@@ -2,6 +2,7 @@ import fs from "fs/promises"
 import path from "path"
 import { afterEach, expect, test, vi } from "vitest"
 import {
+  AxEngineMtpLaunchError,
   assertAxEngineMtpPackCompatibility,
   axEngineSupportsPrefixedMtpSidecar,
   readAxEngineMtpSidecarNamespace,
@@ -84,14 +85,18 @@ test("required policy over a prefixed sidecar fails fast with the actionable ver
   await using pack = await tmpdir({ init: (dir) => writePack(dir, ["language_model.mtp.fc.weight"]) })
   await using engine = await tmpdir({ init: (dir) => writeEngine(dir, { marker: false }) })
   const binaryPath = path.join(engine.path, "ax-engine")
-  await expect(
-    assertAxEngineMtpPackCompatibility({
-      modelPath: pack.path,
-      binaryPath,
-      policy: "required",
-      binaryVersion: "7.4.0",
-    }),
-  ).rejects.toThrow(new RegExp(`^AX_ENGINE_VERSION_UNSUPPORTED:.*${binaryPath}`, "s"))
+  const error = await assertAxEngineMtpPackCompatibility({
+    modelPath: pack.path,
+    binaryPath,
+    policy: "required",
+    binaryVersion: "7.4.0",
+  }).catch((caught: unknown) => caught)
+  expect(error).toBeInstanceOf(AxEngineMtpLaunchError)
+  const message = (error as Error).message
+  expect(message).toMatch(new RegExp(`^AX_ENGINE_VERSION_UNSUPPORTED:.*${binaryPath}`, "s"))
+  // The pairing cannot change between prompt-loop turns; a retryable
+  // classification would replay the whole doomed engine setup three times.
+  expect((error as { isRetryable?: unknown }).isRetryable).toBe(false)
 })
 
 test.each(["auto", "disabled"] as const)("%s policy never blocks on the pack namespace", async (policy) => {

@@ -9,6 +9,21 @@ import { AX_ENGINE_ERROR } from "./constants"
 export const AxEngineMtpPolicy = z.enum(["disabled", "auto", "required"])
 export type AxEngineMtpPolicy = z.infer<typeof AxEngineMtpPolicy>
 
+/**
+ * Terminal launch-validation failure: the pack, binary, or configured policy
+ * cannot change between prompt-loop turns, so replaying the same request would
+ * fail identically. The prompt loop stops on the first turn instead of burning
+ * the consecutive-error budget on two more doomed engine setups.
+ */
+export class AxEngineMtpLaunchError extends Error {
+  readonly isRetryable = false
+
+  constructor(message: string) {
+    super(message)
+    this.name = "AxEngineMtpLaunchError"
+  }
+}
+
 // Managed selection uses the MTP artifact; fail if its drafter is unavailable.
 // Pure MTP describes n-gram stacking, not whether a model drafter is enabled.
 const DEFAULT_MTP_POLICY: AxEngineMtpPolicy = "required"
@@ -17,7 +32,7 @@ export function resolveAxEngineMtpPolicy(options: Record<string, unknown> = {}):
   const value = options.mtpPolicy ?? process.env.AX_ENGINE_MTP_POLICY ?? DEFAULT_MTP_POLICY
   const parsed = AxEngineMtpPolicy.safeParse(value)
   if (!parsed.success) {
-    throw new Error("AX Engine mtpPolicy must be disabled, auto, or required")
+    throw new AxEngineMtpLaunchError("AX Engine mtpPolicy must be disabled, auto, or required")
   }
   return parsed.data
 }
@@ -28,7 +43,8 @@ export function axEngineMtpLaunchPolicy(policy: AxEngineMtpPolicy | undefined, v
   if (policy !== undefined) AxEngineMtpPolicy.parse(policy)
   const parsed = version ? semver.coerce(version) : undefined
   if (!parsed || semver.lt(parsed, "7.4.0")) {
-    if (policy !== undefined) throw new Error("Explicit AX Engine MTP policy requires AX Engine 7.4.0 or newer")
+    if (policy !== undefined)
+      throw new AxEngineMtpLaunchError("Explicit AX Engine MTP policy requires AX Engine 7.4.0 or newer")
     return undefined
   }
   return policy ?? DEFAULT_MTP_POLICY
@@ -133,7 +149,7 @@ export async function assertAxEngineMtpPackCompatibility(input: {
   if (axEngineMtpLaunchPolicy(input.policy, input.binaryVersion) !== "required") return
   if ((await readAxEngineMtpSidecarNamespace(input.modelPath)) !== "prefixed") return
   if ((await axEngineSupportsPrefixedMtpSidecar(input.binaryPath)) !== false) return
-  throw new Error(
+  throw new AxEngineMtpLaunchError(
     `${AX_ENGINE_ERROR.VersionUnsupported}: this model pack's MTP sidecar uses the ${MTP_SIDECAR_PREFIXED_NAMESPACE}* tensor namespace, which the resolved ax-engine-server cannot load (MTP sidecar namespace normalization landed after ax-engine v7.4.0)\n` +
       `Resolved binary: ${input.binaryPath}\n` +
       `Model pack: ${path.join(input.modelPath, MTP_SIDECAR_FILE)}\n` +

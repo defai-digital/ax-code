@@ -8,6 +8,7 @@ import { SessionID } from "../../src/session/schema"
 import { MessageV2 } from "../../src/session/message-v2"
 import { APICallError } from "ai"
 import { AxEngineStartupError } from "../../src/provider/ax-engine/errors"
+import { AxEngineMtpLaunchError } from "../../src/provider/ax-engine/mtp"
 import { AX_ENGINE_ERROR } from "../../src/provider/ax-engine/constants"
 import { SessionRetry } from "../../src/session/retry"
 
@@ -398,6 +399,44 @@ describe("prompt loop error transitions", () => {
 
     expect(result).toEqual({ action: "stop", reason: "error", consecutiveErrors: 1 })
     expect(published).toEqual([{ sessionID, message: "The selected model requires a newer Codex CLI" }])
+  })
+
+  test("stops immediately for a terminal AX Engine launch-validation error", async () => {
+    const sessionID = SessionID.descending()
+    const currentModel = {
+      providerID: ProviderID.make("ax-engine"),
+      modelID: ModelID.make("tiel-coder-35b-axq-mxfp4"),
+    }
+    const message =
+      "AX_ENGINE_VERSION_UNSUPPORTED: this model pack's MTP sidecar uses the language_model.mtp.* tensor namespace"
+    const persisted = MessageV2.fromError(new AxEngineMtpLaunchError(message), {
+      providerID: currentModel.providerID,
+    })
+    expect(MessageV2.APIError.Schema.parse(persisted).data.isRetryable).toBe(false)
+    expect(SessionRetry.retryable(persisted)).toBeUndefined()
+    const published: { sessionID: SessionID; message: string }[] = []
+
+    const result = await handlePromptLoopError(
+      {
+        sessionID,
+        currentModel,
+        error: persisted,
+        consecutiveErrors: 1,
+        step: 1,
+      },
+      {
+        async findFallback() {
+          throw new Error("A terminal launch error must not select another provider")
+        },
+        warn() {},
+        publishError(input) {
+          published.push(input)
+        },
+      },
+    )
+
+    expect(result).toEqual({ action: "stop", reason: "error", consecutiveErrors: 1 })
+    expect(published).toEqual([{ sessionID, message }])
   })
 
   test("stops an AX Engine stream stall without replaying the oversized local request", async () => {
@@ -903,7 +942,10 @@ describe("fallback notice rendering (#415)", () => {
     expect(src).toContain("fallbackNoticeOrigin ??= lastUser.model.providerID")
     // The transition still carries the per-hop switch message, but only for
     // logging — handlePromptLoopError emits it at WARN via deps.warn.
-    const errorsSrc = await readFile(path.join(import.meta.dirname, "../../src/session/prompt/prompt-loop-errors.ts"), "utf-8")
+    const errorsSrc = await readFile(
+      path.join(import.meta.dirname, "../../src/session/prompt/prompt-loop-errors.ts"),
+      "utf-8",
+    )
     expect(errorsSrc).toContain('log.warn)("switching to fallback provider"')
   })
 })
