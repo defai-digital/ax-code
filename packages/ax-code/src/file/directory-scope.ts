@@ -81,12 +81,15 @@ export namespace DirectoryScope {
 
   /**
    * Bounded two-level listing of child paths that look like git checkouts
-   * (have a `.git` file or directory). Does not recurse into junk or
-   * dot-directories. Paths are relative to `dir` with `/` separators so they
-   * can be used as git pathspecs.
+   * (have a `.git` file or directory). Does not recurse into junk names.
+   * Classification (`isMultiRepoParent`) skips top-level dot-directories so
+   * caches do not count; staging excludes pass `{ includeDotDirs: true }`
+   * because `git add` does enter them. Paths are relative to `dir` with `/`
+   * separators so they can be used as git pathspecs.
    */
-  export async function nestedGitChildren(dir: string): Promise<string[]> {
+  export async function nestedGitChildren(dir: string, opts?: { includeDotDirs?: boolean }): Promise<string[]> {
     const resolved = Filesystem.resolve(dir)
+    const includeDotDirs = opts?.includeDotDirs === true
     const found: string[] = []
     const top = await fs.readdir(resolved, { withFileTypes: true }).catch((error) => {
       if (!Filesystem.isEnoent(error)) {
@@ -103,7 +106,7 @@ export namespace DirectoryScope {
         found.push(asGitPathspec(entry.name))
         continue
       }
-      if (entry.name.startsWith(".")) continue
+      if (!includeDotDirs && entry.name.startsWith(".")) continue
       const inner = await fs.readdir(abs, { withFileTypes: true }).catch((error) => {
         if (!Filesystem.isEnoent(error)) {
           log.warn("failed to list nested directory for nested-git classification", { dir: abs, error })

@@ -62,6 +62,23 @@ test("track excludes a nested unborn git repo instead of aborting", async () => 
   })
 })
 
+test("still snapshots a git worktree opened from a subdirectory of nested clones", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await fs.writeFile(path.join(tmp.path, "tracked.txt"), "ok", "utf-8")
+  const sub = path.join(tmp.path, "examples")
+  await initUnbornGit(path.join(sub, "a"))
+  await initUnbornGit(path.join(sub, "b"))
+
+  await Instance.provide({
+    directory: sub,
+    fn: async () => {
+      expect(Instance.worktree).toBe(tmp.path)
+      const hash = await Snapshot.track()
+      expect(hash).toBeTruthy()
+    },
+  })
+})
+
 test("track fail-opens when git add exits 128 instead of throwing", async () => {
   await using tmp = await tmpdir({ git: true })
   await fs.writeFile(path.join(tmp.path, "tracked.txt"), "ok", "utf-8")

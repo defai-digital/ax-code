@@ -455,6 +455,7 @@ export namespace SessionProcessor {
         try {
           snapshot = await NativePerf.runAsync("session.snapshot.track", undefined, () => Snapshot.track())
         } catch (error) {
+          if (Snapshot.UnsupportedPathError.isInstance(error)) throw error
           log.warn("snapshot track failed; continuing without undo coverage", { error })
           snapshot = undefined
         }
@@ -1238,6 +1239,7 @@ export namespace SessionProcessor {
                     try {
                       snapshot = await NativePerf.runAsync("session.snapshot.track", undefined, () => Snapshot.track())
                     } catch (error) {
+                      if (Snapshot.UnsupportedPathError.isInstance(error)) throw error
                       log.warn("snapshot track failed after tools; continuing without undo coverage", { error })
                     }
                   }

@@ -1367,7 +1367,7 @@ export namespace SessionPrompt {
         await publishPromptFailure({
           sessionID,
           assistant: processor.message,
-          message: `Session setup failed before the model ran: ${toErrorMessage(error)}`,
+          message: `Session setup failed: ${toErrorMessage(error)}`,
         })
         reason = "error"
         break

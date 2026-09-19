@@ -147,7 +147,8 @@ describe("DirectoryScope.isMultiRepoParent", () => {
       await initUnbornGit(path.join(tmp.path, "one"))
       await initUnbornGit(path.join(tmp.path, "two"))
       expect(await DirectoryScope.isMultiRepoParent(tmp.path)).toBe(true)
-      expect(await DirectoryScope.nestedGitChildren(tmp.path)).toEqual(["one", "two"])
+      expect(await DirectoryScope.nestedGitChildren(tmp.path)).toEqual(expect.arrayContaining(["one", "two"]))
+      expect((await DirectoryScope.nestedGitChildren(tmp.path)).length).toBe(2)
     })
   })
 
@@ -158,7 +159,9 @@ describe("DirectoryScope.isMultiRepoParent", () => {
       await initUnbornGit(path.join(tmp.path, "_worktrees", "alpha"))
       await initUnbornGit(path.join(tmp.path, "_worktrees", "beta"))
       expect(await DirectoryScope.isMultiRepoParent(tmp.path)).toBe(true)
-      expect(await DirectoryScope.nestedGitChildren(tmp.path)).toEqual(["_worktrees/alpha", "_worktrees/beta"])
+      const nested = await DirectoryScope.nestedGitChildren(tmp.path)
+      expect(nested).toEqual(expect.arrayContaining(["_worktrees/alpha", "_worktrees/beta"]))
+      expect(nested).toHaveLength(2)
     })
   })
 
@@ -178,6 +181,20 @@ describe("DirectoryScope.isMultiRepoParent", () => {
       await initUnbornGit(path.join(tmp.path, "one"))
       await initUnbornGit(path.join(tmp.path, "two"))
       expect(await DirectoryScope.isMultiRepoParent(tmp.path)).toBe(false)
+    })
+  })
+
+  test("classification skips dot-directories; staging includes them", async () => {
+    await using tmp = await tmpdir()
+    await using home = await tmpdir()
+    await withTestHome(home.path, async () => {
+      await initUnbornGit(path.join(tmp.path, ".internal", "one"))
+      await initUnbornGit(path.join(tmp.path, ".internal", "two"))
+      expect(await DirectoryScope.isMultiRepoParent(tmp.path)).toBe(false)
+      expect(await DirectoryScope.nestedGitChildren(tmp.path)).toEqual([])
+      const staging = await DirectoryScope.nestedGitChildren(tmp.path, { includeDotDirs: true })
+      expect(staging).toEqual(expect.arrayContaining([".internal/one", ".internal/two"]))
+      expect(staging).toHaveLength(2)
     })
   })
 

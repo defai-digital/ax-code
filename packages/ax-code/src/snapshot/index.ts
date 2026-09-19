@@ -284,13 +284,15 @@ export namespace Snapshot {
     // prompt with a snapshot error the user never sees (#466). Skip it
     // entirely, like the matching guards in auto-index
     // (src/code-intelligence/auto-index.ts) and File.scan (src/file/index.ts).
+    // Honor an explicit off switch before any filesystem walk or toast.
+    if ((await Config.get()).snapshot === false) return false
     if (Instance.directory === Filesystem.resolve(Global.Path.home)) return false
-    // A parent of many sibling git repos (e.g. ~/code) is not a workspace:
-    // `git add .` walks nested checkouts, including unborn HEADs, and aborts
-    // the prompt. Skip it like $HOME. Ordinary non-git folders still snapshot.
-    if (await DirectoryScope.isMultiRepoParent(Instance.directory)) {
+    // Classify the snapshot worktree, not the session cwd. A git checkout
+    // opened from a subdirectory that happens to contain nested clones
+    // (examples/{a,b}, .internal/reference) is still a real project.
+    if (await DirectoryScope.isMultiRepoParent(Instance.worktree)) {
       warnCoverageOff(
-        Instance.directory,
+        Instance.worktree,
         "multi-repo-parent",
         "Undo coverage is off: this directory is a parent of multiple git repositories, not a repository itself. Open a specific repository for full undo coverage.",
       )
@@ -298,7 +300,7 @@ export namespace Snapshot {
     }
     // Snapshots use their own Git store outside the worktree, so an ordinary
     // project directory does not need a .git directory to support undo/redo.
-    return (await Config.get()).snapshot !== false
+    return true
   }
 
   async function excludes(current: State) {
@@ -384,7 +386,7 @@ export namespace Snapshot {
     if (!options?.excludesSynced) await syncExclude(current)
     const excluded = [
       ...(await windowsExclusions(current)),
-      ...(await DirectoryScope.nestedGitChildren(current.worktree)),
+      ...(await DirectoryScope.nestedGitChildren(current.worktree, { includeDotDirs: true })),
     ]
     // Stage the whole worktree, not just `current.directory` — a session's
     // working directory can be a subdirectory of the git worktree (e.g. a

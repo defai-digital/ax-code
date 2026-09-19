@@ -364,29 +364,29 @@ export namespace AutoIndex {
     // Any error inside the Promise is caught and logged — auto-index
     // is best-effort, it never propagates failures to the caller.
     ;(async () => {
-      if (await DirectoryScope.isMultiRepoParent(directory)) {
-        log.info("skipping: broad directory is not an indexable workspace", { projectID })
-        setState(projectID, {
-          state: "idle",
-          completed: 0,
-          total: 0,
-          startedAt: null,
-          finishedAt: Date.now(),
-          error: null,
-        })
-        return
-      }
       const start = Date.now()
       let candidateFileCount = 0
-      setState(projectID, {
-        state: "indexing",
-        completed: 0,
-        total: 0,
-        startedAt: start,
-        finishedAt: null,
-        error: null,
-      })
       try {
+        if (await DirectoryScope.isMultiRepoParent(directory)) {
+          log.info("skipping: broad directory is not an indexable workspace", { projectID })
+          setState(projectID, {
+            state: "idle",
+            completed: 0,
+            total: 0,
+            startedAt: null,
+            finishedAt: Date.now(),
+            error: null,
+          })
+          return
+        }
+        setState(projectID, {
+          state: "indexing",
+          completed: 0,
+          total: 0,
+          startedAt: start,
+          finishedAt: null,
+          error: null,
+        })
         // Walk eligible files via ripgrep (honors .gitignore),
         // filter to LSP-supported languages. Same logic as the
         // CLI command in cli/cmd/index-graph.ts, extracted here
