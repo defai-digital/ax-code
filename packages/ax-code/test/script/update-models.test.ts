@@ -380,16 +380,19 @@ describe("update-models script", () => {
         minimax: {
           id: "minimax",
           name: "MiniMax (minimax.io)",
+          api: "https://api.minimax.cn/anthropic/v1",
           models: minimaxModels,
         },
         "minimax-coding-plan": {
           id: "minimax-coding-plan",
           name: "MiniMax Token Plan (minimax.io)",
+          api: "https://api.minimax.cn/anthropic/v1",
           models: minimaxModels,
         },
         "minimax-cn-coding-plan": {
           id: "minimax-cn-coding-plan",
           name: "MiniMax Token Plan (minimaxi.com)",
+          api: "https://api.minimax.cn/anthropic/v1",
           models: minimaxModels,
         },
       }),
@@ -410,6 +413,9 @@ describe("update-models script", () => {
     // Display names follow the documented convention, not upstream's domains.
     expect(data["minimax-coding-plan"]?.name).toBe("MiniMax Token Plan")
     expect(data["minimax-cn-coding-plan"]?.name).toBe("MiniMax Token Plan (China)")
+    expect(data.minimax?.api).toBe("https://api.minimax.io/anthropic/v1")
+    expect(data["minimax-coding-plan"]?.api).toBe("https://api.minimax.io/anthropic/v1")
+    expect(data["minimax-cn-coding-plan"]?.api).toBe("https://api.minimaxi.com/anthropic/v1")
     expect(data.minimax?.models?.["MiniMax-M2"]).toBeDefined()
     expect(data.minimax?.models?.["MiniMax-M2.5"]).toBeUndefined()
     expect(data.minimax?.models?.["MiniMax-M2.7"]).toBeDefined()

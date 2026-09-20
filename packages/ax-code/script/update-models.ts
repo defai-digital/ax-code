@@ -1192,6 +1192,22 @@ for (const [id, name] of Object.entries(nameOverrides)) {
   if (fetched[id]) fetched[id].name = name
 }
 
+// models.dev is a discovery source, but these four first-party endpoints are
+// part of AX Code's connection contract. Preserve the documented regional
+// routes when upstream aliases or rewrites its provider records: subscription
+// keys are region-specific and an incorrect host makes an otherwise valid key
+// unusable. The international service uses minimax.io; China uses
+// minimaxi.com. Both expose the Anthropic-compatible path.
+const minimaxEndpointOverrides: Record<string, string> = {
+  minimax: "https://api.minimax.io/anthropic/v1",
+  "minimax-coding-plan": "https://api.minimax.io/anthropic/v1",
+  "minimax-cn": "https://api.minimaxi.com/anthropic/v1",
+  "minimax-cn-coding-plan": "https://api.minimaxi.com/anthropic/v1",
+}
+for (const [id, api] of Object.entries(minimaxEndpointOverrides)) {
+  if (fetched[id]) fetched[id].api = api
+}
+
 // MiniMax Token Plan (legacy *-coding-plan ids): drop MiniMax-M* SKUs older
 // than M2.7. PAYG minimax / minimax-cn keep the full catalog; Alibaba plans
 // still serve MiniMax-M2.5 through their own allowlists.
