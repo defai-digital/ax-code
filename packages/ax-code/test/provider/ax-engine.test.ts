@@ -992,15 +992,19 @@ describe("ax-engine server launch args", () => {
     ])
   })
 
-  test.each([AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID, `AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@${"a".repeat(40)}`])(
-    "aligns managed Qwen prefix snapshots with the engine prefill grid: %s",
-    (apiModelID) => {
-      const args = axEngineServerLaunchArgs({ apiModelID, contextTokens: 65_536, binaryVersion: "7.4.0" })
-      expect(args[args.indexOf("--block-size-tokens") + 1]).toBe("1024")
-      expect(args[args.indexOf("--total-blocks") + 1]).toBe("64")
-      expect(args[args.indexOf("--prefill-chunk") + 1]).toBe("1024")
-    },
-  )
+  test.each([
+    AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+    `AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@${"a".repeat(40)}`,
+    AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+    AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+    `AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP@${"a".repeat(40)}`,
+    `AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP@${"a".repeat(40)}`,
+  ])("aligns managed recurrent prefix snapshots with the engine prefill grid: %s", (apiModelID) => {
+    const args = axEngineServerLaunchArgs({ apiModelID, contextTokens: 65_536, binaryVersion: "7.4.0" })
+    expect(args[args.indexOf("--block-size-tokens") + 1]).toBe("1024")
+    expect(args[args.indexOf("--total-blocks") + 1]).toBe("64")
+    expect(args[args.indexOf("--prefill-chunk") + 1]).toBe("1024")
+  })
 
   test.each([undefined, "unknown", "7.3.1"])(
     "preserves block allocation on unqualified engines: %s",
@@ -1015,13 +1019,39 @@ describe("ax-engine server launch args", () => {
     },
   )
 
+  test.each([AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID, AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID])(
+    "preserves legacy geometry and profile boundaries for %s",
+    (apiModelID) => {
+      for (const binaryVersion of [undefined, "unknown", "7.3.1"]) {
+        const args = axEngineServerLaunchArgs({ apiModelID, contextTokens: 65_536, binaryVersion })
+        expect(args[args.indexOf("--block-size-tokens") + 1]).toBe("16")
+        expect(args).not.toContain("--prefill-chunk")
+      }
+      const unaligned = axEngineServerLaunchArgs({ apiModelID, contextTokens: 65_520, binaryVersion: "7.4.0" })
+      expect(unaligned[unaligned.indexOf("--total-blocks") + 1]).toBe("4095")
+      expect(unaligned).not.toContain("--prefill-chunk")
+      expect(axEngineQwen38ExactMtpEnv(apiModelID, {})).toEqual({})
+      const aligned = axEngineServerLaunchArgs({
+        apiModelID,
+        contextTokens: 65_536,
+        binaryVersion: "7.4.0",
+        mtpPolicy: "required",
+      })
+      expect(aligned[aligned.indexOf("--mlx-mtp-policy") + 1]).toBe("required")
+      expect(aligned[aligned.indexOf("--speculation-profile") + 1]).toBe(
+        apiModelID === AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID ? "auto" : "agentic",
+      )
+    },
+  )
+
   test.each([
     "ornith-35b-axq-6bit",
     "qwen3-coder-next-axq-6bit",
-    AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
-    AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+    "Other/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP@" + "a".repeat(40),
+    "AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP-extra@" + "a".repeat(40),
+    "AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP",
     "Other/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@" + "a".repeat(40),
-  ])("does not apply Qwen prefix geometry to another artifact: %s", (apiModelID) => {
+  ])("does not apply managed prefix geometry to another artifact: %s", (apiModelID) => {
     const args = axEngineServerLaunchArgs({ apiModelID, contextTokens: 65_536, binaryVersion: "7.4.0" })
     expect(args[args.indexOf("--block-size-tokens") + 1]).toBe("16")
     expect(args).not.toContain("--prefill-chunk")

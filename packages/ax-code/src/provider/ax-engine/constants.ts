@@ -142,6 +142,20 @@ export function usesQwen38ExactMtpProfile(modelID: string): boolean {
   return modelID === AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID || repo === expectedRepo
 }
 
+// Prefix snapshot geometry is independent of the dense-Qwen speculative
+// profile. Admit only these exact managed repositories and their stable aliases.
+export function usesAlignedPrefixCacheGeometry(modelID: string): boolean {
+  if (usesQwen38ExactMtpProfile(modelID)) return true
+  if (!isAxEngineModelID(modelID)) return false
+  const repo = axEngineHubReference(modelID)?.repoID
+  return (
+    repo !== undefined &&
+    ([AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID, AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID] as const).some(
+      (id) => repo === AX_ENGINE_MODEL_DEFINITIONS[id].quantizations.mlx?.hfRepo,
+    )
+  )
+}
+
 export function axEngineSpeculationProfile(modelID: string): string {
   // These model contracts supply their own draft gate. The generic agentic
   // profile pins it to 0.80 and overrides that decision. Auto defers to the

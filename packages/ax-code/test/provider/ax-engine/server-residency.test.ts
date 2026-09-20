@@ -9,6 +9,8 @@ import {
   AX_ENGINE_PREFIX_CACHE_DISK_MAX_ENTRY_BYTES,
   AX_ENGINE_PREFIX_CACHE_MAX_BYTES,
   AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+  AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+  AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
   AX_MLX_PREFIX_CACHE_DISK_MAX_BYTES_ENV,
   AX_MLX_PREFIX_CACHE_DISK_MAX_ENTRY_BYTES_ENV,
   AX_ENGINE_QWEN38_EXACT_MTP_PROFILE_ENV,
@@ -159,9 +161,13 @@ describe.skipIf(process.platform === "win32")("managed engine residency", () => 
     expect((await ensureServer(f.input)).pid).not.toBe(previous.pid)
   })
 
-  test("replaces legacy prefix geometry once and then keeps the aligned server resident", async () => {
+  test.each([
+    AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+    AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+    AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+  ] as const)("replaces legacy prefix geometry once and then keeps %s resident", async (modelID) => {
     await using f = await fixture()
-    const input = { ...f.input, binaryVersion: "7.4.0", contextTokens: 65_536 }
+    const input = { ...f.input, modelID, apiModelID: modelID, binaryVersion: "7.4.0", contextTokens: 65_536 }
     const previous = await ensureServer(input)
     const legacy = JSON.parse(await fs.readFile(AxEnginePaths.serverState, "utf8"))
     delete legacy.blockSizeTokens

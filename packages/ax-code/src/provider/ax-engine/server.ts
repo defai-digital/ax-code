@@ -27,7 +27,7 @@ import {
   qwen38ExactMtpProfileFingerprint,
   resolveAxEngineApiKey,
   resolveAxEnginePrefixCacheLaunchConfig,
-  usesQwen38ExactMtpProfile,
+  usesAlignedPrefixCacheGeometry,
   type AxEnginePrefixCacheLaunchConfig,
 } from "./constants"
 import type { AxEngineModelID } from "./constants"
@@ -136,13 +136,13 @@ const AX_ENGINE_SERVER_BLOCK_SIZE_TOKENS = 16
 
 function prefixGeometry(input: { apiModelID: string; contextTokens?: number; binaryVersion?: string }) {
   const version = input.binaryVersion ? semver.coerce(input.binaryVersion) : undefined
-  // Qwen's recurrent snapshots cannot be trimmed. Engine 7.4 restores only
-  // on the prefill grid; 16-token scheduler claims otherwise skip real reuse.
+  // Managed Qwen/Tiel recurrent snapshots cannot be trimmed. Engine 7.4 restores only
+  // on the prefill grid; 16-token claims can skip reuse when prompts grow.
   // Pin both boundaries together without changing the requested context size.
   const aligned =
     input.contextTokens &&
     input.contextTokens % 1024 === 0 &&
-    usesQwen38ExactMtpProfile(input.apiModelID) &&
+    usesAlignedPrefixCacheGeometry(input.apiModelID) &&
     version &&
     semver.gte(version, "7.4.0")
   return {
