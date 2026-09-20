@@ -51,6 +51,7 @@ import { UpgradeCommand } from "./cmd/upgrade"
 import { WebUiCommand } from "./cmd/webui"
 import { WorkflowCommand } from "./cmd/workflow"
 import { TaskCommand } from "./cmd/task"
+import { ScheduleCommand } from "./cmd/schedule"
 import { fatal } from "./bootstrap/fatal"
 import { setKnownCommands } from "./tui/project-arg"
 import { init } from "./bootstrap/env"
@@ -112,6 +113,7 @@ const cmds = [
   SkillCommand,
   WorkflowCommand,
   TaskCommand,
+  ScheduleCommand,
   DesignCheckCommand,
   ContextCommand,
 ]

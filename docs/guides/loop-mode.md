@@ -90,6 +90,23 @@ and `manage_scheduled_task` tools:
 - "Every weekday at 9am, summarize new CI failures."
 - "List my scheduled tasks." / "Pause the CI summary task."
 
+The same tasks are manageable from the shell without opening the TUI:
+
+```bash
+ax-code schedule list                 # status, next run, schedule, id, title
+ax-code schedule show <id>            # details plus the five most recent runs
+ax-code schedule runs <id>            # run history: fired, failed, skipped and why
+ax-code schedule pause|resume <id>
+ax-code schedule delete <id>
+ax-code schedule run <id>             # trigger now; requires a live runtime
+```
+
+`pause`/`resume`/`delete` go through the project's managed runtime when one is
+running (immediate effect, live TUI updates) and otherwise write the project
+database directly. `run` needs a live backend — start one with
+`ax-code runtime start` — because a one-shot CLI process must not claim work it
+cannot finish. All read subcommands accept `--json`.
+
 Schedules support one-time runs, daily/weekly times, and 5-field cron
 expressions, each with an optional IANA timezone. Tasks persist in the
 project database and fire while an AX Code backend for the project is
