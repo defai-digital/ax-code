@@ -35,6 +35,7 @@ import { Locale } from "../../util/locale"
 import { internalBaseUrl, isInternalHostname } from "../../util/internal-url"
 import { isNonEmptyRecord } from "../../util/record"
 import { extractRunFinalAssistantText, handleRunStructuredOutput, resolveRunOutputFile } from "./run-output"
+import { printPendingScheduledTaskNotice } from "./run-schedule-notice"
 import { assertLoopbackHttpUrl } from "../../runtime/listen-security"
 import { sameSkuOnConnectedProvider } from "../../provider/model-selectability"
 import { readNonTtyStdin } from "../stdin"
@@ -554,7 +555,10 @@ export const RunCommand = cmd({
       .example('ax-code run --model qwen -- "Review this"', "put the prompt after --")
       .example('ax-code run --prompt "Review this" --model qwen', "same prompt via --prompt")
       .example("ax-code run --prompt-file ./prompt.txt --model qwen", "read the prompt from a file")
-      .example("ax-code run --file README.md --prompt Summarize --model qwen", "attach a file; --file is not the prompt")
+      .example(
+        "ax-code run --file README.md --prompt Summarize --model qwen",
+        "attach a file; --file is not the prompt",
+      )
   },
   handler: async (args) => {
     const { Server } = await import("../../server/server")
@@ -1201,6 +1205,9 @@ export const RunCommand = cmd({
           }) as typeof globalThis.fetch
           const sdk = createAxCodeClient({ baseUrl: internalBaseUrl(), fetch: fetchFn, directory: runtimeDirectory })
           await execute(sdk)
+          // Still inside the bootstrap context so ScheduledTask.list can read
+          // the project store; must never throw on the way out.
+          await printPendingScheduledTaskNotice(args.format)
         })
       })
     } finally {
