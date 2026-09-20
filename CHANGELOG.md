@@ -6,6 +6,12 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.19.4] - 2026-09-20
+
+### Changed
+
+- Prepare AX Code 7.19.4 and SDK 2.5.39.
+
 ### Changed
 
 - Retire Qoder CLI (`qoder-cli`), Kimi Code CLI (`kimi-cli`), and MiniMax Code CLI (`minimax-cli`) as bundled CLI providers. MiniMax Token Plan API providers are unchanged.
