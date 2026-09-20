@@ -257,23 +257,33 @@ export namespace Snapshot {
     return operations.run(key, fn)
   }
 
-  async function size(current: State, hash: string, file: string) {
+  async function blob(current: State, hash: string, file: string) {
     const tree = await runGit([...core, "--literal-pathspecs", ...args(current, ["ls-tree", "-l", hash, "--", file])], {
       cwd: current.worktree,
     })
     if (tree.code !== 0) throw new Error(`Snapshot content failed: ls-tree exited with code ${tree.code}`)
     const line = tree.text.trim()
     if (!line) return
-    return parseLsTreeSize(line)
+    const size = parseLsTreeSize(line)
+    if (size === undefined) return
+    const separator = line.indexOf("\t")
+    const object = line.slice(0, separator < 0 ? line.length : separator).trim().split(/\s+/)[2]
+    if (!object || !/^[0-9a-f]{40,64}$/i.test(object)) {
+      throw new Error("Snapshot content failed: ls-tree returned an invalid blob id")
+    }
+    return { object, size }
   }
 
   async function show(current: State, hash: string, file: string) {
-    const next = await size(current, hash, file)
-    if (next === undefined || next > maxFileSize) return ""
-    const result = await runGit([...cfg, ...args(current, ["show", `${hash}:${file}`])], {
+    const entry = await blob(current, hash, file)
+    if (entry === undefined || entry.size > maxFileSize) return ""
+    // Do not pass a filename through Git's <tree-ish>:<path> revision syntax:
+    // control characters are accepted by the filesystem but are parsed
+    // differently by some Git versions. The object id is path-independent.
+    const result = await runGit([...cfg, ...args(current, ["cat-file", "blob", entry.object])], {
       cwd: current.worktree,
     })
-    if (result.code !== 0) throw new Error(`Snapshot content failed: show exited with code ${result.code}`)
+    if (result.code !== 0) throw new Error(`Snapshot content failed: cat-file exited with code ${result.code}`)
     return result.text
   }
 

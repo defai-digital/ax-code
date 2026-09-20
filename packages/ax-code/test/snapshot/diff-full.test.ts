@@ -107,7 +107,7 @@ test("previewRevert diffs only the requested files", async () => {
   })
 })
 
-test.each(["ls-tree", "show"])(
+test.each(["ls-tree", "cat-file"])(
   "diffFull rejects failed %s content reads instead of returning empty contents",
   async (command) => {
     await using tmp = await tmpdir({ git: true })
