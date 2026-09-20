@@ -871,7 +871,6 @@ export namespace LLM {
     },
   ): T {
     const maxDurationMs = options.maxDurationMs ?? 0
-    if (options.idleTimeoutMs <= 0 && maxDurationMs <= 0) return output
 
     // Locally-executing tool calls observed on the stream: a `tool-call`
     // chunk has arrived but its `tool-result`/`tool-error` has not. While
@@ -967,16 +966,56 @@ export namespace LLM {
     const fullStream: AsyncIterable<unknown> = {
       [Symbol.asyncIterator]() {
         const inner = output.fullStream[Symbol.asyncIterator]()
+        let completed = false
+        let closed = false
+        const abortUnfinished = () => {
+          if (!completed) options.idleAbort.abort()
+        }
         return {
-          next: () =>
-            raceWatchdog(inner.next()).then((result) => {
-              const iteration = result as IteratorResult<unknown>
-              if (!iteration.done) trackChunk(iteration.value)
+          next: async () => {
+            if (closed) return { done: true as const, value: undefined }
+            try {
+              const result = await raceWatchdog(inner.next())
+              if (closed) return { done: true as const, value: undefined }
+              completed = result.done === true
+              closed = completed
+              if (!result.done) trackChunk(result.value)
               return result
-            }),
-          return: (value?: unknown) =>
-            inner.return ? inner.return(value) : Promise.resolve({ done: true as const, value }),
-          throw: (error?: unknown) => (inner.throw ? inner.throw(error) : Promise.reject(error)),
+            } catch (error) {
+              closed = true
+              abortUnfinished()
+              throw error
+            }
+          },
+          return: async (value?: unknown) => {
+            if (closed) return { done: true as const, value }
+            closed = true
+            // SDK fullStream is a tee branch: cancelling its reader alone does
+            // not abort the provider fetch while another branch remains alive.
+            // Abort first so loop guards and other early exits release local
+            // engine admission before a recovery request, even with timers off.
+            abortUnfinished()
+            try {
+              return inner.return ? await inner.return(value) : { done: true as const, value }
+            } catch (error) {
+              // Some readers reject cleanup after the abort we just issued.
+              // A deliberate break is successful cancellation, not a new error.
+              if (error instanceof Error && error.name === "AbortError") return { done: true as const, value }
+              throw error
+            }
+          },
+          throw: async (error?: unknown) => {
+            if (closed) throw error
+            closed = true
+            abortUnfinished()
+            try {
+              if (inner.throw) return await inner.throw(error)
+              throw error
+            } catch (cleanupError) {
+              if (cleanupError instanceof Error && cleanupError.name === "AbortError") throw error
+              throw cleanupError
+            }
+          },
         }
       },
     }

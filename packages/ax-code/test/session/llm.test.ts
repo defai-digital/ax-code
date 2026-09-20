@@ -3994,7 +3994,7 @@ describe("session.llm.streamIdleWatchdog", () => {
     expect(idleAbort.signal.aborted).toBe(true)
   })
 
-  test("disabled when timeout is 0", () => {
+  test("disabled timers preserve natural completion without aborting", async () => {
     const idleAbort = new AbortController()
     const output = makeOutput({ next: async () => ({ done: true, value: undefined }) })
     const guarded = LLM.attachStreamIdleWatchdog(output, {
@@ -4003,7 +4003,10 @@ describe("session.llm.streamIdleWatchdog", () => {
       providerID: "test",
       modelID: "m",
     })
-    expect(guarded).toBe(output)
+    for await (const _ of guarded.fullStream) {
+      /* consume */
+    }
+    expect(idleAbort.signal.aborted).toBe(false)
   })
 
   test("streamIdleTimeoutMs honors the env override", () => {
