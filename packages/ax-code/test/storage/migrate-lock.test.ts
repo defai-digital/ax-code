@@ -6,20 +6,38 @@ import { describe, expect, test } from "vitest"
 import { tmpdir } from "../fixture/fixture"
 import { MigrationLock } from "../../src/storage/migrate-lock"
 
+type ChildOutput = { stdout: string; stderr: string }
+const childOutput = new WeakMap<ChildProcessWithoutNullStreams, ChildOutput>()
+
+function outputFor(child: ChildProcessWithoutNullStreams): ChildOutput {
+  const existing = childOutput.get(child)
+  if (existing) return existing
+
+  const output = { stdout: "", stderr: "" }
+  child.stdout.on("data", (chunk: Buffer) => {
+    output.stdout += chunk.toString()
+  })
+  child.stderr.on("data", (chunk: Buffer) => {
+    output.stderr += chunk.toString()
+  })
+  childOutput.set(child, output)
+  return output
+}
+
 function waitForLine(child: ChildProcessWithoutNullStreams, expected: string): Promise<void> {
+  const output = outputFor(child)
+  const present = () => output.stdout.includes(expected + "\n")
+  if (present()) return Promise.resolve()
+
   return new Promise((resolve, reject) => {
-    let output = ""
-    const onData = (chunk: Buffer) => {
-      output += chunk.toString()
-      if (!output.includes(expected + "\n")) return
+    const onData = () => {
+      if (!present()) return
       cleanup()
       resolve()
     }
     const onExit = (code: number | null) => {
       cleanup()
-      reject(
-        new Error(`migration lock holder exited before ${expected} (${code}): ${output}${child.stderr.read() ?? ""}`),
-      )
+      reject(new Error(`migration lock holder exited before ${expected} (${code}): ${output.stdout}${output.stderr}`))
     }
     const onError = (error: Error) => {
       cleanup()
