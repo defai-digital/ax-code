@@ -5,12 +5,12 @@ import { Keybinds } from "../../../src/config/schema"
 describe("tui dialog help view model", () => {
   test("keeps the help body inside the dialog safe area in tall terminals", () => {
     expect(dialogHelpBodyHeight({ contentRows: 34, terminalHeight: 60 })).toBe(34)
-    expect(dialogHelpBodyHeight({ contentRows: 60, terminalHeight: 60 })).toBe(52)
+    expect(dialogHelpBodyHeight({ contentRows: 60, terminalHeight: 60 })).toBe(49)
   })
 
   test("keeps the help dialog scrollable in short terminals", () => {
-    expect(dialogHelpBodyHeight({ contentRows: 34, terminalHeight: 30 })).toBe(22)
-    expect(dialogHelpBodyHeight({ contentRows: 34, terminalHeight: 16 })).toBe(8)
+    expect(dialogHelpBodyHeight({ contentRows: 34, terminalHeight: 30 })).toBe(19)
+    expect(dialogHelpBodyHeight({ contentRows: 34, terminalHeight: 16 })).toBe(5)
     expect(dialogHelpBodyHeight({ contentRows: 0, terminalHeight: 30 })).toBe(1)
   })
 })

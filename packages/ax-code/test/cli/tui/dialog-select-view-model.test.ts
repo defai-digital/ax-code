@@ -73,7 +73,7 @@ describe("tui dialog select view model", () => {
     expect(dialogSelectRows(grouped)).toBe(6)
     // 40-line terminal: remaining space after overlay margin + select chrome.
     expect(dialogSelectVisibleHeight(20, 40)).toBe(20)
-    expect(dialogSelectVisibleHeight(30, 40)).toBe(29)
+    expect(dialogSelectVisibleHeight(30, 40)).toBe(26)
     // Tiny terminals still show at least one row instead of collapsing to 0.
     expect(dialogSelectVisibleHeight(20, 8)).toBe(1)
     expect(dialogSelectMoveIndex(0, -1, 2)).toBe(1)
@@ -83,15 +83,22 @@ describe("tui dialog select view model", () => {
     expect(dialogSelectClampIndex(5, 0)).toBe(0)
   })
 
-  test("gives /connect a usable page of options instead of two rows", () => {
+  test("grants only rows the dialog frame can display, so overflow always raises the scrollbar", () => {
     // The old `floor(height / 2) - 6` cap left 2 rows in a 16-line split pane
-    // and 6 on a standard 24-line terminal. A 5-option provider action menu
-    // (Select / Update / Refresh / Disable / Delete) must fit a 16-line pane.
-    expect(dialogSelectVisibleHeight(40, 16)).toBe(5)
-    expect(dialogSelectVisibleHeight(40, 24)).toBe(13)
+    // and 6 on a standard 24-line terminal. The body height must stay within
+    // what the frame actually grants: promising more silently clipped the
+    // remainder with no scrollbar (rows were neither visible nor scrollable
+    // in any signaled way). A 5-option provider action menu at 16 lines now
+    // shows 2 rows and a scrollbar instead of 2 rows and 3 hidden options.
+    expect(dialogSelectVisibleHeight(40, 16)).toBe(2)
+    expect(dialogSelectVisibleHeight(40, 24)).toBe(10)
     expect(dialogSelectVisibleHeight(4, 24)).toBe(4)
-    expect(dialogSelectVisibleHeight(5, 16)).toBe(5)
-    expect(dialogSelectVisibleHeight(8, 16)).toBe(5)
+    expect(dialogSelectVisibleHeight(5, 16)).toBe(2)
+    expect(dialogSelectVisibleHeight(8, 16)).toBe(2)
+    // Overflow signal fidelity: the body is strictly smaller than the content
+    // exactly when the frame cannot show all of it.
+    expect(dialogSelectVisibleHeight(5, 16)).toBeLessThan(5)
+    expect(dialogSelectVisibleHeight(4, 24)).toBe(4)
   })
 
   test("clamps page jumps at the list edges while single steps keep wrapping", () => {
