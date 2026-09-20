@@ -9,15 +9,42 @@ import { createTuiCrashHandler, registerTuiCrashHandlers } from "../tui/util/lif
 
 export const RuntimeCommand = cmd({
   command: "runtime <action>",
-  describe: "start, inspect, attach to, or stop a persistent project runtime",
+  describe: "start, inspect, list, attach to, or stop a persistent project runtime",
   builder: (yargs) =>
     yargs
-      .positional("action", { choices: ["start", "status", "attach", "stop"] as const, demandOption: true })
+      .positional("action", { choices: ["start", "status", "attach", "stop", "list"] as const, demandOption: true })
       .option("dir", { type: "string", describe: "project directory" })
       .option("session", { type: "string", describe: "session to open when attaching" })
-      .option("continue", { type: "boolean", describe: "open the last session when attaching" }),
+      .option("continue", { type: "boolean", describe: "open the last session when attaching" })
+      .option("json", { type: "boolean", describe: "output machine-readable JSON" }),
   handler: async (args) => {
     const directory = args.dir || Filesystem.callerCwd()
+    if (args.action === "list") {
+      const entries = await RuntimeRegistry.list()
+      if (args.json) {
+        console.log(JSON.stringify(entries, null, 2))
+        return
+      }
+      if (entries.length === 0) {
+        console.log("No managed runtimes found.")
+        return
+      }
+      console.log(
+        ["state".padEnd(12), "pid".padEnd(8), "version".padEnd(14), "started".padEnd(25), "directory"].join(""),
+      )
+      for (const entry of entries) {
+        console.log(
+          [
+            entry.state.padEnd(12),
+            String(entry.record.pid).padEnd(8),
+            entry.record.version.padEnd(14),
+            new Date(entry.record.startedAt).toISOString().padEnd(25),
+            entry.directory,
+          ].join(""),
+        )
+      }
+      return
+    }
     if (args.action === "status") {
       const status = await RuntimeRegistry.status(directory)
       const info = "record" in status ? status.record : undefined

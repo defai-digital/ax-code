@@ -19,6 +19,7 @@ project runtime:
 ax-code runtime start --dir /absolute/path/project
 ax-code runtime attach --dir /absolute/path/project --continue
 ax-code runtime status --dir /absolute/path/project
+ax-code runtime list                  # every managed runtime on this machine
 ax-code runtime stop --dir /absolute/path/project
 ```
 

@@ -124,6 +124,35 @@ export namespace RuntimeRegistry {
     }
   }
 
+  /**
+   * Enumerate every managed runtime record without mutating anything.
+   * Corrupt or unreadable records are skipped; state comes from probe().
+   */
+  export async function list(): Promise<
+    Array<{ directory: string; state: "running" | "unavailable"; record: Record }>
+  > {
+    const root = path.join(Global.Path.state, "runtime")
+    const entries = await fs.readdir(root, { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return [] as import("node:fs").Dirent[]
+      throw error
+    })
+    const records: Record[] = []
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith(".json")) continue
+      const record = await read(path.join(root, entry.name)).catch(() => undefined)
+      if (record) records.push(record)
+    }
+    const probed = await Promise.all(
+      records.map(async (record) => ({
+        directory: record.directory,
+        state: (await probe(record)) ? ("running" as const) : ("unavailable" as const),
+        record,
+      })),
+    )
+    probed.sort((a, b) => (a.directory < b.directory ? -1 : a.directory > b.directory ? 1 : 0))
+    return probed
+  }
+
   export async function status(directory: string) {
     const where = await location(directory)
     const record = await read(where.file)
