@@ -22,6 +22,14 @@ export namespace DirectoryScope {
   // multi-repo parent or explode staging excludes.
   const NESTED_GIT_SKIP_NAMES = new Set(["node_modules", "dist", "build", "target", "vendor"])
 
+  function childPath(root: string, name: string): string {
+    const resolvedRoot = Filesystem.resolve(root)
+    const candidate = path.resolve(resolvedRoot, name)
+    if (path.basename(name) !== name || !Filesystem.contains(resolvedRoot, candidate))
+      throw new Error(`Directory entry escapes its parent: ${name}`)
+    return candidate
+  }
+
   function knownBroadDirs(): { path: string; reason: string }[] {
     const home = Global.Path.home
     return [
@@ -65,7 +73,7 @@ export namespace DirectoryScope {
 
   async function hasDotGit(dir: string): Promise<boolean> {
     try {
-      await fs.lstat(path.join(dir, ".git"))
+      await fs.lstat(childPath(dir, ".git"))
       return true
     } catch (error) {
       if (!Filesystem.isMissingPathError(error)) {
@@ -104,7 +112,7 @@ export namespace DirectoryScope {
       if (!entry.isDirectory()) continue
       if (entry.name === "." || entry.name === ".." || entry.name === ".git") continue
       if (NESTED_GIT_SKIP_NAMES.has(entry.name)) continue
-      const abs = path.join(resolved, entry.name)
+      const abs = childPath(resolved, entry.name)
       if (await hasDotGit(abs)) {
         found.push(asGitPathspec(entry.name))
         continue
@@ -119,8 +127,8 @@ export namespace DirectoryScope {
       for (const child of inner) {
         if (!child.isDirectory()) continue
         if (child.name === ".git" || NESTED_GIT_SKIP_NAMES.has(child.name)) continue
-        if (await hasDotGit(path.join(abs, child.name))) {
-          found.push(asGitPathspec(path.join(entry.name, child.name)))
+        if (await hasDotGit(childPath(abs, child.name))) {
+          found.push(asGitPathspec(`${entry.name}/${child.name}`))
         }
       }
     }

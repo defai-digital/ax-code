@@ -18,7 +18,7 @@ import {
 } from "./constants"
 import { AxEnginePaths } from "./paths"
 import { requirePlatformEligibility } from "./platform"
-import { AX_ENGINE_RUNTIME_REQUIRED_FILES, AX_ENGINE_RUNTIME_SIGNED_FILES } from "./payload"
+import { axEngineRuntimeFile, AX_ENGINE_RUNTIME_REQUIRED_FILES, AX_ENGINE_RUNTIME_SIGNED_FILES } from "./payload"
 
 const log = Log.create({ service: "ax-engine-install" })
 
@@ -115,7 +115,7 @@ async function pathExists(file: string): Promise<boolean> {
 export async function assertAxEngineRuntimePayload(installDir: string): Promise<void> {
   const missing: string[] = []
   for (const name of AX_ENGINE_RUNTIME_REQUIRED_FILES) {
-    if (!(await pathExists(path.join(installDir, name)))) missing.push(name)
+    if (!(await pathExists(axEngineRuntimeFile(installDir, name)))) missing.push(name)
   }
   if (missing.length) {
     throw new Error(
@@ -126,7 +126,9 @@ export async function assertAxEngineRuntimePayload(installDir: string): Promise<
 
 async function chmodRuntimePayload(installDir: string): Promise<void> {
   await Promise.all(
-    AX_ENGINE_RUNTIME_SIGNED_FILES.map((name) => fs.chmod(path.join(installDir, name), 0o755).catch(() => undefined)),
+    AX_ENGINE_RUNTIME_SIGNED_FILES.map((name) =>
+      fs.chmod(axEngineRuntimeFile(installDir, name), 0o755).catch(() => undefined),
+    ),
   )
 }
 
@@ -316,8 +318,9 @@ export async function installAxEngineBinary(
       await chmodRuntimePayload(installDir)
       await clearXattr(installDir)
       for (const name of AX_ENGINE_RUNTIME_SIGNED_FILES) {
-        await clearXattr(path.join(installDir, name))
-        await verify(path.join(installDir, name), release.teamId)
+        const runtimeFile = axEngineRuntimeFile(installDir, name)
+        await clearXattr(runtimeFile)
+        await verify(runtimeFile, release.teamId)
       }
       await smoke(binaryPath)
     } catch (error) {

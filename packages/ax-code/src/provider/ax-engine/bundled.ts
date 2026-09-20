@@ -2,6 +2,7 @@ import fs from "fs/promises"
 import { accessSync, constants as fsConstants } from "fs"
 import path from "path"
 import { Process } from "@/util/process"
+import { Filesystem } from "@/util/filesystem"
 import { AX_ENGINE_BINARY_RELEASE, AX_ENGINE_MANAGED_BINARY_NAME } from "./constants"
 import { AX_ENGINE_BUNDLED_DIR_NAME, missingAxEngineRuntimeFiles } from "./payload"
 
@@ -31,8 +32,17 @@ function runtimeRootFromEntry(entryPath: string | undefined): string | undefined
   return path.dirname(dir)
 }
 
+function bundledPath(runtimeRoot: string, ...segments: string[]) {
+  const root = path.resolve(runtimeRoot)
+  const candidate = path.resolve(root, ...segments)
+  if (!Filesystem.contains(Filesystem.resolve(root), Filesystem.resolve(candidate))) {
+    throw new Error("Bundled AX Engine path escapes the runtime root")
+  }
+  return candidate
+}
+
 export function bundledEngineDir(runtimeRoot: string, version: string) {
-  return path.join(runtimeRoot, AX_ENGINE_BUNDLED_DIR_NAME, version)
+  return bundledPath(runtimeRoot, AX_ENGINE_BUNDLED_DIR_NAME, version)
 }
 
 export async function getBundledBinary(
@@ -44,7 +54,7 @@ export async function getBundledBinary(
   const root = runtimeRootFromEntry(entry)
   if (!root) return undefined
   const dir = bundledEngineDir(root, release.version)
-  const binary = path.join(dir, AX_ENGINE_MANAGED_BINARY_NAME)
+  const binary = bundledPath(dir, AX_ENGINE_MANAGED_BINARY_NAME)
   if (!(await isExecutable(binary))) return undefined
   const missing = missingAxEngineRuntimeFiles(dir, existsSyncPath)
   if (missing.length) return undefined

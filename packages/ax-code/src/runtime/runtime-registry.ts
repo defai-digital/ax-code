@@ -11,6 +11,22 @@ import { parseJsonResult } from "@/util/json-value"
 import { ManagedRuntime } from "./managed-runtime"
 import { Installation } from "@/installation"
 import { Shell } from "@/shell/shell"
+import { Filesystem } from "@/util/filesystem"
+
+function runtimeRoot(): string {
+  const state = Filesystem.resolve(Global.Path.state)
+  const root = path.resolve(state, "runtime")
+  if (!Filesystem.contains(state, root)) throw new Error("Runtime registry path escapes the state directory")
+  return root
+}
+
+function runtimeRecordFile(root: string, name: string): string {
+  const resolvedRoot = Filesystem.resolve(root)
+  const file = path.resolve(resolvedRoot, name)
+  if (path.basename(name) !== name || !Filesystem.contains(resolvedRoot, file))
+    throw new Error(`Runtime registry record escapes its directory: ${name}`)
+  return file
+}
 
 export namespace RuntimeRegistry {
   export const Record = ManagedRuntime.Info.extend({
@@ -38,11 +54,11 @@ export namespace RuntimeRegistry {
   export async function location(directory: string) {
     const canonical = await fs.realpath(directory)
     if (!(await fs.stat(canonical)).isDirectory()) throw new Error("Runtime project must be a directory")
-    const root = path.join(Global.Path.state, "runtime")
+    const root = runtimeRoot()
     await fs.mkdir(root, { recursive: true, mode: 0o700 })
     await fs.chmod(root, 0o700)
     const key = createHash("sha256").update(canonical).digest("hex")
-    return { directory: canonical, file: path.join(root, `${key}.json`) }
+    return { directory: canonical, file: runtimeRecordFile(root, `${key}.json`) }
   }
 
   export async function read(file: string): Promise<Record | undefined> {
@@ -131,7 +147,7 @@ export namespace RuntimeRegistry {
   export async function list(): Promise<
     Array<{ directory: string; state: "running" | "unavailable"; record: Record }>
   > {
-    const root = path.join(Global.Path.state, "runtime")
+    const root = runtimeRoot()
     const entries = await fs.readdir(root, { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
       if (error.code === "ENOENT") return [] as import("node:fs").Dirent[]
       throw error
@@ -139,7 +155,7 @@ export namespace RuntimeRegistry {
     const records: Record[] = []
     for (const entry of entries) {
       if (!entry.isFile() || !entry.name.endsWith(".json")) continue
-      const record = await read(path.join(root, entry.name)).catch(() => undefined)
+      const record = await read(runtimeRecordFile(root, entry.name)).catch(() => undefined)
       if (record) records.push(record)
     }
     const probed = await Promise.all(

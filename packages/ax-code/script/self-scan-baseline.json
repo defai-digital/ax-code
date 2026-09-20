@@ -3,31 +3,13 @@
   "scope": "packages/ax-code/src, packages/ax-code-intel/src, packages/ax-code-reason/src",
   "scanners": {
     "race_scan": {
-      "count": 49,
+      "count": 47,
       "findings": [
         {
           "fingerprint": "06f87a1f14481b595da798d0184f8ce120d3e0ff858065f7e48ca62e2c8c57cd",
           "file": "../ax-code-reason/src/prewarm-lsp.ts",
           "line": 40,
           "endLine": 69,
-          "severity": "high",
-          "kind": "toctou",
-          "summary": "toctou"
-        },
-        {
-          "fingerprint": "5ab0137aea737af3add1f9e7f04ae4871d638616d3f3f54b8d9308ea67feba59",
-          "file": "src/provider/ax-engine/mtp.ts",
-          "line": 106,
-          "endLine": 109,
-          "severity": "high",
-          "kind": "toctou",
-          "summary": "toctou"
-        },
-        {
-          "fingerprint": "95450093106046af0006e1b585c68a3f9952b28254e18e2f6ad8b05a02a77fe1",
-          "file": "src/provider/ax-engine/mtp.ts",
-          "line": 127,
-          "endLine": 130,
           "severity": "high",
           "kind": "toctou",
           "summary": "toctou"
@@ -405,7 +387,7 @@
       ]
     },
     "lifecycle_scan": {
-      "count": 188,
+      "count": 186,
       "findings": [
         {
           "fingerprint": "a7c13622ba7e0d28b7440aa5beab525b97481bf7e13bbae3815fdbbbd7e01e47",
@@ -978,7 +960,7 @@
         {
           "fingerprint": "aeb732a3e004738dcf5dceb3c1b29b0e98191cd2c2425912729796cc339015d5",
           "file": "src/cli/cmd/run.ts",
-          "line": 831,
+          "line": 832,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1464,22 +1446,6 @@
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "d5a83da61a699d988dd95b555344b9ec6a42384d6ed204e8935f69363400d1e8",
-          "file": "src/provider/ax-engine/mtp.ts",
-          "line": 109,
-          "severity": "medium",
-          "kind": "map_growth:unbounded_growth",
-          "summary": "map_growth:unbounded_growth"
-        },
-        {
-          "fingerprint": "c370c1b9ae7d9eec3eacb1a26f5ecd0356945ea58248740d1402b48bb86d40b0",
-          "file": "src/provider/ax-engine/mtp.ts",
-          "line": 130,
-          "severity": "medium",
-          "kind": "map_growth:unbounded_growth",
-          "summary": "map_growth:unbounded_growth"
-        },
-        {
           "fingerprint": "18bd52525aeee67ce476a8823018f783c5f85cbaebc7cb383290c834024810e7",
           "file": "src/provider/ax-engine/provider-loader.ts",
           "line": 208,
@@ -1914,7 +1880,7 @@
       ]
     },
     "security_scan": {
-      "count": 514,
+      "count": 494,
       "findings": [
         {
           "fingerprint": "437e1d0157fc1965a429fe7f0e9474576f6c0db625ea27bb6ce1b57af9e2cd9f",
@@ -2645,14 +2611,6 @@
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "88ec4ba60ec09f8389052ef7cad6e9b3cb3d4e1ae4f932ed44bd1f90c4e1c105",
-          "file": "src/cli/cmd/headless-run.ts",
-          "line": 262,
-          "severity": "high",
-          "kind": "ssrf",
-          "summary": "ssrf"
-        },
-        {
           "fingerprint": "828b6136fdcebb0699f0de9e2638e5b4b597dda8b7341133782bda75dd73111e",
           "file": "src/cli/cmd/headless-run.ts",
           "line": 270,
@@ -2821,17 +2779,9 @@
           "summary": "ssrf"
         },
         {
-          "fingerprint": "81ff85b626e55261170624ed91f585835efc8d7b69995532986c97e845f03b70",
-          "file": "src/cli/cmd/run.ts",
-          "line": 578,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
           "fingerprint": "9342baba56a2e3ba03eaaaeb1e5be5559a06065d619e0f414c6f87b0d8518c17",
           "file": "src/cli/cmd/run.ts",
-          "line": 607,
+          "line": 608,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -2839,7 +2789,7 @@
         {
           "fingerprint": "db31dfbdb93d79ab3cc3ba6dc1e8d2ef717988dd7bc5e9e915cadca7995381be",
           "file": "src/cli/cmd/run.ts",
-          "line": 614,
+          "line": 615,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -2847,7 +2797,7 @@
         {
           "fingerprint": "6de2f8c078c30477597d3011651f6187e13c2d3aff538a466b0b77abe54808e1",
           "file": "src/cli/cmd/run.ts",
-          "line": 738,
+          "line": 739,
           "severity": "high",
           "kind": "ssrf",
           "summary": "ssrf"
@@ -2855,7 +2805,7 @@
         {
           "fingerprint": "8abe35e3599e300098c2ccfc56f040ce0dd638c7464afed812d34d750198a79a",
           "file": "src/cli/cmd/run.ts",
-          "line": 1204,
+          "line": 1205,
           "severity": "high",
           "kind": "ssrf",
           "summary": "ssrf"
@@ -2864,14 +2814,6 @@
           "fingerprint": "0b6f012a31e31cd8d98a2d41397deaec2144fedf2fc21a48e980f919101deaf3",
           "file": "src/cli/cmd/runtime/restart.ts",
           "line": 28,
-          "severity": "high",
-          "kind": "ssrf",
-          "summary": "ssrf"
-        },
-        {
-          "fingerprint": "3fbb01b3a107f4ae6fe38e34e54787ec0d027669eabe3f5a6c926ffbeb4fad00",
-          "file": "src/cli/cmd/schedule-impl.ts",
-          "line": 119,
           "severity": "high",
           "kind": "ssrf",
           "summary": "ssrf"
@@ -3647,7 +3589,7 @@
         {
           "fingerprint": "76738db0be14c9b1b4d761c98d9fd87a4bf254b5b2d152de747ce1fcba2d9f40",
           "file": "src/file/directory-scope.ts",
-          "line": 29,
+          "line": 37,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3655,7 +3597,7 @@
         {
           "fingerprint": "af1eda53bf55964ef44e859987ea55f6c4a4295052769bf2cbb9c3c97241a333",
           "file": "src/file/directory-scope.ts",
-          "line": 30,
+          "line": 38,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3663,31 +3605,7 @@
         {
           "fingerprint": "7ccc0dfa6c8789697bf8c9fde02b5a44df14f4b429b0bcc05a6184c26f843ced",
           "file": "src/file/directory-scope.ts",
-          "line": 31,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
-          "fingerprint": "d7d2692dbf3b5f6260c2d4ae92bc02e308d928fd50bc3be2e010fd8730647ad0",
-          "file": "src/file/directory-scope.ts",
-          "line": 68,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
-          "fingerprint": "6f846adb9b3d779f6968c3ae72b2053f7764592b6cace6851b211f2d84c3405b",
-          "file": "src/file/directory-scope.ts",
-          "line": 122,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
-          "fingerprint": "1a9316f6ee8678a54cc3c7ee96efffad6ab35213292771c0400a5c6bc308000d",
-          "file": "src/file/directory-scope.ts",
-          "line": 123,
+          "line": 39,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -4365,14 +4283,6 @@
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "cdfc350ba7b52eb5e88ae43b0a989baa0cc7dcb794d32f244782a5f167bd8001",
-          "file": "src/provider/ax-engine/bundled.ts",
-          "line": 47,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
           "fingerprint": "b067bee239ee84cb9b8f4de3308d5f1caba067a8d62c4d182143bdcbd58312af",
           "file": "src/provider/ax-engine/delete.ts",
           "line": 28,
@@ -4533,41 +4443,9 @@
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "b647111eadf7eb5c6c16158903c8fb7c65235f2a21ac25e9bae01a3cd05a0b3d",
-          "file": "src/provider/ax-engine/install.ts",
-          "line": 118,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
-          "fingerprint": "4e0d16776ee92d6a48fca15facde7efa42e9bf7d135262df4431bd2aa69c0699",
-          "file": "src/provider/ax-engine/install.ts",
-          "line": 129,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
           "fingerprint": "ff99e5f77e69e9fd8e239cf100742eefc54df672473f5006f2422d3249ef2658",
           "file": "src/provider/ax-engine/install.ts",
           "line": 208,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
-          "fingerprint": "e4aa5696f66390e052d46c66f45f73d795d179e8850c66c6a4ba2eefa1df7b63",
-          "file": "src/provider/ax-engine/install.ts",
-          "line": 319,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
-          "fingerprint": "26fd03284168e9534e8276e23657df0fa83e7f1cc0ece780386651d46e392ed7",
-          "file": "src/provider/ax-engine/install.ts",
-          "line": 320,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -4624,46 +4502,6 @@
           "fingerprint": "e61d3cda462e4fea0f377b44ea46969dc02854aee0fb8836898634d02d070065",
           "file": "src/provider/ax-engine/model-cache.ts",
           "line": 923,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
-          "fingerprint": "cd3c8b2ec101c0f2836df5477eaf8a3dc010706947c232b6090fd30d29284c67",
-          "file": "src/provider/ax-engine/mtp.ts",
-          "line": 101,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
-          "fingerprint": "8544544f810e354c40cacfeae06604d329f6aefe3b2190220b5cb61c010d25ce",
-          "file": "src/provider/ax-engine/mtp.ts",
-          "line": 125,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
-          "fingerprint": "659bc1dc104d2ea3379faf3516f8d496e8be971d86a4d416a828a5576ffa945d",
-          "file": "src/provider/ax-engine/mtp.ts",
-          "line": 155,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
-          "fingerprint": "82547462c252b2c88380f24ae4c172fc137057cd8cfd1455e9aca7fd4cf3792b",
-          "file": "src/provider/ax-engine/mtp.ts",
-          "line": 214,
-          "severity": "high",
-          "kind": "ssrf",
-          "summary": "ssrf"
-        },
-        {
-          "fingerprint": "4d4dccf715e3a3ea5ac3fdafcb7bb2b1db565d442bc88fae80f617fac7ca2417",
-          "file": "src/provider/ax-engine/payload.ts",
-          "line": 28,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -4789,49 +4627,17 @@
           "summary": "ssrf"
         },
         {
-          "fingerprint": "5d0a7a01837c0a236e9669e21d17467464ffd26330b648f0f443b060f2b7ad86",
-          "file": "src/runtime/runtime-registry.ts",
-          "line": 41,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
-          "fingerprint": "80a238d057a3ed42aabeda6418870bfc2d5a72c8ed3e0ff95e17fa24dc056daa",
-          "file": "src/runtime/runtime-registry.ts",
-          "line": 45,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
           "fingerprint": "2102ac0c173884f0d19f7b9b434df2c58945859c98da97fd082581f2fd453f57",
           "file": "src/runtime/runtime-registry.ts",
-          "line": 79,
+          "line": 95,
           "severity": "high",
           "kind": "ssrf",
           "summary": "ssrf"
         },
         {
-          "fingerprint": "1a52860fdf38764c1bb9361774927dfbc6e464235f81e5b1afcdc3022af681ac",
-          "file": "src/runtime/runtime-registry.ts",
-          "line": 134,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
-          "fingerprint": "ee08b37ae6932314d031fb2663635ed1c5840890ea09f1762d9c8510f8cd3b91",
-          "file": "src/runtime/runtime-registry.ts",
-          "line": 142,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
           "fingerprint": "d3f98629a03fc8c73d0cafdd4390bb6fe9907163a59006fb6fb4a464b96a8f32",
           "file": "src/runtime/runtime-registry.ts",
-          "line": 239,
+          "line": 255,
           "severity": "high",
           "kind": "ssrf",
           "summary": "ssrf"
@@ -5975,7 +5781,7 @@
         {
           "fingerprint": "12098f39db2a42526133e2c4136f93efed050d436ba2ce74c527e5125a799a69",
           "file": "src/runtime/runtime-registry.ts",
-          "line": 190,
+          "line": 206,
           "severity": "medium",
           "kind": "env_leak",
           "summary": "env_leak"
@@ -6031,7 +5837,7 @@
       ]
     },
     "hardcode_scan": {
-      "count": 76,
+      "count": 75,
       "findings": [
         {
           "fingerprint": "a6bd914a7535ff247af90bb657c68be41d273fa7f12420175006d8274a4b83d3",
@@ -6301,14 +6107,6 @@
           "fingerprint": "982880f8df455c6e50b044614a84fb9243d70ef2f96842307f2da2b1bec1c315",
           "file": "src/mcp/templates/index.ts",
           "line": 201,
-          "severity": "medium",
-          "kind": "inline_url",
-          "summary": "inline_url"
-        },
-        {
-          "fingerprint": "84bd29158ab1bfc97e8488cbd8c738f5a03cf4392bcd698d91ee5167d48ed187",
-          "file": "src/provider/ax-engine/constants.ts",
-          "line": 239,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"

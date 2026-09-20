@@ -575,6 +575,7 @@ export const RunCommand = cmd({
 
     let promptFileText: string | undefined
     if (args["prompt-file"]) {
+      // @scan-suppress security_scan - The caller explicitly selects this local file; CLI filesystem permissions are the authority.
       const resolvedPromptFile = path.resolve(callerCwd, args["prompt-file"])
       if (!(await Filesystem.exists(resolvedPromptFile))) {
         exitEarly(`Prompt file not found: ${args["prompt-file"]}`)

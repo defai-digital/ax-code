@@ -228,6 +228,9 @@ export type AxEngineBinaryRelease = {
   teamId?: string
 }
 
+const AX_ENGINE_RELEASE_ORIGIN = "https://github.com"
+const AX_ENGINE_BINARY_RELEASE_URL = `${AX_ENGINE_RELEASE_ORIGIN}/defai-digital/ax-engine/releases/download/v7.4.0/ax-engine-v7.4.0-macos-arm64.tar.gz`
+
 // Pinned self-contained macOS archive (binaries + MLX dylibs + metallib).
 // Darwin-arm64 AX Code releases stage this under engine/<version>/ as the
 // default floor. The same pin is the managed overlay/updater. Homebrew is an
@@ -236,7 +239,7 @@ export type AxEngineBinaryRelease = {
 export const AX_ENGINE_BINARY_RELEASE: AxEngineBinaryRelease = {
   version: "7.4.0",
   assetName: "ax-engine-v7.4.0-macos-arm64.tar.gz",
-  url: "https://github.com/defai-digital/ax-engine/releases/download/v7.4.0/ax-engine-v7.4.0-macos-arm64.tar.gz",
+  url: AX_ENGINE_BINARY_RELEASE_URL,
   sha256: "f01467bcd7ac6214263eb02f3bac9f5ddc508c48c0729ca2e7dc4e7c628a229d",
   teamId: "N5ZUZDUJS6",
 }

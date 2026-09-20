@@ -5,6 +5,7 @@ import { cmd } from "./cmd"
 import { ScheduledTask } from "../../session/scheduled-task"
 import { ScheduledTaskID } from "../../session/schema"
 import { RuntimeRegistry } from "@/runtime/runtime-registry"
+import { assertLoopbackHttpUrl } from "@/runtime/listen-security"
 import { parseJsonResult } from "@/util/json-value"
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
@@ -116,7 +117,8 @@ async function liveRuntimeRecord(): Promise<RuntimeRegistry.Record | undefined> 
 }
 
 async function runtimeFetch(record: RuntimeRegistry.Record, path: string, method: "POST" | "DELETE") {
-  const response = await fetch(new URL(path, record.url), {
+  const origin = assertLoopbackHttpUrl(record.url, "managed runtime URL")
+  const response = await fetch(new URL(path, origin), {
     method,
     headers: { ...RuntimeRegistry.headers(record), "content-type": "application/json" },
     body: method === "POST" ? "{}" : undefined,

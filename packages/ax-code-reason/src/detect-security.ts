@@ -289,7 +289,7 @@ function detectSsrf(lines: string[], file: string, max: number): DebugEngine.Sec
   // fetch or axios with a variable (not a string literal)
   const fetchRe = /(?:fetch|axios\.(?:get|post|put|delete|patch|request))\s*\(\s*(\w+)/
   // URL validation patterns
-  const ssrfGuardRe = /(?:assertPublicUrl|isPublic|validateUrl|Ssrf\.|allowedHosts|urlAllowlist)/
+  const ssrfGuardRe = /(?:assertPublicUrl|assertLoopbackHttpUrl|isPublic|validateUrl|Ssrf\.|allowedHosts|urlAllowlist)/
 
   for (let i = 0; i < lines.length; i++) {
     if (findings.length >= max) break

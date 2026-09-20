@@ -4,6 +4,7 @@ import z from "zod"
 import semver from "semver"
 import { parseJsonResult } from "../../util/json-value"
 import { assertLoopbackHttpUrl } from "../../runtime/listen-security"
+import { Filesystem } from "../../util/filesystem"
 import { AX_ENGINE_ERROR } from "./constants"
 
 export const AxEngineMtpPolicy = z.enum(["disabled", "auto", "required"])
@@ -72,11 +73,25 @@ const AX_ENGINE_SERVER_BINARY_NAME = "ax-engine-server"
 // Distinctive literal compiled into engines carrying the sidecar namespace
 // normalization (ax-engine weights.rs normalize_mtp_sidecar_namespace).
 const MTP_NAMESPACE_NORMALIZATION_MARKER = "MTP sidecar namespace normalization"
+const MTP_PROBE_CACHE_MAX_ENTRIES = 256
 
 export type AxEngineMtpSidecarNamespace = "bare" | "prefixed" | "unknown"
 
 const sidecarNamespaceCache = new Map<string, { mtimeMs: number; namespace: AxEngineMtpSidecarNamespace }>()
 const binaryCapabilityCache = new Map<string, { mtimeMs: number; size: number; supports: boolean }>()
+
+function containedFile(root: string, name: string): string {
+  const resolvedRoot = Filesystem.resolve(root)
+  const candidate = path.resolve(resolvedRoot, name)
+  if (path.basename(name) !== name || !Filesystem.contains(resolvedRoot, candidate))
+    throw new TypeError(`AX Engine probe path escapes its parent: ${name}`)
+  return candidate
+}
+
+function boundedCacheSet<T>(cache: Map<string, T>, key: string, value: T) {
+  if (!cache.has(key) && cache.size >= MTP_PROBE_CACHE_MAX_ENTRIES) cache.delete(cache.keys().next().value!)
+  cache.set(key, value)
+}
 
 async function detectMtpSidecarNamespace(
   handle: Awaited<ReturnType<typeof fs.open>>,
@@ -98,15 +113,16 @@ async function detectMtpSidecarNamespace(
 
 /** Read the pack's sidecar tensor namespace from its header; failures stay "unknown" (fail-open). */
 export async function readAxEngineMtpSidecarNamespace(modelPath: string): Promise<AxEngineMtpSidecarNamespace> {
-  const file = path.join(modelPath, MTP_SIDECAR_FILE)
+  const file = containedFile(modelPath, MTP_SIDECAR_FILE)
   let handle: Awaited<ReturnType<typeof fs.open>> | undefined
   try {
     handle = await fs.open(file, "r")
     const stat = await handle.stat()
+    // @scan-suppress race_scan - Probe-cache entries are immutable observations; duplicate probes only replace equivalent metadata.
     const cached = sidecarNamespaceCache.get(file)
     if (cached && cached.mtimeMs === stat.mtimeMs) return cached.namespace
     const namespace = await detectMtpSidecarNamespace(handle)
-    sidecarNamespaceCache.set(file, { mtimeMs: stat.mtimeMs, namespace })
+    boundedCacheSet(sidecarNamespaceCache, file, { mtimeMs: stat.mtimeMs, namespace })
     return namespace
   } catch {
     return "unknown"
@@ -122,12 +138,13 @@ export async function readAxEngineMtpSidecarNamespace(modelPath: string): Promis
 export async function axEngineSupportsPrefixedMtpSidecar(binaryPath: string): Promise<boolean | undefined> {
   try {
     const launcher = await fs.realpath(binaryPath)
-    const server = await fs.realpath(path.join(path.dirname(launcher), AX_ENGINE_SERVER_BINARY_NAME))
+    const server = await fs.realpath(containedFile(path.dirname(launcher), AX_ENGINE_SERVER_BINARY_NAME))
     const stat = await fs.stat(server)
+    // @scan-suppress race_scan - Probe-cache entries are immutable observations; duplicate probes only replace equivalent metadata.
     const cached = binaryCapabilityCache.get(server)
     if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached.supports
     const supports = (await fs.readFile(server)).includes(MTP_NAMESPACE_NORMALIZATION_MARKER)
-    binaryCapabilityCache.set(server, { mtimeMs: stat.mtimeMs, size: stat.size, supports })
+    boundedCacheSet(binaryCapabilityCache, server, { mtimeMs: stat.mtimeMs, size: stat.size, supports })
     return supports
   } catch {
     return undefined
@@ -152,7 +169,7 @@ export async function assertAxEngineMtpPackCompatibility(input: {
   throw new AxEngineMtpLaunchError(
     `${AX_ENGINE_ERROR.VersionUnsupported}: this model pack's MTP sidecar uses the ${MTP_SIDECAR_PREFIXED_NAMESPACE}* tensor namespace, which the resolved ax-engine-server cannot load (MTP sidecar namespace normalization landed after ax-engine v7.4.0)\n` +
       `Resolved binary: ${input.binaryPath}\n` +
-      `Model pack: ${path.join(input.modelPath, MTP_SIDECAR_FILE)}\n` +
+      `Model pack: ${containedFile(input.modelPath, MTP_SIDECAR_FILE)}\n` +
       "Point provider.ax-engine.options.binaryPath or AX_ENGINE_BIN at an AX Engine build with Tiel pack support, or upgrade AX Engine.",
   )
 }

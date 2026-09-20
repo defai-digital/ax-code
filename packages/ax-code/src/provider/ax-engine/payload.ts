@@ -25,7 +25,18 @@ export const AX_ENGINE_RUNTIME_SIGNED_FILES = [
 ] as const
 
 export function axEngineRuntimeFile(dir: string, name: string) {
-  return path.join(dir, name)
+  // @scan-suppress security_scan - name is checked against traversal before this helper returns.
+  const root = path.resolve(dir)
+  const file = path.resolve(root, name)
+  const relative = path.relative(root, file)
+  if (
+    path.basename(name) !== name ||
+    relative === ".." ||
+    relative.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relative)
+  )
+    throw new TypeError(`AX Engine runtime file escapes its directory: ${name}`)
+  return file
 }
 
 export function missingAxEngineRuntimeFiles(dir: string, exists: (file: string) => boolean): string[] {
