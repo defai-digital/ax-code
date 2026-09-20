@@ -21,7 +21,7 @@ import type { AxEngineServerOptions } from "../../../src/provider/ax-engine/serv
 import { AxEngineStartupError } from "../../../src/provider/ax-engine/errors"
 import { resolveAxEngineSetup } from "../../../src/provider/ax-engine/setup"
 
-async function fixture(mode: "ready" | "unready" | "exit" = "ready") {
+async function fixture(mode: "ready" | "unready" | "exit" | "reload" = "ready") {
   const tmp = await tmpdir()
   const originalPaths = { ...AxEnginePaths }
   Object.assign(AxEnginePaths, {
@@ -39,7 +39,11 @@ async function fixture(mode: "ready" | "unready" | "exit" = "ready") {
 const http = require("node:http")
 const port = Number(process.argv[process.argv.indexOf("--port") + 1])
 http.createServer((req, res) => {
-  res.writeHead(${mode === "ready" ? 200 : 503}, { "content-type": "application/json" })
+  if (${mode === "reload"} && req.url === "/v1/model/load") {
+    require("node:fs").writeFileSync(${JSON.stringify(path.join(tmp.path, "reload-started"))}, "started")
+    return
+  }
+  res.writeHead(${mode === "unready" ? 503 : 200}, { "content-type": "application/json" })
   res.end('{"data":[]}')
 }).listen(port, "127.0.0.1")
 `,
@@ -81,6 +85,80 @@ http.createServer((req, res) => {
 // Managed process identity currently uses Unix ps; these fixtures exercise
 // real subprocesses and HTTP without loading weights or touching host state.
 describe.skipIf(process.platform === "win32")("managed engine residency", () => {
+  test.each(["launcher", "server", "version", "legacy"])(
+    "restarts once when binary identity changes: %s",
+    async (change) => {
+      await using f = await fixture()
+      const sibling = path.join(path.dirname(f.input.binaryPath), "ax-engine-server")
+      await fs.writeFile(sibling, "old native server")
+      const input = { ...f.input, binaryVersion: "7.4.0" }
+      const previous = await ensureServer(input)
+      if (change === "launcher") await fs.appendFile(input.binaryPath, "# rebuilt launcher\n")
+      if (change === "server") await fs.writeFile(sibling, "new native server build")
+      if (change === "version") input.binaryVersion = "7.4.1"
+      if (change === "legacy") {
+        const state = JSON.parse(await fs.readFile(AxEnginePaths.serverState, "utf8"))
+        delete state.binaryIdentity
+        await fs.writeFile(AxEnginePaths.serverState, JSON.stringify(state))
+      }
+      const current = await ensureServer(input)
+      expect(current.pid).not.toBe(previous.pid)
+      expect((await ensureServer(input)).pid).toBe(current.pid)
+      expect(f.children).toHaveLength(2)
+      await expect(f.children[0].exited).resolves.toBeTypeOf("number")
+    },
+  )
+
+  test("cancelled model reload reaps the uncertain server before releasing the lifecycle lock", async () => {
+    await using f = await fixture("reload")
+    const previous = await ensureServer(f.input)
+    const caller = new AbortController()
+    const reason = new DOMException("Model switch cancelled", "AbortError")
+    const pending = ensureServer({ ...f.input, modelPath: `${f.input.modelPath}-other`, signal: caller.signal })
+    const rejected = expect(pending).rejects.toBe(reason)
+    await vi.waitFor(
+      async () => {
+        await fs.access(path.join(path.dirname(f.input.binaryPath), "reload-started"))
+      },
+      { timeout: 5_000 },
+    )
+    caller.abort(reason)
+    await rejected
+    await expect(fs.access(AxEnginePaths.serverState)).rejects.toThrow()
+    await expect(f.children[0].exited).resolves.toBeTypeOf("number")
+    expect(f.children).toHaveLength(1)
+    expect((await ensureServer(f.input)).pid).not.toBe(previous.pid)
+  })
+
+  test("failed reload cleanup retains an invalidated record and never starts a second engine", async () => {
+    await using f = await fixture("reload")
+    const previous = await ensureServer(f.input)
+    const caller = new AbortController()
+    const kill = process.kill
+    const failure = Object.assign(new Error("Termination denied"), { code: "EPERM" })
+    const killSpy = vi.spyOn(process, "kill").mockImplementation((pid, signal) => {
+      if (pid === previous.pid && signal === "SIGTERM") throw failure
+      return kill(pid, signal)
+    })
+    const pending = ensureServer({ ...f.input, modelPath: `${f.input.modelPath}-other`, signal: caller.signal })
+    const rejected = expect(pending).rejects.toBe(failure)
+    await vi.waitFor(
+      async () => {
+        await fs.access(path.join(path.dirname(f.input.binaryPath), "reload-started"))
+      },
+      { timeout: 5_000 },
+    )
+    caller.abort()
+    await rejected
+    const state = JSON.parse(await fs.readFile(AxEnginePaths.serverState, "utf8"))
+    expect(state.pid).toBe(previous.pid)
+    expect(state.binaryIdentity).toBeUndefined()
+    await expect(ensureServer(f.input)).rejects.toBe(failure)
+    expect(f.children).toHaveLength(1)
+    killSpy.mockRestore()
+    expect((await ensureServer(f.input)).pid).not.toBe(previous.pid)
+  })
+
   test("replaces legacy prefix geometry once and then keeps the aligned server resident", async () => {
     await using f = await fixture()
     const input = { ...f.input, binaryVersion: "7.4.0", contextTokens: 65_536 }

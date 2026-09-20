@@ -11,7 +11,12 @@ import {
   resolveAxEnginePrefixCacheLaunchConfig,
 } from "../../../src/provider/ax-engine/constants"
 import { AxEnginePaths } from "../../../src/provider/ax-engine/paths"
-import { ensureServer, getServerStatus, type AxEngineServerState } from "../../../src/provider/ax-engine/server"
+import {
+  axEngineBinaryIdentity,
+  ensureServer,
+  getServerStatus,
+  type AxEngineServerState,
+} from "../../../src/provider/ax-engine/server"
 
 const originalPaths = { ...AxEnginePaths }
 const originalKill = process.kill.bind(process)
@@ -55,6 +60,8 @@ async function isolate(dir: string) {
   ])
     vi.stubEnv(name, undefined)
   const prefixCache = resolveAxEnginePrefixCacheLaunchConfig({ defaultDir: AxEnginePaths.prefixCache })
+  const binaryPath = path.join(dir, "ax-engine")
+  await fs.writeFile(binaryPath, "fixture launcher")
   const state: AxEngineServerState = {
     prefixCacheDir: prefixCache.dir,
     prefixCacheMaxBytes: prefixCache.maxBytes,
@@ -67,7 +74,8 @@ async function isolate(dir: string) {
     modelID: AX_ENGINE_DEFAULT_MODEL_ID,
     apiModelID: AX_ENGINE_DEFAULT_MODEL_ID,
     modelPath: "/models/old",
-    binaryPath: "/bin/ax-engine",
+    binaryPath,
+    binaryIdentity: await axEngineBinaryIdentity({ binaryPath }),
     startedAt: 1,
   }
   await fs.writeFile(AxEnginePaths.serverState, JSON.stringify(state))

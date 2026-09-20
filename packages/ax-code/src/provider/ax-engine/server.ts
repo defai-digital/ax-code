@@ -1,4 +1,5 @@
 import fs from "fs/promises"
+import { createHash } from "node:crypto"
 import path from "path"
 import { Socket } from "node:net"
 import { setTimeout as delay } from "node:timers/promises"
@@ -51,6 +52,7 @@ export const AxEngineServerState = z.object({
   modelPath: z.string(),
   modelRevision: z.string().optional(),
   binaryPath: z.string(),
+  binaryIdentity: z.string().optional(),
   contextTokens: z.number().int().positive().optional(),
   blockSizeTokens: z.number().int().positive().optional(),
   prefillChunk: z.number().int().positive().optional(),
@@ -215,6 +217,31 @@ function originFromBaseURL(baseURL: string) {
   return `${url.protocol}//${url.host}`
 }
 
+// Observe metadata only: hashing large executables on each model request
+// would defeat resident reuse. Include the resolved launcher and its native
+// sibling, since package upgrades can replace either independently.
+export async function axEngineBinaryIdentity(
+  options: Pick<AxEngineServerOptions, "binaryPath" | "binaryVersion">,
+): Promise<string> {
+  const launcher = await fs.realpath(options.binaryPath)
+  const files = [launcher, path.join(path.dirname(launcher), "ax-engine-server")]
+  const identities = await Promise.all(
+    files.map(async (file, index) => {
+      try {
+        const resolved = await fs.realpath(file)
+        const stat = await fs.stat(resolved, { bigint: true })
+        return [resolved, stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs].map(String)
+      } catch (error) {
+        if (index === 1 && (error as NodeJS.ErrnoException).code === "ENOENT") return [file, "absent"]
+        throw error
+      }
+    }),
+  )
+  return createHash("sha256")
+    .update(JSON.stringify([options.binaryVersion ?? null, identities]))
+    .digest("hex")
+}
+
 async function readServerState(): Promise<{ state?: AxEngineServerState; error?: unknown }> {
   try {
     return { state: AxEngineServerState.parse(await Filesystem.readJson(AxEnginePaths.serverState)) }
@@ -319,16 +346,20 @@ async function terminateServerProcess(state: Pick<AxEngineServerState, "pid" | "
   if (!(await serverProcessAlive(state))) return
   try {
     process.kill(state.pid, "SIGTERM")
-  } catch {
-    return
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ESRCH") return
+    throw error
   }
   if (await waitForPidExit(state.pid, SERVER_EXIT_GRACE_MS)) return
   try {
     process.kill(state.pid, "SIGKILL")
-  } catch {
-    return
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ESRCH") return
+    throw error
   }
-  await waitForPidExit(state.pid, 2_000)
+  if (!(await waitForPidExit(state.pid, 2_000))) {
+    throw new Error(`${AX_ENGINE_ERROR.ServerStartFailed}: ax-engine server ${state.pid} did not exit`)
+  }
 }
 
 type WaitForReadyResult =
@@ -688,7 +719,8 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     throw new Error(`${AX_ENGINE_ERROR.ServerStartFailed}: failed to read server state`)
   }
   const existing = existingResult.state
-  const binaryMatches = existing?.binaryPath === options.binaryPath
+  const identity = await axEngineBinaryIdentity(options)
+  const binaryMatches = existing?.binaryPath === options.binaryPath && existing.binaryIdentity === identity
   // The context window is fixed at launch (KV-cache block pool), so a running
   // server whose contextTokens differ from the request — e.g. an older build
   // that started it at the default 16384 — must be relaunched, not reused.
@@ -751,6 +783,10 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
         )
           return existing
         try {
+          // Invalidate reuse before sending a mutating request. If this caller
+          // dies or process cleanup fails, retain the PID for recovery but do
+          // not trust its previously recorded model on the next ensure.
+          await writeServerState({ ...existing, binaryIdentity: undefined })
           await loadServerModel({
             baseURL: existing.baseURL,
             apiModelID: options.apiModelID,
@@ -782,9 +818,12 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
           await writeServerState(nextState)
           return nextState
         } catch {
-          options.signal?.throwIfAborted()
+          // A disconnected load request may still mutate the engine. Reclaim
+          // it before propagating cancellation so stale model state cannot
+          // authorize reuse by the next lifecycle-lock holder.
           await terminateServerProcess(existing)
           await removeServerState()
+          options.signal?.throwIfAborted()
         }
       } else {
         // The concurrency cap is fixed at launch, so changing
@@ -794,7 +833,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
         log.info("relaunching ax-engine server: launch parameters changed", {
           pid: existing.pid,
           mismatches: [
-            !binaryMatches ? "binaryPath changed" : undefined,
+            !binaryMatches ? "binary identity changed" : undefined,
             !contextMatches ? `contextTokens: ${existing.contextTokens} -> ${options.contextTokens}` : undefined,
             !prefixGeometryMatches ? "prefix block size or prefill chunk changed" : undefined,
             !maxOutputTokensMatches ? `maxOutputTokens: ${existing.maxOutputTokens} -> ${maxOutputTokens}` : undefined,
@@ -912,6 +951,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     modelPath: options.modelPath,
     modelRevision: options.modelRevision,
     binaryPath: options.binaryPath,
+    binaryIdentity: identity,
     contextTokens: options.contextTokens,
     blockSizeTokens,
     prefillChunk,
