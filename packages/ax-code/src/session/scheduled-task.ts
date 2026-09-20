@@ -810,7 +810,13 @@ export namespace ScheduledTask {
       }
       // Missed detection is based on the NOMINAL schedule so jitter can never
       // corrupt catch-up accounting (council: grace/coalescing use nominal times).
-      const missed = now - task.nextRunAt > MISSED_RUN_GRACE_MS
+      // A one-shot whose stored next_run_at no longer equals the nominal runAt
+      // is a failure-policy retry (or an overlap re-arm), not a missed calendar
+      // occurrence — the skip catch-up policy must not disable it for being
+      // late, or a single failed fire plus a short backend outage would
+      // silently kill the reminder the failure policy was meant to retry.
+      const oneShotRetry = task.schedule.type === "once" && task.nextRunAt !== task.schedule.runAt
+      const missed = !oneShotRetry && now - task.nextRunAt > MISSED_RUN_GRACE_MS
       // Deterministic anti-herd spread applies only to on-time fires and is capped
       // below the grace window, so a jitter-delayed task is never misread as missed.
       if (!missed && now < task.nextRunAt + jitterOffsetMs(task)) continue
@@ -1120,7 +1126,12 @@ export namespace ScheduledTask {
       agent: task.agent,
       model: task.model,
       sourceTaskID: task.id,
-      executionTimeoutMs: task.maxRunDurationMs,
+      // The executor's own fallback timeout (72h) is the global queue default;
+      // scheduled runs must enforce the same deadline the overlap/orphan
+      // accounting uses. Otherwise a still-executing run past deadline+grace is
+      // mislabeled orphaned and the next occurrence double-fires while the
+      // late outcome can no longer find its run row.
+      executionTimeoutMs: task.maxRunDurationMs ?? DEFAULT_RUN_DEADLINE_MS,
       payload: {
         scheduledTaskID: task.id,
         scheduledOccurrenceAt: occurrenceAt,
@@ -1710,7 +1721,8 @@ function nextCronRun(expression: string, from: number, timezone?: string): numbe
         const dd = new Date(ms)
         const dk = dd.getFullYear() * 10000 + (dd.getMonth() + 1) * 100 + dd.getDate()
         if (dk !== dayKey) break
-        if (parsed.minutes.has(dd.getMinutes()) && parsed.hours.has(dd.getHours())) return ms
+        if (parsed.minutes.has(dd.getMinutes()) && parsed.hours.has(dd.getHours()) && !isLocalRepeatedWallMinute(ms))
+          return ms
         ms += 60_000
       }
     }
@@ -1741,11 +1753,63 @@ function nextCronRun(expression: string, from: number, timezone?: string): numbe
         advanced = true
         break
       }
-      if (cursor >= startMs && parsed.minutes.has(cc.minute) && parsed.hours.has(cc.hour)) return cursor
+      if (
+        cursor >= startMs &&
+        parsed.minutes.has(cc.minute) &&
+        parsed.hours.has(cc.hour) &&
+        !isTzRepeatedWallMinute(cursor, fmt, cc)
+      )
+        return cursor
     }
     ms = advanced ? cursor : cursor + 60_000
   }
   return undefined
+}
+
+// During a DST fall-back the same wall-clock minute occurs twice. Cron shares
+// the calendar-occurrence semantics of daily/weekly schedules: fire on the
+// first occurrence only, so a candidate whose identical wall minute already
+// happened earlier on the same local date is the repeated copy and is skipped.
+// A repeat is only possible when the zone offset decreased within the last few
+// hours (every IANA fall-back shift is well under three), which gates the
+// precise backward scan off the common path.
+const FALLBACK_REPEAT_WINDOW_MS = 3 * 60 * 60 * 1_000
+const FALLBACK_REPEAT_WINDOW_MINUTES = FALLBACK_REPEAT_WINDOW_MS / MS_PER_MINUTE
+
+function localOffsetMs(ms: number): number {
+  const base = ms - (ms % MS_PER_MINUTE)
+  const d = new Date(base)
+  return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes()) - base
+}
+
+function isLocalRepeatedWallMinute(ms: number): boolean {
+  if (localOffsetMs(ms - FALLBACK_REPEAT_WINDOW_MS) <= localOffsetMs(ms)) return false
+  const target = new Date(ms)
+  const targetDay = target.getFullYear() * 10000 + (target.getMonth() + 1) * 100 + target.getDate()
+  for (let back = 1; back <= FALLBACK_REPEAT_WINDOW_MINUTES; back++) {
+    const c = new Date(ms - back * MS_PER_MINUTE)
+    const day = c.getFullYear() * 10000 + (c.getMonth() + 1) * 100 + c.getDate()
+    if (day !== targetDay) return false
+    if (c.getHours() === target.getHours() && c.getMinutes() === target.getMinutes()) return true
+  }
+  return false
+}
+
+function tzOffsetMs(ms: number, fmt: Intl.DateTimeFormat): number {
+  const base = ms - (ms % MS_PER_MINUTE)
+  const c = tzComponents(base, fmt)
+  return Date.UTC(c.year, c.month - 1, c.day, c.hour, c.minute) - base
+}
+
+function isTzRepeatedWallMinute(ms: number, fmt: Intl.DateTimeFormat, target: TzComponents): boolean {
+  if (tzOffsetMs(ms - FALLBACK_REPEAT_WINDOW_MS, fmt) <= tzOffsetMs(ms, fmt)) return false
+  const key = tzDateKey(target)
+  for (let back = 1; back <= FALLBACK_REPEAT_WINDOW_MINUTES; back++) {
+    const c = tzComponents(ms - back * MS_PER_MINUTE, fmt)
+    if (tzDateKey(c) !== key) return false
+    if (c.hour === target.hour && c.minute === target.minute) return true
+  }
+  return false
 }
 
 function parseCronField(value: string, min: number, max: number): Set<number> | undefined {

@@ -117,6 +117,42 @@ describe("ScheduledTask.nextRunAt", () => {
     ).toBe(Date.UTC(2026, 7, 20, 13, 30, 0))
   })
 
+  test("cron timezone schedules do not repeat an ambiguous fall-back wall-clock occurrence", () => {
+    // 01:30 occurs twice on the 2026 fall-back day (01:30 EDT = 05:30 UTC,
+    // then 01:30 EST = 06:30 UTC). After the first occurrence the next cron
+    // fire is the next local day, not the repeated copy — the same
+    // calendar-occurrence semantics daily/weekly schedules already follow.
+    const firstOccurrence = Date.UTC(2026, 10, 1, 5, 30, 0)
+    expect(
+      ScheduledTask.nextRunAt(
+        { type: "cron", expression: "30 1 * * *", timezone: "America/New_York" },
+        firstOccurrence,
+      ),
+    ).toBe(Date.UTC(2026, 10, 2, 6, 30, 0))
+    // The first occurrence itself is unaffected when computed from before it.
+    const beforeFirst = Date.UTC(2026, 10, 1, 4, 0, 0)
+    expect(
+      ScheduledTask.nextRunAt({ type: "cron", expression: "30 1 * * *", timezone: "America/New_York" }, beforeFirst),
+    ).toBe(firstOccurrence)
+  })
+
+  test("cron local schedules do not repeat an ambiguous fall-back wall-clock occurrence", () => {
+    const originalTZ = process.env.TZ
+    process.env.TZ = "America/New_York"
+    try {
+      const firstOccurrence = Date.UTC(2026, 10, 1, 5, 30, 0)
+      expect(ScheduledTask.nextRunAt({ type: "cron", expression: "30 1 * * *" }, firstOccurrence)).toBe(
+        Date.UTC(2026, 10, 2, 6, 30, 0),
+      )
+      expect(ScheduledTask.nextRunAt({ type: "cron", expression: "30 1 * * *" }, Date.UTC(2026, 10, 1, 4, 0, 0))).toBe(
+        firstOccurrence,
+      )
+    } finally {
+      if (originalTZ === undefined) delete process.env.TZ
+      else process.env.TZ = originalTZ
+    }
+  })
+
   test("one-time schedules run only when strictly in the future", () => {
     const from = Date.now()
     expect(ScheduledTask.nextRunAt({ type: "once", runAt: from + 1_000 }, from)).toBe(from + 1_000)

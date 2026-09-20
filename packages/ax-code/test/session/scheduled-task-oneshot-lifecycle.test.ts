@@ -248,6 +248,70 @@ describe("ScheduledTask one-shot lifecycle", () => {
     })
   })
 
+  test("a failed one-shot with catch-up skip still fires a late retry instead of being disabled", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const now = Date.now()
+        const task = await ScheduledTask.create({
+          title: "Skip-policy reminder",
+          prompt: "Retry me.",
+          schedule: { type: "once", runAt: now + 1_000 },
+          catchUpPolicy: "skip",
+        })
+
+        const first = await claimOnce(task.id, now + 2_000)
+        await ScheduledTask.recordQueueOutcome(task.id, "failed", new Error("boom"), first.queueItem!.id)
+        const retry = await ScheduledTask.get(task.id)
+        expect(retry.status).toBe("active")
+        const retryAt = retry.nextRunAt!
+        if (retry.schedule.type !== "once") throw new Error("expected a one-time schedule")
+        expect(retryAt).toBeGreaterThan(retry.schedule.runAt)
+
+        // The backoff due time passes without a scheduler tick (backend outage
+        // longer than the missed grace). The skip policy governs missed
+        // CALENDAR occurrences; a failure-policy retry is not one, so the task
+        // must still fire rather than being disabled as missed.
+        const results = await ScheduledTask.runDue(retryAt + 6 * 60_000)
+        expect(results.some((item) => item.task.id === task.id)).toBe(true)
+
+        const after = await ScheduledTask.get(task.id)
+        expect(after.status).toBe("active")
+        const runs = await ScheduledTask.listRuns({ taskID: task.id })
+        expect(runs.some((run) => run.status === "missed_skip")).toBe(false)
+        expect(runs.filter((run) => run.status === "running")).toHaveLength(1)
+      },
+    })
+  })
+
+  test("a never-fired one-shot with catch-up skip is still disabled after a missed occurrence", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const now = Date.now()
+        const task = await ScheduledTask.create({
+          title: "Missed reminder",
+          prompt: "Only on time.",
+          schedule: { type: "once", runAt: now + 1_000 },
+          catchUpPolicy: "skip",
+        })
+
+        const results = await ScheduledTask.runDue(now + 10 * 60_000)
+        expect(results.some((item) => item.task.id === task.id)).toBe(false)
+
+        const after = await ScheduledTask.get(task.id)
+        expect(after.status).toBe("disabled")
+        expect(after.nextRunAt).toBeUndefined()
+        const runs = await ScheduledTask.listRuns({ taskID: task.id })
+        expect(runs.some((run) => run.status === "missed_skip")).toBe(true)
+      },
+    })
+  })
+
   test("recurring tasks are unaffected by the one-shot completion rule", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
