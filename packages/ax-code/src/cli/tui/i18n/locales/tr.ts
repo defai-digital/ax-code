@@ -128,6 +128,12 @@ export const messages = {
   "home.newTask": "Yeni g\u00f6rev",
   "home.describe": "Yeni konu\u015fma ba\u015flatmak i\u00e7in bir g\u00f6rev a\u00e7\u0131klay\u0131n.",
   "home.sessions": "/sessions - oturumu s\u00fcrd\u00fcr",
+  "home.examplesLabel": "Bu \u00f6rneklerden birini deneyin:",
+  "home.exampleExplain":
+    "Bu projenin ne yapt\u0131\u011f\u0131n\u0131 ve kodun nas\u0131l d\u00fczenlendi\u011fini a\u00e7\u0131kla",
+  "home.exampleReview": "Commit edilmemi\u015f de\u011fi\u015fikliklerimi incele ve riskleri listele",
+  "home.exampleExplore":
+    "Ana giri\u015f noktas\u0131n\u0131 bul ve ba\u015flatma ak\u0131\u015f\u0131n\u0131 a\u00e7\u0131kla",
   "command.askFixedFiles": "Sabit dosyalar hakk\u0131nda sor",
   "command.axTrust": "AX Trust",
   "command.switchSession": "Oturum de\u011fi\u015ftir",

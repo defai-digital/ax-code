@@ -132,6 +132,13 @@ export const messages = {
   "home.newTask": "T\u00e1c v\u1ee5 m\u1edbi",
   "home.describe": "M\u00f4 t\u1ea3 t\u00e1c v\u1ee5 \u0111\u1ec3 b\u1eaft \u0111\u1ea7u h\u1ed9i tho\u1ea1i m\u1edbi.",
   "home.sessions": "/sessions - ti\u1ebfp t\u1ee5c phi\u00ean",
+  "home.examplesLabel": "H\u00e3y th\u1eed m\u1ed9t trong c\u00e1c v\u00ed d\u1ee5 sau:",
+  "home.exampleExplain":
+    "Gi\u1ea3i th\u00edch d\u1ef1 \u00e1n n\u00e0y l\u00e0m g\u00ec v\u00e0 m\u00e3 ngu\u1ed3n \u0111\u01b0\u1ee3c t\u1ed5 ch\u1ee9c nh\u01b0 th\u1ebf n\u00e0o",
+  "home.exampleReview":
+    "Xem l\u1ea1i c\u00e1c thay \u0111\u1ed5i ch\u01b0a commit c\u1ee7a t\u00f4i v\u00e0 li\u1ec7t k\u00ea r\u1ee7i ro",
+  "home.exampleExplore":
+    "T\u00ecm \u0111i\u1ec3m v\u00e0o ch\u00ednh v\u00e0 gi\u1ea3i th\u00edch lu\u1ed3ng kh\u1edfi \u0111\u1ed9ng",
   "command.askFixedFiles": "H\u1ecfi v\u1ec1 c\u00e1c t\u1ec7p c\u1ed1 \u0111\u1ecbnh",
   "command.axTrust": "AX Trust",
   "command.switchSession": "Chuy\u1ec3n phi\u00ean",

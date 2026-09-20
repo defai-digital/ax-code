@@ -129,6 +129,11 @@ export const messages = {
   "home.newTask": "\u65b0\u4efb\u52a1",
   "home.describe": "\u63cf\u8ff0\u4efb\u52a1\u4ee5\u5f00\u59cb\u65b0\u7684\u5bf9\u8bdd\u3002",
   "home.sessions": "/sessions - \u7ee7\u7eed\u5df2\u6709\u4f1a\u8bdd",
+  "home.examplesLabel": "\u8bd5\u8bd5\u8fd9\u4e9b\u4f8b\u5b50:",
+  "home.exampleExplain":
+    "\u89e3\u91ca\u8fd9\u4e2a\u9879\u76ee\u505a\u4ec0\u4e48,\u4ee5\u53ca\u4ee3\u7801\u5982\u4f55\u7ec4\u7ec7",
+  "home.exampleReview": "\u5ba1\u67e5\u6211\u5c1a\u672a\u63d0\u4ea4\u7684\u66f4\u6539,\u5e76\u5217\u51fa\u98ce\u9669",
+  "home.exampleExplore": "\u627e\u51fa\u4e3b\u8981\u5165\u53e3\u70b9,\u5e76\u89e3\u91ca\u542f\u52a8\u6d41\u7a0b",
   "command.askFixedFiles": "\u8be2\u95ee\u56fa\u5b9a\u6587\u4ef6",
   "command.axTrust": "AX Trust",
   "command.switchSession": "\u5207\u6362\u4f1a\u8bdd",

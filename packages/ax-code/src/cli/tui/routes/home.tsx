@@ -39,6 +39,19 @@ let startupPromptConsumed = false
 // just selected on the new-chat surface. /new and session-delete still reset.
 let homeDefaultWorkModeApplied = false
 
+// Starter examples for the empty new-task surface. Clicking a row inserts it
+// into the prompt for editing instead of submitting blind, so keep the strings
+// repo-agnostic and read-only-leaning. Every locale translates all keys (i18n
+// catalog validation enforces parity).
+const HOME_EXAMPLE_KEYS = ["home.exampleExplain", "home.exampleReview", "home.exampleExplore"] as const
+// The startup surface is this working shell itself (session-first launch,
+// ADR-035, only skips it when resuming a returning user's session), so the
+// examples stay visible on every empty new-task view until the user engages
+// once: clicking an example or submitting the first task sets this kv flag and
+// retires the block for good. Returning users see it at most until their next
+// interaction instead of being nagged on every later visit.
+const HOME_EXAMPLES_DISMISSED_KEY = "home_examples_dismissed"
+
 export function Home() {
   const uiText = useLanguage().t
 
@@ -167,6 +180,23 @@ export function Home() {
   const directory = useDirectory()
   const dimensions = useContentDimensions()
   const compact = () => dimensions().height < 22
+  const examplesDismissed = () => kv.get(HOME_EXAMPLES_DISMISSED_KEY, false) === true
+  const examplesVisible = createMemo(() => guidance().state === "selected" && !compact() && !examplesDismissed())
+  const dismissExamples = () => {
+    if (examplesDismissed()) return
+    kv.set(HOME_EXAMPLES_DISMISSED_KEY, true)
+  }
+  // Submitting any task from Home proves the user knows the loop, so retire
+  // the starter examples once the session list grows while Home is mounted.
+  createEffect(
+    on(
+      () => sync.data.session.length,
+      (count, previous) => {
+        if (previous === undefined || count <= previous) return
+        dismissExamples()
+      },
+    ),
+  )
   // The bottom bar stacks vertically once its segments no longer fit on one
   // line (promptFooterLayout-style degradation; the math lives in home-layout).
   const statusBarLayout = createMemo(() =>
@@ -200,7 +230,28 @@ export function Home() {
         </Show>
         <scrollbox flexGrow={1} minHeight={0} marginTop={1}>
           <SetupGuidanceView guidance={guidance()} compact={compact()} />
-          <Show when={guidance().state === "selected" && (!guidance().showIntroduction || compact())}>
+          <Show when={examplesVisible()}>
+            <box flexShrink={0} flexDirection="column" marginTop={1}>
+              <text flexShrink={0} fg={theme.textMuted} selectable={false} wrapMode="word">
+                {t("home.examplesLabel")}
+              </text>
+              {HOME_EXAMPLE_KEYS.map((key) => (
+                <box
+                  flexShrink={0}
+                  paddingLeft={2}
+                  onMouseUp={() => {
+                    dismissExamples()
+                    prompt.set({ input: t(key), parts: [] })
+                  }}
+                >
+                  <text fg={theme.accent} selectable={false} wrapMode="word">
+                    {t(key)}
+                  </text>
+                </box>
+              ))}
+            </box>
+          </Show>
+          <Show when={guidance().state === "selected" && !examplesVisible()}>
             <text flexShrink={0} fg={theme.textMuted} wrapMode="word">
               {t("home.describe")}
             </text>

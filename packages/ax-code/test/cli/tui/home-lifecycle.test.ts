@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
-import { createRoot, createSignal } from "solid-js"
+import { createRoot, createSignal, Show } from "solid-js"
+import { dictionaries } from "../../../src/cli/tui/i18n"
 import type { PromptInfo } from "../../../src/cli/tui/component/prompt/prompt-info"
 
 const mocked = vi.hoisted(() => ({
@@ -11,6 +12,9 @@ const mocked = vi.hoisted(() => ({
   cliPrompt: undefined as string | undefined,
   route: { workspaceID: undefined as string | undefined, initialPrompt: undefined as PromptInfo | undefined },
   input: { input: "", parts: [] } as PromptInfo,
+  sessions: [] as unknown[],
+  height: 40,
+  kvStore: {} as Record<string, unknown>,
   submit: vi.fn(),
   createSession: vi.fn(),
   setWorkspace: vi.fn(),
@@ -53,7 +57,10 @@ vi.mock("@tui/context/sync", () => ({
       },
       provider: [{ id: "test", models: { model: {} } }],
       session_loaded: true,
-      session: [],
+      get session() {
+        mocked.revision()
+        return mocked.sessions
+      },
       mcp: {},
     },
   }),
@@ -81,9 +88,17 @@ vi.mock("@tui/context/args", () => ({
   }),
 }))
 vi.mock("@tui/context/directory", () => ({ useDirectory: () => () => "/launch" }))
-vi.mock("@tui/context/content-dimensions", () => ({ useContentDimensions: () => () => ({ width: 120, height: 40 }) }))
+vi.mock("@tui/context/content-dimensions", () => ({
+  useContentDimensions: () => () => ({ width: 120, height: mocked.height }),
+}))
 vi.mock("@tui/context/kv", () => ({
-  useKV: () => ({ set: mocked.setKV, get: (_key: string, fallback: unknown) => fallback }),
+  useKV: () => ({
+    set: (key: string, value: unknown) => {
+      mocked.kvStore[key] = value
+      mocked.setKV(key, value)
+    },
+    get: (key: string, fallback: unknown) => mocked.kvStore[key] ?? fallback,
+  }),
 }))
 vi.mock("@tui/context/local", () => ({
   useLocal: () => ({
@@ -122,6 +137,9 @@ beforeEach(() => {
   mocked.cliPrompt = undefined
   mocked.route = { workspaceID: undefined, initialPrompt: undefined }
   mocked.input = { input: "", parts: [] }
+  mocked.sessions = []
+  mocked.height = 40
+  mocked.kvStore = {}
   mocked.navigate.mockImplementation((route: typeof mocked.route) => {
     mocked.route.workspaceID = route.workspaceID
     mocked.route.initialPrompt = route.initialPrompt
@@ -238,4 +256,98 @@ describe("new task Home lifecycle", () => {
     mount()
     expect(mocked.setKV).toHaveBeenCalledOnce()
   })
+
+  test("first-run empty home offers clickable starter examples that prefill the prompt", async () => {
+    const tree = (await home())()
+    expect(examplesVisible(tree)).toBe(true)
+    const rendered = renderedText(tree)
+    for (const key of [
+      "home.examplesLabel",
+      "home.exampleExplain",
+      "home.exampleReview",
+      "home.exampleExplore",
+    ] as const) {
+      expect(rendered).toContain(dictionaries.en[key])
+    }
+    const explain = clickables(tree).find((row) => row.text.includes(dictionaries.en["home.exampleExplain"]))
+    expect(explain).toBeDefined()
+    explain!.click()
+    expect(mocked.input.input).toBe(dictionaries.en["home.exampleExplain"])
+    expect(mocked.input.parts).toEqual([])
+    expect(mocked.submit).not.toHaveBeenCalled()
+    expect(mocked.kvStore[EXAMPLES_DISMISSED_KEY]).toBe(true)
+  })
+
+  // The startup surface is the working shell for every user, so returning users
+  // keep seeing the examples until they engage once (click or first submit).
+  test.each([1, 3])("still offers starter examples to returning users with %i session(s)", async (count) => {
+    mocked.sessions = Array.from({ length: count }, () => ({}))
+    expect(examplesVisible((await home())())).toBe(true)
+  })
+
+  test("hides starter examples once the user dismissed them", async () => {
+    mocked.kvStore[EXAMPLES_DISMISSED_KEY] = true
+    expect(examplesVisible((await home())())).toBe(false)
+  })
+
+  test("submitting a task from Home dismisses the starter examples", async () => {
+    const mount = await home()
+    mount()
+    expect(mocked.setKV).not.toHaveBeenCalledWith(EXAMPLES_DISMISSED_KEY, true)
+    mocked.sessions = [{ id: "ses_new" }]
+    mocked.invalidate()
+    expect(mocked.setKV).toHaveBeenCalledWith(EXAMPLES_DISMISSED_KEY, true)
+  })
+
+  test("hides starter examples in compact terminals", async () => {
+    mocked.height = 21
+    expect(examplesVisible((await home())())).toBe(false)
+  })
 })
+
+const EXAMPLES_DISMISSED_KEY = "home_examples_dismissed"
+
+// The lifecycle harness renders Home through a createElement stub that never
+// executes components, so conditional children stay in the tree as data and
+// visibility is only observable as the evaluated `when` prop of the Show node.
+function examplesVisible(tree: unknown): boolean {
+  const label = dictionaries.en["home.examplesLabel"]
+  const whens: boolean[] = []
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) return node.forEach(walk)
+    if (!node || typeof node !== "object" || !("props" in node)) return
+    const { type, props } = node as { type: unknown; props: Record<string, unknown> }
+    if (type === Show && typeof props.when === "boolean" && renderedText(props.children).includes(label))
+      whens.push(props.when)
+    walk(props.children)
+  }
+  walk(tree)
+  expect(whens).toHaveLength(1)
+  return whens[0]
+}
+
+// Walk the stub tree for visible strings and mouse-click handlers.
+function renderedText(node: unknown, out: string[] = []): string {
+  if (typeof node === "string") out.push(node)
+  else if (Array.isArray(node)) for (const child of node) renderedText(child, out)
+  else if (node && typeof node === "object")
+    for (const value of Object.values(node as Record<string, unknown>)) renderedText(value, out)
+  return out.join("\n")
+}
+
+function clickables(
+  node: unknown,
+  out: { text: string; click: () => void }[] = [],
+): { text: string; click: () => void }[] {
+  if (Array.isArray(node)) {
+    for (const child of node) clickables(child, out)
+    return out
+  }
+  if (node && typeof node === "object" && "props" in node) {
+    const props = (node as { props: Record<string, unknown> }).props
+    if (typeof props.onMouseUp === "function")
+      out.push({ text: renderedText(props.children), click: props.onMouseUp as () => void })
+    clickables(props.children, out)
+  }
+  return out
+}
