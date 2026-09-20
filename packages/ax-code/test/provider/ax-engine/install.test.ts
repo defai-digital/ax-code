@@ -278,6 +278,13 @@ describe("dependency resolution picks up the managed binary", () => {
     const status = await getDependencyStatus()
     // A real ax-engine on PATH would win; CI hosts typically don't have one.
     if (status.mode === "path") return
+    // Managed AX Engine is deliberately Apple-Silicon-only. The test still
+    // exercises installation bookkeeping above, but resolution must not
+    // advertise that macOS runtime on Linux/Windows CI hosts.
+    if (!isAxEngineInstallable()) {
+      expect(status).toMatchObject({ mode: "missing", available: false, installable: false })
+      return
+    }
     expect(status.mode).toBe("managed")
     expect(status.available).toBe(false)
     expect(status.version).toContain("6.6.0")
