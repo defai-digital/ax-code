@@ -131,7 +131,8 @@ describe("provider routes", () => {
     expect(ids).not.toContain("qoder-cli")
     expect(ids).not.toContain("gemini-cli")
     expect(ids).not.toContain("antigravity-cli")
-    expect(ids).toContain("kimi-cli")
+    expect(ids).not.toContain("kimi-cli")
+    expect(ids).not.toContain("minimax-cli")
   })
 
   test.each(["ollama", "lmstudio", "mtplx", "omlx", "ax-studio", "local-llm", "custom-private-gpu"])(

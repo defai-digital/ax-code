@@ -11,9 +11,7 @@ const WEB_SEARCH_CLI_PROVIDERS = new Set([
   "claude-code",
   "codex-cli",
   "grok-build-cli",
-  "kimi-cli",
   "muse-cli",
-  "minimax-cli",
 ])
 
 const CLI_WEB_SEARCH_HINT = [

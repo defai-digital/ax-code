@@ -38,12 +38,12 @@ describe("EnsemblePreflight", () => {
       count: 1,
       ids: ["zai-coding-plan"],
       excluded: [
-        { providerID: "kimi-cli", reason: "no models discovered yet" },
+        { providerID: "grok-build-cli", reason: "no models discovered yet" },
         { providerID: "ax-engine", reason: "models present but none selectable" },
       ],
     })
     expect(msg).toContain("**1**")
-    expect(msg).toContain("kimi-cli")
+    expect(msg).toContain("grok-build-cli")
     expect(msg).toContain("ax-engine")
     expect(msg).toContain("You may continue as a single-provider implementation")
     expect(msg).toContain("Do not retry arena/council")

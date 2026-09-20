@@ -8,7 +8,7 @@ changes belong to AX Coder.
 
 ### Changed
 
-- Retire Qoder CLI (`qoder-cli`) as a bundled CLI provider.
+- Retire Qoder CLI (`qoder-cli`), Kimi Code CLI (`kimi-cli`), and MiniMax Code CLI (`minimax-cli`) as bundled CLI providers. MiniMax Token Plan API providers are unchanged.
 - Darwin-arm64 releases include a self-contained AX Engine sidecar. Homebrew is no longer required for local inference
   on a clean Mac; `ax-code providers ax-engine install` is the overlay/updater.
 

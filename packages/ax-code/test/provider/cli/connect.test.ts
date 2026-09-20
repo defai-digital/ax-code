@@ -202,12 +202,12 @@ describe("probeCliLanguageModel", () => {
     }
   })
 
-  test("probe passes MiniMax --cwd from the bundled definition", async () => {
+  test("probe passes Muse --workspace from the bundled definition", async () => {
     await using tmp = await tmpdir()
     const spawn = vi
       .spyOn(Process, "spawn")
       .mockImplementation(() =>
-        successfulChild('{"type":"item.completed","item":{"id":"item_1","type":"assistant_message","text":"OK"}}\n'),
+        successfulChild('{"payload_type":"run.output.delta","payload":{"text":"OK"}}\n'),
       )
 
     try {
@@ -215,18 +215,16 @@ describe("probeCliLanguageModel", () => {
         directory: tmp.path,
         fn: async () => {
           await probeCliLanguageModel({
-            providerID: "minimax-cli",
-            modelID: "minimax-cli",
-            binary: "mcode",
+            providerID: "muse-cli",
+            modelID: "muse-cli",
+            binary: "muse",
           })
         },
       })
 
       const cmd = spawn.mock.calls[0]?.[0] as string[]
-      expect(cmd).toContain("--cwd")
-      expect(cmd[cmd.indexOf("--cwd") + 1]).toBe(tmp.path)
-      expect(cmd).toContain("--input")
-      expect(cmd).toContain("-")
+      expect(cmd).toContain("--workspace")
+      expect(cmd[cmd.indexOf("--workspace") + 1]).toBe(tmp.path)
     } finally {
       spawn.mockRestore()
     }

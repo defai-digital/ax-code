@@ -3,7 +3,6 @@ const CLI_EFFORT_LEVELS: Record<string, readonly string[]> = {
   "codex-cli": ["minimal", "low", "medium", "high", "xhigh"],
   "grok-build-cli": ["low", "medium", "high"],
   "muse-cli": ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"],
-  "minimax-cli": ["low", "medium", "high"],
 }
 
 export function cliEffortLevels(providerID: string): readonly string[] {
@@ -28,6 +27,5 @@ export function cliEffortArgs(providerID: string, effort?: string): string[] {
   if (providerID === "claude-code") return ["--effort", effort]
   if (providerID === "codex-cli") return ["-c", `model_reasoning_effort="${effort}"`]
   if (providerID === "grok-build-cli" || providerID === "muse-cli") return ["--reasoning-effort", effort]
-  if (providerID === "minimax-cli") return ["--effort", effort]
   return []
 }

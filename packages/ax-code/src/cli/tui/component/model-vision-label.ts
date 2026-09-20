@@ -4,9 +4,7 @@ const CLI_WEB_SEARCH_PROVIDER_IDS = new Set([
   "claude-code",
   "codex-cli",
   "grok-build-cli",
-  "kimi-cli",
   "muse-cli",
-  "minimax-cli",
 ])
 
 export type DisplayCapableModel = {

@@ -3989,7 +3989,7 @@ describe("session.llm.streamIdleWatchdog", () => {
       delete process.env["AX_CODE_STREAM_MAX_DURATION_MS"]
       expect(LLM.streamMaxDurationMs("openai")).toBe(600_000)
       expect(LLM.streamMaxDurationMs("ax-engine")).toBe(3_600_000)
-      expect(LLM.streamMaxDurationMs("kimi-cli")).toBe(3_600_000)
+      expect(LLM.streamMaxDurationMs("grok-build-cli")).toBe(3_600_000)
       process.env["AX_CODE_STREAM_MAX_DURATION_MS"] = "1234"
       expect(LLM.streamMaxDurationMs("openai")).toBe(1_234)
       process.env["AX_CODE_STREAM_MAX_DURATION_MS"] = "0"
@@ -4006,16 +4006,18 @@ describe("session.llm.streamIdleWatchdog", () => {
     const prev = process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"]
     try {
       delete process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"]
-      expect(LLM.isCliProviderID("kimi-cli")).toBe(true)
+      expect(LLM.isCliProviderID("grok-build-cli")).toBe(true)
       expect(LLM.isCliProviderID("custom-cli")).toBe(true)
+      expect(LLM.isCliProviderID("kimi-cli")).toBe(false)
+      expect(LLM.isCliProviderID("minimax-cli")).toBe(false)
       expect(LLM.isCliProviderID("qoder-cli")).toBe(false)
       expect(LLM.isCliProviderID("openai")).toBe(false)
-      expect(LLM.streamIdleTimeoutMs("kimi-cli")).toBe(900_000)
+      expect(LLM.streamIdleTimeoutMs("grok-build-cli")).toBe(900_000)
       expect(LLM.streamIdleTimeoutMs("ax-engine")).toBe(900_000)
       expect(LLM.streamIdleTimeoutMs("openai")).toBe(300_000)
       // Explicit env still wins for CLI providers.
       process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"] = "45000"
-      expect(LLM.streamIdleTimeoutMs("kimi-cli")).toBe(45_000)
+      expect(LLM.streamIdleTimeoutMs("grok-build-cli")).toBe(45_000)
     } finally {
       if (prev === undefined) delete process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"]
       else process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"] = prev

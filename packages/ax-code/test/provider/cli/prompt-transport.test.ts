@@ -57,7 +57,7 @@ async function collect(stream: ReadableStream<LanguageModelV3StreamPart>) {
 }
 
 describe.each(["doGenerate", "doStream"] as const)("%s prompt transport", (method) => {
-  test.each(["claude-code", "codex-cli", "grok-build-cli", "muse-cli", "minimax-cli"])(
+  test.each(["claude-code", "codex-cli", "grok-build-cli", "muse-cli"])(
     "%s delivers the complete large prompt without putting it in argv",
     async (providerID) => {
       await using tmp = await tmpdir()
@@ -119,17 +119,6 @@ process.stdout.write(crypto.createHash("sha256").update(input).digest("hex") + "
       }
     },
   )
-
-  test("rejects oversized Kimi argv before spawn with a non-retryable, actionable error", async () => {
-    const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => {
-      throw new Error("Unexpected CLI launch")
-    })
-    await expect(model("kimi-cli")[method]({ prompt })).rejects.toMatchObject({
-      isRetryable: false,
-      message: expect.stringMatching(/kimi-cli.*command.line.*codex-cli/i),
-    })
-    expect(spawn).not.toHaveBeenCalled()
-  })
 
   test.each(["synchronous", "asynchronous"])("cleans prompt and attachments after %s spawn failure", async (kind) => {
     let promptFile: string | undefined
@@ -248,41 +237,53 @@ test("materializes prompt files under a private temporary directory with a fixed
 
 test("Windows argv guard accounts for shim escaping and returns no prompt content", () => {
   const secretPrompt = 'private "prompt" & value '.repeat(200)
-  const cmd = ["C:\\Program Files\\Kimi\\kimi.cmd", "-p", secretPrompt]
-  expect(() => transport.assertCliCommandSize(cmd, "kimi-cli", "win32")).toThrow(/command line/)
-  expect(() => transport.assertCliCommandSize(["kimi", "-p", '"'.repeat(1_800)], "kimi-cli", "win32")).toThrow(
+  const cmd = ["C:\\Program Files\\Claude\\claude.cmd", "-p", secretPrompt]
+  expect(() => transport.assertCliCommandSize(cmd, "claude-code", "win32")).toThrow(/command line/)
+  expect(() => transport.assertCliCommandSize(["claude", "-p", '"'.repeat(1_800)], "claude-code", "win32")).toThrow(
     /command line/,
   )
-  expect(() => transport.assertCliCommandSize(["kimi", "-p", "\x60".repeat(2_100)], "kimi-cli", "win32")).toThrow(
+  expect(() => transport.assertCliCommandSize(["claude", "-p", "\x60".repeat(2_100)], "claude-code", "win32")).toThrow(
     /command line/,
   )
-  expect(() => transport.assertCliCommandSize(["kimi", "-p", "short prompt"], "kimi-cli", "win32")).not.toThrow()
+  expect(() => transport.assertCliCommandSize(["claude", "-p", "short prompt"], "claude-code", "win32")).not.toThrow()
   try {
-    transport.assertCliCommandSize(cmd, "kimi-cli", "win32")
+    transport.assertCliCommandSize(cmd, "claude-code", "win32")
   } catch (error) {
     expect(error).toMatchObject({ isRetryable: false, requestBodyValues: undefined })
     expect(String(error)).not.toContain(secretPrompt)
-    expect(String(error)).toContain("minimax-cli")
+    expect(String(error)).toContain("muse-cli")
+    expect(String(error)).not.toContain("kimi-cli")
+    expect(String(error)).not.toContain("minimax-cli")
     expect(String(error)).not.toContain("qoder-cli")
   }
 })
 
-test("oversized Kimi prompts remain terminal after session error serialization", async () => {
+test("oversized argv prompts remain terminal after session error serialization", async () => {
   const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => {
     throw new Error("Unexpected CLI launch")
   })
-  const providerID = ProviderID.make("kimi-cli")
+  const providerID = ProviderID.make("claude-code")
   const findFallback = vi.fn()
   const publishError = vi.fn()
-  const failure = await model(providerID)
-    .doGenerate({ prompt })
-    .catch((error: unknown) => error)
+  const cli = new CliLanguageModel({
+    providerID,
+    modelID: "claude-code",
+    binary: "claude",
+    args: [],
+    promptMode: "arg",
+    promptFlag: "-p",
+    parser: {
+      parseComplete: (text) => ({ text: text.trim() }),
+      parseStreamLine: (line) => line,
+    },
+  })
+  const failure = await cli.doGenerate({ prompt }).catch((error: unknown) => error)
   const error = MessageV2.fromError(failure, { providerID })
   expect(error).toMatchObject({ name: "APIError", data: { isRetryable: false } })
   const result = await handlePromptLoopError(
     {
       sessionID: SessionID.descending(),
-      currentModel: { providerID, modelID: ModelID.make("kimi-code/k3") },
+      currentModel: { providerID, modelID: ModelID.make("claude-code") },
       error,
       consecutiveErrors: 1,
       step: 1,

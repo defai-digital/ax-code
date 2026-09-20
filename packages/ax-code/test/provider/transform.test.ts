@@ -2578,9 +2578,9 @@ describe("ProviderTransform.variants", () => {
 
     test("unsupported CLI providers do not advertise inert variants", () => {
       const model = createMockModel({
-        id: "kimi-cli/kimi-cli",
-        providerID: "kimi-cli",
-        api: { id: "kimi-cli", url: "cli://local", npm: "cli" },
+        id: "custom-cli/custom-cli",
+        providerID: "custom-cli",
+        api: { id: "custom-cli", url: "cli://local", npm: "cli" },
       })
       expect(ProviderTransform.variants(model)).toEqual({})
     })

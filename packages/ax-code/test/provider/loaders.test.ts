@@ -89,8 +89,9 @@ describe("CLI provider loaders", () => {
     expect(src).toContain("add(resolved, `${name} (${resolved})`)")
     expect(src).toContain("claudeCodeFamilyModels(current, resolved.model)")
     expect(src).toContain("grokBuildFamilyModels(current, resolved.model)")
-    expect(src).toContain("kimiCliFamilyModels(current, resolved.model)")
     expect(src).toContain("codexCliFamilyModels(current, resolved.model)")
+    expect(src).not.toContain("kimiCliFamilyModels")
+    expect(src).not.toContain("minimaxCliFamilyModels")
   })
 
   test("claude-code configured provider does not discover runnable variants when binary missing", async () => {
@@ -120,12 +121,12 @@ describe("CLI provider loaders", () => {
     })
   })
 
-  test("kimi-cli configured provider does not discover runnable variants when binary missing", async () => {
+  test("muse-cli configured provider does not discover runnable variants when binary missing", async () => {
     await expectMissingCliProvider({
-      providerID: "kimi-cli",
-      binary: "kimi",
-      baseModelID: "kimi-cli",
-      discoveredModelIDs: ["kimi-code/k3", "kimi-code/kimi-for-coding"],
+      providerID: "muse-cli",
+      binary: "muse",
+      baseModelID: "muse-cli",
+      discoveredModelIDs: ["muse-spark-1.3"],
     })
   })
 })

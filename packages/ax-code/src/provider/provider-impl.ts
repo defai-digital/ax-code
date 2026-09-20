@@ -1560,9 +1560,9 @@ export namespace Provider {
   }
 
   // This ranks models within a provider; it does not rank providers for
-  // Council/Arena. CLI discovery publishes both a generic fallback model
-  // (`kimi-cli`) and the model resolved from the CLI's own settings
-  // (`kimi-code/k3`). Prefer that resolved model when it exists.
+  // Council/Arena. CLI discovery may publish both a generic fallback model
+  // and the model resolved from the CLI's own settings. Prefer that resolved
+  // model when it exists.
   const MODEL_ID_PRIORITY = ["gpt-5", "claude-sonnet-4"]
 
   export function defaultModelID(providerID: string, models: Record<string, Model>) {

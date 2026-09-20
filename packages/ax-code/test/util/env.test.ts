@@ -284,7 +284,7 @@ describe("Env.sanitize", () => {
       expect(muse.OPENAI_API_KEY).toBeUndefined()
 
       const minimax = Env.withCliProviderKeys(Env.sanitize({ PATH: "/bin" }), "minimax-cli")
-      expect(minimax.MINIMAX_API_KEY).toBe("minimax-key")
+      expect(minimax.MINIMAX_API_KEY).toBeUndefined()
       expect(minimax.OPENAI_API_KEY).toBeUndefined()
     } finally {
       if (originalGemini === undefined) delete process.env.GEMINI_API_KEY

@@ -7,9 +7,7 @@ describe("modelDisplayInfo", () => {
       "claude-code",
       "codex-cli",
       "grok-build-cli",
-      "kimi-cli",
       "muse-cli",
-      "minimax-cli",
     ]) {
       const display = modelDisplayInfo(providerID, {
         providerID,

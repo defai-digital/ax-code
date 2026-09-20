@@ -373,13 +373,13 @@ describe("Council.selectDiverseMembers", () => {
     expect(unique.map((member) => member.id)).toEqual([1, 3])
   })
 
-  test("keeps Grok Build, Kimi Code, and Claude Code as distinct ensemble families", () => {
+  test("keeps Grok Build, Kimi cloud, and Claude Code as distinct ensemble families", () => {
     const selected = Council.selectDiverseMembers(
-      [{ providerID: "grok-build-cli" }, { providerID: "kimi-cli" }, { providerID: "claude-code" }],
+      [{ providerID: "grok-build-cli" }, { providerID: "kimi-cloud-plan" }, { providerID: "claude-code" }],
       3,
     )
 
-    expect(selected.map((member) => member.providerID)).toEqual(["grok-build-cli", "kimi-cli", "claude-code"])
+    expect(selected.map((member) => member.providerID)).toEqual(["grok-build-cli", "kimi-cloud-plan", "claude-code"])
   })
 })
 

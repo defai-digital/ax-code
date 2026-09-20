@@ -324,7 +324,7 @@ describe("CliLanguageModel", () => {
       binary: process.execPath,
       args: ["-e", 'process.stdout.write(\'{"role":"meta","content":"To resume this session"}\\n\')', "--"],
       promptMode: "arg",
-      parser: CLI_PROVIDER_DEFINITIONS["kimi-cli"]!.parser,
+      parser: CLI_PROVIDER_DEFINITIONS["muse-cli"]!.parser,
     })
 
     await expect(
@@ -712,7 +712,7 @@ describe("CliLanguageModel", () => {
       binary: process.execPath,
       args: ["-e", 'process.stdout.write(\'{"role":"meta","content":"To resume this session: kimi -r x"}\\n\')', "--"],
       promptMode: "stdin",
-      parser: CLI_PROVIDER_DEFINITIONS["kimi-cli"]!.parser,
+      parser: CLI_PROVIDER_DEFINITIONS["muse-cli"]!.parser,
     })
 
     const { stream } = await model.doStream({
@@ -1228,64 +1228,6 @@ describe("CliLanguageModel", () => {
     expect(cmd[cmd.indexOf("--reasoning-effort") + 1]).toBe("max")
   })
 
-  test("passes MiniMax Code CLI prompt through headless exec stdin", () => {
-    const definition = CLI_PROVIDER_DEFINITIONS["minimax-cli"]
-    expect(definition).toBeDefined()
-
-    const cmd = buildCliCommand(
-      {
-        providerID: "minimax-cli",
-        modelID: "minimax-cli",
-        binary: "mcode",
-        args: definition?.args ?? [],
-        parser: definition!.parser,
-        promptMode: definition?.promptMode ?? "stdin",
-        workspaceArg: definition?.workspaceArg,
-      },
-      "write file",
-      "/repo",
-    )
-
-    expect(cmd).toEqual([
-      "mcode",
-      "exec",
-      "--output-format",
-      "stream-json",
-      "--permission",
-      "full",
-      "--prompt-mode",
-      "coding",
-      "--input",
-      "-",
-      "--cwd",
-      "/repo",
-    ])
-    expect(cmd).not.toContain("write file")
-    expect(cmd).not.toContain("mmx")
-  })
-
-  test("passes MiniMax Code CLI model and effort flags", () => {
-    const definition = CLI_PROVIDER_DEFINITIONS["minimax-cli"]
-    const cmd = buildCliCommand(
-      {
-        providerID: "minimax-cli",
-        modelID: "MiniMax-M3",
-        binary: "mcode",
-        args: definition?.args ?? [],
-        parser: definition!.parser,
-        promptMode: definition?.promptMode ?? "stdin",
-      },
-      "write file",
-      undefined,
-      "high",
-    )
-
-    expect(cmd).toContain("--model")
-    expect(cmd[cmd.indexOf("--model") + 1]).toBe("MiniMax-M3")
-    expect(cmd).toContain("--effort")
-    expect(cmd[cmd.indexOf("--effort") + 1]).toBe("high")
-  })
-
   test("maps effort to each supported CLI's native arguments", () => {
     const claude = buildCliCommand(
       {
@@ -1376,79 +1318,9 @@ describe("CliLanguageModel", () => {
     }
   })
 
-  test("passes Kimi Code CLI prompt through stream-json prompt mode", () => {
-    process.env.AX_CODE_AUTONOMOUS = "false"
-    try {
-      const definition = CLI_PROVIDER_DEFINITIONS["kimi-cli"]
-      expect(definition).toBeDefined()
-
-      const cmd = buildCliCommand(
-        {
-          providerID: "kimi-cli",
-          modelID: "kimi-cli",
-          binary: "kimi",
-          args: definition?.args ?? [],
-          parser: definition!.parser,
-          promptMode: definition?.promptMode ?? "arg",
-          promptFlag: definition?.promptFlag,
-        },
-        "write file",
-      )
-
-      expect(cmd).toEqual(["kimi", "--output-format", "stream-json", "-p", "write file"])
-      expect(cmd).not.toContain("--print")
-    } finally {
-      restoreAutonomous()
-    }
-  })
-
-  test("passes resolved Kimi model via --model", () => {
-    process.env.AX_CODE_AUTONOMOUS = "false"
-    try {
-      const definition = CLI_PROVIDER_DEFINITIONS["kimi-cli"]
-      expect(definition).toBeDefined()
-
-      const cmd = buildCliCommand(
-        {
-          providerID: "kimi-cli",
-          modelID: "kimi-code/k3",
-          binary: "kimi",
-          args: definition?.args ?? [],
-          parser: definition!.parser,
-          promptMode: definition?.promptMode ?? "arg",
-          promptFlag: definition?.promptFlag,
-        },
-        "ping",
-      )
-
-      expect(cmd).toEqual(["kimi", "--output-format", "stream-json", "--model", "kimi-code/k3", "-p", "ping"])
-    } finally {
-      restoreAutonomous()
-    }
-  })
-
-  test("does not pass --yolo to Kimi Code CLI prompt mode", () => {
-    delete process.env.AX_CODE_AUTONOMOUS
-    try {
-      const definition = CLI_PROVIDER_DEFINITIONS["kimi-cli"]
-      const cmd = buildCliCommand(
-        {
-          providerID: "kimi-cli",
-          modelID: "kimi-cli",
-          binary: "kimi",
-          args: definition?.args ?? [],
-          parser: definition!.parser,
-          promptMode: definition?.promptMode ?? "arg",
-          promptFlag: definition?.promptFlag,
-        },
-        "write file",
-      )
-      expect(cmd).not.toContain("--yolo")
-      expect(cmd).toEqual(["kimi", "--output-format", "stream-json", "-p", "write file"])
-      expect(cmd).not.toContain("--print")
-    } finally {
-      restoreAutonomous()
-    }
+  test("does not register Kimi or MiniMax CLI providers", () => {
+    expect(CLI_PROVIDER_DEFINITIONS["kimi-cli"]).toBeUndefined()
+    expect(CLI_PROVIDER_DEFINITIONS["minimax-cli"]).toBeUndefined()
   })
 
   test("passes the active workspace through workspaceArg for headless prompts", () => {

@@ -18,14 +18,7 @@ import { isRecord } from "@/util/record"
 import { ModelsDev } from "./models"
 import { claudeDisplayName, claudeFamilyId, latestAnthropicFamilyModels } from "./anthropic-families"
 import { grokDisplayName, grokFallbackLatest, grokFamilyId, latestGrokFamilyModels } from "./grok-families"
-import { kimiDisplayName, kimiFallbackModels, kimiFamilyId, latestKimiFamilyModels } from "./kimi-families"
 import { museDisplayName, museFallbackLatest, museFamilyId, latestMuseFamilyModels } from "./muse-families"
-import {
-  minimaxDisplayName,
-  minimaxFallbackLatest,
-  minimaxFamilyId,
-  latestMiniMaxFamilyModels,
-} from "./minimax-families"
 import { codexDisplayName, codexFallbackModels, codexFamilyId, latestCodexFamilyModels } from "./codex-families"
 import { LOCAL_LLM_RUNTIMES, normalizeLocalRuntimeBaseURL } from "./local-runtime"
 
@@ -381,9 +374,7 @@ const CLI_DEFAULT_MODEL_NAMES: Record<string, string> = {
   "claude-code": "Claude Code default",
   "codex-cli": "Codex CLI default",
   "grok-build-cli": "Grok Build CLI default",
-  "kimi-cli": "Kimi Code CLI default",
   "muse-cli": "Muse Code CLI default",
-  "minimax-cli": "MiniMax Code CLI default",
 }
 
 // A stale standalone `codex` launcher can shadow the newer executable bundled
@@ -693,103 +684,6 @@ async function museCliFamilyModels(
   return models
 }
 
-function collectMiniMaxCatalog(snapshot: Record<string, ModelsDev.Provider>): Record<string, ModelsDev.Model> {
-  const collected: Record<string, ModelsDev.Model> = {}
-  for (const id of ["minimax-coding-plan", "minimax-cn-coding-plan", "minimax"] as const) {
-    for (const [modelID, model] of Object.entries(snapshot[id]?.models ?? {})) {
-      if (!minimaxFamilyId({ id: model.id ?? modelID, family: model.family })) continue
-      const key = (model.id ?? modelID).split("/").pop() ?? modelID
-      if (!collected[key]) collected[key] = { ...model, id: key }
-    }
-  }
-  const fallback = minimaxFallbackLatest()
-  if (!collected[fallback.id]) collected[fallback.id] = fallback as ModelsDev.Model
-  return collected
-}
-
-async function minimaxCliFamilyModels(
-  provider: Provider.Info,
-  resolved?: string,
-): Promise<Record<string, Provider.Model>> {
-  const base = Object.values(provider.models)[0]
-  if (!base) return {}
-  const catalog = collectMiniMaxCatalog(await ModelsDev.get())
-  const models: Record<string, Provider.Model> = {}
-  for (const item of latestMiniMaxFamilyModels(catalog)) {
-    models[item.id] = overlayCliCatalogModel(
-      base,
-      item,
-      "minimax-cli",
-      minimaxDisplayName(item.name, item.id),
-      minimaxFamilyId({ id: item.id, family: item.family }),
-    )
-  }
-  if (resolved && resolved !== "minimax-cli" && !models[resolved] && catalog[resolved]) {
-    const item = catalog[resolved]!
-    models[resolved] = overlayCliCatalogModel(
-      base,
-      item,
-      "minimax-cli",
-      minimaxDisplayName(item.name, resolved),
-      minimaxFamilyId({ id: item.id, family: item.family }),
-    )
-  } else if (resolved && resolved !== "minimax-cli" && !models[resolved]) {
-    const id = ModelID.make(resolved)
-    models[id] = {
-      ...base,
-      id,
-      providerID: ProviderID.make("minimax-cli"),
-      api: { ...base.api, id: resolved },
-      name: minimaxDisplayName(undefined, resolved),
-    }
-  }
-  return models
-}
-
-async function kimiCliFamilyModels(
-  provider: Provider.Info,
-  resolved?: string,
-): Promise<Record<string, Provider.Model>> {
-  const base = Object.values(provider.models)[0]
-  if (!base) return {}
-  const catalog: Record<string, ModelsDev.Model> = {}
-  for (const item of kimiFallbackModels()) {
-    catalog[item.id] = item as ModelsDev.Model
-  }
-  const models: Record<string, Provider.Model> = {}
-  for (const item of latestKimiFamilyModels(catalog)) {
-    models[item.id] = overlayCliCatalogModel(
-      base,
-      item,
-      "kimi-cli",
-      kimiDisplayName(item.name, item.id),
-      kimiFamilyId({ id: item.id, family: item.family }),
-      item.id,
-    )
-  }
-  if (resolved && resolved !== "kimi-cli" && !models[resolved] && catalog[resolved]) {
-    const item = catalog[resolved]!
-    models[resolved] = overlayCliCatalogModel(
-      base,
-      item,
-      "kimi-cli",
-      kimiDisplayName(item.name, resolved),
-      kimiFamilyId({ id: item.id, family: item.family }),
-      resolved,
-    )
-  } else if (resolved && resolved !== "kimi-cli" && !models[resolved]) {
-    const id = ModelID.make(resolved)
-    models[id] = {
-      ...base,
-      id,
-      providerID: ProviderID.make("kimi-cli"),
-      api: { ...base.api, id: resolved },
-      name: kimiDisplayName(undefined, resolved),
-    }
-  }
-  return models
-}
-
 function cliModel(providerID: string, provider: Provider.Info, modelID: string): Provider.Model | undefined {
   const base = Object.values(provider.models)[0]
   if (!base) return
@@ -851,11 +745,6 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
           if (Object.keys(models).length > 0) delete current.models[opts.providerID]
           return models
         }
-        if (opts.providerID === "kimi-cli") {
-          const models = await kimiCliFamilyModels(current, resolved.model)
-          if (Object.keys(models).length > 0) delete current.models[opts.providerID]
-          return models
-        }
         if (opts.providerID === "codex-cli") {
           const models = await codexCliFamilyModels(current, resolved.model)
           if (Object.keys(models).length > 0) delete current.models[opts.providerID]
@@ -863,11 +752,6 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
         }
         if (opts.providerID === "muse-cli") {
           const models = await museCliFamilyModels(current, resolved.model)
-          if (Object.keys(models).length > 0) delete current.models[opts.providerID]
-          return models
-        }
-        if (opts.providerID === "minimax-cli") {
-          const models = await minimaxCliFamilyModels(current, resolved.model)
           if (Object.keys(models).length > 0) delete current.models[opts.providerID]
           return models
         }
@@ -880,9 +764,7 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
 const claudeCode = getCliProviderDefinition("claude-code")!
 const codexCli = getCliProviderDefinition("codex-cli")!
 const grokBuildCli = getCliProviderDefinition("grok-build-cli")!
-const kimiCli = getCliProviderDefinition("kimi-cli")!
 const museCli = getCliProviderDefinition("muse-cli")!
-const minimaxCli = getCliProviderDefinition("minimax-cli")!
 
 export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
   // Official DeepSeek cloud API — OpenAI-compatible (OpenCode: npm
@@ -946,14 +828,6 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     promptMode: grokBuildCli.promptMode,
     promptFlag: grokBuildCli.promptFlag,
   }),
-  "kimi-cli": cliLoader({
-    providerID: "kimi-cli",
-    binary: kimiCli.binary,
-    args: kimiCli.args,
-    parser: kimiCli.parser,
-    promptMode: kimiCli.promptMode,
-    promptFlag: kimiCli.promptFlag,
-  }),
   "muse-cli": cliLoader({
     providerID: "muse-cli",
     binary: museCli.binary,
@@ -962,14 +836,5 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     promptMode: museCli.promptMode,
     promptFlag: museCli.promptFlag,
     workspaceArg: museCli.workspaceArg,
-  }),
-  "minimax-cli": cliLoader({
-    providerID: "minimax-cli",
-    binary: minimaxCli.binary,
-    args: minimaxCli.args,
-    parser: minimaxCli.parser,
-    promptMode: minimaxCli.promptMode,
-    promptFlag: minimaxCli.promptFlag,
-    workspaceArg: minimaxCli.workspaceArg,
   }),
 }

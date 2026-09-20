@@ -452,7 +452,6 @@ export namespace ProviderTransform {
     if (
       model.providerID === "kimi-for-coding" ||
       model.providerID === "kimi-cloud-plan" ||
-      model.providerID === "kimi-cli" ||
       model.providerID === "moonshotai" ||
       model.providerID === "moonshotai-cn"
     ) {

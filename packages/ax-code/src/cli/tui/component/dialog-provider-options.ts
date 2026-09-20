@@ -69,9 +69,7 @@ export const CLI_BINARIES: Record<string, string> = {
   "claude-code": "claude",
   "codex-cli": "codex",
   "grok-build-cli": "grok",
-  "kimi-cli": "kimi",
   "muse-cli": "muse",
-  "minimax-cli": "mcode",
 }
 
 export const OFFLINE_PROVIDERS = new Set<string>(LOCAL_RUNTIME_PROVIDER_IDS)

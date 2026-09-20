@@ -57,9 +57,9 @@ describe("providers command", () => {
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("grok-build-cli")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("qoder-cli")).toBe(false)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("antigravity-cli")).toBe(false)
-    expect(DEFAULT_LOGIN_PROVIDER_IDS.has("kimi-cli")).toBe(true)
+    expect(DEFAULT_LOGIN_PROVIDER_IDS.has("kimi-cli")).toBe(false)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("muse-cli")).toBe(true)
-    expect(DEFAULT_LOGIN_PROVIDER_IDS.has("minimax-cli")).toBe(true)
+    expect(DEFAULT_LOGIN_PROVIDER_IDS.has("minimax-cli")).toBe(false)
   })
 
   test("providers login accepts default Cloud API provider ids directly", async () => {
@@ -297,11 +297,11 @@ describe("providers command", () => {
     const invalidateSpy = vi.spyOn(Provider, "invalidate").mockResolvedValue()
 
     try {
-      await Auth.set("kimi-cli", { type: "api", key: "cli" })
-      await ProvidersLogoutCommand.handler({ provider: "kimi-cli" } as any)
+      await Auth.set("claude-code", { type: "api", key: "cli" })
+      await ProvidersLogoutCommand.handler({ provider: "claude-code" } as any)
 
       expect(selectSpy).not.toHaveBeenCalled()
-      expect(await Auth.get("kimi-cli")).toBeUndefined()
+      expect(await Auth.get("claude-code")).toBeUndefined()
       expect(invalidateSpy).toHaveBeenCalled()
       expect(outroSpy).toHaveBeenCalledWith("Logout successful")
     } finally {
@@ -382,7 +382,7 @@ describe("providers command", () => {
 
     try {
       stdin.isTTY = false
-      await Auth.set("kimi-cli", { type: "api", key: "cli" })
+      await Auth.set("claude-code", { type: "api", key: "cli" })
       await ProvidersLogoutCommand.handler({} as any)
 
       expect(selectSpy).not.toHaveBeenCalled()

@@ -48,7 +48,7 @@ describe("modelSelectableForProvider", () => {
   test("does not reject models whose output capability is not known", () => {
     expect(modelSelectableForProvider("grok-build-cli", { capabilities: { toolcall: false } })).toBe(true)
     expect(modelSelectableForProvider("muse-cli", { capabilities: { toolcall: false } })).toBe(true)
-    expect(modelSelectableForProvider("minimax-cli", { capabilities: { toolcall: false } })).toBe(true)
+    expect(modelSelectableForProvider("minimax-cli", { capabilities: { toolcall: false } })).toBe(false)
     expect(modelSelectableForProvider("qoder-cli", { capabilities: { toolcall: false } })).toBe(false)
   })
 })
