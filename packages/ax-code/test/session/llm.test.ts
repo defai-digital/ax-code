@@ -274,6 +274,8 @@ function createEventResponse(chunks: unknown[], includeDone = false) {
 
 describe("session.llm.stream", () => {
   test.each([
+    { providerID: "ax-engine", modelID: "tiel-coder-35b-axq-mxfp4", local: true },
+    { providerID: "ax-engine", modelID: "cyber-tiel-coder-35b-axq-mxfp4", local: true },
     { providerID: "local-llm", local: true },
     { providerID: "lmstudio", local: true },
     { providerID: "mtplx", local: true },
@@ -286,7 +288,26 @@ describe("session.llm.stream", () => {
     "preserves local request prefixes without changing $providerID management=$management axTrust=$axTrust",
     async (row) => {
       const providerID = ProviderID.make(row.providerID)
-      const modelID = ModelID.make("qwen3.8-max")
+      const modelID = ModelID.make(row.modelID ?? "qwen3.8-max")
+      if (row.providerID === "ax-engine") {
+        for (let i = 0; i < 12; i++) {
+          waitRequest(
+            "/models",
+            new Response(
+              JSON.stringify({
+                data: [
+                  {
+                    id: modelID,
+                    capabilities: { temperature: true, toolcall: true, input: { text: true }, output: { text: true } },
+                    ax_engine: { openai_tool_calling_supported: true, coding_supported: true },
+                  },
+                ],
+              }),
+              { headers: { "Content-Type": "application/json" } },
+            ),
+          )
+        }
+      }
       await using tmp = await tmpdir({
         config: {
           enabled_providers: [providerID],
@@ -294,7 +315,12 @@ describe("session.llm.stream", () => {
             [providerID]: {
               npm: "@ai-sdk/openai-compatible",
               ...(row.management ? { management: row.management } : {}),
-              options: { apiKey: "test", baseURL: `${state.server.url.origin}/v1`, axTrust: row.axTrust },
+              options: {
+                apiKey: "test",
+                baseURL: `${state.server.url.origin}/v1`,
+                axTrust: row.axTrust,
+                ...(row.providerID === "ax-engine" ? { connectionMode: "attach" } : {}),
+              },
               models: {
                 [modelID]: {
                   name: "Local prefix regression",
@@ -355,7 +381,10 @@ describe("session.llm.stream", () => {
                 model: { providerID, modelID },
               },
               agent: { name: "test", mode: "primary", options: {}, permission: [] },
-              messages,
+              messages:
+                row.modelID && captures.length === 1
+                  ? [...messages, { role: "user", content: "Now count Python code only." }]
+                  : messages,
               system: ["Preserve these custom instructions."],
               abort: new AbortController().signal,
               tools: Object.fromEntries(
@@ -385,7 +414,18 @@ describe("session.llm.stream", () => {
             ).toEqual(row.local ? ["alpha", "read", "zeta"] : names)
           }
           expect(messages).toEqual(before)
-          if (row.local) expect(captures[0].body).toEqual(captures[1].body)
+          if (row.modelID) {
+            const first = captures[0].body.messages as Array<{ role: string; content: string }>
+            const followup = captures[1].body.messages as Array<{ role: string; content: string }>
+            expect(first.filter((message) => message.role === "system")).toHaveLength(1)
+            expect(followup.filter((message) => message.role === "system")).toEqual(
+              first.filter((message) => message.role === "system"),
+            )
+            expect(followup.slice(0, first.length - 1)).toEqual(first.slice(0, -1))
+            expect(first[0].content).not.toContain("## Long-Agent Context Pack")
+            expect(captures[0].body.tools).toEqual(captures[1].body.tools)
+            expect(captures[1].body.model).toBe(row.modelID)
+          } else if (row.local) expect(captures[0].body).toEqual(captures[1].body)
         },
       })
     },

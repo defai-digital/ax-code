@@ -231,6 +231,15 @@ describe("ProviderTransform sampling - Kimi / DeepSeek", () => {
     expect(ProviderTransform.topP(model)).toBe(0.95)
   })
 
+  test("keeps only exact managed Tiel aliases on the single-system contract", () => {
+    for (const id of ["tiel-coder-35b-axq-mxfp4", "cyber-tiel-coder-35b-axq-mxfp4"]) {
+      const model = { providerID: "ax-engine", id, api: { id }, family: id }
+      expect(ProviderTransform.requiresSingleLeadingSystem(model)).toBe(true)
+      expect(ProviderTransform.requiresSingleLeadingSystem({ ...model, providerID: "custom" })).toBe(false)
+      expect(ProviderTransform.requiresSingleLeadingSystem({ ...model, api: { id: `${id}-other` } })).toBe(false)
+    }
+  })
+
   test("collapses multiple Ornith system messages into one leading system turn", () => {
     const model = {
       id: "alibaba-pai/Ornith-1.0-397B-FP8",

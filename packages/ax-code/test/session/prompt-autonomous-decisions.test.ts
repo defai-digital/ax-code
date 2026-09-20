@@ -1552,6 +1552,27 @@ describe("local read-only exploration convergence", () => {
     ).toEqual({ action: "stop" })
   })
 
+  test("ordinary AX Engine tool protocol recovery is bounded and preserves tool-free intent", () => {
+    const input = {
+      lastTurnWasForceTextOnly: false,
+      recoveriesUsed: 0,
+      maxRecoveries: 1,
+      axEngineToolsAvailable: true,
+    }
+    expect(unexecutableToolTextRecoveryDecision(input)).toEqual({ action: "recover" })
+    for (const override of [
+      { recoveriesUsed: 1 },
+      { recoveriesUsed: Number.NaN },
+      { recoveriesUsed: -1 },
+      { maxRecoveries: Number.NaN },
+      { axEngineToolsAvailable: false },
+      { lastTurnWasForceTextOnly: true, forceReason: "response_only" as const },
+      { lastTurnWasForceTextOnly: true, forceReason: "goal_complete" as const },
+    ]) {
+      expect(unexecutableToolTextRecoveryDecision({ ...input, ...override })).toEqual({ action: "stop" })
+    }
+  })
+
   test("unexecutable tool text budget is consecutive: recovers again after a clean turn resets it", () => {
     // Mirrors the prompt-impl.ts wiring: the loop increments recoveriesUsed on
     // each recovery and resets it to 0 when the completion gate next evaluates

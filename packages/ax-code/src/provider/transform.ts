@@ -9,7 +9,11 @@ import { isRecord } from "@/util/record"
 import { isQwen37MaxOrPlusModel } from "./model-capabilities"
 import { modelIdFinalSegment, normalizeProviderModelId } from "./model-id"
 import { isDedicatedPrivateGpuProviderID } from "./private-gpu/presets"
-import { AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
+import {
+  AX_ENGINE_PROVIDER_ID,
+  AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+  AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+} from "./ax-engine/constants"
 import { cliEffortVariants } from "./cli/effort"
 import { wrapThinkTagText, type ThinkTagName } from "./think-tags"
 import { PromptCachePolicy } from "./prompt-cache-policy"
@@ -542,6 +546,15 @@ export namespace ProviderTransform {
     api: { id: string }
     family?: string
   }): boolean {
+    // These audited managed aliases use a Qwen-derived template that merges
+    // leading system messages. Keep transient context out of its KV prefix.
+    if (
+      model.providerID === AX_ENGINE_PROVIDER_ID &&
+      [AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID, AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID].includes(
+        model.api.id,
+      )
+    )
+      return true
     if (isOrnithFamily(model)) return true
     const segment = model.id ? modelIdFinalSegment(model.id).toLowerCase() : ""
     const blob = `${segment} ${model.api.id} ${model.family ?? ""}`.toLowerCase()

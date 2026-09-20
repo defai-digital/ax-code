@@ -1669,8 +1669,14 @@ export namespace SessionPrompt {
             recoveriesUsed: unexecutableToolTextRecoveries,
             maxRecoveries: MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
             forceReason: lastTurnForceTextReason,
+            axEngineToolsAvailable:
+              model.providerID === AX_ENGINE_PROVIDER_ID &&
+              model.capabilities.toolcall !== false &&
+              toolChoice !== "none" &&
+              Object.keys(tools).length > 0,
           })
           if (unexecutableRecovery.action === "recover") {
+            const wasForcedTextOnly = lastTurnWasForceTextOnly
             unexecutableToolTextRecoveries += 1
             forceTextOnlyTurn = false
             forceTextReason = undefined
@@ -1687,7 +1693,8 @@ export namespace SessionPrompt {
             axEngineLargeEvidenceGraceUsed = false
             pendingAxEngineTurnInstruction = undefined
             pendingMaxOutputTokens = undefined
-            log.info("autonomous completion gate recovery after forced text-only turn", {
+            log.info("autonomous completion gate tool protocol recovery", {
+              wasForcedTextOnly,
               command: "session.prompt.loop",
               status: "recover",
               errorCode: "UNEXECUTABLE_TOOL_TEXT",
@@ -1698,7 +1705,7 @@ export namespace SessionPrompt {
             await createAutonomousTextContinuation({
               sessionID,
               messages: latestMessages,
-              text: AutonomousContinuationPrompt.unexecutableToolTextRecovery(),
+              text: AutonomousContinuationPrompt.unexecutableToolTextRecovery(wasForcedTextOnly),
             })
             continue
           }

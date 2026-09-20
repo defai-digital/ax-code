@@ -165,6 +165,14 @@ describe("autonomous continuation prompt builders", () => {
     expect(text).toContain("Working directory")
   })
 
+  test("ordinary malformed-tool recovery does not invent a forced text-only turn", () => {
+    const text = AutonomousContinuationPrompt.unexecutableToolTextRecovery(false)
+    expect(text).not.toContain("was forced text-only")
+    expect(text).toContain("No action from that markup ran")
+    expect(text).toContain("existing evidence")
+    expect(text).toContain("complete, valid arguments")
+  })
+
   test("builds completion gate retry guidance", () => {
     const text = AutonomousContinuationPrompt.completionGateRetry({
       message: "Subagent completed without a usable final response.",

@@ -343,13 +343,16 @@ export namespace AutonomousContinuationPrompt {
    * Injected when a forced text-only turn still emitted unexecutable tool markup.
    * Tools are re-enabled for the next turn so the model can finish real work.
    */
-  export function unexecutableToolTextRecovery() {
+  export function unexecutableToolTextRecovery(wasForcedTextOnly = true) {
     return (
-      `Control-plane recovery: the previous turn was forced text-only and the model returned tool-call markup ` +
+      (wasForcedTextOnly
+        ? `Control-plane recovery: the previous turn was forced text-only and the model returned tool-call markup `
+        : `Control-plane recovery: the previous turn returned invalid tool-call markup `) +
       `as plain text (for example <tool_call>…</tool_call>), which is not executable. ` +
-      `Tools are available again for this turn. Either (1) call real AX Code tools via the tool protocol ` +
+      `No action from that markup ran. Tools are available again for this turn. Either (1) call real AX Code tools via the tool protocol ` +
       `(prefer the Working directory from <env>; omit path/workdir to use it), or (2) answer the user in plain ` +
-      `language without tool markup. Do not paste XML or fake tool calls as text.`
+      `language using existing evidence without tool markup. Follow the supplied tool format with complete, valid arguments. ` +
+      `Do not paste XML or fake tool calls as text.`
     )
   }
 
