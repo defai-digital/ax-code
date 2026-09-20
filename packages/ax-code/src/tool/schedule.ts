@@ -105,7 +105,7 @@ export const ScheduleTaskTool = Tool.define("schedule_task", {
     "missed occurrences catch up once (or are skipped) per the catch-up policy when a backend starts again; " +
     "(2) when a task fires, a notification is shown and the prompt runs in a NEW separate session titled with the " +
     "task title — the result does not appear in this conversation; " +
-    "(3) the user can review and manage tasks anytime with the /schedule command in the TUI; " +
+    "(3) the user can review and manage tasks anytime with the /schedule command in the TUI or the `ax-code schedule` CLI; " +
     "(4) a one-time reminder that fails is retried with backoff and paused after repeated failures, and the user " +
     "is notified in each case. Timing is approximate: fires can be up to about a minute late (poll interval), " +
     "plus a small anti-herd spread for recurring schedules.",
