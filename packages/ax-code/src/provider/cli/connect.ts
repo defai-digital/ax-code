@@ -74,47 +74,8 @@ async function checkClaudeAuth(binary: string): Promise<string | undefined> {
   }
 }
 
-async function checkQoderAuth(binary: string): Promise<string | undefined> {
-  try {
-    const out = await Process.run(
-      [binary, "-p", "--output-format", "stream-json", "--permission-mode", "dont_ask", "ping"],
-      {
-        stdin: "ignore",
-        env: cliEnv([], "qoder-cli"),
-        abort: AbortSignal.timeout(5_000),
-        nothrow: true,
-        unref: true,
-      },
-    )
-
-    for (const line of [out.stdout, out.stderr]
-      .map((chunk) => chunk.toString())
-      .join("\n")
-      .split("\n")) {
-      const trimmed = line.trim()
-      if (!trimmed || trimmed[0] !== "{") continue
-      const event = parseCliJsonEventLine(line)
-      if (!event) continue
-      if (isClaudeAuthFailure(event)) {
-        return "Qoder CLI is not logged in. Run `qodercli login` first, then retry `ax-code providers login --provider qoder-cli`."
-      }
-    }
-
-    return
-  } catch (error) {
-    log.debug("qoder auth probe failed", {
-      command: "provider.cli.auth_probe",
-      status: "error",
-      binary,
-      error,
-    })
-    return
-  }
-}
-
 export async function checkCliProviderAuth(providerID: string, binary: string): Promise<string | undefined> {
   if (providerID === "claude-code") return checkClaudeAuth(binary)
-  if (providerID === "qoder-cli") return checkQoderAuth(binary)
   return
 }
 

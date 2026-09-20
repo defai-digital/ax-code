@@ -1088,40 +1088,8 @@ describe("CliLanguageModel", () => {
     expect(cmd).not.toContain("write file")
   })
 
-  test("passes Qoder CLI prompt through headless print stdin", () => {
-    process.env.AX_CODE_AUTONOMOUS = "false"
-    try {
-      const definition = CLI_PROVIDER_DEFINITIONS["qoder-cli"]
-      expect(definition).toBeDefined()
-
-      const cmd = buildCliCommand(
-        {
-          providerID: "qoder-cli",
-          modelID: "qoder-cli",
-          binary: "qodercli",
-          args: definition?.args ?? [],
-          parser: definition!.parser,
-          promptMode: definition?.promptMode ?? "stdin",
-          workspaceArg: definition?.workspaceArg,
-        },
-        "write file",
-        "/repo",
-      )
-
-      expect(cmd).toEqual([
-        "qodercli",
-        "-p",
-        "--output-format",
-        "stream-json",
-        "--permission-mode",
-        "dont_ask",
-        "--cwd",
-        "/repo",
-      ])
-      expect(cmd).not.toContain("write file")
-    } finally {
-      restoreAutonomous()
-    }
+  test("does not register a Qoder CLI provider", () => {
+    expect(CLI_PROVIDER_DEFINITIONS["qoder-cli"]).toBeUndefined()
   })
 
   test("adds autonomous-only flags by default", () => {

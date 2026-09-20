@@ -23,13 +23,13 @@ describe("dialog model options", () => {
   test("keeps CLI provider non-toolcall models selectable", () => {
     expect(dialogModelOptionDisabled("grok-build-cli", "grok-build-cli", model(false))).toBe(false)
     expect(dialogModelOptionDisabled("kimi-cli", "kimi-cli", model(false))).toBe(false)
-    expect(dialogModelOptionDisabled("qoder-cli", "qoder-cli", model(false))).toBe(false)
     expect(dialogModelOptionDisabled("muse-cli", "muse-cli", model(false))).toBe(false)
     expect(dialogModelOptionDisabled("minimax-cli", "minimax-cli", model(false))).toBe(false)
   })
 
   test("does not exempt retired CLI providers from tool-call requirements", () => {
     expect(dialogModelOptionDisabled("gemini-cli", "gemini-cli", model(false))).toBe(true)
+    expect(dialogModelOptionDisabled("qoder-cli", "qoder-cli", model(false))).toBe(true)
   })
 
   test("disables unavailable and explicitly hidden models", () => {

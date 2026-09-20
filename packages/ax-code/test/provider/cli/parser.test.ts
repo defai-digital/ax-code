@@ -7,7 +7,6 @@ import {
   kimiCliParser,
   museCliParser,
   minimaxCliParser,
-  qoderCliParser,
   parseCliJsonEventLine,
 } from "../../../src/provider/cli/parser"
 
@@ -78,11 +77,6 @@ describe("provider CLI raw stream text", () => {
     expect(kimiCliParser.parseStreamLine("  indented output  ")).toBe("  indented output  ")
   })
 
-  test("qoder parser ignores non-JSON stream lines like Claude stream-json", () => {
-    expect(qoderCliParser.parseStreamLine("  indented output  ")).toBeNull()
-    expect(qoderCliParser.parseStreamLine("qodercli banner")).toBeNull()
-  })
-
   test("raw complete fallback preserves model whitespace", () => {
     expect(claudeCodeParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
     expect(codexCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
@@ -90,7 +84,6 @@ describe("provider CLI raw stream text", () => {
     expect(kimiCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
     expect(museCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
     expect(minimaxCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
-    expect(qoderCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
   })
 })
 
@@ -245,29 +238,3 @@ describe("minimaxCliParser", () => {
   })
 })
 
-describe("qoderCliParser", () => {
-  test("extracts Claude-style assistant content blocks", () => {
-    const output = [
-      '{"type":"system","subtype":"init"}',
-      '{"type":"assistant","message":{"content":[{"type":"text","text":"Hello world"}]}}',
-    ].join("\n")
-    expect(qoderCliParser.parseComplete(output)).toEqual({ text: "Hello world" })
-  })
-
-  test("streams content_block_delta events", () => {
-    expect(qoderCliParser.parseStreamLine('{"type":"content_block_delta","delta":{"text":"OK"}}')).toBe("OK")
-    expect(qoderCliParser.parseStreamLine('{"type":"system","subtype":"init"}')).toBeNull()
-  })
-
-  test("surfaces authentication_failed as a CLI output error", () => {
-    expect(() =>
-      qoderCliParser.parseComplete('{"type":"system","subtype":"api_retry","error":"authentication_failed"}'),
-    ).toThrow(CliOutputError)
-    expect(() =>
-      qoderCliParser.parseComplete('{"type":"system","subtype":"api_retry","error":"authentication_failed"}'),
-    ).toThrow("qodercli login")
-    expect(() => qoderCliParser.parseComplete('{"type":"error","error":{"message":"Please login first"}}')).toThrow(
-      "Please login first",
-    )
-  })
-})

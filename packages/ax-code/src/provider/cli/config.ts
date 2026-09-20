@@ -5,7 +5,6 @@ import {
   kimiCliParser,
   minimaxCliParser,
   museCliParser,
-  qoderCliParser,
   type CliOutputParser,
 } from "./parser"
 
@@ -64,15 +63,6 @@ export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
     binary: "mcode",
     args: ["exec", "--output-format", "stream-json", "--permission", "full", "--prompt-mode", "coding", "--input", "-"],
     parser: minimaxCliParser,
-    promptMode: "stdin",
-    workspaceArg: "--cwd",
-  },
-  // Qoder CLI: Claude-style -p/--print headless. Stdin avoids argv limits.
-  // dont_ask because AX Code cannot show Qoder's interactive approval UI.
-  "qoder-cli": {
-    binary: "qodercli",
-    args: ["-p", "--output-format", "stream-json", "--permission-mode", "dont_ask"],
-    parser: qoderCliParser,
     promptMode: "stdin",
     workspaceArg: "--cwd",
   },

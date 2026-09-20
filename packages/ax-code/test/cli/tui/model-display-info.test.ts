@@ -10,7 +10,6 @@ describe("modelDisplayInfo", () => {
       "kimi-cli",
       "muse-cli",
       "minimax-cli",
-      "qoder-cli",
     ]) {
       const display = modelDisplayInfo(providerID, {
         providerID,
@@ -38,6 +37,7 @@ describe("modelDisplayInfo", () => {
 
   test("does not advertise web search for retired CLI providers", () => {
     expect(supportsWebSearch({ providerID: "gemini-cli" })).toBe(false)
+    expect(supportsWebSearch({ providerID: "qoder-cli" })).toBe(false)
   })
 
   test("does not duplicate markers already present in the model name", () => {

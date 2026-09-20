@@ -25,7 +25,7 @@ describe("promptToText", () => {
     expect(promptToText(prompt, { providerID: "kimi-cli" })).toContain("built-in web search")
     expect(promptToText(prompt, { providerID: "muse-cli" })).toContain("built-in web search")
     expect(promptToText(prompt, { providerID: "minimax-cli" })).toContain("built-in web search")
-    expect(promptToText(prompt, { providerID: "qoder-cli" })).toContain("built-in web search")
+    expect(promptToText(prompt, { providerID: "qoder-cli" })).not.toContain("built-in web search")
     expect(promptToText(prompt, { providerID: "gemini-cli" })).not.toContain("built-in web search")
   })
 
@@ -39,7 +39,6 @@ describe("promptToText", () => {
       "kimi-cli",
       "muse-cli",
       "minimax-cli",
-      "qoder-cli",
     ]) {
       const result = promptToText(prompt, { providerID })
       expect(result).toContain("<cli_background_tasks>")

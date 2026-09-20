@@ -264,7 +264,7 @@ test("set does not steal a freshly created auth lock with a partial body", async
 })
 
 test("remove drops a coalesced all() so later get does not return deleted credentials", async () => {
-  await Auth.set("qoder-cli", { type: "api", key: "stale-key" })
+  await Auth.set("stale-cli", { type: "api", key: "stale-key" })
 
   const originalReadJson = Filesystem.readJson.bind(Filesystem)
   let releaseRead!: () => void
@@ -288,15 +288,15 @@ test("remove drops a coalesced all() so later get does not return deleted creden
   try {
     const inflight = Auth.all()
     await initialRead
-    await Auth.remove("qoder-cli")
-    await expect(Auth.get("qoder-cli")).resolves.toBeUndefined()
+    await Auth.remove("stale-cli")
+    await expect(Auth.get("stale-cli")).resolves.toBeUndefined()
     releaseRead()
     await inflight
-    expect(await Auth.get("qoder-cli")).toBeUndefined()
+    expect(await Auth.get("stale-cli")).toBeUndefined()
   } finally {
     releaseRead()
     readSpy.mockRestore()
-    await Auth.remove("qoder-cli").catch(() => undefined)
+    await Auth.remove("stale-cli").catch(() => undefined)
   }
 })
 

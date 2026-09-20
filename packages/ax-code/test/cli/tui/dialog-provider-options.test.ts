@@ -191,11 +191,8 @@ describe("provider dialog options", () => {
     expect(CLI_BINARIES["gemini-cli"]).toBeUndefined()
     expect(CLI_PROVIDERS.has("antigravity-cli")).toBe(false)
     expect(CLI_BINARIES["antigravity-cli"]).toBeUndefined()
-  })
-
-  test("includes Qoder CLI as a CLI provider", () => {
-    expect(CLI_PROVIDERS.has("qoder-cli")).toBe(true)
-    expect(CLI_BINARIES["qoder-cli"]).toBe("qodercli")
+    expect(CLI_PROVIDERS.has("qoder-cli")).toBe(false)
+    expect(CLI_BINARIES["qoder-cli"]).toBeUndefined()
   })
 
   test("includes Kimi Code CLI as a CLI provider", () => {
@@ -229,7 +226,6 @@ describe("provider dialog options", () => {
   test("separates API, CLI, local, and private GPU provider categories", () => {
     expect(providerDialogCategory("groq")).toBe("API Cloud Provider")
     expect(providerDialogCategory("grok-build-cli")).toBe("CLI Provider")
-    expect(providerDialogCategory("qoder-cli")).toBe("CLI Provider")
     expect(providerDialogCategory("kimi-cli")).toBe("CLI Provider")
     expect(providerDialogCategory("ax-engine")).toBe("AX-Engine runtime")
     expect(providerDialogCategory("ollama")).toBe("Local LLM runtime")
@@ -355,7 +351,7 @@ describe("provider dialog options", () => {
         })),
       ).toEqual([
         { value: "api", description: "2 providers" },
-        { value: "cli", description: "7 providers" },
+        { value: "cli", description: "6 providers" },
         { value: "ax-engine", description: "1 provider" },
         { value: "local", description: "6 providers" },
         { value: "private-gpu", description: "14 providers" },
@@ -426,9 +422,9 @@ describe("provider dialog options", () => {
   test("requires normal tool-call capability for local runtime models", () => {
     expect(providerModelSelectable({ providerID: "ax-engine", toolcall: false })).toBe(false)
     expect(providerModelSelectable({ providerID: "grok-build-cli", toolcall: false })).toBe(true)
-    expect(providerModelSelectable({ providerID: "qoder-cli", toolcall: false })).toBe(true)
     expect(providerModelSelectable({ providerID: "kimi-cli", toolcall: false })).toBe(true)
     // Retired CLI providers no longer get the non-toolcall exemption.
+    expect(providerModelSelectable({ providerID: "qoder-cli", toolcall: false })).toBe(false)
     expect(providerModelSelectable({ providerID: "antigravity-cli", toolcall: false })).toBe(false)
     expect(providerModelSelectable({ providerID: "groq", toolcall: false })).toBe(false)
     expect(providerModelSelectable({ providerID: "groq", toolcall: true })).toBe(true)

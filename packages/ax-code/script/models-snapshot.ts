@@ -7,7 +7,6 @@ export const LOCAL_PROVIDER_IDS = [
   "kimi-cli",
   "muse-cli",
   "minimax-cli",
-  "qoder-cli",
   "ollama",
   "ax-studio",
 ] as const
@@ -105,34 +104,6 @@ const LOCAL_PROVIDER_DEFAULTS: ModelsSnapshot = {
       },
     },
   },
-  "qoder-cli": {
-    id: "qoder-cli",
-    name: "Qoder CLI",
-    env: [],
-    npm: "cli",
-    models: {
-      "qoder-cli": {
-        id: "qoder-cli",
-        name: "Qoder CLI",
-        family: "qoder",
-        attachment: true,
-        reasoning: false,
-        tool_call: false,
-        temperature: false,
-        release_date: "2026-06-01",
-        modalities: {
-          input: ["text", "image"],
-          output: ["text"],
-        },
-        limit: {
-          context: 200000,
-          output: 16384,
-        },
-        options: {},
-        status: "active",
-      },
-    },
-  },
 }
 
 export function preserveLocalProviders(fetched: ModelsSnapshot, existing: ModelsSnapshot) {
@@ -166,14 +137,6 @@ export function preserveLocalProviders(fetched: ModelsSnapshot, existing: Models
     minimaxCli.models = {
       ...(minimaxCli.models ?? {}),
       "minimax-cli": minimaxCliDefault.models["minimax-cli"],
-    }
-  }
-  const qoderCli = next["qoder-cli"] as { models?: Record<string, unknown> } | undefined
-  const qoderCliDefault = LOCAL_PROVIDER_DEFAULTS["qoder-cli"] as { models: Record<string, unknown> }
-  if (qoderCli && !qoderCli.models?.["qoder-cli"]) {
-    qoderCli.models = {
-      ...(qoderCli.models ?? {}),
-      "qoder-cli": qoderCliDefault.models["qoder-cli"],
     }
   }
   return next

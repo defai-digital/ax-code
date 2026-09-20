@@ -7,7 +7,6 @@ const CLI_WEB_SEARCH_PROVIDER_IDS = new Set([
   "kimi-cli",
   "muse-cli",
   "minimax-cli",
-  "qoder-cli",
 ])
 
 export type DisplayCapableModel = {

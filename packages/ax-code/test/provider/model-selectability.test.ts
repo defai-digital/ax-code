@@ -49,7 +49,7 @@ describe("modelSelectableForProvider", () => {
     expect(modelSelectableForProvider("grok-build-cli", { capabilities: { toolcall: false } })).toBe(true)
     expect(modelSelectableForProvider("muse-cli", { capabilities: { toolcall: false } })).toBe(true)
     expect(modelSelectableForProvider("minimax-cli", { capabilities: { toolcall: false } })).toBe(true)
-    expect(modelSelectableForProvider("qoder-cli", { capabilities: { toolcall: false } })).toBe(true)
+    expect(modelSelectableForProvider("qoder-cli", { capabilities: { toolcall: false } })).toBe(false)
   })
 })
 

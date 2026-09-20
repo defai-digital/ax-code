@@ -14,7 +14,6 @@ const WEB_SEARCH_CLI_PROVIDERS = new Set([
   "kimi-cli",
   "muse-cli",
   "minimax-cli",
-  "qoder-cli",
 ])
 
 const CLI_WEB_SEARCH_HINT = [

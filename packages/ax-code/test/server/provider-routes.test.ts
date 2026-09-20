@@ -128,7 +128,7 @@ describe("provider routes", () => {
     expect(ids).toContain("custom-private-gpu")
     expect(ids).toContain("grok-build-cli")
     expect(ids).toEqual(expect.arrayContaining(["ollama", "lmstudio", "mtplx", "omlx", "ax-studio", "local-llm"]))
-    expect(ids).toContain("qoder-cli")
+    expect(ids).not.toContain("qoder-cli")
     expect(ids).not.toContain("gemini-cli")
     expect(ids).not.toContain("antigravity-cli")
     expect(ids).toContain("kimi-cli")

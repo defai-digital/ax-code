@@ -193,7 +193,6 @@ CLI providers reuse a local vendor CLI and its login/session instead of storing 
 | `kimi-cli`       | Kimi Code CLI           | `kimi`                 | `kimi-cli`         |
 | `muse-cli`       | Muse Code CLI           | `muse`                 | `muse-cli`         |
 | `minimax-cli`    | MiniMax Code CLI        | `mcode`                | `minimax-cli`      |
-| `qoder-cli`      | Qoder CLI               | `qodercli`             | `qoder-cli`        |
 
 Run the vendor CLI login first when required, then run `ax-code providers login <provider-id>`. AX Code probes the CLI command and stores a local marker credential after the probe succeeds.
 
@@ -202,8 +201,6 @@ For Kimi Code membership, install the local `kimi` binary, run `kimi login`, the
 For Muse Code, install the local `muse` binary, run `muse login` (or set `META_API_KEY`), then `ax-code providers login muse-cli`. AX Code reuses the Muse CLI session (`~/.config/muse`) rather than storing a hosted Meta API key. The hosted `meta` API provider remains a separate connection.
 
 For MiniMax Code, install the local `mcode` binary (`npm install -g @minimax-ai/code` or the official installer), run `mcode login`, then `ax-code providers login minimax-cli`. AX Code reuses the MiniMax Code CLI session (`~/.minimax`) rather than storing a hosted Token Plan key. The hosted `minimax-coding-plan` / `minimax-cn-coding-plan` API providers remain separate connections. Do not use `mmx-cli` for this provider.
-
-For Qoder, install the local `qodercli` binary, run `qodercli login`, then `ax-code providers login qoder-cli`. AX Code reuses the Qoder CLI session (`~/.qoder`) rather than storing a hosted API key.
 
 ## AX Engine Local Provider
 

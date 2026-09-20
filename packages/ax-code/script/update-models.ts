@@ -68,7 +68,6 @@ const cliImageProviderIDs = [
   "kimi-cli",
   "muse-cli",
   "minimax-cli",
-  "qoder-cli",
 ] as const
 const localProviderIDs = ["ax-studio", ...cliImageProviderIDs, "ollama"]
 for (const id of localProviderIDs) {
@@ -307,61 +306,6 @@ if (!fetched["minimax-cli"].models?.["minimax-cli"]) {
       limit: {
         context: 1048576,
         output: 512000,
-      },
-      options: {},
-      status: "active",
-    },
-  }
-}
-if (!fetched["qoder-cli"]) {
-  fetched["qoder-cli"] = {
-    id: "qoder-cli",
-    name: "Qoder CLI",
-    env: [],
-    npm: "cli",
-    models: {
-      "qoder-cli": {
-        id: "qoder-cli",
-        name: "Qoder CLI",
-        family: "qoder",
-        attachment: true,
-        reasoning: false,
-        tool_call: false,
-        temperature: false,
-        release_date: "2026-06-01",
-        modalities: {
-          input: ["text", "image"],
-          output: ["text"],
-        },
-        limit: {
-          context: 200000,
-          output: 16384,
-        },
-        options: {},
-        status: "active",
-      },
-    },
-  }
-}
-if (!fetched["qoder-cli"].models?.["qoder-cli"]) {
-  fetched["qoder-cli"].models = {
-    ...(fetched["qoder-cli"].models ?? {}),
-    "qoder-cli": {
-      id: "qoder-cli",
-      name: "Qoder CLI",
-      family: "qoder",
-      attachment: true,
-      reasoning: false,
-      tool_call: false,
-      temperature: false,
-      release_date: "2026-06-01",
-      modalities: {
-        input: ["text", "image"],
-        output: ["text"],
-      },
-      limit: {
-        context: 200000,
-        output: 16384,
       },
       options: {},
       status: "active",
@@ -865,31 +809,6 @@ if (!fetched["minimax-cli"].models?.["minimax-cli"]) {
       limit: {
         context: 1048576,
         output: 512000,
-      },
-      options: {},
-      status: "active",
-    },
-  }
-}
-if (!fetched["qoder-cli"].models?.["qoder-cli"]) {
-  fetched["qoder-cli"].models = {
-    ...(fetched["qoder-cli"].models ?? {}),
-    "qoder-cli": {
-      id: "qoder-cli",
-      name: "Qoder CLI",
-      family: "qoder",
-      attachment: true,
-      reasoning: false,
-      tool_call: false,
-      temperature: false,
-      release_date: "2026-06-01",
-      modalities: {
-        input: ["text", "image"],
-        output: ["text"],
-      },
-      limit: {
-        context: 200000,
-        output: 16384,
       },
       options: {},
       status: "active",
