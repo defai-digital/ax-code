@@ -52,7 +52,7 @@ export const RollbackCommand = cmd({
             const toolSummary = point.tools.length > 0 ? ` [${point.tools.join(", ")}]` : ""
             console.log(`  Step #${point.step}${dur}${tok}${toolSummary}`)
           }
-          console.log(`\nUsage: ax-code rollback ${sessionID} --step <N>`)
+          console.log(`\nUsage: ax-code session rollback ${sessionID} --step <N>`)
           return
         }
 

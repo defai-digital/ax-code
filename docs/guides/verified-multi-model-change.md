@@ -61,7 +61,7 @@ Once a candidate is in your tree, the evidence commands apply as normal:
 ```bash
 ax-code graph <sessionID>       # what the winning run actually did
 ax-code risk <sessionID>        # heuristic risk signals for the change
-ax-code rollback <sessionID> --dry-run
+ax-code session rollback <sessionID> --dry-run
 ```
 
 See [Execution Evidence](execution-evidence.md).

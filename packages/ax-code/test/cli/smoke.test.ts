@@ -253,7 +253,7 @@ describe("cli smoke", () => {
       fn: async () => Session.create({ title: "CLI Smoke Session" }),
     })
 
-    const out = await Process.run(cmd("session", "list", "--format", "json"), {
+    const out = await Process.run(cmd("session", "list", "--json"), {
       cwd: tmp.path,
     })
 
@@ -310,9 +310,9 @@ describe("cli smoke", () => {
     await using tmp = await tmpdir({ git: true })
 
     for (const args of [
-      ["rollback", "ses_missing"],
-      ["compare", "ses_missing_a", "ses_missing_b"],
-      ["branch", "ses_missing"],
+      ["session", "rollback", "ses_missing"],
+      ["session", "compare", "ses_missing_a", "ses_missing_b"],
+      ["session", "branch", "ses_missing"],
     ]) {
       const out = await Process.run(cmd(...args), {
         cwd: tmp.path,
@@ -321,7 +321,7 @@ describe("cli smoke", () => {
 
       const text = stripAnsi((out.stdout.toString() + out.stderr.toString()).trim())
       expect(out.code).toBe(1)
-      expect(text).toContain(`Session not found: ${args[1]}`)
+      expect(text).toContain(`Session not found: ${args[2]}`)
       expect(text).not.toContain("NotFoundError")
       expect(text).not.toContain(" at ")
     }
@@ -346,7 +346,7 @@ describe("cli smoke", () => {
         .run()
     })
 
-    const out = await Process.run(cmd("session", "list", "--format", "json"), {
+    const out = await Process.run(cmd("session", "list", "--json"), {
       cwd: tmp.path,
     })
 

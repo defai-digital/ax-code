@@ -351,7 +351,7 @@ export const TraceCommand: CommandModule = {
     }
 
     // Pretty print timeline
-    console.log(`\n  ax-code trace (${logFile}, ${filtered.length} entries)\n`)
+    console.log(`\n  ax-code session trace (${logFile}, ${filtered.length} entries)\n`)
 
     for (const entry of filtered) {
       const level =

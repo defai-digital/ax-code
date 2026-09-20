@@ -91,8 +91,7 @@ test("ask parses repeatable files and emits answer/cache metadata with no usage 
     "README.md",
     "--model",
     "fixture/public/model",
-    "--format",
-    "json",
+    "--json",
     "What does this function return?",
   ])
   expect(state.calls).toBe(1)

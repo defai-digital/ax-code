@@ -19,7 +19,7 @@ AX Code exposes an ACP server so IDEs (for example Zed) can host the agent witho
 ax-code acp
 
 # Explicit workspace
-ax-code acp --cwd /path/to/project
+ax-code acp --dir /path/to/project
 ```
 
 ## Initialize + session + prompt (stdio)

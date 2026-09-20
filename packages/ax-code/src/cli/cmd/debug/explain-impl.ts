@@ -233,7 +233,7 @@ export function classifyErrors(entries: DiagnosticEntry[]): DiagnosticIssue[] {
         })`,
         rootCause: `${otherToolErrors.length} tool error(s) detected. Most frequent: ${topToolProblems}. These may be transient or related to specific file or permission states.`,
         impact: "Individual tool calls failed but the session likely recovered via retry or an alternative approach.",
-        suggestedFix: "Review errors with `ax-code trace --errors`. Most tool errors are self-correcting.",
+        suggestedFix: "Review errors with `ax-code session trace --errors`. Most tool errors are self-correcting.",
         riskLevel: "low",
         occurrences: otherToolErrors.reduce((sum, e) => sum + e.count, 0),
       })
@@ -262,7 +262,8 @@ export function classifyErrors(entries: DiagnosticEntry[]): DiagnosticIssue[] {
       title: "Session processing errors",
       rootCause: `${sessionErrors.length} session error(s). May indicate LLM provider issues, context overflow, or processing failures.`,
       impact: "One or more AI interactions may have failed or produced incomplete results.",
-      suggestedFix: "Check provider status with `ax-code providers`. Review session with `ax-code replay <sessionID>`.",
+      suggestedFix:
+        "Check provider status with `ax-code providers`. Review session with `ax-code session replay <sessionID>`.",
       riskLevel: "medium",
       occurrences: sessionErrors.reduce((sum, e) => sum + e.count, 0),
     })

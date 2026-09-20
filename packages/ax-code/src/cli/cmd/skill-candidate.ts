@@ -16,7 +16,7 @@ export const SkillCandidateCommand = cmd({
         demandOption: true,
       })
       .positional("name", { type: "string", describe: "candidate name (propose reads the name from its JSON file)" })
-      .option("file", {
+      .option("proposal", {
         type: "string",
         describe: "JSON proposal for propose, or sessionID/messageID/partID evidence for validate",
       }),
@@ -26,8 +26,8 @@ export const SkillCandidateCommand = cmd({
       const action = args.action
       let input: unknown
       if (action === "propose" || action === "validate") {
-        if (!args.file) throw new Error("--file is required for proposal or validation")
-        const handle = await fs.open(args.file, "r")
+        if (!args.proposal) throw new Error("--proposal is required for proposal or validation")
+        const handle = await fs.open(args.proposal, "r")
         try {
           const stat = await handle.stat()
           if (!stat.isFile() || stat.size > 40_000)

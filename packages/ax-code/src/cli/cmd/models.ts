@@ -22,20 +22,12 @@ export const ModelsCommand = cmd({
         describe: "use more verbose model output (full model metadata)",
         type: "boolean",
       })
-      .option("refresh", {
-        describe: "refresh the models cache from models.dev",
-        type: "boolean",
-      })
       .epilog(
         "Each line is a provider/model ID for --model. Family aliases: deepseek, glm, qwen. " +
           'Bare SKUs such as qwen3.8-max are invalid. Example: ax-code run --model qwen -- "Review this change"',
       )
   },
   handler: async (args) => {
-    if (args.refresh) {
-      UI.println(UI.Style.TEXT_SUCCESS_BOLD + "Models are bundled — no refresh needed" + UI.Style.TEXT_NORMAL)
-    }
-
     await Instance.provide({
       directory: process.cwd(),
       async fn() {

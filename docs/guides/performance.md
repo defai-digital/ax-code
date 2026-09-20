@@ -41,7 +41,7 @@ Enable local profiling for a run:
 
 ```sh
 AX_CODE_PROFILE_NATIVE=1 ax-code run --model your-provider-id/your-model "Your task"
-ax-code replay YOUR_SESSION_ID --mode export
+ax-code session replay YOUR_SESSION_ID --mode export
 ```
 
 The exit profile on stderr includes `session.insertReminders`, `session.preparePromptRequest`, `session.preflight`,
@@ -76,7 +76,7 @@ recipes, and matched fixture comparisons with independent verification.
 
 ## Understand request size
 
-New `llm.request` events in `ax-code replay YOUR_SESSION_ID --mode export` include `requestBytes` when request provenance is available:
+New `llm.request` events in `ax-code session replay YOUR_SESSION_ID --mode export` include `requestBytes` when request provenance is available:
 
 | Field             | Meaning                                                                                 |
 | ----------------- | --------------------------------------------------------------------------------------- |

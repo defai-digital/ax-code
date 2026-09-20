@@ -320,13 +320,13 @@ export namespace ACP {
     async initialize(params: InitializeRequest): Promise<InitializeResponse> {
       log.info("initialize", { protocolVersion: params.protocolVersion })
       const authMethod: AuthMethod = {
-        description: "Run `ax-code auth login` in the terminal",
+        description: "Run `ax-code login` in the terminal",
         name: "Login with ax-code",
         id: "ax-code-login",
       }
       if (params.clientCapabilities?._meta?.["terminal-auth"] === true) {
         authMethod._meta = {
-          "terminal-auth": { command: "ax-code", args: ["auth", "login"], label: "ax-code Login" },
+          "terminal-auth": { command: "ax-code", args: ["login"], label: "ax-code Login" },
         }
       }
       return {

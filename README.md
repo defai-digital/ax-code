@@ -51,7 +51,7 @@ Most agents give you a transcript. AX Code gives you an execution record.
 Every session is recorded while it runs. Afterwards you can compare two runs directly:
 
 ```console
-$ ax-code compare ses_01H8XK ses_01H8XM
+$ ax-code session compare ses_01H8XK ses_01H8XM
 
   Session Comparison
   ============================================================
@@ -103,9 +103,9 @@ The output format above is verbatim from these commands; the session IDs and tas
 
 ## What you get
 
-**Inspect what the agent did.** `ax-code graph` reconstructs the session as an execution graph with per-step tool calls and timings. `ax-code compare` diffs two runs by risk, decision path, and event counts. `ax-code trace` produces replay-backed diagnostics. The evidence exports out of AX Code as JSONL (`ax-code audit export`), a Markdown report (`ax-code audit report`), or OpenTelemetry spans (`ax-code audit otlp`).
+**Inspect what the agent did.** `ax-code graph` reconstructs the session as an execution graph with per-step tool calls and timings. `ax-code session compare` diffs two runs by risk, decision path, and event counts. `ax-code session trace` produces replay-backed diagnostics. The evidence exports out of AX Code as JSONL (`ax-code audit export`), a Markdown report (`ax-code audit report`), or OpenTelemetry spans (`ax-code audit otlp`).
 
-**Undo precisely.** File changes are snapshotted to an out-of-tree Git object store during the run. `ax-code rollback <session> --list` shows recoverable points; `--step N` restores a specific one. Rollback depends on a usable snapshot, so it has real boundaries — see [Execution Evidence](docs/guides/execution-evidence.md).
+**Undo precisely.** File changes are snapshotted to an out-of-tree Git object store during the run. `ax-code session rollback <session> --list` shows recoverable points; `--step N` restores a specific one. Rollback depends on a usable snapshot, so it has real boundaries — see [Execution Evidence](docs/guides/execution-evidence.md).
 
 **Verify competing implementations.** In arena implement mode, each contestant gets an isolated worktree from the same clean base commit, its patch is snapshotted to a branch, your repository's typecheck/lint/test commands run, and candidates that verify rank above candidates that do not. AX Code does not merge the winner for you.
 
@@ -250,19 +250,19 @@ See [Supported Providers and Models](docs/providers/supported-providers.md) for 
 
 Evidence and review:
 
-| Command                      | Purpose                                             |
-| ---------------------------- | --------------------------------------------------- |
-| `ax-code graph <session>`    | Reconstruct a session as an execution graph         |
-| `ax-code compare <a> <b>`    | Compare two runs by risk, decision path, and events |
-| `ax-code replay <session>`   | Inspect and reconstruct the recorded event log      |
-| `ax-code risk <session>`     | Explainable risk signals and mitigations for a run  |
-| `ax-code rollback <session>` | List and restore snapshot points from a run         |
-| `ax-code branch <session>`   | Fork session state to try a different strategy      |
-| `ax-code trace <session>`    | Replay-backed diagnostics and timeline              |
-| `ax-code audit export`       | Export run evidence as JSON Lines                   |
-| `ax-code audit report`       | Generate a Markdown audit report for a run          |
-| `ax-code audit otlp`         | Export a run as OpenTelemetry trace spans           |
-| `ax-code dre-graph`          | Open the local run-report dashboard in a browser    |
+| Command                              | Purpose                                             |
+| ------------------------------------ | --------------------------------------------------- |
+| `ax-code graph <session>`            | Reconstruct a session as an execution graph         |
+| `ax-code session compare <a> <b>`    | Compare two runs by risk, decision path, and events |
+| `ax-code session replay <session>`   | Inspect and reconstruct the recorded event log      |
+| `ax-code risk <session>`             | Explainable risk signals and mitigations for a run  |
+| `ax-code session rollback <session>` | List and restore snapshot points from a run         |
+| `ax-code session branch <session>`   | Fork session state to try a different strategy      |
+| `ax-code session trace <session>`    | Replay-backed diagnostics and timeline              |
+| `ax-code audit export`               | Export run evidence as JSON Lines                   |
+| `ax-code audit report`               | Generate a Markdown audit report for a run          |
+| `ax-code audit otlp`                 | Export a run as OpenTelemetry trace spans           |
+| `ax-code dre-graph`                  | Open the local run-report dashboard in a browser    |
 
 Everyday use:
 
@@ -273,7 +273,7 @@ Everyday use:
 | `ax-code init`                         | Create or update repository `AGENTS.md` (`--wiki` adds AX Wiki)         |
 | `ax-code index`                        | Build the code-intelligence graph                                       |
 | `ax-code wiki`                         | Plan, generate, update, or lint the AX Wiki                             |
-| `ax-code providers login`              | Configure provider credentials                                          |
+| `ax-code login`                        | Configure provider credentials (also `providers login`)                 |
 | `ax-code models`                       | List available provider/model IDs                                       |
 | `ax-code mcp add`                      | Add a local or remote MCP server                                        |
 | `ax-code mcp remove`                   | Remove a configured MCP server                                          |

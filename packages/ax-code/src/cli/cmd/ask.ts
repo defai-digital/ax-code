@@ -30,11 +30,10 @@ export const AskCommand = cmd({
         describe: "connected AX Trust model in provider/model format",
       })
       .option("max-tokens", { type: "number", default: 512, describe: "maximum answer tokens (1 through 4096)" })
-      .option("format", {
-        type: "string",
-        choices: ["text", "json"] as const,
-        default: "text",
-        describe: "answer output format",
+      .option("json", {
+        type: "boolean",
+        default: false,
+        describe: "emit the answer as a single JSON document",
       }),
   async handler(args) {
     const question = args.question.join(" ")
@@ -51,7 +50,7 @@ export const AskCommand = cmd({
           process.cwd(),
           controller.signal,
         )
-        if (args.format === "json") process.stdout.write(JSON.stringify(output) + "\n")
+        if (args.json) process.stdout.write(JSON.stringify(output) + "\n")
         else {
           process.stdout.write(output.answer + "\n")
           process.stderr.write(`AX Trust cache: ${output.cache.status}\n`)

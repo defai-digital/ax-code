@@ -68,11 +68,11 @@ test("composeRunMessage joins prompt-file, --prompt, and positional text", () =>
 })
 
 test("missingRunPromptMessage keeps the original first line and explains common traps", () => {
-  const text = missingRunPromptMessage({ passwordSet: true })
+  const text = missingRunPromptMessage()
   expect(text).toContain("You must provide a message or a command.")
   expect(text).toContain("--prompt")
   expect(text).toContain("--prompt-file")
-  expect(text).toContain("-p/--password")
+  expect(text).toContain("--file attaches files; it is not a prompt file.")
 })
 
 test("run --file does not consume following prompt words", async () => {
@@ -332,15 +332,9 @@ test("run command wires structured output flags after the event loop", async () 
   const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
 
   expect(src).toContain('.option("output-file"')
-  expect(src).toContain('.option("output-last-message"')
   expect(src).toContain('.option("output-schema"')
-  expect(src).toContain("resolveRunOutputFile(")
-  expect(src).toContain('outputLastMessage: args["output-last-message"],')
-  // The early sanity check must pass callerCwd, or aliases like "./out.json"
-  // vs "out.json" get spuriously rejected before the real check runs.
-  const earlyCallStart = src.indexOf("resolveRunOutputFile(")
-  const earlyCallEnd = src.indexOf(")", src.indexOf("outputLastMessage: args", earlyCallStart))
-  expect(src.slice(earlyCallStart, earlyCallEnd)).toContain("callerCwd")
+  expect(src).toContain("handleRunStructuredOutput(")
+  expect(src).toContain('outputFile: args["output-file"],')
   expect(src).toContain("async function readFinalAssistantText")
   expect(src).toContain("assistantMessageID: string | undefined")
   expect(src).toContain("if (!assistantMessageID) return undefined")

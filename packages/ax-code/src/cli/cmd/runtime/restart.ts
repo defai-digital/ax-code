@@ -1,5 +1,5 @@
-import { cmd } from "../cmd"
 import { DEFAULT_SERVER_PORT } from "@/server/constants"
+import { RuntimeRegistry } from "@/runtime/runtime-registry"
 
 export function validateRuntimeRestartPort(port: unknown): number {
   if (typeof port !== "number" || !Number.isInteger(port) || port < 1 || port > 65535) {
@@ -8,29 +8,21 @@ export function validateRuntimeRestartPort(port: unknown): number {
   return port
 }
 
-export const RestartCommand = cmd({
-  command: "restart",
-  describe: "restart the running ax-code server instance",
-  builder: (yargs) =>
-    yargs
-      .option("port", {
-        type: "number",
-        describe: "server port",
-        default: DEFAULT_SERVER_PORT,
-      })
-      .check((args) => {
-        validateRuntimeRestartPort(args.port)
-        return true
-      }),
-  handler: async (args) => {
-    const port = validateRuntimeRestartPort(args.port)
-    const url = `http://127.0.0.1:${port}/instance/restart`
-    const res = await fetch(url, { method: "POST" }).catch(() => null)
-    if (res?.ok) {
-      console.log("ax-code server restarted")
-    } else {
-      console.error("Failed to restart — is the server running?")
-      process.exit(1)
-    }
-  },
-})
+export async function restartRuntimeServer(input: { directory: string; port: unknown }): Promise<boolean> {
+  // A managed runtime listens on a random port behind runtime-token auth, so
+  // the registry record is the only way to reach it; the raw --port path is
+  // the fallback for an unmanaged `ax-code serve` on the default port.
+  const status = await RuntimeRegistry.status(input.directory)
+  const record = "record" in status ? status.record : undefined
+  if (record) {
+    const res = await fetch(new URL("/instance/restart", record.url), {
+      method: "POST",
+      headers: RuntimeRegistry.headers(record),
+      redirect: "error",
+    }).catch(() => null)
+    return res?.ok === true
+  }
+  const port = validateRuntimeRestartPort(input.port)
+  const res = await fetch(`http://127.0.0.1:${port}/instance/restart`, { method: "POST" }).catch(() => null)
+  return res?.ok === true
+}

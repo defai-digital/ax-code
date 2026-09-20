@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest
 import semver from "semver"
 import { Bus } from "../../src/bus"
 import { upgrade } from "../../src/cli/upgrade"
+import { renderUpgradeCheckHuman, runUpgradeCheck, UpgradeCheckCommand } from "../../src/cli/cmd/upgrade"
 import { Config } from "../../src/config/config"
 import { Flag } from "../../src/flag/flag"
 import { Installation } from "../../src/installation"
@@ -165,5 +166,100 @@ describe("cli upgrade", () => {
 
     expect(publishSpy).toHaveBeenCalledWith(Installation.Event.UpdateAvailable, { version: patch })
     expect(publishSpy).not.toHaveBeenCalledWith(Installation.Event.Updated, expect.anything())
+  })
+})
+
+describe("cli upgrade check", () => {
+  test("reports up to date with exit 0 and the JSON report shape", async () => {
+    methodSpy = vi.spyOn(Installation, "method").mockResolvedValue("curl")
+    latestSpy = vi.spyOn(Installation, "latest").mockResolvedValue(current)
+
+    const outcome = await runUpgradeCheck()
+
+    expect(outcome.exitCode).toBe(0)
+    expect(outcome.report).toEqual({ current, latest: current, upToDate: true, method: "curl" })
+    expect(renderUpgradeCheckHuman(outcome.report)).toContain("up to date")
+    expect(renderUpgradeCheckHuman(outcome.report)).toContain(current)
+  })
+
+  test("reports an available update with exit 1", async () => {
+    methodSpy = vi.spyOn(Installation, "method").mockResolvedValue("brew")
+    latestSpy = vi.spyOn(Installation, "latest").mockResolvedValue(patch)
+
+    const outcome = await runUpgradeCheck()
+
+    expect(outcome.exitCode).toBe(1)
+    expect(outcome.report).toEqual({ current, latest: patch, upToDate: false, method: "brew" })
+    expect(renderUpgradeCheckHuman(outcome.report)).toContain("update available")
+    expect(renderUpgradeCheckHuman(outcome.report)).toContain(patch)
+    expect(renderUpgradeCheckHuman(outcome.report)).toContain("ax-code upgrade")
+  })
+
+  test("treats a current version newer than latest as up to date", async () => {
+    methodSpy = vi.spyOn(Installation, "method").mockResolvedValue("curl")
+    latestSpy = vi.spyOn(Installation, "latest").mockResolvedValue("0.0.1")
+
+    const outcome = await runUpgradeCheck()
+
+    expect(outcome.exitCode).toBe(0)
+    expect(outcome.report.upToDate).toBe(true)
+  })
+
+  test("fails with exit 2 when the latest version cannot be fetched", async () => {
+    methodSpy = vi.spyOn(Installation, "method").mockResolvedValue("curl")
+    latestSpy = vi.spyOn(Installation, "latest").mockRejectedValue(new Error("network down"))
+
+    const outcome = await runUpgradeCheck()
+
+    expect(outcome.exitCode).toBe(2)
+    expect(outcome.report.current).toBe(current)
+    expect(outcome.report.latest).toBeNull()
+    expect(outcome.report.upToDate).toBeNull()
+    expect(outcome.report.error).toContain("network down")
+    expect(renderUpgradeCheckHuman(outcome.report)).toContain("upgrade check failed")
+    expect(renderUpgradeCheckHuman(outcome.report)).toContain("network down")
+  })
+
+  test("fails with exit 2 when the install method cannot be determined", async () => {
+    methodSpy = vi.spyOn(Installation, "method").mockResolvedValue("unknown")
+    latestSpy = vi.spyOn(Installation, "latest").mockResolvedValue(patch)
+
+    const outcome = await runUpgradeCheck()
+
+    expect(outcome.exitCode).toBe(2)
+    expect(outcome.report.method).toBe("unknown")
+    expect(outcome.report.latest).toBeNull()
+    expect(outcome.report.error).toContain("--method curl|brew")
+    expect(latestSpy).not.toHaveBeenCalled()
+  })
+
+  test("honors an explicit method without auto-detecting", async () => {
+    methodSpy = vi.spyOn(Installation, "method").mockResolvedValue("unknown")
+    latestSpy = vi.spyOn(Installation, "latest").mockResolvedValue(current)
+
+    const outcome = await runUpgradeCheck({ method: "brew" })
+
+    expect(methodSpy).not.toHaveBeenCalled()
+    expect(latestSpy).toHaveBeenCalledWith("brew")
+    expect(outcome.exitCode).toBe(0)
+    expect(outcome.report.method).toBe("brew")
+  })
+
+  test("handler prints a single JSON document and sets the exit code", async () => {
+    methodSpy = vi.spyOn(Installation, "method").mockResolvedValue("curl")
+    latestSpy = vi.spyOn(Installation, "latest").mockResolvedValue(patch)
+    const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true)
+    const previousExitCode = process.exitCode
+    process.exitCode = undefined
+    try {
+      await UpgradeCheckCommand.handler({ json: true, method: undefined, _: [], $0: "ax-code" })
+
+      const printed = writeSpy.mock.calls.map((call) => String(call[0])).join("")
+      expect(JSON.parse(printed)).toEqual({ current, latest: patch, upToDate: false, method: "curl" })
+      expect(process.exitCode).toBe(1)
+    } finally {
+      writeSpy.mockRestore()
+      process.exitCode = previousExitCode
+    }
   })
 })

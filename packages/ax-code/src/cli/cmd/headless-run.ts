@@ -69,7 +69,6 @@ export const HeadlessRunCommand = cmd({
         type: "string",
       })
       .option("password", {
-        alias: ["p"],
         describe: "basic auth password for --attach; defaults to AX_CODE_SERVER_PASSWORD",
         type: "string",
       })
@@ -78,26 +77,22 @@ export const HeadlessRunCommand = cmd({
         type: "boolean",
         default: true,
       })
-      .option("idleTimeoutMs", {
-        alias: ["idle-timeout-ms"],
+      .option("idle-timeout-ms", {
         describe:
           "abort if the headless session emits no events for this long (inactivity timeout — a busy long run keeps resetting it); set 0 to disable",
         type: "number",
         default: 10 * 60 * 1000,
       })
-      .option("eventLog", {
-        alias: ["event-log"],
+      .option("event-log", {
         describe: "also write raw headless JSONL events to this file",
         type: "string",
       })
-      .option("transportSmoke", {
-        alias: ["transport-smoke"],
+      .option("transport-smoke", {
         describe: "only verify backend subscription and event-log plumbing; does not create a session or send a prompt",
         type: "boolean",
         default: false,
       })
-      .option("commandSmoke", {
-        alias: ["command-smoke"],
+      .option("command-smoke", {
         describe: "create a session and send a non-provider abort command to verify command-route plumbing",
         type: "boolean",
         default: false,
@@ -128,7 +123,7 @@ export const HeadlessRunCommand = cmd({
     if (!process.stdin.isTTY) {
       message += "\n" + (await readNonTtyStdin())
     }
-    if (!message.trim() && !args.command && !args.transportSmoke && !args.commandSmoke) {
+    if (!message.trim() && !args.command && !args["transport-smoke"] && !args["command-smoke"]) {
       throw new Error("headless-run requires a message, --command, --transport-smoke, or --command-smoke")
     }
 
@@ -141,11 +136,11 @@ export const HeadlessRunCommand = cmd({
       let sessionID: string | undefined
       let command: HeadlessRuntimeCommand | undefined
 
-      if (!args.transportSmoke) {
+      if (!args["transport-smoke"]) {
         sessionID =
           args.session ?? (await runtime.createSession({ title: message.trim().slice(0, 50) || undefined })).id
 
-        command = args.commandSmoke
+        command = args["command-smoke"]
           ? {
               type: "session.abort",
               sessionID,
@@ -177,8 +172,10 @@ export const HeadlessRunCommand = cmd({
       const abort = new AbortController()
       const onSignal = () => abort.abort()
       const idleTimeoutMs =
-        typeof args.idleTimeoutMs === "number" && Number.isFinite(args.idleTimeoutMs) && args.idleTimeoutMs > 0
-          ? args.idleTimeoutMs
+        typeof args["idle-timeout-ms"] === "number" &&
+        Number.isFinite(args["idle-timeout-ms"]) &&
+        args["idle-timeout-ms"] > 0
+          ? args["idle-timeout-ms"]
           : undefined
       let timedOut = false
       let idleTimer: ReturnType<typeof setTimeout> | undefined
@@ -202,14 +199,17 @@ export const HeadlessRunCommand = cmd({
           process.stdout.write(line)
         }),
       ]
-      if (args.eventLog && args.eventLog !== "-") {
+      if (args["event-log"] && args["event-log"] !== "-") {
         const resolvedCwd = Filesystem.resolve(callerCwd)
-        const resolvedCandidate = path.resolve(callerCwd, args.eventLog)
+        const resolvedCandidate = path.resolve(callerCwd, args["event-log"])
         // realpath the parent so a symlink directory cannot smuggle the file out
         // of callerCwd. A not-yet-created leaf is joined back after that.
-        const resolvedPath = path.join(Filesystem.resolve(path.dirname(resolvedCandidate)), path.basename(resolvedCandidate))
+        const resolvedPath = path.join(
+          Filesystem.resolve(path.dirname(resolvedCandidate)),
+          path.basename(resolvedCandidate),
+        )
         if (!Filesystem.contains(resolvedCwd, resolvedPath) && Filesystem.resolve(resolvedPath) !== resolvedCwd) {
-          throw new Error(`eventLog path "${args.eventLog}" resolves outside the current directory`)
+          throw new Error(`--event-log path "${args["event-log"]}" resolves outside the current directory`)
         }
         eventSinks.push(await createHeadlessJsonlFileEventSink(resolvedPath))
       }
@@ -232,7 +232,7 @@ export const HeadlessRunCommand = cmd({
             if (sessionID) sessionError = sessionError ?? headlessSessionErrorMessage(event, sessionID)
           },
           stopWhen({ event }) {
-            if (args.transportSmoke || args.commandSmoke) return event.type === "server.connected"
+            if (args["transport-smoke"] || args["command-smoke"]) return event.type === "server.connected"
             return isHeadlessSessionIdleEvent(event, sessionID)
           },
         })
@@ -241,7 +241,7 @@ export const HeadlessRunCommand = cmd({
           idleTimer = undefined
         }
         if (timedOut) {
-          const target = args.transportSmoke || args.commandSmoke ? "server.connected" : "session idle"
+          const target = args["transport-smoke"] || args["command-smoke"] ? "server.connected" : "session idle"
           process.stderr.write(`headless-run aborted: no events for ${idleTimeoutMs}ms while waiting for ${target}\n`)
           process.exitCode = 124
         } else if (sessionError) {

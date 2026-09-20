@@ -4,12 +4,18 @@ import { cmd } from "../cmd"
 import { Log } from "../../../util/log"
 import { EOL } from "os"
 import { setTimeout as sleep } from "node:timers/promises"
+import { ReplayCommand } from "./replay"
 
 export const LSPCommand = cmd({
   command: "lsp",
   describe: "LSP debugging utilities",
   builder: (yargs) =>
-    yargs.command(DiagnosticsCommand).command(SymbolsCommand).command(DocumentSymbolsCommand).demandCommand(),
+    yargs
+      .command(DiagnosticsCommand)
+      .command(SymbolsCommand)
+      .command(DocumentSymbolsCommand)
+      .command(ReplayCommand)
+      .demandCommand(),
   async handler() {},
 })
 

@@ -117,9 +117,9 @@ executed test or type-check envelopes against the current clean Git revision. A 
 exit is insufficient. Validation must cite another session's successful verification at the same revision.
 
 ```sh
-ax-code skill candidate propose --file proposal.json
+ax-code skill candidate propose --proposal proposal.json
 ax-code skill candidate show verified-procedure
-ax-code skill candidate validate verified-procedure --file independent-evidence.json
+ax-code skill candidate validate verified-procedure --proposal independent-evidence.json
 ax-code skill candidate promote verified-procedure
 ax-code skill candidate retire verified-procedure
 ```

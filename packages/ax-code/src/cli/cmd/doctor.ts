@@ -5,8 +5,8 @@
  * Validates configuration, providers, tools, and environment
  */
 
-import type { CommandModule } from "yargs"
 import { Config } from "../../config/config"
+import { cmd } from "./cmd"
 import { Installation } from "../../installation"
 import { runtimeMode } from "../../installation/runtime-mode"
 import { Global } from "../../global"
@@ -361,52 +361,125 @@ export async function doctorProjectContext(callerCwd = Filesystem.callerCwd()) {
   }
 }
 
-export const DoctorCommand: CommandModule = {
-  command: "doctor",
-  describe: "check system health and diagnose issues",
-  handler: async () => {
-    const checks: DoctorCheck[] = []
-    const project = await doctorProjectContext()
-    const tuiPort = await getConfiguredTuiPort()
+export type DoctorCheckEntry = DoctorCheck & { id: string }
 
-    // 1. Version
-    checks.push({
-      name: "Version",
-      status: "ok",
-      detail: `ax-code ${Installation.VERSION} (${Installation.CHANNEL})`,
-    })
+export type DoctorReportCheck = {
+  id: string
+  status: "pass" | "warn" | "fail"
+  summary: string
+  detail?: string
+}
 
+export type DoctorReport = {
+  version: string
+  ok: boolean
+  checks: DoctorReportCheck[]
+}
+
+/** Stable machine ids for every doctor check, in run order. `--skip`
+ * validates against this list and `--json` emits it, so ids must stay
+ * kebab-case and never be renamed; new checks are appended here. */
+export const DOCTOR_CHECK_IDS = [
+  "version",
+  "path-launchers",
+  "runtime",
+  "platform",
+  "data-dir",
+  "config",
+  "credentials",
+  "agents-md",
+  "git",
+  "project-identity",
+  "server-exposure",
+  "isolation-policy",
+  "evidence-cache",
+  "native-addons",
+  "stale-instances",
+  "ax-engine",
+  "computer-use",
+  "tui-server",
+  "tui-preload",
+  "recent-logs",
+  "log-access",
+  "tui-log-errors",
+  "recent-errors",
+  "code-index",
+  "tui-engine",
+  "legacy-render-flags",
+  "feature-flags",
+] as const
+
+export type DoctorCheckId = (typeof DOCTOR_CHECK_IDS)[number]
+
+// getRecentLogsChecks emits several named checks from one scan; map each name
+// onto its stable id so every emitted line can be skipped individually.
+const RECENT_LOG_CHECK_IDS: Record<string, DoctorCheckId> = {
+  "Recent logs": "recent-logs",
+  "Log access": "log-access",
+  "TUI errors in logs": "tui-log-errors",
+  "Recent errors": "recent-errors",
+}
+
+function fallbackCheckId(name: string): DoctorCheckId {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") as DoctorCheckId
+}
+
+export async function runDoctorChecks(input: { skip?: ReadonlySet<string> } = {}): Promise<DoctorCheckEntry[]> {
+  const skip = input.skip ?? new Set<string>()
+  const checks: DoctorCheckEntry[] = []
+  const push = (id: DoctorCheckId, check: DoctorCheck) => {
+    if (!skip.has(id)) checks.push({ id, ...check })
+  }
+  const project = await doctorProjectContext()
+  const tuiPort = await getConfiguredTuiPort()
+
+  // 1. Version
+  push("version", {
+    name: "Version",
+    status: "ok",
+    detail: `ax-code ${Installation.VERSION} (${Installation.CHANNEL})`,
+  })
+
+  if (!skip.has("path-launchers")) {
     const pathLaunchers = await getPathLauncherCheck()
-    if (pathLaunchers) checks.push(pathLaunchers)
+    if (pathLaunchers) push("path-launchers", pathLaunchers)
+  }
 
-    // 2. Runtime
-    checks.push(getRuntimeCheck())
+  // 2. Runtime
+  push("runtime", getRuntimeCheck())
 
-    // 3. Platform
-    checks.push({
-      name: "Platform",
-      status: "ok",
-      detail: `${process.platform} ${process.arch}`,
-    })
+  // 3. Platform
+  push("platform", {
+    name: "Platform",
+    status: "ok",
+    detail: `${process.platform} ${process.arch}`,
+  })
 
-    // 4. Data directory
-    checks.push(await getDoctorDatabaseCheck({ databasePath: Database.Path }))
+  // 4. Data directory
+  push("data-dir", await getDoctorDatabaseCheck({ databasePath: Database.Path }))
 
-    // 5. Load exactly the configuration that this project uses at runtime.
-    const configuration = await getDoctorConfiguration(project.callerCwd)
-    checks.push(configuration.check)
+  // 5. Load exactly the configuration that this project uses at runtime. The
+  // parsed config also feeds the credentials, isolation, AX Engine, and
+  // computer-use checks, so it is loaded even when the config check itself is
+  // skipped.
+  const configuration = await getDoctorConfiguration(project.callerCwd)
+  push("config", configuration.check)
+
+  // 6. Credentials — combine `ax-code providers login` entries (auth.json)
+  // with environment variable fallbacks. Previously we only checked
+  // a few hardcoded env vars (GOOGLE_GENERATIVE_AI_API_KEY, GROQ_API_KEY,
+  // OPENAI_API_KEY) and ignored auth.json entirely, so users who set up
+  // credentials via `ax-code providers login` saw a spurious
+  // "No credentials found" warning on every doctor run.
+  // The env list is now derived from models.dev (one line per provider
+  // in the bundled snapshot) so new providers are picked up
+  // automatically and doctor stays in sync with the rest of the app.
+  // See issue #18.
+  if (!skip.has("credentials")) {
     const configuredCredentials = getConfiguredCredentialProviders(configuration.config)
-
-    // 6. Credentials — combine `ax-code providers login` entries (auth.json)
-    // with environment variable fallbacks. Previously we only checked
-    // a few hardcoded env vars (GOOGLE_GENERATIVE_AI_API_KEY, GROQ_API_KEY,
-    // OPENAI_API_KEY) and ignored auth.json entirely, so users who set up
-    // credentials via `ax-code providers login` saw a spurious
-    // "No credentials found" warning on every doctor run.
-    // The env list is now derived from models.dev (one line per provider
-    // in the bundled snapshot) so new providers are picked up
-    // automatically and doctor stays in sync with the rest of the app.
-    // See issue #18.
     let credentialSourcesIncomplete = !configuration.config
     const stored: string[] = []
     try {
@@ -451,13 +524,13 @@ export const DoctorCommand: CommandModule = {
       if (envKeys.length > 0) {
         parts.push(`${envKeys.length} in environment (${envKeys.map((k) => k.env).join(", ")})`)
       }
-      checks.push({
+      push("credentials", {
         name: "Credentials",
         status: "ok",
         detail: `${parts.join(" + ")}; presence only, authentication not tested${credentialSourcesIncomplete ? "; some sources unavailable" : ""}`,
       })
     } else {
-      checks.push({
+      push("credentials", {
         name: "Credentials",
         status: "warn",
         detail: credentialSourcesIncomplete
@@ -465,220 +538,311 @@ export const DoctorCommand: CommandModule = {
           : "No credentials found. Run `ax-code providers login` or set a provider env var (e.g. ANTHROPIC_API_KEY); presence only, authentication not tested",
       })
     }
+  }
 
-    // 7. AGENTS.md (checked in the caller's cwd, not the bin shim's --cwd)
-    checks.push({
-      name: "AGENTS.md context",
-      status: project.agentsPath ? "ok" : "warn",
-      detail: project.agentsPath
-        ? "Found — project context will be injected"
-        : 'Not found — run "ax-code init" to generate',
-    })
+  // 7. AGENTS.md (checked in the caller's cwd, not the bin shim's --cwd)
+  push("agents-md", {
+    name: "AGENTS.md context",
+    status: project.agentsPath ? "ok" : "warn",
+    detail: project.agentsPath
+      ? "Found — project context will be injected"
+      : 'Not found — run "ax-code init" to generate',
+  })
 
-    // 8. Git
-    const gitExists =
-      project.projectRoot !== project.callerCwd || (await exists(path.join(project.callerCwd, ".git", "HEAD")))
-    checks.push({
-      name: "Git repository",
-      status: gitExists ? "ok" : "warn",
-      detail: gitExists ? "Found" : "Not a git repository",
-    })
+  // 8. Git
+  const gitExists =
+    project.projectRoot !== project.callerCwd || (await exists(path.join(project.callerCwd, ".git", "HEAD")))
+  push("git", {
+    name: "Git repository",
+    status: gitExists ? "ok" : "warn",
+    detail: gitExists ? "Found" : "Not a git repository",
+  })
 
+  if (!skip.has("project-identity")) {
     const duplicateProjectIdentity = await getDuplicateProjectIdentityCheck({ worktree: project.projectRoot })
-    if (duplicateProjectIdentity) checks.push(duplicateProjectIdentity)
+    if (duplicateProjectIdentity) push("project-identity", duplicateProjectIdentity)
+  }
 
-    try {
-      const globalConfig = await Config.global()
-      checks.push(
-        getServerExposureCheck({
-          hostname: globalConfig?.server?.hostname,
-          mdns: globalConfig?.server?.mdns,
-          password: Flag.AX_CODE_SERVER_PASSWORD,
-        }),
-      )
-    } catch {
-      checks.push(
-        getServerExposureCheck({
-          password: Flag.AX_CODE_SERVER_PASSWORD,
-        }),
-      )
-    }
+  try {
+    const globalConfig = await Config.global()
+    push(
+      "server-exposure",
+      getServerExposureCheck({
+        hostname: globalConfig?.server?.hostname,
+        mdns: globalConfig?.server?.mdns,
+        password: Flag.AX_CODE_SERVER_PASSWORD,
+      }),
+    )
+  } catch {
+    push(
+      "server-exposure",
+      getServerExposureCheck({
+        password: Flag.AX_CODE_SERVER_PASSWORD,
+      }),
+    )
+  }
 
-    try {
-      const config = configuration.config ?? (await Config.global())
-      checks.push(
-        getIsolationPolicyCheck({
-          config: config?.isolation,
-          envMode: Flag.AX_CODE_ISOLATION_MODE,
-          envNetwork: Flag.AX_CODE_ISOLATION_NETWORK,
-        }),
-      )
-    } catch {
-      checks.push(
-        getIsolationPolicyCheck({
-          envMode: Flag.AX_CODE_ISOLATION_MODE,
-          envNetwork: Flag.AX_CODE_ISOLATION_NETWORK,
-        }),
-      )
-    }
+  try {
+    const config = configuration.config ?? (await Config.global())
+    push(
+      "isolation-policy",
+      getIsolationPolicyCheck({
+        config: config?.isolation,
+        envMode: Flag.AX_CODE_ISOLATION_MODE,
+        envNetwork: Flag.AX_CODE_ISOLATION_NETWORK,
+      }),
+    )
+  } catch {
+    push(
+      "isolation-policy",
+      getIsolationPolicyCheck({
+        envMode: Flag.AX_CODE_ISOLATION_MODE,
+        envNetwork: Flag.AX_CODE_ISOLATION_NETWORK,
+      }),
+    )
+  }
 
-    // 9. Native Rust addons — routed through the central NativeAddon registry
-    // so the doctor reflects the exact same load semantics (flag gating +
-    // MODULE_NOT_FOUND filtering) as every runtime call site.
-    const addons = [
-      { name: "index-core", load: () => NativeAddon.index() },
-      { name: "fs", load: () => NativeAddon.fs() },
-      { name: "diff", load: () => NativeAddon.diff() },
-      { name: "parser", load: () => NativeAddon.parser() },
-    ]
-    const addonLoaded = new Map(addons.map((a) => [a.name, !!a.load()]))
-    checks.push(getEvidenceCacheCheck())
-    checks.push(getNativeAddonsCheck(addonLoaded))
+  // 9. Native Rust addons — routed through the central NativeAddon registry
+  // so the doctor reflects the exact same load semantics (flag gating +
+  // MODULE_NOT_FOUND filtering) as every runtime call site.
+  const addons = [
+    { name: "index-core", load: () => NativeAddon.index() },
+    { name: "fs", load: () => NativeAddon.fs() },
+    { name: "diff", load: () => NativeAddon.diff() },
+    { name: "parser", load: () => NativeAddon.parser() },
+  ]
+  const addonLoaded = new Map(addons.map((a) => [a.name, !!a.load()]))
+  push("evidence-cache", getEvidenceCacheCheck())
+  push("native-addons", getNativeAddonsCheck(addonLoaded))
 
-    // 10. Stale ax-code processes — multiple instances can block startup,
-    // exhaust the port, or corrupt the shared SQLite database.
+  // 10. Stale ax-code processes — multiple instances can block startup,
+  // exhaust the port, or corrupt the shared SQLite database.
+  if (!skip.has("stale-instances")) {
     const runningInstances = await getRunningInstancesCheck()
-    if (runningInstances) checks.push(runningInstances)
+    if (runningInstances) push("stale-instances", runningInstances)
+  }
 
-    try {
-      const config = configuration.config ?? (await Config.global())
-      checks.push(getAxEngineDoctorCheck(await getAxEngineStatus(config?.provider?.["ax-engine"]?.options ?? {})))
-    } catch (error) {
-      checks.push({
-        name: "AX Engine local provider",
-        status: "warn",
-        detail: `Could not inspect ax-engine status: ${toErrorMessage(error)}`,
-      })
-    }
+  try {
+    const config = configuration.config ?? (await Config.global())
+    push("ax-engine", getAxEngineDoctorCheck(await getAxEngineStatus(config?.provider?.["ax-engine"]?.options ?? {})))
+  } catch (error) {
+    push("ax-engine", {
+      name: "AX Engine local provider",
+      status: "warn",
+      detail: `Could not inspect ax-engine status: ${toErrorMessage(error)}`,
+    })
+  }
 
-    // 11a. Computer use — preflight the configured desktop-control backend
-    // (spawn + MCP handshake + list_apps, capped by the probe timeout).
-    try {
-      const config = configuration.config ?? (await Config.global())
-      checks.push(await getComputerUseCheck({ config: config?.computer }))
-    } catch (error) {
-      checks.push({
-        name: "Computer use",
-        status: "warn",
-        detail: `Could not run computer-use preflight: ${toErrorMessage(error)}`,
-      })
-    }
+  // 11a. Computer use — preflight the configured desktop-control backend
+  // (spawn + MCP handshake + list_apps, capped by the probe timeout).
+  try {
+    const config = configuration.config ?? (await Config.global())
+    push("computer-use", await getComputerUseCheck({ config: config?.computer }))
+  } catch (error) {
+    push("computer-use", {
+      name: "Computer use",
+      status: "warn",
+      detail: `Could not run computer-use preflight: ${toErrorMessage(error)}`,
+    })
+  }
 
-    // 11b. TUI startup — port conflict and server liveness
-    try {
-      const serverRunning = await fetch(`http://127.0.0.1:${tuiPort}/`, {
-        signal: AbortSignal.timeout(1500),
-      })
-        .then(() => true)
-        .catch(() => false)
+  // 11b. TUI startup — port conflict and server liveness
+  try {
+    const serverRunning = await fetch(`http://127.0.0.1:${tuiPort}/`, {
+      signal: AbortSignal.timeout(1500),
+    })
+      .then(() => true)
+      .catch(() => false)
 
-      if (serverRunning) {
-        checks.push({
-          name: "TUI server",
-          status: "ok",
-          detail: `ax-code server responding on port ${tuiPort} (existing session active)`,
-        })
-      } else {
-        // Check if something else owns the port
-        const portBlocked = await new Promise<boolean>((resolve) => {
-          const net = require("net")
-          const socket = new net.Socket()
-          socket.setTimeout(1000)
-          socket.on("connect", () => {
-            socket.end()
-            resolve(true)
-          })
-          socket.on("error", () => {
-            resolve(false)
-          })
-          socket.on("timeout", () => {
-            socket.destroy()
-            resolve(false)
-          })
-          socket.connect(tuiPort, "127.0.0.1")
-        })
-
-        checks.push({
-          name: "TUI server",
-          status: portBlocked ? "warn" : "ok",
-          detail: portBlocked
-            ? `Port ${tuiPort} is in use by another process — ax-code may fail to start or bind a random port`
-            : `Port ${tuiPort} available`,
-        })
-      }
-    } catch {
-      checks.push({ name: "TUI server", status: "ok", detail: `Port ${tuiPort} available` })
-    }
-
-    // 11b. Bun preload — required for source/dev TUI runs. Bundled runtimes
-    // transform TUI JSX during build and do not resolve the preload from disk.
-    checks.push(getTuiPreloadCheck())
-
-    // 12. Recent logs analysis — scan all log files modified within 24 hours for TUI crashes / errors
-    checks.push(...(await getRecentLogsChecks({ logDir: Global.Path.log })))
-
-    // 12. Code intelligence index status
-    try {
-      const indexDb = path.join(Global.Path.data, "ax-code-index.db")
-      const indexExists = await exists(indexDb)
-      if (indexExists) {
-        checks.push({
-          name: "Code index",
-          status: "ok",
-          detail: `Native index database exists at ${indexDb}`,
-        })
-      }
-    } catch {
-      // Best-effort
-    }
-
-    // 13. TUI engine
-    {
-      checks.push({
-        name: "TUI engine",
+    if (serverRunning) {
+      push("tui-server", {
+        name: "TUI server",
         status: "ok",
-        detail: "AX Code TUI (native Zig renderer)",
+        detail: `ax-code server responding on port ${tuiPort} (existing session active)`,
       })
-      if (process.env.AX_CODE_NATIVE_RENDER === "1" || process.env.AX_CODE_NATIVE_RENDER_SCOPE) {
-        checks.push({
-          name: "Legacy native renderer flags",
-          status: "warn",
-          detail: "AX_CODE_NATIVE_RENDER* is retired and ignored; AX Code TUI always uses its bundled native library.",
-        })
-      }
-    }
-
-    // 14. Feature flags
-    const flags: string[] = []
-    if (Flag.AX_CODE_DISABLE_MODELS_FETCH) flags.push("DISABLE_MODELS_FETCH")
-    if (Flag.AX_CODE_NATIVE_INDEX) flags.push(formatNativeFlag("NATIVE_INDEX", addonLoaded.get("index-core") ?? false))
-    if (Flag.AX_CODE_NATIVE_FS) flags.push(formatNativeFlag("NATIVE_FS", addonLoaded.get("fs") ?? false))
-    if (Flag.AX_CODE_NATIVE_DIFF) flags.push(formatNativeFlag("NATIVE_DIFF", addonLoaded.get("diff") ?? false))
-    if (Flag.AX_CODE_NATIVE_PARSER) flags.push(formatNativeFlag("NATIVE_PARSER", addonLoaded.get("parser") ?? false))
-    if (Flag.AX_CODE_DEBUG_ENGINE_NATIVE_SCAN) flags.push("DEBUG_ENGINE_NATIVE_SCAN=on")
-    const featureFlags = getFeatureFlagsCheck(flags)
-    if (featureFlags) checks.push(featureFlags)
-
-    // Print results
-    console.log("\n  ax-code doctor\n")
-
-    for (const check of checks) {
-      const icon = check.status === "ok" ? "✓" : check.status === "warn" ? "△" : "✗"
-      const color = check.status === "ok" ? "\x1b[32m" : check.status === "warn" ? "\x1b[33m" : "\x1b[31m"
-      console.log(`  ${color}${icon}\x1b[0m  ${check.name}: ${check.detail}`)
-    }
-
-    const fails = checks.filter((c) => c.status === "fail").length
-    const warns = checks.filter((c) => c.status === "warn").length
-
-    console.log("")
-    if (fails > 0) {
-      console.log(`  \x1b[31m${Locale.pluralize(fails, "{} issue", "{} issues")} found\x1b[0m`)
-    } else if (warns > 0) {
-      console.log(`  \x1b[33m${Locale.pluralize(warns, "{} warning", "{} warnings")}\x1b[0m — system is functional`)
     } else {
-      console.log("  \x1b[32mAll checks passed\x1b[0m")
+      // Check if something else owns the port
+      const portBlocked = await new Promise<boolean>((resolve) => {
+        const net = require("net")
+        const socket = new net.Socket()
+        socket.setTimeout(1000)
+        socket.on("connect", () => {
+          socket.end()
+          resolve(true)
+        })
+        socket.on("error", () => {
+          resolve(false)
+        })
+        socket.on("timeout", () => {
+          socket.destroy()
+          resolve(false)
+        })
+        socket.connect(tuiPort, "127.0.0.1")
+      })
+
+      push("tui-server", {
+        name: "TUI server",
+        status: portBlocked ? "warn" : "ok",
+        detail: portBlocked
+          ? `Port ${tuiPort} is in use by another process — ax-code may fail to start or bind a random port`
+          : `Port ${tuiPort} available`,
+      })
     }
-    console.log("")
-  },
+  } catch {
+    push("tui-server", { name: "TUI server", status: "ok", detail: `Port ${tuiPort} available` })
+  }
+
+  // 11b. Bun preload — required for source/dev TUI runs. Bundled runtimes
+  // transform TUI JSX during build and do not resolve the preload from disk.
+  push("tui-preload", getTuiPreloadCheck())
+
+  // 12. Recent logs analysis — scan all log files modified within 24 hours for TUI crashes / errors
+  if (Object.values(RECENT_LOG_CHECK_IDS).some((id) => !skip.has(id))) {
+    for (const check of await getRecentLogsChecks({ logDir: Global.Path.log })) {
+      push(RECENT_LOG_CHECK_IDS[check.name] ?? fallbackCheckId(check.name), check)
+    }
+  }
+
+  // 12. Code intelligence index status
+  try {
+    const indexDb = path.join(Global.Path.data, "ax-code-index.db")
+    const indexExists = await exists(indexDb)
+    if (indexExists) {
+      push("code-index", {
+        name: "Code index",
+        status: "ok",
+        detail: `Native index database exists at ${indexDb}`,
+      })
+    }
+  } catch {
+    // Best-effort
+  }
+
+  // 13. TUI engine
+  push("tui-engine", {
+    name: "TUI engine",
+    status: "ok",
+    detail: "AX Code TUI (native Zig renderer)",
+  })
+  if (process.env.AX_CODE_NATIVE_RENDER === "1" || process.env.AX_CODE_NATIVE_RENDER_SCOPE) {
+    push("legacy-render-flags", {
+      name: "Legacy native renderer flags",
+      status: "warn",
+      detail: "AX_CODE_NATIVE_RENDER* is retired and ignored; AX Code TUI always uses its bundled native library.",
+    })
+  }
+
+  // 14. Feature flags
+  const flags: string[] = []
+  if (Flag.AX_CODE_DISABLE_MODELS_FETCH) flags.push("DISABLE_MODELS_FETCH")
+  if (Flag.AX_CODE_NATIVE_INDEX) flags.push(formatNativeFlag("NATIVE_INDEX", addonLoaded.get("index-core") ?? false))
+  if (Flag.AX_CODE_NATIVE_FS) flags.push(formatNativeFlag("NATIVE_FS", addonLoaded.get("fs") ?? false))
+  if (Flag.AX_CODE_NATIVE_DIFF) flags.push(formatNativeFlag("NATIVE_DIFF", addonLoaded.get("diff") ?? false))
+  if (Flag.AX_CODE_NATIVE_PARSER) flags.push(formatNativeFlag("NATIVE_PARSER", addonLoaded.get("parser") ?? false))
+  if (Flag.AX_CODE_DEBUG_ENGINE_NATIVE_SCAN) flags.push("DEBUG_ENGINE_NATIVE_SCAN=on")
+  const featureFlags = getFeatureFlagsCheck(flags)
+  if (featureFlags) push("feature-flags", featureFlags)
+
+  return checks
 }
+
+export function toDoctorReport(checks: DoctorCheckEntry[]): DoctorReport {
+  const reportChecks = checks.map((check) => ({
+    id: check.id,
+    status: check.status === "ok" ? ("pass" as const) : check.status,
+    summary: check.name,
+    ...(check.detail ? { detail: check.detail } : {}),
+  }))
+  return {
+    version: Installation.VERSION,
+    ok: reportChecks.every((check) => check.status !== "fail"),
+    checks: reportChecks,
+  }
+}
+
+export function renderDoctorHuman(checks: DoctorCheckEntry[]): string {
+  const lines: string[] = ["", "  ax-code doctor", ""]
+  for (const check of checks) {
+    const icon = check.status === "ok" ? "✓" : check.status === "warn" ? "△" : "✗"
+    const color = check.status === "ok" ? "\x1b[32m" : check.status === "warn" ? "\x1b[33m" : "\x1b[31m"
+    lines.push(`  ${color}${icon}\x1b[0m  ${check.name}: ${check.detail}`)
+  }
+
+  const fails = checks.filter((c) => c.status === "fail").length
+  const warns = checks.filter((c) => c.status === "warn").length
+
+  lines.push("")
+  if (fails > 0) {
+    lines.push(`  \x1b[31m${Locale.pluralize(fails, "{} issue", "{} issues")} found\x1b[0m`)
+  } else if (warns > 0) {
+    lines.push(`  \x1b[33m${Locale.pluralize(warns, "{} warning", "{} warnings")}\x1b[0m — system is functional`)
+  } else {
+    lines.push("  \x1b[32mAll checks passed\x1b[0m")
+  }
+  lines.push("")
+  return lines.join("\n")
+}
+
+export async function executeDoctor(
+  args: { json?: boolean; skip?: string },
+  deps: {
+    runChecks?: (input: { skip: ReadonlySet<string> }) => Promise<DoctorCheckEntry[]>
+    stdout?: (text: string) => void
+    stderr?: (text: string) => void
+    exit?: (code: number) => void
+  } = {},
+): Promise<number> {
+  const writeOut = deps.stdout ?? ((text: string) => process.stdout.write(text))
+  const writeErr = deps.stderr ?? ((text: string) => process.stderr.write(text))
+  const setExit =
+    deps.exit ??
+    ((code: number) => {
+      process.exitCode = code
+    })
+
+  const skipList = (args.skip ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0)
+  const unknown = skipList.filter((id) => !DOCTOR_CHECK_IDS.includes(id as DoctorCheckId))
+  if (unknown.length > 0) {
+    writeErr(`ax-code doctor: unknown --skip id(s): ${unknown.join(", ")}. Valid ids: ${DOCTOR_CHECK_IDS.join(", ")}\n`)
+    setExit(2)
+    return 2
+  }
+
+  const checks = await (deps.runChecks ?? runDoctorChecks)({ skip: new Set(skipList) })
+  if (args.json) {
+    writeOut(JSON.stringify(toDoctorReport(checks), null, 2) + "\n")
+  } else {
+    writeOut(renderDoctorHuman(checks) + "\n")
+  }
+
+  if (checks.some((check) => check.status === "fail")) {
+    setExit(1)
+    return 1
+  }
+  return 0
+}
+
+export const DoctorCommand = cmd({
+  command: "doctor",
+  describe: "check system health and diagnose issues",
+  builder: (yargs) =>
+    yargs
+      .option("json", {
+        type: "boolean",
+        default: false,
+        describe: "Emit a single machine-readable JSON report and suppress human output",
+      })
+      .option("skip", {
+        type: "string",
+        describe: "Comma-separated check ids to skip; unknown ids are an error",
+      })
+      .epilog(
+        `Exit code is 1 when any check fails; warnings never fail.\nCheck ids:\n  ${DOCTOR_CHECK_IDS.join("\n  ")}`,
+      ),
+  handler: async (args) => {
+    await executeDoctor({ json: args.json, skip: args.skip })
+  },
+})

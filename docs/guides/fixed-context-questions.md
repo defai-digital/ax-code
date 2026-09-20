@@ -34,7 +34,7 @@ The answer goes to stdout; stderr reports `AX Trust cache: MISS`, `HIT`,
 `EXACT_HIT`, `BYPASS` or `UNREPORTED`. `HIT` means the gateway reported semantic
 reuse; `EXACT_HIT` means its exact namespace matched. `UNREPORTED` means the server
 did not provide a recognized cache header. A bypass is not retried to force a hit.
-Add `--format json` for answer, provider/model identity, context digest, cache
+Add `--json` for answer, provider/model identity, context digest, cache
 status, optional request ID/score and usage when actually reported by upstream.
 Cached responses need not include usage; absent usage is not a savings estimate.
 
@@ -43,7 +43,7 @@ Repeat `--file` to include additional context:
 ```bash
 ax-code ask --file src/value.py --file docs/value.md \
   --model defai-01-ax-trust-com/openai/gpt-oss-120b \
-  --max-tokens 1024 --format json \
+  --max-tokens 1024 --json \
   "How is the return value determined?"
 ```
 

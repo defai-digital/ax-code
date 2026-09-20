@@ -1,5 +1,12 @@
 import type { Argv } from "yargs"
 import { cmd } from "../cmd"
+import { ReplayCommand } from "../replay"
+import { RollbackCommand } from "../rollback"
+import { BranchCommand } from "../branch"
+import { CompareCommand } from "../compare"
+import { TraceCommand } from "../trace"
+import { ExportCommand } from "../export"
+import { ImportCommand } from "../import"
 import type { Session } from "../../../session"
 import { bootstrap, bootstrapReadonly } from "../../bootstrap"
 import { UI } from "../../ui"
@@ -80,6 +87,13 @@ export const SessionCommand = cmd({
       .command(SessionBackupProjectCommand)
       .command(SessionClearProjectCommand)
       .command(SessionProjectStatusCommand)
+      .command(ReplayCommand)
+      .command(RollbackCommand)
+      .command(BranchCommand)
+      .command(CompareCommand)
+      .command(TraceCommand)
+      .command(ExportCommand)
+      .command(ImportCommand)
       .demandCommand(),
   async handler() {},
 })
@@ -316,11 +330,10 @@ export const SessionProjectStatusCommand = cmd({
   command: "project-status",
   describe: "show current project session storage status",
   builder: (yargs: Argv) => {
-    return yargs.option("format", {
-      describe: "output format",
-      type: "string",
-      choices: ["text", "json"],
-      default: "text",
+    return yargs.option("json", {
+      describe: "output machine-readable JSON",
+      type: "boolean",
+      default: false,
     })
   },
   handler: async (args) => {
@@ -334,7 +347,7 @@ export const SessionProjectStatusCommand = cmd({
         duplicateProjectIdentities,
       })
 
-      if (args.format === "json") {
+      if (args.json) {
         UI.println(JSON.stringify(payload, null, 2))
         return
       }
@@ -440,36 +453,35 @@ export const SessionListCommand = cmd({
   describe: "list sessions",
   builder: (yargs: Argv) => {
     return yargs
-      .option("max-count", {
+      .option("limit", {
         alias: "n",
         describe: "limit to N most recent sessions",
         type: "number",
       })
-      .option("format", {
-        describe: "output format",
-        type: "string",
-        choices: ["table", "json"],
-        default: "table",
+      .option("json", {
+        describe: "output machine-readable JSON",
+        type: "boolean",
+        default: false,
       })
   },
   handler: async (args) => {
     const { Session } = await import("../../../session")
     const { Process } = await import("../../../util/process")
     await bootstrapReadonly(process.cwd(), async () => {
-      const sessions = [...Session.list({ roots: true, limit: args.maxCount })]
+      const sessions = [...Session.list({ roots: true, limit: args.limit })]
 
-      if (sessions.length === 0 && args.format !== "json") {
+      if (sessions.length === 0 && !args.json) {
         return
       }
 
       let output: string
-      if (args.format === "json") {
+      if (args.json) {
         output = formatSessionJSON(sessions)
       } else {
         output = formatSessionTable(sessions)
       }
 
-      const shouldPaginate = process.stdout.isTTY && !args.maxCount && args.format === "table"
+      const shouldPaginate = process.stdout.isTTY && !args.limit && !args.json
 
       if (shouldPaginate) {
         const proc = Process.spawn(pagerCmd(), {

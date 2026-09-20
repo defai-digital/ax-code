@@ -34,7 +34,7 @@ import { Todo } from "../../session/todo"
 import { Locale } from "../../util/locale"
 import { internalBaseUrl, isInternalHostname } from "../../util/internal-url"
 import { isNonEmptyRecord } from "../../util/record"
-import { extractRunFinalAssistantText, handleRunStructuredOutput, resolveRunOutputFile } from "./run-output"
+import { extractRunFinalAssistantText, handleRunStructuredOutput } from "./run-output"
 import { printPendingScheduledTaskNotice } from "./run-schedule-notice"
 import { assertLoopbackHttpUrl } from "../../runtime/listen-security"
 import { sameSkuOnConnectedProvider } from "../../provider/model-selectability"
@@ -150,16 +150,13 @@ export function composeRunMessage(input: {
   return parts.join("\n")
 }
 
-export function missingRunPromptMessage(input?: { passwordSet?: boolean }): string {
+export function missingRunPromptMessage(): string {
   const lines = [
     "You must provide a message or a command.",
     "Pass the prompt after --, or use --prompt / --prompt-file.",
     'Example: ax-code run --model qwen -- "Review this change"',
-    "--file attaches files; it is not a prompt file. -p is --password, not a prompt flag.",
+    "--file attaches files; it is not a prompt file.",
   ]
-  if (input?.passwordSet) {
-    lines.push("A value was set with -p/--password; that is server basic-auth, not the prompt.")
-  }
   return lines.join("\n")
 }
 
@@ -485,15 +482,12 @@ export const RunCommand = cmd({
         type: "string",
         describe: "write the final assistant message to a file",
       })
-      .option("output-last-message", {
-        type: "string",
-        describe: "write the final assistant message to a file (compatibility alias for --output-file)",
-      })
       .option("output-schema", {
         type: "string",
         describe: "validate the final assistant message as JSON against a JSON Schema file",
       })
       .option("prompt", {
+        alias: ["p"],
         type: "string",
         describe: "prompt text (same as the message positional; preferred by other CLIs)",
       })
@@ -517,7 +511,6 @@ export const RunCommand = cmd({
         describe: `attach to a running ax-code server (e.g., http://localhost:${DEFAULT_SERVER_PORT})`,
       })
       .option("password", {
-        alias: ["p"],
         type: "string",
         describe: "basic auth password for --attach (not a prompt; defaults to AX_CODE_SERVER_PASSWORD)",
       })
@@ -543,14 +536,14 @@ export const RunCommand = cmd({
         describe: "show full tool output (diffs, command output, todo list) instead of concise summaries",
         default: false,
       })
-      .option("replay", {
+      .option("show-history", {
         type: "boolean",
-        describe: "replay visible session history when resuming a session (requires --session or --continue)",
+        describe: "print visible session history when resuming a session (requires --session or --continue)",
         default: false,
       })
-      .option("replay-limit", {
+      .option("history-limit", {
         type: "number",
-        describe: "cap replay to the newest N messages (requires --replay)",
+        describe: "cap history to the newest N messages (requires --show-history)",
       })
       .example('ax-code run --model qwen -- "Review this"', "put the prompt after --")
       .example('ax-code run --prompt "Review this" --model qwen', "same prompt via --prompt")
@@ -651,35 +644,26 @@ export const RunCommand = cmd({
     }
 
     if (message.trim().length === 0 && !args.command) {
-      exitEarly(missingRunPromptMessage({ passwordSet: Boolean(args.password) && !args.attach }))
+      exitEarly(missingRunPromptMessage())
     }
 
     if (args.fork && !args.continue && !args.session) {
       exitEarly("--fork requires --continue or --session")
     }
 
-    if (args.replay && !args.continue && !args.session) {
-      exitEarly("--replay requires --continue or --session")
+    if (args["show-history"] && !args.continue && !args.session) {
+      exitEarly("--show-history requires --continue or --session")
     }
 
-    if (args["replay-limit"] !== undefined && !args.replay) {
-      exitEarly("--replay-limit requires --replay")
+    if (args["history-limit"] !== undefined && !args["show-history"]) {
+      exitEarly("--history-limit requires --show-history")
     }
 
-    if (args["replay-limit"] !== undefined && (!Number.isInteger(args["replay-limit"]) || args["replay-limit"] <= 0)) {
-      exitEarly("--replay-limit must be a positive integer")
-    }
-
-    try {
-      resolveRunOutputFile(
-        {
-          outputFile: args["output-file"],
-          outputLastMessage: args["output-last-message"],
-        },
-        callerCwd,
-      )
-    } catch (error) {
-      exitEarly(toErrorMessage(error))
+    if (
+      args["history-limit"] !== undefined &&
+      (!Number.isInteger(args["history-limit"]) || args["history-limit"] <= 0)
+    ) {
+      exitEarly("--history-limit must be a positive integer")
     }
 
     const rules: Permission.Ruleset = [
@@ -1056,14 +1040,14 @@ export const RunCommand = cmd({
 
       const sessionID = (await session(sdk)) ?? exitEarly("Session not found")
 
-      if (args.replay) {
-        const replayLimit = args["replay-limit"]
+      if (args["show-history"]) {
+        const historyLimit = args["history-limit"]
         const msgsRes = await sdk.session.messages({ sessionID }).catch(() => undefined)
         const msgs = msgsRes?.data ?? []
-        const limited = replayLimit !== undefined ? msgs.slice(-replayLimit) : msgs
+        const limited = historyLimit !== undefined ? msgs.slice(-historyLimit) : msgs
         if (limited.length > 0) {
           UI.println(
-            UI.Style.TEXT_DIM + `── session replay (${limited.length} message${limited.length === 1 ? "" : "s"}) ──`,
+            UI.Style.TEXT_DIM + `── session history (${limited.length} message${limited.length === 1 ? "" : "s"}) ──`,
           )
           for (const entry of limited) {
             const role = entry.info.role === "user" ? "You" : "Assistant"
@@ -1174,7 +1158,6 @@ export const RunCommand = cmd({
         await handleRunStructuredOutput(storedFinalMessage ?? finalMessage, {
           callerCwd,
           outputFile: args["output-file"],
-          outputLastMessage: args["output-last-message"],
           outputSchema: args["output-schema"],
         })
       } catch (e) {

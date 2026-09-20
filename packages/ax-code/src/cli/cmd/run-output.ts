@@ -18,7 +18,6 @@ type RunOutputMessageRecord = {
 export type RunStructuredOutputOptions = {
   callerCwd: string
   outputFile?: string
-  outputLastMessage?: string
   outputSchema?: string
 }
 
@@ -31,22 +30,6 @@ export type SchemaValidationResult =
 
 export function resolveRunOutputPath(callerCwd: string, target: string) {
   return path.isAbsolute(target) ? target : path.resolve(callerCwd, target)
-}
-
-export function resolveRunOutputFile(
-  options: { outputFile?: string; outputLastMessage?: string },
-  callerCwd?: string,
-): string | undefined {
-  if (!options.outputFile) return options.outputLastMessage
-  if (!options.outputLastMessage) return options.outputFile
-  if (options.outputLastMessage === options.outputFile) return options.outputFile
-  if (
-    callerCwd &&
-    resolveRunOutputPath(callerCwd, options.outputLastMessage) === resolveRunOutputPath(callerCwd, options.outputFile)
-  ) {
-    return options.outputFile
-  }
-  throw new Error("--output-file and --output-last-message must not point to different files")
 }
 
 export function extractRunFinalAssistantText(
@@ -95,8 +78,7 @@ export async function writeRunOutputFile(callerCwd: string, target: string, cont
 }
 
 export async function handleRunStructuredOutput(finalMessage: string | undefined, options: RunStructuredOutputOptions) {
-  const outputFile = resolveRunOutputFile(options, options.callerCwd)
-  if (!outputFile && !options.outputSchema) return
+  if (!options.outputFile && !options.outputSchema) return
 
   const text = finalMessage?.trim()
   if (!text) throw new Error("No final assistant message was produced")
@@ -110,7 +92,7 @@ export async function handleRunStructuredOutput(finalMessage: string | undefined
     }
   }
 
-  if (outputFile) await writeRunOutputFile(options.callerCwd, outputFile, text)
+  if (options.outputFile) await writeRunOutputFile(options.callerCwd, options.outputFile, text)
 }
 
 export function validateJsonSchema(value: unknown, schema: JsonSchema): SchemaValidationResult {

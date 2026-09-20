@@ -2,6 +2,111 @@ import type { Argv } from "yargs"
 import { UI } from "../ui"
 import * as prompts from "@clack/prompts"
 import { Installation } from "../../installation"
+import { toErrorMessage } from "../../util/error-message"
+import { cmd } from "./cmd"
+
+export type UpgradeCheckReport = {
+  current: string
+  latest: string | null
+  upToDate: boolean | null
+  method: Installation.Method
+  error?: string
+}
+
+export type UpgradeCheckOutcome = {
+  report: UpgradeCheckReport
+  exitCode: 0 | 1 | 2
+}
+
+// Non-interactive version probe behind `ax-code upgrade check`. Reuses the
+// exact version sources of the interactive flow (Installation.method +
+// Installation.latest) and never installs anything.
+export async function runUpgradeCheck(input: { method?: "curl" | "brew" } = {}): Promise<UpgradeCheckOutcome> {
+  const current = Installation.VERSION
+  const method: Installation.Method = input.method ?? (await Installation.method().catch(() => "unknown" as const))
+  if (method === "unknown") {
+    return {
+      exitCode: 2,
+      report: {
+        current,
+        latest: null,
+        upToDate: null,
+        method,
+        error: "could not determine the install method; re-run with --method curl|brew",
+      },
+    }
+  }
+
+  let latest: string
+  try {
+    latest = await Installation.latest(method)
+  } catch (error) {
+    return {
+      exitCode: 2,
+      report: {
+        current,
+        latest: null,
+        upToDate: null,
+        method,
+        error: `failed to resolve the latest version: ${toErrorMessage(error)}`,
+      },
+    }
+  }
+
+  if (latest === current) {
+    return { exitCode: 0, report: { current, latest, upToDate: true, method } }
+  }
+  const compare = Installation.compareVersions(current, latest)
+  if (compare === undefined) {
+    return {
+      exitCode: 2,
+      report: {
+        current,
+        latest,
+        upToDate: null,
+        method,
+        error: `cannot compare current version ${current} with reported latest version ${latest}`,
+      },
+    }
+  }
+  const upToDate = compare <= 0
+  return { exitCode: upToDate ? 0 : 1, report: { current, latest, upToDate, method } }
+}
+
+export function renderUpgradeCheckHuman(report: UpgradeCheckReport): string {
+  if (report.error) return `upgrade check failed: ${report.error}`
+  if (report.upToDate) return `ax-code ${report.current} is up to date (method: ${report.method})`
+  return `update available: ax-code ${report.current} → ${report.latest} (method: ${report.method}) — run \`ax-code upgrade\` to install`
+}
+
+export const UpgradeCheckCommand = cmd({
+  command: "check",
+  describe:
+    "check whether an ax-code update is available without upgrading (exit 0 = up to date, 1 = update available, 2 = check failed)",
+  builder: (yargs) =>
+    yargs
+      .option("json", {
+        type: "boolean",
+        default: false,
+        describe: "Emit a single machine-readable JSON document",
+      })
+      .option("method", {
+        describe: "installation method to check against (default: auto-detect)",
+        type: "string",
+        choices: ["curl", "brew"],
+      }),
+  handler: async (args) => {
+    const outcome = await runUpgradeCheck({ method: args.method as "curl" | "brew" | undefined })
+    if (args.json) {
+      process.stdout.write(JSON.stringify(outcome.report, null, 2) + "\n")
+    } else if (outcome.report.error) {
+      process.stderr.write(renderUpgradeCheckHuman(outcome.report) + "\n")
+    } else {
+      process.stdout.write(renderUpgradeCheckHuman(outcome.report) + "\n")
+    }
+    if (outcome.exitCode !== 0) process.exitCode = outcome.exitCode
+  },
+})
 
 function formatShadowedLauncherWarning(target: string, check: Installation.LauncherCheck): string {
   const lines = [
@@ -51,11 +156,11 @@ export const UpgradeCommand = {
         type: "string",
       })
       .option("method", {
-        alias: "m",
         describe: "installation method to use",
         type: "string",
         choices: ["curl", "brew"],
       })
+      .command(UpgradeCheckCommand)
   },
   handler: async (args: { target?: string; method?: string }) => {
     UI.empty()

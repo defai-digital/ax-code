@@ -35,14 +35,14 @@ async function createSessions(project: string, count: number) {
 }
 
 describe("session list pagination (#417)", () => {
-  test.each(["json", "table"])("empty session storage produces valid %s output", async (format) => {
+  test.each([true, false])("empty session storage produces valid json=%s output", async (json) => {
     await using project = await tmpdir({ git: true })
     const output = vi.spyOn(console, "log").mockImplementation(() => {})
     try {
       await withCwd(project.path, () =>
-        SessionListCommand.handler({ maxCount: 1, format, $0: "ax-code", _: ["session", "list"] } as never),
+        SessionListCommand.handler({ limit: 1, json, $0: "ax-code", _: ["session", "list"] } as never),
       )
-      expect(output.mock.calls.map((call) => String(call[0])).join("\n")).toBe(format === "json" ? "[]" : "")
+      expect(output.mock.calls.map((call) => String(call[0])).join("\n")).toBe(json ? "[]" : "")
     } finally {
       output.mockRestore()
     }
@@ -61,7 +61,7 @@ describe("session list pagination (#417)", () => {
     })
   })
 
-  test("--max-count N --format json paginates before formatting", async () => {
+  test("--limit N --json paginates before formatting", async () => {
     await using project = await tmpdir({ git: true })
     await createSessions(project.path, 6)
 
@@ -72,8 +72,8 @@ describe("session list pagination (#417)", () => {
     try {
       await withCwd(project.path, () =>
         SessionListCommand.handler({
-          maxCount: 2,
-          format: "json",
+          limit: 2,
+          json: true,
           $0: "ax-code",
           _: ["session", "list"],
         } as never),

@@ -61,8 +61,8 @@ export const BranchCommand = cmd({
         console.log("")
         console.log("  Next steps:")
         console.log(`    ax-code run --session ${forked.id} "your new prompt"`)
-        console.log(`    ax-code compare ${sessionID} ${forked.id}`)
-        if (snapshotHash) console.log(`    ax-code rollback ${forked.id}`)
+        console.log(`    ax-code session compare ${sessionID} ${forked.id}`)
+        if (snapshotHash) console.log(`    ax-code session rollback ${forked.id}`)
         console.log("")
       },
     })

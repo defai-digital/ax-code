@@ -7,7 +7,6 @@ import { ExplainCommand } from "./explain"
 import { FileCommand } from "./file"
 import { LSPCommand } from "./lsp"
 import { PerfCommand } from "./perf"
-import { ReplayCommand } from "./replay"
 import { RipgrepCommand } from "./ripgrep"
 import { ScrapCommand } from "./scrap"
 import { SkillCommand } from "./skill"
@@ -23,7 +22,6 @@ export const DebugCommand = cmd({
       .command(ExplainCommand)
       .command(LSPCommand)
       .command(PerfCommand)
-      .command(ReplayCommand)
       .command(RipgrepCommand)
       .command(FileCommand)
       .command(ScrapCommand)

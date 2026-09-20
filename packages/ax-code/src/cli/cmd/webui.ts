@@ -6,7 +6,8 @@ type WebUiAction = "start" | "status" | "stop" | "logs"
 
 export const WebUiCommand = cmd({
   command: "webui [action]",
-  describe: "open or manage the AX Code Desktop browser UI",
+  // Hidden pending the AX Coder cutover (ADR-068); the command still runs.
+  describe: false,
   builder: (yargs: Argv) =>
     yargs
       .positional("action", {

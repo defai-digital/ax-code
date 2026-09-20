@@ -235,7 +235,6 @@ export const DEFAULT_LOGIN_PROVIDER_IDS = new Set(["ax-code", ...DEFAULT_SETUP_P
 
 export const ProvidersCommand = cmd({
   command: "providers",
-  aliases: ["auth"],
   describe: "manage AI providers and credentials",
   builder: (yargs) =>
     yargs
@@ -564,12 +563,10 @@ export const ProvidersLoginCommand = cmd({
         type: "string",
       })
       .option("provider", {
-        alias: ["p"],
         describe: "provider id or name to log in to (skips provider selection)",
         type: "string",
       })
       .option("method", {
-        alias: ["m"],
         describe: "login method label (skips method selection)",
         type: "string",
       }),
@@ -858,7 +855,6 @@ export const ProvidersLogoutCommand = cmd({
         type: "string",
       })
       .option("provider", {
-        alias: ["p"],
         describe: "provider id to log out from",
         type: "string",
       }),

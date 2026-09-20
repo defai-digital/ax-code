@@ -11,7 +11,7 @@ export const InitCommand: CommandModule<
     depth: string
     force: boolean
     "dry-run": boolean
-    directory?: string
+    dir?: string
     wiki: boolean
     "wiki-only-agents": boolean
   }
@@ -36,7 +36,7 @@ export const InitCommand: CommandModule<
         describe: "Preview without writing file",
         default: false,
       })
-      .option("directory", {
+      .option("dir", {
         type: "string",
         describe: "Project directory to analyze (defaults to the caller's cwd)",
       })
@@ -52,7 +52,7 @@ export const InitCommand: CommandModule<
       }),
   handler: async (args) => {
     const caller = Filesystem.callerCwd()
-    const root = Filesystem.resolve(args.directory ? path.resolve(caller, args.directory) : caller)
+    const root = Filesystem.resolve(args.dir ? path.resolve(caller, args.dir) : caller)
     const depth = args.depth as DepthLevel
 
     console.log(`Analyzing project at ${root} (depth: ${depth})...`)

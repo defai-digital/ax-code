@@ -38,7 +38,6 @@ export const AttachCommand = cmd({
         describe: "fork the session when continuing (use with --continue or --session)",
       })
       .option("password", {
-        alias: ["p"],
         type: "string",
         describe: "basic auth password (defaults to AX_CODE_SERVER_PASSWORD)",
       }),

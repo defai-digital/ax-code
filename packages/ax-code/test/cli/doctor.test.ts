@@ -2,7 +2,9 @@ import { afterEach, describe, expect, test, vi } from "vitest"
 import { mkdir, writeFile, readFile } from "fs/promises"
 import path from "path"
 import {
+  DOCTOR_CHECK_IDS,
   doctorProjectContext,
+  executeDoctor,
   formatNativeFlag,
   getDuplicateProjectIdentityCheck,
   getFeatureFlagsCheck,
@@ -13,7 +15,11 @@ import {
   getEvidenceCacheCheck,
   getServerExposureCheck,
   isHomebrewManagedPath,
+  renderDoctorHuman,
+  toDoctorReport,
+  type DoctorCheckEntry,
 } from "../../src/cli/cmd/doctor"
+import { Installation } from "../../src/installation"
 import { ProjectIdentity } from "../../src/project/project-identity"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Database } from "../../src/storage/db"
@@ -245,5 +251,175 @@ describe("cli doctor", () => {
 
     expect(block).not.toContain("catch {}")
     expect(block).toContain('Log.Default.warn("failed to read configured TUI port; falling back to default"')
+  })
+})
+
+describe("cli doctor machine contract", () => {
+  const passing: DoctorCheckEntry = { id: "runtime", name: "Runtime", status: "ok", detail: "Node v22.0.0 (test)" }
+  const warning: DoctorCheckEntry = {
+    id: "native-addons",
+    name: "Native addons",
+    status: "warn",
+    detail: "None installed — using TypeScript fallbacks",
+  }
+  const failing: DoctorCheckEntry = {
+    id: "config",
+    name: "Configuration",
+    status: "fail",
+    detail: "Could not parse configuration",
+  }
+
+  function capture() {
+    const io = {
+      out: "",
+      err: "",
+      code: undefined as number | undefined,
+    }
+    return {
+      io,
+      deps: {
+        stdout: (text: string) => {
+          io.out += text
+        },
+        stderr: (text: string) => {
+          io.err += text
+        },
+        exit: (code: number) => {
+          io.code = code
+        },
+      },
+    }
+  }
+
+  test("check ids are stable and kebab-case", () => {
+    expect(DOCTOR_CHECK_IDS).toEqual([
+      "version",
+      "path-launchers",
+      "runtime",
+      "platform",
+      "data-dir",
+      "config",
+      "credentials",
+      "agents-md",
+      "git",
+      "project-identity",
+      "server-exposure",
+      "isolation-policy",
+      "evidence-cache",
+      "native-addons",
+      "stale-instances",
+      "ax-engine",
+      "computer-use",
+      "tui-server",
+      "tui-preload",
+      "recent-logs",
+      "log-access",
+      "tui-log-errors",
+      "recent-errors",
+      "code-index",
+      "tui-engine",
+      "legacy-render-flags",
+      "feature-flags",
+    ])
+    for (const id of DOCTOR_CHECK_IDS) expect(id).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/)
+  })
+
+  test("--json emits a parseable document with stable ids", async () => {
+    const { io, deps } = capture()
+    const code = await executeDoctor({ json: true }, { ...deps, runChecks: async () => [passing, warning, failing] })
+
+    const doc = JSON.parse(io.out)
+    expect(doc).toEqual({
+      version: Installation.VERSION,
+      ok: false,
+      checks: [
+        { id: "runtime", status: "pass", summary: "Runtime", detail: "Node v22.0.0 (test)" },
+        { id: "native-addons", status: "warn", summary: "Native addons", detail: warning.detail },
+        { id: "config", status: "fail", summary: "Configuration", detail: failing.detail },
+      ],
+    })
+    expect(code).toBe(1)
+    expect(io.code).toBe(1)
+  })
+
+  test("a failing check yields exit code 1 in human mode", async () => {
+    const { io, deps } = capture()
+    const code = await executeDoctor({ json: false }, { ...deps, runChecks: async () => [passing, failing] })
+
+    expect(code).toBe(1)
+    expect(io.code).toBe(1)
+    expect(io.out).toContain("Runtime: Node v22.0.0 (test)")
+    expect(io.out).toContain("1 issue found")
+  })
+
+  test("warnings never fail in either mode", async () => {
+    const human = capture()
+    expect(await executeDoctor({ json: false }, { ...human.deps, runChecks: async () => [warning] })).toBe(0)
+    expect(human.io.code).toBeUndefined()
+    expect(human.io.out).toContain("1 warning")
+    expect(human.io.out).toContain("system is functional")
+
+    const json = capture()
+    expect(await executeDoctor({ json: true }, { ...json.deps, runChecks: async () => [warning] })).toBe(0)
+    expect(JSON.parse(json.io.out).ok).toBe(true)
+  })
+
+  test("--skip filters checks and is forwarded to the runner", async () => {
+    const { io, deps } = capture()
+    let seen: ReadonlySet<string> = new Set()
+    const code = await executeDoctor(
+      { json: true, skip: " config ,runtime" },
+      {
+        ...deps,
+        runChecks: async (input) => {
+          seen = input.skip
+          return [passing, warning, failing].filter((check) => !input.skip.has(check.id))
+        },
+      },
+    )
+
+    expect([...seen].sort()).toEqual(["config", "runtime"])
+    const doc = JSON.parse(io.out)
+    expect(doc.checks.map((check: { id: string }) => check.id)).toEqual(["native-addons"])
+    expect(doc.ok).toBe(true)
+    expect(code).toBe(0)
+  })
+
+  test("--skip with unknown ids is an error listing valid ids and never runs checks", async () => {
+    const { io, deps } = capture()
+    let ran = false
+    const code = await executeDoctor(
+      { json: true, skip: "config,bogus-id" },
+      {
+        ...deps,
+        runChecks: async () => {
+          ran = true
+          return []
+        },
+      },
+    )
+
+    expect(code).toBe(2)
+    expect(io.code).toBe(2)
+    expect(ran).toBe(false)
+    expect(io.out).toBe("")
+    expect(io.err).toContain("unknown --skip id(s): bogus-id")
+    for (const id of DOCTOR_CHECK_IDS) expect(io.err).toContain(id)
+  })
+
+  test("toDoctorReport marks ok only when no check fails", () => {
+    expect(toDoctorReport([passing, warning]).ok).toBe(true)
+    expect(toDoctorReport([passing, failing]).ok).toBe(false)
+    expect(toDoctorReport([])).toEqual({ version: Installation.VERSION, ok: true, checks: [] })
+  })
+
+  test("human rendering keeps the icon and summary wording", () => {
+    const text = renderDoctorHuman([passing, warning, failing])
+    expect(text).toContain("✓")
+    expect(text).toContain("△")
+    expect(text).toContain("✗")
+    expect(text).toContain("Native addons: None installed — using TypeScript fallbacks")
+    expect(text).toContain("1 issue found")
+    expect(renderDoctorHuman([passing])).toContain("All checks passed")
   })
 })

@@ -10,9 +10,12 @@ export const AcpCommand = cmd({
   command: "acp",
   describe: "start ACP (Agent Client Protocol) server",
   builder: (yargs) => {
-    return withNetworkOptions(yargs).option("cwd", {
-      describe: "working directory",
+    // --cwd stays accepted as an alias because external ACP editor configs
+    // spawn `ax-code acp --cwd <path>`.
+    return withNetworkOptions(yargs).option("dir", {
+      describe: "project directory",
       type: "string",
+      alias: ["cwd"],
       default: process.cwd(),
     })
   },

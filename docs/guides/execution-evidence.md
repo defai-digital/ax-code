@@ -45,8 +45,8 @@ Note that this is the **session execution graph** — what the agent did. It is 
 ## Compare two runs
 
 ```bash
-ax-code compare <sessionA> <sessionB>
-ax-code compare <sessionA> <sessionB> --deep
+ax-code session compare <sessionA> <sessionB>
+ax-code session compare <sessionA> <sessionB> --deep
 ```
 
 Reports the risk delta, files changed, tool-failure counts, the decision path each run took, and per-event-type counts. `--deep` adds step-level divergence analysis through replay comparison.
@@ -67,10 +67,10 @@ A typical use is deciding between two strategies for the same task:
 ## Inspect the recorded event log
 
 ```bash
-ax-code replay <sessionID> --mode summary
-ax-code replay <sessionID> --mode verify
-ax-code replay <sessionID> --mode reconstruct
-ax-code replay <sessionID> --mode export
+ax-code session replay <sessionID> --mode summary
+ax-code session replay <sessionID> --mode verify
+ax-code session replay <sessionID> --mode reconstruct
+ax-code session replay <sessionID> --mode export
 ```
 
 `verify` checks the recorded log for consistency. `reconstruct` rebuilds the step stream from events. `export` writes a portable replay package.
@@ -102,10 +102,10 @@ edits remain on disk. Enabling snapshots now cannot reconstruct earlier file
 contents. A captured turn with no file changes also has nothing to restore.
 
 ```bash
-ax-code rollback <sessionID> --list      # show recoverable points
-ax-code rollback <sessionID> --dry-run   # show what would change
-ax-code rollback <sessionID> --step 4    # restore one step
-ax-code rollback <sessionID>             # restore the whole session
+ax-code session rollback <sessionID> --list      # show recoverable points
+ax-code session rollback <sessionID> --dry-run   # show what would change
+ax-code session rollback <sessionID> --step 4    # restore one step
+ax-code session rollback <sessionID>             # restore the whole session
 ```
 
 `--list` combines durable step events with execution-graph detail, so you can target a specific step rather than reverting the entire run. `--dry-run` uses the same rollback planner as apply and lists any delegated sessions whose file ledger contributes to the result.
@@ -117,8 +117,8 @@ Rollback follows nested child sessions when they wrote to the parent's exact wor
 ## Try a different strategy
 
 ```bash
-ax-code branch <sessionID>
-ax-code branch <sessionID> --from <messageID>
+ax-code session branch <sessionID>
+ax-code session branch <sessionID> --from <messageID>
 ```
 
 Forks the session's stored state so a second attempt starts from a chosen point instead of from scratch.
@@ -128,8 +128,8 @@ This forks **session state** — messages and goals. It is not a Git branch and 
 ## Diagnose
 
 ```bash
-ax-code trace <sessionID>
-ax-code trace <sessionID> --logs
+ax-code session trace <sessionID>
+ax-code session trace <sessionID> --logs
 ```
 
 Replay-backed diagnostics with a risk-scored timeline. `--logs` switches to legacy log-file analysis instead of replay events, which is useful when you are investigating an operational problem rather than reviewing a change.

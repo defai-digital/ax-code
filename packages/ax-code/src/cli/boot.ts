@@ -6,7 +6,6 @@ import { hideBin } from "yargs/helpers"
 import { AskCommand } from "./cmd/ask"
 import { AcpCommand } from "./cmd/acp"
 import { AuditCommand } from "./cmd/audit"
-import { ReplayCommand } from "./cmd/replay"
 import { AgentCommand } from "./cmd/agent"
 import { ConsoleCommand } from "./cmd/account"
 import { AttachCommand } from "./tui/attach"
@@ -15,29 +14,23 @@ import { DbCommand } from "./cmd/db"
 import { DebugCommand } from "./cmd/debug"
 import { DesignCheckCommand } from "./cmd/design-check"
 import { DoctorCommand } from "./cmd/doctor"
-import { TraceCommand } from "./cmd/trace"
-import { CompareCommand } from "./cmd/compare"
-import { RollbackCommand } from "./cmd/rollback"
-import { BranchCommand } from "./cmd/branch"
 import { CapabilityCommand } from "./cmd/capability"
-import { ExportCommand } from "./cmd/export"
 import { GenerateCommand } from "./cmd/generate"
 import { GithubCommand } from "./cmd/github"
 import { GraphCommand } from "./cmd/graph"
 import { HeadlessRunCommand } from "./cmd/headless-run"
 import { RiskCommand } from "./cmd/risk"
 import { DreGraphCommand } from "./cmd/dre-graph"
-import { ImportCommand } from "./cmd/import"
 import { IndexCommand } from "./cmd/index-graph"
 import { InitCommand } from "./cmd/init"
+import { LoginCommand } from "./cmd/login"
+import { LogoutCommand } from "./cmd/logout"
 import { McpCommand } from "./cmd/mcp"
 import { MemoryCommand } from "./cmd/memory"
 import { WikiCommand } from "./cmd/wiki"
 import { ModelsCommand } from "./cmd/models"
-import { PrCommand } from "./cmd/pr"
 import { ReleaseCommand } from "./cmd/release"
 import { ProvidersCommand } from "./cmd/providers"
-import { RestartCommand } from "./cmd/restart"
 import { RunCommand } from "./cmd/run"
 import { ServeCommand } from "./cmd/serve"
 import { RuntimeCommand } from "./cmd/runtime"
@@ -67,55 +60,55 @@ import { DiagnosticLog } from "../debug/diagnostic-log"
 import { isHarmlessInterrupt } from "../util/harmless-interrupt"
 
 const cmds = [
-  AcpCommand,
-  AuditCommand,
-  ReplayCommand,
-  McpCommand,
-  TuiBackendCommand,
-  TuiThreadCommand,
-  AttachCommand,
-  HeadlessRunCommand,
+  // Core
   RunCommand,
   AskCommand,
-  GenerateCommand,
-  DebugCommand,
-  DoctorCommand,
-  TraceCommand,
-  CompareCommand,
-  RollbackCommand,
-  BranchCommand,
-  CapabilityCommand,
-  ConsoleCommand,
-  ProvidersCommand,
-  AgentCommand,
-  UpgradeCommand,
-  UninstallCommand,
-  WebUiCommand,
-  ServeCommand,
-  RuntimeCommand,
-  RestartCommand,
+  AttachCommand,
+  LoginCommand,
+  LogoutCommand,
   ModelsCommand,
-  StatsCommand,
-  ExportCommand,
-  ImportCommand,
-  IndexCommand,
-  GithubCommand,
-  GraphCommand,
-  RiskCommand,
-  DreGraphCommand,
-  PrCommand,
-  InitCommand,
-  ReleaseCommand,
+  ProvidersCommand,
+  // Sessions & evidence
   SessionCommand,
-  DbCommand,
+  AuditCommand,
+  StatsCommand,
+  ContextCommand,
+  RiskCommand,
+  GraphCommand,
+  DreGraphCommand,
+  // Customize
+  AgentCommand,
+  SkillCommand,
+  CapabilityCommand,
   MemoryCommand,
   WikiCommand,
-  SkillCommand,
+  McpCommand,
+  // Project
+  InitCommand,
+  IndexCommand,
+  DesignCheckCommand,
+  GithubCommand,
   WorkflowCommand,
+  // Servers & runtime
+  ServeCommand,
+  RuntimeCommand,
+  AcpCommand,
+  // Maintenance
   TaskCommand,
   ScheduleCommand,
-  DesignCheckCommand,
-  ContextCommand,
+  DbCommand,
+  DoctorCommand,
+  DebugCommand,
+  UpgradeCommand,
+  UninstallCommand,
+  ReleaseCommand,
+  // Hidden / internal commands (registered, never listed)
+  TuiBackendCommand,
+  TuiThreadCommand,
+  HeadlessRunCommand,
+  ConsoleCommand,
+  GenerateCommand,
+  WebUiCommand,
 ]
 
 // Issue #414: names for the unknown-command error emitted by the default
@@ -133,6 +126,70 @@ setKnownCommands([
     return [name]
   }),
 ])
+
+// Top-level help sections (ADR-132). yargs .group() only groups options,
+// never commands, so the root help text is regrouped after rendering.
+// Command names must match the first token of a registered command string;
+// anything visible but unlisted (including the default `$0` command) falls
+// back into the plain "Commands:" section.
+const commandGroups: ReadonlyArray<readonly [string, readonly string[]]> = [
+  ["Core:", ["run", "ask", "attach", "login", "logout", "models", "providers"]],
+  ["Sessions & evidence:", ["session", "audit", "stats", "context", "risk", "graph", "dre-graph"]],
+  ["Customize:", ["agent", "skill", "capability", "memory", "wiki", "mcp"]],
+  ["Project:", ["init", "index", "design-check", "github", "workflow"]],
+  ["Servers & runtime:", ["serve", "runtime", "acp"]],
+  ["Maintenance:", ["task", "schedule", "db", "doctor", "debug", "upgrade", "uninstall", "release", "completion"]],
+]
+
+type UsageCommand = [string, string, boolean, string[] | undefined, string | boolean | undefined]
+type UsageLike = {
+  help: () => string
+  getCommands: () => UsageCommand[]
+}
+
+function renderUsageCommandRows(entries: UsageCommand[]): string[] {
+  const labels = entries.map(([command]) => `  ax-code ${command.replace(/^\$0 ?/, "")}`)
+  const width = Math.max(...labels.map((label) => label.length)) + 2
+  return entries.map((entry, index) => {
+    const hints = [entry[2] ? "[default]" : "", entry[3]?.length ? `[aliases: ${entry[3].join(", ")}]` : ""].filter(
+      Boolean,
+    )
+    const describe = [entry[1], ...hints].filter(Boolean).join(" ")
+    return describe ? labels[index]!.padEnd(width) + describe : labels[index]!
+  })
+}
+
+function groupUsageCommandHelp(text: string, usage: UsageLike): string {
+  const marker = "Commands:\n"
+  const start = text.indexOf(marker)
+  if (start === -1) return text
+  const rest = text.slice(start + marker.length)
+  const end = rest.indexOf("\n\n")
+  if (end === -1) return text
+
+  const commands = usage.getCommands()
+  const byName = new Map<string, UsageCommand>()
+  for (const command of commands) {
+    byName.set(command[0].split(" ")[0] ?? command[0], command)
+  }
+
+  const grouped = new Set<string>()
+  const sections: string[] = []
+  for (const [group, names] of commandGroups) {
+    const entries = names.flatMap((name) => {
+      const entry = byName.get(name)
+      return entry ? [entry] : []
+    })
+    if (entries.length === 0) continue
+    for (const entry of entries) grouped.add(entry[0].split(" ")[0] ?? entry[0])
+    sections.push([group, ...renderUsageCommandRows(entries)].join("\n"))
+  }
+
+  const leftovers = commands.filter((command) => !grouped.has(command[0].split(" ")[0] ?? command[0]))
+  const lines: string[] = ["Commands:", ...renderUsageCommandRows(leftovers)]
+  for (const section of sections) lines.push("", section)
+  return text.slice(0, start) + lines.join("\n") + rest.slice(end)
+}
 
 let forcedExitTimer: ReturnType<typeof setTimeout> | undefined
 let hooksInstalled = false
@@ -240,6 +297,22 @@ export function cli(argv = hideBin(process.argv)) {
     .completion("completion", "generate shell completion script")
 
   for (const cmd of cmds) cli = cli.command(cmd as never)
+
+  {
+    // Wrap the root usage renderer so `--help` lists commands under the named
+    // sections above; subcommand help keeps yargs's own rendering.
+    const internal = (cli as unknown as { getInternalMethods(): unknown }).getInternalMethods() as {
+      getContext: () => { commands: string[] }
+      getUsageInstance: () => UsageLike
+    }
+    const usage = internal.getUsageInstance()
+    const originalHelp = usage.help.bind(usage)
+    usage.help = () => {
+      const text = originalHelp()
+      if (internal.getContext().commands.length > 0) return text
+      return groupUsageCommandHelp(text, usage)
+    }
+  }
 
   cli = cli
     .fail((msg, err) => {

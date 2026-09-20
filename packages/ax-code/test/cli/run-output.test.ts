@@ -6,7 +6,6 @@ import {
   extractRunFinalAssistantText,
   handleRunStructuredOutput,
   parseFinalJson,
-  resolveRunOutputFile,
   resolveRunOutputPath,
   validateJsonSchema,
 } from "../../src/cli/cmd/run-output"
@@ -16,24 +15,6 @@ test("run structured output resolves relative paths from caller cwd", async () =
 
   expect(resolveRunOutputPath(tmp.path, "out/report.json")).toBe(path.join(tmp.path, "out", "report.json"))
   expect(resolveRunOutputPath(tmp.path, "/tmp/report.json")).toBe("/tmp/report.json")
-})
-
-test("run structured output rejects conflicting output file aliases", () => {
-  expect(resolveRunOutputFile({ outputFile: "a.json", outputLastMessage: "a.json" })).toBe("a.json")
-  expect(() => resolveRunOutputFile({ outputFile: "a.json", outputLastMessage: "b.json" })).toThrow(
-    "--output-file and --output-last-message must not point to different files",
-  )
-})
-
-test("run structured output allows aliases that resolve to the same path", async () => {
-  await using tmp = await tmpdir()
-
-  expect(resolveRunOutputFile({ outputFile: "result.json", outputLastMessage: "./result.json" }, tmp.path)).toBe(
-    "result.json",
-  )
-  expect(
-    resolveRunOutputFile({ outputFile: "nested/../result.json", outputLastMessage: "result.json" }, tmp.path),
-  ).toBe("nested/../result.json")
 })
 
 test("run structured output extracts text only from the current assistant message", () => {
