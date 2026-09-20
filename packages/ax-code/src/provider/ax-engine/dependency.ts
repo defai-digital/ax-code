@@ -13,6 +13,7 @@ import {
 } from "./constants"
 import { getBundledBinary } from "./bundled"
 import { getManagedBinary, isAxEngineInstallable } from "./install"
+import { axEngineBinaryIdentity } from "./binary-identity"
 import { parseJsonResult } from "@/util/json-value"
 
 export const AxEngineDependencyStatus = z.object({
@@ -42,7 +43,7 @@ async function isExecutable(file: string) {
     .catch(() => false)
 }
 
-async function version(binaryPath: string) {
+async function probeVersion(binaryPath: string) {
   const direct = await Process.text([binaryPath, "--version"], { timeout: 3000, nothrow: true }).catch(() => undefined)
   if (direct?.code === 0) {
     const text = direct.text.trim() || direct.stderr.toString().trim()
@@ -61,6 +62,40 @@ async function version(binaryPath: string) {
   if (!install || typeof install !== "object") return undefined
   const value = (install as Record<string, unknown>).version
   return typeof value === "string" && value.trim() ? value.trim() : undefined
+}
+
+// Selection and executable access remain live. Only successful version probes
+// are reused; metadata catches launcher/native upgrades, and the TTL bounds
+// changes to wrapper dependencies that are outside that identity.
+const VERSION_CACHE_TTL_MS = 5 * 60_000
+const VERSION_CACHE_LIMIT = 64
+const versionCache = new Map<string, { identity: string; expires: number; result: Promise<string | undefined> }>()
+
+async function version(binaryPath: string): Promise<string | undefined> {
+  const identity = await axEngineBinaryIdentity({ binaryPath }).catch(() => undefined)
+  if (!identity) return probeVersion(binaryPath)
+  const key = binaryPath
+  const cached = versionCache.get(key)
+  if (cached?.identity === identity && cached.expires > performance.now()) return cached.result
+  if (versionCache.size >= VERSION_CACHE_LIMIT) versionCache.delete(versionCache.keys().next().value!)
+  const entry = { identity, expires: Infinity, result: Promise.resolve<string | undefined>(undefined) }
+  entry.result = (async () => {
+    try {
+      const detected = await probeVersion(binaryPath)
+      const after = await axEngineBinaryIdentity({ binaryPath }).catch(() => undefined)
+      if (detected && after === identity) {
+        entry.expires = performance.now() + VERSION_CACHE_TTL_MS
+      } else if (versionCache.get(key) === entry) {
+        versionCache.delete(key)
+      }
+      return detected
+    } catch (error) {
+      if (versionCache.get(key) === entry) versionCache.delete(key)
+      throw error
+    }
+  })()
+  versionCache.set(key, entry)
+  return entry.result
 }
 
 function unsupportedVersionBlocker(detected: string | undefined) {

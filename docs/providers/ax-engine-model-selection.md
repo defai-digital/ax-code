@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-09-19
+Last reviewed: 2026-09-20
 Owner: ax-code runtime
 
 AX Code offers only these two development packs through **AX Engine (Local)** on eligible Apple Silicon Macs. Tiel Coder is the default; Cyber-Tiel Coder is the alternative.
@@ -110,3 +110,30 @@ Configured `required` is not displayed
 as proof of activity. Draft/accepted counts, when available, are cumulative for the
 resident engine. A pending policy change is reported without restarting it during
 status inspection. MTP activation is not a promise of a particular token rate.
+
+## Interpreting local response speed
+
+Managed AX Engine does not impose a tokens-per-second ceiling. A measurement
+such as 50 tok/s is neither a configured target nor an upper limit: faster
+hardware can produce tokens faster. Context size, output budgets, and request
+concurrency limits control capacity, not a fixed token generation rate.
+
+Compare measurements at the same input length, output budget, sampling settings,
+and cache state. Short-prompt decode measurements do not establish a minimum
+rate for a coding session with tens of thousands of context tokens. Reusing a
+prefix reduces prompt processing; subsequent decoding still attends to that
+context. MTP activation alone does not establish useful draft acceptance or a
+fixed speedup.
+
+Separate startup/setup, time to first content, and sustained generation when
+investigating a slow turn. The engine's `ax_runtime_decode_tok_per_sec` metric is
+an exponentially weighted average across requests, not the current response's
+rate. Use request timings and token counts for that response, and counter deltas
+for its MTP acceptance. Streaming chunks can contain multiple tokens; counting
+chunks as tokens gives an incorrect rate.
+
+AX Code reuses successful executable-version probes for up to five minutes.
+It checks executable availability on every resolution and invalidates cached
+versions when launcher or native-server file identity changes. Failed probes
+remain retryable. This reduces repeated setup work; it does not change model
+decode speed. A development backend must be restarted to load source changes.

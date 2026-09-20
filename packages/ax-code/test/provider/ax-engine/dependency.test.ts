@@ -1,0 +1,149 @@
+import { afterEach, expect, test, vi } from "vitest"
+import fs from "node:fs/promises"
+import path from "node:path"
+import { tmpdir } from "../../fixture/fixture"
+import { Process } from "../../../src/util/process"
+import { getDependencyStatus } from "../../../src/provider/ax-engine/dependency"
+
+const response = (text: string, code = 0): Process.TextResult => ({
+  code,
+  text,
+  stdout: Buffer.from(text),
+  stderr: Buffer.alloc(0),
+})
+
+afterEach(() => vi.restoreAllMocks())
+
+async function launcher(dir: string) {
+  const binaryPath = path.join(dir, "ax-engine")
+  await fs.writeFile(binaryPath, "launcher", { mode: 0o755 })
+  return binaryPath
+}
+
+function doctor() {
+  return vi.spyOn(Process, "text").mockImplementation(async (args) => {
+    if (args[1] === "--version") return response("", 2)
+    return response(JSON.stringify({ install: { version: "7.5.1" } }))
+  })
+}
+
+test("coalesces concurrent wrapper probes and reuses a successful doctor version", async () => {
+  await using dir = await tmpdir()
+  const binaryPath = await launcher(dir.path)
+  const probe = doctor()
+  const results = await Promise.all(Array.from({ length: 8 }, () => getDependencyStatus({ binaryPath })))
+  for (const status of results) expect(status.version).toBe("7.5.1")
+  expect((await getDependencyStatus({ binaryPath })).version).toBe("7.5.1")
+  expect(probe).toHaveBeenCalledTimes(2)
+  // Availability must still be checked even with a cached version.
+  await fs.rm(binaryPath)
+  expect((await getDependencyStatus({ binaryPath })).available).toBe(false)
+  expect(probe).toHaveBeenCalledTimes(2)
+})
+
+test("invalidates on launcher replacement and native sibling appearance or replacement", async () => {
+  await using dir = await tmpdir()
+  const binaryPath = await launcher(dir.path)
+  const probe = doctor()
+  await getDependencyStatus({ binaryPath })
+  await fs.writeFile(binaryPath, "replacement launcher")
+  await getDependencyStatus({ binaryPath })
+  const native = path.join(dir.path, "ax-engine-server")
+  await fs.writeFile(native, "native")
+  await getDependencyStatus({ binaryPath })
+  await fs.writeFile(native, "replacement native")
+  await getDependencyStatus({ binaryPath })
+  await fs.rm(native)
+  await getDependencyStatus({ binaryPath })
+  expect(probe).toHaveBeenCalledTimes(10)
+})
+
+test.skipIf(process.platform === "win32")("invalidates when a launcher symlink is retargeted", async () => {
+  await using dir = await tmpdir()
+  const first = await launcher(dir.path)
+  const second = path.join(dir.path, "replacement")
+  await fs.writeFile(second, "replacement", { mode: 0o755 })
+  const binaryPath = path.join(dir.path, "current")
+  await fs.symlink(first, binaryPath)
+  const probe = doctor()
+  await getDependencyStatus({ binaryPath })
+  await fs.unlink(binaryPath)
+  await fs.symlink(second, binaryPath)
+  await getDependencyStatus({ binaryPath })
+  expect(probe).toHaveBeenCalledTimes(4)
+})
+
+test("bounds reuse when wrapper dependencies change without an executable change", async () => {
+  await using dir = await tmpdir()
+  const binaryPath = await launcher(dir.path)
+  const clock = vi.spyOn(performance, "now").mockReturnValue(0)
+  const probe = doctor()
+  await getDependencyStatus({ binaryPath })
+  clock.mockReturnValue(299_999)
+  await getDependencyStatus({ binaryPath })
+  expect(probe).toHaveBeenCalledTimes(2)
+  clock.mockReturnValue(300_000)
+  await getDependencyStatus({ binaryPath })
+  expect(probe).toHaveBeenCalledTimes(4)
+})
+
+test("failed probes are retryable without waiting for expiry", async () => {
+  await using dir = await tmpdir()
+  const binaryPath = await launcher(dir.path)
+  const probe = vi.spyOn(Process, "text").mockResolvedValue(response("", 2))
+  expect((await getDependencyStatus({ binaryPath })).version).toBeUndefined()
+  probe.mockResolvedValue(response("ax-engine 7.5.1"))
+  expect((await getDependencyStatus({ binaryPath })).version).toBe("ax-engine 7.5.1")
+  expect(probe).toHaveBeenCalledTimes(3)
+})
+
+test("does not cache a version observed during an executable replacement", async () => {
+  await using dir = await tmpdir()
+  const binaryPath = await launcher(dir.path)
+  const probe = vi
+    .spyOn(Process, "text")
+    .mockImplementationOnce(async () => {
+      await fs.writeFile(binaryPath, "changed during version probe")
+      return response("ax-engine 7.4.0")
+    })
+    .mockResolvedValue(response("ax-engine 7.5.1"))
+  expect((await getDependencyStatus({ binaryPath })).version).toBe("ax-engine 7.4.0")
+  expect((await getDependencyStatus({ binaryPath })).version).toBe("ax-engine 7.5.1")
+  expect(probe).toHaveBeenCalledTimes(2)
+})
+
+test("an older failed probe cannot evict a replacement binary's successful probe", async () => {
+  await using dir = await tmpdir()
+  const binaryPath = await launcher(dir.path)
+  const started = Promise.withResolvers<void>()
+  const finish = Promise.withResolvers<Process.TextResult>()
+  const probe = vi
+    .spyOn(Process, "text")
+    .mockImplementationOnce(() => {
+      started.resolve()
+      return finish.promise
+    })
+    .mockImplementation(async (args) =>
+      response(args[1] === "--version" ? "ax-engine 7.5.1" : "", args[1] === "--version" ? 0 : 2),
+    )
+  const old = getDependencyStatus({ binaryPath })
+  await started.promise
+  await fs.writeFile(binaryPath, "upgraded launcher")
+  expect((await getDependencyStatus({ binaryPath })).version).toBe("ax-engine 7.5.1")
+  finish.resolve(response("", 2))
+  expect((await old).version).toBeUndefined()
+  expect((await getDependencyStatus({ binaryPath })).version).toBe("ax-engine 7.5.1")
+  expect(probe).toHaveBeenCalledTimes(3)
+})
+
+test("evicts old version probes when many distinct executables are resolved", async () => {
+  await using dir = await tmpdir()
+  const probe = vi.spyOn(Process, "text").mockResolvedValue(response("ax-engine 7.5.1"))
+  const paths = Array.from({ length: 65 }, (_, i) => path.join(dir.path, `engine-${i}`))
+  for (const binaryPath of paths) {
+    await fs.writeFile(binaryPath, "launcher", { mode: 0o755 })
+    await getDependencyStatus({ binaryPath })
+  }
+  await getDependencyStatus({ binaryPath: paths[0] })
+  expect(probe).toHaveBeenCalledTimes(66)
+})
