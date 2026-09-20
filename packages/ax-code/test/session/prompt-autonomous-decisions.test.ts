@@ -26,6 +26,7 @@ import {
   toolCallingBackstopWrapUp,
   toolOnlyStopMessage,
   readOnlyExplorationDecision,
+  recordSuccessfulInspectionEvidence,
   resolveTurnToolChoice,
   shouldRestoreForcedTextOnlyTurn,
   toolOnlyTurnDecision,
@@ -1332,7 +1333,7 @@ describe("local read-only exploration convergence", () => {
 
   test("a repeated successful inspection converges without waiting through another full ladder", () => {
     const base = { consecutiveTurns: 2, nudged: true, nudgeThreshold: 1, forceThreshold: 4, repeatedEvidence: true }
-    expect(readOnlyExplorationDecision({ ...base, hasUsableEvidence: true })).toEqual({ action: "force_text" })
+    expect(readOnlyExplorationDecision({ ...base, hasUsableEvidence: true })).toEqual({ action: "synthesize" })
     expect(readOnlyExplorationDecision({ ...base, hasUsableEvidence: false })).toEqual({ action: "ignore" })
     expect(readOnlyExplorationDecision({ ...base, repeatedEvidence: false, hasUsableEvidence: true })).toEqual({
       action: "ignore",
@@ -1416,7 +1417,7 @@ describe("local read-only exploration convergence", () => {
     expect(
       readOnlyExplorationDecision({ consecutiveTurns: 4, nudged: true, hasUsableEvidence: true, ...config }),
     ).toEqual({
-      action: "force_text",
+      action: "synthesize",
     })
   })
 
@@ -1459,7 +1460,7 @@ describe("local read-only exploration convergence", () => {
         freshLargeEvidence: true,
         largeEvidenceGraceUsed: true,
       }),
-    ).toEqual({ action: "force_text" })
+    ).toEqual({ action: "synthesize" })
     // Hard ceiling still wins even with fresh large evidence.
     expect(
       readOnlyExplorationDecision({
@@ -1710,4 +1711,52 @@ describe("resolve turn tool choice", () => {
       consumedForceTextOnlyTurn: false,
     })
   })
+})
+
+test("repeated local evidence gets one tools-enabled synthesis opportunity", () => {
+  const input = {
+    consecutiveTurns: 2,
+    nudged: true,
+    nudgeThreshold: 1,
+    forceThreshold: 4,
+    hasUsableEvidence: true,
+    repeatedEvidence: true,
+  }
+  expect(readOnlyExplorationDecision(input)).toEqual({ action: "synthesize" })
+  expect(readOnlyExplorationDecision({ ...input, synthesisRequested: true })).toEqual({ action: "force_text" })
+})
+
+test("protocol recovery evidence ignores repeated reads but recognizes changed results", () => {
+  const seen = new Set<string>()
+  const read = (output: string) => [{ type: "tool", tool: "read", state: { status: "completed", output } }]
+  expect(recordSuccessfulInspectionEvidence(read("README bytes"), seen)).toBe(true)
+  expect(recordSuccessfulInspectionEvidence(read("README bytes"), seen)).toBe(false)
+  expect(recordSuccessfulInspectionEvidence(read("Changed README bytes"), seen)).toBe(true)
+  expect(
+    recordSuccessfulInspectionEvidence(
+      [{ type: "tool", tool: "read", state: { status: "error", output: "error" } }],
+      seen,
+    ),
+  ).toBe(false)
+  expect(
+    recordSuccessfulInspectionEvidence(
+      [{ type: "tool", tool: "bash", state: { status: "completed", output: "failure", metadata: { exit: 1 } } }],
+      seen,
+    ),
+  ).toBe(false)
+  expect(recordSuccessfulInspectionEvidence(read(""), seen)).toBe(false)
+  expect([...seen]).toHaveLength(2)
+  expect([...seen].every((value) => /^[a-f0-9]{64}$/.test(value))).toBe(true)
+})
+
+test("inspection history stays bounded without evicting old recovery evidence", () => {
+  const seen = new Set<string>(Array.from({ length: 4096 }, (_, index) => String(index)))
+  expect(
+    recordSuccessfulInspectionEvidence(
+      [{ type: "tool", tool: "read", state: { status: "completed", output: "new evidence" } }],
+      seen,
+    ),
+  ).toBe(false)
+  expect(seen.size).toBe(4096)
+  expect(seen.has("0")).toBe(true)
 })

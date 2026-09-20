@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import type { AutonomousCompletionGate } from "@/control-plane/autonomous-completion-gate"
 
 const EMPTY_MODEL_TURN_INCOMPLETE_MESSAGE =
@@ -401,6 +402,26 @@ export function hasUsableReadOnlyEvidence(parts: readonly ToolActivityPart[] | u
   return parts?.some(isUsableInspectionResult) ?? false
 }
 
+/** Run-local hashes only: repeated successful reads cannot replenish protocol recovery. */
+export function recordSuccessfulInspectionEvidence(
+  parts: readonly ToolActivityPart[] | undefined,
+  seen: Set<string>,
+): boolean {
+  let fresh = false
+  for (const part of parts ?? []) {
+    if (!isUsableInspectionResult(part)) continue
+    // Output identity deliberately ignores argument spelling/order: aliases for
+    // the same inspection must not grant another recovery. Changed output does.
+    const key = createHash("sha256").update(part.tool!).update("\0").update(part.state!.output!).digest("hex")
+    // Saturation is conservative: never evict an old result and accidentally
+    // let cycling reads replenish recovery. A mutation/new user segment clears it.
+    if (seen.has(key) || seen.size >= 4096) continue
+    seen.add(key)
+    fresh = true
+  }
+  return fresh
+}
+
 /** True when this turn completed a read-only tool with a large output payload. */
 export function hasLargeSuccessfulReadOnlyOutput(
   parts: readonly ToolActivityPart[] | undefined,
@@ -410,7 +431,11 @@ export function hasLargeSuccessfulReadOnlyOutput(
   return parts.some((part) => isUsableInspectionResult(part) && (part.state?.output?.length ?? 0) >= minChars)
 }
 
-type ReadOnlyExplorationDecision = { action: "ignore" } | { action: "nudge" } | { action: "force_text" }
+type ReadOnlyExplorationDecision =
+  | { action: "ignore" }
+  | { action: "nudge" }
+  | { action: "synthesize" }
+  | { action: "force_text" }
 
 /**
  * Why the loop forced a text-only turn. Unexecutable-tool recovery must only
@@ -426,9 +451,10 @@ export type ForceTextReason =
   | "other"
 
 /**
- * Local-engine read-only convergence. Force synthesis once the model has had
- * a chance to gather evidence — but do not strip tools while every probe is
- * still failing (wrong invented paths), or pure Q&A never gets a working call.
+ * Local-engine read-only convergence. Offer tools-enabled synthesis before
+ * the hard fallback so Tiel can retain its tool-contract prefix. Give the model
+ * a chance to gather evidence before stripping tools, including a bounded
+ * opportunity to correct failing probes with invented paths.
  * When force would fire on the same turn as a large successful tool result,
  * grant one tools-on grace turn so the model can absorb the payload. A hard
  * ceiling still forces text eventually so latency cannot run away.
@@ -446,17 +472,20 @@ export function readOnlyExplorationDecision(input: {
   largeEvidenceGraceUsed?: boolean
   /** An inspection already attempted in this run returned usable evidence again. */
   repeatedEvidence?: boolean
+  /** Already offered one tools-enabled synthesis turn this streak. */
+  synthesisRequested?: boolean
 }): ReadOnlyExplorationDecision {
-  if (input.repeatedEvidence && input.hasUsableEvidence) return { action: "force_text" }
   const hardCeiling = input.forceThreshold + 2
   if (input.consecutiveTurns >= hardCeiling) return { action: "force_text" }
+  if (input.synthesisRequested) return { action: "force_text" }
+  if (input.repeatedEvidence && input.hasUsableEvidence) return { action: "synthesize" }
   if (input.consecutiveTurns >= input.forceThreshold && input.hasUsableEvidence) {
     // Large payload just landed: keep tools on once so the model can analyze
     // instead of force-texting raw diffs into hallucinated answers.
     if (input.freshLargeEvidence && !input.largeEvidenceGraceUsed) {
       return { action: "nudge" }
     }
-    return { action: "force_text" }
+    return { action: "synthesize" }
   }
   // At/over force threshold but no usable evidence yet: keep tools on and
   // re-issue path/cwd guidance instead of force-texting empty failures.
@@ -475,8 +504,8 @@ export function readOnlyExplorationDecision(input: {
  * <function=edit> as chat). Intentional text-only paths stay tool-free.
  *
  * `recoveriesUsed` is a CONSECUTIVE-offense counter: the prompt loop resets
- * it to 0 whenever the completion gate next evaluates "allow" (a completed
- * tool call or clean prose intervened since the last offense). Callers must
+ * it on clean completion or progress. For AX Engine, identical inspection
+ * results do not replenish the budget; new evidence or mutation does. Callers must
  * preserve that contract — a lifetime counter would hard-stop the session on
  * the second forced-text trap no matter how much real work happened between.
  */

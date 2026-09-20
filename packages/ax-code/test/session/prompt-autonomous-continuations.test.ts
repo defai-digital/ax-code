@@ -288,3 +288,23 @@ describe("autonomous continuation prompt builders", () => {
     expect(text).toContain("has not changed for 2 retries")
   })
 })
+
+test("local synthesis retains tools for essential gaps without inviting repeated reads", () => {
+  const text = AutonomousContinuationPrompt.axEngineReadOnlyCheckpoint({
+    consecutiveTurns: 2,
+    forceThreshold: 4,
+    forced: false,
+    synthesize: true,
+  })
+  expect(text).toContain("answer the user now")
+  expect(text).toContain("Tools remain available")
+  expect(text).toContain("Do not read the same file")
+  expect(text).not.toContain("Tools are disabled")
+  const forced = AutonomousContinuationPrompt.axEngineReadOnlyCheckpoint({
+    consecutiveTurns: 2,
+    forceThreshold: 4,
+    forced: true,
+    synthesize: true,
+  })
+  expect(forced).toContain("Tools are disabled")
+})

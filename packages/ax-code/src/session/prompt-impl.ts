@@ -80,6 +80,7 @@ import {
   modelTurnFinished,
   ordinaryRunCeilingConvergenceDecision,
   readOnlyExplorationDecision,
+  recordSuccessfulInspectionEvidence,
   resolveTurnToolChoice,
   shouldRestoreForcedTextOnlyTurn,
   isMutatingProgressTurn,
@@ -541,6 +542,8 @@ export namespace SessionPrompt {
     let axEngineReadOnlyHasEvidence = false
     // One-shot: deferred force after a large successful tool result this streak.
     let axEngineLargeEvidenceGraceUsed = false
+    let axEngineSynthesisRequested = false
+    const axEngineInspectionEvidence = new Set<string>()
 
     function armForceTextOnlyTurn(reason: ForceTextReason) {
       forceTextOnlyTurn = true
@@ -608,11 +611,13 @@ export namespace SessionPrompt {
       axEngineReadOnlyNudged = false
       axEngineReadOnlyHasEvidence = false
       axEngineLargeEvidenceGraceUsed = false
+      axEngineSynthesisRequested = false
       forceTextOnlyTurn = false
       forceTextReason = undefined
       lastTurnWasForceTextOnly = false
       lastTurnForceTextReason = undefined
       unexecutableToolTextRecoveries = 0
+      axEngineInspectionEvidence.clear()
       pendingAxEngineTurnInstruction = undefined
       pendingMaxOutputTokens = undefined
       activeTurnProfile = undefined
@@ -1435,6 +1440,7 @@ export namespace SessionPrompt {
         axEngineReadOnlyNudged = false
         axEngineReadOnlyHasEvidence = false
         axEngineLargeEvidenceGraceUsed = false
+        axEngineSynthesisRequested = false
       }
 
       // A provider turn that returns finish="other" with zero tokens is a
@@ -1691,6 +1697,7 @@ export namespace SessionPrompt {
             axEngineReadOnlyNudged = false
             axEngineReadOnlyHasEvidence = false
             axEngineLargeEvidenceGraceUsed = false
+            axEngineSynthesisRequested = false
             pendingAxEngineTurnInstruction = undefined
             pendingMaxOutputTokens = undefined
             log.info("autonomous completion gate tool protocol recovery", {
@@ -1779,14 +1786,17 @@ export namespace SessionPrompt {
         if (completionGate.status === "allow") {
           completionGateRetries = 0
           lastCompletionGateSignature = undefined
-          // The unexecutable-tool-text budget is consecutive, not lifetime:
-          // the gate only reaches "allow" after an intervening turn produced
-          // a completed tool call or clean prose (its own tracking clears
-          // exactly then), so the model has demonstrated protocol competence
-          // since the last offense. Resetting here keeps the self-inflicted
-          // forced-text trap recoverable on every recurrence while still
-          // hard-stopping back-to-back offenses.
-          unexecutableToolTextRecoveries = 0
+          const completedParts = latestMessages.find((item) => item.info.id === processor.message.id)?.parts
+          const mutation = isMutatingProgressTurn(completedParts)
+          if (mutation) axEngineInspectionEvidence.clear()
+          const freshEvidence =
+            model.providerID === AX_ENGINE_PROVIDER_ID &&
+            recordSuccessfulInspectionEvidence(completedParts, axEngineInspectionEvidence)
+          // A successful identical read after malformed markup is still the
+          // same stall. Only real progress may replenish the local budget.
+          if (model.providerID !== AX_ENGINE_PROVIDER_ID || modelFinished || mutation || freshEvidence) {
+            unexecutableToolTextRecoveries = 0
+          }
         }
 
         const remainingAgentSteps = Number.isFinite(maxSteps) ? Math.max(0, maxSteps - step) : Infinity
@@ -1964,6 +1974,7 @@ export namespace SessionPrompt {
           axEngineReadOnlyNudged = false
           axEngineReadOnlyHasEvidence = false
           axEngineLargeEvidenceGraceUsed = false
+          axEngineSynthesisRequested = false
           log.info("goal complete forces text-only final turn", {
             command: "session.prompt.loop",
             status: "force_text",
@@ -2021,6 +2032,7 @@ export namespace SessionPrompt {
             hasUsableEvidence: axEngineReadOnlyHasEvidence,
             freshLargeEvidence,
             largeEvidenceGraceUsed: axEngineLargeEvidenceGraceUsed,
+            synthesisRequested: axEngineSynthesisRequested,
             repeatedEvidence:
               hasUsableReadOnlyEvidence(currentParts) &&
               isNoProgressToolTurn(currentParts, priorToolSignatures, sessionToolCycleSignatures(sessionID)),
@@ -2029,6 +2041,8 @@ export namespace SessionPrompt {
             const forced = readOnlyTransition.action === "force_text"
             if (forced) {
               armForceTextOnlyTurn("ax_engine_read_only")
+            } else if (readOnlyTransition.action === "synthesize") {
+              axEngineSynthesisRequested = true
             } else {
               axEngineReadOnlyNudged = true
               // Grace: force deferred because a large tool payload just landed.
@@ -2043,7 +2057,7 @@ export namespace SessionPrompt {
             }
             log.info("ax-engine read-only turn checkpoint", {
               command: "session.prompt.loop",
-              status: forced ? "force_text" : "nudge",
+              status: readOnlyTransition.action,
               sessionID,
               consecutiveTurns: consecutiveAxEngineReadOnlyTurns,
               forced,
@@ -2055,6 +2069,7 @@ export namespace SessionPrompt {
               consecutiveTurns: consecutiveAxEngineReadOnlyTurns,
               forceThreshold: AX_ENGINE_READ_ONLY_TURN_FORCE,
               forced,
+              synthesize: readOnlyTransition.action === "synthesize",
             })
             continue
           }
@@ -2063,6 +2078,7 @@ export namespace SessionPrompt {
           axEngineReadOnlyNudged = false
           axEngineReadOnlyHasEvidence = false
           axEngineLargeEvidenceGraceUsed = false
+          axEngineSynthesisRequested = false
         }
         const failedToolTransition = failedToolTurnDecision({
           consecutiveFailedToolTurns,

@@ -311,6 +311,7 @@ export namespace AutonomousContinuationPrompt {
     consecutiveTurns: number
     forceThreshold: number
     forced: boolean
+    synthesize?: boolean
   }) {
     const turns = `${input.consecutiveTurns} read-only tool turn${input.consecutiveTurns === 1 ? "" : "s"}`
     if (input.forced) {
@@ -325,6 +326,15 @@ export namespace AutonomousContinuationPrompt {
         `If you have no usable evidence yet, say what blocked you (for example wrong paths) in plain language.`
       )
     }
+    if (input.synthesize) {
+      return (
+        `Local-engine synthesis checkpoint: answer the user now using the evidence already collected. ` +
+        `Do not read the same file or repeat a successful query. State findings, evidence, and any remaining gaps. ` +
+        `Tools remain available only for a specific unresolved gap essential to the answer, or required implementation. ` +
+        `If no such gap remains, give the final answer directly without a tool call. ` +
+        `Use actual tool results; do not infer that a file is absent from a search rooted in the wrong directory.`
+      )
+    }
     return (
       `Local-engine latency checkpoint: the last ${turns} only inspected the workspace. ` +
       `If the latest result answers the request, respond now. Otherwise make only the smallest focused follow-up; ` +
@@ -335,6 +345,7 @@ export namespace AutonomousContinuationPrompt {
       `one focused test/lint command, then synthesize. Do not repeat or slightly vary a successful repository-wide ` +
       `query. Keep any follow-up shell command under 500 characters; never assume /testbed, /home/user, or other ` +
       `invented sandbox roots — use the Working directory from <env> (omit path/workdir to default to it). ` +
+      `Relative paths start there, not at Workspace root; do not duplicate a packages/... prefix already in cwd. ` +
       `After ${input.forceThreshold} consecutive successful-evidence read-only turns, the next response may be text-only.`
     )
   }
