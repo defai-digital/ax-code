@@ -99,31 +99,31 @@ function fixtureModel(provider: string): Provider.Model {
 }
 
 test.each([
-  { name: "synthesizes with tools retained", stubborn: false, fresh: false, mutation: false, expectedTurns: 3 },
+  { name: "soft synthesis", steps: ["read", "read", "answer"], failed: false },
+  { name: "truncated synthesis retries once", steps: ["read", "read", "read", "truncated", "answer"], failed: false },
+  { name: "empty synthesis retries once", steps: ["read", "read", "read", "empty", "answer"], failed: false },
   {
-    name: "bounds alternating duplicate reads and malformed text",
-    stubborn: true,
-    fresh: false,
-    mutation: false,
-    expectedTurns: 7,
+    name: "retry remains bounded across pacing continuation",
+    steps: ["read", "read", "read", "blocked", "blocked"],
+    failed: true,
+    pacing: true,
   },
+  { name: "guarded synthesis", steps: ["read", "read", "read", "answer"], failed: false },
+  { name: "blocked calls are bounded", steps: ["read", "read", "read", "blocked", "blocked"], failed: true },
   {
-    name: "allows another recovery after changed evidence",
-    stubborn: true,
-    fresh: true,
-    mutation: false,
-    expectedTurns: 8,
+    name: "blocked call can recover without dropping schemas",
+    steps: ["read", "read", "read", "blocked", "answer"],
+    failed: false,
   },
-  {
-    name: "allows implementation after synthesis and replenishes recovery",
-    stubborn: true,
-    fresh: false,
-    mutation: true,
-    expectedTurns: 9,
-  },
-])("local README convergence $name", async ({ stubborn, fresh, mutation, expectedTurns }) => {
+  { name: "markup retry stays guarded", steps: ["read", "read", "read", "markup", "blocked"], failed: true },
+  { name: "new evidence during soft synthesis", steps: ["read", "read", "fresh", "answer"], failed: false },
+  { name: "mutation during soft synthesis", steps: ["read", "read", "write", "answer"], failed: false },
+])("local convergence: $name", async ({ steps, failed, pacing }) => {
   process.env.AX_CODE_AUTONOMOUS = "true"
-  await using tmp = await tmpdir({ git: true })
+  await using tmp = await tmpdir({
+    git: true,
+    ...(pacing ? { config: { agent: { build: { steps: 5 } }, session: { max_continuations: 1 } } } : {}),
+  })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
@@ -132,40 +132,48 @@ test.each([
       const requests: LLM.StreamInput[] = []
       vi.spyOn(LLM, "stream").mockImplementation(async (input) => {
         requests.push(input)
-        if (requests.length > 10) throw new Error("Unbounded convergence loop")
-        const finishing = (fresh || mutation) && requests.length === expectedTurns
-        const read = !finishing && input.toolChoice !== "none" && (stubborn || requests.length < 3)
-        const callID = `read_${requests.length}`
-        const toolName = mutation && requests.length === 5 ? "write" : "read"
+        const step = steps[requests.length - 1]
+        if (!step) throw new Error("Unbounded local synthesis")
+        const isTool = ["read", "fresh", "write", "blocked"].includes(step)
+        const toolName = step === "write" ? "write" : "read"
         const toolInput = {
           filePath: `${tmp.path}/README.md`,
-          ...(toolName === "write" ? { content: "Updated README" } : {}),
+          ...(step === "write" ? { content: "Updated README" } : {}),
+        }
+        const callID = `call_${requests.length}`
+        if (step === "blocked") {
+          // Exercise the actual resolved execution boundary, not only stream events.
+          await expect(
+            input.tools.read.execute!(toolInput, { toolCallId: callID, messages: input.messages }),
+          ).rejects.toThrow("No tool ran")
         }
         return {
           fullStream: (async function* () {
             yield { type: "start" }
             yield { type: "start-step" }
-            if (read) {
+            if (isTool) {
               yield { type: "tool-input-start", id: callID, toolName }
-              yield {
-                type: "tool-call",
-                toolCallId: callID,
-                toolName,
-                input: toolInput,
-              }
-              yield {
-                type: "tool-result",
-                toolCallId: callID,
-                input: toolInput,
-                output: {
-                  output:
-                    fresh && requests.length >= 5
-                      ? "# README\nUpdated developer guide."
-                      : "# README\nA developer guide.",
-                  title: "README",
-                  metadata: {},
-                  attachments: [],
-                },
+              yield { type: "tool-call", toolCallId: callID, toolName, input: toolInput }
+              if (step === "blocked") {
+                yield {
+                  type: "tool-error",
+                  toolCallId: callID,
+                  toolName,
+                  input: toolInput,
+                  error: new Error("Local synthesis: No tool ran"),
+                }
+              } else {
+                yield {
+                  type: "tool-result",
+                  toolCallId: callID,
+                  input: toolInput,
+                  output: {
+                    output: step === "fresh" ? "Updated README evidence" : "# README\nA developer guide.",
+                    title: "README",
+                    metadata: {},
+                    attachments: [],
+                  },
+                }
               }
             } else {
               yield { type: "text-start", id: "text_1" }
@@ -173,42 +181,49 @@ test.each([
                 type: "text-delta",
                 id: "text_1",
                 text:
-                  stubborn && !finishing
+                  step === "markup"
                     ? malformed
-                    : "The README needs a short project overview before the development instructions.",
+                    : step === "empty"
+                      ? ""
+                      : "The README needs a project overview. Test coverage was not measured.",
               }
               yield { type: "text-end", id: "text_1" }
             }
             yield {
               type: "finish-step",
-              finishReason: read ? "tool-calls" : "stop",
+              finishReason: isTool
+                ? "tool-calls"
+                : step === "truncated"
+                  ? "length"
+                  : step === "empty"
+                    ? "other"
+                    : "stop",
               usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
             }
             yield { type: "finish" }
           })(),
         } as unknown as LLM.StreamOutput
       })
-      const session = await Session.create({ title: "README convergence regression" })
+      const session = await Session.create({ title: "Local synthesis regression" })
       await SessionPrompt.prompt({
         sessionID: session.id,
         agent: "build",
         model: { providerID: model.providerID, modelID: model.id },
         parts: [{ type: "text", text: "Review README.md and suggest improvements" }],
       })
-      expect(requests).toHaveLength(expectedTurns)
-      expect(requests.slice(0, 3).every((request) => request.toolChoice !== "none")).toBe(true)
-      expect(Object.keys(requests[2].tools)).toEqual(Object.keys(requests[1].tools))
-      expect(requests[2].system).toEqual(requests[1].system)
-      expect(requests[2].toolChoice).toBe(requests[1].toolChoice)
-      expect(JSON.stringify(requests[2].messages)).toContain("Local-engine synthesis checkpoint")
+      expect(requests).toHaveLength(steps.length)
+      for (const request of requests) {
+        expect(request.toolChoice).toBeUndefined()
+        expect(Object.keys(request.tools)).toEqual(Object.keys(requests[0].tools))
+        expect(request.system).toEqual(requests[0].system)
+      }
+      expect(JSON.stringify(requests[2].messages)).toContain("previous turn repeated successful inspection")
+      expect(JSON.stringify(requests[2].messages)).toContain("test-file counts do not measure coverage")
+      if (steps.length === 5) expect(JSON.stringify(requests[4].messages)).toContain("Final local synthesis retry")
       const messages = await Session.messages({ sessionID: session.id })
-      const assistants = messages.filter((message) => message.info.role === "assistant")
-      const last = assistants.at(-1)!.info
-      expect(last.role === "assistant" && !!last.error).toBe(stubborn && !fresh && !mutation)
-      const tools = messages.flatMap((message) => message.parts).filter((part) => part.type === "tool")
-      expect(tools.every((part) => part.tool === "read" || (mutation && part.tool === "write"))).toBe(true)
-      if (mutation) expect(tools.filter((part) => part.tool === "write")).toHaveLength(1)
-      if (stubborn) expect(requests.filter((request) => request.toolChoice === "none")).toHaveLength(2)
+      const last = messages.filter((message) => message.info.role === "assistant").at(-1)!.info
+      expect(last.role === "assistant" && !!last.error).toBe(failed)
+      if (failed && last.role === "assistant") expect(JSON.stringify(last.error)).toContain("task remains incomplete")
       await Session.remove(session.id)
     },
   })

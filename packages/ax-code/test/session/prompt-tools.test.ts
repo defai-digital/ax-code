@@ -1,3 +1,4 @@
+import { guardLocalSynthesisTools } from "../../src/session/prompt/local-synthesis"
 import { Config } from "../../src/config/config"
 import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import z from "zod"
@@ -629,6 +630,20 @@ describe("session.prompt-tools", () => {
         expect(tools.permission_hidden).toBeUndefined()
         expect(tools.task).toBeDefined()
         expect(tools.remote_echo).toBeDefined()
+        const guarded = guardLocalSynthesisTools(tools)
+        for (const [name, args] of [
+          ["permitted", {}],
+          ["remote_echo", {}],
+          ["batch", { tool_calls: [{ tool: "permitted", parameters: {} }] }],
+        ] as const) {
+          await expect(guarded[name].execute!(args, { toolCallId: `blocked_${name}`, messages: [] })).rejects.toThrow(
+            "No tool ran",
+          )
+        }
+        expect(events).toEqual([])
+        expect(ask).not.toHaveBeenCalled()
+        expect(permittedExecute).not.toHaveBeenCalled()
+        expect(mcpExecute).not.toHaveBeenCalled()
         const result = await (tools.batch.execute as any)(
           {
             tool_calls: [

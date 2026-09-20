@@ -307,16 +307,36 @@ export namespace AutonomousContinuationPrompt {
     )
   }
 
+  const LOCAL_REVIEW_EVIDENCE_RULES =
+    `For quality findings, counts are leads, not proof: test-file counts do not measure coverage; ` +
+    `unknown requires narrowing and is not equivalent to any; console output may be intentional CLI behavior. ` +
+    `Cite inspected code or actual check results for severity claims. Mark unverified claims and checks not run explicitly. `
+
+  export function localSynthesisRetry() {
+    return (
+      `Final local synthesis retry: tool execution is disabled; no requested tool ran. ` +
+      `Return a concise plain-language answer using evidence already present. Do not emit tool calls or tool markup. ` +
+      `If evidence is insufficient, state the specific gaps without claiming the review is complete. ` +
+      LOCAL_REVIEW_EVIDENCE_RULES
+    )
+  }
+
   export function axEngineReadOnlyCheckpoint(input: {
     consecutiveTurns: number
     forceThreshold: number
     forced: boolean
     synthesize?: boolean
+    repeatedEvidence?: boolean
   }) {
+    const repeated = input.repeatedEvidence
+      ? "The previous turn repeated successful inspection calls already in this conversation. Reuse that evidence; do not rerun those calls to recount or reformat it. "
+      : ""
     const turns = `${input.consecutiveTurns} read-only tool turn${input.consecutiveTurns === 1 ? "" : "s"}`
     if (input.forced) {
       return (
         `Local-engine convergence checkpoint: ${turns} produced no source change or completed answer. ` +
+        repeated +
+        LOCAL_REVIEW_EVIDENCE_RULES +
         `Tools are disabled for the next turn. Answer the user request now from evidence already collected. ` +
         `Structure the response as: (1) Verdict — one-sentence answer, (2) Findings — severity and file path ` +
         `for each issue (or "none"), (3) Evidence — short cites from tool results only, (4) Gaps — what was ` +
@@ -328,6 +348,8 @@ export namespace AutonomousContinuationPrompt {
     }
     if (input.synthesize) {
       return (
+        repeated +
+        LOCAL_REVIEW_EVIDENCE_RULES +
         `Local-engine synthesis checkpoint: answer the user now using the evidence already collected. ` +
         `Do not read the same file or repeat a successful query. State findings, evidence, and any remaining gaps. ` +
         `Tools remain available only for a specific unresolved gap essential to the answer, or required implementation. ` +
@@ -336,6 +358,7 @@ export namespace AutonomousContinuationPrompt {
       )
     }
     return (
+      LOCAL_REVIEW_EVIDENCE_RULES +
       `Local-engine latency checkpoint: the last ${turns} only inspected the workspace. ` +
       `If the latest result answers the request, respond now. Otherwise make only the smallest focused follow-up; ` +
       `Do not rerun a measurement to extract another part of its table or change formatting. ` +

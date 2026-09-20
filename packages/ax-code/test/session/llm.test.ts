@@ -1,3 +1,4 @@
+import { guardLocalSynthesisTools } from "../../src/session/prompt/local-synthesis"
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest"
 import path from "path"
 import fs from "fs/promises"
@@ -369,6 +370,9 @@ describe("session.llm.stream", () => {
                 headers: { "Content-Type": "text/event-stream" },
               }),
             )
+            const resolvedTools = Object.fromEntries(
+              names.map((name) => [name, tool({ description: name, inputSchema: z.object({}) })]),
+            )
             const stream = await LLM.stream({
               sessionID,
               model,
@@ -387,9 +391,10 @@ describe("session.llm.stream", () => {
                   : messages,
               system: ["Preserve these custom instructions."],
               abort: new AbortController().signal,
-              tools: Object.fromEntries(
-                names.map((name) => [name, tool({ description: name, inputSchema: z.object({}) })]),
-              ),
+              tools:
+                row.providerID === "ax-engine" && captures.length === 1
+                  ? guardLocalSynthesisTools(resolvedTools)
+                  : resolvedTools,
             })
             for await (const _ of stream.fullStream) {
               /* consume the adapter response */

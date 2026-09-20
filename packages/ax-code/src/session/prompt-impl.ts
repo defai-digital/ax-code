@@ -97,6 +97,7 @@ import {
   type ForceTextReason,
   type GoalBudgetWrapUp,
 } from "./prompt/prompt-autonomous-decisions"
+import { canPreserveLocalSynthesisTools, guardLocalSynthesisTools } from "./prompt/local-synthesis"
 import { toErrorMessage } from "../util/error-message"
 import { insertReminders } from "./prompt/prompt-reminders"
 import { executeShellCommand } from "./prompt/prompt-shell-command"
@@ -543,6 +544,7 @@ export namespace SessionPrompt {
     // One-shot: deferred force after a large successful tool result this streak.
     let axEngineLargeEvidenceGraceUsed = false
     let axEngineSynthesisRequested = false
+    let guardedSynthesisAttempts = 0
     const axEngineInspectionEvidence = new Set<string>()
 
     function armForceTextOnlyTurn(reason: ForceTextReason) {
@@ -618,7 +620,14 @@ export namespace SessionPrompt {
       lastTurnForceTextReason = undefined
       unexecutableToolTextRecoveries = 0
       axEngineInspectionEvidence.clear()
+      // Pacing continuations are still the same task: never replenish an
+      // in-flight synthesis retry or restore executable tools across them.
       pendingAxEngineTurnInstruction = undefined
+      if (guardedSynthesisAttempts > 0) {
+        armForceTextOnlyTurn("ax_engine_read_only")
+        axEngineReadOnlyHasEvidence = true
+        pendingAxEngineTurnInstruction = AutonomousContinuationPrompt.localSynthesisRetry()
+      }
       pendingMaxOutputTokens = undefined
       activeTurnProfile = undefined
       fallbackModelOverride = undefined
@@ -1198,10 +1207,20 @@ export namespace SessionPrompt {
       // omit tool schemas on the provider wire (ADR-051 D3). Preflight must
       // budget the same way — `tools: {}` means "no overrides" (all tools
       // still counted), not "zero tools".
+      const guardedSynthesis = canPreserveLocalSynthesisTools({
+        providerID: model.providerID,
+        forceTextOnly: forceTextOnlyTurn,
+        forceReason: forceTextReason,
+        hasEvidence: axEngineReadOnlyHasEvidence,
+        isLastStep,
+        omitTools: promptPolicy.omitTools,
+        structured: lastUser.format?.type === "json_schema",
+        supportsTools: model.capabilities.toolcall !== false,
+      })
       const omitToolSchemas =
         promptPolicy.omitTools ||
         model.capabilities.toolcall === false ||
-        ((forceTextOnlyTurn || isLastStep) && lastUser.format?.type !== "json_schema")
+        (((!guardedSynthesis && forceTextOnlyTurn) || isLastStep) && lastUser.format?.type !== "json_schema")
       const preflightCompaction = await NativePerf.runAsync("session.preflight", undefined, () =>
         maybeSchedulePreflightCompaction({
           sessionID,
@@ -1301,7 +1320,7 @@ export namespace SessionPrompt {
         forceTextOnlyTurn,
         isLastStep,
       })
-      const toolChoice = toolChoiceResolution.toolChoice
+      const toolChoice = guardedSynthesis ? undefined : toolChoiceResolution.toolChoice
       lastTurnWasForceTextOnly = toolChoiceResolution.consumedForceTextOnlyTurn
       lastTurnForceTextReason = toolChoiceResolution.consumedForceTextOnlyTurn ? forceTextReason : undefined
       if (toolChoiceResolution.consumedForceTextOnlyTurn) {
@@ -1313,7 +1332,7 @@ export namespace SessionPrompt {
       // materialization either — only structured-output-required turns need
       // tools while toolChoice is otherwise "none".
       const needsTools = toolChoice !== "none" || structuredOutput.toolChoice === "required"
-      const tools = needsTools
+      let tools = needsTools
         ? await NativePerf.runAsync("session.resolveTools", undefined, () =>
             resolveTools({
               agent,
@@ -1334,6 +1353,15 @@ export namespace SessionPrompt {
           )
         : {}
       if (needsTools) structuredOutput.attachTool(tools)
+      if (guardedSynthesis) {
+        try {
+          tools = guardLocalSynthesisTools(tools)
+        } catch (error) {
+          await publishPromptFailure({ sessionID, assistant: processor.message, message: toErrorMessage(error) })
+          reason = "error"
+          break
+        }
+      }
 
       const maxOutputTokensForRequest = pendingMaxOutputTokens
       let result: Awaited<ReturnType<typeof processor.process>>
@@ -1357,6 +1385,7 @@ export namespace SessionPrompt {
             maxOutputTokens: maxOutputTokensForRequest,
           },
           {
+            synthesisOnly: guardedSynthesis,
             mediaRecovery: {
               projection: mediaProjection,
               mediaCount: request.mediaCount,
@@ -1416,6 +1445,47 @@ export namespace SessionPrompt {
       const truncatedModelTurn = isTruncatedModelTurn({
         finish: processor.message.finish,
       })
+      if (guardedSynthesis && !processor.message.error && !abort.aborted) {
+        const parts = await MessageV2.parts(processor.message.id)
+        const gate = AutonomousCompletionGate.evaluate({
+          messages: [{ info: processor.message, parts }],
+          pendingTodos: [],
+        })
+        const complete =
+          modelFinished &&
+          !emptyModelTurn &&
+          !truncatedModelTurn &&
+          !parts.some((part) => part.type === "tool") &&
+          parts.some((part) => part.type === "text" && part.text.trim().length > 0) &&
+          !(gate.status === "blocked" && gate.reason === "unexecutable_tool_text")
+        if (!complete) {
+          guardedSynthesisAttempts += 1
+          if (guardedSynthesisAttempts < 2) {
+            armForceTextOnlyTurn("ax_engine_read_only")
+            pendingAxEngineTurnInstruction = AutonomousContinuationPrompt.localSynthesisRetry()
+            // The evidence predates this failed synthesis; it is still present.
+            axEngineReadOnlyHasEvidence = true
+            if (modelFinished) {
+              pendingAxEngineTurnInstruction = undefined
+              await createAutonomousTextContinuation({
+                sessionID,
+                messages: msgs,
+                text: AutonomousContinuationPrompt.localSynthesisRetry(),
+              })
+            }
+            continue
+          }
+          await publishPromptFailure({
+            sessionID,
+            assistant: processor.message,
+            message:
+              "Local synthesis did not produce a complete answer after two attempts. Requested tools were not executed; the task remains incomplete.",
+          })
+          reason = "error"
+          break
+        }
+        guardedSynthesisAttempts = 0
+      }
       if (!emptyModelTurn) emptyModelTurnRetries = 0
       if (!truncatedModelTurn) {
         truncatedModelTurnRetries = 0
@@ -2024,6 +2094,9 @@ export namespace SessionPrompt {
           consecutiveAxEngineReadOnlyTurns += 1
           if (hasUsableReadOnlyEvidence(currentParts)) axEngineReadOnlyHasEvidence = true
           const freshLargeEvidence = hasLargeSuccessfulReadOnlyOutput(currentParts, AX_ENGINE_LARGE_TOOL_OUTPUT_CHARS)
+          const repeatedEvidence =
+            hasUsableReadOnlyEvidence(currentParts) &&
+            isNoProgressToolTurn(currentParts, priorToolSignatures, sessionToolCycleSignatures(sessionID))
           const readOnlyTransition = readOnlyExplorationDecision({
             consecutiveTurns: consecutiveAxEngineReadOnlyTurns,
             nudged: axEngineReadOnlyNudged,
@@ -2033,9 +2106,7 @@ export namespace SessionPrompt {
             freshLargeEvidence,
             largeEvidenceGraceUsed: axEngineLargeEvidenceGraceUsed,
             synthesisRequested: axEngineSynthesisRequested,
-            repeatedEvidence:
-              hasUsableReadOnlyEvidence(currentParts) &&
-              isNoProgressToolTurn(currentParts, priorToolSignatures, sessionToolCycleSignatures(sessionID)),
+            repeatedEvidence,
           })
           if (readOnlyTransition.action !== "ignore") {
             const forced = readOnlyTransition.action === "force_text"
@@ -2070,6 +2141,7 @@ export namespace SessionPrompt {
               forceThreshold: AX_ENGINE_READ_ONLY_TURN_FORCE,
               forced,
               synthesize: readOnlyTransition.action === "synthesize",
+              repeatedEvidence,
             })
             continue
           }

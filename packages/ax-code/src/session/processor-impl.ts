@@ -416,7 +416,10 @@ export namespace SessionProcessor {
       partFromToolCall(toolCallID: string) {
         return toolcalls[toolCallID]
       },
-      async process(streamInput: LLM.StreamInput, options?: { mediaRecovery?: MediaRecovery }) {
+      async process(
+        streamInput: LLM.StreamInput,
+        options?: { mediaRecovery?: MediaRecovery; synthesisOnly?: boolean },
+      ) {
         log.info("process started", { sessionId: input.sessionID, command: "session.process", status: "started" })
         attempt = 0
         needsCompaction = false
@@ -779,7 +782,10 @@ export namespace SessionProcessor {
                     toolInputCache[value.toolCallId] = inputStr
                     const allRecent = [...recentToolRing, { tool: value.toolName, input: inputStr }]
                     const cycleLen = detectCycle(allRecent, AUTONOMOUS_MAX_CYCLE_LEN)
-                    if (cycleLen !== null) {
+                    // Guarded synthesis rejects every execution callback. Do
+                    // not ask permission to repeat an action that cannot run;
+                    // its dedicated two-attempt limit owns convergence.
+                    if (cycleLen !== null && !options?.synthesisOnly) {
                       // Always inject a reminder into the tool result so the model
                       // sees the hint regardless of provider or mode. Non-Claude
                       // providers (Qwen, GLM, etc.) don't receive Anthropic's
