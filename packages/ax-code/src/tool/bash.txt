@@ -140,3 +140,5 @@ When running commands that modify system state:
 
 # Other common operations
 - View comments on a GitHub PR: gh api repos/foo/bar/pulls/123/comments
+
+For tests and validation, run the check directly: do not pipe it through head/tail or hide progress behind output filters. The tool already captures output and saves oversized results. Use the tool timeout rather than nesting a shell timeout. For slow suites use run_in_background and bash_output to follow that same run. Read captured output or its saved file for a summary; never rerun the suite just to change output filtering or retrieve counts. Missing summaries and partial output do not prove success. Report incomplete or timed-out validation honestly, and rerun only after a concrete correction or justified transient failure. When a pipeline is necessary, preserve and inspect the validation command's exit status using the actual shell's syntax; the last filter's exit status is not the test result.

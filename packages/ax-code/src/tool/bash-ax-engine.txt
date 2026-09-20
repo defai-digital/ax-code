@@ -1,18 +1,16 @@
-Run one focused shell command in ${directory} by default. Use the `workdir` parameter for another directory instead of `cd`.
+Run one focused shell command in ${directory}. Use workdir instead of cd; it applies only to this call. Use the repository root for Git pathspecs.
 
-Actual shell: `${shell}`. Use its syntax. In Bash/sh on Windows, discard output with `/dev/null`, never `nul` or `NUL`, which can create files excluded from snapshots. Keep stderr visible unless suppression is necessary. Unquoted redirects and `&` belong to the outer shell even after `cmd /c`; Bash interprets `&` as background execution.
+Actual shell: `${shell}`. Use its syntax. In Bash/sh on Windows, discard output with /dev/null, never nul/NUL (unrestorable files). Unquoted redirects and & belong to the outer shell even after cmd /c. Keep stderr visible.
 
-The workdir override applies to that call only. Set workdir to the workspace root for repository-relative Git pathspecs; otherwise an incorrect path base can silently yield an empty diff.
-
-Use Bash for git, builds, tests, package managers, process control, and aggregate repository queries. Prefer list/glob/grep/read/edit/write for ordinary file discovery, reading, searching, and changes.
+Use Bash for git, builds, tests, package managers, process control, and aggregate queries. Prefer dedicated file tools for discovery, reading, searching, and editing.
 
 Minimize local-model round trips:
-- Prefer one single-pass command over shell loops or repeated scans.
-- For repository counts, prefer tracked/source files (for example `git ls-files`) and exclude dependency/generated trees such as .git, node_modules, .venv, venv, dist, build, and target.
-- For factual repository queries, keep the command under 500 characters. Never assume `/testbed` or enumerate dozens of file extensions or exclusion paths.
-- If a command's result answers the request, synthesize the answer instead of running a slightly different version of the same query.
-- Batch independent checks in one call when that keeps output clear and bounded.
+- Prefer single-pass commands over loops or repeated scans.
+- Count tracked/source files, excluding dependency/generated trees (.git, node_modules, .venv, venv, dist, build, target).
+- Keep factual queries under 500 characters; never assume `/testbed` or enumerate dozens of extensions.
+- Once evidence answers the request, synthesize instead of repeating queries.
+- Batch independent checks when output stays clear.
 
-Set `run_in_background: true` for dev servers, watchers, or other long-running commands; use bash_output to poll and kill_shell to stop them. Output beyond ${maxLines} lines or ${maxBytes} bytes is truncated and saved for focused follow-up.
+Run tests directly, never through head/tail or progress-hiding filters. Use the tool timeout, not nested timeout commands. For slow tests, servers, or watchers set run_in_background: true and follow the SAME run with bash_output; kill_shell stops it. Output beyond ${maxLines} lines or ${maxBytes} bytes is saved. Read captured output for summaries; NEVER rerun a suite merely to get counts or change filters. Missing summaries do not prove success. Report incomplete/timeout results honestly. If a pipeline is necessary, preserve the check's exit status using this shell's syntax; a filter's status is not the test result.
 
-Do not commit, install packages, modify global system state, or run destructive commands unless the user requested it.
+Do not commit, install packages, change global state, or run destructive commands unless requested.

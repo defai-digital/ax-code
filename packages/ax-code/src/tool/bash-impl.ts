@@ -38,6 +38,7 @@ import { assertSymlinkInsideProject } from "./external-directory"
 import { classifyDestructiveCommand, findWrappedCommand, gitSubcommand } from "./bash-destructive"
 import { BashNetworkHeuristics } from "./bash-network-heuristics"
 import { denyDestructiveInOpsStrict } from "./bash-strict"
+import { assertValidationPipeline } from "./bash-validation-pipeline"
 import { detectSandboxDenial } from "./bash-sandbox-escalation"
 import { BackgroundShell } from "./bash-background"
 import { signalBashProcessTree } from "./bash-process-cleanup"
@@ -467,6 +468,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
       // leaking one tree per call grows the WASM heap for the process lifetime.
       // Mirrors the ownership pattern in code-intelligence/syntactic.ts.
       using _parsedCommandTree = defer(() => tree.delete())
+      assertValidationPipeline(tree.rootNode)
       // Admission and spawning must inspect the same plugin-adjusted environment.
       const shellEnv = await Plugin.trigger(
         "shell.env",
@@ -894,6 +896,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             const innerTree = p.parse(innerCmd)
             if (innerTree) {
               using _innerCommandTree = defer(() => innerTree.delete())
+              assertValidationPipeline(innerTree.rootNode)
               if (innerTree.rootNode.descendantsOfType("variable_assignment").length > 0) shellEnvironmentChanges = true
               for (const innerNode of innerTree.rootNode.descendantsOfType("command")) {
                 if (!innerNode) continue
