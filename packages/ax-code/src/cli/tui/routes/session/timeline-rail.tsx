@@ -1,18 +1,21 @@
 import type { ScrollBoxRenderable } from "ax-tui"
+import { useTerminalDimensions } from "ax-tui/solid"
 import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 import { renderableChildren, isRenderableAlive } from "@tui/util/renderable-safety"
 import { scheduleTuiInterval } from "@tui/util/timer"
-import { timelinePosition, timelineWindow } from "./timeline-rail-model"
+import { RoundedBorder } from "@tui/ui/primitives/card"
+import { timelineCard, timelinePosition, timelineWindow } from "./timeline-rail-model"
 
 /** A two-cell turn navigator; wheel and keyboard scrolling remain on the transcript. */
 export function TimelineRail(props: {
   scroll: () => ScrollBoxRenderable | undefined
-  turns: readonly { id: string; time: { created: number } }[]
+  turns: readonly { id: string; time: { created: number }; preview?: string }[]
 }) {
   const { theme } = useTheme()
+  const dimensions = useTerminalDimensions()
   const [height, setHeight] = createSignal(0)
-  const [position, setPosition] = createSignal({ active: 0, previous: -1, next: -1 })
+  const [position, setPosition] = createSignal({ active: 0, previous: -1, next: -1, atBottom: false })
   const [hover, setHover] = createSignal<number>()
   const [railHovered, setRailHovered] = createSignal(false)
   function update() {
@@ -28,22 +31,22 @@ export function TimelineRail(props: {
     const turns = props.turns.map((turn) => children.get(turn.id))
     // Hidden or unrendered messages must not produce invented scroll positions.
     if (turns.some((turn) => !turn)) return
-    const next = timelinePosition(
-      turns as { y: number }[],
-      scroll.viewport.y,
-      scroll.scrollTop >= Math.max(0, scroll.scrollHeight - scroll.viewport.height),
-    )
+    const atBottom = scroll.scrollTop >= Math.max(0, scroll.scrollHeight - scroll.viewport.height)
+    const next = timelinePosition(turns as { y: number }[], scroll.viewport.y, atBottom)
     setPosition((previous) =>
-      previous.active === next.active && previous.previous === next.previous && previous.next === next.next
+      previous.active === next.active &&
+      previous.previous === next.previous &&
+      previous.next === next.next &&
+      previous.atBottom === atBottom
         ? previous
-        : next,
+        : { ...next, atBottom },
     )
   }
   onMount(() => {
     update()
     onCleanup(scheduleTuiInterval(update, { name: "session-timeline-rail", delayMs: 200, unref: true }))
   })
-  const ticks = createMemo(() => timelineWindow(props.turns.length, height(), position().active))
+  const ticks = createMemo(() => timelineWindow(props.turns.length, height(), position().active, position().atBottom))
   function jump(index: number) {
     const turn = props.turns[index]
     const scroll = props.scroll()
@@ -54,12 +57,30 @@ export function TimelineRail(props: {
     if (child) scroll.scrollBy(child.y - scroll.viewport.y)
     update()
   }
-  const time = () => {
-    const turn = props.turns[hover() ?? position().active]
+  function time(index: number | undefined) {
+    const turn = index === undefined ? undefined : props.turns[index]
     if (!turn || !Number.isFinite(turn.time.created)) return ""
     const date = new Date(turn.time.created)
     return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`
   }
+  // Full preview card only on tick hover; the time-only label stays for the rest of the rail.
+  const card = createMemo(() => {
+    const index = hover()
+    if (index === undefined) return null
+    const tick = ticks().find((tick) => tick.index === index)
+    if (!tick) return null
+    return timelineCard({
+      preview: props.turns[index]?.preview ?? "",
+      timeLabel: time(index),
+      termWidth: dimensions().width,
+      tickRow: tick.row,
+      railHeight: height(),
+    })
+  })
+  const label = createMemo(() => {
+    if (!railHovered() || card()) return ""
+    return time(hover() ?? position().active)
+  })
   return (
     <box
       width={2}
@@ -99,7 +120,7 @@ export function TimelineRail(props: {
               onMouseOut={() => setHover(undefined)}
               onMouseUp={() => jump(tick.index)}
             >
-              {tick.index === position().active ? "\u2501\u2501" : hover() === tick.index ? "\u2500\u2500" : " \u2500"}
+              {tick.index === position().active ? "━━" : hover() === tick.index ? "──" : " ─"}
             </text>
           )}
         </For>
@@ -113,7 +134,35 @@ export function TimelineRail(props: {
           {" "}
           ▾
         </text>
-        <Show when={railHovered()}>
+        <Show when={card()}>
+          {(card) => (
+            <box
+              position="absolute"
+              right={3}
+              top={card().top}
+              width={card().width}
+              paddingLeft={1}
+              paddingRight={1}
+              backgroundColor={theme.backgroundPanel}
+              borderColor={theme.border}
+              border={["top", "right", "bottom", "left"]}
+              customBorderChars={RoundedBorder}
+              flexDirection="column"
+            >
+              <text fg={theme.textMuted} selectable={false}>
+                {time(hover())}
+              </text>
+              <For each={card().lines}>
+                {(line) => (
+                  <text fg={theme.text} selectable={false}>
+                    {line}
+                  </text>
+                )}
+              </For>
+            </box>
+          )}
+        </Show>
+        <Show when={label()}>
           <text
             position="absolute"
             right={3}
@@ -123,7 +172,7 @@ export function TimelineRail(props: {
             fg={theme.textMuted}
             selectable={false}
           >
-            {time()}
+            {label()}
           </text>
         </Show>
       </Show>

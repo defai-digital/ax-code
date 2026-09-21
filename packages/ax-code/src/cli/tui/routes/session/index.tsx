@@ -1,5 +1,6 @@
 import { useLanguage } from "@tui/context/language"
 import { TimelineRail } from "./timeline-rail"
+import { turnPreview } from "./timeline-rail-model"
 import { applyInitialPromptDraft } from "@tui/component/prompt/session-drafts"
 import { useContentDimensions } from "@tui/context/content-dimensions"
 import {
@@ -1418,14 +1419,25 @@ export function Session() {
   const revert = createMemo(() => revertState(revertInfo(), messages()))
   const hiddenIDs = createMemo(() => hiddenMessageIDs(messages(), revertMessageID(), revertPartID()))
   const timelineTurns = createMemo(() =>
-    messages().filter(
-      (message) =>
-        message.role === "user" &&
-        !hiddenIDs().has(message.id) &&
-        (sync.data.part[message.id] ?? []).some(
-          (part) => (part.type === "text" && !part.synthetic) || part.type === "file",
-        ),
-    ),
+    messages()
+      .filter(
+        (message) =>
+          message.role === "user" &&
+          !hiddenIDs().has(message.id) &&
+          (sync.data.part[message.id] ?? []).some(
+            (part) => (part.type === "text" && !part.synthetic) || part.type === "file",
+          ),
+      )
+      .map((message) => {
+        const part = (sync.data.part[message.id] ?? []).find(
+          (part) => part.type === "text" && !part.synthetic && !part.ignored,
+        )
+        return {
+          id: message.id,
+          time: message.time,
+          preview: part && part.type === "text" ? turnPreview(part.text) : "",
+        }
+      }),
   )
   const pinnedInputCandidate = createMemo(() =>
     selectPinnedInputCandidate({
