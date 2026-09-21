@@ -8,7 +8,6 @@ import DESCRIPTION from "./grep.txt"
 import { Instance } from "../project/instance"
 import { fileToolGuard } from "./external-directory"
 import { clampGrepLine } from "./grep-line"
-import { decodeGrepPath } from "./grep-path"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
 import { runNativeScan } from "../native/scan"
@@ -19,16 +18,7 @@ import { errorCode } from "@/util/error-message"
 import { CanonicalOutput } from "./canonical-output"
 import { searchWithContext } from "./grep-context"
 import { readGrepOutput } from "./grep-output"
-import { parseJsonStrict } from "../util/json-value"
-
-const RipgrepText = z.union([z.object({ text: z.string() }), z.object({ bytes: z.string() })])
-const RipgrepEvent = z.object({ type: z.string() }).passthrough()
-const RipgrepMatch = z.object({
-  data: z.object({ path: RipgrepText, lines: RipgrepText, line_number: z.number().int().positive() }),
-})
-const RipgrepEnd = z.object({ data: z.object({ binary_offset: z.number().nullish() }) })
-const decodeRipgrepText = (value: z.infer<typeof RipgrepText>) =>
-  "text" in value ? value.text : Buffer.from(value.bytes, "base64").toString("utf8")
+import { createGrepCollector } from "./grep-collector"
 
 const NativeSearchMatch = z.object({
   path: z.string(),
@@ -231,7 +221,18 @@ export const GrepTool = Tool.define("grep", {
       timeout: commandTimeoutMs,
     })
 
-    const { output, errorOutput, exitCode, capped: outputCapped } = await readGrepOutput(proc, ctx.abort)
+    const collector = createGrepCollector({
+      limit,
+      isFile,
+      mtime: (file) => Filesystem.stat(file)?.mtime?.getTime(),
+    })
+    const {
+      bytes,
+      incompleteRecord,
+      errorOutput,
+      exitCode,
+      capped: outputCapped,
+    } = await readGrepOutput(proc, ctx.abort, collector.onLine)
     if (!outputCapped && exitCode === 124) {
       throw new Error(`grep command timed out after ${commandTimeoutMs / 1000}s`)
     }
@@ -249,76 +250,24 @@ export const GrepTool = Tool.define("grep", {
       }
     }
 
-    if (!outputCapped && ((exitCode !== 0 && exitCode !== 2) || (exitCode === 2 && !output))) {
+    if (!outputCapped && ((exitCode !== 0 && exitCode !== 2) || (exitCode === 2 && !bytes))) {
       throw new Error(`ripgrep failed: ${errorOutput}`)
     }
 
     const hasErrors = !outputCapped && exitCode === 2
 
-    const matches = []
-    let skippedRecords = false
-    let incompleteRecord = false
-    let summarySeen = false
-    let binaryStopped = false
-    // mtime is only needed once per file for sorting, but ripgrep emits one
-    // line per match — wide searches would otherwise stat the same file
-    // hundreds of times.
-    const mtimeCache = new Map<string, number | undefined>()
+    const { matches, totalMatches, skippedRecords, summarySeen, binaryStopped, failure } = collector.result
+    if (failure) throw failure.error
 
-    for (let offset = 0; offset < output.length; ) {
-      const lineEnd = output.indexOf("\n", offset)
-      // Both capture cutoff and a prematurely closed pipe can leave a partial
-      // JSON record. Never turn it into a result or an unreadable-file warning.
-      if (lineEnd === -1) {
-        incompleteRecord = true
-        break
-      }
-      const line = output.slice(offset, lineEnd)
-      offset = lineEnd + 1
-      if (!line.trim()) continue
-      const event = RipgrepEvent.parse(parseJsonStrict(line))
-      if (event.type === "summary") summarySeen = true
-      // An explicitly named file is searched through binary data. Directory
-      // traversal stops that file early; binary_offset alone means detection.
-      if (event.type === "end" && !isFile && RipgrepEnd.parse(event).data.binary_offset != null) binaryStopped = true
-      if (event.type !== "match") continue
-      const record = RipgrepMatch.parse(event).data
-      const filePath = decodeGrepPath(record.path)
-      if (filePath === undefined) {
-        skippedRecords = true
-        continue
-      }
-      const lineNum = record.line_number
-      const lineText = decodeRipgrepText(record.lines).replace(/\r?\n$/, "")
-
-      let modTime = mtimeCache.get(filePath)
-      if (modTime === undefined && !mtimeCache.has(filePath)) {
-        modTime = Filesystem.stat(filePath)?.mtime?.getTime()
-        mtimeCache.set(filePath, modTime)
-      }
-      if (modTime === undefined) {
-        skippedRecords = true
-        continue
-      }
-
-      matches.push({
-        path: filePath,
-        modTime,
-        lineNum,
-        lineText,
-      })
-    }
-
-    matches.sort((a, b) => b.modTime - a.modTime)
     if (hasErrors && !matches.length) throw new Error(`ripgrep failed: ${errorOutput}`)
 
-    const resultCapped = matches.length > limit
+    const resultCapped = totalMatches > limit
     // Process may close stdout before its end event after child exit. A complete
     // protocol summary proves completion; any missing or cut frame does not.
     const streamIncomplete = incompleteRecord || !summarySeen
     const partial = outputCapped || streamIncomplete || binaryStopped
     const truncated = resultCapped || hasErrors || skippedRecords || partial
-    const finalMatches = matches.slice(0, limit)
+    const finalMatches = matches
 
     if (finalMatches.length === 0) {
       return {
@@ -329,7 +278,6 @@ export const GrepTool = Tool.define("grep", {
       }
     }
 
-    const totalMatches = matches.length
     const outputLines = [
       `Found ${totalMatches}${partial ? "+" : ""} matches${resultCapped ? ` (showing first ${limit})` : ""}`,
     ]
@@ -372,9 +320,11 @@ export const GrepTool = Tool.define("grep", {
     return {
       title: params.pattern,
       data: {
-        matches: matches
-          .slice(0, limit)
-          .map((match) => ({ path: match.path, line: match.lineNum, text: clampGrepLine(match.lineText) })),
+        matches: finalMatches.map((match) => ({
+          path: match.path,
+          line: match.lineNum,
+          text: clampGrepLine(match.lineText),
+        })),
         truncated,
       },
       metadata: {
