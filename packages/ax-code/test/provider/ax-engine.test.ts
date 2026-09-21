@@ -54,7 +54,9 @@ import {
   resolveAxEngineApiKey,
   resolveAxEngineMaxConcurrentRequests,
   resolveAxEngineServingLimits,
+  axEngineEffectiveLimit,
   axEngineServingLimitShadowWarnings,
+  AX_ENGINE_OUTPUT_TOKENS_ENV,
   resolveAxEnginePrefixCacheLaunchConfig,
   axEngineQwen38ExactMtpEnv,
   AX_ENGINE_QWEN38_EXACT_MTP_PROFILE_ENV,
@@ -1231,8 +1233,10 @@ describe("resolveAxEngineServingLimits", () => {
   test("accepts environment overrides and clamps output to the context window", () => {
     const previousContext = process.env.AX_ENGINE_CONTEXT_TOKENS
     const previousOutput = process.env.AX_ENGINE_MAX_OUTPUT_TOKENS
+    const previousAlias = process.env[AX_ENGINE_OUTPUT_TOKENS_ENV]
     process.env.AX_ENGINE_CONTEXT_TOKENS = "16384"
     process.env.AX_ENGINE_MAX_OUTPUT_TOKENS = "4096"
+    delete process.env[AX_ENGINE_OUTPUT_TOKENS_ENV]
     try {
       expect(resolveAxEngineServingLimits({}, definition)).toEqual({ contextTokens: 16_384, maxOutputTokens: 4_096 })
       expect(resolveAxEngineServingLimits({ contextTokens: 4_096, maxOutputTokens: 8_192 }, definition)).toEqual({
@@ -1245,6 +1249,31 @@ describe("resolveAxEngineServingLimits", () => {
       else process.env.AX_ENGINE_CONTEXT_TOKENS = previousContext
       if (previousOutput === undefined) delete process.env.AX_ENGINE_MAX_OUTPUT_TOKENS
       else process.env.AX_ENGINE_MAX_OUTPUT_TOKENS = previousOutput
+      if (previousAlias === undefined) delete process.env[AX_ENGINE_OUTPUT_TOKENS_ENV]
+      else process.env[AX_ENGINE_OUTPUT_TOKENS_ENV] = previousAlias
+    }
+  })
+
+  test("only narrows output, snaps Tiel context onto the prefix grid, and keeps a live card from widening it", () => {
+    const previous = process.env[AX_ENGINE_OUTPUT_TOKENS_ENV]
+    delete process.env.AX_ENGINE_MAX_OUTPUT_TOKENS
+    process.env[AX_ENGINE_OUTPUT_TOKENS_ENV] = "2048"
+    try {
+      expect(resolveAxEngineServingLimits({}, definition)).toEqual({ contextTokens: 65_536, maxOutputTokens: 2_048 })
+      expect(resolveAxEngineServingLimits({ outputTokens: 16_000 }, definition).maxOutputTokens).toBe(8_192)
+      expect(resolveAxEngineServingLimits({ contextTokens: 20_000 }, definition).contextTokens).toBe(19_456)
+      expect(resolveAxEngineServingLimits({ contextTokens: "nope" }, definition).contextTokens).toBe(65_536)
+      const ornith = AX_ENGINE_MODEL_DEFINITIONS[AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID]
+      expect(resolveAxEngineServingLimits({ contextTokens: 20_000 }, ornith).contextTokens).toBe(20_000)
+      expect(
+        axEngineEffectiveLimit({ context: 16_384, output: 4_096, advertisedContext: 65_536, advertisedOutput: 8_192 }),
+      ).toEqual({ context: 16_384, output: 4_096 })
+      expect(
+        axEngineEffectiveLimit({ context: 65_536, output: 8_192, advertisedContext: 16_384, advertisedOutput: 2_048 }),
+      ).toEqual({ context: 16_384, output: 2_048 })
+    } finally {
+      if (previous === undefined) delete process.env[AX_ENGINE_OUTPUT_TOKENS_ENV]
+      else process.env[AX_ENGINE_OUTPUT_TOKENS_ENV] = previous
     }
   })
 })

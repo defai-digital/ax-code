@@ -10,6 +10,7 @@ import {
   AX_ENGINE_MODEL_IDS,
   AX_ENGINE_PROVIDER_ID,
   isAxEngineBuiltinModelID,
+  axEngineEffectiveLimit,
   noteAxEngineOnce,
   resolveAxEngineApiKey,
   resolveAxEngineMaxConcurrentRequests,
@@ -92,12 +93,21 @@ function inputLimit(context: number, output: number) {
 }
 
 function applyLiveContract(model: Provider.Model, contract: AxEngineLiveModelContract) {
-  const context = contract.context ?? model.limit.context
-  const output = Math.min(context, contract.output ?? model.limit.output)
+  if (contract.context !== undefined && contract.context > model.limit.context) {
+    noteAxEngineOnce(
+      `ax-engine advertises context ${contract.context}, above the ${model.limit.context} token launch window; keeping the launch window`,
+    )
+  }
+  const effective = axEngineEffectiveLimit({
+    context: model.limit.context,
+    output: model.limit.output,
+    advertisedContext: contract.context,
+    advertisedOutput: contract.output,
+  })
   model.limit = {
-    context,
-    output,
-    input: inputLimit(context, output),
+    context: effective.context,
+    output: effective.output,
+    input: inputLimit(effective.context, effective.output),
   }
   model.capabilities = {
     ...model.capabilities,

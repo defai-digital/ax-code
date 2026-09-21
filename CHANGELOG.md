@@ -10,7 +10,7 @@ changes belong to AX Coder.
 
 - Read an AX Engine `doctor --json` install version even when doctor exits non-zero, and let `mtpPolicy: disabled` turn MTP off when the binary version cannot be established.
 - Advertise tool calling on the Tiel and Cyber-Tiel catalogs so a missing live model card does not drop every tool. A live `/v1/models` card still overrides the catalog.
-- Accept `provider.ax-engine.options.contextTokens` / `maxOutputTokens` and `AX_ENGINE_CONTEXT_TOKENS` / `AX_ENGINE_MAX_OUTPUT_TOKENS`. Warn when configured options shadow `AX_ENGINE_BIN` or `AX_ENGINE_HOST`.
+- Accept `provider.ax-engine.options.contextTokens` / `maxOutputTokens` and `AX_ENGINE_CONTEXT_TOKENS` / `AX_ENGINE_MAX_OUTPUT_TOKENS`. Overrides only narrow the catalog window, stay on the 1,024-token prefix grid, and cannot be raised by a larger live model card. Warn when configured options shadow `AX_ENGINE_BIN` or `AX_ENGINE_HOST`.
 - Attach the AX Engine server log excerpt and process status when a local stream closes with `terminated`.
 - Add the GitHub issue forms linked from `CONTRIBUTING.md`.
 

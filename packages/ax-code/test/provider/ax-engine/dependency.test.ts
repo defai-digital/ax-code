@@ -102,6 +102,26 @@ test("reads doctor install.version when the host is not ready", async () => {
   expect(status.available).toBe(true)
 })
 
+test("does not warn when AX_ENGINE_BIN is only whitespace or the same binary", async () => {
+  await using dir = await tmpdir()
+  const binaryPath = await launcher(dir.path)
+  vi.spyOn(Process, "text").mockResolvedValue(response("ax-engine 7.5.3"))
+  const previous = process.env.AX_ENGINE_BIN
+  try {
+    process.env.AX_ENGINE_BIN = `  ${binaryPath}  `
+    const same = await getDependencyStatus({ binaryPath })
+    expect(same.binaryPath).toBe(binaryPath)
+    expect(same.warnings.join(" ")).not.toContain("AX_ENGINE_BIN")
+    process.env.AX_ENGINE_BIN = "   "
+    const blank = await getDependencyStatus({ binaryPath })
+    expect(blank.binaryPath).toBe(binaryPath)
+    expect(blank.warnings.join(" ")).not.toContain("ignored")
+  } finally {
+    if (previous === undefined) delete process.env.AX_ENGINE_BIN
+    else process.env.AX_ENGINE_BIN = previous
+  }
+})
+
 test("warns when a configured binary path shadows AX_ENGINE_BIN", async () => {
   await using dir = await tmpdir()
   const binaryPath = await launcher(dir.path)

@@ -11,6 +11,7 @@ import { Process } from "@/util/process"
 import { Env } from "@/util/env"
 import { Log } from "@/util/log"
 import {
+  AX_ENGINE_ALIGNED_CONTEXT_BLOCK_TOKENS,
   AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS,
   AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
   AX_ENGINE_DEFAULT_PORT,
@@ -145,13 +146,13 @@ function prefixGeometry(input: { apiModelID: string; contextTokens?: number; bin
   // Pin both boundaries together without changing the requested context size.
   const aligned =
     input.contextTokens &&
-    input.contextTokens % 1024 === 0 &&
+    input.contextTokens % AX_ENGINE_ALIGNED_CONTEXT_BLOCK_TOKENS === 0 &&
     usesAlignedPrefixCacheGeometry(input.apiModelID) &&
     version &&
     semver.gte(version, "7.4.0")
   return {
-    blockSizeTokens: aligned ? 1024 : AX_ENGINE_SERVER_BLOCK_SIZE_TOKENS,
-    prefillChunk: aligned ? 1024 : undefined,
+    blockSizeTokens: aligned ? AX_ENGINE_ALIGNED_CONTEXT_BLOCK_TOKENS : AX_ENGINE_SERVER_BLOCK_SIZE_TOKENS,
+    prefillChunk: aligned ? AX_ENGINE_ALIGNED_CONTEXT_BLOCK_TOKENS : undefined,
   }
 }
 

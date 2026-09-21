@@ -63,8 +63,15 @@ export const AX_ENGINE_MAX_CONCURRENT_REQUESTS_ENV = "AX_ENGINE_MAX_CONCURRENT_R
 export const AX_ENGINE_SERVER_DEFAULT_CONTEXT_TOKENS = 16_384
 export const AX_ENGINE_CONTEXT_TOKENS_ENV = "AX_ENGINE_CONTEXT_TOKENS"
 export const AX_ENGINE_MAX_OUTPUT_TOKENS_ENV = "AX_ENGINE_MAX_OUTPUT_TOKENS"
+// Accepted alias. The geometry branch documented this name; the canonical env is
+// AX_ENGINE_MAX_OUTPUT_TOKENS, which wins when both are set.
+export const AX_ENGINE_OUTPUT_TOKENS_ENV = "AX_ENGINE_OUTPUT_TOKENS"
+// Tiel and Qwen3.8 prefix caches restore on a 1024-token grid. A narrowed window
+// that is not a multiple of this falls back to 16-token blocks and skips reuse.
+export const AX_ENGINE_ALIGNED_CONTEXT_BLOCK_TOKENS = 1024
 // Matches OUTPUT_TOKEN_MAX in provider/transform.ts. Catalog output budgets stay
-// below this; an explicit override cannot raise a request past it.
+// at or below this; an explicit override cannot raise a request past it or past
+// the catalog output ceiling.
 const AX_ENGINE_OUTPUT_TOKEN_MAX = 32_000
 
 // Cold-start health wait. Loading a 27B–35B MLX model from local disk or a
@@ -221,62 +228,154 @@ export function resolveAxEngineMaxConcurrentRequests(options: Record<string, unk
   )
 }
 
+function tokenOverridePresent(value: unknown) {
+  if (value === undefined || value === null) return false
+  if (typeof value === "string" && !value.trim()) return false
+  return true
+}
+
+function readNarrowingOverride(input: {
+  optionValue: unknown
+  envValue: unknown
+  optionLabel: string
+  envLabel: string
+  ceiling: number
+  ceilingLabel: string
+}) {
+  const optionPresent = tokenOverridePresent(input.optionValue)
+  const envPresent = tokenOverridePresent(input.envValue)
+  const source = optionPresent
+    ? { value: input.optionValue, label: input.optionLabel }
+    : envPresent
+      ? { value: input.envValue, label: input.envLabel }
+      : undefined
+  if (!source) return undefined
+  const parsed = parseMaxConcurrentRequests(source.value)
+  if (parsed === undefined) {
+    noteAxEngineOnce(`${source.label} is not a positive whole number and was ignored; using ${input.ceiling}`)
+    return undefined
+  }
+  if (parsed > input.ceiling) {
+    noteAxEngineOnce(
+      `${source.label} ${parsed} exceeds the catalog ${input.ceilingLabel} ${input.ceiling}; using ${input.ceiling}`,
+    )
+    return input.ceiling
+  }
+  return parsed
+}
+
+function outputEnvOverride() {
+  const primary = process.env[AX_ENGINE_MAX_OUTPUT_TOKENS_ENV]
+  const alias = process.env[AX_ENGINE_OUTPUT_TOKENS_ENV]
+  if (tokenOverridePresent(primary) && tokenOverridePresent(alias) && String(primary).trim() !== String(alias).trim()) {
+    noteAxEngineOnce(`${AX_ENGINE_OUTPUT_TOKENS_ENV} is ignored because ${AX_ENGINE_MAX_OUTPUT_TOKENS_ENV} is set`)
+  }
+  if (tokenOverridePresent(primary)) return { value: primary, label: AX_ENGINE_MAX_OUTPUT_TOKENS_ENV }
+  if (tokenOverridePresent(alias)) return { value: alias, label: AX_ENGINE_OUTPUT_TOKENS_ENV }
+  return undefined
+}
+
 export function axEngineServingLimitShadowWarnings(options: Record<string, unknown> = {}): string[] {
   const warnings: string[] = []
-  const contextConfigured = parseMaxConcurrentRequests(options.contextTokens) !== undefined
-  const contextEnv = parseMaxConcurrentRequests(process.env[AX_ENGINE_CONTEXT_TOKENS_ENV])
-  if (contextConfigured && contextEnv !== undefined) {
+  if (tokenOverridePresent(options.contextTokens) && tokenOverridePresent(process.env[AX_ENGINE_CONTEXT_TOKENS_ENV])) {
     warnings.push("AX_ENGINE_CONTEXT_TOKENS is ignored because provider.ax-engine.options.contextTokens is set")
   }
-  const outputConfigured =
-    parseMaxConcurrentRequests(options.maxOutputTokens) !== undefined ||
-    parseMaxConcurrentRequests(options.outputTokens) !== undefined
-  const outputEnv = parseMaxConcurrentRequests(process.env[AX_ENGINE_MAX_OUTPUT_TOKENS_ENV])
-  if (outputConfigured && outputEnv !== undefined) {
+  const outputConfigured = tokenOverridePresent(options.maxOutputTokens) || tokenOverridePresent(options.outputTokens)
+  const outputEnv =
+    tokenOverridePresent(process.env[AX_ENGINE_MAX_OUTPUT_TOKENS_ENV]) ||
+    tokenOverridePresent(process.env[AX_ENGINE_OUTPUT_TOKENS_ENV])
+  if (outputConfigured && outputEnv) {
     warnings.push(
-      "AX_ENGINE_MAX_OUTPUT_TOKENS is ignored because provider.ax-engine.options.maxOutputTokens or outputTokens is set",
+      "AX_ENGINE_MAX_OUTPUT_TOKENS and AX_ENGINE_OUTPUT_TOKENS are ignored because provider.ax-engine.options.maxOutputTokens or outputTokens is set",
     )
   }
   return warnings
 }
 
+function alignNarrowedContext(value: number, ceiling: number, apiModelID?: string) {
+  if (!apiModelID || !usesAlignedPrefixCacheGeometry(apiModelID)) return value
+  if (value % AX_ENGINE_ALIGNED_CONTEXT_BLOCK_TOKENS === 0) return value
+  const snapped = Math.floor(value / AX_ENGINE_ALIGNED_CONTEXT_BLOCK_TOKENS) * AX_ENGINE_ALIGNED_CONTEXT_BLOCK_TOKENS
+  const aligned = snapped >= AX_ENGINE_ALIGNED_CONTEXT_BLOCK_TOKENS ? snapped : AX_ENGINE_ALIGNED_CONTEXT_BLOCK_TOKENS
+  const bounded = Math.min(aligned, ceiling)
+  noteAxEngineOnce(
+    `AX Engine context ${value} is not a multiple of ${AX_ENGINE_ALIGNED_CONTEXT_BLOCK_TOKENS}; using ${bounded} so prefix-cache blocks stay ${AX_ENGINE_ALIGNED_CONTEXT_BLOCK_TOKENS} tokens`,
+  )
+  return bounded
+}
+
 /**
  * Catalog windows stay the default. Provider options, then the matching
- * environment variables, may shrink them. A value above the catalog context
- * or the request-layer output ceiling is clamped so an override cannot grow
- * the KV pool past the model contract.
+ * environment variables, may only shrink them. A value above the catalog
+ * ceiling is clamped, an invalid value is ignored, and a Tiel / Qwen3.8
+ * window is snapped down onto the 1024-token prefix grid. The returned
+ * numbers are what both the server launch and the model limit must use.
  */
 export function resolveAxEngineServingLimits(
   options: Record<string, unknown> = {},
-  definition: { contextTokens: number; outputTokens: number },
+  definition: { contextTokens: number; outputTokens: number; apiModelID?: string },
 ) {
   for (const warning of axEngineServingLimitShadowWarnings(options)) noteAxEngineOnce(warning)
-  const requestedContext =
-    parseMaxConcurrentRequests(options.contextTokens) ??
-    parseMaxConcurrentRequests(process.env[AX_ENGINE_CONTEXT_TOKENS_ENV])
-  let contextTokens = definition.contextTokens
-  if (requestedContext) {
-    if (requestedContext > definition.contextTokens) {
-      noteAxEngineOnce(
-        `provider.ax-engine.options.contextTokens ${requestedContext} exceeds the catalog window ${definition.contextTokens}; using ${definition.contextTokens}`,
-      )
-    }
-    contextTokens = Math.min(requestedContext, definition.contextTokens)
+  const outputEnv = outputEnvOverride()
+  const outputOption = tokenOverridePresent(options.maxOutputTokens)
+    ? { value: options.maxOutputTokens, label: "provider.ax-engine.options.maxOutputTokens" }
+    : tokenOverridePresent(options.outputTokens)
+      ? { value: options.outputTokens, label: "provider.ax-engine.options.outputTokens" }
+      : undefined
+  if (
+    tokenOverridePresent(options.maxOutputTokens) &&
+    tokenOverridePresent(options.outputTokens) &&
+    String(options.maxOutputTokens).trim() !== String(options.outputTokens).trim()
+  ) {
+    noteAxEngineOnce(
+      "provider.ax-engine.options.outputTokens is ignored because provider.ax-engine.options.maxOutputTokens is set",
+    )
   }
-  const requestedOutput =
-    parseMaxConcurrentRequests(options.maxOutputTokens) ??
-    parseMaxConcurrentRequests(options.outputTokens) ??
-    parseMaxConcurrentRequests(process.env[AX_ENGINE_MAX_OUTPUT_TOKENS_ENV])
-  let maxOutputTokens = definition.outputTokens
-  if (requestedOutput) {
-    if (requestedOutput > AX_ENGINE_OUTPUT_TOKEN_MAX) {
-      noteAxEngineOnce(
-        `provider.ax-engine.options.maxOutputTokens ${requestedOutput} exceeds ${AX_ENGINE_OUTPUT_TOKEN_MAX}; using ${AX_ENGINE_OUTPUT_TOKEN_MAX}`,
-      )
-    }
-    maxOutputTokens = Math.min(requestedOutput, AX_ENGINE_OUTPUT_TOKEN_MAX)
+  const requestedContext = readNarrowingOverride({
+    optionValue: options.contextTokens,
+    envValue: process.env[AX_ENGINE_CONTEXT_TOKENS_ENV],
+    optionLabel: "provider.ax-engine.options.contextTokens",
+    envLabel: AX_ENGINE_CONTEXT_TOKENS_ENV,
+    ceiling: definition.contextTokens,
+    ceilingLabel: "context",
+  })
+  const contextTokens =
+    requestedContext === undefined
+      ? definition.contextTokens
+      : alignNarrowedContext(requestedContext, definition.contextTokens, definition.apiModelID)
+  const requestedOutput = readNarrowingOverride({
+    optionValue: outputOption?.value,
+    envValue: outputEnv?.value,
+    optionLabel: outputOption?.label ?? "provider.ax-engine.options.maxOutputTokens",
+    envLabel: outputEnv?.label ?? AX_ENGINE_MAX_OUTPUT_TOKENS_ENV,
+    ceiling: Math.min(definition.outputTokens, AX_ENGINE_OUTPUT_TOKEN_MAX),
+    ceilingLabel: "output",
+  })
+  let maxOutputTokens = requestedOutput ?? definition.outputTokens
+  if (maxOutputTokens > contextTokens) {
+    noteAxEngineOnce(
+      `AX Engine output budget ${maxOutputTokens} exceeds the ${contextTokens} token context window; using ${contextTokens}`,
+    )
+    maxOutputTokens = contextTokens
   }
-  return { contextTokens, maxOutputTokens: Math.min(maxOutputTokens, contextTokens) }
+  return { contextTokens, maxOutputTokens }
+}
+
+/** Keep the prompt budget inside the window the server was actually launched with. */
+export function axEngineEffectiveLimit(input: {
+  context: number
+  output: number
+  advertisedContext?: number
+  advertisedOutput?: number
+}) {
+  const context =
+    input.advertisedContext === undefined ? input.context : Math.min(input.context, input.advertisedContext)
+  const output = Math.min(
+    context,
+    input.output,
+    input.advertisedOutput === undefined ? input.output : input.advertisedOutput,
+  )
+  return { context, output }
 }
 
 export function resolveAxEngineApiKey(options: Record<string, unknown> = {}, savedKey?: unknown) {
