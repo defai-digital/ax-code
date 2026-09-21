@@ -15,7 +15,10 @@ const response = (text: string, code = 0): Process.TextResult => ({
   stderr: Buffer.alloc(0),
 })
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllEnvs()
+})
 
 async function launcher(dir: string) {
   const binaryPath = path.join(dir, "ax-engine")
@@ -248,3 +251,32 @@ test.each([undefined, "dev"])(
     expect(await getDependencyStatus()).toMatchObject({ available: true, mode: "bundled", binaryPath: bundled })
   },
 )
+
+test("warns when AX_ENGINE_BIN is shadowed by a configured binaryPath", async () => {
+  await using dir = await tmpdir()
+  const binaryPath = await launcher(dir.path)
+  vi.spyOn(Process, "text").mockResolvedValue(response("ax-engine 7.5.3"))
+  vi.stubEnv("AX_ENGINE_BIN", "/elsewhere/ax-engine")
+  const status = await getDependencyStatus({ binaryPath })
+  expect(status.mode).toBe("configured")
+  expect(status.binaryPath).toBe(binaryPath)
+  expect(status.warnings.join("\n")).toContain("AX_ENGINE_BIN (/elsewhere/ax-engine) is ignored")
+})
+
+test("does not warn when AX_ENGINE_BIN resolves to the configured binary", async () => {
+  await using dir = await tmpdir()
+  const binaryPath = await launcher(dir.path)
+  vi.spyOn(Process, "text").mockResolvedValue(response("ax-engine 7.5.3"))
+  vi.stubEnv("AX_ENGINE_BIN", `  ${binaryPath}  `)
+  const status = await getDependencyStatus({ binaryPath })
+  expect(status.binaryPath).toBe(binaryPath)
+  expect(status.warnings.join("\n")).not.toContain("AX_ENGINE_BIN")
+})
+
+test("does not warn when no AX_ENGINE_BIN override is set", async () => {
+  await using dir = await tmpdir()
+  const binaryPath = await launcher(dir.path)
+  vi.spyOn(Process, "text").mockResolvedValue(response("ax-engine 7.5.3"))
+  const status = await getDependencyStatus({ binaryPath })
+  expect(status.warnings.join("\n")).not.toContain("AX_ENGINE_BIN")
+})
