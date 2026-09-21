@@ -69,7 +69,7 @@ async function probeVersion(binaryPath: string) {
   const direct = await Process.text([binaryPath, "--version"], { timeout: 3000, nothrow: true }).catch(() => undefined)
   if (direct?.code === 0) {
     const text = direct.text.trim() || direct.stderr.toString().trim()
-    if (text) return text
+    if (text && semver.coerce(text)) return text
   }
 
   // The Python-distributed AX Engine wrapper exposes its version through the
@@ -106,7 +106,7 @@ async function version(binaryPath: string): Promise<string | undefined> {
     try {
       const detected = await probeVersion(binaryPath)
       const after = await axEngineBinaryIdentity({ binaryPath }).catch(() => undefined)
-      if (detected && after === identity) {
+      if (detected && semver.coerce(detected) && after === identity) {
         entry.expires = performance.now() + VERSION_CACHE_TTL_MS
       } else if (versionCache.get(key) === entry) {
         versionCache.delete(key)
@@ -212,7 +212,7 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
 
   const managed = await getManagedBinary()
   if (managed) {
-    const detectedVersion = (await version(managed.path)) ?? managed.version
+    const detectedVersion = await version(managed.path)
     const versionBlocker = unsupportedVersionBlocker(detectedVersion)
     if (!versionBlocker && !lacksBundledContract(detectedVersion)) {
       return {
@@ -234,17 +234,23 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
 
   const bundled = await getBundledBinary({ entryPath: options.entryPath })
   if (bundled) {
-    const detectedVersion = (await version(bundled.path)) ?? bundled.version
+    const detectedVersion = await version(bundled.path)
     const versionBlocker = unsupportedVersionBlocker(detectedVersion)
-    return {
-      available: !versionBlocker,
-      mode: "bundled",
-      binaryPath: bundled.path,
-      version: detectedVersion,
-      installable: versionBlocker ? isAxEngineInstallable() : false,
-      blockers: versionBlocker ? [versionBlocker] : [],
-      warnings,
+    if (!versionBlocker && !lacksBundledContract(detectedVersion)) {
+      return {
+        available: true,
+        mode: "bundled",
+        binaryPath: bundled.path,
+        version: detectedVersion,
+        installable: false,
+        blockers: [],
+        warnings,
+      }
     }
+    warnings.push(
+      versionBlocker ??
+        `${AX_ENGINE_ERROR.VersionUnsupported}: bundled ax-engine ${coercedVersionLabel(detectedVersion)} does not establish the required ${AX_ENGINE_BUNDLED_MIN_VERSION} contract; reinstall the AX Code runtime or install a managed engine`,
+    )
   }
 
   const installable = isAxEngineInstallable()

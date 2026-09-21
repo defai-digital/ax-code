@@ -152,13 +152,19 @@ async function readInstallState(): Promise<AxEngineInstallState | undefined> {
 }
 
 // The currently-installed managed ax-engine binary, if the recorded marker
-// still points at an executable on disk. Used by dependency resolution as the
-// lowest-priority binary source. A partially-written install (no marker, or a
-// marker whose binary is gone) resolves to undefined, so it is never trusted.
+// still points at an executable on disk. Dependency resolution checks it after
+// PATH and before the bundled runtime. A partially-written install (no marker, or a
+// marker whose runtime payload is incomplete) resolves to undefined, so it is
+// never trusted and a normal install can repair it.
 export async function getManagedBinary(): Promise<{ path: string; version: string } | undefined> {
   const state = await readInstallState()
   if (!state) return undefined
   if (!(await isExecutable(state.path))) return undefined
+  try {
+    await assertAxEngineRuntimePayload(path.dirname(state.path))
+  } catch {
+    return undefined
+  }
   return { path: state.path, version: state.version }
 }
 

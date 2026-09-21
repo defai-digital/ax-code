@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import { constants as fsConstants } from "fs"
 import path from "path"
@@ -6,6 +6,7 @@ import os from "os"
 import { execFileSync } from "child_process"
 import { createHash } from "crypto"
 
+import * as Which from "../../../src/util/which"
 import { AxEnginePaths } from "../../../src/provider/ax-engine/paths"
 import { installReleaseBin } from "@ax-code/ax-code-intel/server-releases"
 import {
@@ -65,8 +66,13 @@ async function cleanup() {
   await fs.rm(AxEnginePaths.bin, { recursive: true, force: true }).catch(() => undefined)
 }
 
-beforeEach(cleanup)
+beforeEach(async () => {
+  await cleanup()
+  // Exercise the fixture runtime even on developer hosts with Homebrew installed.
+  vi.spyOn(Which, "which").mockReturnValue(null)
+})
 afterEach(async () => {
+  vi.restoreAllMocks()
   await cleanup()
   delete process.env[AX_ENGINE_INSTALL_ENV.url]
   delete process.env[AX_ENGINE_INSTALL_ENV.sha256]
@@ -118,6 +124,19 @@ describe("resolveInstallableRelease", () => {
 })
 
 describe("installAxEngineBinary", () => {
+  test.each(["ax-engine-server", "libmlx.dylib", "mlx.metallib"])(
+    "repairs a recorded installation missing %s",
+    async (missing) => {
+      const first = await installAxEngineBinary({}, baseRuntime())
+      await fs.rm(path.join(path.dirname(first.binaryPath), missing))
+      expect(await getManagedBinary()).toBeUndefined()
+      const repaired = await installAxEngineBinary({}, baseRuntime())
+      expect(repaired).toMatchObject({ installed: true, alreadyPresent: false })
+      await fs.access(path.join(path.dirname(repaired.binaryPath), missing))
+      expect(await getManagedBinary()).toEqual({ path: repaired.binaryPath, version: RELEASE.version })
+    },
+  )
+
   test("installs, records a marker, and is discoverable + idempotent", async () => {
     const first = await installAxEngineBinary({}, baseRuntime())
     expect(first).toMatchObject({ installed: true, alreadyPresent: false, version: RELEASE.version })
@@ -213,8 +232,6 @@ describe("dependency resolution picks up the managed binary", () => {
   test("resolves mode 'managed' once installed", async () => {
     await installAxEngineBinary({}, baseRuntime())
     const status = await getDependencyStatus()
-    // A real ax-engine on PATH would win, but CI hosts don't have one.
-    if (status.mode === "path") return
     expect(status.available).toBe(true)
     expect(status.mode).toBe("managed")
     expect(status.managedVersion).toBe(RELEASE.version)
@@ -276,20 +293,9 @@ describe("dependency resolution picks up the managed binary", () => {
     )
 
     const status = await getDependencyStatus()
-    // A real ax-engine on PATH would win; CI hosts typically don't have one.
-    if (status.mode === "path") return
-    // Managed AX Engine is deliberately Apple-Silicon-only. The test still
-    // exercises installation bookkeeping above, but resolution must not
-    // advertise that macOS runtime on Linux/Windows CI hosts.
-    if (!isAxEngineInstallable()) {
-      expect(status).toMatchObject({ mode: "missing", available: false, installable: false })
-      return
-    }
-    expect(status.mode).toBe("managed")
-    expect(status.available).toBe(false)
-    expect(status.version).toContain("6.6.0")
-    expect(status.blockers.join(" ")).toContain("AX_ENGINE_VERSION_UNSUPPORTED")
-    expect(status.installable).toBe(isAxEngineInstallable())
+    expect(status).toMatchObject({ mode: "missing", available: false, installable: isAxEngineInstallable() })
+    expect(status.warnings.join(" ")).toContain("6.6.0")
+    expect(status.warnings.join(" ")).toContain("AX_ENGINE_VERSION_UNSUPPORTED")
   })
 })
 
@@ -352,10 +358,8 @@ describe("end-to-end install of a real tarball artifact", () => {
       // And it now resolves as the managed dependency.
       expect(await getManagedBinary()).toEqual({ path: bin, version: "e2e-1" })
       const status = await getDependencyStatus()
-      if (status.mode !== "path") {
-        expect(status.mode).toBe("managed")
-        expect(status.binaryPath).toBe(bin)
-      }
+      expect(status.mode).toBe("managed")
+      expect(status.binaryPath).toBe(bin)
     } finally {
       await fs.rm(stage, { recursive: true, force: true }).catch(() => undefined)
     }
@@ -402,7 +406,7 @@ describe("bundled sidecar resolution", () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "axe-bundled-"))
     try {
       const dir = path.join(root, "engine", AX_ENGINE_BINARY_RELEASE.version)
-      await writeRuntimePayload(dir, "#!/bin/sh\necho ax-engine 7.4.0\n")
+      await writeRuntimePayload(dir, "#!/bin/sh\necho ax-engine 7.5.3\n")
       const entry = path.join(root, "lib", "index-node-tui.js")
       await fs.mkdir(path.dirname(entry), { recursive: true })
       await fs.writeFile(entry, "export {}\n")
@@ -414,7 +418,6 @@ describe("bundled sidecar resolution", () => {
       })
 
       const status = await getDependencyStatus({ entryPath: entry })
-      if (status.mode === "path") return
       expect(status.mode).toBe("bundled")
       expect(status.available).toBe(true)
       expect(status.binaryPath).toBe(bundled?.path)
