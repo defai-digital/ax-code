@@ -55,14 +55,43 @@ full-context (64K) planning figure — weights, KV cache, buffers, and host rese
 live catalog fit result for your machine rather than sizing to the model file alone.
 
 Speed is hardware-bound. AX Code does not impose a tokens-per-second ceiling (the docs say so
-explicitly); faster hardware produces tokens faster. Measured native Tiel Coder decode on the
-M3 Max 128 GiB benchmark host: 47–58 tokens/second on AX Engine with MTP active, 92–96
-tokens/second on MTPLX on the same hardware. Uncached prefill runs roughly 830–1,446
-tokens/second. These come from the
-[Tiel prefill/decode benchmark](docs/guides/tiel-runtime-phases-2026-09-19.md) and the
-[MTP profile comparison](docs/guides/tiel-mtp-profile-2026-09-19.md); both packs are
-development requantizations with no certified quality-parity or MTP-speed claim, so read the
-numbers as observations on a single host, not a guarantee for your machine.
+explicitly); faster hardware produces tokens faster. The chart is a **native runtime-phase**
+measurement on the M3 Max 128 GiB benchmark host — median of three trials, 256-token output,
+prefix cache disabled, MTP active — so it is not AX Code end-to-end coding throughput and not a
+guarantee for your machine. Decode tokens/second (higher is better); each `=` is about 6 tokens/s.
+
+```text
+Tiel Coder 35B A3B - short (458 tok in)
+  AX Engine   ========== 57.0
+  MTPLX       =============== 92.3
+Tiel Coder 35B A3B - context (3,182 tok in)
+  AX Engine   ========= 55.3
+  MTPLX       ================ 96.3
+Cyber-Tiel 35B A3B - short (483 tok in)
+  AX Engine   ========== 58.5
+  MTPLX       ================ 95.1
+Cyber-Tiel 35B A3B - context (3,207 tok in)
+  AX Engine   ======== 47.4
+  MTPLX       =============== 92.1
+```
+
+Exact values from the same matched run (prefill in tokens/s):
+
+| Case                | AX Engine decode | MTPLX decode | AX Engine prefill | MTPLX prefill |
+| ------------------- | ---------------: | -----------: | ----------------: | ------------: |
+| Tiel, short         |             57.0 |         92.3 |           1,255.6 |       1,207.0 |
+| Tiel, context       |             55.3 |         96.3 |           1,424.2 |       1,279.5 |
+| Cyber-Tiel, short   |             58.5 |         95.1 |           1,226.9 |       1,189.6 |
+| Cyber-Tiel, context |             47.4 |         92.1 |           1,446.2 |       1,427.6 |
+
+The shipping default now runs Tiel on the model-selected `auto` profile (47.8–54.7 decode tokens/s
+on the same host); MTPLX was not rerun for `auto`, so the MTPLX figures above remain the
+`agentic`-baseline matched comparison, not a simultaneous measurement. The AX Engine numbers come
+from a local source build carrying the Tiel MTP loader fix; the Homebrew binary available at
+measurement time could not start Tiel, and no MTP-disabled control was run, so these are not a
+certified MTP speedup. Both packs are development requantizations with no certified quality parity
+or MTP-speed claim. Source: [Tiel prefill/decode benchmark](docs/guides/tiel-runtime-phases-2026-09-19.md)
+and [MTP profile comparison](docs/guides/tiel-mtp-profile-2026-09-19.md).
 
 The largest practical payoff is the local prefix cache. A repeated 285-token task with a full
 36,708-token KV cache returned its first payload in 0.04 seconds on MTPLX — see the
@@ -303,13 +332,12 @@ would change the model's effective behavior without telling you. AX Code also ve
 text-and-tool contract before activation, so an unusable pack is caught up front rather than
 discovered mid-task.
 
-On a measured Apple M3 Max with 128 GiB unified memory, Tiel Coder 35B A3B MTP measured 47–58
-tokens/second native decode on AX Engine with MTP active, and 92–96 tokens/second on MTPLX on the
-same hardware (median of three trials, 256 output tokens, prefix cache disabled). Uncached prefill
-ran about 830–1,446 tokens/second. These packs require an AX Engine build containing the Tiel MTP
-loader fix (7.5.0 or newer); the tested Homebrew 7.4.0 predates the fix and fails with
-`MlxMtpRequiredButUnavailable`. Tiel uses model-selected `auto` tuning with MTP still required;
-Cyber-Tiel retains `agentic`; its managed read-task probes failed with both profiles. See the
+The measured decode and prefill numbers, with their provenance and caveats, are charted in the
+"Apple Silicon, managed local inference" section near the top of this README. In short: Tiel uses
+model-selected `auto` tuning with MTP still required; Cyber-Tiel retains `agentic` (its managed
+read-task probes failed with both profiles). These packs require an AX Engine build containing the
+Tiel MTP loader fix (7.5.0 or newer); the Homebrew 7.4.0 binary predates the fix and fails with
+`MlxMtpRequiredButUnavailable`. See the
 [Tiel prefill/decode benchmark and build requirements](docs/guides/tiel-runtime-phases-2026-09-19.md),
 the [MTP profile comparison](docs/guides/tiel-mtp-profile-2026-09-19.md), and the
 [2026-09-19 AX Code / OpenCode retest with MTP](docs/guides/local-client-matrix-2026-09-19.md).
