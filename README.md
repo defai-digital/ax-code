@@ -83,6 +83,15 @@ and the [AX Code summary](docs/guides/tiel-peer-2026-09-20.md). The 19 September
 [Tiel prefill/decode benchmark](docs/guides/tiel-runtime-phases-2026-09-19.md). Both packs are
 development requantizations with no certified quality-parity or MTP-speed claim.
 
+AX Engine's own first-run pack is dense **Qwen 3.8 27B AXQ 6-bit MTP**, not Tiel. It is
+excluded from AX Code's managed catalog; serve it with `ax-engine serve qwen3.8-27b:axq`
+and attach as a local endpoint if you want that model. Direct AR already uses 95–98% of
+published memory bandwidth (mlx-lm 12.78 tok/s on M4 Pro, 27.90 on M5 Max). Product-path
+MTP is **31.05 tok/s** decode / **120.3 tok/s** prefill on Mac mini M4 Pro 64 GB (**2.43×**
+direct) and **76.90 tok/s** decode / **795.3 tok/s** prefill on M5 Max 128 GB (**2.76×**
+direct). Do not compare those dense-27B decode numbers with Tiel completion tok/s.
+See [AX Engine Qwen 27B performance](https://github.com/defai-digital/ax-engine#qwen-performance).
+
 The largest practical payoff is the local prefix cache. A repeated 285-token task with a full
 36,708-token KV cache returned its first payload in 0.04 seconds on MTPLX — see the
 [AX Code / OpenCode client retest](docs/guides/local-client-matrix-2026-09-19.md). AX Engine 7.5.0
