@@ -48,6 +48,16 @@ export const AX_ENGINE_CODING_MODEL_MIN_MEMORY_BYTES = 96 * 1024 ** 3
 export const AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS = 1
 export const AX_ENGINE_MAX_CONCURRENT_REQUESTS_ENV = "AX_ENGINE_MAX_CONCURRENT_REQUESTS"
 
+// Optional geometry overrides. AX_ENGINE_MODEL_CONTEXT_TOKENS and each catalog
+// model's outputTokens are the certified ceilings for that pack; these knobs only
+// let a host dial the engine DOWN. A smaller paged-KV budget is much cheaper to
+// prefill (measured on AX-Tiel-Coder-35B: a 15 032-token prompt took 71.2s at the
+// catalog geometry versus 18.0s at 16 blocks), which keeps long agent steps clear
+// of host memory pressure, and it is the only supported way to do that without
+// editing the catalog. Values above the ceiling are ignored, never raised.
+export const AX_ENGINE_CONTEXT_TOKENS_ENV = "AX_ENGINE_CONTEXT_TOKENS"
+export const AX_ENGINE_OUTPUT_TOKENS_ENV = "AX_ENGINE_OUTPUT_TOKENS"
+
 // Cold-start health wait. Loading a 27B–35B MLX model from local disk or a
 // network mount (SMB/NFS) can take several minutes of mmap + weight load +
 // first-token warmup. The outer setup envelope and server-lock budgets below
@@ -199,6 +209,31 @@ export function resolveAxEngineMaxConcurrentRequests(options: Record<string, unk
     parseMaxConcurrentRequests(options.maxConcurrentRequests) ??
     parseMaxConcurrentRequests(process.env[AX_ENGINE_MAX_CONCURRENT_REQUESTS_ENV]) ??
     AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS
+  )
+}
+
+// Geometry overrides may only narrow the catalog ceiling; a value above it is
+// ignored rather than silently trusted, so a typo cannot widen the KV budget past
+// what the pack was certified for.
+function parseGeometryOverride(value: unknown, ceiling: number): number | undefined {
+  const parsed = typeof value === "string" && value.trim() ? Number(value.trim()) : value
+  if (typeof parsed !== "number" || !Number.isInteger(parsed) || parsed < 1) return undefined
+  return Math.min(parsed, ceiling)
+}
+
+export function resolveAxEngineContextTokens(options: Record<string, unknown> = {}, ceiling: number) {
+  return (
+    parseGeometryOverride(options.contextTokens, ceiling) ??
+    parseGeometryOverride(process.env[AX_ENGINE_CONTEXT_TOKENS_ENV], ceiling) ??
+    ceiling
+  )
+}
+
+export function resolveAxEngineOutputTokens(options: Record<string, unknown> = {}, ceiling: number) {
+  return (
+    parseGeometryOverride(options.outputTokens, ceiling) ??
+    parseGeometryOverride(process.env[AX_ENGINE_OUTPUT_TOKENS_ENV], ceiling) ??
+    ceiling
   )
 }
 

@@ -11,7 +11,9 @@ import {
   AX_ENGINE_PROVIDER_ID,
   isAxEngineBuiltinModelID,
   resolveAxEngineApiKey,
+  resolveAxEngineContextTokens,
   resolveAxEngineMaxConcurrentRequests,
+  resolveAxEngineOutputTokens,
 } from "./constants"
 import { requirePlatformEligibility } from "./platform"
 import { getDependencyStatus } from "./dependency"
@@ -167,8 +169,8 @@ async function ensureManagedReady(provider: Provider.Info, options: AxEngineMode
       modelPath,
       modelRevision: model.revision,
       preferredPort: AX_ENGINE_DEFAULT_PORT,
-      contextTokens: definition.contextTokens,
-      maxOutputTokens: definition.outputTokens,
+      contextTokens: resolveAxEngineContextTokens(provider.options, definition.contextTokens),
+      maxOutputTokens: resolveAxEngineOutputTokens(provider.options, definition.outputTokens),
       binaryVersion: dependency.version,
       maxConcurrentRequests: resolveAxEngineMaxConcurrentRequests(provider.options),
       mtpPolicy: resolveAxEngineMtpPolicy(provider.options),

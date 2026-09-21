@@ -124,9 +124,17 @@ export function pinnedDownloadVersionBlocker(detected: string | undefined) {
 export async function getDependencyStatus(options: AxEngineDependencyOptions = {}): Promise<AxEngineDependencyStatus> {
   const configured =
     typeof options.binaryPath === "string" && options.binaryPath.trim() ? options.binaryPath.trim() : undefined
-  const env = process.env.AX_ENGINE_BIN
+  const env = process.env.AX_ENGINE_BIN?.trim() || undefined
   const candidate = configured ?? env
   const warnings: string[] = []
+  // `configured ?? env` makes a configured binaryPath silently outrank
+  // AX_ENGINE_BIN. That shadowing is hard to diagnose from the outside ("I set
+  // the env var and nothing changed"), so surface it instead of ignoring it.
+  if (configured && env && env !== configured) {
+    warnings.push(
+      `AX_ENGINE_BIN=${env} is ignored because provider.ax-engine.options.binaryPath is set to ${configured}`,
+    )
+  }
 
   // Resolution order: explicit config/env wins. PATH wins only when it meets
   // the bundled MTP floor. Managed overlay then bundled floor, then missing.
