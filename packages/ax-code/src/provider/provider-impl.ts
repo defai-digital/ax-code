@@ -1322,13 +1322,12 @@ export namespace Provider {
     // Re-enter its loader to check readiness and the live coding contract.
     if (cached && s.generation === currentModelCacheGeneration() && model.providerID !== AX_ENGINE_PROVIDER_ID)
       return cached
-    // In-flight dedup: the pending check below and the modelPending registration
+    // Other providers use in-flight dedup: the pending check and modelPending registration
     // after the loader promise is created run with no await in between, so concurrent
     // callers cannot both miss the pending entry and start duplicate loads.
-    // Managed AX Engine readiness can take minutes. A signal-owned caller must
-    // be able to stop its own readiness attempt instead of joining a shared
-    // load that may have been started by a background title request.
-    const callerOwnsLoad = model.providerID === AX_ENGINE_PROVIDER_ID && context.signal !== undefined
+    // Each AX Engine caller needs its own live metadata refresh and cancellation,
+    // even when another caller is loading the same language model.
+    const callerOwnsLoad = model.providerID === AX_ENGINE_PROVIDER_ID
     const pending = s.modelPending.get(key)
     if (pending && !callerOwnsLoad) {
       const language = await pending
@@ -1360,7 +1359,7 @@ export namespace Provider {
               sdk,
               model.api.id,
               { ...provider.options, ...model.options },
-              context,
+              model.providerID === AX_ENGINE_PROVIDER_ID ? { ...context, model } : context,
             )
           : sdk.languageModel(model.api.id)
         if (s.generation === currentModelCacheGeneration()) cacheLanguage(s.models, key, language as Lang)

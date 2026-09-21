@@ -7,6 +7,8 @@ import type { EntrySection, MemoryEntry, MemorySection, ProjectMemory } from "./
 import * as store from "./store"
 import { entryApplies } from "./applicability"
 import { Log } from "../util/log"
+import path from "node:path"
+import { realpath } from "node:fs/promises"
 
 const log = Log.create({ service: "memory.injector" })
 
@@ -122,10 +124,15 @@ export function buildContext(memory: ProjectMemory, opts: BuildContextOptions = 
 
   // Project-scoped curated entries.
   const entryOpts = { agent, paths, projectRoot: memory.projectRoot }
-  pushEntries(parts, "Feedback Rules", memory.sections.feedback, entryOpts)
-  pushEntries(parts, "User Preferences", memory.sections.userPrefs, entryOpts)
-  pushEntries(parts, "Project Decisions", memory.sections.decisions, entryOpts)
-  pushEntries(parts, "References", memory.sections.reference, entryOpts)
+  // getContext shares the object only when both scopes refer to one file.
+  // Keep its global precedence, without repeating the same curated entries.
+  // Equal content from distinct stores must retain its separate scope.
+  if (global !== memory) {
+    pushEntries(parts, "Feedback Rules", memory.sections.feedback, entryOpts)
+    pushEntries(parts, "User Preferences", memory.sections.userPrefs, entryOpts)
+    pushEntries(parts, "Project Decisions", memory.sections.decisions, entryOpts)
+    pushEntries(parts, "References", memory.sections.reference, entryOpts)
+  }
 
   if (memory.sections.patterns?.content) {
     parts.push("## Tech Stack")
@@ -169,12 +176,22 @@ export function buildContext(memory: ProjectMemory, opts: BuildContextOptions = 
  * Returns empty string if no memory is cached anywhere.
  */
 export async function getContext(projectRoot: string, opts: Omit<BuildContextOptions, "global"> = {}): Promise<string> {
+  // Preserve the loader's fail-soft behavior for malformed runtime callers.
+  const projectPath = typeof projectRoot === "string" ? store.getMemoryPath(projectRoot) : undefined
+  const globalPath = store.getGlobalMemoryPath()
+  const sharedSource =
+    projectPath !== undefined &&
+    (path.resolve(projectPath) === path.resolve(globalPath) ||
+      (await Promise.all([
+        realpath(projectPath).catch(() => undefined),
+        realpath(globalPath).catch(() => undefined),
+      ]).then(([project, global]) => project !== undefined && project === global)))
   const [memory, global] = await Promise.all([
     store.load(projectRoot).catch((err) => {
       log.error("failed to load project memory", { projectRoot, err })
       return null
     }),
-    store.loadGlobal().catch((err) => {
+    (sharedSource ? Promise.resolve(null) : store.loadGlobal()).catch((err) => {
       log.error("failed to load global memory", { err })
       return null
     }),
@@ -195,7 +212,7 @@ export async function getContext(projectRoot: string, opts: Omit<BuildContextOpt
     }
     return buildContext(shell, { ...opts, global })
   }
-  return buildContext(memory!, { ...opts, global })
+  return buildContext(memory!, { ...opts, global: sharedSource ? memory : global })
 }
 
 /**

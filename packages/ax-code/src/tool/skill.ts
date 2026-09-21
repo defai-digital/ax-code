@@ -9,6 +9,7 @@ import { Filesystem } from "@/util/filesystem"
 import { Recorder } from "../replay/recorder"
 import { Agent } from "../agent/agent"
 import { SkillCatalog } from "../skill/catalog"
+import { AX_ENGINE_PROVIDER_ID } from "../provider/ax-engine/constants"
 
 function escapeXmlAttribute(value: string) {
   return value
@@ -42,20 +43,27 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
   const description =
     list.length === 0
       ? "Load a specialized skill that provides domain-specific instructions and workflows. No skills are currently available."
-      : [
-          "Load a specialized skill that provides domain-specific instructions and workflows.",
-          "",
-          "When you recognize that a task matches one of the available skills listed below, use this tool to load the full skill instructions.",
-          "",
-          "The skill will inject detailed instructions, workflows, and access to bundled resources (scripts, references, templates) into the conversation context.",
-          "",
-          'Tool output includes a `<skill_content name="...">` block with the loaded content.',
-          "",
-          "The following skills provide specialized sets of instructions for particular tasks",
-          "Invoke this tool to load a skill when a task matches one of the available skills listed below:",
-          "",
-          Skill.fmt(list, { verbose: false }),
-        ].join("\n")
+      : ctx?.model?.providerID === AX_ENGINE_PROVIDER_ID
+        ? [
+            "Load specialized instructions and workflows when a task matches a skill in the system <available_skills> catalog.",
+            "That catalog includes descriptions and may recommend skills for current files; query searches all eligible skill metadata, including entries omitted from the catalog.",
+            'Use query="" to list eligible skills and offset to continue a search page. Use name to load full instructions.',
+            'Loaded instructions arrive in <skill_content name="..."> with a base directory and bundled resource paths.',
+          ].join("\n")
+        : [
+            "Load a specialized skill that provides domain-specific instructions and workflows.",
+            "",
+            "When you recognize that a task matches one of the available skills listed below, use this tool to load the full skill instructions.",
+            "",
+            "The skill will inject detailed instructions, workflows, and access to bundled resources (scripts, references, templates) into the conversation context.",
+            "",
+            'Tool output includes a `<skill_content name="...">` block with the loaded content.',
+            "",
+            "The following skills provide specialized sets of instructions for particular tasks",
+            "Invoke this tool to load a skill when a task matches one of the available skills listed below:",
+            "",
+            Skill.fmt(list, { verbose: false }),
+          ].join("\n")
 
   const examples = list
     .map((skill) => escapePromptMetadata(skill.name))

@@ -1,5 +1,5 @@
 import type { Provider } from "../provider"
-import type { CustomLoader } from "../loaders"
+import type { CustomLoader, CustomModelLoaderContext } from "../loaders"
 import { NativePerf } from "../../perf/native"
 import { ProviderID, ModelID } from "../schema"
 import {
@@ -386,7 +386,7 @@ export function axEngineLoader(): CustomLoader {
         }
         return models
       },
-      async getModel(sdk: any, modelID: string, options?: Record<string, any>, context?: { signal?: AbortSignal }) {
+      async getModel(sdk: any, modelID: string, options?: Record<string, any>, context?: CustomModelLoaderContext) {
         const externalBaseURL = configuredExternalBaseURL
         if (externalBaseURL) {
           const requestedModelID =
@@ -406,6 +406,7 @@ export function axEngineLoader(): CustomLoader {
           const contract = requireAxEngineCodingContract(contracts, apiModelID)
           const ref = modelRefs.get(apiModelID)
           if (ref) applyLiveContract(ref, contract)
+          if (context?.model && context.model !== ref) applyLiveContract(context.model, contract)
           return sdk.languageModel(apiModelID)
         }
 
@@ -423,6 +424,7 @@ export function axEngineLoader(): CustomLoader {
         const apiModelID = contract.id
         const ref = modelRefs.get(apiModelID)
         if (ref) applyLiveContract(ref, contract)
+        if (context?.model && context.model !== ref) applyLiveContract(context.model, contract)
         return sdk.languageModel(apiModelID)
       },
     }

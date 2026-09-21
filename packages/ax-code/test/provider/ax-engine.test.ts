@@ -1941,6 +1941,38 @@ describe("ax-engine provider integration", () => {
     expect(requested).toEqual([AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID])
   })
 
+  test("refreshes detached caller metadata after the live serving window shrinks", async () => {
+    let output = 8192
+    let context = 65536
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          data: [liveCard(AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID, { limit: { context, output } })],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      )) as typeof fetch
+    const provider = {
+      id: AX_ENGINE_PROVIDER_ID,
+      name: "AX Engine",
+      source: "config",
+      env: [],
+      options: { baseURL: "http://127.0.0.1:31418/v1" },
+      models: {},
+    } as any
+    const loader = await axEngineLoader()(provider)
+    const discovered = await loader.discoverModels!(provider)
+    const catalog = discovered[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID]
+    const caller = structuredClone(catalog)
+    context = 16384
+    output = 768
+    await loader.getModel!({ languageModel: (id: string) => ({ id }) }, caller.api.id, caller.options, {
+      model: caller,
+    })
+    expect(caller.limit).toEqual({ context: 16384, output: 768, input: 15616 })
+    expect(catalog.limit).toEqual(caller.limit)
+    expect(caller.capabilities.toolcall).toBe(true)
+  })
+
   test("discovered Coder-Next AXQ preserves the public model id for loader resolution", async () => {
     globalThis.fetch = (async () =>
       new Response(

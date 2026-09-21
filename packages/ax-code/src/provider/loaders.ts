@@ -26,6 +26,8 @@ const log = Log.create({ service: "provider.loaders" })
 
 export interface CustomModelLoaderContext {
   signal?: AbortSignal
+  /** The caller-owned metadata to refresh after runtime negotiation. */
+  model?: Provider.Model
 }
 
 export type CustomModelLoader = (

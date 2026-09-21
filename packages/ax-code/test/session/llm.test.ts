@@ -274,6 +274,78 @@ function createEventResponse(chunks: unknown[], includeDone = false) {
 }
 
 describe("session.llm.stream", () => {
+  test("sends the live output limit when the caller retains a detached cold catalog model", async () => {
+    const providerID = ProviderID.make("ax-engine")
+    const modelID = ModelID.make("tiel-coder-35b-axq-mxfp4")
+    for (let i = 0; i < 12; i++)
+      waitRequest(
+        "/models",
+        new Response(
+          JSON.stringify({
+            data: [
+              {
+                id: modelID,
+                limit: { context: 16384, output: 768 },
+                capabilities: { toolcall: true, input: { text: true }, output: { text: true } },
+                ax_engine: { openai_tool_calling_supported: true, coding_supported: true },
+              },
+            ],
+          }),
+          { headers: { "Content-Type": "application/json" } },
+        ),
+      )
+    await using tmp = await tmpdir({
+      config: {
+        enabled_providers: [providerID],
+        provider: {
+          [providerID]: {
+            npm: "@ai-sdk/openai-compatible",
+            options: { apiKey: "test", baseURL: `${state.server.url.origin}/v1`, connectionMode: "attach" },
+            models: { [modelID]: { name: "Cold catalog", tool_call: true, limit: { context: 65536, output: 8192 } } },
+          },
+        },
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        for (let turn = 0; turn < 2; turn++) {
+          const model = structuredClone(await Provider.getModel(providerID, modelID))
+          model.limit = { context: 65536, output: 8192 }
+          const sessionID = SessionID.make("session-live-window")
+          const request = waitRequest(
+            "/chat/completions",
+            new Response(createChatStream("ok"), {
+              headers: { "Content-Type": "text/event-stream" },
+            }),
+          )
+          const stream = await LLM.stream({
+            sessionID,
+            model,
+            user: {
+              id: MessageID.make("user-live-window"),
+              sessionID,
+              role: "user",
+              time: { created: 1 },
+              agent: "test",
+              model: { providerID, modelID },
+            },
+            agent: { name: "test", mode: "primary", options: {}, permission: [] },
+            messages: [{ role: "user", content: "Say ok." }],
+            system: ["Be concise."],
+            abort: new AbortController().signal,
+            tools: {},
+          })
+          for await (const _ of stream.fullStream) {
+            /* consume the response */
+          }
+          expect((await request).body.max_tokens).toBe(768)
+          expect(model.limit).toEqual({ context: 16384, output: 768, input: 15616 })
+        }
+      },
+    })
+  })
+
   test.each([
     { providerID: "ax-engine", modelID: "tiel-coder-35b-axq-mxfp4", local: true },
     { providerID: "ax-engine", modelID: "cyber-tiel-coder-35b-axq-mxfp4", local: true },

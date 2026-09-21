@@ -135,12 +135,14 @@ const MIN_COMPACTABLE_HISTORY_TOKENS = 512
 function fixedBudgetMessage(input: {
   model: Provider.Model
   fixedTokens: number
+  fixedSystemTokens: number
+  toolSchemaTokens: number
   usableTokens: number
   compactableHistoryTokens: number
 }) {
   const detail =
     input.fixedTokens >= input.usableTokens
-      ? `The fixed system prompt and tool schemas need about ${input.fixedTokens} tokens, but only ${input.usableTokens} input tokens are usable.`
+      ? `The fixed system prompt and tool schemas need about ${input.fixedTokens} tokens (${input.fixedSystemTokens} system + ${input.toolSchemaTokens} tool schemas), but only ${input.usableTokens} input tokens are usable.`
       : `The request exceeds the usable ${input.usableTokens}-token input budget and has only about ${input.compactableHistoryTokens} tokens of compactable history.`
   return (
     `This model cannot fit the current AX Code agent/tool setup. ${detail} ` +
@@ -227,6 +229,8 @@ export async function maybeSchedulePreflightCompaction(input: {
       message: fixedBudgetMessage({
         model: input.model,
         fixedTokens,
+        fixedSystemTokens,
+        toolSchemaTokens,
         usableTokens: inputCap,
         compactableHistoryTokens,
       }),
