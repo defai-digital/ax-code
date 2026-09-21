@@ -25,6 +25,7 @@ function setup() {
     pasteStyleId: 1,
     promptPartTypeId: () => 1,
     inputBlocked: () => false,
+    inputFocused: () => true,
     disablePasteSummary: () => false,
     suppressAutocompleteForNextContentChange: vi.fn(),
     requestInputLayoutRefresh: vi.fn(),
@@ -190,5 +191,39 @@ describe("prompt terminal paste", () => {
     expect(await running).toBe(false)
     expect(host.input.insertText).not.toHaveBeenCalled()
     expect(host.pasteSubmitGate.finishPasteHandling).toHaveBeenCalledWith({ submitDeferred: false })
+  })
+
+  test("does not insert clipboard text or submit after focus moves to a dialog", async () => {
+    const pending = Promise.withResolvers<Awaited<ReturnType<typeof Clipboard.read>>>()
+    vi.spyOn(Clipboard, "read").mockReturnValue(pending.promise)
+    const { controller, host } = setup()
+    const submit = vi.fn()
+    const gate = createPromptPasteSubmitGate({ submit })
+    host.pasteSubmitGate = gate
+    const running = controller.pasteClipboardText()
+    expect(gate.deferSubmitUntilPasteHandled()).toBe(true)
+    host.inputFocused = () => false
+    pending.resolve({ mime: "text/plain", data: "clipboard text" })
+
+    expect(await running).toBe(false)
+    expect(host.input.insertText).not.toHaveBeenCalled()
+    expect(submit).not.toHaveBeenCalled()
+  })
+
+  test("pastes clipboard text and releases deferred submission while focused", async () => {
+    const pending = Promise.withResolvers<Awaited<ReturnType<typeof Clipboard.read>>>()
+    vi.spyOn(Clipboard, "read").mockReturnValue(pending.promise)
+    const { controller, host } = setup()
+    const submit = vi.fn()
+    const gate = createPromptPasteSubmitGate({ submit })
+    host.pasteSubmitGate = gate
+    const running = controller.pasteClipboardText()
+    expect(gate.deferSubmitUntilPasteHandled()).toBe(true)
+    pending.resolve({ mime: "text/plain", data: "clipboard text" })
+
+    expect(await running).toBe(true)
+    expect(host.input.insertText).toHaveBeenCalledWith("clipboard text")
+    await Promise.resolve()
+    expect(submit).toHaveBeenCalledOnce()
   })
 })

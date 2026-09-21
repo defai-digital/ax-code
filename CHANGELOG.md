@@ -6,6 +6,16 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Added
+
+- Add a right-click Copy/Paste menu and turn preview cards on the transcript timeline.
+
+### Fixed
+
+- Recognize Git exit-status assertions by their actual subcommand and option tokens. Accept quiet ref verification
+  while rejecting assertion-like filter/path arguments and Git failures masked by observation-only shell chains.
+- Discard pending context-menu clipboard pastes and deferred submission when the prompt loses focus.
+
 ## [7.19.5] - 2026-09-21
 
 ### Changed

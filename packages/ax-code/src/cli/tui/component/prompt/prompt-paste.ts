@@ -30,6 +30,7 @@ export type PromptPasteHost = {
   pasteStyleId: number
   promptPartTypeId: () => number
   inputBlocked: () => boolean
+  inputFocused: () => boolean
   disablePasteSummary: () => boolean
   suppressAutocompleteForNextContentChange: () => void
   requestInputLayoutRefresh: (options?: { autocomplete?: boolean }) => void
@@ -236,21 +237,21 @@ export function createPromptPaste(host: PromptPasteHost) {
   }
 
   async function pasteClipboardText() {
-    if (!canPaste()) return false
+    if (!canPaste() || !host.inputFocused()) return false
     host.pasteSubmitGate.beginPasteHandling()
     let handledPaste = false
     try {
       const text = clipboardTextPaste({
         content: await Clipboard.read(),
       })
-      if (!text || !canPaste()) return false
+      if (!text || !canPaste() || !host.inputFocused()) return false
 
       host.input.insertText(text)
       host.requestInputLayoutRefresh({ autocomplete: false })
       handledPaste = true
       return true
     } finally {
-      host.pasteSubmitGate.finishPasteHandling({ submitDeferred: handledPaste && canPaste() })
+      host.pasteSubmitGate.finishPasteHandling({ submitDeferred: handledPaste && canPaste() && host.inputFocused() })
     }
   }
 

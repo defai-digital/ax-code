@@ -84,7 +84,12 @@ describe("VerificationPolicy command classification", () => {
       "git diff --exit-code",
       "git diff --quiet HEAD~1 -- src/",
       "git diff-index --quiet HEAD",
+      "git diff --quiet --no-exit-code",
+      "git diff --exit-code && echo clean",
+      "git diff --quiet;",
+      "git diff --quiet\n",
       "git rev-parse --verify HEAD^{commit}",
+      "git rev-parse --quiet --verify HEAD",
       "git describe --exact-match --tags HEAD",
     ]) {
       expect(VerificationPolicy.isTrivialVerificationCommand(command)).toBe(false)
@@ -100,6 +105,17 @@ describe("VerificationPolicy command classification", () => {
       "git rev-parse HEAD",
       "git describe --tags",
       "git merge-base HEAD origin/main",
+      "git log --grep='diff --quiet'",
+      'git log --grep "merge-base --is-ancestor"',
+      "git diff --quietly",
+      "git rev-parse --end-of-options --verify HEAD",
+      "git diff -- --quiet",
+      "git diff -S --quiet",
+      "git -C 'diff --quiet' status",
+      "git diff --exit-code --no-exit-code",
+      "git diff --exit-code | cat",
+      "git diff --exit-code; echo ok",
+      "git diff --quiet || true",
     ]) {
       expect(VerificationPolicy.isTrivialVerificationCommand(command)).toBe(true)
     }

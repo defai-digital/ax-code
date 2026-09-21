@@ -730,6 +730,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     pasteStyleId,
     promptPartTypeId: () => promptPartTypeId,
     inputBlocked,
+    inputFocused: () => input?.focused ?? false,
     disablePasteSummary: () => !!sync.data.config.experimental?.disable_paste_summary,
     suppressAutocompleteForNextContentChange,
     requestInputLayoutRefresh,

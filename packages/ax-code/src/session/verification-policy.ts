@@ -8,6 +8,7 @@
 
 import fs from "fs/promises"
 import path from "path"
+import { parseShellArgs } from "../util/shell-args"
 import { resolveCommands } from "../planner/verification/runner"
 import { decodePackageJsonObject, packageJsonStringMap, parsePackageJsonObject } from "../util/package-json"
 
@@ -106,12 +107,74 @@ export namespace VerificationPolicy {
    * check commands (for example `git merge-base --is-ancestor HEAD origin/main`
    * asserting that work was pushed).
    */
-  const GIT_ASSERTION_FORMS = [
-    /\bmerge-base\s+--is-ancestor\b/,
-    /\bdiff\b[^;&|]*\s--(?:exit-code|quiet)\b/,
-    /\brev-parse\s+--verify\b/,
-    /\bdescribe\b[^;&|]*\s--exact-match\b/,
-  ]
+  function isGitAssertion(segment: string): boolean {
+    const tokens = parseShellArgs(segment.trim().replace(/^[({]+\s*/, ""))
+    while (tokens[0] && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[0])) tokens.shift()
+    if (tokens.shift() !== "git") return false
+    // Identify the actual subcommand, not assertion-looking text in a path,
+    // config value, log filter, or other argument.
+    while (tokens[0]?.startsWith("-")) {
+      const option = tokens.shift()!
+      if (["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env"].includes(option)) {
+        if (!tokens.length) return false
+        tokens.shift()
+      } else if (
+        !/^(?:--(?:git-dir|work-tree|namespace|config-env)=.+|-[Cc].+|--no-pager|--paginate|-p|-P|--bare|--no-optional-locks)$/.test(
+          option,
+        )
+      ) {
+        return false
+      }
+    }
+    const subcommand = tokens.shift()
+    if (
+      !subcommand ||
+      !["diff", "diff-index", "diff-files", "diff-tree", "merge-base", "rev-parse", "describe"].includes(subcommand)
+    )
+      return false
+    let assertion = false
+    let quietDiff = false
+    for (let index = 0; index < tokens.length; index++) {
+      const token = tokens[index]
+      if (token === "--" || token === "--end-of-options" || token.startsWith("#")) break
+      if (token === "--help" || token === "-h") return false
+      // These options consume the next token even when it looks like a flag.
+      if (
+        [
+          "-S",
+          "-G",
+          "-O",
+          "-l",
+          "-U",
+          "--output",
+          "--diff-filter",
+          "--find-object",
+          "--skip-to",
+          "--rotate-to",
+          "--prefix",
+          "--default",
+          "--exclude",
+          "--match",
+        ].includes(token)
+      ) {
+        index++
+        continue
+      }
+      if (subcommand.startsWith("diff")) {
+        if (token === "--quiet") quietDiff = true
+        if (token === "--no-quiet") quietDiff = false
+        if (token === "--exit-code") assertion = true
+        if (token === "--no-exit-code") assertion = false
+      } else if (
+        (subcommand === "merge-base" && token === "--is-ancestor") ||
+        (subcommand === "rev-parse" && token === "--verify") ||
+        (subcommand === "describe" && token === "--exact-match")
+      ) {
+        assertion = true
+      }
+    }
+    return assertion || quietDiff
+  }
 
   export function detectEcosystem(signals: VerificationSignals): Ecosystem {
     if (signals.hasPackageJson) return "node"
@@ -161,11 +224,18 @@ export namespace VerificationPolicy {
   }
 
   export function isTrivialVerificationCommand(command: string): boolean {
-    const segments = command.split(/&&|\|\||;|\||\n/)
-    for (const segment of segments) {
+    const segments = command.split(/(&&|\|\||;|\||\n)/)
+    const lastCommand = segments.findLastIndex((part, index) => index % 2 === 0 && part.trim())
+    for (let index = 0; index < segments.length; index += 2) {
+      const segment = segments[index]
       const word = firstWord(segment)
       if (!word) continue
-      if (word === "git" && GIT_ASSERTION_FORMS.some((form) => form.test(segment))) return false
+      // Only && preserves this assertion's failure through the remaining
+      // chain. A pipe, fallback, or later statement can mask its exit status.
+      const preservesFailure = segments
+        .slice(index + 1, lastCommand)
+        .every((part, offset) => offset % 2 !== 0 || part === "&&")
+      if (word === "git" && preservesFailure && isGitAssertion(segment)) return false
       if (!TRIVIAL_COMMANDS.has(word)) return false
     }
     return true
