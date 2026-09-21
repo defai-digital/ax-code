@@ -63,6 +63,10 @@ The current matched peer numbers are native AX Engine versus MTPLX **2.11.3** on
 including TTFT**. These are native-API measurements, not default `ax-engine serve` and not AX Code
 sessions. AX Code bundles signed AX Engine **7.5.3**.
 
+<p align="center">
+  <img src="docs/images/tiel-vs-mtplx-2026-09-20.svg" width="820" alt="Grouped bar chart of completion throughput in tokens per second (including time to first token), AX Engine versus MTPLX 2.11.3, for the Tiel default pack and the Cyber-Tiel alternate pack on M5 Max 128 GiB, and the Tiel pack on M4 Pro 64 GiB. AX Engine leads both M5 Max cells; on M4 Pro the Tiel pack is essentially level with MTPLX.">
+</p>
+
 On MacBook Pro **M5 Max 128 GiB**, the managed default
 [Tiel Coder 35B A3B MXFP4 MTP](docs/providers/ax-engine-model-selection.md) pack completed at
 **194.88 tok/s** versus MTPLX 177.44 on `python-lru`. Decode for that cell was 217.85 versus 198.40.
@@ -71,11 +75,11 @@ The fastest decode cell in the campaign is the alternate **Cyber-Tiel** pack at 
 unresolved. On a Mac mini **M4 Pro 64 GiB**, Tiel completion is about 90 tok/s. **M5 Max 128 GiB is
 the campaign host, not the minimum** — see the M4 Pro 48 GB+ recommendation above.
 
-| Host | Pack (default unless noted) | Completion tok/s (incl. TTFT) | Decode tok/s |
-| ---- | --------------------------- | ----------------------------: | -----------: |
-| M5 Max 128 GiB | Tiel `python-lru` | **194.88** vs 177.44 | 217.85 vs 198.40 |
-| M5 Max 128 GiB | Cyber-Tiel `python-lru` (alternate) | 219.43 vs 194.15 | **249.01** vs 219.84 |
-| M4 Pro 64 GiB | Tiel `python-lru` | 90.46 vs 92.23 | 109.12 vs 107.04 |
+| Host           | Pack (default unless noted)         | Completion tok/s (incl. TTFT) |         Decode tok/s |
+| -------------- | ----------------------------------- | ----------------------------: | -------------------: |
+| M5 Max 128 GiB | Tiel `python-lru`                   |          **194.88** vs 177.44 |     217.85 vs 198.40 |
+| M5 Max 128 GiB | Cyber-Tiel `python-lru` (alternate) |              219.43 vs 194.15 | **249.01** vs 219.84 |
+| M4 Pro 64 GiB  | Tiel `python-lru`                   |                90.46 vs 92.23 |     109.12 vs 107.04 |
 
 Source: [AX Engine four-machine report](https://github.com/defai-digital/ax-engine/blob/main/docs/performance/tiel-vs-mtplx-2026-09-20.md)
 and the [AX Code summary](docs/guides/tiel-peer-2026-09-20.md). The 19 September M3 Max snapshot
