@@ -67,6 +67,7 @@ import { DialogRollback } from "./dialog-rollback"
 import { DialogDiffViewer } from "../../component/dialog-diff-viewer"
 import { SessionRollbackView } from "./rollback"
 import { Sidebar } from "./sidebar"
+import { SessionTopBar } from "./top-bar"
 import { sessionQualityActions, sessionQualityActionValue } from "./quality"
 import { computeSessionMainPaneWidth } from "./layout"
 import { Flag } from "@/flag/flag"
@@ -428,6 +429,9 @@ export function Session() {
   // Layout math (main pane, prompt) must use the panel signal so the
   // prompt isn't shrunk when the sidebar is floating as an overlay.
   const sidebarPanelVisible = createMemo(() => sidebarVisible() && wide())
+  // The route header hides exactly when the docked sidebar takes over its
+  // role; the top bar then picks up the title so it is not lost.
+  const headerShown = createMemo(() => showHeader() && (!sidebarVisible() || !wide()))
   const showTimestamps = createMemo(() => timestamps() === "show")
   const contentWidth = createMemo(() =>
     computeSessionMainPaneWidth({
@@ -1568,7 +1572,15 @@ export function Session() {
           onMouseUp={handleSubagentBodyMouseUp}
         >
           <Show when={session()}>
-            <Show when={showHeader() && (!sidebarVisible() || !wide())}>
+            <Show when={!session()?.parentID}>
+              <SessionTopBar
+                sessionID={route.sessionID}
+                width={contentWidth()}
+                showTitle={!headerShown()}
+                statusTick={statusTick}
+              />
+            </Show>
+            <Show when={headerShown()}>
               <Header />
             </Show>
             <SubagentStatusPanel

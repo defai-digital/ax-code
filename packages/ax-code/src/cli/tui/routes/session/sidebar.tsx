@@ -15,7 +15,6 @@ import { ChromeAction, ChromeWidthAction } from "../../component/chrome-action"
 import { useCommandDialog } from "../../component/dialog-command"
 import { useSDK } from "@tui/context/sdk"
 import { useToast } from "../../ui/toast"
-import { Clipboard } from "../../util/clipboard"
 import { Log } from "@/util/log"
 import { Flag } from "@/flag/flag"
 import { EventQuery } from "@/replay/query"
@@ -24,7 +23,7 @@ import { SessionDreView } from "./dre"
 import { SessionRollbackView } from "./rollback"
 import { SessionSemanticDiff } from "@/session/semantic-diff"
 import { Todo } from "@/session/todo"
-import { footerSessionStatusOrIdle, footerSessionStatusView } from "./footer-view-model"
+import { footerSessionStatusOrIdle } from "./footer-view-model"
 import { followUpText, isQueueableStatus } from "../../component/prompt/follow-up-queue"
 import { steerBarrier, steerFollowUp } from "../../component/prompt/steer-follow-up"
 import { useKeybind } from "../../context/keybind"
@@ -47,7 +46,6 @@ import { Locale } from "@/util/locale"
 import type { McpStatus } from "@ax-code/sdk/v2"
 import type { SyncedSessionQualityReadiness } from "../../context/sync-session-risk"
 import { countByWorkflow as countFindingsByWorkflow } from "@/quality/finding-counts"
-import { disabledProviderIDs } from "../../component/provider-list-view-model"
 import {
   hasSidebarSignal,
   renderSessionChecksSummary,
@@ -146,13 +144,6 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
     const candidate = sync.data.session_status?.[props.sessionID]
     return footerSessionStatusOrIdle(candidate)
   })
-  const sidebarStatusView = createMemo(() => {
-    props.statusTick?.()
-    const current = status()
-    if (current.type === "idle") return undefined
-    return footerSessionStatusView({ status: current, now: Date.now() })
-  })
-  const sidebarStatusLabel = createMemo(() => sidebarStatusView()?.label)
   const dimensions = useContentDimensions()
   const kv = useKV()
   const sidebarWidth = createMemo(() => computeSidebarWidth(dimensions().width, kv.get("sidebar_width")))
@@ -255,23 +246,6 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
       }
       toast.show({ message: uiText("ui.steerFailed", { message: outcome.message }), variant: "error" })
     })
-  }
-
-  // Clicking the session id copies it so it can be pasted into issues, logs,
-  // or `--session` flags without selecting the text by hand.
-  async function copySessionID(id: string) {
-    try {
-      await Clipboard.copy(id)
-      toast.show({ message: uiText("ui.sessionIdCopiedToClipboard"), variant: "success", duration: 1500 })
-    } catch (error) {
-      log.warn("copy session id failed", {
-        command: "tui.sidebar.session.copy",
-        status: "error",
-        sessionID: id,
-        error,
-      })
-      toast.show({ message: uiText("ui.failedToCopySessionId"), variant: "error" })
-    }
   }
 
   // Coarse refresh key for sidebar surfaces that read the session event log.
@@ -388,21 +362,6 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
   const hasProviders = createMemo(() => sync.data.provider.length > 0)
   const gettingStartedDismissed = createMemo(() => kv.get("dismissed_getting_started", false))
 
-  // Only connected providers appear in the sidebar list. Config-disabled
-  // providers (credentials kept, provider off) are filtered out here and
-  // surfaced in the manage dialog, which offers enable/disconnect — so the
-  // re-enable path stays reachable without cluttering the active list.
-  const connectedProviders = createMemo(() => sync.data.provider)
-  const disabledProviders = createMemo(() =>
-    disabledProviderIDs(
-      sync.data.config,
-      sync.data.provider.map((provider) => provider.id),
-    ),
-  )
-  // Keep the Providers section (and its "manage" link) visible even when every
-  // provider is disabled, otherwise the only path back to re-enable disappears.
-  const hasProviderSection = createMemo(() => connectedProviders().length > 0 || disabledProviders().length > 0)
-
   return (
     <Show when={session()}>
       {(session) => (
@@ -426,28 +385,6 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
             }}
           >
             <box flexShrink={0} gap={1} paddingRight={1}>
-              <box paddingRight={1}>
-                <text
-                  fg={theme.warning}
-                  wrapMode="none"
-                  onMouseUp={() => {
-                    void copySessionID(session().id)
-                  }}
-                >
-                  {session().id}
-                </text>
-                <text fg={theme.text}>
-                  <b>{session().title}</b>
-                </text>
-                <Show when={sidebarStatusLabel()}>
-                  {(label) => (
-                    <text fg={theme.warning} wrapMode="none">
-                      {label()}
-                    </text>
-                  )}
-                </Show>
-                <Show when={session().share?.url}>{(url) => <text fg={theme.textMuted}>{url()}</text>}</Show>
-              </box>
               <Show when={mcpEntries().length > 0}>
                 <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
                   <box
@@ -495,48 +432,6 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                         </box>
                       )}
                     </For>
-                  </Show>
-                </box>
-              </Show>
-              <Show when={hasProviderSection()}>
-                <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
-                  <box flexDirection="row" justifyContent="space-between">
-                    <text fg={theme.text}>
-                      <b>{uiText("ui.providers")}</b>
-                      <span style={{ fg: theme.textMuted }}> ({connectedProviders().length})</span>
-                    </text>
-                    <text
-                      fg={theme.textMuted}
-                      onMouseUp={() => {
-                        command.trigger("provider.manage")
-                      }}
-                    >
-                      {uiText("ui.manage")}
-                    </text>
-                  </box>
-
-                  <For each={connectedProviders()}>
-                    {(provider) => (
-                      <box
-                        flexDirection="row"
-                        gap={1}
-                        onMouseUp={() => {
-                          command.trigger("provider.manage")
-                        }}
-                      >
-                        <text flexShrink={0} style={{ fg: theme.success }}>
-                          •
-                        </text>
-                        <text fg={theme.text} wrapMode="word">
-                          {provider.name} <span style={{ fg: theme.textMuted }}>{uiText("ui.connected")}</span>
-                        </text>
-                      </box>
-                    )}
-                  </For>
-                  <Show when={disabledProviders().length > 0}>
-                    <text fg={theme.textMuted} wrapMode="word">
-                      {Locale.pluralize(disabledProviders().length, "{} provider disabled", "{} providers disabled")}
-                    </text>
                   </Show>
                 </box>
               </Show>

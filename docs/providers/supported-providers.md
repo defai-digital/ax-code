@@ -15,7 +15,7 @@ Use `/connect` in the terminal UI or `ax-code providers login <provider-id>` for
 
 ### Managing connected providers
 
-The sidebar shows a **Providers** section listing every connected (and temporarily disabled) provider; click a row or **manage** to open the provider manager, which is also available as the `/providers` command. From there you can select a model, disable, or disconnect each provider, or jump to the full `/connect` flow.
+The session view keeps a top bar with the session ID (click to copy), title, and live status, followed by a **Providers** entry showing the connected count; click it or **manage** to open the provider manager, which is also available as the `/providers` command. From there you can select a model, disable, or disconnect each provider, or jump to the full `/connect` flow.
 
 - **Replace a key**: select the provider in `/connect` and choose **Replace key**, or re-run `ax-code providers login <provider-id>`.
 - **Disable temporarily**: choose **Disable** in `/providers` or `/connect`, or run `ax-code providers disable <provider-id>`. This adds the provider to `disabled_providers` in the global config and keeps the saved credentials. Disabled providers stay visible in `/providers` and under **Disabled** in `/connect`, and can be turned back on with **Enable** or `ax-code providers enable <provider-id>`.
