@@ -9,7 +9,7 @@ _  ___ |    |_/_____/ /___  / /_/ /_  /_/ /_  /___
 <h1 align="center">AX Code</h1>
 
 <p align="center"><strong>Inspect the run. Verify the change. Decide what stays.</strong></p>
-<p align="center"><strong>Local coding agent with managed inference on Apple Silicon M3 Max.</strong></p>
+<p align="center"><strong>Local coding agent with managed inference on Apple Silicon.</strong></p>
 
 AX Code is an open-source coding-agent runtime for reviewable, reversible work. Run a 35B-class coding model on a single Apple Silicon laptop with managed lifecycle, and keep an evidence record of every change. Sessions are recorded as structured event logs with file snapshots, so you can reconstruct what the agent did, compare two runs against each other, and roll back what you do not want. Candidate implementations can be built in isolated Git worktrees and ranked against your repository's own checks — nothing merges automatically.
 
@@ -54,44 +54,34 @@ verification, and managed start/shutdown. The catalog budgets roughly 64 GiB as 
 full-context (64K) planning figure — weights, KV cache, buffers, and host reserve — so confirm the
 live catalog fit result for your machine rather than sizing to the model file alone.
 
-Speed is hardware-bound. AX Code does not impose a tokens-per-second ceiling (the docs say so
-explicitly); faster hardware produces tokens faster. The chart is a **native runtime-phase**
-measurement on the M3 Max 128 GiB benchmark host — median of three trials, 256-token output,
-prefix cache disabled, MTP active — so it is not AX Code end-to-end coding throughput and not a
-guarantee for your machine. Decode tokens/second (higher is better); each `=` is about 6 tokens/s.
+Speed is hardware-bound. AX Code does not impose a tokens-per-second ceiling; faster hardware
+produces tokens faster. **AX Code session throughput is not engine tok/s:** a coding turn also
+pays tool rounds, prompt growth, HTTP sidecar overhead, and cache state.
 
-```text
-Tiel Coder 35B A3B - short (458 tok in)
-  AX Engine   ========== 57.0
-  MTPLX       =============== 92.3
-Tiel Coder 35B A3B - context (3,182 tok in)
-  AX Engine   ========= 55.3
-  MTPLX       ================ 96.3
-Cyber-Tiel 35B A3B - short (483 tok in)
-  AX Engine   ========== 58.5
-  MTPLX       ================ 95.1
-Cyber-Tiel 35B A3B - context (3,207 tok in)
-  AX Engine   ======== 47.4
-  MTPLX       =============== 92.1
-```
+The current matched peer numbers are native AX Engine versus MTPLX **2.11.3** on **20 September
+2026** (six measured samples, cold KV, MTP depth 3). The primary metric is **completion tokens/s
+including TTFT**. These are native-API measurements, not default `ax-engine serve` and not AX Code
+sessions. AX Code bundles signed AX Engine **7.5.3**.
 
-Exact values from the same matched run (prefill in tokens/s):
+On MacBook Pro **M5 Max 128 GiB**, the managed default
+[Tiel Coder 35B A3B MXFP4 MTP](docs/providers/ax-engine-model-selection.md) pack completed at
+**194.88 tok/s** versus MTPLX 177.44 on `python-lru`. Decode for that cell was 217.85 versus 198.40.
+The fastest decode cell in the campaign is the alternate **Cyber-Tiel** pack at **249.01 tok/s**
+(completion 219.43). Cyber-Tiel is not the managed default, and its managed read-task probes remain
+unresolved. On a Mac mini **M4 Pro 64 GiB**, Tiel completion is about 90 tok/s. **M5 Max 128 GiB is
+the campaign host, not the minimum** — see the M4 Pro 48 GB+ recommendation above.
 
-| Case                | AX Engine decode | MTPLX decode | AX Engine prefill | MTPLX prefill |
-| ------------------- | ---------------: | -----------: | ----------------: | ------------: |
-| Tiel, short         |             57.0 |         92.3 |           1,255.6 |       1,207.0 |
-| Tiel, context       |             55.3 |         96.3 |           1,424.2 |       1,279.5 |
-| Cyber-Tiel, short   |             58.5 |         95.1 |           1,226.9 |       1,189.6 |
-| Cyber-Tiel, context |             47.4 |         92.1 |           1,446.2 |       1,427.6 |
+| Host | Pack (default unless noted) | Completion tok/s (incl. TTFT) | Decode tok/s |
+| ---- | --------------------------- | ----------------------------: | -----------: |
+| M5 Max 128 GiB | Tiel `python-lru` | **194.88** vs 177.44 | 217.85 vs 198.40 |
+| M5 Max 128 GiB | Cyber-Tiel `python-lru` (alternate) | 219.43 vs 194.15 | **249.01** vs 219.84 |
+| M4 Pro 64 GiB | Tiel `python-lru` | 90.46 vs 92.23 | 109.12 vs 107.04 |
 
-The shipping default now runs Tiel on the model-selected `auto` profile (47.8–54.7 decode tokens/s
-on the same host); MTPLX was not rerun for `auto`, so the MTPLX figures above remain the
-`agentic`-baseline matched comparison, not a simultaneous measurement. The AX Engine numbers come
-from a local source build carrying the Tiel MTP loader fix; the Homebrew binary available at
-measurement time could not start Tiel, and no MTP-disabled control was run, so these are not a
-certified MTP speedup. Both packs are development requantizations with no certified quality parity
-or MTP-speed claim. Source: [Tiel prefill/decode benchmark](docs/guides/tiel-runtime-phases-2026-09-19.md)
-and [MTP profile comparison](docs/guides/tiel-mtp-profile-2026-09-19.md).
+Source: [AX Engine four-machine report](https://github.com/defai-digital/ax-engine/blob/main/docs/performance/tiel-vs-mtplx-2026-09-20.md)
+and the [AX Code summary](docs/guides/tiel-peer-2026-09-20.md). The 19 September M3 Max snapshot
+(47–58 versus 92–96 decode on a 7.4.0-identifying source build) is historical only:
+[Tiel prefill/decode benchmark](docs/guides/tiel-runtime-phases-2026-09-19.md). Both packs are
+development requantizations with no certified quality-parity or MTP-speed claim.
 
 The largest practical payoff is the local prefix cache. A repeated 285-token task with a full
 36,708-token KV cache returned its first payload in 0.04 seconds on MTPLX — see the
@@ -250,7 +240,7 @@ Trusting the tap allows Homebrew to load all current and future formulae and cas
 Existing Homebrew users do not need to migrate. Use one installation channel for `ax-code`;
 `ax-code upgrade` follows the active installation, while `brew upgrade ax-code` updates Homebrew.
 
-After install, to enable managed local inference on Apple Silicon M3 Max with the bundled AX
+After install, to enable managed local inference on Apple Silicon with the bundled AX
 Engine and the 35B MXFP4 MTP pack, see [AX Engine Model Selection](docs/providers/ax-engine-model-selection.md).
 To connect an already-running MTPLX, oMLX, Ollama, LM Studio, AX Studio, or any other
 OpenAI-compatible endpoint instead, see [MTPLX and oMLX setup](docs/providers/local-mlx-runtimes.md).
@@ -332,17 +322,18 @@ would change the model's effective behavior without telling you. AX Code also ve
 text-and-tool contract before activation, so an unusable pack is caught up front rather than
 discovered mid-task.
 
-The measured decode and prefill numbers, with their provenance and caveats, are charted in the
-"Apple Silicon, managed local inference" section near the top of this README. In short: Tiel uses
+The current Tiel versus MTPLX numbers, with host, metric, and caveats, are in the
+"Apple Silicon, managed local inference" section near the top of this README. Tiel uses
 model-selected `auto` tuning with MTP still required; Cyber-Tiel retains `agentic` (its managed
-read-task probes failed with both profiles). These packs require an AX Engine build containing the
-Tiel MTP loader fix (7.5.0 or newer); the Homebrew 7.4.0 binary predates the fix and fails with
-`MlxMtpRequiredButUnavailable`. See the
-[Tiel prefill/decode benchmark and build requirements](docs/guides/tiel-runtime-phases-2026-09-19.md),
-the [MTP profile comparison](docs/guides/tiel-mtp-profile-2026-09-19.md), and the
-[2026-09-19 AX Code / OpenCode retest with MTP](docs/guides/local-client-matrix-2026-09-19.md).
-Both packs are development requantizations with no certified quality-parity or MTP-speed claim.
-See [local runtime setup](docs/providers/local-mlx-runtimes.md) for MTPLX/oMLX preset details.
+read-task probes failed with both profiles, so it stays the alternate pack). These packs require
+AX Engine 7.5.0 or newer; the Homebrew 7.4.0 binary predates the Tiel MTP loader fix and fails
+with `MlxMtpRequiredButUnavailable`. See the
+[20 September four-machine summary](docs/guides/tiel-peer-2026-09-20.md),
+the historical [Tiel prefill/decode benchmark](docs/guides/tiel-runtime-phases-2026-09-19.md),
+and the [2026-09-19 AX Code / OpenCode retest with MTP](docs/guides/local-client-matrix-2026-09-19.md)
+(Qwen 3.8, a different model). Both Tiel packs are development requantizations with no certified
+quality-parity or MTP-speed claim. See [local runtime setup](docs/providers/local-mlx-runtimes.md)
+for MTPLX/oMLX preset details.
 
 CLI bridges reuse a local vendor CLI and its login session. AX Code records its own tool execution
 in full; activity that happens inside a vendor CLI process is visible only through that bridge's

@@ -1,10 +1,16 @@
 # Tiel Coder native prefill and decode measurements
 
-Status: Measured local snapshot
-Last reviewed: 2026-09-19
+Status: Historical local snapshot
+Last reviewed: 2026-09-21
 Owner: AX Code maintainers
 Date: 2026-09-19
-Scope: AX Code's two selected Tiel packs, AX Engine versus MTPLX
+Scope: AX Code's two selected Tiel packs, AX Engine versus MTPLX, Apple M3 Max 128 GiB
+
+**Superseded for ranking.** The 20 September 2026 four-machine native-API campaign is the
+current Tiel versus MTPLX comparison, including M5 Max completion **194.88** tok/s for the
+default pack and Cyber-Tiel peak decode **249.01** tok/s. See
+[Tiel peer summary](tiel-peer-2026-09-20.md). Keep this page as the 19 September M3 Max
+phase snapshot (engine identified as 7.4.0; median of three). Do not mix the tables.
 
 These results retain the original `agentic` profile baseline. The subsequent
 [Tiel MTP profile comparison](tiel-mtp-profile-2026-09-19.md) measures the `auto`

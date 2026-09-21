@@ -123,6 +123,12 @@ such as 50 tok/s is neither a configured target nor an upper limit: faster
 hardware can produce tokens faster. Context size, output budgets, and request
 concurrency limits control capacity, not a fixed token generation rate.
 
+The current public Tiel versus MTPLX snapshot is the 20 September 2026 native-API
+campaign summarized in [Tiel peer summary](../guides/tiel-peer-2026-09-20.md).
+On M5 Max 128 GiB the managed default Tiel pack completed at **194.88 tok/s**
+including TTFT (decode 217.85). Cyber-Tiel peak decode **249.01 tok/s** is the
+alternate pack, not the default. Those figures are not AX Code session speed.
+
 Compare measurements at the same input length, output budget, sampling settings,
 and cache state. Short-prompt decode measurements do not establish a minimum
 rate for a coding session with tens of thousands of context tokens. Reusing a

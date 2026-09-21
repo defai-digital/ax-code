@@ -30,7 +30,8 @@ For standalone questions about selected files through AX Trust caching, see
 | Get several models to attempt the same change            | [Verified Multi-Model Changes](guides/verified-multi-model-change.md)   |
 | Choose an install or runtime channel                     | [Installation and Runtime Channels](getting-started/install-runtime.md) |
 | Connect a hosted, CLI, custom, or local provider         | [Supported Providers and Models](providers/supported-providers.md)      |
-| Enable managed local inference on Apple Silicon M3 Max   | [AX Engine Model Selection](providers/ax-engine-model-selection.md)     |
+| Enable managed local inference on Apple Silicon          | [AX Engine Model Selection](providers/ax-engine-model-selection.md)     |
+| Read the current Tiel vs MTPLX speed numbers             | [Tiel peer summary (20 September 2026)](guides/tiel-peer-2026-09-20.md) |
 | Try AX Code with a free-tier model API                   | [Free-Tier API Quickstart](providers/free-tier-apis.md)                 |
 | Run an agent with safe filesystem and network boundaries | [Sandbox Mode](guides/sandbox.md)                                       |
 | Administer cloud or network infrastructure safely        | [Cloud Operations Mode](guides/cloud-operations.md)                     |
@@ -86,6 +87,7 @@ For standalone questions about selected files through AX Trust caching, see
 - [Free-Tier API Quickstart](providers/free-tier-apis.md) — compatible no-cost paths, constraints, and safe evaluation.
 - [Custom and Gateway Providers](providers/custom-provider.md) — OpenAI- and Anthropic-compatible endpoints.
 - [MTPLX and oMLX Setup](providers/local-mlx-runtimes.md) — source-checkout local presets, discovery, tools, and authentication.
+- [Tiel peer summary (20 September 2026)](guides/tiel-peer-2026-09-20.md) — current Tiel / Cyber-Tiel vs MTPLX native-API numbers; 194.88 completion default, 249.01 peak decode.
 - [AX Code/OpenCode Client Retest](guides/local-client-matrix-2026-09-19.md) — six client/runtime combinations, active MTP, first/repeat timing, and code checks.
 - [Local Inference Measurements](guides/local-inference-results-2026-09-19.md) — dated AX Code/OpenCode and runtime testing with timing and comparability limits.
 - [AX Engine Model Selection](providers/ax-engine-model-selection.md) — local model ranking and memory guidance.

@@ -7,7 +7,7 @@ Scope: Native Tiel MTP profile measurements and managed AX Code acceptance
 
 AX Code now selects the `auto` speculation profile for the default Tiel Coder pack, while keeping MTP activation `required`. Cyber-Tiel retains `agentic`: its `auto` candidate failed the real read-tool probe with repetitive output and subsequent concurrency-limit errors. This lets the engine use its model-specific draft gate. The previous generic `agentic` profile overrode that gate with 0.80. The native comparison improved Tiel decode in both measured workloads and Cyber-Tiel with longer input; Cyber-Tiel's short-input result regressed slightly. Higher native throughput did not establish usable tool behavior for that candidate.
 
-These are direct AX Engine native phase measurements on an Apple M3 Max with 128 GiB, not AX Code task throughput. The [original AX Engine versus MTPLX report](tiel-runtime-phases-2026-09-19.md) remains the historical baseline. MTPLX was not rerun in this profile experiment, so its earlier 92–96 tokens/s results must not be treated as a simultaneous comparison.
+These are direct AX Engine native phase measurements on an Apple M3 Max with 128 GiB, not AX Code task throughput. The [original AX Engine versus MTPLX report](tiel-runtime-phases-2026-09-19.md) remains the 19 September M3 Max historical baseline. The current ranking is the [20 September four-machine campaign](tiel-peer-2026-09-20.md). MTPLX was not rerun in this profile experiment, so its earlier 92–96 tokens/s results must not be treated as a simultaneous comparison.
 
 ## Confirmation results
 
