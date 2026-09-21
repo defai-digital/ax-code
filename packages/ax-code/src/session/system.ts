@@ -164,7 +164,6 @@ export namespace SystemPrompt {
           `  For substantial multi-file, architectural, or product-visible changes, create or update a repo document only when the user or repository policy requires it.`,
           `  For trivial changes, keep the decision frame lightweight in the plan instead of creating permanent docs.`,
           `  Prefer industry/common best practices and avoid over-engineering: choose the simplest change that solves the task, avoid new abstractions without 3+ concrete use cases, and verify before expanding scope.`,
-          `  Sandwich non-trivial work: plan → implement → verify (tests/build/verify_project) before claiming done.`,
           `  Use one investigator per call path; use task_parallel only for independent read-only scopes with distinct deliverables and shared existing evidence. Do not duplicate discovery or run concurrent writers.`,
           ...(codingProfile
             ? []

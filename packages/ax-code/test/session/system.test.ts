@@ -334,9 +334,12 @@ describe("session.system", () => {
           } as any)
 
           const text = result.join("\n")
+          const autonomous = text.slice(text.indexOf("<autonomous_workflow>"), text.indexOf("</autonomous_workflow>"))
           expect(text).toContain("<autonomous_workflow>")
           expect(text).toContain("avoid over-engineering")
-          expect(text).toContain("plan → implement → verify")
+          expect(text).toContain("verify before expanding scope")
+          expect(autonomous).not.toContain("Sandwich")
+          expect(text).toContain("Sandwich non-trivial work: plan (or a short decision frame) → implement → verify.")
           expect(text).toContain("task_parallel")
           expect(text).toContain("<verification_protocol>")
           expect(text).toContain("verify_project")
