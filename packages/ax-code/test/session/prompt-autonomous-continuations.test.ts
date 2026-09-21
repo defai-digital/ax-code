@@ -201,6 +201,7 @@ describe("autonomous continuation prompt builders", () => {
     })
 
     expect(text).toContain("2 model turns remaining")
+    expect(text).toContain("set reason")
     expect(text).toContain("1 unfinished todo")
     expect(text).toContain("credible suspected")
   })
@@ -286,6 +287,7 @@ describe("autonomous continuation prompt builders", () => {
     expect(text).toContain("auto-continuation 3/10")
     expect(text).toContain("do not keep doing broad exploration")
     expect(text).toContain("has not changed for 2 retries")
+    expect(text).toContain("set reason")
   })
 })
 

@@ -220,6 +220,8 @@ describe("session.system", () => {
     expect(PROMPT_ANTHROPIC).toContain("avoid over-engineering")
     expect(PROMPT_ANTHROPIC).not.toContain("Use these tools VERY frequently")
     expect(PROMPT_ANTHROPIC).not.toContain("Always use the TodoWrite tool")
+    expect(PROMPT_ANTHROPIC).toContain("set reason")
+    expect(PROMPT_ANTHROPIC).not.toContain("cancel it with a reason")
     expect(PROMPT_ANTHROPIC).toContain("Never ask permission questions")
 
     const gemini = SystemPrompt.provider({
@@ -340,6 +342,8 @@ describe("session.system", () => {
           expect(text).toContain("verify before expanding scope")
           expect(autonomous).not.toContain("Sandwich")
           expect(text).toContain("Sandwich non-trivial work: plan (or a short decision frame) → implement → verify.")
+          expect(autonomous).toContain("set reason")
+          expect(autonomous).not.toContain("never leave todos")
           expect(text).toContain("task_parallel")
           expect(text).toContain("<verification_protocol>")
           expect(text).toContain("verify_project")

@@ -48,6 +48,39 @@ describe("session.todo", () => {
     })
   })
 
+  test("keeps a cancellation reason by writing it into content", () => {
+    expect(
+      Todo.absorbCancellationReason({
+        content: "Investigate flaky test",
+        status: "cancelled",
+        priority: "low",
+        reason: "covered by an existing test",
+      }),
+    ).toEqual({
+      content: "Investigate flaky test (covered by an existing test)",
+      status: "cancelled",
+      priority: "low",
+    })
+
+    expect(
+      Todo.absorbCancellationReason({
+        content: "Investigate flaky test (covered by an existing test)",
+        status: "cancelled",
+        priority: "low",
+        reason: "covered by an existing test",
+      }).content,
+    ).toBe("Investigate flaky test (covered by an existing test)")
+
+    expect(
+      Todo.absorbCancellationReason({
+        content: "Ship release",
+        status: "completed",
+        priority: "high",
+        reason: "not a cancellation",
+      }),
+    ).toEqual({ content: "Ship release", status: "completed", priority: "high" })
+  })
+
   test("classifies active todo statuses for generic todo-like values", () => {
     expect(isActiveTodoStatus("pending")).toBe(true)
     expect(isActiveTodoStatus("in_progress")).toBe(true)

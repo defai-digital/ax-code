@@ -171,7 +171,7 @@ export namespace SystemPrompt {
                 `  If the user asks for council or arena multi-provider review, call council/arena within 1–2 tool rounds — do not start with task_parallel monorepo digs.`,
               ]),
           `  When autonomous mode makes choices for the user, record those choices in the final response.`,
-          `  Before ending your turn, mark every todo as completed or cancelled — never leave todos in pending or in_progress state.`,
+          `  Before ending your turn, update todos to match work that is actually finished. Mark an item completed only after its work is done. Cancel an item only when it is no longer required, and set reason. Do not mark an item completed just to end the turn.`,
           `</autonomous_workflow>`,
         ]
       : []

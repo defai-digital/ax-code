@@ -438,7 +438,7 @@ export namespace AutonomousContinuationPrompt {
       )} and ${Locale.pluralize(input.pendingTodos.length, "{} unfinished todo", "{} unfinished todos")}:\n` +
       `${Todo.formatLines(input.pendingTodos).join("\n")}\n` +
       `Stop broad exploration now. Finish the remaining concrete work, write any required reports, ` +
-      `or cancel low-confidence todos with a short reason. Update the todo list after each completed ` +
+      `or cancel low-confidence todos and set reason to a short explanation. Update the todo list after each completed ` +
       `or cancelled item before continuing.` +
       optionalReportTodoClosureGuidance({ include: input.includeReportClosureGuidance, mode: "deadline" })
     )
@@ -458,7 +458,7 @@ export namespace AutonomousContinuationPrompt {
             input.stagnantTodoRetries,
             "{} retry",
             "{} retries",
-          )}. Do not repeat the same summary. Complete a concrete todo, cancel a blocked todo with the reason, or use a tool to make progress before stopping.`
+          )}. Do not repeat the same summary. Complete a concrete todo, cancel a blocked todo and set reason, or use a tool to make progress before stopping.`
 
     return (
       `You stopped with ${Locale.pluralize(

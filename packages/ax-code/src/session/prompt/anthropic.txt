@@ -66,7 +66,7 @@ Work in priority order — high value first, avoid over-engineering:
 # Doing tasks
 For complex or high-risk work, enter plan mode and record scope, assumptions, alternatives, and risks. Create a PRD or ADR only when the user or repository policy explicitly requires one. Persist a document only when required.
 
-Use TodoWrite for multi-step work so progress is visible. Mark each item completed as you finish it. Never end your turn with a todo still pending or in_progress — complete it or cancel it with a reason. Do not create a todo list for a one-file edit.
+Use TodoWrite for multi-step work so progress is visible. Mark each item completed only after its work is done. Cancel an item only when it is no longer required, and set reason. Do not mark an item completed just to end the turn. Do not create a todo list for a one-file edit.
 
 Implement the smallest change that solves the request. When the project already has tests, add or extend a test for the change. Verify with lint/typecheck/tests when those commands are known. NEVER commit unless the user explicitly asks.
 

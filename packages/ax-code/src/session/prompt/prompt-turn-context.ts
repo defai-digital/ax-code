@@ -43,7 +43,7 @@ export async function buildTurnContext(input: {
             prefix: "  ",
             statusTransform: (status) => status.toUpperCase(),
           }),
-          `  Complete all of these before ending your turn.`,
+          `  Finish an item's work before marking it completed. Cancel an item only when it is no longer required, and set reason. Do not mark an item completed just to end the turn.`,
           `</pending_todos>`,
         ].join("\n")
       : undefined

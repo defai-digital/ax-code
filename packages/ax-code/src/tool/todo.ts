@@ -3,10 +3,17 @@ import { Tool } from "./tool"
 import DESCRIPTION_WRITE from "./todowrite.txt"
 import { Todo } from "../session/todo"
 
+const TodoWriteItem = Todo.Info.extend({
+  reason: z
+    .string()
+    .optional()
+    .describe("Why this item was cancelled. Stored in content; the todo table has no reason column."),
+})
+
 export const TodoWriteTool = Tool.define("todowrite", {
   description: DESCRIPTION_WRITE,
   parameters: z.object({
-    todos: z.array(z.object(Todo.Info.shape)).describe("The updated todo list"),
+    todos: z.array(TodoWriteItem).describe("The updated todo list"),
   }),
   async execute(params, ctx) {
     await ctx.ask({
@@ -18,7 +25,7 @@ export const TodoWriteTool = Tool.define("todowrite", {
 
     await Todo.update({
       sessionID: ctx.sessionID,
-      todos: params.todos,
+      todos: params.todos.map((todo) => Todo.absorbCancellationReason(todo)),
     })
     return {
       title: `${Todo.countActive(params.todos)} todos`,

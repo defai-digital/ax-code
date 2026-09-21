@@ -41,5 +41,7 @@ NOTE that you should not use this tool if there is only one trivial task to do. 
    - Create specific, actionable items
    - Break complex tasks into smaller, manageable steps
    - Use clear, descriptive task names
+   - Every item needs priority: high, medium, or low
+   - When status is cancelled, set reason. That note is stored in the item content
 
 When in doubt, apply the rules above: use the list when the task has 3+ distinct steps or the user gave several tasks; skip it for single-step, trivial, or informational requests.

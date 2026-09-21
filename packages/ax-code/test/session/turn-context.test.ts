@@ -123,6 +123,8 @@ describe("buildTurnContext", () => {
         expect(text).toContain("Objective: ship the feature")
         expect(text).toContain('<pending_todos count="1">')
         expect(text).toContain("[PENDING] write tests")
+        expect(text).toContain("set reason")
+        expect(text).not.toContain("Complete all of these before ending your turn")
         // Preserve the relative order the blocks had in the system prompt.
         expect(text.indexOf("<decision-hints>")).toBeLessThan(text.indexOf("<intelligence_nudge>"))
         expect(text.indexOf("<intelligence_nudge>")).toBeLessThan(text.indexOf("<session_goal"))

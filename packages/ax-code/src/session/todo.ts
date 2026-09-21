@@ -17,6 +17,14 @@ export namespace Todo {
     .meta({ ref: "Todo" })
   export type Info = z.infer<typeof Info>
 
+  /** The todo table has no reason column. Keep a cancellation note on content. */
+  export function absorbCancellationReason(todo: Info & { reason?: string }): Info {
+    const note = todo.reason?.trim().slice(0, 500)
+    const stored = { content: todo.content, status: todo.status, priority: todo.priority }
+    if (stored.status !== "cancelled" || !note || stored.content.includes(note)) return stored
+    return { ...stored, content: `${stored.content} (${note})` }
+  }
+
   export function formatLines(
     todos: readonly { status: string; content: string }[],
     options?: {
