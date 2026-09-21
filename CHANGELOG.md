@@ -6,6 +6,21 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Changed
+
+- Bundle signed AX Engine 7.5.3 on Apple Silicon Macs. Automatic runtime selection requires the Tiel-compatible
+  7.5.0 floor and skips stale or unverified PATH engines and stale managed overlays.
+- Group CLI commands by purpose and unify machine-readable status and report flags.
+
+### Fixed
+
+- Preserve AX Engine resident identity and prefix-cache geometry, cache successful version probes, and cancel
+  abandoned model streams before recovery requests.
+- Bound local read-only synthesis and tool-protocol recovery while preserving the engine tool schema contract.
+- Reject lossy validation pipelines inside subshells and command groups, including Rust and Go lint checks.
+- Resolve event-log symlinks and missing parent paths before enforcing workspace containment; refuse dangling
+  symlinks and avoid following a substituted leaf when opening the log.
+
 ## [7.19.4] - 2026-09-20
 
 ### Changed

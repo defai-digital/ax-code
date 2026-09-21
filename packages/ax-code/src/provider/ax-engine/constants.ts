@@ -30,9 +30,9 @@ export const AX_ENGINE_PINNED_DOWNLOAD_MIN_VERSION = "6.13.1"
 // scheduler's per-step width). Older binaries only know the conflated knob,
 // so they keep receiving the per-model budget as --max-batch-tokens.
 export const AX_ENGINE_MAX_OUTPUT_TOKENS_FLAG_MIN_VERSION = "7.1.0"
-// First qualified explicit-MTP / self-contained macOS archive. PATH copies
-// below this floor are skipped when a bundled or managed runtime is present.
-export const AX_ENGINE_BUNDLED_MIN_VERSION = "7.4.0"
+// First published Tiel MTP namespace loader. Automatic PATH and managed
+// selections below this floor must not hide the compatible bundled runtime.
+export const AX_ENGINE_BUNDLED_MIN_VERSION = "7.5.0"
 export const AX_ENGINE_SPECULATION_PROFILE = "agentic"
 export const AX_ENGINE_MTP_MODE = "pure"
 export const AX_ENGINE_RECOMMENDED_MEMORY_BYTES = 64 * 1024 ** 3
@@ -243,7 +243,7 @@ export type AxEngineBinaryRelease = {
 }
 
 const AX_ENGINE_RELEASE_ORIGIN = "https://github.com"
-const AX_ENGINE_BINARY_RELEASE_URL = `${AX_ENGINE_RELEASE_ORIGIN}/defai-digital/ax-engine/releases/download/v7.4.0/ax-engine-v7.4.0-macos-arm64.tar.gz`
+const AX_ENGINE_BINARY_RELEASE_URL = `${AX_ENGINE_RELEASE_ORIGIN}/defai-digital/ax-engine/releases/download/v7.5.3/ax-engine-v7.5.3-macos-arm64.tar.gz`
 
 // Pinned self-contained macOS archive (binaries + MLX dylibs + metallib).
 // Darwin-arm64 AX Code releases stage this under engine/<version>/ as the
@@ -251,10 +251,10 @@ const AX_ENGINE_BINARY_RELEASE_URL = `${AX_ENGINE_RELEASE_ORIGIN}/defai-digital/
 // alternative, not the required clean-Mac path. AX_ENGINE_INSTALL_* overrides
 // remain for validating a different artifact.
 export const AX_ENGINE_BINARY_RELEASE: AxEngineBinaryRelease = {
-  version: "7.4.0",
-  assetName: "ax-engine-v7.4.0-macos-arm64.tar.gz",
+  version: "7.5.3",
+  assetName: "ax-engine-v7.5.3-macos-arm64.tar.gz",
   url: AX_ENGINE_BINARY_RELEASE_URL,
-  sha256: "f01467bcd7ac6214263eb02f3bac9f5ddc508c48c0729ca2e7dc4e7c628a229d",
+  sha256: "e6336436ff782ac1b8d261e32ff8291a077f38acb9de2602522f724cdd2801b8",
   teamId: "N5ZUZDUJS6",
 }
 

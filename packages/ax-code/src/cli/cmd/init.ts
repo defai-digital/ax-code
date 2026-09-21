@@ -52,6 +52,7 @@ export const InitCommand: CommandModule<
       }),
   handler: async (args) => {
     const caller = Filesystem.callerCwd()
+    // @scan-suppress security_scan - --dir intentionally selects the project root; Context.init owns writes within that root.
     const root = Filesystem.resolve(args.dir ? path.resolve(caller, args.dir) : caller)
     const depth = args.depth as DepthLevel
 

@@ -200,18 +200,7 @@ export const HeadlessRunCommand = cmd({
         }),
       ]
       if (args["event-log"] && args["event-log"] !== "-") {
-        const resolvedCwd = Filesystem.resolve(callerCwd)
-        const resolvedCandidate = path.resolve(callerCwd, args["event-log"])
-        // realpath the parent so a symlink directory cannot smuggle the file out
-        // of callerCwd. A not-yet-created leaf is joined back after that.
-        const resolvedPath = path.join(
-          Filesystem.resolve(path.dirname(resolvedCandidate)),
-          path.basename(resolvedCandidate),
-        )
-        if (!Filesystem.contains(resolvedCwd, resolvedPath) && Filesystem.resolve(resolvedPath) !== resolvedCwd) {
-          throw new Error(`--event-log path "${args["event-log"]}" resolves outside the current directory`)
-        }
-        eventSinks.push(await createHeadlessJsonlFileEventSink(resolvedPath))
+        eventSinks.push(await createHeadlessJsonlFileEventSink(args["event-log"], callerCwd))
       }
       const eventSink = createHeadlessCompositeEventSink(eventSinks)
       let sessionError: string | undefined

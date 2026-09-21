@@ -35,6 +35,12 @@ describe("validation output admission", () => {
     "env CI=1 timeout --signal TERM 3 pnpm exec vitest run | tail",
     '"/usr/bin/npm" run "test:unit" | tail',
     "vitest run | head",
+    "(pnpm test) | tail",
+    "{ pnpm test; } | tail",
+    "(pnpm test; echo done) | tail",
+    "cargo clippy | tail",
+    "cargo fmt --check | head",
+    "go vet ./... | tail",
     "pnpm -r test | tail",
     "pnpm -w test | tail",
     "npm -w core test | tail",
@@ -61,6 +67,9 @@ describe("validation output admission", () => {
     "cd /repo && cat tests.log 2>&1 | tail",
     "pnpm test | grep -q passed",
     "pytest --help | head",
+    "(cat tests.log) | tail",
+    "{ echo done; } | tail",
+    "cargo fmt | tail",
     "pnpm exec vitest --version | tail",
   ])("preserves ordinary command: %s", (command) => {
     expect(() => inspect(command)).not.toThrow()

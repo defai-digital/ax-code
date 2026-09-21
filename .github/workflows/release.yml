@@ -390,9 +390,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          VERSION="7.4.0"
+          VERSION="7.5.3"
           ASSET="ax-engine-v${VERSION}-macos-arm64.tar.gz"
-          EXPECTED="f01467bcd7ac6214263eb02f3bac9f5ddc508c48c0729ca2e7dc4e7c628a229d"
+          EXPECTED="e6336436ff782ac1b8d261e32ff8291a077f38acb9de2602522f724cdd2801b8"
           DEST="$RUNNER_TEMP/$ASSET"
           SIBLING="$GITHUB_WORKSPACE/../ax-engine/target/release-artifacts/v${VERSION}/$ASSET"
           if [ -f "$SIBLING" ]; then
@@ -482,12 +482,12 @@ jobs:
             exit 1
           fi
           if [ "${{ matrix.targets }}" = "darwin-arm64" ]; then
-            ENGINE_BIN="$SMOKE_ROOT/engine/7.4.0/ax-engine"
+            ENGINE_BIN="$SMOKE_ROOT/engine/7.5.3/ax-engine"
             if [ ! -x "$ENGINE_BIN" ]; then
-              echo "FAIL: darwin-arm64 runtime did not ship AX Engine at engine/7.4.0/ax-engine"
+              echo "FAIL: darwin-arm64 runtime did not ship AX Engine at engine/7.5.3/ax-engine"
               exit 1
             fi
-            if [ ! -f "$SMOKE_ROOT/engine/7.4.0/mlx.metallib" ]; then
+            if [ ! -f "$SMOKE_ROOT/engine/7.5.3/mlx.metallib" ]; then
               echo "FAIL: darwin-arm64 runtime did not ship mlx.metallib"
               exit 1
             fi

@@ -15,6 +15,7 @@ export async function restartRuntimeServer(input: { directory: string; port: unk
   const status = await RuntimeRegistry.status(input.directory)
   const record = "record" in status ? status.record : undefined
   if (record) {
+    // @scan-suppress security_scan - RuntimeRegistry.Record validates an authenticated 127.0.0.1 HTTP URL; redirects are rejected.
     const res = await fetch(new URL("/instance/restart", record.url), {
       method: "POST",
       headers: RuntimeRegistry.headers(record),

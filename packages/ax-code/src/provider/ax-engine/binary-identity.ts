@@ -7,6 +7,7 @@ import { createHash } from "node:crypto"
 // sibling, since package upgrades can replace either independently.
 export async function axEngineBinaryIdentity(options: { binaryPath: string; binaryVersion?: string }): Promise<string> {
   const launcher = await fs.realpath(options.binaryPath)
+  // @scan-suppress security_scan - Fixed sibling basename under the explicitly resolved executable directory; metadata reads only.
   const files = [launcher, path.join(path.dirname(launcher), "ax-engine-server")]
   const identities = await Promise.all(
     files.map(async (file, index) => {

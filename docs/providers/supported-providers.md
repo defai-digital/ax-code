@@ -217,19 +217,19 @@ AX Engine uses the compact `core` tool profile by default (`bash`, file discover
 
 ### Installing the engine
 
-Local inference needs AX Engine 7.4.0 or later for managed MTP. Apple Silicon Mac installers already include a self-contained AX Engine sidecar (`engine/<version>/` next to the CLI runtime), so a clean Mac does not need Homebrew.
+Local inference needs AX Engine 7.5.0 or later for managed Tiel MTP. Apple Silicon Mac installers already include a self-contained AX Engine sidecar (`engine/<version>/` next to the CLI runtime), so a clean Mac does not need Homebrew.
 
 AX Code then resolves the binary in this order:
 
 1. `provider.ax-engine.options.binaryPath` in `ax-code.json`
 2. the `AX_ENGINE_BIN` environment variable
-3. `ax-engine` on your `PATH` (skipped when older than 7.4.0 so a stale brew copy cannot hide the bundled runtime)
-4. an AX Code-managed overlay install (`ax-code providers ax-engine install`)
+3. `ax-engine` on your `PATH` (requires a verified version of at least 7.5.0)
+4. an AX Code-managed overlay install (`ax-code providers ax-engine install`; also requires at least 7.5.0)
 5. the sidecar bundled in the current Mac runtime
 
 It first checks `--version` and falls back to the structured `doctor --json` install version used by the wrapper. AX Code owns server startup and normally launches `ax-engine serve` on `127.0.0.1:31418`. The optional Homebrew formula remains an alternative for users who want a brew-owned engine; it is not required.
 
-A PATH or overlay install that is missing `libmlx.dylib` / `mlx.metallib` is rejected. The bundled and overlay archives are the self-contained 7.4.0 macOS payload.
+A PATH or overlay install that is missing `libmlx.dylib` / `mlx.metallib` is rejected. The bundled and overlay archives are the self-contained 7.5.3 macOS payload.
 
 Installing the engine does not download a model. Pick and download a model afterward from the Desktop **Models** page or with `ax-code providers ax-engine prepare`. A complete compatible base snapshot already in the Hugging Face cache is accepted for direct decode; `prepare --download` uses the catalog's preferred MTP package when available.
 

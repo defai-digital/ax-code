@@ -551,6 +551,7 @@ export async function runDoctorChecks(input: { skip?: ReadonlySet<string> } = {}
 
   // 8. Git
   const gitExists =
+    // @scan-suppress security_scan - Read-only probe of fixed .git/HEAD under the caller-selected project directory.
     project.projectRoot !== project.callerCwd || (await exists(path.join(project.callerCwd, ".git", "HEAD")))
   push("git", {
     name: "Git repository",

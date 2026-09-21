@@ -168,10 +168,9 @@ function groupUsageCommandHelp(text: string, usage: UsageLike): string {
   if (end === -1) return text
 
   const commands = usage.getCommands()
-  const byName = new Map<string, UsageCommand>()
-  for (const command of commands) {
-    byName.set(command[0].split(" ")[0] ?? command[0], command)
-  }
+  const byName = new Map<string, UsageCommand>(
+    commands.map((command) => [command[0].split(" ")[0] ?? command[0], command]),
+  )
 
   const grouped = new Set<string>()
   const sections: string[] = []

@@ -75,6 +75,7 @@ async function version(binaryPath: string): Promise<string | undefined> {
   const identity = await axEngineBinaryIdentity({ binaryPath }).catch(() => undefined)
   if (!identity) return probeVersion(binaryPath)
   const key = binaryPath
+  // @scan-suppress race_scan - Single-flight cache ownership is checked after awaits; stale probes cannot evict replacements.
   const cached = versionCache.get(key)
   if (cached?.identity === identity && cached.expires > performance.now()) return cached.result
   if (versionCache.size >= VERSION_CACHE_LIMIT) versionCache.delete(versionCache.keys().next().value!)
@@ -105,10 +106,9 @@ function unsupportedVersionBlocker(detected: string | undefined) {
   return `${AX_ENGINE_ERROR.VersionUnsupported}: ax-engine ${parsed.version} is installed; ${AX_ENGINE_MIN_VERSION} or later is required`
 }
 
-function belowBundledFloor(detected: string | undefined) {
+function lacksBundledContract(detected: string | undefined) {
   const parsed = detected ? semver.coerce(detected) : undefined
-  if (!parsed) return false
-  return semver.lt(parsed, AX_ENGINE_BUNDLED_MIN_VERSION)
+  return !parsed || semver.lt(parsed, AX_ENGINE_BUNDLED_MIN_VERSION)
 }
 
 function coercedVersionLabel(detected: string | undefined) {
@@ -158,7 +158,7 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
   if (found) {
     const detectedVersion = await version(found)
     const versionBlocker = unsupportedVersionBlocker(detectedVersion)
-    if (!versionBlocker && !belowBundledFloor(detectedVersion)) {
+    if (!versionBlocker && !lacksBundledContract(detectedVersion)) {
       if (AX_ENGINE_BINARY_RELEASE && detectedVersion && semver.coerce(detectedVersion)) {
         const parsed = semver.coerce(detectedVersion)
         if (parsed && semver.lt(parsed, AX_ENGINE_BINARY_RELEASE.version)) {
@@ -179,7 +179,7 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
     }
     warnings.push(
       versionBlocker ??
-        `${AX_ENGINE_ERROR.VersionUnsupported}: PATH ax-engine ${coercedVersionLabel(detectedVersion)} is older than ${AX_ENGINE_BUNDLED_MIN_VERSION}; using the AX Code runtime instead`,
+        `${AX_ENGINE_ERROR.VersionUnsupported}: PATH ax-engine ${coercedVersionLabel(detectedVersion)} does not establish the required ${AX_ENGINE_BUNDLED_MIN_VERSION} contract; using the AX Code runtime instead`,
     )
   }
 
@@ -187,7 +187,7 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
   if (managed) {
     const detectedVersion = (await version(managed.path)) ?? managed.version
     const versionBlocker = unsupportedVersionBlocker(detectedVersion)
-    if (!versionBlocker) {
+    if (!versionBlocker && !lacksBundledContract(detectedVersion)) {
       return {
         available: true,
         mode: "managed",
@@ -199,7 +199,10 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
         warnings,
       }
     }
-    warnings.push(versionBlocker)
+    warnings.push(
+      versionBlocker ??
+        `${AX_ENGINE_ERROR.VersionUnsupported}: managed ax-engine ${coercedVersionLabel(detectedVersion)} does not establish the required ${AX_ENGINE_BUNDLED_MIN_VERSION} contract; using the bundled runtime instead`,
+    )
   }
 
   const bundled = await getBundledBinary({ entryPath: options.entryPath })
