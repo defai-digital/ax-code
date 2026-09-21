@@ -179,22 +179,16 @@ describe("prompt terminal paste", () => {
     expect(host.toast.show).not.toHaveBeenCalled()
   })
 
-  test("does not insert Windows clipboard text after disposal", async () => {
-    const platform = Object.getOwnPropertyDescriptor(process, "platform")!
-    Object.defineProperty(process, "platform", { value: "win32" })
-    try {
-      const pending = Promise.withResolvers<Awaited<ReturnType<typeof Clipboard.read>>>()
-      vi.spyOn(Clipboard, "read").mockReturnValue(pending.promise)
-      const { controller, host } = setup()
-      const running = controller.pasteWindowsClipboardText()
-      controller.dispose()
-      pending.resolve({ mime: "text/plain", data: "clipboard text" })
+  test("does not insert clipboard text after disposal", async () => {
+    const pending = Promise.withResolvers<Awaited<ReturnType<typeof Clipboard.read>>>()
+    vi.spyOn(Clipboard, "read").mockReturnValue(pending.promise)
+    const { controller, host } = setup()
+    const running = controller.pasteClipboardText()
+    controller.dispose()
+    pending.resolve({ mime: "text/plain", data: "clipboard text" })
 
-      expect(await running).toBe(false)
-      expect(host.input.insertText).not.toHaveBeenCalled()
-      expect(host.pasteSubmitGate.finishPasteHandling).toHaveBeenCalledWith({ submitDeferred: false })
-    } finally {
-      Object.defineProperty(process, "platform", platform)
-    }
+    expect(await running).toBe(false)
+    expect(host.input.insertText).not.toHaveBeenCalled()
+    expect(host.pasteSubmitGate.finishPasteHandling).toHaveBeenCalledWith({ submitDeferred: false })
   })
 })

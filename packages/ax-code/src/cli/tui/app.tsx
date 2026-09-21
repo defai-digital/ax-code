@@ -6,7 +6,7 @@ import { DialogSetup, shouldOfferSetup } from "./component/dialog-setup"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "ax-tui/solid"
 import { Clipboard } from "@tui/util/clipboard"
 import { Selection } from "@tui/util/selection"
-import { MouseButton, TextAttributes, resolveRenderLib, type MouseEvent } from "ax-tui"
+import { TextAttributes, resolveRenderLib, type MouseEvent } from "ax-tui"
 import { RouteProvider, useRoute } from "@tui/context/route"
 import {
   type Component,
@@ -30,6 +30,7 @@ import { WorkMode } from "@/mode/work-mode"
 import { providerModelKey } from "@/provider/model-key"
 
 import { DialogProvider, useDialog } from "@tui/ui/dialog"
+import { contextMenuMouseDown, useContextMenu } from "@tui/ui/context-menu"
 import { SDKProvider, useSDK } from "@tui/context/sdk"
 import { SyncProvider, useSync } from "@tui/context/sync"
 import { LocalProvider, useLocal } from "@tui/context/local"
@@ -277,6 +278,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   registerTuiSequenceTarget(sequenceTarget)
   onCleanup(() => unregisterTuiSequenceTarget(sequenceTarget))
   const dialog = useDialog()
+  const contextMenu = useContextMenu()
   const local = useLocal()
   const kv = useKV()
   const command = useCommandDialog()
@@ -1399,15 +1401,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       width={dimensions().width}
       height={dimensions().height}
       backgroundColor={theme.background}
-      onMouseDown={(evt: MouseEvent) => {
-        if (!Flag.AX_CODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) return
-        if (evt.button !== MouseButton.RIGHT) return
-
-        if (!Selection.copy(renderer, toast)) return
-        evt.preventDefault()
-        evt.stopPropagation()
-      }}
+      onMouseDown={(evt: MouseEvent) => contextMenuMouseDown(evt, contextMenu, renderer)}
       onMouseUp={Flag.AX_CODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT ? undefined : () => Selection.copy(renderer, toast)}
+      onMouseScroll={() => contextMenu.close()}
     >
       <Show when={args.persistentRuntime}>
         {(runtime) => (

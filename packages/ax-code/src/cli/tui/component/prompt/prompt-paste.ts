@@ -6,7 +6,7 @@ import { stringWidth } from "@/bun/node-compat"
 import { Filesystem } from "@/util/filesystem"
 import { Clipboard } from "../../util/clipboard"
 import { parsePastedFilePath } from "./prompt-filepath"
-import { windowsClipboardTextPaste } from "./view-model"
+import { clipboardTextPaste } from "./view-model"
 import type { PromptInfo } from "./history"
 import { isRenderableAlive } from "../../util/renderable-safety"
 
@@ -235,14 +235,13 @@ export function createPromptPaste(host: PromptPasteHost) {
     }
   }
 
-  async function pasteWindowsClipboardText() {
+  async function pasteClipboardText() {
     if (!canPaste()) return false
     host.pasteSubmitGate.beginPasteHandling()
     let handledPaste = false
     try {
-      const text = windowsClipboardTextPaste({
+      const text = clipboardTextPaste({
         content: await Clipboard.read(),
-        platform: process.platform,
       })
       if (!text || !canPaste()) return false
 
@@ -264,6 +263,6 @@ export function createPromptPaste(host: PromptPasteHost) {
     pasteImage,
     pasteClipboardImage,
     handleTerminalPaste,
-    pasteWindowsClipboardText,
+    pasteClipboardText,
   }
 }

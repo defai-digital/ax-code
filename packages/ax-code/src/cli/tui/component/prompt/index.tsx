@@ -1,9 +1,10 @@
 import { FooterStatusRow } from "./footer-status-row"
 import { useLanguage } from "../../context/language"
 import { usePromptRef } from "@tui/context/prompt"
+import { useContextMenu } from "../../ui/context-menu"
 import { createSessionPromptDraftLifecycle, promptDraftKey } from "./session-drafts"
 import { useContentDimensions } from "@tui/context/content-dimensions"
-import { BoxRenderable, TextareaRenderable, MouseEvent, KeyEvent, MouseButton } from "ax-tui"
+import { BoxRenderable, TextareaRenderable, MouseEvent, KeyEvent } from "ax-tui"
 import { createEffect, createMemo, onMount, createSignal, onCleanup, on, Show, Switch, Match, For } from "solid-js"
 import { providerModelEquals } from "@/provider/model-key"
 import { shouldAdoptMessageModelFromHistory } from "@tui/context/local-util"
@@ -48,7 +49,7 @@ import {
   createPromptPasteSubmitGate,
   isUnmodifiedPromptSubmitKey,
   sanitizePromptInput,
-  windowsClipboardTextPaste,
+  clipboardTextPaste,
 } from "./view-model"
 import { FooterAnimationSpinner } from "../footer-animation"
 import { summarizedPasteViews } from "./paste-view-model"
@@ -737,6 +738,16 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     toast,
   })
 
+  // The right-click context menu routes paste back through this gate-aware
+  // path whenever the prompt owns the focused editor.
+  const contextMenu = useContextMenu()
+  onCleanup(
+    contextMenu.registerPromptPaste({
+      focused: () => input?.focused ?? false,
+      paste: () => void paste.pasteClipboardText(),
+    }),
+  )
+
   const ref: PromptRef = {
     get focused() {
       return input.focused
@@ -1146,7 +1157,12 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
                       handledPaste = true
                       return
                     }
-                    const text = windowsClipboardTextPaste({ content, platform: process.platform })
+                    // Text paste via clipboard read stays Windows-only here:
+                    // other platforms deliver text through the terminal's
+                    // bracketed paste event, and inserting directly would
+                    // double-paste. The right-click context menu pastes on all
+                    // platforms through paste.pasteClipboardText.
+                    const text = process.platform === "win32" ? clipboardTextPaste({ content }) : undefined
                     if (text) {
                       e.preventDefault()
                       suppressAutocompleteForNextContentChange()
@@ -1280,11 +1296,9 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
               }}
               onMouseDown={(r: MouseEvent) => {
                 focusRenderable(r.target, { name: "prompt-mouse-target-focus" })
-                if (r.button !== MouseButton.RIGHT || process.platform !== "win32") return
-
-                r.preventDefault()
-                r.stopPropagation()
-                void paste.pasteWindowsClipboardText()
+                // Right-click stays unconsumed so the app-level context menu
+                // (copy/paste) opens; its paste routes back through
+                // pasteClipboardText via the context-menu registration below.
               }}
               focusedBackgroundColor={theme.backgroundElement}
               cursorColor={theme.text}

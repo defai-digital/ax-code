@@ -1199,7 +1199,7 @@ describe("AX Code TUI stability guardrails", () => {
     const syncBody = prompt.slice(syncStart, syncEnd)
     const paste = await fs.readFile(PROMPT_PASTE_SRC, "utf8")
     const pasteStart = paste.indexOf("async function handleTerminalPaste(event: PasteEvent)")
-    const pasteEnd = paste.indexOf("async function pasteWindowsClipboardText", pasteStart)
+    const pasteEnd = paste.indexOf("async function pasteClipboardText", pasteStart)
     const pasteBody = paste.slice(pasteStart, pasteEnd)
 
     expect(refreshBody).toContain("syncPromptInputFromRenderable({ autocomplete: options.autocomplete })")

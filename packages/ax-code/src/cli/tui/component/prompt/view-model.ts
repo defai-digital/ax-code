@@ -146,11 +146,7 @@ export function isPromptExitCommand(input: string) {
   return trimmed === "exit" || trimmed === "quit" || trimmed === ":q"
 }
 
-export function windowsClipboardTextPaste(input: {
-  content: ClipboardContentView | undefined
-  platform: NodeJS.Platform
-}) {
-  if (input.platform !== "win32") return undefined
+export function clipboardTextPaste(input: { content: ClipboardContentView | undefined }) {
   if (input.content?.mime !== "text/plain") return undefined
 
   const text = input.content.data.replace(/\r\n/g, "\n").replace(/\r/g, "\n")

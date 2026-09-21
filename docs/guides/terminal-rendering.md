@@ -64,9 +64,12 @@ Opting out is a trade, not a pure win:
   which has no terminal scrollback — in-TUI wheel scrolling. Keyboard controls
   remain available for those actions.
 
-On Windows, right-click in the prompt pastes the clipboard while capture is on.
-That behavior is inactive once capture is off, where the terminal handles the
-click instead.
+While capture is on, right-click opens the TUI's own context menu instead of
+the terminal's: a small Copy / Paste menu at the click position. Copy is
+enabled when a selection is on screen, Paste when a text input is focused —
+including the prompt and inputs inside dialogs. The menu closes on Escape, on
+any keypress, on scroll, or on a click outside of it. Once capture is off, the
+terminal handles the click instead.
 
 ## Override the profile
 

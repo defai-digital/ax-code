@@ -7,7 +7,7 @@ import {
   promptEscapeClearIntent,
   promptSubmissionView,
   sanitizePromptInput,
-  windowsClipboardTextPaste,
+  clipboardTextPaste,
 } from "../../../src/cli/tui/component/prompt/view-model"
 import type { PromptInfo } from "../../../src/cli/tui/component/prompt/prompt-info"
 
@@ -95,40 +95,22 @@ describe("prompt view model", () => {
     ).toEqual({ action: "passthrough" })
   })
 
-  test("uses Windows clipboard text as a direct paste fallback", () => {
-    expect(
-      windowsClipboardTextPaste({
-        platform: "win32",
-        content: { mime: "text/plain", data: "first\r\nsecond\rthird" },
-      }),
-    ).toBe("first\nsecond\nthird")
+  test("normalizes clipboard text line endings for direct paste", () => {
+    expect(clipboardTextPaste({ content: { mime: "text/plain", data: "first\r\nsecond\rthird" } })).toBe(
+      "first\nsecond\nthird",
+    )
   })
 
-  test("ignores empty Windows clipboard text fallback", () => {
-    expect(
-      windowsClipboardTextPaste({
-        platform: "win32",
-        content: { mime: "text/plain", data: "\r\n  \t" },
-      }),
-    ).toBeUndefined()
+  test("ignores empty clipboard text", () => {
+    expect(clipboardTextPaste({ content: { mime: "text/plain", data: "\r\n  \t" } })).toBeUndefined()
   })
 
   test("does not turn non-text clipboard data into pasted prompt text", () => {
-    expect(
-      windowsClipboardTextPaste({
-        platform: "win32",
-        content: { mime: "image/png", data: "base64" },
-      }),
-    ).toBeUndefined()
+    expect(clipboardTextPaste({ content: { mime: "image/png", data: "base64" } })).toBeUndefined()
   })
 
-  test("leaves non-Windows text paste to the terminal paste event", () => {
-    expect(
-      windowsClipboardTextPaste({
-        platform: "darwin",
-        content: { mime: "text/plain", data: "hello" },
-      }),
-    ).toBeUndefined()
+  test("ignores a missing clipboard payload", () => {
+    expect(clipboardTextPaste({ content: undefined })).toBeUndefined()
   })
 
   test("strips SGR mouse residue (marked with <) from prompt input", () => {

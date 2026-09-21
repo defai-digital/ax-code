@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { createTuiDialogLoaders, replaceLazyDialog } from "../../../src/cli/tui/tui-dialogs"
 import type { DialogContext } from "../../../src/cli/tui/ui/dialog"
+import { createContextMenu } from "../../../src/cli/tui/ui/context-menu"
 import { DialogAlert } from "../../../src/cli/tui/ui/dialog-alert"
 
 vi.mock("@tui/ui/dialog-alert", () => ({ DialogAlert: { show: vi.fn() } }))
@@ -23,6 +24,7 @@ function host() {
     clear() {
       stack = []
     },
+    contextMenu: createContextMenu(),
   }
 }
 

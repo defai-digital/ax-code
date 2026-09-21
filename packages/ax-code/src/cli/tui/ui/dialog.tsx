@@ -10,6 +10,13 @@ import { Flag } from "@/flag/flag"
 import { Selection } from "@tui/util/selection"
 import { blurRenderable, focusRenderable, isRenderableAlive, renderableChildren } from "@tui/util/renderable-safety"
 import { DIALOG_OVERLAY_VERTICAL_MARGIN, dialogOverlayMaxHeight } from "./dialog-overlay"
+import {
+  ContextMenuOverlay,
+  ContextMenuProvider,
+  contextMenuMouseDown,
+  createContextMenu,
+  useContextMenu,
+} from "./context-menu"
 
 export function Dialog(
   props: ParentProps<{
@@ -20,6 +27,7 @@ export function Dialog(
   const dimensions = useTerminalDimensions()
   const { theme } = useTheme()
   const renderer = useRenderer()
+  const contextMenu = useContextMenu()
 
   // Only arm dismissal when a press actually begins on the backdrop and no
   // selection is in progress. A drag that starts inside the dialog never
@@ -54,6 +62,9 @@ export function Dialog(
       <box
         onMouseDown={(e: MouseEvent) => {
           armed = false
+          // Right-clicks inside the panel never reach the overlay bubble
+          // point, so the context menu is triggered from here directly.
+          if (e.button === MouseButton.RIGHT) contextMenuMouseDown(e, contextMenu, renderer)
           e.stopPropagation()
         }}
         onMouseUp={(e: MouseEvent) => {
@@ -85,12 +96,23 @@ function init() {
   })
 
   const renderer = useRenderer()
+  const contextMenu = createContextMenu()
 
   const escapeHandlers = new WeakMap<(typeof store.stack)[number], () => boolean>()
 
   useKeyboard((evt) => {
-    if (store.stack.length === 0) return
     if (evt.defaultPrevented) return
+    // An open context menu closes on any key. Escape is swallowed so the
+    // dialog behind the menu stays open; other keys continue to their target.
+    if (contextMenu.current) {
+      contextMenu.close()
+      if (evt.name === "escape") {
+        evt.preventDefault()
+        evt.stopPropagation()
+        return
+      }
+    }
+    if (store.stack.length === 0) return
     if ((evt.name === "escape" || (evt.ctrl && evt.name === "c")) && renderer.getSelection()?.getSelectedText()) return
     if (evt.name === "escape" || (evt.ctrl && evt.name === "c")) {
       const current = store.stack.at(-1)
@@ -154,6 +176,7 @@ function init() {
       }
     },
     clear() {
+      contextMenu.close()
       for (const item of store.stack) {
         closeItem(item)
       }
@@ -164,6 +187,7 @@ function init() {
       refocus()
     },
     replace(input: any, onClose?: () => void) {
+      contextMenu.close()
       if (store.stack.length === 0) {
         focus = renderer.currentFocusedRenderable
         blurRenderable(focus, { name: "dialog-open-blur-current-focus" })
@@ -188,6 +212,7 @@ function init() {
     setSize(size: "medium" | "large") {
       setStore("size", size)
     },
+    contextMenu,
   }
 }
 
@@ -201,29 +226,26 @@ export function DialogProvider(props: ParentProps) {
   const toast = useToast()
   return (
     <ctx.Provider value={value}>
-      {props.children}
-      <box
-        position="absolute"
-        onMouseDown={(evt: MouseEvent) => {
-          if (!Flag.AX_CODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) return
-          if (evt.button !== MouseButton.RIGHT) return
-
-          if (!Selection.copy(renderer, toast)) return
-          evt.preventDefault()
-          evt.stopPropagation()
-        }}
-        onMouseUp={
-          !Flag.AX_CODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT ? () => Selection.copy(renderer, toast) : undefined
-        }
-      >
-        <Show when={value.stack.at(-1)}>
-          {(item) => (
-            <Dialog onClose={() => value.clear()} size={value.size}>
-              {item().element}
-            </Dialog>
-          )}
-        </Show>
-      </box>
+      <ContextMenuProvider value={value.contextMenu}>
+        {props.children}
+        <box
+          position="absolute"
+          onMouseDown={(evt: MouseEvent) => contextMenuMouseDown(evt, value.contextMenu, renderer)}
+          onMouseUp={
+            !Flag.AX_CODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT ? () => Selection.copy(renderer, toast) : undefined
+          }
+          onMouseScroll={() => value.contextMenu.close()}
+        >
+          <Show when={value.stack.at(-1)}>
+            {(item) => (
+              <Dialog onClose={() => value.clear()} size={value.size}>
+                {item().element}
+              </Dialog>
+            )}
+          </Show>
+        </box>
+        <ContextMenuOverlay menu={value.contextMenu} />
+      </ContextMenuProvider>
     </ctx.Provider>
   )
 }
