@@ -988,4 +988,12 @@ export const messages = {
   "animation.mahjongEnding": "Mahjong : Scores finaux",
   "animation.fujiDay": "Mont Fuji : Jour",
   "animation.fujiNight": "Mont Fuji : Nuit",
+  "ui.steerNowHint": "{keybind} orienter maintenant",
+  "ui.steerQueueEmpty": "Aucune relance enregistr\u00e9e \u00e0 orienter",
+  "ui.steerNothingSteerable": "Rien dans la file ne peut orienter le tour en cours",
+  "ui.steeredFollowUps": "{count} relance(s) orient\u00e9es dans le tour en cours",
+  "ui.steeredFollowUpsPartial": "{count} orient\u00e9es ; {remaining} restent en file",
+  "ui.steerQueuedNext": "Aucun tour en cours ; d\u00e9plac\u00e9 en t\u00eate de file",
+  "ui.steerFailed": "\u00c9chec de l'orientation : {message}",
+  "ui.steerIntoRunningTurn": "Orienter dans le tour en cours",
 } satisfies Dictionary

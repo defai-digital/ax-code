@@ -25,7 +25,9 @@ import { SessionRollbackView } from "./rollback"
 import { SessionSemanticDiff } from "@/session/semantic-diff"
 import { Todo } from "@/session/todo"
 import { footerSessionStatusOrIdle, footerSessionStatusView } from "./footer-view-model"
-import { followUpText } from "../../component/prompt/follow-up-queue"
+import { followUpText, isQueueableStatus } from "../../component/prompt/follow-up-queue"
+import { steerBarrier, steerFollowUp } from "../../component/prompt/steer-follow-up"
+import { useKeybind } from "../../context/keybind"
 import {
   durableFollowUps,
   followUpAction,
@@ -70,6 +72,8 @@ const QUEUED_DELETE_ICON = "x"
 const QUEUED_DELETE_ICON_WIDTH = 2
 const QUEUED_SEND_ICON = "▸"
 const QUEUED_SEND_ICON_WIDTH = 2
+const QUEUED_STEER_ICON = "»"
+const QUEUED_STEER_ICON_WIDTH = 2
 const QUEUED_EDIT_ICON = "✎"
 const QUEUED_EDIT_ICON_WIDTH = 2
 
@@ -131,6 +135,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
   const toast = useToast()
   const { theme } = useTheme()
   const command = useCommandDialog()
+  const keybind = useKeybind()
 
   const session = createMemo(() => sync.session.get(props.sessionID))
   const risk = createMemo(() => sync.session.risk(props.sessionID))
@@ -222,11 +227,33 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
     })
   }
 
-  async function sendQueuedNow(id: string) {
+  async function togglePauseQueued(id: string) {
     await queueOperation(async () => {
       const item = queued().find((row) => row.id === id)
       if (!item) return
       updateQueue(await followUpAction(sdk, id, item.status === "paused" ? "resume" : "pause"))
+    })
+  }
+
+  // Steer-now: inject the row into the running turn at its next step boundary
+  // via the atomic server endpoint; when no generation is active the row is
+  // prioritized to the front of the queue instead and the toast says so.
+  async function steerQueued(id: string) {
+    await queueOperation(async () => {
+      const item = queued().find((row) => row.id === id)
+      if (!item) return
+      const outcome = await steerFollowUp(sdk, item)
+      if (outcome.kind === "delivered") {
+        updateQueue(outcome.item)
+        toast.show({ message: uiText("ui.steeredFollowUps", { count: 1 }), variant: "info" })
+        return
+      }
+      if (outcome.kind === "queued_next") {
+        updateQueue(outcome.item)
+        toast.show({ message: uiText("ui.steerQueuedNext"), variant: "info" })
+        return
+      }
+      toast.show({ message: uiText("ui.steerFailed", { message: outcome.message }), variant: "error" })
     })
   }
 
@@ -705,11 +732,22 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                             >
                               <text style={{ fg: theme.text }}>{QUEUED_EDIT_ICON}</text>
                             </box>
+                            <Show when={steerBarrier(item) === null}>
+                              <box
+                                flexShrink={0}
+                                width={QUEUED_STEER_ICON_WIDTH}
+                                onMouseUp={() => {
+                                  void steerQueued(item.id)
+                                }}
+                              >
+                                <text style={{ fg: theme.accent }}>{QUEUED_STEER_ICON}</text>
+                              </box>
+                            </Show>
                             <box
                               flexShrink={0}
                               width={QUEUED_SEND_ICON_WIDTH}
                               onMouseUp={() => {
-                                void sendQueuedNow(item.id)
+                                void togglePauseQueued(item.id)
                               }}
                             >
                               <text style={{ fg: theme.primary }}>
@@ -744,6 +782,11 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                         </box>
                       )}
                     </For>
+                  </Show>
+                  <Show when={isQueueableStatus(status().type) && keybind.print("input_submit_steer")}>
+                    <text fg={theme.textMuted}>
+                      {uiText("ui.steerNowHint", { keybind: keybind.print("input_submit_steer") })}
+                    </text>
                   </Show>
                 </box>
               </Show>

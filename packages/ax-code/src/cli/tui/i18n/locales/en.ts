@@ -954,4 +954,12 @@ export const messages = {
   "animation.mahjongEnding": "Mahjong: Final Points",
   "animation.fujiDay": "Fuji Mountain: Daytime",
   "animation.fujiNight": "Fuji Mountain: Night",
+  "ui.steerNowHint": "{keybind} steer now",
+  "ui.steerQueueEmpty": "No saved follow-ups to steer",
+  "ui.steerNothingSteerable": "Nothing in the queue can steer the running turn",
+  "ui.steeredFollowUps": "Steered {count} follow-up(s) into the running turn",
+  "ui.steeredFollowUpsPartial": "Steered {count}; {remaining} remain queued",
+  "ui.steerQueuedNext": "No running turn; moved to the front of the queue",
+  "ui.steerFailed": "Steering failed: {message}",
+  "ui.steerIntoRunningTurn": "Steer into running turn",
 } as const

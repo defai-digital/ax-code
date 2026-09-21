@@ -1162,6 +1162,46 @@ export namespace TaskQueue {
     })
   }
 
+  /**
+   * Cancel a follow-up row whose text was just admitted into the running
+   * generation, recording the audit trail (`steeredInto` generation UUID and
+   * `steeredAt`) on the payload in the same guarded write. Re-checks the
+   * source status inside the write (ADR-106 D5) so a concurrent executor claim
+   * fails the transition instead of being clobbered; the row then stays paused
+   * and the already-admitted steer receipt remains authoritative.
+   */
+  export async function cancelSteered(id: TaskQueueID, audit: { steeredInto: string; steeredAt: number }): Promise<Info> {
+    const fromStatuses: Status[] = ["queued", "waiting_for_idle", "paused"]
+    const now = Date.now()
+    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+      const fresh = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get()
+      if (!fresh) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
+      const current = fromRow(fresh)
+      if (!fromStatuses.includes(current.status)) return { item: current, raced: true as const }
+      const row = db
+        .update(TaskQueueTable)
+        .set({
+          status: "cancelled",
+          payload: { ...current.payload, steeredInto: audit.steeredInto, steeredAt: audit.steeredAt },
+          time_updated: now,
+          time_completed: now,
+        })
+        .where(and(eq(TaskQueueTable.id, id), inArray(TaskQueueTable.status, fromStatuses)))
+        .returning()
+        .get()
+      return row ? { item: fromRow(row), raced: false as const } : { item: current, raced: true as const }
+    })
+    assertProjectItem(result.item)
+    if (result.raced) {
+      throw new HTTPException(409, {
+        message: `Cannot steer task queue item ${id} while it is ${result.item.status}.`,
+      })
+    }
+    publishUpdated(result.item)
+    await syncWorkflowStatusIfNeeded(result.item)
+    return result.item
+  }
+
   export async function stop(id: TaskQueueID): Promise<Info> {
     const current = await get(id)
     if (current.status === "completed" || current.status === "failed" || current.status === "cancelled") {

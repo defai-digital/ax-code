@@ -1007,4 +1007,16 @@ export const messages = {
   "animation.mahjongEnding": "\u9ebb\u5c07\uff1a\u7d50\u7b97",
   "animation.fujiDay": "\u5bcc\u58eb\u5c71\uff1a\u767d\u5929",
   "animation.fujiNight": "\u5bcc\u58eb\u5c71\uff1a\u591c\u666f",
+  "ui.steerNowHint": "{keybind} \u7acb\u5373\u5f15\u5c0e",
+  "ui.steerQueueEmpty": "\u6c92\u6709\u53ef\u5f15\u5c0e\u7684\u5df2\u5b58\u5f8c\u7e8c\u5de5\u4f5c",
+  "ui.steerNothingSteerable":
+    "\u4f47\u5217\u4e2d\u6c92\u6709\u53ef\u5f15\u5c0e\u81f3\u9032\u884c\u4e2d\u56de\u5408\u7684\u9805\u76ee",
+  "ui.steeredFollowUps":
+    "\u5df2\u5f15\u5c0e {count} \u5247\u5f8c\u7e8c\u5de5\u4f5c\u9032\u5165\u9032\u884c\u4e2d\u7684\u56de\u5408",
+  "ui.steeredFollowUpsPartial":
+    "\u5df2\u5f15\u5c0e {count} \u5247\uff1b{remaining} \u5247\u4ecd\u5728\u4f47\u5217\u4e2d",
+  "ui.steerQueuedNext":
+    "\u76ee\u524d\u6c92\u6709\u9032\u884c\u4e2d\u7684\u56de\u5408\uff1b\u5df2\u79fb\u81f3\u4f47\u5217\u6700\u524d",
+  "ui.steerFailed": "\u5f15\u5c0e\u5931\u6557\uff1a{message}",
+  "ui.steerIntoRunningTurn": "\u5f15\u5c0e\u81f3\u9032\u884c\u4e2d\u7684\u56de\u5408",
 } satisfies Dictionary

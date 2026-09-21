@@ -136,6 +136,7 @@ import { SubagentStatusPanel } from "./subagent-status-panel"
 import { hasNewActiveSubagent } from "./subagent-panel-layout"
 import { SessionRouteContext as context } from "./context"
 import { durableFollowUps } from "../../component/prompt/durable-follow-up"
+import { isQueueableStatus } from "../../component/prompt/follow-up-queue"
 
 addDefaultParsers(parsers.parsers)
 
@@ -1735,7 +1736,10 @@ export function Session() {
                     </Switch>
                   )}
                 </For>
-                <QueuedFollowUps items={queuedFollowUps()} />
+                <QueuedFollowUps
+                  items={queuedFollowUps()}
+                  busy={isQueueableStatus(sync.data.session_status?.[route.sessionID]?.type)}
+                />
               </scrollbox>
               <Show when={showTimeline()}>
                 <TimelineRail scroll={() => scroll} turns={timelineTurns()} />

@@ -42,8 +42,10 @@ import { userRoute } from "../../util/transcript"
 import { routeEvent } from "./route"
 import { isAssistantThinkingActive } from "./thinking-status"
 
-export function QueuedFollowUps(props: { items: DurableFollowUp[] }) {
+export function QueuedFollowUps(props: { items: DurableFollowUp[]; busy?: boolean }) {
   const { theme } = useTheme()
+  const uiText = useLanguage().t
+  const keybind = useKeybind()
 
   return (
     <Show when={props.items.length > 0}>
@@ -61,6 +63,9 @@ export function QueuedFollowUps(props: { items: DurableFollowUp[] }) {
             </text>
           )}
         </For>
+        <Show when={props.busy && keybind.print("input_submit_steer")}>
+          <text fg={theme.textMuted}>{uiText("ui.steerNowHint", { keybind: keybind.print("input_submit_steer") })}</text>
+        </Show>
       </box>
     </Show>
   )

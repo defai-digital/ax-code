@@ -1,8 +1,11 @@
 import { Hono } from "hono"
 import { describeRoute, resolver } from "hono-openapi"
+import { HTTPException } from "hono/http-exception"
 import { validator } from "../validation"
 import z from "zod"
 import { TaskQueue } from "@/session/task-queue"
+import { TaskQueueSteer } from "@/session/task-queue-steer"
+import { SessionSteering } from "@/session/steering"
 import { TaskQueueID, SessionID } from "@/session/schema"
 import { TaskQueueExecutor } from "@/session/task-queue-executor"
 import { errors } from "../error"
@@ -245,6 +248,31 @@ export const TaskQueueRoutes = lazy(() =>
       validator("param", TASK_QUEUE_ID_PARAM),
       async (c) => {
         return c.json(await TaskQueueExecutor.sendNow(taskID(c)))
+      },
+    )
+    .post(
+      "/:taskID/steer",
+      describeRoute({
+        summary: "Steer follow-up into the running turn",
+        description:
+          "Admit a queued follow-up's text into the session's running generation at its next step boundary and cancel the queue row with a steeredInto audit trail. Text-only follow-ups are steerable; the steered text applies the running turn's agent, model, and tools. Anything else is rejected with 400. When no generation is active the row is left untouched and the response carries reason generation_not_active with a null receipt.",
+        operationId: "taskQueue.steer",
+        responses: {
+          200: {
+            description: "Steering outcome with the latest task queue item.",
+            content: { "application/json": { schema: resolver(TaskQueueSteer.Result) } },
+          },
+          ...errors(400, 404, 409),
+        },
+      }),
+      validator("param", TASK_QUEUE_ID_PARAM),
+      async (c) => {
+        try {
+          return c.json(await TaskQueueSteer.steer(taskID(c)))
+        } catch (error) {
+          if (SessionSteering.Conflict.isInstance(error)) throw new HTTPException(409, { message: error.data.message })
+          throw error
+        }
       },
     )
     .post(

@@ -24,6 +24,8 @@ import { upsert } from "../../context/sync-util"
 import { axEngineDownloadChip, type AxEngineDownloadJobView } from "../ax-engine-downloads-view-model"
 import { isQueueableStatus } from "./follow-up-queue"
 import { isSteerableDraft, steerBusySession, type SteerClient } from "./prompt-steer"
+import { durableFollowUps } from "./durable-follow-up"
+import { steerQueuedPrefix } from "./steer-follow-up"
 import { assign } from "./part"
 import { SESSION_CREATE_TIMEOUT_MS } from "@/constants/session-create"
 import { submitPromptRoute } from "./prompt-submit"
@@ -43,7 +45,7 @@ type PromptSubmitComposer = Pick<TextareaRenderable, "clear"> &
     extmarks: Pick<TextareaRenderable["extmarks"], "getAllForTypeId" | "clear">
   }
 
-type PromptSubmitSdk = Pick<ReturnType<typeof useSDK>, "url" | "directory" | "baseDirectory" | "fetch"> & {
+type PromptSubmitSdk = Pick<ReturnType<typeof useSDK>, "url" | "directory" | "baseDirectory" | "fetch" | "sseConnected"> & {
   client: {
     session: {
       create: (
@@ -89,6 +91,7 @@ export type PromptSubmitHost = {
       provider: readonly unknown[]
       provider_loaded: boolean
       provider_failed: boolean
+      task_queue: readonly unknown[]
       config?: { modes?: WorkModeConfig } | undefined
     }
     set: (key: "session", update: (sessions: Session[]) => Session[]) => void
@@ -210,12 +213,68 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
   let steerRequested = false
 
   async function submitSteer() {
+    // An empty composer over a busy session promotes the steerable prefix of
+    // the saved follow-up queue into the running turn. A non-empty draft keeps
+    // the ordinary steer path: the gesture always names exactly one explicit
+    // target and never bundles the queue with a draft.
+    const sessionID = host.sessionID()
+    if (
+      !host.syncPromptInputFromRenderable() &&
+      sessionID &&
+      host.store.mode === "normal" &&
+      host.queueModeEnabled() &&
+      isQueueableStatus(host.status().type)
+    ) {
+      await steerSavedFollowUps(sessionID)
+      return
+    }
     steerRequested = true
     try {
       return await submit()
     } finally {
       steerRequested = false
     }
+  }
+
+  async function steerSavedFollowUps(sessionID: string) {
+    const rows = durableFollowUps(host.sync.data.task_queue, sessionID)
+    if (rows.length === 0) {
+      host.toast.show({ variant: "info", message: t("ui.steerQueueEmpty"), duration: 2500 })
+      return
+    }
+    const outcome = await steerQueuedPrefix(host.sdk, rows)
+    host.log.info("tui.prompt.submitSteer: queue promotion finished", {
+      sessionID,
+      steered: outcome.steered.length,
+      queuedNext: outcome.queuedNext.length,
+      remaining: outcome.remaining,
+      failed: outcome.failed,
+    })
+    if (outcome.failed && outcome.steered.length === 0 && outcome.queuedNext.length === 0) {
+      host.toast.show({ variant: "error", message: t("ui.steerFailed", { message: outcome.failed }) })
+      return
+    }
+    if (outcome.steered.length === 0 && outcome.queuedNext.length === 0) {
+      host.toast.show({ variant: "info", message: t("ui.steerNothingSteerable"), duration: 3000 })
+      return
+    }
+    if (outcome.steered.length === 0) {
+      host.toast.show({ variant: "info", message: t("ui.steerQueuedNext"), duration: 3000 })
+      return
+    }
+    if (outcome.remaining > 0) {
+      host.toast.show({
+        variant: outcome.failed ? "warning" : "info",
+        message: t("ui.steeredFollowUpsPartial", { count: outcome.steered.length, remaining: outcome.remaining }),
+        duration: 3500,
+      })
+      return
+    }
+    host.toast.show({
+      variant: "info",
+      message: t("ui.steeredFollowUps", { count: outcome.steered.length }),
+      duration: 3000,
+    })
   }
 
   async function submit() {

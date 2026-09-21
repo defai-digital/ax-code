@@ -1055,4 +1055,17 @@ export const messages = {
   "animation.mahjongEnding": "\ub9c8\uc791: \ucd5c\uc885 \uc810\uc218",
   "animation.fujiDay": "\ud6c4\uc9c0\uc0b0: \ub0ae",
   "animation.fujiNight": "\ud6c4\uc9c0\uc0b0: \ubc24",
+  "ui.steerNowHint": "{keybind} \uc989\uc2dc \uc870\uc815",
+  "ui.steerQueueEmpty":
+    "\uc870\uc815\ud560 \uc800\uc7a5\ub41c \ud6c4\uc18d \uc791\uc5c5\uc774 \uc5c6\uc2b5\ub2c8\ub2e4",
+  "ui.steerNothingSteerable":
+    "\ub300\uae30\uc5f4\uc5d0 \uc9c4\ud589 \uc911\uc778 \ud134\uc73c\ub85c \uc870\uc815\ud560 \uc218 \uc788\ub294 \ud56d\ubaa9\uc774 \uc5c6\uc2b5\ub2c8\ub2e4",
+  "ui.steeredFollowUps":
+    "\ud6c4\uc18d \uc791\uc5c5 {count}\uac1c\ub97c \uc9c4\ud589 \uc911\uc778 \ud134\uc73c\ub85c \uc870\uc815\ud588\uc2b5\ub2c8\ub2e4",
+  "ui.steeredFollowUpsPartial":
+    "{count}\uac1c\ub97c \uc870\uc815\ud588\uc2b5\ub2c8\ub2e4. {remaining}\uac1c\ub294 \ub300\uae30\uc5f4\uc5d0 \ub0a8\uc544 \uc788\uc2b5\ub2c8\ub2e4",
+  "ui.steerQueuedNext":
+    "\uc9c4\ud589 \uc911\uc778 \ud134\uc774 \uc5c6\uc5b4 \ub300\uae30\uc5f4 \ub9e8 \uc55e\uc73c\ub85c \uc774\ub3d9\ud588\uc2b5\ub2c8\ub2e4",
+  "ui.steerFailed": "\uc870\uc815 \uc2e4\ud328: {message}",
+  "ui.steerIntoRunningTurn": "\uc9c4\ud589 \uc911\uc778 \ud134\uc73c\ub85c \uc870\uc815",
 } satisfies Dictionary

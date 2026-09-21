@@ -106,6 +106,27 @@ Receipts are process-local, with at most 256 per session and 32 pending requests
 entries can be evicted. After a restart, obtain the new generation and reconcile saved messages; this API does not
 promise durable receipt lookup across restarts. The generated SDK exposes `session.steering` and `session.steer`.
 
+## Steer a saved follow-up into the running turn
+
+`POST /task-queue/{taskID}/steer` admits a queued follow-up's text into the session's running generation at its
+next step boundary — the same delivery point as `POST /session/{sessionID}/steering` — and cancels the queue row in
+the same request, recording `steeredInto` (the generation UUID) and `steeredAt` on the row payload for audit.
+Text-only follow-ups up to 16,000 characters are steerable; the steered text applies the running turn's agent,
+model, and tools. Attachments, non-followup kinds, settled rows, and oversize text are rejected with HTTP 400, and
+a row that races to another status mid-request returns HTTP 409.
+
+The response carries the latest queue item and a nullable receipt. When no generation is active the row is left
+untouched and the response reports `generation_not_active` with a null receipt; callers may then fall back to
+`POST /task-queue/{taskID}/send-now`, which only moves the row to the front of the queue and still waits for the
+turn to end. A steered row is not undoable, but it stays visible as `cancelled` in the `/queue` history with its
+audit fields.
+
+In the TUI, the `input_submit_steer` keybind (default `ctrl+s`) steers the typed draft when one exists; with an
+empty composer over a busy session it instead promotes the steerable prefix of the saved queue in FIFO order,
+stopping at the first non-steerable row so later follow-ups never jump ahead of it. The sidebar Follow-ups section
+and the `/queue` dialog offer the same per-row steer-now action, and a hint near queued follow-ups shows the bound
+key. The generated SDK exposes `taskQueue.steer`.
+
 ## Propose a skill from verified work
 
 Skill candidates are explicit records in AX Code's existing local storage. They do not enter skill discovery until

@@ -955,4 +955,12 @@ export const messages = {
   "animation.mahjongEnding": "Mahjong: Skor Akhir",
   "animation.fujiDay": "Gunung Fuji: Siang",
   "animation.fujiNight": "Gunung Fuji: Malam",
+  "ui.steerNowHint": "{keybind} arahkan sekarang",
+  "ui.steerQueueEmpty": "Tidak ada tindak lanjut tersimpan untuk diarahkan",
+  "ui.steerNothingSteerable": "Tidak ada dalam antrean yang dapat mengarahkan giliran yang berjalan",
+  "ui.steeredFollowUps": "{count} tindak lanjut diarahkan ke giliran yang sedang berjalan",
+  "ui.steeredFollowUpsPartial": "{count} diarahkan; {remaining} tetap dalam antrean",
+  "ui.steerQueuedNext": "Tidak ada giliran yang berjalan; dipindahkan ke depan antrean",
+  "ui.steerFailed": "Pengarahan gagal: {message}",
+  "ui.steerIntoRunningTurn": "Arahkan ke giliran yang sedang berjalan",
 } satisfies Dictionary

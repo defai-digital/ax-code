@@ -967,4 +967,12 @@ export const messages = {
   "animation.mahjongEnding": "Mahjong: Punteggio finale",
   "animation.fujiDay": "Monte Fuji: Giorno",
   "animation.fujiNight": "Monte Fuji: Notte",
+  "ui.steerNowHint": "{keybind} indirizza ora",
+  "ui.steerQueueEmpty": "Nessun follow-up salvato da indirizzare",
+  "ui.steerNothingSteerable": "Niente in coda pu\u00f2 indirizzare il turno in corso",
+  "ui.steeredFollowUps": "{count} follow-up indirizzati nel turno in corso",
+  "ui.steeredFollowUpsPartial": "{count} indirizzati; {remaining} restano in coda",
+  "ui.steerQueuedNext": "Nessun turno in corso; spostato in cima alla coda",
+  "ui.steerFailed": "Indirizzamento non riuscito: {message}",
+  "ui.steerIntoRunningTurn": "Indirizza nel turno in corso",
 }

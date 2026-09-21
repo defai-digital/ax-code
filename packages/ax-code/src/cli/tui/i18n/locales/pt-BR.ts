@@ -969,4 +969,12 @@ export const messages = {
   "animation.mahjongEnding": "Mahjong: Pontua\u00e7\u00e3o final",
   "animation.fujiDay": "Monte Fuji: Dia",
   "animation.fujiNight": "Monte Fuji: Noite",
+  "ui.steerNowHint": "{keybind} direcionar agora",
+  "ui.steerQueueEmpty": "Nenhum acompanhamento salvo para direcionar",
+  "ui.steerNothingSteerable": "Nada na fila pode direcionar o turno em andamento",
+  "ui.steeredFollowUps": "{count} acompanhamento(s) direcionados para o turno em andamento",
+  "ui.steeredFollowUpsPartial": "{count} direcionados; {remaining} permanecem na fila",
+  "ui.steerQueuedNext": "Nenhum turno em andamento; movido para o in\u00edcio da fila",
+  "ui.steerFailed": "Falha ao direcionar: {message}",
+  "ui.steerIntoRunningTurn": "Direcionar para o turno em andamento",
 } satisfies Dictionary

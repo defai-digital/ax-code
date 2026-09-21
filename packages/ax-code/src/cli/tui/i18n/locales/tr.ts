@@ -992,4 +992,12 @@ export const messages = {
   "animation.mahjongEnding": "Mahjong: Son Puanlar",
   "animation.fujiDay": "Fuji Da\u011f\u0131: G\u00fcnd\u00fcz",
   "animation.fujiNight": "Fuji Da\u011f\u0131: Gece",
+  "ui.steerNowHint": "{keybind} \u015fimdi y\u00f6nlendir",
+  "ui.steerQueueEmpty": "Y\u00f6nlendirilecek kay\u0131tl\u0131 takip yok",
+  "ui.steerNothingSteerable": "Kuyrukta \u00e7al\u0131\u015fan tura y\u00f6nlendirilebilecek \u00f6\u011fe yok",
+  "ui.steeredFollowUps": "{count} takip \u00e7al\u0131\u015fan tura y\u00f6nlendirildi",
+  "ui.steeredFollowUpsPartial": "{count} y\u00f6nlendirildi; {remaining} kuyrukta kald\u0131",
+  "ui.steerQueuedNext": "\u00c7al\u0131\u015fan tur yok; kuyru\u011fun \u00f6n\u00fcne ta\u015f\u0131nd\u0131",
+  "ui.steerFailed": "Y\u00f6nlendirme ba\u015far\u0131s\u0131z: {message}",
+  "ui.steerIntoRunningTurn": "\u00c7al\u0131\u015fan tura y\u00f6nlendir",
 } satisfies Dictionary

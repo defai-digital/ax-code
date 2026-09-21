@@ -31,6 +31,9 @@ const FollowUpRow = z.object({
 })
 export type DurableFollowUp = z.infer<typeof FollowUpRow>
 
+/** Minimal SDK surface the follow-up endpoints need; the full useSDK satisfies it. */
+export type FollowUpSdk = Pick<ReturnType<typeof useSDK>, "sseConnected" | "url" | "directory" | "fetch">
+
 export function mergeFollowUpSnapshot<T extends { id: string; sessionID?: string } & Record<string, unknown>>(
   current: T[],
   snapshot: unknown[],
@@ -94,7 +97,7 @@ export function followUpStatus(row: DurableFollowUp) {
 }
 
 export async function followUpAction(
-  sdk: ReturnType<typeof useSDK>,
+  sdk: FollowUpSdk,
   id: string,
   action: "pause" | "resume" | "cancel" | "edit" | "send-now" | "retry",
   body?: unknown,
@@ -110,7 +113,7 @@ export async function followUpAction(
   return FollowUpRow.parse(await response.json())
 }
 
-export async function pauseFollowUp(sdk: ReturnType<typeof useSDK>, id: string) {
+export async function pauseFollowUp(sdk: FollowUpSdk, id: string) {
   if (!sdk.sseConnected) throw new Error("Reconnect before editing saved follow-ups")
   const response = await sdk.fetch(`${sdk.url.replace(/\/$/, "")}/task-queue/${encodeURIComponent(id)}`, {
     headers: directoryRequestHeaders({ directory: sdk.directory }),

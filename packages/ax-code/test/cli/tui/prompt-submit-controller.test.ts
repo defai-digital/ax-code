@@ -70,6 +70,7 @@ function setup(input: {
         ],
         provider_loaded: input.providerLoaded ?? true,
         provider_failed: false,
+        task_queue: [],
         config: input.config ?? { modes: { arena: { enabled: true } } },
       },
       set: vi.fn(),
@@ -78,6 +79,7 @@ function setup(input: {
       url: "http://localhost:4096",
       directory: "/test/workspace",
       baseDirectory: "/test/workspace",
+      sseConnected: true,
       client: { session: { create: vi.fn(async ({ id }) => ({ data: session(id) })) } },
       fetch: async (url, init) => {
         requests.push(new Request(url, init))
@@ -537,5 +539,125 @@ describe("send-now steering", () => {
     expect(host.history.append).not.toHaveBeenCalled()
     expect(host.submitPending()).toBe(false)
     expect(controller.submitInFlight).toBe(false)
+  })
+})
+
+describe("empty-composer queue promotion", () => {
+  function followUpRow(input: { id: string; text: string; position: number; status?: string; sessionID?: string }) {
+    return {
+      id: input.id,
+      sessionID: input.sessionID ?? "ses_test",
+      kind: "followup",
+      status: input.status ?? "waiting_for_idle",
+      title: input.text.slice(0, 40),
+      position: input.position,
+      time: { created: input.position + 1 },
+      payload: {
+        body: {
+          parts: [{ type: "text", text: input.text }],
+          agent: "build",
+          model: { providerID: "test-provider", modelID: "test-model" },
+        },
+      },
+    }
+  }
+
+  function promotionSetup(rows: unknown[]) {
+    const fixture = setup({ mode: "normal", workMode: "agent", text: "" })
+    fixture.host.queueModeEnabled = () => true
+    fixture.host.status = () => ({ type: "busy" })
+    fixture.host.sync.data.task_queue = rows
+    return fixture
+  }
+
+  function cancelledCopy(row: any) {
+    return { ...row, status: "cancelled", payload: { ...row.payload, steeredInto: "gen-1", steeredAt: 1000 } }
+  }
+
+  test("steers the steerable prefix of the saved queue in FIFO order", async () => {
+    const first = followUpRow({ id: "tas_1", text: "first queued", position: 0 })
+    const second = followUpRow({ id: "tas_2", text: "second queued", position: 1 })
+    const otherSession = followUpRow({ id: "tas_9", text: "not this session", position: 2, sessionID: "ses_other" })
+    const { controller, host, requests } = promotionSetup([first, second, otherSession])
+    host.sdk.fetch = async (url, init) => {
+      requests.push(new Request(url, init))
+      const id = String(url).split("/task-queue/")[1]!.split("/")[0]
+      const source = [first, second].find((row) => row.id === id)!
+      return Response.json({ item: cancelledCopy(source), receipt: { status: "accepted" } })
+    }
+    await controller.submitSteer()
+    expect(requests.map((request) => request.url)).toEqual([
+      "http://localhost:4096/task-queue/tas_1/steer",
+      "http://localhost:4096/task-queue/tas_2/steer",
+    ])
+    expect(host.toast.show).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: "info", message: "Steered 2 follow-up(s) into the running turn" }),
+    )
+    expect(host.input.clear).not.toHaveBeenCalled()
+  })
+
+  test("an empty queue reports nothing to steer and sends no requests", async () => {
+    const { controller, host, requests } = promotionSetup([])
+    await controller.submitSteer()
+    expect(requests).toHaveLength(0)
+    expect(host.toast.show).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: "info", message: "No saved follow-ups to steer" }),
+    )
+  })
+
+  test("a leading barrier steers nothing and keeps every row queued", async () => {
+    const paused = followUpRow({ id: "tas_1", text: "parked", position: 0, status: "paused" })
+    const steerable = followUpRow({ id: "tas_2", text: "waiting behind", position: 1 })
+    const { controller, host, requests } = promotionSetup([paused, steerable])
+    await controller.submitSteer()
+    expect(requests).toHaveLength(0)
+    expect(host.toast.show).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: "info", message: "Nothing in the queue can steer the running turn" }),
+    )
+  })
+
+  test("without an active generation only the first miss is prioritized", async () => {
+    const first = followUpRow({ id: "tas_1", text: "first queued", position: 0 })
+    const second = followUpRow({ id: "tas_2", text: "second queued", position: 1 })
+    const { controller, host, requests } = promotionSetup([first, second])
+    host.sdk.fetch = async (url, init) => {
+      requests.push(new Request(url, init))
+      if (String(url).endsWith("/steer"))
+        return Response.json({ item: first, receipt: null, reason: "generation_not_active" })
+      return Response.json({ ...first, status: "queued", position: 0 })
+    }
+    await controller.submitSteer()
+    expect(requests.map((request) => request.url)).toEqual([
+      "http://localhost:4096/task-queue/tas_1/steer",
+      "http://localhost:4096/task-queue/tas_1/send-now",
+    ])
+    expect(host.toast.show).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: "info", message: "No running turn; moved to the front of the queue" }),
+    )
+  })
+
+  test("a failed steer stops the promotion and keeps later rows queued", async () => {
+    const first = followUpRow({ id: "tas_1", text: "first queued", position: 0 })
+    const second = followUpRow({ id: "tas_2", text: "second queued", position: 1 })
+    const { controller, host, requests } = promotionSetup([first, second])
+    host.sdk.fetch = async (url, init) => {
+      requests.push(new Request(url, init))
+      return Response.json({ message: "row changed" }, { status: 409 })
+    }
+    await controller.submitSteer()
+    expect(requests).toHaveLength(1)
+    expect(host.toast.show).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: "error", message: "Steering failed: row changed" }),
+    )
+  })
+
+  test("an idle session with an empty composer stays a no-op", async () => {
+    const fixture = setup({ mode: "normal", workMode: "agent", text: "" })
+    fixture.host.queueModeEnabled = () => true
+    fixture.host.status = () => ({ type: "idle" })
+    fixture.host.sync.data.task_queue = [followUpRow({ id: "tas_1", text: "queued", position: 0 })]
+    await fixture.controller.submitSteer()
+    expect(fixture.requests).toHaveLength(0)
+    expect(fixture.host.toast.show).not.toHaveBeenCalled()
   })
 })

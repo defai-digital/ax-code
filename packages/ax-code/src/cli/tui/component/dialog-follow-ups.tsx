@@ -14,7 +14,10 @@ import {
   followUpStatus,
   type DurableFollowUp,
 } from "./prompt/durable-follow-up"
+import { steerBarrier, steerFollowUp } from "./prompt/steer-follow-up"
 import { Keybind } from "@/util/keybind"
+
+type FollowUpDialogAction = "pause" | "resume" | "cancel" | "retry" | "edit" | "stop" | "steer"
 
 export function DialogFollowUps(props: { sessionID: string; onAttention: () => void }) {
   const uiText = useLanguage().t
@@ -30,12 +33,23 @@ export function DialogFollowUps(props: { sessionID: string; onAttention: () => v
   const reopen = () =>
     dialog.replace(() => <DialogFollowUps sessionID={props.sessionID} onAttention={props.onAttention} />)
 
-  async function act(item: DurableFollowUp, action: "pause" | "resume" | "cancel" | "retry" | "edit" | "stop") {
+  async function act(item: DurableFollowUp, action: FollowUpDialogAction) {
     try {
       if (action === "stop") {
         if (!sdk.sseConnected) throw new Error("Reconnect before stopping the active turn")
         const result = await sdk.client.session.abort({ sessionID: props.sessionID })
         if (result.error) throw new Error("Unable to stop the active turn")
+      } else if (action === "steer") {
+        const outcome = await steerFollowUp(sdk, item)
+        if (outcome.kind === "delivered") {
+          update(outcome.item)
+          toast.show({ message: uiText("ui.steeredFollowUps", { count: 1 }), variant: "info" })
+        } else if (outcome.kind === "queued_next") {
+          update(outcome.item)
+          toast.show({ message: uiText("ui.steerQueuedNext"), variant: "info" })
+        } else {
+          toast.show({ message: uiText("ui.steerFailed", { message: outcome.message }), variant: "error" })
+        }
       } else if (action !== "edit") update(await followUpAction(sdk, item.id, action))
       else {
         const paused = await pauseFollowUp(sdk, item.id)
@@ -73,8 +87,11 @@ export function DialogFollowUps(props: { sessionID: string; onAttention: () => v
       return
     }
     const mutable = ["queued", "waiting_for_idle", "paused"].includes(item.status)
-    const actions: Array<{ title: string; value: "pause" | "resume" | "cancel" | "retry" | "edit" | "stop" }> = [
+    const actions: Array<{ title: string; value: FollowUpDialogAction }> = [
       ...(mutable ? [{ title: uiText("ui.editPauseFirst"), value: "edit" as const }] : []),
+      ...(mutable && steerBarrier(item) === null
+        ? [{ title: uiText("ui.steerIntoRunningTurn"), value: "steer" as const }]
+        : []),
       ...(item.status === "paused"
         ? [{ title: uiText("ui.resume"), value: "resume" as const }]
         : mutable

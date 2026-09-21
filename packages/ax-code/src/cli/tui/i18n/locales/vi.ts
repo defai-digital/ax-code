@@ -1035,4 +1035,17 @@ export const messages = {
   "animation.mahjongEnding": "M\u1ea1t ch\u01b0\u1ee3c: \u0110i\u1ec3m cu\u1ed1i",
   "animation.fujiDay": "N\u00fai Ph\u00fa S\u0129: Ban ng\u00e0y",
   "animation.fujiNight": "N\u00fai Ph\u00fa S\u0129: Ban \u0111\u00eam",
+  "ui.steerNowHint": "{keybind} \u0111i\u1ec1u h\u01b0\u1edbng ngay",
+  "ui.steerQueueEmpty":
+    "Kh\u00f4ng c\u00f3 theo d\u00f5i \u0111\u00e3 l\u01b0u \u0111\u1ec3 \u0111i\u1ec1u h\u01b0\u1edbng",
+  "ui.steerNothingSteerable":
+    "Kh\u00f4ng c\u00f3 m\u1ee5c n\u00e0o trong h\u00e0ng \u0111\u1ee3i c\u00f3 th\u1ec3 \u0111i\u1ec1u h\u01b0\u1edbng l\u01b0\u1ee3t \u0111ang ch\u1ea1y",
+  "ui.steeredFollowUps":
+    "\u0110\u00e3 \u0111i\u1ec1u h\u01b0\u1edbng {count} theo d\u00f5i v\u00e0o l\u01b0\u1ee3t \u0111ang ch\u1ea1y",
+  "ui.steeredFollowUpsPartial":
+    "\u0110\u00e3 \u0111i\u1ec1u h\u01b0\u1edbng {count}; c\u00f2n {remaining} trong h\u00e0ng \u0111\u1ee3i",
+  "ui.steerQueuedNext":
+    "Kh\u00f4ng c\u00f3 l\u01b0\u1ee3t \u0111ang ch\u1ea1y; \u0111\u00e3 chuy\u1ec3n l\u00ean \u0111\u1ea7u h\u00e0ng \u0111\u1ee3i",
+  "ui.steerFailed": "\u0110i\u1ec1u h\u01b0\u1edbng th\u1ea5t b\u1ea1i: {message}",
+  "ui.steerIntoRunningTurn": "\u0110i\u1ec1u h\u01b0\u1edbng v\u00e0o l\u01b0\u1ee3t \u0111ang ch\u1ea1y",
 } satisfies Dictionary

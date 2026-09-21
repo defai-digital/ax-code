@@ -965,4 +965,12 @@ export const messages = {
   "animation.mahjongEnding": "Mahjong: Endstand",
   "animation.fujiDay": "Berg Fuji: Tag",
   "animation.fujiNight": "Berg Fuji: Nacht",
+  "ui.steerNowHint": "{keybind} jetzt steuern",
+  "ui.steerQueueEmpty": "Keine gespeicherten Folgeauftr\u00e4ge zum Steuern",
+  "ui.steerNothingSteerable": "Nichts in der Warteschlange kann den laufenden Durchlauf steuern",
+  "ui.steeredFollowUps": "{count} Folgeauftrag/-auftr\u00e4ge in den laufenden Durchlauf gesteuert",
+  "ui.steeredFollowUpsPartial": "{count} gesteuert; {remaining} verbleiben in der Warteschlange",
+  "ui.steerQueuedNext": "Kein laufender Durchlauf; an den Anfang der Warteschlange verschoben",
+  "ui.steerFailed": "Steuern fehlgeschlagen: {message}",
+  "ui.steerIntoRunningTurn": "In den laufenden Durchlauf steuern",
 } satisfies Dictionary

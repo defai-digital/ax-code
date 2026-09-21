@@ -43,6 +43,13 @@ if a hook vetoes it, the draft stays in the composer with the reason. Drafts
 with attachments and slash commands always use the follow-up queue. The same
 delivery is available to other clients through the steering API described in
 [harness controls](harness-controls.md#correct-a-running-generation).
+Saved follow-ups can also be steered after the fact: pressing `ctrl+s` with an
+empty composer promotes the steerable prefix of the queue in order and stops
+at the first non-steerable row, and the sidebar Follow-ups section and the
+`/queue` dialog offer the same per-row steer-now action. Steered rows are
+cancelled with a `steeredInto` audit trail and stay visible in the `/queue`
+history. When no generation is active, steer-now falls back to prioritizing
+the row to the front of the queue — it still starts only after the turn ends.
 The composer clears only after acknowledgement. Reattach to the same session
 and use `/queue` to inspect, pause, edit, resume, or cancel them. Editing first
 pauses the item and preserves attachments and model selection; saving does not

@@ -4326,6 +4326,48 @@ export type SymbolSource = {
   kind: number
 }
 
+/** AX Code API schema `TaskQueueSteerResult` (auto-generated from the OpenAPI contract). */
+export type TaskQueueSteerResult = {
+  item: {
+    id: string
+    projectID: string
+    directory: string
+    worktree?: string
+    sessionID?: string
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    status:
+      | "queued"
+      | "waiting_for_idle"
+      | "running"
+      | "blocked_permission"
+      | "blocked_question"
+      | "paused"
+      | "failed"
+      | "completed"
+      | "cancelled"
+    priority: number
+    position: number
+    title: string
+    agent?: string
+    model?: unknown
+    sourceMessageID?: string
+    sourceTaskID?: string
+    payload: {
+      [key: string]: unknown
+    }
+    error?: string
+    executionTimeoutMs?: number
+    time: {
+      created: number
+      updated?: number
+      started?: number
+      completed?: number
+    }
+  }
+  receipt: SteeringReceipt | null
+  reason?: string
+}
+
 /** AX Code API schema `TextPart` (auto-generated from the OpenAPI contract). */
 export type TextPart = {
   id: string
@@ -6845,6 +6887,48 @@ export type TaskQueueSendNowResponses = {
 
 /** Successful response payload for `POST /task-queue/{taskID}/send-now` — Send task now */
 export type TaskQueueSendNowResponse = TaskQueueSendNowResponses[keyof TaskQueueSendNowResponses]
+
+/** Request payload shape for `POST /task-queue/{taskID}/steer` — Steer follow-up into the running turn */
+export type TaskQueueSteerData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task-queue/{taskID}/steer"
+}
+
+/** Error response payloads for `POST /task-queue/{taskID}/steer` — Steer follow-up into the running turn */
+export type TaskQueueSteerErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
+}
+
+/** Error response payload for `POST /task-queue/{taskID}/steer` — Steer follow-up into the running turn */
+export type TaskQueueSteerError = TaskQueueSteerErrors[keyof TaskQueueSteerErrors]
+
+/** Success response payloads for `POST /task-queue/{taskID}/steer` — Steer follow-up into the running turn */
+export type TaskQueueSteerResponses = {
+  /**
+   * Steering outcome with the latest task queue item.
+   */
+  200: TaskQueueSteerResult
+}
+
+/** Successful response payload for `POST /task-queue/{taskID}/steer` — Steer follow-up into the running turn */
+export type TaskQueueSteerResponse = TaskQueueSteerResponses[keyof TaskQueueSteerResponses]
 
 /** Request payload shape for `POST /task-queue/{taskID}/reorder` — Reorder task */
 export type TaskQueueReorderData = {

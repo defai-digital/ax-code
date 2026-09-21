@@ -649,10 +649,12 @@ describe("AX Code TUI stability guardrails", () => {
     expect(queuedBlock).toContain("width={QUEUED_DELETE_ICON_WIDTH}")
     expect(queuedBlock).toContain("dropQueued(item.id)")
     expect(queuedBlock).toContain("<text style={{ fg: theme.warning }}>{QUEUED_DELETE_ICON}</text>")
-    // The send-now and edit controls are also fixed-width boxes so wide glyphs
-    // stay aligned.
+    // The pause/resume, steer, and edit controls are also fixed-width boxes so
+    // wide glyphs stay aligned.
     expect(queuedBlock).toContain("width={QUEUED_SEND_ICON_WIDTH}")
-    expect(queuedBlock).toContain("void sendQueuedNow(item.id)")
+    expect(queuedBlock).toContain("void togglePauseQueued(item.id)")
+    expect(queuedBlock).toContain("width={QUEUED_STEER_ICON_WIDTH}")
+    expect(queuedBlock).toContain("void steerQueued(item.id)")
     expect(queuedBlock).toContain("width={QUEUED_EDIT_ICON_WIDTH}")
     expect(queuedBlock).toContain("editQueued(item.id)")
     // Click handlers stay on the width-boxed containers, never on <text> (wide

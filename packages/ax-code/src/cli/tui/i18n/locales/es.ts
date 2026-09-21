@@ -967,4 +967,12 @@ export const messages = {
   "animation.mahjongEnding": "Mahjong: Puntos finales",
   "animation.fujiDay": "Monte Fuji: D\u00eda",
   "animation.fujiNight": "Monte Fuji: Noche",
+  "ui.steerNowHint": "{keybind} dirigir ahora",
+  "ui.steerQueueEmpty": "No hay seguimientos guardados para dirigir",
+  "ui.steerNothingSteerable": "Nada en la cola puede dirigir el turno en curso",
+  "ui.steeredFollowUps": "{count} seguimiento(s) dirigidos al turno en curso",
+  "ui.steeredFollowUpsPartial": "{count} dirigidos; {remaining} permanecen en cola",
+  "ui.steerQueuedNext": "No hay turno en curso; movido al frente de la cola",
+  "ui.steerFailed": "Error al dirigir: {message}",
+  "ui.steerIntoRunningTurn": "Dirigir al turno en curso",
 } satisfies Dictionary

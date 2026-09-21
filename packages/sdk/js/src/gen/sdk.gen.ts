@@ -304,6 +304,8 @@ import type {
   TaskQueueSendNowResponses,
   TaskQueueStatusErrors,
   TaskQueueStatusResponses,
+  TaskQueueSteerErrors,
+  TaskQueueSteerResponses,
   TextPartInput,
   ToolIdsErrors,
   ToolIdsResponses,
@@ -1767,6 +1769,36 @@ export class TaskQueue extends HeyApiClient {
     )
     return (options?.client ?? this.client).post<TaskQueueSendNowResponses, TaskQueueSendNowErrors, ThrowOnError>({
       url: "/task-queue/{taskID}/send-now",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Steer follow-up into the running turn
+   *
+   * Admit a queued follow-up's text into the session's running generation at its next step boundary and cancel the queue row with a steeredInto audit trail. Text-only follow-ups are steerable; the steered text applies the running turn's agent, model, and tools. Anything else is rejected with 400. When no generation is active the row is left untouched and the response carries reason generation_not_active with a null receipt.
+   */
+  public steer<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TaskQueueSteerResponses, TaskQueueSteerErrors, ThrowOnError>({
+      url: "/task-queue/{taskID}/steer",
       ...options,
       ...params,
     })
