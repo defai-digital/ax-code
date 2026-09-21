@@ -383,6 +383,7 @@ export namespace BlastRadius {
    */
   async function isUntrackedGitignored(filePath: string): Promise<boolean> {
     if (!filePath) return false
+    // @scan-suppress security_scan - Normalize an already-written path only for read-only git check-ignore; this does not authorize file access.
     const resolved = path.resolve(filePath)
     const stripped = new Set([
       "GIT_DIR",

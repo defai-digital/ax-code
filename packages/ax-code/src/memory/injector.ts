@@ -181,6 +181,7 @@ export async function getContext(projectRoot: string, opts: Omit<BuildContextOpt
   const globalPath = store.getGlobalMemoryPath()
   const sharedSource =
     projectPath !== undefined &&
+    // @scan-suppress security_scan - Compare store-derived memory paths for deduplication; loading and authorization remain in the store.
     (path.resolve(projectPath) === path.resolve(globalPath) ||
       (await Promise.all([
         realpath(projectPath).catch(() => undefined),
