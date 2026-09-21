@@ -6,7 +6,13 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Changed
+
+- Bundle signed AX Engine 7.5.4 on Apple Silicon Macs and use the same verified archive for managed installs.
+
 ### Fixed
+
+- Verify managed AX Engine installs with the native doctor identity when `--version` is unsupported, and reject mismatched runtime versions.
 
 - Read an AX Engine `doctor --json` install version even when doctor exits non-zero, and let `mtpPolicy: disabled` turn MTP off when the binary version cannot be established.
 - Advertise tool calling on the Tiel and Cyber-Tiel catalogs so a missing live model card does not drop every tool. A live `/v1/models` card still overrides the catalog.

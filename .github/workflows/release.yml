@@ -390,9 +390,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          VERSION="7.5.3"
+          VERSION="7.5.4"
           ASSET="ax-engine-v${VERSION}-macos-arm64.tar.gz"
-          EXPECTED="e6336436ff782ac1b8d261e32ff8291a077f38acb9de2602522f724cdd2801b8"
+          EXPECTED="4f3e992209dea6fa3d6ec2861c0a20e6512bdd4df36bc0700a2a5e6ac9ef8da0"
           DEST="$RUNNER_TEMP/$ASSET"
           SIBLING="$GITHUB_WORKSPACE/../ax-engine/target/release-artifacts/v${VERSION}/$ASSET"
           if [ -f "$SIBLING" ]; then
@@ -482,15 +482,18 @@ jobs:
             exit 1
           fi
           if [ "${{ matrix.targets }}" = "darwin-arm64" ]; then
-            ENGINE_BIN="$SMOKE_ROOT/engine/7.5.3/ax-engine"
+            ENGINE_BIN="$SMOKE_ROOT/engine/7.5.4/ax-engine"
             if [ ! -x "$ENGINE_BIN" ]; then
-              echo "FAIL: darwin-arm64 runtime did not ship AX Engine at engine/7.5.3/ax-engine"
+              echo "FAIL: darwin-arm64 runtime did not ship AX Engine at engine/7.5.4/ax-engine"
               exit 1
             fi
-            if [ ! -f "$SMOKE_ROOT/engine/7.5.3/mlx.metallib" ]; then
+            if [ ! -f "$SMOKE_ROOT/engine/7.5.4/mlx.metallib" ]; then
               echo "FAIL: darwin-arm64 runtime did not ship mlx.metallib"
               exit 1
             fi
+            ENGINE_DOCTOR="$SMOKE_ROOT/ax-engine-doctor.json"
+            "$ENGINE_BIN" doctor --json > "$ENGINE_DOCTOR" || true
+            node -e 'const fs = require("node:fs"); const data = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (data.install?.version !== "7.5.4") throw new Error("Bundled AX Engine version mismatch"); console.log("Bundled AX Engine: " + data.install.version)' "$ENGINE_DOCTOR"
           fi
 
       - name: Notarize macOS CLI archive

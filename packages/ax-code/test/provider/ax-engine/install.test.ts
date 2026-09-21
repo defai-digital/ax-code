@@ -108,11 +108,11 @@ describe("resolveInstallableRelease", () => {
   })
 
   test("pins a self-contained darwin-arm64 release and refuses other hosts", () => {
-    expect(AX_ENGINE_BINARY_RELEASE.version).toBe("7.5.3")
+    expect(AX_ENGINE_BINARY_RELEASE.version).toBe("7.5.4")
     expect(AX_ENGINE_BINARY_RELEASE.sha256).toMatch(/^[a-f0-9]{64}$/)
     expect(AX_ENGINE_BINARY_RELEASE.url.startsWith("https://")).toBe(true)
     expect(resolveInstallableRelease("darwin", "arm64", {})).toMatchObject({
-      version: "7.5.3",
+      version: "7.5.4",
       sha256: AX_ENGINE_BINARY_RELEASE.sha256,
     })
     expect(isAxEngineInstallable("darwin", "arm64", {})).toBe(true)
@@ -124,6 +124,54 @@ describe("resolveInstallableRelease", () => {
 })
 
 describe("installAxEngineBinary", () => {
+  test.each([0, 1])("accepts doctor install identity when --version is unsupported (doctor exit %s)", async (code) => {
+    const result = await installAxEngineBinary(
+      {},
+      baseRuntime({
+        install: (async (input) => {
+          await writeRuntimePayload(
+            path.dirname(input.bin),
+            `#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo 'unknown command: --version' >&2
+  exit 1
+fi
+echo '{"install":{"version":"9.9.9"}}'
+exit ${code}
+`,
+          )
+          return input.bin
+        }) as NonNullable<AxEngineInstallRuntime["install"]>,
+      }),
+    )
+    expect(result.installed).toBe(true)
+    expect((await getManagedBinary())?.version).toBe("9.9.9")
+  })
+
+  test.each(["7.5.3", "unknown"])(
+    "rejects an unexpected runtime identity %s and removes the payload",
+    async (detected) => {
+      await expect(
+        installAxEngineBinary(
+          {},
+          baseRuntime({
+            install: (async (input) => {
+              await writeRuntimePayload(
+                path.dirname(input.bin),
+                `#!/bin/sh
+echo '${detected}'
+`,
+              )
+              return input.bin
+            }) as NonNullable<AxEngineInstallRuntime["install"]>,
+          }),
+        ),
+      ).rejects.toThrow("does not match 9.9.9")
+      expect(await getManagedBinary()).toBeUndefined()
+      await expect(fs.access(AxEnginePaths.managedBinary(RELEASE.version))).rejects.toBeTruthy()
+    },
+  )
+
   test.each(["ax-engine-server", "libmlx.dylib", "mlx.metallib"])(
     "repairs a recorded installation missing %s",
     async (missing) => {
@@ -406,7 +454,7 @@ describe("bundled sidecar resolution", () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "axe-bundled-"))
     try {
       const dir = path.join(root, "engine", AX_ENGINE_BINARY_RELEASE.version)
-      await writeRuntimePayload(dir, "#!/bin/sh\necho ax-engine 7.5.3\n")
+      await writeRuntimePayload(dir, "#!/bin/sh\necho ax-engine 7.5.4\n")
       const entry = path.join(root, "lib", "index-node-tui.js")
       await fs.mkdir(path.dirname(entry), { recursive: true })
       await fs.writeFile(entry, "export {}\n")

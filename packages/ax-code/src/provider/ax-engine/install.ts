@@ -2,6 +2,7 @@ import fs from "fs/promises"
 import { constants as fsConstants } from "fs"
 import path from "path"
 import z from "zod"
+import semver from "semver"
 import { FileLock } from "@/util/filelock"
 import { Filesystem } from "@/util/filesystem"
 import { Process } from "@/util/process"
@@ -17,6 +18,7 @@ import {
   type AxEngineBinaryRelease,
 } from "./constants"
 import { AxEnginePaths } from "./paths"
+import { probeVersion } from "./version-probe"
 import { requirePlatformEligibility } from "./platform"
 import { axEngineRuntimeFile, AX_ENGINE_RUNTIME_REQUIRED_FILES, AX_ENGINE_RUNTIME_SIGNED_FILES } from "./payload"
 
@@ -49,7 +51,7 @@ export type AxEngineInstallRuntime = {
   install?: typeof installReleaseBin
   verifyCodesign?: (binaryPath: string, expectedTeamId?: string) => Promise<void>
   clearQuarantine?: (binaryPath: string) => Promise<void>
-  smoke?: (binaryPath: string) => Promise<void>
+  smoke?: (binaryPath: string, expectedVersion: string) => Promise<void>
 }
 
 function assetNameFromUrl(url: string): string {
@@ -69,7 +71,7 @@ function optionalTrimmed(value: string | undefined): string | undefined {
 // Resolve the ax-engine release the current host should install, or undefined
 // when there is none. The binary only ships for Apple Silicon macOS. An
 // AX_ENGINE_INSTALL_URL env override wins so a machine can target a specific
-// artifact without a code change. The default pin is the self-contained 7.5.3
+// artifact without a code change. The default pin is the self-contained 7.5.4
 // archive staged into darwin-arm64 AX Code releases.
 export function resolveInstallableRelease(
   platform: string = process.platform,
@@ -132,13 +134,12 @@ async function chmodRuntimePayload(installDir: string): Promise<void> {
   )
 }
 
-async function smokeInstalledBinary(binaryPath: string): Promise<void> {
-  const probe = await Process.run([binaryPath, "--version"], { timeout: 15_000, nothrow: true })
-  if (probe.code !== 0) {
+async function smokeInstalledBinary(binaryPath: string, expectedVersion: string): Promise<void> {
+  const detected = await probeVersion(binaryPath)
+  const parsed = detected ? semver.coerce(detected) : undefined
+  if (!parsed || (semver.valid(expectedVersion) && !semver.eq(parsed, expectedVersion))) {
     throw new Error(
-      `${AX_ENGINE_ERROR.BinaryMissing}: installed ax-engine failed --version (${
-        probe.stderr.toString().trim() || `exited ${probe.code}`
-      })`,
+      `${AX_ENGINE_ERROR.BinaryMissing}: installed ax-engine version ${detected ?? "unknown"} does not match ${expectedVersion}`,
     )
   }
 }
@@ -328,7 +329,7 @@ export async function installAxEngineBinary(
         await clearXattr(runtimeFile)
         await verify(runtimeFile, release.teamId)
       }
-      await smoke(binaryPath)
+      await smoke(binaryPath, release.version)
     } catch (error) {
       // Never leave an unverified binary behind — a later resolution must not
       // pick it up.

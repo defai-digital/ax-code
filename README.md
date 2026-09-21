@@ -121,7 +121,7 @@ pays tool rounds, prompt growth, HTTP sidecar overhead, and cache state.
 The current matched peer numbers are native AX Engine versus MTPLX **2.11.3** on **20 September
 2026** (six measured samples, cold KV, MTP depth 3). The primary metric is **completion tokens/s
 including TTFT**. These are native-API measurements, not default `ax-engine serve` and not AX Code
-sessions. AX Code bundles signed AX Engine **7.5.3**.
+sessions. AX Code bundles signed AX Engine **7.5.4**.
 
 <p align="center">
   <img src="docs/images/tiel-vs-mtplx-2026-09-20.svg" width="820" alt="Grouped bar chart of completion throughput in tokens per second (including time to first token), AX Engine versus MTPLX 2.11.3, for the Tiel default pack and the Cyber-Tiel alternate pack on M5 Max 128 GiB, and the Tiel pack on M4 Pro 64 GiB. AX Engine leads both M5 Max cells; on M4 Pro the Tiel pack is essentially level with MTPLX.">
