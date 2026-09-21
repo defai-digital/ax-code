@@ -24,6 +24,66 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 
 ---
 
+## Install
+
+AX Code is a local-first coding agent for serious software work. It runs locally on Apple Silicon
+with managed 35B-class inference through AX Engine, on Windows, and on Ubuntu; cloud API, CLI,
+private-GPU, and AX Trust providers remain available when you want them. For a non-technical
+overview and screenshots, see [ax-code.app](https://ax-code.app).
+
+**Public downloads are temporarily unavailable (2026-09-16).** The release installer URLs and
+the Homebrew formula below currently return 404 because the original GitHub repository is private.
+These commands document the supported install channels; for current status, see the
+[ax-code.app install guide](https://ax-code.app/en/download/). The Standard open-source
+direction does not itself change repository visibility or restore public downloads.
+
+### macOS (Apple Silicon)
+
+Use the standalone release installer (recommended; Homebrew is not required):
+
+```bash
+curl -fsSL https://download.ax-code.com/install | bash
+```
+
+If you already manage tools with Homebrew, it remains a supported alternative:
+
+```bash
+brew tap defai-digital/tap
+brew trust defai-digital/tap
+brew install defai-digital/tap/ax-code
+```
+
+Trusting the tap allows Homebrew to load all current and future formulae and casks published there.
+Use one installation channel for `ax-code`; `ax-code upgrade` follows the active installation, while
+`brew upgrade ax-code` updates Homebrew.
+
+### Windows
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.ax-code.com/install.ps1 | iex"
+```
+
+### Ubuntu 24.04+
+
+```bash
+curl -fsSL https://download.ax-code.com/install | bash
+```
+
+### After install
+
+```bash
+ax-code
+```
+
+Then connect a provider with `/connect` in the terminal UI, or run `ax-code providers login`. No
+project setup or config file is required.
+
+To enable managed local inference on Apple Silicon with the bundled AX Engine and the 35B MXFP4
+MTP pack, see [AX Engine Model Selection](docs/providers/ax-engine-model-selection.md). To connect
+an already-running MTPLX, oMLX, Ollama, LM Studio, AX Studio, or any other OpenAI-compatible
+endpoint, see [MTPLX and oMLX setup](docs/providers/local-mlx-runtimes.md). Release archives are
+verified with minisign; deeper platform notes live in [Installation and Runtime Channels](docs/getting-started/install-runtime.md).
+
 ## Standard and Business
 
 **AX Code Standard** is open-source AI coding for individuals and teams, built to work
@@ -224,14 +284,14 @@ required; older binaries fail with `MlxMtpRequiredButUnavailable`. See
 [AX Engine Model Selection](docs/providers/ax-engine-model-selection.md) for memory guidance, the
 managed activation contract, and the MTP policy.
 
-## Get started
+## Install reference (canonical section at the top)
 
-**Public downloads are temporarily unavailable (2026-09-16).** The original GitHub
-repository is private, so the release installer URLs below return 404 for anonymous
-users. Homebrew also downloads its archive from that repository. These commands document
-the existing channels; they are not currently usable public installation paths. See the
-[website guide](https://ax-code.app/en/download/) for installation updates. The Standard
-open-source direction does not itself change repository visibility or restore downloads.
+The installation blocks below are kept as a single-page reference and for change history. The
+canonical, current copy lives in the [Install](#install) section near the top of this README.
+The original GitHub repository is private, so the release installer URLs and the Homebrew formula
+currently return 404 for anonymous users; the Standard open-source direction does not itself
+change repository visibility or restore public downloads. For the current download status, see
+the [ax-code.app install guide](https://ax-code.app/en/download/).
 
 ### macOS (Apple Silicon)
 
