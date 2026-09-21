@@ -30,6 +30,7 @@ For standalone questions about selected files through AX Trust caching, see
 | Get several models to attempt the same change            | [Verified Multi-Model Changes](guides/verified-multi-model-change.md)   |
 | Choose an install or runtime channel                     | [Installation and Runtime Channels](getting-started/install-runtime.md) |
 | Connect a hosted, CLI, custom, or local provider         | [Supported Providers and Models](providers/supported-providers.md)      |
+| Enable managed local inference on Apple Silicon M3 Max   | [AX Engine Model Selection](providers/ax-engine-model-selection.md)     |
 | Try AX Code with a free-tier model API                   | [Free-Tier API Quickstart](providers/free-tier-apis.md)                 |
 | Run an agent with safe filesystem and network boundaries | [Sandbox Mode](guides/sandbox.md)                                       |
 | Administer cloud or network infrastructure safely        | [Cloud Operations Mode](guides/cloud-operations.md)                     |

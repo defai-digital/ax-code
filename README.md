@@ -9,8 +9,9 @@ _  ___ |    |_/_____/ /___  / /_/ /_  /_/ /_  /___
 <h1 align="center">AX Code</h1>
 
 <p align="center"><strong>Inspect the run. Verify the change. Decide what stays.</strong></p>
+<p align="center"><strong>Local coding agent with managed inference on Apple Silicon M3 Max.</strong></p>
 
-AX Code is an open-source coding-agent runtime for reviewable, reversible work. Every session is recorded as a structured event log with file snapshots, so you can reconstruct what the agent did, compare two runs against each other, and roll back what you do not want. Candidate implementations can be built in isolated Git worktrees and ranked against your repository's own checks — nothing merges automatically.
+AX Code is an open-source coding-agent runtime for reviewable, reversible work. Run a 35B-class coding model on a single Apple Silicon laptop with managed lifecycle, and keep an evidence record of every change. Sessions are recorded as structured event logs with file snapshots, so you can reconstruct what the agent did, compare two runs against each other, and roll back what you do not want. Candidate implementations can be built in isolated Git worktrees and ranked against your repository's own checks — nothing merges automatically.
 
 Built by [DEFAI Digital](https://github.com/defai-digital).
 
@@ -39,6 +40,38 @@ v8.0 is upcoming. Business features, pricing, and deployment availability are no
 being announced as generally available. Computer use (CUA) is planned for v8.1.
 Read [Standard and Business](docs/getting-started/editions.md) for the edition boundaries,
 local inference scope, licensing, and current public-access status.
+
+## Apple Silicon, managed local inference
+
+AX Code is one of few open-source agent runtimes that activates a 35B-class coding model on a
+single Apple Silicon laptop with managed lifecycle. On M3 Max with 128 GiB unified memory, the
+[Tiel Coder 35B A3B MXFP4 MTP](docs/providers/ax-engine-model-selection.md) pack runs in its
+native MXFP4 quantization without quantization-to-fit compromises. AX Engine manages the process
+end to end: model selection, download, MTP policy enforcement, live text-and-tool contract
+verification, and managed start/shutdown. Each pack is sized for roughly 64 GiB of weights plus
+KV cache, buffers, and host reserve — plan the memory envelope, not just the model file.
+
+Speed is hardware-bound. AX Code does not impose a tokens-per-second ceiling (the docs say so
+explicitly); faster hardware produces tokens faster. Measured native Tiel Coder decode on M3 Max
+with 128 GiB: 47–58 tokens/second on AX Engine with MTP active, 92–96 tokens/second on MTPLX on
+the same hardware. Uncached prefill runs roughly 830–1,446 tokens/second. These come from the
+[Tiel prefill/decode benchmark](docs/guides/tiel-runtime-phases-2026-09-19.md) and the
+[MTP profile comparison](docs/guides/tiel-mtp-profile-2026-09-19.md); both packs are
+development requantizations with no certified quality-parity or MTP-speed claim, so read the
+numbers as observations on a single host, not a guarantee for your machine.
+
+The largest practical payoff is the local prefix cache. A repeated 285-token task with a full
+36,708-token KV cache returned its first payload in 0.04 seconds on MTPLX — see the
+[AX Code / OpenCode client retest](docs/guides/local-client-matrix-2026-09-19.md). AX Engine 7.5.0
+or newer is required; older binaries lack the Tiel MTP namespace loader fix and reject these packs
+with `MlxMtpRequiredButUnavailable`. MTP policy is required by default: an unavailable drafter
+fails startup instead of silently falling back to direct decoding, because a silent fallback would
+change the model's effective behavior without telling you.
+
+Local inference is one runtime among many. AX Code also connects to MTPLX, oMLX, Ollama, LM Studio,
+AX Studio, and any OpenAI-compatible endpoint, so the speed/quality/runtime tradeoff is yours to
+make. Cloud API, CLI, private GPU cloud, and AX Trust providers remain available whenever you want
+them — local is the default path, not a lock-in.
 
 ## The problem
 
@@ -142,6 +175,14 @@ ax-code
 
 Use `auto` (default) to restore detection or `normal` for normal cache and concurrency budgets. Both profiles start semantic analysis on demand; ordinary reads do not prewarm language servers. On a host with sufficient headroom, `AX_CODE_MEMORY_PROFILE=normal AX_CODE_LSP_PREWARM=1 ax-code` restores speculative startup/read prewarming to reduce first-query latency. The evidence cache uses bounded memory by default; RocksDB is opt-in. These controls preserve model selection and required checks; they do not certify arbitrary projects for low-RAM hardware. See [Memory usage](docs/guides/memory-usage.md) for limits and workload guidance.
 
+For managed local inference through AX Engine with the default 35B-class MXFP4 MTP pack on Apple
+Silicon M3 Max, plan for roughly 64 GiB of unified memory (weights, KV cache, buffers, and host
+reserve). Hosts below 64 GiB can still run AX Code and connect to smaller local runtimes via the
+[MTPLX / oMLX presets](docs/providers/local-mlx-runtimes.md); the 35B pack requires the larger
+envelope. AX Engine 7.5.0 or newer is required; older binaries fail with
+`MlxMtpRequiredButUnavailable`. See [AX Engine Model Selection](docs/providers/ax-engine-model-selection.md)
+for memory guidance, the managed activation contract, and the MTP policy.
+
 ## Get started
 
 **Public downloads are temporarily unavailable (2026-09-16).** The original GitHub
@@ -170,6 +211,11 @@ brew install defai-digital/tap/ax-code
 Trusting the tap allows Homebrew to load all current and future formulae and casks published there.
 Existing Homebrew users do not need to migrate. Use one installation channel for `ax-code`;
 `ax-code upgrade` follows the active installation, while `brew upgrade ax-code` updates Homebrew.
+
+After install, to enable managed local inference on Apple Silicon M3 Max with the bundled AX
+Engine and the 35B MXFP4 MTP pack, see [AX Engine Model Selection](docs/providers/ax-engine-model-selection.md).
+To connect an already-running MTPLX, oMLX, Ollama, LM Studio, AX Studio, or any other
+OpenAI-compatible endpoint instead, see [MTPLX and oMLX setup](docs/providers/local-mlx-runtimes.md).
 
 ### Windows
 
@@ -227,24 +273,48 @@ See [Sandbox Mode](docs/guides/sandbox.md), [Autonomous Mode](docs/guides/autono
 
 ## Providers and models
 
-| Family                   | Providers                                                                                                                                   | Model source                                                      |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Cloud API providers      | Google, DeepSeek, Meta (Muse Spark), GroqCloud, OpenRouter, Hugging Face, UnoRouter, Alibaba plans, MiniMax plans, GitHub Copilot, Z.AI     | Hosted provider model catalogs bundled with AX Code               |
-| CLI providers            | Claude Code, Codex CLI, Grok Build CLI, Muse Code                                                                                           | One model ID per CLI bridge, reusing the local vendor CLI session |
-| AX Engine local provider | `ax-engine` on eligible Apple Silicon Macs                                                                                                  | Tiel Coder (default) and Cyber-Tiel Coder 35B A3B AXQ MXFP4 MTP   |
-| Local LLM runtimes       | Ollama, LM Studio, MTPLX, oMLX, AX Studio, or any OpenAI-compatible endpoint                                                                | Models discovered from the local runtime's endpoint               |
-| Private GPU cloud        | Catalog: Nebius, Fireworks AI, Together AI, Baseten, NVIDIA NIM, Deep Infra; dedicated: RunPod, SageMaker, Volcengine Ark, custom, and more | API-key catalogs or URL+token endpoints that expose `/v1/models`  |
-| AX Trust                 | Managed gateway connections (base URL + client API key)                                                                                     | Models discovered from the connected gateway                      |
+| Family                       | Providers                                                                                                                                   | Model source                                                      |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Cloud API providers          | Google, DeepSeek, Meta (Muse Spark), GroqCloud, OpenRouter, Hugging Face, UnoRouter, Alibaba plans, MiniMax plans, GitHub Copilot, Z.AI     | Hosted provider model catalogs bundled with AX Code               |
+| CLI providers                | Claude Code, Codex CLI, Grok Build CLI, Muse Code                                                                                           | One model ID per CLI bridge, reusing the local vendor CLI session |
+| **AX Engine local provider** | `ax-engine` on eligible Apple Silicon Macs                                                                                                  | Tiel Coder (default) and Cyber-Tiel Coder 35B A3B AXQ MXFP4 MTP   |
+| **Local LLM runtimes**       | Ollama, LM Studio, MTPLX, oMLX, AX Studio, or any OpenAI-compatible endpoint                                                                | Models discovered from the local runtime's endpoint               |
+| Private GPU cloud            | Catalog: Nebius, Fireworks AI, Together AI, Baseten, NVIDIA NIM, Deep Infra; dedicated: RunPod, SageMaker, Volcengine Ark, custom, and more | API-key catalogs or URL+token endpoints that expose `/v1/models`  |
+| AX Trust                     | Managed gateway connections (base URL + client API key)                                                                                     | Models discovered from the connected gateway                      |
 
-MTPLX and oMLX presets are available in the source checkout, ahead of the v7.19.3 packaged binaries.
-The source checkout also selects Tiel Coder by default for AX Engine, with Cyber-Tiel as its only alternative. These packs require an AX Engine build containing the Tiel MTP loader fix; the tested Homebrew 7.4.0 predates it. See the [Tiel prefill/decode benchmark and build requirements](docs/guides/tiel-runtime-phases-2026-09-19.md) and the subsequent [MTP profile comparison](docs/guides/tiel-mtp-profile-2026-09-19.md). Tiel uses model-selected `auto` tuning with MTP still required; Cyber-Tiel retains `agentic`; its managed read-task probes failed with both profiles.
-See [local runtime setup](docs/providers/local-mlx-runtimes.md) and the
-[2026-09-19 AX Code/OpenCode retest with MTP](docs/guides/local-client-matrix-2026-09-19.md).
-The report separates decode speed, first-token latency, cache reuse, and model-package differences.
+Tiel Coder 35B A3B MTP is the default AX Engine pack; MTPLX and oMLX presets ship ahead of the
+packaged binaries for users who prefer them. The two local rows are the headline option: managed
+activation on Apple Silicon (AX Engine) or connect-already-running-server for users who bring
+their own runtime.
 
-CLI bridges reuse a local vendor CLI and its login session. AX Code records its own tool execution in full; activity that happens inside a vendor CLI process is visible only through that bridge's output.
+**Why MTP is required, not optional.** MTP (multi-token prediction) is required by default as a
+correctness boundary, not merely offered for speed. AX Engine rejects a pack whose drafter is
+unavailable instead of silently falling back to a slower single-token path — a silent fallback
+would change the model's effective behavior without telling you. AX Code also verifies the live
+text-and-tool contract before activation, so an unusable pack is caught up front rather than
+discovered mid-task.
 
-See [Supported Providers and Models](docs/providers/supported-providers.md) for provider IDs and credentials, [Free-Tier API Quickstart](docs/providers/free-tier-apis.md) to evaluate without buying credits, and [AX Engine Model Selection](docs/providers/ax-engine-model-selection.md) for local inference.
+On a measured Apple M3 Max with 128 GiB unified memory, Tiel Coder 35B A3B MTP measured 47–58
+tokens/second native decode on AX Engine with MTP active, and 92–96 tokens/second on MTPLX on the
+same hardware (median of three trials, 256 output tokens, prefix cache disabled). Uncached prefill
+ran about 830–1,446 tokens/second. These packs require an AX Engine build containing the Tiel MTP
+loader fix (7.5.0 or newer); the tested Homebrew 7.4.0 predates the fix and fails with
+`MlxMtpRequiredButUnavailable`. Tiel uses model-selected `auto` tuning with MTP still required;
+Cyber-Tiel retains `agentic`; its managed read-task probes failed with both profiles. See the
+[Tiel prefill/decode benchmark and build requirements](docs/guides/tiel-runtime-phases-2026-09-19.md),
+the [MTP profile comparison](docs/guides/tiel-mtp-profile-2026-09-19.md), and the
+[2026-09-19 AX Code / OpenCode retest with MTP](docs/guides/local-client-matrix-2026-09-19.md).
+Both packs are development requantizations with no certified quality-parity or MTP-speed claim.
+See [local runtime setup](docs/providers/local-mlx-runtimes.md) for MTPLX/oMLX preset details.
+
+CLI bridges reuse a local vendor CLI and its login session. AX Code records its own tool execution
+in full; activity that happens inside a vendor CLI process is visible only through that bridge's
+output.
+
+See [Supported Providers and Models](docs/providers/supported-providers.md) for provider IDs and
+credentials, [Free-Tier API Quickstart](docs/providers/free-tier-apis.md) to evaluate without buying
+credits, and [AX Engine Model Selection](docs/providers/ax-engine-model-selection.md) for local
+inference.
 
 ## Commands
 
@@ -296,6 +366,107 @@ Everyday use:
 - [Sandbox Mode](docs/guides/sandbox.md) · [Autonomous Mode](docs/guides/autonomous.md) · [MCP Integrations](docs/integrations/mcp.md)
 - [Semantic Layer](docs/architecture/semantic-layer.md) — provenance and replay boundaries for graph and LSP answers
 - [AX Wiki](docs/integrations/wiki.md) · [Stability](docs/architecture/stability.md)
+
+## Long-Agent Context Pack
+
+A one-shot handoff for coding agents (Claude Code, Codex, Grok Build, Muse Code, or any agent
+reading this README from cold context). Internal agents working in this repo should still read
+[`AGENTS.md`](AGENTS.md) first; this section is the public summary, not a replacement.
+
+### Identity
+
+- **Product:** AX Code — an open-source coding-agent runtime for reviewable, reversible work.
+- **Repository:** `defai-digital/ax-code`. Apache-2.0; named MIT-derived portions are preserved in
+  [LICENSE-MIT](LICENSE-MIT) and [NOTICE](NOTICE).
+- **What it is:** a local-first CLI + terminal UI + HTTP server + generated TypeScript SDK +
+  VS Code extension. Sessions are recorded as structured event logs with file snapshots;
+  candidate implementations can be ranked against the repository's own checks before anything
+  merges.
+- **Out of scope here:** AX Agent, AX Engine, AX Serving, AX Fabric, AX Trust, AX Telemetry,
+  AX BI, and AX Computer (closed engine). The Desktop GUI source lives in the `ax-coder` repo
+  and is consumed as a published signed runtime — Desktop source, Electron workspaces, and
+  Desktop release workflows are not part of this repository (ADR-068).
+
+### Layout
+
+pnpm + Turbo monorepo.
+
+| Path                 | What it owns                                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `packages/ax-code/`  | Core runtime: CLI, terminal TUI (SolidJS over the standalone `ax-tui` framework), Hono HTTP server, headless runner |
+| `packages/sdk/js/`   | Generated TypeScript SDK; the contract is owned by the server routes under `packages/ax-code/src/server/`           |
+| `crates/`            | Rust N-API addons: index, fs, diff, parser, terminal, daemon, bench                                                 |
+| `packages/ax-wiki/`  | Wiki compiler; keep publishable (no `"private": true`)                                                              |
+| `docs/`              | Public, user-facing documentation only — PRDs/ADRs/specs belong in `.internal/`                                     |
+| `script/`            | Repo scripts: format, structure, release, SDK generation, repo-structure checks                                     |
+| `.github/workflows/` | CI: `ax-code-ci`, `release`, `repo-structure`, `codeql`, `models-drift`, `sdk-jsr`, and more                        |
+
+### Verify before claiming done
+
+Always run the verification commands that match the area you changed. Never claim a check passed
+without running it.
+
+| Area you touched                      | Run                                                                                                                    |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Core source under `packages/ax-code/` | `pnpm --dir packages/ax-code run typecheck`, then `pnpm --dir packages/ax-code run test:ci -- deterministic`           |
+| Server routes / OpenAPI schema        | `pnpm --dir packages/sdk/js run build` and commit the regenerated `openapi.json` / `src/gen/` artifacts                |
+| Native addons under `crates/`         | `pnpm build:native` so the JS wrappers pick up the new `.node` binaries                                                |
+| Repo scripts, structure, public docs  | `pnpm run check:structure`, `pnpm run test:scripts`                                                                    |
+| Single test file (core)               | `AX_TEST_FILES=test/path/foo.test.ts pnpm --dir packages/ax-code exec vitest run` (comma-separated for multiple files) |
+
+Do not run `pnpm test` from the repo root — it intentionally exits 1. Tests are per-package.
+
+### Invariants agents must respect
+
+These are enforced by CI, ADR, or the published contract. Treat them as load-bearing.
+
+- **Desktop stays out.** Do not add Desktop GUI source, Electron workspaces, or Desktop release
+  workflows here. AX Coder owns the Desktop source. Public Desktop release ownership is frozen
+  pending AX Coder's signed shadow, upgrade, rollback, and release-cutover gates.
+- **Computer use is unreleased.** Do not bundle, publish, advertise, or document
+  `packages/ax-computer` as a supported feature before v8.0.0 plus an explicit go/no-go.
+  v8.0.0 is the eligibility floor, not a release commitment.
+- **AX Trust is its own product.** Do not duplicate policy, credentials, approvals, or
+  immutable audit here. AX Trust owns those; AX Code consumes them through the
+  provider-connect contract.
+- **Public `docs/` is for users only.** PRDs, ADRs, tech specs, roadmaps, competitive reviews,
+  and reference clones live under `.internal/`. Do not move them into `docs/`.
+- **Trust-scoped config and isolation rules are load-bearing.** `src/config/`, `src/isolation/`,
+  and `src/permission/` gate what the agent is allowed to do; do not "simplify" them away.
+- **Cost is not a local product.** Do not reintroduce token pricing, "estimated cost", or any
+  derived dollar figure. AX Code records exact tokens; AX Trust owns billing. A naive local
+  rate table drifts from real invoices and erodes trust in every other number the product shows.
+- **Keep `packages/ax-wiki` publishable.** No `"private": true`. The wiki engine is intended
+  for npm publication and a future extraction.
+- **TS namespaces stay in core `src/`.** Vitest is configured around them; "simplifying" them
+  breaks the test runner.
+- **Pinned catalog only.** Versions for managed deps live in `pnpm-workspace.yaml` under
+  `catalog:`; reference as `"catalog:"` in package manifests. Do not hardcode versions that
+  exist in the catalog.
+- **Internal-only paths never get committed.** `.internal/`, root `AGENTS.md`, `CLAUDE.md`,
+  and `GEMINI.md` are gitignored and blocked at pre-commit. If you find yourself about to
+  `git add -f` one of these, stop.
+
+### Subsystem pointers
+
+When your change touches one of these areas, read the linked doc first; behavior is ADR-locked.
+
+- **AX Engine / managed local selection** — [docs/providers/ax-engine-model-selection.md](docs/providers/ax-engine-model-selection.md)
+- **Provider connection taxonomy** — [docs/providers/supported-providers.md](docs/providers/supported-providers.md), [docs/providers/custom-provider.md](docs/providers/custom-provider.md)
+- **Council / arena modes** — [docs/guides/modes.md](docs/guides/modes.md), [docs/guides/verified-multi-model-change.md](docs/guides/verified-multi-model-change.md)
+- **Snapshot, rollback, evidence export** — [docs/guides/execution-evidence.md](docs/guides/execution-evidence.md)
+- **Sandbox / autonomy / permissions** — [docs/guides/sandbox.md](docs/guides/sandbox.md), [docs/guides/autonomous.md](docs/guides/autonomous.md)
+- **MCP and WebMCP** — [docs/integrations/mcp.md](docs/integrations/mcp.md)
+- **Standalone install / runtime channels** — [docs/getting-started/install-runtime.md](docs/getting-started/install-runtime.md)
+- **Goal assurance and `verify_project`** — [docs/guides/goal-assurance.md](docs/guides/goal-assurance.md)
+- **Conversation recap and TUI stability** — [docs/architecture/stability.md](docs/architecture/stability.md)
+
+### One-line mental model
+
+AX Code is a local-first agent runtime. Sessions are durable, evidence is recorded while the
+agent runs, candidate implementations are ranked against the repository's own checks before
+anything merges, and the cost of undoing a bad decision is bounded by an out-of-tree snapshot.
+Agents are guests in the user's repository — the user reviews, the agent proposes.
 
 ## Community
 
