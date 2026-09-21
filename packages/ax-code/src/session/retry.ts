@@ -41,11 +41,12 @@ export namespace SessionRetry {
   }
 
   /**
-   * AX Trust rejects a full pool with this code and a hardcoded
-   * `Retry-After: 1`. The lease is held until another generation finishes,
-   * so five 1-second retries (~5s) expire while the slot is still taken.
-   * Session ses_-e5f3a5d6974ffexB8P6pzBD4t and several siblings in the same
-   * hour all died in 5506-5679 ms with this body.
+   * A concurrency limit means another request still holds the lease until
+   * that generation finishes. AX Trust used to advertise Retry-After: 1 for
+   * this case, and five of those waits expired the retry budget in about 5
+   * seconds (session ses_-e5f3a5d6974ffexB8P6pzBD4t). A hint shorter than
+   * the exponential delay is ignored. A longer hint, including Trust's
+   * 10-second floor, still wins.
    */
   function isConcurrencyLimit(error: MessageV2.APIError) {
     const record = parseJsonRecord(error.data.responseBody)

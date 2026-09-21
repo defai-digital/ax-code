@@ -142,6 +142,15 @@ describe("session.retry.delay", () => {
   })
 
   test("concurrency limit still honors a longer retry-after", () => {
+    const trustFloor = new MessageV2.APIError({
+      message: "pool concurrent request limit exceeded",
+      isRetryable: true,
+      statusCode: 429,
+      responseHeaders: { "retry-after": "10" },
+      responseBody: JSON.stringify({ error: { code: "concurrency_limit_exceeded" } }),
+    }).toObject() as MessageV2.APIError
+    expect(SessionRetry.delay(1, trustFloor)).toBe(10_000)
+
     const error = new MessageV2.APIError({
       message: "pool concurrent request limit exceeded",
       isRetryable: true,
