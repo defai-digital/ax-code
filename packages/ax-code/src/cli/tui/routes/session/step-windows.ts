@@ -23,6 +23,8 @@ export type StepTokenWindow = {
   /** Tokens reported by the step's step-finish part. */
   input: number
   output: number
+  /** Reasoning tokens reported by the step's step-finish part (0 when absent). */
+  reasoning: number
   /** Whether the step's step-finish part (and thus its usage) has landed. */
   finished: boolean
 }
@@ -39,10 +41,10 @@ export function parseStepTokenWindows(
 
     if (part.type === "step-start") {
       sawStepPart = true
-      steps.push({ input: 0, output: 0, finished: false })
+      steps.push({ input: 0, output: 0, reasoning: 0, finished: false })
       continue
     }
-    if (steps.length === 0) steps.push({ input: 0, output: 0, finished: false })
+    if (steps.length === 0) steps.push({ input: 0, output: 0, reasoning: 0, finished: false })
     const step = steps[steps.length - 1]
 
     if (part.type === "text" || part.type === "reasoning") {
@@ -72,10 +74,11 @@ export function parseStepTokenWindows(
       sawStepPart = true
       const tokens =
         part.tokens && typeof part.tokens === "object"
-          ? (part.tokens as { input?: unknown; output?: unknown })
+          ? (part.tokens as { input?: unknown; output?: unknown; reasoning?: unknown })
           : undefined
       if (typeof tokens?.input === "number" && Number.isFinite(tokens.input)) step.input += tokens.input
       if (typeof tokens?.output === "number" && Number.isFinite(tokens.output)) step.output += tokens.output
+      if (typeof tokens?.reasoning === "number" && Number.isFinite(tokens.reasoning)) step.reasoning += tokens.reasoning
       step.finished = true
     }
   }
@@ -89,10 +92,18 @@ export function stepDecodeEnd(step: StepTokenWindow): number | undefined {
   return step.toolStart ?? step.streamEnd
 }
 
-// Aggregate output tokens and decode windows over finished steps. The
-// in-flight step is excluded — its usage is unknown until step-finish, and
-// pairing its window with earlier steps' tokens would drag the rate down
-// while tools run.
+// Decode tokens a finished step produced: visible output plus reasoning — the
+// same population the decode window spans, since the window opens at the
+// earliest text OR reasoning token and usage reports the two as disjoint,
+// additive components (Session.getUsage).
+export function stepDecodeTokens(step: StepTokenWindow): number {
+  return step.output + step.reasoning
+}
+
+// A first→last-token window spans N−1 inter-token intervals for N tokens (the
+// first token was already decoded when the window opens). Charging N against
+// the window systematically overstates the rate, so each counted step
+// contributes one less token, floored at zero.
 export function stepDecodeTotals(steps: readonly StepTokenWindow[]): { tokens: number; ms: number } {
   let tokens = 0
   let ms = 0
@@ -100,9 +111,49 @@ export function stepDecodeTotals(steps: readonly StepTokenWindow[]): { tokens: n
     if (!step.finished) continue
     const firstOut = step.firstOut
     const end = stepDecodeEnd(step)
-    if (firstOut === undefined || end === undefined || end <= firstOut || step.output <= 0) continue
-    tokens += step.output
+    const produced = stepDecodeTokens(step)
+    if (firstOut === undefined || end === undefined || end <= firstOut || produced <= 0) continue
+    tokens += Math.max(0, produced - 1)
     ms += end - firstOut
   }
   return { tokens, ms }
+}
+
+// Post-turn rate gates: a rate computed from a handful of tokens or a
+// sub-second window is confidently wrong ("inf t/s" flashes), so the caller
+// shows token counts alone below these floors. The live footer chip keeps its
+// own looser gate for responsiveness.
+export const DECODE_RATE_MIN_TOKENS = 20
+export const DECODE_RATE_MIN_WINDOW_MS = 1_000
+
+export type TurnDecodeStats = { tokens: number; ms: number; firstTokenMs?: number }
+
+/**
+ * Pooled decode windows for a finished assistant turn, plus the wait from
+ * message creation to the first output token (provider setup, local model
+ * load, and step-1 prefill live in that wait, never in the rate). Step-aware
+ * when step parts exist; older sessions without them fall back to one
+ * earliest→latest output window charged with the message-level token totals.
+ */
+export function turnDecodeStats(input: {
+  parts: readonly unknown[]
+  created: number
+  completed: number
+  outputTokens: number
+  reasoningTokens: number
+}): TurnDecodeStats {
+  const { steps, sawStepPart } = parseStepTokenWindows(input.parts, input.completed)
+  const first = steps[0]?.firstOut
+  const firstTokenMs = first !== undefined && first > input.created ? first - input.created : undefined
+  if (sawStepPart) {
+    return { ...stepDecodeTotals(steps), firstTokenMs }
+  }
+  const fallback = steps[0]
+  const firstOut = fallback?.firstOut
+  const end = fallback ? stepDecodeEnd(fallback) : undefined
+  const produced = input.outputTokens + input.reasoningTokens
+  if (firstOut === undefined || end === undefined || end <= firstOut || produced <= 0) {
+    return { tokens: 0, ms: 0, firstTokenMs }
+  }
+  return { tokens: Math.max(0, produced - 1), ms: end - firstOut, firstTokenMs }
 }

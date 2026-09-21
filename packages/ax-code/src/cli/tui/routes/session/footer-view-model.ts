@@ -99,22 +99,20 @@ export function formatTokenRate(rate: number): string {
 }
 
 // Build the per-turn token chip view from the most-recent assistant
-// message plus the current turn's start timestamp. Rate is OUTPUT
-// tokens per second — that's what the user sees "happening" during a
-// stream. Returns `rate` undefined when the turn is settled (startedAt
-// not supplied), when there's no meaningful elapsed window yet, or
-// when there are no output tokens to report against.
-//
-// When the message's parts are supplied and carry step data, the rate is
-// computed over the finished steps' decode windows instead of the
-// wall-clock window: message token totals accumulate across steps while
-// the wall clock keeps running through tool execution, so the naive
-// output/elapsed rate continuously decays during every tool call and
-// mid-step stream — a number that reads as "the model is slowing down"
-// when nothing about decode speed changed.
+// message and its parts. Rate is DECODE tokens per second over the
+// finished steps' first→last-token decode windows: message token
+// totals accumulate across steps while the wall clock keeps running
+// through provider setup, local model load, prefill, and tool
+// execution, so any wall-clock rate continuously decays for reasons
+// that have nothing to do with decode speed. Returns `rate` undefined
+// when the turn is settled, when there is no meaningful decode window
+// yet, or when the parts carry no step data — with no step windows
+// the only remaining denominator is the whole-turn wall clock, the
+// misleading number this chip exists to avoid. The in-flight step is
+// excluded because its usage is unknowable until its step-finish
+// lands.
 export function footerTokenChip(input: {
   tokens?: { input?: number; output?: number }
-  startedAt?: number
   now?: number
   parts?: readonly unknown[]
 }): FooterTokenChip | undefined {
@@ -134,13 +132,6 @@ export function footerTokenChip(input: {
       if (totals.tokens > 0 && seconds >= RATE_MIN_ELAPSED_SECONDS) {
         view.rate = formatTokenRate(totals.tokens / seconds)
       }
-      return view
-    }
-  }
-  if (input.startedAt !== undefined && outTok > 0) {
-    const elapsed = Math.max(0, (now - input.startedAt) / 1000)
-    if (elapsed >= RATE_MIN_ELAPSED_SECONDS) {
-      view.rate = formatTokenRate(outTok / elapsed)
     }
   }
   return view

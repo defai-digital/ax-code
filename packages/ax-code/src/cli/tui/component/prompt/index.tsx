@@ -1023,7 +1023,6 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     const now = completed ?? Date.now()
     return footerTokenChip({
       tokens: last.tokens,
-      startedAt: last.time.created,
       now,
       parts: sync.data.part[last.id] ?? [],
     })

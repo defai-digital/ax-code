@@ -1015,4 +1015,5 @@ export const messages = {
     "\u5f53\u524d\u6ca1\u6709\u8fdb\u884c\u4e2d\u7684\u56de\u5408\uff1b\u5df2\u79fb\u81f3\u961f\u5217\u6700\u524d",
   "ui.steerFailed": "\u5f15\u5bfc\u5931\u8d25\uff1a{message}",
   "ui.steerIntoRunningTurn": "\u5f15\u5bfc\u81f3\u8fdb\u884c\u4e2d\u7684\u56de\u5408",
+  "ui.firstToken": "\u9996\u4e2a token",
 } satisfies Dictionary

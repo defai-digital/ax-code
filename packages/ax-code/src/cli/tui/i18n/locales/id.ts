@@ -963,4 +963,5 @@ export const messages = {
   "ui.steerQueuedNext": "Tidak ada giliran yang berjalan; dipindahkan ke depan antrean",
   "ui.steerFailed": "Pengarahan gagal: {message}",
   "ui.steerIntoRunningTurn": "Arahkan ke giliran yang sedang berjalan",
+  "ui.firstToken": "token pertama",
 } satisfies Dictionary

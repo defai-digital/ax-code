@@ -1,5 +1,5 @@
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
-import { parseStepTokenWindows, stepDecodeEnd } from "./step-windows"
+import { parseStepTokenWindows, stepDecodeEnd, stepDecodeTokens } from "./step-windows"
 
 type SidebarInferenceMessage = {
   id: string
@@ -81,8 +81,11 @@ export function sidebarLocalInferenceView(input: {
 
     const firstOut = step.firstOut
     const end = stepDecodeEnd(step)
-    if (firstOut !== undefined && end !== undefined && end > firstOut && step.output > 0) {
-      decodeTokens += step.output
+    const produced = stepDecodeTokens(step)
+    if (firstOut !== undefined && end !== undefined && end > firstOut && produced > 0) {
+      // A first→last-token window spans N−1 inter-token intervals — see
+      // stepDecodeTotals for the shared correction every surface applies.
+      decodeTokens += Math.max(0, produced - 1)
       decodeMs += end - firstOut
     }
 

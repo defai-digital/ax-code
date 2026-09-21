@@ -1068,4 +1068,5 @@ export const messages = {
     "\uc9c4\ud589 \uc911\uc778 \ud134\uc774 \uc5c6\uc5b4 \ub300\uae30\uc5f4 \ub9e8 \uc55e\uc73c\ub85c \uc774\ub3d9\ud588\uc2b5\ub2c8\ub2e4",
   "ui.steerFailed": "\uc870\uc815 \uc2e4\ud328: {message}",
   "ui.steerIntoRunningTurn": "\uc9c4\ud589 \uc911\uc778 \ud134\uc73c\ub85c \uc870\uc815",
+  "ui.firstToken": "\uccab \ud1a0\ud070",
 } satisfies Dictionary

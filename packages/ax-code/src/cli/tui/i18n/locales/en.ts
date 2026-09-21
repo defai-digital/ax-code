@@ -962,4 +962,5 @@ export const messages = {
   "ui.steerQueuedNext": "No running turn; moved to the front of the queue",
   "ui.steerFailed": "Steering failed: {message}",
   "ui.steerIntoRunningTurn": "Steer into running turn",
+  "ui.firstToken": "first token",
 } as const

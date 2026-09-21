@@ -304,7 +304,7 @@ export function AssistantMessage(props: { message: AssistantMessage; parts: Part
     return assistantMessageDuration(props.message, messages())
   })
   const toolSummary = createMemo(() => assistantToolSummary(props.parts))
-  const stats = createMemo(() => (showAssistantStats() ? assistantMessageStats(props.message) : undefined))
+  const stats = createMemo(() => (showAssistantStats() ? assistantMessageStats(props.message, props.parts) : undefined))
 
   const keybind = useKeybind()
 
@@ -444,6 +444,12 @@ export function AssistantMessage(props: { message: AssistantMessage; parts: Part
               </Show>
               <Show when={stats()?.rate}>
                 <span style={{ fg: theme.textMuted }}> · {stats()!.rate}</span>
+              </Show>
+              <Show when={stats()?.firstToken}>
+                <span style={{ fg: theme.textMuted }}>
+                  {" "}
+                  · {uiText("ui.firstToken")} {stats()!.firstToken}
+                </span>
               </Show>
               <Show when={stats()?.cacheHit}>
                 <span style={{ fg: theme.textMuted }}>

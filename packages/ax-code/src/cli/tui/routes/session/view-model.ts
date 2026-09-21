@@ -2,7 +2,13 @@ import type { AssistantMessage, Part, UserMessage } from "@ax-code/sdk/v2"
 import stripAnsi from "strip-ansi"
 import { userRoute, type AgentInfo } from "./route"
 import { filetype } from "./format"
-import { formatTokenCount, formatTokenRate, RATE_MIN_ELAPSED_SECONDS } from "./footer-view-model"
+import { formatTokenCount, formatTokenRate } from "./footer-view-model"
+import {
+  DECODE_RATE_MIN_TOKENS,
+  DECODE_RATE_MIN_WINDOW_MS,
+  turnDecodeStats,
+} from "./step-windows"
+import { Locale } from "@/util/locale"
 import { parseTuiJsonPayload } from "../../util/json"
 
 /** Truecolor / cursor CSI in model text wraps into a leftover gutter beside the transcript. */
@@ -129,23 +135,39 @@ export function assistantMessageDuration(
   return message.time.completed - user.time.created
 }
 
-export type AssistantMessageStats = { output?: string; rate?: string; cacheHit?: string }
+export type AssistantMessageStats = { output?: string; rate?: string; firstToken?: string; cacheHit?: string }
 
-// Per-message throughput/cache readout for the assistant footer line. The rate
-// is EFFECTIVE output tokens per second over the whole assistant turn
-// (time.created → time.completed), so it includes tool execution between
-// steps — intentionally matching the latency the user experienced rather than
-// raw decode speed. cacheHit uses cache.read, which local servers (ax-engine)
-// fill with prefix-cache hits.
-export function assistantMessageStats(message: AssistantMessage): AssistantMessageStats | undefined {
+// Per-message throughput/cache readout for the assistant footer line. The
+// rate is DECODE tokens per second (visible output + reasoning — the same
+// population the decode windows span) pooled over per-step first→last-token
+// windows, so provider setup, local model load, prefill, and tool execution
+// never enter the denominator. The wait to the first output token — where
+// model load and prefill actually live — is reported separately as
+// firstToken. Rates are gated on ≥ DECODE_RATE_MIN_TOKENS and
+// ≥ DECODE_RATE_MIN_WINDOW_MS because tiny samples produce confidently wrong
+// numbers. cacheHit uses cache.read, which local servers (ax-engine) fill
+// with prefix-cache hits.
+export function assistantMessageStats(
+  message: AssistantMessage,
+  parts?: readonly unknown[],
+): AssistantMessageStats | undefined {
   const stats: AssistantMessageStats = {}
   const output = message.tokens.output
   if (output > 0) {
     stats.output = formatTokenCount(output)
     if (message.time.completed) {
-      const elapsed = (message.time.completed - message.time.created) / 1000
-      if (elapsed >= RATE_MIN_ELAPSED_SECONDS) {
-        stats.rate = formatTokenRate(output / elapsed)
+      const decode = turnDecodeStats({
+        parts: parts ?? [],
+        created: message.time.created,
+        completed: message.time.completed,
+        outputTokens: output,
+        reasoningTokens: message.tokens.reasoning,
+      })
+      if (decode.tokens >= DECODE_RATE_MIN_TOKENS && decode.ms >= DECODE_RATE_MIN_WINDOW_MS) {
+        stats.rate = formatTokenRate(decode.tokens / (decode.ms / 1000))
+      }
+      if (decode.firstTokenMs !== undefined) {
+        stats.firstToken = Locale.duration(decode.firstTokenMs)
       }
     }
   }
@@ -154,7 +176,7 @@ export function assistantMessageStats(message: AssistantMessage): AssistantMessa
   if (read > 0 && read + fresh > 0) {
     stats.cacheHit = `${Math.round((read / (read + fresh)) * 100)}%`
   }
-  if (!stats.output && !stats.rate && !stats.cacheHit) return undefined
+  if (!stats.output && !stats.rate && !stats.firstToken && !stats.cacheHit) return undefined
   return stats
 }
 

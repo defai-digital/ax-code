@@ -973,4 +973,5 @@ export const messages = {
   "ui.steerQueuedNext": "Kein laufender Durchlauf; an den Anfang der Warteschlange verschoben",
   "ui.steerFailed": "Steuern fehlgeschlagen: {message}",
   "ui.steerIntoRunningTurn": "In den laufenden Durchlauf steuern",
+  "ui.firstToken": "erstes Token",
 } satisfies Dictionary

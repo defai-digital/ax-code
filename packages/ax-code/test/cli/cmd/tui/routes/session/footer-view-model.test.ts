@@ -40,42 +40,30 @@ describe("footerTokenChip", () => {
     expect(footerTokenChip({ tokens: { input: 0, output: 100 } })).toEqual({ input: "0", output: "100" })
   })
 
-  test("no rate when startedAt is missing (turn already settled)", () => {
+  test("renders counts when the turn is settled", () => {
     expect(footerTokenChip({ tokens: { input: 500, output: 200 } })).toEqual({ input: "500", output: "200" })
   })
 
-  test("no rate when elapsed window is sub-second (avoids inf t/s flash)", () => {
-    // 200ms after start, 50 tokens — too noisy to surface
-    const startedAt = 1_700_000_000_000
-    expect(footerTokenChip({ tokens: { input: 100, output: 50 }, startedAt, now: startedAt + 200 })).toEqual({
+  test("no rate without step data (wall-clock would charge load and tool time)", () => {
+    // 200 output tokens with no step windows: the whole-turn window would
+    // claim a rate even if most of it was model load. The chip reports
+    // counts only.
+    expect(footerTokenChip({ tokens: { input: 100, output: 50 }, now: 1_700_000_000_200 })).toEqual({
       input: "100",
       output: "50",
     })
-  })
-
-  test("rate uses 1-decimal when <100 t/s", () => {
-    // 5s elapsed, 200 output → 40 t/s
-    const startedAt = 1_700_000_000_000
-    expect(footerTokenChip({ tokens: { input: 1000, output: 200 }, startedAt, now: startedAt + 5_000 })).toEqual({
+    expect(footerTokenChip({ tokens: { input: 1000, output: 200 }, now: 1_700_000_005_000 })).toEqual({
       input: "1.0k",
       output: "200",
-      rate: "40.0 t/s",
     })
-  })
-
-  test("rate uses whole number when >=100 t/s", () => {
-    // 4s elapsed, 500 output → 125 t/s
-    const startedAt = 1_700_000_000_000
-    expect(footerTokenChip({ tokens: { input: 800, output: 500 }, startedAt, now: startedAt + 4_000 })).toEqual({
+    expect(footerTokenChip({ tokens: { input: 800, output: 500 }, now: 1_700_000_004_000 })).toEqual({
       input: "800",
       output: "500",
-      rate: "125 t/s",
     })
   })
 
   test("no rate when output tokens still zero (only input staged)", () => {
-    const startedAt = 1_700_000_000_000
-    expect(footerTokenChip({ tokens: { input: 1500, output: 0 }, startedAt, now: startedAt + 3_000 })).toEqual({
+    expect(footerTokenChip({ tokens: { input: 1500, output: 0 }, now: 1_700_000_003_000 })).toEqual({
       input: "1.5k",
       output: "0",
     })
@@ -86,11 +74,10 @@ describe("footerTokenChip", () => {
     // One finished step decoded 100 tokens in 1s, then a 56s tool ran and the
     // in-flight second step has no usage yet. Wall-clock math over the 60s
     // turn would report ~1.7 t/s and keep decaying; the step-aware rate is a
-    // stable 100 t/s.
+    // stable 99 t/s (99 token intervals over the 1s decode window).
     expect(
       footerTokenChip({
         tokens: { input: 10_000, output: 100 },
-        startedAt,
         now: startedAt + 60_000,
         parts: [
           { type: "step-start" },
@@ -100,19 +87,18 @@ describe("footerTokenChip", () => {
           { type: "step-start" },
         ],
       }),
-    ).toEqual({ input: "10k", output: "100", rate: "100 t/s" })
+    ).toEqual({ input: "10k", output: "100", rate: "99.0 t/s" })
   })
 
-  test("parts without step data fall back to the wall-clock window", () => {
+  test("parts without step data report counts only, never a wall-clock rate", () => {
     const startedAt = 1_700_000_000_000
     expect(
       footerTokenChip({
         tokens: { input: 1000, output: 200 },
-        startedAt,
         now: startedAt + 5_000,
         parts: [{ type: "text", time: { start: startedAt + 1_000, end: startedAt + 5_000 } }],
       }),
-    ).toEqual({ input: "1.0k", output: "200", rate: "40.0 t/s" })
+    ).toEqual({ input: "1.0k", output: "200" })
   })
 })
 

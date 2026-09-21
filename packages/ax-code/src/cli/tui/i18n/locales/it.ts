@@ -975,4 +975,5 @@ export const messages = {
   "ui.steerQueuedNext": "Nessun turno in corso; spostato in cima alla coda",
   "ui.steerFailed": "Indirizzamento non riuscito: {message}",
   "ui.steerIntoRunningTurn": "Indirizza nel turno in corso",
+  "ui.firstToken": "primo token",
 }

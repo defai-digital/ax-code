@@ -975,4 +975,5 @@ export const messages = {
   "ui.steerQueuedNext": "No hay turno en curso; movido al frente de la cola",
   "ui.steerFailed": "Error al dirigir: {message}",
   "ui.steerIntoRunningTurn": "Dirigir al turno en curso",
+  "ui.firstToken": "primer token",
 } satisfies Dictionary

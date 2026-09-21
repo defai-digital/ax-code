@@ -61,7 +61,7 @@ describe("sidebarLocalInferenceView", () => {
     ).toEqual({
       modelID: "qwen3-coder-next-axq-6bit",
       prefillRate: "2.0k t/s",
-      decodeRate: "100 t/s",
+      decodeRate: "99.7 t/s",
     })
   })
 
@@ -98,7 +98,7 @@ describe("sidebarLocalInferenceView", () => {
     ).toEqual({
       modelID: "qwen3-coder-next-axq-6bit",
       prefillRate: "17k t/s",
-      decodeRate: "100 t/s",
+      decodeRate: "99.0 t/s",
     })
   })
 
@@ -129,7 +129,7 @@ describe("sidebarLocalInferenceView", () => {
     ).toEqual({
       modelID: "qwen3.8-27b-axq-6bit",
       prefillRate: "10k t/s",
-      decodeRate: "100 t/s",
+      decodeRate: "99.0 t/s",
     })
   })
 
@@ -158,7 +158,7 @@ describe("sidebarLocalInferenceView", () => {
     ).toEqual({
       modelID: "qwen3.8-27b-axq-6bit",
       prefillRate: "1.0k t/s",
-      decodeRate: "50.0 t/s",
+      decodeRate: "49.0 t/s",
     })
   })
 

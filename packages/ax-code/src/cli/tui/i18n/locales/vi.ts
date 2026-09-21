@@ -1048,4 +1048,5 @@ export const messages = {
     "Kh\u00f4ng c\u00f3 l\u01b0\u1ee3t \u0111ang ch\u1ea1y; \u0111\u00e3 chuy\u1ec3n l\u00ean \u0111\u1ea7u h\u00e0ng \u0111\u1ee3i",
   "ui.steerFailed": "\u0110i\u1ec1u h\u01b0\u1edbng th\u1ea5t b\u1ea1i: {message}",
   "ui.steerIntoRunningTurn": "\u0110i\u1ec1u h\u01b0\u1edbng v\u00e0o l\u01b0\u1ee3t \u0111ang ch\u1ea1y",
+  "ui.firstToken": "token \u0111\u1ea7u ti\u00ean",
 } satisfies Dictionary
