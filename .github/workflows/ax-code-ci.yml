@@ -381,6 +381,23 @@ jobs:
           AX_TEST_FILES: test/script/node-launcher.test.ts,test/script/source-launcher.test.ts
         run: pnpm exec vitest run --retry=0
 
+      - name: Cache manifest-verified TUI native dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .internal/reports/testing/native-cache
+          key: ax-tui-native-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Prepare verified native dependencies before TUI checks
+        working-directory: packages/ax-code
+        shell: bash
+        run: |
+          node --import tsx --input-type=module <<'NODE'
+          import { appendFileSync } from "node:fs"
+          import { prepareTestNative } from "./script/test-native.ts"
+          const cacheDir = await prepareTestNative({ cacheDir: "../../.internal/reports/testing/native-cache" })
+          appendFileSync(process.env.GITHUB_ENV, `AX_CODE_TUI_NATIVE_CACHE_DIR=${cacheDir}\nAX_CODE_TUI_NATIVE_OFFLINE=1\n`)
+          NODE
+
       - name: Validate TUI locales and native setup dialogs
         run: pnpm --dir packages/ax-code run check:tui-locales
 

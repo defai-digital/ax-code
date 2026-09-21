@@ -21,6 +21,7 @@ changes belong to AX Coder.
 - Recognize Git exit-status assertions by their actual subcommand and option tokens. Accept quiet ref verification
   while rejecting assertion-like filter/path arguments and Git failures masked by observation-only shell chains.
 - Discard pending context-menu clipboard pastes and deferred submission when the prompt loses focus.
+- Prepare verified TUI native dependencies before CI smoke tests, with bounded retries for transient downloads.
 
 ## [7.19.5] - 2026-09-21
 
