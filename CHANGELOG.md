@@ -6,6 +6,12 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.19.6] - 2026-09-21
+
+### Changed
+
+- Prepare AX Code 7.19.6 and SDK 2.5.41.
+
 ### Added
 
 - Add a right-click Copy/Paste menu and turn preview cards on the transcript timeline.
