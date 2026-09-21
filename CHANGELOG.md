@@ -6,6 +6,12 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.19.5] - 2026-09-21
+
+### Changed
+
+- Prepare AX Code 7.19.5 and SDK 2.5.40.
+
 ### Changed
 
 - Bundle signed AX Engine 7.5.3 on Apple Silicon Macs. Automatic runtime selection requires the Tiel-compatible
