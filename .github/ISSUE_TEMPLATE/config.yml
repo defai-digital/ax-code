@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: AX Code documentation
+    url: https://github.com/defai-digital/ax-code/tree/main/docs
+    about: Operator guides and provider reference

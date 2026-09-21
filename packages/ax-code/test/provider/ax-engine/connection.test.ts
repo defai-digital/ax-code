@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test, vi } from "vitest"
 import {
   axEngineAttachProviderConfig,
   axEngineConnectionApiKey,
+  axEngineConnectionShadowWarnings,
   axEngineEndpointsMayAlias,
   axEngineManagedProviderConfig,
   normalizeAxEngineEndpointBaseURL,
@@ -20,6 +21,14 @@ describe("AX Engine connection compatibility", () => {
     expect(() => normalizeAxEngineEndpointBaseURL("ftp://localhost/model")).toThrow(/http/i)
     expect(() => normalizeAxEngineEndpointBaseURL("http://user:secret@localhost:31418")).toThrow(/credentials/i)
     expect(() => normalizeAxEngineEndpointBaseURL("")).toThrow(/required/i)
+  })
+
+  test("warns when managed mode or a configured endpoint shadows AX_ENGINE_HOST", () => {
+    vi.stubEnv("AX_ENGINE_HOST", "http://127.0.0.1:9")
+    expect(axEngineConnectionShadowWarnings({ connectionMode: "managed" }).join(" ")).toContain("AX_ENGINE_HOST")
+    expect(resolveAxEngineConnectMode({ connectionMode: "managed" })).toBe("managed")
+    expect(axEngineConnectionShadowWarnings({ baseURL: "http://127.0.0.1:31418/v1" }).join(" ")).toContain("baseURL")
+    expect(axEngineConnectionShadowWarnings({ connectionMode: "attach" })).toEqual([])
   })
 
   test("explicit local setup overrides legacy configuration and host environment", () => {

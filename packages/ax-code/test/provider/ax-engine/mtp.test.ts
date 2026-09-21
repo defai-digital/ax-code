@@ -49,7 +49,9 @@ test.each(["disabled", "auto", "required"] as const)(
 
 test.each([undefined, "unknown", "7.3.0"])("unqualified binary %s cannot silently downgrade opt-in", (version) => {
   expect(axEngineMtpLaunchArgs(undefined, version)).toEqual(["--disable-ngram-acceleration"])
-  expect(() => axEngineMtpLaunchArgs("disabled", version)).toThrow("7.4.0")
+  // disabled turns MTP off without a qualified version. auto and required still
+  // refuse to drop the explicit policy on an old or unreadable binary.
+  expect(axEngineMtpLaunchArgs("disabled", version)).toEqual(["--disable-ngram-acceleration"])
   expect(() => axEngineMtpLaunchArgs("auto", version)).toThrow("7.4.0")
   expect(() => axEngineMtpLaunchArgs("required", version)).toThrow("7.4.0")
 })

@@ -429,6 +429,7 @@ export const ProvidersAxEngineCommand = cmd({
         quantization,
         download: args.download,
         mtpPolicy: resolveAxEngineMtpPolicy(options),
+        options,
         start: args.start,
       })
       await Provider.invalidate().catch(() => {})
@@ -453,6 +454,7 @@ export const ProvidersAxEngineCommand = cmd({
         quantization,
         download: args.download,
         mtpPolicy: resolveAxEngineMtpPolicy(options),
+        options,
         start: true,
       })
       await Provider.invalidate().catch(() => {})

@@ -53,6 +53,8 @@ import {
   resolveDownloadDestination,
   resolveAxEngineApiKey,
   resolveAxEngineMaxConcurrentRequests,
+  resolveAxEngineServingLimits,
+  axEngineServingLimitShadowWarnings,
   resolveAxEnginePrefixCacheLaunchConfig,
   axEngineQwen38ExactMtpEnv,
   AX_ENGINE_QWEN38_EXACT_MTP_PROFILE_ENV,
@@ -1194,6 +1196,59 @@ describe("resolveAxEngineMaxConcurrentRequests", () => {
   })
 })
 
+describe("resolveAxEngineServingLimits", () => {
+  const definition = AX_ENGINE_MODEL_DEFINITIONS[AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]
+
+  test("defaults to the catalog window", () => {
+    const previousContext = process.env.AX_ENGINE_CONTEXT_TOKENS
+    const previousOutput = process.env.AX_ENGINE_MAX_OUTPUT_TOKENS
+    delete process.env.AX_ENGINE_CONTEXT_TOKENS
+    delete process.env.AX_ENGINE_MAX_OUTPUT_TOKENS
+    try {
+      expect(resolveAxEngineServingLimits({}, definition)).toEqual({ contextTokens: 65_536, maxOutputTokens: 8_192 })
+    } finally {
+      if (previousContext === undefined) delete process.env.AX_ENGINE_CONTEXT_TOKENS
+      else process.env.AX_ENGINE_CONTEXT_TOKENS = previousContext
+      if (previousOutput === undefined) delete process.env.AX_ENGINE_MAX_OUTPUT_TOKENS
+      else process.env.AX_ENGINE_MAX_OUTPUT_TOKENS = previousOutput
+    }
+  })
+
+  test("lets a provider option shrink the window ahead of the environment", () => {
+    const previous = process.env.AX_ENGINE_CONTEXT_TOKENS
+    process.env.AX_ENGINE_CONTEXT_TOKENS = "32768"
+    try {
+      expect(resolveAxEngineServingLimits({ contextTokens: 16_384 }, definition).contextTokens).toBe(16_384)
+      expect(axEngineServingLimitShadowWarnings({ contextTokens: 16_384 }).join(" ")).toContain(
+        "AX_ENGINE_CONTEXT_TOKENS",
+      )
+    } finally {
+      if (previous === undefined) delete process.env.AX_ENGINE_CONTEXT_TOKENS
+      else process.env.AX_ENGINE_CONTEXT_TOKENS = previous
+    }
+  })
+
+  test("accepts environment overrides and clamps output to the context window", () => {
+    const previousContext = process.env.AX_ENGINE_CONTEXT_TOKENS
+    const previousOutput = process.env.AX_ENGINE_MAX_OUTPUT_TOKENS
+    process.env.AX_ENGINE_CONTEXT_TOKENS = "16384"
+    process.env.AX_ENGINE_MAX_OUTPUT_TOKENS = "4096"
+    try {
+      expect(resolveAxEngineServingLimits({}, definition)).toEqual({ contextTokens: 16_384, maxOutputTokens: 4_096 })
+      expect(resolveAxEngineServingLimits({ contextTokens: 4_096, maxOutputTokens: 8_192 }, definition)).toEqual({
+        contextTokens: 4_096,
+        maxOutputTokens: 4_096,
+      })
+      expect(resolveAxEngineServingLimits({ contextTokens: 999_999 }, definition).contextTokens).toBe(65_536)
+    } finally {
+      if (previousContext === undefined) delete process.env.AX_ENGINE_CONTEXT_TOKENS
+      else process.env.AX_ENGINE_CONTEXT_TOKENS = previousContext
+      if (previousOutput === undefined) delete process.env.AX_ENGINE_MAX_OUTPUT_TOKENS
+      else process.env.AX_ENGINE_MAX_OUTPUT_TOKENS = previousOutput
+    }
+  })
+})
+
 describe("resolveAxEnginePrefixCacheLaunchConfig", () => {
   const defaultDir = "/tmp/ax-engine-prefix-cache"
 
@@ -1578,7 +1633,7 @@ describe("ax-engine provider integration", () => {
     expect(Object.values(provider.models).map((model) => model.limit.context)).toEqual([65_536, 65_536])
     expect(provider.models[AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]).toMatchObject({
       name: "Tiel Coder 35B A3B AXQ MXFP4 MTP (Local MLX)",
-      tool_call: false,
+      tool_call: true,
       limit: { context: 65_536, input: 57_344, output: 8_192 },
       options: {
         modelID: AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,

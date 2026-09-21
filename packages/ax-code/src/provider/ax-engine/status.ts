@@ -4,7 +4,14 @@ import { AxEngineDependencyStatus, getDependencyStatus } from "./dependency"
 import { AxEngineDiskStatus, AxEngineModelStatus, getDiskStatus, getModelStatus } from "./model-cache"
 import { AxEngineServerRuntimeStatus, getServerStatus } from "./server"
 import { Auth } from "../../auth"
-import { AX_ENGINE_ERROR, AX_ENGINE_PROVIDER_ID, resolveAxEngineApiKey } from "./constants"
+import {
+  AX_ENGINE_ERROR,
+  AX_ENGINE_PROVIDER_ID,
+  axEngineServingLimitShadowWarnings,
+  noteAxEngineOnce,
+  resolveAxEngineApiKey,
+} from "./constants"
+import { axEngineConnectionShadowWarnings } from "./connection"
 import { resolveAxEngineMtpPolicy } from "./mtp"
 import { toErrorMessage } from "../../util/error-message"
 import { parseAxEngineModelContracts } from "./model-card"
@@ -129,7 +136,10 @@ async function savedAxEngineApiKey(savedKey?: unknown) {
   }
 }
 
-export async function getAxEngineStatus(options: AxEngineRuntimeOptions = {}, savedKey?: unknown): Promise<AxEngineStatus> {
+export async function getAxEngineStatus(
+  options: AxEngineRuntimeOptions = {},
+  savedKey?: unknown,
+): Promise<AxEngineStatus> {
   const apiKey = resolveAxEngineApiKey(options, await savedAxEngineApiKey(savedKey))
   const [eligibility, dependency, disk, model, server] = await Promise.all([
     getPlatformEligibility(),
@@ -139,6 +149,13 @@ export async function getAxEngineStatus(options: AxEngineRuntimeOptions = {}, sa
     getServerStatus(apiKey, resolveAxEngineMtpPolicy(options)),
   ])
   const capability = await getCapabilityStatus(server, apiKey)
+  for (const warning of [
+    ...axEngineConnectionShadowWarnings(options),
+    ...axEngineServingLimitShadowWarnings(options),
+  ]) {
+    noteAxEngineOnce(warning)
+    if (!dependency.warnings.includes(warning)) dependency.warnings.push(warning)
+  }
 
   const core: AxEngineStatusCore = {
     eligibility,

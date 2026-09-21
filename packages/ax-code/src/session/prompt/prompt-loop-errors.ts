@@ -99,9 +99,13 @@ function terminalProviderErrorMessage(error: unknown) {
 }
 
 function isAxEngineStreamStall(input: { providerID: string; error: unknown }) {
+  if (input.providerID !== AX_ENGINE_PROVIDER_ID) return false
+  const message = terminalProviderErrorMessage(input.error).toLowerCase()
+  // Idle watchdog text, plus a local stream that only emitted keep-alives and
+  // then closed (undici "terminated" / "other side closed"). Replaying that
+  // request against a dead or wedged engine repeats the same failure.
   return (
-    input.providerID === AX_ENGINE_PROVIDER_ID &&
-    terminalProviderErrorMessage(input.error).includes("Model stream stalled")
+    message.includes("model stream stalled") || message.includes("terminated") || message.includes("other side closed")
   )
 }
 
@@ -189,7 +193,15 @@ export async function handlePromptLoopError(
   // than the generic provider timeout, so reaching it represents a real stall.
   if (isAxEngineStreamStall({ providerID: input.currentModel.providerID, error: input.error })) {
     const cause = terminalProviderErrorMessage(input.error)
-    const message = `${cause} The local request was not replayed automatically; reduce the session context or retry after the engine becomes idle.`
+    const runtime = await import("@/provider/ax-engine/server")
+      .then((mod) => mod.describeAxEngineRuntimeFailure())
+      .catch(() => undefined)
+    const message = [
+      `${cause} The local request was not replayed automatically; reduce the session context or retry after the engine becomes idle.`,
+      runtime,
+    ]
+      .filter(Boolean)
+      .join("\n")
     ;(deps.warn ?? log.warn)("local engine stream stalled, stopping without replay", {
       command: "session.prompt.loop",
       status: "error",

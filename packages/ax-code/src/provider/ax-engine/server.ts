@@ -15,6 +15,7 @@ import {
   AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
   AX_ENGINE_DEFAULT_PORT,
   AX_ENGINE_ERROR,
+  AX_ENGINE_SERVER_DEFAULT_CONTEXT_TOKENS,
   AX_ENGINE_MAX_OUTPUT_TOKENS_FLAG_MIN_VERSION,
   AX_ENGINE_MTP_MODE,
   AX_ENGINE_READY_TIMEOUT_MS,
@@ -25,6 +26,7 @@ import {
   axEnginePrefixCacheEnv,
   axEngineQwen38ExactMtpEnv,
   qwen38ExactMtpProfileFingerprint,
+  noteAxEngineOnce,
   resolveAxEngineApiKey,
   resolveAxEnginePrefixCacheLaunchConfig,
   usesAlignedPrefixCacheGeometry,
@@ -490,6 +492,27 @@ async function readServerLogExcerpt(startOffset: number) {
   }
 }
 
+/** Best-effort context for a stream that died after the server was already up. */
+export async function describeAxEngineRuntimeFailure(): Promise<string | undefined> {
+  const lines: string[] = []
+  try {
+    const recorded = await readServerState()
+    if (recorded.state) {
+      const alive = await serverProcessAlive(recorded.state)
+      lines.push(
+        alive
+          ? `ax-engine server pid ${recorded.state.pid} is still running`
+          : `ax-engine server pid ${recorded.state.pid} has exited`,
+      )
+    }
+  } catch {
+    // Attribution is best-effort and must not replace the original failure.
+  }
+  const excerpt = await readServerLogExcerpt(0)
+  if (excerpt) lines.push("Recent ax-engine server log:", excerpt)
+  return lines.length > 0 ? lines.join("\n") : undefined
+}
+
 export function formatServerStartupFailure(input: {
   code: (typeof AX_ENGINE_ERROR)[keyof typeof AX_ENGINE_ERROR]
   origin: string
@@ -867,6 +890,11 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     mtpMode,
     mtpPolicy,
   })
+  if (options.contextTokens && options.contextTokens > AX_ENGINE_SERVER_DEFAULT_CONTEXT_TOKENS) {
+    noteAxEngineOnce(
+      `ax-engine is launching with a ${options.contextTokens} token context window; the server default is ${AX_ENGINE_SERVER_DEFAULT_CONTEXT_TOKENS}. Set provider.ax-engine.options.contextTokens or AX_ENGINE_CONTEXT_TOKENS to use a smaller window.`,
+    )
+  }
   log.info("starting ax-engine server", {
     port,
     modelID: options.modelID,

@@ -1,0 +1,18 @@
+name: Feature request
+description: Describe a problem AX Code should solve
+title: "[feature] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the problem you are trying to solve, not only the solution you want.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Optional approach. Include constraints that a design must keep.
+    validations:
+      required: false

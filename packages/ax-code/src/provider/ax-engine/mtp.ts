@@ -38,12 +38,23 @@ export function resolveAxEngineMtpPolicy(options: Record<string, unknown> = {}):
   return parsed.data
 }
 
+const EXPLICIT_MTP_POLICY_MIN_VERSION = "7.4.0"
+
+function explicitMtpPolicySupported(version?: string) {
+  const parsed = version ? semver.coerce(version) : undefined
+  return Boolean(parsed && semver.gte(parsed, EXPLICIT_MTP_POLICY_MIN_VERSION))
+}
+
 // 7.4.0 is the qualified explicit-policy contract. Legacy internal callers
 // without a policy can retain their old launch, but its policy stays unknown.
+// `disabled` does not need that contract: a missing version (doctor not-ready)
+// must not block turning MTP off, and an unqualified binary keeps the legacy
+// off switch instead of receiving --mlx-mtp-policy.
 export function axEngineMtpLaunchPolicy(policy: AxEngineMtpPolicy | undefined, version?: string) {
   if (policy !== undefined) AxEngineMtpPolicy.parse(policy)
+  if (policy === "disabled") return "disabled"
   const parsed = version ? semver.coerce(version) : undefined
-  if (!parsed || semver.lt(parsed, "7.4.0")) {
+  if (!parsed || semver.lt(parsed, EXPLICIT_MTP_POLICY_MIN_VERSION)) {
     if (policy !== undefined)
       throw new AxEngineMtpLaunchError("Explicit AX Engine MTP policy requires AX Engine 7.4.0 or newer")
     return undefined
@@ -53,7 +64,9 @@ export function axEngineMtpLaunchPolicy(policy: AxEngineMtpPolicy | undefined, v
 
 export function axEngineMtpLaunchArgs(policy: AxEngineMtpPolicy | undefined, version?: string): string[] {
   const resolved = axEngineMtpLaunchPolicy(policy, version)
-  if (resolved === undefined) return ["--disable-ngram-acceleration"]
+  if (resolved === undefined || (resolved === "disabled" && !explicitMtpPolicySupported(version))) {
+    return ["--disable-ngram-acceleration"]
+  }
   // The blanket disable flag also turns Auto into Disabled in AX Engine.
   // Required is explicit and fails in the engine if no drafter is admitted.
   return [...(resolved === "auto" ? [] : ["--disable-ngram-acceleration"]), "--mlx-mtp-policy", resolved]

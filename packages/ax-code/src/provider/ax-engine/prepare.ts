@@ -1,5 +1,5 @@
 import z from "zod"
-import { AX_ENGINE_DEFAULT_PORT, AX_ENGINE_ERROR } from "./constants"
+import { AX_ENGINE_DEFAULT_PORT, AX_ENGINE_ERROR, resolveAxEngineServingLimits } from "./constants"
 import type { AxEngineModelID, AxEngineQuantization } from "./constants"
 import { downloadModel, AxEngineModelStatus, AxEnginePrepareState, getModelStatus, markPrepared } from "./model-cache"
 import { getDependencyStatus } from "./dependency"
@@ -26,6 +26,8 @@ export type AxEnginePrepareInput = {
   download?: boolean
   start?: boolean
   mtpPolicy?: AxEngineMtpPolicy
+  /** Provider options used for context/output overrides. */
+  options?: Record<string, unknown>
   signal?: AbortSignal
 }
 
@@ -129,6 +131,7 @@ export async function prepareAxEngine(
     throw new Error(dependency.blockers[0] ?? "ax-engine binary is not available")
   }
 
+  const serving = resolveAxEngineServingLimits(input.options ?? {}, definition)
   const server = await startServer({
     binaryPath: dependency.binaryPath,
     modelID: model.modelID,
@@ -136,8 +139,8 @@ export async function prepareAxEngine(
     modelPath: model.path,
     modelRevision: model.revision,
     preferredPort: AX_ENGINE_DEFAULT_PORT,
-    contextTokens: definition.contextTokens,
-    maxOutputTokens: definition.outputTokens,
+    contextTokens: serving.contextTokens,
+    maxOutputTokens: serving.maxOutputTokens,
     binaryVersion: dependency.version,
     mtpPolicy,
     signal: input.signal,

@@ -1,0 +1,18 @@
+name: Question
+description: Ask about using AX Code
+title: "[question] "
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What are you trying to do, and where did you get stuck?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: AX Code version
+      placeholder: ax-code --version
+    validations:
+      required: false

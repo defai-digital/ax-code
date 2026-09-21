@@ -1,0 +1,39 @@
+name: Bug report
+description: Report a defect in AX Code
+title: "[bug] "
+body:
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: Describe the behavior you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: Describe what happened instead, including error text.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List the smallest set of steps that shows the defect.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: AX Code version
+      placeholder: ax-code --version
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      placeholder: macOS 26, Apple Silicon
+    validations:
+      required: true

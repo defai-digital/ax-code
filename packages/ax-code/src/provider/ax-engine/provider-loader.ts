@@ -10,8 +10,10 @@ import {
   AX_ENGINE_MODEL_IDS,
   AX_ENGINE_PROVIDER_ID,
   isAxEngineBuiltinModelID,
+  noteAxEngineOnce,
   resolveAxEngineApiKey,
   resolveAxEngineMaxConcurrentRequests,
+  resolveAxEngineServingLimits,
 } from "./constants"
 import { requirePlatformEligibility } from "./platform"
 import { getDependencyStatus } from "./dependency"
@@ -159,6 +161,7 @@ async function ensureManagedReady(provider: Provider.Info, options: AxEngineMode
   }
   const binaryPath = dependency.binaryPath
   const modelPath = model.path
+  const serving = resolveAxEngineServingLimits(provider.options ?? {}, definition)
   const state = await NativePerf.runAsync("ax-engine.setup.server", undefined, () =>
     ensureServer({
       binaryPath,
@@ -167,8 +170,8 @@ async function ensureManagedReady(provider: Provider.Info, options: AxEngineMode
       modelPath,
       modelRevision: model.revision,
       preferredPort: AX_ENGINE_DEFAULT_PORT,
-      contextTokens: definition.contextTokens,
-      maxOutputTokens: definition.outputTokens,
+      contextTokens: serving.contextTokens,
+      maxOutputTokens: serving.maxOutputTokens,
       binaryVersion: dependency.version,
       maxConcurrentRequests: resolveAxEngineMaxConcurrentRequests(provider.options),
       mtpPolicy: resolveAxEngineMtpPolicy(provider.options),
@@ -184,7 +187,13 @@ async function ensureManagedReady(provider: Provider.Info, options: AxEngineMode
       signal,
     }),
   )
-  return requireAxEngineCodingContract(contracts, apiModelID, { requireText: Boolean(definition.revision) })
+  const contract = requireAxEngineCodingContract(contracts, apiModelID, { requireText: Boolean(definition.revision) })
+  if (contract.context && contract.context < serving.contextTokens) {
+    noteAxEngineOnce(
+      `ax-engine advertises a context of ${contract.context} tokens, below the ${serving.contextTokens} token launch window. Set provider.ax-engine.options.contextTokens or AX_ENGINE_CONTEXT_TOKENS to match it.`,
+    )
+  }
+  return contract
 }
 
 export function axEngineLoader(): CustomLoader {
@@ -216,6 +225,8 @@ export function axEngineLoader(): CustomLoader {
     ) {
       const modelID = def.id
       const id = ModelID.make(modelID)
+      const serving = resolveAxEngineServingLimits(provider.options ?? {}, def)
+      const toolcall = live?.toolcall ?? def.toolcall
       const model: Provider.Model = {
         id,
         providerID: ProviderID.make(AX_ENGINE_PROVIDER_ID),
@@ -226,15 +237,15 @@ export function axEngineLoader(): CustomLoader {
           temperature: true,
           reasoning: def.reasoning,
           attachment: false,
-          toolcall: def.toolcall,
+          toolcall,
           input: { text: true, audio: false, image: false, video: false, pdf: false },
           output: { text: true, audio: false, image: false, video: false, pdf: false },
           interleaved: false,
         },
         limit: {
-          context: def.contextTokens,
-          input: inputLimit(def.contextTokens, def.outputTokens),
-          output: def.outputTokens,
+          context: serving.contextTokens,
+          input: inputLimit(serving.contextTokens, serving.maxOutputTokens),
+          output: serving.maxOutputTokens,
         },
         status: "active",
         options: {

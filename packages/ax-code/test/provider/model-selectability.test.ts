@@ -88,13 +88,16 @@ describe("ax-engine local MLX model list", () => {
     },
   )
 
-  test("unverified candidates must have pinned artifact identity", () => {
-    for (const id of AX_ENGINE_MODEL_IDS) {
+  test("Tiel packs advertise tool calling and keep a pinned revision", () => {
+    for (const id of [
+      AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+      AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+    ] as const) {
       const definition = AX_ENGINE_MODEL_DEFINITIONS[id]
-      if (definition.toolcall) continue
+      expect(definition.toolcall).toBe(true)
       expect(definition.revision).toMatch(/^[a-f0-9]{40}$/)
-      expect(modelSelectableForProvider("ax-engine", { capabilities: { toolcall: false } })).toBe(false)
     }
+    expect(modelSelectableForProvider("ax-engine", { capabilities: { toolcall: false } })).toBe(false)
   })
 })
 
@@ -103,9 +106,7 @@ describe("modelContextFitBlockReason", () => {
     // The Tiel Coder pack's original 32,768-context/8,192-output budget: only
     // 24,576 usable input tokens, below the fixed full-agent estimate — every
     // brand-new session on it failed before any turn could be sent (#379).
-    expect(
-      modelContextFitBlockReason("ax-engine", { limit: { context: 32_768, output: 8_192 } }),
-    ).toMatch(/cannot fit/)
+    expect(modelContextFitBlockReason("ax-engine", { limit: { context: 32_768, output: 8_192 } })).toMatch(/cannot fit/)
     expect(
       modelSelectableForProvider("ax-engine", {
         capabilities: { toolcall: false },

@@ -1,5 +1,11 @@
 import { isLocalHostname } from "@/util/local-host"
-import { AX_ENGINE_API_KEY, AX_ENGINE_DEFAULT_PORT, AX_ENGINE_ERROR, resolveAxEngineApiKey } from "./constants"
+import {
+  AX_ENGINE_API_KEY,
+  AX_ENGINE_DEFAULT_PORT,
+  AX_ENGINE_ERROR,
+  noteAxEngineOnce,
+  resolveAxEngineApiKey,
+} from "./constants"
 import { fetchAxEngineModelContracts, type AxEngineLiveModelContract } from "./model-card"
 
 export const AX_ENGINE_CONNECTION_MODES = ["managed", "attach"] as const
@@ -44,10 +50,27 @@ export function normalizeAxEngineEndpointBaseURL(input: string): string {
 }
 
 /**
+ * Configured connection mode or endpoint wins over AX_ENGINE_HOST. Callers
+ * surface these strings so a shadowed environment variable is visible.
+ */
+export function axEngineConnectionShadowWarnings(options: AxEngineConnectionOptions = {}): string[] {
+  const host = optionalString(process.env.AX_ENGINE_HOST)
+  if (!host) return []
+  if (options.connectionMode === "managed") {
+    return [`AX_ENGINE_HOST (${host}) is ignored because provider.ax-engine.options.connectionMode is "managed"`]
+  }
+  if (optionalString(options.baseURL)) {
+    return [`AX_ENGINE_HOST (${host}) is ignored because provider.ax-engine.options.baseURL is set`]
+  }
+  return []
+}
+
+/**
  * Explicit connectionMode wins over legacy URL/env inference. This lets a user
  * switch back to managed mode even when AX_ENGINE_HOST remains set.
  */
 export function resolveAxEngineConnectMode(options: AxEngineConnectionOptions = {}): AxEngineConnectMode {
+  for (const warning of axEngineConnectionShadowWarnings(options)) noteAxEngineOnce(warning)
   if (options.connectionMode === "managed" || options.connectionMode === "attach") {
     return options.connectionMode
   }

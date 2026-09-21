@@ -90,6 +90,35 @@ test("bounds reuse when wrapper dependencies change without an executable change
   expect(probe).toHaveBeenCalledTimes(4)
 })
 
+test("reads doctor install.version when the host is not ready", async () => {
+  await using dir = await tmpdir()
+  const binaryPath = await launcher(dir.path)
+  vi.spyOn(Process, "text").mockImplementation(async (args) => {
+    if (args[1] === "--version") return response("", 2)
+    return response('doctor: not ready\n{"result":"not_ready","install":{"version":"7.5.3"}}', 1)
+  })
+  const status = await getDependencyStatus({ binaryPath })
+  expect(status.version).toBe("7.5.3")
+  expect(status.available).toBe(true)
+})
+
+test("warns when a configured binary path shadows AX_ENGINE_BIN", async () => {
+  await using dir = await tmpdir()
+  const binaryPath = await launcher(dir.path)
+  vi.spyOn(Process, "text").mockResolvedValue(response("ax-engine 7.5.3"))
+  const previous = process.env.AX_ENGINE_BIN
+  process.env.AX_ENGINE_BIN = "/env/ax-engine"
+  try {
+    const status = await getDependencyStatus({ binaryPath })
+    expect(status).toMatchObject({ mode: "configured", binaryPath, version: "ax-engine 7.5.3" })
+    expect(status.warnings.join(" ")).toContain("AX_ENGINE_BIN")
+    expect(status.warnings.join(" ")).toContain("/env/ax-engine")
+  } finally {
+    if (previous === undefined) delete process.env.AX_ENGINE_BIN
+    else process.env.AX_ENGINE_BIN = previous
+  }
+})
+
 test("failed probes are retryable without waiting for expiry", async () => {
   await using dir = await tmpdir()
   const binaryPath = await launcher(dir.path)

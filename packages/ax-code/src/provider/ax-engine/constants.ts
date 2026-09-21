@@ -1,4 +1,15 @@
 import z from "zod"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "ax-engine" })
+const notedAxEngineMessages = new Set<string>()
+
+/** Log a repeated AX Engine configuration notice once per process. */
+export function noteAxEngineOnce(message: string) {
+  if (notedAxEngineMessages.has(message)) return
+  notedAxEngineMessages.add(message)
+  log.warn(message)
+}
 
 export const AX_ENGINE_PROVIDER_ID = "ax-engine"
 // Stable recommended aliases. Additional AutomatosX artifacts are discovered
@@ -47,6 +58,14 @@ export const AX_ENGINE_CODING_MODEL_MIN_MEMORY_BYTES = 96 * 1024 ** 3
 // AX_ENGINE_MAX_CONCURRENT_REQUESTS env var.
 export const AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS = 1
 export const AX_ENGINE_MAX_CONCURRENT_REQUESTS_ENV = "AX_ENGINE_MAX_CONCURRENT_REQUESTS"
+// ax-engine serve's built-in KV window when --total-blocks is omitted (1024 x 16).
+// Catalog launches are larger so the agent prompt fits; either override can shrink it.
+export const AX_ENGINE_SERVER_DEFAULT_CONTEXT_TOKENS = 16_384
+export const AX_ENGINE_CONTEXT_TOKENS_ENV = "AX_ENGINE_CONTEXT_TOKENS"
+export const AX_ENGINE_MAX_OUTPUT_TOKENS_ENV = "AX_ENGINE_MAX_OUTPUT_TOKENS"
+// Matches OUTPUT_TOKEN_MAX in provider/transform.ts. Catalog output budgets stay
+// below this; an explicit override cannot raise a request past it.
+const AX_ENGINE_OUTPUT_TOKEN_MAX = 32_000
 
 // Cold-start health wait. Loading a 27B–35B MLX model from local disk or a
 // network mount (SMB/NFS) can take several minutes of mmap + weight load +
@@ -202,6 +221,64 @@ export function resolveAxEngineMaxConcurrentRequests(options: Record<string, unk
   )
 }
 
+export function axEngineServingLimitShadowWarnings(options: Record<string, unknown> = {}): string[] {
+  const warnings: string[] = []
+  const contextConfigured = parseMaxConcurrentRequests(options.contextTokens) !== undefined
+  const contextEnv = parseMaxConcurrentRequests(process.env[AX_ENGINE_CONTEXT_TOKENS_ENV])
+  if (contextConfigured && contextEnv !== undefined) {
+    warnings.push("AX_ENGINE_CONTEXT_TOKENS is ignored because provider.ax-engine.options.contextTokens is set")
+  }
+  const outputConfigured =
+    parseMaxConcurrentRequests(options.maxOutputTokens) !== undefined ||
+    parseMaxConcurrentRequests(options.outputTokens) !== undefined
+  const outputEnv = parseMaxConcurrentRequests(process.env[AX_ENGINE_MAX_OUTPUT_TOKENS_ENV])
+  if (outputConfigured && outputEnv !== undefined) {
+    warnings.push(
+      "AX_ENGINE_MAX_OUTPUT_TOKENS is ignored because provider.ax-engine.options.maxOutputTokens or outputTokens is set",
+    )
+  }
+  return warnings
+}
+
+/**
+ * Catalog windows stay the default. Provider options, then the matching
+ * environment variables, may shrink them. A value above the catalog context
+ * or the request-layer output ceiling is clamped so an override cannot grow
+ * the KV pool past the model contract.
+ */
+export function resolveAxEngineServingLimits(
+  options: Record<string, unknown> = {},
+  definition: { contextTokens: number; outputTokens: number },
+) {
+  for (const warning of axEngineServingLimitShadowWarnings(options)) noteAxEngineOnce(warning)
+  const requestedContext =
+    parseMaxConcurrentRequests(options.contextTokens) ??
+    parseMaxConcurrentRequests(process.env[AX_ENGINE_CONTEXT_TOKENS_ENV])
+  let contextTokens = definition.contextTokens
+  if (requestedContext) {
+    if (requestedContext > definition.contextTokens) {
+      noteAxEngineOnce(
+        `provider.ax-engine.options.contextTokens ${requestedContext} exceeds the catalog window ${definition.contextTokens}; using ${definition.contextTokens}`,
+      )
+    }
+    contextTokens = Math.min(requestedContext, definition.contextTokens)
+  }
+  const requestedOutput =
+    parseMaxConcurrentRequests(options.maxOutputTokens) ??
+    parseMaxConcurrentRequests(options.outputTokens) ??
+    parseMaxConcurrentRequests(process.env[AX_ENGINE_MAX_OUTPUT_TOKENS_ENV])
+  let maxOutputTokens = definition.outputTokens
+  if (requestedOutput) {
+    if (requestedOutput > AX_ENGINE_OUTPUT_TOKEN_MAX) {
+      noteAxEngineOnce(
+        `provider.ax-engine.options.maxOutputTokens ${requestedOutput} exceeds ${AX_ENGINE_OUTPUT_TOKEN_MAX}; using ${AX_ENGINE_OUTPUT_TOKEN_MAX}`,
+      )
+    }
+    maxOutputTokens = Math.min(requestedOutput, AX_ENGINE_OUTPUT_TOKEN_MAX)
+  }
+  return { contextTokens, maxOutputTokens: Math.min(maxOutputTokens, contextTokens) }
+}
+
 export function resolveAxEngineApiKey(options: Record<string, unknown> = {}, savedKey?: unknown) {
   const saved = typeof savedKey === "string" && savedKey.trim() ? savedKey.trim() : undefined
   const configured = typeof options.apiKey === "string" && options.apiKey.trim() ? options.apiKey.trim() : undefined
@@ -340,7 +417,9 @@ export type AxEngineModelDefinition = {
 }
 
 export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineBuiltinModelID, AxEngineModelDefinition> = {
-  // Explicitly selected development packs. Pin identity; do not claim native capabilities before startup.
+  // Explicitly selected development packs. Pin identity; resource figures stay
+  // estimates until startup. Tool calling follows the published engine contract
+  // so a missing live card does not drop every tool. A live card still wins.
   [AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]: {
     id: AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
     apiModelID: AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
@@ -350,7 +429,7 @@ export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineBuiltinModelID, AxEngin
     defaultQuantization: "mlx",
     releaseDate: "2026-09-19",
     reasoning: false,
-    toolcall: false,
+    toolcall: true,
     minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
     contextTokens: AX_ENGINE_MODEL_CONTEXT_TOKENS[AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID],
     outputTokens: 8_192,
@@ -389,7 +468,7 @@ export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineBuiltinModelID, AxEngin
     defaultQuantization: "mlx",
     releaseDate: "2026-09-19",
     reasoning: false,
-    toolcall: false,
+    toolcall: true,
     minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
     contextTokens: AX_ENGINE_MODEL_CONTEXT_TOKENS[AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID],
     outputTokens: 8_192,

@@ -486,6 +486,39 @@ describe("prompt loop error transitions", () => {
     ])
   })
 
+  test("treats an AX Engine stream that closes with terminated as a stall", async () => {
+    const sessionID = SessionID.descending()
+    const warnings: { message: string; fields: Record<string, unknown> }[] = []
+    const result = await handlePromptLoopError(
+      {
+        sessionID,
+        currentModel: {
+          providerID: ProviderID.make("ax-engine"),
+          modelID: ModelID.make("tiel-coder-35b-axq-mxfp4"),
+        },
+        error: new TypeError("terminated"),
+        consecutiveErrors: 1,
+        step: 2,
+      },
+      {
+        async findFallback() {
+          throw new Error("fallback lookup must not run")
+        },
+        warn(message, fields) {
+          warnings.push({ message, fields })
+        },
+        publishError() {},
+      },
+    )
+    expect(result).toEqual({ action: "stop", reason: "error", consecutiveErrors: 1 })
+    expect(warnings).toEqual([
+      {
+        message: "local engine stream stalled, stopping without replay",
+        fields: expect.objectContaining({ errorCode: "AX_ENGINE_STREAM_STALLED", sessionID }),
+      },
+    ])
+  })
+
   test("stops once with the cap's own message when a cumulative autonomous cap trips", async () => {
     // Cumulative caps (files/lines; steps until the next continuation) make
     // every subsequent tool call throw, so retrying can never recover —
