@@ -140,6 +140,8 @@ The output format above is verbatim from these commands; the session IDs and tas
 
 ## What you get
 
+**Run inference on your own machine.** On Apple Silicon, AX Code manages a 35B-class coding model through AX Engine — selection, download, MTP policy, live text-and-tool contract verification, and managed start/shutdown — and connects to MTPLX, oMLX, Ollama, LM Studio, AX Studio, or any OpenAI-compatible endpoint. Cloud API, CLI, private-GPU, and AX Trust providers are equally first-class. See [AX Engine Model Selection](docs/providers/ax-engine-model-selection.md).
+
 **Inspect what the agent did.** `ax-code graph` reconstructs the session as an execution graph with per-step tool calls and timings. `ax-code session compare` diffs two runs by risk, decision path, and event counts. `ax-code session trace` produces replay-backed diagnostics. The evidence exports out of AX Code as JSONL (`ax-code audit export`), a Markdown report (`ax-code audit report`), or OpenTelemetry spans (`ax-code audit otlp`).
 
 **Undo precisely.** File changes are snapshotted to an out-of-tree Git object store during the run. `ax-code session rollback <session> --list` shows recoverable points; `--step N` restores a specific one. Rollback depends on a usable snapshot, so it has real boundaries — see [Execution Evidence](docs/guides/execution-evidence.md).
@@ -249,7 +251,7 @@ Release archives are verified with minisign. Platform support, update paths, sig
 
 ## When AX Code fits
 
-**Good fit:** consequential changes in Git repositories where the change has to be reviewed — refactors, migrations, cross-module fixes, security-sensitive edits; unattended or scheduled runs whose output someone must audit afterwards; teams that want model choice without handing the review record to a single hosted product.
+**Good fit:** consequential changes in Git repositories where the change has to be reviewed — refactors, migrations, cross-module fixes, security-sensitive edits; unattended or scheduled runs whose output someone must audit afterwards; teams that want model choice without handing the review record to a single hosted product; and work that should run on the user's own Apple Silicon machine rather than through a cloud endpoint.
 
 **Poor fit:** inline autocomplete; a single quick disposable edit; fully managed cloud delegation; workflows where you will not use Git or run repository checks. A lighter editor assistant is the better tool for those.
 
