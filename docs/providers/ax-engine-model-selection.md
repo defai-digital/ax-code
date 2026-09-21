@@ -46,6 +46,11 @@ Both selected aliases use a 65,536-token context, 8,192-token output limit, esti
 
 Each memory estimate includes weights, sidecars, KV cache, buffers, and host reserve. Use the live catalog's fit result for the current machine. These estimates are not hardware or model-quality certification.
 
+The 64 GiB figure is a conservative full-context (64K) planning budget, not a hard floor. For a
+comfortable managed local-inference machine, we recommend an Apple Silicon M4 Pro with 48 GB of
+unified memory or above (for example a Mac Mini M4 Pro 48 GB); smaller Apple Silicon Macs can
+still run AX Code itself from 8 GB with cloud/API models or lighter local runtimes.
+
 Before managed activation, AX Code checks the active AX Engine model's text and structured tool contract. A `verification-required` state means preparation is complete but that live contract has not been established. Repository names or MTP sidecars alone do not prove reasoning, vision, MTP acceleration, or multi-turn coding quality.
 
 Session compaction uses the active model's context/output budgets and reserves input headroom. The selected variant keeps its own catalog budget; the source model's maximum context is not a managed memory guarantee.

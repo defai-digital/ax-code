@@ -43,18 +43,22 @@ local inference scope, licensing, and current public-access status.
 
 ## Apple Silicon, managed local inference
 
-AX Code is one of few open-source agent runtimes that activates a 35B-class coding model on a
-single Apple Silicon laptop with managed lifecycle. On M3 Max with 128 GiB unified memory, the
+AX Code itself runs from 8 GB of RAM on an Apple Silicon M2 Mac. The managed local-inference path
+is a different envelope: to run a 35B-class coding model through AX Engine, we recommend an Apple
+Silicon M4 Pro with 48 GB of unified memory or above (for example a Mac Mini M4 Pro 48 GB). On
+that class of machine the
 [Tiel Coder 35B A3B MXFP4 MTP](docs/providers/ax-engine-model-selection.md) pack runs in its
-native MXFP4 quantization without quantization-to-fit compromises. AX Engine manages the process
-end to end: model selection, download, MTP policy enforcement, live text-and-tool contract
-verification, and managed start/shutdown. Each pack is sized for roughly 64 GiB of weights plus
-KV cache, buffers, and host reserve — plan the memory envelope, not just the model file.
+native MXFP4 quantization without quantization-to-fit compromises, and AX Engine manages the
+process end to end: model selection, download, MTP policy enforcement, live text-and-tool contract
+verification, and managed start/shutdown. The catalog budgets roughly 64 GiB as a conservative
+full-context (64K) planning figure — weights, KV cache, buffers, and host reserve — so confirm the
+live catalog fit result for your machine rather than sizing to the model file alone.
 
 Speed is hardware-bound. AX Code does not impose a tokens-per-second ceiling (the docs say so
-explicitly); faster hardware produces tokens faster. Measured native Tiel Coder decode on M3 Max
-with 128 GiB: 47–58 tokens/second on AX Engine with MTP active, 92–96 tokens/second on MTPLX on
-the same hardware. Uncached prefill runs roughly 830–1,446 tokens/second. These come from the
+explicitly); faster hardware produces tokens faster. Measured native Tiel Coder decode on the
+M3 Max 128 GiB benchmark host: 47–58 tokens/second on AX Engine with MTP active, 92–96
+tokens/second on MTPLX on the same hardware. Uncached prefill runs roughly 830–1,446
+tokens/second. These come from the
 [Tiel prefill/decode benchmark](docs/guides/tiel-runtime-phases-2026-09-19.md) and the
 [MTP profile comparison](docs/guides/tiel-mtp-profile-2026-09-19.md); both packs are
 development requantizations with no certified quality-parity or MTP-speed claim, so read the
@@ -150,11 +154,11 @@ The output format above is verbatim from these commands; the session IDs and tas
 
 Choose hardware for the repository tools as well as AX Code. These are capacity-planning guidelines, not certified performance limits; the 8 GB baseline has not been validated by a physical-machine load test.
 
-| Workload                                                                             | Minimum planning baseline                                                                  | Recommended target                                                                                       |
-| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| Cloud/API models (including CLIs using remote models), one session, small repository | 8 GB system RAM; expect limited headroom for a browser, build and language server          | 16 GB RAM, modern 4-core or better CPU, SSD                                                              |
-| Large TypeScript/Rust repositories, concurrent builds or several agents/sessions     | Start from the 16 GB cloud target; 8 GB is not a suitable planning baseline                | 32 GB or more RAM; size for your actual language servers and builds                                      |
-| Local inference                                                                      | The selected model/runtime requirements, plus RAM for AX Code, repository tools and the OS | Budget model weights, KV cache/context and runtime overhead separately; cloud figures above do not apply |
+| Workload                                                                             | Minimum planning baseline                                                                  | Recommended target                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cloud/API models (including CLIs using remote models), one session, small repository | 8 GB system RAM; expect limited headroom for a browser, build and language server          | 16 GB RAM, modern 4-core or better CPU, SSD                                                                                                                                           |
+| Large TypeScript/Rust repositories, concurrent builds or several agents/sessions     | Start from the 16 GB cloud target; 8 GB is not a suitable planning baseline                | 32 GB or more RAM; size for your actual language servers and builds                                                                                                                   |
+| Local inference                                                                      | The selected model/runtime requirements, plus RAM for AX Code, repository tools and the OS | For the default 35B AX Engine pack, an Apple Silicon M4 Pro with 48 GB+ unified memory (e.g. Mac Mini M4 Pro 48 GB); budget weights, KV cache/context and runtime overhead separately |
 
 Supported packaged CPU/OS targets are Apple Silicon macOS, Windows x64/ARM64 and Ubuntu 24.04+ amd64/arm64. Cloud inference does not require a local GPU. Reserve SSD space for the runtime, repository, dependencies, session history and temporary command output; 10 GB of free space is a starting headroom target, not a disk-usage cap. Large builds and local model downloads need substantially more.
 
@@ -175,13 +179,16 @@ ax-code
 
 Use `auto` (default) to restore detection or `normal` for normal cache and concurrency budgets. Both profiles start semantic analysis on demand; ordinary reads do not prewarm language servers. On a host with sufficient headroom, `AX_CODE_MEMORY_PROFILE=normal AX_CODE_LSP_PREWARM=1 ax-code` restores speculative startup/read prewarming to reduce first-query latency. The evidence cache uses bounded memory by default; RocksDB is opt-in. These controls preserve model selection and required checks; they do not certify arbitrary projects for low-RAM hardware. See [Memory usage](docs/guides/memory-usage.md) for limits and workload guidance.
 
-For managed local inference through AX Engine with the default 35B-class MXFP4 MTP pack on Apple
-Silicon M3 Max, plan for roughly 64 GiB of unified memory (weights, KV cache, buffers, and host
-reserve). Hosts below 64 GiB can still run AX Code and connect to smaller local runtimes via the
-[MTPLX / oMLX presets](docs/providers/local-mlx-runtimes.md); the 35B pack requires the larger
-envelope. AX Engine 7.5.0 or newer is required; older binaries fail with
-`MlxMtpRequiredButUnavailable`. See [AX Engine Model Selection](docs/providers/ax-engine-model-selection.md)
-for memory guidance, the managed activation contract, and the MTP policy.
+AX Code's 8 GB baseline covers the agent runtime and cloud/API inference; it is not a local
+inference floor. To run the default 35B-class MXFP4 MTP pack through managed AX Engine, we
+recommend an Apple Silicon M4 Pro with 48 GB of unified memory or above (for example a Mac Mini
+M4 Pro 48 GB). The catalog's ~64 GiB figure is a conservative full-context planning estimate
+(weights, KV cache, buffers, and host reserve); use the live catalog fit result for your machine.
+Smaller Macs can still use AX Code with cloud/API models or connect to lighter local runtimes via
+the [MTPLX / oMLX presets](docs/providers/local-mlx-runtimes.md). AX Engine 7.5.0 or newer is
+required; older binaries fail with `MlxMtpRequiredButUnavailable`. See
+[AX Engine Model Selection](docs/providers/ax-engine-model-selection.md) for memory guidance, the
+managed activation contract, and the MTP policy.
 
 ## Get started
 
