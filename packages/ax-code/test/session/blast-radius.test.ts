@@ -1,3 +1,5 @@
+import fs from "fs/promises"
+import path from "path"
 import { describe, expect, test, afterEach, beforeEach } from "vitest"
 import {
   AUTONOMOUS_MAX_FILES_CHANGED,
@@ -7,6 +9,8 @@ import {
 } from "../../src/constants/session"
 import { BlastRadius } from "../../src/session/blast-radius"
 import type { SessionID } from "../../src/session/schema"
+import { git } from "../../src/util/git"
+import { tmpdir } from "../fixture/fixture"
 
 const SID = "ses_blast_test_0001" as unknown as SessionID
 
@@ -204,19 +208,60 @@ describe("BlastRadius", () => {
     expect(() => BlastRadius.assertWritable(SID, ".env")).toThrow(/blocked-path pattern/)
   })
 
-  test("recordWriteAndAssert no-ops when not autonomous", () => {
+  test("recordWriteAndAssert no-ops when not autonomous", async () => {
     process.env["AX_CODE_AUTONOMOUS"] = "false"
     BlastRadius.get(SID, { steps: 1, files: 1, lines: 1 })
-    expect(() => BlastRadius.recordWriteAndAssert(SID, "/a", 100)).not.toThrow()
+    await expect(BlastRadius.recordWriteAndAssert(SID, "/a", 100)).resolves.toBeUndefined()
     // No accounting when autonomous is off.
     expect(BlastRadius.get(SID).lines).toBe(0)
   })
 
-  test("recordWriteAndAssert tallies and throws once over caps", () => {
+  test("recordWriteAndAssert tallies and throws once over caps", async () => {
     process.env["AX_CODE_AUTONOMOUS"] = "true"
     BlastRadius.get(SID, { steps: 100, files: 100, lines: 5 })
-    BlastRadius.recordWriteAndAssert(SID, "/a", 3)
-    expect(() => BlastRadius.recordWriteAndAssert(SID, "/b", 10)).toThrow()
+    await BlastRadius.recordWriteAndAssert(SID, "/a", 3)
+    await expect(BlastRadius.recordWriteAndAssert(SID, "/b", 10)).rejects.toThrow()
+  })
+
+  test("recordWriteAndAssert charges no lines for an untracked gitignored path", async () => {
+    // Session ses_-e5f3a8d511fffezsIaxCxGUcU redirected clippy into
+    // target/review/clippy.log (502730 bytes, ceil(size/80) = 6285) and
+    // stopped at 6454/5000. The log is gitignored generated output.
+    process.env["AX_CODE_AUTONOMOUS"] = "true"
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(path.join(tmp.path, ".gitignore"), "target/\n*.log\n")
+    const logDir = path.join(tmp.path, "target", "review")
+    await fs.mkdir(logDir, { recursive: true })
+    const clippyLog = path.join(logDir, "clippy.log")
+    await fs.writeFile(clippyLog, "warning: generated\n")
+    const trackedLog = path.join(tmp.path, "notes.log")
+    await fs.writeFile(trackedLog, "tracked\n")
+    const added = await git(["add", "-f", "--", "notes.log"], { cwd: tmp.path })
+    expect(added.exitCode).toBe(0)
+    const committed = await git(["commit", "-m", "track notes"], { cwd: tmp.path })
+    expect(committed.exitCode).toBe(0)
+    const sourceDir = path.join(tmp.path, "src")
+    await fs.mkdir(sourceDir)
+    const source = path.join(sourceDir, "main.rs")
+    await fs.writeFile(source, "fn main() {}\n")
+
+    BlastRadius.get(SID, { steps: 100, files: 10, lines: 20 })
+    await BlastRadius.recordWriteAndAssert(SID, clippyLog, 6285)
+    expect(BlastRadius.get(SID).lines).toBe(0)
+    expect(BlastRadius.get(SID).files.size).toBe(1)
+
+    await BlastRadius.recordWriteAndAssert(SID, source, 12)
+    expect(BlastRadius.get(SID).lines).toBe(12)
+
+    await BlastRadius.recordWriteAndAssert(SID, trackedLog, 4)
+    expect(BlastRadius.get(SID).lines).toBe(16)
+
+    await BlastRadius.recordWriteAndAssert(SID, path.join(tmp.path, "missing", "file.rs"), 3)
+    expect(BlastRadius.get(SID).lines).toBe(19)
+
+    await BlastRadius.recordWriteAndAssert(SID, "/no/such/repo/file.rs", 1)
+    expect(BlastRadius.get(SID).lines).toBe(20)
+    expect(BlastRadius.get(SID).files.size).toBe(5)
   })
 
   test("cap trip carries the descriptive message on Error.message, not just the class name", () => {

@@ -1,5 +1,7 @@
+import path from "path"
 import { Wildcard } from "@/util/wildcard"
 import { Log } from "@/util/log"
+import { git } from "@/util/git"
 import { NamedError } from "@ax-code/util/error"
 import z from "zod"
 import {
@@ -370,14 +372,52 @@ export namespace BlastRadius {
   }
 
   /**
+   * Untracked paths that `git check-ignore` reports as ignored are generated
+   * output, not hand-authored source. A verification redirect such as
+   * `cargo clippy > target/review/clippy.log` otherwise charges
+   * `ceil(size / 80)` and can exhaust the line cap on the log alone.
+   *
+   * Only exit code 0 is an exemption. A missing repository, a git failure,
+   * or a tracked file (check-ignore exits 1 even when a pattern matches)
+   * keeps the caller's line delta. The file cap still counts the path.
+   */
+  async function isUntrackedGitignored(filePath: string): Promise<boolean> {
+    if (!filePath) return false
+    const resolved = path.resolve(filePath)
+    const stripped = new Set([
+      "GIT_DIR",
+      "GIT_WORK_TREE",
+      "GIT_COMMON_DIR",
+      "GIT_INDEX_FILE",
+      "GIT_OBJECT_DIRECTORY",
+      "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    ])
+    const env: Record<string, string> = {}
+    for (const [key, value] of Object.entries(process.env)) {
+      if (value === undefined || stripped.has(key)) continue
+      env[key] = value
+    }
+    const result = await git(["check-ignore", "--quiet", "--", resolved], {
+      cwd: path.dirname(resolved),
+      env,
+      timeout: 5_000,
+    })
+    return result.exitCode === 0
+  }
+
+  /**
    * Tool-side hook called AFTER a successful write to update the per-session
    * tally. Only counts in autonomous mode. Throws if the post-write tally
    * exceeds the file or line cap.
    */
-  export function recordWriteAndAssert(sessionID: SessionID, filePath: string, lineDelta: number) {
+  export async function recordWriteAndAssert(sessionID: SessionID, filePath: string, lineDelta: number) {
     const isAutonomous = ScopedFlag.autonomous()
     if (!isAutonomous) return
-    recordWrite(sessionID, filePath, lineDelta)
+    const ignored = lineDelta > 0 && (await isUntrackedGitignored(filePath))
+    if (ignored) {
+      log.info("gitignored path not counted toward line cap", { filePath })
+    }
+    recordWrite(sessionID, filePath, ignored ? 0 : lineDelta)
     assertWithinCaps(sessionID)
   }
 }

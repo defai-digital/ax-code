@@ -154,7 +154,7 @@ export const MultiEditTool = Tool.define("multiedit", {
       }
 
       for (const [file, diff] of writeDeltas) {
-        BlastRadius.recordWriteAndAssert(ctx.sessionID, file, diff.additions + diff.deletions)
+        await BlastRadius.recordWriteAndAssert(ctx.sessionID, file, diff.additions + diff.deletions)
       }
     } catch (error) {
       const rollbackErrors: { file: string; error: unknown }[] = []

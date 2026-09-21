@@ -69,7 +69,7 @@ async function writeUniqueImage(
       await fs.writeFile(filePath, data, { flag: "wx" })
       await notifyFileEdited(filePath, "add")
       await FileTime.read(ctx.sessionID, filePath)
-      BlastRadius.recordWriteAndAssert(ctx.sessionID, filePath, 1)
+      await BlastRadius.recordWriteAndAssert(ctx.sessionID, filePath, 1)
       return filePath
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "EEXIST") continue

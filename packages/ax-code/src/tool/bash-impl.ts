@@ -1592,7 +1592,11 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         if (proc.exitCode === 0) {
           for (const filePath of redirectWritePaths) {
             if (Filesystem.contains(Instance.worktree, filePath)) {
-              BlastRadius.recordWriteAndAssert(ctx.sessionID, filePath, await estimateAutonomousLineDelta(filePath))
+              await BlastRadius.recordWriteAndAssert(
+                ctx.sessionID,
+                filePath,
+                await estimateAutonomousLineDelta(filePath),
+              )
             }
           }
         }

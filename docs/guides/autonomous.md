@@ -144,6 +144,8 @@ Prefer the first-class **`autonomy`** object. Legacy `session.*` and `experiment
 
 Binary files (`cp` of an executable, `curl -o` of a zip, and other non-text writes) still count toward the **file** cap, but they charge **zero lines**. The line cap measures textual change. Shell text writes keep the `ceil(size / 80)` estimate so a dense payload cannot evade the budget by having few newlines.
 
+Untracked paths that `git check-ignore` reports as ignored also charge zero lines and still count as one file. That covers generated trees such as `target/` when a verifier redirects its output there (`cargo clippy > target/review/clippy.log`). The exemption applies only when git exits 0. A missing repository, a git failure, and a tracked file keep the normal line charge, including a tracked file whose name matches an ignore pattern.
+
 ### Profiles
 
 Set `autonomy.profile` to seed several fields at once (explicit fields still win):

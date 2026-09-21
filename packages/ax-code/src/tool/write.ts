@@ -123,7 +123,7 @@ export const WriteTool = Tool.define("write", {
         if (change.added) additions += change.count || 0
         else if (change.removed) deletions += change.count || 0
       }
-      BlastRadius.recordWriteAndAssert(ctx.sessionID, filepath, additions + deletions)
+      await BlastRadius.recordWriteAndAssert(ctx.sessionID, filepath, additions + deletions)
     })
 
     const { diagnostics, output: diagOutput } = await collectDiagnostics([filepath], {

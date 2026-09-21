@@ -192,7 +192,7 @@ export const NotebookEditTool = Tool.define("notebook_edit", {
         if (change.added) additions += change.count || 0
         else if (change.removed) deletions += change.count || 0
       }
-      BlastRadius.recordWriteAndAssert(ctx.sessionID, notebookPath, additions + deletions)
+      await BlastRadius.recordWriteAndAssert(ctx.sessionID, notebookPath, additions + deletions)
       cellCount = notebook.cells.length
     })
 

@@ -546,7 +546,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
     // Autonomous accounting: only the changes we successfully applied count.
     for (const change of appliedChanges) {
       const target = change.movePath ?? change.filePath
-      BlastRadius.recordWriteAndAssert(ctx.sessionID, target, (change.additions ?? 0) + (change.deletions ?? 0))
+      await BlastRadius.recordWriteAndAssert(ctx.sessionID, target, (change.additions ?? 0) + (change.deletions ?? 0))
     }
 
     // Generate output summary
