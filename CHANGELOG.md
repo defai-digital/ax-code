@@ -6,14 +6,16 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.20.0] - 2026-09-21
+
 ### Changed
 
+- Prepare AX Code 7.20.0 and SDK 2.5.42.
 - Bundle signed AX Engine 7.5.4 on Apple Silicon Macs and use the same verified archive for managed installs.
 
 ### Fixed
 
 - Verify managed AX Engine installs with the native doctor identity when `--version` is unsupported, and reject mismatched runtime versions.
-
 - Read an AX Engine `doctor --json` install version even when doctor exits non-zero, and let `mtpPolicy: disabled` turn MTP off when the binary version cannot be established.
 - Advertise tool calling on the Tiel and Cyber-Tiel catalogs so a missing live model card does not drop every tool. A live `/v1/models` card still overrides the catalog.
 - Accept `provider.ax-engine.options.contextTokens` / `maxOutputTokens` and `AX_ENGINE_CONTEXT_TOKENS` / `AX_ENGINE_MAX_OUTPUT_TOKENS`. Overrides only narrow the catalog window, stay on the 1,024-token prefix grid, and cannot be raised by a larger live model card. Warn when configured options shadow `AX_ENGINE_BIN` or `AX_ENGINE_HOST`.
