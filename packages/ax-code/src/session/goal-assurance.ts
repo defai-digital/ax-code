@@ -42,7 +42,9 @@ export namespace GoalAssurance {
                 .max(5),
               command: Text.refine(
                 (value) => !VerificationPolicy.isTrivialVerificationCommand(value),
-                "A goal check must execute assertions, not an observation or no-op command",
+                "A goal check must execute assertions, not an observation or no-op command. " +
+                  "Wrap observations in test/[ ] exit-status assertions; git is accepted only in assertion " +
+                  "forms such as git merge-base --is-ancestor, git diff --exit-code, or git rev-parse --verify.",
               ),
               purpose: Text,
               environment: Text,

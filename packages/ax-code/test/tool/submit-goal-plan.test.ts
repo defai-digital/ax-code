@@ -287,6 +287,54 @@ describe("submit_goal_plan", () => {
     })
   })
 
+  test("accepts a git merge-base --is-ancestor assertion at admission", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const head = (await git(["rev-parse", "HEAD"], { cwd: tmp.path })).text().trim()
+        const session = await Session.create({})
+        await SessionGoal.create({ sessionID: session.id, objective: "record the results then test and commit" })
+        const tool = await SubmitGoalPlanTool.init()
+        const result = await tool.execute(
+          {
+            kind: "code-change",
+            assurance: {
+              ...assurance,
+              checks: [
+                {
+                  ...assurance.checks[0],
+                  command: 'git merge-base --is-ancestor "{BASELINE}" HEAD',
+                },
+              ],
+            },
+            title: "Record the results",
+            acceptance: ["HEAD stays an ancestor of the recorded baseline"],
+            verification: [{ tag: "gating", action: "check ancestry", observation: "exit status zero" }],
+            nonGoals: ["unrelated refactors"],
+            assumedScope: "src",
+            implementationApproach: "Keep it small",
+            taskChecklist: ["Implement", "Verify"],
+          },
+          {
+            sessionID: session.id,
+            messageID: MessageID.ascending(),
+            agent: "goal-plan-writer",
+            abort: new AbortController().signal,
+            messages: [],
+            extra: {},
+            metadata() {},
+            async ask() {},
+          },
+        )
+        expect(result.output).toContain("git merge-base --is-ancestor")
+        expect(result.output).toContain(head)
+        expect(result.output).not.toContain("{BASELINE}")
+        await Session.remove(session.id)
+      },
+    })
+  })
+
   test("uses the parent session objective when the writer is a child", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

@@ -99,6 +99,20 @@ export namespace VerificationPolicy {
   const VERIFICATION_HINTS =
     /\b(test|tests|typecheck|tsc|lint|eslint|clippy|cargo\s+(test|check|clippy)|pytest|vitest|jest|mocha|go\s+test|mypy|ruff|pyright|build|compile|check)\b/i
 
+  /**
+   * Git subcommand forms that assert by exit status instead of observing. A
+   * bare `git status`/`git log` never verifies anything, but these fail with a
+   * nonzero exit when their condition does not hold, so they are legitimate
+   * check commands (for example `git merge-base --is-ancestor HEAD origin/main`
+   * asserting that work was pushed).
+   */
+  const GIT_ASSERTION_FORMS = [
+    /\bmerge-base\s+--is-ancestor\b/,
+    /\bdiff\b[^;&|]*\s--(?:exit-code|quiet)\b/,
+    /\brev-parse\s+--verify\b/,
+    /\bdescribe\b[^;&|]*\s--exact-match\b/,
+  ]
+
   export function detectEcosystem(signals: VerificationSignals): Ecosystem {
     if (signals.hasPackageJson) return "node"
     if (signals.hasCargoToml) return "rust"
@@ -151,6 +165,7 @@ export namespace VerificationPolicy {
     for (const segment of segments) {
       const word = firstWord(segment)
       if (!word) continue
+      if (word === "git" && GIT_ASSERTION_FORMS.some((form) => form.test(segment))) return false
       if (!TRIVIAL_COMMANDS.has(word)) return false
     }
     return true

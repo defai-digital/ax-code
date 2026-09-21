@@ -76,6 +76,34 @@ describe("VerificationPolicy command classification", () => {
       expect(VerificationPolicy.looksLikeVerificationCommand(command)).toBe(true)
     }
   })
+
+  test("accepts git exit-status assertion forms as non-trivial", () => {
+    for (const command of [
+      "git merge-base --is-ancestor HEAD origin/main",
+      "git -C packages/ax-code merge-base --is-ancestor 1234567 HEAD",
+      "git diff --exit-code",
+      "git diff --quiet HEAD~1 -- src/",
+      "git diff-index --quiet HEAD",
+      "git rev-parse --verify HEAD^{commit}",
+      "git describe --exact-match --tags HEAD",
+    ]) {
+      expect(VerificationPolicy.isTrivialVerificationCommand(command)).toBe(false)
+    }
+  })
+
+  test("keeps git observation commands trivial", () => {
+    for (const command of [
+      "git log --oneline",
+      "git show HEAD",
+      "git diff --name-only",
+      "git diff --stat",
+      "git rev-parse HEAD",
+      "git describe --tags",
+      "git merge-base HEAD origin/main",
+    ]) {
+      expect(VerificationPolicy.isTrivialVerificationCommand(command)).toBe(true)
+    }
+  })
 })
 
 describe("VerificationPolicy.renderVerificationProtocol", () => {
