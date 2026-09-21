@@ -40,6 +40,25 @@ export namespace SessionRetry {
     return error.data.metadata?.errorCode === "alibaba_token_plan_short_window_quota"
   }
 
+  /**
+   * AX Trust rejects a full pool with this code and a hardcoded
+   * `Retry-After: 1`. The lease is held until another generation finishes,
+   * so five 1-second retries (~5s) expire while the slot is still taken.
+   * Session ses_-e5f3a5d6974ffexB8P6pzBD4t and several siblings in the same
+   * hour all died in 5506-5679 ms with this body.
+   */
+  function isConcurrencyLimit(error: MessageV2.APIError) {
+    const record = parseJsonRecord(error.data.responseBody)
+    if (!record) return false
+    if (record.code === "concurrency_limit_exceeded") return true
+    const nested = isRecord(record.error) ? record.error : undefined
+    return nested?.code === "concurrency_limit_exceeded"
+  }
+
+  function exponentialDelay(attempt: number) {
+    return Math.min(RETRY_INITIAL_DELAY * Math.pow(RETRY_BACKOFF_FACTOR, attempt - 1), RETRY_MAX_DELAY_NO_HEADERS)
+  }
+
   function numericHeaderDelay(value: string | undefined, multiplier: number) {
     if (value === undefined) return undefined
     const trimmed = value.trim()
@@ -75,6 +94,7 @@ export namespace SessionRetry {
 
   export function delay(attempt: number, error?: MessageV2.APIError) {
     const effectiveAttempt = normalizedAttempt(attempt)
+    const exponential = exponentialDelay(effectiveAttempt)
     if (error) {
       const headers = error.data.responseHeaders
       if (isAlibabaTokenPlanShortWindowQuota(error)) {
@@ -82,22 +102,18 @@ export namespace SessionRetry {
         if (parsedHeaderDelay !== undefined) return parsedHeaderDelay
         return jitter(ALIBABA_TOKEN_PLAN_QUOTA_RETRY_DELAY)
       }
-      if (headers) {
-        const parsedHeaderDelay = headerDelay(headers)
-        if (parsedHeaderDelay !== undefined) return parsedHeaderDelay
-
-        return jitter(
-          Math.min(
-            RETRY_INITIAL_DELAY * Math.pow(RETRY_BACKOFF_FACTOR, effectiveAttempt - 1),
-            RETRY_MAX_DELAY_NO_HEADERS,
-          ),
-        )
+      const parsedHeaderDelay = headers ? headerDelay(headers) : undefined
+      // A 1-second concurrency hint must not undercut the exponential floor.
+      // A longer server hint still wins.
+      if (isConcurrencyLimit(error)) {
+        if (parsedHeaderDelay !== undefined && parsedHeaderDelay >= exponential) return parsedHeaderDelay
+        return jitter(exponential)
       }
+      if (parsedHeaderDelay !== undefined) return parsedHeaderDelay
+      if (headers) return jitter(exponential)
     }
 
-    return jitter(
-      Math.min(RETRY_INITIAL_DELAY * Math.pow(RETRY_BACKOFF_FACTOR, effectiveAttempt - 1), RETRY_MAX_DELAY_NO_HEADERS),
-    )
+    return jitter(exponential)
   }
 
   /** Add +/-25% jitter to prevent thundering herd on simultaneous retries. */
@@ -216,6 +232,10 @@ export namespace SessionRetry {
       if (!error.data?.isRetryable) return undefined
       const circuit = circuitFor(providerID)
       if (isAlibabaTokenPlanShortWindowQuota(error)) {
+        circuit.failureStreak = 0
+        return message
+      }
+      if (isConcurrencyLimit(error)) {
         circuit.failureStreak = 0
         return message
       }

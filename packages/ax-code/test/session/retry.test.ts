@@ -116,6 +116,55 @@ describe("session.retry.delay", () => {
     expect(SessionRetry.delay(1, longError)).toBe(MAX_RETRY_HEADER_DELAY_MS)
   })
 
+  test("concurrency limit does not collapse onto a 1-second retry-after", () => {
+    const body = JSON.stringify({
+      error: {
+        code: "concurrency_limit_exceeded",
+        message: "pool concurrent request limit exceeded",
+        type: "rate_limit_error",
+      },
+    })
+    const error = new MessageV2.APIError({
+      message: "pool concurrent request limit exceeded",
+      isRetryable: true,
+      statusCode: 429,
+      responseHeaders: { "retry-after": "1" },
+      responseBody: body,
+    }).toObject() as MessageV2.APIError
+
+    const bases = [2000, 4000, 8000, 16000, 30000]
+    for (let attempt = 1; attempt <= bases.length; attempt++) {
+      const delay = SessionRetry.delay(attempt, error)
+      const base = bases[attempt - 1]
+      expect(delay).toBeGreaterThanOrEqual(Math.round(base * 0.75))
+      expect(delay).toBeLessThanOrEqual(Math.round(base * 1.25))
+    }
+  })
+
+  test("concurrency limit still honors a longer retry-after", () => {
+    const error = new MessageV2.APIError({
+      message: "pool concurrent request limit exceeded",
+      isRetryable: true,
+      statusCode: 429,
+      responseHeaders: { "retry-after": "30" },
+      responseBody: JSON.stringify({ error: { code: "concurrency_limit_exceeded" } }),
+    }).toObject() as MessageV2.APIError
+
+    expect(SessionRetry.delay(1, error)).toBe(MAX_RETRY_HEADER_DELAY_MS)
+  })
+
+  test("a 1-second retry-after still wins for ordinary rate limits", () => {
+    const error = new MessageV2.APIError({
+      message: "request rate limit exceeded",
+      isRetryable: true,
+      statusCode: 429,
+      responseHeaders: { "retry-after": "1" },
+      responseBody: JSON.stringify({ error: { code: "request_rate_limit_exceeded" } }),
+    }).toObject() as MessageV2.APIError
+
+    expect(SessionRetry.delay(4, error)).toBe(1000)
+  })
+
   test("caps future http-date retry-after values at 30 seconds", () => {
     const date = new Date(Date.now() + 120_000).toUTCString()
     const error = apiError({ "retry-after": date })
@@ -236,6 +285,24 @@ describe("session.retry.retryable", () => {
 
     expect(SessionRetry.retryable(messageError)).toBeUndefined()
     expect(SessionRetry.retryable(codeError)).toBeUndefined()
+  })
+
+  test("retries pool concurrency limits instead of treating them as quota", () => {
+    const message = "pool concurrent request limit exceeded"
+    const error = new MessageV2.APIError({
+      message,
+      isRetryable: true,
+      statusCode: 429,
+      responseBody: JSON.stringify({
+        error: {
+          code: "concurrency_limit_exceeded",
+          message,
+          type: "rate_limit_error",
+        },
+      }),
+    }).toObject() as ReturnType<NamedError["toObject"]>
+
+    expect(SessionRetry.retryable(error)).toBe(message)
   })
 
   test("does not retry account quota exhaustion when only response body has the quota code", () => {
