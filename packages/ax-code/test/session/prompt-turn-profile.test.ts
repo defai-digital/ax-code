@@ -160,6 +160,8 @@ describe("response-only turn execution profile", () => {
     "Rewrite that to match the style of src/util/helpers.",
     "Rewrite that to match 設定.md",
     "Rephrase that like the Dockerfile comments",
+    "rewrite that and verify the deployment",
+    "Summarize that and confirm the installation worked",
   ])("rejects repository work or ambiguous new tasks: %s", (text) => {
     expect(detect(text).kind).toBe("default")
   })

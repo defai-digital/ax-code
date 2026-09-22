@@ -232,6 +232,35 @@ describe("tool.apply_patch freeform", () => {
     })
   })
 
+  test("a case-only rename keeps the file instead of unlinking the shared inode", async () => {
+    await using fixture = await tmpdir()
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const source = path.join(fixture.path, "readme.md")
+        const dest = path.join(fixture.path, "README.md")
+        await writeAndTrack(source, "old content\n")
+        // Case-insensitive volumes (macOS default, Windows) resolve both names
+        // to the same file; case-sensitive ones see a normal move.
+        const insensitive = await fs
+          .stat(dest)
+          .then(() => true)
+          .catch(() => false)
+
+        const patchText =
+          "*** Begin Patch\n*** Update File: readme.md\n*** Move to: README.md\n@@\n-old content\n+new content\n*** End Patch"
+        await execute({ patchText }, ctx)
+
+        expect(await fs.readFile(dest, "utf-8")).toBe("new content\n")
+        const names = await fs.readdir(fixture.path)
+        expect(names).toContain("README.md")
+        if (!insensitive) expect(names).not.toContain("readme.md")
+      },
+    })
+  })
+
   test("applies multiple hunks to one file", async () => {
     await using fixture = await tmpdir()
     const { ctx } = makeCtx()

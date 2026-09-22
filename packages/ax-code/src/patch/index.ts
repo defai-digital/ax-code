@@ -661,9 +661,17 @@ export namespace Patch {
             }
 
             await fs.writeFile(hunk.move_path, fileUpdate.content, "utf-8")
-            await fs.unlink(hunk.path).catch((error: any) => {
-              if (error?.code !== "ENOENT") throw error
-            })
+            // A case-only rename on a case-insensitive filesystem resolves both
+            // names to one inode; unlinking the source would delete the file
+            // just written. Rename the entry instead.
+            const same = await Promise.all([fs.stat(hunk.path), fs.stat(hunk.move_path)])
+              .then(([a, b]) => a.dev === b.dev && a.ino === b.ino)
+              .catch(() => false)
+            if (same) await fs.rename(hunk.path, hunk.move_path).catch(() => undefined)
+            else
+              await fs.unlink(hunk.path).catch((error: any) => {
+                if (error?.code !== "ENOENT") throw error
+              })
             modified.push(hunk.move_path)
             log.info(`Moved file: ${hunk.path} -> ${hunk.move_path}`)
           } else {

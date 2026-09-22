@@ -128,7 +128,7 @@ const REWRITE_PATTERNS: Array<{ intent: Exclude<ResponseOnlyIntent, "translate">
 // Inflection-tolerant: plural nouns and the common edit verbs must not slip
 // past into a tool-less compact turn ("summarize that and update the files").
 const REPOSITORY_OR_EDIT_SIGNAL =
-  /\b(?:apps?|ui|code|source|files?|repos?|repositor(?:y|ies)|projects?|workspace|i18n|l10n|locales?|locali[sz]ation|implement|edit(?:s|ed|ing)?|modify|change[sd]?|fix(?:es|ed)?|patch(?:es)?|refactor|commit(?:s|ted)?|push|pull\s+request|components?|functions?|class(?:es)?|tests?|readme|update[sd]?|create[sd]?|delete[sd]?|remove[sd]?|rename[sd]?|move[sd]?|run|build|deploy|install|execute)\b|(?:程式|代码|代碼|原始碼|源码|檔案|文件|專案|项目|應用|应用|介面|界面|本地化|國際化|国际化|實作|实现|修改|編輯|编辑|修復|修复|提交|部署|安裝|安装|執行|执行|新增|刪除|删除|建立|重命名)/i
+  /\b(?:apps?|ui|code|source|files?|repos?|repositor(?:y|ies)|projects?|workspace|i18n|l10n|locales?|locali[sz]ation|implement|edit(?:s|ed|ing)?|modify|change[sd]?|fix(?:es|ed)?|patch(?:es)?|refactor|commit(?:s|ted)?|push|pull\s+request|components?|functions?|class(?:es)?|tests?|readme|update[sd]?|create[sd]?|delete[sd]?|remove[sd]?|rename[sd]?|move[sd]?|run(?:s|ning)?|build(?:s|ing)?|deploy(?:s|ed|ing|ment)?|install(?:s|ed|ing|ation)?|execut(?:e|es|ed|ing|ion)|verif(?:y|ies|ied|ying|ication)|validat(?:e|es|ed|ing|ion)|audit(?:s|ed|ing)?)\b|(?:程式|代码|代碼|原始碼|源码|檔案|文件|專案|项目|應用|应用|介面|界面|本地化|國際化|国际化|實作|实现|修改|編輯|编辑|修復|修复|提交|部署|安裝|安装|執行|执行|新增|刪除|删除|建立|重命名)/i
 
 // Paths and filenames: absolute or dot-relative, bare repository-relative
 // (`src/util/helpers`), Unicode filenames (`設定.md`), and the common
@@ -139,7 +139,7 @@ const PATH_OR_CODE_SIGNAL =
 // A second clause joined by and/then that names an action is a new task, not
 // a modifier of the transform ("repeat that and deploy it").
 const MULTI_TASK_SIGNAL =
-  /\b(?:also|and\s+then|then\s+also)\b|\b(?:and|then)\s+(?:also\s+)?(?:update|add|create|delete|remove|rename|move|run|build|deploy|install|execute|email|send|open|write|save|commit|push|edit|change|fix|check|search|find|look|read|list|show|print|test|inspect|review)\b|(?:另外|然後|然后|並且|并且|順便|顺便|以及|還有|还有)/i
+  /\b(?:also|and\s+then|then\s+also)\b|\b(?:and|then)\s+(?:also\s+)?(?:update|add|create|delete|remove|rename|move|run|build|deploy|install|execute|email|send|open|write|save|commit|push|edit|change|fix|check|search|find|look|read|list|show|print|test|inspect|review|verify|validate|audit|confirm|ensure|debug|investigate)\b|(?:另外|然後|然后|並且|并且|順便|顺便|以及|還有|还有)/i
 const STRUCTURED_FORMAT_SIGNAL = /\b(?:json|xml|yaml|csv|schema)\b/i
 // A new story can omit history only when it does not refer back to that history.
 // Ambiguous references take the ordinary path, which retains evidence and tools.

@@ -23,6 +23,36 @@ import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 
 const log = Log.create({ service: "tool.apply_patch" })
 
+/**
+ * Whether two paths name the same file on disk. A case-only rename on a
+ * case-insensitive filesystem (readme.md -> README.md) compares unequal as
+ * strings while resolving to one inode; treating it as a move would write the
+ * new content and then unlink that same inode.
+ */
+async function sameFile(a: string, b: string): Promise<boolean> {
+  if (a === b) return true
+  try {
+    const [first, second] = await Promise.all([fs.stat(a), fs.stat(b)])
+    return first.dev === second.dev && first.ino === second.ino
+  } catch {
+    return false
+  }
+}
+
+/** Remove the move source after the destination was written, unless both are one file. */
+async function finishMove(source: string, dest: string) {
+  if (dest === source) return
+  if (await sameFile(source, dest)) {
+    // Case-only rename on a case-insensitive filesystem: the content is
+    // already in place; only the directory entry's case needs to change.
+    await fs.rename(source, dest).catch(() => undefined)
+    return
+  }
+  await fs.unlink(source).catch((error: unknown) => {
+    if (errorCode(error) !== "ENOENT") throw error
+  })
+}
+
 async function readFileIfExists(filePath: string): Promise<string | undefined> {
   return fs.readFile(filePath, "utf-8").catch((err: NodeJS.ErrnoException) => {
     if (err?.code === "ENOENT") return undefined
@@ -75,6 +105,8 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       moveOldContent?: string
       existed: boolean
       moveExisted?: boolean
+      /** Source and destination resolve to the same file (case-only rename). */
+      moveSameFile?: boolean
       diff: string
       additions: number
       deletions: number
@@ -196,6 +228,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
                 })
             : undefined
           let moveOldContent: string | undefined
+          const moveSameFile = moveExisted ? await sameFile(filePath, movePath!) : false
           if (moveExisted) {
             try {
               moveOldContent = await fs.readFile(movePath!, "utf-8")
@@ -218,6 +251,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             moveOldContent,
             existed: true,
             moveExisted,
+            moveSameFile,
             diff,
             additions,
             deletions,
@@ -422,10 +456,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
                   }
                   activeDirty = true
                   await Filesystem.write(dest, change.newContent)
-                  if (dest !== change.filePath)
-                    await fs.unlink(change.filePath).catch((error: unknown) => {
-                      if (errorCode(error) !== "ENOENT") throw error
-                    })
+                  await finishMove(change.filePath, dest)
                 })
               } else {
                 await FileTime.withLock(first, async () => {
@@ -448,10 +479,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
                     }
                     activeDirty = true
                     await Filesystem.write(dest, change.newContent)
-                    if (dest !== change.filePath)
-                      await fs.unlink(change.filePath).catch((error: unknown) => {
-                        if (errorCode(error) !== "ENOENT") throw error
-                      })
+                    await finishMove(change.filePath, dest)
                   })
                 })
               }
@@ -551,7 +579,10 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       // Same line count rule as the delete branch: a trailing newline does not
       // start another line.
       const overwritten =
-        change.moveExisted && typeof change.moveOldContent === "string" && change.moveOldContent.length > 0
+        change.moveExisted &&
+        !change.moveSameFile &&
+        typeof change.moveOldContent === "string" &&
+        change.moveOldContent.length > 0
           ? change.moveOldContent.split("\n").length - (change.moveOldContent.endsWith("\n") ? 1 : 0)
           : 0
       await BlastRadius.recordWriteAndAssert(
