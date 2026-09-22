@@ -6,6 +6,12 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.20.2] - 2026-09-22
+
+### Changed
+
+- Prepare AX Code 7.20.2 and SDK 2.5.44.
+
 ### Added
 
 - Provide structured terminal results, bounded execution, steering flags, and additional machine-readable commands for headless callers.
