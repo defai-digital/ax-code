@@ -6,6 +6,18 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Changed
+
+- Bundle signed AX Engine 7.5.5 on Apple Silicon Macs and use the same verified archive for managed installs.
+
+### Fixed
+
+- Parse explicit AX Engine version lines from stdout or stderr without treating startup diagnostics or unrelated tool versions as the engine version.
+- Preserve case-only patch renames, count overwritten destination lines, and keep coding and verification requests out of compact response-only turns.
+- Preserve interrupted follow-ups as paused, guard queue retry races, and keep retry jitter above enforced delay floors.
+- Maintain transcript byte totals and reduce repeated TUI transcript, sidebar, footer, and navigation work.
+- Preserve todo cancellation reasons and improve session top-bar and goal-plan display.
+
 ## [7.20.0] - 2026-09-21
 
 ### Changed

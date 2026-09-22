@@ -233,7 +233,7 @@ Managed Tiel launches use the catalog window (65,536 context tokens and 8,192 ou
 
 Tiel and Cyber-Tiel advertise structured tool calling. A live `/v1/models` card still overrides that advertisement once the server is running. `mtpPolicy: disabled` turns MTP off even when the binary version cannot be read; `auto` and `required` still need AX Engine 7.4.0 or newer.
 
-A PATH or overlay install that is missing `libmlx.dylib` / `mlx.metallib` is rejected. The bundled and overlay archives are the self-contained 7.5.4 macOS payload.
+A PATH or overlay install that is missing `libmlx.dylib` / `mlx.metallib` is rejected. The bundled and overlay archives are the self-contained 7.5.5 macOS payload.
 
 Installing the engine does not download a model. Pick and download a model afterward from the Desktop **Models** page or with `ax-code providers ax-engine prepare`. A complete compatible base snapshot already in the Hugging Face cache is accepted for direct decode; `prepare --download` uses the catalog's preferred MTP package when available.
 

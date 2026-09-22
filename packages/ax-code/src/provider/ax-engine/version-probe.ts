@@ -23,15 +23,24 @@ function installVersionFromDoctorText(text: string) {
   return embedded.ok ? installVersion(embedded.value) : undefined
 }
 
+function directVersion(text: string) {
+  for (const line of text.split(/\r?\n/)) {
+    const label = line.trim()
+    const value = label.replace(/^ax-engine\s+/i, "")
+    if (semver.valid(value)) return label
+  }
+  return undefined
+}
+
 export async function probeVersion(binaryPath: string) {
   const direct = await Process.text([binaryPath, "--version"], { timeout: 3000, nothrow: true }).catch(() => undefined)
   if (direct?.code === 0) {
-    const text = direct.text.trim() || direct.stderr.toString().trim()
-    if (text && semver.coerce(text)) return text
+    const detected = directVersion(direct.text) ?? directVersion(direct.stderr.toString())
+    if (detected) return detected
   }
 
-  // Native and Python-distributed AX Engine launchers expose their version through the
-  // structured doctor response rather than a top-level --version flag. Doctor
+  // Older native and Python-distributed launchers expose their version through
+  // the structured doctor response instead of a --version flag. Doctor
   // exits non-zero when the host is not ready (Metal toolchain, MLX files).
   // That exit code is host readiness, not version knowability: install.version
   // is still authoritative.

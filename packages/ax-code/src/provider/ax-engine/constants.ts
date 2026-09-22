@@ -419,7 +419,7 @@ export type AxEngineBinaryRelease = {
 }
 
 const AX_ENGINE_RELEASE_ORIGIN = "https://github.com"
-const AX_ENGINE_BINARY_RELEASE_URL = `${AX_ENGINE_RELEASE_ORIGIN}/defai-digital/ax-engine/releases/download/v7.5.4/ax-engine-v7.5.4-macos-arm64.tar.gz`
+const AX_ENGINE_BINARY_RELEASE_URL = `${AX_ENGINE_RELEASE_ORIGIN}/defai-digital/ax-engine/releases/download/v7.5.5/ax-engine-v7.5.5-macos-arm64.tar.gz`
 
 // Pinned self-contained macOS archive (binaries + MLX dylibs + metallib).
 // Darwin-arm64 AX Code releases stage this under engine/<version>/ as the
@@ -427,10 +427,10 @@ const AX_ENGINE_BINARY_RELEASE_URL = `${AX_ENGINE_RELEASE_ORIGIN}/defai-digital/
 // alternative, not the required clean-Mac path. AX_ENGINE_INSTALL_* overrides
 // remain for validating a different artifact.
 export const AX_ENGINE_BINARY_RELEASE: AxEngineBinaryRelease = {
-  version: "7.5.4",
-  assetName: "ax-engine-v7.5.4-macos-arm64.tar.gz",
+  version: "7.5.5",
+  assetName: "ax-engine-v7.5.5-macos-arm64.tar.gz",
   url: AX_ENGINE_BINARY_RELEASE_URL,
-  sha256: "4f3e992209dea6fa3d6ec2861c0a20e6512bdd4df36bc0700a2a5e6ac9ef8da0",
+  sha256: "f83b82d0de865c2ff92e05794db0265e6b9804b03300d758adea89d641d1879a",
   teamId: "N5ZUZDUJS6",
 }
 

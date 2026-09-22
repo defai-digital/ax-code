@@ -108,11 +108,11 @@ describe("resolveInstallableRelease", () => {
   })
 
   test("pins a self-contained darwin-arm64 release and refuses other hosts", () => {
-    expect(AX_ENGINE_BINARY_RELEASE.version).toBe("7.5.4")
+    expect(AX_ENGINE_BINARY_RELEASE.version).toBe("7.5.5")
     expect(AX_ENGINE_BINARY_RELEASE.sha256).toMatch(/^[a-f0-9]{64}$/)
     expect(AX_ENGINE_BINARY_RELEASE.url.startsWith("https://")).toBe(true)
     expect(resolveInstallableRelease("darwin", "arm64", {})).toMatchObject({
-      version: "7.5.4",
+      version: "7.5.5",
       sha256: AX_ENGINE_BINARY_RELEASE.sha256,
     })
     expect(isAxEngineInstallable("darwin", "arm64", {})).toBe(true)
@@ -362,7 +362,7 @@ describe("end-to-end install of a real tarball artifact", () => {
     try {
       // A stand-in ax-engine executable, packed exactly how a release archive
       // is expected to be shaped: the binary at the top level of the tarball.
-      await writeRuntimePayload(stage, "#!/bin/sh\necho ax-engine-real 9.9.9\n")
+      await writeRuntimePayload(stage, "#!/bin/sh\n# ax-engine-real fixture\necho ax-engine 9.9.9\n")
       const tarPath = path.join(stage, "artifact.tar.gz")
       execFileSync("tar", ["-czf", tarPath, "-C", stage, ...AX_ENGINE_RUNTIME_REQUIRED_FILES])
       const bytes = await fs.readFile(tarPath)
@@ -454,7 +454,7 @@ describe("bundled sidecar resolution", () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "axe-bundled-"))
     try {
       const dir = path.join(root, "engine", AX_ENGINE_BINARY_RELEASE.version)
-      await writeRuntimePayload(dir, "#!/bin/sh\necho ax-engine 7.5.4\n")
+      await writeRuntimePayload(dir, "#!/bin/sh\necho ax-engine 7.5.5\n")
       const entry = path.join(root, "lib", "index-node-tui.js")
       await fs.mkdir(path.dirname(entry), { recursive: true })
       await fs.writeFile(entry, "export {}\n")
