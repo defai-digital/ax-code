@@ -52,6 +52,7 @@ function normalizePath(value: string, worktree?: string): Candidate {
   // A leading tilde is not inside the worktree even though it is not an
   // absolute path here; the server expands it to the home directory.
   if (/^~(?:[\\/]|$|[^\\/]*[\\/])/.test(value)) return { pattern: "path:<external>", durable: false }
+  // @scan-suppress security_scan - the joined path is only compared to the worktree with path.relative to classify it as inside or outside; nothing is opened.
   const absolute = path.isAbsolute(value) ? path.normalize(value) : path.normalize(path.join(worktree ?? ".", value))
   if (!worktree) return { pattern: `path:${cap(value)}`, durable: false }
 

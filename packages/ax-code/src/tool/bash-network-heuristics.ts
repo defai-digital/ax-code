@@ -65,7 +65,18 @@ export namespace BashNetworkHeuristics {
   /** management-form prefixes: `docker container run`, `docker image pull` */
   const CONTAINER_MANAGEMENT_GROUPS = new Set(["container", "image", "compose"])
   /** global container flags that take a value in the next argument */
-  const CONTAINER_VALUE_FLAGS = new Set(["--config", "--context", "-c", "-H", "--host", "-l", "--log-level", "--tlscacert", "--tlscert", "--tlskey"])
+  const CONTAINER_VALUE_FLAGS = new Set([
+    "--config",
+    "--context",
+    "-c",
+    "-H",
+    "--host",
+    "-l",
+    "--log-level",
+    "--tlscacert",
+    "--tlscert",
+    "--tlskey",
+  ])
   const NAMESPACE_TOOLS = new Set(["nsenter", "unshare"])
   /** Leading help/version forms; `-h` and `-v` are not included since docker
    *  uses them for hostname and volume. */
@@ -172,7 +183,9 @@ export namespace BashNetworkHeuristics {
       }
       // env/nice/timeout/xargs/nohup/setsid: skip the wrapper and its
       // VAR=value or -flag arguments, then judge what follows.
-      rest = after.filter((arg, i) => !(i === 0 && applet === "timeout" && /^\d/.test(arg))).filter((arg) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(arg))
+      rest = after
+        .filter((arg, i) => !(i === 0 && applet === "timeout" && /^\d/.test(arg)))
+        .filter((arg) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(arg))
     }
     return undefined
   }
@@ -212,8 +225,26 @@ export namespace BashNetworkHeuristics {
       if (opaque || codes.some(looksNetworked)) result.inlineCodeNetworkSuspect = true
     }
 
-    const firstArg = args.find((arg) => arg.length > 0)
-    if ((firstArg !== undefined && HELP_LEADING.has(firstArg)) || args.includes("--help")) return result
+    // Help/version forms only exempt the invocation when they appear before
+    // the image or command operand: the first argument, any argument before
+    // the (possibly management-form) subcommand, or the argument immediately
+    // after it. A `--help` behind the image (`docker run --rm alpine --help`,
+    // or inside container payload such as `sh -c "echo --help"`) must not
+    // disable escape detection.
+    const firstArgIndex = args.findIndex((arg) => arg.length > 0)
+    if (firstArgIndex !== -1 && HELP_LEADING.has(args[firstArgIndex]!)) return result
+    let subcommandEnd = -1
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i]!
+      if (CONTAINER_VALUE_FLAGS.has(arg)) {
+        i++
+        continue
+      }
+      if (arg.length === 0 || arg.startsWith("-")) continue
+      subcommandEnd = CONTAINER_MANAGEMENT_GROUPS.has(arg) && args[i + 1] !== undefined ? i + 1 : i
+      break
+    }
+    if (subcommandEnd >= 0 && args.some((arg, i) => HELP_LEADING.has(arg) && i <= subcommandEnd + 1)) return result
 
     if (CONTAINER_RUNNERS.has(base)) {
       const subcommand = containerSubcommand(args)

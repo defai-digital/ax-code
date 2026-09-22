@@ -143,6 +143,13 @@ describe("tool.bash helpers", () => {
     expect(hasDynamicRedirection("echo ok 2>> ${LOG_FILE}")).toBe(true)
     expect(hasDynamicRedirection("echo ok|>$OUTPUT_FILE")).toBe(true)
     expect(hasDynamicRedirection("echo ok |2>>`log-path`")).toBe(true)
+    // No delimiter before the `>` — still a redirect into an expansion.
+    expect(hasDynamicRedirection("echo pwned>$F")).toBe(true)
+    expect(hasDynamicRedirection("echo x>$(cmd)")).toBe(true)
+    expect(hasDynamicRedirection("echo x >>$F")).toBe(true)
+    // Static words and fd duplication stay undetected.
+    expect(hasDynamicRedirection("echo a>b")).toBe(false)
+    expect(hasDynamicRedirection("cmd 2>&1")).toBe(false)
   })
 
   test("extracts quoted absolute path literals", () => {

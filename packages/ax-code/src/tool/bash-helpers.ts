@@ -170,7 +170,11 @@ export function staticallyCreatedPathArgs(cmd: string, args: string[]) {
 }
 
 export function hasDynamicRedirection(command: string) {
-  return /(?:^|[\s&;|])\d*>>?\s*(?:\$|`)/.test(command)
+  // The redirect operator must be caught wherever it appears: `echo pwned>$F`
+  // has no whitespace before the `>`, so requiring a delimiter would let the
+  // expansion target through. Fd duplication (`2>&1`) never matches because
+  // `&` does not start an expansion.
+  return />>?\s*(?:\$|`)/.test(command)
 }
 
 export function absolutePathLiterals(value: string) {

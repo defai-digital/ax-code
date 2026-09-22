@@ -547,6 +547,40 @@ describe("tool.bash truncation", () => {
     })
   })
 
+  test("dynamic and split-quoted redirection targets are checked in autonomous mode", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await withAutonomous(async () => {
+      const sessionID = SessionID.make("ses_bash_dynamic_redirect")
+      BlastRadius.reset(sessionID)
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const bash = await BashTool.init()
+            // `>$F` has no delimiter before the `>`: the dynamic-redirection
+            // preflight must still reject it instead of executing silently.
+            await expect(
+              bash.execute(
+                { command: "F=.git/config; echo pwned>$F", description: "dynamic redirect into .git" },
+                { ...ctx, sessionID },
+              ),
+            ).rejects.toThrow(/Dynamic redirection targets/)
+            // A split-quoted target decodes to the real word (.git/config),
+            // so the non-overridable protected-path refusal fires.
+            await expect(
+              bash.execute(
+                { command: 'echo pwned> ".git/con"fig', description: "split-quoted redirect into .git" },
+                { ...ctx, sessionID },
+              ),
+            ).rejects.toMatchObject({ message: expect.stringContaining("Refusing to write") })
+          },
+        })
+      } finally {
+        BlastRadius.reset(sessionID)
+      }
+    })
+  })
+
   test("git config write to a dangerous key is blocked in autonomous mode even behind a global git flag", async () => {
     await using tmp = await tmpdir({ git: true })
     await withAutonomous(async () => {

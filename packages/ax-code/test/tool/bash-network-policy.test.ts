@@ -102,7 +102,7 @@ describe("bash network heuristics: evasions and false positives (round-5 review)
     expect(suspect("python3.11", ["-c", 'import socket; socket.create_connection(("x",80))'])).toBe(true)
     expect(suspect("nodejs", ["-e", 'fetch("https://x")'])).toBe(true)
     expect(suspect("pypy3", ["-c", "import urllib.request"])).toBe(true)
-    expect(suspect("perl5.36", ["-e", 'use Net::FTP'])).toBe(true)
+    expect(suspect("perl5.36", ["-e", "use Net::FTP"])).toBe(true)
   })
 
   test("attached, bundled, repeated, and print flags carry inline code", () => {
@@ -118,8 +118,8 @@ describe("bash network heuristics: evasions and false positives (round-5 review)
     expect(suspect("perl", ["-MIO::Socket::INET", "-e", '$s=IO::Socket::INET->new("x:80")'])).toBe(true)
     expect(suspect("node", ["-e", 'require("net").connect(80,"x")'])).toBe(true)
     expect(suspect("node", ["-e", 'new WebSocket("ws://x")'])).toBe(true)
-    expect(suspect("php", ["-r", '$c=curl_init($argv[1]);curl_exec($c);'])).toBe(true)
-    expect(suspect("php", ["-r", 'fsockopen($argv[1],80);'])).toBe(true)
+    expect(suspect("php", ["-r", "$c=curl_init($argv[1]);curl_exec($c);"])).toBe(true)
+    expect(suspect("php", ["-r", "fsockopen($argv[1],80);"])).toBe(true)
   })
 
   test("busybox wrapper applets are looked through", () => {
@@ -135,6 +135,16 @@ describe("bash network heuristics: evasions and false positives (round-5 review)
     expect(escape("docker", ["compose", "up"])).toBe(true)
     expect(escape("docker", ["run", "-v", "/h:/c", "alpine"])).toBe(true)
     expect(escape("docker", ["run", "--help"])).toBe(false)
+    expect(escape("nsenter", ["--help"])).toBe(false)
+  })
+
+  test("help flags behind the container image do not disable escape detection", () => {
+    expect(escape("docker", ["run", "alpine", "sh", "-c", "echo --help"])).toBe(true)
+    expect(escape("docker", ["run", "alpine", "sh", "-c", "echo", "--help"])).toBe(true)
+    expect(escape("docker", ["run", "--rm", "alpine", "--help"])).toBe(true)
+    // Help before the image or command operand still exempts.
+    expect(escape("docker", ["run", "--help"])).toBe(false)
+    expect(escape("docker", ["--help"])).toBe(false)
     expect(escape("nsenter", ["--help"])).toBe(false)
   })
 

@@ -577,7 +577,14 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             if (!inPlace) return undefined
             // With -e/-f every positional is a file; otherwise the first
             // positional is the script.
-            const explicitScript = args.some((arg) => arg === "-e" || arg === "-f" || /^-[a-zA-Z]*[ef]$/.test(arg) || arg.startsWith("--expression") || arg.startsWith("--file"))
+            const explicitScript = args.some(
+              (arg) =>
+                arg === "-e" ||
+                arg === "-f" ||
+                /^-[a-zA-Z]*[ef]$/.test(arg) ||
+                arg.startsWith("--expression") ||
+                arg.startsWith("--file"),
+            )
             return operands(new Set(["-e", "--expression", "-f", "--file"]), !explicitScript)
           }
           case "perl": {
@@ -587,7 +594,9 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           }
           case "gawk":
           case "awk": {
-            const inPlace = args.some((arg, i) => (arg === "-i" && args[i + 1] === "inplace") || arg === "--include=inplace")
+            const inPlace = args.some(
+              (arg, i) => (arg === "-i" && args[i + 1] === "inplace") || arg === "--include=inplace",
+            )
             if (!inPlace) return undefined
             const programFromFile = args.some((arg) => arg === "-f" || arg.startsWith("--file"))
             return operands(new Set(["-i", "-f", "--file", "-v", "-F"]), !programFromFile)
@@ -599,7 +608,10 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           case "patch": {
             // `patch [options] [originalfile [patchfile]]`: only the first
             // positional is written.
-            const files = operands(new Set(["-i", "--input", "-d", "--directory", "-o", "--output", "-r", "--reject-file"]), false)
+            const files = operands(
+              new Set(["-i", "--input", "-d", "--directory", "-o", "--output", "-r", "--reject-file"]),
+              false,
+            )
             return files.length > 0 ? [files[0]!] : []
           }
           default:
@@ -656,7 +668,9 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           const dest = targetDir ?? positionals.at(-1)
           if (dest) {
             const intoDirectory = targetDir !== undefined || (sources.length > 0 && (await Filesystem.isDir(dest)))
-            if (intoDirectory) for (const source of sources) redirectWritePaths.add(path.join(dest, path.basename(source)))
+            if (intoDirectory)
+              // @scan-suppress security_scan - the joined path is only recorded so the protected-path check sees the real copy target; it is never used to read or write a file here.
+              for (const source of sources) redirectWritePaths.add(path.join(dest, path.basename(source)))
             else redirectWritePaths.add(dest)
           }
           return
@@ -1087,9 +1101,24 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         for (let i = 0; i < redirect.childCount; i++) {
           const child = redirect.child(i)
           if (!child) continue
+          // Expansion targets (`>$F`, `>$(cmd)`, `>`cmd``, `> >(cmd)`) resolve
+          // to paths the preflight cannot know. Record a dynamic path access
+          // so the interactive admission fires instead of silently skipping
+          // the write.
+          if (["simple_expansion", "expansion", "command_substitution", "process_substitution"].includes(child.type)) {
+            dynamicPathAccess = true
+            continue
+          }
           if (!["word", "string", "raw_string", "concatenation"].includes(child.type)) continue
-          const target = stripShellQuotes(child.text)
-          // Skip command substitution / fd dup (&1 etc.) — opaque or non-path.
+          // decodeShellLiteral joins split-quoted targets (`> ".git/con"fig`)
+          // into the word the shell will actually write; a word it cannot
+          // decode (embedded expansion, glob, bare ~) is dynamic.
+          const target = decodeShellLiteral(child.text)
+          if (target === undefined) {
+            dynamicPathAccess = true
+            continue
+          }
+          // Skip fd dup (&1 etc.) — opaque or non-path.
           if (!target || /^&/.test(target)) continue
           assertStaticRedirectTarget(target)
           assertSupportedWindowsRedirect(child.text, shell)
