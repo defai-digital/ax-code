@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import { createSessionTreeIndex } from "../../../src/cli/tui/util/session-tree"
 import {
   hasActiveSubagentInSessionTree,
@@ -56,4 +56,40 @@ test("repeated subtree reads return equal but independent sets", () => {
   const second = index.subtree("root")
   expect([...second].sort()).toEqual(["child", "grandchild", "root"])
   expect(second).not.toBe(first)
+})
+
+test("bounds retained subtree entries and node references across many roots", () => {
+  const nodes = Array.from({ length: 512 }, (_, i) => ({
+    id: `node-${i}`,
+    parentID: i ? `node-${i - 1}` : undefined,
+  }))
+  const writes = vi.spyOn(Map.prototype, "set")
+  let retained: Map<string, Set<string>>
+  try {
+    const index = createSessionTreeIndex(nodes)
+    for (let i = 0; i < 128; i++) index.subtree(`node-${i}`)
+    const cacheWrite = writes.mock.calls.findIndex(([key, value]) => key === "node-0" && value instanceof Set)
+    retained = writes.mock.contexts[cacheWrite] as Map<string, Set<string>>
+  } finally {
+    writes.mockRestore()
+  }
+  expect(retained!.size).toBeLessThanOrEqual(64)
+  expect([...retained!.values()].reduce((sum, ids) => sum + ids.size, 0)).toBeLessThanOrEqual(16_384)
+})
+
+test("evicted and oversized subtrees still return complete independent results", () => {
+  const index = createSessionTreeIndex(sessions)
+  index.subtree("root").clear()
+  for (let i = 0; i < 100; i++) index.subtree(`unknown-${i}`)
+  expect([...index.subtree("root")]).toEqual(["root", "child", "grandchild"])
+  const large = createSessionTreeIndex(
+    Array.from({ length: 17_000 }, (_, i) => ({
+      id: `node-${i}`,
+      parentID: i ? `node-${i - 1}` : undefined,
+    })),
+  )
+  const first = large.subtree("node-0")
+  expect(first.size).toBe(17_000)
+  first.clear()
+  expect(large.subtree("node-0").size).toBe(17_000)
 })

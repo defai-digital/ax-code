@@ -7,13 +7,17 @@ export function createSessionTreeIndex(sessions: readonly SessionTreeNode[]) {
     if (!session.parentID) continue
     const siblings = children.get(session.parentID) ?? []
     siblings.push(session.id)
-    children.set(session.parentID, siblings)
+    // Local index has at most one parent entry per input node and follows its session list.
+    children.set(session.parentID, siblings) // @scan-suppress lifecycle_scan
   }
-  // The index is immutable after construction, so a subtree is computed once
-  // per root. Callers receive a copy because some mutate the result (the
+  // The index is immutable after construction, so retained subtrees can be
+  // reused. Callers receive a copy because some mutate the result (the
   // footer removes the parent from its descendants); sharing the cached Set
   // would silently corrupt later reads.
   const cache = new Map<string, Set<string>>()
+  let cachedNodes = 0
+  const maxEntries = 64
+  const maxNodes = 16_384
   return {
     subtree(sessionID: string | undefined): Set<string> {
       if (sessionID === undefined) return new Set<string>()
@@ -27,7 +31,17 @@ export function createSessionTreeIndex(sessions: readonly SessionTreeNode[]) {
         ids.add(id)
         pending.push(...(children.get(id) ?? []))
       }
+      // Do not retain quadratic descendant sets across many roots. Very large
+      // subtrees remain queryable without being kept in the cache.
+      if (ids.size > maxNodes) return ids
+      while (cache.size >= maxEntries || cachedNodes + ids.size > maxNodes) {
+        const oldest = cache.keys().next().value!
+        cachedNodes -= cache.get(oldest)!.size
+        cache.delete(oldest)
+      }
+      // @scan-suppress lifecycle_scan - FIFO eviction above caps both entries and retained node references.
       cache.set(sessionID, ids)
+      cachedNodes += ids.size
       return new Set(ids)
     },
   }

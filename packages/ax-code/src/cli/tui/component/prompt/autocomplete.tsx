@@ -128,7 +128,7 @@ const slashAutocompleteTokens = (option: AutocompleteOption): string[] => {
   add(option.display)
   for (const alias of option.aliases ?? []) add(alias)
   const result = [...tokens]
-  slashTokenCache.set(option, result)
+  slashTokenCache.set(option, result) // @scan-suppress lifecycle_scan - WeakMap does not retain discarded options.
   return result
 }
 
