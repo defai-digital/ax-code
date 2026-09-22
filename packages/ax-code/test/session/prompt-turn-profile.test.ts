@@ -129,6 +129,12 @@ describe("response-only turn execution profile", () => {
     })
   })
 
+  test("and/or and digit-only fractions are not mistaken for repository paths", () => {
+    expect(detect("make that shorter and/or clearer").reason).not.toBe("path_or_code_signal")
+    expect(detect("tell me a story about 12/25")).toMatchObject({ kind: "conversation", intent: "new-story" })
+    expect(detect("Rewrite that to match the style of src/util/helpers.").reason).toBe("path_or_code_signal")
+  })
+
   test("does not duplicate the clarifying parenthetical for abbreviated aliases", () => {
     // Already clarified: left untouched instead of gaining a second parenthetical.
     expect(clarifyRequestedLanguage("please reply in t. chinese (繁體中文)")).toBe(
@@ -162,6 +168,9 @@ describe("response-only turn execution profile", () => {
     "Rephrase that like the Dockerfile comments",
     "rewrite that and verify the deployment",
     "Summarize that and confirm the installation worked",
+    "rewrite that fixing the bug",
+    "summarize that and merge the PR",
+    "Repeat that updating the README",
   ])("rejects repository work or ambiguous new tasks: %s", (text) => {
     expect(detect(text).kind).toBe("default")
   })

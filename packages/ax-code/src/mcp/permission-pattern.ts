@@ -49,6 +49,9 @@ function isOutsideRelativePath(relative: string) {
 }
 
 function normalizePath(value: string, worktree?: string): Candidate {
+  // A leading tilde is not inside the worktree even though it is not an
+  // absolute path here; the server expands it to the home directory.
+  if (/^~(?:[\\/]|$|[^\\/]*[\\/])/.test(value)) return { pattern: "path:<external>", durable: false }
   const absolute = path.isAbsolute(value) ? path.normalize(value) : path.normalize(path.join(worktree ?? ".", value))
   if (!worktree) return { pattern: `path:${cap(value)}`, durable: false }
 
@@ -63,8 +66,17 @@ function normalizePath(value: string, worktree?: string): Candidate {
   return { pattern: "path:<external>", durable: false }
 }
 
+// Derived patterns are later wildcard-matched, so a tool argument that itself
+// contains a wildcard (`owner: "*"`, `url: "https://*.example.com/"`) would
+// turn an "always" approval into a grant over every value. Such candidates
+// stay approvable for the single call but never become durable.
+function containsWildcard(pattern: string) {
+  return pattern.includes("*") || pattern.includes("?")
+}
+
 function addCandidate(output: Candidate[], seen: Set<string>, candidate: Candidate | undefined) {
   if (!candidate) return
+  if (candidate.durable && containsWildcard(candidate.pattern)) candidate = { ...candidate, durable: false }
   if (seen.has(candidate.pattern)) return
   seen.add(candidate.pattern)
   output.push(candidate)

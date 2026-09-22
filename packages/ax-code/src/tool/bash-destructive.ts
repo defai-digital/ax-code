@@ -433,7 +433,9 @@ function classifySsh(args: string[]): string | undefined {
   // `22` in `-p 22`) are ignored because they precede the remote command;
   // remote commands with their own flags (`commit check`) are usually a
   // single quoted argv token, and the exclusions still catch the rest.
-  const remoteCommand = [...args].reverse().find((arg) => !arg.startsWith("-"))
+  // A bare `user@host` (or host) is the destination, not a remote command;
+  // a username such as `commit@…` must not read as a device commit.
+  const remoteCommand = [...args].reverse().find((arg) => !arg.startsWith("-") && !/^[^\s@]+@[^\s@]+$/.test(arg))
   if (!remoteCommand) return undefined
   if (!SSH_COMMIT_PATTERN.test(remoteCommand)) return undefined
   if (SSH_COMMIT_EXCLUSIONS.some((pattern) => pattern.test(remoteCommand))) return undefined

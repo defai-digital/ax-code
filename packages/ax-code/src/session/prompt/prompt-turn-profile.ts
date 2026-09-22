@@ -93,7 +93,11 @@ const REWRITE_PATTERNS: Array<{ intent: Exclude<ResponseOnlyIntent, "translate">
   {
     intent: "rewrite",
     pattern:
-      /^(?:please\s+)?(?:rewrite|rephrase|paraphrase|restate|repeat|summari[sz]e)\s+(?:that|it|this|the\s+above|the\s+(?:last|previous)\s+answer|your\s+(?:last|previous)?\s*(?:answer|response)|the\s+answer)(?:\s+.{1,100})?[.!?]*$/i,
+      // The tail after the referent may only be a modifier phrase (tone,
+      // length, audience, language); a free tail let a second instruction
+      // ride along ("rewrite that fixing the bug", "summarize that and merge
+      // the PR") into a tool-less turn.
+      /^(?:please\s+)?(?:rewrite|rephrase|paraphrase|restate|repeat|summari[sz]e)\s+(?:that|it|this|the\s+above|the\s+(?:last|previous)\s+answer|your\s+(?:last|previous)?\s*(?:answer|response)|the\s+answer)(?:\s+(?:in|into|as|for|with|using|more|less|but|without|so|shorter|longer|briefly|concisely|formally|casually|politely|simply|clearly|plainly|please|like|to\s+(?:be|sound|match|fit|suit))\b.{0,100})?[.!?]*$/i,
   },
   {
     intent: "shorten",
@@ -128,13 +132,13 @@ const REWRITE_PATTERNS: Array<{ intent: Exclude<ResponseOnlyIntent, "translate">
 // Inflection-tolerant: plural nouns and the common edit verbs must not slip
 // past into a tool-less compact turn ("summarize that and update the files").
 const REPOSITORY_OR_EDIT_SIGNAL =
-  /\b(?:apps?|ui|code|source|files?|repos?|repositor(?:y|ies)|projects?|workspace|i18n|l10n|locales?|locali[sz]ation|implement|edit(?:s|ed|ing)?|modify|change[sd]?|fix(?:es|ed)?|patch(?:es)?|refactor|commit(?:s|ted)?|push|pull\s+request|components?|functions?|class(?:es)?|tests?|readme|update[sd]?|create[sd]?|delete[sd]?|remove[sd]?|rename[sd]?|move[sd]?|run(?:s|ning)?|build(?:s|ing)?|deploy(?:s|ed|ing|ment)?|install(?:s|ed|ing|ation)?|execut(?:e|es|ed|ing|ion)|verif(?:y|ies|ied|ying|ication)|validat(?:e|es|ed|ing|ion)|audit(?:s|ed|ing)?)\b|(?:程式|代码|代碼|原始碼|源码|檔案|文件|專案|项目|應用|应用|介面|界面|本地化|國際化|国际化|實作|实现|修改|編輯|编辑|修復|修复|提交|部署|安裝|安装|執行|执行|新增|刪除|删除|建立|重命名)/i
+  /\b(?:apps?|ui|code|source|files?|repos?|repositor(?:y|ies)|projects?|workspace|i18n|l10n|locales?|locali[sz]ation|implement|edit(?:s|ed|ing)?|modify|change[sd]?|fix(?:es|ed)?|patch(?:es)?|refactor|commit(?:s|ted)?|push|pull\s+request|components?|functions?|class(?:es)?|tests?|readme|updat(?:e|es|ed|ing)|creat(?:e|es|ed|ing)|delet(?:e|es|ed|ing)|remov(?:e|es|ed|ing)|renam(?:e|es|ed|ing)|mov(?:e|es|ed|ing)|run(?:s|ning)?|build(?:s|ing)?|deploy(?:s|ed|ing|ment)?|install(?:s|ed|ing|ation)?|execut(?:e|es|ed|ing|ion)|verif(?:y|ies|ied|ying|ication)|validat(?:e|es|ed|ing|ion)|audit(?:s|ed|ing)?|fixing|changing|modifying|patching|committing|refactoring|merg(?:e|es|ed|ing)|rebas(?:e|es|ed|ing)|revert(?:s|ed|ing)?|publish(?:es|ed|ing)?|releas(?:e|es|ed|ing)|clon(?:e|es|ed|ing)|checkout|stash|fetch(?:es|ed|ing)?|migrat(?:e|es|ed|ing|ion)|upgrad(?:e|es|ed|ing)|lint(?:s|ed|ing)?|bugs?|PRs?)\b|(?:程式|代码|代碼|原始碼|源码|檔案|文件|專案|项目|應用|应用|介面|界面|本地化|國際化|国际化|實作|实现|修改|編輯|编辑|修復|修复|提交|部署|安裝|安装|執行|执行|新增|刪除|删除|建立|重命名)/i
 
 // Paths and filenames: absolute or dot-relative, bare repository-relative
 // (`src/util/helpers`), Unicode filenames (`設定.md`), and the common
 // extensionless build files.
 const PATH_OR_CODE_SIGNAL =
-  /`[^`]+`|(?:^|\s)(?:\.\.?\/|\/)[^\s]+|(?:^|\s)[\p{L}\p{N}_.-]+(?:\/[\p{L}\p{N}_.-]+)+|[\p{L}\p{N}_.-]+\.(?:c|cc|cpp|css|env|go|h|hpp|html|ipynb|java|js|jsx|json|lock|log|md|php|po|proto|py|rb|rs|sh|sql|swift|tf|toml|ts|tsx|txt|vue|yaml|yml)\b|\b(?:Makefile|Dockerfile|CMakeLists\.txt)\b/iu
+  /`[^`]+`|(?:^|\s)(?:\.\.?\/|\/)[^\s]+|(?:^|\s)(?!(?:and|or)\/)(?=[^\s/]*[\p{L}_])[\p{L}\p{N}_.-]+(?:\/(?!(?:and|or)\b)[\p{L}\p{N}_.-]+)+|[\p{L}\p{N}_.-]+\.(?:c|cc|cpp|css|env|go|h|hpp|html|ipynb|java|js|jsx|json|lock|log|md|php|po|proto|py|rb|rs|sh|sql|swift|tf|toml|ts|tsx|txt|vue|yaml|yml)\b|\b(?:Makefile|Dockerfile|CMakeLists\.txt)\b/iu
 
 // A second clause joined by and/then that names an action is a new task, not
 // a modifier of the transform ("repeat that and deploy it").

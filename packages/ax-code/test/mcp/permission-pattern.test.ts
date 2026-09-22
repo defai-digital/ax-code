@@ -70,6 +70,27 @@ describe("McpPermissionPattern.derive", () => {
     expect(result.durable).toBe(false)
   })
 
+  test("argument values containing wildcards never become durable grants", () => {
+    const repo = McpPermissionPattern.derive("github_list", { owner: "*", repo: "*" })
+    expect(repo.patterns).toEqual(["repo:*/*"])
+    expect(repo.durable).toBe(false)
+    expect(repo.always).toEqual([])
+
+    const url = McpPermissionPattern.derive("fetch", { url: "https://*.example.com/x" })
+    expect(url.durable).toBe(false)
+    expect(url.always).toEqual([])
+
+    const id = McpPermissionPattern.derive("vm", { id: "vm-?" })
+    expect(id.durable).toBe(false)
+  })
+
+  test("tilde paths are external even though they are not absolute", () => {
+    const worktree = path.join(path.sep, "tmp", "repo")
+    const result = McpPermissionPattern.derive("read", { path: "~/.ssh/config" }, { worktree })
+    expect(result.patterns).toEqual(["path:<external>"])
+    expect(result.durable).toBe(false)
+  })
+
   test("falls back to non-durable wildcard for unknown args and redacts secrets in metadata", () => {
     const result = McpPermissionPattern.derive("custom_tool", {
       query: "hello",

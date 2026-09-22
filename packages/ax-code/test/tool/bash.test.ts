@@ -507,6 +507,46 @@ describe("tool.bash truncation", () => {
     })
   })
 
+  test("in-place editors and cp -t targets are checked against protected paths in autonomous mode", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await fs.writeFile(path.join(dir, "notes.txt"), "alpha\n")
+      },
+    })
+    await withAutonomous(async () => {
+      const sessionID = SessionID.make("ses_bash_inplace_writers")
+      BlastRadius.reset(sessionID)
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const bash = await BashTool.init()
+            for (const command of [
+              "sed -i 's/x/y/' .git/config",
+              "truncate -s 0 .git/config",
+              "cp -t .git/hooks notes.txt",
+              "cp --target-directory=.git/hooks notes.txt",
+            ]) {
+              await expect(
+                bash.execute({ command, description: "in-place write into .git" }, { ...ctx, sessionID }),
+              ).rejects.toMatchObject({ message: expect.stringContaining("Refusing to write") })
+            }
+            // Ordinary in-workspace targets still work.
+            const ok = await bash.execute(
+              { command: "sed -i.bak 's/alpha/beta/' notes.txt && cat notes.txt", description: "edit notes" },
+              { ...ctx, sessionID },
+            )
+            expect(ok.metadata.exit).toBe(0)
+            expect(ok.output).toContain("beta")
+          },
+        })
+      } finally {
+        BlastRadius.reset(sessionID)
+      }
+    })
+  })
+
   test("git config write to a dangerous key is blocked in autonomous mode even behind a global git flag", async () => {
     await using tmp = await tmpdir({ git: true })
     await withAutonomous(async () => {

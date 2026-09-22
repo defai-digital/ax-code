@@ -543,6 +543,70 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         return normalized
       }
 
+      /**
+       * File operands an in-place editor writes, or undefined when the command
+       * is not one (or is not editing in place). Conservative by design: an
+       * operand that turns out to be a script is only ever over-recorded.
+       */
+      const inPlaceWriteOperands = (name: string, args: readonly string[]): string[] | undefined => {
+        const operands = (skipValueFlags: ReadonlySet<string>, skipFirstPositional: boolean) => {
+          const files: string[] = []
+          let first = skipFirstPositional
+          for (let i = 0; i < args.length; i++) {
+            const arg = args[i]!
+            if (arg === "--") {
+              files.push(...args.slice(i + 1).filter((rest) => rest.length > 0))
+              break
+            }
+            if (skipValueFlags.has(arg)) {
+              i++
+              continue
+            }
+            if (arg.startsWith("-")) continue
+            if (first) {
+              first = false
+              continue
+            }
+            files.push(arg)
+          }
+          return files
+        }
+        switch (name) {
+          case "sed": {
+            const inPlace = args.some((arg) => /^-[a-zA-Z]*i/.test(arg) || arg.startsWith("--in-place"))
+            if (!inPlace) return undefined
+            // With -e/-f every positional is a file; otherwise the first
+            // positional is the script.
+            const explicitScript = args.some((arg) => arg === "-e" || arg === "-f" || /^-[a-zA-Z]*[ef]$/.test(arg) || arg.startsWith("--expression") || arg.startsWith("--file"))
+            return operands(new Set(["-e", "--expression", "-f", "--file"]), !explicitScript)
+          }
+          case "perl": {
+            const inPlace = args.some((arg) => /^-[a-zA-Z]*i/.test(arg) && !arg.startsWith("-I"))
+            if (!inPlace) return undefined
+            return operands(new Set(["-e", "-E", "-M", "-m"]), false)
+          }
+          case "gawk":
+          case "awk": {
+            const inPlace = args.some((arg, i) => (arg === "-i" && args[i + 1] === "inplace") || arg === "--include=inplace")
+            if (!inPlace) return undefined
+            const programFromFile = args.some((arg) => arg === "-f" || arg.startsWith("--file"))
+            return operands(new Set(["-i", "-f", "--file", "-v", "-F"]), !programFromFile)
+          }
+          case "truncate":
+            // Numeric flag values (`-s 0`) are not part of the parsed operand
+            // list, so only path-valued flags consume a following token.
+            return operands(new Set(["-r", "--reference"]), false)
+          case "patch": {
+            // `patch [options] [originalfile [patchfile]]`: only the first
+            // positional is written.
+            const files = operands(new Set(["-i", "--input", "-d", "--directory", "-o", "--output", "-r", "--reject-file"]), false)
+            return files.length > 0 ? [files[0]!] : []
+          }
+          default:
+            return undefined
+        }
+      }
+
       const recordInnerCommandPaths = async (parts: string[], decoded = false) => {
         const name = parts[0]
         if (!name) return
@@ -563,13 +627,50 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         // isolation workspace-boundary check. The remaining commands
         // (cd/rm/mkdir/touch/chmod/chown/cat) have no such single-dest shape.
         if (["cp", "mv", "install"].includes(name)) {
-          let destResolved: string | undefined
-          for (const arg of args) {
+          const positionals: string[] = []
+          let targetDir: string | undefined
+          for (let i = 0; i < args.length; i++) {
+            const arg = args[i]!
+            // `-t DIR` / `--target-directory DIR` / `--target-directory=DIR`
+            // name the destination explicitly; every positional is a source.
+            if (arg === "-t" || arg === "--target-directory") {
+              const next = args[i + 1]
+              if (next) targetDir = (await recordResolvedPath(next, decoded)) ?? targetDir
+              i++
+              continue
+            }
+            const inlineTarget = arg.match(/^--target-directory=(.+)$/)?.[1]
+            if (inlineTarget) {
+              targetDir = (await recordResolvedPath(inlineTarget, decoded)) ?? targetDir
+              continue
+            }
             if (arg.startsWith("-")) continue
             const resolved = await recordResolvedPath(arg, decoded)
-            if (resolved) destResolved = resolved // last positional wins
+            if (resolved) positionals.push(resolved)
           }
-          if (destResolved) redirectWritePaths.add(destResolved)
+          // The written file is <dir>/<source basename> when the destination
+          // is a directory (explicit -t, or a trailing existing directory), so
+          // directory-scoped protected patterns such as `.git/hooks/**` see
+          // the real target rather than the directory itself.
+          const sources = targetDir ? positionals : positionals.slice(0, -1)
+          const dest = targetDir ?? positionals.at(-1)
+          if (dest) {
+            const intoDirectory = targetDir !== undefined || (sources.length > 0 && (await Filesystem.isDir(dest)))
+            if (intoDirectory) for (const source of sources) redirectWritePaths.add(path.join(dest, path.basename(source)))
+            else redirectWritePaths.add(dest)
+          }
+          return
+        }
+        // In-place editors write to their file operands without any redirect
+        // or modeled destination, so a relative in-workspace operand would
+        // otherwise escape the protected/blocked-path and line-budget checks
+        // (`sed -i … .git/config`, `truncate -s 0 .env`).
+        const inPlaceOperands = inPlaceWriteOperands(name, args)
+        if (inPlaceOperands) {
+          for (const operand of inPlaceOperands) {
+            const resolved = await recordResolvedPath(operand, decoded)
+            if (resolved) redirectWritePaths.add(resolved)
+          }
           return
         }
         if (name === "tee") {

