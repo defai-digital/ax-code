@@ -2,6 +2,7 @@ import { MAX_CONSECUTIVE_ERRORS } from "@/constants/session"
 import { Log } from "../../util/log"
 import { Session } from ".."
 import { MessageV2 } from "../message-v2"
+import { SessionRetry } from "../retry"
 import { findFallbackModel, isLocalProvider } from "./prompt-provider-fallback"
 import {
   consecutiveErrorDecision,
@@ -76,6 +77,7 @@ function providerFallbackUnavailableMessage(input: {
 
 function nonRetryableProviderError(error: unknown) {
   if (!error || typeof error !== "object") return false
+  if (isProviderConcurrencyExhausted(error)) return false
   if ((error as { isRetryable?: unknown }).isRetryable === false) return true
   const name = (error as { name?: unknown }).name
   if (name !== "APIError" && name !== "AI_APICallError") return false
@@ -83,6 +85,26 @@ function nonRetryableProviderError(error: unknown) {
   if (direct === false) return true
   const data = (error as { data?: unknown }).data
   return Boolean(data && typeof data === "object" && (data as { isRetryable?: unknown }).isRetryable === false)
+}
+
+/**
+ * A concurrency-limit hit that exhausted its (already extended, always-
+ * retryable-in-principle) attempt budget is marked `isRetryable: false` by
+ * processor-impl.ts to end THAT attempt sequence — not because the condition
+ * itself became permanent. Exempt it from the blanket isRetryable-false ->
+ * stop-immediately rule so the outer loop's normal consecutive-error retry
+ * (bounded by MAX_CONSECUTIVE_ERRORS, same backoff as any transient failure)
+ * gets a further chance once the shared pool has had more time to free up —
+ * this is the class of failure ADR PRD-2026-09-22 (provider concurrency
+ * resilience) exists to recover from automatically.
+ */
+function isProviderConcurrencyExhausted(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false
+  const data = (error as { data?: unknown }).data
+  if (!data || typeof data !== "object") return false
+  const metadata = (data as { metadata?: unknown }).metadata
+  if (!metadata || typeof metadata !== "object") return false
+  return (metadata as { errorCode?: unknown }).errorCode === SessionRetry.PROVIDER_CONCURRENCY_EXHAUSTED_ERROR_CODE
 }
 
 function terminalProviderErrorMessage(error: unknown) {

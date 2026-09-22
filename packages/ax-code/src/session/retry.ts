@@ -13,10 +13,16 @@ export namespace SessionRetry {
   const ALIBABA_TOKEN_PLAN_QUOTA_RETRY_DELAY = 60_000
   // Extended attempt budget for concurrency-limit hits only: a saturated
   // shared pool routinely outlasts the generic 5-attempt budget, so this class
-  // gets more attempts before the turn gives up. processor-impl.ts still reads
-  // RETRY_MAX_ATTEMPTS directly for every other retryable condition and will
-  // consume this via maxAttemptsFor() in a later wave.
+  // gets more attempts before the turn gives up (processor-impl.ts consumes
+  // this via maxAttemptsFor(); every other retryable condition keeps
+  // RETRY_MAX_ATTEMPTS).
   export const CONCURRENCY_RETRY_MAX_ATTEMPTS = 8
+  // Stable machine-readable code for the terminal error a concurrency-limit
+  // hit produces once its extended attempt budget is exhausted. The outer
+  // prompt loop (prompt-loop-errors.ts) exempts this code from its generic
+  // "isRetryable: false -> stop immediately" rule, since this class remains
+  // retryable in principle — only this one attempt sequence gave up.
+  export const PROVIDER_CONCURRENCY_EXHAUSTED_ERROR_CODE = "provider_concurrency_exhausted"
   // Server Retry-After cap for concurrency-limit hits only. The generic cap
   // (RETRY_MAX_DELAY_NO_HEADERS, 30s) still applies to every other header use.
   const CONCURRENCY_HEADER_DELAY_CAP_MS = 120_000
@@ -357,15 +363,13 @@ export namespace SessionRetry {
 
   /**
    * A stable machine-readable code for the terminal error emitted when a
-   * concurrency-limit hit exhausts its retry budget. The caller (a later wave
-   * in processor-impl.ts) should key its automatic-requeue decision on this,
-   * placed in the terminal error's `metadata.errorCode` bag —
-   * MessageV2.APIError carries `data.metadata: Record<string, string> |
-   * undefined`, so the caller sets `error.data.metadata.errorCode =
-   * terminalErrorCode(error)` — rather than parsing the
-   * "(stopped after N retries)" message suffix.
+   * concurrency-limit hit exhausts its retry budget. processor-impl.ts places
+   * this in the terminal error's `metadata.errorCode` bag
+   * (`error.data.metadata.errorCode = terminalErrorCode(error)`) rather than
+   * a message-suffix a caller would have to parse; prompt-loop-errors.ts's
+   * outer retry layer keys its non-retryable-error exemption on this code.
    */
   export function terminalErrorCode(error: MessageV2.APIError): string | undefined {
-    return isConcurrencyLimit(error) ? "provider_concurrency_exhausted" : undefined
+    return isConcurrencyLimit(error) ? PROVIDER_CONCURRENCY_EXHAUSTED_ERROR_CODE : undefined
   }
 }

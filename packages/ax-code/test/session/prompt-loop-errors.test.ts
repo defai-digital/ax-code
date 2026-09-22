@@ -374,6 +374,81 @@ describe("prompt loop error transitions", () => {
     ])
   })
 
+  test("retries instead of stopping when a concurrency-limit budget exhausts (incident ses_-e5f357c3894ffefPDXJEmOCRt)", async () => {
+    const sessionID = SessionID.descending()
+    const warnings: { message: string; fields: Record<string, unknown> }[] = []
+    const published: { sessionID: SessionID; message: string }[] = []
+
+    const result = await handlePromptLoopError(
+      {
+        sessionID,
+        currentModel: primaryModel,
+        // The exact shape processor-impl.ts produces once maxAttemptsFor()
+        // is exhausted for a concurrency_limit_exceeded 429: isRetryable is
+        // false (the inner attempt sequence is over) but the terminal
+        // errorCode names the condition as budget-exhaustion, not permanent.
+        error: {
+          name: "APIError",
+          data: {
+            statusCode: 429,
+            message: "pool concurrent request limit exceeded (stopped after 8 retries)",
+            isRetryable: false,
+            metadata: { errorCode: SessionRetry.PROVIDER_CONCURRENCY_EXHAUSTED_ERROR_CODE },
+          },
+        },
+        consecutiveErrors: 1,
+        step: 1,
+      },
+      {
+        warn(message, fields) {
+          warnings.push({ message, fields })
+        },
+        publishError(input) {
+          published.push(input)
+        },
+      },
+    )
+
+    // "continue" (not "stop"): the outer loop's ordinary consecutive-error
+    // retry path applies, bounded by MAX_CONSECUTIVE_ERRORS like any other
+    // transient failure, instead of giving up on the first isRetryable-false
+    // sighting.
+    expect(result).toEqual({ action: "continue", consecutiveErrors: 1 })
+    expect(warnings.some((entry) => entry.fields.errorCode === "NON_RETRYABLE_PROVIDER_ERROR")).toBe(false)
+    expect(published).toEqual([])
+  })
+
+  test("still stops immediately for a concurrency-limit error with no exhaustion errorCode", async () => {
+    const sessionID = SessionID.descending()
+    const published: { sessionID: SessionID; message: string }[] = []
+
+    const result = await handlePromptLoopError(
+      {
+        sessionID,
+        currentModel: primaryModel,
+        error: {
+          name: "APIError",
+          data: {
+            statusCode: 429,
+            message: "pool concurrent request limit exceeded",
+            isRetryable: false,
+          },
+        },
+        consecutiveErrors: 1,
+        step: 1,
+      },
+      {
+        warn() {},
+        publishError(input) {
+          published.push(input)
+        },
+      },
+    )
+
+    expect(result).toEqual({ action: "stop", reason: "error", consecutiveErrors: 1 })
+    expect(published).toHaveLength(1)
+  })
+
   test("stops immediately for an explicitly non-retryable CLI error", async () => {
     const sessionID = SessionID.descending()
     const published: { sessionID: SessionID; message: string }[] = []
