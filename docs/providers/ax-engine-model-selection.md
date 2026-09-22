@@ -14,7 +14,7 @@ AX Code offers only these two development packs through **AX Engine (Local)** on
 
 The aliases pin revisions `5ab39b24bfd7f65203be9b7823b1840486f58b6d` and `fe05e871ec69ad9ae8eac01fd285555514ac7daf`, respectively. Both use the `mlx` selector, preserving the publisher's MXFP4 package. The model cards describe development requantizations with no certified quality-parity or MTP-speed claim; selecting them does not establish native execution or a speed improvement.
 
-AX Code bundles the signed [AX Engine 7.5.5 release](https://github.com/defai-digital/ax-engine/releases/tag/v7.5.5), which includes the Tiel sidecar namespace loader fix from commit `51137c71a6794964d52c32c95e275c0923ed8d0b`. Older Homebrew 7.4.0 binaries lack that fix and reject these packs with `MlxMtpRequiredButUnavailable`. Keep MTP required; explicit runtime overrides must also contain the fix. The [native prefill and decode measurements](../guides/tiel-runtime-phases-2026-09-19.md) retain their original tested build identity and do not certify performance of the newer release.
+AX Code bundles the signed [AX Engine 7.5.6 release](https://github.com/defai-digital/ax-engine/releases/tag/v7.5.6), which includes the Tiel sidecar namespace loader fix from commit `51137c71a6794964d52c32c95e275c0923ed8d0b`. Older Homebrew 7.4.0 binaries lack that fix and reject these packs with `MlxMtpRequiredButUnavailable`. Keep MTP required; explicit runtime overrides must also contain the fix. The [native prefill and decode measurements](../guides/tiel-runtime-phases-2026-09-19.md) retain their original tested build identity and do not certify performance of the newer release.
 
 Qwen3.8 27B, Ornith, Qwen3-Coder-Next and all other repositories are excluded from new managed selection and downloads. Each selected repository appears once. Configured aliases and older cached revisions do not add choices after discovery. Other providers and the separately configured loopback attach interface retain their behavior. To run AX Engine's own dense default, start `ax-engine serve qwen3.8-27b:axq` and attach that local endpoint; measured product-path MTP is **31.05 tok/s** decode on Mac mini M4 Pro 64 GB and **76.90 tok/s** decode / **795.3 tok/s** prefill on M5 Max 128 GB. Those figures are not Tiel completion tok/s and not AX Code session speed. See [Tiel peer summary](../guides/tiel-peer-2026-09-20.md#do-not-mix-with-qwen-38-27b).
 
@@ -91,7 +91,7 @@ To explicitly select a policy, set `provider.ax-engine.options.mtpPolicy` in `ax
 | `required` (default) | Require an admitted MTP drafter; AX Engine rejects an unavailable drafter instead of silently falling back. |
 
 `AX_ENGINE_MTP_POLICY` provides the same three values when no provider option is set.
-Automatic runtime selection requires AX Engine 7.5.5 or newer to enforce these policies, including
+Automatic runtime selection requires AX Engine 7.5.6 or newer to enforce these policies, including
 the default `required` policy. Explicit `disabled` and `auto` settings still override
 the default. Older/unknown binaries reject policy selection
 before replacing a running engine; upgrade before using the managed policy controls. Historical state files without a recorded policy

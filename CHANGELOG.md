@@ -6,6 +6,10 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Changed
+
+- Bundle signed AX Engine 7.5.6 on Apple Silicon Macs and require a verified 7.5.6 or newer runtime for configured, PATH, managed, and bundled selection.
+
 ## [7.20.2] - 2026-09-22
 
 ### Changed

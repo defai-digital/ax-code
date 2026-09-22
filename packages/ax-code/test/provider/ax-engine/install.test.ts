@@ -108,11 +108,11 @@ describe("resolveInstallableRelease", () => {
   })
 
   test("pins a self-contained darwin-arm64 release and refuses other hosts", () => {
-    expect(AX_ENGINE_BINARY_RELEASE.version).toBe("7.5.5")
+    expect(AX_ENGINE_BINARY_RELEASE.version).toBe("7.5.6")
     expect(AX_ENGINE_BINARY_RELEASE.sha256).toMatch(/^[a-f0-9]{64}$/)
     expect(AX_ENGINE_BINARY_RELEASE.url.startsWith("https://")).toBe(true)
     expect(resolveInstallableRelease("darwin", "arm64", {})).toMatchObject({
-      version: "7.5.5",
+      version: "7.5.6",
       sha256: AX_ENGINE_BINARY_RELEASE.sha256,
     })
     expect(isAxEngineInstallable("darwin", "arm64", {})).toBe(true)
@@ -295,20 +295,20 @@ describe("dependency resolution picks up the managed binary", () => {
         [
           "#!/bin/sh",
           'if [ "$1" = "--version" ]; then exit 2; fi',
-          'if [ "$1" = "doctor" ]; then echo \'{"install":{"version":"7.5.5"}}\'; exit 0; fi',
+          'if [ "$1" = "doctor" ]; then echo \'{"install":{"version":"7.5.6"}}\'; exit 0; fi',
           "exit 1",
           "",
         ].join("\n"),
         { mode: 0o755 },
       )
       const status = await getDependencyStatus({ binaryPath: binary })
-      expect(status).toMatchObject({ available: true, mode: "configured", version: "7.5.5", blockers: [] })
+      expect(status).toMatchObject({ available: true, mode: "configured", version: "7.5.6", blockers: [] })
     } finally {
       await fs.rm(dir, { recursive: true, force: true })
     }
   })
 
-  test.each(["6.6.0", "7.5.4"])("blocks configured AX Engine version %s below 7.5.5", async (version) => {
+  test.each(["6.6.0", "7.5.5"])("blocks configured AX Engine version %s below 7.5.6", async (version) => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "axe-version-"))
     try {
       const binary = path.join(dir, "ax-engine")
@@ -317,7 +317,7 @@ describe("dependency resolution picks up the managed binary", () => {
       expect(status.available).toBe(false)
       expect(status.version).toContain(version)
       expect(status.blockers.join(" ")).toContain("AX_ENGINE_VERSION_UNSUPPORTED")
-      expect(status.blockers.join(" ")).toContain("7.5.5")
+      expect(status.blockers.join(" ")).toContain("7.5.6")
     } finally {
       await fs.rm(dir, { recursive: true, force: true })
     }
@@ -455,7 +455,7 @@ describe("bundled sidecar resolution", () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "axe-bundled-"))
     try {
       const dir = path.join(root, "engine", AX_ENGINE_BINARY_RELEASE.version)
-      await writeRuntimePayload(dir, "#!/bin/sh\necho ax-engine 7.5.5\n")
+      await writeRuntimePayload(dir, "#!/bin/sh\necho ax-engine 7.5.6\n")
       const entry = path.join(root, "lib", "index-node-tui.js")
       await fs.mkdir(path.dirname(entry), { recursive: true })
       await fs.writeFile(entry, "export {}\n")

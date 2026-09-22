@@ -390,9 +390,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          VERSION="7.5.5"
+          VERSION="7.5.6"
           ASSET="ax-engine-v${VERSION}-macos-arm64.tar.gz"
-          EXPECTED="f83b82d0de865c2ff92e05794db0265e6b9804b03300d758adea89d641d1879a"
+          EXPECTED="3c13ad28c898054dddcf644143996b40b61da21bb9f22db26ad53cbb0e7d8729"
           DEST="$RUNNER_TEMP/$ASSET"
           SIBLING="$GITHUB_WORKSPACE/../ax-engine/target/release-artifacts/v${VERSION}/$ASSET"
           if [ -f "$SIBLING" ]; then
@@ -482,18 +482,18 @@ jobs:
             exit 1
           fi
           if [ "${{ matrix.targets }}" = "darwin-arm64" ]; then
-            ENGINE_BIN="$SMOKE_ROOT/engine/7.5.5/ax-engine"
+            ENGINE_BIN="$SMOKE_ROOT/engine/7.5.6/ax-engine"
             if [ ! -x "$ENGINE_BIN" ]; then
-              echo "FAIL: darwin-arm64 runtime did not ship AX Engine at engine/7.5.5/ax-engine"
+              echo "FAIL: darwin-arm64 runtime did not ship AX Engine at engine/7.5.6/ax-engine"
               exit 1
             fi
-            if [ ! -f "$SMOKE_ROOT/engine/7.5.5/mlx.metallib" ]; then
+            if [ ! -f "$SMOKE_ROOT/engine/7.5.6/mlx.metallib" ]; then
               echo "FAIL: darwin-arm64 runtime did not ship mlx.metallib"
               exit 1
             fi
             ENGINE_DOCTOR="$SMOKE_ROOT/ax-engine-doctor.json"
             "$ENGINE_BIN" doctor --json > "$ENGINE_DOCTOR" || true
-            node -e 'const fs = require("node:fs"); const data = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (data.install?.version !== "7.5.5") throw new Error("Bundled AX Engine version mismatch"); console.log("Bundled AX Engine: " + data.install.version)' "$ENGINE_DOCTOR"
+            node -e 'const fs = require("node:fs"); const data = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (data.install?.version !== "7.5.6") throw new Error("Bundled AX Engine version mismatch"); console.log("Bundled AX Engine: " + data.install.version)' "$ENGINE_DOCTOR"
           fi
 
       - name: Notarize macOS CLI archive
