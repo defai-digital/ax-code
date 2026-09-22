@@ -20,6 +20,7 @@ import { scheduleTuiTimeout } from "../util/timer"
 import { ChromeAction, ChromeWidthAction } from "./chrome-action"
 import { useCommandDialog } from "./dialog-command"
 import { ScheduleStatus } from "./schedule-status"
+import { ScheduledSessionNavigation } from "./scheduled-session-navigation"
 import { SplitBorder } from "./border"
 import { sessionNavigationEntries } from "./session-list-data"
 import { createSessionActivityIndex, knownAttentionRequests } from "../util/session-activity"
@@ -219,6 +220,7 @@ export function SessionNavigation(props: {
           trackOptions: { backgroundColor: theme.backgroundPanel, foregroundColor: theme.borderActive },
         }}
       >
+        <ScheduledSessionNavigation width={innerWidth()} sessions={sessions()} />
         <Show when={rows().length === 0}>
           <text flexShrink={0} fg={theme.textMuted} selectable={false} wrapMode="word">
             {!sync.data.session_loaded
