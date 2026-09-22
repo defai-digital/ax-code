@@ -13,7 +13,7 @@ export function AxTuiSpinner(props: { frames: string[]; interval: number; color:
   return <spinner frames={props.frames} interval={props.interval} color={props.color} />
 }
 
-export function Spinner(props: { children?: JSX.Element; color?: RGBA; fallbackPrefix?: string }) {
+export function Spinner(props: { children?: JSX.Element; color?: RGBA; fallbackPrefix?: string; frames?: string[] }) {
   const { theme } = useTheme()
   const kv = useKV()
   const color = () => props.color ?? theme.textMuted
@@ -29,7 +29,7 @@ export function Spinner(props: { children?: JSX.Element; color?: RGBA; fallbackP
       }
     >
       <box flexDirection="row" gap={1}>
-        <AxTuiSpinner frames={frames} interval={100} color={color()} />
+        <AxTuiSpinner frames={props.frames ?? frames} interval={100} color={color()} />
         <Show when={props.children}>
           <text fg={color()}>{props.children}</text>
         </Show>

@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import {
   buildSubagentStatusView,
   hasActiveGoalPlanner,
+  isGoalPlannerSession,
   isGoalPlanning,
   mergeSubagentRollupTasks,
   queueItemsForSessionTree,
@@ -434,6 +435,24 @@ describe("hasActiveGoalPlanner", () => {
       statuses: { plan: { type: "busy" as const, waitState: "llm" as const } },
     }
     expect(hasActiveGoalPlanner(input)).toBe(isGoalPlanning(buildSubagentStatusView(input)))
+  })
+})
+
+describe("isGoalPlannerSession", () => {
+  test("matches the writer by agent name regardless of title", () => {
+    expect(isGoalPlannerSession({ agent: "goal-plan-writer", title: "Renamed run" })).toBe(true)
+    expect(isGoalPlannerSession({ agent: "goal-plan-writer" })).toBe(true)
+  })
+
+  test("falls back to the well-known title when no agent is recorded", () => {
+    expect(isGoalPlannerSession({ title: "Goal plan writer" })).toBe(true)
+    expect(isGoalPlannerSession({ title: "Goal plan writer", agent: undefined })).toBe(true)
+  })
+
+  test("rejects other agents and other titles", () => {
+    expect(isGoalPlannerSession({ agent: "explore", title: "Goal plan writer" })).toBe(false)
+    expect(isGoalPlannerSession({ title: "Explore code" })).toBe(false)
+    expect(isGoalPlannerSession({})).toBe(false)
   })
 })
 

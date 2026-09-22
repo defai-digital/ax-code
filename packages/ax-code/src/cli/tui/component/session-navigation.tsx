@@ -24,6 +24,12 @@ import { SplitBorder } from "./border"
 import { sessionNavigationEntries } from "./session-list-data"
 import { createSessionActivityIndex, knownAttentionRequests } from "../util/session-activity"
 import { truncateToCellWidth } from "../routes/session/last-input-view-model"
+import { isGoalPlannerSession } from "../routes/session/subagent-status-view"
+import { Spinner } from "./spinner"
+
+// Braille dot-cycle frames for the goal-planning pixel: braille is the only
+// CJK-safe dot-matrix family (same constraint as the footer's animated pixel).
+const GOAL_PLANNER_PIXEL_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
 export function SessionNavigation(props: {
   width: number
@@ -220,13 +226,24 @@ export function SessionNavigation(props: {
         <For each={rows()}>
           {(row) => {
             const state = createMemo(() => (observed() ? activity().get(row.session.id) : undefined))
+            // The goal plan writer runs in a child session that otherwise looks
+            // like any other "Working" row, so users can't tell planning is in
+            // progress. Animate a pixel in front of its title while it is busy;
+            // the pixel disappears on its own once the writer settles to idle.
+            const planning = createMemo(() => {
+              if (!observed() || !isGoalPlannerSession(row.session)) return false
+              const type = sync.data.session_status?.[row.session.id]?.type
+              return type !== undefined && type !== "idle"
+            })
             const [hover, setHover] = createSignal(false)
             const indent = () => Math.min(row.depth, 3)
             const slot = () => slots().get(row.session.id)
             const selected = () => current() === row.session.id
             const label = () => state()?.label ?? ""
-            // Reserve the scrollbar, selection marker, disclosure, and pinned slot.
-            const titleWidth = () => Math.max(0, innerWidth() - 4 - indent() - (slot() ? 2 : 0))
+            // Reserve the scrollbar, selection marker, disclosure, planning
+            // pixel, and pinned slot.
+            const titleWidth = () =>
+              Math.max(0, innerWidth() - 4 - indent() - (slot() ? 2 : 0) - (planning() ? 2 : 0))
             const openSession = () => route.navigate({ type: "session", sessionID: row.session.id })
             onCleanup(() => rowNodes.delete(row.session.id))
             return (
@@ -265,6 +282,11 @@ export function SessionNavigation(props: {
                         {row.hasChildren ? (effectiveExpanded().has(row.session.id) ? "−" : "+") : " "}
                       </text>
                     </box>
+                    <Show when={planning()}>
+                      <box flexShrink={0} onMouseUp={openSession}>
+                        <Spinner frames={GOAL_PLANNER_PIXEL_FRAMES} color={theme.primary} fallbackPrefix="… " />
+                      </box>
+                    </Show>
                     <box flexGrow={1} minWidth={0} onMouseUp={openSession}>
                       <text fg={selected() ? theme.primary : theme.text} selectable={false}>
                         <span style={{ bold: selected() }}>{truncateToCellWidth(row.session.title, titleWidth())}</span>

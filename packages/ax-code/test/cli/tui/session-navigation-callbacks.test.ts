@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { createRoot, createSignal, For, Show, type Setter } from "solid-js"
 import { SessionNavigation } from "../../../src/cli/tui/component/session-navigation"
 import { NavigationBar } from "../../../src/cli/tui/component/navigation-bar"
+import { Spinner } from "../../../src/cli/tui/component/spinner"
 import { DialogNavigationWidth, DialogSidebarWidth } from "../../../src/cli/tui/component/dialog-navigation-width"
 import { DialogSessionList } from "../../../src/cli/tui/component/dialog-session-list"
 import { DialogNavigationOptions } from "../../../src/cli/tui/component/dialog-navigation-options"
@@ -23,6 +24,7 @@ const mocked = vi.hoisted(() => ({
   current: "root",
   permissions: {} as Record<string, { id: string; sessionID: string }[]>,
   questions: {} as Record<string, { id: string; sessionID: string }[]>,
+  statuses: { child: { type: "busy" } } as Record<string, { type: string }>,
   sessions: [
     { id: "root", title: "Parent session", directory: "/workspace", time: { updated: 2 } },
     { id: "child", title: "Child session", parentID: "root", directory: "/workspace", time: { updated: 3 } },
@@ -41,7 +43,9 @@ vi.mock("@tui/context/sync", () => ({
     data: {
       session: mocked.sessions,
       session_loaded: true,
-      session_status: { child: { type: "busy" } },
+      get session_status() {
+        return mocked.statuses
+      },
       status: "complete",
       path: { directory: "/workspace" },
       get permission() {
@@ -115,6 +119,13 @@ beforeEach(() => {
   mocked.current = "root"
   mocked.permissions = {}
   mocked.questions = {}
+  mocked.statuses = { child: { type: "busy" } }
+  mocked.sessions = [
+    { id: "root", title: "Parent session", directory: "/workspace", time: { updated: 2 } },
+    { id: "child", title: "Child session", parentID: "root", directory: "/workspace", time: { updated: 3 } },
+    { id: "idle", title: "Earlier session", directory: "/workspace", time: { updated: 1 } },
+    { id: "other", title: "Other workspace", directory: "/other", time: { updated: 4 } },
+  ]
   // Run actual application callbacks using the existing classic-JSX test
   // transform. Terminal nodes are captured; native layout is tested separately.
   vi.stubGlobal("React", {
@@ -151,6 +162,17 @@ function find(value: unknown, predicate: (node: Element) => boolean): Element | 
   if (!value || typeof value !== "object" || !("props" in value)) return undefined
   const node = value as Element
   return predicate(node) ? node : find(node.props.children, predicate)
+}
+function collect(value: unknown, predicate: (node: Element) => boolean, into: Element[] = []): Element[] {
+  if (Array.isArray(value)) {
+    for (const child of value) collect(child, predicate, into)
+    return into
+  }
+  if (!value || typeof value !== "object" || !("props" in value)) return into
+  const node = value as Element
+  if (predicate(node)) into.push(node)
+  collect(node.props.children, predicate, into)
+  return into
 }
 function mount(component: () => unknown): Element {
   return createRoot((dispose) => {
@@ -587,5 +609,47 @@ describe("shared navigation picker filters", () => {
     const picker = sessionPicker(true)
     expect(picker.options.map((option) => option.value)).toEqual(["root", "child", "idle"])
     expect(text(picker.tree)).toContain("Cached sessions; reconnect to filter")
+  })
+})
+
+describe("goal planner pixel", () => {
+  const planner = {
+    id: "planner",
+    title: "Goal plan writer",
+    parentID: "root",
+    directory: "/workspace",
+    time: { updated: 5 },
+  }
+  const rail = () => mount(() => SessionNavigation({ ...navigationProps(new Set(["root"])), width: 60 }))
+  // The classic-JSX harness keeps nested function components inert, so the
+  // pixel is asserted as the Spinner element the rail mounts before the title.
+  const pixels = (tree: Element) => collect(tree, (node) => node.type === Spinner)
+
+  test("shows an animated pixel before the Goal plan writer while planning", () => {
+    mocked.sessions = [...mocked.sessions, planner]
+    mocked.statuses = { child: { type: "busy" }, planner: { type: "busy" } }
+    const tree = rail()
+    expect(pixels(tree).length).toBe(1)
+    const pixel = pixels(tree)[0]
+    expect(Array.isArray(pixel.props.frames)).toBe(true)
+    expect((pixel.props.frames as string[]).length).toBeGreaterThan(1)
+    const ordered = collect(
+      tree,
+      (node) => node.type === Spinner || (node.type === "text" && text(node) === "Goal plan writer"),
+    )
+    expect(ordered.length).toBe(2)
+    expect(ordered[0].type).toBe(Spinner)
+    expect(ordered[1].type).toBe("text")
+  })
+
+  test("removes the pixel once the plan writer settles to idle", () => {
+    mocked.sessions = [...mocked.sessions, planner]
+    mocked.statuses = { child: { type: "busy" }, planner: { type: "idle" } }
+    expect(pixels(rail()).length).toBe(0)
+  })
+
+  test("does not mark ordinary busy sessions", () => {
+    mocked.statuses = { child: { type: "busy" } }
+    expect(pixels(rail()).length).toBe(0)
   })
 })

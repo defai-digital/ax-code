@@ -269,8 +269,14 @@ export function subagentPanelTitle(activeCount: number) {
   return Locale.pluralize(activeCount, "Subagent", "Subagents {}")
 }
 
+// Shared "is this the goal plan writer" check so the session route, the goal
+// chip, and the navigation rail all agree on the same identity rule.
+export function isGoalPlannerSession(session: { title?: string; agent?: string }) {
+  return session.agent === "goal-plan-writer" || (!session.agent && session.title === "Goal plan writer")
+}
+
 export function isGoalPlanner(item: SubagentStatusItem) {
-  return item.agent === "goal-plan-writer" || (!item.agent && item.title === "Goal plan writer")
+  return isGoalPlannerSession(item)
 }
 
 export function isGoalPlanning(view: SubagentStatusView) {
