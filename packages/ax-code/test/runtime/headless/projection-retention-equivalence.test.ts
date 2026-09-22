@@ -29,10 +29,20 @@ type Event =
   | { kind: "clearSession"; sessionID: string }
   | { kind: "refresh"; sessionID: string }
   | { kind: "budget"; sessionID: string; maxBytes?: number; maxMessages?: number }
+  | { kind: "replaceList"; sessionID: string; keepEvery: number }
+  | { kind: "dropList"; sessionID: string }
 
 const SESSIONS = ["s1", "s2", "s3"]
 const PART_IDS = ["p1", "p2", "p3"]
-const messageIDs = Array.from({ length: 40 }, (_, index) => `m${String(index).padStart(3, "0")}`).concat(["m9", "m10"])
+// Message ids are globally unique and belong to exactly one session, as in
+// production; the session is recoverable from the id.
+const messageIDs = SESSIONS.flatMap((sessionID) =>
+  Array.from({ length: 14 }, (_, index) => `${sessionID}-m${String(index).padStart(3, "0")}`).concat([
+    `${sessionID}-m9`,
+    `${sessionID}-m10`,
+  ]),
+)
+const sessionOf = (messageID: string) => messageID.slice(0, messageID.indexOf("-"))
 
 function generate(next: () => number, count: number): Event[] {
   const events: Event[] = []
@@ -40,7 +50,7 @@ function generate(next: () => number, count: number): Event[] {
   for (let index = 0; index < count; index++) {
     const roll = next()
     const messageID = pick(messageIDs)
-    const sessionID = pick(SESSIONS)
+    const sessionID = roll < 0.93 ? sessionOf(messageID) : pick(SESSIONS)
     if (roll < 0.45) {
       const big = next() < 0.04
       events.push({
@@ -59,6 +69,7 @@ function generate(next: () => number, count: number): Event[] {
         suffix: emoji ? "😀".slice(Math.floor(next() * 2)) : "x".repeat(Math.floor(next() * 12)),
       })
     } else if (roll < 0.88) {
+      // Re-admitting an existing message exercises the overwrite path.
       events.push({ kind: "message", sessionID, messageID })
     } else if (roll < 0.91) {
       events.push({ kind: "forgetPart", messageID, partID: pick(PART_IDS) })
@@ -76,11 +87,20 @@ function generate(next: () => number, count: number): Event[] {
         maxMessages: next() < 0.5 ? 3 : undefined,
       })
     }
+    // Snapshot hydration replaces a session's list (then refreshes sizes) and
+    // session teardown drops it (after clearing the ledger), as production does.
+    if (next() < 0.03) events.push({ kind: "replaceList", sessionID, keepEvery: 1 + Math.floor(next() * 3) })
+    if (next() < 0.01) events.push({ kind: "dropList", sessionID })
+    // Budget checks run on every transcript event in production; interleave
+    // them densely so eviction decisions are compared at every step.
+    if (next() < 0.35) events.push({ kind: "budget", sessionID, maxBytes: next() < 0.3 ? 2000 : undefined })
   }
   return events
 }
 
-function apply(mod: Module, state: State, tails: Map<string, string>, event: Event) {
+type Budgets = Map<string, string>
+
+function apply(mod: Module, state: State, tails: Map<string, string>, event: Event, budgets?: Budgets) {
   switch (event.kind) {
     case "part": {
       const parts = (state.part[event.messageID] ??= [])
@@ -117,14 +137,33 @@ function apply(mod: Module, state: State, tails: Map<string, string>, event: Eve
     case "refresh":
       mod.refreshProjectionSizes(state, event.sessionID)
       return
-    case "budget":
-      mod.enforceTranscriptBudget(state, event.sessionID, { maxBytes: event.maxBytes, maxMessages: event.maxMessages })
+    case "replaceList": {
+      // Mirrors sync-session-store snapshot hydration: the list is replaced,
+      // then sizes are refreshed from it before the next budget check.
+      const list = state.message[event.sessionID] ?? []
+      state.message[event.sessionID] = list.filter((_, index) => index % event.keepEvery === 0)
+      mod.refreshProjectionSizes(state, event.sessionID)
       return
+    }
+    case "dropList":
+      // Mirrors session delete / leave prune: the ledger is cleared first.
+      mod.clearProjectionSession(state, event.sessionID)
+      delete state.message[event.sessionID]
+      return
+    case "budget": {
+      const result = mod.enforceTranscriptBudget(state, event.sessionID, {
+        maxBytes: event.maxBytes,
+        maxMessages: event.maxMessages,
+      })
+      budgets?.set(event.sessionID, JSON.stringify(result))
+      return
+    }
   }
 }
 
-function snapshot(mod: Module, state: State) {
+function snapshot(mod: Module, state: State, budgets?: Budgets) {
   return JSON.stringify({
+    budgets: budgets ? [...budgets.entries()].sort() : undefined,
     messages: Object.fromEntries(Object.entries(state.message).map(([key, list]) => [key, list.map((m) => m.id)])),
     partKeys: Object.keys(state.part).sort(),
     partCounts: Object.fromEntries(Object.entries(state.part).map(([key, list]) => [key, list.length])),
@@ -166,10 +205,14 @@ describe("projection retention incremental pending total", () => {
     const current = fresh()
     const tailsA = new Map<string, string>()
     const tailsB = new Map<string, string>()
+    const budgetsA: Budgets = new Map()
+    const budgetsB: Budgets = new Map()
     for (const event of events) {
-      apply(Legacy, legacy, tailsA, event)
-      apply(Current, current, tailsB, event)
-      expect(snapshot(Current, current), JSON.stringify(event).slice(0, 120)).toBe(snapshot(Legacy, legacy))
+      apply(Legacy, legacy, tailsA, event, budgetsA)
+      apply(Current, current, tailsB, event, budgetsB)
+      expect(snapshot(Current, current, budgetsB), JSON.stringify(event).slice(0, 120)).toBe(
+        snapshot(Legacy, legacy, budgetsA),
+      )
     }
   })
 
@@ -180,10 +223,14 @@ describe("projection retention incremental pending total", () => {
       const current = fresh()
       const tailsA = new Map<string, string>()
       const tailsB = new Map<string, string>()
+      const budgetsA: Budgets = new Map()
+      const budgetsB: Budgets = new Map()
       for (const event of generate(next, 600)) {
-        apply(Legacy, legacy, tailsA, event)
-        apply(Current, current, tailsB, event)
-        expect(snapshot(Current, current), `seed ${seed} ${event.kind}`).toBe(snapshot(Legacy, legacy))
+        apply(Legacy, legacy, tailsA, event, budgetsA)
+        apply(Current, current, tailsB, event, budgetsB)
+        expect(snapshot(Current, current, budgetsB), `seed ${seed} ${event.kind}`).toBe(
+          snapshot(Legacy, legacy, budgetsA),
+        )
       }
     }
   })

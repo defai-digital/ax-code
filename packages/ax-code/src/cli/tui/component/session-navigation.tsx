@@ -22,7 +22,7 @@ import { useCommandDialog } from "./dialog-command"
 import { ScheduleStatus } from "./schedule-status"
 import { SplitBorder } from "./border"
 import { sessionNavigationEntries } from "./session-list-data"
-import { createSessionActivityIndex, knownAttentionRequestCount } from "../util/session-activity"
+import { createSessionActivityIndex, knownAttentionRequests } from "../util/session-activity"
 import { truncateToCellWidth } from "../routes/session/last-input-view-model"
 import { isGoalPlannerSession } from "../routes/session/subagent-status-view"
 import { Spinner } from "./spinner"
@@ -52,6 +52,10 @@ export function SessionNavigation(props: {
   const sessions = createMemo(() => sync.data.session.filter((session) => session.directory === directory()))
   const filter = () => navigationFilter(kv.get("navigation_filter"))
   const observed = () => sdk.sseConnected && sync.data.session_loaded
+  // Deduplicated, sorted attention requests depend only on permissions and
+  // questions; computed once here instead of inside each of the three
+  // status-reactive memos below that build an activity index.
+  const requests = createMemo(() => knownAttentionRequests(sync.data.permission, sync.data.question))
   const scopedSessions = createMemo(() =>
     filter() === "recent"
       ? sessions()
@@ -60,6 +64,7 @@ export function SessionNavigation(props: {
           statuses: sync.data.session_status,
           permissions: sync.data.permission,
           questions: sync.data.question,
+          requests: requests(),
           currentID: current(),
           observed: observed(),
         }),
@@ -73,6 +78,7 @@ export function SessionNavigation(props: {
       statuses: sync.data.session_status,
       permissions: sync.data.permission,
       questions: sync.data.question,
+      requests: requests(),
       observed: observed(),
     }),
   )
@@ -88,9 +94,10 @@ export function SessionNavigation(props: {
       statuses: sync.data.session_status,
       permissions: sync.data.permission,
       questions: sync.data.question,
+      requests: requests(),
     }),
   )
-  const pendingCount = createMemo(() => knownAttentionRequestCount(sync.data.permission, sync.data.question))
+  const pendingCount = createMemo(() => requests().length)
   const slots = createMemo(() => new Map(local.session.slots().map((id, index) => [id, index + 1])))
   const innerWidth = () => navigationRailInnerWidth(props.width)
   const preferredWidth = () => chromeWidth(kv.get("navigation_width"), NAVIGATION_WIDTH_DEFAULT)

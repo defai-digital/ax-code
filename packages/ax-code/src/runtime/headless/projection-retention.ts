@@ -10,7 +10,10 @@ type State = {
   message_memory_limited?: Record<string, boolean>
   message_reload?: Record<string, boolean>
 }
-type Size = { sessionID?: string; info: number; parts: Map<string, number> }
+// `admitted` is the session whose message list currently contains the message;
+// it lets every size mutation route its byte delta to that session's transcript
+// total without scanning the list.
+type Size = { sessionID?: string; admitted?: string; info: number; parts: Map<string, number> }
 type Ledger = {
   sizes: Map<string, Size>
   pending: Set<string>
@@ -21,6 +24,18 @@ type Ledger = {
    * pending has a sizes entry, and this equals the recomputed sum.
    */
   pendingBytes: number
+  /**
+   * Exact sum of sizeTotal(sizes.get(id)) over the ids admitted to
+   * state.message[sessionID], the mirror of pendingBytes for the admitted set,
+   * so enforceTranscriptBudget does not walk every message and part on each
+   * transcript event. An absent key means "never built" and triggers the
+   * backfill in enforceTranscriptBudget; admitted and pending are disjoint.
+   */
+  transcript: Map<string, number>
+  /** Number of size entries admitted to each session; lets the budget check
+   *  detect a message list replaced or trimmed outside the ledger and rebuild
+   *  that session's accounting instead of trusting a stale total. */
+  transcriptCount: Map<string, number>
   floor: Map<string, string>
   delta: Map<string, Map<string, string>>
 }
@@ -28,7 +43,15 @@ const ledgers = new WeakMap<object, Ledger>()
 function ledger(state: State) {
   let value = ledgers.get(state.part)
   if (!value) {
-    value = { sizes: new Map(), pending: new Set(), pendingBytes: 0, floor: new Map(), delta: new Map() }
+    value = {
+      sizes: new Map(),
+      pending: new Set(),
+      pendingBytes: 0,
+      transcript: new Map(),
+      transcriptCount: new Map(),
+      floor: new Map(),
+      delta: new Map(),
+    }
     ledgers.set(state.part, value)
   }
   return value
@@ -40,6 +63,30 @@ function sizeTotal(size: Size) {
   let total = size.info
   for (const value of size.parts.values()) total += value
   return total
+}
+function creditTranscript(book: Ledger, sessionID: string | undefined, delta: number) {
+  if (!sessionID || delta === 0) return
+  book.transcript.set(sessionID, (book.transcript.get(sessionID) ?? 0) + delta)
+}
+/** Count an entry toward a session's transcript (moving it if it was admitted elsewhere). */
+function admit(book: Ledger, entry: Size, sessionID: string) {
+  if (entry.admitted === sessionID) return
+  unadmit(book, entry)
+  entry.admitted = sessionID
+  creditTranscript(book, sessionID, sizeTotal(entry))
+  book.transcriptCount.set(sessionID, (book.transcriptCount.get(sessionID) ?? 0) + 1)
+}
+function unadmit(book: Ledger, entry: Size) {
+  const sessionID = entry.admitted
+  if (!sessionID) return
+  creditTranscript(book, sessionID, -sizeTotal(entry))
+  book.transcriptCount.set(sessionID, (book.transcriptCount.get(sessionID) ?? 0) - 1)
+  entry.admitted = undefined
+}
+function resetTranscript(book: Ledger, sessionID: string) {
+  for (const entry of book.sizes.values()) if (entry.admitted === sessionID) entry.admitted = undefined
+  book.transcript.delete(sessionID)
+  book.transcriptCount.delete(sessionID)
 }
 function owner(state: State, messageID: string, explicit?: string) {
   return (
@@ -61,10 +108,15 @@ function sizeEntry(state: State, messageID: string, sessionID?: string) {
 export function rememberProjectionMessage(state: State, message: { id: string; sessionID: string }) {
   const book = ledger(state)
   const entry = sizeEntry(state, message.id, message.sessionID)
-  // Subtract the pre-overwrite total: the message leaves pending entirely.
-  if (book.pending.has(message.id)) book.pendingBytes -= sizeTotal(entry)
+  // Subtract the pre-overwrite total from wherever it was counted: the
+  // message leaves pending entirely, and an already admitted message must not
+  // be double-counted on a snapshot overwrite. Parts carried while pending
+  // move into the transcript total in the same step.
+  const before = sizeTotal(entry)
+  if (book.pending.delete(message.id)) book.pendingBytes -= before
+  unadmit(book, entry)
   entry.info = bytes(message)
-  book.pending.delete(message.id)
+  admit(book, entry, message.sessionID)
 }
 export function admitsProjectionPart(state: State, part: { messageID: string; sessionID?: string }) {
   const sessionID = owner(state, part.messageID, part.sessionID)
@@ -80,13 +132,20 @@ export function rememberProjectionPart(state: State, part: { id: string; message
   const before = entry.parts.get(part.id) ?? 0
   const added = bytes(part)
   entry.parts.set(part.id, added)
+  // Pending and transcript accounting are independent: a message backfilled
+  // into a transcript while its parts were still pending is counted in both,
+  // exactly as the per-call recompute did.
   if (book.pending.has(part.messageID)) {
     // Already counted; only the replaced part's contribution changes.
     book.pendingBytes += added - before
-  } else if (!sessionID || !state.message[sessionID]?.some((message) => message.id === part.messageID)) {
+  } else if (
+    !entry.admitted &&
+    (!sessionID || !state.message[sessionID]?.some((message) => message.id === part.messageID))
+  ) {
     book.pending.add(part.messageID)
     book.pendingBytes += sizeTotal(entry)
   }
+  if (entry.admitted) creditTranscript(book, entry.admitted, added - before)
   boundPending(state)
 }
 export function rememberProjectionDelta(
@@ -104,6 +163,7 @@ export function rememberProjectionDelta(
     const delta = bytes(previousTail + suffix) - bytes(previousTail)
     size.parts.set(partID, size.parts.get(partID)! + delta)
     if (book.pending.has(messageID)) book.pendingBytes += delta
+    if (size.admitted) creditTranscript(book, size.admitted, delta)
   }
   boundPending(state)
 }
@@ -133,8 +193,13 @@ export function forgetProjectionMessage(state: State, messageID: string, evicted
     if (state.message_truncated) state.message_truncated[evictedSessionID] = true
   }
   delete state.part[messageID]
+  // Single choke point for every removal path (budget eviction, overflow
+  // shift, explicit removal, session clear, pending eviction).
   const size = book.sizes.get(messageID)
-  if (size && book.pending.delete(messageID)) book.pendingBytes -= sizeTotal(size)
+  if (size) {
+    if (book.pending.delete(messageID)) book.pendingBytes -= sizeTotal(size)
+    unadmit(book, size)
+  }
   book.sizes.delete(messageID)
   book.pending.delete(messageID)
   book.delta.delete(messageID)
@@ -147,6 +212,7 @@ export function forgetProjectionPart(state: State, messageID: string, partID: st
     size.parts.delete(partID)
     // Membership persists (info still counts); only this part's bytes leave.
     if (book.pending.has(messageID)) book.pendingBytes -= previous
+    if (size.admitted) creditTranscript(book, size.admitted, -previous)
   }
   clearProjectionDelta(state, messageID, partID)
 }
@@ -158,6 +224,7 @@ export function clearProjectionSession(state: State, sessionID: string) {
     if (parts.some((part) => (part as { sessionID?: string })?.sessionID === sessionID)) ids.add(id)
   }
   for (const id of ids) forgetProjectionMessage(state, id)
+  resetTranscript(book, sessionID)
   book.floor.delete(sessionID)
   if (state.message_reload) delete state.message_reload[sessionID]
   if (state.message_memory_limited) delete state.message_memory_limited[sessionID]
@@ -180,8 +247,12 @@ export function clearProjectionDelta(state: State, messageID: string, partID: st
 }
 /** Rebuild accounting only after authoritative snapshot/undo reload, not per token. */
 export function refreshProjectionSizes(state: State, sessionID: string) {
+  const book = ledger(state)
+  // The reload may have dropped messages: reset this session's admitted
+  // accounting before the remember* calls below rebuild it, without deleting
+  // the dropped entries (owner() and floor admission still consult them).
+  resetTranscript(book, sessionID)
   for (const message of state.message[sessionID] ?? []) {
-    const book = ledger(state)
     // Direct sizes removal bypasses forgetProjectionMessage, so settle the
     // pending total here before the entry is rebuilt below.
     const stale = book.sizes.get(message.id)
@@ -204,15 +275,30 @@ export function enforceTranscriptBudget(
 ) {
   const book = ledger(state)
   const messages = state.message[sessionID] ?? []
-  let total = 0
-  for (const message of messages) {
-    if (!book.sizes.has(message.id)) {
-      rememberProjectionMessage(state, { ...message, sessionID })
-      for (const part of state.part[message.id] ?? [])
-        rememberProjectionPart(state, { ...(part as { id: string }), messageID: message.id, sessionID })
+  // The message list can be replaced or trimmed outside the ledger (snapshot
+  // hydration, session leave/prune). Detect that from the admitted count and
+  // membership (Map lookups only) and rebuild this session's accounting from
+  // the list, which is exactly what the per-call recompute produced.
+  const consistent =
+    book.transcriptCount.get(sessionID) === messages.length &&
+    messages.every((message) => book.sizes.get(message.id)?.admitted === sessionID)
+  if (!consistent) {
+    resetTranscript(book, sessionID)
+    for (const message of messages) {
+      const entry = book.sizes.get(message.id)
+      if (!entry) {
+        // Never seen: the recompute materialized these from the part table.
+        rememberProjectionMessage(state, { ...message, sessionID })
+        for (const part of state.part[message.id] ?? [])
+          rememberProjectionPart(state, { ...(part as { id: string }), messageID: message.id, sessionID })
+      } else {
+        // Seen (possibly still pending): admit its current total as-is; the
+        // recompute never touched such an entry's info or pending membership.
+        admit(book, entry, sessionID)
+      }
     }
-    total += sizeTotal(book.sizes.get(message.id)!)
   }
+  let total = book.transcript.get(sessionID) ?? 0
   const max = options.maxBytes ?? MAX_TRANSCRIPT_BYTES
   while (!options.preserve && (total > max || messages.length > (options.maxMessages ?? 100)) && messages.length > 1) {
     const removed = messages.shift()!

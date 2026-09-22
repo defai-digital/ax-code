@@ -38,10 +38,13 @@ export function createSessionActivityIndex(input: {
   statuses: ActivityStatuses
   permissions: RequestBuckets
   questions: RequestBuckets
+  /** Precomputed knownAttentionRequests(permissions, questions); callers that
+   *  build several indexes per change share one sorted list this way. */
+  requests?: readonly AttentionRequest[]
 }) {
   const uiText = input.t ?? english
   const tree = createSessionTreeIndex(input.sessions)
-  const requests = knownAttentionRequests(input.permissions, input.questions)
+  const requests = input.requests ?? knownAttentionRequests(input.permissions, input.questions)
   const bySession = new Map<string, AttentionRequest[]>()
   for (const request of requests) {
     const list = bySession.get(request.sessionID) ?? []

@@ -1,4 +1,4 @@
-import { createSessionActivityIndex, type ActivityStatuses, type RequestBuckets } from "../util/session-activity"
+import { createSessionActivityIndex, type ActivityStatuses, type RequestBuckets, type AttentionRequest } from "../util/session-activity"
 import { orderRootSessions } from "../component/session-list-data"
 
 export type NavigationFilter = "recent" | "active"
@@ -78,6 +78,7 @@ export function activeNavigationSessions<
   statuses: ActivityStatuses
   permissions: RequestBuckets
   questions: RequestBuckets
+  requests?: readonly AttentionRequest[]
   currentID?: string
   observed: boolean
 }) {
@@ -106,6 +107,7 @@ export function visibleAfterNavigationClear<
   statuses?: ActivityStatuses
   permissions?: RequestBuckets
   questions?: RequestBuckets
+  requests?: readonly AttentionRequest[]
   observed?: boolean
 }) {
   const clearedAt = navigationClearedAt(input.clearedAt)
@@ -122,6 +124,7 @@ export function visibleAfterNavigationClear<
       statuses: input.statuses ?? {},
       permissions: input.permissions ?? {},
       questions: input.questions ?? {},
+      requests: input.requests,
       currentID: input.currentID,
       observed: true,
     })) {
