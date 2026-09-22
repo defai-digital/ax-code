@@ -75,9 +75,16 @@ describe("AutoIndex.maybeStart", () => {
       fn: () => AutoIndex.maybeStart(ProjectID.make("proj_auto_index_fallback")),
     })
 
-    for (let i = 0; i < 20 && (indexFilesSpy?.mock.calls.length ?? 0) === 0; i++) {
-      await sleep(10)
-    }
+    // maybeStart returns before asynchronous directory admission and indexing.
+    // Wait for completion so fixture cleanup cannot race the background task.
+    await vi.waitFor(() => {
+      expect(AutoIndex.getState(ProjectID.make("proj_auto_index_fallback"))).toMatchObject({
+        state: "idle",
+        completed: 1,
+        total: 1,
+        finishedAt: expect.any(Number),
+      })
+    })
 
     expect(countNodesSpy).toHaveBeenCalled()
     expect(indexFilesSpy).toHaveBeenCalledWith(
@@ -136,15 +143,14 @@ describe("AutoIndex.maybeStart", () => {
       fn: () => AutoIndex.maybeStart(projectID),
     })
 
-    for (let i = 0; i < 20 && AutoIndex.getState(projectID).state === "indexing"; i++) {
-      await sleep(10)
-    }
-
-    expect(AutoIndex.getState(projectID)).toMatchObject({
-      state: "failed",
-      completed: 2,
-      total: 2,
-      error: "Indexing failed for all 2 files.",
+    // Initial idle is not completion: directory admission is asynchronous.
+    await vi.waitFor(() => {
+      expect(AutoIndex.getState(projectID)).toMatchObject({
+        state: "failed",
+        completed: 2,
+        total: 2,
+        error: "Indexing failed for all 2 files.",
+      })
     })
   })
 
@@ -177,15 +183,14 @@ describe("AutoIndex.maybeStart", () => {
       fn: () => AutoIndex.maybeStart(projectID),
     })
 
-    for (let i = 0; i < 20 && AutoIndex.getState(projectID).state === "indexing"; i++) {
-      await sleep(10)
-    }
-
-    expect(AutoIndex.getState(projectID)).toMatchObject({
-      state: "idle",
-      completed: 1,
-      total: 1,
-      error: "Indexing is already running in another ax-code process.",
+    // Initial idle is not completion: directory admission is asynchronous.
+    await vi.waitFor(() => {
+      expect(AutoIndex.getState(projectID)).toMatchObject({
+        state: "idle",
+        completed: 1,
+        total: 1,
+        error: "Indexing is already running in another ax-code process.",
+      })
     })
   })
 
