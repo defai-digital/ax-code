@@ -1764,6 +1764,17 @@ export function Session() {
                     {uiText("ui.followUps2")}
                     {queuedFollowUps().length}
                     {uiText("ui.queue")}
+                    <Show
+                      when={
+                        isQueueableStatus(sync.data.session_status?.[route.sessionID]?.type) &&
+                        keybind.print("input_submit_steer")
+                      }
+                    >
+                      <span style={{ fg: theme.textMuted }}>
+                        {" "}
+                        · {uiText("ui.steerNowHint", { keybind: keybind.print("input_submit_steer") })}
+                      </span>
+                    </Show>
                   </text>
                 </box>
               </Show>
