@@ -997,4 +997,6 @@ export const messages = {
   "ui.steerFailed": "\u00c9chec de l'orientation : {message}",
   "ui.steerIntoRunningTurn": "Orienter dans le tour en cours",
   "ui.firstToken": "premier token",
+  "ui.queuedCommandBehindTurn":
+    "{command} a \u00e9t\u00e9 mis en file d\u2019attente derri\u00e8re le tour en cours \u2014 ouvrez /queue pour le g\u00e9rer",
 } satisfies Dictionary

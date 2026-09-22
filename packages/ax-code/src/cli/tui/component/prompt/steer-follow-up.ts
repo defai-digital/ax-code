@@ -12,7 +12,8 @@
  *
  * Queue promotion (ctrl+s with an empty composer) steers the steerable PREFIX
  * of the queue in FIFO order and stops at the first barrier — a paused,
- * blocked, running, or non-text row, an agent/variant/model override, or text
+ * blocked, running, or non-text row (queued command/prompt/shell rows have no
+ * steerable body), an agent/variant/model override, or text
  * over the steering limit. Later rows never jump ahead of a barrier, so the
  * conversation keeps its causal order.
  */
@@ -46,15 +47,18 @@ export type SteerFollowUpOutcome =
 /** Reasons that mean "no live generation to steer": prioritize the row instead. */
 const FALLBACK_REASONS = new Set(["generation_not_active", "generation_ended_before_application"])
 
-export type SteerBarrier = "paused" | "status" | "attachments" | "too_long" | "empty"
+export type SteerBarrier = "kind" | "paused" | "status" | "attachments" | "too_long" | "empty"
 
 /**
  * Why a queue row cannot steer, or null when it can. Mirrors the server checks:
- * the row must be pending (not paused) and text-only within the steering size
- * limit. The body always snapshots the composer's agent/model/variant, which
- * steering intentionally ignores in favor of the running turn's context.
+ * the row must be a text follow-up (command/prompt/shell rows have no steerable
+ * body — the server rejects them with a 4xx), pending (not paused), and
+ * text-only within the steering size limit. The body always snapshots the
+ * composer's agent/model/variant, which steering intentionally ignores in favor
+ * of the running turn's context.
  */
 export function steerBarrier(item: DurableFollowUp): SteerBarrier | null {
+  if (item.kind !== "followup") return "kind"
   if (item.status === "paused") return "paused"
   if (item.status !== "queued" && item.status !== "waiting_for_idle") return "status"
   let body: ReturnType<typeof followUpBody>
@@ -91,10 +95,7 @@ export function steerablePrefix(rows: readonly DurableFollowUp[]): SteerablePref
 }
 
 /** Steer one saved follow-up via the atomic server endpoint. */
-export async function steerFollowUp(
-  sdk: FollowUpSdk,
-  item: DurableFollowUp,
-): Promise<SteerFollowUpOutcome> {
+export async function steerFollowUp(sdk: FollowUpSdk, item: DurableFollowUp): Promise<SteerFollowUpOutcome> {
   if (!sdk.sseConnected) return { kind: "failed", message: "Reconnect before steering saved follow-ups" }
   const base = `${sdk.url.replace(/\/$/, "")}/task-queue/${encodeURIComponent(item.id)}`
   const headers = directoryRequestHeaders({ directory: sdk.directory, contentType: "application/json" })

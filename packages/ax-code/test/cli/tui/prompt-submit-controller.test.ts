@@ -661,3 +661,46 @@ describe("empty-composer queue promotion", () => {
     expect(fixture.host.toast.show).not.toHaveBeenCalled()
   })
 })
+
+describe("busy slash command queueing", () => {
+  function commandSetup(statusType: string) {
+    const fixture = setup({ mode: "normal", workMode: "agent", text: "/goal ship the release" })
+    fixture.host.status = () => ({ type: statusType })
+    fixture.host.sync.data.command = [{ name: "goal" }]
+    fixture.host.sdk.fetch = async (url, init) => {
+      fixture.requests.push(new Request(url, init))
+      return Response.json({ id: "queue_saved", status: "waiting_for_idle" }, { status: 202 })
+    }
+    return fixture
+  }
+
+  test("a known slash command accepted while busy toasts that it queued behind the turn", async () => {
+    const { controller, host, requests } = commandSetup("busy")
+    await controller.submit()
+    expect(requests).toHaveLength(1)
+    expect(new URL(requests[0].url).pathname).toBe("/session/ses_test/command_async")
+    expect(host.toast.show).toHaveBeenCalledTimes(1)
+    expect(host.toast.show).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variant: "info",
+        message: "Queued /goal ship the release behind the running turn \u2014 open /queue to manage it",
+      }),
+    )
+  })
+
+  test("an idle command submit stays silent", async () => {
+    const { controller, host, requests } = commandSetup("idle")
+    await controller.submit()
+    expect(requests).toHaveLength(1)
+    expect(new URL(requests[0].url).pathname).toBe("/session/ses_test/command_async")
+    expect(host.toast.show).not.toHaveBeenCalled()
+  })
+
+  test("a busy retry status also reports the queued command", async () => {
+    const { controller, host } = commandSetup("retry")
+    await controller.submit()
+    expect(host.toast.show).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: "info", message: expect.stringContaining("/goal ship the release") }),
+    )
+  })
+})

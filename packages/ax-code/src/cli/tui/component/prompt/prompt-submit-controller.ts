@@ -24,7 +24,7 @@ import { upsert } from "../../context/sync-util"
 import { axEngineDownloadChip, type AxEngineDownloadJobView } from "../ax-engine-downloads-view-model"
 import { isQueueableStatus } from "./follow-up-queue"
 import { isSteerableDraft, steerBusySession, type SteerClient } from "./prompt-steer"
-import { durableFollowUps } from "./durable-follow-up"
+import { commandLineLabel, durableFollowUps } from "./durable-follow-up"
 import { steerQueuedPrefix } from "./steer-follow-up"
 import { assign } from "./part"
 import { SESSION_CREATE_TIMEOUT_MS } from "@/constants/session-create"
@@ -45,7 +45,10 @@ type PromptSubmitComposer = Pick<TextareaRenderable, "clear"> &
     extmarks: Pick<TextareaRenderable["extmarks"], "getAllForTypeId" | "clear">
   }
 
-type PromptSubmitSdk = Pick<ReturnType<typeof useSDK>, "url" | "directory" | "baseDirectory" | "fetch" | "sseConnected"> & {
+type PromptSubmitSdk = Pick<
+  ReturnType<typeof useSDK>,
+  "url" | "directory" | "baseDirectory" | "fetch" | "sseConnected"
+> & {
   client: {
     session: {
       create: (
@@ -692,6 +695,11 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
         const commandId = workRouted.kind === "command" ? workRouted.command : commandName.slice(1)
 
         submitAction = "Command submission"
+        // A busy session leaves the command row waiting_for_idle with no user
+        // message until it executes; detect that from the same queueable
+        // condition the follow-up path uses so the acceptance can say where it
+        // landed instead of silently vanishing from the transcript.
+        const queuedBehindTurn = isQueueableStatus(status().type)
         await submitAsyncRoute({
           sessionID,
           path: "command_async",
@@ -713,6 +721,15 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
               })),
           },
         })
+        const queuedCommandLine = commandLineLabel(commandId, args)
+        if (queuedBehindTurn && queuedCommandLine) {
+          log.info("tui.prompt.submit: command queued behind the running turn", { sessionID, command: commandId })
+          toast.show({
+            variant: "info",
+            message: t("ui.queuedCommandBehindTurn", { command: queuedCommandLine }),
+            duration: 4000,
+          })
+        }
       } else {
         submitAction = "Prompt submission"
         await submitAsyncRoute({

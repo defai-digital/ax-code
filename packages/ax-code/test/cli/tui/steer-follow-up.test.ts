@@ -64,6 +64,16 @@ describe("steerBarrier", () => {
     expect(steerBarrier(row({ id: "tas_3", text: "x".repeat(STEER_MAX_TEXT_LENGTH + 1) }))).toBe("too_long")
     expect(steerBarrier(row({ id: "tas_4", body: {} }))).toBe("empty")
   })
+
+  test("queued command/prompt/shell rows are kind barriers even while pending", () => {
+    const command = {
+      ...row({ id: "tas_1", body: { command: "goal", arguments: "ship the release" } }),
+      kind: "command" as const,
+    }
+    expect(steerBarrier(command)).toBe("kind")
+    expect(steerBarrier({ ...row({ id: "tas_2" }), kind: "prompt" as const })).toBe("kind")
+    expect(steerBarrier({ ...row({ id: "tas_3" }), kind: "shell" as const })).toBe("kind")
+  })
 })
 
 describe("steerablePrefix", () => {
@@ -87,6 +97,17 @@ describe("steerablePrefix", () => {
     const blocked = steerablePrefix([row({ id: "tas_1", text: "" }), row({ id: "tas_2", position: 1 })])
     expect(blocked.items).toHaveLength(0)
     expect(blocked.barrier?.reason).toBe("empty")
+  })
+
+  test("the prefix stops at a queued command row exactly like any other barrier", () => {
+    const command = {
+      ...row({ id: "tas_2", position: 1, body: { command: "goal", arguments: "ship the release" } }),
+      kind: "command" as const,
+    }
+    const prefix = steerablePrefix([row({ id: "tas_1", position: 0 }), command, row({ id: "tas_3", position: 2 })])
+    expect(prefix.items.map((item) => item.id)).toEqual(["tas_1"])
+    expect(prefix.barrier?.item.id).toBe("tas_2")
+    expect(prefix.barrier?.reason).toBe("kind")
   })
 })
 
@@ -191,7 +212,9 @@ describe("steerFollowUp", () => {
 
   test("admission rejections and transport failures leave the row alone", async () => {
     const rejected = sdk({
-      steer: () => ({ body: { item: row({ id: "tas_1" }), receipt: { status: "rejected", reason: "admission_rejected" } } }),
+      steer: () => ({
+        body: { item: row({ id: "tas_1" }), receipt: { status: "rejected", reason: "admission_rejected" } },
+      }),
     })
     expect(await steerFollowUp(rejected.fake, row({ id: "tas_1" }))).toEqual({
       kind: "failed",
@@ -252,7 +275,9 @@ describe("steerQueuedPrefix", () => {
   test("prioritizes only the first miss when the generation is gone", async () => {
     const rows = [row({ id: "tas_1", position: 0 }), row({ id: "tas_2", position: 1 })]
     const { fake, calls } = sdk({
-      steer: (id) => ({ body: { item: rows.find((item) => item.id === id), receipt: null, reason: "generation_not_active" } }),
+      steer: (id) => ({
+        body: { item: rows.find((item) => item.id === id), receipt: null, reason: "generation_not_active" },
+      }),
       sendNow: (id) => ({ body: { ...rows.find((item) => item.id === id), status: "queued", position: 0 } }),
     })
     const outcome = await steerQueuedPrefix(fake, rows)

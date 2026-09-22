@@ -32,7 +32,9 @@ import {
   followUpAction,
   pauseFollowUp,
   followUpBody,
+  followUpLabel,
   followUpStatus,
+  isTextFollowUp,
   type DurableFollowUp,
 } from "../../component/prompt/durable-follow-up"
 import { DialogPrompt } from "../../ui/dialog-prompt"
@@ -622,15 +624,18 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                       {(item) => (
                         <box flexDirection="row" gap={1}>
                           <Show when={["queued", "waiting_for_idle", "paused"].includes(item.status)}>
-                            <box
-                              flexShrink={0}
-                              width={QUEUED_EDIT_ICON_WIDTH}
-                              onMouseUp={() => {
-                                editQueued(item.id)
-                              }}
-                            >
-                              <text style={{ fg: theme.text }}>{QUEUED_EDIT_ICON}</text>
-                            </box>
+                            {/* Editing rewrites prompt text, so only text follow-ups carry the edit affordance. */}
+                            <Show when={isTextFollowUp(item)}>
+                              <box
+                                flexShrink={0}
+                                width={QUEUED_EDIT_ICON_WIDTH}
+                                onMouseUp={() => {
+                                  editQueued(item.id)
+                                }}
+                              >
+                                <text style={{ fg: theme.text }}>{QUEUED_EDIT_ICON}</text>
+                              </box>
+                            </Show>
                             <Show when={steerBarrier(item) === null}>
                               <box
                                 flexShrink={0}
@@ -675,7 +680,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                             }
                           >
                             <text fg={theme.textMuted} wrapMode="word">
-                              {followUpStatus(item)}: {item.title}
+                              {followUpStatus(item)}: {followUpLabel(item)}
                             </text>
                           </box>
                         </box>

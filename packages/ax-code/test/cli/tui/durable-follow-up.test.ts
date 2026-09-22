@@ -3,7 +3,9 @@ import { describe, expect, test } from "vitest"
 import {
   durableFollowUps,
   followUpBody,
+  followUpLabel,
   followUpStatus,
+  isTextFollowUp,
   mergeFollowUpSnapshot,
 } from "../../../src/cli/tui/component/prompt/durable-follow-up"
 
@@ -27,6 +29,28 @@ function row(id: string, status = "queued") {
         variant: "high",
       },
     },
+  }
+}
+
+/** A command_async row as the busy-session route enqueues it (server title is the bare command line). */
+function commandRow(id: string, overrides: Record<string, unknown> = {}) {
+  return {
+    id,
+    kind: "command",
+    sessionID: "ses_one",
+    status: "waiting_for_idle",
+    title: "goal ship the release",
+    position: 2,
+    time: { created: 2, updated: 2 },
+    payload: {
+      body: {
+        command: "goal",
+        arguments: "ship the release",
+        agent: "build",
+        model: { providerID: "gateway", modelID: "model" },
+      },
+    },
+    ...overrides,
   }
 }
 
@@ -83,5 +107,39 @@ describe("durable follow-up projection", () => {
   })
   test("an in-flight snapshot cannot resurrect a deleted task", () => {
     expect(mergeFollowUpSnapshot([], [row("deleted")], "ses_one", new Map(), new Set(["deleted"]))).toEqual([])
+  })
+  test("command rows parse, list, and show the derived /goal label", () => {
+    const items = durableFollowUps([row("a"), commandRow("cmd_1")], "ses_one")
+    expect(items.map((item) => item.id)).toEqual(["a", "cmd_1"])
+    const command = items.find((item) => item.id === "cmd_1")!
+    expect(followUpLabel(command)).toBe("[command] /goal ship the release")
+    expect(followUpStatus(command)).toBe("Queued")
+    expect(isTextFollowUp(command)).toBe(false)
+    expect(isTextFollowUp(items.find((item) => item.id === "a")!)).toBe(true)
+    // Follow-up rows keep their server title byte-for-byte.
+    expect(followUpLabel(items.find((item) => item.id === "a")!)).toBe("a")
+  })
+  test("multi-line command arguments collapse to a single label line", () => {
+    const multiLine = commandRow("cmd_1", {
+      payload: { body: { command: "goal", arguments: "ship it\nand then the notes" } },
+    })
+    expect(followUpLabel(durableFollowUps([multiLine], "ses_one")[0])).toBe("[command] /goal ship it")
+  })
+  test("command rows merge by id across snapshot and event ordering", () => {
+    const queued = commandRow("cmd_1")
+    const before = new Map([[queued.id, JSON.stringify(queued)]])
+    // No fresher event during refresh: the snapshot response wins.
+    const completed = { ...queued, status: "completed", time: { created: 2, updated: 3 } }
+    expect(mergeFollowUpSnapshot([queued], [completed], "ses_one", before).find((r) => r.id === "cmd_1")?.status).toBe(
+      "completed",
+    )
+    // An event received after the snapshot request takes precedence.
+    const running = { ...queued, status: "running", time: { created: 2, updated: 4 } }
+    expect(mergeFollowUpSnapshot([running], [queued], "ses_one", before).find((r) => r.id === "cmd_1")?.status).toBe(
+      "running",
+    )
+    // Unknown kinds stay opaque passthrough entries.
+    const automation = { ...queued, id: "auto_1", kind: "automation" }
+    expect(mergeFollowUpSnapshot([automation], [], "ses_one", new Map())).toEqual([automation])
   })
 })

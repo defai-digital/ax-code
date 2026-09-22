@@ -36,7 +36,7 @@ import {
 import { SessionCodeRenderer } from "./render-adapter"
 import { coalescedToolLabel } from "./tool-rendering"
 import { toolRendererComponent } from "./tool-renderers"
-import { followUpStatus, type DurableFollowUp } from "../../component/prompt/durable-follow-up"
+import { followUpLabel, followUpStatus, type DurableFollowUp } from "../../component/prompt/durable-follow-up"
 import { useSessionRouteContext as use } from "./context"
 import { userRoute } from "../../util/transcript"
 import { routeEvent } from "./route"
@@ -59,12 +59,14 @@ export function QueuedFollowUps(props: { items: DurableFollowUp[]; busy?: boolea
                 {followUpStatus(item)}
                 {props.items.length > 1 ? ` ${index() + 1}/${props.items.length}` : ""}:{" "}
               </span>
-              <span>{item.title.slice(0, 64)}</span>
+              <span>{followUpLabel(item).slice(0, 64)}</span>
             </text>
           )}
         </For>
         <Show when={props.busy && keybind.print("input_submit_steer")}>
-          <text fg={theme.textMuted}>{uiText("ui.steerNowHint", { keybind: keybind.print("input_submit_steer") })}</text>
+          <text fg={theme.textMuted}>
+            {uiText("ui.steerNowHint", { keybind: keybind.print("input_submit_steer") })}
+          </text>
         </Show>
       </box>
     </Show>

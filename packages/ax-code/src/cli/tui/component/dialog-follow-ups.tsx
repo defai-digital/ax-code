@@ -11,7 +11,9 @@ import {
   followUpAction,
   pauseFollowUp,
   followUpBody,
+  followUpLabel,
   followUpStatus,
+  isTextFollowUp,
   type DurableFollowUp,
 } from "./prompt/durable-follow-up"
 import { steerBarrier, steerFollowUp } from "./prompt/steer-follow-up"
@@ -88,7 +90,9 @@ export function DialogFollowUps(props: { sessionID: string; onAttention: () => v
     }
     const mutable = ["queued", "waiting_for_idle", "paused"].includes(item.status)
     const actions: Array<{ title: string; value: FollowUpDialogAction }> = [
-      ...(mutable ? [{ title: uiText("ui.editPauseFirst"), value: "edit" as const }] : []),
+      // Editing rewrites prompt text, so it applies only to text follow-ups;
+      // pause/resume/cancel/retry below apply to every queued kind.
+      ...(mutable && isTextFollowUp(item) ? [{ title: uiText("ui.editPauseFirst"), value: "edit" as const }] : []),
       ...(mutable && steerBarrier(item) === null
         ? [{ title: uiText("ui.steerIntoRunningTurn"), value: "steer" as const }]
         : []),
@@ -125,7 +129,7 @@ export function DialogFollowUps(props: { sessionID: string; onAttention: () => v
       placeholder={items().length ? "Choose a follow-up" : "No pending follow-ups"}
       options={[
         ...items().map((item) => ({
-          title: item.title,
+          title: followUpLabel(item),
           value: item as DurableFollowUp | null,
           description: followUpStatus(item),
         })),

@@ -976,4 +976,6 @@ export const messages = {
   "ui.steerFailed": "Indirizzamento non riuscito: {message}",
   "ui.steerIntoRunningTurn": "Indirizza nel turno in corso",
   "ui.firstToken": "primo token",
+  "ui.queuedCommandBehindTurn":
+    "{command} \u00e8 stato accodato dietro il turno in esecuzione \u2014 apri /queue per gestirlo",
 }

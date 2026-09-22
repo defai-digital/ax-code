@@ -974,4 +974,6 @@ export const messages = {
   "ui.steerFailed": "Steuern fehlgeschlagen: {message}",
   "ui.steerIntoRunningTurn": "In den laufenden Durchlauf steuern",
   "ui.firstToken": "erstes Token",
+  "ui.queuedCommandBehindTurn":
+    "{command} wurde hinter dem laufenden Turn eingeplant \u2014 \u00f6ffne /queue zum Verwalten",
 } satisfies Dictionary

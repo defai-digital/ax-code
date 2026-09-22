@@ -1049,4 +1049,6 @@ export const messages = {
   "ui.steerFailed": "\u0110i\u1ec1u h\u01b0\u1edbng th\u1ea5t b\u1ea1i: {message}",
   "ui.steerIntoRunningTurn": "\u0110i\u1ec1u h\u01b0\u1edbng v\u00e0o l\u01b0\u1ee3t \u0111ang ch\u1ea1y",
   "ui.firstToken": "token \u0111\u1ea7u ti\u00ean",
+  "ui.queuedCommandBehindTurn":
+    "{command} \u0111\u00e3 \u0111\u01b0\u1ee3c x\u1ebfp h\u00e0ng sau l\u01b0\u1ee3t \u0111ang ch\u1ea1y \u2014 m\u1edf /queue \u0111\u1ec3 qu\u1ea3n l\u00fd",
 } satisfies Dictionary

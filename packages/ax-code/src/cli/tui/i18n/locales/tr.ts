@@ -1001,4 +1001,6 @@ export const messages = {
   "ui.steerFailed": "Y\u00f6nlendirme ba\u015far\u0131s\u0131z: {message}",
   "ui.steerIntoRunningTurn": "\u00c7al\u0131\u015fan tura y\u00f6nlendir",
   "ui.firstToken": "ilk token",
+  "ui.queuedCommandBehindTurn":
+    "{command} \u00e7al\u0131\u015fmakta olan turun arkas\u0131na kuyru\u011fa al\u0131nd\u0131 \u2014 y\u00f6netmek i\u00e7in /queue komutunu a\u00e7\u0131n",
 } satisfies Dictionary

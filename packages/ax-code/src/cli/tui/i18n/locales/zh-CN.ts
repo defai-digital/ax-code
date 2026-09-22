@@ -1016,4 +1016,6 @@ export const messages = {
   "ui.steerFailed": "\u5f15\u5bfc\u5931\u8d25\uff1a{message}",
   "ui.steerIntoRunningTurn": "\u5f15\u5bfc\u81f3\u8fdb\u884c\u4e2d\u7684\u56de\u5408",
   "ui.firstToken": "\u9996\u4e2a token",
+  "ui.queuedCommandBehindTurn":
+    "\u5df2\u5c06 {command} \u6392\u5165\u6b63\u5728\u8fd0\u884c\u7684\u56de\u5408\u4e4b\u540e \u2014 \u6253\u5f00 /queue \u8fdb\u884c\u7ba1\u7406",
 } satisfies Dictionary
