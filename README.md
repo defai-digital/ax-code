@@ -463,6 +463,7 @@ Everyday use:
 - [Fixed-context questions](docs/guides/fixed-context-questions.md) — ask about selected files through AX Trust caching
 - [Execution Evidence](docs/guides/execution-evidence.md) — graph, replay, compare, risk, rollback, trace, and audit export
 - [Verified Multi-Model Changes](docs/guides/verified-multi-model-change.md) — council review and arena implementation
+- [Headless CLI](docs/guides/headless-cli.md) — one-shot `ax-code run` for scripts, CI, and agent callers
 - [Documentation Hub](docs/README.md) — guides, architecture, providers, and reference
 - [Sandbox Mode](docs/guides/sandbox.md) · [Autonomous Mode](docs/guides/autonomous.md) · [MCP Integrations](docs/integrations/mcp.md)
 - [Semantic Layer](docs/architecture/semantic-layer.md) — provenance and replay boundaries for graph and LSP answers

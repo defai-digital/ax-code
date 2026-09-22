@@ -36,6 +36,7 @@ For standalone questions about selected files through AX Trust caching, see
 | Run an agent with safe filesystem and network boundaries | [Sandbox Mode](guides/sandbox.md)                                       |
 | Administer cloud or network infrastructure safely        | [Cloud Operations Mode](guides/cloud-operations.md)                     |
 | Run unattended or in CI                                  | [Autonomous Mode](guides/autonomous.md)                                 |
+| Call the one-shot `ax-code run` CLI from scripts or CI   | [Headless CLI](guides/headless-cli.md)                                  |
 | Run recurring prompts or schedule durable tasks          | [Loop Mode and Scheduled Tasks](guides/loop-mode.md)                    |
 | Hear a sound or spoken alert when a run needs attention  | [Audio Notifications](guides/audio-notifications.md)                    |
 | Keep scheduled work running across process or host exits | [Long-Running Operations](guides/long-running-operations.md)            |
@@ -65,6 +66,7 @@ For standalone questions about selected files through AX Trust caching, see
 - [Sandbox Mode](guides/sandbox.md) — isolation modes, protected paths, network controls, and precedence.
 - [Cloud Operations Mode](guides/cloud-operations.md) — plan/approve/apply workflow, approval tokens, and the `cloudops` agent posture.
 - [Autonomous Mode](guides/autonomous.md) — unattended execution, approvals, headless use, and safeguards.
+- [Headless CLI](guides/headless-cli.md) — the one-shot `ax-code run` command for scripting, CI, and agent callers.
 - [TUI Languages and Setup](guides/tui-language-and-setup.md) — interface and conversation languages, first-time setup.
 - [TUI Animations](guides/tui-animations.md) — opening and ending pairs, terminal capabilities, and rendering fallbacks.
 - [Loop Mode and Scheduled Tasks](guides/loop-mode.md) — recurring prompts, durable schedules, and long-run limits.
