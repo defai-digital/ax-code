@@ -79,6 +79,16 @@ describe("session.todo", () => {
         reason: "not a cancellation",
       }),
     ).toEqual({ content: "Ship release", status: "completed", priority: "high" })
+
+    // A reason that merely appears inside the content is still appended.
+    expect(
+      Todo.absorbCancellationReason({
+        content: "Investigate reason handling in todowrite",
+        status: "cancelled",
+        priority: "low",
+        reason: "reason",
+      }).content,
+    ).toBe("Investigate reason handling in todowrite (reason)")
   })
 
   test("classifies active todo statuses for generic todo-like values", () => {

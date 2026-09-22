@@ -59,6 +59,25 @@ describe("session top bar layout", () => {
     expect(layout.id).toBe(segments.id)
   })
 
+  test("keeps a short title whole instead of applying the truncation floor", () => {
+    const layout = sessionTopBarLayout({ width: 17, segments: { id: segments.id, title: "Hi" } })
+    expect(layout.id).toBe(segments.id)
+    expect(layout.title).toBe("Hi")
+  })
+
+  test("drops the providers block once it no longer fits at all", () => {
+    const layout = sessionTopBarLayout({ width: 10, segments })
+    expect(layout.providers).toBeUndefined()
+    expect(layout.manage).toBeUndefined()
+    expect(layout.id.length).toBeLessThanOrEqual(10)
+    expect(sessionTopBarLayout({ width: 0, segments })).toEqual({ id: "" })
+  })
+
+  test("treats a non-finite width as no room", () => {
+    const layout = sessionTopBarLayout({ width: Number.NaN, segments })
+    expect(layout).toEqual({ id: "" })
+  })
+
   test("uses the full width when there is no providers block", () => {
     const layout = sessionTopBarLayout({
       width: 60,

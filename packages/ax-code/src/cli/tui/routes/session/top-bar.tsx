@@ -74,8 +74,8 @@ export function SessionTopBar(props: {
 
   const layout = createMemo(() =>
     sessionTopBarLayout({
-      // The bar's own left padding consumes one cell of the pane width.
-      width: Math.max(0, props.width - 1),
+      // The bar's own horizontal padding consumes two cells of the pane width.
+      width: Math.max(0, props.width - 2),
       segments: {
         id: session()?.id ?? props.sessionID,
         title: props.showTitle ? session()?.title : undefined,
@@ -94,6 +94,7 @@ export function SessionTopBar(props: {
       flexDirection="row"
       justifyContent="space-between"
       paddingLeft={1}
+      paddingRight={1}
       backgroundColor={theme.backgroundPanel}
     >
       <box flexGrow={1} minWidth={0} flexDirection="row" gap={2}>
@@ -126,7 +127,7 @@ export function SessionTopBar(props: {
       </box>
       <Show when={layout().providers}>
         {(providers) => (
-          <box flexShrink={0} flexDirection="row" gap={2} paddingRight={1}>
+          <box flexShrink={0} flexDirection="row" gap={2}>
             <text fg={theme.text} wrapMode="none" selectable={false} onMouseUp={manage}>
               {providers()}
             </text>

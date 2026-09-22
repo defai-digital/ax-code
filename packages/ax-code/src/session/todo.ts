@@ -21,7 +21,9 @@ export namespace Todo {
   export function absorbCancellationReason(todo: Info & { reason?: string }): Info {
     const note = todo.reason?.trim().slice(0, 500)
     const stored = { content: todo.content, status: todo.status, priority: todo.priority }
-    if (stored.status !== "cancelled" || !note || stored.content.includes(note)) return stored
+    // Only an already-appended note counts as stored; a plain substring match
+    // would drop a reason that happens to appear inside the content text.
+    if (stored.status !== "cancelled" || !note || stored.content.endsWith(`(${note})`)) return stored
     return { ...stored, content: `${stored.content} (${note})` }
   }
 
