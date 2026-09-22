@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import type { NamedError } from "@ax-code/util/error"
 import { APICallError } from "ai"
 import { SessionRetry } from "../../src/session/retry"
@@ -18,6 +18,23 @@ function apiError(headers?: Record<string, string>): MessageV2.APIError {
 
 function wrap(message: unknown): ReturnType<NamedError["toObject"]> {
   return { data: { message } } as ReturnType<NamedError["toObject"]>
+}
+
+function concurrencyError(headers?: Record<string, string>): MessageV2.APIError {
+  const message = "pool concurrent request limit exceeded"
+  return new MessageV2.APIError({
+    message,
+    isRetryable: true,
+    statusCode: 429,
+    responseHeaders: headers,
+    responseBody: JSON.stringify({
+      error: {
+        code: "concurrency_limit_exceeded",
+        message,
+        type: "rate_limit_error",
+      },
+    }),
+  }).toObject() as MessageV2.APIError
 }
 
 describe("session.retry.delay", () => {
@@ -314,6 +331,42 @@ describe("session.retry.retryable", () => {
     expect(SessionRetry.retryable(error)).toBe(message)
   })
 
+  test("retries concurrency limits even when the SDK marks them non-retryable", () => {
+    const message = "pool concurrent request limit exceeded"
+    const error = new MessageV2.APIError({
+      message,
+      isRetryable: false,
+      statusCode: 429,
+      responseBody: JSON.stringify({
+        error: { code: "concurrency_limit_exceeded", message, type: "rate_limit_error" },
+      }),
+    }).toObject() as ReturnType<NamedError["toObject"]>
+
+    expect(SessionRetry.retryable(error)).toBe(message)
+  })
+
+  test("retries Alibaba short-window quota even when marked non-retryable", () => {
+    const message = "Alibaba short-window quota exceeded"
+    const error = new MessageV2.APIError({
+      message,
+      isRetryable: false,
+      responseBody: JSON.stringify({ error: { code: "AllocatedQuotaExceeded" } }),
+      metadata: { errorCode: "alibaba_token_plan_short_window_quota" },
+    }).toObject() as ReturnType<NamedError["toObject"]>
+
+    expect(SessionRetry.retryable(error)).toBe(message)
+  })
+
+  test("still does not retry a non-concurrency error marked non-retryable", () => {
+    const error = new MessageV2.APIError({
+      message: "request rate limit exceeded",
+      isRetryable: false,
+      statusCode: 429,
+    }).toObject() as ReturnType<NamedError["toObject"]>
+
+    expect(SessionRetry.retryable(error)).toBeUndefined()
+  })
+
   test("does not retry account quota exhaustion when only response body has the quota code", () => {
     const error = new MessageV2.APIError({
       message: "Too Many Requests",
@@ -363,6 +416,73 @@ describe("session.retry.retryable", () => {
     // Only three consecutive failures without an intervening success open it.
     expect(SessionRetry.retryable(mk())).toBeUndefined()
     expect(SessionRetry.networkCircuitOpen()).toBe(true)
+  })
+})
+
+describe("session.retry.concurrency budget", () => {
+  const providerID = "test-provider"
+
+  beforeEach(() => {
+    SessionRetry.resetNetworkCircuit()
+    vi.spyOn(Math, "random").mockReturnValue(0)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  test("concurrency streak accumulates and raises the delay ceiling", () => {
+    const error = concurrencyError()
+    // streak 1 -> 30s ceiling
+    expect(SessionRetry.retryable(error, providerID)).toBe("pool concurrent request limit exceeded")
+    expect(SessionRetry.delay(10, error, providerID)).toBe(30_000)
+    // streak 2 -> 60s ceiling
+    expect(SessionRetry.retryable(error, providerID)).toBe("pool concurrent request limit exceeded")
+    expect(SessionRetry.delay(10, error, providerID)).toBe(60_000)
+    // streak 3 -> still 60s ceiling
+    expect(SessionRetry.retryable(error, providerID)).toBe("pool concurrent request limit exceeded")
+    expect(SessionRetry.delay(10, error, providerID)).toBe(60_000)
+    // streak 4 -> 120s ceiling
+    expect(SessionRetry.retryable(error, providerID)).toBe("pool concurrent request limit exceeded")
+    expect(SessionRetry.delay(10, error, providerID)).toBe(120_000)
+  })
+
+  test("recordConcurrencySuccess resets the streak back to the 30s ceiling", () => {
+    const error = concurrencyError()
+    for (let i = 0; i < 4; i++) SessionRetry.retryable(error, providerID)
+    expect(SessionRetry.delay(10, error, providerID)).toBe(120_000)
+    SessionRetry.recordConcurrencySuccess(providerID)
+    expect(SessionRetry.delay(10, error, providerID)).toBe(30_000)
+  })
+
+  test("honors a Retry-After hint up to the raised cap for concurrency hits", () => {
+    const error = concurrencyError()
+    // Accumulate streak >= 2 so the raised header cap is in effect.
+    SessionRetry.retryable(error, providerID)
+    SessionRetry.retryable(error, providerID)
+
+    const hint = concurrencyError({ "retry-after": "90" })
+    expect(SessionRetry.delay(1, hint, providerID)).toBe(90_000)
+  })
+
+  test("still ignores a Retry-After hint shorter than the exponential floor", () => {
+    const error = concurrencyError()
+    for (let i = 0; i < 4; i++) SessionRetry.retryable(error, providerID)
+
+    // attempt 3 -> exponential floor 8000; Retry-After: 5 (5000ms) is shorter
+    const hint = concurrencyError({ "retry-after": "5" })
+    expect(SessionRetry.delay(3, hint, providerID)).toBe(8000)
+  })
+
+  test("maxAttemptsFor returns 8 for concurrency errors and 5 otherwise", () => {
+    expect(SessionRetry.maxAttemptsFor(concurrencyError())).toBe(8)
+    expect(SessionRetry.maxAttemptsFor(apiError())).toBe(5)
+    expect(SessionRetry.maxAttemptsFor(undefined)).toBe(5)
+  })
+
+  test("terminalErrorCode returns a stable code only for concurrency errors", () => {
+    expect(SessionRetry.terminalErrorCode(concurrencyError())).toBe("provider_concurrency_exhausted")
+    expect(SessionRetry.terminalErrorCode(apiError())).toBeUndefined()
   })
 })
 
