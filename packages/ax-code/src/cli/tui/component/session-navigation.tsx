@@ -186,30 +186,36 @@ export function SessionNavigation(props: {
           {truncateToCellWidth(uiText("ui.cachedDisconnected"), innerWidth())}
         </text>
       </Show>
-      <box flexShrink={0} flexDirection="row" gap={1} marginBottom={1}>
-        <For each={["recent", "active"] as const}>
-          {(value) => (
-            <box
-              flexShrink={0}
-              paddingRight={1}
-              backgroundColor={filter() === value ? theme.backgroundElement : undefined}
-              onMouseUp={() => kv.set("navigation_filter", value)}
-            >
-              <text fg={filter() === value ? theme.primary : theme.textMuted} selectable={false}>
-                <span style={{ bold: filter() === value }}>
-                  {value === "recent" ? uiText("common.recent") : uiText("ui.active")}
-                </span>
-              </text>
-            </box>
-          )}
-        </For>
+      <ScheduledSessionNavigation width={innerWidth()} sessions={sessions()} />
+      <box width={innerWidth()} flexShrink={0} backgroundColor={theme.backgroundElement}>
+        <box flexShrink={0} flexDirection="row" gap={1} paddingLeft={1} marginBottom={filter() === "active" ? 0 : 1}>
+          <For each={["recent", "active"] as const}>
+            {(value) => (
+              <box
+                flexShrink={0}
+                paddingLeft={1}
+                paddingRight={1}
+                backgroundColor={filter() === value ? theme.backgroundPanel : undefined}
+                onMouseUp={() => kv.set("navigation_filter", value)}
+              >
+                <text fg={filter() === value ? theme.primary : theme.textMuted} selectable={false}>
+                  <span style={{ bold: filter() === value }}>
+                    {value === "recent" ? uiText("common.recent") : uiText("ui.active")}
+                  </span>
+                </text>
+              </box>
+            )}
+          </For>
+        </box>
+        <Show when={filter() === "active"}>
+          <text flexShrink={0} paddingLeft={1} marginBottom={1} fg={theme.textMuted} selectable={false} wrapMode="word">
+            {observed() ? uiText("ui.includesCurrentSession") : uiText("ui.cachedSessionsReconnectToFilter")}
+          </text>
+        </Show>
       </box>
-      <Show when={filter() === "active"}>
-        <text flexShrink={0} fg={theme.textMuted} selectable={false} wrapMode="word">
-          {observed() ? uiText("ui.includesCurrentSession") : uiText("ui.cachedSessionsReconnectToFilter")}
-        </text>
-      </Show>
       <scrollbox
+        backgroundColor={theme.backgroundElement}
+        marginBottom={clearedHint() ? 0 : 1}
         onSizeChange={revealCurrent}
         ref={(node) => {
           scroll = node
@@ -217,10 +223,9 @@ export function SessionNavigation(props: {
         flexGrow={1}
         minHeight={0}
         verticalScrollbarOptions={{
-          trackOptions: { backgroundColor: theme.backgroundPanel, foregroundColor: theme.borderActive },
+          trackOptions: { backgroundColor: theme.backgroundElement, foregroundColor: theme.borderActive },
         }}
       >
-        <ScheduledSessionNavigation width={innerWidth()} sessions={sessions()} />
         <Show when={rows().length === 0}>
           <text flexShrink={0} fg={theme.textMuted} selectable={false} wrapMode="word">
             {!sync.data.session_loaded
@@ -264,7 +269,7 @@ export function SessionNavigation(props: {
                 marginLeft={indent()}
                 onMouseOver={() => setHover(true)}
                 onMouseOut={() => setHover(false)}
-                backgroundColor={selected() ? theme.backgroundElement : hover() ? theme.background : undefined}
+                backgroundColor={selected() ? theme.backgroundPanel : hover() ? theme.background : undefined}
               >
                 <box
                   width={1}
@@ -343,7 +348,13 @@ export function SessionNavigation(props: {
         </For>
       </scrollbox>
       <Show when={clearedHint()}>
-        <box flexShrink={0} onMouseUp={() => kv.set("navigation_cleared_at", 0)}>
+        <box
+          width={innerWidth()}
+          flexShrink={0}
+          marginBottom={1}
+          backgroundColor={theme.backgroundElement}
+          onMouseUp={() => kv.set("navigation_cleared_at", 0)}
+        >
           <text fg={theme.primary} selectable={false}>
             {truncateToCellWidth(uiText("navigation.showHidden"), innerWidth())}
           </text>

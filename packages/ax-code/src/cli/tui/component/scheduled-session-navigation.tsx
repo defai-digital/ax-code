@@ -68,6 +68,7 @@ export function ScheduledSessionNavigation(props: { width: number; sessions: rea
   const [queueItems, setQueueItems] = createSignal<ReadonlyMap<string, TaskQueueGetResponse>>(new Map())
   const [state, setState] = createSignal<"loading" | "ready" | "error">("loading")
   const [tab, setTab] = createSignal<"new" | "finished">("new")
+  const contentWidth = () => Math.max(0, props.width - 2)
   const links = createMemo(() => scheduledSessionLinks(tasks(), queueItems(), props.sessions))
   const savedKey = (name: string) => `${name}:${sdk.directory ?? ""}`
   const saved = (name: string) => {
@@ -163,17 +164,25 @@ export function ScheduledSessionNavigation(props: { width: number; sessions: rea
 
   return (
     <Show when={tasks().length > 0 || state() !== "ready"}>
-      <box flexShrink={0} marginTop={1}>
+      <box
+        width={props.width}
+        flexShrink={0}
+        paddingLeft={1}
+        paddingRight={1}
+        marginBottom={1}
+        backgroundColor={theme.backgroundElement}
+      >
         <box onMouseUp={() => command.trigger("scheduled.list")}>
           <text fg={theme.textMuted} selectable={false}>
-            <b>{truncateToCellWidth("Scheduled sessions", props.width)}</b>
+            <b>{truncateToCellWidth("Scheduled sessions", contentWidth())}</b>
           </text>
         </box>
         <box flexDirection="row" gap={1}>
           <For each={["new", "finished"] as const}>
             {(value) => (
               <box
-                backgroundColor={tab() === value ? theme.backgroundElement : undefined}
+                paddingRight={1}
+                backgroundColor={tab() === value ? theme.backgroundPanel : undefined}
                 onMouseUp={() => setTab(value)}
               >
                 <text fg={tab() === value ? theme.primary : theme.textMuted} selectable={false}>
@@ -186,6 +195,11 @@ export function ScheduledSessionNavigation(props: { width: number; sessions: rea
         <For each={visible()}>
           {(link) => (
             <box
+              backgroundColor={
+                route.data.type === "session" && route.data.sessionID === link.sessionID
+                  ? theme.backgroundPanel
+                  : undefined
+              }
               onMouseUp={() => {
                 save("scheduled_session_seen", [scheduledSessionKey(link)])
                 route.navigate({ type: "session", sessionID: link.sessionID })
@@ -197,7 +211,7 @@ export function ScheduledSessionNavigation(props: { width: number; sessions: rea
                 }
                 selectable={false}
               >
-                {truncateToCellWidth(`  ${link.taskTitle}`, props.width)}
+                {truncateToCellWidth(link.taskTitle, contentWidth())}
               </text>
             </box>
           )}
@@ -205,32 +219,29 @@ export function ScheduledSessionNavigation(props: { width: number; sessions: rea
         <Show when={buckets()[tab()].length > MAX_ROWS}>
           <box onMouseUp={() => command.trigger("scheduled.list")}>
             <text fg={theme.textMuted} selectable={false}>
-              {truncateToCellWidth(`  ${buckets()[tab()].length - MAX_ROWS} more in Schedule`, props.width)}
+              {truncateToCellWidth(`${buckets()[tab()].length - MAX_ROWS} more in Schedule`, contentWidth())}
             </text>
           </box>
         </Show>
         <Show when={state() === "ready" && visible().length === 0}>
           <text fg={theme.textMuted} selectable={false}>
-            {tab() === "new" ? "  No new sessions" : "  No finished sessions"}
+            {tab() === "new" ? "No new sessions" : "No finished sessions"}
           </text>
         </Show>
         <Show when={tab() === "finished" && buckets().finished.length > 0}>
           <box onMouseUp={() => save("scheduled_session_cleaned", buckets().finished.map(scheduledSessionKey))}>
             <text fg={theme.textMuted} selectable={false}>
-              {" "}
               Clean finished
             </text>
           </box>
         </Show>
         <Show when={state() === "loading" && links().length === 0}>
           <text fg={theme.textMuted} selectable={false}>
-            {" "}
             Loading...
           </text>
         </Show>
         <Show when={state() === "error"}>
           <text fg={theme.warning} selectable={false}>
-            {" "}
             Schedule unavailable
           </text>
         </Show>
