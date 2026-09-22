@@ -464,17 +464,6 @@ export namespace SessionProcessor {
           snapshot = undefined
         }
         while (true) {
-          // Bound how many concurrent requests this process (and, best
-          // effort, this machine) sends to one provider — see
-          // .internal/prd/PRD-2026-09-22-provider-concurrency-resilience.md.
-          // Held for the whole attempt (setup through full stream drain via
-          // `using` disposal on every loop exit: success, retry `continue`,
-          // or terminal `break`) so a saturated shared pool sees this process
-          // queue locally instead of firing every attempt immediately.
-          using _providerSlot = await ProviderConcurrencyGovernor.acquire({
-            providerID: input.model.providerID,
-            signal: input.abort,
-          })
           blocked = false
           let currentText: MessageV2.TextPart | undefined
           let reasoningMap: Record<string, MessageV2.ReasoningPart> = {}
@@ -490,7 +479,29 @@ export namespace SessionProcessor {
           // Tracks whether the stream loop errored (used by the final
           // transaction to decide whether to overwrite part end times).
           let streamErrored = false
+          // Released in the `finally` below, on every exit from this attempt
+          // (success, retry `continue`, or terminal `break`/give-up). NOT a
+          // `using` declaration: combined with this try/catch/continue/while
+          // structure, `using` was observed to silently break the outer
+          // `attempt` counter's persistence across iterations (chaos.test.ts
+          // "retryable error retries then succeeds" looped forever instead of
+          // giving up after its budget — reproduced with a no-op `using` in
+          // this exact position, unrelated to the governor's own logic) — an
+          // explicit variable + finally avoids whatever that interaction is.
+          let _providerSlot: { [Symbol.dispose](): void } | undefined
           try {
+            // Bound how many concurrent requests this process (and, best
+            // effort, this machine) sends to one provider — see
+            // .internal/prd/complete/PRD-2026-09-22-provider-concurrency-resilience.md.
+            // Held for the whole attempt (setup through full stream drain).
+            // Inside the try (not before it) so a pre-aborted signal is
+            // caught by the same `input.abort.aborted` handling below as any
+            // other abort point in this attempt, instead of throwing past it
+            // uncaught (chaos.test.ts "pre-aborted signal stops immediately").
+            _providerSlot = await ProviderConcurrencyGovernor.acquire({
+              providerID: input.model.providerID,
+              signal: input.abort,
+            })
             let usedTools = false
             let receivedFinish = false
             const requestStartedAt = Date.now()
@@ -1704,6 +1715,8 @@ export namespace SessionProcessor {
               // terminal session error and transitions to idle only after
               // that decision is final.
             }
+          } finally {
+            _providerSlot?.[Symbol.dispose]()
           }
           // Resolve async snapshot before batching final DB writes
           let finalPatch: { hash: string; files: string[] } | undefined
