@@ -129,6 +129,14 @@ describe("response-only turn execution profile", () => {
     })
   })
 
+  test("does not duplicate the clarifying parenthetical for abbreviated aliases", () => {
+    // Already clarified: left untouched instead of gaining a second parenthetical.
+    expect(clarifyRequestedLanguage("please reply in t. chinese (繁體中文)")).toBe(
+      "please reply in t. chinese (繁體中文)",
+    )
+    expect(clarifyRequestedLanguage("write it in trad. chinese")).toBe("write it in Traditional Chinese (繁體中文)")
+  })
+
   test.each([
     ["Translate the previous answer into Japanese", "translate"],
     ["Make that shorter", "shorten"],
@@ -146,6 +154,12 @@ describe("response-only turn execution profile", () => {
     "Edit `src/messages.ts` to use Chinese",
     "Write a poem in Chinese",
     "Make that shorter and then inspect the tests",
+    "Summarize that and update the files.",
+    "Repeat that and deploy it.",
+    "Summarize that and email the team.",
+    "Rewrite that to match the style of src/util/helpers.",
+    "Rewrite that to match 設定.md",
+    "Rephrase that like the Dockerfile comments",
   ])("rejects repository work or ambiguous new tasks: %s", (text) => {
     expect(detect(text).kind).toBe("default")
   })

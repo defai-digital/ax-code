@@ -125,13 +125,21 @@ const REWRITE_PATTERNS: Array<{ intent: Exclude<ResponseOnlyIntent, "translate">
   },
 ]
 
+// Inflection-tolerant: plural nouns and the common edit verbs must not slip
+// past into a tool-less compact turn ("summarize that and update the files").
 const REPOSITORY_OR_EDIT_SIGNAL =
-  /\b(?:app|ui|code|source|file|repo(?:sitory)?|project|workspace|i18n|l10n|locale|locali[sz]ation|implement|edit|modify|change|fix|patch|refactor|commit|push|pull\s+request|component|function|class|tests?|readme)\b|(?:程式|代码|代碼|原始碼|源码|檔案|文件|專案|项目|應用|应用|介面|界面|本地化|國際化|国际化|實作|实现|修改|編輯|编辑|修復|修复|提交)/i
+  /\b(?:apps?|ui|code|source|files?|repos?|repositor(?:y|ies)|projects?|workspace|i18n|l10n|locales?|locali[sz]ation|implement|edit(?:s|ed|ing)?|modify|change[sd]?|fix(?:es|ed)?|patch(?:es)?|refactor|commit(?:s|ted)?|push|pull\s+request|components?|functions?|class(?:es)?|tests?|readme|update[sd]?|create[sd]?|delete[sd]?|remove[sd]?|rename[sd]?|move[sd]?|run|build|deploy|install|execute)\b|(?:程式|代码|代碼|原始碼|源码|檔案|文件|專案|项目|應用|应用|介面|界面|本地化|國際化|国际化|實作|实现|修改|編輯|编辑|修復|修复|提交|部署|安裝|安装|執行|执行|新增|刪除|删除|建立|重命名)/i
 
+// Paths and filenames: absolute or dot-relative, bare repository-relative
+// (`src/util/helpers`), Unicode filenames (`設定.md`), and the common
+// extensionless build files.
 const PATH_OR_CODE_SIGNAL =
-  /`[^`]+`|(?:^|\s)(?:\.\.?\/|\/)[^\s]+|\b[\w.-]+\.(?:c|cc|cpp|css|go|h|hpp|html|java|js|jsx|json|md|php|po|py|rb|rs|sh|swift|toml|ts|tsx|vue|yaml|yml)\b/i
+  /`[^`]+`|(?:^|\s)(?:\.\.?\/|\/)[^\s]+|(?:^|\s)[\p{L}\p{N}_.-]+(?:\/[\p{L}\p{N}_.-]+)+|[\p{L}\p{N}_.-]+\.(?:c|cc|cpp|css|env|go|h|hpp|html|ipynb|java|js|jsx|json|lock|log|md|php|po|proto|py|rb|rs|sh|sql|swift|tf|toml|ts|tsx|txt|vue|yaml|yml)\b|\b(?:Makefile|Dockerfile|CMakeLists\.txt)\b/iu
 
-const MULTI_TASK_SIGNAL = /\b(?:also|and\s+then|then\s+also)\b|(?:另外|然後|然后|並且|并且)/i
+// A second clause joined by and/then that names an action is a new task, not
+// a modifier of the transform ("repeat that and deploy it").
+const MULTI_TASK_SIGNAL =
+  /\b(?:also|and\s+then|then\s+also)\b|\b(?:and|then)\s+(?:also\s+)?(?:update|add|create|delete|remove|rename|move|run|build|deploy|install|execute|email|send|open|write|save|commit|push|edit|change|fix|check|search|find|look|read|list|show|print|test|inspect|review)\b|(?:另外|然後|然后|並且|并且|順便|顺便|以及|還有|还有)/i
 const STRUCTURED_FORMAT_SIGNAL = /\b(?:json|xml|yaml|csv|schema)\b/i
 // A new story can omit history only when it does not refer back to that history.
 // Ambiguous references take the ordinary path, which retains evidence and tools.
@@ -205,8 +213,14 @@ const LANGUAGE_CLARIFICATIONS: Array<{ pattern: RegExp; replacement: string }> =
     pattern: /\btraditional\s+chinese\b(?!\s*\(\u7e41\u9ad4\u4e2d\u6587\))/gi,
     replacement: "Traditional Chinese (\u7e41\u9ad4\u4e2d\u6587)",
   },
-  { pattern: /\btrad\.?\s+chinese\b/gi, replacement: "Traditional Chinese (\u7e41\u9ad4\u4e2d\u6587)" },
-  { pattern: /\bt\.?\s*chinese\b/gi, replacement: "Traditional Chinese (\u7e41\u9ad4\u4e2d\u6587)" },
+  {
+    pattern: /\btrad\.?\s+chinese\b(?!\s*\(\u7e41\u9ad4\u4e2d\u6587\))/gi,
+    replacement: "Traditional Chinese (\u7e41\u9ad4\u4e2d\u6587)",
+  },
+  {
+    pattern: /\bt\.?\s*chinese\b(?!\s*\(\u7e41\u9ad4\u4e2d\u6587\))/gi,
+    replacement: "Traditional Chinese (\u7e41\u9ad4\u4e2d\u6587)",
+  },
   {
     pattern: /\bsimplified\s+chinese\b(?!\s*\(\u7b80\u4f53\u4e2d\u6587\))/gi,
     replacement: "Simplified Chinese (\u7b80\u4f53\u4e2d\u6587)",

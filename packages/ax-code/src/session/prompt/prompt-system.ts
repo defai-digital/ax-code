@@ -13,6 +13,7 @@ type SystemCache = {
   skills?: string | undefined
   skillsAgentKey?: string
   skillsLastMsgID?: string
+  skillsMsgCount?: number
   skillsFn?: Function
 }
 
@@ -47,6 +48,13 @@ export async function systemPrompt(input: {
     input.cache.skillsAgentKey !== input.agent.name ||
     input.cache.skillsFn !== skillsFn
 
+  // A history that shrank while keeping its last message (compaction that
+  // preserves the tail) would otherwise pass the last-ID check below and keep
+  // recommendations derived from dropped file calls.
+  if (!recompute && input.cache.skillsMsgCount !== undefined && messages.length < input.cache.skillsMsgCount) {
+    recompute = true
+  }
+
   if (!recompute && lastMsgID !== input.cache.skillsLastMsgID) {
     const sinceID = input.cache.skillsLastMsgID
     const sinceIdx = sinceID ? messages.findIndex((m) => m.info.id === sinceID) : -1
@@ -63,6 +71,7 @@ export async function systemPrompt(input: {
     input.cache.skillsFn = skillsFn
   }
   input.cache.skillsLastMsgID = lastMsgID
+  input.cache.skillsMsgCount = messages.length
   const skills = input.cache.skills
 
   // Project memory is intentionally not cached. The loader is a single
@@ -98,12 +107,15 @@ export async function systemPrompt(input: {
   // hints, intelligence nudge) deliberately does NOT live here — it is
   // rendered as a synthetic <turn_context> part on the last user message by
   // prompt-turn-context.ts / prompt-reminders.ts instead.
+  // Empty blocks are dropped from the array sources too: some providers
+  // reject an empty system message, and a loader alternating between "" and
+  // nothing would otherwise flicker the cached prefix.
   const system = [
-    ...(input.environmentOverride ?? input.cache.environment ?? []),
+    ...(input.environmentOverride ?? input.cache.environment ?? []).filter(Boolean),
     ...(assuranceWorkflow ? [assuranceWorkflow] : []),
     ...(memory ? [memory] : []),
     ...(skills ? [skills] : []),
-    ...input.cache.instructions,
+    ...input.cache.instructions.filter(Boolean),
   ]
   if (input.format.type === "json_schema" && input.structuredPrompt) {
     system.push(input.structuredPrompt)

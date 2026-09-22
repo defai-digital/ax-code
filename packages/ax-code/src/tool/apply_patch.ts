@@ -548,9 +548,11 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
     // content, which the source-side diff never sees; charge those lines too.
     for (const change of appliedChanges) {
       const target = change.movePath ?? change.filePath
+      // Same line count rule as the delete branch: a trailing newline does not
+      // start another line.
       const overwritten =
         change.moveExisted && typeof change.moveOldContent === "string" && change.moveOldContent.length > 0
-          ? change.moveOldContent.split("\n").length
+          ? change.moveOldContent.split("\n").length - (change.moveOldContent.endsWith("\n") ? 1 : 0)
           : 0
       await BlastRadius.recordWriteAndAssert(
         ctx.sessionID,

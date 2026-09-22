@@ -1287,6 +1287,56 @@ describe("session.prompt helpers", () => {
     expect(calls).toBe(2)
   })
 
+  test("skills cache recomputes when history shrinks but keeps its last message", async () => {
+    const cache = {}
+    let calls = 0
+    const skillsFn = async () => {
+      calls++
+      return `skills-${calls}`
+    }
+    const args = (messages: any[]) => ({
+      agent: { name: "build" } as any,
+      model: { providerID: ProviderID.make("openai"), api: { id: "gpt-5.2" } } as any,
+      format: { type: "text" } as { type: string },
+      cache,
+      skills: skillsFn,
+      environment: async () => ["env"],
+      instructions: async () => [],
+      memory: async () => undefined,
+      messages,
+    })
+    const userMsg = (id: string) => ({ info: { id, role: "user" }, parts: [] }) as any
+    const fileToolMsg = (id: string) =>
+      ({
+        info: { id, role: "assistant" },
+        parts: [{ type: "tool", tool: "read", state: { status: "completed", input: { filePath: "a.ts" } } }],
+      }) as any
+
+    await systemPrompt(args([userMsg("m1"), fileToolMsg("m2"), userMsg("m3")]))
+    expect(calls).toBe(1)
+    // Compaction dropped m1 and m2 but kept the tail m3: same last id, fewer
+    // messages, so the recommendation derived from m2 must be recomputed.
+    await systemPrompt(args([userMsg("m3")]))
+    expect(calls).toBe(2)
+    // Unchanged history afterwards is a cache hit.
+    await systemPrompt(args([userMsg("m3")]))
+    expect(calls).toBe(2)
+  })
+
+  test("drops empty blocks from the environment and instruction arrays", async () => {
+    const result = await systemPrompt({
+      agent: { name: "build" } as any,
+      model: { providerID: ProviderID.make("openai"), api: { id: "gpt-5.2" } } as any,
+      format: { type: "text" },
+      cache: {},
+      skills: async () => undefined,
+      environment: async () => ["env", ""],
+      instructions: async () => ["", "rules"],
+      memory: async () => undefined,
+    })
+    expect(result).toEqual(["env", "rules"])
+  })
+
   test("skills cache invalidates when message history is truncated (compaction)", async () => {
     const cache = {}
     let calls = 0
