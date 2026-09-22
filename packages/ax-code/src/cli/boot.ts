@@ -36,8 +36,10 @@ import {
   commandTokenFromArgv,
   isCliUsageFailureMessage,
   RunCommand,
+  runArgvUsesEventStream,
   runUsageFailureHint,
 } from "./cmd/run"
+import { buildRunEarlyErrorEvent } from "./cmd/run-output"
 import { ServeCommand } from "./cmd/serve"
 import { RuntimeCommand } from "./cmd/runtime"
 import { SessionCommand } from "./cmd/session"
@@ -323,6 +325,13 @@ export function cli(argv = hideBin(process.argv)) {
   cli = cli
     .fail((msg, err) => {
       if (err) throw err
+      // Stream consumers (`run --format json|jsonl|ndjson`) get one
+      // structured error line on stdout before any stderr prose, so a
+      // yargs-level usage failure (e.g. a mistyped flag) is still machine-
+      // parsable instead of stdout-silent.
+      if (runArgvUsesEventStream(rawArgv) && msg) {
+        process.stdout.write(JSON.stringify(buildRunEarlyErrorEvent("usage", msg)) + "\n")
+      }
       if (msg) process.stderr.write(`${msg}\n`)
       if (isCliUsageFailureMessage(msg)) {
         const command = commandTokenFromArgv(rawArgv)

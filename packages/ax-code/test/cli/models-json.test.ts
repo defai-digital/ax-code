@@ -57,6 +57,22 @@ describe("models --json", () => {
     expect(doc.models.every((m) => m.provider === "grok-build-cli")).toBe(true)
   })
 
+  test("normalizes the provider filter through ProviderID.make like text mode", async () => {
+    // F8: the --json filter must resolve the provider id exactly like the
+    // text mode (ProviderID.make), so a future non-identity normalization in
+    // ProviderID.make applies to both output modes at once. Today make is an
+    // identity cast, so the behavioral assertion is the same lookup plus a
+    // source pin that both modes route through it.
+    const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/models.ts"), "utf-8")
+    const jsonLookup = src.indexOf("const requestedProviderID = ProviderID.make(input.provider)")
+    const textLookup = src.indexOf("const requestedProviderID = ProviderID.make(args.provider)")
+    expect(jsonLookup).toBeGreaterThan(-1)
+    expect(textLookup).toBeGreaterThan(-1)
+
+    const doc = document(buildModelsDocument({ providers, connected: ["anthropic"], provider: "grok-build-cli" }))
+    expect(doc.models.map((m) => m.model)).toEqual(["grok-4.6"])
+  })
+
   test("returns the current error for an unknown provider filter", () => {
     const result = buildModelsDocument({ providers, connected: ["anthropic"], provider: "nope" })
     expect("error" in result).toBe(true)
@@ -94,5 +110,29 @@ describe("models --json", () => {
     const plain = document(buildModelsDocument({ providers, connected: ["anthropic"], provider: "anthropic" }))
     expect(verbose.models.every((m) => "metadata" in m)).toBe(true)
     expect(plain.models.every((m) => !("metadata" in m))).toBe(true)
+  })
+
+  test("connected is derived from the same Provider.list() keys the handler lists (G9)", async () => {
+    // The listing source is Provider.list() — the same map whose keys
+    // `providers list --json` (src/cli/cmd/providers-impl.ts) uses as its
+    // connected set — never the catalog merge, so no catalog-only provider
+    // can appear in `models` output and every listed entry is connected by
+    // construction. The field stays because the --json shape is documented;
+    // the source pin keeps the invariant honest if the listing source ever
+    // changes to a catalog merge (at which point connected must become
+    // discriminating again).
+    const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/models.ts"), "utf-8")
+    // Comment phrase pins are whitespace-normalized (Prettier wraps comments
+    // across lines, so each phrase half is pinned independently).
+    const normalized = src.replace(/\s+/g, " ")
+    expect(normalized).toContain("const connectedProviderIDs = Object.keys(providers)")
+    expect(normalized).toContain("connected: connectedProviderIDs")
+    expect(normalized).toContain("no catalog-only provider can")
+    expect(normalized).toContain("appear here and every listed entry is connected by construction")
+    // The builder itself still discriminates when a narrower connected set is
+    // passed (the shape contract other callers rely on).
+    const doc = document(buildModelsDocument({ providers, connected: [] }))
+    expect(doc.models.length).toBeGreaterThan(0)
+    expect(doc.models.every((m) => m.connected === false)).toBe(true)
   })
 })

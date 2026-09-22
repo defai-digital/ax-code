@@ -50,8 +50,11 @@ export function buildModelsDocument(input: {
 
   let providerIDs: string[]
   if (input.provider) {
-    if (!input.providers[input.provider]) return { error: `Provider not found: ${input.provider}` }
-    providerIDs = [input.provider]
+    // Same normalization as the text mode below (`ProviderID.make`) so both
+    // output modes resolve the provider filter identically.
+    const requestedProviderID = ProviderID.make(input.provider)
+    if (!input.providers[requestedProviderID]) return { error: `Provider not found: ${input.provider}` }
+    providerIDs = [requestedProviderID]
   } else {
     providerIDs = orderedProviderIDs(input.providers)
   }
@@ -113,9 +116,16 @@ export const ModelsCommand = cmd({
         if (args.json) {
           const providerMap: Record<string, ModelsProvider> = {}
           for (const [providerID, info] of Object.entries(providers)) providerMap[providerID] = info
+          // `connected` uses the same definition as `providers list --json`
+          // (src/cli/cmd/providers-impl.ts): the keys of `Provider.list()`.
+          // The models listing above is drawn from that same connected map
+          // rather than the catalog merge, so no catalog-only provider can
+          // appear here and every listed entry is connected by construction.
+          // The field is kept because the --json shape is documented.
+          const connectedProviderIDs = Object.keys(providers)
           const result = buildModelsDocument({
             providers: providerMap,
-            connected: Object.keys(providers),
+            connected: connectedProviderIDs,
             provider: args.provider,
             verbose: args.verbose,
           })

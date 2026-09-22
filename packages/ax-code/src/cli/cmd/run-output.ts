@@ -115,16 +115,36 @@ function errorNameOfRecord(error: unknown): string | undefined {
 }
 
 /**
- * Connection-failure signals from an SDK call. undici wraps the OS socket
- * error (ECONNREFUSED/ENOTFOUND) as the `cause` of a `TypeError: fetch
- * failed`; direct socket errors carry the code themselves. The cause chain is
- * walked because some runtimes nest it another level (e.g. AggregateError).
+ * Connection-failure errno codes from an SDK call: refused and DNS failures
+ * plus reset/timeout/unreachable variants and undici's own `UND_ERR_*`
+ * errors. undici wraps the OS socket error as the `cause` of a
+ * `TypeError: fetch failed`; direct socket errors carry the code themselves.
+ */
+const RUN_CONNECTION_ERROR_CODES: ReadonlySet<string> = new Set([
+  "ECONNREFUSED",
+  "ENOTFOUND",
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "EAI_AGAIN",
+  "EHOSTUNREACH",
+  "ENETUNREACH",
+  "EPIPE",
+])
+
+/**
+ * Connection-failure signals from an SDK call. The cause chain is walked
+ * because some runtimes nest it another level (e.g. AggregateError).
  */
 function isRunConnectionFailure(error: unknown, seen: Set<object> = new Set()): boolean {
   if (typeof error !== "object" || error === null || seen.has(error)) return false
   seen.add(error)
   const record = error as { name?: unknown; message?: unknown; code?: unknown; cause?: unknown }
-  if (record.code === "ECONNREFUSED" || record.code === "ENOTFOUND") return true
+  if (
+    typeof record.code === "string" &&
+    (RUN_CONNECTION_ERROR_CODES.has(record.code) || record.code.startsWith("UND_ERR_"))
+  ) {
+    return true
+  }
   if (record.name === "TypeError" && typeof record.message === "string" && record.message.includes("fetch failed")) {
     return true
   }
@@ -202,6 +222,25 @@ export function classifyRunFailure(error: unknown): RunFailureClassification {
   return { code: "internal", message: NamedError.message(error) }
 }
 
+/**
+ * Masks the password in a URL's userinfo (`http://user:pass@host` becomes
+ * `http://user:***@host`) so attach/auth error messages never echo
+ * credentials into the structured error event or the log. URLs without a
+ * password are returned verbatim (no URL round-trip, so non-canonical
+ * spellings are preserved); an unparseable string is also returned verbatim —
+ * redaction must never turn a display string into an exception.
+ */
+export function redactRunUrlCredentials(url: string): string {
+  try {
+    const parsed = new URL(url)
+    if (parsed.password === "") return url
+    parsed.password = "***"
+    return parsed.toString()
+  } catch {
+    return url
+  }
+}
+
 /** File-extension mime mapping for `run --file` attachments. */
 const RUN_FILE_MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
   png: "image/png",
@@ -269,10 +308,15 @@ export const RUN_BUILTIN_TOOL_IDS: ReadonlySet<string> = new Set([
   "list",
   "webfetch",
   "websearch",
+  // Rendered as a built-in tool by the run renderer (src/tool/codesearch.ts).
+  "codesearch",
   "task",
   "todowrite",
   "todoread",
   "question",
+  // Hand-off tool gated with `question` (src/tool/plan.ts); the per-turn
+  // tools map always disables both for headless runs.
+  "plan_exit",
   "skill",
 ])
 
@@ -341,17 +385,64 @@ export function isRunMutatingToolCompletion(tool: string, status: string): boole
 }
 
 /**
- * A tool error raised when the read-only sandbox denied a mutating tool call
- * (`session/prompt/prompt-tools.ts` throws `Tool denied in read-only mode:
- * <reason>`). It reaches the CLI as a tool error rather than a permission
- * ask, but represents the same blocked-run condition and feeds the same
- * denial counter.
+ * Mutable blocked-run accounting shared by the live event loop and the
+ * post-stream reconciliation. `observedParts` doubles as the drain/replay
+ * observed-part set so a redelivered final part is skipped everywhere at once.
  */
-export function isRunReadOnlyToolDenial(state: { status: string; error?: string }): boolean {
+export type RunToolAccounting = {
+  observedParts: Set<string>
+  successfulMutations: number
+  permissionDenials: number
+}
+
+export function createRunToolAccounting(): RunToolAccounting {
+  return { observedParts: new Set<string>(), successfulMutations: 0, permissionDenials: 0 }
+}
+
+/**
+ * Counts one settled tool part toward the blocked-run accounting, exactly
+ * once per part id: the observed-parts guard makes a redelivered final part
+ * (an SSE replay or the post-stream reconciliation) a no-op instead of a
+ * double count. Parts from every session in the run's tree feed the same
+ * counters.
+ */
+export function accountToolCompletion(
+  accounting: RunToolAccounting,
+  part: { id: string; tool: string; state: { status: string; error?: string } },
+): void {
+  if (accounting.observedParts.has(part.id)) return
+  accounting.observedParts.add(part.id)
+  if (isRunMutatingToolCompletion(part.tool, part.state.status)) accounting.successfulMutations++
+  if (isRunToolDenial(part.state)) accounting.permissionDenials++
+}
+
+/**
+ * A tool error raised when a permission deny rule rejected the call without
+ * ever asking (`permission/index.ts` DeniedError: "The user has specified a
+ * rule which prevents you from using this specific tool call. …"), e.g. a
+ * `--disallowed-tools` deny rule. It reaches the CLI as a tool error rather
+ * than a permission ask, but represents the same blocked-run condition and
+ * feeds the same denial counter.
+ */
+const RUN_TOOL_DENIED_BY_RULE_PREFIX =
+  "The user has specified a rule which prevents you from using this specific tool call"
+
+/**
+ * A tool error raised when a mutating call was denied without a permission
+ * ask: the read-only sandbox prefix (`session/prompt/prompt-tools.ts` throws
+ * `Tool denied in read-only mode: <reason>`) or a permission deny rule
+ * (DeniedError, see above). Both block the run the same way and feed the
+ * same denial counter.
+ */
+export function isRunToolDenial(state: { status: string; error?: string }): boolean {
+  if (state.status !== "error" || typeof state.error !== "string") return false
   return (
-    state.status === "error" && typeof state.error === "string" && /^Tool denied in read-only mode/.test(state.error)
+    state.error.startsWith("Tool denied in read-only mode") || state.error.startsWith(RUN_TOOL_DENIED_BY_RULE_PREFIX)
   )
 }
+
+/** Backwards-compatible alias for the generalized {@link isRunToolDenial}. */
+export const isRunReadOnlyToolDenial = isRunToolDenial
 
 /**
  * A run is blocked when every permission ask was denied and none of the
@@ -394,7 +485,14 @@ export function resolveRunResultStatus(input: {
 export type RunStructuredOutputOptions = {
   callerCwd: string
   outputFile?: string
-  outputSchema?: string
+  /**
+   * Structured-output enforcement: the schema file path (kept for callers
+   * that want to name it in error text) together with the object parsed by
+   * the pre-submission preflight. The same parsed object steers the model
+   * (prompt body `format`) and backs the post-run validation, so the schema
+   * file is read exactly once and cannot change between the two (TOCTOU).
+   */
+  outputSchema?: { file: string; parsed: JsonSchema }
 }
 
 export type SchemaValidationResult =
@@ -449,22 +547,6 @@ export function parseFinalJson(text: string): unknown {
   }
 }
 
-export async function loadJsonSchemaFile(callerCwd: string, file: string): Promise<JsonSchema> {
-  const resolved = resolveRunOutputPath(callerCwd, file)
-  let text: string
-  try {
-    text = await readFile(resolved, "utf8")
-  } catch (error) {
-    throw new Error(`Failed to read output schema ${resolved}: ${toErrorMessage(error)}`)
-  }
-
-  try {
-    return JSON.parse(text) as JsonSchema
-  } catch (error) {
-    throw new Error(`Failed to parse output schema ${resolved}: ${toErrorMessage(error)}`)
-  }
-}
-
 export async function writeRunOutputFile(callerCwd: string, target: string, content: string) {
   const resolved = resolveRunOutputPath(callerCwd, target)
   await mkdir(path.dirname(resolved), { recursive: true })
@@ -478,9 +560,12 @@ export async function handleRunStructuredOutput(finalMessage: string | undefined
   if (!text) throw new Error("No final assistant message was produced")
 
   if (options.outputSchema) {
-    const schema = await loadJsonSchemaFile(options.callerCwd, options.outputSchema)
+    // F14 TOCTOU: reuse the object parsed by the pre-submission preflight
+    // instead of re-reading the schema file after the run — the file may have
+    // changed (or vanished) in between, and the model was steered by the
+    // preflight object, so that same object is the authoritative contract.
     const value = parseFinalJson(text)
-    const result = validateJsonSchema(value, schema)
+    const result = validateJsonSchema(value, options.outputSchema.parsed)
     if (!result.ok) {
       throw new Error(`Output schema validation failed: ${result.errors.join("; ")}`)
     }

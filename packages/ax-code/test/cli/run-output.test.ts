@@ -3,10 +3,12 @@ import path from "node:path"
 import { readFile, writeFile } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import {
+  accountToolCompletion,
   buildAddDirRules,
   buildRunEarlyErrorEvent,
   buildRunResultEvent,
   classifyRunFailure,
+  createRunToolAccounting,
   extractRunFinalAssistantText,
   extractRunStructuredOutput,
   extractRunUsageTotals,
@@ -16,9 +18,11 @@ import {
   isRunMutatingToolCompletion,
   isRunReadOnlyToolDenial,
   isRunSelfAbortError,
+  isRunToolDenial,
   parseDisallowedTools,
   parseFinalJson,
   preflightRunOutputSchema,
+  redactRunUrlCredentials,
   resolveRunOutputPath,
   resolveRunResultStatus,
   runFileMime,
@@ -158,20 +162,18 @@ test("run structured output compares object enum values independent of key order
 
 test("run structured output writes file after schema success", async () => {
   await using tmp = await tmpdir()
-  await writeFile(
-    path.join(tmp.path, "schema.json"),
-    JSON.stringify({
-      type: "object",
-      required: ["status"],
-      properties: { status: { const: "ok" } },
-      additionalProperties: false,
-    }),
-  )
+  const schema = {
+    type: "object",
+    required: ["status"],
+    properties: { status: { const: "ok" } },
+    additionalProperties: false,
+  }
+  await writeFile(path.join(tmp.path, "schema.json"), JSON.stringify(schema))
 
   await handleRunStructuredOutput('{"status":"ok"}', {
     callerCwd: tmp.path,
     outputFile: "nested/result.json",
-    outputSchema: "schema.json",
+    outputSchema: { file: "schema.json", parsed: schema },
   })
 
   await expect(readFile(path.join(tmp.path, "nested", "result.json"), "utf8")).resolves.toBe('{"status":"ok"}')
@@ -179,25 +181,56 @@ test("run structured output writes file after schema success", async () => {
 
 test("run structured output does not write file after schema failure", async () => {
   await using tmp = await tmpdir()
-  await writeFile(
-    path.join(tmp.path, "schema.json"),
-    JSON.stringify({
-      type: "object",
-      required: ["status"],
-      properties: { status: { const: "ok" } },
-      additionalProperties: false,
-    }),
-  )
+  const schema = {
+    type: "object",
+    required: ["status"],
+    properties: { status: { const: "ok" } },
+    additionalProperties: false,
+  }
+  await writeFile(path.join(tmp.path, "schema.json"), JSON.stringify(schema))
 
   await expect(
     handleRunStructuredOutput('{"status":"bad"}', {
       callerCwd: tmp.path,
       outputFile: "result.json",
-      outputSchema: "schema.json",
+      outputSchema: { file: "schema.json", parsed: schema },
     }),
   ).rejects.toThrow("Output schema validation failed")
 
   await expect(readFile(path.join(tmp.path, "result.json"), "utf8")).rejects.toThrow()
+})
+
+test("run structured output validates against the pre-parsed schema, not a re-read file", async () => {
+  // F14 TOCTOU: the schema file is read exactly once at preflight; editing it
+  // after the run started must not change the post-run validation, which uses
+  // the object parsed before submission.
+  await using tmp = await tmpdir()
+  const preflightSchema = {
+    type: "object",
+    required: ["status"],
+    properties: { status: { const: "ok" } },
+    additionalProperties: false,
+  }
+  const schemaFile = path.join(tmp.path, "schema.json")
+  await writeFile(schemaFile, JSON.stringify(preflightSchema))
+  // Simulate the file changing between preflight and post-run validation.
+  await writeFile(
+    schemaFile,
+    JSON.stringify({
+      type: "object",
+      required: ["status"],
+      properties: { status: { const: "changed-after-preflight" } },
+      additionalProperties: false,
+    }),
+  )
+
+  // The preflight-parsed object is the contract: {"status":"ok"} still passes.
+  await expect(
+    handleRunStructuredOutput('{"status":"ok"}', {
+      callerCwd: tmp.path,
+      outputSchema: { file: "schema.json", parsed: preflightSchema },
+    }),
+  ).resolves.toBeUndefined()
 })
 
 test("run result event builder carries usage only when token counts exist", () => {
@@ -337,19 +370,40 @@ test("isRunSelfAbortError is true only for a self-requested MessageAbortedError"
   expect(isRunSelfAbortError(undefined, { timedOut: true, cancelled: false })).toBe(false)
 })
 
-test("read-only sandbox tool denials are classified by their error prefix", () => {
+test("read-only sandbox and permission-rule tool denials are classified by their error prefix", () => {
   // prompt-tools throws `Tool denied in read-only mode: <reason>` for a
   // mutating call denied under --sandbox read-only; it reaches the CLI as a
   // tool error and must count as a permission denial for blocked runs.
-  expect(isRunReadOnlyToolDenial({ status: "error", error: "Tool denied in read-only mode" })).toBe(true)
+  expect(isRunToolDenial({ status: "error", error: "Tool denied in read-only mode" })).toBe(true)
+  expect(isRunToolDenial({ status: "error", error: "Tool denied in read-only mode: bash is not permitted" })).toBe(true)
+  // permission/index.ts DeniedError (a deny rule — e.g. --disallowed-tools —
+  // never asks; it fails the call with this text) blocks the run the same way.
   expect(
-    isRunReadOnlyToolDenial({ status: "error", error: "Tool denied in read-only mode: bash is not permitted" }),
+    isRunToolDenial({
+      status: "error",
+      error:
+        "The user has specified a rule which prevents you from using this specific tool call. Here are some of the relevant rules …",
+    }),
+  ).toBe(true)
+  // The legacy export stays an alias of the generalized predicate.
+  expect(isRunReadOnlyToolDenial).toBe(isRunToolDenial)
+  expect(
+    isRunReadOnlyToolDenial({
+      status: "error",
+      error: "The user has specified a rule which prevents you from using this specific tool call. …",
+    }),
   ).toBe(true)
   // Other tool errors, completed tools, and missing error text do not count.
-  expect(isRunReadOnlyToolDenial({ status: "error", error: "Permission denied" })).toBe(false)
-  expect(isRunReadOnlyToolDenial({ status: "error", error: "prefix Tool denied in read-only mode" })).toBe(false)
-  expect(isRunReadOnlyToolDenial({ status: "error" })).toBe(false)
-  expect(isRunReadOnlyToolDenial({ status: "completed", error: "Tool denied in read-only mode" })).toBe(false)
+  expect(isRunToolDenial({ status: "error", error: "Permission denied" })).toBe(false)
+  expect(isRunToolDenial({ status: "error", error: "prefix Tool denied in read-only mode" })).toBe(false)
+  expect(
+    isRunToolDenial({
+      status: "error",
+      error: "prefix The user has specified a rule which prevents you from using this specific tool call",
+    }),
+  ).toBe(false)
+  expect(isRunToolDenial({ status: "error" })).toBe(false)
+  expect(isRunToolDenial({ status: "completed", error: "Tool denied in read-only mode" })).toBe(false)
 })
 
 test("run early error event builder emits the structured code shape", () => {
@@ -447,6 +501,29 @@ test("classifyRunFailure maps the loopback-policy rejection to a usage error", (
     code: "usage",
     message: "--attach URL must use a loopback address; remote AX Code access is disabled by the local-only policy",
   })
+})
+
+test("classifyRunFailure maps the wider connection errno and undici codes to attach", () => {
+  // F7: refused/DNS plus reset/timeout/unreachable/pipe variants and undici's
+  // own UND_ERR_* errors all classify as attach failures, on the error itself
+  // or anywhere in its cause chain.
+  for (const code of ["ECONNRESET", "ETIMEDOUT", "EAI_AGAIN", "EHOSTUNREACH", "ENETUNREACH", "EPIPE"]) {
+    const direct = Object.assign(new Error(`socket error ${code}`), { code })
+    expect(classifyRunFailure(direct)).toEqual({ code: "attach", message: `socket error ${code}` })
+  }
+  // undici wraps the OS error as the cause of a TypeError; UND_ERR_ codes on
+  // any chain level count too.
+  const undici = new TypeError("fetch failed", {
+    cause: Object.assign(new Error("socket disconnected"), { code: "UND_ERR_SOCKET" }),
+  })
+  expect(classifyRunFailure(undici)).toEqual({ code: "attach", message: "socket disconnected" })
+  const nested = Object.assign(new Error("outer"), {
+    cause: Object.assign(new Error("inner"), { code: "UND_ERR_CONNECT_TIMEOUT" }),
+  })
+  expect(classifyRunFailure(nested)).toEqual({ code: "attach", message: "inner" })
+  // Unknown errno codes stay internal unless a TypeError: fetch failed wraps them.
+  const unknown = Object.assign(new Error("weird socket thing"), { code: "ESOMETHINGELSE" })
+  expect(classifyRunFailure(unknown)).toEqual({ code: "internal", message: "weird socket thing" })
 })
 
 test("isRunAuthFailure keys on the authorization message or a 401/403 status", () => {
@@ -549,6 +626,20 @@ test("buildAddDirRules emits one external_directory allow rule per directory", (
   expect(buildAddDirRules([])).toEqual([])
 })
 
+test("buildAddDirRules covers both the resolved and the real path of one --add-dir entry", () => {
+  // F6: the CLI pushes BOTH spellings when realpath differs (the tool side
+  // asks with realpath(parentDir)/*, so a resolved-only rule would never
+  // match). The pair produces two rules; identical spellings dedupe naturally
+  // because the CLI only pushes the second entry when it differs.
+  expect(buildAddDirRules(["/var/tmp/symlink-dir", "/private/real-dir"])).toEqual([
+    { permission: "external_directory", pattern: "/var/tmp/symlink-dir/*", action: "allow" },
+    { permission: "external_directory", pattern: "/private/real-dir/*", action: "allow" },
+  ])
+  // The rules are exact per spelling: realpath and resolved are not conflated.
+  expect(buildAddDirRules(["/var/tmp/symlink-dir"])).toHaveLength(1)
+  expect(buildAddDirRules(["/var/tmp/symlink-dir"])[0]!.pattern).toBe("/var/tmp/symlink-dir/*")
+})
+
 test("RUN_BUILTIN_TOOL_IDS covers the core tool surface", () => {
   for (const id of [
     "bash",
@@ -562,15 +653,93 @@ test("RUN_BUILTIN_TOOL_IDS covers the core tool surface", () => {
     "list",
     "webfetch",
     "websearch",
+    // Rendered as a built-in by the run renderer (run.ts codesearch()).
+    "codesearch",
     "task",
     "todowrite",
     "todoread",
     "question",
+    // Disabled per turn together with `question` (src/tool/plan.ts).
+    "plan_exit",
     "skill",
   ]) {
     expect(RUN_BUILTIN_TOOL_IDS.has(id)).toBe(true)
   }
   // Not built-in: these only ever match dynamic MCP tool ids.
   expect(RUN_BUILTIN_TOOL_IDS.has("mcp__figma__get_file")).toBe(false)
-  expect(RUN_BUILTIN_TOOL_IDS.has("codesearch")).toBe(false)
+  expect(RUN_BUILTIN_TOOL_IDS.has("some-mcp-server")).toBe(false)
+})
+
+test("accountToolCompletion counts a settled tool part exactly once (G3)", () => {
+  const accounting = createRunToolAccounting()
+  expect(accounting.successfulMutations).toBe(0)
+  expect(accounting.permissionDenials).toBe(0)
+
+  // A completed mutating tool counts one mutation.
+  accountToolCompletion(accounting, { id: "prt_write", tool: "write", state: { status: "completed" } })
+  expect(accounting.successfulMutations).toBe(1)
+  expect(accounting.permissionDenials).toBe(0)
+
+  // A redelivered final part (SSE replay or post-stream reconciliation)
+  // double-counted before G3; the observed-parts guard makes it a no-op.
+  accountToolCompletion(accounting, { id: "prt_write", tool: "write", state: { status: "completed" } })
+  expect(accounting.successfulMutations).toBe(1)
+  expect(accounting.observedParts.has("prt_write")).toBe(true)
+
+  // A read-only sandbox denial counts one permission denial, also exactly once.
+  const denied = {
+    id: "prt_bash",
+    tool: "bash",
+    state: { status: "error", error: "Tool denied in read-only mode: bash is not permitted to write" },
+  }
+  accountToolCompletion(accounting, denied)
+  accountToolCompletion(accounting, denied)
+  expect(accounting.permissionDenials).toBe(1)
+  expect(accounting.successfulMutations).toBe(1)
+
+  // Non-mutating completions and non-denial errors observe the part but
+  // change no counter.
+  accountToolCompletion(accounting, { id: "prt_read", tool: "read", state: { status: "completed" } })
+  accountToolCompletion(accounting, { id: "prt_err", tool: "bash", state: { status: "error", error: "exit 1" } })
+  expect(accounting.successfulMutations).toBe(1)
+  expect(accounting.permissionDenials).toBe(1)
+  expect(accounting.observedParts.has("prt_read")).toBe(true)
+  expect(accounting.observedParts.has("prt_err")).toBe(true)
+
+  // An errored mutating tool never counts as a successful mutation.
+  accountToolCompletion(accounting, { id: "prt_edit", tool: "edit", state: { status: "error", error: "boom" } })
+  expect(accounting.successfulMutations).toBe(1)
+})
+
+test("accountToolCompletion shares the observed set with the drain/replay bookkeeping", () => {
+  const accounting = createRunToolAccounting()
+  accountToolCompletion(accounting, { id: "prt_a", tool: "bash", state: { status: "completed" } })
+  // run.ts aliases observedFinalParts to accounting.observedParts, so a part
+  // observed here is skipped by the finalEvents replay and the drain check.
+  const observedFinalParts = accounting.observedParts
+  expect(observedFinalParts.has("prt_a")).toBe(true)
+  expect(observedFinalParts.size).toBe(1)
+})
+
+test("redactRunUrlCredentials masks the userinfo password in attach URLs (G5)", () => {
+  // The password is replaced with *** while the username, host, and port stay
+  // readable for diagnostics.
+  expect(redactRunUrlCredentials("http://user:pass@127.0.0.1:4096")).toBe("http://user:***@127.0.0.1:4096/")
+  expect(redactRunUrlCredentials("https://alice:secret-token@example.com")).toBe("https://alice:***@example.com/")
+  expect(redactRunUrlCredentials("http://u:p@localhost:4096/x/y?q=1")).toBe("http://u:***@localhost:4096/x/y?q=1")
+
+  // URLs without a password (including username-only userinfo) come back
+  // verbatim — no URL round-trip, so non-canonical spellings are preserved.
+  expect(redactRunUrlCredentials("http://127.0.0.1:4096")).toBe("http://127.0.0.1:4096")
+  expect(redactRunUrlCredentials("http://user@127.0.0.1:4096")).toBe("http://user@127.0.0.1:4096")
+  expect(redactRunUrlCredentials("http://127.0.0.1:4096/")).toBe("http://127.0.0.1:4096/")
+
+  // Unparseable strings are returned verbatim; redaction never throws.
+  expect(redactRunUrlCredentials("not a url")).toBe("not a url")
+  expect(redactRunUrlCredentials("")).toBe("")
+
+  // The secret never survives anywhere in the redacted value.
+  for (const url of ["http://user:sekrit@127.0.0.1:4096", "https://a:b%40c@example.com"]) {
+    expect(redactRunUrlCredentials(url)).not.toMatch(/sekrit|b%40c/)
+  }
 })

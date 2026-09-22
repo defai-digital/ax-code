@@ -98,6 +98,14 @@ async function runEventStream(input: {
   sessionCreateStatus?: number
   /** Body for a rejected POST /session; defaults to the runtime auth ForbiddenError. */
   sessionCreateError?: { name: string; data: { message: string } }
+  /**
+   * Invoked by the stub on the first request it receives that belongs to the
+   * run's bootstrap (the `/provider` model-validation request or the
+   * `POST /session` create) — before the stub answers it, so the hook can
+   * emit a signal while the request is still in flight and no session
+   * exists yet.
+   */
+  beforeSession?: () => void
   /** Extra fields merged into the handler args (e.g. sandbox, steering flags). */
   extraArgs?: Record<string, unknown>
 }) {
@@ -112,6 +120,13 @@ async function runEventStream(input: {
   let abortCalled = false
   let capturedMessageBody: string | undefined
   let capturedMessageHeaders: NodeJS.Dict<string | string[]> | undefined
+  const permissionReplies: string[] = []
+  let beforeSessionFired = false
+  const fireBeforeSession = () => {
+    if (beforeSessionFired || !input.beforeSession) return
+    beforeSessionFired = true
+    input.beforeSession()
+  }
   const emit = (event: Record<string, unknown>) => eventsResponse!.write(`data: ${JSON.stringify(event)}\n\n`)
   const server = createServer(async (request, response) => {
     if (request.url?.startsWith("/event")) {
@@ -123,10 +138,12 @@ async function runEventStream(input: {
     response.setHeader("content-type", "application/json")
     const pathname = (request.url ?? "").split("?")[0]
     if (request.url === "/provider") {
+      fireBeforeSession()
       response.end(JSON.stringify(input.providers ?? { all: [], connected: [] }))
       return
     }
     if (request.url === "/session" && request.method === "POST") {
+      fireBeforeSession()
       if (input.sessionCreateStatus !== undefined) {
         response.statusCode = input.sessionCreateStatus
         response.end(
@@ -204,6 +221,7 @@ async function runEventStream(input: {
       return
     }
     if (request.method === "POST" && pathname.includes("/reply")) {
+      permissionReplies.push(pathname)
       response.end("true")
       return
     }
@@ -240,6 +258,7 @@ async function runEventStream(input: {
       abortCalled,
       messageBody: capturedMessageBody,
       messageHeaders: capturedMessageHeaders,
+      permissionReplies,
     }
   } finally {
     write.mockRestore()
@@ -529,6 +548,79 @@ test("run that recovered after a denial stays completed with exit 0", async () =
   expect(exitCode).toBeUndefined()
 })
 
+test("child-session permission asks are auto-rejected, named, and counted (G1)", async () => {
+  const sessionID = "ses_stream"
+  const childID = "ses_child_task"
+  // The run recovered with a completed write on the MAIN session, so the
+  // denial counting is observable independently of the blocked-run outcome.
+  const writePart = {
+    id: "prt_write_child_run",
+    messageID: "msg_final",
+    sessionID,
+    type: "tool",
+    callID: "call_write_child_run",
+    tool: "write",
+    state: {
+      status: "completed",
+      input: { filePath: "notes.txt", content: "ok" },
+      output: "wrote notes.txt",
+      title: "Write notes.txt",
+      metadata: {},
+      time: { start: 1, end: 2 },
+    },
+  }
+  const textPart = {
+    id: "prt_text_child_run",
+    messageID: "msg_final",
+    sessionID,
+    type: "text",
+    text: "Done via subagent",
+    time: { start: 1, end: 3 },
+  }
+  const { lines, exitCode, rejected, permissionReplies } = await runEventStream({
+    events: [
+      // The task tool spawned a child session under the main session.
+      { type: "session.created", properties: { info: { id: childID, parentID: sessionID } } },
+      // The child asked for permission; the ask carries the CHILD session id.
+      {
+        type: "permission.asked",
+        properties: { id: "per_child", sessionID: childID, permission: "bash", patterns: ["rm -rf /tmp/x"] },
+      },
+      { type: "message.part.updated", properties: { part: writePart } },
+      { type: "message.part.updated", properties: { part: textPart } },
+      { type: "message.updated", properties: { info: assistantInfo(sessionID) } },
+    ],
+    promptResponse: { info: assistantInfo(sessionID), parts: [writePart, textPart] },
+    messages: [
+      {
+        info: { id: "msg_final", role: "assistant" },
+        parts: [{ type: "text", text: "Done via subagent" }],
+      },
+    ],
+  })
+
+  expect(rejected).toBeUndefined()
+  // The denial event names the asking child session, not the main session.
+  const denial = JSON.parse(lines.find((line) => line.includes('"type":"permission_denied"'))!)
+  expect(denial).toMatchObject({
+    type: "permission_denied",
+    sessionID: childID,
+    permission: "bash",
+    patterns: ["rm -rf /tmp/x"],
+  })
+  // The stub saw exactly one POST /permission/<requestID>/reply for the
+  // child's ask — without the session tree nobody replied and the child
+  // blocked until --timeout.
+  expect(permissionReplies).toHaveLength(1)
+  expect(permissionReplies[0]).toContain("per_child")
+  // The child denial feeds the run's blocked-run accounting.
+  const result = JSON.parse(lines[lines.length - 1])
+  expect(result.type).toBe("result")
+  expect(result.status).toBe("completed")
+  expect(result.permissionDenials).toBe(1)
+  expect(exitCode).toBeUndefined()
+})
+
 test("run --timeout aborts the held submission and exits 124 with a single timeout result", async () => {
   const sessionID = "ses_stream"
   const textPart = {
@@ -605,6 +697,35 @@ test("run SIGINT cancels the held submission and exits 130 with a single cancell
   // The self-requested abort is the expected outcome, not a failure: no
   // `error` stream event is emitted.
   expect(lines.some((line) => line.includes('"type":"error"'))).toBe(false)
+})
+
+test("run SIGINT before the session exists emits one cancelled result and never submits", async () => {
+  // The signal lands while POST /session is still in flight (the stub emits
+  // it before answering), so no session exists yet: the pre-session branch
+  // must behave like the pre-session --timeout and commit the terminal
+  // outcome itself instead of exiting stdout-silent.
+  const { lines, exitCode, rejected, abortCalled, messageBody } = await runEventStream({
+    beforeSession: () => process.emit("SIGINT"),
+    captureBody: true,
+  })
+
+  // The aborted bootstrap calls are teardown fallout of the committed cancel
+  // outcome: the handler-level conversion swallows them.
+  expect(rejected).toBeUndefined()
+  expect(exitCode).toBe(130)
+  // Exactly one stdout line: the early terminal result, with the cancel
+  // status and no session id.
+  expect(lines).toHaveLength(1)
+  const result = JSON.parse(lines[0])
+  expect(result.type).toBe("result")
+  expect(result.status).toBe("cancelled")
+  expect(result.sessionID).toBe("")
+  expect(result.text).toBe("")
+  expect(result.permissionDenials).toBe(0)
+  // The run never reached the prompt submission, and there was no session to
+  // abort server-side.
+  expect(messageBody).toBeUndefined()
+  expect(abortCalled).toBe(false)
 })
 
 test("run reports a server-side abort error with no timeout or SIGINT as a failure", async () => {
@@ -755,7 +876,10 @@ test("steering flags reach the POST /message body as system, tools, and format",
   expect(rejected).toBeUndefined()
   const body = JSON.parse(messageBody ?? "{}")
   expect(body.system).toBe("Answer in English only")
-  expect(body.tools).toEqual({ bash: false, write: false, read: false })
+  // F4: the per-turn tools map always disables the interactive
+  // question/plan_exit tools (resumed sessions never see the create-time
+  // rules) and merges in --disallowed-tools.
+  expect(body.tools).toEqual({ question: false, plan_exit: false, bash: false, write: false, read: false })
   // --output-schema both steers the model and is enforced afterwards: the
   // parsed schema object is sent as the json_schema format with up to two
   // server-side retries before the CLI's own final validation runs.
@@ -924,4 +1048,123 @@ test("run --attach with a 403 Runtime authorization required body classifies as 
   expect(event.error.message).toContain("--runtime")
   expect(event.error.message).toContain("AX_CODE_RUNTIME_TOKEN")
   expect(lines.some((line) => line.includes('"type":"result"'))).toBe(false)
+})
+
+test("run --output-schema reports a schema-violating final text as an error result (F1)", async () => {
+  await using tmp = await tmpdir()
+  // The assistant produced plain text that violates the schema the server was
+  // told to steer toward; the CLI's post-run validation must fail the run:
+  // one structured error event, terminal result status "error", exit 1.
+  const schema = {
+    type: "object",
+    required: ["status"],
+    properties: { status: { const: "ok" } },
+    additionalProperties: false,
+  }
+  const schemaFile = path.join(tmp.path, "schema.json")
+  await writeFile(schemaFile, JSON.stringify(schema))
+  const sessionID = "ses_stream"
+  const badText = '{"status":"bad"}'
+  const textPart = {
+    id: "prt_text",
+    messageID: "msg_final",
+    sessionID,
+    type: "text",
+    text: badText,
+    time: { start: 1, end: 2 },
+  }
+
+  const { lines, exitCode, rejected } = await runEventStream({
+    events: [
+      { type: "message.part.updated", properties: { part: textPart } },
+      { type: "message.updated", properties: { info: assistantInfo(sessionID) } },
+    ],
+    promptResponse: { info: assistantInfo(sessionID), parts: [textPart] },
+    messages: [{ info: { id: "msg_final", role: "assistant" }, parts: [{ type: "text", text: badText }] }],
+    extraArgs: { "output-schema": schemaFile },
+  })
+
+  expect(rejected).toBeUndefined()
+  expect(exitCode).toBe(1)
+  const errorLines = lines.filter((line) => line.includes('"type":"error"'))
+  expect(errorLines).toHaveLength(1)
+  const errorEvent = JSON.parse(errorLines[0])
+  expect(errorEvent.type).toBe("error")
+  expect(errorEvent.error.name).toBe("StructuredOutputError")
+  expect(errorEvent.error.data.message).toContain("Output schema validation failed")
+  // The terminal result reports the failure (not "completed") and stays the
+  // last stdout line; exit 1 is not downgraded by any other precedence.
+  const result = JSON.parse(lines[lines.length - 1])
+  expect(result.type).toBe("result")
+  expect(result.status).toBe("error")
+  expect(lines[lines.length - 1]).toBe(lines.find((line) => line.includes('"type":"result"')))
+})
+
+test("run --session sends question:false and plan_exit:false in the per-turn tools map (F4)", async () => {
+  // Create-time deny rules never reach a resumed session; the per-turn tools
+  // map is the only mechanism that disables the interactive tools there.
+  const { messageBody, rejected } = await runEventStream({
+    ...scriptedOkExchange("ses_stream"),
+    session: "ses_stream",
+    captureBody: true,
+  })
+
+  expect(rejected).toBeUndefined()
+  const body = JSON.parse(messageBody ?? "{}")
+  expect(body.tools).toMatchObject({ question: false, plan_exit: false })
+})
+
+test("run whose only tool call was denied by a permission deny rule exits blocked (F12)", async () => {
+  // A deny rule (e.g. --disallowed-tools) never asks; the call fails with the
+  // DeniedError text from permission/index.ts. Like the read-only sandbox
+  // denial, it must count toward blocked-run accounting without a
+  // permission_denied event.
+  const sessionID = "ses_stream"
+  const deniedBashPart = {
+    id: "prt_bash_rule",
+    messageID: "msg_final",
+    sessionID,
+    type: "tool",
+    callID: "call_bash_rule",
+    tool: "bash",
+    state: {
+      status: "error",
+      input: { command: "rm -rf /tmp/fixture" },
+      error:
+        "The user has specified a rule which prevents you from using this specific tool call. Here are some of the relevant rules …",
+      time: { start: 1, end: 2 },
+    },
+  }
+  const textPart = {
+    id: "prt_text",
+    messageID: "msg_final",
+    sessionID,
+    type: "text",
+    text: "Could not proceed",
+    time: { start: 1, end: 3 },
+  }
+  const { lines, exitCode } = await runEventStream({
+    events: [
+      { type: "message.part.updated", properties: { part: deniedBashPart } },
+      { type: "message.part.updated", properties: { part: textPart } },
+      { type: "message.updated", properties: { info: assistantInfo(sessionID) } },
+    ],
+    promptResponse: { info: assistantInfo(sessionID), parts: [deniedBashPart, textPart] },
+    messages: [
+      {
+        info: { id: "msg_final", role: "assistant" },
+        parts: [{ type: "text", text: "Could not proceed" }],
+      },
+    ],
+  })
+
+  expect(lines.some((line) => line.includes('"type":"permission_denied"'))).toBe(false)
+  const toolUse = JSON.parse(lines.find((line) => line.includes('"type":"tool_use"'))!)
+  expect(toolUse.part.state.error).toContain("The user has specified a rule")
+
+  const result = JSON.parse(lines[lines.length - 1])
+  expect(result.type).toBe("result")
+  expect(result.status).toBe("blocked")
+  expect(result.permissionDenials).toBe(1)
+  expect(exitCode).toBe(3)
 })

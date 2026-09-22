@@ -1,7 +1,7 @@
 import { defer } from "@/util/defer"
 import type { Argv } from "yargs"
 import { AsyncLocalStorage } from "node:async_hooks"
-import { readFile } from "fs/promises"
+import { readFile, realpath } from "fs/promises"
 import path from "path"
 import { pathToFileURL } from "url"
 import { UI } from "../ui"
@@ -35,27 +35,29 @@ import { Locale } from "../../util/locale"
 import { internalBaseUrl, isInternalHostname } from "../../util/internal-url"
 import { isNonEmptyRecord } from "../../util/record"
 import {
+  accountToolCompletion,
   buildAddDirRules,
   buildRunEarlyErrorEvent,
   buildRunResultEvent,
   classifyRunFailure,
+  createRunToolAccounting,
   extractRunFinalAssistantText,
   extractRunStructuredOutput,
   extractRunUsageTotals,
   handleRunStructuredOutput,
   isBlockedRun,
   isRunAuthFailure,
-  isRunMutatingToolCompletion,
-  isRunReadOnlyToolDenial,
   isRunSelfAbortError,
   parseDisallowedTools,
   preflightRunOutputSchema,
+  redactRunUrlCredentials,
   resolveRunResultStatus,
   runFileMime,
   RUN_BUILTIN_TOOL_IDS,
   type RunEarlyErrorCode,
   type RunUsageTotals,
 } from "./run-output"
+import { createRunLifecycle, RUN_SERVER_ABORT_BOUND_MS } from "./run-lifecycle"
 import { printPendingScheduledTaskNotice } from "./run-schedule-notice"
 import { assertLoopbackHttpUrl } from "../../runtime/listen-security"
 import { sameSkuOnConnectedProvider } from "../../provider/model-selectability"
@@ -320,6 +322,30 @@ export function commandTokenFromArgv(argv: readonly string[]): string | undefine
 }
 
 /**
+ * Whether the raw CLI argv selects the `run` command with one of the NDJSON
+ * event-stream `--format` values (spaced or `=` spelling). Used by the shared
+ * CLI failure handler so a yargs-level usage failure (e.g. a mistyped flag)
+ * still writes one structured `{"type":"error",...}` stdout line for stream
+ * consumers before the human-readable stderr prose — without it they get
+ * nothing on stdout at all.
+ */
+export function runArgvUsesEventStream(argv: readonly string[]): boolean {
+  if (commandTokenFromArgv(argv) !== "run") return false
+  for (let i = 0; i < argv.length; i++) {
+    const token = argv[i]
+    // Prompt text after `--` must never match, even when it spells a flag.
+    if (token === "--") return false
+    if (token === "--format") {
+      const value = argv[i + 1]
+      if (value !== undefined && isRunEventStreamFormat(value)) return true
+      continue
+    }
+    if (token.startsWith("--format=") && isRunEventStreamFormat(token.slice("--format=".length))) return true
+  }
+  return false
+}
+
+/**
  * The requested model when its provider lists it and is connected, else the
  * same model ID on a connected provider: config and docs keep naming a SKU by its native
  * provider (`deepseek/deepseek-v4-pro`) after that provider was disabled and
@@ -547,25 +573,37 @@ function normalizePath(input?: string) {
   return input
 }
 
-/** Shared mutable state between the handler body and `convertRunRejection`. */
+/**
+ * Shared mutable state between the handler body and the pre-session-timeout
+ * bail inside `executeRun`.
+ */
 type RunAbortState = {
   /**
    * True once a pre-session `--timeout` fired and emitted the terminal
-   * timeout result itself. The SDK calls it aborts afterwards are expected
-   * fallout and must not surface as a second error.
+   * timeout result itself. The submission must not start afterwards, and the
+   * SDK calls it aborts are expected fallout — see `convertRunRejection`.
    */
   earlyTimeoutEmitted: boolean
 }
 
 /**
  * Whether the error is (or wraps) an AbortError from an aborted fetch, e.g.
- * the SDK calls cut by the pre-session `--timeout`.
+ * the SDK calls cut by the pre-session `--timeout`. Wrapping is walked on
+ * both the `cause` chain and an `AggregateError`'s `errors` array — Promise
+ * combinators aggregate their failures there, not in `cause`.
  */
-function isAbortError(error: unknown, seen: Set<object> = new Set()): boolean {
+export function isAbortError(error: unknown, seen: Set<object> = new Set()): boolean {
   if (typeof error !== "object" || error === null || seen.has(error)) return false
   seen.add(error)
   if (errorNameOf(error) === "AbortError") return true
-  return isAbortError((error as { cause?: unknown }).cause, seen)
+  if (isAbortError((error as { cause?: unknown }).cause, seen)) return true
+  const aggregated = (error as { errors?: unknown }).errors
+  if (Array.isArray(aggregated)) {
+    for (const inner of aggregated) {
+      if (isAbortError(inner, seen)) return true
+    }
+  }
+  return false
 }
 
 /**
@@ -582,27 +620,34 @@ function isAbortError(error: unknown, seen: Set<object> = new Set()): boolean {
  * for plain rejected bodies). The terminal `result` line is never emitted on
  * this path: these rejections all leave `execute` before its final write.
  *
- * A pre-session `--timeout` abort (see `RunAbortState`) is swallowed: the
- * terminal result and exit 124 were already emitted when it fired.
+ * Once the run's terminal outcome is committed — the terminal result or
+ * error line was already written (the lifecycle's terminal guard), or the
+ * exit code was decided by the `--timeout` timer or a SIGINT/SIGTERM —
+ * every later rejection is expected fallout of tearing the run down: a
+ * server 5xx racing the abort, an SDK-wrapped error, or an AggregateError
+ * whose `errors` array holds the AbortError. Such rejections are logged at
+ * debug level and swallowed so no second terminal line is written and the
+ * committed exit code (124 / 130 / 1) stands. Attach URLs interpolated into
+ * messages carry their userinfo password masked.
  */
 async function convertRunRejection(
   args: { format?: string; attach?: string },
   body: () => Promise<void>,
-  abortState?: RunAbortState,
   getAttachUrl: () => string | undefined = () => args.attach,
+  isOutcomeCommitted: () => boolean = () => false,
 ): Promise<void> {
   try {
     await body()
   } catch (error) {
     if (UI.CancelledError.isInstance(error)) throw error
-    if (abortState?.earlyTimeoutEmitted && isAbortError(error)) {
-      Log.Default.info("run aborted by pre-session timeout", {
+    if (isOutcomeCommitted()) {
+      Log.Default.debug("run rejection after committed terminal outcome; swallowed", {
         error: error instanceof Error ? error.message : undefined,
       })
       return
     }
     const classified = classifyRunFailure(error)
-    const attachUrl = getAttachUrl() ?? internalBaseUrl()
+    const attachUrl = redactRunUrlCredentials(getAttachUrl() ?? internalBaseUrl())
     const message =
       classified.code === "attach"
         ? isRunAuthFailure(error)
@@ -818,6 +863,34 @@ export const RunCommand = cmd({
     // Resolved by the --runtime branch inside `body`; the failure converter reads
     // it so an auth/connection rejection names the runtime URL instead of args.attach.
     let runtimeAttach: { baseUrl: string; headers: Record<string, string>; directory: string } | undefined
+    // Bounded-run state (timer/signal/abort/exit-code precedence) lives in the
+    // lifecycle module so the once-only guards and precedence rule are
+    // unit-testable without a server. The server-abort helper is assigned a
+    // real implementation once `execute` knows the session; until then the
+    // callback is a no-op, exactly like the previous inline holder.
+    let serverAbort: (reason: "timeout" | "cancelled") => void = () => {}
+    const lifecycle = createRunLifecycle({
+      timeoutSeconds: args.timeout,
+      isStream: isRunEventStreamFormat(args.format),
+      onTimeoutNotice: () => UI.error(`run timed out after ${args.timeout} s`),
+      onCancelNotice: () => UI.error("run cancelled"),
+      onEarlyResult: (status) => {
+        if (status === "timeout") abortState.earlyTimeoutEmitted = true
+        process.stdout.write(
+          JSON.stringify(
+            buildRunResultEvent({
+              timestamp: Date.now(),
+              sessionID: "",
+              status,
+              text: "",
+              permissionDenials: 0,
+            }),
+          ) + EOL,
+        )
+      },
+      onServerAbort: (reason) => serverAbort(reason),
+    })
+    const onRunSignal = lifecycle.onSignal
     return convertRunRejection(
       args,
       async () => {
@@ -826,6 +899,14 @@ export const RunCommand = cmd({
         const { Agent } = await import("../../agent/agent")
         const { ServerRuntimeAuth } = await import("../../server/runtime-auth")
         const exitEarly = (message: string, code: RunEarlyErrorCode = "usage"): never => {
+          // Single-writer rule (the lifecycle's terminal guard): once any
+          // terminal line was written, later early exits stay log-only — no
+          // second structured stdout line, no exit-code overwrite.
+          if (lifecycle.terminal()) {
+            Log.Default.debug("run early exit after terminal line", { code, message })
+            throw new UI.CancelledError()
+          }
+          lifecycle.markTerminal()
           // Commit the exit code before any output so every early-exit path
           // carries exit 1 even if a write below throws, and callers that inspect
           // process.exitCode right at the rejection see it without depending on
@@ -848,19 +929,12 @@ export const RunCommand = cmd({
           if (!quiet) warnPrefix(message)
         }
 
-        // Bounded-run state shared by the --timeout timer and the signal
-        // handlers. `abortRun` is assigned once `execute` knows the session; both
-        // paths route through it so there is exactly one abort helper for the run.
-        let timedOut = false
-        let cancelled = false
-        let abortRun: (reason: "timeout" | "cancelled") => void = () => {}
-        // SIGINT and SIGTERM share one handler (CI runners send TERM): both
-        // cancel the run with status "cancelled" and exit 130.
-        const onRunSignal = () => {
-          cancelled = true
-          process.exitCode = 130
-          abortRun("cancelled")
-        }
+        // Bounded-run state (timedOut/cancelled flags, the --timeout timer,
+        // and the SIGINT/SIGTERM handler) lives in `lifecycle` created at
+        // handler scope; `lifecycle.signal` is threaded into every SDK call
+        // so a timeout or signal cuts pending requests too, not just the
+        // server-side generation. `serverAbort` (handler scope) is assigned
+        // the real implementation once `execute` knows the session.
 
         let promptFileText: string | undefined
         // `--prompt-file -` reads the prompt from stdin explicitly (like other
@@ -929,6 +1003,12 @@ export const RunCommand = cmd({
         // permission rules only; --file containment below is never widened —
         // the server denies outside-project attachments regardless of
         // permission rules (prompt-file-attachment.ts).
+        // The tool side canonicalizes with realpath(parentDir) before asking
+        // (tool/external-directory.ts), so a symlinked --add-dir path would
+        // produce a resolved-spelled rule that never matches the real-spelled
+        // ask. Emit BOTH spellings when realpath differs (realpath falls back
+        // to the resolved path when it cannot resolve, e.g. a broken
+        // filesystem edge).
         const addDirPaths: string[] = []
         if (args["add-dir"]) {
           const addDirList = Array.isArray(args["add-dir"]) ? args["add-dir"] : [args["add-dir"]]
@@ -942,6 +1022,8 @@ export const RunCommand = cmd({
               exitEarly(`Not a directory: ${dirPath}`)
             }
             addDirPaths.push(resolvedDir)
+            const realDir = await realpath(resolvedDir).catch(() => resolvedDir)
+            if (realDir !== resolvedDir) addDirPaths.push(realDir)
           }
           // The ruleset is applied at session create time; an existing session
           // (--session/--continue) cannot pick it up, so say so and continue.
@@ -1098,45 +1180,12 @@ export const RunCommand = cmd({
 
         // E2: arm the --timeout bound before the first SDK call. A black-holed
         // --attach host or a hung bootstrap used to be unbounded because the
-        // timer only fired after the session resolved.
-        const earlyAbort = new AbortController()
-        const runSessionRef = { id: "" }
-        const onRunTimeout = () => {
-          timedOut = true
-          process.exitCode = 124
-          if (!isRunEventStreamFormat(args.format)) {
-            UI.error(`run timed out after ${args.timeout} s`)
-          }
-          if (runSessionRef.id) {
-            abortRun("timeout")
-            return
-          }
-          // Pre-session timeout: there is no session to abort server-side yet.
-          // Emit the terminal result now (empty session id) and cut the pending
-          // SDK calls so nothing keeps the process alive.
-          abortState.earlyTimeoutEmitted = true
-          if (isRunEventStreamFormat(args.format)) {
-            process.stdout.write(
-              JSON.stringify(
-                buildRunResultEvent({
-                  timestamp: Date.now(),
-                  sessionID: "",
-                  status: "timeout",
-                  text: "",
-                  permissionDenials: 0,
-                }),
-              ) + EOL,
-            )
-          }
-          earlyAbort.abort()
-        }
-        let timeoutTimer: ReturnType<typeof setTimeout> | undefined
-        if (args.timeout !== undefined) {
-          timeoutTimer = setTimeout(onRunTimeout, args.timeout * 1000)
-        }
-        using _timeout = defer(() => {
-          if (timeoutTimer) clearTimeout(timeoutTimer)
-        })
+        // timer only fired after the session resolved. The timer, the
+        // pre/post-session branching, the early terminal result, and the
+        // shared abort all live in `lifecycle` now; `using` keeps the disarm
+        // on every exit of this scope (early throws included).
+        lifecycle.arm()
+        using _timeout = defer(() => lifecycle.disarm())
 
         const rules: Permission.Ruleset = [
           {
@@ -1173,7 +1222,7 @@ export const RunCommand = cmd({
         // `{ error }` with no data. Throwing lets the handler-level conversion
         // classify the real cause (A4).
         async function latestRootSessionID(sdk: AxCodeClient) {
-          const listed = await sdk.session.list(undefined, { signal: earlyAbort.signal })
+          const listed = await sdk.session.list(undefined, { signal: lifecycle.signal })
           if (listed.error) throw listed.error
           return listed.data?.find((s) => !s.parentID)?.id
         }
@@ -1182,7 +1231,7 @@ export const RunCommand = cmd({
           const baseID = args.continue ? await latestRootSessionID(sdk) : args.session
 
           if (baseID && args.fork) {
-            const forked = await sdk.session.fork({ sessionID: baseID }, { signal: earlyAbort.signal })
+            const forked = await sdk.session.fork({ sessionID: baseID }, { signal: lifecycle.signal })
             if (forked.error) throw forked.error
             return forked.data?.id
           }
@@ -1190,7 +1239,7 @@ export const RunCommand = cmd({
           if (baseID) return baseID
 
           const name = title()
-          const result = await sdk.session.create({ title: name, permission: rules }, { signal: earlyAbort.signal })
+          const result = await sdk.session.create({ title: name, permission: rules }, { signal: lifecycle.signal })
           if (result.error) throw result.error
           return result.data?.id
         }
@@ -1207,9 +1256,14 @@ export const RunCommand = cmd({
           sdk: AxCodeClient,
           sessionID: string,
           assistantMessageID: string | undefined,
+          signal: AbortSignal | undefined = lifecycle.signal,
         ): Promise<string | undefined> {
           if (!assistantMessageID) return undefined
-          const result = await sdk.session.messages({ sessionID })
+          // F9: the read carries the lifecycle signal so a server that hangs
+          // after the stream ended cannot keep the process alive; an abort
+          // here only leaves usage/structured unknown (the caller's catch
+          // treats it as such), it is never a run failure.
+          const result = await sdk.session.messages({ sessionID }, signal ? { signal } : undefined)
           // Side-channel: the same fetch carries the token counts for the
           // terminal result event; missing counts leave usage undefined.
           finalUsage = extractRunUsageTotals(result.data, assistantMessageID)
@@ -1219,7 +1273,7 @@ export const RunCommand = cmd({
           return extractRunFinalAssistantText(result.data, assistantMessageID)
         }
 
-        async function execute(sdk: AxCodeClient) {
+        async function executeRun(sdk: AxCodeClient) {
           function tool(part: ToolPart) {
             try {
               const full = Boolean(args.full)
@@ -1259,22 +1313,33 @@ export const RunCommand = cmd({
           using _events = defer(() => eventAbort.abort())
           // @scan-suppress lifecycle_scan - The scoped disposer above aborts the owned SSE subscription on every exit; closeEvents also aborts before returning the iterator.
           // The SSE connect is the first SDK call of the run; the early
-          // --timeout (E2) must be able to cut it too, e.g. for a black-holed
-          // attach host.
+          // --timeout (E2) and the signal handlers must be able to cut it
+          // too, e.g. for a black-holed attach host. An abort ends the SDK's
+          // SSE stream gracefully (the reader is cancelled), so the event
+          // loop simply finishes instead of failing.
           const events = await sdk.event.subscribe(undefined, {
-            signal: AbortSignal.any([eventAbort.signal, earlyAbort.signal]),
+            signal: AbortSignal.any([eventAbort.signal, lifecycle.signal]),
           })
           let error: string | undefined
           let finalMessage: string | undefined
           let finalAssistantMessageID: string | undefined
           let submittedMessage: Awaited<ReturnType<typeof sdk.session.prompt>>["data"]
-          const observedFinalParts = new Set<string>()
           // Blocked-run accounting: auto-rejected permission asks (including
           // read-only sandbox denials that surface as tool errors) vs tool calls
           // that actually completed a mutation (item: blocked runs exit 3).
-          let permissionDenials = 0
-          let successfulMutations = 0
-          let resultEmitted = false
+          // The accounting's observed-parts set doubles as the drain/replay
+          // observed set, so a redelivered final part is a no-op everywhere
+          // (G3).
+          const accounting = createRunToolAccounting()
+          const observedFinalParts = accounting.observedParts
+          // Sessions belonging to this run's tree (G1): the main session plus
+          // child sessions spawned by the `task` tool (src/tool/task.ts gives
+          // each child its own session id and ruleset). A child's permission
+          // ask carries the child session id, so matching only the main id
+          // would leave the ask unanswered until `--timeout` — the tree is
+          // extended from session.created/session.updated events whose
+          // parent is already in it, seeded once the main session resolves.
+          const sessionTree = new Set<string>()
 
           const toggles = new Map<string, boolean>()
           const observedCompletedMessages = new Set<string>()
@@ -1304,6 +1369,14 @@ export const RunCommand = cmd({
 
           async function loop(source: AsyncIterable<Event>) {
             for await (const event of source) {
+              // G1: track child sessions spawned inside this run's tree; their
+              // permission asks and tool completions belong to the run even
+              // though their session id differs from the main session's.
+              if (event.type === "session.created" || event.type === "session.updated") {
+                const info = event.properties.info
+                if (info.parentID !== undefined && sessionTree.has(info.parentID)) sessionTree.add(info.id)
+              }
+
               if (
                 event.type === "message.updated" &&
                 event.properties.info.role === "assistant" &&
@@ -1317,6 +1390,7 @@ export const RunCommand = cmd({
               if (
                 event.type === "message.updated" &&
                 event.properties.info.role === "assistant" &&
+                event.properties.info.sessionID === sessionID &&
                 !isRunEventStreamFormat(args.format) &&
                 toggles.get("start") !== true
               ) {
@@ -1344,23 +1418,30 @@ export const RunCommand = cmd({
 
               if (event.type === "message.part.updated") {
                 const part = event.properties.part
-                if (part.sessionID !== sessionID) continue
-                if (
-                  (part.type === "tool" && (part.state.status === "completed" || part.state.status === "error")) ||
+                // G1: parts from any session in the run's tree are accounted
+                // for; only the main session's parts are observed for the
+                // drain, rendered, or streamed below.
+                if (!sessionTree.has(part.sessionID)) continue
+                const isMainSession = part.sessionID === sessionID
+                if (part.type === "tool" && (part.state.status === "completed" || part.state.status === "error")) {
+                  // G3: the accounting helper owns the observed-parts guard
+                  // for settled tool parts, so a redelivered final part never
+                  // double-counts a mutation or a denial.
+                  accountToolCompletion(accounting, part)
+                } else if (
                   ((part.type === "text" || part.type === "reasoning") && part.time?.end) ||
                   part.type === "step-start" ||
                   part.type === "step-finish"
-                )
+                ) {
                   observedFinalParts.add(part.id)
+                }
                 checkDrained?.()
 
                 if (part.type === "tool" && (part.state.status === "completed" || part.state.status === "error")) {
-                  if (isRunMutatingToolCompletion(part.tool, part.state.status)) successfulMutations++
-                  // A mutating call denied by the read-only sandbox surfaces as a
-                  // tool error rather than a permission ask; it blocks the run the
-                  // same way and feeds the same counter.
-                  if (isRunReadOnlyToolDenial(part.state)) permissionDenials++
                   if (emit("tool_use", { part })) continue
+                  // Child-session tool parts feed the accounting and the
+                  // stream above, but are never rendered into the transcript.
+                  if (!isMainSession) continue
                   if (part.state.status === "completed") {
                     if (!quiet) tool(part)
                     continue
@@ -1380,6 +1461,10 @@ export const RunCommand = cmd({
                   UI.error(cappedError.text)
                   omittedHint(cappedError)
                 }
+
+                // Everything below is main-session scoped: the running-task
+                // toggle, step markers, and streamed text/reasoning.
+                if (!isMainSession) continue
 
                 if (
                   part.type === "tool" &&
@@ -1421,7 +1506,9 @@ export const RunCommand = cmd({
                   const line = `Thinking: ${text}`
                   if (process.stdout.isTTY) {
                     UI.empty()
-                    UI.println(`${UI.Style.TEXT_DIM}\u001b[3m${line}\u001b[0m${UI.Style.TEXT_NORMAL}`)
+                    // Italic routing goes through UI.Style so NO_COLOR or a
+                    // non-TTY stderr cannot leak raw escape sequences.
+                    UI.println(`${UI.Style.TEXT_DIM}${UI.Style.TEXT_ITALIC}${line}${UI.Style.TEXT_NORMAL}`)
                     UI.empty()
                     continue
                   }
@@ -1432,7 +1519,13 @@ export const RunCommand = cmd({
               if (event.type === "session.error") {
                 const props = event.properties
                 if (props.sessionID !== sessionID || !props.error) continue
-                if (isRunSelfAbortError(String(props.error.name), { timedOut, cancelled })) continue
+                if (
+                  isRunSelfAbortError(String(props.error.name), {
+                    timedOut: lifecycle.timedOut(),
+                    cancelled: lifecycle.cancelled(),
+                  })
+                )
+                  continue
                 observedErrors.add(JSON.stringify(props.error))
                 let err = String(props.error.name)
                 if ("data" in props.error && props.error.data && "message" in props.error.data) {
@@ -1450,21 +1543,32 @@ export const RunCommand = cmd({
 
               if (event.type === "permission.asked") {
                 const permission = event.properties
-                if (permission.sessionID !== sessionID) continue
-                permissionDenials++
+                // G1: asks from any session in the run's tree are
+                // auto-rejected (a headless run has no human to answer them);
+                // the same reply call works for child asks because it takes
+                // the permission request id only.
+                if (!sessionTree.has(permission.sessionID)) continue
+                accounting.permissionDenials++
                 // Stream consumers see the denial as an event before the
-                // rejection reaches the server; humans keep the stderr warning.
+                // rejection reaches the server; the event names the asking
+                // session, which differs from the main session for child asks.
+                // Humans keep the stderr warning.
                 emit("permission_denied", {
+                  sessionID: permission.sessionID,
                   permission: permission.permission,
                   patterns: permission.patterns,
                 })
                 warn(
-                  `permission requested: ${permission.permission} (${permission.patterns.join(", ")}); auto-rejecting`,
+                  `permission requested${permission.sessionID === sessionID ? "" : ` in child session ${permission.sessionID}`}: ` +
+                    `${permission.permission} (${permission.patterns.join(", ")}); auto-rejecting`,
                 )
-                await sdk.permission.reply({
-                  requestID: permission.id,
-                  reply: "reject",
-                })
+                await sdk.permission.reply(
+                  {
+                    requestID: permission.id,
+                    reply: "reject",
+                  },
+                  { signal: lifecycle.signal },
+                )
               }
             }
           }
@@ -1536,13 +1640,20 @@ export const RunCommand = cmd({
                 .list(
                   undefined,
                   waitForDiscovery
-                    ? { headers: { [Provider.DISCOVERY_WAIT_HEADER]: "true" }, signal: earlyAbort.signal }
-                    : { signal: earlyAbort.signal },
+                    ? { headers: { [Provider.DISCOVERY_WAIT_HEADER]: "true" }, signal: lifecycle.signal }
+                    : { signal: lifecycle.signal },
                 )
                 .then((result) =>
                   result.data ? { all: result.data.all, connected: result.data.connected } : undefined,
                 )
-                .catch(() => undefined)
+                .catch((error: unknown) => {
+                  // F10: an abort (timeout/signal) must surface, not hide
+                  // behind this catch — otherwise the flow enters `execute`
+                  // on a cut connection. Real listing failures keep the
+                  // warning path below.
+                  if (isAbortError(error)) throw error
+                  return undefined
+                })
             const initialProviders = await listProviders()
             let connected = initialProviders?.connected
             const providers = initialProviders
@@ -1590,7 +1701,7 @@ export const RunCommand = cmd({
           // as an unstructured fatal (A1). Any non-404 failure propagates to the
           // handler-level conversion.
           if (args.session) {
-            await sdk.session.get({ sessionID: args.session }, { throwOnError: true, signal: earlyAbort.signal }).then(
+            await sdk.session.get({ sessionID: args.session }, { throwOnError: true, signal: lifecycle.signal }).then(
               () => undefined,
               (error: unknown) => {
                 if (errorNameOf(error) === "SessionNotFoundError") {
@@ -1605,22 +1716,31 @@ export const RunCommand = cmd({
           }
 
           const sessionID = (await session(sdk)) ?? exitEarly("Session not found")
-          runSessionRef.id = sessionID
+          lifecycle.markSession()
+          // G1: the main session roots the run's session tree.
+          sessionTree.add(sessionID)
           // A pre-session --timeout already emitted the terminal result and cut
           // the SDK calls. `--session` resolves without another SDK call, so
           // without this bail the submission would still proceed and a second
-          // result line could follow.
+          // result line could follow (the lifecycle's terminal guard blocks
+          // the emission, but the submission itself must not run either).
           if (abortState.earlyTimeoutEmitted) {
-            resultEmitted = true
             return
           }
 
           // Single abort path shared by the --timeout timer and the signal handlers.
           // Best-effort and never throwing: an already-idle session answers 4xx
           // (silently ignored), and only unexpected server failures get a debug line.
-          abortRun = (reason) => {
-            void sdk.session
-              .abort({ sessionID })
+          // F11: the abort request carries its own short timeout signal — never
+          // the lifecycle signal — so cutting the pending SDK calls cannot also
+          // kill the very request that tells the server to stop.
+          // F13: the request is recorded in the lifecycle and awaited before the
+          // terminal result is written (and before the handler returns), so the
+          // abort is actually delivered — a fire-and-forget request loses the
+          // race with process teardown and leaves the generation running.
+          serverAbort = (reason) => {
+            const request: Promise<void> = sdk.session
+              .abort({ sessionID }, { signal: AbortSignal.timeout(RUN_SERVER_ABORT_BOUND_MS) })
               .then((result) => {
                 if (result.error && result.response && result.response.status >= 500) {
                   Log.Default.debug("run abort failed", {
@@ -1631,11 +1751,25 @@ export const RunCommand = cmd({
                 }
               })
               .catch(() => {})
+            lifecycle.recordServerAbort(request)
+          }
+          // F3: a timeout or signal that fired while the session was resolving
+          // raced a no-op serverAbort (assigned only now); the lifecycle
+          // already aborted the pending calls. For a session THIS run created,
+          // issue the hygiene abort so the server is not left running an
+          // orphaned generation. A resumed session (--session/--continue
+          // without --fork) is deliberately left alone: the caller may have
+          // live work there that this run never started.
+          const sessionCreatedHere = (!args.session && !args.continue) || args.fork === true
+          if ((lifecycle.timedOut() || lifecycle.cancelled()) && sessionCreatedHere) {
+            serverAbort(lifecycle.timedOut() ? "timeout" : "cancelled")
           }
 
           if (args["show-history"]) {
             const historyLimit = args["history-limit"]
-            const msgsRes = await sdk.session.messages({ sessionID }).catch(() => undefined)
+            const msgsRes = await sdk.session
+              .messages({ sessionID }, { signal: lifecycle.signal })
+              .catch(() => undefined)
             const msgs = msgsRes?.data ?? []
             const limited = historyLimit !== undefined ? msgs.slice(-historyLimit) : msgs
             if (limited.length > 0) {
@@ -1679,53 +1813,72 @@ export const RunCommand = cmd({
 
           // The --timeout timer is armed in the handler body before the first
           // SDK call (E2); by this point a firing timer routes through
-          // abortRun and the drain/reconciliation path below emits the
+          // `serverAbort` and the drain/reconciliation path below emits the
           // terminal result with status "timeout".
 
+          // F3: a timeout or signal that fired before the submission goes
+          // straight to the terminal result path — the prompt POST is skipped
+          // entirely (status timeout/cancelled, exit 124/130, no error event).
+          const skipSubmission = lifecycle.timedOut() || lifecycle.cancelled()
+          // F4: interactive tools are always disabled per turn. The
+          // create-time deny rules only cover new sessions; a resumed
+          // --session/--continue session would otherwise still reach the
+          // interactive `question`/`plan_exit` tools. Merged with
+          // --disallowed-tools (this per-request tools map is deprecated but
+          // honored, and is the only mechanism that covers resumed sessions).
+          const promptTools: Record<string, false> = { question: false, plan_exit: false, ...disallowedTools }
           try {
-            if (args.command) {
-              const response = await sdk.session.command(
-                {
-                  sessionID,
-                  agent,
-                  model: runModel ? `${runModel.providerID}/${runModel.modelID}` : undefined,
-                  command: args.command,
-                  arguments: message,
-                  variant: args.variant,
-                },
-                { throwOnError: true },
-              )
-              submittedMessage = response.data
-            } else {
-              const response = await sdk.session.prompt(
-                {
-                  sessionID,
-                  agent,
-                  model: runModel,
-                  variant: args.variant,
-                  ...(appendSystemPrompt !== undefined ? { system: appendSystemPrompt } : {}),
-                  // --disallowed-tools is sent through BOTH mechanisms: the
-                  // create-time deny rules cover new sessions, while this
-                  // (deprecated but honored) per-request tools map also covers
-                  // resumed --session/--continue sessions.
-                  ...(disallowedTools !== undefined ? { tools: disallowedTools } : {}),
-                  ...(isolationPolicy !== undefined ? { isolation: isolationPolicy } : {}),
-                  ...(outputFormat !== undefined ? { format: outputFormat } : {}),
-                  parts: [...files, { type: "text", text: message }],
-                },
-                { throwOnError: true },
-              )
-              submittedMessage = response.data
+            if (!skipSubmission) {
+              if (args.command) {
+                const response = await sdk.session.command(
+                  {
+                    sessionID,
+                    agent,
+                    model: runModel ? `${runModel.providerID}/${runModel.modelID}` : undefined,
+                    command: args.command,
+                    arguments: message,
+                    variant: args.variant,
+                  },
+                  { throwOnError: true, signal: lifecycle.signal },
+                )
+                submittedMessage = response.data
+              } else {
+                const response = await sdk.session.prompt(
+                  {
+                    sessionID,
+                    agent,
+                    model: runModel,
+                    variant: args.variant,
+                    ...(appendSystemPrompt !== undefined ? { system: appendSystemPrompt } : {}),
+                    // --disallowed-tools is sent through BOTH mechanisms: the
+                    // create-time deny rules cover new sessions, while this
+                    // (deprecated but honored) per-request tools map also covers
+                    // resumed --session/--continue sessions.
+                    tools: promptTools,
+                    ...(isolationPolicy !== undefined ? { isolation: isolationPolicy } : {}),
+                    ...(outputFormat !== undefined ? { format: outputFormat } : {}),
+                    parts: [...files, { type: "text", text: message }],
+                  },
+                  { throwOnError: true, signal: lifecycle.signal },
+                )
+                submittedMessage = response.data
+              }
             }
           } catch (e) {
             await closeEvents()
             await loopResult
             // An abort this process requested (--timeout or SIGINT) can also
-            // surface here if the synchronous submission rejects with the abort
-            // error after `abortRun` fired. That is the expected outcome, not a
-            // failure: fall through to the terminal result path, which reports
-            // status timeout/cancelled. Any other error still propagates.
-            if (!isRunSelfAbortError(errorNameOf(e), { timedOut, cancelled })) throw e
+            // surface here: the server settles the submission with a
+            // MessageAbortedError, or the lifecycle signal cuts the pending
+            // POST and it rejects with an AbortError. Both are the expected
+            // outcome, not a failure: fall through to the terminal result
+            // path, which reports status timeout/cancelled. Any other error
+            // still propagates.
+            const selfAbortState = { timedOut: lifecycle.timedOut(), cancelled: lifecycle.cancelled() }
+            const selfAbort =
+              isRunSelfAbortError(errorNameOf(e), selfAbortState) ||
+              ((selfAbortState.timedOut || selfAbortState.cancelled) && isAbortError(e))
+            if (!selfAbort) throw e
           }
 
           // Give final frames on the separate SSE connection a bounded chance to
@@ -1750,7 +1903,12 @@ export const RunCommand = cmd({
           })
           await closeEvents()
           const loopError = await loopResult
-          if (loopError !== undefined) {
+          // An AbortError here is the lifecycle signal cutting the SSE read or
+          // a pending permission reply after a timeout/signal — expected
+          // fallout, not a loop failure (F11).
+          const loopSelfAbort =
+            loopError !== undefined && (lifecycle.timedOut() || lifecycle.cancelled()) && isAbortError(loopError)
+          if (loopError !== undefined && !loopSelfAbort) {
             Log.Default.error("run event loop failed", { sessionID, error: toErrorMessage(loopError) })
             UI.error(`Event stream error: ${toErrorMessage(loopError)}`)
             process.exitCode = 1
@@ -1759,6 +1917,15 @@ export const RunCommand = cmd({
           await loop(finalEvents())
           const storedFinalMessage = await readFinalAssistantText(sdk, sessionID, finalAssistantMessageID).catch(
             (e) => {
+              // F9: an abort here (timeout/signal cut the read) only leaves
+              // usage/structured unknown — it is never a run failure.
+              if (isAbortError(e)) {
+                Log.Default.info("final assistant text read aborted; usage/structured stay unknown", {
+                  sessionID,
+                  assistantMessageID: finalAssistantMessageID,
+                })
+                return undefined
+              }
               Log.Default.warn("failed to read final assistant text from session messages", {
                 sessionID,
                 assistantMessageID: finalAssistantMessageID,
@@ -1783,7 +1950,10 @@ export const RunCommand = cmd({
             await handleRunStructuredOutput(finalText, {
               callerCwd,
               outputFile: args["output-file"],
-              outputSchema: args["output-schema"],
+              outputSchema:
+                outputFormat !== undefined && args["output-schema"] !== undefined
+                  ? { file: args["output-schema"], parsed: outputFormat.schema }
+                  : undefined,
             })
             // Default format: the serialized structured object is the final
             // stdout text (same TTY/non-TTY split as streamed text parts);
@@ -1798,37 +1968,84 @@ export const RunCommand = cmd({
               }
             }
           } catch (e) {
-            UI.error(e instanceof Error ? e.message : String(e))
+            // F1: record the failure so the terminal result reports "error"
+            // and the exit-code precedence keeps 1 instead of downgrading to
+            // 130/124/3. Stream formats also get one structured error event
+            // (before the terminal result line).
+            const outputMessage = e instanceof Error ? e.message : String(e)
+            error = error ? error + EOL + outputMessage : outputMessage
+            emit("error", { error: { name: "StructuredOutputError", data: { message: outputMessage } } })
+            UI.error(outputMessage)
             process.exitCode = 1
           }
           if (error) process.exitCode = 1
 
+          // F13: a server abort issued by --timeout/SIGINT must be delivered
+          // before the run reports its terminal outcome — waiting here, instead
+          // of firing the request and forgetting it, is what actually stops a
+          // real server's generation before the process exits. The wait is
+          // bounded by the request's own short timeout signal (F11) and never
+          // rejects; it resolves immediately when no abort was issued. It sits
+          // before the outcome computation so a timer firing during the wait
+          // cannot produce a stale verdict — the precedence rules below still
+          // decide between timeout and cancelled afterwards.
+          await lifecycle.awaitServerAbort()
+
           // Terminal result line for stream consumers. Emitted after every other
           // stdout write so it is always the last line of the run, exactly once
           // even when the SSE stream ended early and the final reconciliation
-          // replayed the remaining frames. Exit-code precedence (highest first):
-          // a real error (1) beats a SIGINT cancel (130), which beats a timeout
-          // (124), which beats a blocked run (3); success is 0.
-          const runFailed = error !== undefined || loopError !== undefined
-          const runBlocked = !runFailed && isBlockedRun(permissionDenials, successfulMutations)
-          if (runFailed) process.exitCode = 1
-          else if (cancelled) process.exitCode = 130
-          else if (timedOut) process.exitCode = 124
-          else if (runBlocked) process.exitCode = 3
-          if (resultEmitted || !isRunEventStreamFormat(args.format)) return
-          resultEmitted = true
+          // replayed the remaining frames (the lifecycle's terminal guard makes
+          // the exactly-once rule structural). Exit-code precedence (highest
+          // first): a real error (1) beats a SIGINT cancel (130), which beats a
+          // timeout (124), which beats a blocked run (3); success is 0. The
+          // rule lives in the lifecycle module (unit-tested in
+          // run-lifecycle.test.ts).
+          const runFailed = error !== undefined || (loopError !== undefined && !loopSelfAbort)
+          const runBlocked = !runFailed && isBlockedRun(accounting.permissionDenials, accounting.successfulMutations)
+          const runExitCode = lifecycle.exitCode({ failed: runFailed, blocked: runBlocked })
+          if (runExitCode !== undefined) process.exitCode = runExitCode
+          if (lifecycle.terminal() || !isRunEventStreamFormat(args.format)) return
+          lifecycle.markTerminal()
           process.stdout.write(
             JSON.stringify(
               buildRunResultEvent({
                 timestamp: Date.now(),
                 sessionID,
-                status: resolveRunResultStatus({ failed: runFailed, blocked: runBlocked, timedOut, cancelled }),
+                status: resolveRunResultStatus({
+                  failed: runFailed,
+                  blocked: runBlocked,
+                  timedOut: lifecycle.timedOut(),
+                  cancelled: lifecycle.cancelled(),
+                }),
                 text: finalText ?? "",
-                permissionDenials,
+                permissionDenials: accounting.permissionDenials,
                 usage: finalUsage,
               }),
             ) + EOL,
           )
+        }
+
+        // F2: the run body settles here — success or failure — so the
+        // --timeout timer is cleared (and its handler neutered) the moment
+        // `executeRun` finishes. Without this, a timer firing during the
+        // post-run teardown (scheduled-task notice, bootstrap shutdown) could
+        // overwrite a successful exit code with 124 or re-abort an
+        // already-completed session.
+        async function execute(sdk: AxCodeClient) {
+          try {
+            await executeRun(sdk)
+          } finally {
+            // F2: settle first so the timeout timer is disarmed and neutered
+            // before the (bounded) wait below — a timer firing during the
+            // wait could otherwise overwrite a committed cancel exit code.
+            lifecycle.settle()
+            // F13: every return path — including throws that never reach the
+            // terminal emission above — waits for an issued server abort to
+            // settle before the handler returns; the wait is bounded by the
+            // request's own short timeout signal and resolves immediately
+            // when no abort was issued.
+            await lifecycle.awaitServerAbort()
+          }
         }
 
         // E1: --runtime resolves the managed runtime record of the project
@@ -1912,8 +2129,12 @@ export const RunCommand = cmd({
           }
         }
       },
-      abortState,
       () => runtimeAttach?.baseUrl ?? args.attach,
+      // G2/G6: a terminal line was already written (result or error), or the
+      // exit code was committed by the --timeout timer / a signal — later
+      // rejections are teardown fallout and must not write a second terminal
+      // line or flip the committed exit code.
+      () => lifecycle.terminal() || lifecycle.timedOut() || lifecycle.cancelled(),
     )
   },
 })

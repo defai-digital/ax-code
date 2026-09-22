@@ -1,4 +1,4 @@
-import { expect, test, vi } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import path from "path"
 import { readFile, writeFile } from "node:fs/promises"
 import yargs from "yargs"
@@ -8,6 +8,7 @@ import {
   composeRunMessage,
   findRunModelError,
   formatRunToolFallbackInput,
+  isAbortError,
   isCliUsageFailureMessage,
   isRunEventStreamFormat,
   joinRunMessageArguments,
@@ -16,8 +17,15 @@ import {
   resolveRunAgentDisplayName,
   resolveRunModel,
   RunCommand,
+  runArgvUsesEventStream,
   runUsageFailureHint,
 } from "../../src/cli/cmd/run"
+import {
+  createRunLifecycle,
+  RUN_LAST_RESORT_EXIT_DELAY_MS,
+  RUN_SERVER_ABORT_BOUND_MS,
+} from "../../src/cli/cmd/run-lifecycle"
+import { UI } from "../../src/cli/ui"
 import { tmpdir } from "../fixture/fixture"
 import { Provider } from "../../src/provider/provider"
 
@@ -376,7 +384,9 @@ test("run command wires structured output flags after the event loop", async () 
   expect(src).toContain("assistantMessageID: string | undefined")
   expect(src).toContain("if (!assistantMessageID) return undefined")
   expect(src).toContain("finalAssistantMessageID = event.properties.info.id")
-  expect(src).toContain("await sdk.session.messages({ sessionID })")
+  // The final messages read carries the lifecycle abort signal (F9/F11) so a
+  // hung server after the stream ended cannot keep the process alive.
+  expect(src).toContain("await sdk.session.messages({ sessionID }, signal ? { signal } : undefined)")
   // --output-schema: the server-captured structured value is serialized into
   // the final text when present; the text parts stay the fallback.
   expect(src).toContain("finalStructured = extractRunStructuredOutput(result.data, assistantMessageID)")
@@ -799,6 +809,564 @@ test("command token derivation finds run from raw argv without yargs internals",
   expect(commandTokenFromArgv([])).toBeUndefined()
 })
 
+test("runArgvUsesEventStream matches run plus a stream --format value in both spellings", () => {
+  // Spaced and `=` spellings, all three stream format names.
+  for (const format of ["json", "jsonl", "ndjson"]) {
+    expect(runArgvUsesEventStream(["run", "--format", format, "--", "hi"])).toBe(true)
+    expect(runArgvUsesEventStream(["run", `--format=${format}`, "--", "hi"])).toBe(true)
+  }
+  // Global flags before the command do not hide it.
+  expect(runArgvUsesEventStream(["--log-level", "DEBUG", "run", "--format", "json"])).toBe(true)
+  // Non-stream formats, other commands, missing values, and prompt text after
+  // `--` that merely spells a flag never match.
+  expect(runArgvUsesEventStream(["run", "--format", "default"])).toBe(false)
+  expect(runArgvUsesEventStream(["run", "--format=default"])).toBe(false)
+  expect(runArgvUsesEventStream(["run"])).toBe(false)
+  expect(runArgvUsesEventStream(["session", "list", "--format", "json"])).toBe(false)
+  expect(runArgvUsesEventStream(["--format", "json"])).toBe(false)
+  expect(runArgvUsesEventStream(["run", "--", "--format", "json"])).toBe(false)
+  // A later stream format still matches after a non-stream one.
+  expect(runArgvUsesEventStream(["run", "--format", "default", "--format", "json"])).toBe(true)
+})
+
+describe("createRunLifecycle", () => {
+  function makeLifecycle(overrides: Partial<Parameters<typeof createRunLifecycle>[0]> = {}) {
+    const calls = {
+      timeoutNotices: 0,
+      cancelNotices: 0,
+      earlyResults: [] as Array<"timeout" | "cancelled">,
+      serverAborts: [] as Array<"timeout" | "cancelled">,
+    }
+    const lifecycle = createRunLifecycle({
+      timeoutSeconds: 0.05,
+      isStream: true,
+      onTimeoutNotice: () => calls.timeoutNotices++,
+      onCancelNotice: () => calls.cancelNotices++,
+      onEarlyResult: (status) => calls.earlyResults.push(status),
+      onServerAbort: (reason) => calls.serverAborts.push(reason),
+      ...overrides,
+    })
+    return { lifecycle, calls }
+  }
+
+  test("pre-session timeout: early result for streams, signal aborted, no server abort", () => {
+    vi.useFakeTimers()
+    try {
+      const { lifecycle, calls } = makeLifecycle()
+      lifecycle.arm()
+      expect(lifecycle.timedOut()).toBe(false)
+      vi.advanceTimersByTime(60)
+      expect(lifecycle.timedOut()).toBe(true)
+      expect(process.exitCode).toBe(124)
+      expect(calls.earlyResults).toEqual(["timeout"])
+      expect(calls.serverAborts).toEqual([])
+      expect(lifecycle.signal.aborted).toBe(true)
+      expect(lifecycle.exitCode({ failed: false, blocked: false })).toBe(124)
+    } finally {
+      vi.useRealTimers()
+      process.exitCode = undefined
+    }
+  })
+
+  test("text-mode timeout emits the notice instead of the early result", () => {
+    vi.useFakeTimers()
+    try {
+      const { lifecycle, calls } = makeLifecycle({ isStream: false })
+      lifecycle.arm()
+      vi.advanceTimersByTime(60)
+      expect(calls.timeoutNotices).toBe(1)
+      expect(calls.cancelNotices).toBe(0)
+      expect(calls.earlyResults).toEqual([])
+    } finally {
+      vi.useRealTimers()
+      process.exitCode = undefined
+    }
+  })
+
+  test("post-session timeout: server abort first, then the signal cut", () => {
+    vi.useFakeTimers()
+    try {
+      const { lifecycle, calls } = makeLifecycle()
+      lifecycle.arm()
+      lifecycle.markSession()
+      expect(lifecycle.signal.aborted).toBe(false)
+      vi.advanceTimersByTime(60)
+      expect(calls.serverAborts).toEqual(["timeout"])
+      expect(calls.earlyResults).toEqual([])
+      expect(lifecycle.signal.aborted).toBe(true)
+      expect(process.exitCode).toBe(124)
+    } finally {
+      vi.useRealTimers()
+      process.exitCode = undefined
+    }
+  })
+
+  test("settle neuters the timer so it cannot fire into a finished run (F2)", () => {
+    vi.useFakeTimers()
+    try {
+      const { lifecycle, calls } = makeLifecycle()
+      lifecycle.arm()
+      lifecycle.settle()
+      expect(lifecycle.settled()).toBe(true)
+      vi.advanceTimersByTime(60)
+      // The settled run keeps its outcome: no timeout, no exit-code overwrite.
+      expect(lifecycle.timedOut()).toBe(false)
+      expect(calls.earlyResults).toEqual([])
+      expect(lifecycle.exitCode({ failed: false, blocked: false })).toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+      process.exitCode = undefined
+    }
+  })
+
+  test("onSignal cancels: exit 130, signal aborted, server abort only after markSession (F3)", () => {
+    // Pre-session: the signal commits the early cancelled result and cuts
+    // the pending calls without a server abort.
+    const pre = makeLifecycle()
+    pre.lifecycle.onSignal()
+    expect(pre.lifecycle.cancelled()).toBe(true)
+    expect(process.exitCode).toBe(130)
+    expect(pre.calls.earlyResults).toEqual(["cancelled"])
+    expect(pre.calls.serverAborts).toEqual([])
+    expect(pre.lifecycle.signal.aborted).toBe(true)
+    process.exitCode = undefined
+
+    // Post-session: the server abort is issued before the signal cut.
+    const post = makeLifecycle()
+    post.lifecycle.markSession()
+    post.lifecycle.onSignal()
+    expect(post.calls.serverAborts).toEqual(["cancelled"])
+    expect(post.calls.earlyResults).toEqual([])
+    expect(post.lifecycle.signal.aborted).toBe(true)
+    expect(post.lifecycle.exitCode({ failed: false, blocked: false })).toBe(130)
+    process.exitCode = undefined
+  })
+
+  test("pre-session signal emits exactly one early cancelled result and commits the terminal guard", () => {
+    vi.useFakeTimers()
+    try {
+      const { lifecycle, calls } = makeLifecycle()
+      lifecycle.onSignal()
+      expect(lifecycle.cancelled()).toBe(true)
+      expect(process.exitCode).toBe(130)
+      // Stream formats: exactly one early result line, carrying the cancel
+      // status — the pre-session signal behaves like the pre-session timeout.
+      expect(calls.earlyResults).toEqual(["cancelled"])
+      // The early result is a terminal line: the guard is committed so every
+      // later writer (early errors, the result emission, the failure
+      // converter) is log-only from here on.
+      expect(lifecycle.terminal()).toBe(true)
+      expect(calls.serverAborts).toEqual([])
+      expect(lifecycle.signal.aborted).toBe(true)
+
+      // A second signal (SIGINT then SIGTERM share the handler through two
+      // `process.once` registrations) writes nothing more.
+      lifecycle.onSignal()
+      expect(calls.earlyResults).toEqual(["cancelled"])
+
+      // Text mode: the same branch prints one stderr cancel notice instead
+      // of the early result, and commits the same terminal outcome.
+      const text = makeLifecycle({ isStream: false })
+      text.lifecycle.onSignal()
+      expect(text.calls.earlyResults).toEqual([])
+      expect(text.calls.cancelNotices).toBe(1)
+      expect(text.calls.timeoutNotices).toBe(0)
+      expect(text.lifecycle.terminal()).toBe(true)
+      expect(process.exitCode).toBe(130)
+    } finally {
+      vi.useRealTimers()
+      process.exitCode = undefined
+    }
+  })
+
+  test("pre-session timeout and signal keep the first committed terminal outcome", () => {
+    vi.useFakeTimers()
+    try {
+      // Signal first: the cancelled result and exit 130 stand; a later
+      // timeout firing adds no second line, no notice, and no exit flip.
+      const signalFirst = makeLifecycle()
+      signalFirst.lifecycle.onSignal()
+      expect(signalFirst.calls.earlyResults).toEqual(["cancelled"])
+      expect(process.exitCode).toBe(130)
+      signalFirst.lifecycle.arm()
+      vi.advanceTimersByTime(60)
+      expect(signalFirst.lifecycle.timedOut()).toBe(true)
+      expect(signalFirst.calls.earlyResults).toEqual(["cancelled"])
+      expect(signalFirst.calls.timeoutNotices).toBe(0)
+      expect(process.exitCode).toBe(130)
+      process.exitCode = undefined
+
+      // Timeout first: the timeout result and exit 124 stand; a later
+      // signal adds no second line and does not flip the committed code.
+      const timeoutFirst = makeLifecycle()
+      timeoutFirst.lifecycle.arm()
+      vi.advanceTimersByTime(60)
+      expect(timeoutFirst.calls.earlyResults).toEqual(["timeout"])
+      expect(process.exitCode).toBe(124)
+      timeoutFirst.lifecycle.onSignal()
+      expect(timeoutFirst.lifecycle.cancelled()).toBe(true)
+      expect(timeoutFirst.calls.earlyResults).toEqual(["timeout"])
+      expect(process.exitCode).toBe(124)
+    } finally {
+      vi.useRealTimers()
+      process.exitCode = undefined
+    }
+  })
+
+  test("exitCode precedence: error 1 > cancel 130 > timeout 124 > blocked 3 > success undefined", () => {
+    const { lifecycle } = makeLifecycle()
+    expect(lifecycle.exitCode({ failed: true, blocked: true })).toBe(1)
+    lifecycle.onSignal()
+    expect(lifecycle.exitCode({ failed: false, blocked: true })).toBe(130)
+    expect(lifecycle.exitCode({ failed: true, blocked: false })).toBe(1)
+    process.exitCode = undefined
+
+    const { lifecycle: timed } = makeLifecycle()
+    // Fake timers must be active before arm(): the timer is captured by
+    // whatever setTimeout is global at arm time.
+    vi.useFakeTimers()
+    try {
+      timed.arm()
+      vi.advanceTimersByTime(60)
+      expect(timed.exitCode({ failed: false, blocked: true })).toBe(124)
+      expect(timed.exitCode({ failed: false, blocked: false })).toBe(124)
+    } finally {
+      vi.useRealTimers()
+      process.exitCode = undefined
+    }
+
+    const { lifecycle: plain } = makeLifecycle()
+    expect(plain.exitCode({ failed: false, blocked: true })).toBe(3)
+    expect(plain.exitCode({ failed: false, blocked: false })).toBeUndefined()
+  })
+
+  test("arm without a timeout is a no-op and disarm cancels a pending timer", () => {
+    vi.useFakeTimers()
+    try {
+      const none = makeLifecycle({ timeoutSeconds: undefined })
+      none.lifecycle.arm()
+      vi.advanceTimersByTime(10_000)
+      expect(none.lifecycle.timedOut()).toBe(false)
+
+      const { lifecycle, calls } = makeLifecycle()
+      lifecycle.arm()
+      lifecycle.disarm()
+      vi.advanceTimersByTime(60)
+      expect(lifecycle.timedOut()).toBe(false)
+      expect(calls.earlyResults).toEqual([])
+    } finally {
+      vi.useRealTimers()
+      process.exitCode = undefined
+    }
+  })
+
+  test("terminal guard starts unset, sets once, and never resets", () => {
+    const { lifecycle } = makeLifecycle()
+    expect(lifecycle.terminal()).toBe(false)
+    lifecycle.markTerminal()
+    expect(lifecycle.terminal()).toBe(true)
+    lifecycle.markTerminal()
+    expect(lifecycle.terminal()).toBe(true)
+  })
+
+  test("pre-session timeout commits the terminal guard alongside the early result", () => {
+    vi.useFakeTimers()
+    try {
+      const { lifecycle, calls } = makeLifecycle()
+      lifecycle.arm()
+      vi.advanceTimersByTime(60)
+      expect(calls.earlyResults).toEqual(["timeout"])
+      // G6: the early timeout result is a terminal line; later writers
+      // (early errors, the result emission, the failure converter) are
+      // log-only from here on.
+      expect(lifecycle.terminal()).toBe(true)
+
+      const text = makeLifecycle({ isStream: false })
+      text.lifecycle.arm()
+      vi.advanceTimersByTime(60)
+      expect(text.calls.timeoutNotices).toBe(1)
+      // Text mode commits the same terminal outcome (the stderr notice).
+      expect(text.lifecycle.terminal()).toBe(true)
+    } finally {
+      vi.useRealTimers()
+      process.exitCode = undefined
+    }
+  })
+
+  test("post-session timeout arms the last-resort exit and it fires with the committed code", () => {
+    vi.useFakeTimers()
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never)
+    try {
+      const { lifecycle } = makeLifecycle()
+      lifecycle.arm()
+      lifecycle.markSession()
+      vi.advanceTimersByTime(60)
+      expect(lifecycle.timedOut()).toBe(true)
+      expect(process.exitCode).toBe(124)
+      // The bound is armed but has not fired yet.
+      expect(exitSpy).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(RUN_LAST_RESORT_EXIT_DELAY_MS)
+      // G10: a wedged fetch or SSE cannot keep the process alive past the
+      // bound; the committed exit code (124) is what the exit carries.
+      expect(exitSpy).toHaveBeenCalledTimes(1)
+      expect(exitSpy).toHaveBeenCalledWith(124)
+    } finally {
+      exitSpy.mockRestore()
+      vi.useRealTimers()
+      process.exitCode = undefined
+    }
+  })
+
+  test("settle clears the last-resort exit so normal shutdown is unbounded", () => {
+    vi.useFakeTimers()
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never)
+    try {
+      const { lifecycle } = makeLifecycle()
+      lifecycle.arm()
+      lifecycle.markSession()
+      vi.advanceTimersByTime(60)
+      // The run body finished inside the bound: settle() disarms the
+      // last-resort timer along with the timeout timer.
+      lifecycle.settle()
+      vi.advanceTimersByTime(RUN_LAST_RESORT_EXIT_DELAY_MS * 2)
+      expect(exitSpy).not.toHaveBeenCalled()
+    } finally {
+      exitSpy.mockRestore()
+      vi.useRealTimers()
+      process.exitCode = undefined
+    }
+  })
+
+  test("post-session signal arms the last-resort exit with the cancel exit code", () => {
+    vi.useFakeTimers()
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never)
+    try {
+      const { lifecycle } = makeLifecycle()
+      lifecycle.markSession()
+      lifecycle.onSignal()
+      expect(process.exitCode).toBe(130)
+      vi.advanceTimersByTime(RUN_LAST_RESORT_EXIT_DELAY_MS)
+      expect(exitSpy).toHaveBeenCalledTimes(1)
+      expect(exitSpy).toHaveBeenCalledWith(130)
+    } finally {
+      exitSpy.mockRestore()
+      vi.useRealTimers()
+      process.exitCode = undefined
+    }
+  })
+
+  test("pre-session timeout and signal never arm the last-resort exit", () => {
+    vi.useFakeTimers()
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never)
+    try {
+      const timeout = makeLifecycle()
+      timeout.lifecycle.arm()
+      vi.advanceTimersByTime(60)
+      expect(timeout.lifecycle.timedOut()).toBe(true)
+
+      const signal = makeLifecycle()
+      signal.lifecycle.onSignal()
+      expect(signal.lifecycle.cancelled()).toBe(true)
+
+      vi.advanceTimersByTime(RUN_LAST_RESORT_EXIT_DELAY_MS * 2)
+      // No server abort was requested (there is no session yet), so no
+      // last-resort bound is armed on these paths.
+      expect(exitSpy).not.toHaveBeenCalled()
+    } finally {
+      exitSpy.mockRestore()
+      vi.useRealTimers()
+      process.exitCode = undefined
+    }
+  })
+
+  test("terminal emission waits for a pending server abort that resolves later", async () => {
+    vi.useFakeTimers()
+    try {
+      const { lifecycle, calls } = makeLifecycle()
+      lifecycle.markSession()
+      lifecycle.onSignal()
+      expect(calls.serverAborts).toEqual(["cancelled"])
+
+      let release: () => void = () => {}
+      const pending = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      lifecycle.recordServerAbort(pending)
+
+      let done = false
+      const awaited = lifecycle.awaitServerAbort().then(() => {
+        done = true
+      })
+      // While the abort request is still in flight, the terminal wait stays
+      // pending across timer turns — and settle() from the run body
+      // finishing does not neuter it (the handler-return wait must survive
+      // settle, or a throw path could still leave the request undelivered).
+      await vi.advanceTimersByTimeAsync(250)
+      expect(done).toBe(false)
+      lifecycle.settle()
+      release()
+      await awaited
+      expect(done).toBe(true)
+    } finally {
+      vi.useRealTimers()
+      process.exitCode = undefined
+    }
+  })
+
+  test("a never-resolving server abort is released by its 5 s bound", async () => {
+    vi.useFakeTimers()
+    try {
+      const { lifecycle } = makeLifecycle()
+      lifecycle.markSession()
+      lifecycle.onSignal()
+      lifecycle.recordServerAbort(new Promise<void>(() => {}))
+
+      let done = false
+      const awaited = lifecycle.awaitServerAbort().then(() => {
+        done = true
+      })
+      // One millisecond inside the bound the run is still waiting for the
+      // delivery; at the bound the wait is released regardless.
+      await vi.advanceTimersByTimeAsync(RUN_SERVER_ABORT_BOUND_MS - 1)
+      expect(done).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      await awaited
+      expect(done).toBe(true)
+    } finally {
+      vi.useRealTimers()
+      process.exitCode = undefined
+    }
+  })
+
+  test("awaitServerAbort returns immediately when no server abort was issued", async () => {
+    const { lifecycle } = makeLifecycle()
+    // No request was recorded (happy path, or a pre-session cut), so the
+    // terminal emission and the handler return never wait.
+    await expect(lifecycle.awaitServerAbort()).resolves.toBeUndefined()
+  })
+})
+
+test("run records every server abort and awaits delivery before the terminal result and handler return", async () => {
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+
+  // The abort request promise is recorded in the lifecycle instead of being
+  // fired and forgotten (F13).
+  const assign = src.indexOf("serverAbort = (reason) => {")
+  const record = src.indexOf("lifecycle.recordServerAbort(request)", assign)
+  expect(assign).toBeGreaterThan(-1)
+  expect(record).toBeGreaterThan(assign)
+
+  // The terminal emission (and the non-stream early return behind the same
+  // gate) waits for the recorded abort before the result line is written.
+  const terminalWait = src.indexOf("await lifecycle.awaitServerAbort()", record)
+  const gate = src.indexOf("if (lifecycle.terminal() || !isRunEventStreamFormat(args.format)) return")
+  expect(terminalWait).toBeGreaterThan(-1)
+  expect(gate).toBeGreaterThan(terminalWait)
+
+  // Throw paths never reach the emission: execute()'s finally settles the
+  // run first (F2), then awaits the abort so no return path leaves the
+  // request in flight.
+  const settle = src.indexOf("lifecycle.settle()", gate)
+  const finallyWait = src.indexOf("await lifecycle.awaitServerAbort()", gate)
+  expect(settle).toBeGreaterThan(-1)
+  expect(finallyWait).toBeGreaterThan(settle)
+})
+
+test("isAbortError walks the cause chain and AggregateError.errors arrays", () => {
+  const abortError = () => Object.assign(new Error("This operation was aborted"), { name: "AbortError" })
+
+  // Direct hit and the classic cause chain.
+  expect(isAbortError(abortError())).toBe(true)
+  expect(isAbortError(new TypeError("fetch failed", { cause: abortError() }))).toBe(true)
+  expect(isAbortError(new Error("outer", { cause: new Error("inner", { cause: abortError() }) }))).toBe(true)
+
+  // G2: Promise combinators aggregate their failures in `errors`, not `cause`.
+  expect(isAbortError(new AggregateError([abortError()], "all failed"))).toBe(true)
+  expect(isAbortError(new AggregateError([new Error("server 500"), abortError()], "all failed"))).toBe(true)
+  // An AggregateError wrapping a plain TypeError whose cause is the abort.
+  expect(isAbortError(new AggregateError([new TypeError("fetch failed", { cause: abortError() })], "all failed"))).toBe(
+    true,
+  )
+
+  // Non-abort failures never match, however they are wrapped.
+  expect(isAbortError(new Error("boom"))).toBe(false)
+  expect(isAbortError(new TypeError("fetch failed", { cause: new Error("connect ECONNREFUSED") }))).toBe(false)
+  expect(isAbortError(new AggregateError([new Error("server 500")], "all failed"))).toBe(false)
+
+  // Cyclic wrapping is safe instead of recursing forever.
+  const cyclic = new Error("cyclic")
+  cyclic.cause = cyclic
+  expect(isAbortError(cyclic)).toBe(false)
+  const cyclicAggregate = new AggregateError([], "cyclic")
+  cyclicAggregate.errors.push(cyclicAggregate)
+  expect(isAbortError(cyclicAggregate)).toBe(false)
+
+  // Non-objects never match.
+  expect(isAbortError(undefined)).toBe(false)
+  expect(isAbortError("AbortError")).toBe(false)
+  expect(isAbortError(null)).toBe(false)
+})
+
+test("UI.Style.TEXT_ITALIC is gated like the other style tokens", () => {
+  const original = Object.getOwnPropertyDescriptor(process.stderr, "isTTY")
+  const hadNoColor = "NO_COLOR" in process.env
+  const previousNoColor = process.env.NO_COLOR
+  try {
+    delete process.env.NO_COLOR
+    Object.defineProperty(process.stderr, "isTTY", { value: true, configurable: true })
+    expect(UI.Style.TEXT_ITALIC).toBe("\x1b[3m")
+
+    // NO_COLOR set to any value (no-color.org) disables the sequence.
+    process.env.NO_COLOR = "1"
+    expect(UI.Style.TEXT_ITALIC).toBe("")
+
+    // A non-TTY stderr disables it too, with NO_COLOR unset.
+    delete process.env.NO_COLOR
+    Object.defineProperty(process.stderr, "isTTY", { value: false, configurable: true })
+    expect(UI.Style.TEXT_ITALIC).toBe("")
+  } finally {
+    if (original) Object.defineProperty(process.stderr, "isTTY", original)
+    if (hadNoColor) process.env.NO_COLOR = previousNoColor
+    else delete process.env.NO_COLOR
+  }
+})
+
+test("run --thinking routes italic styling through UI.Style instead of raw escapes", async () => {
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  // G8: no hardcoded italic/reset escape sequences may remain in run.ts, so
+  // NO_COLOR or a non-TTY stderr can never leak raw escapes.
+  expect(src).toContain("${UI.Style.TEXT_DIM}${UI.Style.TEXT_ITALIC}${line}${UI.Style.TEXT_NORMAL}")
+  expect(src).not.toContain("\\u001b[3m")
+  expect(src).not.toContain("\\u001b[0m")
+  expect(src).not.toContain("\\x1b[3m")
+})
+
+test("run answers permission asks for every session in the run's tree (G1)", async () => {
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+
+  // The tree is seeded from the main session and extended from
+  // session.created/session.updated events whose parent is already in it.
+  expect(src).toContain("const sessionTree = new Set<string>()")
+  expect(src).toContain("sessionTree.add(sessionID)")
+  expect(src).toContain('event.type === "session.created" || event.type === "session.updated"')
+  expect(src).toContain("sessionTree.has(info.parentID)")
+  // Asks match the tree, not the main session id alone; the emitted denial
+  // names the asking (child) session.
+  expect(src).toContain("if (!sessionTree.has(permission.sessionID)) continue")
+  expect(src).toContain("sessionID: permission.sessionID,")
+  // Child tool parts are accounted and streamed but never rendered.
+  expect(src).toContain("if (!sessionTree.has(part.sessionID)) continue")
+  expect(src).toContain("const isMainSession = part.sessionID === sessionID")
+  // The one-shot header only fires for the main session's assistant updates:
+  // the session filter sits directly before the format check in that branch.
+  expect(src).toContain(
+    "event.properties.info.sessionID === sessionID &&\n                !isRunEventStreamFormat(args.format)",
+  )
+  // Rejections after a committed terminal outcome are swallowed (G2/G6).
+  expect(src).toContain("if (isOutcomeCommitted()) {")
+  expect(src).toContain("lifecycle.terminal() || lifecycle.timedOut() || lifecycle.cancelled()")
+})
+
 test("shared CLI failure handler appends the run usage hint and skips full help for run", async () => {
   const src = await readFile(path.join(import.meta.dirname, "../../src/cli/boot.ts"), "utf-8")
   const failStart = src.indexOf(".fail((msg, err) => {")
@@ -830,6 +1398,24 @@ test("shared CLI failure handler writes usage-failure help to stderr, never stdo
   expect(handler).not.toContain('cli.showHelp("log")')
   // The one-line error and the run hint already target stderr too.
   expect(handler).toContain("process.stderr.write(`${msg}\\n`)")
+})
+
+test("shared CLI failure handler gives stream run consumers one structured stdout line (F15)", async () => {
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/boot.ts"), "utf-8")
+  const failStart = src.indexOf(".fail((msg, err) => {")
+  const strict = src.indexOf(".strict()", failStart)
+  expect(failStart).toBeGreaterThan(-1)
+  const handler = src.slice(failStart, strict)
+
+  // A yargs-level usage failure (e.g. `run --format json --timeot 5`) writes
+  // one {"type":"error","error":{"code":"usage",...}} stdout line before any
+  // stderr prose, so NDJSON consumers are not left stdout-silent.
+  const stdoutLine = handler.indexOf("runArgvUsesEventStream(rawArgv)")
+  const structured = handler.indexOf('buildRunEarlyErrorEvent("usage", msg)')
+  const stderrLine = handler.indexOf("process.stderr.write(`${msg}\\n`)")
+  expect(stdoutLine).toBeGreaterThan(-1)
+  expect(structured).toBeGreaterThan(stdoutLine)
+  expect(stderrLine).toBeGreaterThan(structured)
 })
 
 test("run --format json writes a structured usage error line on missing prompt", async () => {
@@ -870,12 +1456,22 @@ test("run event stream ends with a terminal result record", async () => {
   const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
 
   expect(src).toContain("buildRunResultEvent(")
-  expect(src).toContain("resolveRunResultStatus({ failed: runFailed, blocked: runBlocked, timedOut, cancelled })")
-  expect(src).toContain("else if (runBlocked) process.exitCode = 3")
+  // Whitespace-normalized: the status call wraps across lines in the source.
+  expect(src.replace(/\s+/g, " ")).toContain(
+    "resolveRunResultStatus({ failed: runFailed, blocked: runBlocked, timedOut: lifecycle.timedOut(), cancelled: lifecycle.cancelled(), })",
+  )
+  // The exit-code precedence (1 > 130 > 124 > 3) lives in the lifecycle module.
+  expect(src).toContain("const runExitCode = lifecycle.exitCode({ failed: runFailed, blocked: runBlocked })")
+  expect(src).toContain("if (runExitCode !== undefined) process.exitCode = runExitCode")
   expect(src).toContain("usage: finalUsage")
-  expect(src).toContain("resultEmitted = true")
-  // Blocked accounting rides the same loop that emits tool_use events.
-  expect(src).toContain("if (isRunMutatingToolCompletion(part.tool, part.state.status)) successfulMutations++")
+  // G6: the single-writer rule is structural — the result emission consults
+  // and sets the lifecycle's terminal guard instead of a local flag.
+  expect(src).toContain("if (lifecycle.terminal() || !isRunEventStreamFormat(args.format)) return")
+  expect(src).toContain("lifecycle.markTerminal()")
+  expect(src).not.toContain("resultEmitted")
+  // Blocked accounting rides the same loop that emits tool_use events, through
+  // the idempotent accounting helper (G3) fed by every session in the tree.
+  expect(src).toContain("accountToolCompletion(accounting, part)")
   expect(src).toContain('emit("permission_denied", {')
   // The result write happens after the structured-output wiring, so it is
   // the final stdout line of the run. (The pre-session --timeout emits its own
@@ -1114,18 +1710,25 @@ test("run --prompt-file - is a usage error when stdin is a TTY", async () => {
 
 test("run arms the timeout before the first SDK call and prints the session id in the header", async () => {
   const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const lifecycleSrc = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run-lifecycle.ts"), "utf-8")
 
   // E2: the timer is armed (handler body) before the event subscription (the
-  // first SDK call inside execute), so a black-holed attach host is bounded.
-  const armed = src.indexOf("timeoutTimer = setTimeout(onRunTimeout")
+  // first SDK call inside executeRun), so a black-holed attach host is bounded.
+  const armed = src.indexOf("lifecycle.arm()")
   const subscribe = src.indexOf("const events = await sdk.event.subscribe")
   expect(armed).toBeGreaterThan(-1)
   expect(subscribe).toBeGreaterThan(armed)
   // A pre-session firing emits the terminal result with an empty session id
-  // and cuts the pending SDK calls via the shared abort controller.
+  // and cuts the pending SDK calls via the shared lifecycle signal; a
+  // post-session firing routes through the server abort first. The signal's
+  // pre-session branch shares the same early-result callback with its own
+  // status.
   expect(src).toContain("abortState.earlyTimeoutEmitted = true")
-  expect(src).toContain("earlyAbort.abort()")
-  expect(src).toContain("AbortSignal.any([eventAbort.signal, earlyAbort.signal])")
+  expect(lifecycleSrc).toContain('input.onServerAbort("timeout")')
+  expect(lifecycleSrc).toContain('input.onEarlyResult("timeout")')
+  expect(lifecycleSrc).toContain('input.onEarlyResult("cancelled")')
+  expect(lifecycleSrc).toContain("controller.abort()")
+  expect(src).toContain("AbortSignal.any([eventAbort.signal, lifecycle.signal])")
 
   // E4: the default-format header ends with the session id so multi-turn
   // callers can resume without --format json.
@@ -1139,8 +1742,13 @@ test("run arms the timeout before the first SDK call and prints the session id i
 
   // B1: the appended system prompt is sent as the request `system` field.
   expect(src).toContain("...(appendSystemPrompt !== undefined ? { system: appendSystemPrompt } : {})")
-  // B2: both mechanisms — create-time deny rules and the per-request tools map.
-  expect(src).toContain("...(disallowedTools !== undefined ? { tools: disallowedTools } : {})")
+  // B2/F4: both mechanisms — create-time deny rules and the per-request tools
+  // map, which always disables the interactive question/plan_exit tools and
+  // merges in --disallowed-tools.
+  expect(src).toContain(
+    "const promptTools: Record<string, false> = { question: false, plan_exit: false, ...disallowedTools }",
+  )
+  expect(src).toContain("tools: promptTools")
   // E1: the sandbox policy rides every prompt body, tightening attach runs.
   expect(src).toContain("...(isolationPolicy !== undefined ? { isolation: isolationPolicy } : {})")
   // B4: the parsed schema is sent as the json_schema output format.

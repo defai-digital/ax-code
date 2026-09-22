@@ -83,7 +83,7 @@ export const StatsCommand = cmd({
   handler: async (args) => {
     await bootstrap(process.cwd(), async () => {
       try {
-        const stats = await aggregateSessionStats(args.days, args.project)
+        const stats = await aggregateSessionStats(args.days, args.project, { json: args.json === true })
 
         if (args.json) {
           process.stdout.write(JSON.stringify(buildStatsDocument(stats), null, 2) + EOL)
@@ -174,6 +174,16 @@ export function validateStatsDisplayLimit(limit: unknown, option: "--tools" | "-
   return limit
 }
 
+/**
+ * The large-dataset notice text, or undefined below the threshold. Under
+ * `--json` the notice must go to stderr (never stdout) so the JSON document
+ * stays the only stdout content; text mode keeps the stdout behavior.
+ */
+export function statsLargeDatasetNotice(sessionCount: number): string | undefined {
+  if (sessionCount <= 1000) return undefined
+  return `Large dataset detected (${sessionCount} sessions). This may take a while...`
+}
+
 async function getCurrentProject(): Promise<Project.Info> {
   return Instance.project
 }
@@ -186,7 +196,11 @@ async function getAllSessions(): Promise<Session.Info[]> {
   })
 }
 
-export async function aggregateSessionStats(days?: number, projectFilter?: string): Promise<SessionStats> {
+export async function aggregateSessionStats(
+  days?: number,
+  projectFilter?: string,
+  options?: { json?: boolean },
+): Promise<SessionStats> {
   days = validateStatsDays(days)
   const sessions = await getAllSessions()
   const MS_IN_DAY = 24 * 60 * 60 * 1000
@@ -241,8 +255,12 @@ export async function aggregateSessionStats(days?: number, projectFilter?: strin
     medianTokensPerSession: 0,
   }
 
-  if (filteredSessions.length > 1000) {
-    console.log(`Large dataset detected (${filteredSessions.length} sessions). This may take a while...`)
+  const notice = statsLargeDatasetNotice(filteredSessions.length)
+  if (notice !== undefined) {
+    // G7: under --json the notice goes to stderr so stdout stays a single
+    // JSON document; text mode keeps the previous stdout notice.
+    if (options?.json) process.stderr.write(notice + EOL)
+    else console.log(notice)
   }
 
   if (filteredSessions.length === 0) {

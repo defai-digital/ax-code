@@ -146,6 +146,25 @@ export type McpAuthJSONDocument = {
   servers: McpAuthJSONServer[]
 }
 
+/**
+ * Replaces userinfo embedded in a server URL with `***` and leaves everything
+ * else untouched. A URL without credentials is returned verbatim (no URL
+ * round-trip, so non-canonical spellings are preserved); an unparseable
+ * string is also returned verbatim — redaction must never turn a display
+ * string into an exception.
+ */
+export function redactUrlCredentials(url: string): string {
+  try {
+    const parsed = new URL(url)
+    if (parsed.username === "" && parsed.password === "") return url
+    parsed.username = "***"
+    parsed.password = ""
+    return parsed.toString()
+  } catch {
+    return url
+  }
+}
+
 export function buildMcpAuthDocument(input: {
   servers: Array<{ name: string; status: MCP.AuthStatus; url: string }>
 }): McpAuthJSONDocument {
@@ -153,7 +172,9 @@ export function buildMcpAuthDocument(input: {
     servers: input.servers.map((server) => ({
       name: server.name,
       status: getAuthStatusText(server.status),
-      url: server.url,
+      // Credentials embedded in the URL (https://user:token@host/…) must
+      // never leak into --json output.
+      url: redactUrlCredentials(server.url),
     })),
   }
 }
@@ -548,7 +569,9 @@ export const McpAuthListCommand = cmd({
           const authStatus = await MCP.getAuthStatus(name)
           const icon = getAuthStatusIcon(authStatus)
           const statusText = getAuthStatusText(authStatus)
-          const url = serverConfig.url
+          // Same redaction as --json: credentials embedded in the URL never
+          // reach the text-mode output either.
+          const url = redactUrlCredentials(serverConfig.url)
 
           prompts.log.info(`${icon} ${name} ${UI.Style.TEXT_DIM}${statusText}\n    ${UI.Style.TEXT_DIM}${url}`)
         }

@@ -1,16 +1,19 @@
 import { describe, expect, test } from "vitest"
 import yargs from "yargs"
 import type { Argv } from "yargs"
+import { readFile } from "node:fs/promises"
+import path from "node:path"
 import { buildProvidersDocument, ProvidersListCommand } from "../../src/cli/cmd/providers-impl"
 import { buildAgentsDocument, AgentListCommand } from "../../src/cli/cmd/agent"
 import {
   buildMcpDocument,
   buildMcpAuthDocument,
+  redactUrlCredentials,
   resolveMcpStatus,
   McpListCommand,
   McpAuthListCommand,
 } from "../../src/cli/cmd/mcp-impl"
-import { buildStatsDocument, StatsCommand } from "../../src/cli/cmd/stats"
+import { buildStatsDocument, statsLargeDatasetNotice, StatsCommand } from "../../src/cli/cmd/stats"
 import { buildContextDocument, ContextCommand } from "../../src/cli/cmd/context"
 import { MemoryStatusCommand, MemoryListCommand } from "../../src/cli/cmd/memory"
 import { ModelsCommand } from "../../src/cli/cmd/models"
@@ -178,6 +181,32 @@ describe("mcp auth list --json", () => {
     expect(() => JSON.parse(JSON.stringify(doc))).not.toThrow()
   })
 
+  test("redacts credentials embedded in server URLs", () => {
+    // A URL with userinfo (e.g. https://user:token@host/mcp) must never leak
+    // the credential into --json output; the redaction replaces userinfo with
+    // *** and leaves the rest of the URL intact.
+    expect(redactUrlCredentials("https://user:secret@example.com/mcp")).toBe("https://***@example.com/mcp")
+    expect(redactUrlCredentials("https://token@example.com/mcp")).toBe("https://***@example.com/mcp")
+    // URLs without credentials come back verbatim — including non-canonical
+    // spellings that a URL round-trip would normalize.
+    expect(redactUrlCredentials("https://example.com/mcp")).toBe("https://example.com/mcp")
+    expect(redactUrlCredentials("https://a")).toBe("https://a")
+    expect(redactUrlCredentials("not a url")).toBe("not a url")
+    // The document builder applies the same redaction per server.
+    const doc = buildMcpAuthDocument({
+      servers: [
+        { name: "creds", status: "authenticated", url: "https://user:secret@example.com/mcp" },
+        { name: "plain", status: "authenticated", url: "https://example.com/mcp" },
+      ],
+    })
+    expect(doc.servers).toEqual([
+      { name: "creds", status: "authenticated", url: "https://***@example.com/mcp" },
+      { name: "plain", status: "authenticated", url: "https://example.com/mcp" },
+    ])
+    // The credential never survives anywhere in the serialized document.
+    expect(JSON.stringify(doc)).not.toContain("secret")
+  })
+
   test("builder accepts --json", () => {
     expect(builderAcceptsJson(McpAuthListCommand.builder)).toBe(true)
   })
@@ -214,6 +243,22 @@ describe("stats --json", () => {
 
   test("builder accepts --json", () => {
     expect(builderAcceptsJson(StatsCommand.builder)).toBe(true)
+  })
+
+  test("large-dataset notice stays off stdout under --json (G7)", async () => {
+    // The pure decision: no notice at or below the 1000-session threshold,
+    // the original text above it.
+    expect(statsLargeDatasetNotice(0)).toBeUndefined()
+    expect(statsLargeDatasetNotice(1000)).toBeUndefined()
+    expect(statsLargeDatasetNotice(1001)).toBe("Large dataset detected (1001 sessions). This may take a while...")
+
+    // The routing pin: under --json the notice goes to stderr so stdout is a
+    // single JSON document; text mode keeps the stdout notice.
+    const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/stats.ts"), "utf-8")
+    expect(src).toContain("if (options?.json) process.stderr.write(notice + EOL)")
+    expect(src).toContain("else console.log(notice)")
+    expect(src).not.toContain("console.log(`Large dataset detected")
+    expect(src).toContain("await aggregateSessionStats(args.days, args.project, { json: args.json === true })")
   })
 })
 

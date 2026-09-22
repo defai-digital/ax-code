@@ -37,6 +37,9 @@ export namespace UI {
     get TEXT_NORMAL_BOLD() {
       return color("\x1b[1m")
     },
+    get TEXT_ITALIC() {
+      return color("\x1b[3m")
+    },
     get TEXT_WARNING() {
       return color("\x1b[93m")
     },
