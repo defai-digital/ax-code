@@ -1,6 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
+import { NamedError } from "@ax-code/util/error"
 import { toErrorMessage } from "@/util/error-message"
+import { parseJsonResult } from "@/util/json-value"
 
 type JsonSchema = boolean | Record<string, unknown>
 type RunOutputPartRecord = {
@@ -11,6 +13,8 @@ type RunOutputMessageRecord = {
   info?: {
     id?: string
     role?: string
+    /** Server-captured structured result, set when the run steered through the StructuredOutput tool. */
+    structured?: unknown
     tokens?: {
       input?: unknown
       output?: unknown
@@ -44,8 +48,14 @@ export type RunResultEvent = {
   usage?: RunUsageTotals
 }
 
-/** Machine-readable code carried by the structured early-error line on `exitEarly` paths. */
-export type RunEarlyErrorCode = "usage" | "provider" | "model"
+/**
+ * Machine-readable code carried by the structured early-error line on `exitEarly`
+ * paths. `usage`/`provider`/`model` cover flag and routing mistakes caught before
+ * any request; `session` is a missing or rejected session id; `attach` is a
+ * failure to reach the ax-code server; `internal` converts any otherwise
+ * unstructured rejection.
+ */
+export type RunEarlyErrorCode = "usage" | "provider" | "model" | "session" | "attach" | "internal"
 
 /** One stdout line emitted before the stderr prose when the run exits before submitting. */
 export type RunEarlyErrorEvent = {
@@ -54,6 +64,12 @@ export type RunEarlyErrorEvent = {
     code: RunEarlyErrorCode
     message: string
   }
+}
+
+/** The structured classification of an otherwise-unhandled run rejection. */
+export type RunFailureClassification = {
+  code: RunEarlyErrorCode
+  message: string
 }
 
 export function buildRunResultEvent(input: {
@@ -89,6 +105,208 @@ export function buildRunResultEvent(input: {
 
 export function buildRunEarlyErrorEvent(code: RunEarlyErrorCode, message: string): RunEarlyErrorEvent {
   return { type: "error", error: { code, message } }
+}
+
+/** Extract `.name` from an unknown error (a rejected HTTP body or a thrown error). */
+function errorNameOfRecord(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null || !("name" in error)) return undefined
+  const name = (error as { name?: unknown }).name
+  return typeof name === "string" ? name : undefined
+}
+
+/**
+ * Connection-failure signals from an SDK call. undici wraps the OS socket
+ * error (ECONNREFUSED/ENOTFOUND) as the `cause` of a `TypeError: fetch
+ * failed`; direct socket errors carry the code themselves. The cause chain is
+ * walked because some runtimes nest it another level (e.g. AggregateError).
+ */
+function isRunConnectionFailure(error: unknown, seen: Set<object> = new Set()): boolean {
+  if (typeof error !== "object" || error === null || seen.has(error)) return false
+  seen.add(error)
+  const record = error as { name?: unknown; message?: unknown; code?: unknown; cause?: unknown }
+  if (record.code === "ECONNREFUSED" || record.code === "ENOTFOUND") return true
+  if (record.name === "TypeError" && typeof record.message === "string" && record.message.includes("fetch failed")) {
+    return true
+  }
+  return isRunConnectionFailure(record.cause, seen)
+}
+
+/**
+ * The most detailed message in the cause chain — typically
+ * "connect ECONNREFUSED 127.0.0.1:4096" rather than the generic
+ * "fetch failed" TypeError that wraps it.
+ */
+function describeRunConnectionFailure(error: unknown): string {
+  const messages: string[] = []
+  const seen = new Set<object>()
+  let current: unknown = error
+  while (typeof current === "object" && current !== null && !seen.has(current)) {
+    seen.add(current)
+    const message = NamedError.message(current).trim()
+    if (message.length > 0) messages.push(message)
+    const cause = (current as { cause?: unknown }).cause
+    if (cause === undefined || cause === null) break
+    current = cause
+  }
+  const detailed = messages.filter((message) => message !== "fetch failed")
+  return detailed[detailed.length - 1] ?? messages[messages.length - 1] ?? "connection failed"
+}
+
+/**
+ * Whether an otherwise-unhandled rejection is an HTTP 401/403 from the
+ * attached server. A managed runtime requires the `x-ax-code-runtime-token`
+ * header and answers `403 {"name":"ForbiddenError",...}` (or the server's
+ * `{name:"InvalidRequestError", status: 403}` envelope) with the message
+ * "Runtime authorization required" when it is missing, so the classifier keys
+ * on that message string or the 401/403 status rather than the `name` field.
+ */
+export function isRunAuthFailure(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false
+  const record = error as { status?: unknown; data?: { statusCode?: unknown } | null }
+  if (record.status === 401 || record.status === 403) return true
+  if (record.data?.statusCode === 401 || record.data?.statusCode === 403) return true
+  // Auth rejections arrive as deserialized HTTP bodies (plain records), never as
+  // real Error instances. Exclude Error here so a thrown Error that happens to
+  // carry the same wording is not mistaken for an auth rejection.
+  if (error instanceof Error) return false
+  return NamedError.message(error) === "Runtime authorization required"
+}
+
+/** Whether an error is the local-only loopback-policy rejection from `assertLoopbackHttpUrl`. */
+function isLoopbackPolicyRejection(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  return error.message.includes("must use a loopback address")
+}
+
+/**
+ * Map an otherwise-unhandled run rejection to the structured early-error
+ * shape: a deserialized `SessionNotFoundError` body is a session failure, an
+ * HTTP 401/403 auth rejection or a fetch/socket failure is an attach failure,
+ * the loopback-policy rejection is a usage error, everything else is internal
+ * with the most readable message available (`NamedError.message`, never
+ * "[object Object]").
+ */
+export function classifyRunFailure(error: unknown): RunFailureClassification {
+  if (errorNameOfRecord(error) === "SessionNotFoundError") {
+    return { code: "session", message: NamedError.message(error) }
+  }
+  if (isRunAuthFailure(error)) {
+    return { code: "attach", message: NamedError.message(error) }
+  }
+  if (isLoopbackPolicyRejection(error)) {
+    return { code: "usage", message: NamedError.message(error) }
+  }
+  if (isRunConnectionFailure(error)) {
+    return { code: "attach", message: describeRunConnectionFailure(error) }
+  }
+  return { code: "internal", message: NamedError.message(error) }
+}
+
+/** File-extension mime mapping for `run --file` attachments. */
+const RUN_FILE_MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+}
+
+/**
+ * Mime type for a `run --file` attachment inferred from its filename:
+ * images and PDFs keep their binary type, everything else is text/plain.
+ * Directories are classified by the caller (application/x-directory).
+ */
+export function runFileMime(filename: string): string {
+  const dot = filename.lastIndexOf(".")
+  const extension = dot === -1 ? "" : filename.slice(dot + 1).toLowerCase()
+  if (extension === "pdf") return "application/pdf"
+  return RUN_FILE_MIME_BY_EXTENSION[extension] ?? "text/plain"
+}
+
+export type RunOutputSchemaPreflight = { ok: true; schema: Record<string, unknown> } | { ok: false; message: string }
+
+/**
+ * Pre-submission check for `--output-schema`: the file must be readable, valid
+ * JSON, and an object. Returns a usage-error message on failure so the run can
+ * exit early instead of wasting a full generation before the post-run
+ * validation rejects. On success the parsed schema object is returned so the
+ * same value can steer the model (prompt body `format`); the post-run
+ * validation itself stays unchanged as the backstop.
+ */
+export async function preflightRunOutputSchema(callerCwd: string, file: string): Promise<RunOutputSchemaPreflight> {
+  const resolved = resolveRunOutputPath(callerCwd, file)
+  let text: string
+  try {
+    text = await readFile(resolved, "utf8")
+  } catch (error) {
+    return { ok: false, message: `Failed to read output schema ${file}: ${toErrorMessage(error)}` }
+  }
+  const parsed = parseJsonResult(text)
+  if (!parsed.ok) {
+    return { ok: false, message: `Failed to parse output schema ${file}: ${toErrorMessage(parsed.error)}` }
+  }
+  if (typeof parsed.value !== "object" || parsed.value === null || Array.isArray(parsed.value)) {
+    return { ok: false, message: `Output schema ${file} must be a JSON object` }
+  }
+  return { ok: true, schema: parsed.value as Record<string, unknown> }
+}
+
+/**
+ * Built-in tool ids derived from the tool source files in `src/tool/`
+ * (`ls.ts` serves the `list` id, `todo.ts` serves todowrite/todoread).
+ * `--disallowed-tools` ids outside this set are not an error — MCP tool ids
+ * are dynamic — but the CLI warns on them in the default format.
+ */
+export const RUN_BUILTIN_TOOL_IDS: ReadonlySet<string> = new Set([
+  "bash",
+  "read",
+  "write",
+  "edit",
+  "multiedit",
+  "apply_patch",
+  "glob",
+  "grep",
+  "list",
+  "webfetch",
+  "websearch",
+  "task",
+  "todowrite",
+  "todoread",
+  "question",
+  "skill",
+])
+
+/**
+ * Parse repeatable `--disallowed-tools` values: each entry may carry one id or
+ * a comma-separated list. Whitespace-only entries are ignored; the result maps
+ * every distinct id to `false` for the prompt body's `tools` field.
+ */
+export function parseDisallowedTools(values: readonly string[]): Record<string, false> {
+  const tools: Record<string, false> = {}
+  for (const value of values) {
+    for (const entry of value.split(",")) {
+      const id = entry.trim()
+      if (id.length > 0) tools[id] = false
+    }
+  }
+  return tools
+}
+
+/**
+ * Permission rules for `--add-dir`: one `external_directory` allow rule per
+ * resolved directory. Tools ask for that permission with a `<dir>/*` glob
+ * (`tool/external-directory.ts`, `tool/bash-impl.ts`) and the wildcard matcher
+ * treats `*` as `.*` crossing `/`, so a single `<dir>/*` pattern covers the
+ * directory and everything beneath it.
+ */
+export function buildAddDirRules(
+  paths: readonly string[],
+): Array<{ permission: "external_directory"; pattern: string; action: "allow" }> {
+  return paths.map((dir) => ({
+    permission: "external_directory" as const,
+    pattern: dir.replaceAll("\\", "/").replace(/\/+$/, "") + "/*",
+    action: "allow" as const,
+  }))
 }
 
 /**
@@ -203,6 +421,24 @@ export function extractRunFinalAssistantText(
     const text = part.text.trim()
     if (text) return text
   }
+}
+
+/**
+ * The server-captured structured result (`info.structured`) of the final
+ * assistant message. A run with `format: json_schema` steers the model
+ * through a `StructuredOutput` tool and stores the captured object here; the
+ * assistant usually produces no text part at all, so this — serialized — is
+ * the run's final text. Undefined when the server stored none (an older
+ * server, or the model failed the requirement and the message carries a
+ * `StructuredOutputError`).
+ */
+export function extractRunStructuredOutput(
+  messages: readonly RunOutputMessageRecord[] | undefined,
+  assistantMessageID: string | undefined,
+): unknown {
+  if (!assistantMessageID) return undefined
+  const message = messages?.find((item) => item.info?.role === "assistant" && item.info.id === assistantMessageID)
+  return message?.info?.structured
 }
 
 export function parseFinalJson(text: string): unknown {

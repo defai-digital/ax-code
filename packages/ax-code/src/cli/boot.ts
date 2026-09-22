@@ -31,7 +31,13 @@ import { WikiCommand } from "./cmd/wiki"
 import { ModelsCommand } from "./cmd/models"
 import { ReleaseCommand } from "./cmd/release"
 import { ProvidersCommand } from "./cmd/providers"
-import { commandTokenFromArgv, RunCommand, runUnknownArgumentHint } from "./cmd/run"
+import {
+  cliFailureShowsFullHelp,
+  commandTokenFromArgv,
+  isCliUsageFailureMessage,
+  RunCommand,
+  runUsageFailureHint,
+} from "./cmd/run"
 import { ServeCommand } from "./cmd/serve"
 import { RuntimeCommand } from "./cmd/runtime"
 import { SessionCommand } from "./cmd/session"
@@ -259,7 +265,8 @@ export function cli(argv = hideBin(process.argv)) {
       choices: ["DEBUG", "INFO", "WARN", "ERROR"],
     })
     .option("sandbox", {
-      describe: "isolation sandbox mode (default: full-access / sandbox off)",
+      describe:
+        "isolation sandbox mode (default: full-access / sandbox off); under --attach it is also sent per request and can only tighten the server's mode",
       type: "string",
       choices: ["read-only", "workspace-write", "full-access"],
     })
@@ -317,15 +324,15 @@ export function cli(argv = hideBin(process.argv)) {
     .fail((msg, err) => {
       if (err) throw err
       if (msg) process.stderr.write(`${msg}\n`)
-      if (
-        msg?.startsWith("Unknown argument") ||
-        msg?.startsWith("Not enough non-option arguments") ||
-        msg?.startsWith("Invalid values:") ||
-        msg?.startsWith("Missing required argument")
-      ) {
-        const hint = runUnknownArgumentHint(msg, commandTokenFromArgv(rawArgv))
+      if (isCliUsageFailureMessage(msg)) {
+        const command = commandTokenFromArgv(rawArgv)
+        const hint = runUsageFailureHint(msg, command)
         if (hint) process.stderr.write(`${hint}\n`)
-        cli.showHelp("log")
+        // Scripted `run` callers get the one-line error plus the hint only —
+        // never the full help dump; every other command keeps the full help.
+        // Usage-failure help goes to stderr so a mistyped command keeps stdout
+        // empty (a scripted caller must not see 60 lines of help on stdout).
+        if (cliFailureShowsFullHelp(msg, command)) cli.showHelp((text) => process.stderr.write(text + "\n"))
       }
       process.exit(1)
     })

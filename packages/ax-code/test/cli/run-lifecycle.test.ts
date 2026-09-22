@@ -1,12 +1,14 @@
 import { expect, test, vi } from "vitest"
 import path from "path"
-import { readFile } from "node:fs/promises"
+import { readFile, writeFile } from "node:fs/promises"
 import yargs from "yargs"
 import {
+  cliFailureShowsFullHelp,
   commandTokenFromArgv,
   composeRunMessage,
   findRunModelError,
   formatRunToolFallbackInput,
+  isCliUsageFailureMessage,
   isRunEventStreamFormat,
   joinRunMessageArguments,
   missingRunPromptMessage,
@@ -14,10 +16,20 @@ import {
   resolveRunAgentDisplayName,
   resolveRunModel,
   RunCommand,
-  runUnknownArgumentHint,
+  runUsageFailureHint,
 } from "../../src/cli/cmd/run"
 import { tmpdir } from "../fixture/fixture"
 import { Provider } from "../../src/provider/provider"
+
+// `run --runtime` resolves the managed runtime through RuntimeRegistry. Mock the
+// registry so the absent-runtime handler path is exercised without touching the
+// real state directory or probing a loopback server.
+vi.mock("../../src/runtime/runtime-registry", () => ({
+  RuntimeRegistry: {
+    status: vi.fn(async () => ({ state: "absent" as const, directory: "/tmp/ax-code-project" })),
+    headers: vi.fn((record: { token: string }) => ({ "x-ax-code-runtime-token": record.token })),
+  },
+}))
 
 async function parseRunArgv(argv: string[]) {
   let parsed: Record<string, unknown> | undefined
@@ -335,7 +347,10 @@ test("run command scopes the local SDK client to the runtime directory", async (
 
   expect(src).toContain("const runtimeDirectory = directory || callerCwd")
   expect(src).toContain("await bootstrap(runtimeDirectory")
-  expect(src).toContain(
+  // Whitespace- and trailing-comma-normalized: the local client call is one
+  // logical expression, but the handler wrapper deepened its indentation past
+  // printWidth so the formatter wraps it across lines.
+  expect(src.replace(/\s+/g, " ").replace(/,\s*\}/g, " }")).toContain(
     "createAxCodeClient({ baseUrl: internalBaseUrl(), fetch: fetchFn, directory: runtimeDirectory })",
   )
   expect(src).not.toContain("createOpencodeClient")
@@ -362,16 +377,24 @@ test("run command wires structured output flags after the event loop", async () 
   expect(src).toContain("if (!assistantMessageID) return undefined")
   expect(src).toContain("finalAssistantMessageID = event.properties.info.id")
   expect(src).toContain("await sdk.session.messages({ sessionID })")
+  // --output-schema: the server-captured structured value is serialized into
+  // the final text when present; the text parts stay the fallback.
+  expect(src).toContain("finalStructured = extractRunStructuredOutput(result.data, assistantMessageID)")
+  expect(src).toContain(
+    "outputFormat !== undefined && finalStructured !== undefined ? JSON.stringify(finalStructured) : undefined",
+  )
 
   const awaitLoop = src.indexOf("await loopResult")
   const storedFinalMessage = src.indexOf(
     "const storedFinalMessage = await readFinalAssistantText(sdk, sessionID, finalAssistantMessageID)",
     awaitLoop,
   )
-  const structuredOutput = src.indexOf("await handleRunStructuredOutput(storedFinalMessage ?? finalMessage", awaitLoop)
+  const finalText = src.indexOf("const finalText = structuredText ?? storedFinalMessage ?? finalMessage", awaitLoop)
+  const structuredOutput = src.indexOf("await handleRunStructuredOutput(finalText", awaitLoop)
   expect(awaitLoop).toBeGreaterThan(-1)
   expect(storedFinalMessage).toBeGreaterThan(awaitLoop)
-  expect(structuredOutput).toBeGreaterThan(storedFinalMessage)
+  expect(finalText).toBeGreaterThan(storedFinalMessage)
+  expect(structuredOutput).toBeGreaterThan(finalText)
 })
 
 test("headless-run clears the idle timer before checking timeout state", async () => {
@@ -394,6 +417,19 @@ test("non-interactive run entry points share bounded pipe input handling", async
     expect(source).toContain("await readNonTtyStdin()")
     expect(source).not.toContain("for await (const chunk of process.stdin)")
   }
+})
+
+test("run registers one shared signal handler for SIGINT and SIGTERM and removes both", async () => {
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+
+  // CI runners send SIGTERM: both signals share one handler so either cancels
+  // the run with status "cancelled" and exit 130.
+  expect(src).toContain('process.once("SIGINT", onRunSignal)')
+  expect(src).toContain('process.once("SIGTERM", onRunSignal)')
+  expect(src).not.toContain("onSigint")
+  // The finally always pairs the registrations with removals.
+  expect(src).toContain('process.removeListener("SIGINT", onRunSignal)')
+  expect(src).toContain('process.removeListener("SIGTERM", onRunSignal)')
 })
 
 test("headless-run keeps signal handlers installed until cleanup", async () => {
@@ -637,15 +673,112 @@ test("run exits 1 when --fork is passed without --continue or --session (#416)",
   }
 })
 
-test("unknown-argument hint targets only run command failures", () => {
+test("run exits 1 with a structured usage line when --continue and --session are combined", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const previous = process.cwd()
+  process.chdir(tmp.path)
+  let output = ""
+  const write = vi.spyOn(process.stdout, "write").mockImplementation(((chunk: unknown) => {
+    output += String(chunk)
+    return true
+  }) as any)
+  try {
+    await expect(
+      RunCommand.handler({
+        message: ["hello"],
+        continue: true,
+        session: "ses_x",
+        command: false,
+        "--": [],
+        format: "json",
+      } as never),
+    ).rejects.toThrow()
+    expect(process.exitCode).toBe(1)
+
+    const lines = output.split("\n").filter((line) => line.trim().length > 0)
+    expect(lines).toHaveLength(1)
+    expect(JSON.parse(lines[0])).toEqual({
+      type: "error",
+      error: { code: "usage", message: "--continue and --session are mutually exclusive" },
+    })
+  } finally {
+    write.mockRestore()
+    process.chdir(previous)
+    process.exitCode = undefined
+  }
+})
+
+test("run validates --output-schema before submission and exits 1 on a broken schema", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await writeFile(path.join(tmp.path, "broken.json"), "{ not json")
+  const previous = process.cwd()
+  process.chdir(tmp.path)
+  let output = ""
+  const write = vi.spyOn(process.stdout, "write").mockImplementation(((chunk: unknown) => {
+    output += String(chunk)
+    return true
+  }) as any)
+  try {
+    await expect(
+      RunCommand.handler({
+        message: ["hello"],
+        "output-schema": "broken.json",
+        command: false,
+        "--": [],
+        format: "json",
+      } as never),
+    ).rejects.toThrow()
+    expect(process.exitCode).toBe(1)
+
+    const lines = output.split("\n").filter((line) => line.trim().length > 0)
+    expect(lines).toHaveLength(1)
+    const event = JSON.parse(lines[0])
+    expect(event.type).toBe("error")
+    expect(event.error.code).toBe("usage")
+    expect(event.error.message).toContain("Failed to parse output schema broken.json")
+  } finally {
+    write.mockRestore()
+    process.chdir(previous)
+    process.exitCode = undefined
+  }
+})
+
+test("run usage failures print a one-line hint instead of the full help", () => {
   const hint = "Run `ax-code run --help` to see the accepted flags."
-  expect(runUnknownArgumentHint("Unknown argument: bogus", "run")).toBe(hint)
-  // Other commands and other failure messages get no run hint.
-  expect(runUnknownArgumentHint("Unknown argument: bogus", "session")).toBeUndefined()
-  expect(runUnknownArgumentHint("Unknown argument: bogus", undefined)).toBeUndefined()
-  expect(runUnknownArgumentHint("Not enough non-option arguments: got 0", "run")).toBeUndefined()
-  expect(runUnknownArgumentHint("Invalid values: format", "run")).toBeUndefined()
-  expect(runUnknownArgumentHint(undefined, "run")).toBeUndefined()
+  // Every yargs usage-failure class on `run` gets the one-line hint and never
+  // the full help dump.
+  for (const message of [
+    "Unknown argument: bogus",
+    "Not enough non-option arguments: got 0, need at least 1",
+    "Invalid values: format",
+    "Missing required argument: model",
+  ]) {
+    expect(isCliUsageFailureMessage(message)).toBe(true)
+    expect(runUsageFailureHint(message, "run")).toBe(hint)
+    expect(cliFailureShowsFullHelp(message, "run")).toBe(false)
+    // Other commands keep the full help and get no run hint.
+    expect(cliFailureShowsFullHelp(message, "session")).toBe(true)
+    expect(runUsageFailureHint(message, "session")).toBeUndefined()
+    expect(runUsageFailureHint(message, undefined)).toBeUndefined()
+  }
+  // Messages outside the usage-failure classes keep yargs defaults.
+  expect(isCliUsageFailureMessage("Some other failure")).toBe(false)
+  expect(runUsageFailureHint("Some other failure", "run")).toBeUndefined()
+  expect(cliFailureShowsFullHelp("Some other failure", "run")).toBe(false)
+  expect(cliFailureShowsFullHelp("Some other failure", "session")).toBe(false)
+  expect(runUsageFailureHint(undefined, "run")).toBeUndefined()
+})
+
+test("unknown argument json on run hints at the NDJSON format flag", () => {
+  expect(runUsageFailureHint("Unknown argument: json", "run")).toBe(
+    "Use --format json for the NDJSON event stream (run --help lists the accepted flags).",
+  )
+  // Any other unknown flag keeps the generic hint, and other commands never
+  // get the NDJSON hint.
+  expect(runUsageFailureHint("Unknown argument: out", "run")).toBe(
+    "Run `ax-code run --help` to see the accepted flags.",
+  )
+  expect(runUsageFailureHint("Unknown argument: json", "session")).toBeUndefined()
 })
 
 test("command token derivation finds run from raw argv without yargs internals", () => {
@@ -666,18 +799,37 @@ test("command token derivation finds run from raw argv without yargs internals",
   expect(commandTokenFromArgv([])).toBeUndefined()
 })
 
-test("shared CLI failure handler appends the run unknown-argument hint", async () => {
+test("shared CLI failure handler appends the run usage hint and skips full help for run", async () => {
   const src = await readFile(path.join(import.meta.dirname, "../../src/cli/boot.ts"), "utf-8")
   const failStart = src.indexOf(".fail((msg, err) => {")
   const strict = src.indexOf(".strict()", failStart)
   expect(failStart).toBeGreaterThan(-1)
   expect(strict).toBeGreaterThan(failStart)
   const handler = src.slice(failStart, strict)
-  expect(handler).toContain("runUnknownArgumentHint(msg, commandTokenFromArgv(rawArgv))")
+  expect(handler).toContain("if (isCliUsageFailureMessage(msg)) {")
+  expect(handler).toContain("runUsageFailureHint(msg, command)")
   expect(handler).toContain("process.stderr.write(`${hint}\\n`)")
-  // The hint lands before the help dump and the exit stays 1.
-  expect(handler.indexOf("if (hint)")).toBeLessThan(handler.indexOf('cli.showHelp("log")'))
+  // Full help is conditional: only non-run commands print it, and the hint
+  // lands before any help output. The exit stays 1.
+  expect(handler.indexOf("if (hint)")).toBeLessThan(handler.indexOf("cliFailureShowsFullHelp"))
   expect(handler).toContain("process.exit(1)")
+})
+
+test("shared CLI failure handler writes usage-failure help to stderr, never stdout", async () => {
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/boot.ts"), "utf-8")
+  const failStart = src.indexOf(".fail((msg, err) => {")
+  const strict = src.indexOf(".strict()", failStart)
+  expect(failStart).toBeGreaterThan(-1)
+  expect(strict).toBeGreaterThan(failStart)
+  const handler = src.slice(failStart, strict)
+
+  // The full help is emitted through a stderr print callback, not yargs's
+  // `showHelp("log")` (which writes to stdout via console.log), so a scripted
+  // caller that mistypes a non-run command gets an empty stdout with exit 1.
+  expect(handler).toContain('cli.showHelp((text) => process.stderr.write(text + "\\n"))')
+  expect(handler).not.toContain('cli.showHelp("log")')
+  // The one-line error and the run hint already target stderr too.
+  expect(handler).toContain("process.stderr.write(`${msg}\\n`)")
 })
 
 test("run --format json writes a structured usage error line on missing prompt", async () => {
@@ -726,9 +878,345 @@ test("run event stream ends with a terminal result record", async () => {
   expect(src).toContain("if (isRunMutatingToolCompletion(part.tool, part.state.status)) successfulMutations++")
   expect(src).toContain('emit("permission_denied", {')
   // The result write happens after the structured-output wiring, so it is
-  // the final stdout line of the run.
-  const structured = src.indexOf("await handleRunStructuredOutput(storedFinalMessage ?? finalMessage")
-  const resultWrite = src.indexOf("buildRunResultEvent({")
+  // the final stdout line of the run. (The pre-session --timeout emits its own
+  // result earlier in the file — E2 — so the search starts at the
+  // structured-output wiring.)
+  const structured = src.indexOf("await handleRunStructuredOutput(finalText")
+  const resultWrite = src.indexOf("buildRunResultEvent({", structured)
   expect(structured).toBeGreaterThan(-1)
   expect(resultWrite).toBeGreaterThan(structured)
+})
+
+test("run accepts the steering flags as long-only kebab-case options", async () => {
+  const parsed = await parseRunArgv([
+    "--append-system-prompt",
+    "Be terse",
+    "--disallowed-tools",
+    "bash,write",
+    "--disallowed-tools",
+    "read",
+    "--add-dir",
+    "/tmp/agent-a",
+    "--add-dir",
+    "/tmp/agent-b",
+    "hello",
+  ])
+  expect(parsed["append-system-prompt"]).toBe("Be terse")
+  // Repeatable values stay in order; comma splitting happens in the handler.
+  expect(parsed["disallowed-tools"]).toEqual(["bash,write", "read"])
+  expect(parsed["add-dir"]).toEqual(["/tmp/agent-a", "/tmp/agent-b"])
+
+  const fileVariant = await parseRunArgv(["--append-system-prompt-file", "./extra.txt", "hello"])
+  expect(fileVariant["append-system-prompt-file"]).toBe("./extra.txt")
+
+  // `--prompt-file=-` is the spelling yargs parses to the literal "-"; the
+  // spaced `--prompt-file -` form parses to an empty string (yargs drops the
+  // lone dash token), and the handler treats both as the stdin sentinel.
+  const stdinVariant = await parseRunArgv(["--prompt-file=-", "hello"])
+  expect(stdinVariant["prompt-file"]).toBe("-")
+  const spacedVariant = await parseRunArgv(["--prompt-file", "-", "hello"])
+  expect(spacedVariant["prompt-file"]).toBe("")
+  expect(spacedVariant.message).toEqual(["hello"])
+
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  expect(src).toContain('if (promptFileFlag === "-" || promptFileFlag === "")')
+})
+
+test("run --append-system-prompt and --append-system-prompt-file are mutually exclusive", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const previous = process.cwd()
+  process.chdir(tmp.path)
+  let output = ""
+  const write = vi.spyOn(process.stdout, "write").mockImplementation(((chunk: unknown) => {
+    output += String(chunk)
+    return true
+  }) as any)
+  try {
+    await expect(
+      RunCommand.handler({
+        message: ["hello"],
+        "append-system-prompt": "extra",
+        "append-system-prompt-file": "extra.txt",
+        command: false,
+        "--": [],
+        format: "json",
+      } as never),
+    ).rejects.toThrow()
+    expect(process.exitCode).toBe(1)
+
+    const lines = output.split("\n").filter((line) => line.trim().length > 0)
+    expect(lines).toHaveLength(1)
+    expect(JSON.parse(lines[0])).toEqual({
+      type: "error",
+      error: {
+        code: "usage",
+        message: "--append-system-prompt and --append-system-prompt-file are mutually exclusive",
+      },
+    })
+  } finally {
+    write.mockRestore()
+    process.chdir(previous)
+    process.exitCode = undefined
+  }
+})
+
+test("run rejects empty --append-system-prompt text and empty --disallowed-tools values", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const previous = process.cwd()
+  process.chdir(tmp.path)
+  const write = vi.spyOn(process.stdout, "write").mockImplementation((() => true) as any)
+  try {
+    await expect(
+      RunCommand.handler({
+        message: ["hello"],
+        "append-system-prompt": "",
+        command: false,
+        "--": [],
+        format: "json",
+      } as never),
+    ).rejects.toThrow()
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = undefined
+    await expect(
+      RunCommand.handler({
+        message: ["hello"],
+        "disallowed-tools": [","],
+        command: false,
+        "--": [],
+        format: "json",
+      } as never),
+    ).rejects.toThrow()
+    expect(process.exitCode).toBe(1)
+  } finally {
+    write.mockRestore()
+    process.chdir(previous)
+    process.exitCode = undefined
+  }
+})
+
+test("run rejects a --add-dir path that is missing or not a directory", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await writeFile(path.join(tmp.path, "plain.txt"), "not a dir")
+  const previous = process.cwd()
+  process.chdir(tmp.path)
+  const write = vi.spyOn(process.stdout, "write").mockImplementation((() => true) as any)
+  try {
+    await expect(
+      RunCommand.handler({
+        message: ["hello"],
+        "add-dir": ["does-not-exist"],
+        command: false,
+        "--": [],
+        format: "json",
+      } as never),
+    ).rejects.toThrow()
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = undefined
+    await expect(
+      RunCommand.handler({
+        message: ["hello"],
+        "add-dir": ["plain.txt"],
+        command: false,
+        "--": [],
+        format: "json",
+      } as never),
+    ).rejects.toThrow()
+    expect(process.exitCode).toBe(1)
+  } finally {
+    write.mockRestore()
+    process.chdir(previous)
+    process.exitCode = undefined
+  }
+})
+
+test("run --add-dir does not widen --file containment", async () => {
+  // The server denies any attachment outside the project directory
+  // regardless of permission rules, so a --file under an --add-dir path is a
+  // usage error up front, not an accepted run the server would sideline.
+  await using tmp = await tmpdir({ git: true })
+  await using outside = await tmpdir()
+  const outsideFile = path.join(outside.path, "spec.md")
+  await writeFile(outsideFile, "spec")
+  const previous = process.cwd()
+  process.chdir(tmp.path)
+  let output = ""
+  const write = vi.spyOn(process.stdout, "write").mockImplementation(((chunk: unknown) => {
+    output += String(chunk)
+    return true
+  }) as any)
+  try {
+    await expect(
+      RunCommand.handler({
+        message: ["hello"],
+        "add-dir": [outside.path],
+        file: [outsideFile],
+        command: false,
+        "--": [],
+        format: "json",
+      } as never),
+    ).rejects.toThrow()
+    expect(process.exitCode).toBe(1)
+
+    const lines = output.split("\n").filter((line) => line.trim().length > 0)
+    expect(lines).toHaveLength(1)
+    const event = JSON.parse(lines[0])
+    expect(event.error.code).toBe("usage")
+    expect(event.error.message).toBe(
+      `File outside the current project directory: ${outsideFile}. ` +
+        "Copy it into the project or pass its content with --prompt-file.",
+    )
+  } finally {
+    write.mockRestore()
+    process.chdir(previous)
+    process.exitCode = undefined
+  }
+})
+
+test("run --prompt-file - is a usage error when stdin is a TTY", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const previous = process.cwd()
+  process.chdir(tmp.path)
+  let output = ""
+  const write = vi.spyOn(process.stdout, "write").mockImplementation(((chunk: unknown) => {
+    output += String(chunk)
+    return true
+  }) as any)
+  const originalIsTTY = Object.getOwnPropertyDescriptor(process.stdin, "isTTY")
+  Object.defineProperty(process.stdin, "isTTY", { value: true, configurable: true })
+  try {
+    await expect(
+      RunCommand.handler({
+        message: [],
+        "prompt-file": "-",
+        command: false,
+        "--": [],
+        format: "json",
+      } as never),
+    ).rejects.toThrow()
+    expect(process.exitCode).toBe(1)
+
+    const lines = output.split("\n").filter((line) => line.trim().length > 0)
+    expect(lines).toHaveLength(1)
+    const event = JSON.parse(lines[0])
+    expect(event.error.code).toBe("usage")
+    expect(event.error.message).toContain("--prompt-file - requires the prompt on piped stdin")
+  } finally {
+    // Restore the original descriptor (vitest stdin is typically not a TTY).
+    if (originalIsTTY) Object.defineProperty(process.stdin, "isTTY", originalIsTTY)
+    else delete (process.stdin as { isTTY?: boolean }).isTTY
+    write.mockRestore()
+    process.chdir(previous)
+    process.exitCode = undefined
+  }
+})
+
+test("run arms the timeout before the first SDK call and prints the session id in the header", async () => {
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+
+  // E2: the timer is armed (handler body) before the event subscription (the
+  // first SDK call inside execute), so a black-holed attach host is bounded.
+  const armed = src.indexOf("timeoutTimer = setTimeout(onRunTimeout")
+  const subscribe = src.indexOf("const events = await sdk.event.subscribe")
+  expect(armed).toBeGreaterThan(-1)
+  expect(subscribe).toBeGreaterThan(armed)
+  // A pre-session firing emits the terminal result with an empty session id
+  // and cuts the pending SDK calls via the shared abort controller.
+  expect(src).toContain("abortState.earlyTimeoutEmitted = true")
+  expect(src).toContain("earlyAbort.abort()")
+  expect(src).toContain("AbortSignal.any([eventAbort.signal, earlyAbort.signal])")
+
+  // E4: the default-format header ends with the session id so multi-turn
+  // callers can resume without --format json.
+  expect(src).toContain("modelID} · ${sessionID}`)")
+
+  // B3: --add-dir only widens tool permissions — never --file containment,
+  // which the server enforces against the project directory regardless of
+  // permission rules.
+  expect(src).not.toContain("addDirPaths.some((dir) => Filesystem.contains(dir, resolvedPath))")
+  expect(src).toContain("if (!Filesystem.contains(fileBaseDir, resolvedPath)) {")
+
+  // B1: the appended system prompt is sent as the request `system` field.
+  expect(src).toContain("...(appendSystemPrompt !== undefined ? { system: appendSystemPrompt } : {})")
+  // B2: both mechanisms — create-time deny rules and the per-request tools map.
+  expect(src).toContain("...(disallowedTools !== undefined ? { tools: disallowedTools } : {})")
+  // E1: the sandbox policy rides every prompt body, tightening attach runs.
+  expect(src).toContain("...(isolationPolicy !== undefined ? { isolation: isolationPolicy } : {})")
+  // B4: the parsed schema is sent as the json_schema output format.
+  expect(src).toContain("...(outputFormat !== undefined ? { format: outputFormat } : {})")
+})
+
+test("run --runtime and --attach are mutually exclusive", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const previous = process.cwd()
+  process.chdir(tmp.path)
+  let output = ""
+  const write = vi.spyOn(process.stdout, "write").mockImplementation(((chunk: unknown) => {
+    output += String(chunk)
+    return true
+  }) as any)
+  try {
+    await expect(
+      RunCommand.handler({
+        message: ["hello"],
+        runtime: true,
+        attach: "http://127.0.0.1:4096",
+        command: false,
+        "--": [],
+        format: "json",
+      } as never),
+    ).rejects.toThrow()
+    expect(process.exitCode).toBe(1)
+
+    const lines = output.split("\n").filter((line) => line.trim().length > 0)
+    expect(lines).toHaveLength(1)
+    expect(JSON.parse(lines[0])).toEqual({
+      type: "error",
+      error: { code: "usage", message: "--runtime and --attach are mutually exclusive" },
+    })
+  } finally {
+    write.mockRestore()
+    process.chdir(previous)
+    process.exitCode = undefined
+  }
+})
+
+test("run --runtime exits with an attach error when no managed runtime is running", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const previous = process.cwd()
+  process.chdir(tmp.path)
+  let output = ""
+  const write = vi.spyOn(process.stdout, "write").mockImplementation(((chunk: unknown) => {
+    output += String(chunk)
+    return true
+  }) as any)
+  try {
+    await expect(
+      RunCommand.handler({
+        message: ["hello"],
+        runtime: true,
+        command: false,
+        "--": [],
+        format: "json",
+      } as never),
+    ).rejects.toThrow()
+    expect(process.exitCode).toBe(1)
+
+    const lines = output.split("\n").filter((line) => line.trim().length > 0)
+    expect(lines).toHaveLength(1)
+    expect(JSON.parse(lines[0])).toEqual({
+      type: "error",
+      error: {
+        code: "attach",
+        message:
+          "No running managed runtime for /tmp/ax-code-project. " +
+          "Start one with `ax-code runtime start --dir /tmp/ax-code-project`.",
+      },
+    })
+  } finally {
+    write.mockRestore()
+    process.chdir(previous)
+    process.exitCode = undefined
+  }
 })

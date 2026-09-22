@@ -133,6 +133,10 @@ export namespace Flag {
   export declare const AX_CODE_OTLP_ENDPOINT: string | undefined
   export const AX_CODE_SERVER_PASSWORD = process.env["AX_CODE_SERVER_PASSWORD"]
   export const AX_CODE_SERVER_USERNAME = process.env["AX_CODE_SERVER_USERNAME"]
+  // Runtime auth token for `run --attach`: sent as x-ax-code-runtime-token when
+  // set. Access-time getter (see defineStringFlag) so tests and wrappers can set
+  // the env var after this module loads.
+  export declare const AX_CODE_RUNTIME_TOKEN: string | undefined
   export declare const AX_CODE_ENABLE_HTTP_DOCS: boolean
   // Acknowledge and suppress the plaintext-Basic-Auth-over-non-loopback warning.
   // See #250.
@@ -366,6 +370,10 @@ defineStringFlag("AX_CODE_TEST_MANAGED_CONFIG_DIR")
 defineStringFlag("AX_CODE_INTERNAL_BASE_URL")
 
 defineStringFlag("AX_CODE_OTLP_ENDPOINT")
+
+// Access-time so `run --attach` honors a token set by a wrapper or test after
+// module load (mirrors AX_CODE_SERVER_PASSWORD but stays runtime-refreshable).
+defineStringFlag("AX_CODE_RUNTIME_TOKEN")
 
 // The live OpenAPI docs route is gated at request time, so tests and
 // wrappers can opt in without reloading the server module graph.

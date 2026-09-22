@@ -1,5 +1,37 @@
 import z from "zod"
 
+// Bounded fallback length for a serialized unknown record: enough to carry a
+// deserialized error body, small enough that a huge object cannot flood a
+// single log/UI line.
+const UNKNOWN_RECORD_MESSAGE_MAX_LENGTH = 2048
+
+/**
+ * A readable one-line message for a non-Error object reaching an error
+ * formatter — typically a deserialized NamedError body such as
+ * `{ name: "SessionNotFoundError", data: { message: "Session not found: ..." } }`
+ * rejected by an HTTP client. `String(record)` would render the useless
+ * "[object Object]", so prefer the record's own message fields, then a
+ * bounded JSON serialization.
+ */
+function describeUnknownRecord(error: object): string {
+  const record = error as { name?: unknown; message?: unknown; data?: { message?: unknown } | null }
+  const dataMessage = record.data?.message
+  if (typeof dataMessage === "string" && dataMessage.length > 0) return dataMessage
+  if (typeof record.message === "string" && record.message.length > 0) return record.message
+  if (typeof record.name === "string" && record.name.length > 0) return record.name
+  try {
+    const serialized = JSON.stringify(error)
+    if (typeof serialized === "string") {
+      return serialized.length > UNKNOWN_RECORD_MESSAGE_MAX_LENGTH
+        ? serialized.slice(0, UNKNOWN_RECORD_MESSAGE_MAX_LENGTH)
+        : serialized
+    }
+  } catch {
+    // Circular or otherwise unserializable — fall through.
+  }
+  return "[unserializable error]"
+}
+
 export abstract class NamedError extends Error {
   abstract schema(): z.core.$ZodType
   abstract toObject(): { name: string; data: any }
@@ -53,6 +85,7 @@ export abstract class NamedError extends Error {
 
   static message(error: unknown): string {
     if (error instanceof Error) return error.message
+    if (typeof error === "object" && error !== null) return describeUnknownRecord(error)
     return String(error)
   }
 

@@ -1,12 +1,20 @@
 import { createServer, type ServerResponse } from "node:http"
 import { once } from "node:events"
+import path from "node:path"
+import { readFile, writeFile } from "node:fs/promises"
 import { expect, test, vi } from "vitest"
 import { RunCommand } from "../../src/cli/cmd/run"
+import { tmpdir } from "../fixture/fixture"
 
 test.each([false, "check"])(
-  "headless run rejects HTTP submission failures and closes an idle event stream: %s",
+  "headless run converts HTTP submission failures into a structured error line: %s",
   async (command) => {
     let eventClosed = false
+    let output = ""
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(((chunk: unknown) => {
+      output += String(chunk)
+      return true
+    }) as any)
     const server = createServer((request, response) => {
       if (request.url?.startsWith("/event")) {
         response.writeHead(200, { "content-type": "text/event-stream" })
@@ -28,6 +36,7 @@ test.each([false, "check"])(
     await once(server, "listening")
     const address = server.address()
     if (!address || typeof address === "string") throw new Error("Missing test server address")
+    const previousExitCode = process.exitCode
     try {
       await expect(
         RunCommand.handler({
@@ -37,9 +46,20 @@ test.each([false, "check"])(
           attach: `http://127.0.0.1:${address.port}`,
           format: "json",
         } as never),
-      ).rejects.toMatchObject({ name: "UnknownError", data: { message: "Request preparation failed" } })
+      ).rejects.toMatchObject({ name: "UICancelledError" })
       await expect.poll(() => eventClosed).toBe(true)
+      // The rejection is converted: exactly one structured error line on
+      // stdout, no result line, no raw body leak.
+      const lines = output.split("\n").filter((line) => line.trim().length > 0)
+      expect(lines).toHaveLength(1)
+      expect(JSON.parse(lines[0])).toEqual({
+        type: "error",
+        error: { code: "internal", message: "Request preparation failed" },
+      })
+      expect(process.exitCode).toBe(1)
     } finally {
+      write.mockRestore()
+      process.exitCode = previousExitCode
       server.closeAllConnections()
       await new Promise<void>((resolve) => server.close(() => resolve()))
     }
@@ -53,6 +73,16 @@ test.each([false, "check"])(
  */
 async function runEventStream(input: {
   model?: string
+  session?: string
+  continue?: boolean
+  /** Output format for the handler args; the NDJSON event stream by default. */
+  format?: string
+  /** Status for GET /session/{id} (the --session preflight); 200 by default. */
+  sessionGet?: number
+  /** Error status for POST /message, making the submission reject. */
+  messageStatus?: number
+  /** Body for the rejected POST /message; defaults to SessionNotFoundError. */
+  messageError?: { name: string; data: { message: string } }
   events?: Array<Record<string, unknown>>
   promptResponse?: { info?: Record<string, unknown>; parts?: Array<Record<string, unknown>> }
   messages?: unknown[]
@@ -60,6 +90,16 @@ async function runEventStream(input: {
   timeout?: number
   holdMessage?: boolean
   afterSubmit?: () => void
+  /** Capture the raw POST /message request body (see the captureBody tests). */
+  captureBody?: boolean
+  /** Capture the POST /message request headers (see the runtime-token test). */
+  captureHeaders?: boolean
+  /** Error status for POST /session (the first SDK call); 201/200 by default. */
+  sessionCreateStatus?: number
+  /** Body for a rejected POST /session; defaults to the runtime auth ForbiddenError. */
+  sessionCreateError?: { name: string; data: { message: string } }
+  /** Extra fields merged into the handler args (e.g. sandbox, steering flags). */
+  extraArgs?: Record<string, unknown>
 }) {
   const sessionID = "ses_stream"
   let output = ""
@@ -70,8 +110,10 @@ async function runEventStream(input: {
   let eventsResponse: ServerResponse | undefined
   let heldMessageResponse: ServerResponse | undefined
   let abortCalled = false
+  let capturedMessageBody: string | undefined
+  let capturedMessageHeaders: NodeJS.Dict<string | string[]> | undefined
   const emit = (event: Record<string, unknown>) => eventsResponse!.write(`data: ${JSON.stringify(event)}\n\n`)
-  const server = createServer((request, response) => {
+  const server = createServer(async (request, response) => {
     if (request.url?.startsWith("/event")) {
       eventsResponse = response
       response.writeHead(200, { "content-type": "text/event-stream" })
@@ -79,15 +121,42 @@ async function runEventStream(input: {
       return
     }
     response.setHeader("content-type", "application/json")
+    const pathname = (request.url ?? "").split("?")[0]
     if (request.url === "/provider") {
       response.end(JSON.stringify(input.providers ?? { all: [], connected: [] }))
       return
     }
     if (request.url === "/session" && request.method === "POST") {
+      if (input.sessionCreateStatus !== undefined) {
+        response.statusCode = input.sessionCreateStatus
+        response.end(
+          JSON.stringify(
+            input.sessionCreateError ?? {
+              name: "ForbiddenError",
+              data: { message: "Runtime authorization required" },
+            },
+          ),
+        )
+        return
+      }
       response.end(JSON.stringify({ id: sessionID }))
       return
     }
-    if (request.method === "POST" && request.url?.endsWith("/abort")) {
+    // The --session preflight: GET /session/{id} with a configurable status.
+    if (request.method === "GET" && /^\/session\/[^/]+$/.test(pathname)) {
+      const requestedID = pathname.split("/")[2]
+      const status = input.sessionGet ?? 200
+      response.statusCode = status
+      if (status !== 200) {
+        response.end(
+          JSON.stringify({ name: "SessionNotFoundError", data: { message: `Session not found: ${requestedID}` } }),
+        )
+        return
+      }
+      response.end(JSON.stringify({ id: requestedID }))
+      return
+    }
+    if (request.method === "POST" && pathname.endsWith("/abort")) {
       abortCalled = true
       // The abort is what completes a held submission: flush the scripted
       // frames and settle the /message response only now, then answer true.
@@ -99,7 +168,24 @@ async function runEventStream(input: {
       response.end("true")
       return
     }
-    if (request.method === "POST" && request.url?.endsWith("/message")) {
+    if (request.method === "POST" && pathname.endsWith("/message")) {
+      // Drain the request body first so captureBody can read every chunk.
+      const chunks: Buffer[] = []
+      for await (const chunk of request) chunks.push(chunk as Buffer)
+      if (input.captureBody) capturedMessageBody = Buffer.concat(chunks).toString("utf8")
+      if (input.captureHeaders) capturedMessageHeaders = request.headers
+      if (input.messageStatus !== undefined) {
+        response.statusCode = input.messageStatus
+        response.end(
+          JSON.stringify(
+            input.messageError ?? {
+              name: "SessionNotFoundError",
+              data: { message: `Session not found: ${sessionID}` },
+            },
+          ),
+        )
+        return
+      }
       if (input.holdMessage) {
         // Simulate a long generation: hold the submission open until the abort
         // route fires, mirroring a server whose generation only stops on abort.
@@ -113,11 +199,11 @@ async function runEventStream(input: {
       response.end(JSON.stringify(input.promptResponse ?? {}))
       return
     }
-    if (request.method === "GET" && request.url?.endsWith("/message")) {
+    if (request.method === "GET" && pathname.endsWith("/message")) {
       response.end(JSON.stringify(input.messages ?? []))
       return
     }
-    if (request.method === "POST" && request.url?.includes("/reply")) {
+    if (request.method === "POST" && pathname.includes("/reply")) {
       response.end("true")
       return
     }
@@ -135,9 +221,12 @@ async function runEventStream(input: {
         command: false,
         "--": [],
         attach: `http://127.0.0.1:${address.port}`,
-        format: "json",
+        format: input.format ?? "json",
         ...(input.model === undefined ? {} : { model: input.model }),
+        ...(input.session === undefined ? {} : { session: input.session }),
+        ...(input.continue === undefined ? {} : { continue: input.continue }),
         ...(input.timeout === undefined ? {} : { timeout: input.timeout }),
+        ...(input.extraArgs ?? {}),
       } as never),
     ).then(
       () => ({ rejected: undefined as unknown }),
@@ -149,6 +238,8 @@ async function runEventStream(input: {
       exitCode: process.exitCode,
       rejected: settled.rejected,
       abortCalled,
+      messageBody: capturedMessageBody,
+      messageHeaders: capturedMessageHeaders,
     }
   } finally {
     write.mockRestore()
@@ -549,4 +640,288 @@ test("run reports a server-side abort error with no timeout or SIGINT as a failu
   // This abort was not requested by this process, so it is reported as an
   // error today: the stream emits an `error` event.
   expect(lines.some((line) => line.includes('"type":"error"'))).toBe(true)
+})
+
+test("run --session preflight reports a missing session as one structured session error", async () => {
+  const { lines, exitCode, rejected } = await runEventStream({
+    session: "ses_missing",
+    sessionGet: 404,
+  })
+
+  // The preflight fails before anything is created: one structured error
+  // line, exit 1, no result line, and a cancelled (not raw) rejection.
+  expect(rejected).toMatchObject({ name: "UICancelledError" })
+  expect(exitCode).toBe(1)
+  expect(lines).toHaveLength(1)
+  const event = JSON.parse(lines[0])
+  expect(event.type).toBe("error")
+  expect(event.error.code).toBe("session")
+  expect(event.error.message).toContain("Session not found: ses_missing")
+  expect(event.error.message).toContain("ax-code session list --json")
+  expect(lines.some((line) => line.includes('"type":"result"'))).toBe(false)
+})
+
+test("prompt rejection with a SessionNotFoundError body converts instead of leaking [object Object]", async () => {
+  const { output, lines, exitCode, rejected } = await runEventStream({
+    // No --session, so the preflight does not apply: the POST /message
+    // submission itself rejects with a 404 SessionNotFoundError body.
+    messageStatus: 404,
+  })
+
+  expect(rejected).toMatchObject({ name: "UICancelledError" })
+  expect(exitCode).toBe(1)
+  expect(lines).toHaveLength(1)
+  const event = JSON.parse(lines[0])
+  expect(event.type).toBe("error")
+  expect(event.error.code).toBe("session")
+  expect(event.error.message).toContain("Session not found")
+  expect(lines.some((line) => line.includes('"type":"result"'))).toBe(false)
+  // The deserialized body must never reach stdout as a raw stringification.
+  expect(output).not.toContain("[object Object]")
+})
+
+test("--continue with --session is a mutual-exclusion usage error before any request", async () => {
+  const { lines, exitCode, rejected } = await runEventStream({
+    continue: true,
+    session: "ses_stream",
+  })
+
+  expect(rejected).toMatchObject({ name: "UICancelledError" })
+  expect(exitCode).toBe(1)
+  expect(lines).toHaveLength(1)
+  expect(JSON.parse(lines[0])).toEqual({
+    type: "error",
+    error: { code: "usage", message: "--continue and --session are mutually exclusive" },
+  })
+})
+
+/** Minimal successful exchange for tests that only inspect the request body. */
+function scriptedOkExchange(sessionID: string) {
+  const textPart = {
+    id: "prt_text",
+    messageID: "msg_final",
+    sessionID,
+    type: "text",
+    text: '{"summary":"ok"}',
+    time: { start: 1, end: 2 },
+  }
+  return {
+    events: [
+      { type: "message.part.updated", properties: { part: textPart } },
+      { type: "message.updated", properties: { info: assistantInfo(sessionID) } },
+    ],
+    promptResponse: { info: assistantInfo(sessionID), parts: [textPart] },
+    messages: [{ info: { id: "msg_final", role: "assistant" }, parts: [{ type: "text", text: '{"summary":"ok"}' }] }],
+  }
+}
+
+test("--sandbox read-only sends isolation.mode in the POST /message body", async () => {
+  // --sandbox is a global yargs option declared in boot.ts (not on the run
+  // builder); yargs merges global options into the command's parsed args, so
+  // RunCommand.handler receives it as args.sandbox and reads it from there.
+  // The test passes it directly through the handler args — the same field the
+  // real CLI populates.
+  const { messageBody, rejected } = await runEventStream({
+    ...scriptedOkExchange("ses_stream"),
+    captureBody: true,
+    extraArgs: { sandbox: "read-only" },
+  })
+
+  expect(rejected).toBeUndefined()
+  const body = JSON.parse(messageBody ?? "{}")
+  // Mirrors bootstrap/env.ts: network is only true for full-access.
+  expect(body.isolation).toEqual({ mode: "read-only", network: false })
+})
+
+test("steering flags reach the POST /message body as system, tools, and format", async () => {
+  await using tmp = await tmpdir()
+  const schema = {
+    type: "object",
+    properties: { summary: { type: "string" } },
+    required: ["summary"],
+  }
+  await writeFile(path.join(tmp.path, "schema.json"), JSON.stringify(schema))
+
+  const { messageBody, rejected } = await runEventStream({
+    ...scriptedOkExchange("ses_stream"),
+    captureBody: true,
+    extraArgs: {
+      "append-system-prompt": "Answer in English only",
+      "disallowed-tools": ["bash,write", "read"],
+      "output-schema": path.join(tmp.path, "schema.json"),
+    },
+  })
+
+  expect(rejected).toBeUndefined()
+  const body = JSON.parse(messageBody ?? "{}")
+  expect(body.system).toBe("Answer in English only")
+  expect(body.tools).toEqual({ bash: false, write: false, read: false })
+  // --output-schema both steers the model and is enforced afterwards: the
+  // parsed schema object is sent as the json_schema format with up to two
+  // server-side retries before the CLI's own final validation runs.
+  expect(body.format).toEqual({ type: "json_schema", schema, retryCount: 2 })
+})
+
+/**
+ * Fixture for a `--output-schema` run: the server steered the model through
+ * the StructuredOutput tool, stored the captured object on `info.structured`,
+ * and the assistant message carries no text part at all.
+ */
+function structuredOutputExchange(sessionID: string) {
+  const structured = { summary: "ok", checks: 3 }
+  const structuredToolPart = {
+    id: "prt_structured",
+    messageID: "msg_final",
+    sessionID,
+    type: "tool",
+    callID: "call_structured",
+    tool: "StructuredOutput",
+    state: {
+      status: "completed",
+      input: structured,
+      output: "Structured output captured successfully.",
+      title: "Structured Output",
+      metadata: { valid: true },
+      time: { start: 1, end: 2 },
+    },
+  }
+  return {
+    structured,
+    exchange: {
+      events: [
+        { type: "message.part.updated", properties: { part: structuredToolPart } },
+        { type: "message.updated", properties: { info: assistantInfo(sessionID) } },
+      ],
+      promptResponse: { info: assistantInfo(sessionID), parts: [structuredToolPart] },
+      // Stored messages carry `structured` and no text part — the final text
+      // must come from the captured object, not a text part.
+      messages: [{ info: { id: "msg_final", role: "assistant", structured }, parts: [] }],
+    },
+  }
+}
+
+async function writeStructuredSchema(tmp: { path: string }) {
+  const schema = {
+    type: "object",
+    properties: { summary: { type: "string" }, checks: { type: "integer" } },
+    required: ["summary", "checks"],
+    additionalProperties: false,
+  }
+  const file = path.join(tmp.path, "schema.json")
+  await writeFile(file, JSON.stringify(schema))
+  return file
+}
+
+test("run --output-schema reports the captured structured object as the final text", async () => {
+  await using tmp = await tmpdir()
+  const schemaFile = await writeStructuredSchema(tmp)
+  const { structured, exchange } = structuredOutputExchange("ses_stream")
+
+  const { lines, exitCode, rejected } = await runEventStream({
+    ...exchange,
+    extraArgs: {
+      "output-schema": schemaFile,
+      "output-file": path.join(tmp.path, "result.json"),
+    },
+  })
+
+  expect(rejected).toBeUndefined()
+  expect(exitCode).toBeUndefined()
+  // The terminal result line is stdout's final text and carries the serialized
+  // structured object; the post-run schema validation of that same string
+  // passed (a failure would exit 1 with an error instead).
+  const result = JSON.parse(lines[lines.length - 1])
+  expect(result.type).toBe("result")
+  expect(result.status).toBe("completed")
+  expect(result.text).toBe(JSON.stringify(structured))
+  expect(lines.some((line) => line.includes('"type":"error"'))).toBe(false)
+  // --output-file receives the same serialized object.
+  await expect(readFile(path.join(tmp.path, "result.json"), "utf8")).resolves.toBe(JSON.stringify(structured))
+})
+
+test("run --output-schema prints the serialized structured object on stdout in the default format", async () => {
+  await using tmp = await tmpdir()
+  const schemaFile = await writeStructuredSchema(tmp)
+  const { structured, exchange } = structuredOutputExchange("ses_stream")
+
+  const { lines, exitCode, rejected } = await runEventStream({
+    ...exchange,
+    format: "default",
+    extraArgs: { "output-schema": schemaFile },
+  })
+
+  expect(rejected).toBeUndefined()
+  expect(exitCode).toBeUndefined()
+  // No text part was streamed, so the serialized structured object itself is
+  // the final stdout text (headers and tool blocks go to stderr).
+  expect(lines).toHaveLength(1)
+  expect(lines[lines.length - 1]).toBe(JSON.stringify(structured))
+})
+
+test("run --output-schema with a StructuredOutputError assistant message stays a run error", async () => {
+  await using tmp = await tmpdir()
+  const schemaFile = await writeStructuredSchema(tmp)
+  const sessionID = "ses_stream"
+  const structuredError = {
+    name: "StructuredOutputError",
+    data: { message: "Model did not produce structured output" },
+  }
+
+  const { lines, exitCode, rejected } = await runEventStream({
+    events: [
+      { type: "message.updated", properties: { info: { ...assistantInfo(sessionID), error: structuredError } } },
+    ],
+    promptResponse: { info: { ...assistantInfo(sessionID), error: structuredError }, parts: [] },
+    // The model never called the tool: no `structured`, no text part.
+    messages: [{ info: { id: "msg_final", role: "assistant" }, parts: [] }],
+    extraArgs: { "output-schema": schemaFile },
+  })
+
+  expect(rejected).toBeUndefined()
+  expect(exitCode).toBe(1)
+  // The server-side StructuredOutputError surfaces as a normal run error:
+  // status "error" on the terminal result and exit 1.
+  const errorLine = lines.find((line) => line.includes('"type":"error"'))
+  expect(errorLine).toBeDefined()
+  expect(JSON.parse(errorLine!)).toMatchObject({
+    type: "error",
+    error: { name: "StructuredOutputError" },
+  })
+  const result = JSON.parse(lines[lines.length - 1])
+  expect(result.type).toBe("result")
+  expect(result.status).toBe("error")
+})
+
+test("run --attach sends AX_CODE_RUNTIME_TOKEN as x-ax-code-runtime-token on POST /message", async () => {
+  vi.stubEnv("AX_CODE_RUNTIME_TOKEN", "tok-123")
+  try {
+    const { rejected, messageHeaders } = await runEventStream({
+      ...scriptedOkExchange("ses_stream"),
+      captureHeaders: true,
+    })
+
+    expect(rejected).toBeUndefined()
+    expect(messageHeaders?.["x-ax-code-runtime-token"]).toBe("tok-123")
+  } finally {
+    vi.unstubAllEnvs()
+  }
+})
+
+test("run --attach with a 403 Runtime authorization required body classifies as attach", async () => {
+  const { lines, exitCode, rejected } = await runEventStream({
+    sessionCreateStatus: 403,
+    sessionCreateError: { name: "ForbiddenError", data: { message: "Runtime authorization required" } },
+  })
+
+  expect(rejected).toMatchObject({ name: "UICancelledError" })
+  expect(exitCode).toBe(1)
+  expect(lines).toHaveLength(1)
+  const event = JSON.parse(lines[0])
+  expect(event.type).toBe("error")
+  expect(event.error.code).toBe("attach")
+  expect(event.error.message).toContain("Runtime authorization required")
+  expect(event.error.message).toContain("127.0.0.1")
+  expect(event.error.message).toContain("--runtime")
+  expect(event.error.message).toContain("AX_CODE_RUNTIME_TOKEN")
+  expect(lines.some((line) => line.includes('"type":"result"'))).toBe(false)
 })
