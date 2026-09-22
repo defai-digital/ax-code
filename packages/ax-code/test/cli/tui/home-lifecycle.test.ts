@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { createRoot, createSignal, Show } from "solid-js"
 import { dictionaries } from "../../../src/cli/tui/i18n"
+import { Installation } from "../../../src/installation"
 import type { PromptInfo } from "../../../src/cli/tui/component/prompt/prompt-info"
 
 const mocked = vi.hoisted(() => ({
@@ -14,6 +15,9 @@ const mocked = vi.hoisted(() => ({
   input: { input: "", parts: [] } as PromptInfo,
   sessions: [] as unknown[],
   height: 40,
+  width: 120,
+  directory: "/launch",
+  mcp: {} as Record<string, { status: string }>,
   kvStore: {} as Record<string, unknown>,
   submit: vi.fn(),
   createSession: vi.fn(),
@@ -22,6 +26,7 @@ const mocked = vi.hoisted(() => ({
   setKV: vi.fn(),
   toast: vi.fn(),
   setPromptRef: vi.fn(),
+  commandTrigger: vi.fn(),
   promptType: undefined as unknown,
 }))
 vi.mock("solid-js", async () => {
@@ -61,7 +66,10 @@ vi.mock("@tui/context/sync", () => ({
         mocked.revision()
         return mocked.sessions
       },
-      mcp: {},
+      get mcp() {
+        mocked.revision()
+        return mocked.mcp
+      },
     },
   }),
 }))
@@ -87,9 +95,9 @@ vi.mock("@tui/context/args", () => ({
     },
   }),
 }))
-vi.mock("@tui/context/directory", () => ({ useDirectory: () => () => "/launch" }))
+vi.mock("@tui/context/directory", () => ({ useDirectory: () => () => mocked.directory }))
 vi.mock("@tui/context/content-dimensions", () => ({
-  useContentDimensions: () => () => ({ width: 120, height: mocked.height }),
+  useContentDimensions: () => () => ({ width: mocked.width, height: mocked.height }),
 }))
 vi.mock("@tui/context/kv", () => ({
   useKV: () => ({
@@ -114,7 +122,9 @@ vi.mock("@tui/context/local", () => ({
   }),
 }))
 vi.mock("@tui/ui/toast", () => ({ Toast: () => undefined, useToast: () => ({ show: mocked.toast }) }))
-vi.mock("../../../src/cli/tui/component/dialog-command", () => ({ useCommandDialog: () => ({ trigger: vi.fn() }) }))
+vi.mock("../../../src/cli/tui/component/dialog-command", () => ({
+  useCommandDialog: () => ({ trigger: mocked.commandTrigger }),
+}))
 vi.mock("../../../src/cli/tui/component/logo", () => ({ Logo: () => undefined }))
 vi.mock("../../../src/cli/tui/component/mode-chips", () => ({ ModeChips: () => undefined }))
 vi.mock("../../../src/cli/tui/component/work-mode-notice", () => ({ WorkModeNotice: () => undefined }))
@@ -139,6 +149,10 @@ beforeEach(() => {
   mocked.input = { input: "", parts: [] }
   mocked.sessions = []
   mocked.height = 40
+  mocked.width = 120
+  mocked.directory = "/launch"
+  mocked.mcp = {}
+  mocked.commandTrigger = vi.fn()
   mocked.kvStore = {}
   mocked.navigate.mockImplementation((route: typeof mocked.route) => {
     mocked.route.workspaceID = route.workspaceID
@@ -303,6 +317,63 @@ describe("new task Home lifecycle", () => {
     mocked.height = 21
     expect(examplesVisible((await home())())).toBe(false)
   })
+
+  test("compact header keeps the model chip and a Sessions action clickable", async () => {
+    mocked.height = 21
+    mocked.width = 80
+    const tree = (await home())()
+    expect(visibleText(tree)).toContain("Test model")
+    const sessions = visibleClickables(tree).find((row) => row.text.includes(dictionaries.en["ui.sessions"]))
+    const model = visibleClickables(tree).find((row) => row.text.includes("Test model"))
+    expect(sessions).toBeDefined()
+    expect(model).toBeDefined()
+    model!.click()
+    expect(mocked.commandTrigger).toHaveBeenCalledWith("model.list")
+    sessions!.click()
+    expect(mocked.commandTrigger).toHaveBeenCalledWith("session.list")
+  })
+
+  test("compact header hides the model chip while the model is still loading", async () => {
+    mocked.height = 21
+    mocked.loaded = false
+    mocked.ready = false
+    const tree = (await home())()
+    expect(visibleText(tree)).not.toContain("Test model")
+    expect(visibleClickables(tree).some((row) => row.text.includes(dictionaries.en["ui.sessions"]))).toBe(true)
+  })
+
+  test("regular header keeps the two-row layout without the compact sessions chip", async () => {
+    const tree = (await home())()
+    expect(visibleText(tree)).toContain("Test model")
+    const rows = visibleClickables(tree)
+    expect(rows.some((row) => row.text.includes(dictionaries.en["ui.sessions"]))).toBe(false)
+    expect(rows.some((row) => row.text.includes(dictionaries.en["home.sessions"]))).toBe(true)
+  })
+
+  test("status bar shows the full workspace path on wide terminals", async () => {
+    mocked.directory = "/Users/dev/very/deeply/nested/ax-code-tui-ux-glm"
+    expect(visibleText((await home())())).toContain(mocked.directory)
+  })
+
+  test("status bar abbreviates a long workspace path instead of stacking", async () => {
+    mocked.width = 50
+    mocked.directory = "/Users/dev/very/deeply/nested/ax-code-tui-ux-glm"
+    const rendered = visibleText((await home())())
+    expect(rendered).toContain("ax-code-tui-ux-glm")
+    expect(rendered).not.toContain(mocked.directory)
+    expect(rendered).toContain(Installation.VERSION)
+  })
+
+  test("status bar drops the version before stacking essential status", async () => {
+    mocked.width = 46
+    mocked.directory = "/Users/dev/very/deeply/nested/ax-code-tui-ux-glm"
+    mocked.mcp = { alpha: { status: "connected" }, beta: { status: "connected" } }
+    const rendered = visibleText((await home())())
+    expect(rendered).toContain("ax-code-tui-ux-glm")
+    expect(rendered).not.toContain(mocked.directory)
+    expect(rendered).not.toContain(Installation.VERSION)
+    expect(rendered).toContain("/status")
+  })
 })
 
 const EXAMPLES_DISMISSED_KEY = "home_examples_dismissed"
@@ -348,6 +419,37 @@ function clickables(
     if (typeof props.onMouseUp === "function")
       out.push({ text: renderedText(props.children), click: props.onMouseUp as () => void })
     clickables(props.children, out)
+  }
+  return out
+}
+
+// The stub keeps both Show branches in the tree as data, so visibility-aware
+// assertions prune subtrees under a Show whose `when` evaluated to false.
+function visibleText(node: unknown, out: string[] = []): string {
+  if (typeof node === "string") out.push(node)
+  else if (Array.isArray(node)) for (const child of node) visibleText(child, out)
+  else if (node && typeof node === "object" && "props" in node) {
+    const { type, props } = node as { type: unknown; props: Record<string, unknown> }
+    if (type === Show && props.when === false) return out.join("\n")
+    for (const value of Object.values(props)) visibleText(value, out)
+  }
+  return out.join("\n")
+}
+
+function visibleClickables(
+  node: unknown,
+  out: { text: string; click: () => void }[] = [],
+): { text: string; click: () => void }[] {
+  if (Array.isArray(node)) {
+    for (const child of node) visibleClickables(child, out)
+    return out
+  }
+  if (node && typeof node === "object" && "props" in node) {
+    const { type, props } = node as { type: unknown; props: Record<string, unknown> }
+    if (type === Show && props.when === false) return out
+    if (typeof props.onMouseUp === "function")
+      out.push({ text: renderedText(props.children), click: props.onMouseUp as () => void })
+    visibleClickables(props.children, out)
   }
   return out
 }

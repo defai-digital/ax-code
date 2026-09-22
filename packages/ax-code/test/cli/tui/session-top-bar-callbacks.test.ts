@@ -40,7 +40,9 @@ vi.mock("@tui/context/sync", () => ({
     },
   }),
 }))
-vi.mock("../../../src/cli/tui/context/theme", () => ({ useTheme: () => ({ theme: {} }) }))
+vi.mock("../../../src/cli/tui/context/theme", () => ({
+  useTheme: () => ({ theme: { accent: "accent-color", warning: "warning-color", textMuted: "muted-color" } }),
+}))
 vi.mock("../../../src/cli/tui/ui/toast", () => ({ useToast: () => ({ show: mocked.toast }) }))
 vi.mock("../../../src/cli/tui/util/clipboard", () => ({ Clipboard: { copy: mocked.copy } }))
 vi.mock("../../../src/cli/tui/component/dialog-command", () => ({
@@ -125,20 +127,19 @@ function bar(props: { width?: number; showTitle?: boolean } = {}) {
 }
 
 describe("session top bar callbacks", () => {
-  test("renders the session id, title, and providers entry moved from the sidebar", () => {
+  test("renders the title, session id, and one providers entry", () => {
     const tree = bar()
     expect(text(tree)).toContain("root")
     expect(text(tree)).toContain("Rebrand this project")
     expect(text(tree)).toContain("Providers (2)")
-    expect(text(tree)).toContain("manage")
+    expect(text(tree)).not.toContain("manage")
   })
 
-  test("opens the provider manager from the providers entry and the manage link", () => {
+  test("opens the provider manager from the providers entry", () => {
     const tree = bar()
     click(tree, "Providers (2)")
     expect(mocked.trigger).toHaveBeenCalledWith("provider.manage")
-    click(tree, "manage")
-    expect(mocked.trigger).toHaveBeenCalledTimes(2)
+    expect(mocked.trigger).toHaveBeenCalledTimes(1)
   })
 
   test("copies the session id on click and confirms with a toast", async () => {
@@ -154,6 +155,9 @@ describe("session top bar callbacks", () => {
     mocked.statuses = { root: { type: "busy" } }
     const tree = bar()
     expect(text(tree)).toContain("Thinking")
+    const status = find(tree, (item) => item.type === "text" && text(item) === "Thinking")
+    expect(status?.props.fg).toBe("accent-color")
+    expect(status?.props.fg).not.toBe("warning-color")
   })
 
   test("omits the title when the route header already shows it", () => {
@@ -177,7 +181,7 @@ describe("session top bar callbacks", () => {
     expect(mocked.trigger).toHaveBeenCalledWith("provider.manage")
   })
 
-  test("drops the manage link before the providers block under extreme narrowness", () => {
+  test("keeps one provider action under extreme narrowness", () => {
     const tree = bar({ width: 28 })
     expect(text(tree)).toContain("Providers (2)")
     expect(text(tree)).not.toContain("manage")

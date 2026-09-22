@@ -13,7 +13,7 @@ import { sessionTopBarLayout } from "./top-bar-view-model"
 const log = Log.create({ service: "tui.session.top-bar" })
 
 // Slim bar pinned to the top of the session route. It carries the session
-// identity block (id, title, live status, share URL) and the providers entry
+// identity block (title, live status, id, share URL) and the providers entry
 // that previously sat at the top of the docked sidebar, so both stay visible
 // at the top regardless of sidebar visibility. The title is only needed when
 // the route header is not already showing it.
@@ -31,11 +31,24 @@ export function SessionTopBar(props: {
 
   const session = createMemo(() => sync.session.get(props.sessionID))
 
-  const statusLabel = createMemo(() => {
+  const statusView = createMemo(() => {
     props.statusTick?.()
     const current = footerSessionStatusOrIdle(sync.data.session_status?.[props.sessionID])
     if (current.type === "idle") return undefined
-    return footerSessionStatusView({ status: current, now: Date.now() }).label
+    return footerSessionStatusView({ status: current, now: Date.now() })
+  })
+  const statusColor = createMemo(() => {
+    switch (statusView()?.tone) {
+      case "success":
+        return theme.success
+      case "warning":
+        return theme.warning
+      case "working":
+        return theme.accent
+      case "muted":
+      default:
+        return theme.textMuted
+    }
   })
 
   const connectedProviders = createMemo(() => sync.data.provider)
@@ -79,10 +92,9 @@ export function SessionTopBar(props: {
       segments: {
         id: session()?.id ?? props.sessionID,
         title: props.showTitle ? session()?.title : undefined,
-        status: statusLabel(),
+        status: statusView()?.label,
         share: session()?.share?.url,
         providers: hasProviderSection() ? `${uiText("ui.providers")} (${connectedProviders().length})` : undefined,
-        manage: hasProviderSection() ? uiText("ui.manage") : undefined,
       },
     }),
   )
@@ -98,11 +110,6 @@ export function SessionTopBar(props: {
       backgroundColor={theme.backgroundPanel}
     >
       <box flexGrow={1} minWidth={0} flexDirection="row" gap={2}>
-        <Show when={layout().id}>
-          <text fg={theme.warning} wrapMode="none" selectable={false} onMouseUp={() => void copySessionID()}>
-            {layout().id}
-          </text>
-        </Show>
         <Show when={layout().title}>
           {(title) => (
             <text fg={theme.text} wrapMode="none" selectable={false}>
@@ -112,10 +119,15 @@ export function SessionTopBar(props: {
         </Show>
         <Show when={layout().status}>
           {(status) => (
-            <text fg={theme.warning} wrapMode="none" selectable={false}>
+            <text fg={statusColor()} wrapMode="none" selectable={false}>
               {status()}
             </text>
           )}
+        </Show>
+        <Show when={layout().id}>
+          <text fg={theme.textMuted} wrapMode="none" selectable={false} onMouseUp={() => void copySessionID()}>
+            {layout().id}
+          </text>
         </Show>
         <Show when={layout().share}>
           {(url) => (
@@ -127,17 +139,10 @@ export function SessionTopBar(props: {
       </box>
       <Show when={layout().providers}>
         {(providers) => (
-          <box flexShrink={0} flexDirection="row" gap={2}>
+          <box flexShrink={0} flexDirection="row">
             <text fg={theme.text} wrapMode="none" selectable={false} onMouseUp={manage}>
               {providers()}
             </text>
-            <Show when={layout().manage}>
-              {(label) => (
-                <text fg={theme.textMuted} wrapMode="none" selectable={false} onMouseUp={manage}>
-                  {label()}
-                </text>
-              )}
-            </Show>
           </box>
         )}
       </Show>

@@ -12,7 +12,7 @@ import { useTheme } from "@tui/context/theme"
 import { ModeChips } from "../component/mode-chips"
 import { WorkModeNotice } from "../component/work-mode-notice"
 import { useCommandDialog } from "../component/dialog-command"
-import { homeStatusBarLayout, homeStatusBarMcpWidth } from "./home-layout"
+import { homeCompactHeaderPlan, homeStatusBarMcpWidth, homeStatusBarPlan } from "./home-layout"
 import { Locale } from "@/util/locale"
 import { useSync } from "../context/sync"
 import { Toast, useToast } from "../ui/toast"
@@ -197,36 +197,76 @@ export function Home() {
       },
     ),
   )
-  // The bottom bar stacks vertically once its segments no longer fit on one
-  // line (promptFooterLayout-style degradation; the math lives in home-layout).
-  const statusBarLayout = createMemo(() =>
-    homeStatusBarLayout({
+  // Compact terminals (height < 22) swap the two-line header for one row that
+  // keeps the model chip and a Sessions action visible; the model id truncates
+  // so both affordances fit (the math lives in home-layout).
+  const compactHeader = createMemo(() =>
+    homeCompactHeaderPlan({
       terminalWidth: dimensions().width,
-      segmentWidths: [
-        stringWidth(directory()),
-        mcp() ? homeStatusBarMcpWidth(connectedMcpCount()) : 0,
-        stringWidth(Installation.VERSION),
-      ],
+      heading: t("home.newTask"),
+      agent: agentLabel(),
+      model: local.model.parsed().model,
+      sessions: t("ui.sessions"),
+    }),
+  )
+  // The bottom bar stays on one row: full path, then the abbreviated project
+  // label, then the version dropped; stacking is the last resort.
+  const statusBar = createMemo(() =>
+    homeStatusBarPlan({
+      terminalWidth: dimensions().width,
+      directory: directory(),
+      mcpWidth: mcp() ? homeStatusBarMcpWidth(connectedMcpCount()) : 0,
+      versionWidth: stringWidth(Installation.VERSION),
     }),
   )
 
   return (
     <>
       <box flexGrow={1} minHeight={0} paddingTop={1} paddingLeft={2} paddingRight={2}>
-        <text fg={theme.accent} flexShrink={0} selectable={false}>
-          {t("home.newTask")}
-        </text>
-        <Show when={!modelLoading() && !compact()}>
-          <box flexDirection="row" flexShrink={0}>
-            <text fg={theme.textMuted} selectable={false}>
-              {agentLabel()} ·{" "}
+        <Show when={compact()}>
+          <box flexDirection="row" width="100%" justifyContent="space-between" flexShrink={0}>
+            <text fg={theme.accent} flexShrink={0} selectable={false}>
+              {t("home.newTask")}
             </text>
-            <box onMouseUp={() => command.trigger(guidance().modelCommand)}>
-              <text fg={theme.textMuted} selectable={false}>
-                {local.model.parsed().model}
-              </text>
+            <box flexDirection="row" gap={2} flexShrink={0}>
+              <Show when={!modelLoading()}>
+                <box flexDirection="row" flexShrink={0}>
+                  <Show when={compactHeader().showAgent}>
+                    <text fg={theme.textMuted} selectable={false}>
+                      {agentLabel()} ·{" "}
+                    </text>
+                  </Show>
+                  <box onMouseUp={() => command.trigger(guidance().modelCommand)}>
+                    <text fg={theme.textMuted} selectable={false}>
+                      {compactHeader().model}
+                    </text>
+                  </box>
+                </box>
+              </Show>
+              <box flexShrink={0} onMouseUp={() => command.trigger("session.list")}>
+                <text fg={theme.accent} selectable={false}>
+                  {compactHeader().sessions}
+                </text>
+              </box>
             </box>
           </box>
+        </Show>
+        <Show when={!compact()}>
+          <text fg={theme.accent} flexShrink={0} selectable={false}>
+            {t("home.newTask")}
+          </text>
+          <Show when={!modelLoading()}>
+            <box flexDirection="row" flexShrink={0}>
+              <text fg={theme.textMuted} selectable={false}>
+                {agentLabel()} ·{" "}
+              </text>
+              <box onMouseUp={() => command.trigger(guidance().modelCommand)}>
+                <text fg={theme.textMuted} selectable={false}>
+                  {local.model.parsed().model}
+                </text>
+              </box>
+            </box>
+          </Show>
         </Show>
         <scrollbox flexGrow={1} minHeight={0} marginTop={1}>
           <SetupGuidanceView guidance={guidance()} compact={compact()} />
@@ -283,12 +323,12 @@ export function Home() {
         paddingBottom={1}
         paddingLeft={2}
         paddingRight={2}
-        flexDirection={statusBarLayout().stacked ? "column" : "row"}
-        justifyContent={statusBarLayout().stacked ? "flex-start" : "space-between"}
+        flexDirection={statusBar().stacked ? "column" : "row"}
+        justifyContent={statusBar().stacked ? "flex-start" : "space-between"}
         flexShrink={0}
-        gap={statusBarLayout().stacked ? 1 : 2}
+        gap={statusBar().stacked ? 1 : 2}
       >
-        <text fg={theme.textMuted}>{directory()}</text>
+        <text fg={theme.textMuted}>{statusBar().workspace}</text>
         <box gap={1} flexDirection="row" flexShrink={0}>
           <Show when={mcp()}>
             <text fg={theme.text}>
@@ -305,9 +345,11 @@ export function Home() {
             <text fg={theme.textMuted}>/status</text>
           </Show>
         </box>
-        <box flexShrink={0}>
-          <text fg={theme.textMuted}>{Installation.VERSION}</text>
-        </box>
+        <Show when={statusBar().showVersion}>
+          <box flexShrink={0}>
+            <text fg={theme.textMuted}>{Installation.VERSION}</text>
+          </box>
+        </Show>
       </box>
     </>
   )
