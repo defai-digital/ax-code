@@ -215,6 +215,33 @@ test("a steer admitted but never applied returns the row to the queue when the g
   })
 })
 
+test("an interrupted generation parks the recovered follow-up instead of auto-starting it", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const app = Server.Default()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({})
+      const controller = new AbortController()
+      SessionSteering.begin(session.id, controller.signal)
+      const item = await enqueueFollowUp(session.id, "park me on interrupt")
+      expect((await steerRequest(app, tmp.path, item.id)).status).toBe(200)
+      expect((await TaskQueue.get(item.id)).status).toBe("cancelled")
+
+      controller.abort()
+      SessionSteering.finish(session.id)
+
+      const deadline = Date.now() + 5000
+      let row = await TaskQueue.get(item.id)
+      while (row.status === "cancelled" && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 25))
+        row = await TaskQueue.get(item.id)
+      }
+      expect(row.status).toBe("paused")
+    },
+  })
+})
+
 test("steering an unknown or re-steered row fails cleanly", async () => {
   await using tmp = await tmpdir({ git: true })
   const app = Server.Default()

@@ -61,6 +61,9 @@ export namespace SessionSteering {
   export function finish(sessionID: SessionID) {
     const current = state().get(sessionID)
     if (!current) return
+    // An aborted signal means the user interrupted the turn; the queue must
+    // then park recovered follow-ups instead of auto-starting them.
+    const aborted = current.active?.signal.aborted ?? false
     current.active = undefined
     const discarded: Receipt[] = []
     for (const pending of current.receipts.values()) {
@@ -77,7 +80,7 @@ export namespace SessionSteering {
     // loop runs, server or headless.
     if (discarded.length > 0) {
       void import("./task-queue-steer")
-        .then(({ TaskQueueSteer }) => TaskQueueSteer.reconcileDiscarded(sessionID, discarded))
+        .then(({ TaskQueueSteer }) => TaskQueueSteer.reconcileDiscarded(sessionID, discarded, { aborted }))
         .catch(() => undefined)
     }
   }

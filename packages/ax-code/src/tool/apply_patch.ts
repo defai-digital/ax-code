@@ -544,9 +544,19 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
     }
 
     // Autonomous accounting: only the changes we successfully applied count.
+    // A move onto an existing destination also discards that destination's
+    // content, which the source-side diff never sees; charge those lines too.
     for (const change of appliedChanges) {
       const target = change.movePath ?? change.filePath
-      await BlastRadius.recordWriteAndAssert(ctx.sessionID, target, (change.additions ?? 0) + (change.deletions ?? 0))
+      const overwritten =
+        change.moveExisted && typeof change.moveOldContent === "string" && change.moveOldContent.length > 0
+          ? change.moveOldContent.split("\n").length
+          : 0
+      await BlastRadius.recordWriteAndAssert(
+        ctx.sessionID,
+        target,
+        (change.additions ?? 0) + (change.deletions ?? 0) + overwritten,
+      )
     }
 
     // Generate output summary

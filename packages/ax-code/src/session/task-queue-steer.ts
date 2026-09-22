@@ -96,10 +96,19 @@ export namespace TaskQueueSteer {
    * applied. The queue row was cancelled on admission with `steeredInto` set
    * to that generation; put it back in the queue so the follow-up runs on the
    * next turn instead of vanishing. Rows already applied, retried, or edited
-   * by the user are left alone.
+   * by the user are left alone. When the generation ended because the user
+   * interrupted it, the recovered row is parked as paused, matching how an
+   * interrupt treats every other waiting follow-up, rather than auto-started.
    */
-  export async function reconcileDiscarded(sessionID: string, receipts: readonly SessionSteering.Receipt[]) {
+  export async function reconcileDiscarded(
+    sessionID: string,
+    receipts: readonly SessionSteering.Receipt[],
+    options: { aborted?: boolean } = {},
+  ) {
     for (const receipt of receipts) {
+      // Only receipts the generation actually discarded qualify; an applied
+      // or otherwise rejected receipt must never resurrect a row.
+      if (receipt.status !== "rejected" || receipt.reason !== "generation_ended_before_application") continue
       const match = CLIENT_ID.exec(receipt.clientID)
       if (!match) continue
       const parsed = TaskQueueID.zod.safeParse(match[1])
@@ -110,6 +119,14 @@ export namespace TaskQueueSteer {
         if (row.sessionID !== sessionID) continue
         if (row.status !== "cancelled" || row.payload["steeredInto"] !== receipt.generation) continue
         const retried = await TaskQueue.retry(id)
+        if (options.aborted) {
+          await TaskQueue.pause(id)
+          log.info("parked follow-up whose steer was interrupted before application", {
+            id,
+            generation: receipt.generation,
+          })
+          continue
+        }
         await TaskQueueExecutor.start(retried)
         log.info("requeued follow-up whose steer ended before application", { id, generation: receipt.generation })
       } catch (error) {
@@ -138,6 +155,9 @@ export namespace TaskQueueSteer {
     // steered again during a later turn. Within one generation retries of the
     // same row and text still collapse onto the first receipt.
     const clientID = clientIDFor(id, generation, text)
+    // Resolve the prompt module before holding the row: an import failure
+    // after pause() would leave the row parked with no restore path.
+    const { SessionPrompt } = await import("./prompt")
 
     // Hold the row so the executor cannot claim it between the generation
     // check and admission. pause() is the guarded atomic transition, and a
@@ -159,7 +179,6 @@ export namespace TaskQueueSteer {
       }
     }
 
-    const { SessionPrompt } = await import("./prompt")
     let receipt: SessionSteering.Receipt
     try {
       receipt = await SessionPrompt.steer(sessionID, { expectedGeneration: generation, clientID, text })

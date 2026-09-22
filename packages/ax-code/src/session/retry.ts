@@ -101,14 +101,14 @@ export namespace SessionRetry {
       if (isAlibabaTokenPlanShortWindowQuota(error)) {
         const parsedHeaderDelay = headerDelay(headers)
         if (parsedHeaderDelay !== undefined) return parsedHeaderDelay
-        return jitter(ALIBABA_TOKEN_PLAN_QUOTA_RETRY_DELAY)
+        return floorJitter(ALIBABA_TOKEN_PLAN_QUOTA_RETRY_DELAY)
       }
       const parsedHeaderDelay = headers ? headerDelay(headers) : undefined
       // A 1-second concurrency hint must not undercut the exponential floor.
       // A longer server hint still wins.
       if (isConcurrencyLimit(error)) {
         if (parsedHeaderDelay !== undefined && parsedHeaderDelay >= exponential) return parsedHeaderDelay
-        return jitter(exponential)
+        return floorJitter(exponential)
       }
       if (parsedHeaderDelay !== undefined) return parsedHeaderDelay
       if (headers) return jitter(exponential)
@@ -120,6 +120,15 @@ export namespace SessionRetry {
   /** Add +/-25% jitter to prevent thundering herd on simultaneous retries. */
   function jitter(ms: number): number {
     return Math.round(ms * (0.75 + Math.random() * 0.5))
+  }
+
+  /**
+   * One-sided jitter for values that are floors: a concurrency lease or quota
+   * window that the code just refused to undercut must not be undercut by
+   * the jitter itself, so spread upward only (+0..25%).
+   */
+  function floorJitter(ms: number): number {
+    return Math.round(ms * (1 + Math.random() * 0.25))
   }
 
   // Patterns that indicate the error is permanent — retrying the same
@@ -175,7 +184,8 @@ export namespace SessionRetry {
     const key = providerID ?? "__global__"
     let state = circuits.get(key)
     if (!state) {
-      // Evict oldest entry if at capacity (LRU by insertion order).
+      // Evict the first-inserted entry at capacity (FIFO; access does not
+      // refresh order). Losing a live provider's streak is harmless.
       if (circuits.size >= CIRCUIT_MAX_PROVIDERS) {
         const oldest = circuits.keys().next().value
         if (oldest !== undefined) circuits.delete(oldest)

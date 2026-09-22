@@ -1313,7 +1313,7 @@ export namespace TaskQueue {
       delete payload["deliveryError"]
       delete payload["deliveryEmpty"]
     }
-    const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const row = db
         .update(TaskQueueTable)
         .set({
@@ -1324,13 +1324,24 @@ export namespace TaskQueue {
           time_completed: null,
           time_updated: now,
         })
-        .where(eq(TaskQueueTable.id, id))
+        // Re-check the terminal status inside the write (ADR-106 D5): an
+        // edit or a competing retry landing between get() and this update
+        // must not be overwritten by the stale payload copied above.
+        .where(and(eq(TaskQueueTable.id, id), inArray(TaskQueueTable.status, ["failed", "cancelled"])))
         .returning()
         .get()
-      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
-      return fromRow(row)
+      if (row) return { item: fromRow(row), raced: false as const }
+      const fresh = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get()
+      if (!fresh) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
+      return { item: fromRow(fresh), raced: true as const }
     })
-    assertProjectItem(item)
+    assertProjectItem(result.item)
+    if (result.raced) {
+      throw new HTTPException(409, {
+        message: `Cannot retry task queue item ${id} while it is ${result.item.status}.`,
+      })
+    }
+    const item = result.item
     publishUpdated(item)
     await syncWorkflowStatusIfNeeded(item)
     return item
