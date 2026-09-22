@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { activityItems } from "@/cli/tui/routes/session/activity"
+import { activityItems, rowActivityItems } from "@/cli/tui/routes/session/activity"
 import type { ReplayEvent } from "@/replay/event"
 import type { Part } from "@ax-code/sdk/v2"
 
@@ -83,5 +83,15 @@ describe("sidebar activity bounded selection", () => {
     }
     expect(activityItems([], [], [], 10)).toEqual([])
     expect(activityItems(parts, [], [], 10)).toEqual(activityItems(parts, [], []).slice(0, 10))
+  })
+})
+
+describe("sidebar activity precomputed row items", () => {
+  test("passing memoized row items yields the same result as deriving them inline", () => {
+    const rows = Array.from({ length: 30 }, (_, i) => routeRow(`m${i}`, i + 1))
+    const parts = [toolPart("p1", 5), toolPart("p2", 12), toolPart("p3", 31)]
+    const rowItems = rowActivityItems(rows, [])
+    expect(activityItems(parts, rows, [], 10, rowItems)).toEqual(activityItems(parts, rows, [], 10))
+    expect(activityItems(parts, rows, [], undefined, rowItems)).toEqual(activityItems(parts, rows, []))
   })
 })

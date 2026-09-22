@@ -18,7 +18,7 @@ import { useToast } from "../../ui/toast"
 import { Log } from "@/util/log"
 import { Flag } from "@/flag/flag"
 import { EventQuery } from "@/replay/query"
-import { activityItems as items } from "./activity"
+import { activityItems as items, rowActivityItems } from "./activity"
 import { SessionDreView } from "./dre"
 import { SessionRollbackView } from "./rollback"
 import { SessionSemanticDiff } from "@/session/semantic-diff"
@@ -275,10 +275,14 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
     const sid = props.sessionID as Parameters<typeof EventQuery.recentBySessionWithTimestamp>[0]
     return EventQuery.recentBySessionWithTimestamp(sid, ACTIVITY_ROW_WINDOW)
   })
+  // Event-log rows change only on the coarse refresh key, while the tool
+  // parts below change on every tool-part event; derive the row items once
+  // per refresh instead of re-walking 400 rows per part event.
+  const rowItems = createMemo(() => rowActivityItems(activityRows(), sync.data.agent))
   const activity = createMemo(() => {
     const msgs = messages()
     const parts = msgs.flatMap((msg) => sync.data.part[msg.id] ?? [])
-    return items(parts, activityRows(), sync.data.agent, 10)
+    return items(parts, activityRows(), sync.data.agent, 10, rowItems())
   })
   const localInference = createMemo(() => {
     props.statusTick?.()

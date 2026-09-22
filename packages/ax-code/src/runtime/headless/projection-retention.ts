@@ -279,8 +279,11 @@ export function enforceTranscriptBudget(
   // hydration, session leave/prune). Detect that from the admitted count and
   // membership (Map lookups only) and rebuild this session's accounting from
   // the list, which is exactly what the per-call recompute produced.
+  // An absent count means nothing is admitted to this session; treat it as 0
+  // so an empty list is consistent instead of forcing a ledger-wide reset on
+  // every event of a session that has no messages yet.
   const consistent =
-    book.transcriptCount.get(sessionID) === messages.length &&
+    (book.transcriptCount.get(sessionID) ?? 0) === messages.length &&
     messages.every((message) => book.sizes.get(message.id)?.admitted === sessionID)
   if (!consistent) {
     resetTranscript(book, sessionID)

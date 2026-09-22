@@ -150,17 +150,23 @@ function routeItem(row: { event_data: ReplayEvent; time_created: number }, agent
   }
 }
 
+/**
+ * Activity rows derived from the event log only. Callers that re-run on every
+ * tool-part event but whose rows change far less often memoize this part and
+ * pass it to activityItems, which keeps the same concatenation order.
+ */
+export function rowActivityItems(rows: { event_data: ReplayEvent; time_created: number }[], agents?: AgentInfo[]) {
+  return [...rows.map((row) => routeItem(row, agents)).filter((item) => !!item), ...agentControlActivityItems(rows)]
+}
+
 export function activityItems(
   parts: Part[],
   rows: { event_data: ReplayEvent; time_created: number }[],
   agents?: AgentInfo[],
   limit?: number,
+  rowItems: Activity[] = rowActivityItems(rows, agents),
 ) {
-  const all = [
-    ...parts.map(toolItem).filter((item) => !!item),
-    ...rows.map((row) => routeItem(row, agents)).filter((item) => !!item),
-    ...agentControlActivityItems(rows),
-  ]
+  const all = [...parts.map(toolItem).filter((item) => !!item), ...rowItems]
   if (limit === undefined) return all.toSorted((a, b) => (b.time ?? 0) - (a.time ?? 0))
   // Bounded selection for callers that render only the newest few rows: the
   // sidebar recomputes this on every tool-part event, so avoid sorting every
