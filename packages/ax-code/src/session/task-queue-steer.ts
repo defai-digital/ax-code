@@ -118,9 +118,10 @@ export namespace TaskQueueSteer {
         const row = await TaskQueue.get(id)
         if (row.sessionID !== sessionID) continue
         if (row.status !== "cancelled" || row.payload["steeredInto"] !== receipt.generation) continue
-        const retried = await TaskQueue.retry(id)
+        // One guarded write: an interrupted recovery lands as paused directly,
+        // so the interrupt's cancel sweep can never catch it in a queued gap.
+        const retried = await TaskQueue.retry(id, { paused: options.aborted === true })
         if (options.aborted) {
-          await TaskQueue.pause(id)
           log.info("parked follow-up whose steer was interrupted before application", {
             id,
             generation: receipt.generation,

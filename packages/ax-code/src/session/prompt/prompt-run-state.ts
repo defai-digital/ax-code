@@ -92,8 +92,11 @@ export function createPromptRunState() {
       return state()[sessionID]?.callbacks.shift()
     },
 
-    async cancel(sessionID: SessionID) {
-      SessionSteering.finish(sessionID)
+    async cancel(sessionID: SessionID, options: { interrupted?: boolean } = {}) {
+      // Pass the interrupt intent along: steered follow-ups recovered from
+      // this generation must be parked, not auto-started, when the user
+      // asked the turn to stop.
+      SessionSteering.finish(sessionID, { interrupted: options.interrupted })
       const s = state()
       const match = s[sessionID]
       if (!match) {

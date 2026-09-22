@@ -1300,7 +1300,13 @@ export namespace TaskQueue {
     return cancelled
   }
 
-  export async function retry(id: TaskQueueID): Promise<Info> {
+  /**
+   * Returns a terminal row to the queue. `paused: true` lands it directly in
+   * `paused` in the same write, for callers that must not let it start (an
+   * interrupted steer recovery) and cannot afford a queued window between
+   * two transitions.
+   */
+  export async function retry(id: TaskQueueID, options: { paused?: boolean } = {}): Promise<Info> {
     const current = await get(id)
     assertActionStatus(current, "retry", ["failed", "cancelled"])
     const now = Date.now()
@@ -1317,7 +1323,7 @@ export namespace TaskQueue {
       const row = db
         .update(TaskQueueTable)
         .set({
-          status: "queued",
+          status: options.paused ? "paused" : "queued",
           payload,
           error: null,
           time_started: null,

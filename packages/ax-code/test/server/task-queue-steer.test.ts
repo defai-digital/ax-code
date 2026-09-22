@@ -170,10 +170,15 @@ test("a row retried after a steer can be steered again in a later generation", a
       SessionSteering.begin(session.id, new AbortController().signal)
       const item = await enqueueFollowUp(session.id, "same text, later turn")
       expect((await steerRequest(app, tmp.path, item.id)).status).toBe(200)
-      SessionSteering.finish(session.id)
-
-      // The row comes back to the queue and the next turn starts.
-      await TaskQueue.retry(item.id)
+      // An interrupted end parks the never-applied steer as paused, which is
+      // still steerable by an explicit gesture; wait for the recovery instead
+      // of racing it with a manual retry, then the next turn starts.
+      SessionSteering.finish(session.id, { interrupted: true })
+      const deadline = Date.now() + 5000
+      while ((await TaskQueue.get(item.id)).status === "cancelled" && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 25))
+      }
+      expect((await TaskQueue.get(item.id)).status).toBe("paused")
       SessionSteering.begin(session.id, new AbortController().signal)
       const generation = SessionSteering.view(session.id).generation!
 
@@ -228,8 +233,11 @@ test("an interrupted generation parks the recovered follow-up instead of auto-st
       expect((await steerRequest(app, tmp.path, item.id)).status).toBe(200)
       expect((await TaskQueue.get(item.id)).status).toBe("cancelled")
 
+      // Production order: the run state finishes with the interrupt intent
+      // before it aborts the controller, so the signal is still live here.
+      expect(controller.signal.aborted).toBe(false)
+      SessionSteering.finish(session.id, { interrupted: true })
       controller.abort()
-      SessionSteering.finish(session.id)
 
       const deadline = Date.now() + 5000
       let row = await TaskQueue.get(item.id)

@@ -293,7 +293,7 @@ export namespace SessionPrompt {
     // free to admit a waiting followup; pausing after that point would race a
     // followup starting during the very abort meant to stop it.
     if (isGenuineInterrupt) await pausePendingFollowups(sessionID)
-    await runState.cancel(sessionID)
+    await runState.cancel(sessionID, { interrupted: isGenuineInterrupt })
     await cancelDescendantSessions(sessionID, {
       cancelQueueItems: opts?.cancelQueueItems,
       preservePausedFollowups: isGenuineInterrupt,

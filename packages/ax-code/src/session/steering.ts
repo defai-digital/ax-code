@@ -58,12 +58,15 @@ export namespace SessionSteering {
     entry(sessionID).active = { generation: randomUUID(), signal }
   }
 
-  export function finish(sessionID: SessionID) {
+  /**
+   * Ends the generation. `interrupted` is the caller's intent (a genuine user
+   * interrupt), passed explicitly because production callers finish before
+   * they abort the controller, so the signal cannot be sampled here.
+   */
+  export function finish(sessionID: SessionID, options: { interrupted?: boolean } = {}) {
     const current = state().get(sessionID)
     if (!current) return
-    // An aborted signal means the user interrupted the turn; the queue must
-    // then park recovered follow-ups instead of auto-starting them.
-    const aborted = current.active?.signal.aborted ?? false
+    const aborted = options.interrupted === true
     current.active = undefined
     const discarded: Receipt[] = []
     for (const pending of current.receipts.values()) {
