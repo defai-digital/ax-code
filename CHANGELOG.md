@@ -6,9 +6,16 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
-### Changed
+### Added
 
-- Require AX Engine 7.5.5 for configured binaries, PATH copies, and managed overlays.
+- Provide structured terminal results, bounded execution, steering flags, and additional machine-readable commands for headless callers.
+
+### Fixed
+
+- Preserve completed run outcomes when shutdown signals arrive during cleanup, and avoid duplicate server aborts or incorrect exit codes when cancellation races a timeout.
+- Enforce shell write-target and network permissions, monitor command deny rules, and MCP grant boundaries.
+- Handle headless subagent permission denials, deduplicate tool accounting, and keep interactive-only tools disabled on resumed runs.
+- Share session tree indexes and avoid repeatedly serializing streaming transcript parts.
 
 ## [7.20.1] - 2026-09-22
 

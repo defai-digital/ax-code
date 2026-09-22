@@ -919,6 +919,53 @@ describe("createRunLifecycle", () => {
     }
   })
 
+  test.each([false, true])("signals after settle preserve the completed outcome (session=%s)", (hasSession) => {
+    vi.useFakeTimers()
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never)
+    try {
+      const { lifecycle, calls } = makeLifecycle()
+      if (hasSession) lifecycle.markSession()
+      lifecycle.settle()
+      process.exitCode = 0
+      lifecycle.onSignal()
+      vi.advanceTimersByTime(RUN_LAST_RESORT_EXIT_DELAY_MS * 2)
+      expect(process.exitCode).toBe(0)
+      expect(lifecycle.cancelled()).toBe(false)
+      expect(lifecycle.signal.aborted).toBe(false)
+      expect(calls.serverAborts).toEqual([])
+      expect(calls.earlyResults).toEqual([])
+      expect(exitSpy).not.toHaveBeenCalled()
+    } finally {
+      exitSpy.mockRestore()
+      vi.useRealTimers()
+      process.exitCode = undefined
+    }
+  })
+
+  test.each(["signal", "timeout"] as const)(
+    "post-session %s first aborts once and preserves cancellation precedence",
+    (first) => {
+      vi.useFakeTimers()
+      const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never)
+      try {
+        const { lifecycle, calls } = makeLifecycle()
+        lifecycle.markSession()
+        lifecycle.arm()
+        if (first === "signal") lifecycle.onSignal()
+        vi.advanceTimersByTime(60)
+        if (first === "timeout") lifecycle.onSignal()
+        expect(process.exitCode).toBe(130)
+        expect(calls.serverAborts).toEqual([first === "signal" ? "cancelled" : "timeout"])
+        vi.advanceTimersByTime(RUN_LAST_RESORT_EXIT_DELAY_MS)
+        expect(exitSpy).toHaveBeenCalledExactlyOnceWith(130)
+      } finally {
+        exitSpy.mockRestore()
+        vi.useRealTimers()
+        process.exitCode = undefined
+      }
+    },
+  )
+
   test("onSignal cancels: exit 130, signal aborted, server abort only after markSession (F3)", () => {
     // Pre-session: the signal commits the early cancelled result and cuts
     // the pending calls without a server abort.

@@ -140,6 +140,10 @@ export function createRunLifecycle(input: {
       return
     }
     timedOut = true
+    // Cancellation has higher precedence and already requested the server
+    // abort. Keep its exit code and original delivery promise while teardown
+    // is still waiting; a second request could outlive the awaited one.
+    if (cancelled) return
     process.exitCode = 124
     if (!input.isStream && !terminalFlag) input.onTimeoutNotice?.()
     if (hasSession) {
@@ -223,7 +227,7 @@ export function createRunLifecycle(input: {
       // the two `process.once` registrations share this handler — or a direct
       // double call) must not write a second terminal line, flip the exit
       // code again, or issue a second server abort.
-      if (cancelled) return
+      if (settledFlag || cancelled) return
       // Single-writer: a pre-session --timeout may have committed the
       // terminal outcome already (early timeout result, exit 124). A later
       // signal adds no second terminal line, no notice, and no exit-code
@@ -235,6 +239,9 @@ export function createRunLifecycle(input: {
       }
       cancelled = true
       process.exitCode = 130
+      // Upgrade a pending timeout to cancellation without replacing its
+      // in-flight server abort or restarting the last-resort deadline.
+      if (timedOut) return
       if (hasSession) {
         // Same ordering as the timeout: server abort first (own signal),
         // then cut the pending SDK calls (F11), with the same last-resort
