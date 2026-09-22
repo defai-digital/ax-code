@@ -1423,8 +1423,14 @@ export function Session() {
 
   const revert = createMemo(() => revertState(revertInfo(), messages()))
   const hiddenIDs = createMemo(() => hiddenMessageIDs(messages(), revertMessageID(), revertPartID()))
-  const timelineTurns = createMemo(() =>
-    messages()
+  // turnPreview is a pure function of the user part's text, and that text
+  // never changes after submission, so previews are reused across recomputes
+  // (which happen several times per turn over the whole history) and only the
+  // new turn pays for normalization. Same pattern as the transcript's part cache.
+  let previewCache = new Map<string, { text: string; preview: string }>()
+  const timelineTurns = createMemo(() => {
+    const next = new Map<string, { text: string; preview: string }>()
+    const turns = messages()
       .filter(
         (message) =>
           message.role === "user" &&
@@ -1437,13 +1443,17 @@ export function Session() {
         const part = (sync.data.part[message.id] ?? []).find(
           (part) => part.type === "text" && !part.synthetic && !part.ignored,
         )
-        return {
-          id: message.id,
-          time: message.time,
-          preview: part && part.type === "text" ? turnPreview(part.text) : "",
+        let preview = ""
+        if (part && part.type === "text") {
+          const cached = previewCache.get(message.id)
+          preview = cached && cached.text === part.text ? cached.preview : turnPreview(part.text)
+          next.set(message.id, { text: part.text, preview })
         }
-      }),
-  )
+        return { id: message.id, time: message.time, preview }
+      })
+    previewCache = next
+    return turns
+  })
   const pinnedInputCandidate = createMemo(() =>
     selectPinnedInputCandidate({
       messages: messages(),

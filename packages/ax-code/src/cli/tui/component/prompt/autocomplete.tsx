@@ -109,7 +109,14 @@ export type AutocompleteOption = {
 const normalizeSlashAutocompleteQuery = (value: string): string =>
   removeLineRange(value).trim().replace(/^\//, "").toLowerCase()
 
+// Ranking re-runs on every keystroke while the slash dropdown is open, but the
+// option objects only change when the command registry is rebuilt, so their
+// tokens are memoized per object. A WeakMap holds no strong references.
+const slashTokenCache = new WeakMap<AutocompleteOption, string[]>()
+
 const slashAutocompleteTokens = (option: AutocompleteOption): string[] => {
+  const cached = slashTokenCache.get(option)
+  if (cached) return cached
   const tokens = new Set<string>()
   const add = (value?: string) => {
     if (!value) return
@@ -120,7 +127,9 @@ const slashAutocompleteTokens = (option: AutocompleteOption): string[] => {
   add(option.value)
   add(option.display)
   for (const alias of option.aliases ?? []) add(alias)
-  return [...tokens]
+  const result = [...tokens]
+  slashTokenCache.set(option, result)
+  return result
 }
 
 export function rankSlashAutocompleteOptions(options: AutocompleteOption[], query: string): AutocompleteOption[] {

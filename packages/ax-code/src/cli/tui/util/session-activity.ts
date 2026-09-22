@@ -41,13 +41,25 @@ export function createSessionActivityIndex(input: {
   }
   return {
     get(sessionID: string) {
-      const ids = tree.subtree(sessionID)
-      const members = [...ids].map((id) => ({ id, status: input.statuses[id]?.type }))
-      const pending = [...ids].flatMap((id) => bySession.get(id) ?? [])
-      const approvals = pending.filter((request) => request.kind === "approval").length
+      // One pass over the subtree: this runs once per visible navigation row
+      // on every activity change, so avoid re-spreading and re-scanning the
+      // same id set for each derived field.
+      const members: { id: string; status: string | undefined }[] = []
+      const pending: AttentionRequest[] = []
+      let approvals = 0
+      let retrying = false
+      let working = false
+      for (const id of tree.subtree(sessionID)) {
+        const status = input.statuses[id]?.type
+        members.push({ id, status })
+        if (status === "retry") retrying = true
+        if (status === "busy") working = true
+        for (const request of bySession.get(id) ?? []) {
+          pending.push(request)
+          if (request.kind === "approval") approvals++
+        }
+      }
       const questions = pending.length - approvals
-      const retrying = members.some((member) => member.status === "retry")
-      const working = members.some((member) => member.status === "busy")
       // A sparse status snapshot is not evidence of idle. Only positive live
       // signals get row labels; no inferred Done/Idle badge is rendered.
       const label = approvals

@@ -1,5 +1,5 @@
 import stripAnsi from "strip-ansi"
-import { stringWidth } from "@/bun/node-compat"
+import { charWidth, stringWidth } from "@/bun/node-compat"
 
 /** Turn order, not message length, determines timeline spacing. */
 export function timelineWindow(count: number, height: number, active: number, atBottom = false) {
@@ -50,7 +50,9 @@ function fitWidth(text: string, width: number) {
   let used = 0
   let taken = 0
   for (const ch of text) {
-    const w = stringWidth(ch)
+    // `ch` is one code point (for..of), so the per-scalar table is exact and
+    // skips stringWidth's whole-string ANSI handling.
+    const w = charWidth(ch.codePointAt(0) ?? 0)
     if (used + w > width) break
     used += w
     taken += ch.length

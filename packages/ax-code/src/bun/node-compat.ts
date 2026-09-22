@@ -366,7 +366,12 @@ function isNativeWideEmoji(cp: number): boolean {
 // 0, zero-width/combining marks as 0, wide CJK/emoji as 2, everything else 1.
 // The previous shim counted code points, which misaligns TUI layout for wide
 // characters and ANSI-styled strings.
-function charWidth(cp: number): number {
+/**
+ * Terminal cell width of one code point (ANSI-unaware). Exported for callers
+ * that already iterate scalars and would otherwise pay stringWidth's whole
+ * string handling per character.
+ */
+export function charWidth(cp: number): number {
   // ASCII never reaches the combining, wide, or emoji tables (all start at
   // U+0300 or above), so answer it before the range checks below.
   if (cp < 0x80) return cp < 32 || cp === 0x7f ? 0 : 1

@@ -1,5 +1,5 @@
 import type { PromptInfo } from "./history"
-import { stringWidth } from "@/bun/node-compat"
+import { charWidth } from "@/bun/node-compat"
 import { isActiveTodo } from "@/session/todo-status"
 
 type PromptPart = PromptInfo["parts"][number]
@@ -16,8 +16,13 @@ export type PromptPartExtmarkView = {
 // (stringWidth would give it 0). Extmark ranges and cursorOffset use these
 // units, while JS string ops (slice/indexOf) use UTF-16 indices — always
 // convert through these helpers before mixing the two.
+//
+// The helpers below iterate scalars with for..of, so `char` is exactly one
+// code point: a lone ESC or 0x9B is a zero-width control either way, which is
+// why charWidth on the code point is byte-identical to stringWidth(char)
+// without its per-call ANSI check and second loop.
 function displayWidthOfChar(char: string) {
-  return char === "\n" ? 1 : stringWidth(char)
+  return char === "\n" ? 1 : charWidth(char.codePointAt(0) ?? 0)
 }
 
 export function stringIndexFromDisplayOffset(text: string, displayOffset: number) {
