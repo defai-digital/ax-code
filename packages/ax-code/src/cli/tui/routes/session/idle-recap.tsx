@@ -26,7 +26,11 @@ export function IdleRecap(props: { sessionID: string }) {
   const [recap, setRecap] = createSignal<string>()
   const [loading, setLoading] = createSignal(false)
 
-  const snapshot = createMemo<RecapSnapshot>(() => {
+  // Everything except the composer input: this body walks the session list
+  // and the message list, so it must not re-run on every keystroke. The
+  // outer snapshot memo below adds `input` and keeps the same field set, so
+  // the controller sees identical values and the same update cadence.
+  const treeState = createMemo(() => {
     const session = sync.session.get(props.sessionID)
     const messages = (sync.data.message[props.sessionID] ?? []).filter(
       (message) =>
@@ -49,13 +53,16 @@ export function IdleRecap(props: { sessionID: string }) {
       enabled: tuiConfig?.idle_recap?.enabled ?? true,
       delayMs: Math.max(1_000, tuiConfig?.idle_recap?.delay_ms ?? 5_000),
       pregenerate: tuiConfig?.idle_recap?.pregenerate ?? true,
-      // PromptRef.current is a Solid signal, so this memo re-runs when Prompt
-      // mounts below us; store.prompt.input then tracks typing. A plain let
-      // left first-observation recap armed with input: "" forever.
-      input: promptRef.current?.current.input ?? "",
-      autoScope: subtree ? "conversation" : "turn",
+      autoScope: subtree ? ("conversation" as const) : ("turn" as const),
     }
   })
+  const snapshot = createMemo<RecapSnapshot>(() => ({
+    ...treeState(),
+    // PromptRef.current is a Solid signal, so this memo re-runs when Prompt
+    // mounts below us; store.prompt.input then tracks typing. A plain let
+    // left first-observation recap armed with input: "" forever.
+    input: promptRef.current?.current.input ?? "",
+  }))
 
   const controller = createRecapController({
     snapshot,

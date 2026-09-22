@@ -278,7 +278,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
   const activity = createMemo(() => {
     const msgs = messages()
     const parts = msgs.flatMap((msg) => sync.data.part[msg.id] ?? [])
-    return items(parts, activityRows(), sync.data.agent).slice(0, 10)
+    return items(parts, activityRows(), sync.data.agent, 10)
   })
   const localInference = createMemo(() => {
     props.statusTick?.()

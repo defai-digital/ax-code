@@ -154,10 +154,26 @@ export function activityItems(
   parts: Part[],
   rows: { event_data: ReplayEvent; time_created: number }[],
   agents?: AgentInfo[],
+  limit?: number,
 ) {
-  return [
+  const all = [
     ...parts.map(toolItem).filter((item) => !!item),
     ...rows.map((row) => routeItem(row, agents)).filter((item) => !!item),
     ...agentControlActivityItems(rows),
-  ].toSorted((a, b) => (b.time ?? 0) - (a.time ?? 0))
+  ]
+  if (limit === undefined) return all.toSorted((a, b) => (b.time ?? 0) - (a.time ?? 0))
+  // Bounded selection for callers that render only the newest few rows: the
+  // sidebar recomputes this on every tool-part event, so avoid sorting every
+  // part in the session. Inserting only before strictly smaller times keeps
+  // ties in production order, matching the stable full sort.
+  const top: Activity[] = []
+  for (const item of all) {
+    const time = item.time ?? 0
+    let index = top.length
+    while (index > 0 && (top[index - 1]!.time ?? 0) < time) index--
+    if (index >= limit) continue
+    top.splice(index, 0, item)
+    if (top.length > limit) top.pop()
+  }
+  return top
 }

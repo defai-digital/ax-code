@@ -575,17 +575,25 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
   // "idle" and the footer would otherwise render a blank row. Project the
   // most recently active child into the busy row so the spinner and label
   // keep moving until the whole session tree settles.
+  // The session tree root this footer reports on: the parent for a child
+  // session, otherwise the session itself. Shared by the two status memos
+  // below so the linear scan over the session list runs once per change
+  // instead of once per memo per status event.
+  const treeRootID = createMemo(() => {
+    if (!props.sessionID) return undefined
+    const self = sync.data.session.find((item) => item.id === props.sessionID)
+    return self?.parentID ?? props.sessionID
+  })
   // Declared before footerLayout: that memo reads this value at creation time.
   const subagentStatus = createMemo(() => {
     statusTick()
     if (!props.sessionID) return
     if (status().type !== "idle") return
-    const self = sync.data.session.find((item) => item.id === props.sessionID)
     return footerSubagentStatusView({
       t: language.t,
       sessions: sync.data.session,
       statuses: sync.data.session_status,
-      parentSessionID: self?.parentID ?? props.sessionID,
+      parentSessionID: treeRootID() ?? props.sessionID,
       now: Date.now(),
     })
   })
@@ -1042,12 +1050,11 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     // /goal planning and task subagents run in child sessions: the parent
     // stays "idle" while they work, so suppress "Finished" until the whole
     // session tree has settled.
-    const self = sync.data.session.find((item) => item.id === props.sessionID)
     if (
       hasActiveSubagentInSessionTree({
         sessions: sync.data.session,
         statuses: sync.data.session_status,
-        parentSessionID: self?.parentID ?? props.sessionID,
+        parentSessionID: treeRootID() ?? props.sessionID,
       })
     )
       return false

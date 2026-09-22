@@ -63,3 +63,25 @@ describe("sidebar activity recent-rows equivalence", () => {
     expect(fromRecent).toEqual(fromFull)
   })
 })
+
+describe("sidebar activity bounded selection", () => {
+  function timedToolPart(id: string, start: number | undefined): Part {
+    return { id, type: "tool", tool: "read", state: { status: "completed", time: start === undefined ? undefined : { start } } } as unknown as Part
+  }
+
+  test("limit selects the same newest items as sorting everything, ties included", () => {
+    const rows = Array.from({ length: 60 }, (_, i) => routeRow(`m${i}`, Math.floor(i / 4) + 1))
+    const parts = [
+      timedToolPart("p1", 3),
+      timedToolPart("p2", 15),
+      timedToolPart("p3", 15),
+      timedToolPart("p4", undefined),
+      timedToolPart("p5", 16),
+    ]
+    for (const limit of [1, 3, 10, 25, 200]) {
+      expect(activityItems(parts, rows, [], limit)).toEqual(activityItems(parts, rows, []).slice(0, limit))
+    }
+    expect(activityItems([], [], [], 10)).toEqual([])
+    expect(activityItems(parts, [], [], 10)).toEqual(activityItems(parts, [], []).slice(0, 10))
+  })
+})

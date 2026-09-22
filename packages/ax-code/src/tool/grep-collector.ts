@@ -30,7 +30,9 @@ export function createGrepCollector(input: {
     failure: undefined as { error: unknown } | undefined,
   }
   function accept(line: string) {
-    if (!line.trim()) return
+    // Same predicate as `!line.trim()` (\s covers exactly the trim set) without
+    // allocating a trimmed copy of every line ripgrep emits.
+    if (!/\S/.test(line)) return
     const event = Event.parse(parseJsonStrict(line))
     if (event.type === "summary") result.summarySeen = true
     if (event.type === "end" && !input.isFile && End.parse(event).data.binary_offset != null)
