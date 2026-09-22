@@ -6,7 +6,7 @@ export type AttentionRequest = PendingRequestRef & { kind: "approval" | "questio
 export type RequestBuckets = Record<string, PendingRequestRef[] | undefined>
 export type ActivityStatuses = Record<string, { type: string } | undefined>
 
-export function knownAttentionRequests(permissions: RequestBuckets, questions: RequestBuckets): AttentionRequest[] {
+function collectAttentionRequests(permissions: RequestBuckets, questions: RequestBuckets) {
   const unique = new Map<string, AttentionRequest>()
   for (const [kind, buckets] of [
     ["approval", permissions],
@@ -18,9 +18,18 @@ export function knownAttentionRequests(permissions: RequestBuckets, questions: R
       }
     }
   }
-  return [...unique.values()].toSorted(
+  return unique
+}
+
+export function knownAttentionRequests(permissions: RequestBuckets, questions: RequestBuckets): AttentionRequest[] {
+  return [...collectAttentionRequests(permissions, questions).values()].toSorted(
     (a, b) => a.kind.localeCompare(b.kind) || a.sessionID.localeCompare(b.sessionID) || a.id.localeCompare(b.id),
   )
+}
+
+/** Same count as knownAttentionRequests(...).length without the sort and spread. */
+export function knownAttentionRequestCount(permissions: RequestBuckets, questions: RequestBuckets) {
+  return collectAttentionRequests(permissions, questions).size
 }
 
 export function createSessionActivityIndex(input: {

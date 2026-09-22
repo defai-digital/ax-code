@@ -9,10 +9,17 @@ export function createSessionTreeIndex(sessions: readonly SessionTreeNode[]) {
     siblings.push(session.id)
     children.set(session.parentID, siblings)
   }
+  // The index is immutable after construction, so a subtree is computed once
+  // per root. Callers receive a copy because some mutate the result (the
+  // footer removes the parent from its descendants); sharing the cached Set
+  // would silently corrupt later reads.
+  const cache = new Map<string, Set<string>>()
   return {
     subtree(sessionID: string | undefined): Set<string> {
+      if (sessionID === undefined) return new Set<string>()
+      const cached = cache.get(sessionID)
+      if (cached) return new Set(cached)
       const ids = new Set<string>()
-      if (sessionID === undefined) return ids
       const pending = [sessionID]
       while (pending.length) {
         const id = pending.pop()!
@@ -20,7 +27,8 @@ export function createSessionTreeIndex(sessions: readonly SessionTreeNode[]) {
         ids.add(id)
         pending.push(...(children.get(id) ?? []))
       }
-      return ids
+      cache.set(sessionID, ids)
+      return new Set(ids)
     },
   }
 }

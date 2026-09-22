@@ -715,18 +715,25 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
 
   // Observe the viewed subtree, not task success or only the parent status.
   const turnComplete = createTurnCompleteTracker()
+  // The index only reads sessions, permissions, and questions when built;
+  // statuses are read lazily by get(). Building it in a memo means a status
+  // event (several per tool call) no longer rebuilds the whole-session tree,
+  // while the effect below still tracks statuses through get(). The route
+  // check stays inside so non-session routes keep their previous dependency set.
+  const turnActivity = createMemo(() => {
+    const sessionID = route.data.type === "session" ? route.data.sessionID : undefined
+    if (sessionID === undefined) return undefined
+    return createSessionActivityIndex({
+      sessions: sync.data.session,
+      statuses: sync.data.session_status,
+      permissions: sync.data.permission,
+      questions: sync.data.question,
+    })
+  })
   createEffect(() => {
     const sessionID = route.data.type === "session" ? route.data.sessionID : undefined
     const status = sessionID === undefined ? undefined : sync.data.session_status?.[sessionID]?.type
-    const activity =
-      sessionID === undefined
-        ? undefined
-        : createSessionActivityIndex({
-            sessions: sync.data.session,
-            statuses: sync.data.session_status,
-            permissions: sync.data.permission,
-            questions: sync.data.question,
-          }).get(sessionID)
+    const activity = sessionID === undefined ? undefined : turnActivity()?.get(sessionID)
     const failedMembers = activity?.members
       .filter(({ id }) => {
         const last = sync.data.message[id]?.findLast((message) => message.role === "assistant")

@@ -22,7 +22,7 @@ import { useCommandDialog } from "./dialog-command"
 import { ScheduleStatus } from "./schedule-status"
 import { SplitBorder } from "./border"
 import { sessionNavigationEntries } from "./session-list-data"
-import { createSessionActivityIndex, knownAttentionRequests } from "../util/session-activity"
+import { createSessionActivityIndex, knownAttentionRequestCount } from "../util/session-activity"
 import { truncateToCellWidth } from "../routes/session/last-input-view-model"
 import { isGoalPlannerSession } from "../routes/session/subagent-status-view"
 import { Spinner } from "./spinner"
@@ -90,7 +90,7 @@ export function SessionNavigation(props: {
       questions: sync.data.question,
     }),
   )
-  const pendingCount = createMemo(() => knownAttentionRequests(sync.data.permission, sync.data.question).length)
+  const pendingCount = createMemo(() => knownAttentionRequestCount(sync.data.permission, sync.data.question))
   const slots = createMemo(() => new Map(local.session.slots().map((id, index) => [id, index + 1])))
   const innerWidth = () => navigationRailInnerWidth(props.width)
   const preferredWidth = () => chromeWidth(kv.get("navigation_width"), NAVIGATION_WIDTH_DEFAULT)

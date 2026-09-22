@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { createSessionActivityIndex, knownAttentionRequests } from "../../../src/cli/tui/util/session-activity"
+import { createSessionActivityIndex, knownAttentionRequestCount, knownAttentionRequests } from "../../../src/cli/tui/util/session-activity"
 
 const sessions = [{ id: "root" }, { id: "child", parentID: "root" }, { id: "deep", parentID: "child" }, { id: "other" }]
 
@@ -43,4 +43,14 @@ describe("session activity", () => {
       { id: "same", sessionID: "missing-session", kind: "question" },
     ])
   })
+})
+
+test("knownAttentionRequestCount matches the sorted list length", () => {
+  const permissions = {
+    a: [{ id: "p1", sessionID: "s1" }, { id: "p2", sessionID: "s2" }],
+    b: [{ id: "p1", sessionID: "s1" }],
+  }
+  const questions = { a: [{ id: "q1", sessionID: "s1" }], c: undefined }
+  expect(knownAttentionRequestCount(permissions, questions)).toBe(knownAttentionRequests(permissions, questions).length)
+  expect(knownAttentionRequestCount({}, {})).toBe(0)
 })

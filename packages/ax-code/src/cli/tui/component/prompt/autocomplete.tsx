@@ -757,6 +757,12 @@ export function Autocomplete(props: {
         // Check if autocomplete should reopen (e.g., after backspace deleted a space)
         const offset = props.input().cursorOffset
         if (offset === 0) return
+        // No trigger can exist unless the buffer starts with "/" or contains
+        // an "@" somewhere before the cursor. One native scan replaces the
+        // per-keystroke display-offset walk, slices, and regex passes below
+        // for ordinary typing; when either byte is present the checks run
+        // exactly as before.
+        if (!value.startsWith("/") && !value.includes("@")) return
         // cursorOffset is a display-width offset; convert before slicing the
         // UTF-16 string so preceding wide (CJK/emoji) characters don't shift
         // the range.

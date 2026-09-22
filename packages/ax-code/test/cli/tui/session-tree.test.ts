@@ -44,3 +44,16 @@ describe("session subtree", () => {
     expect(hasActiveSubagentInSessionTree({ ...input, parentSessionID: "other" })).toBe(false)
   })
 })
+
+test("repeated subtree reads return equal but independent sets", () => {
+  const index = createSessionTreeIndex([
+    { id: "root" },
+    { id: "child", parentID: "root" },
+    { id: "grandchild", parentID: "child" },
+  ])
+  const first = index.subtree("root")
+  first.delete("root")
+  const second = index.subtree("root")
+  expect([...second].sort()).toEqual(["child", "grandchild", "root"])
+  expect(second).not.toBe(first)
+})
