@@ -166,6 +166,27 @@ export namespace TaskQueue {
     })
   }
 
+  /**
+   * Extract a stable comparison key from a `command` row's payload. Returns
+   * `undefined` when the payload is not shaped like a slash command (no
+   * string `body.command`), in which case the row is not a dedup candidate.
+   * The comparison reads the parsed payload fields — never string equality on
+   * the raw JSON — and trims both `command` and `arguments` so `/goal Build`
+   * and `/goal Build ` are the same command.
+   */
+  function commandFingerprint(payload: Payload): { command: string; arguments: string } | undefined {
+    const body = payload["body"]
+    if (!body || typeof body !== "object") return undefined
+    const record = body as Record<string, unknown>
+    const command = record["command"]
+    if (typeof command !== "string") return undefined
+    const args = record["arguments"]
+    return {
+      command: command.trim(),
+      arguments: typeof args === "string" ? args.trim() : "",
+    }
+  }
+
   function publishCreated(item: Info) {
     Bus.publishDetached(Event.Created, { item })
   }
@@ -407,6 +428,47 @@ export namespace TaskQueue {
           )
           .get()
         if (existing) return fromRow(existing)
+      }
+
+      // Dedupe identical, not-yet-started slash commands. `command` rows carry
+      // a fresh sourceMessageID per submission, so the sourceMessageID lookup
+      // above cannot catch two `/goal` submissions of the same text; the two
+      // rows would otherwise sit in `waiting_for_idle` and run the same goal
+      // twice. Only `queued` / `waiting_for_idle` / `paused` rows are eligible
+      // — a command that already started or finished is never reused.
+      if (idempotent && parsed.sessionID && parsed.kind === "command") {
+        const incoming = commandFingerprint(parsed.payload)
+        if (incoming) {
+          const duplicate = db
+            .select()
+            .from(TaskQueueTable)
+            .where(
+              and(
+                eq(TaskQueueTable.project_id, projectID),
+                eq(TaskQueueTable.session_id, parsed.sessionID),
+                eq(TaskQueueTable.kind, "command"),
+                inArray(TaskQueueTable.status, ["queued", "waiting_for_idle", "paused"]),
+              ),
+            )
+            .orderBy(asc(TaskQueueTable.position), asc(TaskQueueTable.id))
+            .all()
+            .find((row) => {
+              const existing = commandFingerprint(row.payload)
+              return (
+                existing !== undefined &&
+                existing.command === incoming.command &&
+                existing.arguments === incoming.arguments
+              )
+            })
+          if (duplicate) {
+            const existing = fromRow(duplicate)
+            log.info("deduplicated identical pending command", {
+              existingTaskQueueID: existing.id,
+              incomingSourceMessageID: parsed.sourceMessageID,
+            })
+            return existing
+          }
+        }
       }
 
       const values: typeof TaskQueueTable.$inferInsert = {
@@ -1170,7 +1232,10 @@ export namespace TaskQueue {
    * fails the transition instead of being clobbered; the row then stays paused
    * and the already-admitted steer receipt remains authoritative.
    */
-  export async function cancelSteered(id: TaskQueueID, audit: { steeredInto: string; steeredAt: number }): Promise<Info> {
+  export async function cancelSteered(
+    id: TaskQueueID,
+    audit: { steeredInto: string; steeredAt: number },
+  ): Promise<Info> {
     const fromStatuses: Status[] = ["queued", "waiting_for_idle", "paused"]
     const now = Date.now()
     const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {

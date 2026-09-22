@@ -193,6 +193,122 @@ describe("TaskQueue", () => {
     })
   })
 
+  test("deduplicates identical pending slash commands submitted with different message IDs", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const payload = { kind: "command", body: { command: "goal", arguments: "Ship the feature" } }
+
+        const first = await TaskQueue.enqueueIdempotent({
+          sessionID: session.id,
+          kind: "command",
+          title: "goal Ship the feature",
+          sourceMessageID: MessageID.ascending(),
+          payload,
+        })
+        const second = await TaskQueue.enqueueIdempotent({
+          sessionID: session.id,
+          kind: "command",
+          title: "goal Ship the feature",
+          sourceMessageID: MessageID.ascending(),
+          payload,
+        })
+
+        expect(second.id).toBe(first.id)
+        expect(await TaskQueue.list({ sessionID: session.id })).toHaveLength(1)
+      },
+    })
+  })
+
+  test("does not dedupe slash commands with different arguments", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+
+        const first = await TaskQueue.enqueueIdempotent({
+          sessionID: session.id,
+          kind: "command",
+          title: "goal",
+          sourceMessageID: MessageID.ascending(),
+          payload: { kind: "command", body: { command: "goal", arguments: "Ship it" } },
+        })
+        const second = await TaskQueue.enqueueIdempotent({
+          sessionID: session.id,
+          kind: "command",
+          title: "goal",
+          sourceMessageID: MessageID.ascending(),
+          payload: { kind: "command", body: { command: "goal", arguments: "Ship it now" } },
+        })
+
+        expect(second.id).not.toBe(first.id)
+        expect(await TaskQueue.list({ sessionID: session.id })).toHaveLength(2)
+      },
+    })
+  })
+
+  test("does not dedupe a slash command whose earlier row already started or finished", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const payload = { kind: "command", body: { command: "goal", arguments: "Ship it" } }
+        const input = (sourceMessageID: string) => ({
+          sessionID: session.id,
+          kind: "command" as const,
+          title: "goal Ship it",
+          sourceMessageID,
+          payload,
+        })
+
+        const running = await TaskQueue.enqueueIdempotent(input(MessageID.ascending()))
+        await TaskQueue.setStatus({ id: running.id, status: "running" })
+
+        const afterRunning = await TaskQueue.enqueueIdempotent(input(MessageID.ascending()))
+        expect(afterRunning.id).not.toBe(running.id)
+        expect((await TaskQueue.get(afterRunning.id)).status).toBe("queued")
+
+        await TaskQueue.setStatus({ id: afterRunning.id, status: "completed" })
+
+        const afterCompleted = await TaskQueue.enqueueIdempotent(input(MessageID.ascending()))
+        expect(afterCompleted.id).not.toBe(running.id)
+        expect(afterCompleted.id).not.toBe(afterRunning.id)
+        expect((await TaskQueue.get(afterCompleted.id)).status).toBe("queued")
+      },
+    })
+  })
+
+  test("does not dedupe prompt rows with identical text", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const input = (sourceMessageID: string) => ({
+          sessionID: session.id,
+          kind: "prompt" as const,
+          title: "Continue",
+          sourceMessageID,
+          payload: { body: { parts: [{ type: "text", text: "continue" }] } },
+        })
+
+        const first = await TaskQueue.enqueueIdempotent(input(MessageID.ascending()))
+        const second = await TaskQueue.enqueueIdempotent(input(MessageID.ascending()))
+
+        expect(second.id).not.toBe(first.id)
+        expect(await TaskQueue.list({ sessionID: session.id })).toHaveLength(2)
+      },
+    })
+  })
+
   test("recovers interrupted active items after backend restart", async () => {
     await using tmp = await tmpdir({ git: true })
 
