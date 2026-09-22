@@ -6,9 +6,22 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.20.3] - 2026-09-22
+
 ### Changed
 
+- Prepare AX Code 7.20.3 and SDK 2.5.45.
 - Bundle signed AX Engine 7.5.6 on Apple Silicon Macs and require a verified 7.5.6 or newer runtime for configured, PATH, managed, and bundled selection.
+
+- Add provider concurrency admission and extended retries for shared gateway limits.
+- Improve scheduled-session navigation and busy-session follow-up visibility.
+
+### Fixed
+
+- Reject cancelled provider admission even with custom abort reasons or a cancellation racing FIFO handoff, releasing any acquired slots and leases.
+- Prevent a late heartbeat from recreating a released provider lease and delaying subsequent requests.
+- Keep release-side engine downloads and smoke checks aligned with the managed engine version and archive hash.
+- Wait for provider concurrency retries without premature slot disposal or infinite retry loops.
 
 ## [7.20.2] - 2026-09-22
 
