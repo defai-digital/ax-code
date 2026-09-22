@@ -235,7 +235,8 @@ export const McpListCommand = cmd({
           const toolCounts = new Map<string, number>()
           if (args.tools) {
             for (const t of await MCP.listAllTools()) {
-              toolCounts.set(t.server, (toolCounts.get(t.server) ?? 0) + 1)
+              // Command-local counts have one entry per discovered server and are discarded after output.
+              toolCounts.set(t.server, (toolCounts.get(t.server) ?? 0) + 1) // @scan-suppress lifecycle_scan
             }
           }
           const document = buildMcpDocument({

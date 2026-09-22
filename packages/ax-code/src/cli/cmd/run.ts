@@ -989,6 +989,7 @@ export const RunCommand = cmd({
           }
         })()
         const runtimeDirectory = directory || callerCwd
+        // @scan-suppress security_scan - This caller-selected CLI directory is used for display paths, not a filesystem access grant.
         const pathDisplayRoot = directory && path.isAbsolute(directory) ? path.resolve(directory) : process.cwd()
 
         // Skip when attaching: --attach and --runtime connect to an already-running
@@ -1014,6 +1015,7 @@ export const RunCommand = cmd({
           const addDirList = Array.isArray(args["add-dir"]) ? args["add-dir"] : [args["add-dir"]]
           const addDirBase = directory ?? callerCwd
           for (const dirPath of addDirList) {
+            // @scan-suppress security_scan - The CLI caller explicitly grants these directories; existence and realpath are checked below.
             const resolvedDir = path.resolve(addDirBase, dirPath)
             if (!(await Filesystem.exists(resolvedDir))) {
               exitEarly(`Directory not found: ${dirPath}`)
@@ -1038,6 +1040,7 @@ export const RunCommand = cmd({
           const fileBaseDir = directory ?? callerCwd
 
           for (const filePath of list) {
+            // @scan-suppress security_scan - Attachment paths are checked for project containment below and revalidated by the server.
             const resolvedPath = path.resolve(fileBaseDir, filePath)
             if (!(await Filesystem.exists(resolvedPath))) {
               exitEarly(`File not found: ${filePath}`)
@@ -1135,6 +1138,7 @@ export const RunCommand = cmd({
         }
         if (args["append-system-prompt-file"] !== undefined) {
           const file = args["append-system-prompt-file"]
+          // @scan-suppress security_scan - The CLI caller explicitly selects this system-prompt file; local filesystem permissions apply.
           const raw = await readFile(path.resolve(callerCwd, file), "utf8").catch((error: unknown) => {
             exitEarly(`Failed to read system prompt file ${file}: ${toErrorMessage(error)}`)
             return ""
@@ -1311,12 +1315,12 @@ export const RunCommand = cmd({
 
           const eventAbort = new AbortController()
           using _events = defer(() => eventAbort.abort())
-          // @scan-suppress lifecycle_scan - The scoped disposer above aborts the owned SSE subscription on every exit; closeEvents also aborts before returning the iterator.
           // The SSE connect is the first SDK call of the run; the early
           // --timeout (E2) and the signal handlers must be able to cut it
           // too, e.g. for a black-holed attach host. An abort ends the SDK's
           // SSE stream gracefully (the reader is cancelled), so the event
           // loop simply finishes instead of failing.
+          // @scan-suppress lifecycle_scan - The scoped eventAbort disposer and closeEvents cancel this subscription on exit.
           const events = await sdk.event.subscribe(undefined, {
             signal: AbortSignal.any([eventAbort.signal, lifecycle.signal]),
           })
@@ -2106,6 +2110,7 @@ export const RunCommand = cmd({
                 const url = new URL(request.url)
                 if (!isInternalHostname(url.hostname)) throw new Error(`Internal fetch rejected: ${url.hostname}`)
                 ServerRuntimeAuth.apply(request.headers)
+                // @scan-suppress security_scan - This calls the in-process Hono app after the internal-host check, not a network fetch.
                 return Server.Default().fetch(request)
               }) as typeof globalThis.fetch
               const sdk = createAxCodeClient({
