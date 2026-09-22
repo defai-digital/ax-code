@@ -93,7 +93,10 @@ export function scheduledSessionLinks(
       return [
         {
           taskID: task.id,
-          taskTitle: task.title,
+          taskTitle:
+            phase === "running" && ["daily", "weekly", "cron"].includes(task.schedule?.type)
+              ? `R ${task.title}`
+              : task.title,
           lastRunAt: task.lastRunAt ?? 0,
           sessionID: item?.sessionID && knownSessions.has(item.sessionID) ? item.sessionID : undefined,
           status: status ?? (started ? "unknown" : "scheduled"),

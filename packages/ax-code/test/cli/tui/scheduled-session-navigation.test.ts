@@ -27,6 +27,21 @@ function rows(overrides: Partial<ScheduledTaskInfo> = {}, status?: TaskQueueGetR
 }
 
 describe("scheduled task lifetime navigation", () => {
+  test.each([
+    { type: "cron", expression: "*/5 * * * *" },
+    { type: "daily", time: "09:00" },
+    { type: "weekly", day: 1, time: "09:00" },
+  ] as const)("marks $type schedules with R only in Running", (schedule) => {
+    expect(rows({ schedule })[0].taskTitle).toBe("Tokyo weather check")
+    const started = { schedule, lastQueueID: "q", lastRunAt: 10 }
+    expect(rows(started, "running")[0].taskTitle).toBe("R Tokyo weather check")
+    expect(rows(started, "completed")[0].taskTitle).toBe("R Tokyo weather check")
+    expect(rows({ ...started, status: "disabled" }, "completed")[0].taskTitle).toBe("Tokyo weather check")
+    expect(rows({ ...started, schedule: { type: "once", runAt: 10 } }, "running")[0].taskTitle).toBe(
+      "Tokyo weather check",
+    )
+  })
+
   test("a five-minute schedule stays Running between occurrences until the schedule ends", () => {
     const start = 1_790_112_644_000
     const recurring = task({ schedule: { type: "cron", expression: "*/5 * * * *" }, nextRunAt: start })
