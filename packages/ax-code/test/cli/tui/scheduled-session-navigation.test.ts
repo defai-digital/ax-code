@@ -5,6 +5,7 @@ import type {
   ScheduledTaskRunInfo,
 } from "../../../src/cli/tui/component/dialog-scheduled-task-view-model"
 import {
+  scheduledNavigationRun,
   scheduledSessionBuckets,
   scheduledSessionKey,
   scheduledSessionLinks,
@@ -17,83 +18,117 @@ function item(status: TaskQueueGetResponse["status"], sessionID?: string): TaskQ
   return { status, sessionID } as TaskQueueGetResponse
 }
 const sessions = [{ id: "session" }] as Session[]
-const buckets = (tasks: ScheduledTaskInfo[], queue = new Map<string, TaskQueueGetResponse>()) =>
-  scheduledSessionBuckets(scheduledSessionLinks(tasks, queue, sessions), new Set())
+function rows(overrides: Partial<ScheduledTaskInfo> = {}, status?: TaskQueueGetResponse["status"]) {
+  return scheduledSessionLinks(
+    [task(overrides)],
+    status ? new Map([["q", item(status, "session")]]) : new Map(),
+    sessions,
+  )
+}
 
-describe("scheduled task navigation", () => {
-  test("a newly created one-time task appears before its first queue or session exists", () => {
-    const result = buckets([task({ nextRunAt: 1790112644000 })])
-    expect(result.new).toHaveLength(1)
-    expect(result.new[0]).toMatchObject({ taskTitle: "Tokyo weather check", status: "scheduled" })
-    expect(result.new[0].sessionID).toBeUndefined()
-    expect(result.running).toEqual([])
-    expect(result.done).toEqual([])
+describe("scheduled task lifetime navigation", () => {
+  test("a five-minute schedule stays Running between occurrences until the schedule ends", () => {
+    const start = 1_790_112_644_000
+    const recurring = task({ schedule: { type: "cron", expression: "*/5 * * * *" }, nextRunAt: start })
+    expect(rows(recurring)[0].phase).toBe("new")
+    const fired = { ...recurring, lastQueueID: "q", lastRunAt: start, nextRunAt: start + 300_000 }
+    expect(rows(fired, "running")[0]).toMatchObject({ phase: "running", detail: "running" })
+    const waiting = rows(fired, "completed")
+    expect(waiting).toHaveLength(1)
+    expect(waiting[0]).toMatchObject({ phase: "running", detail: "Waiting for next run" })
+    expect(waiting[0].scheduleDetail).toMatch(/^Next /)
+    expect(scheduledSessionBuckets(waiting, new Set())).toEqual({ new: [], running: waiting, done: [] })
+    const next = { ...fired, lastRunAt: start + 300_000, nextRunAt: start + 600_000 }
+    expect(rows(next, "queued")[0].phase).toBe("running")
+    expect(rows(next, "running")[0].phase).toBe("running")
+    expect(rows(next, "completed")[0].phase).toBe("running")
+    const ended = rows({ ...next, status: "disabled", nextRunAt: undefined }, "completed")
+    expect(scheduledSessionBuckets(ended, new Set())).toEqual({ new: [], running: [], done: ended })
+    expect(scheduledSessionBuckets(ended, new Set(ended.map(scheduledSessionKey))).done).toEqual([])
   })
 
   test.each([
-    ["queued", "new"],
-    ["waiting_for_idle", "new"],
-    ["running", "running"],
-    ["blocked_permission", "running"],
-    ["blocked_question", "running"],
-    ["paused", "running"],
-    ["completed", "done"],
-    ["failed", "done"],
-    ["cancelled", "done"],
-  ] as const)("classifies %s as %s even before a session is attached", (status, phase) => {
-    const result = buckets([task({ lastQueueID: "q", lastRunAt: 10 })], new Map([["q", item(status)]]))
-    expect(result[phase]).toHaveLength(1)
-    expect(Object.values(result).flat()).toHaveLength(1)
+    "queued",
+    "waiting_for_idle",
+    "running",
+    "blocked_permission",
+    "blocked_question",
+    "paused",
+    "completed",
+    "failed",
+    "cancelled",
+  ] as const)("an active started schedule stays Running with queue status %s", (status) => {
+    expect(rows({ lastQueueID: "q", lastRunAt: 10 }, status)[0].phase).toBe("running")
   })
 
-  test("attaches a session without changing the execution phase and tolerates removed sessions", () => {
-    for (const sessionID of [undefined, "session", "removed"]) {
-      const result = buckets([task({ lastQueueID: "q", lastRunAt: 10 })], new Map([["q", item("running", sessionID)]]))
-      expect(result.running).toHaveLength(1)
-      expect(result.running[0].sessionID).toBe(sessionID === "session" ? "session" : undefined)
-    }
+  test("paused schedules preserve whether they have ever started", () => {
+    expect(rows({ status: "paused" })[0]).toMatchObject({ phase: "new", detail: "Schedule paused" })
+    expect(rows({ status: "paused", lastQueueID: "q", lastRunAt: 10 }, "completed")[0]).toMatchObject({
+      phase: "running",
+      detail: "Schedule paused",
+    })
+    expect(rows({ status: "paused", lastQueueID: "q", lastRunAt: 10 }, "running")[0]).toMatchObject({
+      phase: "running",
+      scheduleDetail: "Schedule paused",
+    })
   })
 
-  test("recurring completion retains the next occurrence after clearing Done", () => {
+  test("disabled schedules enter Done only after an outstanding run has ended", () => {
+    expect(rows({ status: "disabled", lastQueueID: "q", lastRunAt: 10 }, "running")[0].phase).toBe("running")
+    expect(rows({ status: "disabled", lastQueueID: "q", lastRunAt: 10 }, "cancelled")[0].phase).toBe("done")
+    expect(rows({ status: "disabled" })[0].phase).toBe("done")
+    expect(rows({ status: "disabled", lastQueueID: "missing", lastRunAt: 10 })[0]).toMatchObject({
+      phase: "running",
+      detail: "Status unavailable",
+    })
+  })
+
+  test("one-time failures awaiting retries remain Running until disabled", () => {
+    const retry = { lastRunAt: 10, lastQueueID: "q", nextRunAt: 20 }
+    expect(rows(retry, "failed")[0]).toMatchObject({ phase: "running", detail: "Last run: failed" })
+    expect(rows({ ...retry, status: "disabled", nextRunAt: undefined }, "completed")[0].phase).toBe("done")
+  })
+
+  test("missing sessions and queue data do not hide or complete a started schedule", () => {
     const links = scheduledSessionLinks(
-      [task({ lastQueueID: "q", lastRunAt: 10, nextRunAt: 20 })],
-      new Map([["q", item("completed", "session")]]),
+      [task({ lastQueueID: "q", lastRunAt: 10 })],
+      new Map([["q", item("running", "removed")]]),
       sessions,
     )
-    const result = scheduledSessionBuckets(links, new Set())
-    expect(result.new).toHaveLength(1)
-    expect(result.done).toHaveLength(1)
-    const cleaned = new Set(result.done.map(scheduledSessionKey))
-    expect(scheduledSessionBuckets(links, cleaned)).toEqual({ new: result.new, running: [], done: [] })
-    const later = scheduledSessionLinks(
-      [task({ lastQueueID: "q2", lastRunAt: 20 })],
-      new Map([["q2", item("completed", "session")]]),
-      sessions,
+    expect(links[0].sessionID).toBeUndefined()
+    expect(links[0].phase).toBe("running")
+    expect(rows({ lastRunAt: 10 })[0]).toMatchObject({ phase: "running", detail: "Status unavailable" })
+    expect(rows()[0]).toMatchObject({ phase: "new", status: "scheduled" })
+  })
+
+  test("overlap skip history cannot replace the latest actual execution", () => {
+    const running = { status: "running", time: { created: 10 } } as ScheduledTaskRunInfo
+    const skipped = { status: "skipped_overlap", time: { created: 20 } } as ScheduledTaskRunInfo
+    expect(scheduledNavigationRun([skipped, running])).toBe(running)
+    expect(scheduledNavigationRun([skipped])).toBe(skipped)
+    expect(scheduledNavigationRun([])).toBeUndefined()
+    const links = scheduledSessionLinks(
+      [task({ lastRunAt: 10, nextRunAt: 30 })],
+      new Map(),
+      [],
+      new Map([["task", running]]),
     )
-    expect(scheduledSessionBuckets(later, cleaned).done).toHaveLength(1)
+    expect(links[0].phase).toBe("running")
   })
 
-  test("paused schedules remain New and unavailable status never implies Done", () => {
-    expect(buckets([task({ status: "paused" })]).new[0].detail).toBe("Schedule paused")
-    const result = buckets([task({ lastQueueID: "missing", lastRunAt: 10 })])
-    expect(result.new[0].detail).toBe("Status unavailable")
-    expect(result.done).toEqual([])
+  test("cleaning an ended task never hides a resumed task or a later run", () => {
+    const ended = rows({ status: "disabled", lastQueueID: "q", lastRunAt: 10 }, "completed")
+    const cleaned = new Set(ended.map(scheduledSessionKey))
+    expect(
+      scheduledSessionBuckets(rows({ lastQueueID: "q", lastRunAt: 10 }, "completed"), cleaned).running,
+    ).toHaveLength(1)
+    expect(
+      scheduledSessionBuckets(rows({ status: "disabled", lastQueueID: "q", lastRunAt: 20 }, "completed"), cleaned).done,
+    ).toHaveLength(1)
   })
 
-  test("workflow execution uses run history when there is no queue session", () => {
-    for (const status of ["running", "completed", "failed", "timeout", "missed_skip"] as const) {
-      const links = scheduledSessionLinks(
-        [task({ lastRunAt: 10 })],
-        new Map(),
-        [],
-        new Map([["task", { status } as ScheduledTaskRunInfo]]),
-      )
-      expect(links[0].phase).toBe(status === "running" ? "running" : "done")
-    }
-  })
-
-  test("does not drop distinct tasks sharing a session or tasks beyond the previous cap", () => {
+  test("distinct schedules sharing a session and older active tasks remain visible", () => {
     const tasks = Array.from({ length: 20 }, (_, i) => task({ id: String(i), lastRunAt: i, lastQueueID: "q" }))
-    expect(buckets(tasks, new Map([["q", item("running", "session")]])).running).toHaveLength(20)
+    expect(scheduledSessionLinks(tasks, new Map([["q", item("completed", "session")]]), sessions)).toHaveLength(20)
   })
 })

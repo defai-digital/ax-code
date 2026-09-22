@@ -25,6 +25,7 @@ export type ScheduledSessionLink = {
   status: TaskQueueGetResponse["status"] | ScheduledTaskRunInfo["status"] | "scheduled" | "unknown"
   phase: "new" | "running" | "done"
   detail: string
+  scheduleDetail?: string
 }
 
 export function scheduledSessionKey(link: ScheduledSessionLink): string {
@@ -44,6 +45,12 @@ export function scheduledSessionBuckets(links: readonly ScheduledSessionLink[], 
   }
 }
 
+// Skipped ticks are history, not replacements for the latest actual execution.
+export function scheduledNavigationRun(runs: readonly ScheduledTaskRunInfo[]): ScheduledTaskRunInfo | undefined {
+  const ordered = runs.toSorted((a, b) => b.time.created - a.time.created)
+  return ordered.find((run) => run.status !== "skipped_overlap" && run.status !== "missed_skip") ?? ordered[0]
+}
+
 export function scheduledSessionLinks(
   tasks: readonly ScheduledTaskInfo[],
   queueItems: ReadonlyMap<string, TaskQueueGetResponse>,
@@ -59,41 +66,49 @@ export function scheduledSessionLinks(
       const status = item?.status ?? run?.status
       const terminal =
         status && ["completed", "failed", "cancelled", "timeout", "skipped_overlap", "missed_skip"].includes(status)
-      const queued = status === "queued" || status === "waiting_for_idle"
-      const rows: ScheduledSessionLink[] = []
-      const base = { taskID: task.id, taskTitle: task.title, lastRunAt: task.lastRunAt ?? 0 }
-      if (status) {
-        rows.push({
-          ...base,
+      const started =
+        task.lastRunAt !== undefined ||
+        (status !== undefined && status !== "missed_skip" && status !== "skipped_overlap")
+      const executing = status !== undefined && !terminal
+      // A completed occurrence does not finish the schedule's lifetime.
+      // Missing execution data cannot prove that a disabled schedule has drained.
+      const phase =
+        executing || (!status && started)
+          ? "running"
+          : task.status === "disabled"
+            ? "done"
+            : started
+              ? "running"
+              : "new"
+      const detail =
+        !status && started
+          ? "Status unavailable"
+          : task.status === "paused" && !executing
+            ? "Schedule paused"
+            : terminal && phase === "running"
+              ? status === "completed"
+                ? "Waiting for next run"
+                : `Last run: ${status.replaceAll("_", " ")}`
+              : (status?.replaceAll("_", " ") ?? (phase === "done" ? "Schedule ended" : "Scheduled"))
+      return [
+        {
+          taskID: task.id,
+          taskTitle: task.title,
+          lastRunAt: task.lastRunAt ?? 0,
           sessionID: item?.sessionID && knownSessions.has(item.sessionID) ? item.sessionID : undefined,
-          status,
-          phase: terminal ? "done" : queued ? "new" : "running",
-          detail: status.replaceAll("_", " "),
-        })
-      }
-      // Keep the next occurrence visible after completion, including retries and paused schedules.
-      // During a live run, show one row; its next occurrence returns after the run ends.
-      if (
-        !status ||
-        (terminal && task.status !== "disabled" && (task.nextRunAt !== undefined || task.status === "paused"))
-      ) {
-        const unknown = !status && task.lastRunAt !== undefined
-        rows.push({
-          ...base,
-          status: unknown ? "unknown" : "scheduled",
-          phase: "new",
-          detail: unknown
-            ? "Status unavailable"
-            : task.status === "paused"
-              ? "Schedule paused"
-              : task.status === "disabled"
-                ? "Schedule disabled"
-                : task.nextRunAt !== undefined
+          status: status ?? (started ? "unknown" : "scheduled"),
+          phase,
+          detail,
+          scheduleDetail:
+            phase === "done"
+              ? undefined
+              : task.status === "paused"
+                ? "Schedule paused"
+                : task.status === "active" && task.nextRunAt !== undefined
                   ? `Next ${Locale.todayTimeOrDateTime(task.nextRunAt)}`
-                  : "Scheduled",
-        })
-      }
-      return rows
+                  : undefined,
+        } satisfies ScheduledSessionLink,
+      ]
     })
 }
 
@@ -141,7 +156,7 @@ export function ScheduledSessionNavigation(props: { width: number; sessions: rea
             }
             if (task.lastRunAt !== undefined && !nextItems.has(task.lastQueueID ?? "")) {
               const history = await sdk.client.scheduledTask.listRuns({ scheduledTaskID: task.id })
-              const latest = history.data?.toSorted((a, b) => b.time.created - a.time.created)[0]
+              const latest = scheduledNavigationRun(history.data ?? [])
               if (latest) nextRuns.set(task.id, latest)
             }
           }),
@@ -253,6 +268,11 @@ export function ScheduledSessionNavigation(props: { width: number; sessions: rea
               <text fg={theme.textMuted} selectable={false}>
                 {truncateToCellWidth(link.detail, contentWidth())}
               </text>
+              <Show when={link.scheduleDetail}>
+                <text fg={theme.textMuted} selectable={false}>
+                  {truncateToCellWidth(link.scheduleDetail!, contentWidth())}
+                </text>
+              </Show>
             </box>
           )}
         </For>
