@@ -69,7 +69,8 @@ ax-code run --model qwen --append-system-prompt "Answer in English only" -- "Rev
 
 Disables tools by id for the run (comma-separated, repeatable). It is applied through both server mechanisms: deny
 rules on the created session cover new runs, and a per-request tools map also covers resumed `--session`/`--continue`
-runs. Unknown ids are not an error — MCP tool ids are dynamic — but under the default format each id outside the
+runs. Denying `bash` also denies the `monitor` tool's command, which runs through the same shell launcher; a call that
+hits a deny rule fails as a tool error and counts as a denial for the blocked-run status. Unknown ids are not an error — MCP tool ids are dynamic — but under the default format each id outside the
 built-in tool set prints one stderr warning (suppressed by `--quiet`).
 
 ```bash
@@ -83,7 +84,9 @@ Grants the agent access to one additional directory (repeatable): an `external_d
 Each path must exist and be a directory (resolved against the caller cwd like `--file`). The rule is applied when the
 session is created, so under `--session`/`--continue` it cannot take effect — the CLI prints
 `--add-dir applies only to new sessions` on stderr and continues. It does not change `--file` containment: attachments
-must still live inside the project directory.
+must still live inside the project directory. It covers the file tools (read, glob, grep, list, edit, write); a shell
+command that reaches into the directory through a dynamic path still triggers the interactive-only path-access
+prompt, which a headless run auto-rejects, so prefer the file tools or pass the file content explicitly.
 
 ```bash
 ax-code run --model qwen --add-dir ../design-docs -- "Read ../design-docs/spec.md and summarize it"
@@ -167,8 +170,11 @@ The `error.code` is one of:
 
 `--sandbox read-only|workspace-write|full-access` selects the isolation mode (default `full-access`). In headless runs
 permission asks are auto-rejected and reported as `permission_denied` events, so a run that needs a write it was not
-allowed to make reports `blocked` and exits 3. Use `read-only` only when no mutation is expected; `workspace-write`
-keeps writes inside the project.
+allowed to make reports `blocked` and exits 3. This covers subagents too: asks raised in child sessions created by the
+`task` tool are rejected the same way, and their `permission_denied` events carry the child `sessionID`. Tool calls
+refused by a permission deny rule (for example from `--disallowed-tools`) or by the read-only sandbox count as
+denials as well. The interactive `question` and `plan_exit` tools are always disabled in a headless run, including on
+resumed sessions. Use `read-only` only when no mutation is expected; `workspace-write` keeps writes inside the project.
 
 Under `--attach` the flag is also sent as a per-request isolation policy in every prompt body; the server applies the
 stricter of its own mode and the requested policy, so it can only tighten. The same per-request policy is sent for
@@ -177,11 +183,13 @@ locally owned servers, keeping the behavior uniform.
 ## Structured output
 
 `-o/--output-file <path>` writes the final assistant text to a file. `--output-schema <file>` validates the final text
-as JSON against a JSON Schema file and exits 1 on mismatch. The schema file is preflighted before the model runs — an
-unreadable, unparseable, or non-object schema is a usage error before anything is submitted. On success the parsed
-schema is also sent to the model as the run's `json_schema` output format, and the server retries an invalid reply up
-to twice before the CLI's own final validation runs as the backstop. The final output is the serialized structured
-object (one line of JSON): it is what stdout, `--output-file`, and `result.text` carry:
+as JSON against a JSON Schema file; a mismatch is reported as an `error` event with `result.status` `error` and exit
+
+1. The schema file is preflighted before the model runs — an
+   unreadable, unparseable, or non-object schema is a usage error before anything is submitted. On success the parsed
+   schema is also sent to the model as the run's `json_schema` output format, and the server retries an invalid reply up
+   to twice before the CLI's own final validation runs as the backstop. The final output is the serialized structured
+   object (one line of JSON): it is what stdout, `--output-file`, and `result.text` carry:
 
 ```bash
 ax-code run --model qwen --output-schema ./answer.schema.json -- "Return a JSON object with a summary field"
@@ -309,4 +317,7 @@ When wrapping `ax-code run` from a script, CI step, or another agent:
 - Run from the project directory: a home or multi-repo parent directory is refused in non-interactive mode. Set
   `AX_CODE_ALLOW_BROAD_DIR=1` to override that guard.
 - Usage failures print nothing on stdout (help and the one-line error go to stderr), so a mistyped command leaves
-  stdout empty with exit 1.
+  stdout empty with exit 1. Under `--format json` the usage failure is also written as one `error` line on stdout.
+- A signal that arrives while the process is still loading, before the `run` command is active, ends the process with
+  exit 130 and no output; once the command is active, SIGINT and SIGTERM always produce the single terminal `result`
+  line with status `cancelled`.
