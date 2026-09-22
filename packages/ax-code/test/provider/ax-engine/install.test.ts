@@ -295,28 +295,29 @@ describe("dependency resolution picks up the managed binary", () => {
         [
           "#!/bin/sh",
           'if [ "$1" = "--version" ]; then exit 2; fi',
-          'if [ "$1" = "doctor" ]; then echo \'{"install":{"version":"6.11.0"}}\'; exit 0; fi',
+          'if [ "$1" = "doctor" ]; then echo \'{"install":{"version":"7.5.5"}}\'; exit 0; fi',
           "exit 1",
           "",
         ].join("\n"),
         { mode: 0o755 },
       )
       const status = await getDependencyStatus({ binaryPath: binary })
-      expect(status).toMatchObject({ available: true, mode: "configured", version: "6.11.0", blockers: [] })
+      expect(status).toMatchObject({ available: true, mode: "configured", version: "7.5.5", blockers: [] })
     } finally {
       await fs.rm(dir, { recursive: true, force: true })
     }
   })
 
-  test("blocks configured AX Engine versions older than the supported contract", async () => {
+  test.each(["6.6.0", "7.5.4"])("blocks configured AX Engine version %s below 7.5.5", async (version) => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "axe-version-"))
     try {
       const binary = path.join(dir, "ax-engine")
-      await fs.writeFile(binary, "#!/bin/sh\necho 'ax-engine 6.6.0'\n", { mode: 0o755 })
+      await fs.writeFile(binary, `#!/bin/sh\necho 'ax-engine ${version}'\n`, { mode: 0o755 })
       const status = await getDependencyStatus({ binaryPath: binary })
       expect(status.available).toBe(false)
-      expect(status.version).toContain("6.6.0")
+      expect(status.version).toContain(version)
       expect(status.blockers.join(" ")).toContain("AX_ENGINE_VERSION_UNSUPPORTED")
+      expect(status.blockers.join(" ")).toContain("7.5.5")
     } finally {
       await fs.rm(dir, { recursive: true, force: true })
     }

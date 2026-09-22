@@ -79,9 +79,10 @@ async function version(binaryPath: string): Promise<string | undefined> {
 }
 
 function unsupportedVersionBlocker(detected: string | undefined) {
-  if (!detected) return undefined
-  const parsed = semver.coerce(detected)
-  if (!parsed || semver.gte(parsed, AX_ENGINE_MIN_VERSION)) return undefined
+  const parsed = detected ? semver.coerce(detected) : undefined
+  if (!parsed)
+    return `${AX_ENGINE_ERROR.VersionUnsupported}: a verified AX Engine ${AX_ENGINE_MIN_VERSION} or later is required; detected ${detected ?? "unknown"}`
+  if (semver.gte(parsed, AX_ENGINE_MIN_VERSION)) return undefined
   return `${AX_ENGINE_ERROR.VersionUnsupported}: ax-engine ${parsed.version} is installed; ${AX_ENGINE_MIN_VERSION} or later is required`
 }
 
@@ -112,8 +113,8 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
     noteAxEngineOnce(message)
   }
 
-  // Resolution order: explicit config/env wins. PATH wins only when it meets
-  // the bundled MTP floor. Managed overlay then bundled floor, then missing.
+  // Resolution order: explicit config/env wins when it meets AX_ENGINE_MIN_VERSION.
+  // PATH, managed overlay, and the bundled sidecar must meet the same floor.
   if (candidate) {
     if (!(await isExecutable(candidate))) {
       return {

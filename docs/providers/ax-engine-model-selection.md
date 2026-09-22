@@ -91,7 +91,7 @@ To explicitly select a policy, set `provider.ax-engine.options.mtpPolicy` in `ax
 | `required` (default) | Require an admitted MTP drafter; AX Engine rejects an unavailable drafter instead of silently falling back. |
 
 `AX_ENGINE_MTP_POLICY` provides the same three values when no provider option is set.
-Automatic runtime selection requires AX Engine 7.5.0 or newer to enforce these policies, including
+Automatic runtime selection requires AX Engine 7.5.5 or newer to enforce these policies, including
 the default `required` policy. Explicit `disabled` and `auto` settings still override
 the default. Older/unknown binaries reject policy selection
 before replacing a running engine; upgrade before using the managed policy controls. Historical state files without a recorded policy

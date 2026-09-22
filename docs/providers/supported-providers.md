@@ -217,14 +217,14 @@ AX Engine uses the compact `core` tool profile by default (`bash`, file discover
 
 ### Installing the engine
 
-Local inference needs AX Engine 7.5.0 or later for managed Tiel MTP. Apple Silicon Mac installers already include a self-contained AX Engine sidecar (`engine/<version>/` next to the CLI runtime), so a clean Mac does not need Homebrew.
+Local inference needs AX Engine 7.5.5 or later. Apple Silicon Mac installers already include a self-contained AX Engine sidecar (`engine/<version>/` next to the CLI runtime), so a clean Mac does not need Homebrew.
 
 AX Code then resolves the binary in this order:
 
-1. `provider.ax-engine.options.binaryPath` in `ax-code.json`
-2. the `AX_ENGINE_BIN` environment variable
-3. `ax-engine` on your `PATH` (requires a verified version of at least 7.5.0)
-4. an AX Code-managed overlay install (`ax-code providers ax-engine install`; also requires at least 7.5.0)
+1. `provider.ax-engine.options.binaryPath` in `ax-code.json` (requires a verified version of at least 7.5.5)
+2. the `AX_ENGINE_BIN` environment variable (requires a verified version of at least 7.5.5)
+3. `ax-engine` on your `PATH` (requires a verified version of at least 7.5.5)
+4. an AX Code-managed overlay install (`ax-code providers ax-engine install`; also requires at least 7.5.5)
 5. the sidecar bundled in the current Mac runtime
 
 It first checks `--version` and falls back to `install.version` from `ax-engine doctor --json`. Doctor's exit code reports host readiness (Metal toolchain, MLX files), so a non-zero exit still counts when that JSON contains a version. AX Code owns server startup and normally launches `ax-engine serve` on `127.0.0.1:31418`. The optional Homebrew formula remains an alternative for users who want a brew-owned engine; it is not required.
