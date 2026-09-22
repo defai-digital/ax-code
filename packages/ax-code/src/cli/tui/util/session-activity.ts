@@ -32,6 +32,13 @@ export function knownAttentionRequestCount(permissions: RequestBuckets, question
   return collectAttentionRequests(permissions, questions).size
 }
 
+// One-cell row symbols for scanning attention, retry, and working states on
+// the navigation title row. ASCII only: ambiguous-width glyphs can render as
+// two cells in CJK terminals (same constraint as the footer's ellipsis).
+const ATTENTION_SYMBOL = "!"
+const RETRY_SYMBOL = "~"
+const WORKING_SYMBOL = "*"
+
 export function createSessionActivityIndex(input: {
   t?: Translate
   sessions: readonly SessionTreeNode[]
@@ -88,7 +95,18 @@ export function createSessionActivityIndex(input: {
             : working
               ? uiText("ui.working")
               : undefined
-      return { members, pending, label, working: working || retrying, attention: pending.length > 0 }
+      // The one-cell symbol mirrors the label precedence (attention > retry >
+      // working), so the title-row glyph never disagrees with the text label
+      // below it, and stays undefined exactly when the label does.
+      const symbol = pending.length ? ATTENTION_SYMBOL : retrying ? RETRY_SYMBOL : working ? WORKING_SYMBOL : undefined
+      return {
+        members,
+        pending,
+        label,
+        symbol,
+        working: working || retrying,
+        attention: pending.length > 0,
+      }
     },
   }
 }

@@ -247,10 +247,11 @@ export function SessionNavigation(props: {
             const slot = () => slots().get(row.session.id)
             const selected = () => current() === row.session.id
             const label = () => state()?.label ?? ""
-            // Reserve the scrollbar, selection marker, disclosure, planning
-            // pixel, and pinned slot.
+            const symbol = () => state()?.symbol
+            // Reserve the scrollbar, selection marker, disclosure, status
+            // symbol, planning pixel, and pinned slot.
             const titleWidth = () =>
-              Math.max(0, innerWidth() - 4 - indent() - (slot() ? 2 : 0) - (planning() ? 2 : 0))
+              Math.max(0, innerWidth() - 4 - indent() - (symbol() ? 1 : 0) - (slot() ? 2 : 0) - (planning() ? 2 : 0))
             const openSession = () => route.navigate({ type: "session", sessionID: row.session.id })
             onCleanup(() => rowNodes.delete(row.session.id))
             return (
@@ -289,6 +290,16 @@ export function SessionNavigation(props: {
                         {row.hasChildren ? (effectiveExpanded().has(row.session.id) ? "−" : "+") : " "}
                       </text>
                     </box>
+                    <Show when={symbol()}>
+                      {/* One cell, matching the titleWidth reservation above:
+                          a scan column of state glyphs that stays aligned
+                          across rows at every rail width. Attention keeps the
+                          warning color; retry and working keep primary, the
+                          same split as the label row below. */}
+                      <text flexShrink={0} fg={state()?.attention ? theme.warning : theme.primary} selectable={false}>
+                        {symbol()}
+                      </text>
+                    </Show>
                     <Show when={planning()}>
                       {/* One cell for the pixel plus one of padding in both the
                           animated and the static fallback mode, matching the two
@@ -312,8 +323,11 @@ export function SessionNavigation(props: {
                   </box>
                   <Show when={label()}>
                     <box flexDirection="row" gap={1} paddingLeft={2} onMouseUp={openSession}>
+                      {/* Same state symbol as the title row, so both rows of an
+                          entry speak one shape language; defined whenever the
+                          label is. */}
                       <text flexShrink={0} fg={state()?.attention ? theme.warning : theme.primary} selectable={false}>
-                        {state()?.attention ? "!" : "•"}
+                        {symbol()}
                       </text>
                       <text fg={state()?.attention ? theme.warning : theme.textMuted} selectable={false}>
                         {truncateToCellWidth(label(), Math.max(0, innerWidth() - 6 - indent()))}
@@ -334,7 +348,7 @@ export function SessionNavigation(props: {
         </box>
       </Show>
       <box flexShrink={0} marginTop={1}>
-        <ScheduleStatus width={innerWidth()} compact />
+        <ScheduleStatus width={innerWidth()} compact showWhenEmpty />
         <box flexShrink={0} flexDirection="row" gap={2} flexWrap="wrap">
           <ChromeAction onMouseUp={() => command.trigger("session.navigation")}>/navigation</ChromeAction>
           <ChromeWidthAction width={preferredWidth()} onMouseUp={() => command.trigger("session.navigation.width")} />

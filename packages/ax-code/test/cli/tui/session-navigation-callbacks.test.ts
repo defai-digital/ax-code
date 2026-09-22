@@ -653,3 +653,103 @@ describe("goal planner pixel", () => {
     expect(pixels(rail()).length).toBe(0)
   })
 })
+
+describe("first-row status symbol", () => {
+  const glyphs = (tree: Element) =>
+    collect(tree, (node) => node.type === "text" && ["!", "~", "*"].includes(text(node)))
+
+  test("shows the aggregated working symbol on the title row before the title", () => {
+    const tree = mount(() => SessionNavigation(navigationProps()))
+    // Root aggregates the busy child subtree even while collapsed; the symbol
+    // appears on the title row and again as the label-row marker.
+    const ordered = collect(
+      tree,
+      (node) => node.type === "text" && (text(node) === "*" || text(node) === "Parent session"),
+    )
+    expect(ordered.map((node) => text(node))).toEqual(["*", "Parent session", "*"])
+    expect(text(tree)).toContain("Working")
+  })
+
+  test("marks attention with ! on both rows while keeping the localized label", () => {
+    mocked.permissions = { child: [{ id: "p", sessionID: "child" }] }
+    const tree = mount(() => SessionNavigation(navigationProps()))
+    expect(text(tree)).toContain("Approval needed")
+    const ordered = collect(
+      tree,
+      (node) => node.type === "text" && (text(node) === "!" || text(node) === "Parent session"),
+    )
+    expect(ordered.map((node) => text(node))).toEqual(["!", "Parent session", "!"])
+  })
+
+  test("distinguishes retry from plain working on the first row", () => {
+    mocked.statuses = { child: { type: "retry" } }
+    const tree = mount(() => SessionNavigation(navigationProps()))
+    expect(text(tree)).toContain("Retrying")
+    expect(glyphs(tree).map((node) => text(node))).toEqual(["~", "~"])
+  })
+
+  test("rows without live signals render no symbol and keep the full title width", () => {
+    mocked.statuses = {}
+    const tree = mount(() => SessionNavigation(navigationProps()))
+    expect(glyphs(tree)).toEqual([])
+    expect(text(tree)).toContain("Parent session")
+  })
+
+  test("a disconnected rail suppresses first-row symbols", () => {
+    mocked.connected = false
+    const tree = mount(() => SessionNavigation(navigationProps()))
+    expect(glyphs(tree)).toEqual([])
+  })
+
+  test("long titles still truncate inside the 24-column rail with a symbol", () => {
+    // A fresh id avoids the mocked slot reservation, isolating the symbol's
+    // single cell: innerWidth 22 - 4 fixed - 1 symbol = 17 cells (14 + "...").
+    mocked.sessions = [
+      {
+        id: "long",
+        title: "Extremely long session title that cannot fit",
+        directory: "/workspace",
+        time: { updated: 2 },
+      },
+      { id: "idle", title: "Earlier session", directory: "/workspace", time: { updated: 1 } },
+    ]
+    mocked.statuses = { long: { type: "busy" } }
+    const tree = mount(() => SessionNavigation(navigationProps()))
+    const title = collect(tree, (node) => node.type === "text" && text(node).startsWith("Extremely long"))[0]
+    expect(title).toBeDefined()
+    expect(text(title)).toBe("Extremely long...")
+    expect(glyphs(tree).map((node) => text(node))).toEqual(["*", "*"])
+  })
+
+  test("the goal planner pixel keeps its cell beside the working symbol", () => {
+    mocked.sessions = [
+      ...mocked.sessions,
+      {
+        id: "planner",
+        title: "Goal plan writer",
+        parentID: "root",
+        directory: "/workspace",
+        time: { updated: 5 },
+      },
+    ]
+    mocked.statuses = { child: { type: "busy" }, planner: { type: "busy" } }
+    const tree = mount(() => SessionNavigation({ ...navigationProps(new Set(["root"])), width: 36 }))
+    const ordered = collect(
+      tree,
+      (node) =>
+        node.type === Spinner || (node.type === "text" && (text(node) === "Goal plan writer" || text(node) === "*")),
+    )
+    // Rows: root (*,*), child (*,*), planner (title-row *, pixel, title,
+    // label-row *) — first-row symbols stay left of the animated pixel.
+    expect(ordered.map((node) => (node.type === Spinner ? "pixel" : text(node)))).toEqual([
+      "*",
+      "*",
+      "*",
+      "*",
+      "*",
+      "pixel",
+      "Goal plan writer",
+      "*",
+    ])
+  })
+})

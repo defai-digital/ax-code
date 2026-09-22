@@ -169,3 +169,39 @@ export function scheduleChrome(tasks: readonly ScheduledTaskInfo[], now = Date.n
   }
   return undefined
 }
+
+export type ScheduleLoadState = "loading" | "error" | "ready"
+
+/**
+ * Status for the always-visible schedule entry in the navigation rail.
+ * Unlike scheduleChrome, this also covers loading, error, disconnected, and
+ * empty states.
+ */
+export type ScheduleRailStatus =
+  | ({ kind: "summary"; disconnected: boolean } & ScheduleChrome)
+  | { kind: "status"; status: "loading" | "error" | "offline" | "empty" | "inactive"; tone: ScheduleChromeTone }
+
+export function scheduleStatus(input: {
+  tasks: readonly ScheduledTaskInfo[]
+  loadState: ScheduleLoadState
+  connected: boolean
+  now?: number
+}): ScheduleRailStatus {
+  const now = input.now ?? Date.now()
+  if (!input.connected && input.loadState !== "ready") return { kind: "status", status: "offline", tone: "muted" }
+  if (input.loadState === "loading") return { kind: "status", status: "loading", tone: "muted" }
+  if (input.loadState === "error") return { kind: "status", status: "error", tone: "error" }
+  const chrome = scheduleChrome(input.tasks, now)
+  if (chrome) {
+    return {
+      kind: "summary",
+      compact: chrome.compact,
+      detail: chrome.detail,
+      tone: chrome.tone,
+      disconnected: !input.connected,
+    }
+  }
+  if (!input.connected) return { kind: "status", status: "offline", tone: "muted" }
+  if (input.tasks.length > 0) return { kind: "status", status: "inactive", tone: "muted" }
+  return { kind: "status", status: "empty", tone: "muted" }
+}

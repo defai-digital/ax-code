@@ -191,19 +191,23 @@ function DialogScheduledTaskRuns(props: { task: ScheduledTaskInfo }) {
   const toast = useToast()
 
   const [runs, setRuns] = createSignal<ScheduledTaskRunInfo[]>([])
+  const [runsState, setRunsState] = createSignal<"loading" | "ready" | "error">("loading")
 
   onMount(() => {
     sdk.client.scheduledTask
       .listRuns({ scheduledTaskID: props.task.id })
       .then((result) => {
         if (result.error) {
+          setRunsState("error")
           log.warn("scheduled task runs load failed", { error: result.error, id: props.task.id })
           toast.show({ message: errorMessage(result.error, "Failed to load runs"), variant: "error" })
           return
         }
         setRuns(result.data ?? [])
+        setRunsState("ready")
       })
       .catch((error) => {
+        setRunsState("error")
         log.warn("scheduled task runs load failed", { error, id: props.task.id })
         toast.show({ message: errorMessage(error, "Failed to load runs"), variant: "error" })
       })
@@ -214,14 +218,32 @@ function DialogScheduledTaskRuns(props: { task: ScheduledTaskInfo }) {
     return sync.data.task_queue.find((item) => item.id === run.queueID)?.sessionID
   }
 
-  const options = createMemo(() =>
-    runs().map((run) => ({
+  const options = createMemo(() => {
+    const rows = runs().map((run) => ({
       title: runTitle(run),
       value: run.id,
       description: runDescription(run),
-      footer: automationSessionID(run) ? "enter: open session" : undefined,
-    })),
-  )
+      footer: automationSessionID(run) ? "enter: open session" : uiText("ui.noRecordedAutomationSessionForThisRun"),
+    }))
+    if (rows.length > 0) return rows
+    if (runsState() !== "ready") {
+      return [
+        {
+          title: runsState() === "loading" ? uiText("ui.loading") : "Unable to load runs",
+          value: "unavailable",
+          disabled: true,
+        },
+      ]
+    }
+    return [
+      {
+        title: "No runs yet",
+        value: "empty",
+        description: "Run the task now to record its first run.",
+        disabled: true,
+      },
+    ]
+  })
 
   return (
     <DialogSelect

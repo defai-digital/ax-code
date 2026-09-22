@@ -4,6 +4,7 @@ import {
   runDescription,
   runTitle,
   scheduleChrome,
+  scheduleStatus,
   scheduleSummary,
   sortTasks,
   taskDescription,
@@ -137,5 +138,52 @@ describe("dialog-scheduled-task view model", () => {
       detail: "paused · Task",
       tone: "warning",
     })
+  })
+
+  test("scheduleStatus covers the loading, error, offline, and empty states", () => {
+    expect(scheduleStatus({ tasks: [], loadState: "loading", connected: true })).toEqual({
+      kind: "status",
+      status: "loading",
+      tone: "muted",
+    })
+    expect(scheduleStatus({ tasks: [], loadState: "error", connected: true })).toEqual({
+      kind: "status",
+      status: "error",
+      tone: "error",
+    })
+    expect(scheduleStatus({ tasks: [], loadState: "ready", connected: false })).toEqual({
+      kind: "status",
+      status: "offline",
+      tone: "muted",
+    })
+    expect(scheduleStatus({ tasks: [], loadState: "loading", connected: false })).toEqual({
+      kind: "status",
+      status: "offline",
+      tone: "muted",
+    })
+    expect(scheduleStatus({ tasks: [], loadState: "ready", connected: true })).toEqual({
+      kind: "status",
+      status: "empty",
+      tone: "muted",
+    })
+    expect(scheduleStatus({ tasks: [task({ status: "disabled" })], loadState: "ready", connected: true })).toEqual({
+      kind: "status",
+      status: "inactive",
+      tone: "muted",
+    })
+  })
+
+  test("scheduleStatus retains the live summary and flags disconnection", () => {
+    const now = Date.now()
+    const live = [task({ nextRunAt: now + 3_600_000 })]
+    const connected = scheduleStatus({ tasks: live, loadState: "ready", connected: true, now })
+    expect(connected.kind).toBe("summary")
+    if (connected.kind === "summary") {
+      expect(connected.disconnected).toBe(false)
+      expect(connected.compact.startsWith("Next ")).toBe(true)
+    }
+    const disconnected = scheduleStatus({ tasks: live, loadState: "ready", connected: false, now })
+    expect(disconnected.kind).toBe("summary")
+    if (disconnected.kind === "summary") expect(disconnected.disconnected).toBe(true)
   })
 })
