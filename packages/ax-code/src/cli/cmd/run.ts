@@ -34,11 +34,24 @@ import { Todo } from "../../session/todo"
 import { Locale } from "../../util/locale"
 import { internalBaseUrl, isInternalHostname } from "../../util/internal-url"
 import { isNonEmptyRecord } from "../../util/record"
-import { extractRunFinalAssistantText, handleRunStructuredOutput } from "./run-output"
+import {
+  buildRunEarlyErrorEvent,
+  buildRunResultEvent,
+  extractRunFinalAssistantText,
+  extractRunUsageTotals,
+  handleRunStructuredOutput,
+  isBlockedRun,
+  isRunMutatingToolCompletion,
+  isRunReadOnlyToolDenial,
+  isRunSelfAbortError,
+  resolveRunResultStatus,
+  type RunEarlyErrorCode,
+  type RunUsageTotals,
+} from "./run-output"
 import { printPendingScheduledTaskNotice } from "./run-schedule-notice"
 import { assertLoopbackHttpUrl } from "../../runtime/listen-security"
 import { sameSkuOnConnectedProvider } from "../../provider/model-selectability"
-import { readNonTtyStdin } from "../stdin"
+import { DEFAULT_STDIN_PIPE_QUIET_WINDOW_MS, readNonTtyStdin } from "../stdin"
 import { CLI_CONCISE_MAX_LINES, diffSummary, formatDiffSummary, tailLines } from "../../util/tool-output"
 
 type ToolProps<T extends Tool.Info> = {
@@ -179,6 +192,13 @@ export function formatRunToolFallbackInput(input: unknown): string {
   }
 }
 
+/** Extract `.name` from an unknown error (a rejected HTTP body or a thrown error). */
+function errorNameOf(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null || !("name" in error)) return undefined
+  const name = (error as { name?: unknown }).name
+  return typeof name === "string" ? name : undefined
+}
+
 type RunProviderList = Parameters<typeof sameSkuOnConnectedProvider>[0]
 
 export function findRunModelError(input: {
@@ -197,6 +217,58 @@ export function findRunModelError(input: {
     return (
       `Model "${input.modelID}" not found for provider "${input.providerID}". ` + "Run `ax-code models` for usable IDs."
     )
+  }
+  return undefined
+}
+
+/**
+ * The structured early-error code matching a `findRunModelError` message:
+ * unknown provider vs unknown model on a known provider. Call only when
+ * `findRunModelError` already returned a message.
+ */
+export function findRunModelErrorCode(input: {
+  providers: RunProviderList
+  providerID: string
+  modelID: string
+}): RunEarlyErrorCode {
+  const provider = input.providers.find((item) => item.id === input.providerID)
+  return provider ? "model" : "provider"
+}
+
+/**
+ * Hint appended to a yargs "Unknown argument" failure when the failing
+ * command is `run`, so headless callers can discover the accepted flag
+ * surface without re-reading the full help.
+ */
+export function runUnknownArgumentHint(message: string | undefined, command: string | undefined): string | undefined {
+  if (!message?.startsWith("Unknown argument")) return undefined
+  if (command !== "run") return undefined
+  return "Run `ax-code run --help` to see the accepted flags."
+}
+
+/**
+ * The command yargs is parsing, derived from the raw CLI arguments: the
+ * first non-flag token after the entry. Global value-taking flags
+ * (--log-level, --sandbox, --debug-dir) skip their value so a flag value is
+ * never mistaken for the command, and nothing after `--` counts. Used by the
+ * shared CLI failure handler to attribute an "Unknown argument" error to its
+ * command without depending on yargs internals, which do not expose the
+ * command chain reliably at strict-fail time.
+ */
+export function commandTokenFromArgv(argv: readonly string[]): string | undefined {
+  const valueFlags = new Set(["--log-level", "--sandbox", "--debug-dir"])
+  let skipValue = false
+  for (const token of argv) {
+    if (skipValue) {
+      skipValue = false
+      continue
+    }
+    if (token === "--") return undefined
+    if (token.startsWith("-")) {
+      if (!token.includes("=") && valueFlags.has(token)) skipValue = true
+      continue
+    }
+    return token
   }
   return undefined
 }
@@ -475,7 +547,8 @@ export const RunCommand = cmd({
         default: "default",
         describe:
           "output format: default (final assistant text) or json/jsonl/ndjson " +
-          "(newline-delimited JSON event stream — one JSON object per line, not a single JSON document)",
+          "(newline-delimited JSON event stream — one JSON object per line, not a single JSON document; " +
+          "emits error and permission_denied events and ends with a terminal result line)",
       })
       .option("output-file", {
         alias: ["o"],
@@ -536,6 +609,13 @@ export const RunCommand = cmd({
         describe: "show full tool output (diffs, command output, todo list) instead of concise summaries",
         default: false,
       })
+      .option("quiet", {
+        type: "boolean",
+        describe:
+          "suppress the stderr agent/model header, tool-progress blocks, and non-error warnings " +
+          "(default format; errors on stderr and stdout content are unchanged)",
+        default: false,
+      })
       .option("show-history", {
         type: "boolean",
         describe: "print visible session history when resuming a session (requires --session or --continue)",
@@ -545,6 +625,15 @@ export const RunCommand = cmd({
         type: "number",
         describe: "cap history to the newest N messages (requires --show-history)",
       })
+      .option("timeout", {
+        type: "number",
+        describe: 'abort the run after this many seconds and exit 124 (result.status "timeout")',
+      })
+      .epilog(
+        "When no positional message or --prompt/--prompt-file is given, piped stdin is used as the prompt. " +
+          `The stdin reader waits for a ${DEFAULT_STDIN_PIPE_QUIET_WINDOW_MS} ms quiet window: write your prompt ` +
+          "promptly and close stdin; use --prompt-file for large or slowly produced prompts.",
+      )
       .example('ax-code run --model qwen -- "Review this"', "put the prompt after --")
       .example('ax-code run --prompt "Review this" --model qwen', "same prompt via --prompt")
       .example("ax-code run --prompt-file ./prompt.txt --model qwen", "read the prompt from a file")
@@ -552,19 +641,47 @@ export const RunCommand = cmd({
         "ax-code run --file README.md --prompt Summarize --model qwen",
         "attach a file; --file is not the prompt",
       )
+      .example('echo "Summarize README.md" | ax-code run --model qwen', "read the prompt from piped stdin")
   },
   handler: async (args) => {
     const { Server } = await import("../../server/server")
     const { Provider } = await import("../../provider/provider")
     const { Agent } = await import("../../agent/agent")
     const { ServerRuntimeAuth } = await import("../../server/runtime-auth")
-    const exitEarly = (message: string): never => {
-      UI.error(message)
+    const exitEarly = (message: string, code: RunEarlyErrorCode = "usage"): never => {
+      // Commit the exit code before any output so every early-exit path
+      // carries exit 1 even if a write below throws, and callers that inspect
+      // process.exitCode right at the rejection see it without depending on
+      // the top-level CLI handler.
       process.exitCode = 1
+      // Stream consumers get one structured stdout line before the
+      // human-readable stderr prose so an early exit stays diagnosable.
+      if (isRunEventStreamFormat(args.format)) {
+        process.stdout.write(JSON.stringify(buildRunEarlyErrorEvent(code, message)) + EOL)
+      }
+      UI.error(message)
       throw new UI.CancelledError()
     }
     const callerCwd = Filesystem.callerCwd()
     const previousCwd = process.cwd()
+    // --quiet keeps stderr to errors only: the header, tool-progress blocks,
+    // and non-error warnings are dropped; stdout content is untouched.
+    const quiet = args.quiet === true
+    const warn = (message: string) => {
+      if (!quiet) warnPrefix(message)
+    }
+
+    // Bounded-run state shared by the --timeout timer and the SIGINT handler.
+    // `abortRun` is assigned once `execute` knows the session; both paths route
+    // through it so there is exactly one abort helper for the run.
+    let timedOut = false
+    let cancelled = false
+    let abortRun: (reason: "timeout" | "cancelled") => void = () => {}
+    const onSigint = () => {
+      cancelled = true
+      process.exitCode = 130
+      abortRun("cancelled")
+    }
 
     let promptFileText: string | undefined
     if (args["prompt-file"]) {
@@ -590,7 +707,7 @@ export const RunCommand = cmd({
       try {
         Provider.parseModel(args.model)
       } catch (error) {
-        exitEarly(toErrorMessage(error))
+        exitEarly(toErrorMessage(error), "model")
       }
     }
 
@@ -666,6 +783,10 @@ export const RunCommand = cmd({
       exitEarly("--history-limit must be a positive integer")
     }
 
+    if (args.timeout !== undefined && (!Number.isFinite(args.timeout) || args.timeout <= 0)) {
+      exitEarly("--timeout must be a positive number of seconds", "usage")
+    }
+
     const rules: Permission.Ruleset = [
       {
         permission: "question",
@@ -700,6 +821,10 @@ export const RunCommand = cmd({
       return result.data?.id
     }
 
+    // Token usage of the final assistant message, set while reading the
+    // stored final text; undefined when no counts are available.
+    let finalUsage: RunUsageTotals | undefined
+
     async function readFinalAssistantText(
       sdk: AxCodeClient,
       sessionID: string,
@@ -707,6 +832,9 @@ export const RunCommand = cmd({
     ): Promise<string | undefined> {
       if (!assistantMessageID) return undefined
       const result = await sdk.session.messages({ sessionID })
+      // Side-channel: the same fetch carries the token counts for the
+      // terminal result event; missing counts leave usage undefined.
+      finalUsage = extractRunUsageTotals(result.data, assistantMessageID)
       return extractRunFinalAssistantText(result.data, assistantMessageID)
     }
 
@@ -755,6 +883,12 @@ export const RunCommand = cmd({
       let finalAssistantMessageID: string | undefined
       let submittedMessage: Awaited<ReturnType<typeof sdk.session.prompt>>["data"]
       const observedFinalParts = new Set<string>()
+      // Blocked-run accounting: auto-rejected permission asks (including
+      // read-only sandbox denials that surface as tool errors) vs tool calls
+      // that actually completed a mutation (item: blocked runs exit 3).
+      let permissionDenials = 0
+      let successfulMutations = 0
+      let resultEmitted = false
 
       const toggles = new Map<string, boolean>()
       const observedCompletedMessages = new Set<string>()
@@ -800,19 +934,23 @@ export const RunCommand = cmd({
             !isRunEventStreamFormat(args.format) &&
             toggles.get("start") !== true
           ) {
-            UI.empty()
-            const agentName = await resolveRunAgentDisplayName({
-              agentName: event.properties.info.agent,
-              attached: Boolean(args.attach),
-              listLocalAgents: () => Agent.list(),
-              listAttachedAgents: () =>
-                sdk.app
-                  .agents()
-                  .then((result) => result.data ?? [])
-                  .catch(() => []),
-            })
-            UI.println(`> ${agentName} · ${event.properties.info.modelID}`)
-            UI.empty()
+            // --quiet drops the header line and the display-name lookup it
+            // exists for; the toggle is still set so the check is one-shot.
+            if (!quiet) {
+              UI.empty()
+              const agentName = await resolveRunAgentDisplayName({
+                agentName: event.properties.info.agent,
+                attached: Boolean(args.attach),
+                listLocalAgents: () => Agent.list(),
+                listAttachedAgents: () =>
+                  sdk.app
+                    .agents()
+                    .then((result) => result.data ?? [])
+                    .catch(() => []),
+              })
+              UI.println(`> ${agentName} · ${event.properties.info.modelID}`)
+              UI.empty()
+            }
             toggles.set("start", true)
           }
 
@@ -829,9 +967,14 @@ export const RunCommand = cmd({
             checkDrained?.()
 
             if (part.type === "tool" && (part.state.status === "completed" || part.state.status === "error")) {
+              if (isRunMutatingToolCompletion(part.tool, part.state.status)) successfulMutations++
+              // A mutating call denied by the read-only sandbox surfaces as a
+              // tool error rather than a permission ask; it blocks the run the
+              // same way and feeds the same counter.
+              if (isRunReadOnlyToolDenial(part.state)) permissionDenials++
               if (emit("tool_use", { part })) continue
               if (part.state.status === "completed") {
-                tool(part)
+                if (!quiet) tool(part)
                 continue
               }
               inline({
@@ -857,7 +1000,7 @@ export const RunCommand = cmd({
               !isRunEventStreamFormat(args.format)
             ) {
               if (toggles.get(part.id) === true) continue
-              task(props<typeof TaskTool>(part))
+              if (!quiet) task(props<typeof TaskTool>(part))
               toggles.set(part.id, true)
             }
 
@@ -901,6 +1044,7 @@ export const RunCommand = cmd({
           if (event.type === "session.error") {
             const props = event.properties
             if (props.sessionID !== sessionID || !props.error) continue
+            if (isRunSelfAbortError(String(props.error.name), { timedOut, cancelled })) continue
             observedErrors.add(JSON.stringify(props.error))
             let err = String(props.error.name)
             if ("data" in props.error && props.error.data && "message" in props.error.data) {
@@ -919,9 +1063,14 @@ export const RunCommand = cmd({
           if (event.type === "permission.asked") {
             const permission = event.properties
             if (permission.sessionID !== sessionID) continue
-            warnPrefix(
-              `permission requested: ${permission.permission} (${permission.patterns.join(", ")}); auto-rejecting`,
-            )
+            permissionDenials++
+            // Stream consumers see the denial as an event before the
+            // rejection reaches the server; humans keep the stderr warning.
+            emit("permission_denied", {
+              permission: permission.permission,
+              patterns: permission.patterns,
+            })
+            warn(`permission requested: ${permission.permission} (${permission.patterns.join(", ")}); auto-rejecting`)
             await sdk.permission.reply({
               requestID: permission.id,
               reply: "reject",
@@ -942,19 +1091,19 @@ export const RunCommand = cmd({
             .catch(() => undefined)
 
           if (!modes) {
-            warnPrefix(`failed to list agents from ${args.attach}. Falling back to default agent`)
+            warn(`failed to list agents from ${args.attach}. Falling back to default agent`)
             return undefined
           }
 
           const agent = modes.find((a) => a.name === args.agent)
           if (!agent) {
-            warnPrefix(`agent "${args.agent}" not found. Falling back to default agent`)
+            warn(`agent "${args.agent}" not found. Falling back to default agent`)
             return undefined
           }
 
           const tier = Agent.resolveTier(agent)
           if (tier === "subagent" || tier === "internal") {
-            warnPrefix(`agent "${args.agent}" is a ${tier} agent, not a primary agent. Falling back to default agent`)
+            warn(`agent "${args.agent}" is a ${tier} agent, not a primary agent. Falling back to default agent`)
             return undefined
           }
 
@@ -963,14 +1112,12 @@ export const RunCommand = cmd({
 
         const entry = await Agent.get(args.agent)
         if (!entry) {
-          warnPrefix(`agent "${args.agent}" not found. Falling back to default agent`)
+          warn(`agent "${args.agent}" not found. Falling back to default agent`)
           return undefined
         }
         const entryTier = Agent.resolveTier(entry)
         if (entryTier === "subagent" || entryTier === "internal") {
-          warnPrefix(
-            `agent "${args.agent}" is a ${entryTier} agent, not a primary agent. Falling back to default agent`,
-          )
+          warn(`agent "${args.agent}" is a ${entryTier} agent, not a primary agent. Falling back to default agent`)
           return undefined
         }
         return args.agent
@@ -991,7 +1138,7 @@ export const RunCommand = cmd({
           providerID = parsed.providerID
           modelID = parsed.modelID
         } catch (error) {
-          exitEarly(toErrorMessage(error))
+          exitEarly(toErrorMessage(error), "model")
         }
         runModel = { providerID: providerID!, modelID: modelID! }
         const listProviders = (waitForDiscovery = false) =>
@@ -1019,26 +1166,46 @@ export const RunCommand = cmd({
             })
           : undefined
         if (!providers) {
-          warnPrefix(`failed to list providers; skipping validation for model "${args.model}"`)
+          warn(`failed to list providers; skipping validation for model "${args.model}"`)
         } else {
           const resolved = resolveRunModel({ providers, connected, providerID: providerID!, modelID: modelID! })
           if (!resolved) {
-            const modelError = findRunModelError({ providers, providerID: providerID!, modelID: modelID! })
-            if (modelError) exitEarly(modelError)
+            const modelInput = { providers, providerID: providerID!, modelID: modelID! }
+            const modelError = findRunModelError(modelInput)
+            if (modelError) exitEarly(modelError, findRunModelErrorCode(modelInput))
             if (connected && !connected.includes(providerID!)) {
               exitEarly(
                 `Provider "${providerID!}" is not connected. ` +
                   "Connect it with `ax-code providers login`, or pick an ID from `ax-code models`.",
+                "provider",
               )
             }
           } else if (resolved.providerID !== providerID!) {
-            warnPrefix(`model "${args.model}" is served as "${resolved.providerID}/${resolved.modelID}"`)
+            warn(`model "${args.model}" is served as "${resolved.providerID}/${resolved.modelID}"`)
             runModel = resolved
           }
         }
       }
 
       const sessionID = (await session(sdk)) ?? exitEarly("Session not found")
+
+      // Single abort path shared by the --timeout timer and the SIGINT handler.
+      // Best-effort and never throwing: an already-idle session answers 4xx
+      // (silently ignored), and only unexpected server failures get a debug line.
+      abortRun = (reason) => {
+        void sdk.session
+          .abort({ sessionID })
+          .then((result) => {
+            if (result.error && result.response && result.response.status >= 500) {
+              Log.Default.debug("run abort failed", {
+                sessionID,
+                reason,
+                status: result.response.status,
+              })
+            }
+          })
+          .catch(() => {})
+      }
 
       if (args["show-history"]) {
         const historyLimit = args["history-limit"]
@@ -1083,6 +1250,25 @@ export const RunCommand = cmd({
         (error: unknown) => error,
       )
 
+      // Bound the run: once the prompt is submitted, a timer aborts the session
+      // and lets the normal drain/reconciliation path emit the terminal result
+      // with status "timeout". Cleared on normal completion so the process does
+      // not linger.
+      let timeoutTimer: ReturnType<typeof setTimeout> | undefined
+      if (args.timeout !== undefined) {
+        timeoutTimer = setTimeout(() => {
+          timedOut = true
+          process.exitCode = 124
+          if (!isRunEventStreamFormat(args.format)) {
+            UI.error(`run timed out after ${args.timeout} s`)
+          }
+          abortRun("timeout")
+        }, args.timeout * 1000)
+      }
+      using _timeout = defer(() => {
+        if (timeoutTimer) clearTimeout(timeoutTimer)
+      })
+
       try {
         if (args.command) {
           const response = await sdk.session.command(
@@ -1113,7 +1299,12 @@ export const RunCommand = cmd({
       } catch (e) {
         await closeEvents()
         await loopResult
-        throw e
+        // An abort this process requested (--timeout or SIGINT) can also
+        // surface here if the synchronous submission rejects with the abort
+        // error after `abortRun` fired. That is the expected outcome, not a
+        // failure: fall through to the terminal result path, which reports
+        // status timeout/cancelled. Any other error still propagates.
+        if (!isRunSelfAbortError(errorNameOf(e), { timedOut, cancelled })) throw e
       }
 
       // Give final frames on the separate SSE connection a bounded chance to
@@ -1165,7 +1356,39 @@ export const RunCommand = cmd({
         process.exitCode = 1
       }
       if (error) process.exitCode = 1
+
+      // Terminal result line for stream consumers. Emitted after every other
+      // stdout write so it is always the last line of the run, exactly once
+      // even when the SSE stream ended early and the final reconciliation
+      // replayed the remaining frames. Exit-code precedence (highest first):
+      // a real error (1) beats a SIGINT cancel (130), which beats a timeout
+      // (124), which beats a blocked run (3); success is 0.
+      const runFailed = error !== undefined || loopError !== undefined
+      const runBlocked = !runFailed && isBlockedRun(permissionDenials, successfulMutations)
+      if (runFailed) process.exitCode = 1
+      else if (cancelled) process.exitCode = 130
+      else if (timedOut) process.exitCode = 124
+      else if (runBlocked) process.exitCode = 3
+      if (resultEmitted || !isRunEventStreamFormat(args.format)) return
+      resultEmitted = true
+      process.stdout.write(
+        JSON.stringify(
+          buildRunResultEvent({
+            timestamp: Date.now(),
+            sessionID,
+            status: resolveRunResultStatus({ failed: runFailed, blocked: runBlocked, timedOut, cancelled }),
+            text: storedFinalMessage ?? finalMessage ?? "",
+            permissionDenials,
+            usage: finalUsage,
+          }),
+        ) + EOL,
+      )
     }
+
+    // Register the SIGINT handler only after every early-exit validation has
+    // passed, so the `finally` below always pairs the registration with its
+    // removal and no early-return path leaks a listener.
+    process.once("SIGINT", onSigint)
 
     try {
       if (args.attach) {
@@ -1195,6 +1418,7 @@ export const RunCommand = cmd({
         })
       })
     } finally {
+      process.removeListener("SIGINT", onSigint)
       if (process.cwd() !== previousCwd) {
         try {
           process.chdir(previousCwd)

@@ -3,10 +3,18 @@ import path from "node:path"
 import { readFile, writeFile } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import {
+  buildRunEarlyErrorEvent,
+  buildRunResultEvent,
   extractRunFinalAssistantText,
+  extractRunUsageTotals,
   handleRunStructuredOutput,
+  isBlockedRun,
+  isRunMutatingToolCompletion,
+  isRunReadOnlyToolDenial,
+  isRunSelfAbortError,
   parseFinalJson,
   resolveRunOutputPath,
+  resolveRunResultStatus,
   validateJsonSchema,
 } from "../../src/cli/cmd/run-output"
 
@@ -130,4 +138,173 @@ test("run structured output does not write file after schema failure", async () 
   ).rejects.toThrow("Output schema validation failed")
 
   await expect(readFile(path.join(tmp.path, "result.json"), "utf8")).rejects.toThrow()
+})
+
+test("run result event builder carries usage only when token counts exist", () => {
+  const usage = { input: 10, output: 5, reasoning: 2, cacheRead: 7, cacheWrite: 1 }
+  const withUsage = buildRunResultEvent({
+    timestamp: 123,
+    sessionID: "ses_1",
+    status: "completed",
+    text: "done",
+    permissionDenials: 0,
+    usage,
+  })
+  expect(withUsage).toEqual({
+    type: "result",
+    timestamp: 123,
+    sessionID: "ses_1",
+    status: "completed",
+    text: "done",
+    permissionDenials: 0,
+    usage,
+  })
+
+  const withoutUsage = buildRunResultEvent({
+    timestamp: 456,
+    sessionID: "ses_2",
+    status: "blocked",
+    text: "",
+    permissionDenials: 2,
+  })
+  expect(withoutUsage).toEqual({
+    type: "result",
+    timestamp: 456,
+    sessionID: "ses_2",
+    status: "blocked",
+    text: "",
+    permissionDenials: 2,
+  })
+  expect("usage" in withoutUsage).toBe(false)
+  expect(JSON.stringify(withoutUsage)).not.toContain('"usage"')
+})
+
+test("extractRunUsageTotals flattens final assistant tokens and omits missing or partial counts", () => {
+  const messages = [
+    {
+      info: {
+        id: "msg_user",
+        role: "user",
+        tokens: { input: 1, output: 2, reasoning: 3, cache: { read: 4, write: 5 } },
+      },
+      parts: [],
+    },
+    {
+      info: {
+        id: "msg_final",
+        role: "assistant",
+        tokens: { input: 10, output: 20, reasoning: 30, cache: { read: 40, write: 50 } },
+      },
+      parts: [{ type: "text", text: "answer" }],
+    },
+  ]
+
+  expect(extractRunUsageTotals(messages, "msg_final")).toEqual({
+    input: 10,
+    output: 20,
+    reasoning: 30,
+    cacheRead: 40,
+    cacheWrite: 50,
+  })
+  // User messages never carry run usage; unknown IDs omit the key.
+  expect(extractRunUsageTotals(messages, "msg_user")).toBeUndefined()
+  expect(extractRunUsageTotals(messages, "msg_missing")).toBeUndefined()
+  expect(extractRunUsageTotals(messages, undefined)).toBeUndefined()
+  expect(extractRunUsageTotals(undefined, "msg_final")).toBeUndefined()
+
+  // Assistant message without token counts: usage stays absent.
+  expect(extractRunUsageTotals([{ info: { id: "msg_a", role: "assistant" }, parts: [] }], "msg_a")).toBeUndefined()
+
+  // Partial counts would be a wrong number; they are dropped entirely.
+  expect(
+    extractRunUsageTotals(
+      [
+        {
+          info: { id: "msg_p", role: "assistant", tokens: { input: 1, output: 2, reasoning: 3 } },
+          parts: [],
+        },
+      ],
+      "msg_p",
+    ),
+  ).toBeUndefined()
+})
+
+test("run mutating-tool and blocked-run rules classify recovery correctly", () => {
+  expect(isRunMutatingToolCompletion("write", "completed")).toBe(true)
+  expect(isRunMutatingToolCompletion("edit", "completed")).toBe(true)
+  expect(isRunMutatingToolCompletion("multiedit", "completed")).toBe(true)
+  expect(isRunMutatingToolCompletion("apply_patch", "completed")).toBe(true)
+  expect(isRunMutatingToolCompletion("bash", "completed")).toBe(true)
+  expect(isRunMutatingToolCompletion("read", "completed")).toBe(false)
+  expect(isRunMutatingToolCompletion("bash", "error")).toBe(false)
+  expect(isRunMutatingToolCompletion("bash", "running")).toBe(false)
+
+  expect(isBlockedRun(1, 0)).toBe(true)
+  expect(isBlockedRun(3, 0)).toBe(true)
+  // Denied once, then a mutation completed: recovered, not blocked.
+  expect(isBlockedRun(1, 1)).toBe(false)
+  expect(isBlockedRun(0, 0)).toBe(false)
+
+  expect(resolveRunResultStatus({ failed: false, blocked: false })).toBe("completed")
+  expect(resolveRunResultStatus({ failed: false, blocked: true })).toBe("blocked")
+  // An observed error wins over blocked.
+  expect(resolveRunResultStatus({ failed: true, blocked: true })).toBe("error")
+})
+
+test("resolveRunResultStatus orders error, cancelled, timeout, blocked, completed", () => {
+  // timeout beats blocked.
+  expect(resolveRunResultStatus({ failed: false, blocked: true, timedOut: true })).toBe("timeout")
+  expect(resolveRunResultStatus({ failed: false, blocked: false, timedOut: true })).toBe("timeout")
+  // cancelled beats timeout.
+  expect(resolveRunResultStatus({ failed: false, blocked: true, timedOut: true, cancelled: true })).toBe("cancelled")
+  expect(resolveRunResultStatus({ failed: false, blocked: false, timedOut: false, cancelled: true })).toBe("cancelled")
+  // error beats cancelled, timeout, and blocked.
+  expect(resolveRunResultStatus({ failed: true, blocked: false, timedOut: true, cancelled: true })).toBe("error")
+  expect(resolveRunResultStatus({ failed: true, blocked: true, timedOut: false, cancelled: false })).toBe("error")
+})
+
+test("isRunSelfAbortError is true only for a self-requested MessageAbortedError", () => {
+  // The abort this process requested (--timeout or SIGINT) is the expected
+  // outcome, not a failure.
+  expect(isRunSelfAbortError("MessageAbortedError", { timedOut: true, cancelled: false })).toBe(true)
+  expect(isRunSelfAbortError("MessageAbortedError", { timedOut: false, cancelled: true })).toBe(true)
+  expect(isRunSelfAbortError("MessageAbortedError", { timedOut: true, cancelled: true })).toBe(true)
+  // The same abort error with no timeout and no SIGINT is someone else's
+  // server-side cancel: still a failure.
+  expect(isRunSelfAbortError("MessageAbortedError", { timedOut: false, cancelled: false })).toBe(false)
+  // Any other error is never swallowed.
+  expect(isRunSelfAbortError("UnknownError", { timedOut: true, cancelled: false })).toBe(false)
+  expect(isRunSelfAbortError(undefined, { timedOut: true, cancelled: false })).toBe(false)
+})
+
+test("read-only sandbox tool denials are classified by their error prefix", () => {
+  // prompt-tools throws `Tool denied in read-only mode: <reason>` for a
+  // mutating call denied under --sandbox read-only; it reaches the CLI as a
+  // tool error and must count as a permission denial for blocked runs.
+  expect(isRunReadOnlyToolDenial({ status: "error", error: "Tool denied in read-only mode" })).toBe(true)
+  expect(
+    isRunReadOnlyToolDenial({ status: "error", error: "Tool denied in read-only mode: bash is not permitted" }),
+  ).toBe(true)
+  // Other tool errors, completed tools, and missing error text do not count.
+  expect(isRunReadOnlyToolDenial({ status: "error", error: "Permission denied" })).toBe(false)
+  expect(isRunReadOnlyToolDenial({ status: "error", error: "prefix Tool denied in read-only mode" })).toBe(false)
+  expect(isRunReadOnlyToolDenial({ status: "error" })).toBe(false)
+  expect(isRunReadOnlyToolDenial({ status: "completed", error: "Tool denied in read-only mode" })).toBe(false)
+})
+
+test("run early error event builder emits the structured code shape", () => {
+  expect(buildRunEarlyErrorEvent("provider", 'Unknown provider "x"')).toEqual({
+    type: "error",
+    error: { code: "provider", message: 'Unknown provider "x"' },
+  })
+  expect(buildRunEarlyErrorEvent("usage", "--fork requires --continue or --session")).toEqual({
+    type: "error",
+    error: { code: "usage", message: "--fork requires --continue or --session" },
+  })
+  expect(buildRunEarlyErrorEvent("model", 'Model "m" not found')).toEqual({
+    type: "error",
+    error: { code: "model", message: 'Model "m" not found' },
+  })
+  // The early line carries exactly type + error: no timestamp/sessionID.
+  expect(Object.keys(buildRunEarlyErrorEvent("usage", "x"))).toEqual(["type", "error"])
 })

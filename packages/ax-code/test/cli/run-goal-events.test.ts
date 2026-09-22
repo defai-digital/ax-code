@@ -7,6 +7,7 @@ import { RunCommand } from "../../src/cli/cmd/run"
 test.each(["goal", false])(
   "headless submission keeps handling permissions after an early idle: %s",
   async (command) => {
+    const previousExitCode = process.exitCode
     let events: ServerResponse | undefined
     let submission: ServerResponse | undefined
     let output = ""
@@ -96,11 +97,16 @@ test.each(["goal", false])(
       } as never)
       expect(deadlineFired).toBe(false)
       expect(rejected).toBe(true)
-      expect(output.match(/Permission rejected; alternative work finished/g)).toHaveLength(1)
+      // Once in the text event, once embedded in the terminal result line.
+      expect(output.match(/Permission rejected; alternative work finished/g)).toHaveLength(2)
+      // The run's only interaction was a denied permission and no mutation
+      // ever completed: blocked, exit 3.
+      expect(process.exitCode).toBe(3)
       await expect.poll(() => eventClosed).toBe(true)
     } finally {
       clearTimeout(deadline)
       write.mockRestore()
+      process.exitCode = previousExitCode
       server.closeAllConnections()
       await new Promise<void>((resolve) => server.close(() => resolve()))
     }

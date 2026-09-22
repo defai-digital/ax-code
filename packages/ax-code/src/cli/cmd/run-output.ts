@@ -11,8 +11,166 @@ type RunOutputMessageRecord = {
   info?: {
     id?: string
     role?: string
+    tokens?: {
+      input?: unknown
+      output?: unknown
+      reasoning?: unknown
+      cache?: { read?: unknown; write?: unknown }
+    }
   }
   parts?: RunOutputPartRecord[]
+}
+
+/** Terminal status of a headless `ax-code run`. */
+export type RunResultStatus = "completed" | "blocked" | "error" | "timeout" | "cancelled"
+
+/** Token counts reported on the terminal `result` event, flattened from `info.tokens`. */
+export type RunUsageTotals = {
+  input: number
+  output: number
+  reasoning: number
+  cacheRead: number
+  cacheWrite: number
+}
+
+/** The last line of the run event stream: one record summarizing the whole run. */
+export type RunResultEvent = {
+  type: "result"
+  timestamp: number
+  sessionID: string
+  status: RunResultStatus
+  text: string
+  permissionDenials: number
+  usage?: RunUsageTotals
+}
+
+/** Machine-readable code carried by the structured early-error line on `exitEarly` paths. */
+export type RunEarlyErrorCode = "usage" | "provider" | "model"
+
+/** One stdout line emitted before the stderr prose when the run exits before submitting. */
+export type RunEarlyErrorEvent = {
+  type: "error"
+  error: {
+    code: RunEarlyErrorCode
+    message: string
+  }
+}
+
+export function buildRunResultEvent(input: {
+  timestamp: number
+  sessionID: string
+  status: RunResultStatus
+  text: string
+  permissionDenials: number
+  usage?: RunUsageTotals
+}): RunResultEvent {
+  // `usage` is omitted entirely when no token counts are available; a
+  // present-but-empty usage object would be a wrong number.
+  if (input.usage === undefined) {
+    return {
+      type: "result",
+      timestamp: input.timestamp,
+      sessionID: input.sessionID,
+      status: input.status,
+      text: input.text,
+      permissionDenials: input.permissionDenials,
+    }
+  }
+  return {
+    type: "result",
+    timestamp: input.timestamp,
+    sessionID: input.sessionID,
+    status: input.status,
+    text: input.text,
+    permissionDenials: input.permissionDenials,
+    usage: input.usage,
+  }
+}
+
+export function buildRunEarlyErrorEvent(code: RunEarlyErrorCode, message: string): RunEarlyErrorEvent {
+  return { type: "error", error: { code, message } }
+}
+
+/**
+ * Read token usage from the stored final assistant message. Returns undefined
+ * when the message or its counts are missing or partial — the result event
+ * then omits the `usage` key instead of reporting incomplete numbers.
+ */
+export function extractRunUsageTotals(
+  messages: readonly RunOutputMessageRecord[] | undefined,
+  assistantMessageID: string | undefined,
+): RunUsageTotals | undefined {
+  if (!assistantMessageID) return undefined
+  const message = messages?.find((item) => item.info?.role === "assistant" && item.info.id === assistantMessageID)
+  const tokens = message?.info?.tokens
+  if (!tokens) return undefined
+  const counts = [tokens.input, tokens.output, tokens.reasoning, tokens.cache?.read, tokens.cache?.write]
+  if (counts.some((value) => typeof value !== "number" || !Number.isFinite(value))) return undefined
+  return {
+    input: tokens.input as number,
+    output: tokens.output as number,
+    reasoning: tokens.reasoning as number,
+    cacheRead: tokens.cache?.read as number,
+    cacheWrite: tokens.cache?.write as number,
+  }
+}
+
+/** Tools whose successful completion counts as a mutation for the blocked-run rule. */
+const RUN_MUTATING_TOOLS: ReadonlySet<string> = new Set(["write", "edit", "multiedit", "apply_patch", "bash"])
+
+export function isRunMutatingToolCompletion(tool: string, status: string): boolean {
+  return status === "completed" && RUN_MUTATING_TOOLS.has(tool)
+}
+
+/**
+ * A tool error raised when the read-only sandbox denied a mutating tool call
+ * (`session/prompt/prompt-tools.ts` throws `Tool denied in read-only mode:
+ * <reason>`). It reaches the CLI as a tool error rather than a permission
+ * ask, but represents the same blocked-run condition and feeds the same
+ * denial counter.
+ */
+export function isRunReadOnlyToolDenial(state: { status: string; error?: string }): boolean {
+  return (
+    state.status === "error" && typeof state.error === "string" && /^Tool denied in read-only mode/.test(state.error)
+  )
+}
+
+/**
+ * A run is blocked when every permission ask was denied and none of the
+ * denied mutations ever completed. A run that recovered (denied once, then
+ * completed a mutation) is not blocked.
+ */
+export function isBlockedRun(permissionDenials: number, successfulMutations: number): boolean {
+  return permissionDenials >= 1 && successfulMutations === 0
+}
+
+/**
+ * True when an error is the abort error (`MessageAbortedError`) the server
+ * emits in response to an abort this process requested itself — a `--timeout`
+ * or a SIGINT. Those are the expected terminal outcomes (`timeout` /
+ * `cancelled`), not failures; the run must not report them as an error. Every
+ * other error — including a `MessageAbortedError` that arrives when neither
+ * flag is set (someone else cancelled the session server-side) — is reported
+ * as-is.
+ */
+export function isRunSelfAbortError(
+  errorName: string | undefined,
+  state: { timedOut: boolean; cancelled: boolean },
+): boolean {
+  return (state.timedOut || state.cancelled) && errorName === "MessageAbortedError"
+}
+
+export function resolveRunResultStatus(input: {
+  failed: boolean
+  blocked: boolean
+  timedOut?: boolean
+  cancelled?: boolean
+}): RunResultStatus {
+  if (input.failed) return "error"
+  if (input.cancelled) return "cancelled"
+  if (input.timedOut) return "timeout"
+  if (input.blocked) return "blocked"
+  return "completed"
 }
 
 export type RunStructuredOutputOptions = {

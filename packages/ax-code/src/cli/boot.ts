@@ -31,7 +31,7 @@ import { WikiCommand } from "./cmd/wiki"
 import { ModelsCommand } from "./cmd/models"
 import { ReleaseCommand } from "./cmd/release"
 import { ProvidersCommand } from "./cmd/providers"
-import { RunCommand } from "./cmd/run"
+import { commandTokenFromArgv, RunCommand, runUnknownArgumentHint } from "./cmd/run"
 import { ServeCommand } from "./cmd/serve"
 import { RuntimeCommand } from "./cmd/runtime"
 import { SessionCommand } from "./cmd/session"
@@ -323,6 +323,8 @@ export function cli(argv = hideBin(process.argv)) {
         msg?.startsWith("Invalid values:") ||
         msg?.startsWith("Missing required argument")
       ) {
+        const hint = runUnknownArgumentHint(msg, commandTokenFromArgv(rawArgv))
+        if (hint) process.stderr.write(`${hint}\n`)
         cli.showHelp("log")
       }
       process.exit(1)

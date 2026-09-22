@@ -1,8 +1,9 @@
-import { expect, test } from "vitest"
+import { expect, test, vi } from "vitest"
 import path from "path"
 import { readFile } from "node:fs/promises"
 import yargs from "yargs"
 import {
+  commandTokenFromArgv,
   composeRunMessage,
   findRunModelError,
   formatRunToolFallbackInput,
@@ -13,6 +14,7 @@ import {
   resolveRunAgentDisplayName,
   resolveRunModel,
   RunCommand,
+  runUnknownArgumentHint,
 } from "../../src/cli/cmd/run"
 import { tmpdir } from "../fixture/fixture"
 import { Provider } from "../../src/provider/provider"
@@ -93,6 +95,26 @@ test("run accepts --prompt and --prompt-file", async () => {
   expect(parsed.prompt).toBe("hello from agent")
   expect(parsed["prompt-file"]).toBe("./prompt.txt")
   expect(parsed.model).toBe("qwen")
+})
+
+test("run accepts --quiet as a long-only boolean flag", async () => {
+  const parsed = await parseRunArgv(["--quiet", "hello"])
+  expect(parsed.quiet).toBe(true)
+  const withoutFlag = await parseRunArgv(["hello"])
+  expect(withoutFlag.quiet).toBe(false)
+
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  // Documented in the builder, and no short alias exists.
+  expect(src).toContain('.option("quiet"')
+  expect(src).not.toContain('alias: ["q"]')
+  // --quiet drops the header, completed tool blocks, and warnings; the error
+  // path keeps rendering.
+  expect(src).toContain("if (!quiet) tool(part)")
+  expect(src).toContain("const warn = (message: string) => {")
+  // Piped stdin and its quiet window are documented in the help text.
+  expect(src).toContain("piped stdin is used as the prompt")
+  expect(src).toContain("quiet window")
+  expect(src).toContain('echo "Summarize README.md" | ax-code run --model qwen')
 })
 
 test("run command model validation flags unknown provider or model (#405)", () => {
@@ -613,4 +635,100 @@ test("run exits 1 when --fork is passed without --continue or --session (#416)",
     process.chdir(previous)
     process.exitCode = undefined
   }
+})
+
+test("unknown-argument hint targets only run command failures", () => {
+  const hint = "Run `ax-code run --help` to see the accepted flags."
+  expect(runUnknownArgumentHint("Unknown argument: bogus", "run")).toBe(hint)
+  // Other commands and other failure messages get no run hint.
+  expect(runUnknownArgumentHint("Unknown argument: bogus", "session")).toBeUndefined()
+  expect(runUnknownArgumentHint("Unknown argument: bogus", undefined)).toBeUndefined()
+  expect(runUnknownArgumentHint("Not enough non-option arguments: got 0", "run")).toBeUndefined()
+  expect(runUnknownArgumentHint("Invalid values: format", "run")).toBeUndefined()
+  expect(runUnknownArgumentHint(undefined, "run")).toBeUndefined()
+})
+
+test("command token derivation finds run from raw argv without yargs internals", () => {
+  // The real failing invocation: strict-mode "Unknown argument" while the
+  // run command is being parsed. Derivation must not depend on yargs
+  // internal parse context, which does not expose the command reliably at
+  // fail time.
+  expect(commandTokenFromArgv(["run", "--model", "nope/x", "--nonsense", "--", "hi"])).toBe("run")
+  expect(commandTokenFromArgv(["run", "--bogus"])).toBe("run")
+  // Global flags before the command never hide it, including value flags.
+  expect(commandTokenFromArgv(["--debug", "run", "--bogus"])).toBe("run")
+  expect(commandTokenFromArgv(["--log-level", "DEBUG", "run", "--bogus"])).toBe("run")
+  expect(commandTokenFromArgv(["--log-level=DEBUG", "run", "--bogus"])).toBe("run")
+  // Non-run commands, flag-only argv, and post-`--` text never resolve to run.
+  expect(commandTokenFromArgv(["session", "list"])).toBe("session")
+  expect(commandTokenFromArgv(["--print-logs"])).toBeUndefined()
+  expect(commandTokenFromArgv(["--", "run"])).toBeUndefined()
+  expect(commandTokenFromArgv([])).toBeUndefined()
+})
+
+test("shared CLI failure handler appends the run unknown-argument hint", async () => {
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/boot.ts"), "utf-8")
+  const failStart = src.indexOf(".fail((msg, err) => {")
+  const strict = src.indexOf(".strict()", failStart)
+  expect(failStart).toBeGreaterThan(-1)
+  expect(strict).toBeGreaterThan(failStart)
+  const handler = src.slice(failStart, strict)
+  expect(handler).toContain("runUnknownArgumentHint(msg, commandTokenFromArgv(rawArgv))")
+  expect(handler).toContain("process.stderr.write(`${hint}\\n`)")
+  // The hint lands before the help dump and the exit stays 1.
+  expect(handler.indexOf("if (hint)")).toBeLessThan(handler.indexOf('cli.showHelp("log")'))
+  expect(handler).toContain("process.exit(1)")
+})
+
+test("run --format json writes a structured usage error line on missing prompt", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const previous = process.cwd()
+  process.chdir(tmp.path)
+  let output = ""
+  const write = vi.spyOn(process.stdout, "write").mockImplementation(((chunk: unknown) => {
+    output += String(chunk)
+    return true
+  }) as any)
+  try {
+    await expect(
+      RunCommand.handler({
+        message: [],
+        command: false,
+        "--": [],
+        format: "json",
+      } as never),
+    ).rejects.toThrow()
+    expect(process.exitCode).toBe(1)
+
+    const lines = output.split("\n").filter((line) => line.trim().length > 0)
+    expect(lines).toHaveLength(1)
+    const event = JSON.parse(lines[0])
+    expect(event).toEqual({
+      type: "error",
+      error: { code: "usage", message: missingRunPromptMessage() },
+    })
+  } finally {
+    write.mockRestore()
+    process.chdir(previous)
+    process.exitCode = undefined
+  }
+})
+
+test("run event stream ends with a terminal result record", async () => {
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+
+  expect(src).toContain("buildRunResultEvent(")
+  expect(src).toContain("resolveRunResultStatus({ failed: runFailed, blocked: runBlocked, timedOut, cancelled })")
+  expect(src).toContain("else if (runBlocked) process.exitCode = 3")
+  expect(src).toContain("usage: finalUsage")
+  expect(src).toContain("resultEmitted = true")
+  // Blocked accounting rides the same loop that emits tool_use events.
+  expect(src).toContain("if (isRunMutatingToolCompletion(part.tool, part.state.status)) successfulMutations++")
+  expect(src).toContain('emit("permission_denied", {')
+  // The result write happens after the structured-output wiring, so it is
+  // the final stdout line of the run.
+  const structured = src.indexOf("await handleRunStructuredOutput(storedFinalMessage ?? finalMessage")
+  const resultWrite = src.indexOf("buildRunResultEvent({")
+  expect(structured).toBeGreaterThan(-1)
+  expect(resultWrite).toBeGreaterThan(structured)
 })
