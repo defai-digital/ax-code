@@ -23,15 +23,17 @@ export const TodoWriteTool = Tool.define("todowrite", {
       metadata: {},
     })
 
+    // Echo the stored shape so the tool result matches what todoread returns.
+    const todos = params.todos.map((todo) => Todo.absorbCancellationReason(todo))
     await Todo.update({
       sessionID: ctx.sessionID,
-      todos: params.todos.map((todo) => Todo.absorbCancellationReason(todo)),
+      todos,
     })
     return {
-      title: `${Todo.countActive(params.todos)} todos`,
-      output: JSON.stringify(params.todos, null, 2),
+      title: `${Todo.countActive(todos)} todos`,
+      output: JSON.stringify(todos, null, 2),
       metadata: {
-        todos: params.todos,
+        todos,
       },
     }
   },

@@ -283,8 +283,11 @@ export function SessionNavigation(props: {
                       </text>
                     </box>
                     <Show when={planning()}>
-                      <box flexShrink={0} onMouseUp={openSession}>
-                        <Spinner frames={GOAL_PLANNER_PIXEL_FRAMES} color={theme.primary} fallbackPrefix="… " />
+                      {/* One cell for the pixel plus one of padding in both the
+                          animated and the static fallback mode, matching the two
+                          cells titleWidth reserves above. */}
+                      <box flexShrink={0} paddingRight={1} onMouseUp={openSession}>
+                        <Spinner frames={GOAL_PLANNER_PIXEL_FRAMES} color={theme.primary} fallbackPrefix="…" />
                       </box>
                     </Show>
                     <box flexGrow={1} minWidth={0} onMouseUp={openSession}>
