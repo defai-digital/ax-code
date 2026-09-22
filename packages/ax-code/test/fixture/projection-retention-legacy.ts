@@ -1,3 +1,5 @@
+// Verbatim pre-optimization copy of src/runtime/headless/projection-retention.ts,
+// kept as the reference oracle for projection-retention-equivalence.test.ts.
 /** Reconstructible transcript budgets, separate from authoritative session storage. */
 export const MAX_TRANSCRIPT_BYTES = 16 * 1024 * 1024
 export const MAX_PENDING_MESSAGES = 128
@@ -14,13 +16,6 @@ type Size = { sessionID?: string; info: number; parts: Map<string, number> }
 type Ledger = {
   sizes: Map<string, Size>
   pending: Set<string>
-  /**
-   * Exact sum of sizeTotal(sizes.get(id)) over id in pending, maintained at
-   * every mutation site so the per-token bound check is O(1) instead of a
-   * walk over every pending message and part. Invariant: every id in
-   * pending has a sizes entry, and this equals the recomputed sum.
-   */
-  pendingBytes: number
   floor: Map<string, string>
   delta: Map<string, Map<string, string>>
 }
@@ -28,7 +23,7 @@ const ledgers = new WeakMap<object, Ledger>()
 function ledger(state: State) {
   let value = ledgers.get(state.part)
   if (!value) {
-    value = { sizes: new Map(), pending: new Set(), pendingBytes: 0, floor: new Map(), delta: new Map() }
+    value = { sizes: new Map(), pending: new Set(), floor: new Map(), delta: new Map() }
     ledgers.set(state.part, value)
   }
   return value
@@ -59,12 +54,8 @@ function sizeEntry(state: State, messageID: string, sessionID?: string) {
   return entry
 }
 export function rememberProjectionMessage(state: State, message: { id: string; sessionID: string }) {
-  const book = ledger(state)
-  const entry = sizeEntry(state, message.id, message.sessionID)
-  // Subtract the pre-overwrite total: the message leaves pending entirely.
-  if (book.pending.has(message.id)) book.pendingBytes -= sizeTotal(entry)
-  entry.info = bytes(message)
-  book.pending.delete(message.id)
+  sizeEntry(state, message.id, message.sessionID).info = bytes(message)
+  ledger(state).pending.delete(message.id)
 }
 export function admitsProjectionPart(state: State, part: { messageID: string; sessionID?: string }) {
   const sessionID = owner(state, part.messageID, part.sessionID)
@@ -74,18 +65,10 @@ export function admitsProjectionPart(state: State, part: { messageID: string; se
   return !floor || part.messageID > floor
 }
 export function rememberProjectionPart(state: State, part: { id: string; messageID: string; sessionID?: string }) {
-  const book = ledger(state)
   const sessionID = owner(state, part.messageID, part.sessionID)
-  const entry = sizeEntry(state, part.messageID, sessionID)
-  const before = entry.parts.get(part.id) ?? 0
-  const added = bytes(part)
-  entry.parts.set(part.id, added)
-  if (book.pending.has(part.messageID)) {
-    // Already counted; only the replaced part's contribution changes.
-    book.pendingBytes += added - before
-  } else if (!sessionID || !state.message[sessionID]?.some((message) => message.id === part.messageID)) {
-    book.pending.add(part.messageID)
-    book.pendingBytes += sizeTotal(entry)
+  sizeEntry(state, part.messageID, sessionID).parts.set(part.id, bytes(part))
+  if (!sessionID || !state.message[sessionID]?.some((message) => message.id === part.messageID)) {
+    ledger(state).pending.add(part.messageID)
   }
   boundPending(state)
 }
@@ -96,25 +79,20 @@ export function rememberProjectionDelta(
   suffix: string,
   previousTail: string,
 ) {
-  const book = ledger(state)
-  const size = book.sizes.get(messageID)
-  if (size?.parts.has(partID)) {
-    // Keep the boundary-aware delta: a surrogate pair split across
-    // previousTail and suffix escapes differently than suffix alone.
-    const delta = bytes(previousTail + suffix) - bytes(previousTail)
-    size.parts.set(partID, size.parts.get(partID)! + delta)
-    if (book.pending.has(messageID)) book.pendingBytes += delta
-  }
+  const size = ledger(state).sizes.get(messageID)
+  if (size?.parts.has(partID))
+    size.parts.set(partID, size.parts.get(partID)! + bytes(previousTail + suffix) - bytes(previousTail))
   boundPending(state)
 }
 function boundPending(state: State) {
   const book = ledger(state)
-  // pendingBytes already equals the recomputed total; each eviction below
-  // subtracts the evicted size through forgetProjectionMessage.
-  while (book.pending.size > MAX_PENDING_MESSAGES || book.pendingBytes > MAX_PENDING_BYTES) {
+  let total = 0
+  for (const id of book.pending) total += sizeTotal(book.sizes.get(id)!)
+  while (book.pending.size > MAX_PENDING_MESSAGES || total > MAX_PENDING_BYTES) {
     const id = book.pending.values().next().value
     if (!id) break
     const size = book.sizes.get(id)!
+    total -= sizeTotal(size)
     if (size.sessionID) (state.message_reload ??= {})[size.sessionID] = true
     // Pass the owning session so the eviction raises that session's floor
     // (like every other eviction path here does). Without it, a message
@@ -133,21 +111,12 @@ export function forgetProjectionMessage(state: State, messageID: string, evicted
     if (state.message_truncated) state.message_truncated[evictedSessionID] = true
   }
   delete state.part[messageID]
-  const size = book.sizes.get(messageID)
-  if (size && book.pending.delete(messageID)) book.pendingBytes -= sizeTotal(size)
   book.sizes.delete(messageID)
   book.pending.delete(messageID)
   book.delta.delete(messageID)
 }
 export function forgetProjectionPart(state: State, messageID: string, partID: string) {
-  const book = ledger(state)
-  const size = book.sizes.get(messageID)
-  const previous = size?.parts.get(partID)
-  if (size && previous !== undefined) {
-    size.parts.delete(partID)
-    // Membership persists (info still counts); only this part's bytes leave.
-    if (book.pending.has(messageID)) book.pendingBytes -= previous
-  }
+  ledger(state).sizes.get(messageID)?.parts.delete(partID)
   clearProjectionDelta(state, messageID, partID)
 }
 export function clearProjectionSession(state: State, sessionID: string) {
@@ -182,10 +151,6 @@ export function clearProjectionDelta(state: State, messageID: string, partID: st
 export function refreshProjectionSizes(state: State, sessionID: string) {
   for (const message of state.message[sessionID] ?? []) {
     const book = ledger(state)
-    // Direct sizes removal bypasses forgetProjectionMessage, so settle the
-    // pending total here before the entry is rebuilt below.
-    const stale = book.sizes.get(message.id)
-    if (stale && book.pending.delete(message.id)) book.pendingBytes -= sizeTotal(stale)
     book.sizes.delete(message.id)
     const ids = new Set((state.part[message.id] ?? []).map((part) => (part as { id: string }).id))
     for (const id of book.delta.get(message.id)?.keys() ?? []) {

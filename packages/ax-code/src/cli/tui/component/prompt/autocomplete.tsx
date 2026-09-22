@@ -28,7 +28,7 @@ import { useKV } from "@tui/context/kv"
 import { buildGlyphSet, detectNerdFontTerminal, NERD_FONT_KV_KEY, resolveNerdFontEnabled } from "@tui/ui/glyphs"
 import { Flag } from "@/flag/flag"
 import { stringWidth } from "@/bun/node-compat"
-import { displayOffsetFromStringIndex, stringIndexFromDisplayOffset } from "./prompt-helpers"
+import { displayOffsetFromStringIndex, stringIndexFromDisplayOffset, stringIndicesFromDisplayOffsets } from "./prompt-helpers"
 
 export type AutocompleteGroupEntry =
   | { type: "header"; label: string }
@@ -167,16 +167,17 @@ export function shouldHideAutocompleteOnInput(input: {
   // triggerIndex/cursorOffset are display-width offsets (buffer units);
   // convert before indexing the UTF-16 string so preceding wide (CJK/emoji)
   // characters don't shift the inspected range.
-  const triggerStringIndex = stringIndexFromDisplayOffset(value, triggerIndex)
-
   if (cursorOffset <= triggerIndex) {
     // Textarea cursor state can lag the text mutation by one tick after
     // typing the trigger key. Keep the dropdown open if the trigger is now
     // present at the expected index; a later cursor refresh will settle it.
+    const triggerStringIndex = stringIndexFromDisplayOffset(value, triggerIndex)
     return !(cursorOffset === triggerIndex && value.at(triggerStringIndex) === mode)
   }
 
-  const cursorStringIndex = stringIndexFromDisplayOffset(value, cursorOffset)
+  // This runs per keystroke while the dropdown is open; one walk yields both
+  // indices instead of re-scanning the prefix up to the trigger.
+  const [triggerStringIndex, cursorStringIndex] = stringIndicesFromDisplayOffsets(value, triggerIndex, cursorOffset)
   if (value.slice(triggerStringIndex, cursorStringIndex).match(/\s/)) return true
   if (mode === "/" && value.match(/^\S+\s+\S+\s*$/)) return true
   return false

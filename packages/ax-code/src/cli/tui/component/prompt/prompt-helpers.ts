@@ -37,6 +37,31 @@ export function stringIndexFromDisplayOffset(text: string, displayOffset: number
   return index
 }
 
+/**
+ * Both string indices for an ordered pair of display offsets in one walk.
+ * Equivalent to calling stringIndexFromDisplayOffset twice: the low index is
+ * recorded at the exact iteration where the single-offset walk would stop
+ * (before consuming the character), and the walk then continues to the high
+ * offset. Precondition: 0 <= lowOffset <= highOffset.
+ */
+export function stringIndicesFromDisplayOffsets(
+  text: string,
+  lowOffset: number,
+  highOffset: number,
+): [lowIndex: number, highIndex: number] {
+  if (highOffset <= 0) return [0, 0]
+  let lowIndex: number | undefined = lowOffset <= 0 ? 0 : undefined
+  let width = 0
+  let index = 0
+  for (const char of text) {
+    if (lowIndex === undefined && width >= lowOffset) lowIndex = index
+    if (width >= highOffset) return [lowIndex ?? index, index]
+    width += displayWidthOfChar(char)
+    index += char.length
+  }
+  return [lowIndex ?? index, index]
+}
+
 export function displayOffsetFromStringIndex(text: string, stringIndex: number) {
   if (stringIndex <= 0) return 0
   let width = 0
@@ -257,11 +282,17 @@ export function hasUnfinishedTodosInPromptParts(
   messages: Array<{ id?: string }> | undefined,
   partsByMessage: Record<string, unknown[]>,
 ) {
-  let latestTodos: Array<{ status?: unknown }> | undefined
-  for (const message of messages ?? []) {
+  // Only the newest completed todowrite matters, so walk from the end and
+  // stop at the first one. This runs inside a memo that re-evaluates on every
+  // subagent status event; the forward scan touched every part of every
+  // message through the store proxy each time.
+  const list = messages ?? []
+  for (let messageIndex = list.length - 1; messageIndex >= 0; messageIndex--) {
+    const message = list[messageIndex]!
     if (!message.id) continue
-    for (const part of partsByMessage[message.id] ?? []) {
-      const toolPart = part as {
+    const parts = partsByMessage[message.id] ?? []
+    for (let partIndex = parts.length - 1; partIndex >= 0; partIndex--) {
+      const toolPart = parts[partIndex] as {
         type?: unknown
         tool?: unknown
         state?: {
@@ -275,8 +306,8 @@ export function hasUnfinishedTodosInPromptParts(
       if (toolPart.state?.status !== "completed") continue
       const todos = toolPart.state.metadata?.todos
       if (!Array.isArray(todos)) continue
-      latestTodos = todos as Array<{ status?: unknown }>
+      return (todos as Array<{ status?: unknown }>).some(isActiveTodo)
     }
   }
-  return latestTodos?.some(isActiveTodo) ?? false
+  return false
 }
