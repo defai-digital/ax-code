@@ -1,5 +1,5 @@
 import fs from "node:fs/promises"
-import { unlinkSync } from "node:fs"
+import { unlinkSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { createHash, randomUUID } from "node:crypto"
 import z from "zod"
@@ -160,6 +160,7 @@ async function countLiveLeases(dir: string): Promise<number> {
   let live = 0
   for (const name of entries) {
     if (!name.endsWith(".json")) continue
+    // @scan-suppress security_scan - readdir supplies a single entry name beneath the internal lease directory.
     const file = path.join(dir, name)
     const body = await readLeaseBody(file).catch(() => undefined)
     if (!body) {
@@ -201,6 +202,7 @@ interface HeldLease {
 }
 
 async function writeLease(dir: string, ttlMs: number): Promise<HeldLease> {
+  // @scan-suppress security_scan - The lease filename consists only of the process ID and a generated UUID.
   const file = path.join(dir, `${process.pid}-${randomUUID()}.json`)
   const body: LeaseBody = {
     pid: process.pid,
@@ -216,12 +218,16 @@ async function writeLease(dir: string, ttlMs: number): Promise<HeldLease> {
   } finally {
     await handle.close()
   }
+  // @scan-suppress lifecycle_scan - releaseLease clears the returned interval before synchronously unlinking its file.
   const heartbeat = setInterval(() => {
-    // Refresh acquiredAt so live holders are never pruned mid-request. Best
-    // effort by contract: a failed refresh is logged and ignored.
-    void fs
-      .writeFile(file, JSON.stringify({ ...body, acquiredAt: Date.now() }))
-      .catch((err) => log.warn("provider slot lease heartbeat failed", { file, err }))
+    // Keep this tiny write synchronous with releaseLease: a pending async
+    // write could recreate the file after disposal. r+ also refuses to create
+    // a lease already reclaimed by another process.
+    try {
+      writeFileSync(file, JSON.stringify({ ...body, acquiredAt: Date.now() }), { flag: "r+" })
+    } catch (err) {
+      log.warn("provider slot lease heartbeat failed", { file, err })
+    }
   }, HEARTBEAT_INTERVAL_MS)
   heartbeat.unref()
   return { file, heartbeat }
@@ -277,6 +283,7 @@ async function acquireCrossProcessLease(opts: {
       await sleep(POLL_INTERVAL_MS)
     }
   } catch (err) {
+    if (opts.signal?.aborted) throw abortError()
     if (isAbortError(err)) throw err
     // Fail open, always: Layer 2 is best-effort risk reduction, never a
     // hard gate that can wedge a request Layer 1 already admitted.
@@ -365,6 +372,7 @@ export namespace ProviderConcurrencyGovernor {
     try {
       return await acquireInner(input)
     } catch (err) {
+      if (input.signal?.aborted) throw abortError()
       if (isAbortError(err)) throw err
       log.error("provider concurrency governor failed open", { providerID: input.providerID, err })
       return noopDisposable()
@@ -415,6 +423,7 @@ async function acquireInner(input: ProviderConcurrencyGovernor.AcquireInput): Pr
           if (index !== -1) state.queue.splice(index, 1)
           reject(abortError())
         }
+        // @scan-suppress race_scan - Both settlement wrappers below remove this listener; an abort removes itself through once.
         signal.addEventListener("abort", onAbort, { once: true })
         // `once` removes the listener only after the abort fires. A normal
         // release-handoff resolves the waiter without firing abort, leaving a
@@ -442,6 +451,7 @@ async function acquireInner(input: ProviderConcurrencyGovernor.AcquireInput): Pr
   if (input.crossProcess !== false) {
     try {
       const stateRoot = input.stateRoot ?? Filesystem.resolve(Global.Path.state)
+      // @scan-suppress security_scan - The only variable path component is a fixed-width hexadecimal provider hash.
       const dir = path.join(stateRoot, "provider-slots", providerHash(providerID))
       lease = await acquireCrossProcessLease({
         dir,
@@ -461,6 +471,14 @@ async function acquireInner(input: ProviderConcurrencyGovernor.AcquireInput): Pr
       }
       lease = undefined
     }
+  }
+
+  // A signal can arrive after FIFO handoff or while the lease write awaits
+  // I/O. Ownership has transferred, so unwind both layers before rejecting.
+  if (input.signal?.aborted) {
+    releaseLease(lease)
+    releaseInProcess(state)
+    throw abortError()
   }
 
   let disposed = false

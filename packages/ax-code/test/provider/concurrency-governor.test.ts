@@ -59,6 +59,58 @@ describe("ProviderConcurrencyGovernor", () => {
     else process.env[ENV_LIMIT] = savedEnv
   })
 
+  test("custom pre-abort reasons never fail open into provider admission", async () => {
+    const controller = new AbortController()
+    controller.abort(new Error("User cancelled"))
+    await expect(
+      ProviderConcurrencyGovernor.acquire({
+        providerID: "custom-pre-abort",
+        crossProcess: false,
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" })
+  })
+
+  test("cancellation during slot handoff releases admission to the next waiter", async () => {
+    const input = { providerID: "handoff-abort", limit: 1, crossProcess: false }
+    const held = await ProviderConcurrencyGovernor.acquire(input)
+    const controller = new AbortController()
+    const waiting = ProviderConcurrencyGovernor.acquire({ ...input, signal: controller.signal })
+    held[Symbol.dispose]()
+    controller.abort()
+    await expect(waiting).rejects.toMatchObject({ name: "AbortError" })
+    const nextController = new AbortController()
+    const next = ProviderConcurrencyGovernor.acquire({ ...input, signal: nextController.signal })
+    try {
+      const slot = await Promise.race([
+        next,
+        tick(500).then(() => {
+          throw new Error("Slot leaked")
+        }),
+      ])
+      slot[Symbol.dispose]()
+    } finally {
+      nextController.abort()
+    }
+  })
+
+  test("custom cancellation during cross-process wait rejects and releases the local slot", async () => {
+    await using tmp = await tmpdir()
+    const providerID = "custom-cross-abort"
+    await writeForeignLease(leaseDirFor(tmp.path, providerID))
+    const controller = new AbortController()
+    const pending = ProviderConcurrencyGovernor.acquire({
+      providerID,
+      limit: 1,
+      stateRoot: tmp.path,
+      signal: controller.signal,
+    })
+    await tick(25)
+    controller.abort(new Error("Deadline exceeded"))
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" })
+    using slot = await ProviderConcurrencyGovernor.acquire({ providerID, limit: 1, crossProcess: false })
+  })
+
   describe("in-process semaphore (layer 1)", () => {
     test("admits up to the limit immediately and queues the next acquire until a slot releases", async () => {
       const providerID = "gateway-a"
@@ -276,6 +328,39 @@ describe("ProviderConcurrencyGovernor", () => {
   })
 
   describe("cross-process lease layer (layer 2)", () => {
+    test("a heartbeat cannot recreate a lease after its slot is disposed", async () => {
+      await using tmp = await tmpdir()
+      const providerID = "heartbeat-release"
+      const slot = await ProviderConcurrencyGovernor.acquire({ providerID, limit: 1, stateRoot: tmp.path })
+      const original = fs.writeFile.bind(fs)
+      let finish!: () => void
+      const gate = new Promise<void>((resolve) => {
+        finish = resolve
+      })
+      let pending: Promise<void> | undefined
+      vi.spyOn(fs, "writeFile").mockImplementation((...args) => {
+        pending = gate.then(() => original(...args))
+        return pending
+      })
+      vi.useFakeTimers()
+      try {
+        // The held lease timer was created with real timers, so acquire a
+        // fresh lease under fake timers before triggering its heartbeat.
+        slot[Symbol.dispose]()
+        const held = await ProviderConcurrencyGovernor.acquire({ providerID, limit: 1, stateRoot: tmp.path })
+        vi.advanceTimersByTime(30_000)
+        held[Symbol.dispose]()
+        finish()
+        await pending
+        expect(await listLeases(leaseDirFor(tmp.path, providerID))).toEqual([])
+      } finally {
+        finish()
+        await pending
+        slot[Symbol.dispose]()
+        vi.useRealTimers()
+      }
+    })
+
     test("composed lifecycle: a second in-process acquire waits at layer 1 and takes over the lease on release", async () => {
       await using tmp = await tmpdir()
       const providerID = "gateway-compose"
