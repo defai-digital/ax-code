@@ -33,6 +33,10 @@ const SteerResponse = z.object({
   receipt: SteerReceipt.nullable(),
   reason: z.string().optional(),
 })
+const SteerResponseItemStatus = z.object({ status: z.string() }).passthrough()
+
+/** Statuses `send-now` accepts; anything else means the server already moved the row on. */
+const SEND_NOW_STATUSES = new Set(["queued", "waiting_for_idle", "paused"])
 
 export type SteerFollowUpOutcome =
   | { kind: "delivered"; item: DurableFollowUp }
@@ -112,6 +116,15 @@ export async function steerFollowUp(
   }
   const reason = receipt?.reason ?? parsed.reason ?? "rejected"
   if (FALLBACK_REASONS.has(reason)) {
+    // When the turn ended inside the admission window, the server's restore
+    // path already resumed the held row and may have started it. Asking for
+    // send-now on a running row would 409 and report a failure for a
+    // follow-up that is in fact executing, so only prioritize rows the server
+    // left pending.
+    const status = SteerResponseItemStatus.safeParse(parsed.item)
+    if (status.success && !SEND_NOW_STATUSES.has(status.data.status)) {
+      return { kind: "queued_next", item: parsed.item as DurableFollowUp }
+    }
     // The turn already ended (or never started): move the row to the front so
     // it runs next. This is prioritization, not mid-turn injection.
     try {

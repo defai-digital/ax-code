@@ -32,6 +32,13 @@ function deltaKey(event: StreamEventLike): string {
   return `${sessionID}\0${props.messageID}\0${props.partID}\0${props.field}`
 }
 
+// Three states: absent (legacy producer), a valid non-negative integer, or
+// present but invalid.
+function deltaOffset(value: unknown): number | undefined | "invalid" {
+  if (value === undefined) return undefined
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : "invalid"
+}
+
 /**
  * Merge `from` into `into`. With offsets (accumulated text length before the
  * delta), the merged event keeps the first chunk's offset and only appends
@@ -45,8 +52,12 @@ function mergeDelta(into: StreamEventLike, from: StreamEventLike): StreamEventLi
   const fromProps = from.properties!
   const intoDelta = String(intoProps.delta ?? "")
   const fromDelta = String(fromProps.delta ?? "")
-  const intoOffset = typeof intoProps.offset === "number" ? intoProps.offset : undefined
-  const fromOffset = typeof fromProps.offset === "number" ? fromProps.offset : undefined
+  const intoOffset = deltaOffset(intoProps.offset)
+  const fromOffset = deltaOffset(fromProps.offset)
+  // A present but unusable offset (NaN, negative, fractional) must not fall
+  // into either the legacy concat path or the span math below: NaN defeats
+  // every comparison and would glue an unpositioned chunk onto the group.
+  if (intoOffset === "invalid" || fromOffset === "invalid") return undefined
   if (intoOffset === undefined && fromOffset === undefined) {
     // Legacy producers without offsets: concatenate as before.
     return {
@@ -166,10 +177,16 @@ export function createStreamDeltaCoalescer(options: StreamDeltaCoalescerOptions)
     if (cancelTimer) return
     const elapsed = now() - lastFlushAt
     const delay = elapsed < windowMs ? Math.max(0, windowMs - elapsed) : windowMs
-    cancelTimer = schedule(() => {
+    // An injected scheduler may run the callback synchronously; adopting its
+    // cancel handle afterwards would leave a stale truthy `cancelTimer` that
+    // stops every later armTimer from scheduling at all.
+    let fired = false
+    const cancel = schedule(() => {
+      fired = true
       cancelTimer = undefined
       flush()
     }, delay)
+    if (!fired) cancelTimer = cancel
   }
 
   return {

@@ -182,7 +182,59 @@ describe("coalesceStreamEvents", () => {
   })
 })
 
+describe("coalesceStreamEvents offset validation", () => {
+  test("keeps a delta with a NaN offset separate instead of gluing it onto the group", () => {
+    const first = {
+      type: "message.part.delta",
+      properties: { sessionID: "s1", messageID: "m1", partID: "p1", field: "text", offset: 0, delta: "ab" },
+    }
+    const corrupt = {
+      type: "message.part.delta",
+      properties: { sessionID: "s1", messageID: "m1", partID: "p1", field: "text", offset: Number.NaN, delta: "XY" },
+    }
+    expect(coalesceStreamEvents([first, corrupt])).toEqual([first, corrupt])
+    expect(coalesceStreamEvents([corrupt, first])).toEqual([corrupt, first])
+  })
+
+  test("treats negative and fractional offsets as non-mergeable", () => {
+    const first = {
+      type: "message.part.delta",
+      properties: { sessionID: "s1", messageID: "m1", partID: "p1", field: "text", offset: 0, delta: "ab" },
+    }
+    for (const offset of [-1, 1.5]) {
+      const bad = {
+        type: "message.part.delta",
+        properties: { sessionID: "s1", messageID: "m1", partID: "p1", field: "text", offset, delta: "cd" },
+      }
+      expect(coalesceStreamEvents([first, bad])).toEqual([first, bad])
+    }
+  })
+})
+
 describe("createStreamDeltaCoalescer", () => {
+  test("keeps arming the timer when the scheduler fires synchronously", () => {
+    const emitted: unknown[][] = []
+    const coalescer = createStreamDeltaCoalescer({
+      windowMs: 16,
+      now: () => 0,
+      schedule: (fn) => {
+        fn()
+        return () => undefined
+      },
+      emit: (events) => {
+        emitted.push(events)
+      },
+    })
+    const delta = (text: string) => ({
+      type: "message.part.delta",
+      properties: { messageID: "m1", partID: "p1", field: "text", delta: text },
+    })
+    coalescer.push(delta("a"))
+    coalescer.push(delta("b"))
+    coalescer.push(delta("c"))
+    expect(emitted).toEqual([[delta("a")], [delta("b")], [delta("c")]])
+  })
+
   test("buffers text deltas until the window and merges them", () => {
     const emitted: unknown[][] = []
     const timers: Array<{ fn: () => void; delay: number }> = []

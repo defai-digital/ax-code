@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 import z from "zod"
 import { HTTPException } from "hono/http-exception"
 import { Log } from "@/util/log"
-import type { TaskQueueID } from "./schema"
+import { TaskQueueID } from "./schema"
 import { SessionSteering } from "./steering"
 import { TaskQueue } from "./task-queue"
 import { TaskQueueExecutor } from "./task-queue-executor"
@@ -83,6 +83,41 @@ export namespace TaskQueueSteer {
     return text
   }
 
+  // `tq_<row id>_<generation prefix>_<text hash>`; the trailing two fields are
+  // fixed-width hex, so the row id can be recovered from the receipt alone.
+  const CLIENT_ID = /^tq_(.+)_[0-9a-f]{8}_[0-9a-f]{12}$/
+
+  function clientIDFor(id: TaskQueueID, generation: string, text: string) {
+    return `tq_${id}_${generation.slice(0, 8)}_${createHash("sha256").update(text).digest("hex").slice(0, 12)}`
+  }
+
+  /**
+   * Called by SessionSteering.finish for receipts that were admitted but never
+   * applied. The queue row was cancelled on admission with `steeredInto` set
+   * to that generation; put it back in the queue so the follow-up runs on the
+   * next turn instead of vanishing. Rows already applied, retried, or edited
+   * by the user are left alone.
+   */
+  export async function reconcileDiscarded(sessionID: string, receipts: readonly SessionSteering.Receipt[]) {
+    for (const receipt of receipts) {
+      const match = CLIENT_ID.exec(receipt.clientID)
+      if (!match) continue
+      const parsed = TaskQueueID.zod.safeParse(match[1])
+      if (!parsed.success) continue
+      const id = parsed.data
+      try {
+        const row = await TaskQueue.get(id)
+        if (row.sessionID !== sessionID) continue
+        if (row.status !== "cancelled" || row.payload["steeredInto"] !== receipt.generation) continue
+        const retried = await TaskQueue.retry(id)
+        await TaskQueueExecutor.start(retried)
+        log.info("requeued follow-up whose steer ended before application", { id, generation: receipt.generation })
+      } catch (error) {
+        log.warn("could not requeue a discarded steered follow-up", { id, error })
+      }
+    }
+  }
+
   export async function steer(id: TaskQueueID): Promise<Result> {
     const item = await TaskQueue.get(id)
     if (!STEERABLE_STATUSES.includes(item.status)) {
@@ -97,7 +132,12 @@ export namespace TaskQueueSteer {
     const generation = SessionSteering.view(sessionID).generation
     if (!generation) return { item, receipt: null, reason: "generation_not_active" }
 
-    const clientID = `tq_${id}_${createHash("sha256").update(text).digest("hex").slice(0, 12)}`
+    // Receipts dedupe by clientID against a digest that includes the
+    // generation, so the id must vary per generation: a row restored after an
+    // admission rejection would otherwise hit a permanent conflict when
+    // steered again during a later turn. Within one generation retries of the
+    // same row and text still collapse onto the first receipt.
+    const clientID = clientIDFor(id, generation, text)
 
     // Hold the row so the executor cannot claim it between the generation
     // check and admission. pause() is the guarded atomic transition, and a
@@ -135,8 +175,12 @@ export namespace TaskQueueSteer {
         return { item: cancelled, receipt }
       } catch (error) {
         // The steer is already admitted and durable; a failed audit write must
-        // not mask that. Report the admitted receipt with the row as held.
+        // not mask that. Report the fresh row when it can be read: a raced
+        // claim between the hold and the cancel leaves the row running, and a
+        // synthetic "cancelled" would hide that the follow-up will also run.
         log.warn("steered follow-up could not be marked cancelled", { id, error })
+        const fresh = await TaskQueue.get(id).catch(() => undefined)
+        if (fresh) return { item: fresh, receipt }
         return {
           item: {
             ...held,

@@ -62,11 +62,23 @@ export namespace SessionSteering {
     const current = state().get(sessionID)
     if (!current) return
     current.active = undefined
+    const discarded: Receipt[] = []
     for (const pending of current.receipts.values()) {
       if (pending.receipt.status !== "accepted") continue
       pending.receipt.status = "rejected"
       pending.receipt.reason = "generation_ended_before_application"
       pending.text = undefined
+      discarded.push({ ...pending.receipt })
+    }
+    // An admitted-but-unapplied steer whose text came from a saved follow-up
+    // must not be lost with the generation: the queue row was cancelled on
+    // admission, so hand the discarded receipts back to the queue to restore.
+    // Lazy import keeps the module graph acyclic and works wherever the prompt
+    // loop runs, server or headless.
+    if (discarded.length > 0) {
+      void import("./task-queue-steer")
+        .then(({ TaskQueueSteer }) => TaskQueueSteer.reconcileDiscarded(sessionID, discarded))
+        .catch(() => undefined)
     }
   }
 

@@ -285,9 +285,11 @@ export function SessionNavigation(props: {
                     <Show when={planning()}>
                       {/* One cell for the pixel plus one of padding in both the
                           animated and the static fallback mode, matching the two
-                          cells titleWidth reserves above. */}
+                          cells titleWidth reserves above. The fallback stays
+                          ASCII: U+2026 is ambiguous-width and can render as two
+                          cells in CJK terminals. */}
                       <box flexShrink={0} paddingRight={1} onMouseUp={openSession}>
-                        <Spinner frames={GOAL_PLANNER_PIXEL_FRAMES} color={theme.primary} fallbackPrefix="…" />
+                        <Spinner frames={GOAL_PLANNER_PIXEL_FRAMES} color={theme.primary} fallbackPrefix="*" />
                       </box>
                     </Show>
                     <box flexGrow={1} minWidth={0} onMouseUp={openSession}>

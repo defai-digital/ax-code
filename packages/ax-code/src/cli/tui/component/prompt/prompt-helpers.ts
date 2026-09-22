@@ -133,9 +133,65 @@ export function setPromptPartSourceRange(part: PromptPart, start: number, end: n
 export function relocatePromptPartAfterEditor(part: PromptPart, content: string): PromptPart | null {
   const virtualText = promptPartVirtualText(part)
   if (!virtualText) return part
-
   const index = content.indexOf(virtualText)
   if (index === -1) return null
+  return relocatePromptPartAt(part, content, index)
+}
+
+// Original display offset of a part's virtual text, used to keep parts in
+// document order when several share the same virtual text.
+function promptPartSourceStart(part: PromptPart) {
+  if (part.type === "agent") return part.source?.start ?? 0
+  if (part.type === "file" || part.type === "text") return part.source?.text?.start ?? 0
+  return 0
+}
+
+/**
+ * Relocates every non-text part after an external-editor round-trip. Parts
+ * are matched in their original document order and each match is consumed,
+ * so two attachments with the same virtual text (two files named README.md)
+ * land on their own occurrence instead of both collapsing onto the first.
+ * A part whose text only survives before the cursor (the user reordered the
+ * chips) falls back to the first occurrence no other part has claimed; a
+ * part with no unclaimed occurrence left is dropped. The returned array
+ * keeps the input order.
+ */
+export function relocatePromptPartsAfterEditor(parts: readonly PromptPart[], content: string): PromptPart[] {
+  const ordered = parts
+    .map((part, order) => ({ part, order, start: promptPartSourceStart(part) }))
+    .sort((a, b) => a.start - b.start || a.order - b.order)
+  const relocated: { order: number; part: PromptPart }[] = []
+  const claimed: { start: number; end: number }[] = []
+  const isClaimed = (start: number, end: number) =>
+    claimed.some((span) => start < span.end && end > span.start)
+  // First unclaimed occurrence at or after `from`, or -1.
+  const findUnclaimed = (virtualText: string, from: number) => {
+    let index = content.indexOf(virtualText, from)
+    while (index !== -1 && isClaimed(index, index + virtualText.length)) {
+      index = content.indexOf(virtualText, index + 1)
+    }
+    return index
+  }
+  let cursor = 0
+  for (const entry of ordered) {
+    const virtualText = promptPartVirtualText(entry.part)
+    if (!virtualText) {
+      relocated.push({ order: entry.order, part: entry.part })
+      continue
+    }
+    let index = findUnclaimed(virtualText, cursor)
+    if (index === -1) index = findUnclaimed(virtualText, 0)
+    if (index === -1) continue
+    const part = relocatePromptPartAt(entry.part, content, index)
+    if (part) relocated.push({ order: entry.order, part })
+    claimed.push({ start: index, end: index + virtualText.length })
+    cursor = Math.max(cursor, index + virtualText.length)
+  }
+  return relocated.sort((a, b) => a.order - b.order).map((entry) => entry.part)
+}
+
+function relocatePromptPartAt(part: PromptPart, content: string, index: number): PromptPart | null {
+  const virtualText = promptPartVirtualText(part)
   // Source ranges feed extmarks.create, which expects display-width offsets —
   // convert the UTF-16 indexOf result (and range end) before storing.
   const start = displayOffsetFromStringIndex(content, index)

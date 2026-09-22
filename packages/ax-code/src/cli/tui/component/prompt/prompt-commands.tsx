@@ -5,7 +5,7 @@ import { Editor } from "@tui/util/editor"
 import { errorPayloadMessage } from "@tui/util/error-message"
 import type { DialogContext } from "@tui/ui/dialog"
 import type { CommandOption } from "../dialog-command"
-import { endDisplayOffset, expandPromptTextParts, relocatePromptPartAfterEditor } from "./prompt-helpers"
+import { endDisplayOffset, expandPromptTextParts, relocatePromptPartsAfterEditor } from "./prompt-helpers"
 import type { PromptInfo } from "./history"
 import type { StashEntry } from "./stash-util"
 
@@ -213,9 +213,7 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
         // Filter out parts whose virtual text was deleted
         // this handles a case where the user edits the text in the editor
         // such that the virtual text moves around or is deleted
-        const updatedNonTextParts = nonTextParts
-          .map((part) => relocatePromptPartAfterEditor(part, content))
-          .filter((part) => part !== null)
+        const updatedNonTextParts = relocatePromptPartsAfterEditor(nonTextParts, content)
 
         setStore("prompt", {
           input: content,

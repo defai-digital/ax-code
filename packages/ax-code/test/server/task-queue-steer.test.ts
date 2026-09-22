@@ -160,6 +160,61 @@ test("non-text follow-ups, wrong kinds, and oversize text are rejected with 400"
   })
 })
 
+test("a row retried after a steer can be steered again in a later generation", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const app = Server.Default()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({})
+      SessionSteering.begin(session.id, new AbortController().signal)
+      const item = await enqueueFollowUp(session.id, "same text, later turn")
+      expect((await steerRequest(app, tmp.path, item.id)).status).toBe(200)
+      SessionSteering.finish(session.id)
+
+      // The row comes back to the queue and the next turn starts.
+      await TaskQueue.retry(item.id)
+      SessionSteering.begin(session.id, new AbortController().signal)
+      const generation = SessionSteering.view(session.id).generation!
+
+      const again = await steerRequest(app, tmp.path, item.id)
+      expect(again.status).toBe(200)
+      const result = TaskQueueSteer.Result.parse(await again.json())
+      expect(result.receipt?.status).toBe("accepted")
+      expect(result.receipt?.generation).toBe(generation)
+      expect(result.item.payload.steeredInto).toBe(generation)
+    },
+  })
+})
+
+test("a steer admitted but never applied returns the row to the queue when the generation ends", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const app = Server.Default()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({})
+      SessionSteering.begin(session.id, new AbortController().signal)
+      const item = await enqueueFollowUp(session.id, "do not lose me")
+      const response = await steerRequest(app, tmp.path, item.id)
+      expect(response.status).toBe(200)
+      expect((await TaskQueue.get(item.id)).status).toBe("cancelled")
+
+      // The turn ends (interrupt, provider error) before the next step boundary.
+      SessionSteering.finish(session.id)
+
+      const deadline = Date.now() + 5000
+      let row = await TaskQueue.get(item.id)
+      while (row.status === "cancelled" && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 25))
+        row = await TaskQueue.get(item.id)
+      }
+      expect(row.status).not.toBe("cancelled")
+      expect(["queued", "waiting_for_idle", "running"]).toContain(row.status)
+    },
+  })
+})
+
 test("steering an unknown or re-steered row fails cleanly", async () => {
   await using tmp = await tmpdir({ git: true })
   const app = Server.Default()

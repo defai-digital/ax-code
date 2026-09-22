@@ -153,6 +153,42 @@ describe("steerFollowUp", () => {
     ])
   })
 
+  test("does not send-now a row the server already restarted after the generation ended", async () => {
+    const item = row({ id: "tas_1" })
+    const { fake, calls } = sdk({
+      steer: () => ({
+        body: {
+          item: { ...item, status: "running" },
+          receipt: { status: "rejected", reason: "generation_not_active" },
+        },
+      }),
+      sendNow: () => ({ status: 409, body: { message: "Cannot send now task queue item tas_1 while it is running." } }),
+    })
+    const outcome = await steerFollowUp(fake, item)
+    expect(outcome.kind).toBe("queued_next")
+    if (outcome.kind === "queued_next") expect(outcome.item.status).toBe("running")
+    expect(calls.map((call) => call.url)).toEqual(["http://localhost:4096/task-queue/tas_1/steer"])
+  })
+
+  test("still prioritizes a rejected row the server left pending", async () => {
+    const item = row({ id: "tas_1" })
+    const { fake, calls } = sdk({
+      steer: () => ({
+        body: {
+          item: { ...item, status: "waiting_for_idle" },
+          receipt: { status: "rejected", reason: "generation_not_active" },
+        },
+      }),
+      sendNow: () => ({ body: { ...item, status: "queued", position: 0 } }),
+    })
+    const outcome = await steerFollowUp(fake, item)
+    expect(outcome.kind).toBe("queued_next")
+    expect(calls.map((call) => call.url)).toEqual([
+      "http://localhost:4096/task-queue/tas_1/steer",
+      "http://localhost:4096/task-queue/tas_1/send-now",
+    ])
+  })
+
   test("admission rejections and transport failures leave the row alone", async () => {
     const rejected = sdk({
       steer: () => ({ body: { item: row({ id: "tas_1" }), receipt: { status: "rejected", reason: "admission_rejected" } } }),

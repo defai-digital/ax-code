@@ -8,6 +8,7 @@ import {
   promptHistoryNavigationAllowed,
   promptPartExtmarkView,
   relocatePromptPartAfterEditor,
+  relocatePromptPartsAfterEditor,
   setPromptPartSourceRange,
   stringIndexFromDisplayOffset,
 } from "../../../src/cli/tui/component/prompt/prompt-helpers"
@@ -177,6 +178,31 @@ describe("prompt helpers", () => {
       },
     })
     expect(relocatePromptPartAfterEditor(part, "deleted")).toBeNull()
+  })
+
+  test("gives attachments with identical virtual text their own occurrence", () => {
+    const file = (path: string, start: number): PromptInfo["parts"][number] => ({
+      type: "file",
+      mime: "text/markdown",
+      url: `file://${path}`,
+      filename: "README.md",
+      source: { type: "file", path, text: { value: "README.md", start, end: start + 9 } },
+    })
+    const parts = [file("/a/README.md", 0), file("/b/README.md", 10)]
+
+    const relocated = relocatePromptPartsAfterEditor(parts, "see README.md and README.md")
+
+    expect(relocated).toHaveLength(2)
+    expect(relocated[0]).toMatchObject({ source: { path: "/a/README.md", text: { start: 4, end: 13 } } })
+    expect(relocated[1]).toMatchObject({ source: { path: "/b/README.md", text: { start: 18, end: 27 } } })
+
+    // Reordered in the editor: the second chip now precedes the first one.
+    const swapped = relocatePromptPartsAfterEditor([file("/a/README.md", 10), file("/b/README.md", 0)], "README.md README.md")
+    expect(swapped[0]).toMatchObject({ source: { path: "/a/README.md", text: { start: 10 } } })
+    expect(swapped[1]).toMatchObject({ source: { path: "/b/README.md", text: { start: 0 } } })
+
+    // Deleted text drops only that part.
+    expect(relocatePromptPartsAfterEditor(parts, "see README.md only")).toHaveLength(1)
   })
 
   test("relocates virtual source ranges in display units after wide characters and newlines", () => {
