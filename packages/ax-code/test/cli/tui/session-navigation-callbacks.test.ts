@@ -110,7 +110,7 @@ const disposals: (() => void)[] = []
 beforeEach(() => {
   vi.clearAllMocks()
   mocked.connected = true
-  mocked.kv = {}
+  mocked.kv = { navigation_filter: "recent" }
   const [revision, setRevision] = createSignal(0)
   mocked.revision = revision
   mocked.invalidate = () => {
@@ -240,6 +240,14 @@ describe("session navigation callbacks", () => {
     ])
     expect(mocked.navigate).not.toHaveBeenCalled()
     expect(mocked.reply).not.toHaveBeenCalled()
+  })
+
+  test("defaults to Active before Recent without a saved preference", () => {
+    delete mocked.kv.navigation_filter
+    const tree = mount(() => SessionNavigation(navigationProps()))
+    expect(text(tree)).not.toContain("Earlier session")
+    expect(text(tree).indexOf("Active")).toBeLessThan(text(tree).indexOf("Recent"))
+    expect(sessionPicker(true).options.map((option) => option.value)).not.toContain("idle")
   })
 
   test("restores hidden history without deleting sessions or resetting pins", () => {

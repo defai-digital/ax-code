@@ -244,7 +244,7 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
     <box>
       <Show when={props.navigation}>
         <box flexDirection="row" gap={2} paddingLeft={4}>
-          <For each={["recent", "active"] as const}>
+          <For each={["active", "recent"] as const}>
             {(value) => (
               <box onMouseUp={() => kv.set("navigation_filter", value)}>
                 <text fg={filter() === value ? theme.accent : theme.textMuted} selectable={false}>

@@ -50,9 +50,11 @@ describe("navigation scope and active filter", () => {
   ])("labels project %s without assuming the host path separator", (directory, expected) =>
     expect(projectLabel(directory)).toBe(expected),
   )
-  test("invalid stored filters fall back to recent", () => {
+  test("missing or invalid stored filters fall back to active", () => {
     expect(navigationFilter("active")).toBe("active")
-    expect(navigationFilter({ active: true })).toBe("recent")
+    expect(navigationFilter({ active: true })).toBe("active")
+    expect(navigationFilter(undefined)).toBe("active")
+    expect(navigationFilter("recent")).toBe("recent")
   })
 })
 

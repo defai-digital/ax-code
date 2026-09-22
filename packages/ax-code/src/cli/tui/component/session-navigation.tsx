@@ -189,7 +189,7 @@ export function SessionNavigation(props: {
       <ScheduledSessionNavigation width={innerWidth()} sessions={sessions()} />
       <box width={innerWidth()} flexShrink={0} backgroundColor={theme.backgroundElement}>
         <box flexShrink={0} flexDirection="row" gap={1} paddingLeft={1} marginBottom={filter() === "active" ? 0 : 1}>
-          <For each={["recent", "active"] as const}>
+          <For each={["active", "recent"] as const}>
             {(value) => (
               <box
                 flexShrink={0}

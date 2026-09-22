@@ -4,7 +4,7 @@ import { orderRootSessions } from "../component/session-list-data"
 export type NavigationFilter = "recent" | "active"
 
 export function navigationFilter(value: unknown): NavigationFilter {
-  return value === "active" ? "active" : "recent"
+  return value === "recent" ? "recent" : "active"
 }
 
 /** Rail-only recents cutoff. Zero means the bar has not been cleared. */
