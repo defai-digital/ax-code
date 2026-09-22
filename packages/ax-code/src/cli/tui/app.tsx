@@ -728,6 +728,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       statuses: sync.data.session_status,
       permissions: sync.data.permission,
       questions: sync.data.question,
+      tree: sync.sessionTree?.(),
     })
   })
   createEffect(() => {
@@ -793,7 +794,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const pendingRequests = createPendingRequestTracker()
   createEffect(() => {
     const sessionID = route.data.type === "session" ? route.data.sessionID : undefined
-    const family = familySessionIDs(sync.data.session, sessionID)
+    const family = familySessionIDs(sync.data.session, sessionID, sync.sessionTree?.())
     const outside = [
       ...outsideFamilyRequests(sync.data.permission, family).map((request) => ({
         ...request,

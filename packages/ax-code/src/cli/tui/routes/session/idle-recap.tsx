@@ -48,6 +48,7 @@ export function IdleRecap(props: { sessionID: string }) {
         sessions: sync.data.session,
         statuses: sync.data.session_status,
         parentSessionID: props.sessionID,
+        tree: sync.sessionTree?.(),
       }),
       hasMessages: messages.some((message) => message.role === "user"),
       enabled: tuiConfig?.idle_recap?.enabled ?? true,

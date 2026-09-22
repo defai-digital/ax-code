@@ -1,5 +1,5 @@
 import { english, type Translate } from "../i18n"
-import { createSessionTreeIndex, type SessionTreeNode } from "./session-tree"
+import { createSessionTreeIndex, type SessionTreeIndex, type SessionTreeNode } from "./session-tree"
 import type { PendingRequestRef } from "./pending-request-notices"
 
 export type AttentionRequest = PendingRequestRef & { kind: "approval" | "question" }
@@ -41,9 +41,12 @@ export function createSessionActivityIndex(input: {
   /** Precomputed knownAttentionRequests(permissions, questions); callers that
    *  build several indexes per change share one sorted list this way. */
   requests?: readonly AttentionRequest[]
+  /** Prebuilt index over exactly `sessions` (the shared Sync memo for the
+   *  full store list); callers indexing a filtered subset must omit it. */
+  tree?: SessionTreeIndex
 }) {
   const uiText = input.t ?? english
-  const tree = createSessionTreeIndex(input.sessions)
+  const tree = input.tree ?? createSessionTreeIndex(input.sessions)
   const requests = input.requests ?? knownAttentionRequests(input.permissions, input.questions)
   const bySession = new Map<string, AttentionRequest[]>()
   for (const request of requests) {

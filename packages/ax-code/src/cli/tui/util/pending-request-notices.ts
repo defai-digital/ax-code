@@ -1,4 +1,4 @@
-import { createSessionTreeIndex } from "./session-tree"
+import { createSessionTreeIndex, type SessionTreeIndex } from "./session-tree"
 
 // Surfaces permission/question requests that the current route cannot answer
 // (PRD-2026-09-12). The session route renders prompts only for the open
@@ -17,8 +17,9 @@ export type PendingRequestRef = {
 export function familySessionIDs(
   sessions: readonly { id: string; parentID?: string }[],
   currentSessionID: string | undefined,
+  tree?: SessionTreeIndex,
 ): Set<string> {
-  return createSessionTreeIndex(sessions).subtree(currentSessionID)
+  return (tree ?? createSessionTreeIndex(sessions)).subtree(currentSessionID)
 }
 
 export function requestsInSessionTree<T extends PendingRequestRef>(

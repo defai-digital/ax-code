@@ -21,7 +21,7 @@ function rng(seed: number) {
 }
 
 type Event =
-  | { kind: "part"; sessionID: string; messageID: string; partID: string; size: number }
+  | { kind: "part"; sessionID: string; messageID: string; partID: string; size: number; shape?: string }
   | { kind: "delta"; messageID: string; partID: string; suffix: string }
   | { kind: "message"; sessionID: string; messageID: string }
   | { kind: "forgetPart"; messageID: string; partID: string }
@@ -59,6 +59,10 @@ function generate(next: () => number, count: number): Event[] {
         messageID,
         partID: pick(PART_IDS),
         size: big ? 100_000 + Math.floor(next() * 500_000) : Math.floor(next() * 64),
+        // Streaming snapshots extend the previous text; some end on a lone
+        // high surrogate that the next snapshot completes, some shrink, some
+        // replace the text outright, and a few carry no text at all.
+        shape: next() < 0.5 ? "extend" : next() < 0.7 ? "surrogate" : next() < 0.8 ? "shrink" : next() < 0.9 ? "replace" : "notext",
       })
     } else if (roll < 0.8) {
       const emoji = next() < 0.1
@@ -105,7 +109,29 @@ function apply(mod: Module, state: State, tails: Map<string, string>, event: Eve
     case "part": {
       const parts = (state.part[event.messageID] ??= [])
       const existing = parts.findIndex((part) => (part as { id: string }).id === event.partID)
-      const part = { id: event.partID, messageID: event.messageID, sessionID: event.sessionID, text: "a".repeat(event.size) }
+      const previous = existing >= 0 ? ((parts[existing] as { text?: string }).text ?? "") : ""
+      let text: string | undefined
+      switch (event.shape) {
+        case "extend":
+          text = previous + "é\"\\".repeat(1 + (event.size % 5)) + "a".repeat(event.size % 40)
+          break
+        case "surrogate":
+          // Complete a dangling high surrogate first, then leave a new one.
+          text = (previous.endsWith("\ud83d") ? previous + "\ude00" : previous) + "x".repeat(event.size % 9) + "\ud83d"
+          break
+        case "shrink":
+          text = previous.slice(0, Math.floor(previous.length / 2))
+          break
+        case "notext":
+          text = undefined
+          break
+        default:
+          text = "a".repeat(event.size)
+      }
+      const part =
+        text === undefined
+          ? { id: event.partID, messageID: event.messageID, sessionID: event.sessionID, type: "tool", state: { status: "completed" } }
+          : { id: event.partID, messageID: event.messageID, sessionID: event.sessionID, text }
       if (existing >= 0) parts[existing] = part
       else parts.push(part)
       mod.rememberProjectionPart(state, part)

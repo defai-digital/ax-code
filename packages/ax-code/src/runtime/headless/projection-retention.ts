@@ -13,7 +13,16 @@ type State = {
 // `admitted` is the session whose message list currently contains the message;
 // it lets every size mutation route its byte delta to that session's transcript
 // total without scanning the list.
-type Size = { sessionID?: string; admitted?: string; info: number; parts: Map<string, number> }
+type Size = {
+  sessionID?: string
+  admitted?: string
+  info: number
+  parts: Map<string, number>
+  /** Last measured text per part: the exact serialized byte size of that
+   *  string reference, so a snapshot that only extended the text costs
+   *  O(suffix) instead of re-serializing the whole part. */
+  textMemo?: Map<string, { text: string; entryBytes: number }>
+}
 type Ledger = {
   sizes: Map<string, Size>
   pending: Set<string>
@@ -58,6 +67,35 @@ function ledger(state: State) {
 }
 function bytes(value: unknown) {
   return Buffer.byteLength(JSON.stringify(value) ?? "", "utf8")
+}
+const TEXT_KEY_BYTES = Buffer.byteLength('"text":', "utf8")
+/**
+ * bytes(part) without serializing the accumulated text on every snapshot.
+ * JSON.stringify of a plain object is "{" + entries joined by "," + "}", so
+ * its length is the text-free remainder plus the text entry plus one comma
+ * when the remainder has any entry; key order does not change the sum. The
+ * text entry is memoized per part: an unchanged reference costs nothing and a
+ * pure extension is measured as bytes(tail + suffix) - bytes(tail), the same
+ * boundary-aware arithmetic the delta path uses (a lone surrogate at the old
+ * end pairs with the suffix's first unit, so one unit of tail suffices).
+ */
+function partBytes(entry: Size, part: { id: string; text?: unknown }) {
+  if (typeof part.text !== "string") {
+    entry.textMemo?.delete(part.id)
+    return bytes(part)
+  }
+  const rest: Record<string, unknown> = { ...part }
+  delete rest.text
+  const restBytes = bytes(rest)
+  const memo = entry.textMemo?.get(part.id)
+  let textBytes: number
+  if (memo && memo.text === part.text) textBytes = memo.entryBytes
+  else if (memo && part.text.length >= memo.text.length && part.text.startsWith(memo.text)) {
+    const tail = memo.text.slice(-1)
+    textBytes = memo.entryBytes + bytes(tail + part.text.slice(memo.text.length)) - bytes(tail)
+  } else textBytes = bytes(part.text)
+  ;(entry.textMemo ??= new Map()).set(part.id, { text: part.text, entryBytes: textBytes })
+  return restBytes + TEXT_KEY_BYTES + textBytes + (restBytes > 2 ? 1 : 0)
 }
 function sizeTotal(size: Size) {
   let total = size.info
@@ -130,7 +168,7 @@ export function rememberProjectionPart(state: State, part: { id: string; message
   const sessionID = owner(state, part.messageID, part.sessionID)
   const entry = sizeEntry(state, part.messageID, sessionID)
   const before = entry.parts.get(part.id) ?? 0
-  const added = bytes(part)
+  const added = partBytes(entry, part)
   entry.parts.set(part.id, added)
   // Pending and transcript accounting are independent: a message backfilled
   // into a transcript while its parts were still pending is counted in both,
@@ -210,6 +248,7 @@ export function forgetProjectionPart(state: State, messageID: string, partID: st
   const previous = size?.parts.get(partID)
   if (size && previous !== undefined) {
     size.parts.delete(partID)
+    size.textMemo?.delete(partID)
     // Membership persists (info still counts); only this part's bytes leave.
     if (book.pending.has(messageID)) book.pendingBytes -= previous
     if (size.admitted) creditTranscript(book, size.admitted, -previous)

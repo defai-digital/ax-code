@@ -3,7 +3,7 @@ import { formatDuration } from "@/util/format"
 import { Locale } from "@/util/locale"
 import type { CompactionBudget } from "@/session/compaction-budget"
 import { parseStepTokenWindows, stepDecodeTotals } from "./step-windows"
-import { createSessionTreeIndex } from "../../util/session-tree"
+import { createSessionTreeIndex, type SessionTreeIndex } from "../../util/session-tree"
 
 export type FooterSessionStatus =
   | {
@@ -363,13 +363,16 @@ export function hasActiveSubagentInSessionTree(input: {
   sessions: readonly { id: string; parentID?: string }[]
   statuses?: Record<string, { type: string } | undefined>
   parentSessionID: string
+  /** Prebuilt index over exactly `sessions` (the shared Sync memo). */
+  tree?: SessionTreeIndex
 }): boolean {
-  const descendants = createSessionTreeIndex(input.sessions).subtree(input.parentSessionID)
+  const descendants = (input.tree ?? createSessionTreeIndex(input.sessions)).subtree(input.parentSessionID)
   descendants.delete(input.parentSessionID)
-  return [...descendants].some((id) => {
+  for (const id of descendants) {
     const status = input.statuses?.[id]
-    return status !== undefined && status.type !== "idle"
-  })
+    if (status !== undefined && status.type !== "idle") return true
+  }
+  return false
 }
 
 // While subagents work, the parent's own status stays "idle" and the footer
@@ -382,10 +385,12 @@ export function footerSubagentStatusView(input: {
   statuses?: Record<string, FooterSessionStatus | undefined>
   parentSessionID: string
   now?: number
+  /** Prebuilt index over exactly `sessions` (the shared Sync memo). */
+  tree?: SessionTreeIndex
 }): (FooterSessionStatusView & { running: number }) | undefined {
   const uiText = input.t ?? english
   let running = 0
-  const descendants = createSessionTreeIndex(input.sessions).subtree(input.parentSessionID)
+  const descendants = (input.tree ?? createSessionTreeIndex(input.sessions)).subtree(input.parentSessionID)
   descendants.delete(input.parentSessionID)
   for (const id of descendants) {
     const status = input.statuses?.[id]

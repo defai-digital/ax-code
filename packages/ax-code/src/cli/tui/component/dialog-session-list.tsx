@@ -162,6 +162,7 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
       statuses: sync.data.session_status,
       permissions: sync.data.permission,
       questions: sync.data.question,
+      tree: sync.sessionTree?.(),
     })
     const today = new Date().toDateString()
     const pinnedIDs = local.session.pinned()

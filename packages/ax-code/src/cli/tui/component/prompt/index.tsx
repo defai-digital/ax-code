@@ -595,6 +595,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
       statuses: sync.data.session_status,
       parentSessionID: treeRootID() ?? props.sessionID,
       now: Date.now(),
+      tree: sync.sessionTree?.(),
     })
   })
 
@@ -1055,6 +1056,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
         sessions: sync.data.session,
         statuses: sync.data.session_status,
         parentSessionID: treeRootID() ?? props.sessionID,
+        tree: sync.sessionTree?.(),
       })
     )
       return false

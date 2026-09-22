@@ -93,3 +93,23 @@ test("evicted and oversized subtrees still return complete independent results",
   first.clear()
   expect(large.subtree("node-0").size).toBe(17_000)
 })
+
+test("each iterates the same ids as subtree and hasChildren reflects the children map", () => {
+  const index = createSessionTreeIndex([
+    { id: "root" },
+    { id: "child", parentID: "root" },
+    { id: "grandchild", parentID: "child" },
+    { id: "lonely" },
+  ])
+  const seen: string[] = []
+  index.each("root", (id) => seen.push(id))
+  expect(seen.sort()).toEqual([...index.subtree("root")].sort())
+  const none: string[] = []
+  index.each(undefined, (id) => none.push(id))
+  expect(none).toEqual([])
+  expect(index.hasChildren("root")).toBe(true)
+  expect(index.hasChildren("child")).toBe(true)
+  expect(index.hasChildren("grandchild")).toBe(false)
+  expect(index.hasChildren("lonely")).toBe(false)
+  expect(index.hasChildren("missing")).toBe(false)
+})

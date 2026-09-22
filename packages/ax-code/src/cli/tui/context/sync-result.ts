@@ -1,4 +1,5 @@
 import { findByID, findWorkspace, sessionRuntimeStatus } from "./sync-query"
+import { createSessionTreeIndex, type SessionTreeIndex } from "../util/session-tree"
 
 export interface SyncResultStoreState<
   TSession extends { id: string } = { id: string },
@@ -28,6 +29,9 @@ export function createSyncContextValue<
   workspaceSync: TWorkspaceSync
   bootstrap: TBootstrap
   runtime: TRuntime
+  /** Shared parent/child index over the full store session list, rebuilt
+   *  only when the list structure or a parentID changes. */
+  sessionTree?: () => SessionTreeIndex
 }) {
   type Session = TStore["session"][number]
   type Message = TStore["message"][string] extends Array<infer TItem> ? TItem : never
@@ -69,5 +73,7 @@ export function createSyncContextValue<
     },
     runtime: input.runtime,
     bootstrap: input.bootstrap,
+    /** Falls back to a fresh build when the provider did not supply a memo (tests). */
+    sessionTree: input.sessionTree ?? (() => createSessionTreeIndex(input.store.session)),
   }
 }

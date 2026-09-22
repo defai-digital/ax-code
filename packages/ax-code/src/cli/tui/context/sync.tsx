@@ -1,11 +1,12 @@
 import type { Message, Provider, Session, Part, Todo, SessionStatus } from "@ax-code/sdk/v2"
 import { createStore, produce } from "solid-js/store"
+import { createSessionTreeIndex } from "../util/session-tree"
 import { useSDK } from "@tui/context/sdk"
 import { createSimpleContext } from "./helper"
 import type { Snapshot } from "@/snapshot"
 import { useExit } from "./exit"
 import { useArgs } from "./args"
-import { createEffect, on, onMount, onCleanup, batch } from "solid-js"
+import { createEffect, createMemo, on, onMount, onCleanup, batch } from "solid-js"
 import { Log } from "@/util/log"
 import type { SessionGoal } from "@/session/goal"
 import { withTimeout } from "@/util/timeout"
@@ -257,6 +258,11 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       startupCoordinator,
     })
 
+    // One tree index for every consumer that reads the full session list.
+    // Iterating the store array and reading id/parentID is what the memo
+    // tracks, so in-place splices and parent changes rebuild it while title
+    // and status writes do not; consumers keep their own status reads.
+    const sessionTree = createMemo(() => createSessionTreeIndex(store.session))
     return createSyncContextValue({
       store,
       setStore,
@@ -267,6 +273,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         syncSuperLong,
       },
       bootstrap,
+      sessionTree,
     })
   },
 })
