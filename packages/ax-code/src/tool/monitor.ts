@@ -7,6 +7,10 @@ import { NotificationEvent } from "@/notification/events"
 import { ToolBoolean, ToolNumber } from "./schema"
 import { BashTool } from "./bash"
 import { BackgroundShell } from "./bash-background"
+import { Permission } from "@/permission"
+import { Session } from "../session"
+import { NotFoundError } from "../storage/db"
+import { Wildcard } from "@/util/wildcard"
 
 const log = Log.create({ service: "tool.monitor" })
 
@@ -20,6 +24,30 @@ function compileFilter(pattern: string | undefined): RegExp | undefined {
   } catch {
     throw new Error(`Invalid filter regex: ${pattern}`)
   }
+}
+
+// monitor reuses BashTool.execute for the command it runs, but rewrites
+// BashTool's `bash` permission ask into a `monitor` ask. That rename means a
+// session deny rule for `bash` (e.g. a headless run started with
+// `--disallowed-tools bash`, which persists `{ permission: "bash", action:
+// "deny", pattern: "*" }`) never gets evaluated, so `monitor` still executes
+// shell commands while the model is told bash is unavailable. Evaluate `bash`
+// against the session ruleset up front — using the command itself as the
+// pattern, the same single-command pattern BashTool derives for its ask — and
+// reject with the same DeniedError BashTool would throw (filtered ruleset) so
+// the run's blocked-run accounting counts it. The `monitor` ask is preserved
+// for the allow/ask cases below.
+async function assertBashAllowed(command: string, ctx: Tool.Context): Promise<void> {
+  const session = await Session.get(ctx.sessionID).catch((error) => {
+    if (NotFoundError.isInstance(error)) return undefined
+    throw error
+  })
+  const ruleset = session?.permission ?? []
+  const rule = Permission.evaluate("bash", command, ruleset)
+  if (rule.action !== "deny") return
+  throw new Permission.DeniedError({
+    ruleset: ruleset.filter((candidate) => Wildcard.match("bash", candidate.permission)),
+  })
 }
 
 export const MonitorTool = Tool.define("monitor", {
@@ -45,6 +73,10 @@ export const MonitorTool = Tool.define("monitor", {
     // Validate before BashTool can spawn. In particular, an invalid filter
     // must never leave behind an untracked process.
     const filterRe = compileFilter(params.filter)
+
+    // A deny rule for `bash` must also deny the command monitor runs. Check it
+    // before delegating to BashTool so a denied monitor never spawns a shell.
+    await assertBashAllowed(params.command, ctx)
 
     const persistent = params.persistent === true
     const timeoutMs = persistent ? undefined : (params.timeout_ms ?? DEFAULT_TIMEOUT_MS)
