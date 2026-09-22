@@ -18,23 +18,21 @@ export type ScheduledSessionLink = {
   taskTitle: string
   sessionID: string
   lastRunAt: number
+  status: TaskQueueGetResponse["status"]
 }
 
 export function scheduledSessionKey(link: ScheduledSessionLink): string {
-  // A reused session returns to New when a later scheduled run updates it.
+  // A reused session gets a distinct dismissal key for each scheduled run.
   return `${link.sessionID}:${link.lastRunAt}`
 }
 
-export function scheduledSessionBuckets(
-  links: readonly ScheduledSessionLink[],
-  seen: ReadonlySet<string>,
-  cleaned: ReadonlySet<string>,
-) {
-  // Finished means opened by the user; Clean only hides that version in this rail.
-  const visible = links.filter((link) => !cleaned.has(scheduledSessionKey(link)))
+export function scheduledSessionBuckets(links: readonly ScheduledSessionLink[], cleaned: ReadonlySet<string>) {
+  // Tab membership follows the queue lifecycle. Clean only hides terminal runs in this rail.
+  const finished = (link: ScheduledSessionLink) =>
+    link.status === "completed" || link.status === "failed" || link.status === "cancelled"
   return {
-    new: visible.filter((link) => !seen.has(scheduledSessionKey(link))),
-    finished: visible.filter((link) => seen.has(scheduledSessionKey(link))),
+    new: links.filter((link) => !finished(link)),
+    finished: links.filter((link) => finished(link) && !cleaned.has(scheduledSessionKey(link))),
   }
 }
 
@@ -53,7 +51,7 @@ export function scheduledSessionLinks(
       const sessionID = item?.sessionID
       if (!sessionID || !knownSessions.has(sessionID) || seen.has(sessionID)) return []
       seen.add(sessionID)
-      return [{ taskID: task.id, taskTitle: task.title, sessionID, lastRunAt: task.lastRunAt! }]
+      return [{ taskID: task.id, taskTitle: task.title, sessionID, lastRunAt: task.lastRunAt!, status: item.status }]
     })
     .slice(0, MAX_CANDIDATES)
 }
@@ -75,9 +73,7 @@ export function ScheduledSessionNavigation(props: { width: number; sessions: rea
     const value: unknown = kv.get(savedKey(name), [])
     return new Set<string>(Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [])
   }
-  const buckets = createMemo(() =>
-    scheduledSessionBuckets(links(), saved("scheduled_session_seen"), saved("scheduled_session_cleaned")),
-  )
+  const buckets = createMemo(() => scheduledSessionBuckets(links(), saved("scheduled_session_cleaned")))
   const visible = () => buckets()[tab()].slice(0, MAX_ROWS)
   function save(name: string, keys: readonly string[]) {
     kv.set(savedKey(name), [...new Set([...saved(name), ...keys])].slice(-MAX_SAVED_KEYS))
@@ -153,15 +149,6 @@ export function ScheduledSessionNavigation(props: { width: number; sessions: rea
     if (directory !== previousDirectory) requestRefresh()
     previousDirectory = directory
   })
-  createEffect(() => {
-    const currentRoute = route.data
-    if (currentRoute.type !== "session") return
-    const link = links().find((item) => item.sessionID === currentRoute.sessionID)
-    if (!link) return
-    const key = scheduledSessionKey(link)
-    if (!saved("scheduled_session_seen").has(key)) save("scheduled_session_seen", [key])
-  })
-
   return (
     <Show when={tasks().length > 0 || state() !== "ready"}>
       <box
@@ -201,7 +188,6 @@ export function ScheduledSessionNavigation(props: { width: number; sessions: rea
                   : undefined
               }
               onMouseUp={() => {
-                save("scheduled_session_seen", [scheduledSessionKey(link)])
                 route.navigate({ type: "session", sessionID: link.sessionID })
               }}
             >

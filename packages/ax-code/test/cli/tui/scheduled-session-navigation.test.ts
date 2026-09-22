@@ -11,8 +11,11 @@ function task(id: string, queueID: string | undefined, lastRunAt: number): Sched
   return { id, title: `Task ${id}`, lastQueueID: queueID, lastRunAt } as ScheduledTaskInfo
 }
 
-function item(sessionID: string | undefined): TaskQueueGetResponse {
-  return { sessionID } as TaskQueueGetResponse
+function item(
+  sessionID: string | undefined,
+  status: TaskQueueGetResponse["status"] = "completed",
+): TaskQueueGetResponse {
+  return { sessionID, status } as TaskQueueGetResponse
 }
 
 function session(id: string): Session {
@@ -48,11 +51,72 @@ describe("scheduled session navigation", () => {
     expect(links).toEqual([])
   })
 
-  test("a later run in a reused session returns to New after Finished is cleaned", () => {
-    const first = { taskID: "task", taskTitle: "Task", sessionID: "session", lastRunAt: 10 }
-    const next = { ...first, lastRunAt: 20 }
-    const seen = new Set([scheduledSessionKey(first)])
+  test("running and blocked sessions stay New; terminal outcomes are Finished", () => {
+    const links = scheduledSessionLinks(
+      [task("running", "q1", 40), task("blocked", "q2", 30), task("completed", "q3", 20), task("failed", "q4", 10)],
+      new Map([
+        ["q1", item("s1", "running")],
+        ["q2", item("s2", "blocked_permission")],
+        ["q3", item("s3", "completed")],
+        ["q4", item("s4", "failed")],
+      ]),
+      [session("s1"), session("s2"), session("s3"), session("s4")],
+    )
+    const buckets = scheduledSessionBuckets(links, new Set())
+    expect(buckets.new.map((link) => link.taskID)).toEqual(["running", "blocked"])
+    expect(buckets.finished.map((link) => link.taskID)).toEqual(["completed", "failed"])
+  })
+
+  test("a later run in a reused session is not hidden by cleaning an earlier finished run", () => {
+    const first = {
+      taskID: "task",
+      taskTitle: "Task",
+      sessionID: "session",
+      lastRunAt: 10,
+      status: "completed" as const,
+    }
+    const next = { ...first, lastRunAt: 20, status: "running" as const }
     const cleaned = new Set([scheduledSessionKey(first)])
-    expect(scheduledSessionBuckets([first, next], seen, cleaned)).toEqual({ new: [next], finished: [] })
+    expect(scheduledSessionBuckets([first, next], cleaned)).toEqual({ new: [next], finished: [] })
+    const nextDone = { ...next, status: "completed" as const }
+    expect(scheduledSessionBuckets([first, nextDone], cleaned)).toEqual({ new: [], finished: [nextDone] })
+  })
+
+  test("a previously cleaned running session returns to New after the tab fix", () => {
+    const running = {
+      taskID: "task",
+      taskTitle: "Task",
+      sessionID: "session",
+      lastRunAt: 10,
+      status: "running" as const,
+    }
+    expect(scheduledSessionBuckets([running], new Set([scheduledSessionKey(running)]))).toEqual({
+      new: [running],
+      finished: [],
+    })
+  })
+
+  test("classifies every queue status by whether execution has ended", () => {
+    const statuses = [
+      "queued",
+      "waiting_for_idle",
+      "running",
+      "blocked_permission",
+      "blocked_question",
+      "paused",
+      "completed",
+      "failed",
+      "cancelled",
+    ] as const
+    const links = statuses.map((status, index) => ({
+      taskID: String(index),
+      taskTitle: status,
+      sessionID: `session-${index}`,
+      lastRunAt: index + 1,
+      status,
+    }))
+    const buckets = scheduledSessionBuckets(links, new Set())
+    expect(buckets.new.map((link) => link.status)).toEqual(statuses.slice(0, 6))
+    expect(buckets.finished.map((link) => link.status)).toEqual(statuses.slice(6))
   })
 })
