@@ -8,9 +8,18 @@ changes belong to AX Coder.
 
 ### Changed
 
-- Bundle signed AX Engine 7.5.5 on Apple Silicon Macs and use the same verified archive for managed installs.
+- Require AX Engine 7.5.5 for configured binaries, PATH copies, and managed overlays.
+
+## [7.20.1] - 2026-09-22
+
+### Changed
+
+- Prepare AX Code 7.20.1 and SDK 2.5.43.
+- Bundle signed AX Engine 7.5.5 on Apple Silicon Macs and require a verified 7.5.5 or newer runtime for configured, PATH, managed, and bundled selection.
 
 ### Fixed
+
+- Bound cached session subtrees by both entry count and total retained node references.
 
 - Parse explicit AX Engine version lines from stdout or stderr without treating startup diagnostics or unrelated tool versions as the engine version.
 - Preserve case-only patch renames, count overwritten destination lines, and keep coding and verification requests out of compact response-only turns.
