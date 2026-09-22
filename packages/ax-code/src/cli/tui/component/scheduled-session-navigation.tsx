@@ -1,38 +1,46 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js"
 import type { Session, TaskQueueGetResponse } from "@ax-code/sdk/v2"
+import { Locale } from "@/util/locale"
 import { useSDK } from "@tui/context/sdk"
 import { useKV } from "@tui/context/kv"
 import { useRoute } from "@tui/context/route"
 import { useTheme } from "@tui/context/theme"
 import { useCommandDialog } from "./dialog-command"
-import { SCHEDULED_TASK_EVENTS, type ScheduledTaskInfo } from "./dialog-scheduled-task-view-model"
+import {
+  SCHEDULED_TASK_EVENTS,
+  type ScheduledTaskInfo,
+  type ScheduledTaskRunInfo,
+} from "./dialog-scheduled-task-view-model"
 import { truncateToCellWidth } from "../routes/session/last-input-view-model"
 import { scheduleTuiTimeout } from "../util/timer"
 
 const MAX_ROWS = 6
-const MAX_CANDIDATES = 12
 const MAX_SAVED_KEYS = 200
 
 export type ScheduledSessionLink = {
   taskID: string
   taskTitle: string
-  sessionID: string
+  sessionID?: string
   lastRunAt: number
-  status: TaskQueueGetResponse["status"]
+  status: TaskQueueGetResponse["status"] | ScheduledTaskRunInfo["status"] | "scheduled" | "unknown"
+  phase: "new" | "running" | "done"
+  detail: string
 }
 
 export function scheduledSessionKey(link: ScheduledSessionLink): string {
-  // A reused session gets a distinct dismissal key for each scheduled run.
-  return `${link.sessionID}:${link.lastRunAt}`
+  return `${link.taskID}:${link.lastRunAt}`
 }
 
 export function scheduledSessionBuckets(links: readonly ScheduledSessionLink[], cleaned: ReadonlySet<string>) {
-  // Tab membership follows the queue lifecycle. Clean only hides terminal runs in this rail.
-  const finished = (link: ScheduledSessionLink) =>
-    link.status === "completed" || link.status === "failed" || link.status === "cancelled"
   return {
-    new: links.filter((link) => !finished(link)),
-    finished: links.filter((link) => finished(link) && !cleaned.has(scheduledSessionKey(link))),
+    new: links.filter((link) => link.phase === "new"),
+    running: links.filter((link) => link.phase === "running"),
+    done: links.filter(
+      (link) =>
+        link.phase === "done" &&
+        !cleaned.has(scheduledSessionKey(link)) &&
+        !cleaned.has(`${link.sessionID}:${link.lastRunAt}`),
+    ),
   }
 }
 
@@ -40,20 +48,53 @@ export function scheduledSessionLinks(
   tasks: readonly ScheduledTaskInfo[],
   queueItems: ReadonlyMap<string, TaskQueueGetResponse>,
   sessions: readonly Session[],
+  runs: ReadonlyMap<string, ScheduledTaskRunInfo> = new Map(),
 ): ScheduledSessionLink[] {
   const knownSessions = new Set(sessions.map((session) => session.id))
-  const seen = new Set<string>()
   return tasks
-    .filter((task) => task.lastQueueID && task.lastRunAt)
     .toSorted((a, b) => (b.lastRunAt ?? 0) - (a.lastRunAt ?? 0))
     .flatMap((task) => {
-      const item = queueItems.get(task.lastQueueID!)
-      const sessionID = item?.sessionID
-      if (!sessionID || !knownSessions.has(sessionID) || seen.has(sessionID)) return []
-      seen.add(sessionID)
-      return [{ taskID: task.id, taskTitle: task.title, sessionID, lastRunAt: task.lastRunAt!, status: item.status }]
+      const item = task.lastQueueID ? queueItems.get(task.lastQueueID) : undefined
+      const run = runs.get(task.id)
+      const status = item?.status ?? run?.status
+      const terminal =
+        status && ["completed", "failed", "cancelled", "timeout", "skipped_overlap", "missed_skip"].includes(status)
+      const queued = status === "queued" || status === "waiting_for_idle"
+      const rows: ScheduledSessionLink[] = []
+      const base = { taskID: task.id, taskTitle: task.title, lastRunAt: task.lastRunAt ?? 0 }
+      if (status) {
+        rows.push({
+          ...base,
+          sessionID: item?.sessionID && knownSessions.has(item.sessionID) ? item.sessionID : undefined,
+          status,
+          phase: terminal ? "done" : queued ? "new" : "running",
+          detail: status.replaceAll("_", " "),
+        })
+      }
+      // Keep the next occurrence visible after completion, including retries and paused schedules.
+      // During a live run, show one row; its next occurrence returns after the run ends.
+      if (
+        !status ||
+        (terminal && task.status !== "disabled" && (task.nextRunAt !== undefined || task.status === "paused"))
+      ) {
+        const unknown = !status && task.lastRunAt !== undefined
+        rows.push({
+          ...base,
+          status: unknown ? "unknown" : "scheduled",
+          phase: "new",
+          detail: unknown
+            ? "Status unavailable"
+            : task.status === "paused"
+              ? "Schedule paused"
+              : task.status === "disabled"
+                ? "Schedule disabled"
+                : task.nextRunAt !== undefined
+                  ? `Next ${Locale.todayTimeOrDateTime(task.nextRunAt)}`
+                  : "Scheduled",
+        })
+      }
+      return rows
     })
-    .slice(0, MAX_CANDIDATES)
 }
 
 export function ScheduledSessionNavigation(props: { width: number; sessions: readonly Session[] }) {
@@ -63,11 +104,12 @@ export function ScheduledSessionNavigation(props: { width: number; sessions: rea
   const command = useCommandDialog()
   const { theme } = useTheme()
   const [tasks, setTasks] = createSignal<ScheduledTaskInfo[]>([])
+  const [runs, setRuns] = createSignal<ReadonlyMap<string, ScheduledTaskRunInfo>>(new Map())
   const [queueItems, setQueueItems] = createSignal<ReadonlyMap<string, TaskQueueGetResponse>>(new Map())
   const [state, setState] = createSignal<"loading" | "ready" | "error">("loading")
-  const [tab, setTab] = createSignal<"new" | "finished">("new")
+  const [tab, setTab] = createSignal<"new" | "running" | "done">("new")
   const contentWidth = () => Math.max(0, props.width - 2)
-  const links = createMemo(() => scheduledSessionLinks(tasks(), queueItems(), props.sessions))
+  const links = createMemo(() => scheduledSessionLinks(tasks(), queueItems(), props.sessions, runs()))
   const savedKey = (name: string) => `${name}:${sdk.directory ?? ""}`
   const saved = (name: string) => {
     const value: unknown = kv.get(savedKey(name), [])
@@ -87,21 +129,29 @@ export function ScheduledSessionNavigation(props: { width: number; sessions: rea
       const result = await sdk.client.scheduledTask.list()
       if (result.error) throw result.error
       const nextTasks = result.data ?? []
-      const ids = nextTasks
-        .filter((task) => task.lastQueueID && task.lastRunAt)
-        .toSorted((a, b) => (b.lastRunAt ?? 0) - (a.lastRunAt ?? 0))
-        .slice(0, MAX_CANDIDATES)
-        .map((task) => task.lastQueueID!)
       const nextItems = new Map<string, TaskQueueGetResponse>()
-      await Promise.all(
-        ids.map(async (id) => {
-          const item = await sdk.client.taskQueue.get({ taskID: id })
-          if (item.data) nextItems.set(id, item.data)
-        }),
-      )
+      const nextRuns = new Map<string, ScheduledTaskRunInfo>()
+      // Bound concurrent requests without dropping older active tasks from the rail.
+      for (let offset = 0; offset < nextTasks.length; offset += 6) {
+        await Promise.all(
+          nextTasks.slice(offset, offset + 6).map(async (task) => {
+            if (task.lastQueueID) {
+              const item = await sdk.client.taskQueue.get({ taskID: task.lastQueueID })
+              if (item.data) nextItems.set(task.lastQueueID, item.data)
+            }
+            if (task.lastRunAt !== undefined && !nextItems.has(task.lastQueueID ?? "")) {
+              const history = await sdk.client.scheduledTask.listRuns({ scheduledTaskID: task.id })
+              const latest = history.data?.toSorted((a, b) => b.time.created - a.time.created)[0]
+              if (latest) nextRuns.set(task.id, latest)
+            }
+          }),
+        )
+        if (current !== generation) return
+      }
       if (current !== generation) return
       setTasks(nextTasks)
       setQueueItems(nextItems)
+      setRuns(nextRuns)
       setState("ready")
     } catch {
       if (current === generation) setState("error")
@@ -161,11 +211,11 @@ export function ScheduledSessionNavigation(props: { width: number; sessions: rea
       >
         <box onMouseUp={() => command.trigger("scheduled.list")}>
           <text fg={theme.textMuted} selectable={false}>
-            <b>{truncateToCellWidth("Scheduled sessions", contentWidth())}</b>
+            <b>{truncateToCellWidth("Scheduled tasks", contentWidth())}</b>
           </text>
         </box>
-        <box flexDirection="row" gap={1}>
-          <For each={["new", "finished"] as const}>
+        <box flexDirection="row" flexWrap="wrap" gap={1}>
+          <For each={["new", "running", "done"] as const}>
             {(value) => (
               <box
                 paddingRight={1}
@@ -173,7 +223,7 @@ export function ScheduledSessionNavigation(props: { width: number; sessions: rea
                 onMouseUp={() => setTab(value)}
               >
                 <text fg={tab() === value ? theme.primary : theme.textMuted} selectable={false}>
-                  {value === "new" ? "New" : "Finished"} {buckets()[value].length}
+                  {value === "new" ? "New" : value === "running" ? "Running" : "Done"} {buckets()[value].length}
                 </text>
               </box>
             )}
@@ -188,7 +238,8 @@ export function ScheduledSessionNavigation(props: { width: number; sessions: rea
                   : undefined
               }
               onMouseUp={() => {
-                route.navigate({ type: "session", sessionID: link.sessionID })
+                if (link.sessionID) route.navigate({ type: "session", sessionID: link.sessionID })
+                else command.trigger("scheduled.list")
               }}
             >
               <text
@@ -198,6 +249,9 @@ export function ScheduledSessionNavigation(props: { width: number; sessions: rea
                 selectable={false}
               >
                 {truncateToCellWidth(link.taskTitle, contentWidth())}
+              </text>
+              <text fg={theme.textMuted} selectable={false}>
+                {truncateToCellWidth(link.detail, contentWidth())}
               </text>
             </box>
           )}
@@ -211,13 +265,13 @@ export function ScheduledSessionNavigation(props: { width: number; sessions: rea
         </Show>
         <Show when={state() === "ready" && visible().length === 0}>
           <text fg={theme.textMuted} selectable={false}>
-            {tab() === "new" ? "No new sessions" : "No finished sessions"}
+            {tab() === "new" ? "No new tasks" : tab() === "running" ? "No running tasks" : "No done tasks"}
           </text>
         </Show>
-        <Show when={tab() === "finished" && buckets().finished.length > 0}>
-          <box onMouseUp={() => save("scheduled_session_cleaned", buckets().finished.map(scheduledSessionKey))}>
+        <Show when={tab() === "done" && buckets().done.length > 0}>
+          <box onMouseUp={() => save("scheduled_session_cleaned", buckets().done.map(scheduledSessionKey))}>
             <text fg={theme.textMuted} selectable={false}>
-              Clean finished
+              Clear done
             </text>
           </box>
         </Show>
