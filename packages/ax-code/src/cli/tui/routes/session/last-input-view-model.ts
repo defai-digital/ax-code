@@ -156,9 +156,15 @@ export function selectPinnedInputCandidate(input: {
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
 
-function fitWidth(text: string, width: number) {
+// Width of ELLIPSIS: plain ASCII, so it never needs measuring.
+const ELLIPSIS_WIDTH = ELLIPSIS.length
+
+// Longest grapheme prefix whose summed cell width fits. Callers have already
+// established that the whole text overflows, so this skips the admission scan
+// and only walks the raw string once. Segment widths are measured on the raw
+// grapheme (not the ANSI-stripped text) to keep the historical cut points.
+function fitOverflow(text: string, width: number) {
   if (width <= 0) return ""
-  if (stringWidth(text) <= width) return text
   let out = ""
   let used = 0
   for (const { segment: ch } of graphemes.segment(text)) {
@@ -170,12 +176,17 @@ function fitWidth(text: string, width: number) {
   return out
 }
 
+// The ellipsis is all single-cell dots, so a narrower budget takes a prefix.
+function fitEllipsis(width: number) {
+  if (width <= 0) return ""
+  return ELLIPSIS_WIDTH <= width ? ELLIPSIS : ELLIPSIS.slice(0, width)
+}
+
 export function truncateToCellWidth(text: string, width: number) {
   if (width <= 0) return ""
   if (stringWidth(text) <= width) return text
-  const ellipsisWidth = stringWidth(ELLIPSIS)
-  const budget = Math.max(0, width - ellipsisWidth)
-  return fitWidth(text, budget).trimEnd() + fitWidth(ELLIPSIS, width)
+  const budget = Math.max(0, width - ELLIPSIS_WIDTH)
+  return fitOverflow(text, budget).trimEnd() + fitEllipsis(width)
 }
 
 export function wrapPreview(text: string, firstLineWidth: number, nextLineWidth: number, maxLines: 1 | 2) {
@@ -190,10 +201,12 @@ export function wrapPreview(text: string, firstLineWidth: number, nextLineWidth:
       break
     }
     if (last) {
-      lines.push(truncateToCellWidth(remaining, width))
+      // Same as truncateToCellWidth, minus the admission scan already done above.
+      const budget = Math.max(0, width - ELLIPSIS_WIDTH)
+      lines.push(fitOverflow(remaining, budget).trimEnd() + fitEllipsis(width))
       break
     }
-    const fitted = fitWidth(remaining, width)
+    const fitted = fitOverflow(remaining, width)
     if (!fitted) break
     // Back up to the last space only when the fitted prefix ends mid-word.
     // If the next character is a space, the last word already fits and

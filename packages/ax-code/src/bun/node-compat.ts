@@ -367,9 +367,11 @@ function isNativeWideEmoji(cp: number): boolean {
 // The previous shim counted code points, which misaligns TUI layout for wide
 // characters and ANSI-styled strings.
 function charWidth(cp: number): number {
-  if (cp === 0) return 0
-  // C0/C1 control characters
-  if (cp < 32 || (cp >= 0x7f && cp < 0xa0)) return 0
+  // ASCII never reaches the combining, wide, or emoji tables (all start at
+  // U+0300 or above), so answer it before the range checks below.
+  if (cp < 0x80) return cp < 32 || cp === 0x7f ? 0 : 1
+  // C1 control characters
+  if (cp < 0xa0) return 0
   // Combining marks / zero-width
   if (
     (cp >= 0x0300 && cp <= 0x036f) ||
@@ -399,9 +401,21 @@ function charWidth(cp: number): number {
   return 1
 }
 
+// Every sequence ansi-regex matches starts with ESC or the 8-bit CSI byte, so
+// a string without either byte is returned by stripAnsi unchanged. Checking
+// for them first keeps the regex off the TUI's per-frame measuring path.
+function hasAnsi(input: string) {
+  return input.includes("\u001b") || input.includes("\u009b")
+}
+
 export function stringWidth(input: string) {
+  const text = hasAnsi(input) ? stripAnsi(input) : input
   let width = 0
-  for (const ch of stripAnsi(input)) width += charWidth(ch.codePointAt(0) ?? 0)
+  for (let index = 0; index < text.length; ) {
+    const cp = text.codePointAt(index) ?? 0
+    width += charWidth(cp)
+    index += cp > 0xffff ? 2 : 1
+  }
   return width
 }
 

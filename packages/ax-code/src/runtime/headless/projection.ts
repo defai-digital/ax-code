@@ -502,18 +502,21 @@ function appendPartTextDelta<
   // bootstrap refetches, replay). Reconcile instead of blindly appending:
   // append only the suffix not yet applied; a delta ahead of the accumulated
   // text (gap) is skipped — the next snapshot is authoritative and heals it.
-  let next: string
+  let appended: string
   if (typeof offset === "number") {
     if (offset > current.length) return
-    next = current + delta.slice(current.length - offset)
+    appended = delta.slice(current.length - offset)
   } else {
     // Legacy producers without an offset: append-only, as before.
-    next = current + delta
+    appended = delta
   }
-  if (next === current) return
+  if (!appended) return
+  const next = current + appended
   part.text = next
   setProjectionDelta(state, messageID, partID, next)
-  rememberProjectionDelta(state, messageID, partID, next.slice(current.length), current.slice(-1))
+  // `appended` is exactly the suffix past `current`; reuse it instead of
+  // re-slicing the rope once more per streamed token.
+  rememberProjectionDelta(state, messageID, partID, appended, current.slice(-1))
 }
 
 function removePart<
