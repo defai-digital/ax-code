@@ -8,6 +8,7 @@ import { Snapshot } from "@/snapshot"
 import { SessionSummary } from "./summary"
 import { Bus } from "@/bus"
 import { SessionRetry } from "./retry"
+import { ProviderConcurrencyGovernor } from "@/provider/concurrency-governor"
 import { SessionStatus } from "./status"
 import { StreamRepetition } from "./stream-repetition"
 import { Plugin } from "@/plugin"
@@ -463,6 +464,17 @@ export namespace SessionProcessor {
           snapshot = undefined
         }
         while (true) {
+          // Bound how many concurrent requests this process (and, best
+          // effort, this machine) sends to one provider — see
+          // .internal/prd/PRD-2026-09-22-provider-concurrency-resilience.md.
+          // Held for the whole attempt (setup through full stream drain via
+          // `using` disposal on every loop exit: success, retry `continue`,
+          // or terminal `break`) so a saturated shared pool sees this process
+          // queue locally instead of firing every attempt immediately.
+          using _providerSlot = await ProviderConcurrencyGovernor.acquire({
+            providerID: input.model.providerID,
+            signal: input.abort,
+          })
           blocked = false
           let currentText: MessageV2.TextPart | undefined
           let reasoningMap: Record<string, MessageV2.ReasoningPart> = {}
@@ -1414,8 +1426,12 @@ export namespace SessionProcessor {
                   // next step in a long tool-using turn, and clears the
                   // network failure streak so intermittent failures never
                   // accumulate across successes toward a spurious circuit
-                  // open (STAB-14).
+                  // open (STAB-14). Same reasoning for the concurrency-limit
+                  // streak: a finished step means the provider is currently
+                  // admitting requests, so past pool contention should not
+                  // keep stretching future retry delays for this provider.
                   SessionRetry.recordNetworkSuccess(input.model.providerID)
+                  SessionRetry.recordConcurrencySuccess(input.model.providerID)
                   attempt = 0
                   break
 
@@ -1634,8 +1650,14 @@ export namespace SessionProcessor {
               const retry = SessionRetry.retryable(error, input.model.providerID)
               if (retry !== undefined) {
                 attempt++
-                if (attempt <= SessionRetry.RETRY_MAX_ATTEMPTS) {
-                  const delay = SessionRetry.delay(attempt, MessageV2.APIError.isInstance(error) ? error : undefined)
+                // Concurrency-limit hits get an extended attempt budget (a
+                // saturated shared pool routinely outlasts the generic
+                // budget); every other retryable condition keeps the
+                // generic RETRY_MAX_ATTEMPTS.
+                const apiError = MessageV2.APIError.isInstance(error) ? error : undefined
+                const maxAttempts = SessionRetry.maxAttemptsFor(apiError)
+                if (attempt <= maxAttempts) {
+                  const delay = SessionRetry.delay(attempt, apiError, input.model.providerID)
                   await SessionStatus.set(input.sessionID, {
                     type: "retry",
                     attempt,
@@ -1656,18 +1678,23 @@ export namespace SessionProcessor {
                   continue
                 }
                 const apiErrorMessage =
-                  MessageV2.APIError.isInstance(error) && typeof error.data?.message === "string"
-                    ? error.data.message
-                    : retry
+                  apiError && typeof apiError.data?.message === "string" ? apiError.data.message : retry
+                // A stable, machine-readable code (never the message suffix
+                // below) so a later automatic-requeue decision does not need
+                // to parse "(stopped after N retries)" text.
+                const terminalErrorCode = apiError ? SessionRetry.terminalErrorCode(apiError) : undefined
                 input.assistantMessage.error =
-                  MessageV2.APIError.isInstance(error) && error.data
+                  apiError && apiError.data
                     ? new MessageV2.APIError({
-                        ...error.data,
+                        ...apiError.data,
                         isRetryable: false,
-                        message: `${apiErrorMessage} (stopped after ${SessionRetry.RETRY_MAX_ATTEMPTS} retries)`,
+                        metadata: terminalErrorCode
+                          ? { ...apiError.data.metadata, errorCode: terminalErrorCode }
+                          : apiError.data.metadata,
+                        message: `${apiErrorMessage} (stopped after ${maxAttempts} retries)`,
                       }).toObject()
                     : new NamedError.Unknown({
-                        message: `${retry} (stopped after ${SessionRetry.RETRY_MAX_ATTEMPTS} retries)`,
+                        message: `${retry} (stopped after ${maxAttempts} retries)`,
                       }).toObject()
               } else {
                 input.assistantMessage.error ??= error
