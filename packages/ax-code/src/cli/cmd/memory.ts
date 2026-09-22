@@ -119,11 +119,22 @@ export const MemoryWarmupCommand = cmd({
 export const MemoryStatusCommand = cmd({
   command: "status",
   describe: "show current memory status",
-  async handler() {
+  builder: (yargs) =>
+    yargs.option("json", {
+      describe: "output machine-readable JSON",
+      type: "boolean",
+      default: false,
+    }),
+  async handler(args) {
+    const meta = await getMetadata(process.cwd())
+    if (args.json) {
+      console.log(JSON.stringify(meta ?? { exists: false }, null, 2))
+      return
+    }
+
     UI.empty()
     prompts.intro("Memory Status")
 
-    const meta = await getMetadata(process.cwd())
     if (!meta) {
       prompts.log.warn("No memory cached. Run: ax-code memory warmup")
       prompts.outro("Done")
@@ -401,14 +412,25 @@ export const MemoryListCommand = cmd({
         describe: "list global memory entries instead of project entries",
         type: "boolean",
         default: false,
+      })
+      .option("json", {
+        describe: "output machine-readable JSON",
+        type: "boolean",
+        default: false,
       }),
   async handler(args) {
-    UI.empty()
-    prompts.intro("Memory Entries")
-
     const kind = args.kind ? KIND_BY_FLAG[args.kind] : undefined
     const scope = args.global ? "global" : "project"
     const entries = await listEntries(process.cwd(), kind, scope)
+
+    if (args.json) {
+      console.log(JSON.stringify({ entries }, null, 2))
+      return
+    }
+
+    UI.empty()
+    prompts.intro("Memory Entries")
+
     if (entries.length === 0) {
       prompts.log.warn("No entries recorded")
       prompts.outro("Done")

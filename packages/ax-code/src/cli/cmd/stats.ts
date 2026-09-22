@@ -10,6 +10,7 @@ import { Instance } from "../../project/instance"
 import { isNonEmptyRecord } from "../../util/record"
 import { toErrorMessage } from "../../util/error-message"
 import { Locale } from "../../util/locale"
+import { EOL } from "os"
 
 interface SessionStats {
   totalSessions: number
@@ -67,6 +68,11 @@ export const StatsCommand = cmd({
         describe: "filter by project (default: all projects, empty string: current project)",
         type: "string",
       })
+      .option("json", {
+        describe: "output machine-readable JSON",
+        type: "boolean",
+        default: false,
+      })
       .check((argv) => {
         validateStatsDays(argv.days)
         validateStatsDisplayLimit(argv.tools, "--tools")
@@ -76,19 +82,81 @@ export const StatsCommand = cmd({
   },
   handler: async (args) => {
     await bootstrap(process.cwd(), async () => {
-      const stats = await aggregateSessionStats(args.days, args.project)
+      try {
+        const stats = await aggregateSessionStats(args.days, args.project)
 
-      let modelLimit: number | undefined
-      if (args.models === true) {
-        modelLimit = Infinity
-      } else if (typeof args.models === "number") {
-        modelLimit = validateStatsDisplayLimit(args.models, "--models")
+        if (args.json) {
+          process.stdout.write(JSON.stringify(buildStatsDocument(stats), null, 2) + EOL)
+          return
+        }
+
+        let modelLimit: number | undefined
+        if (args.models === true) {
+          modelLimit = Infinity
+        } else if (typeof args.models === "number") {
+          modelLimit = validateStatsDisplayLimit(args.models, "--models")
+        }
+
+        displayStats(stats, validateStatsDisplayLimit(args.tools, "--tools"), modelLimit)
+      } catch (error) {
+        if (args.json) {
+          process.stderr.write(
+            JSON.stringify({ error: { code: "stats-error", message: toErrorMessage(error) } }, null, 2) + EOL,
+          )
+          process.exitCode = 1
+          return
+        }
+        throw error
       }
-
-      displayStats(stats, validateStatsDisplayLimit(args.tools, "--tools"), modelLimit)
     })
   },
 })
+
+export type StatsJSONDocument = {
+  sessions: number
+  messages: number
+  days: number
+  tokens: {
+    input: number
+    output: number
+    reasoning: number
+    cacheRead: number
+    cacheWrite: number
+  }
+  tokensPerSession: number
+  medianTokensPerSession: number
+  models: Record<string, { messages: number; input: number; output: number; cacheRead: number; cacheWrite: number }>
+  tools: Record<string, number>
+}
+
+export function buildStatsDocument(stats: SessionStats): StatsJSONDocument {
+  const models: StatsJSONDocument["models"] = {}
+  for (const [model, usage] of Object.entries(stats.modelUsage)) {
+    models[model] = {
+      messages: usage.messages,
+      input: usage.tokens.input,
+      output: usage.tokens.output,
+      cacheRead: usage.tokens.cache.read,
+      cacheWrite: usage.tokens.cache.write,
+    }
+  }
+  return {
+    sessions: stats.totalSessions,
+    messages: stats.totalMessages,
+    days: stats.days,
+    tokens: {
+      input: stats.totalTokens.input,
+      output: stats.totalTokens.output,
+      reasoning: stats.totalTokens.reasoning,
+      cacheRead: stats.totalTokens.cache.read,
+      cacheWrite: stats.totalTokens.cache.write,
+    },
+    tokensPerSession: stats.tokensPerSession,
+    medianTokensPerSession: stats.medianTokensPerSession,
+    models,
+    tools: { ...stats.toolUsage },
+  }
+}
 
 export function validateStatsDays(days: unknown): number | undefined {
   if (days === undefined) return undefined

@@ -120,7 +120,9 @@ export const ModelsCommand = cmd({
             verbose: args.verbose,
           })
           if ("error" in result) {
-            UI.error(result.error)
+            process.stderr.write(
+              JSON.stringify({ error: { code: "provider-not-found", message: result.error } }, null, 2) + EOL,
+            )
             process.exitCode = 1
             return
           }

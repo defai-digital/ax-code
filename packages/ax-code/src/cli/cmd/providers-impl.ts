@@ -470,11 +470,92 @@ export const ProvidersAxEngineCommand = cmd({
   },
 })
 
+export type ProvidersJSONEntry = {
+  id: string
+  name: string
+  connected: boolean
+  management?: string
+  models: number
+}
+
+export type ProvidersJSONDocument = {
+  providers: ProvidersJSONEntry[]
+}
+
+export function buildProvidersDocument(input: {
+  providers: Record<string, { name?: string; models?: Record<string, unknown> }>
+  connected: readonly string[]
+  management?: Record<string, string | undefined>
+}): ProvidersJSONDocument {
+  const connected = new Set(input.connected)
+  const entries: ProvidersJSONEntry[] = []
+  for (const [id, provider] of Object.entries(input.providers)) {
+    const entry: ProvidersJSONEntry = {
+      id,
+      name: provider.name ?? id,
+      connected: connected.has(id),
+      models: Object.keys(provider.models ?? {}).length,
+    }
+    const management = input.management?.[id]
+    if (management) entry.management = management
+    entries.push(entry)
+  }
+  entries.sort((a, b) => {
+    const aIsAx = a.id.startsWith("ax-code")
+    const bIsAx = b.id.startsWith("ax-code")
+    if (aIsAx && !bIsAx) return -1
+    if (!aIsAx && bIsAx) return 1
+    return a.id.localeCompare(b.id)
+  })
+  return { providers: entries }
+}
+
 export const ProvidersListCommand = cmd({
   command: "list",
   aliases: ["ls"],
   describe: "list providers and credentials",
-  async handler(_args) {
+  builder: (yargs) =>
+    yargs.option("json", {
+      describe: "output machine-readable JSON",
+      type: "boolean",
+      default: false,
+    }),
+  async handler(args) {
+    if (args.json) {
+      await Instance.provide({
+        directory: process.cwd(),
+        async fn() {
+          const { Provider } = await import("../../provider/provider")
+          const { ModelsDev } = await import("../../provider/models")
+          await Provider.ready()
+          const connected = await Provider.list()
+          const catalog = await ModelsDev.get()
+          const config = await Config.get()
+
+          const providers: Record<string, { name?: string; models?: Record<string, unknown> }> = {}
+          for (const [id, provider] of Object.entries(catalog)) {
+            providers[id] = { name: provider.name, models: provider.models }
+          }
+          for (const [id, info] of Object.entries(connected)) {
+            providers[id] = { name: info.name, models: info.models }
+          }
+
+          const management: Record<string, string | undefined> = {}
+          for (const [id, provider] of Object.entries(config.provider ?? {})) {
+            if (provider.management) management[id] = provider.management
+          }
+
+          const document = buildProvidersDocument({
+            providers,
+            connected: Object.keys(connected),
+            management,
+          })
+          process.stdout.write(JSON.stringify(document, null, 2) + os.EOL)
+        },
+      })
+      return
+    }
+
     const { ModelsDev } = await import("../../provider/models")
     const { getCliProviderDefinition } = await import("../../provider/cli/config")
     UI.empty()

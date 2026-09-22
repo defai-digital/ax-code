@@ -11,6 +11,7 @@ import matter from "gray-matter"
 import { Instance } from "../../project/instance"
 import { EOL } from "os"
 import type { Argv } from "yargs"
+import { providerModelKey } from "../../provider/model-key"
 
 export type AgentMode = "all" | "primary" | "subagent"
 
@@ -239,14 +240,57 @@ const AgentCreateCommand = cmd({
   },
 })
 
-const AgentListCommand = cmd({
+export type AgentJSONEntry = {
+  name: string
+  mode: string
+  builtIn: boolean
+  description?: string
+  tier?: string
+  model?: string
+}
+
+export type AgentsJSONDocument = {
+  agents: AgentJSONEntry[]
+}
+
+export function buildAgentsDocument(agents: Agent.Info[]): AgentsJSONDocument {
+  const sorted = [...agents].sort((a, b) => {
+    if (a.native !== b.native) return a.native ? -1 : 1
+    return a.name.localeCompare(b.name)
+  })
+  const entries: AgentJSONEntry[] = sorted.map((agent) => {
+    const entry: AgentJSONEntry = {
+      name: agent.name,
+      mode: agent.mode,
+      builtIn: agent.native === true,
+    }
+    if (agent.description) entry.description = agent.description
+    if (agent.tier) entry.tier = agent.tier
+    if (agent.model)
+      entry.model = providerModelKey({ providerID: agent.model.providerID, modelID: agent.model.modelID })
+    return entry
+  })
+  return { agents: entries }
+}
+
+export const AgentListCommand = cmd({
   command: "list",
   describe: "list all available agents",
-  async handler() {
+  builder: (yargs: Argv) =>
+    yargs.option("json", {
+      describe: "output machine-readable JSON",
+      type: "boolean",
+      default: false,
+    }),
+  async handler(args) {
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
         const agents = await Agent.list()
+        if (args.json) {
+          process.stdout.write(JSON.stringify(buildAgentsDocument(agents), null, 2) + EOL)
+          return
+        }
         const sortedAgents = agents.sort((a, b) => {
           if (a.native !== b.native) {
             return a.native ? -1 : 1

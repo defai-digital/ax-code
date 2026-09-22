@@ -20,6 +20,7 @@ import { parseJsonPayload } from "../../util/json-value"
 import { toErrorMessage } from "../../util/error-message"
 import { parseShellArgs } from "../../util/shell-args"
 import { McpWebMcpCommand } from "./mcp-webmcp"
+import { EOL } from "os"
 
 // Above this many MCP tools, LLM tool-selection accuracy degrades and the
 // extra schema overhead noticeably eats context. Mirrors the empirical
@@ -79,6 +80,84 @@ export function formatMcpDebugEpochSeconds(seconds: number): string {
   return Number.isFinite(date.getTime()) ? date.toISOString() : new Date(0).toISOString()
 }
 
+export type McpJSONServer = {
+  name: string
+  type: string
+  status: string
+  enabled: boolean
+  tools?: number
+  error?: string
+}
+
+export type McpJSONDocument = {
+  servers: McpJSONServer[]
+}
+
+// Maps an MCP status to the same status string / enabled flag the text mode
+// prints. Keep the `status` strings in sync with the text rendering below.
+export function resolveMcpStatus(status: MCP.Status | undefined): {
+  status: string
+  enabled: boolean
+  error?: string
+} {
+  if (!status) return { status: "not initialized", enabled: true }
+  switch (status.status) {
+    case "connected":
+      return { status: "connected", enabled: true }
+    case "disabled":
+      return { status: "disabled", enabled: false }
+    case "needs_auth":
+      return { status: "needs authentication", enabled: true }
+    case "needs_trust":
+      return { status: "needs trust", enabled: true }
+    case "needs_client_registration":
+      return { status: "needs client registration", enabled: true, error: status.error }
+    case "failed":
+      return { status: "failed", enabled: true, error: status.error }
+  }
+}
+
+export function buildMcpDocument(input: {
+  servers: Array<{ name: string; type: "local" | "remote"; status: MCP.Status | undefined; tools?: number }>
+  includeTools?: boolean
+}): McpJSONDocument {
+  const servers: McpJSONServer[] = input.servers.map((server) => {
+    const resolved = resolveMcpStatus(server.status)
+    const entry: McpJSONServer = {
+      name: server.name,
+      type: server.type,
+      status: resolved.status,
+      enabled: resolved.enabled,
+    }
+    if (input.includeTools) entry.tools = server.tools ?? 0
+    if (resolved.error) entry.error = resolved.error
+    return entry
+  })
+  return { servers }
+}
+
+export type McpAuthJSONServer = {
+  name: string
+  status: string
+  url: string
+}
+
+export type McpAuthJSONDocument = {
+  servers: McpAuthJSONServer[]
+}
+
+export function buildMcpAuthDocument(input: {
+  servers: Array<{ name: string; status: MCP.AuthStatus; url: string }>
+}): McpAuthJSONDocument {
+  return {
+    servers: input.servers.map((server) => ({
+      name: server.name,
+      status: getAuthStatusText(server.status),
+      url: server.url,
+    })),
+  }
+}
+
 export const McpCommand = cmd({
   command: "mcp",
   describe: "manage MCP (Model Context Protocol) servers",
@@ -112,15 +191,17 @@ export const McpListCommand = cmd({
         describe: "expand each server's tools and their current permission action",
         type: "boolean",
         default: false,
+      })
+      .option("json", {
+        describe: "output machine-readable JSON",
+        type: "boolean",
+        default: false,
       }),
   async handler(args) {
     const { available: discoverAvailable } = await import("../../mcp/discovery")
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
-        UI.empty()
-        prompts.intro("MCP Servers")
-
         const config = await Config.get()
         const mcpServers = config.mcp ?? {}
         const statuses = await MCP.status()
@@ -128,6 +209,29 @@ export const McpListCommand = cmd({
         const servers = Object.entries(mcpServers).filter((entry): entry is [string, McpConfigured] =>
           MCP.isConfigured(entry[1]),
         )
+
+        if (args.json) {
+          const toolCounts = new Map<string, number>()
+          if (args.tools) {
+            for (const t of await MCP.listAllTools()) {
+              toolCounts.set(t.server, (toolCounts.get(t.server) ?? 0) + 1)
+            }
+          }
+          const document = buildMcpDocument({
+            servers: servers.map(([name, serverConfig]) => ({
+              name,
+              type: serverConfig.type,
+              status: statuses[name],
+              tools: toolCounts.get(name),
+            })),
+            includeTools: args.tools,
+          })
+          process.stdout.write(JSON.stringify(document, null, 2) + EOL)
+          return
+        }
+
+        UI.empty()
+        prompts.intro("MCP Servers")
 
         if (servers.length === 0) {
           prompts.log.warn("No MCP servers configured")
@@ -399,13 +503,16 @@ export const McpAuthListCommand = cmd({
   command: "list",
   aliases: ["ls"],
   describe: "list OAuth-capable MCP servers and their auth status",
-  async handler() {
+  builder: (yargs) =>
+    yargs.option("json", {
+      describe: "output machine-readable JSON",
+      type: "boolean",
+      default: false,
+    }),
+  async handler(args) {
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
-        UI.empty()
-        prompts.intro("MCP OAuth Status")
-
         const config = await Config.get()
         const mcpServers = config.mcp ?? {}
 
@@ -413,6 +520,23 @@ export const McpAuthListCommand = cmd({
         const oauthServers = Object.entries(mcpServers).filter(
           (entry): entry is [string, McpRemote] => isMcpRemote(entry[1]) && entry[1].oauth !== false,
         )
+
+        if (args.json) {
+          const document = buildMcpAuthDocument({
+            servers: await Promise.all(
+              oauthServers.map(async ([name, serverConfig]) => ({
+                name,
+                status: await MCP.getAuthStatus(name),
+                url: serverConfig.url,
+              })),
+            ),
+          })
+          process.stdout.write(JSON.stringify(document, null, 2) + EOL)
+          return
+        }
+
+        UI.empty()
+        prompts.intro("MCP OAuth Status")
 
         if (oauthServers.length === 0) {
           prompts.log.warn("No OAuth-capable MCP servers configured")

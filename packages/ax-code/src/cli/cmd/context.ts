@@ -7,23 +7,75 @@ import { MessageV2 } from "../../session/message-v2"
 import { Provider } from "../../provider/provider"
 import { ProviderID, ModelID } from "../../provider/schema"
 import { calculateBreakdown, formatBreakdown } from "../../stats"
+import { EOL } from "os"
+
+export type ContextJSONDocument = {
+  session: string
+  title: string
+  provider: string | null
+  model: string | null
+  messages: number
+  toolCalls: number
+  tokens: {
+    input: number
+    output: number
+    reasoning: number
+    cached: number
+  }
+}
+
+export function buildContextDocument(input: {
+  session: Session.Info
+  messages: number
+  toolCalls: number
+  provider: string | null
+  model: string | null
+  tokens: { input: number; output: number; reasoning: number; cached: number }
+}): ContextJSONDocument {
+  return {
+    session: input.session.id,
+    title: input.session.title || "untitled",
+    provider: input.provider,
+    model: input.model,
+    messages: input.messages,
+    toolCalls: input.toolCalls,
+    tokens: { ...input.tokens },
+  }
+}
+
+function writeContextJsonError(code: string, message: string) {
+  process.stderr.write(JSON.stringify({ error: { code, message } }, null, 2) + EOL)
+  process.exitCode = 1
+}
 
 export const ContextCommand = cmd({
   command: "context [sessionID]",
   describe: "show context window usage and token breakdown",
   builder: (yargs) =>
-    yargs.positional("sessionID", {
-      describe: "session ID (default: latest session)",
-      type: "string",
-    }),
+    yargs
+      .positional("sessionID", {
+        describe: "session ID (default: latest session)",
+        type: "string",
+      })
+      .option("json", {
+        describe: "output machine-readable JSON",
+        type: "boolean",
+        default: false,
+      }),
   async handler(args) {
-    UI.empty()
-    prompts.intro("Context Stats")
+    if (!args.json) {
+      UI.empty()
+      prompts.intro("Context Stats")
+    }
 
     await bootstrapReadonly(process.cwd(), async () => {
       const sessions = [...Session.list({ limit: 1000 })]
 
       if (sessions.length === 0) {
+        if (args.json) {
+          writeContextJsonError("no-sessions", "No sessions found. Start a conversation first.")
+          return
+        }
         prompts.log.warn("No sessions found. Start a conversation first.")
         prompts.outro("Done")
         return
@@ -36,6 +88,10 @@ export const ContextCommand = cmd({
       if (args.sessionID) {
         session = sessions.find((s) => s.id === args.sessionID)
         if (!session) {
+          if (args.json) {
+            writeContextJsonError("session-not-found", `Session "${args.sessionID}" not found`)
+            return
+          }
           prompts.log.error(`Session "${args.sessionID}" not found`)
           prompts.outro("Done")
           return
@@ -60,14 +116,23 @@ export const ContextCommand = cmd({
           }
         }
         if (!session) {
+          if (args.json) {
+            writeContextJsonError(
+              "no-context-session",
+              "No session with model context found. Run a conversation first.",
+            )
+            return
+          }
           prompts.log.warn("No session with model context found. Run a conversation first.")
           prompts.outro("Done")
           return
         }
       }
 
-      prompts.log.info(`Session: ${session.id}`)
-      prompts.log.info(`Title: ${session.title || "untitled"}`)
+      if (!args.json) {
+        prompts.log.info(`Session: ${session.id}`)
+        prompts.log.info(`Title: ${session.title || "untitled"}`)
+      }
 
       let inputTokens = 0
       let outputTokens = 0
@@ -96,6 +161,19 @@ export const ContextCommand = cmd({
             if (part.type === "tool") toolCalls++
           }
         }
+      }
+
+      if (args.json) {
+        const document = buildContextDocument({
+          session,
+          messages: messageCount,
+          toolCalls,
+          provider: providerID || null,
+          model: modelID || null,
+          tokens: { input: inputTokens, output: outputTokens, reasoning: reasoningTokens, cached: cachedTokens },
+        })
+        process.stdout.write(JSON.stringify(document, null, 2) + EOL)
+        return
       }
 
       // Resolve the provider model so the breakdown reflects the real
