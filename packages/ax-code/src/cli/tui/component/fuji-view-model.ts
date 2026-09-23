@@ -5,20 +5,25 @@ export function isFujiStyle(style: string | undefined): style is FujiStyle {
 
 /** Day/night sky stops from the reference: top, mid, bottom. */
 export const FUJI_SKY_STOPS: Record<FujiStyle, readonly [string, string, string]> = {
-  "fuji-day": ["#78236e", "#bc4749", "#ff8223"],
+  "fuji-day": ["#78236e", "#e08a63", "#f2a65e"],
   "fuji-night": ["#101b36", "#182848", "#1d3557"],
 }
 
 const hexRgb = (hex: string): readonly [number, number, number] =>
   [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16)) as [number, number, number]
 
+/** Day sky midpoint: rose climbs higher than gold so the band reads warm sunset,
+ *  not "dark sky then orange ground". The end stops stay byte-identical. */
+const DAY_SKY_MID = 0.35
+
 /** Sample the vertical sky gradient. `t` is 0 at the top of the frame. */
 export function fujiSkyRgb(style: FujiStyle, t: number): readonly [number, number, number] {
   const stops = FUJI_SKY_STOPS[style].map(hexRgb)
   const x = Math.max(0, Math.min(1, t))
-  const from = x <= 0.5 ? stops[0]! : stops[1]!
-  const to = x <= 0.5 ? stops[1]! : stops[2]!
-  const u = x <= 0.5 ? x * 2 : (x - 0.5) * 2
+  const mid = style === "fuji-day" ? DAY_SKY_MID : 0.5
+  const from = x <= mid ? stops[0]! : stops[1]!
+  const to = x <= mid ? stops[1]! : stops[2]!
+  const u = x <= mid ? x / mid : (x - mid) / (1 - mid)
   return [0, 1, 2].map((channel) => Math.round(from[channel]! + (to[channel]! - from[channel]!) * u)) as [
     number,
     number,
@@ -59,21 +64,21 @@ export const FUJI_COLORS = {
   "fuji-day": {
     sky: "#ffe5d9",
     light: "#ffe66d",
-    orbBg: "#ff9e4f",
-    glowBg: "#cf5f4a",
+    orbBg: "#ffb46b",
+    glowBg: "#d98d63",
     snow: "#fff1e6",
-    snowBg: "#ffc9a8",
-    mountain: "#8a5060",
-    mountainBg: "#4a2438",
+    snowBg: "#f4c9b4",
+    mountain: "#b07a88",
+    mountainBg: "#432a42",
     water: "#ffd9a8",
-    waterBg: "#c86964",
-    waterDeep: "#8c3c46",
-    blossom: "#e0507a",
+    waterBg: "#a86278",
+    waterDeep: "#6f3a50",
+    blossom: "#dd6f92",
     blossomBg: "#ff96b4",
     trunk: "#6c584c",
     track: "#5c4a52",
     petal: "#ffd6e0",
-    skirt: "#ff8fa3",
+    skirt: "#c76e83",
     jr: "#ffd166",
     train: "#edf2f4",
     trainBg: "#1d3557",

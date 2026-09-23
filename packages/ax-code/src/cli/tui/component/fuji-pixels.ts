@@ -166,7 +166,10 @@ export function renderFujiPixels(width: number, height: number, style: FujiStyle
     const faceX = peakX + halfW * 0.2
     for (let x = xa; x < xb; x++) {
       const sunlit = x < faceX
-      const color = y + 0.5 < snowEdge[x]! ? (sunlit ? snow : snowShade) : sunlit ? rock : rockShade
+      // Day sunlit face uses the lighter `mountain` rose so the lit/shadow
+      // split is visible; night keeps the original rock/rockShade split.
+      const belowSnow = night ? (sunlit ? rock : rockShade) : sunlit ? slopeEdge : rock
+      const color = y + 0.5 < snowEdge[x]! ? (sunlit ? snow : snowShade) : belowSnow
       const i = (y * w + x) * 3
       pixels[i] = color[0]!
       pixels[i + 1] = color[1]!
