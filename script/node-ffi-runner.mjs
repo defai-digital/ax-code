@@ -188,7 +188,13 @@ if (process.platform !== "win32" && typeof process.execve === "function") {
     optionsFlags.push(flag)
   }
   const childEnv = { ...launchEnv, AX_CODE_LAUNCH_NODE_OPTIONS: process.env.NODE_OPTIONS ?? "" }
-  const augmented = [...ffiArgs, ...optionsFlags]
+  // The entry pushed below is a TypeScript file, so tsx (loaded via `--import
+  // tsx`) detects a TS preload in NODE_OPTIONS and falls back from
+  // module.registerHooks() to the deprecated async module.register(). Node 26
+  // warns about that (DEP0205, module.register is deprecated). The fallback is
+  // tsx's intentional compatibility path, so silence only that warning code for
+  // the TUI child instead of changing the loader.
+  const augmented = [...ffiArgs, "--disable-warning=DEP0205", ...optionsFlags]
   if (entry) augmented.push("--import", toNodeOptionsImportSpecifier(entry))
   if (process.env.NODE_OPTIONS) augmented.push(process.env.NODE_OPTIONS)
   childEnv.NODE_OPTIONS = augmented.join(" ")

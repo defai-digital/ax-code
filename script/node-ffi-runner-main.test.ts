@@ -104,7 +104,7 @@ test("TUI runner admits equals-form preloads with spaces and records the Solid l
     writeFileSync(
       path.join(root, "packages/ax-code/src/index-node-tui.ts"),
       `
-console.log(JSON.stringify({ loaded: globalThis.preloadProbe, loader: process.env.AX_CODE_CLI_SOLID_LOADER }))
+console.log(JSON.stringify({ loaded: globalThis.preloadProbe, loader: process.env.AX_CODE_CLI_SOLID_LOADER, nodeOptions: process.env.NODE_OPTIONS }))
 `,
     )
     const result = spawnSync(
@@ -126,6 +126,9 @@ console.log(JSON.stringify({ loaded: globalThis.preloadProbe, loader: process.en
     expect(output.loaded).toBe("loaded")
     if (process.platform !== "win32")
       expect(output.loader).toBe(new URL("solid-loader%20probe.mjs", `file://${root}/`).href)
+    // The TUI entry is a .ts preload, so tsx falls back to the deprecated
+    // module.register(); the runner must silence only that DEP0205 warning.
+    if (process.platform !== "win32") expect(output.nodeOptions).toContain("--disable-warning=DEP0205")
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
