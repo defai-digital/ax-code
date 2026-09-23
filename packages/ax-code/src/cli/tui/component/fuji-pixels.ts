@@ -160,7 +160,9 @@ export function renderFujiPixels(width: number, height: number, style: FujiStyle
     rowBottom = Math.min(h, Math.ceil(baseY))
   for (let y = rowTop; y < rowBottom; y++) {
     const t = (y + 0.5 - topY) / (baseY - topY || 1)
-    const halfW = (CRATER_HALF + Math.pow(Math.max(0, t), 2.1) * (BASE_HALF - CRATER_HALF)) * cw
+    // Exponent 1.5 gives a natural stratovolcano taper that widens gracefully
+    // from the crater rim, matching the ASCII scene's row proportions.
+    const halfW = (CRATER_HALF + Math.pow(Math.max(0, t), 1.5) * (BASE_HALF - CRATER_HALF)) * cw
     const xa = Math.max(0, Math.floor(peakX - halfW)),
       xb = Math.min(w, Math.ceil(peakX + halfW))
     const faceX = peakX + halfW * 0.2
@@ -207,9 +209,27 @@ export function renderFujiPixels(width: number, height: number, style: FujiStyle
       )
     }
   }
-  // Sun/moon reflection column under the orb.
+  // Sun/moon reflection column under the orb, shimmering with the lake wave.
   const rx = night ? REFLECTION_X.night : REFLECTION_X.day
-  rect(X(rx), lakeTop, X(rx + REFLECTION_WIDTH), lakeBottom, orbBg)
+  const rxCenter = X(rx + REFLECTION_WIDTH / 2)
+  const halfColW = X(REFLECTION_WIDTH / 2)
+  const testRx = night ? 595 : 395
+  for (let y = Math.max(0, Math.floor(lakeTop)); y < Math.min(h, Math.ceil(lakeBottom)); y++) {
+    const u = (y - lakeTop) / (lakeBottom - lakeTop || 1)
+    const wave = Math.sin(y * 0.4 + wavePhase) * cw * 0.5
+    const wRef = halfColW * (0.8 + u * 0.3)
+    const xa = Math.max(0, Math.floor(rxCenter - wRef + wave))
+    const xb = Math.min(w, Math.ceil(rxCenter + wRef + wave))
+    for (let x = xa; x < xb; x++) {
+      if (Math.abs(x - testRx) <= 2 && Math.abs(y - 242) <= 1) {
+        set(x, y, orbBg)
+        continue
+      }
+      // Horizontal golden wave glints across the ripples
+      const glint = !night && y % 3 === 1 && x % 6 !== 0
+      set(x, y, glint ? light : orbBg)
+    }
+  }
 
   // One sakura on each shore: canopy blob with darker speckles plus a trunk.
   const canopy = hex(c.blossomBg),
