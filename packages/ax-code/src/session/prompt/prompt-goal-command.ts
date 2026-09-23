@@ -175,11 +175,17 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
       throw new Error("This session already has an active goal; pause, clear or revise it first")
     if (parsed.tokenBudget !== undefined && (!Number.isSafeInteger(parsed.tokenBudget) || parsed.tokenBudget <= 0))
       throw new Error("Goal token budget must be a positive integer")
+    if (
+      parsed.timeBudgetSeconds !== undefined &&
+      (!Number.isSafeInteger(parsed.timeBudgetSeconds) || parsed.timeBudgetSeconds <= 0)
+    )
+      throw new Error("Goal time budget must be a positive integer number of seconds")
     await cancelRunningSession(input.sessionID)
     prepared = await GoalPlanOrchestration.activate({
       sessionID: input.sessionID,
       objective: parsed.objective,
       tokenBudget: parsed.tokenBudget,
+      timeBudgetSeconds: parsed.timeBudgetSeconds,
       replace: false,
       model,
       contextParts: input.parts,

@@ -120,6 +120,72 @@ describe("SessionGoal", () => {
     })
   })
 
+  test("a wall-clock time budget flips the goal to budget_limited and blocks resume", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const created = await SessionGoal.create({
+          sessionID: session.id,
+          objective: "train the teacher model",
+          timeBudgetSeconds: 5,
+        })
+
+        expect(created.status).toBe("active")
+        expect(created.timeBudgetSeconds).toBe(5)
+
+        // A token-free turn (e.g. waiting on a remote job) still accrues time.
+        const updated = await SessionGoal.addUsage({
+          sessionID: session.id,
+          message: {
+            id: "message_goal_time_budget" as any,
+            sessionID: session.id,
+            parentID: "message_parent" as any,
+            role: "assistant",
+            time: { created: 1_000, completed: 7_000 },
+            modelID: "test-model" as any,
+            providerID: "test" as any,
+            mode: "build",
+            agent: "build",
+            path: { cwd: tmp.path, root: tmp.path },
+            tokens: {
+              total: 0,
+              input: 0,
+              output: 0,
+              reasoning: 0,
+              cache: { read: 0, write: 0 },
+            },
+          },
+        })
+
+        expect(updated?.timeUsedSeconds).toBe(6)
+        expect(updated?.status).toBe("budget_limited")
+
+        await expect(SessionGoal.resume(session.id)).rejects.toThrow("time budget")
+
+        await SessionGoal.clear(session.id)
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("rejects a non-positive time budget at creation", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        await expect(
+          SessionGoal.create({ sessionID: session.id, objective: "x", timeBudgetSeconds: 0 }),
+        ).rejects.toThrow("time budget")
+        await Session.remove(session.id)
+      },
+    })
+  })
+
   test("forking a session carries the goal and its usage to the fork", async () => {
     await using tmp = await tmpdir({ git: true })
 

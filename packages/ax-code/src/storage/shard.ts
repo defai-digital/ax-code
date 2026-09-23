@@ -175,6 +175,7 @@ export namespace Shard {
       "token_budget" integer,
       "tokens_used" integer NOT NULL DEFAULT 0,
       "time_used_seconds" integer NOT NULL DEFAULT 0,
+      "time_budget_seconds" integer,
       "time_created" integer NOT NULL,
       "time_updated" integer NOT NULL
     )`,
@@ -373,6 +374,26 @@ export namespace Shard {
     `CREATE INDEX IF NOT EXISTS "workflow_budget_ledger_child_idx" ON "workflow_budget_ledger" ("child_id")`,
   ]
 
+  // Columns added to shard tables after shards already exist in the wild:
+  // CREATE TABLE IF NOT EXISTS never alters an existing table, so apply these
+  // idempotently by inspecting pragma table_info first. Keep one entry per
+  // (table, column); new columns must be nullable or carry a default.
+  const SHARD_COLUMN_MIGRATIONS: readonly { table: string; column: string; ddl: string }[] = [
+    {
+      table: "session_goal",
+      column: "time_budget_seconds",
+      ddl: `ALTER TABLE "session_goal" ADD COLUMN "time_budget_seconds" integer`,
+    },
+  ]
+
+  function applyColumnMigrations(db: ShardClient) {
+    for (const migration of SHARD_COLUMN_MIGRATIONS) {
+      const columns = db.$client.prepare(`PRAGMA table_info("${migration.table}")`).all() as { name: string }[]
+      if (columns.some((column) => column.name === migration.column)) continue
+      db.run(migration.ddl)
+    }
+  }
+
   function open(projectID: ProjectID): ShardClient {
     const key = projectID as string
     const existing = cache.get(key)
@@ -388,6 +409,7 @@ export namespace Shard {
     const db = init(file)
     applyStartupPragmas(db, file)
     for (const statement of SHARD_SCHEMA_DDL) db.run(statement)
+    applyColumnMigrations(db)
 
     cache.set(key, db)
     while (cache.size > MAX_OPEN) {

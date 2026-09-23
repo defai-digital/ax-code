@@ -112,4 +112,60 @@ describe("parseGoalArguments", () => {
       expect(decision.message).toContain("--budget")
     }
   })
+
+  test("--time-budget accepts seconds, minutes, and hours", () => {
+    expect(parseGoalArguments("--time-budget 900 fix the bug")).toEqual({
+      action: "create",
+      timeBudgetSeconds: 900,
+      objective: "fix the bug",
+    })
+    expect(parseGoalArguments("--time-budget 30m fix the bug")).toEqual({
+      action: "create",
+      timeBudgetSeconds: 1800,
+      objective: "fix the bug",
+    })
+    expect(parseGoalArguments("--time-budget=2h fix the bug")).toEqual({
+      action: "create",
+      timeBudgetSeconds: 7200,
+      objective: "fix the bug",
+    })
+  })
+
+  test("--budget and --time-budget combine in either order", () => {
+    expect(parseGoalArguments("--budget 500 --time-budget 30m fix the bug")).toEqual({
+      action: "create",
+      tokenBudget: 500,
+      timeBudgetSeconds: 1800,
+      objective: "fix the bug",
+    })
+    expect(parseGoalArguments("--time-budget 30m --budget 500 fix the bug")).toEqual({
+      action: "create",
+      tokenBudget: 500,
+      timeBudgetSeconds: 1800,
+      objective: "fix the bug",
+    })
+  })
+
+  test("malformed, empty, and duplicate --time-budget values error explicitly", () => {
+    for (const raw of [
+      "--time-budget soon fix the bug",
+      "--time-budget -5 fix the bug",
+      "--time-budget=",
+      "--time-budget",
+    ]) {
+      const decision = parseGoalArguments(raw)
+      expect(decision.action).toBe("error")
+      if (decision.action !== "error") throw new Error(`expected error for ${raw}`)
+      expect(decision.message).toContain("--time-budget")
+    }
+    const duplicate = parseGoalArguments("--time-budget 10m --time-budget 20m fix the bug")
+    expect(duplicate.action).toBe("error")
+  })
+
+  test("a time budget without an objective errors instead of creating a goal", () => {
+    const decision = parseGoalArguments("--time-budget 30m")
+    expect(decision.action).toBe("error")
+    if (decision.action !== "error") throw new Error("expected error")
+    expect(decision.message).toContain("--time-budget requires a goal objective")
+  })
 })

@@ -7,7 +7,8 @@ import type { SessionGoal } from "@/session/goal"
 function goalSummary(goal: SessionGoal.PublicInfo | null | undefined) {
   if (!goal) return "No goal is set for this session."
   const budget = goal.tokenBudget === undefined ? "" : ` · ${goal.tokensUsed}/${goal.tokenBudget} tokens`
-  return `${goal.status}: ${goal.objective}${budget}`
+  const time = goal.timeBudgetSeconds === undefined ? "" : ` · ${goal.timeUsedSeconds}s/${goal.timeBudgetSeconds}s`
+  return `${goal.status}: ${goal.objective}${budget}${time}`
 }
 
 export function DialogGoal(props: { goal?: SessionGoal.PublicInfo | null; setPrompt: (value: string) => void }) {
@@ -44,11 +45,13 @@ export function DialogGoal(props: { goal?: SessionGoal.PublicInfo | null; setPro
       })
     }
 
-    // Resuming sets the goal back to active, which the server refuses when the
-    // token budget is exhausted. Only offer Resume when it can actually succeed,
-    // otherwise the action throws a budget error. (A budget-exhausted goal can
-    // still be cleared or replaced with a new goal below.)
-    const budgetExhausted = goal?.tokenBudget !== undefined && (goal?.remainingTokens ?? 0) <= 0
+    // Resuming sets the goal back to active, which the server refuses when a
+    // token or time budget is exhausted. Only offer Resume when it can actually
+    // succeed, otherwise the action throws a budget error. (A budget-exhausted
+    // goal can still be cleared or replaced with a new goal below.)
+    const budgetExhausted =
+      (goal?.tokenBudget !== undefined && (goal?.remainingTokens ?? 0) <= 0) ||
+      (goal?.timeBudgetSeconds !== undefined && (goal?.remainingTimeSeconds ?? 0) <= 0)
     if ((goal?.status === "paused" || goal?.status === "blocked") && !budgetExhausted) {
       items.push({
         title: uiText("ui.resumeCurrentGoal"),

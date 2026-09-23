@@ -9,6 +9,7 @@ type GoalContinuationInfo = {
   tokenBudget?: number
   tokensUsed: number
   timeUsedSeconds: number
+  timeBudgetSeconds?: number
   planPath?: string
   nextStep?: string
   contractContext?: string
@@ -69,6 +70,7 @@ export function handlePromptLoopGoalContinuation(
         tokensUsed: decision.tokensUsed,
         tokenBudget: decision.tokenBudget,
         timeUsedSeconds: decision.timeUsedSeconds,
+        timeBudgetSeconds: decision.timeBudgetSeconds,
       }),
       budgetWrapUp: "sent",
     }

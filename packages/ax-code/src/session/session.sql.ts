@@ -124,6 +124,7 @@ export const SessionGoalTable = sqliteTable(
     token_budget: integer(),
     tokens_used: integer().notNull().default(0),
     time_used_seconds: integer().notNull().default(0),
+    time_budget_seconds: integer(),
     ...Timestamps,
   },
   (table) => [index("session_goal_status_idx").on(table.status)],

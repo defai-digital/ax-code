@@ -460,6 +460,51 @@ describe("autonomous continuation decisions", () => {
     })
   })
 
+  test("a time-budget-only goal still gets its wrap-up turn", () => {
+    // The wrap-up gate must not require a token budget: a goal carrying only
+    // a wall-clock budget would otherwise fall through to "ignore" and never
+    // surface the budget stop.
+    const decision = goalContinuationDecision({
+      goal: {
+        objective: "train the teacher",
+        status: "budget_limited",
+        tokensUsed: 120,
+        timeUsedSeconds: 4000,
+        timeBudgetSeconds: 3600,
+      },
+      continuations: 25,
+      budgetWrapUp: "none",
+    })
+
+    expect(decision).toEqual({
+      action: "continue_budget_wrapup",
+      objective: "train the teacher",
+      tokensUsed: 120,
+      timeUsedSeconds: 4000,
+      timeBudgetSeconds: 3600,
+    })
+  })
+
+  test("the budget stop names the time budget when it tripped", () => {
+    const decision = goalContinuationDecision({
+      goal: {
+        objective: "train the teacher",
+        status: "budget_limited",
+        tokensUsed: 120,
+        timeUsedSeconds: 4000,
+        timeBudgetSeconds: 3600,
+      },
+      continuations: 0,
+      budgetWrapUp: "sent",
+    })
+
+    expect(decision).toMatchObject({ action: "stop_budget_limit", reason: "stalled" })
+    if (decision.action !== "stop_budget_limit") throw new Error("expected stop_budget_limit")
+    expect(decision.message).toContain("reached its time budget")
+    expect(decision.message).toContain("4000 of 3600 seconds used")
+    expect(decision.message).not.toContain("token budget")
+  })
+
   test("uses todo retries for unfinished-todo completion gate events", () => {
     expect(
       completionGateEventState({

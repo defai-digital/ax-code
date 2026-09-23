@@ -30,6 +30,7 @@ export namespace SessionGoal {
     tokenBudget: z.number().int().positive().optional(),
     tokensUsed: z.number().int().min(0),
     timeUsedSeconds: z.number().int().min(0),
+    timeBudgetSeconds: z.number().int().positive().optional(),
     time: z.object({
       created: z.number(),
       updated: z.number().optional(),
@@ -39,6 +40,7 @@ export namespace SessionGoal {
 
   export const PublicInfo = Info.extend({
     remainingTokens: z.number().int().min(0).optional(),
+    remainingTimeSeconds: z.number().int().min(0).optional(),
     planPath: z.string().optional(),
   })
   export type PublicInfo = z.infer<typeof PublicInfo>
@@ -61,6 +63,7 @@ export namespace SessionGoal {
       tokenBudget: row.token_budget ?? undefined,
       tokensUsed: row.tokens_used,
       timeUsedSeconds: row.time_used_seconds,
+      timeBudgetSeconds: row.time_budget_seconds ?? undefined,
       time: {
         created: row.time_created,
         updated: row.time_updated ?? undefined,
@@ -102,6 +105,9 @@ export namespace SessionGoal {
       tokensUsed: goal.tokensUsed,
       remainingTokens: goal.tokenBudget === undefined ? undefined : Math.max(0, goal.tokenBudget - goal.tokensUsed),
       timeUsedSeconds: goal.timeUsedSeconds,
+      timeBudgetSeconds: goal.timeBudgetSeconds,
+      remainingTimeSeconds:
+        goal.timeBudgetSeconds === undefined ? undefined : Math.max(0, goal.timeBudgetSeconds - goal.timeUsedSeconds),
       time: goal.time,
       planPath,
     })
@@ -146,12 +152,20 @@ export namespace SessionGoal {
         "Cannot resume a budget-limited goal without increasing the token budget. Start a new goal with a larger budget or clear the current goal first.",
       )
     }
+    // Same guard for the wall-clock budget: a time-exhausted goal must not
+    // silently resume either (the budget_limited → pause → resume bypass).
+    if (status === "active" && row.time_budget_seconds !== null && row.time_used_seconds >= row.time_budget_seconds) {
+      throw new Error(
+        "Cannot resume a budget-limited goal without increasing the time budget. Start a new goal with a larger time budget or clear the current goal first.",
+      )
+    }
   }
 
   export async function create(input: {
     sessionID: SessionID
     objective: string
     tokenBudget?: number
+    timeBudgetSeconds?: number
     replace?: boolean
     status?: Extract<Status, "active" | "paused">
   }): Promise<Info> {
@@ -160,6 +174,12 @@ export namespace SessionGoal {
     if (input.tokenBudget !== undefined && (!Number.isSafeInteger(input.tokenBudget) || input.tokenBudget <= 0)) {
       throw new Error("Goal token budget must be a positive integer")
     }
+    if (
+      input.timeBudgetSeconds !== undefined &&
+      (!Number.isSafeInteger(input.timeBudgetSeconds) || input.timeBudgetSeconds <= 0)
+    ) {
+      throw new Error("Goal time budget must be a positive integer number of seconds")
+    }
     const status = input.status ?? "active"
     const now = reserveCreated()
     const values = {
@@ -167,6 +187,7 @@ export namespace SessionGoal {
       objective,
       status,
       token_budget: input.tokenBudget,
+      time_budget_seconds: input.timeBudgetSeconds,
       tokens_used: 0,
       time_used_seconds: 0,
       time_created: now,
@@ -183,6 +204,7 @@ export namespace SessionGoal {
               objective,
               status,
               token_budget: input.tokenBudget ?? null,
+              time_budget_seconds: input.timeBudgetSeconds ?? null,
               tokens_used: 0,
               time_used_seconds: 0,
               time_created: now,
@@ -206,6 +228,7 @@ export namespace SessionGoal {
           objective,
           status,
           token_budget: input.tokenBudget ?? null,
+          time_budget_seconds: input.timeBudgetSeconds ?? null,
           tokens_used: 0,
           time_used_seconds: 0,
           time_created: now,
@@ -340,6 +363,7 @@ export namespace SessionGoal {
         objective: row.objective,
         status: row.status,
         token_budget: row.token_budget,
+        time_budget_seconds: row.time_budget_seconds,
         tokens_used: row.tokens_used,
         time_used_seconds: row.time_used_seconds,
         time_created: now,
@@ -455,8 +479,12 @@ export namespace SessionGoal {
           time_used_seconds: sql`${SessionGoalTable.time_used_seconds} + ${elapsedSeconds}`,
           status: sql`case
             when ${SessionGoalTable.status} = 'active'
-              and ${SessionGoalTable.token_budget} is not null
-              and ${SessionGoalTable.tokens_used} + ${tokenDelta} >= ${SessionGoalTable.token_budget}
+              and (
+                (${SessionGoalTable.token_budget} is not null
+                  and ${SessionGoalTable.tokens_used} + ${tokenDelta} >= ${SessionGoalTable.token_budget})
+                or (${SessionGoalTable.time_budget_seconds} is not null
+                  and ${SessionGoalTable.time_used_seconds} + ${elapsedSeconds} >= ${SessionGoalTable.time_budget_seconds})
+              )
             then 'budget_limited'
             else ${SessionGoalTable.status}
           end`,
@@ -479,8 +507,13 @@ export namespace SessionGoal {
     if (!goal) return "No goal is set for this session."
     const remaining =
       goal.tokenBudget === undefined ? "" : ` Remaining tokens: ${Math.max(0, goal.tokenBudget - goal.tokensUsed)}.`
+    const time =
+      ` Time used: ${goal.timeUsedSeconds}s${goal.timeBudgetSeconds === undefined ? "" : `/${goal.timeBudgetSeconds}s`}.` +
+      (goal.timeBudgetSeconds === undefined
+        ? ""
+        : ` Remaining time: ${Math.max(0, goal.timeBudgetSeconds - goal.timeUsedSeconds)}s.`)
     const publicGoal = toPublic(goal)
     const plan = publicGoal?.planPath ? `\nPlan: ${publicGoal.planPath}` : ""
-    return `Goal ${goal.status}: ${goal.objective}\nTokens used: ${goal.tokensUsed}${goal.tokenBudget === undefined ? "" : `/${goal.tokenBudget}`}.${remaining}${plan}`
+    return `Goal ${goal.status}: ${goal.objective}\nTokens used: ${goal.tokensUsed}${goal.tokenBudget === undefined ? "" : `/${goal.tokenBudget}`}.${remaining}${time}${plan}`
   }
 }

@@ -86,9 +86,10 @@ type GoalForContinuationDecision = {
   tokenBudget?: number
   tokensUsed: number
   timeUsedSeconds: number
+  timeBudgetSeconds?: number
 }
 
-// Budget wrap-up lifecycle for a goal that hit its token budget:
+// Budget wrap-up lifecycle for a goal that hit its token or time budget:
 //   "none"      — no wrap-up owed or sent yet (goal not budget_limited, or it
 //                 became budget_limited during this run and the wrap-up turn
 //                 has not been injected).
@@ -112,8 +113,9 @@ type GoalContinuationDecision =
       action: "continue_budget_wrapup"
       objective: string
       tokensUsed: number
-      tokenBudget: number
+      tokenBudget?: number
       timeUsedSeconds: number
+      timeBudgetSeconds?: number
     }
   | {
       action: "stop_budget_limit"
@@ -987,19 +989,26 @@ export function goalContinuationDecision(input: {
     // a wrap-up turn that kept tool-calling could keep the loop running with
     // no goal driver and no budget stop ever surfacing to the user.
     if (input.budgetWrapUp === "sent") {
-      const budget = input.goal.tokenBudget
+      // Report the budget that actually tripped: a goal can carry a token
+      // budget, a wall-clock time budget, or both.
+      const exhausted: string[] = []
+      if (input.goal.tokenBudget !== undefined && input.goal.tokensUsed >= input.goal.tokenBudget) {
+        exhausted.push(`token budget (${input.goal.tokensUsed} of ${input.goal.tokenBudget} tokens used)`)
+      }
+      if (input.goal.timeBudgetSeconds !== undefined && input.goal.timeUsedSeconds >= input.goal.timeBudgetSeconds) {
+        exhausted.push(`time budget (${input.goal.timeUsedSeconds} of ${input.goal.timeBudgetSeconds} seconds used)`)
+      }
       return {
         action: "stop_budget_limit",
         reason: "stalled",
         message:
-          `Goal "${input.goal.objective}" reached its token budget` +
-          (budget !== undefined ? ` (${input.goal.tokensUsed} of ${budget} tokens used)` : "") +
+          `Goal "${input.goal.objective}" reached its ${exhausted.join(" and ") || "budget"}` +
           `. The wrap-up turn has already run, so the session is stopped. ` +
           `Review the wrap-up summary, then resume with a new prompt or start a new goal with a larger budget.`,
       }
     }
 
-    if (input.goal.tokenBudget !== undefined) {
+    if (input.goal.tokenBudget !== undefined || input.goal.timeBudgetSeconds !== undefined) {
       // The single budget wrap-up turn is guaranteed once per budget cycle
       // (bounded by budgetWrapUp), independent of the continuation cap.
       // Active goals deliberately run past maxContinuations, so by the time a
@@ -1012,6 +1021,7 @@ export function goalContinuationDecision(input: {
         tokensUsed: input.goal.tokensUsed,
         tokenBudget: input.goal.tokenBudget,
         timeUsedSeconds: input.goal.timeUsedSeconds,
+        timeBudgetSeconds: input.goal.timeBudgetSeconds,
       }
     }
   }

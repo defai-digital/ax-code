@@ -72,12 +72,15 @@ export const GetGoalTool = Tool.define("get_goal", {
 
 export const CreateGoalTool = Tool.define("create_goal", {
   description:
-    "Create a goal only when explicitly requested by the user or system/developer instructions; do not infer goals from ordinary tasks. Set tokenBudget only when an explicit token budget is requested. Fails while an active or paused goal exists; only completed, blocked, or budget-limited goals are replaced.",
+    "Create a goal only when explicitly requested by the user or system/developer instructions; do not infer goals from ordinary tasks. Set tokenBudget only when an explicit token budget is requested, and timeBudgetSeconds only when an explicit wall-clock limit is requested. Fails while an active or paused goal exists; only completed, blocked, or budget-limited goals are replaced.",
   parameters: z.object({
     objective: z.string().min(1).describe("The concrete objective to start pursuing."),
     tokenBudget: ToolNumber(z.number().int().positive())
       .optional()
       .describe("Optional positive token budget for the new goal."),
+    timeBudgetSeconds: ToolNumber(z.number().int().positive())
+      .optional()
+      .describe("Optional positive wall-clock budget for the new goal, in seconds."),
   }),
   async execute(params, ctx) {
     const selected = ctx.extra?.model
@@ -97,6 +100,7 @@ export const CreateGoalTool = Tool.define("create_goal", {
       sessionID: ctx.sessionID,
       objective: params.objective,
       tokenBudget: params.tokenBudget,
+      timeBudgetSeconds: params.timeBudgetSeconds,
       replace: false,
       model,
       variant,

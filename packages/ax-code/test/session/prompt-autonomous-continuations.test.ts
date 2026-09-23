@@ -38,6 +38,19 @@ describe("autonomous continuation prompt builders", () => {
     expect(text).toContain("do not start new substantive work")
   })
 
+  test("names the time budget when the wall-clock limit tripped", () => {
+    const text = AutonomousContinuationPrompt.goalBudgetLimit({
+      objective: "train the teacher",
+      tokensUsed: 120,
+      timeUsedSeconds: 4000,
+      timeBudgetSeconds: 3600,
+    })
+
+    expect(text).toContain("reached its time budget")
+    expect(text).toContain("Time budget: 3600 seconds")
+    expect(text).not.toContain("Token budget: undefined")
+  })
+
   test("builds goal ceiling-approach convergence guidance", () => {
     const text = AutonomousContinuationPrompt.goalCeilingApproach({
       objective: "finish the migration",

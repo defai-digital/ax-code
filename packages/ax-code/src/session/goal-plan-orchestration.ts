@@ -55,6 +55,7 @@ export namespace GoalPlanOrchestration {
     sessionID: SessionID
     objective: string
     tokenBudget?: number
+    timeBudgetSeconds?: number
     replace?: boolean
     model?: { providerID: ProviderID; modelID: ModelID }
     variant?: string
@@ -65,6 +66,7 @@ export namespace GoalPlanOrchestration {
       sessionID: input.sessionID,
       objective: input.objective,
       tokenBudget: input.tokenBudget,
+      timeBudgetSeconds: input.timeBudgetSeconds,
       replace: input.replace,
       status: "paused",
     })

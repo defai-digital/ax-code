@@ -6,7 +6,24 @@ type GoalArgumentDecision =
       action: "create"
       objective: string
       tokenBudget?: number
+      timeBudgetSeconds?: number
     }
+
+// Wall-clock budget units for --time-budget: bare numbers are seconds, with
+// m/h suffixes for the units people actually think in for expensive runs
+// (e.g. /goal --time-budget 30m <objective>). Adopted from the kimi-code
+// goal-mode design (wallClockBudgetMs), stored in seconds.
+const TIME_BUDGET_UNITS: Record<string, number> = { s: 1, m: 60, h: 3600 }
+
+function parseTimeBudget(raw: string): number | undefined {
+  const match = /^(\d+)([smh])?$/i.exec(raw)
+  if (!match) return undefined
+  const seconds = Number(match[1]) * (TIME_BUDGET_UNITS[(match[2] ?? "s").toLowerCase()] ?? 1)
+  return Number.isSafeInteger(seconds) && seconds > 0 ? seconds : undefined
+}
+
+const TOKEN_BUDGET_HINT = "a positive whole number of tokens (e.g. /goal --budget 500000 <objective>)"
+const TIME_BUDGET_HINT = "a positive duration in seconds, minutes, or hours (e.g. /goal --time-budget 30m <objective>)"
 
 export function parseGoalArguments(raw: string): GoalArgumentDecision {
   const text = raw.trim()
@@ -25,52 +42,86 @@ export function parseGoalArguments(raw: string): GoalArgumentDecision {
   // it would silently CREATE a goal whose objective is the word "status".
   if (lower === "status") return { action: "view" }
 
-  // The flag is matched case-insensitively to stay consistent with the
-  // pause/resume/clear keywords above (which compare against `lower`).
+  // Leading budget flags may combine in either order:
+  // /goal --budget 500000 --time-budget 2h <objective>. Flags are matched
+  // case-insensitively to stay consistent with the control keywords above.
   // Match ANY value token, then validate: a malformed value (negative,
   // decimal, non-numeric) must surface as an explicit error — previously it
   // fell through to goal creation with the raw "--budget -5 ..." text as
   // the objective, silently dropping the budget.
-  const budgetMatch = /^--(?:token-)?budget(?:\s+|=)(\S+)(?:\s+([\s\S]+))?$/i.exec(text)
-  if (budgetMatch) {
-    const value = budgetMatch[1] ?? ""
-    if (!/^\d+$/.test(value)) {
-      return {
-        action: "error",
-        message: `Invalid --budget value "${value}": expected a positive whole number of tokens (e.g. /goal --budget 500000 <objective>).`,
-      }
+  let rest = text
+  let tokenBudget: number | undefined
+  let timeBudgetSeconds: number | undefined
+  let lastFlag: string | undefined
+  let lastValue: string | undefined
+  for (;;) {
+    // `--budgeting is hard` is a plain objective: the flag word must be
+    // followed by whitespace, `=`, or the end of the input.
+    const flag = /^(--token-budget|--time-budget|--budget)(?=[\s=]|$)/i.exec(rest)
+    if (!flag) break
+    const name = flag[1]!.toLowerCase()
+    const isTime = name === "--time-budget"
+    const hint = isTime ? TIME_BUDGET_HINT : TOKEN_BUDGET_HINT
+    const after = rest.slice(flag[0].length)
+    let value: string
+    let consumed: number
+    if (after.startsWith("=")) {
+      // "=" must be followed immediately by the value: "--budget= fix the
+      // bug" has an empty value and must error, not swallow "fix".
+      value = /^\S*/.exec(after.slice(1))![0]
+      consumed = flag[0].length + 1 + value.length
+    } else if (/^\s/.test(after)) {
+      const body = after.replace(/^\s+/, "")
+      value = /^\S*/.exec(body)![0]
+      consumed = flag[0].length + (after.length - body.length) + value.length
+    } else {
+      value = ""
+      consumed = flag[0].length
     }
-    const objective = budgetMatch[2]?.trim()
+    // A budget flag whose value is missing or empty ("--budget", "--budget=")
+    // must error explicitly instead of falling through to goal creation with
+    // the raw flag text as the objective and NO budget applied.
+    if (!value) {
+      return { action: "error", message: `Invalid ${name} value: expected ${hint}.` }
+    }
+    if (isTime) {
+      if (timeBudgetSeconds !== undefined)
+        return { action: "error", message: "--time-budget was specified more than once." }
+      const parsed = parseTimeBudget(value)
+      if (parsed === undefined) {
+        return { action: "error", message: `Invalid --time-budget value "${value}": expected ${TIME_BUDGET_HINT}.` }
+      }
+      timeBudgetSeconds = parsed
+    } else {
+      if (tokenBudget !== undefined) return { action: "error", message: "--budget was specified more than once." }
+      if (!/^\d+$/.test(value)) {
+        return { action: "error", message: `Invalid --budget value "${value}": expected ${TOKEN_BUDGET_HINT}.` }
+      }
+      tokenBudget = Number(value)
+    }
+    lastFlag = name
+    lastValue = value
+    rest = rest.slice(consumed).replace(/^\s+/, "")
+  }
+
+  if (tokenBudget !== undefined || timeBudgetSeconds !== undefined) {
     // --budget N without an objective is not a valid create. Error explicitly
     // instead of silently showing the goal view — the user's intent (set a
     // budget) cannot be honored, and budgets of existing goals are immutable.
-    if (!objective) {
+    if (!rest) {
       return {
         action: "error",
         message:
-          `--budget requires a goal objective (e.g. /goal --budget ${value} <objective>). ` +
+          `${lastFlag} requires a goal objective (e.g. /goal ${lastFlag} ${lastValue} <objective>). ` +
           `A budget applies only to a new goal; run /goal with no arguments to view the current goal.`,
       }
     }
     return {
       action: "create",
-      tokenBudget: Number(value),
-      objective,
+      ...(tokenBudget === undefined ? {} : { tokenBudget }),
+      ...(timeBudgetSeconds === undefined ? {} : { timeBudgetSeconds }),
+      objective: rest,
     }
   }
-  // A budget flag whose value is missing or empty ("--budget", "--budget=",
-  // "--budget= fix the bug") does not match the strict pattern above. Without
-  // this guard it fell through to goal creation with the raw flag text as the
-  // objective and NO budget applied — silently dropping the user's intent.
-  // `--budgeting is hard` is a plain objective and is left alone (no
-  // `=`/whitespace/end right after the flag word).
-  if (/^--(?:token-)?budget(?:=|\s|$)/i.test(text)) {
-    return {
-      action: "error",
-      message:
-        `Invalid --budget value: expected a positive whole number of tokens ` +
-        `(e.g. /goal --budget 500000 <objective>).`,
-    }
-  }
-  return { action: "create", objective: text }
+  return { action: "create", objective: rest }
 }

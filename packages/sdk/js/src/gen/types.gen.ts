@@ -1993,11 +1993,13 @@ export type EventSessionGoal = {
       tokenBudget?: number
       tokensUsed: number
       timeUsedSeconds: number
+      timeBudgetSeconds?: number
       time: {
         created: number
         updated?: number
       }
       remainingTokens?: number
+      remainingTimeSeconds?: number
       planPath?: string
     } | null
   }
@@ -12425,11 +12427,13 @@ export type SessionGoalResponses = {
     tokenBudget?: number
     tokensUsed: number
     timeUsedSeconds: number
+    timeBudgetSeconds?: number
     time: {
       created: number
       updated?: number
     }
     remainingTokens?: number
+    remainingTimeSeconds?: number
     planPath?: string
   } | null
 }

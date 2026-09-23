@@ -68,6 +68,11 @@ budget-limited. What bounds it instead:
 
 - **Token budget** (`/goal --budget N …`): when exhausted, the agent gets one
   wrap-up turn, then the goal becomes `budget_limited`.
+- **Time budget** (`/goal --time-budget 30m …`): a wall-clock limit in seconds,
+  minutes (`m`), or hours (`h`), combinable with the token budget in either
+  order. It bounds elapsed work the token budget cannot see — remote training
+  jobs, long tool calls, provider stalls. The same wrap-up turn and
+  `budget_limited` transition apply when it trips.
 - **Cumulative step ceiling**: active-goal runs share the Super-Long backstop
   of `max_steps × 40` total steps (20,000 by default) instead of the ordinary
   autonomous ceiling of `max_steps × (max_continuations + 1)`. Override with

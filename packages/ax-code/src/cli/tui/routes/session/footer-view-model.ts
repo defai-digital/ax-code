@@ -70,6 +70,9 @@ type FooterGoalInfo = {
   tokenBudget?: number
   tokensUsed?: number
   remainingTokens?: number
+  timeBudgetSeconds?: number
+  timeUsedSeconds?: number
+  remainingTimeSeconds?: number
 }
 type FooterGoalChip = {
   label: string
@@ -85,6 +88,15 @@ export function formatTokenCount(n: number): string {
   if (n < 10_000) return `${(n / 1000).toFixed(1)}k`
   if (n >= 999_500) return `${(n / 1_000_000).toFixed(1)}m`
   return `${Math.round(n / 1000)}k`
+}
+
+// Compact wall-clock rendering for goal time budgets: 45s, 25m, 2h, 1h30m.
+export function formatGoalSeconds(n: number): string {
+  if (n < 60) return `${n}s`
+  if (n < 3600) return `${Math.round(n / 60)}m`
+  const hours = Math.floor(n / 3600)
+  const minutes = Math.round((n % 3600) / 60)
+  return minutes === 0 ? `${hours}h` : `${hours}h${minutes}m`
 }
 
 // Sub-second rates are noisy and meaningless ("inf t/s" right after the
@@ -216,11 +228,17 @@ export function footerGoalChip(input: {
     goal.tokenBudget === undefined || goal.tokensUsed === undefined
       ? ""
       : ` - ${formatTokenCount(goal.tokensUsed)}/${formatTokenCount(goal.tokenBudget)}${input.compact ? "" : " tok"}`
-  // Don't hint "/goal resume" once the token budget is exhausted — resuming
-  // such a goal is refused server-side, so the hint would point at an action
-  // that errors. The goal can still be cleared or replaced. The same applies
+  const time =
+    goal.timeBudgetSeconds === undefined || goal.timeUsedSeconds === undefined
+      ? ""
+      : ` - ${formatGoalSeconds(goal.timeUsedSeconds)}/${formatGoalSeconds(goal.timeBudgetSeconds)}`
+  // Don't hint "/goal resume" once a budget is exhausted — resuming such a
+  // goal is refused server-side, so the hint would point at an action that
+  // errors. The goal can still be cleared or replaced. The same applies
   // while the plan writer is running: resume is the wrong action.
-  const budgetExhausted = goal.tokenBudget !== undefined && (goal.remainingTokens ?? 0) <= 0
+  const budgetExhausted =
+    (goal.tokenBudget !== undefined && (goal.remainingTokens ?? 0) <= 0) ||
+    (goal.timeBudgetSeconds !== undefined && (goal.remainingTimeSeconds ?? 0) <= 0)
   const resumeHint =
     !planning && !input.compact && (goal.status === "paused" || goal.status === "blocked") && !budgetExhausted
       ? "/goal resume"
@@ -235,7 +253,7 @@ export function footerGoalChip(input: {
         : "warning"
 
   return {
-    label: `${status}: ${objective}${tokens}${resume}`,
+    label: `${status}: ${objective}${tokens}${time}${resume}`,
     tone,
     resumeHint,
   }

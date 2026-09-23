@@ -26636,6 +26636,11 @@
                           "minimum": 0,
                           "maximum": 9007199254740991
                         },
+                        "timeBudgetSeconds": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
                         "time": {
                           "type": "object",
                           "properties": {
@@ -26651,6 +26656,11 @@
                           ]
                         },
                         "remainingTokens": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "remainingTimeSeconds": {
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9007199254740991
@@ -41832,6 +41842,11 @@
                         "minimum": 0,
                         "maximum": 9007199254740991
                       },
+                      "timeBudgetSeconds": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
                       "time": {
                         "type": "object",
                         "properties": {
@@ -41847,6 +41862,11 @@
                         ]
                       },
                       "remainingTokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "remainingTimeSeconds": {
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 9007199254740991

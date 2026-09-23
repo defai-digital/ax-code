@@ -164,7 +164,8 @@ describe("session.prompt helpers", () => {
       const decision = parseGoalArguments(raw)
       expect(decision.action).toBe("error")
       if (decision.action !== "error") throw new Error("expected error")
-      expect(decision.message).toContain("--budget requires a goal objective")
+      // The error names the flag exactly as typed.
+      expect(decision.message).toContain(`${raw.split(" ")[0]} requires a goal objective`)
     }
   })
 
