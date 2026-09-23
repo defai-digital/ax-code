@@ -1265,6 +1265,16 @@ export namespace MessageV2 {
     return TRANSIENT_PATTERNS.some((p) => lower.includes(p.toLowerCase()))
   }
 
+  // AX Trust gateway SSE reports upstream provider failures as the exact
+  // strings "upstream stream failed" / "upstream stream timed out". Exact
+  // equality (never substring) so lookalike provider messages stay
+  // unclassified; these route through the transient-network retryable
+  // branch in fromError instead of collapsing to UnknownError.
+  function isGatewayUpstreamStreamFailure(e: unknown): boolean {
+    const msg = e instanceof Error ? e.message : typeof e === "string" ? e : ""
+    return msg === "upstream stream failed" || msg === "upstream stream timed out"
+  }
+
   function transientNetworkMessage(e: unknown): string {
     const code = (e as SystemError)?.code
     if (code === "ECONNRESET") return "Connection reset by server"
@@ -1406,7 +1416,7 @@ export namespace MessageV2 {
           },
           { cause: e },
         ).toObject()
-      case isTransientNetworkError(e):
+      case isTransientNetworkError(e) || isGatewayUpstreamStreamFailure(e):
         return new MessageV2.APIError(
           {
             message: transientNetworkMessage(e),

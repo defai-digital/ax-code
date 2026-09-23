@@ -1282,7 +1282,14 @@ describe("session.processor", () => {
     })
   })
 
-  test("stops after capped retryable failures", async () => {
+  test.each([
+    ["rate-limit", false],
+    ["upstream stream failed", false],
+    ["upstream stream timed out", false],
+    ["upstream stream failed", true],
+    ["upstream stream timed out", true],
+  ] as const)("bounded provider failure %s, recover=%s", async (failure, recover) => {
+    SessionRetry.resetNetworkCircuit(model.providerID)
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -1318,13 +1325,30 @@ describe("session.processor", () => {
           time: { created: Date.now() },
         } as MessageV2.Assistant)
 
-        const err = new MessageV2.APIError({
-          message: "Rate Limited",
-          isRetryable: true,
-        }).toObject()
+        const err =
+          failure === "rate-limit"
+            ? new MessageV2.APIError({ message: "Rate Limited", isRetryable: true }).toObject()
+            : failure
 
+        let calls = 0
         const stream = vi.fn(async () => {
-          throw err
+          if (++calls === 1 || !recover) throw err
+          // The processor consumes only fullStream from this SDK test double.
+          return {
+            fullStream: (async function* () {
+              yield { type: "start" }
+              yield { type: "start-step" }
+              yield { type: "text-start", id: "recovered" }
+              yield { type: "text-delta", id: "recovered", text: "recovered" }
+              yield { type: "text-end", id: "recovered" }
+              yield {
+                type: "finish-step",
+                finishReason: "stop",
+                usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12 },
+              }
+              yield { type: "finish" }
+            })(),
+          } as unknown as Awaited<ReturnType<typeof LLM.stream>>
         })
         const sleep = vi.fn(async () => {})
 
@@ -1349,9 +1373,25 @@ describe("session.processor", () => {
           model,
         })
 
+        if (recover) {
+          expect(result).toBe("continue")
+          expect(stream).toHaveBeenCalledTimes(2)
+          expect(sleep).toHaveBeenCalledTimes(1)
+          expect(processor.message.error).toBeUndefined()
+          expect(processor.message.finish).toBe("stop")
+          expect(SessionRetry.networkCircuitOpen(model.providerID)).toBe(false)
+          const saved = await MessageV2.get({ sessionID: session.id, messageID: assistant.id })
+          expect(saved.parts.some((part) => part.type === "text" && part.text === "recovered")).toBe(true)
+          return
+        }
         expect(result).toBe("stop")
-        expect(stream.mock.calls.length).toBe(SessionRetry.RETRY_MAX_ATTEMPTS + 1)
-        expect(sleep.mock.calls.length).toBe(SessionRetry.RETRY_MAX_ATTEMPTS)
+        // Gateway stream interruptions use the existing three-hit network
+        // circuit; rate limits retain the generic retry budget.
+        const attempts = failure === "rate-limit" ? SessionRetry.RETRY_MAX_ATTEMPTS + 1 : 3
+        expect(stream.mock.calls.length).toBe(attempts)
+        expect(sleep.mock.calls.length).toBe(attempts - 1)
+        expect(SessionRetry.networkCircuitOpen(model.providerID)).toBe(failure !== "rate-limit")
+        SessionRetry.resetNetworkCircuit(model.providerID)
         expect(processor.message.error).toBeDefined()
       },
     })
