@@ -1170,8 +1170,14 @@ export namespace TaskQueue {
    * 409. Any other status raced into between the caller's check and this
    * write still fails the guarded transition with the fresh status
    * (ADR-106 D5).
+   *
+   * `changed` reports whether THIS call performed the pause (false when the
+   * row was already paused, or the guarded write raced). Callers that may
+   * restore the row on failure must only resume a row they paused themselves:
+   * an interrupt sweep or a manual pause that won the race owns the paused
+   * state, and un-pausing it would violate the interrupt contract.
    */
-  export async function pauseIfActive(id: TaskQueueID): Promise<Info> {
+  export async function pauseIfActive(id: TaskQueueID): Promise<{ info: Info; changed: boolean }> {
     const now = Date.now()
     const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const fresh = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get()
@@ -1199,7 +1205,7 @@ export namespace TaskQueue {
       publishUpdated(result.item)
       await syncWorkflowStatusIfNeeded(result.item)
     }
-    return result.item
+    return { info: result.item, changed: result.changed }
   }
 
   export async function resume(id: TaskQueueID): Promise<Info> {
@@ -1284,12 +1290,19 @@ export namespace TaskQueue {
       const current = fromRow(fresh)
       if (!fromStatuses.includes(current.status)) return { item: current, raced: true as const }
       // A fresh admission overwrites the previous steer audit; drop any stale
-      // applied stamp so a future lost steer of this row stays recoverable,
-      // and drop any stale owner heartbeat so it cannot mask the fresh
-      // admission with a previous owner's liveness.
-      const payload: Payload = { ...current.payload, steeredInto: audit.steeredInto, steeredAt: audit.steeredAt }
+      // applied stamp so a future lost steer of this row stays recoverable.
+      // The fresh admission also stamps the first owner heartbeat: the
+      // dangerous restart-recovery window is admission → the next step
+      // boundary (which can sit behind a multi-minute tool call), and it must
+      // be covered from the moment the row is cancelled, not from the first
+      // drain tick.
+      const payload: Payload = {
+        ...current.payload,
+        steeredInto: audit.steeredInto,
+        steeredAt: audit.steeredAt,
+        steeredHeartbeatAt: now,
+      }
       delete payload["steeredAppliedAt"]
-      delete payload["steeredHeartbeatAt"]
       const row = db
         .update(TaskQueueTable)
         .set({
@@ -1368,6 +1381,36 @@ export namespace TaskQueue {
         .where(eq(TaskQueueTable.id, id))
         .run()
     })
+  }
+
+  /**
+   * One beat of the admitting backend's owner-heartbeat interval for a steered
+   * follow-up (see TaskQueueSteer): stamps the row exactly where
+   * `steerHeartbeat` would, and reports whether the interval should keep
+   * running. Returns false — without stamping — once the row is applied,
+   * gone, or no longer a cancelled row awaiting apply for this generation, so
+   * the interval clears itself instead of refreshing a row that left the
+   * cancelled-awaiting-apply state.
+   */
+  export async function steerHeartbeatTick(id: TaskQueueID, generation: string, now = Date.now()): Promise<boolean> {
+    let keepBeating = false
+    SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+      const fresh = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get()
+      if (!fresh) return
+      if (fresh.status !== "cancelled") return
+      const current = fromRow(fresh)
+      if (current.payload["steeredInto"] !== generation) return
+      if (current.payload["steeredAppliedAt"] !== undefined) return
+      keepBeating = true
+      db.update(TaskQueueTable)
+        .set({
+          payload: { ...current.payload, steeredHeartbeatAt: now },
+          time_updated: now,
+        })
+        .where(eq(TaskQueueTable.id, id))
+        .run()
+    })
+    return keepBeating
   }
 
   export async function stop(id: TaskQueueID): Promise<Info> {
@@ -1481,6 +1524,15 @@ export namespace TaskQueue {
     const payload: Payload = { ...current.payload }
     delete payload[EXECUTOR_OWNER_KEY]
     delete payload[INTERRUPTION_REASON_KEY]
+    // A retried row is plain queue work again: drop every steer audit key so
+    // a row the user later cancels cannot match the restart sweep's
+    // admitted-but-never-applied steer shape (cancelled + steeredInto + no
+    // applied stamp — see recoverInterrupted) and be silently resurrected
+    // after the next backend restart.
+    delete payload["steeredInto"]
+    delete payload["steeredAt"]
+    delete payload["steeredAppliedAt"]
+    delete payload["steeredHeartbeatAt"]
     if (current.kind === "subagent" && current.payload["source"] === "task") {
       payload["deliveryStatus"] = "pending"
       delete payload["resultDelivery"]
@@ -1630,14 +1682,16 @@ export namespace TaskQueue {
       // drain commit), the follow-up text would be lost with the cancelled
       // row. Requeue rows whose steer is older than the liveness window: a
       // still-live peer applies and stamps within it. Rows carrying an owner
-      // heartbeat (`steeredHeartbeatAt`, refreshed by the live backend at each
-      // step boundary of the target generation — see TaskQueue.steerHeartbeat)
-      // are judged on the heartbeat instead of the admission time, so a
-      // generation still driving toward the apply behind a long-running tool
-      // call is not requeued and double-executed by a second backend booting
-      // mid-window. Bounded to the last 24h so ancient steers do not resurface
-      // long after the user moved on, and clear the steer audit keys — the row
-      // returns to the plain queue.
+      // heartbeat (`steeredHeartbeatAt`, stamped at admission by
+      // TaskQueue.cancelSteered and refreshed by the live backend at each
+      // step boundary of the target generation — see TaskQueue.steerHeartbeat
+      // — and on an interval until the apply lands — see
+      // TaskQueue.steerHeartbeatTick) are judged on the heartbeat instead of
+      // the admission time, so a generation still driving toward the apply
+      // behind a long-running tool call is not requeued and double-executed
+      // by a second backend booting mid-window. Bounded to the last 24h so
+      // ancient steers do not resurface long after the user moved on, and
+      // clear the steer audit keys — the row returns to the plain queue.
       const STEER_RECOVERY_WINDOW_MS = 24 * 60 * 60 * 1000
       const steeredRows = db
         .select()

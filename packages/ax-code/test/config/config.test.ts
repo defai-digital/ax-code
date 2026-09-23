@@ -3299,3 +3299,52 @@ describe("project config {file:} substitution is sandboxed", () => {
     }
   })
 })
+
+describe("Config.peek", () => {
+  test("mirrors the last get(), clears on invalidate, and is keyed per directory", async () => {
+    await using tmpA = await tmpdir({ git: true, config: { model: "test/a" } })
+    await using tmpB = await tmpdir({ git: true, config: { model: "test/b" } })
+    await Instance.provide({
+      directory: tmpA.path,
+      fn: async () => {
+        const a = await Config.get()
+        expect(Config.peek()).toBe(a)
+        await Instance.provide({
+          directory: tmpB.path,
+          fn: async () => {
+            expect(Config.peek()).toBeUndefined()
+            const b = await Config.get()
+            expect(Config.peek()).toBe(b)
+            expect(b.model).toBe("test/b")
+          },
+        })
+        // Back in A: peek still sees A's config (per-directory keying).
+        expect(Config.peek()).toBe(a)
+        await Config.invalidate()
+        expect(Config.peek()).toBeUndefined()
+        const fresh = await Config.get()
+        expect(Config.peek()).toBe(fresh)
+      },
+    })
+  })
+
+  test("an in-flight get() from before an invalidate cannot overwrite the fresh peek", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "test/old" } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const stale = Config.get()
+        await Config.invalidate()
+        await writeConfig(tmp.path, { model: "test/new" })
+        const fresh = await Config.get()
+        const staleValue = await stale
+        expect(staleValue.model).toBe("test/old")
+        expect(fresh.model).toBe("test/new")
+        // The stale load predates the invalidation and must not shadow the
+        // fresh re-read, even if it resolves last.
+        expect(Config.peek()).toBe(fresh)
+        expect(Config.peek()).not.toBe(staleValue)
+      },
+    })
+  })
+})

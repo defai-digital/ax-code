@@ -138,11 +138,28 @@ const GoalPauseCommand = cmd({
   async handler(args) {
     await bootstrap(args.dir ?? process.cwd(), async () => {
       const sessionID = await resolveAnyGoalSession(args.session)
+      const current = await SessionGoal.get(sessionID)
+      const refusal = goalPauseRefusal(current)
+      if (refusal) throw new Error(refusal)
       const goal = await SessionGoal.pause(sessionID)
       process.stdout.write(SessionGoal.format(goal) + EOL)
     })
   },
 })
+
+/**
+ * Pausing a terminal goal would silently demote it to "paused", from which a
+ * bare `goal resume` could resurrect work that already finished (or is
+ * budget-exhausted and must not be reactivated implicitly). Returns the
+ * refusal message, or undefined when the goal can be paused.
+ */
+export function goalPauseRefusal(goal: SessionGoal.Info | undefined): string | undefined {
+  if (!goal) return "No goal is set for this session."
+  if (goal.status === "complete" || goal.status === "budget_limited") {
+    return `Goal is already ${goal.status}; nothing to pause.`
+  }
+  return undefined
+}
 
 const GoalClearCommand = cmd({
   command: "clear",

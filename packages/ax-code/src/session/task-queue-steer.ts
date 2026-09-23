@@ -26,7 +26,11 @@ const log = Log.create({ service: "task-queue-steer" })
  * - admission rejected (hook veto, stale generation): the held row is
  *   restored to the queue so nothing is dropped;
  * - admitted: the row is cancelled with a `steeredInto`/`steeredAt` audit
- *   trail. Steered text is not undoable; the cancelled row keeps the record.
+ *   trail and an initial owner heartbeat; an interval on the admitting
+ *   backend keeps that heartbeat fresh until the steering drain stamps the
+ *   row applied, so restart recovery on a second backend cannot requeue and
+ *   double-execute the follow-up while the generation works toward the apply.
+ *   Steered text is not undoable; the cancelled row keeps the record.
  */
 export namespace TaskQueueSteer {
   export const Result = z
@@ -109,6 +113,44 @@ export namespace TaskQueueSteer {
    */
   const RECONCILABLE_REASONS = new Set(["generation_ended_before_application", "application_rejected"])
 
+  /**
+   * Beat cadence for a steered follow-up's owner heartbeat while the apply is
+   * pending. Matches the executor's 30 s execution heartbeat; restart
+   * recovery's 90 s liveness window is three missed beats, so one stalled
+   * tick cannot trip it.
+   */
+  const STEER_HEARTBEAT_INTERVAL_MS = 30_000
+
+  // One interval per queue row: a row can only await apply for one admitted
+  // steer at a time (a cancelled row cannot be steered again until retried).
+  const steerHeartbeatTimers = new Map<TaskQueueID, ReturnType<typeof setInterval>>()
+
+  function startSteerHeartbeat(id: TaskQueueID, generation: string) {
+    stopSteerHeartbeat(id)
+    const timer = setInterval(() => {
+      void TaskQueue.steerHeartbeatTick(id, generation).then(
+        (keepBeating) => {
+          if (!keepBeating) stopSteerHeartbeat(id)
+        },
+        (error) => {
+          // A transient tick failure (e.g. project lock) must not kill the
+          // heartbeat; a row that left the awaiting-apply state stops the
+          // interval on its next successful read.
+          log.warn("steered follow-up heartbeat tick failed", { id, error })
+        },
+      )
+    }, STEER_HEARTBEAT_INTERVAL_MS)
+    timer.unref()
+    steerHeartbeatTimers.set(id, timer)
+  }
+
+  function stopSteerHeartbeat(id: TaskQueueID) {
+    const timer = steerHeartbeatTimers.get(id)
+    if (!timer) return
+    clearInterval(timer)
+    steerHeartbeatTimers.delete(id)
+  }
+
   export async function reconcileDiscarded(
     sessionID: string,
     receipts: readonly SessionSteering.Receipt[],
@@ -130,6 +172,10 @@ export namespace TaskQueueSteer {
         // One guarded write: an interrupted recovery lands as paused directly,
         // so the interrupt's cancel sweep can never catch it in a queued gap.
         const retried = await TaskQueue.retry(id, { paused: options.aborted === true })
+        // The row left the cancelled-awaiting-apply state; its owner-heartbeat
+        // interval (started at admission) must stop instead of refreshing a
+        // plain queued/paused row.
+        stopSteerHeartbeat(id)
         if (options.aborted) {
           log.info("parked follow-up whose steer was interrupted before application", {
             id,
@@ -157,9 +203,16 @@ export namespace TaskQueueSteer {
     if (!match) return
     const parsed = TaskQueueID.zod.safeParse(match[1])
     if (!parsed.success) return
-    await TaskQueue.markSteeredApplied(parsed.data, generation).catch((error) => {
-      log.warn("could not mark a steered follow-up as applied", { id: parsed.data, error })
-    })
+    // On success the apply is durable: no heartbeat can be needed past this
+    // point (the tick would self-stop anyway, but do not wait a beat). On
+    // failure keep the interval running — it is the row's only protection
+    // against restart recovery requeueing text that was already applied.
+    await TaskQueue.markSteeredApplied(parsed.data, generation).then(
+      () => stopSteerHeartbeat(parsed.data),
+      (error) => {
+        log.warn("could not mark a steered follow-up as applied", { id: parsed.data, error })
+      },
+    )
   }
 
   /**
@@ -208,12 +261,16 @@ export namespace TaskQueueSteer {
     // it also tolerates an interrupt sweep that paused the row after the
     // steerable-status check above (a paused row is a valid hold target, not
     // a contradictory 409), and a turn ending after the hold cannot start
-    // the row.
-    const wasPaused = item.status === "paused"
-    const held = wasPaused ? item : await TaskQueue.pauseIfActive(id)
+    // the row. `changed` records whether THIS call performed the pause: it
+    // is the only case where restore() may resume the row. When the row was
+    // already paused before the hold (including a pause racing between the
+    // initial read above and the hold), an admission rejection must leave it
+    // paused — the interrupt contract owns that state (ADR-106 D5).
+    const hold = item.status === "paused" ? { info: item, changed: false } : await TaskQueue.pauseIfActive(id)
+    const held = hold.info
 
     async function restore(): Promise<TaskQueue.Info> {
-      if (wasPaused) return held
+      if (!hold.changed) return held
       try {
         const resumed = await TaskQueue.resume(id)
         // Re-evaluate immediately (mirroring retry): the row returns to
@@ -238,6 +295,12 @@ export namespace TaskQueueSteer {
       const steeredAt = Date.now()
       try {
         const cancelled = await TaskQueue.cancelSteered(id, { steeredInto: generation, steeredAt })
+        // Keep the row's owner heartbeat fresh for the whole waiting window —
+        // the drain only beats at step boundaries, and the gap between
+        // admission and the next boundary can span a multi-minute tool call.
+        // The interval self-clears once the apply lands or the row leaves the
+        // cancelled-awaiting-apply state; a process exit is safe (unref'd).
+        startSteerHeartbeat(id, generation)
         return { item: cancelled, receipt }
       } catch (error) {
         // The steer is already admitted and durable; a failed audit write must

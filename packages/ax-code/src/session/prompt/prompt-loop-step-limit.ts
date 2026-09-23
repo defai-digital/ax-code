@@ -12,6 +12,7 @@ type PromptLoopGlobalStepLimitTransition =
   | { action: "stop"; reason: "step_limit"; message: string; stopCode: SessionStop.Code }
 
 type PromptLoopGlobalStepLimitDeps = {
+  info?: (message: string, fields: Record<string, unknown>) => void
   warn?: (message: string, fields: Record<string, unknown>) => void
   publishError?: (input: { sessionID: SessionID; message: string; code?: SessionStop.Code }) => void
 }
@@ -24,6 +25,14 @@ export function handlePromptLoopGlobalStepLimit(
     autonomous: boolean
     continuations: number
     maxContinuations: number
+    /**
+     * Steered text was applied at the top of THIS iteration and still needs a
+     * model response. Stopping at the ceiling now would write a synthetic
+     * failure over an unanswered user message, so the ceiling defers by one
+     * iteration (mirroring the assistant-exit steering extension); next
+     * iteration the receipt reads applied and the ceiling stops normally.
+     */
+    hasPendingSteering?: boolean
   },
   deps: PromptLoopGlobalStepLimitDeps = {},
 ): PromptLoopGlobalStepLimitTransition {
@@ -39,6 +48,16 @@ export function handlePromptLoopGlobalStepLimit(
         maxContinuations: input.maxContinuations,
       }),
     }
+  }
+
+  if (input.hasPendingSteering) {
+    ;(deps.info ?? log.info)("extending loop for pending steering", {
+      command: "session.prompt.loop",
+      status: "ok",
+      sessionID: input.sessionID,
+      ceiling: "global_step",
+    })
+    return { action: "ignore" }
   }
 
   ;(deps.warn ?? log.warn)("global step limit reached", {

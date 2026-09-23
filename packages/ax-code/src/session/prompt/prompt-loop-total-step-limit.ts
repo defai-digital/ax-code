@@ -16,6 +16,7 @@ type PromptLoopTotalStepLimitGoal = {
 }
 
 type PromptLoopTotalStepLimitDeps = {
+  info?: (message: string, fields: Record<string, unknown>) => void
   warn?: (message: string, fields: Record<string, unknown>) => void
   publishError?: (input: { sessionID: SessionID; message: string; code?: SessionStop.Code }) => void
   pauseGoal?: (sessionID: SessionID) => Promise<unknown>
@@ -28,11 +29,28 @@ export async function handlePromptLoopTotalStepLimit(
     totalStepLimit: number
     continuations: number
     goal?: PromptLoopTotalStepLimitGoal
+    /**
+     * Steered text was applied at the top of THIS iteration and still needs a
+     * model response. Stopping at the ceiling now would write a synthetic
+     * failure over an unanswered user message, so the ceiling defers by one
+     * iteration (mirroring the assistant-exit steering extension); next
+     * iteration the receipt reads applied and the ceiling stops normally.
+     */
+    hasPendingSteering?: boolean
   },
   deps: PromptLoopTotalStepLimitDeps = {},
 ): Promise<PromptLoopTotalStepLimitTransition> {
   const decision = totalStepLimitDecision(input)
   if (decision.action === "ignore") return { action: "ignore" }
+  if (input.hasPendingSteering) {
+    ;(deps.info ?? log.info)("extending loop for pending steering", {
+      command: "session.prompt.loop",
+      status: "ok",
+      sessionID: input.sessionID,
+      ceiling: "total_step",
+    })
+    return { action: "ignore" }
+  }
 
   // A goal left "active" past this stop turns the session into a repeating
   // failure loop: every later user prompt finishes its turn, the goal

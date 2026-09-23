@@ -1461,8 +1461,16 @@ export namespace Config {
   // read the same cached snapshot the async path uses via peek(). Entries
   // are dropped by invalidate()/invalidateAll() BEFORE the cache is dropped,
   // so a mid-session config edit is either observed fresh or fails closed
-  // (peek returns undefined) while the re-read is in flight.
+  // (peek returns undefined) while the re-read is in flight. Bounded so a
+  // long-lived server opening many projects cannot grow without limit.
+  const PEEKED_MAX_ENTRIES = 32
   const peeked = new Map<string, Info>()
+  // Bumped on every invalidation. A get() that captured its generation before
+  // an invalidate MUST NOT publish its (stale) result afterwards: a slow
+  // in-flight load from before the edit could otherwise finish after the
+  // fresh re-read and overwrite peeked with the pre-edit config, reopening
+  // the stale-snapshot window peek() exists to close.
+  let peekedGeneration = 0
 
   function peekKey() {
     try {
@@ -1482,10 +1490,22 @@ export namespace Config {
     return key ? peeked.get(key) : undefined
   }
 
+  function peekedSet(key: string, config: Info) {
+    if (!peeked.has(key) && peeked.size >= PEEKED_MAX_ENTRIES) {
+      const oldest = peeked.keys().next().value
+      if (oldest !== undefined) peeked.delete(oldest)
+    }
+    peeked.set(key, config)
+  }
+
   export async function get() {
+    const generation = peekedGeneration
     const x = await state()
     const key = peekKey()
-    if (key) peeked.set(key, x.config)
+    // Skip publishing when an invalidate() landed while this load was in
+    // flight — the value predates the edit and must not shadow the fresh
+    // re-read that the invalidation triggers.
+    if (key && generation === peekedGeneration) peekedSet(key, x.config)
     return x.config
   }
 
@@ -1496,6 +1516,7 @@ export namespace Config {
    * Prefer this over restarting the session for `modes.*` opt-ins.
    */
   export async function invalidate() {
+    peekedGeneration++
     const key = peekKey()
     if (key) peeked.delete(key)
     await state.invalidate()
@@ -1508,6 +1529,7 @@ export namespace Config {
    * preserving active sessions, LSP clients, MCP connections, and tools.
    */
   export async function invalidateAll() {
+    peekedGeneration++
     peeked.clear()
     let currentDirectory: string | undefined
     try {

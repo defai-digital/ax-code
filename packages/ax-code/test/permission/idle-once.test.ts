@@ -237,6 +237,30 @@ describe("permission idle-once deadline (ADR-138)", () => {
     })
   })
 
+  test("requireInteractive metadata suppresses the deadline even for allowlisted permissions", async () => {
+    armedEnv()
+    await using tmp = await tmpdir({ git: true, config: ARMED_CONFIG as never })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const sessionID = SessionID.make("ses_idle_once_interactive")
+        const ask = Permission.ask({
+          sessionID,
+          permission: "bash_destructive",
+          patterns: ["rm -rf /tmp/i"],
+          metadata: { requireInteractive: true },
+          always: [],
+          ruleset: [],
+        })
+        const pending = await waitForPending()
+        expect(pending[0]!.autoOnceAt).toBeUndefined()
+        const rejection = expect(ask).rejects.toThrow("rejected")
+        await Permission.reply({ requestID: pending[0]!.id, reply: "reject" })
+        await rejection
+      },
+    })
+  })
+
   test("the env override is capped at the setTimeout maximum", async () => {
     vi.stubEnv("AX_CODE_AUTONOMOUS", "1")
     vi.stubEnv("AX_CODE_ISOLATION_MODE", "full-access")

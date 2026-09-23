@@ -719,9 +719,14 @@ export namespace SessionPrompt {
       ;({ msgs, cached: cachedMsgs } = await loopMessages({ sessionID, cached: cachedMsgs }))
 
       const steeringBase = SessionSteering.hasPending(sessionID, abort) ? scanLoopMessages(msgs).lastUser : undefined
-      if (
-        steeringBase &&
-        (await SessionSteering.drain(sessionID, abort, async (steering) => {
+      // True when the drain below commits steered text THIS iteration. The
+      // receipt reads "applied" immediately, so the ceiling handlers cannot
+      // see it via SessionSteering.hasPending — but the applied user message
+      // still needs its model response; the step ceilings treat this like the
+      // assistant-exit steering extension instead of hard-stopping mid-turn.
+      let steeredTextApplied = false
+      if (steeringBase) {
+        steeredTextApplied = await SessionSteering.drain(sessionID, abort, async (steering) => {
           await createUserMessage(
             {
               sessionID,
@@ -739,9 +744,10 @@ export namespace SessionPrompt {
             },
             steering,
           )
-        }))
-      ) {
-        ;({ msgs, cached: cachedMsgs } = await loopMessages({ sessionID, cached: undefined }))
+        })
+        if (steeredTextApplied) {
+          ;({ msgs, cached: cachedMsgs } = await loopMessages({ sessionID, cached: undefined }))
+        }
       }
 
       let { lastUser, lastUserParts, lastAssistant, lastFinished, lastFinishedStepTokens, tasks } =
@@ -854,6 +860,7 @@ export namespace SessionPrompt {
         totalStepLimit: totalStepCeiling,
         continuations,
         goal: activeGoal,
+        hasPendingSteering: steeredTextApplied,
       })
       if (totalStepLimit.action === "stop") {
         // lastUser already scanned from the in-loop message list — no full DB reload.
@@ -883,6 +890,7 @@ export namespace SessionPrompt {
         autonomous: effectivelyAutonomous,
         continuations,
         maxContinuations: effectiveMaxContinuations,
+        hasPendingSteering: steeredTextApplied,
       })
       if (globalStepLimit.action === "continue_autonomous") {
         await continueAutonomousLoop({

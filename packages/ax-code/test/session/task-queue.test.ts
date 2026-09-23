@@ -687,18 +687,32 @@ describe("TaskQueue", () => {
       fn: async () => {
         const generation = "8b9b2313-8498-47f2-b9ad-f2fcfc4f6085"
         const lost = await TaskQueue.enqueue({ kind: "prompt", title: "Steered then lost" })
+        const admittedAt = Date.now()
         await TaskQueue.cancelSteered(lost.id, {
           steeredInto: generation,
-          steeredAt: Date.now() - TaskQueue.RESTART_RECOVERY_LIVENESS_MS - 1_000,
+          steeredAt: admittedAt - TaskQueue.RESTART_RECOVERY_LIVENESS_MS - 1_000,
         })
 
-        const recovered = await TaskQueue.recoverInterrupted()
+        // Admission stamps the first owner heartbeat, so recovery right after
+        // a backend restart still gives the live peer generation its liveness
+        // window even though the admission itself is long past it.
+        const fresh = await TaskQueue.recoverInterrupted({ now: admittedAt + 1_000 })
+        expect(fresh.requeued).toEqual([])
+        expect((await TaskQueue.get(lost.id)).status).toBe("cancelled")
+
+        // A heartbeat gone stale proves the admitting backend died before
+        // the apply: recovery requeues the lost steer and clears every audit
+        // key, the heartbeat included.
+        const recovered = await TaskQueue.recoverInterrupted({
+          now: admittedAt + TaskQueue.RESTART_RECOVERY_LIVENESS_MS + 1,
+        })
         expect(recovered.requeued.map((item) => item.id)).toEqual([lost.id])
         const restored = await TaskQueue.get(lost.id)
         expect(restored.status).toBe("queued")
         expect(restored.payload["steeredInto"]).toBeUndefined()
         expect(restored.payload["steeredAt"]).toBeUndefined()
         expect(restored.payload["steeredAppliedAt"]).toBeUndefined()
+        expect(restored.payload["steeredHeartbeatAt"]).toBeUndefined()
       },
     })
   })
@@ -771,18 +785,93 @@ describe("TaskQueue", () => {
         expect(restored.payload["steeredHeartbeatAt"]).toBeUndefined()
 
         // The stamp is guarded like the applied stamp: a mismatched generation
-        // or an already-applied steer must not be heartbeat-stamped.
+        // must not overwrite the admission heartbeat, and an already-applied
+        // steer must not be heartbeat-stamped at all.
         await TaskQueue.cancelSteered(restored.id, {
           steeredInto: generation,
           steeredAt: Date.now() - 6 * 60_000,
         })
+        const readmitted = await TaskQueue.get(restored.id)
+        const admissionBeat = readmitted.payload["steeredHeartbeatAt"]
+        expect(typeof admissionBeat).toBe("number")
         await TaskQueue.steerHeartbeat(restored.id, "00000000-0000-0000-0000-000000000000", Date.now())
-        expect((await TaskQueue.get(restored.id)).payload["steeredHeartbeatAt"]).toBeUndefined()
+        expect((await TaskQueue.get(restored.id)).payload["steeredHeartbeatAt"]).toBe(admissionBeat)
         await TaskQueue.markSteeredApplied(restored.id, generation)
         await TaskQueue.steerHeartbeat(restored.id, generation, Date.now())
         const applied = await TaskQueue.get(restored.id)
         expect(applied.payload["steeredAppliedAt"]).toBeDefined()
-        expect(applied.payload["steeredHeartbeatAt"]).toBeUndefined()
+        expect(applied.payload["steeredHeartbeatAt"]).toBe(admissionBeat)
+      },
+    })
+  })
+
+  test("steerHeartbeatTick keeps beating only while the row awaits apply for its generation", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const generation = "8b9b2313-8498-47f2-b9ad-f2fcfc4f6085"
+        const row = await TaskQueue.enqueue({ kind: "prompt", title: "Interval-driven steer" })
+        await TaskQueue.cancelSteered(row.id, { steeredInto: generation, steeredAt: Date.now() })
+
+        // A cancelled row awaiting apply for this generation is stamped and
+        // asks for another beat.
+        const beatAt = Date.now() + 1_000
+        await expect(TaskQueue.steerHeartbeatTick(row.id, generation, beatAt)).resolves.toBe(true)
+        expect((await TaskQueue.get(row.id)).payload["steeredHeartbeatAt"]).toBe(beatAt)
+
+        // A mismatched generation (row reassigned to another steer) stops.
+        await expect(
+          TaskQueue.steerHeartbeatTick(row.id, "00000000-0000-0000-0000-000000000000", Date.now()),
+        ).resolves.toBe(false)
+
+        // Once the apply lands the tick stops instead of refreshing.
+        await TaskQueue.markSteeredApplied(row.id, generation)
+        await expect(TaskQueue.steerHeartbeatTick(row.id, generation, Date.now())).resolves.toBe(false)
+
+        // A row restored to the plain queue (retried) stops as well, and the
+        // retry has already stripped every steer audit key (see the retry
+        // test below).
+        const other = await TaskQueue.enqueue({ kind: "prompt", title: "Steered then retried" })
+        await TaskQueue.cancelSteered(other.id, { steeredInto: generation, steeredAt: Date.now() })
+        const retried = await TaskQueue.retry(other.id)
+        expect(retried.status).toBe("queued")
+        await expect(TaskQueue.steerHeartbeatTick(other.id, generation, Date.now())).resolves.toBe(false)
+      },
+    })
+  })
+
+  test("retry clears steer audit keys so a re-cancelled row is not resurrected by restart recovery", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const generation = "8b9b2313-8498-47f2-b9ad-f2fcfc4f6085"
+        const row = await TaskQueue.enqueue({ kind: "prompt", title: "Interrupted steer, retried, cancelled" })
+        await TaskQueue.cancelSteered(row.id, { steeredInto: generation, steeredAt: Date.now() })
+        expect((await TaskQueue.get(row.id)).payload["steeredInto"]).toBe(generation)
+
+        // The interrupted recovery restored the row; retry() must strip every
+        // steer audit key so the row is plain queue work again.
+        const retried = await TaskQueue.retry(row.id)
+        expect(retried.status).toBe("queued")
+        expect(retried.payload["steeredInto"]).toBeUndefined()
+        expect(retried.payload["steeredAt"]).toBeUndefined()
+        expect(retried.payload["steeredAppliedAt"]).toBeUndefined()
+        expect(retried.payload["steeredHeartbeatAt"]).toBeUndefined()
+
+        // The user cancels the restored row. Restart recovery must NOT treat
+        // it as an admitted-but-never-applied steer: with the audit keys gone
+        // the cancelled row no longer matches the sweep, and it must stay
+        // cancelled instead of being requeued and executed.
+        await TaskQueue.cancel(retried.id)
+        const recovered = await TaskQueue.recoverInterrupted({
+          now: Date.now() + 2 * TaskQueue.RESTART_RECOVERY_LIVENESS_MS,
+        })
+        expect(recovered.requeued.map((item) => item.id)).not.toContain(retried.id)
+        expect((await TaskQueue.get(retried.id)).status).toBe("cancelled")
       },
     })
   })
@@ -795,13 +884,16 @@ describe("TaskQueue", () => {
       fn: async () => {
         const queued = await TaskQueue.enqueue({ kind: "prompt", title: "Hold me" })
         const held = await TaskQueue.pauseIfActive(queued.id)
-        expect(held.status).toBe("paused")
+        expect(held.info.status).toBe("paused")
+        expect(held.changed).toBe(true)
 
         // Already paused is a valid hold target, not a contradictory 409: an
         // interrupt sweep may pause the row between a caller's steerable-status
-        // check and its hold.
+        // check and its hold. The hold did not perform the pause, so `changed`
+        // is false and a rejecting caller must not resume the row.
         const again = await TaskQueue.pauseIfActive(queued.id)
-        expect(again.status).toBe("paused")
+        expect(again.info.status).toBe("paused")
+        expect(again.changed).toBe(false)
         expect((await TaskQueue.get(queued.id)).status).toBe("paused")
 
         // Any other status raced into the gap still fails the guarded write

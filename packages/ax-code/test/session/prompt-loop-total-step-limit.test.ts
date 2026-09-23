@@ -159,4 +159,61 @@ describe("prompt loop total step limit", () => {
     expect(result.message).toContain("/goal pause")
     expect(warnings.some((w) => w.message === "failed to pause goal at cumulative step ceiling")).toBe(true)
   })
+
+  test("defers the stop by one iteration when steering text was applied this iteration", async () => {
+    const sessionID = SessionID.descending()
+    const infos: { message: string; fields: Record<string, unknown> }[] = []
+    const published: { message: string; code?: string }[] = []
+    let paused = 0
+
+    const result = await handlePromptLoopTotalStepLimit(
+      {
+        sessionID,
+        totalSteps: 2000,
+        totalStepLimit: 2000,
+        continuations: 3,
+        goal: { objective: "finish refactor", status: "active" },
+        hasPendingSteering: true,
+      },
+      {
+        info(message, fields) {
+          infos.push({ message, fields })
+        },
+        publishError(input) {
+          published.push(input)
+        },
+        async pauseGoal() {
+          paused += 1
+        },
+      },
+    )
+
+    // The ceiling defers instead of stopping: the applied steered text still
+    // needs its model response. No synthetic failure, no goal pause.
+    expect(result).toEqual({ action: "ignore" })
+    expect(published).toEqual([])
+    expect(paused).toBe(0)
+    expect(infos).toEqual([
+      {
+        message: "extending loop for pending steering",
+        fields: { command: "session.prompt.loop", status: "ok", sessionID, ceiling: "total_step" },
+      },
+    ])
+  })
+
+  test("still stops without pending steering when the input flag is unset", async () => {
+    const result = await handlePromptLoopTotalStepLimit(
+      {
+        sessionID: SessionID.descending(),
+        totalSteps: 2000,
+        totalStepLimit: 2000,
+        continuations: 0,
+      },
+      {
+        publishError() {},
+      },
+    )
+
+    expect(result).toMatchObject({ action: "stop", reason: "step_limit" })
+  })
 })

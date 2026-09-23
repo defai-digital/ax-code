@@ -2,6 +2,7 @@ import { afterEach, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
+import { SessionPrompt } from "../../src/session/prompt"
 import { TaskQueueID } from "../../src/session/schema"
 import { SessionSteering } from "../../src/session/steering"
 import { TaskQueue } from "../../src/session/task-queue"
@@ -59,6 +60,9 @@ test("steering a queued follow-up admits the text and cancels the row with an au
       expect(result.item.status).toBe("cancelled")
       expect(result.item.payload.steeredInto).toBe(generation)
       expect(typeof result.item.payload.steeredAt).toBe("number")
+      // The admission itself stamps the first owner heartbeat so restart
+      // recovery stays away from the moment the row is cancelled.
+      expect(typeof result.item.payload.steeredHeartbeatAt).toBe("number")
 
       const persisted = await TaskQueue.get(item.id)
       expect(persisted.status).toBe("cancelled")
@@ -341,6 +345,52 @@ test("a row paused between the steerable check and the hold still steers", async
   })
 })
 
+test("a row paused between the steerable check and the hold stays paused when admission rejects it", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const app = Server.Default()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({})
+      SessionSteering.begin(session.id, new AbortController().signal)
+      const generation = SessionSteering.view(session.id).generation!
+      const item = await enqueueFollowUp(session.id, "paused mid-flight, then rejected")
+
+      // An interrupt sweep lands between the steer's initial read and its
+      // hold, exactly like the accepted-steer race above — but this time
+      // admission rejects the text. The hold did not perform the pause, so
+      // the rejection must leave the row paused: restore() resuming it would
+      // un-pause and start work the steer never parked (ADR-106: interrupt
+      // pauses remaining follow-ups).
+      const realGet = TaskQueue.get.bind(TaskQueue)
+      let raced = false
+      vi.spyOn(TaskQueue, "get").mockImplementation(async (id: TaskQueueID) => {
+        const row = await realGet(id)
+        if (!raced && row.id === item.id) {
+          raced = true
+          await TaskQueue.pause(id)
+          return { ...row, status: "queued" as const }
+        }
+        return row
+      })
+      vi.spyOn(SessionPrompt, "steer").mockResolvedValue({
+        sessionID: session.id,
+        generation,
+        clientID: `tq_${item.id}_${generation.slice(0, 8)}_0`.slice(0, 100),
+        status: "rejected",
+        reason: "admission_rejected",
+      })
+
+      const result = await TaskQueueSteer.steer(item.id)
+      expect(result.receipt?.status).toBe("rejected")
+      // The raced pause owns the row's state; the rejected steer must not
+      // have resumed or started it.
+      const row = await TaskQueue.get(item.id)
+      expect(row.status).toBe("paused")
+    },
+  })
+})
+
 test("the steering drain refreshes a steered follow-up's owner heartbeat at the step boundary", async () => {
   await using tmp = await tmpdir({ git: true })
   const app = Server.Default()
@@ -374,6 +424,111 @@ test("the steering drain refreshes a steered follow-up's owner heartbeat at the 
       }
       expect(typeof row.payload["steeredHeartbeatAt"]).toBe("number")
       expect(typeof row.payload["steeredAppliedAt"]).toBe("number")
+    },
+  })
+})
+
+test("admission starts an owner-heartbeat interval that refreshes until the apply lands, then clears itself", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({})
+      const controller = new AbortController()
+      SessionSteering.begin(session.id, controller.signal)
+      const generation = SessionSteering.view(session.id).generation!
+      const item = await enqueueFollowUp(session.id, "heartbeat until applied")
+      vi.spyOn(SessionPrompt, "steer").mockResolvedValue({
+        sessionID: session.id,
+        generation,
+        clientID: "tq_probe",
+        status: "accepted",
+      })
+
+      vi.useFakeTimers()
+      try {
+        const tick = vi.spyOn(TaskQueue, "steerHeartbeatTick")
+        const setIntervalSpy = vi.spyOn(globalThis, "setInterval")
+        const clearIntervalSpy = vi.spyOn(globalThis, "clearInterval")
+
+        const result = await TaskQueueSteer.steer(item.id)
+        expect(result.receipt?.status).toBe("accepted")
+        expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 30_000)
+
+        // Admission stamps the first owner heartbeat alongside the audit trail.
+        const admitted = await TaskQueue.get(item.id)
+        expect(admitted.status).toBe("cancelled")
+        expect(typeof admitted.payload["steeredHeartbeatAt"]).toBe("number")
+        const admissionBeat = admitted.payload["steeredHeartbeatAt"] as number
+
+        // Each beat refreshes the cancelled row's heartbeat: the row's
+        // admission is by now far older than the restart-recovery liveness
+        // window, so only the beats keep recovery from requeueing it.
+        await vi.advanceTimersByTimeAsync(30_000)
+        expect(tick).toHaveBeenCalledTimes(1)
+        const beat = await TaskQueue.get(item.id)
+        expect(beat.payload["steeredHeartbeatAt"]).toBeGreaterThan(admissionBeat)
+
+        // Once the apply lands, the next tick reports stop and the interval
+        // clears itself without stamping again.
+        await TaskQueue.markSteeredApplied(item.id, generation)
+        await vi.advanceTimersByTimeAsync(30_000)
+        expect(tick).toHaveBeenCalledTimes(2)
+        expect(clearIntervalSpy).toHaveBeenCalled()
+        expect((await TaskQueue.get(item.id)).payload["steeredHeartbeatAt"]).toBe(beat.payload["steeredHeartbeatAt"])
+      } finally {
+        vi.useRealTimers()
+      }
+    },
+  })
+})
+
+test("restoring a discarded steer clears its owner-heartbeat interval", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({})
+      SessionSteering.begin(session.id, new AbortController().signal)
+      const generation = SessionSteering.view(session.id).generation!
+      const item = await enqueueFollowUp(session.id, "restored after discard")
+      vi.spyOn(SessionPrompt, "steer").mockResolvedValue({
+        sessionID: session.id,
+        generation,
+        clientID: "tq_probe",
+        status: "accepted",
+      })
+      expect((await TaskQueueSteer.steer(item.id)).receipt?.status).toBe("accepted")
+
+      vi.useFakeTimers()
+      try {
+        const tick = vi.spyOn(TaskQueue, "steerHeartbeatTick")
+        const clearIntervalSpy = vi.spyOn(globalThis, "clearInterval")
+
+        // The generation ends (interrupt) before the apply: the discarded
+        // receipt returns the row to the queue parked as paused, and the
+        // restore takes the owner-heartbeat interval down with it.
+        await TaskQueueSteer.reconcileDiscarded(
+          session.id,
+          [
+            {
+              sessionID: session.id,
+              generation,
+              clientID: `tq_${item.id}_${generation.slice(0, 8)}_abcdef123456`,
+              status: "rejected",
+              reason: "generation_ended_before_application",
+            },
+          ],
+          { aborted: true },
+        )
+        expect((await TaskQueue.get(item.id)).status).toBe("paused")
+
+        await vi.advanceTimersByTimeAsync(31_000)
+        expect(tick).not.toHaveBeenCalled()
+        expect(clearIntervalSpy).toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
     },
   })
 })

@@ -415,6 +415,10 @@ export namespace Permission {
     const allowlist = cfg.permissions ?? IDLE_ONCE_DEFAULT_PERMISSIONS
     if (!allowlist.includes(info.permission)) return undefined
     if (NEVER_IDLE_ONCE.has(info.permission)) return undefined
+    // A caller-marked requireInteractive decision must stay human even when the
+    // permission name is allowlisted — the marker, not the name, is the
+    // contract (see permission/interaction.ts).
+    if (info.metadata?.requireInteractive === true) return undefined
     const isolationMode = Flag.AX_CODE_ISOLATION_MODE ?? config.isolation?.mode ?? Isolation.DEFAULT_MODE
     if (isolationMode !== "full-access") return undefined
     // Head-of-queue: called right after this ask registered, so head means no
@@ -568,6 +572,11 @@ export namespace Permission {
     log.info("asking", { id, permission: info.permission, patterns: info.patterns })
 
     const deferred = createDeferred<void>()
+    // A caller-supplied id that collides with a live pending entry would
+    // orphan the old entry's deadline timer (still armed, same id) and could
+    // auto-approve THIS replacement ask. Disarm the previous entry before
+    // overwriting; the old caller's hung promise is its own bug to surface.
+    clearIdleOnceTimer(pending.get(id))
     const entry: PendingEntry = { info, ruleset, deferred }
     pending.set(id, entry)
 
@@ -668,14 +677,20 @@ export namespace Permission {
       // "Always" could persist rules in the middle of a session-wide reject
       // sweep, leaving both effects interleaved nondeterministically.
       return serializeAlwaysReply(s, async () => {
+        // The idle-once deadline (or a racing reply from another client) may
+        // have resolved the request while this sweep awaited the always-queue:
+        // only report success when THIS call actually rejected the target row,
+        // per the documented false-means-already-resolved contract.
+        let rejectedTarget = false
         for (const [id, entry] of [...pending.entries()]) {
           if (entry.info.sessionID !== existing.info.sessionID) continue
+          if (id === input.requestID) rejectedTarget = true
           clearIdleOnceTimer(entry)
           pending.delete(id)
           publishReply(entry, input.reply)
           entry.deferred.reject(input.message ? new CorrectedError({ feedback: input.message }) : new RejectedError())
         }
-        return true
+        return rejectedTarget
       })
     }
 

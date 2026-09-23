@@ -126,4 +126,60 @@ describe("prompt loop global step limit", () => {
     expect(published[0]?.code).toBe("MODEL_TURN_SEGMENT_LIMIT")
     expect(result.stopCode).toBe("MODEL_TURN_SEGMENT_LIMIT")
   })
+
+  test("defers the stop by one iteration when steering text was applied this iteration", () => {
+    const sessionID = SessionID.descending()
+    const infos: { message: string; fields: Record<string, unknown> }[] = []
+    const warnings: { message: string; fields: Record<string, unknown> }[] = []
+    const published: { sessionID: SessionID; message: string; code?: string }[] = []
+
+    const result = handlePromptLoopGlobalStepLimit(
+      {
+        sessionID,
+        step: 10,
+        stepLimit: 10,
+        autonomous: true,
+        continuations: 3,
+        maxContinuations: 3,
+        hasPendingSteering: true,
+      },
+      {
+        info(message, fields) {
+          infos.push({ message, fields })
+        },
+        warn(message, fields) {
+          warnings.push({ message, fields })
+        },
+        publishError(input) {
+          published.push(input)
+        },
+      },
+    )
+
+    // The ceiling defers instead of stopping: the applied steered text still
+    // needs its model response. No synthetic failure is written.
+    expect(result).toEqual({ action: "ignore" })
+    expect(warnings).toEqual([])
+    expect(published).toEqual([])
+    expect(infos).toEqual([
+      {
+        message: "extending loop for pending steering",
+        fields: { command: "session.prompt.loop", status: "ok", sessionID, ceiling: "global_step" },
+      },
+    ])
+  })
+
+  test("keeps the autonomous continuation when budget remains, even with pending steering", () => {
+    const result = handlePromptLoopGlobalStepLimit({
+      sessionID: SessionID.descending(),
+      step: 10,
+      stepLimit: 10,
+      autonomous: true,
+      continuations: 1,
+      maxContinuations: 3,
+      hasPendingSteering: true,
+    })
+
+    expect(result.action).toBe("continue_autonomous")
+  })
 })

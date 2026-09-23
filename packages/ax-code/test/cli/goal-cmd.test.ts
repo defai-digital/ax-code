@@ -177,3 +177,22 @@ describe("resolveAnyGoalSession", () => {
     })
   })
 })
+
+describe("goalPauseRefusal", () => {
+  test("refuses terminal goals so pause cannot demote them into resumable work", async () => {
+    const { goalPauseRefusal } = await import("../../src/cli/cmd/goal-impl")
+    expect(goalPauseRefusal(undefined)).toContain("No goal")
+    const base = {
+      sessionID: {} as never,
+      objective: "obj",
+      tokensUsed: 0,
+      timeUsedSeconds: 0,
+      time: { created: 0 },
+    }
+    expect(goalPauseRefusal({ ...base, status: "complete" })).toContain("already complete")
+    expect(goalPauseRefusal({ ...base, status: "budget_limited" })).toContain("already budget_limited")
+    expect(goalPauseRefusal({ ...base, status: "active" })).toBeUndefined()
+    expect(goalPauseRefusal({ ...base, status: "paused" })).toBeUndefined()
+    expect(goalPauseRefusal({ ...base, status: "blocked" })).toBeUndefined()
+  })
+})
