@@ -1088,6 +1088,16 @@ describe("reverse exit rain", () => {
     expect(commands).not.toMatch(/name: "exit",\s*aliases: \[[^\]]*\],\s*hidden: true/)
   })
 
+  test("the /ev and /ov previews are offered in the slash menu, not callable blind", () => {
+    const commands = readFileSync(path.join(import.meta.dirname, "../../../src/cli/tui", "app-commands.ts"), "utf8")
+    // A hidden entry runs blind: /ev replays the launch's randomly chosen
+    // ending, so without a menu label there is no way to tell which one it is.
+    expect(commands).toMatch(/slash: \{ name: "ev" \},/)
+    expect(commands).not.toMatch(/slash: \{ name: "ev", hidden: true \}/)
+    expect(commands).toMatch(/slash: \{ name: "ov", aliases: \["op"\] \},/)
+    expect(commands).not.toMatch(/slash: \{ name: "ov", aliases: \["op"\], hidden: true \}/)
+  })
+
   test("the palette previews the reverse rain alongside the rain", () => {
     const dir = "../../../src/cli/tui"
     const commands = readFileSync(path.join(import.meta.dirname, dir, "app-commands.ts"), "utf8")
