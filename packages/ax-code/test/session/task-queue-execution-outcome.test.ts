@@ -48,10 +48,10 @@ async function settle(sessionID: SessionID) {
     payload: { text: "Count lines of code" },
   })
   await TaskQueueExecutor.start(item)
-  // Wait for either terminal outcome so a regression reports the incorrect
+  // Wait for a terminal outcome so a regression reports the incorrect
   // completed state immediately instead of timing out waiting for failure.
   await vi.waitFor(async () => {
-    expect((await TaskQueue.get(item.id)).status).toMatch(/^(completed|failed)$/)
+    expect((await TaskQueue.get(item.id)).status).toMatch(/^(completed|failed|cancelled)$/)
   })
   return TaskQueue.get(item.id)
 }
@@ -143,6 +143,25 @@ describe("task queue execution outcomes", () => {
         const item = await settle(session.id)
         expect(item.status).toBe("failed")
         expect(item.error).toBe(message)
+      },
+    })
+  })
+
+  test("cancels the queue row for an expected goal budget stop instead of failing it", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        vi.spyOn(SessionPrompt, "prompt").mockImplementation(async () => {
+          await recordEnd(session.id, "budget_limited")
+          return response(session.id)
+        })
+
+        const item = await settle(session.id)
+        expect(item.status).toBe("cancelled")
+        expect(item.error).toBe("Session stopped after the goal reached its budget")
+        expect(item.time.completed).toBeDefined()
       },
     })
   })

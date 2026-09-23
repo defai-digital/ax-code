@@ -19,7 +19,10 @@ export const BackgroundSubagentDeliveryInternals = {
 
 export async function deliverBackgroundSubagentHandoff(input: {
   item: TaskQueue.Info
-  outcome: { status: "completed"; result: unknown } | { status: "failed"; error: string }
+  outcome:
+    | { status: "completed"; result: unknown }
+    | { status: "failed"; error: string }
+    | { status: "cancelled"; error: string }
 }) {
   const { item, outcome } = input
   if (!isLiveTaskSubagent(item)) return item
@@ -43,12 +46,13 @@ export async function deliverBackgroundSubagentHandoff(input: {
     }).then((result) => result.item)
   }
 
+  const failed = outcome.status === "failed" || outcome.status === "cancelled"
   const text = outcome.status === "completed" ? childVisibleText(outcome.result) : ""
-  const errorMessage = outcome.status === "failed" ? outcome.error : undefined
+  const errorMessage = failed ? outcome.error : undefined
   const handoff = formatBackgroundTaskHandoff({
     taskID: item.sessionID,
     title: item.title,
-    state: outcome.status === "failed" ? "error" : "completed",
+    state: failed ? "error" : "completed",
     text,
     errorMessage,
   })
@@ -59,7 +63,7 @@ export async function deliverBackgroundSubagentHandoff(input: {
     const delivered = await TaskQueue.completeResultDelivery({
       id: item.id,
       claim,
-      resultEmpty: outcome.status === "failed" || isEmptySubagentResultText(text),
+      resultEmpty: failed || isEmptySubagentResultText(text),
     })
     wakeParent(parentSessionID)
     return delivered.item
@@ -198,9 +202,16 @@ async function waitForResultWasPersisted(
 
 async function recoveryOutcome(
   item: TaskQueue.Info,
-): Promise<{ status: "completed"; result: unknown } | { status: "failed"; error: string }> {
+): Promise<
+  | { status: "completed"; result: unknown }
+  | { status: "failed"; error: string }
+  | { status: "cancelled"; error: string }
+> {
   if (item.status === "failed") {
     return { status: "failed", error: item.error ?? "Background subagent failed before delivery." }
+  }
+  if (item.status === "cancelled") {
+    return { status: "cancelled", error: item.error ?? "Background subagent was cancelled before delivery." }
   }
   if (!item.sessionID) return { status: "completed", result: { parts: [] } }
   const messages = await Session.messages({ sessionID: item.sessionID }).catch((error: unknown) => {

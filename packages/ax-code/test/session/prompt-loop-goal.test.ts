@@ -177,7 +177,7 @@ describe("prompt loop goal continuation", () => {
       },
     )
 
-    expect(result).toEqual({ action: "stop", reason: "stalled", budgetWrapUp: "sent" })
+    expect(result).toEqual({ action: "stop", reason: "budget_limited", budgetWrapUp: "sent" })
     expect(published).toHaveLength(1)
     expect(published[0]?.message).toContain("token budget")
   })

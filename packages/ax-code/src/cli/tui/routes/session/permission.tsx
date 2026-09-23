@@ -305,7 +305,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
     }
   })
 
-  // ADR-136 idle "Allow once": the server stamps autoOnceAt on asks that will
+  // ADR-138 idle "Allow once": the server stamps autoOnceAt on asks that will
   // auto-reply "once" after a deadline (opt-in, full-access + autonomous,
   // allowlisted permission). Render the remaining seconds on the once option;
   // the server timer is authoritative — at zero it replies and the replied

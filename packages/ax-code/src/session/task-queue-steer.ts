@@ -162,6 +162,23 @@ export namespace TaskQueueSteer {
     })
   }
 
+  /**
+   * Refresh a steered follow-up's owner heartbeat from the steering drain's
+   * step boundary, while the receipt stays accepted and the apply is still
+   * pending. Non-`tq_` client IDs (composer-draft steers, which never touched
+   * the queue) parse nothing and no-op. Failures are logged and swallowed: a
+   * missed beat only makes restart recovery conservatively requeue the row.
+   */
+  export async function heartbeatSteered(clientID: string, generation: string) {
+    const match = CLIENT_ID.exec(clientID)
+    if (!match) return
+    const parsed = TaskQueueID.zod.safeParse(match[1])
+    if (!parsed.success) return
+    await TaskQueue.steerHeartbeat(parsed.data, generation).catch((error) => {
+      log.warn("could not refresh a steered follow-up heartbeat", { id: parsed.data, error })
+    })
+  }
+
   export async function steer(id: TaskQueueID): Promise<Result> {
     const item = await TaskQueue.get(id)
     if (!STEERABLE_STATUSES.includes(item.status)) {
@@ -187,10 +204,13 @@ export namespace TaskQueueSteer {
     const { SessionPrompt } = await import("./prompt")
 
     // Hold the row so the executor cannot claim it between the generation
-    // check and admission. pause() is the guarded atomic transition, and a
-    // turn ending after the hold cannot start the row.
+    // check and admission. pauseIfActive() is the guarded atomic transition:
+    // it also tolerates an interrupt sweep that paused the row after the
+    // steerable-status check above (a paused row is a valid hold target, not
+    // a contradictory 409), and a turn ending after the hold cannot start
+    // the row.
     const wasPaused = item.status === "paused"
-    const held = wasPaused ? item : await TaskQueue.pause(id)
+    const held = wasPaused ? item : await TaskQueue.pauseIfActive(id)
 
     async function restore(): Promise<TaskQueue.Info> {
       if (wasPaused) return held

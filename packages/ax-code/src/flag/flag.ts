@@ -145,7 +145,7 @@ export namespace Flag {
   export declare const AX_CODE_ISOLATION_MODE: "read-only" | "workspace-write" | "full-access" | undefined
   export declare const AX_CODE_ISOLATION_NETWORK: boolean | undefined
   export declare const AX_CODE_ISOLATION_BACKEND: "app" | "os" | "auto" | undefined
-  // Debug/ops override for the ADR-136 idle "Allow once" countdown
+  // Debug/ops override for the ADR-138 idle "Allow once" countdown
   // (milliseconds; bypasses the config clamp so tests and operators can use
   // short values). Still requires experimental.permission_idle_once.enabled.
   export declare const AX_CODE_PERMISSION_IDLE_ONCE_MS: number | undefined
@@ -470,11 +470,15 @@ Object.defineProperty(Flag, "AX_CODE_ISOLATION_BACKEND", {
   configurable: false,
 })
 
-// Dynamic getter for AX_CODE_PERMISSION_IDLE_ONCE_MS (ADR-136 debug override)
+// Dynamic getter for AX_CODE_PERMISSION_IDLE_ONCE_MS (ADR-138 debug override)
 Object.defineProperty(Flag, "AX_CODE_PERMISSION_IDLE_ONCE_MS", {
   get() {
     const v = Number(process.env["AX_CODE_PERMISSION_IDLE_ONCE_MS"])
-    return Number.isFinite(v) && v > 0 ? v : undefined
+    if (!Number.isFinite(v) || v <= 0) return undefined
+    // Node setTimeout clamps delays above 2^31-1 ms to ~1ms (and warns), which
+    // would turn a "practically never" override into an immediate auto-approve.
+    // Cap instead so the countdown keeps its declared semantics.
+    return Math.min(v, 2_147_483_647)
   },
   enumerable: true,
   configurable: false,

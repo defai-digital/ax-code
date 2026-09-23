@@ -23,7 +23,7 @@ type PromptLoopGoalTransition =
       text: string
       budgetWrapUp: GoalBudgetWrapUp
     }
-  | { action: "stop"; reason: "stalled"; budgetWrapUp: GoalBudgetWrapUp }
+  | { action: "stop"; reason: "budget_limited"; budgetWrapUp: GoalBudgetWrapUp }
 
 type PromptLoopGoalDeps = {
   publishError?: (input: { sessionID: SessionID; message: string }) => void

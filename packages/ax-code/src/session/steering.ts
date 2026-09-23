@@ -182,6 +182,14 @@ export namespace SessionSteering {
     const pending = [...current.receipts.values()].filter((item) => item.admitted && item.receipt.status === "accepted")
     let applied = false
     for (const item of pending) {
+      // A follow-up row cancelled on admission is protected from restart
+      // recovery only by its owner's liveness; refresh the row heartbeat at
+      // this step boundary so a second backend booting while the steer waits
+      // for its apply does not requeue and double-execute the follow-up (see
+      // TaskQueue.recoverInterrupted). Non-queue client IDs no-op.
+      void import("./task-queue-steer")
+        .then(({ TaskQueueSteer }) => TaskQueueSteer.heartbeatSteered(item.receipt.clientID, generation))
+        .catch(() => undefined)
       const messageID = MessageID.ascending()
       try {
         await apply({

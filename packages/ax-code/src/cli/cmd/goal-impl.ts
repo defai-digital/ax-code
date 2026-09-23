@@ -27,8 +27,11 @@ function writeJson(value: unknown) {
 // reactivated and a budget-limited one refused, so neither is a safe default.
 const RESUMABLE_STATUSES = new Set(["paused", "blocked", "active"])
 
+const RESUMABLE_GOAL_SESSION_DESCRIBE = "session id (defaults to the project's single resumable goal)"
+const ANY_GOAL_SESSION_DESCRIBE = "session id (defaults to the project's single goal)"
+
 /**
- * Resolve which session the goal command targets. An explicit --session wins;
+ * Resolve which session `goal resume` targets. An explicit --session wins;
  * otherwise the project's single resumable goal is picked. More than one
  * resumable goal is an error rather than a guess — resuming reactivates the
  * goal and starts burning budget, so the wrong pick is expensive.
@@ -50,6 +53,21 @@ export async function resolveGoalSession(sessionID: string | undefined): Promise
     )
   }
   return resumable[0]!.sessionID
+}
+
+/**
+ * Resolve which session a non-resume goal command (status/pause/clear)
+ * targets. These only inspect or stop the goal — they never reactivate it —
+ * so any existing goal resolves regardless of status.
+ */
+export async function resolveAnyGoalSession(sessionID: string | undefined): Promise<SessionID> {
+  if (sessionID) return SessionID.make(sessionID)
+  const goals = await SessionGoal.list()
+  if (goals.length === 0) throw new Error("No goal is set in this project.")
+  if (goals.length > 1) {
+    throw new Error(`Multiple sessions have goals: ${goals.map((goal) => goal.sessionID).join(", ")} — pass --session.`)
+  }
+  return goals[0]!.sessionID
 }
 
 /**
@@ -81,11 +99,11 @@ function goalStatusFromEvent(event: unknown, sessionID: string): string | undefi
   return typed.properties.goal?.status
 }
 
-function sessionFilter<T>(yargs: Argv<T>) {
+function sessionFilter<T>(yargs: Argv<T>, describe = RESUMABLE_GOAL_SESSION_DESCRIBE) {
   return yargs.option("session", {
     alias: ["s"],
     type: "string",
-    describe: "session id (defaults to the project's single resumable goal)",
+    describe,
   })
 }
 
@@ -99,10 +117,10 @@ function dirOption<T>(yargs: Argv<T>) {
 const GoalStatusCommand = cmd({
   command: "status",
   describe: "show the current session goal",
-  builder: (yargs: Argv) => dirOption(sessionFilter(yargs)).option("json", jsonOption()),
+  builder: (yargs: Argv) => dirOption(sessionFilter(yargs, ANY_GOAL_SESSION_DESCRIBE)).option("json", jsonOption()),
   async handler(args) {
     await bootstrapReadonly(args.dir ?? process.cwd(), async () => {
-      const sessionID = await resolveGoalSession(args.session)
+      const sessionID = await resolveAnyGoalSession(args.session)
       const goal = await SessionGoal.get(sessionID)
       if (args.json) {
         writeJson(goal ? SessionGoal.publicInfo(goal) : null)
@@ -116,10 +134,10 @@ const GoalStatusCommand = cmd({
 const GoalPauseCommand = cmd({
   command: "pause",
   describe: "pause the current session goal",
-  builder: (yargs: Argv) => dirOption(sessionFilter(yargs)),
+  builder: (yargs: Argv) => dirOption(sessionFilter(yargs, ANY_GOAL_SESSION_DESCRIBE)),
   async handler(args) {
     await bootstrap(args.dir ?? process.cwd(), async () => {
-      const sessionID = await resolveGoalSession(args.session)
+      const sessionID = await resolveAnyGoalSession(args.session)
       const goal = await SessionGoal.pause(sessionID)
       process.stdout.write(SessionGoal.format(goal) + EOL)
     })
@@ -129,10 +147,10 @@ const GoalPauseCommand = cmd({
 const GoalClearCommand = cmd({
   command: "clear",
   describe: "clear the current session goal and its plan",
-  builder: (yargs: Argv) => dirOption(sessionFilter(yargs)),
+  builder: (yargs: Argv) => dirOption(sessionFilter(yargs, ANY_GOAL_SESSION_DESCRIBE)),
   async handler(args) {
     await bootstrap(args.dir ?? process.cwd(), async () => {
-      const sessionID = await resolveGoalSession(args.session)
+      const sessionID = await resolveAnyGoalSession(args.session)
       await SessionGoal.clear(sessionID)
       process.stdout.write("Goal cleared for this session." + EOL)
     })

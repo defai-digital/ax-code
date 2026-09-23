@@ -1455,8 +1455,38 @@ export namespace Config {
     }),
   )
 
+  // Last resolved config per directory. Synchronous consumers that cannot
+  // afford an await — e.g. the permission idle-once gate, which must stay
+  // await-free between pending registration and the asked-event publish —
+  // read the same cached snapshot the async path uses via peek(). Entries
+  // are dropped by invalidate()/invalidateAll() BEFORE the cache is dropped,
+  // so a mid-session config edit is either observed fresh or fails closed
+  // (peek returns undefined) while the re-read is in flight.
+  const peeked = new Map<string, Info>()
+
+  function peekKey() {
+    try {
+      return Instance.directory
+    } catch {
+      return undefined
+    }
+  }
+
+  /**
+   * Synchronously read the cached config for the active directory, or
+   * undefined when the cache has not been populated or was just invalidated.
+   * Never reads disk; use get()/getFresh() when you can await.
+   */
+  export function peek(): Info | undefined {
+    const key = peekKey()
+    return key ? peeked.get(key) : undefined
+  }
+
   export async function get() {
-    return state().then((x) => x.config)
+    const x = await state()
+    const key = peekKey()
+    if (key) peeked.set(key, x.config)
+    return x.config
   }
 
   /**
@@ -1466,6 +1496,8 @@ export namespace Config {
    * Prefer this over restarting the session for `modes.*` opt-ins.
    */
   export async function invalidate() {
+    const key = peekKey()
+    if (key) peeked.delete(key)
     await state.invalidate()
   }
 
@@ -1476,6 +1508,7 @@ export namespace Config {
    * preserving active sessions, LSP clients, MCP connections, and tools.
    */
   export async function invalidateAll() {
+    peeked.clear()
     let currentDirectory: string | undefined
     try {
       currentDirectory = Instance.directory

@@ -75,7 +75,7 @@ describe("finishPromptLoopQueue", () => {
     expect(calls).toEqual(["cancel", "drain"])
   })
 
-  test.each(["error", "step_limit", "stalled"] as const)(
+  test.each(["error", "step_limit", "stalled", "budget_limited"] as const)(
     "drains waiting follow-ups when a synchronous turn ends with reason %s",
     async (reason) => {
       const calls: string[] = []

@@ -12,6 +12,13 @@ import type { SessionID } from "../session/schema"
 
 const log = Log.create({ service: "risk" })
 
+// Session ends that stopped the run before its work completed. A budget
+// limit is an expected clean stop, but like a stall or step limit the task
+// itself did not finish, so readiness/scoring treat all three alike.
+function endedBeforeCompletion(reason: string | null | undefined): boolean {
+  return reason === "step_limit" || reason === "stalled" || reason === "budget_limited"
+}
+
 export namespace Risk {
   export type Level = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
   export type ValidationState = "not_run" | "passed" | "failed" | "partial"
@@ -201,7 +208,7 @@ export namespace Risk {
 
   function readiness(signals: NormalizedSignals, conf: number): Readiness {
     if (signals.completionGateBlocked) return "blocked"
-    if (signals.sessionEndReason === "step_limit" || signals.sessionEndReason === "stalled") return "blocked"
+    if (endedBeforeCompletion(signals.sessionEndReason)) return "blocked"
     if (signals.validationState === "failed") return "blocked"
     if (signals.filesChanged > 0 && signals.validationState === "not_run") return "needs_validation"
     if ((signals.recoveredSubagentResults ?? 0) > 0) return "needs_review"
@@ -293,11 +300,7 @@ export namespace Risk {
     push(
       "tools",
       "Control-plane completion",
-      next.completionGateBlocked
-        ? 25
-        : next.sessionEndReason === "step_limit" || next.sessionEndReason === "stalled"
-          ? 18
-          : 0,
+      next.completionGateBlocked ? 25 : endedBeforeCompletion(next.sessionEndReason) ? 18 : 0,
       next.completionGateBlocked
         ? `completion gate blocked${next.completionGateReason ? `: ${next.completionGateReason}` : ""}`
         : `session ended ${next.sessionEndReason}`,
@@ -324,7 +327,7 @@ export namespace Risk {
     if (next.toolFailures > 0) parts.push(`${next.toolFailures} tool failures`)
     if (next.recoveredSubagentResults > 0) parts.push(`${next.recoveredSubagentResults} recovered subagent results`)
     if (next.completionGateBlocked) parts.push("completion gate blocked")
-    if (next.sessionEndReason === "step_limit" || next.sessionEndReason === "stalled") {
+    if (endedBeforeCompletion(next.sessionEndReason)) {
       parts.push(`session ended ${next.sessionEndReason}`)
     }
 
@@ -347,9 +350,7 @@ export namespace Risk {
       next.completionGateBlocked
         ? `control-plane completion gate blocked${next.completionGateReason ? `: ${next.completionGateReason}` : ""}`
         : "",
-      next.sessionEndReason === "step_limit" || next.sessionEndReason === "stalled"
-        ? `session ended with ${next.sessionEndReason}`
-        : "",
+      endedBeforeCompletion(next.sessionEndReason) ? `session ended with ${next.sessionEndReason}` : "",
     ].filter(Boolean)
 
     const unknowns = [
@@ -373,7 +374,7 @@ export namespace Risk {
       next.securityRelated ? "review auth, session, or credential paths with an owner" : "",
       next.recoveredSubagentResults > 0 ? "review the recovered subagent result against the inspected evidence" : "",
       next.completionGateBlocked ? "retry or resume the blocked autonomous subtask before accepting completion" : "",
-      next.sessionEndReason === "step_limit" || next.sessionEndReason === "stalled"
+      endedBeforeCompletion(next.sessionEndReason)
         ? "resume the session or increase the step budget before treating the work as finished"
         : "",
     ].filter(Boolean)

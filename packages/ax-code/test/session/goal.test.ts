@@ -342,12 +342,19 @@ describe("SessionGoal", () => {
         expect(limited?.tokensUsed).toBe(100)
         expect(limited?.timeUsedSeconds).toBe(6)
 
-        // budget_limited goals still accrue (the wrap-up turn is goal work).
+        // The tripping turn above was recorded in full by the same UPDATE that
+        // flipped the status. Later turns on a budget_limited goal — the user
+        // keeps chatting, or a forked session keeps working — must not accrue:
+        // usage would otherwise grow forever and goal status/forks would show
+        // ever-increasing overage.
         await SessionGoal.addUsage({
           sessionID: session.id,
           message: message("message_goal_usage_d", 10, 10_000, 11_000),
         })
-        expect((await SessionGoal.get(session.id))?.tokensUsed).toBe(110)
+        const after = await SessionGoal.get(session.id)
+        expect(after?.status).toBe("budget_limited")
+        expect(after?.tokensUsed).toBe(100)
+        expect(after?.timeUsedSeconds).toBe(6)
 
         await Session.remove(session.id)
       },

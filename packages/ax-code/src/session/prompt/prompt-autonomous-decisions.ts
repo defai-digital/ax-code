@@ -119,7 +119,7 @@ type GoalContinuationDecision =
     }
   | {
       action: "stop_budget_limit"
-      reason: "stalled"
+      reason: "budget_limited"
       message: string
     }
 
@@ -1000,7 +1000,7 @@ export function goalContinuationDecision(input: {
       }
       return {
         action: "stop_budget_limit",
-        reason: "stalled",
+        reason: "budget_limited",
         message:
           `Goal "${input.goal.objective}" reached its ${exhausted.join(" and ") || "budget"}` +
           `. The wrap-up turn has already run, so the session is stopped. ` +

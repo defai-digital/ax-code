@@ -1162,6 +1162,46 @@ export namespace TaskQueue {
     return transitionStatus({ id, action: "pause", fromStatuses: ["queued", "waiting_for_idle"], status: "paused" })
   }
 
+  /**
+   * Pause a queued/waiting row, or accept one that is already paused without
+   * touching it. The steer hold uses this instead of `pause()`: its
+   * steerable-status check can race an interrupt sweep's pause, and the row
+   * turning paused mid-flight is a valid hold target, not a contradictory
+   * 409. Any other status raced into between the caller's check and this
+   * write still fails the guarded transition with the fresh status
+   * (ADR-106 D5).
+   */
+  export async function pauseIfActive(id: TaskQueueID): Promise<Info> {
+    const now = Date.now()
+    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+      const fresh = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get()
+      if (!fresh) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
+      const current = fromRow(fresh)
+      if (current.status === "paused") return { item: current, changed: false as const }
+      const row = db
+        .update(TaskQueueTable)
+        .set({ status: "paused", time_updated: now })
+        .where(and(eq(TaskQueueTable.id, id), inArray(TaskQueueTable.status, ["queued", "waiting_for_idle"])))
+        .returning()
+        .get()
+      if (row) return { item: fromRow(row), changed: true as const }
+      const latest = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get()
+      if (!latest) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
+      return { item: fromRow(latest), changed: false as const }
+    })
+    assertProjectItem(result.item)
+    if (result.item.status !== "paused") {
+      throw new HTTPException(409, {
+        message: `Cannot pause task queue item ${id} while it is ${result.item.status}.`,
+      })
+    }
+    if (result.changed) {
+      publishUpdated(result.item)
+      await syncWorkflowStatusIfNeeded(result.item)
+    }
+    return result.item
+  }
+
   export async function resume(id: TaskQueueID): Promise<Info> {
     const current = await get(id)
     assertActionStatus(current, "resume", ["paused"])
@@ -1244,9 +1284,12 @@ export namespace TaskQueue {
       const current = fromRow(fresh)
       if (!fromStatuses.includes(current.status)) return { item: current, raced: true as const }
       // A fresh admission overwrites the previous steer audit; drop any stale
-      // applied stamp so a future lost steer of this row stays recoverable.
+      // applied stamp so a future lost steer of this row stays recoverable,
+      // and drop any stale owner heartbeat so it cannot mask the fresh
+      // admission with a previous owner's liveness.
       const payload: Payload = { ...current.payload, steeredInto: audit.steeredInto, steeredAt: audit.steeredAt }
       delete payload["steeredAppliedAt"]
+      delete payload["steeredHeartbeatAt"]
       const row = db
         .update(TaskQueueTable)
         .set({
@@ -1291,6 +1334,35 @@ export namespace TaskQueue {
       db.update(TaskQueueTable)
         .set({
           payload: { ...current.payload, steeredAppliedAt: now },
+          time_updated: now,
+        })
+        .where(eq(TaskQueueTable.id, id))
+        .run()
+    })
+  }
+
+  /**
+   * Refresh the owner heartbeat of an admitted-but-unapplied steer (called
+   * from the steering drain at each step boundary of the target generation
+   * while the receipt stays accepted). Restart recovery on a second backend
+   * skips a cancelled steered row while this stamp is fresh, so a generation
+   * still working toward the apply — which can sit behind a long-running
+   * tool call well past the liveness window — is not requeued and
+   * double-executed. Like the applied stamp, the write is best-effort and
+   * idempotent, and it never touches rows stamped applied or steered into a
+   * different generation.
+   */
+  export async function steerHeartbeat(id: TaskQueueID, generation: string, now = Date.now()): Promise<void> {
+    SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+      const fresh = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get()
+      if (!fresh) return
+      if (fresh.status !== "cancelled") return
+      const current = fromRow(fresh)
+      if (current.payload["steeredInto"] !== generation) return
+      if (current.payload["steeredAppliedAt"] !== undefined) return
+      db.update(TaskQueueTable)
+        .set({
+          payload: { ...current.payload, steeredHeartbeatAt: now },
           time_updated: now,
         })
         .where(eq(TaskQueueTable.id, id))
@@ -1557,9 +1629,15 @@ export namespace TaskQueue {
       // the apply landed (e.g. a backend restart between admission and the
       // drain commit), the follow-up text would be lost with the cancelled
       // row. Requeue rows whose steer is older than the liveness window: a
-      // still-live peer applies and stamps within it. Bounded to the last 24h
-      // so ancient steers do not resurface long after the user moved on, and
-      // clear the steer audit keys — the row returns to the plain queue.
+      // still-live peer applies and stamps within it. Rows carrying an owner
+      // heartbeat (`steeredHeartbeatAt`, refreshed by the live backend at each
+      // step boundary of the target generation — see TaskQueue.steerHeartbeat)
+      // are judged on the heartbeat instead of the admission time, so a
+      // generation still driving toward the apply behind a long-running tool
+      // call is not requeued and double-executed by a second backend booting
+      // mid-window. Bounded to the last 24h so ancient steers do not resurface
+      // long after the user moved on, and clear the steer audit keys — the row
+      // returns to the plain queue.
       const STEER_RECOVERY_WINDOW_MS = 24 * 60 * 60 * 1000
       const steeredRows = db
         .select()
@@ -1575,12 +1653,23 @@ export namespace TaskQueue {
       for (const row of steeredRows) {
         if (typeof row.payload["steeredInto"] !== "string") continue
         if (row.payload["steeredAppliedAt"] !== undefined) continue
-        const steeredAt = typeof row.payload["steeredAt"] === "number" ? row.payload["steeredAt"] : 0
-        if (now - steeredAt < livenessMs) continue
+        const steeredHeartbeatAt = row.payload["steeredHeartbeatAt"]
+        if (typeof steeredHeartbeatAt === "number") {
+          // The admitting backend is alive and stamping at step boundaries;
+          // it will apply the steer. Only a stale heartbeat (owner hung or
+          // dead since) falls through to the requeue below.
+          if (now - steeredHeartbeatAt < livenessMs) continue
+        } else {
+          // Rows written before owner heartbeats existed fall back to the
+          // admission timestamp.
+          const steeredAt = typeof row.payload["steeredAt"] === "number" ? row.payload["steeredAt"] : 0
+          if (now - steeredAt < livenessMs) continue
+        }
         const payload = { ...row.payload }
         delete payload["steeredInto"]
         delete payload["steeredAt"]
         delete payload["steeredAppliedAt"]
+        delete payload["steeredHeartbeatAt"]
         const updated = db
           .update(TaskQueueTable)
           .set({
@@ -1742,11 +1831,17 @@ export namespace TaskQueue {
     return item
   }
 
+  /**
+   * States from which `sendNow` may promote a row to the front of the queue.
+   * Shared by the pre-write assertion and the guarded re-check inside the
+   * reordering transaction so both agree on the same source states.
+   */
+  export const SEND_NOW_STATUSES: readonly Status[] = ["queued", "waiting_for_idle", "paused"]
+
   export async function sendNow(id: TaskQueueID): Promise<Info> {
     const current = await get(id)
-    assertActionStatus(current, "send now", ["queued", "waiting_for_idle", "paused"])
+    assertActionStatus(current, "send now", SEND_NOW_STATUSES)
     const now = Date.now()
-    const sendNowFromStatuses: Status[] = ["queued", "waiting_for_idle", "paused"]
     let raced: Status | undefined
     const changed = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
       // Re-check the source status inside the same transaction as the write
@@ -1756,7 +1851,7 @@ export namespace TaskQueue {
       // leaves no shifted rows to roll back.
       const freshRow = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get()
       if (!freshRow) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
-      if (!sendNowFromStatuses.includes(freshRow.status as Status)) {
+      if (!SEND_NOW_STATUSES.includes(freshRow.status as Status)) {
         raced = freshRow.status as Status
         return { item: fromRow(freshRow), shifted: [] as Info[] }
       }
@@ -1770,7 +1865,7 @@ export namespace TaskQueue {
             // Only the active queue participates in ordering. Terminal history
             // rows would otherwise be renumbered and re-published (an SSE event
             // storm on large projects) without affecting the schedule.
-            inArray(TaskQueueTable.status, sendNowFromStatuses),
+            inArray(TaskQueueTable.status, SEND_NOW_STATUSES),
           ),
         )
         .returning()
@@ -1779,7 +1874,7 @@ export namespace TaskQueue {
       const row = db
         .update(TaskQueueTable)
         .set({ status: "queued", position: 0, time_updated: now })
-        .where(and(eq(TaskQueueTable.id, id), inArray(TaskQueueTable.status, sendNowFromStatuses)))
+        .where(and(eq(TaskQueueTable.id, id), inArray(TaskQueueTable.status, SEND_NOW_STATUSES)))
         .returning()
         .get()
       if (!row) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
@@ -1811,7 +1906,7 @@ export namespace TaskQueue {
     return EDITABLE_STATUSES.includes(status)
   }
 
-  function assertActionStatus(item: Info, action: string, allowed: Status[]) {
+  function assertActionStatus(item: Info, action: string, allowed: readonly Status[]) {
     if (allowed.includes(item.status)) return
     throw new HTTPException(409, {
       message: `Cannot ${action} task queue item ${item.id} while it is ${item.status}.`,

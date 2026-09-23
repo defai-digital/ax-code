@@ -304,3 +304,76 @@ test("steering an unknown or re-steered row fails cleanly", async () => {
     },
   })
 })
+
+test("a row paused between the steerable check and the hold still steers", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const app = Server.Default()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({})
+      SessionSteering.begin(session.id, new AbortController().signal)
+      const item = await enqueueFollowUp(session.id, "paused mid-flight")
+
+      // An interrupt sweep lands between the steer's initial read and its
+      // hold: the first read still shows queued while the row is already
+      // paused. The hold must tolerate the raced pause instead of failing
+      // with a contradictory 409.
+      const realGet = TaskQueue.get.bind(TaskQueue)
+      let raced = false
+      vi.spyOn(TaskQueue, "get").mockImplementation(async (id: TaskQueueID) => {
+        const row = await realGet(id)
+        if (!raced && row.id === item.id) {
+          raced = true
+          await TaskQueue.pause(id)
+          return { ...row, status: "queued" as const }
+        }
+        return row
+      })
+
+      const response = await steerRequest(app, tmp.path, item.id)
+      expect(response.status).toBe(200)
+      const result = TaskQueueSteer.Result.parse(await response.json())
+      expect(result.receipt?.status).toBe("accepted")
+      expect(result.item.status).toBe("cancelled")
+      expect((await TaskQueue.get(item.id)).status).toBe("cancelled")
+    },
+  })
+})
+
+test("the steering drain refreshes a steered follow-up's owner heartbeat at the step boundary", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const app = Server.Default()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({})
+      const controller = new AbortController()
+      SessionSteering.begin(session.id, controller.signal)
+      const item = await enqueueFollowUp(session.id, "heartbeat while pending")
+      expect((await steerRequest(app, tmp.path, item.id)).status).toBe(200)
+      expect((await TaskQueue.get(item.id)).status).toBe("cancelled")
+
+      // At the step boundary the drain refreshes the cancelled row's owner
+      // heartbeat while the steer is pending; the apply then stamps it
+      // applied. Both writes are lazy, so poll for them.
+      const applied = await SessionSteering.drain(session.id, controller.signal, async (steering) => {
+        steering.beforeCommit()
+        steering.afterCommit()
+      })
+      expect(applied).toBe(true)
+
+      const deadline = Date.now() + 5000
+      let row = await TaskQueue.get(item.id)
+      while (
+        (row.payload["steeredHeartbeatAt"] === undefined || row.payload["steeredAppliedAt"] === undefined) &&
+        Date.now() < deadline
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 25))
+        row = await TaskQueue.get(item.id)
+      }
+      expect(typeof row.payload["steeredHeartbeatAt"]).toBe("number")
+      expect(typeof row.payload["steeredAppliedAt"]).toBe("number")
+    },
+  })
+})

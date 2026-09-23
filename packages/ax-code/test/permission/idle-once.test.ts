@@ -1,12 +1,15 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { setTimeout as sleep } from "node:timers/promises"
+import fs from "fs/promises"
+import path from "path"
 import { Bus } from "../../src/bus"
+import { Config } from "../../src/config/config"
 import { Permission } from "../../src/permission"
 import { Instance } from "../../src/project/instance"
 import { SessionID } from "../../src/session/schema"
 import { tmpdir } from "../fixture/fixture"
 
-// ADR-136: an opt-in idle "Allow once" — full-access + autonomous +
+// ADR-138: an opt-in idle "Allow once" — full-access + autonomous +
 // allowlisted interactive permission + head-of-queue gets a server-side
 // deadline that auto-replies "once"; any human reply cancels it. The tests
 // use the AX_CODE_PERMISSION_IDLE_ONCE_MS debug override with real timers.
@@ -69,7 +72,7 @@ function askDestructive(sessionID: SessionID, pattern: string) {
   })
 }
 
-describe("permission idle-once deadline (ADR-136)", () => {
+describe("permission idle-once deadline (ADR-138)", () => {
   test("auto-replies once when the deadline fires unattended", async () => {
     armedEnv()
     await using tmp = await tmpdir({ git: true, config: ARMED_CONFIG as never })
@@ -189,6 +192,66 @@ describe("permission idle-once deadline (ADR-136)", () => {
         const ask = askDestructive(sessionID, "rm -rf /tmp/opt")
         const pending = await waitForPending()
         expect(pending[0]!.autoOnceAt).toBeUndefined()
+        const rejection = expect(ask).rejects.toThrow("rejected")
+        await Permission.reply({ requestID: pending[0]!.id, reply: "reject" })
+        await rejection
+      },
+    })
+  })
+
+  test("a mid-session sandbox toggle suppresses the deadline", async () => {
+    vi.stubEnv("AX_CODE_AUTONOMOUS", "1")
+    vi.stubEnv("AX_CODE_PERMISSION_IDLE_ONCE_MS", "50")
+    // No AX_CODE_ISOLATION_MODE: the gate falls back to the config/default
+    // mode, which the PUT /isolation flow can change mid-session.
+    await using tmp = await tmpdir({ git: true, config: ARMED_CONFIG as never })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const sessionID = SessionID.make("ses_idle_once_toggle")
+        const first = askDestructive(sessionID, "rm -rf /tmp/t1")
+        const firstPending = await waitForPending()
+        await waitForAutoOnceAt(firstPending[0]!.id)
+        await first
+
+        // Mimic the PUT /isolation flow: persist a restricted mode straight
+        // to the project config, then drop the config cache and re-read
+        // (persistProjectConfig + Config.getFresh). The idle-once gate must
+        // observe the new mode on the very next ask — a stale snapshot would
+        // auto-approve a destructive command in a session the user just
+        // sandboxed.
+        await fs.writeFile(
+          path.join(tmp.path, "ax-code.json"),
+          JSON.stringify({ ...ARMED_CONFIG, isolation: { mode: "workspace-write", network: false } }),
+        )
+        await Config.invalidate()
+        expect((await Config.get()).isolation?.mode).toBe("workspace-write")
+
+        const second = askDestructive(sessionID, "rm -rf /tmp/t2")
+        const secondPending = await waitForPending()
+        expect(secondPending[0]!.autoOnceAt).toBeUndefined()
+        const rejection = expect(second).rejects.toThrow("rejected")
+        await Permission.reply({ requestID: secondPending[0]!.id, reply: "reject" })
+        await rejection
+      },
+    })
+  })
+
+  test("the env override is capped at the setTimeout maximum", async () => {
+    vi.stubEnv("AX_CODE_AUTONOMOUS", "1")
+    vi.stubEnv("AX_CODE_ISOLATION_MODE", "full-access")
+    // Above Node's 2^31-1ms setTimeout ceiling: without the cap the delay
+    // would clamp to ~1ms and auto-approve almost immediately.
+    vi.stubEnv("AX_CODE_PERMISSION_IDLE_ONCE_MS", "9999999999")
+    await using tmp = await tmpdir({ git: true, config: ARMED_CONFIG as never })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const sessionID = SessionID.make("ses_idle_once_cap")
+        const ask = askDestructive(sessionID, "rm -rf /tmp/cap")
+        const pending = await waitForPending()
+        const at = await waitForAutoOnceAt(pending[0]!.id)
+        expect(at - Date.now()).toBeGreaterThan(24 * 60 * 60 * 1000)
         const rejection = expect(ask).rejects.toThrow("rejected")
         await Permission.reply({ requestID: pending[0]!.id, reply: "reject" })
         await rejection

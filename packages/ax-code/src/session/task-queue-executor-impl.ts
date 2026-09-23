@@ -202,13 +202,18 @@ async function executeClaimedItem(item: TaskQueue.Info, execution: QueueExecutio
     // blocks. If they shared one block a DB error from finishIfRunning would
     // fall into the catch and mark a successfully-run task as "failed".
     let succeeded = false
+    let cancelled: { error: string } | undefined
     let result: unknown
     try {
       result = await runWithExecutionWatchdog(item, execution)
       const latest = await TaskQueue.get(item.id).catch(() => item)
-      const failure = failureForQueueExecution({ ...item, ...latest }, result)
-      if (failure) throw new Error(failure)
-      succeeded = true
+      const outcome = outcomeForQueueExecution({ ...item, ...latest }, result)
+      if (outcome?.status === "cancelled") {
+        cancelled = outcome
+      } else {
+        if (outcome) throw new Error(outcome.error)
+        succeeded = true
+      }
     } catch (error) {
       DiagnosticLog.recordProcess("server.taskQueueTaskFailed", {
         taskID: item.id,
@@ -223,6 +228,14 @@ async function executeClaimedItem(item: TaskQueue.Info, execution: QueueExecutio
       await syncScheduledTaskOutcome(finished, error)
       await deliverLiveTaskSubagent(finished, { status: "failed", error: NamedError.message(error) })
       log.error("task queue item execution failed", { taskID: item.id, sessionID: item.sessionID, error })
+    }
+    if (cancelled) {
+      // Expected clean termination (for example a goal budget stop): cancel
+      // the row instead of failing it so /queue does not show a spurious red
+      // failure for work that ended by design.
+      const finished = await finishIfRunning(item, { status: "cancelled", error: cancelled.error })
+      await syncScheduledTaskOutcome(finished, new Error(cancelled.error))
+      await deliverLiveTaskSubagent(finished, { status: "cancelled", error: cancelled.error })
     }
     if (succeeded) {
       const finished = await finishIfRunning(item, { status: "completed" })
@@ -258,7 +271,10 @@ async function executeClaimedItem(item: TaskQueue.Info, execution: QueueExecutio
 
 async function deliverLiveTaskSubagent(
   item: TaskQueue.Info,
-  outcome: { status: "completed"; result: unknown } | { status: "failed"; error: string },
+  outcome:
+    | { status: "completed"; result: unknown }
+    | { status: "failed"; error: string }
+    | { status: "cancelled"; error: string },
 ) {
   if (item.kind !== "subagent" || item.payload["source"] !== "task") return
   await import("./background-subagent-delivery")
@@ -369,7 +385,7 @@ async function syncScheduledTaskOutcome(item: TaskQueue.Info, error?: unknown) {
 
 async function finishIfRunning(
   item: TaskQueue.Info,
-  input: { status: Extract<TaskQueue.Status, "completed" | "failed">; error?: string },
+  input: { status: Extract<TaskQueue.Status, "completed" | "failed" | "cancelled">; error?: string },
 ) {
   const current = await TaskQueue.get(item.id)
   if (!isActiveQueueStatus(current.status)) return current
@@ -469,6 +485,8 @@ function workflowTokenPacingWaitMs(input: {
   maxTokensPerMinute: number
   now: number
 }) {
+  // A request larger than the whole per-minute budget can never be paced:
+  // waiting cannot make room for it, so it is admitted immediately.
   if (input.requestedTokens <= 0 || input.requestedTokens > input.maxTokensPerMinute) return 0
   let total = input.requestedTokens + input.started.reduce((sum, item) => sum + item.tokens, 0)
   if (total <= input.maxTokensPerMinute) return 0
@@ -542,7 +560,9 @@ async function requireActiveQueueItem(id: TaskQueueID) {
   return current
 }
 
-function failureForQueueExecution(item: TaskQueue.Info, result: unknown): string | undefined {
+type QueueExecutionOutcome = { status: "failed"; error: string } | { status: "cancelled"; error: string }
+
+function outcomeForQueueExecution(item: TaskQueue.Info, result: unknown): QueueExecutionOutcome | undefined {
   if (!item.sessionID) return undefined
   // Prompt failures are returned as assistant messages, not necessarily thrown
   // or recorded as replay errors (for example, a blocked completion gate).
@@ -551,9 +571,9 @@ function failureForQueueExecution(item: TaskQueue.Info, result: unknown): string
   if (assistant.success && assistant.data.sessionID === item.sessionID && assistant.data.error) {
     const error = assistant.data.error
     if ("message" in error.data && typeof error.data.message === "string" && error.data.message.trim()) {
-      return error.data.message.trim()
+      return { status: "failed", error: error.data.message.trim() }
     }
-    return error.name
+    return { status: "failed", error: error.name }
   }
 
   const startedAt = item.time.started ?? item.time.created
@@ -573,17 +593,22 @@ function failureForQueueExecution(item: TaskQueue.Info, result: unknown): string
   })?.event_data
 
   if (latestError?.type === "error" && latestError.message.trim()) {
-    return latestError.message.trim()
+    return { status: "failed", error: latestError.message.trim() }
   }
   switch (latestEnd.reason) {
+    // A goal budget stop is an expected clean end — the wrap-up turn ran
+    // before the session stopped — so the row is cancelled like other
+    // expected terminations, not failed as a stall would be.
+    case "budget_limited":
+      return { status: "cancelled", error: "Session stopped after the goal reached its budget" }
     case "error":
-      return "Session ended with an error"
+      return { status: "failed", error: "Session ended with an error" }
     case "stalled":
-      return "Session stalled before completing the task"
+      return { status: "failed", error: "Session stalled before completing the task" }
     case "step_limit":
-      return "Session reached its step limit before completing the task"
+      return { status: "failed", error: "Session reached its step limit before completing the task" }
     case "aborted":
-      return "Session was aborted before completing the task"
+      return { status: "failed", error: "Session was aborted before completing the task" }
   }
 }
 

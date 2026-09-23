@@ -2,7 +2,7 @@ import { Recorder } from "../../replay/recorder"
 import { BlastRadius } from "../blast-radius"
 import type { SessionID, SessionStop } from "../schema"
 
-export type PromptLoopEndReason = "completed" | "aborted" | "error" | "step_limit" | "stalled"
+export type PromptLoopEndReason = "completed" | "aborted" | "error" | "step_limit" | "stalled" | "budget_limited"
 
 type PromptLoopRecordingDeps = {
   begin: typeof Recorder.begin

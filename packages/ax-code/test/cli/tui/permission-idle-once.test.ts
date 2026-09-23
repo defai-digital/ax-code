@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 
-// ADR-136: the permission prompt renders the server's idle "Allow once"
+// ADR-138: the permission prompt renders the server's idle "Allow once"
 // countdown. The prompt requires AX Code TUI native FFI to render, so these
 // are source-text guards like p-permission-question-reply-sdk-error.test.ts.
 const SRC = path.join(__dirname, "../../../src/cli/tui/routes/session/permission.tsx")

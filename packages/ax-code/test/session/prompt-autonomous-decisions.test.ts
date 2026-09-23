@@ -410,7 +410,7 @@ describe("autonomous continuation decisions", () => {
       budgetWrapUp: "sent",
     })
 
-    expect(decision).toMatchObject({ action: "stop_budget_limit", reason: "stalled" })
+    expect(decision).toMatchObject({ action: "stop_budget_limit", reason: "budget_limited" })
     if (decision.action !== "stop_budget_limit") throw new Error("expected stop_budget_limit")
     expect(decision.message).toContain('Goal "finish refactor" reached its token budget')
     expect(decision.message).toContain("120 of 100 tokens used")
@@ -498,7 +498,7 @@ describe("autonomous continuation decisions", () => {
       budgetWrapUp: "sent",
     })
 
-    expect(decision).toMatchObject({ action: "stop_budget_limit", reason: "stalled" })
+    expect(decision).toMatchObject({ action: "stop_budget_limit", reason: "budget_limited" })
     if (decision.action !== "stop_budget_limit") throw new Error("expected stop_budget_limit")
     expect(decision.message).toContain("reached its time budget")
     expect(decision.message).toContain("4000 of 3600 seconds used")

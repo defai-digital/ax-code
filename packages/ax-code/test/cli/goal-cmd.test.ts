@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { SessionGoal } from "../../src/session/goal"
-import { goalResumeExitCode, resolveGoalSession } from "../../src/cli/cmd/goal-impl"
+import { goalResumeExitCode, resolveAnyGoalSession, resolveGoalSession } from "../../src/cli/cmd/goal-impl"
 import { tmpdir } from "../fixture/fixture"
 
 afterEach(async () => {
@@ -105,6 +105,74 @@ describe("resolveGoalSession", () => {
         await SessionGoal.create({ sessionID: second.id, objective: "two", status: "active" })
         const goals = await SessionGoal.list()
         expect(goals.map((goal) => goal.objective).sort()).toEqual(["one", "two"])
+      },
+    })
+  })
+})
+
+describe("resolveAnyGoalSession", () => {
+  test("errors without goals in the project", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(resolveAnyGoalSession(undefined)).rejects.toThrow("No goal is set in this project")
+      },
+    })
+  })
+
+  test("resolves a budget_limited goal without --session", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const goal = await SessionGoal.create({ sessionID: session.id, objective: "budget ran out", status: "active" })
+        await SessionGoal.setStatus({
+          sessionID: session.id,
+          status: "budget_limited",
+          expected: { created: goal.time.created, status: "active", updated: goal.time.updated },
+        })
+        expect(await resolveAnyGoalSession(undefined)).toBe(session.id)
+      },
+    })
+  })
+
+  test("resolves a complete goal without --session", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const goal = await SessionGoal.create({ sessionID: session.id, objective: "done already", status: "paused" })
+        await SessionGoal.setStatus({
+          sessionID: session.id,
+          status: "complete",
+          expected: { created: goal.time.created, status: "paused", updated: goal.time.updated },
+        })
+        expect(await resolveAnyGoalSession(undefined)).toBe(session.id)
+        // resume still refuses the same goal.
+        await expect(resolveGoalSession(undefined)).rejects.toThrow("No resumable goal")
+      },
+    })
+  })
+
+  test("requires --session when multiple goals exist", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const first = await Session.create({})
+        const second = await Session.create({})
+        await SessionGoal.create({ sessionID: first.id, objective: "one", status: "paused" })
+        const limited = await SessionGoal.create({ sessionID: second.id, objective: "two", status: "active" })
+        await SessionGoal.setStatus({
+          sessionID: second.id,
+          status: "budget_limited",
+          expected: { created: limited.time.created, status: "active", updated: limited.time.updated },
+        })
+        await expect(resolveAnyGoalSession(undefined)).rejects.toThrow("Multiple sessions have goals")
+        expect(await resolveAnyGoalSession(first.id)).toBe(first.id)
       },
     })
   })

@@ -70,7 +70,7 @@ export namespace Permission {
       patterns: z.string().array(),
       metadata: z.record(z.string(), z.any()),
       always: z.string().array(),
-      // ADR-136: epoch ms when the server auto-replies "once" for an idle
+      // ADR-138: epoch ms when the server auto-replies "once" for an idle
       // interactive ask (full-access + autonomous + configured allowlist).
       // Absent on every other ask; clients render a countdown from it.
       autoOnceAt: z.number().int().positive().optional(),
@@ -182,7 +182,7 @@ export namespace Permission {
     info: Request
     ruleset: Ruleset
     deferred: PromiseDeferred<void>
-    // ADR-136 idle "Allow once" deadline; cleared on every removal path.
+    // ADR-138 idle "Allow once" deadline; cleared on every removal path.
     autoOnceTimer?: ReturnType<typeof setTimeout>
   }
 
@@ -198,19 +198,6 @@ export namespace Permission {
     // Per-instance mutex for "always" replies. Module-level storage would
     // needlessly serialize concurrent project instances (e.g. worktrees).
     alwaysReplyQueue: Promise<void>
-    // ADR-136 idle-once gate snapshot, loaded once at instance init. The
-    // registration→asked-publish stretch in askPromise must stay free of
-    // awaits (test/permission/next.test.ts pins that ordering), so the
-    // config-dependent gates read this snapshot synchronously. Env-level
-    // gates (autonomous, isolation override, AX_CODE_PERMISSION_IDLE_ONCE_MS)
-    // are still read per-ask; a config toggle takes effect on the next
-    // instance.
-    idleOnce: {
-      enabled: boolean
-      timeoutMs: number | undefined
-      permissions: readonly string[] | undefined
-      isolationMode: string | undefined
-    }
   }
 
   const state = Instance.state(
@@ -227,23 +214,22 @@ export namespace Permission {
           { count: legacy.length, patterns: legacy.slice(0, 10).map((rule) => rule.pattern) },
         )
       }
-      const config = await Config.get()
-      const idleOnceConfig = config.experimental?.permission_idle_once
+      // Warm the Config cache so the idle-once gate's synchronous
+      // Config.peek() is populated for every later ask (see
+      // idleOnceDeadline). Config.get() is what the rest of the permission
+      // gates use too, so the gate reads the same values the live
+      // registration path would, including mid-session invalidations.
+      await Config.get()
       return {
         pending: new Map<PermissionID, PendingEntry>(),
         approved,
         projectID: Instance.project.id,
         alwaysReplyQueue: Promise.resolve(),
-        idleOnce: {
-          enabled: idleOnceConfig?.enabled ?? false,
-          timeoutMs: idleOnceConfig?.timeout_ms,
-          permissions: idleOnceConfig?.permissions,
-          isolationMode: config.isolation?.mode,
-        },
       } satisfies State
     },
     async (state) => {
       for (const item of state.pending.values()) {
+        clearIdleOnceTimer(item)
         item.deferred.reject(new RejectedError())
       }
       state.pending.clear()
@@ -264,7 +250,7 @@ export namespace Permission {
   // but it must never silently grant mouse/keyboard control of the host desktop.
   export const NEVER_AUTONOMOUS_AUTOAPPROVE: ReadonlySet<string> = new Set(["computer"])
 
-  // ADR-136: permissions that can never receive an idle "Allow once" deadline,
+  // ADR-138: permissions that can never receive an idle "Allow once" deadline,
   // regardless of configuration. These exist because a boundary, a hook
   // author, an operations reviewer, or an experimental bridge demanded a
   // human decision; a timeout must not override that.
@@ -404,12 +390,16 @@ export namespace Permission {
   }
 
   /**
-   * ADR-136 idle "Allow once": decide whether a registered interactive ask
+   * ADR-138 idle "Allow once": decide whether a registered interactive ask
    * gets a server-side deadline that auto-replies "once", and if so when.
    * Must run synchronously right after pending registration — the
    * registration→asked-publish stretch may not contain awaits
    * (test/permission/next.test.ts pins that ordering), which is why the
-   * config-dependent gates read the instance-init snapshot in State.
+   * config-dependent gates read Config.peek() — the synchronously cached
+   * config the async gates also use. When the cache was just invalidated
+   * (mid-session edit re-read in flight) peek() returns undefined and the
+   * gate fails CLOSED: no deadline. Env-level gates (autonomous, isolation
+   * override, AX_CODE_PERMISSION_IDLE_ONCE_MS) are read live per ask.
    * Gates: opt-in config, the permission allowlist, the never-auto
    * exclusions, unattended operation (autonomous), no filesystem sandbox
    * (full-access), and head-of-queue — only the session's oldest pending ask
@@ -417,13 +407,15 @@ export namespace Permission {
    * nobody watches.
    */
   function idleOnceDeadline(s: State, info: Request): number | undefined {
-    const cfg = s.idleOnce
-    if (!cfg.enabled) return undefined
+    const config = Config.peek()
+    if (!config) return undefined
+    const cfg = config.experimental?.permission_idle_once
+    if (!cfg?.enabled) return undefined
     if (!ScopedFlag.autonomous()) return undefined
     const allowlist = cfg.permissions ?? IDLE_ONCE_DEFAULT_PERMISSIONS
     if (!allowlist.includes(info.permission)) return undefined
     if (NEVER_IDLE_ONCE.has(info.permission)) return undefined
-    const isolationMode = Flag.AX_CODE_ISOLATION_MODE ?? cfg.isolationMode ?? Isolation.DEFAULT_MODE
+    const isolationMode = Flag.AX_CODE_ISOLATION_MODE ?? config.isolation?.mode ?? Isolation.DEFAULT_MODE
     if (isolationMode !== "full-access") return undefined
     // Head-of-queue: called right after this ask registered, so head means no
     // OTHER pending ask for the same session exists right now (the entry
@@ -435,7 +427,7 @@ export namespace Permission {
     // sub-second auto-approve.
     const timeoutMs =
       Flag.AX_CODE_PERMISSION_IDLE_ONCE_MS ??
-      Math.min(Math.max(cfg.timeoutMs ?? IDLE_ONCE_DEFAULT_MS, IDLE_ONCE_MIN_MS), IDLE_ONCE_MAX_MS)
+      Math.min(Math.max(cfg.timeout_ms ?? IDLE_ONCE_DEFAULT_MS, IDLE_ONCE_MIN_MS), IDLE_ONCE_MAX_MS)
     return Date.now() + timeoutMs
   }
 
@@ -600,7 +592,7 @@ export namespace Permission {
       return await deferred.promise
     }
 
-    // ADR-136: arm the idle "Allow once" deadline before the ask is published
+    // ADR-138: arm the idle "Allow once" deadline before the ask is published
     // so the countdown travels with the request to every client. The gate
     // runs synchronously against the just-registered entry — this stretch may
     // not contain awaits (test/permission/next.test.ts pins that ordering).

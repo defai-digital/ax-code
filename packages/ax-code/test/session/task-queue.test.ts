@@ -735,6 +735,85 @@ describe("TaskQueue", () => {
     })
   })
 
+  test("restart recovery honors a steered row's owner heartbeat before requeueing it", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const generation = "8b9b2313-8498-47f2-b9ad-f2fcfc4f6085"
+        const held = await TaskQueue.enqueue({ kind: "prompt", title: "Steered, owner still stepping" })
+        // Admission older than the liveness window: without an owner heartbeat
+        // the steeredAt fallback would already requeue this row.
+        await TaskQueue.cancelSteered(held.id, {
+          steeredInto: generation,
+          steeredAt: Date.now() - 6 * 60_000,
+        })
+
+        // A live owner stamps the row at each step boundary of the target
+        // generation, so a fresh heartbeat keeps restart recovery away even
+        // though the admission itself is long past the liveness window.
+        const beat = Date.now()
+        await TaskQueue.steerHeartbeat(held.id, generation, beat)
+        expect(typeof (await TaskQueue.get(held.id)).payload["steeredHeartbeatAt"]).toBe("number")
+        const fresh = await TaskQueue.recoverInterrupted({ now: beat + 1_000 })
+        expect(fresh.requeued).toEqual([])
+        expect((await TaskQueue.get(held.id)).status).toBe("cancelled")
+
+        // A heartbeat gone stale proves the owner stopped driving the
+        // generation: recovery requeues the lost steer and clears every steer
+        // audit key, the heartbeat included.
+        const stale = await TaskQueue.recoverInterrupted({ now: beat + TaskQueue.RESTART_RECOVERY_LIVENESS_MS + 1 })
+        expect(stale.requeued.map((item) => item.id)).toEqual([held.id])
+        const restored = await TaskQueue.get(held.id)
+        expect(restored.status).toBe("queued")
+        expect(restored.payload["steeredInto"]).toBeUndefined()
+        expect(restored.payload["steeredHeartbeatAt"]).toBeUndefined()
+
+        // The stamp is guarded like the applied stamp: a mismatched generation
+        // or an already-applied steer must not be heartbeat-stamped.
+        await TaskQueue.cancelSteered(restored.id, {
+          steeredInto: generation,
+          steeredAt: Date.now() - 6 * 60_000,
+        })
+        await TaskQueue.steerHeartbeat(restored.id, "00000000-0000-0000-0000-000000000000", Date.now())
+        expect((await TaskQueue.get(restored.id)).payload["steeredHeartbeatAt"]).toBeUndefined()
+        await TaskQueue.markSteeredApplied(restored.id, generation)
+        await TaskQueue.steerHeartbeat(restored.id, generation, Date.now())
+        const applied = await TaskQueue.get(restored.id)
+        expect(applied.payload["steeredAppliedAt"]).toBeDefined()
+        expect(applied.payload["steeredHeartbeatAt"]).toBeUndefined()
+      },
+    })
+  })
+
+  test("pauseIfActive tolerates a row already paused and refuses active rows", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const queued = await TaskQueue.enqueue({ kind: "prompt", title: "Hold me" })
+        const held = await TaskQueue.pauseIfActive(queued.id)
+        expect(held.status).toBe("paused")
+
+        // Already paused is a valid hold target, not a contradictory 409: an
+        // interrupt sweep may pause the row between a caller's steerable-status
+        // check and its hold.
+        const again = await TaskQueue.pauseIfActive(queued.id)
+        expect(again.status).toBe("paused")
+        expect((await TaskQueue.get(queued.id)).status).toBe("paused")
+
+        // Any other status raced into the gap still fails the guarded write
+        // against the fresh status.
+        await TaskQueue.setStatus({ id: queued.id, status: "running" })
+        await expect(TaskQueue.pauseIfActive(queued.id)).rejects.toThrow(
+          `Cannot pause task queue item ${queued.id} while it is running.`,
+        )
+      },
+    })
+  })
+
   test("retry clears the previous executor owner", async () => {
     await using tmp = await tmpdir({ git: true })
 

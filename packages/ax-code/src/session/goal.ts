@@ -460,15 +460,16 @@ export namespace SessionGoal {
     const now = Date.now()
 
     // Cheap pre-check against a read store before opening a write transaction:
-    // the common cases — no goal row, a paused/terminal goal, or a turn with
-    // zero token/time accrual — must not pay for a BEGIN IMMEDIATE write lock
-    // (plus the sharding lookup) just to discover they are a no-op.
+    // the common cases — no goal row, a non-active goal (paused, terminal, or
+    // already budget_limited), or a turn with zero token/time accrual — must
+    // not pay for a BEGIN IMMEDIATE write lock (plus the sharding lookup)
+    // just to discover they are a no-op.
     const readStore = SessionShard.storeFor(input.sessionID)
     const existing = readStore.use((db) =>
       db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.sessionID)).get(),
     )
     if (!existing) return undefined
-    if (existing.status !== "active" && existing.status !== "budget_limited") return fromRow(existing)
+    if (existing.status !== "active") return fromRow(existing)
     if (!shouldUpdate || (tokenDelta === 0 && elapsedSeconds === 0)) return fromRow(existing)
 
     const store = SessionShard.storeFor(input.sessionID, { write: true })
@@ -478,13 +479,17 @@ export namespace SessionGoal {
       // and the UPDATE below always reflects the latest committed row.
       const row = db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.sessionID)).get()
       if (!row) return undefined
-      // Only goals doing work accrue usage: active goals and the single
-      // budget_limited wrap-up turn. Paused and terminal goals must not be
-      // charged for unrelated turns in the same session — a paused goal
-      // drifting past its budget becomes permanently un-resumable
-      // (assertCanSetStatus), and a completed goal would report
-      // ever-growing final usage.
-      if (row.status !== "active" && row.status !== "budget_limited") return fromRow(row)
+      // Only an active goal accrues usage. The UPDATE below flips an active
+      // row to budget_limited in the same statement when this turn trips the
+      // budget, so the tripping step is always recorded in full; every later
+      // turn — user chat while the goal sits budget_limited — must not
+      // inflate tokens_used/time_used_seconds (goal status and forks would
+      // otherwise show ever-growing overage). Paused and terminal goals must
+      // not be charged for unrelated turns in the same session either — a
+      // paused goal drifting past its budget becomes permanently un-resumable
+      // (assertCanSetStatus), and a completed goal would report ever-growing
+      // final usage.
+      if (row.status !== "active") return fromRow(row)
       // A turn with no measurable token accrual and sub-second duration has
       // nothing to persist.
       if (!shouldUpdate || (tokenDelta === 0 && elapsedSeconds === 0)) return fromRow(row)
