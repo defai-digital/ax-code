@@ -39,7 +39,12 @@ import {
 import { ModelID, ProviderID } from "./schema"
 import { levenshtein } from "@/util/levenshtein"
 import { isModelSupportedForProvider } from "./model-support"
-import { isNonChatModelID, modelSelectableForProvider, sameSkuOnConnectedProvider } from "./model-selectability"
+import {
+  isNonChatModelID,
+  modelSelectableForProvider,
+  retiredCatalogSuccessors,
+  sameSkuOnConnectedProvider,
+} from "./model-selectability"
 import {
   defaultModelIDForProvider,
   IMPLICIT_DEFAULT_UNAVAILABLE_MESSAGE,
@@ -1449,6 +1454,20 @@ export namespace Provider {
       // Prefer the session's own provider, then any connected provider.
       const onCurrent = await tryGetModel(providerID, parsed.modelID)
       if (onCurrent && modelSelectableForProvider(providerID, onCurrent)) return onCurrent
+      // The configured id may be a retired alias (deepseek-v4-flash) while the
+      // gateway only lists the current SKU (deepseek-flash). Resolve that
+      // before the family scan, which would otherwise pick the shortest
+      // unrelated flash model.
+      for (const successor of retiredCatalogSuccessors(parsed.modelID)) {
+        const successorID = ModelID.make(successor)
+        const aliased = await tryGetModel(providerID, successorID)
+        if (aliased && modelSelectableForProvider(providerID, aliased)) return aliased
+        const movedSuccessor = await resolvePinnedModel({
+          providerID: parsed.providerID,
+          modelID: successorID,
+        })
+        if (movedSuccessor) return getModel(movedSuccessor.providerID, movedSuccessor.modelID)
+      }
       const moved = await resolvePinnedModel(parsed)
       if (moved) {
         log.warn("configured small_model moved to another provider", {

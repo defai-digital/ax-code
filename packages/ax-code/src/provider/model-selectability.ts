@@ -79,6 +79,17 @@ export function isNonChatModelID(modelID: string) {
   return NON_CHAT_ID_TOKENS.some((token) => id.includes(token))
 }
 
+// Renamed catalog ids. A configured pin still using the old id must follow
+// the current SKU. Leaving it unresolved makes the small-model scan pick the
+// shortest unrelated "*-flash" id on a multi-model gateway.
+const RETIRED_CATALOG_SUCCESSORS: Record<string, readonly string[]> = {
+  "deepseek-v4-flash": ["deepseek-flash"],
+}
+
+export function retiredCatalogSuccessors(modelID: string): readonly string[] {
+  return RETIRED_CATALOG_SUCCESSORS[modelIdFinalSegment(modelID).toLowerCase()] ?? []
+}
+
 // Catalog identity of a model ID: final path segment, "[Nm]" context suffix
 // removed, separators normalized — `deepseek/deepseek-v4-pro`,
 // `DeepSeek-V4-Pro`, and `deepseek-v4-pro[1m]` all share one key.

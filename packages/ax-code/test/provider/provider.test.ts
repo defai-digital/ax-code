@@ -2158,6 +2158,59 @@ test("getSmallModel respects config small_model override", async () => {
   })
 })
 
+test("getSmallModel follows a retired flash id on the current gateway", async () => {
+  const providerID = "gateway-retired-flash"
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await fs.writeFile(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          small_model: "deepseek/deepseek-v4-flash",
+          enabled_providers: [providerID],
+          provider: {
+            [providerID]: {
+              npm: "@ai-sdk/openai-compatible",
+              name: "Gateway",
+              models: {
+                "glm-5.3-flash": {
+                  name: "GLM 5.3 Flash",
+                  tool_call: true,
+                  limit: { context: 1_000_000, output: 8192 },
+                },
+                "qwen3.8-flash": {
+                  name: "Qwen 3.8 Flash",
+                  tool_call: true,
+                  limit: { context: 1_000_000, output: 8192 },
+                },
+                "deepseek-flash": {
+                  name: "DeepSeek Flash",
+                  tool_call: true,
+                  limit: { context: 128_000, output: 8192 },
+                },
+              },
+            },
+          },
+        }),
+      )
+    },
+  })
+  await Auth.set(providerID, { type: "api", key: "test-gateway-key" })
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const model = await Provider.getSmallModel(ProviderID.make(providerID))
+        expect(model).toBeDefined()
+        expect(String(model?.providerID)).toBe(providerID)
+        expect(String(model?.id)).toBe("deepseek-flash")
+      },
+    })
+  } finally {
+    await Auth.remove(providerID)
+  }
+})
+
 test("getSmallModel falls back when configured small_model is disconnected", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

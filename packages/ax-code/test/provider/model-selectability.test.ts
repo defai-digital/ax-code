@@ -4,6 +4,7 @@ import {
   modelContextFitBlockReason,
   modelSelectableForProvider,
   providerModelSelectable,
+  retiredCatalogSuccessors,
   sameSkuOnConnectedProvider,
 } from "@/provider/model-selectability"
 import {
@@ -12,6 +13,15 @@ import {
   AX_ENGINE_MODEL_IDS,
   AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
 } from "@/provider/ax-engine/constants"
+
+describe("retiredCatalogSuccessors", () => {
+  test("follows the renamed DeepSeek flash id", () => {
+    expect(retiredCatalogSuccessors("deepseek-v4-flash")).toEqual(["deepseek-flash"])
+    expect(retiredCatalogSuccessors("deepseek/deepseek-v4-flash")).toEqual(["deepseek-flash"])
+    expect(retiredCatalogSuccessors("deepseek-flash")).toEqual([])
+    expect(retiredCatalogSuccessors("glm-5.3-flash")).toEqual([])
+  })
+})
 
 describe("providerModelSelectable", () => {
   test("tool-call models are selectable for any provider", () => {
