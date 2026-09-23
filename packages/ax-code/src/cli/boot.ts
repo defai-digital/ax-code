@@ -53,6 +53,7 @@ import { WebUiCommand } from "./cmd/webui"
 import { WorkflowCommand } from "./cmd/workflow"
 import { TaskCommand } from "./cmd/task"
 import { ScheduleCommand } from "./cmd/schedule"
+import { GoalCommand } from "./cmd/goal-impl"
 import { fatal } from "./bootstrap/fatal"
 import { setKnownCommands } from "./tui/project-arg"
 import { init } from "./bootstrap/env"
@@ -84,6 +85,7 @@ const cmds = [
   RiskCommand,
   GraphCommand,
   DreGraphCommand,
+  GoalCommand,
   // Customize
   AgentCommand,
   SkillCommand,

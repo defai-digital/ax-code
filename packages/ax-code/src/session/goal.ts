@@ -2,8 +2,8 @@ import z from "zod"
 import { Instance } from "../project/instance"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
-import { eq, sql } from "@/storage/db"
-import { SessionGoalTable } from "./session.sql"
+import { Database, eq, sql } from "@/storage/db"
+import { SessionGoalTable, SessionTable } from "./session.sql"
 import { SessionShard } from "./shard"
 import { SessionID } from "./schema"
 import type { MessageV2 } from "./message-v2"
@@ -132,6 +132,26 @@ export namespace SessionGoal {
       const row = db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, sessionID)).get()
       return row ? fromRow(row) : undefined
     })
+  }
+
+  /**
+   * Every goal belonging to a session of the current project (CLI discovery).
+   * Session membership comes from the registry (the authoritative
+   * session→project mapping): without that filter the goal table of a shared
+   * store (legacy flag-off mode) would leak other projects' goals.
+   */
+  export async function list(): Promise<Info[]> {
+    const projectID = Instance.project.id
+    const sessionIDs = Database.use((db) =>
+      db.select({ id: SessionTable.id }).from(SessionTable).where(eq(SessionTable.project_id, projectID)).all(),
+    ).map((row) => row.id)
+    if (sessionIDs.length === 0) return []
+    const members = new Set(sessionIDs)
+    const store = SessionShard.storeForProject(projectID)
+    return store
+      .use((db) => db.select().from(SessionGoalTable).all())
+      .filter((row) => members.has(row.session_id as (typeof sessionIDs)[number]))
+      .map(fromRow)
   }
 
   // NOTE: creation is blocked by active AND paused goals (a paused goal is

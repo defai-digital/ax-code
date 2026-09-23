@@ -18,7 +18,7 @@ function assertInternalUrl(url: URL) {
   if (!isInternalHostname(url.hostname)) throw new Error(`Internal fetch rejected: ${url.hostname}`)
 }
 
-function createInternalFetch(handler: FetchHandler, headers?: Record<string, string>): typeof globalThis.fetch {
+export function createInternalFetch(handler: FetchHandler, headers?: Record<string, string>): typeof globalThis.fetch {
   return (async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = new Request(input, init)
     assertInternalUrl(new URL(request.url))

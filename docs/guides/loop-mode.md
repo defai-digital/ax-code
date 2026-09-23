@@ -80,6 +80,23 @@ budget-limited. What bounds it instead:
 - Doom-loop detection, blast-radius caps, and the tool-only-turn breaker still
   apply throughout.
 
+## Goal CLI (headless)
+
+The same goal control is available outside the TUI under `ax-code goal`:
+
+- `ax-code goal status [--json]` — show the current goal (`-s/--session` to
+  pick a session; defaults to the project's single resumable goal and errors
+  when the choice would be ambiguous).
+- `ax-code goal pause` / `ax-code goal clear` — pause or clear it.
+- `ax-code goal resume` — resume the goal and drive it headlessly until it
+  settles. Without `--attach` it bootstraps the project in-process; with
+  `--attach http://localhost:4111` it drives a running server instead. Exit
+  codes follow the headless goal contract: `0` complete, `3` blocked, `4`
+  budget-limited, `6` paused/non-terminal, `1` session error, `124` idle
+  timeout (`--idle-timeout-ms`, default 10 minutes). Events stream to stdout
+  as JSONL (`--event-log PATH` also records them), and a final
+  `Goal <status>: <objective>` line goes to stderr.
+
 As a goal run approaches the step ceiling the agent receives a one-time
 convergence warning telling it to verify and complete the goal or leave a
 clean hand-off. If the ceiling is reached anyway, the goal is **paused** — not
