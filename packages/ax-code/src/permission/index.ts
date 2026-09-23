@@ -70,6 +70,10 @@ export namespace Permission {
       patterns: z.string().array(),
       metadata: z.record(z.string(), z.any()),
       always: z.string().array(),
+      // ADR-136: epoch ms when the server auto-replies "once" for an idle
+      // interactive ask (full-access + autonomous + configured allowlist).
+      // Absent on every other ask; clients render a countdown from it.
+      autoOnceAt: z.number().int().positive().optional(),
       tool: z
         .object({
           messageID: MessageID.zod,
@@ -178,6 +182,8 @@ export namespace Permission {
     info: Request
     ruleset: Ruleset
     deferred: PromiseDeferred<void>
+    // ADR-136 idle "Allow once" deadline; cleared on every removal path.
+    autoOnceTimer?: ReturnType<typeof setTimeout>
   }
 
   interface State {
@@ -192,6 +198,19 @@ export namespace Permission {
     // Per-instance mutex for "always" replies. Module-level storage would
     // needlessly serialize concurrent project instances (e.g. worktrees).
     alwaysReplyQueue: Promise<void>
+    // ADR-136 idle-once gate snapshot, loaded once at instance init. The
+    // registration→asked-publish stretch in askPromise must stay free of
+    // awaits (test/permission/next.test.ts pins that ordering), so the
+    // config-dependent gates read this snapshot synchronously. Env-level
+    // gates (autonomous, isolation override, AX_CODE_PERMISSION_IDLE_ONCE_MS)
+    // are still read per-ask; a config toggle takes effect on the next
+    // instance.
+    idleOnce: {
+      enabled: boolean
+      timeoutMs: number | undefined
+      permissions: readonly string[] | undefined
+      isolationMode: string | undefined
+    }
   }
 
   const state = Instance.state(
@@ -208,11 +227,19 @@ export namespace Permission {
           { count: legacy.length, patterns: legacy.slice(0, 10).map((rule) => rule.pattern) },
         )
       }
+      const config = await Config.get()
+      const idleOnceConfig = config.experimental?.permission_idle_once
       return {
         pending: new Map<PermissionID, PendingEntry>(),
         approved,
         projectID: Instance.project.id,
         alwaysReplyQueue: Promise.resolve(),
+        idleOnce: {
+          enabled: idleOnceConfig?.enabled ?? false,
+          timeoutMs: idleOnceConfig?.timeout_ms,
+          permissions: idleOnceConfig?.permissions,
+          isolationMode: config.isolation?.mode,
+        },
       } satisfies State
     },
     async (state) => {
@@ -236,6 +263,24 @@ export namespace Permission {
   // `full-access` may auto-approve established filesystem/network risk classes,
   // but it must never silently grant mouse/keyboard control of the host desktop.
   export const NEVER_AUTONOMOUS_AUTOAPPROVE: ReadonlySet<string> = new Set(["computer"])
+
+  // ADR-136: permissions that can never receive an idle "Allow once" deadline,
+  // regardless of configuration. These exist because a boundary, a hook
+  // author, an operations reviewer, or an experimental bridge demanded a
+  // human decision; a timeout must not override that.
+  const NEVER_IDLE_ONCE: ReadonlySet<string> = new Set([
+    "isolation_escalation",
+    "hook",
+    "ops_approve",
+    "webmcp",
+    "computer",
+    "external_directory",
+  ])
+
+  const IDLE_ONCE_DEFAULT_PERMISSIONS: readonly string[] = ["bash_destructive"]
+  const IDLE_ONCE_MIN_MS = 5_000
+  const IDLE_ONCE_MAX_MS = 300_000
+  const IDLE_ONCE_DEFAULT_MS = 90_000
 
   export function isInteractiveOnly(permission: string, metadata?: Record<string, unknown>): boolean {
     return isInteractivePermission(permission, metadata)
@@ -352,8 +397,51 @@ export namespace Permission {
     })
   }
 
+  function clearIdleOnceTimer(entry: PendingEntry | undefined) {
+    if (!entry?.autoOnceTimer) return
+    clearTimeout(entry.autoOnceTimer)
+    entry.autoOnceTimer = undefined
+  }
+
+  /**
+   * ADR-136 idle "Allow once": decide whether a registered interactive ask
+   * gets a server-side deadline that auto-replies "once", and if so when.
+   * Must run synchronously right after pending registration — the
+   * registration→asked-publish stretch may not contain awaits
+   * (test/permission/next.test.ts pins that ordering), which is why the
+   * config-dependent gates read the instance-init snapshot in State.
+   * Gates: opt-in config, the permission allowlist, the never-auto
+   * exclusions, unattended operation (autonomous), no filesystem sandbox
+   * (full-access), and head-of-queue — only the session's oldest pending ask
+   * may auto-allow, so a burst of queued asks cannot mass auto-approve while
+   * nobody watches.
+   */
+  function idleOnceDeadline(s: State, info: Request): number | undefined {
+    const cfg = s.idleOnce
+    if (!cfg.enabled) return undefined
+    if (!ScopedFlag.autonomous()) return undefined
+    const allowlist = cfg.permissions ?? IDLE_ONCE_DEFAULT_PERMISSIONS
+    if (!allowlist.includes(info.permission)) return undefined
+    if (NEVER_IDLE_ONCE.has(info.permission)) return undefined
+    const isolationMode = Flag.AX_CODE_ISOLATION_MODE ?? cfg.isolationMode ?? Isolation.DEFAULT_MODE
+    if (isolationMode !== "full-access") return undefined
+    // Head-of-queue: called right after this ask registered, so head means no
+    // OTHER pending ask for the same session exists right now (the entry
+    // itself is in the map and must be excluded).
+    if ([...s.pending.values()].some((entry) => entry.info.id !== info.id && entry.info.sessionID === info.sessionID))
+      return undefined
+    // The env override (debug/ops/tests) bypasses the clamp; configured values
+    // stay within the 5s–300s band so a typo cannot turn the countdown into a
+    // sub-second auto-approve.
+    const timeoutMs =
+      Flag.AX_CODE_PERMISSION_IDLE_ONCE_MS ??
+      Math.min(Math.max(cfg.timeoutMs ?? IDLE_ONCE_DEFAULT_MS, IDLE_ONCE_MIN_MS), IDLE_ONCE_MAX_MS)
+    return Date.now() + timeoutMs
+  }
+
   async function askPromise(input: z.infer<typeof AskInput>, options?: { signal?: AbortSignal }): Promise<void> {
-    const { approved, pending } = await state()
+    const s = await state()
+    const { approved, pending } = s
     const { ruleset, ...request } = input
     let needsAsk = false
     enforceSafetyPolicy(request, input.agent)
@@ -488,9 +576,11 @@ export namespace Permission {
     log.info("asking", { id, permission: info.permission, patterns: info.patterns })
 
     const deferred = createDeferred<void>()
-    pending.set(id, { info, ruleset, deferred })
+    const entry: PendingEntry = { info, ruleset, deferred }
+    pending.set(id, entry)
 
     const onAbort = () => {
+      clearIdleOnceTimer(entry)
       if (!pending.delete(id)) return
       // The ask died without a user decision (turn aborted, session
       // cancelled). Publish a reject reply so subscribed prompts (TUI,
@@ -508,6 +598,30 @@ export namespace Permission {
     if (signal?.aborted) {
       onAbort()
       return await deferred.promise
+    }
+
+    // ADR-136: arm the idle "Allow once" deadline before the ask is published
+    // so the countdown travels with the request to every client. The gate
+    // runs synchronously against the just-registered entry — this stretch may
+    // not contain awaits (test/permission/next.test.ts pins that ordering).
+    const idleOnceAt = idleOnceDeadline(s, info)
+    if (idleOnceAt) {
+      info.autoOnceAt = idleOnceAt
+      entry.autoOnceTimer = setTimeout(
+        () => {
+          // First-writer-wins: a human reply removes the pending entry first,
+          // so a late fire is a silent no-op. A WARN log keeps the unattended
+          // destructive approval in the audit trail.
+          log.warn("permission idle-once auto-reply", {
+            id,
+            permission: info.permission,
+            patterns: info.patterns,
+          })
+          void replyPromise({ requestID: id, reply: "once" }).catch(() => undefined)
+        },
+        Math.max(0, idleOnceAt - Date.now()),
+      )
+      entry.autoOnceTimer.unref?.()
     }
 
     Bus.publishDetached(Event.Asked, info)
@@ -564,6 +678,7 @@ export namespace Permission {
       return serializeAlwaysReply(s, async () => {
         for (const [id, entry] of [...pending.entries()]) {
           if (entry.info.sessionID !== existing.info.sessionID) continue
+          clearIdleOnceTimer(entry)
           pending.delete(id)
           publishReply(entry, input.reply)
           entry.deferred.reject(input.message ? new CorrectedError({ feedback: input.message }) : new RejectedError())
@@ -573,6 +688,7 @@ export namespace Permission {
     }
 
     if (input.reply === "once") {
+      clearIdleOnceTimer(existing)
       pending.delete(input.requestID)
       publishReply(existing, input.reply)
       existing.deferred.resolve(undefined)
@@ -581,6 +697,7 @@ export namespace Permission {
 
     return serializeAlwaysReply(s, async () => {
       if (!pending.delete(input.requestID)) return false
+      clearIdleOnceTimer(existing)
 
       const rules = existing.info.always.map((pattern) => ({
         permission: existing.info.permission,
@@ -627,6 +744,7 @@ export namespace Permission {
           return evaluate(item.info.permission, pattern, item.ruleset, approved).action === "allow"
         })
         if (!ok) continue
+        clearIdleOnceTimer(item)
         pending.delete(id)
         Bus.publishDetached(Event.Replied, {
           sessionID: item.info.sessionID,

@@ -45,6 +45,7 @@ export const messages = {
   "setup.sidebar": "/sidebar - ng\u1eef c\u1ea3nh phi\u00ean",
   "permission.required": "C\u1ea7n c\u1ea5p quy\u1ec1n",
   "permission.once": "Cho ph\u00e9p m\u1ed9t l\u1ea7n",
+  "permission.onceCountdown": "Cho ph\u00e9p m\u1ed9t l\u1ea7n ({seconds}s)",
   "permission.always": "Lu\u00f4n cho ph\u00e9p",
   "permission.alwaysTitle": "Lu\u00f4n cho ph\u00e9p",
   "permission.future":

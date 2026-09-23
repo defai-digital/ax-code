@@ -43,6 +43,7 @@ export const messages = {
   "setup.sidebar": "/sidebar - Sitzungskontext",
   "permission.required": "Berechtigung erforderlich",
   "permission.once": "Einmal erlauben",
+  "permission.onceCountdown": "Einmal erlauben ({seconds}s)",
   "permission.always": "Immer erlauben",
   "permission.alwaysTitle": "Immer erlauben",
   "permission.future": "Dies erlaubt k\u00fcnftig Anfragen f\u00fcr {permission} in diesem Projekt.",

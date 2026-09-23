@@ -422,11 +422,7 @@ export const Keybinds = z
     input_clear: z.string().optional().default("ctrl+c").describe("Clear input field"),
     input_paste: z.string().optional().default("ctrl+v").describe("Paste from clipboard"),
     input_submit: z.string().optional().default("return").describe("Submit input"),
-    input_submit_steer: z
-      .string()
-      .optional()
-      .default("ctrl+s")
-      .describe("Send now into the running turn (steer)"),
+    input_submit_steer: z.string().optional().default("ctrl+s").describe("Send now into the running turn (steer)"),
     input_newline: z
       .string()
       .optional()
@@ -1122,6 +1118,30 @@ export const Info = z
           .optional()
           .describe(
             "When autonomous mode encounters a permission whose risk class is unknown, prompt instead of auto-approving. Default: true. Set false only to preserve legacy compatibility.",
+          ),
+        permission_idle_once: z
+          .object({
+            enabled: z
+              .boolean()
+              .optional()
+              .describe(
+                "Idle 'Allow once': auto-reply once after a countdown for allowlisted interactive permissions. Default: false (opt-in).",
+              ),
+            timeout_ms: PositiveInteger.min(5_000)
+              .max(300_000)
+              .optional()
+              .describe("Countdown before the automatic once reply. Default: 90000."),
+            permissions: z
+              .string()
+              .array()
+              .optional()
+              .describe(
+                'Interactive permissions that may auto-reply once. Default: ["bash_destructive"]. isolation_escalation, hook, ops_approve, webmcp, computer, and external_directory are always excluded.',
+              ),
+          })
+          .optional()
+          .describe(
+            "ADR-136: narrow exception to the interactive-only permission contract. Only fires while running unattended (autonomous) with the sandbox off (full-access), and only for the session's oldest pending ask — a burst of queued asks never mass auto-approves. The ask carries autoOnceAt so clients can render the countdown; any human reply cancels the deadline.",
           ),
         autonomous_caps: z
           .object({

@@ -145,6 +145,10 @@ export namespace Flag {
   export declare const AX_CODE_ISOLATION_MODE: "read-only" | "workspace-write" | "full-access" | undefined
   export declare const AX_CODE_ISOLATION_NETWORK: boolean | undefined
   export declare const AX_CODE_ISOLATION_BACKEND: "app" | "os" | "auto" | undefined
+  // Debug/ops override for the ADR-136 idle "Allow once" countdown
+  // (milliseconds; bypasses the config clamp so tests and operators can use
+  // short values). Still requires experimental.permission_idle_once.enabled.
+  export declare const AX_CODE_PERMISSION_IDLE_ONCE_MS: number | undefined
 
   // Native Rust addons — default ON (opt-out with =0 or =false).
   // These dispatch CPU-bound operations to Rust native addons via NAPI-RS.
@@ -461,6 +465,16 @@ Object.defineProperty(Flag, "AX_CODE_ISOLATION_BACKEND", {
     const v = process.env["AX_CODE_ISOLATION_BACKEND"]?.toLowerCase()
     if (v === "app" || v === "os" || v === "auto") return v
     return undefined
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+// Dynamic getter for AX_CODE_PERMISSION_IDLE_ONCE_MS (ADR-136 debug override)
+Object.defineProperty(Flag, "AX_CODE_PERMISSION_IDLE_ONCE_MS", {
+  get() {
+    const v = Number(process.env["AX_CODE_PERMISSION_IDLE_ONCE_MS"])
+    return Number.isFinite(v) && v > 0 ? v : undefined
   },
   enumerable: true,
   configurable: false,

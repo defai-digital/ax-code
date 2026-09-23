@@ -769,6 +769,23 @@ export type Config = {
      */
     autonomous_strict_permission?: boolean
     /**
+     * ADR-136: narrow exception to the interactive-only permission contract. Only fires while running unattended (autonomous) with the sandbox off (full-access), and only for the session's oldest pending ask — a burst of queued asks never mass auto-approves. The ask carries autoOnceAt so clients can render the countdown; any human reply cancels the deadline.
+     */
+    permission_idle_once?: {
+      /**
+       * Idle 'Allow once': auto-reply once after a countdown for allowlisted interactive permissions. Default: false (opt-in).
+       */
+      enabled?: boolean
+      /**
+       * Countdown before the automatic once reply. Default: 90000.
+       */
+      timeout_ms?: number
+      /**
+       * Interactive permissions that may auto-reply once. Default: ["bash_destructive"]. isolation_escalation, hook, ops_approve, webmcp, computer, and external_directory are always excluded.
+       */
+      permissions?: Array<string>
+    }
+    /**
      * Override the default autonomous-mode blast-radius caps. Any field omitted falls back to the constant default.
      */
     autonomous_caps?: {
@@ -3076,6 +3093,7 @@ export type PermissionRequest = {
     [key: string]: unknown
   }
   always: Array<string>
+  autoOnceAt?: number
   tool?: {
     messageID: string
     callID: string

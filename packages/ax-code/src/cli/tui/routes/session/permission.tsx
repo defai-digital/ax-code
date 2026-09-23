@@ -2,7 +2,7 @@ import { useLanguage } from "@tui/context/language"
 import { useContentDimensions } from "@tui/context/content-dimensions"
 import { canPersistPermission, canConfirmPersistentPermission } from "@/permission/interaction"
 import { createStore, produce } from "solid-js/store"
-import { createEffect, createMemo, createSignal, For, Match, on, Show, Switch } from "solid-js"
+import { createEffect, createMemo, createSignal, For, Match, on, onCleanup, Show, Switch } from "solid-js"
 import { Portal, useKeyboard, useTerminalDimensions, type JSX } from "ax-tui/solid"
 import type { TextareaRenderable } from "ax-tui"
 import { useKeybind } from "../../context/keybind"
@@ -304,8 +304,36 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
       setStore({ stage: "permission", alwaysRequestID: undefined })
     }
   })
+
+  // ADR-136 idle "Allow once": the server stamps autoOnceAt on asks that will
+  // auto-reply "once" after a deadline (opt-in, full-access + autonomous,
+  // allowlisted permission). Render the remaining seconds on the once option;
+  // the server timer is authoritative — at zero it replies and the replied
+  // event unmounts this prompt, so the client never submits itself.
+  const [secondsLeft, setSecondsLeft] = createSignal<number | undefined>(undefined)
+  createEffect(
+    on(
+      () => props.request.id,
+      () => {
+        const at = props.request.autoOnceAt
+        if (!at) {
+          setSecondsLeft(undefined)
+          return
+        }
+        const update = () => setSecondsLeft(Math.max(0, Math.ceil((at - Date.now()) / 1000)))
+        update()
+        const interval = setInterval(update, 1_000)
+        onCleanup(() => clearInterval(interval))
+      },
+    ),
+  )
+
   const baseOptions = createMemo(() => {
-    const opts: Record<string, string> = { once: t("permission.once"), reject: t("common.reject") }
+    const seconds = secondsLeft()
+    const opts: Record<string, string> = {
+      once: seconds === undefined ? t("permission.once") : t("permission.onceCountdown", { seconds: String(seconds) }),
+      reject: t("common.reject"),
+    }
     if (allowAlwaysAvailable()) opts.always = t("permission.always")
     return opts
   })

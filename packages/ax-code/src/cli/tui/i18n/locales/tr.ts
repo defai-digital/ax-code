@@ -45,6 +45,7 @@ export const messages = {
   "setup.sidebar": "/sidebar - oturum ba\u011flam\u0131",
   "permission.required": "\u0130zin gerekli",
   "permission.once": "Bir kez izin ver",
+  "permission.onceCountdown": "Bir kez izin ver ({seconds}s)",
   "permission.always": "Her zaman izin ver",
   "permission.alwaysTitle": "Her zaman izin ver",
   "permission.future": "Bu projede gelecekteki {permission} isteklerine izin verilir.",

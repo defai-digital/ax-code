@@ -43,6 +43,7 @@ export const messages = {
   "setup.sidebar": "/sidebar - konteks sesi",
   "permission.required": "Izin diperlukan",
   "permission.once": "Izinkan sekali",
+  "permission.onceCountdown": "Izinkan sekali ({seconds}s)",
   "permission.always": "Selalu izinkan",
   "permission.alwaysTitle": "Selalu izinkan",
   "permission.future": "Ini akan mengizinkan permintaan {permission} berikutnya di proyek ini.",

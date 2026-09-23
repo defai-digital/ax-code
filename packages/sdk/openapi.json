@@ -37915,6 +37915,29 @@
                 "description": "When autonomous mode encounters a permission whose risk class is unknown, prompt instead of auto-approving. Default: true. Set false only to preserve legacy compatibility.",
                 "type": "boolean"
               },
+              "permission_idle_once": {
+                "description": "ADR-136: narrow exception to the interactive-only permission contract. Only fires while running unattended (autonomous) with the sandbox off (full-access), and only for the session's oldest pending ask — a burst of queued asks never mass auto-approves. The ask carries autoOnceAt so clients can render the countdown; any human reply cancels the deadline.",
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "description": "Idle 'Allow once': auto-reply once after a countdown for allowlisted interactive permissions. Default: false (opt-in).",
+                    "type": "boolean"
+                  },
+                  "timeout_ms": {
+                    "description": "Countdown before the automatic once reply. Default: 90000.",
+                    "type": "integer",
+                    "minimum": 5000,
+                    "maximum": 300000
+                  },
+                  "permissions": {
+                    "description": "Interactive permissions that may auto-reply once. Default: [\"bash_destructive\"]. isolation_escalation, hook, ops_approve, webmcp, computer, and external_directory are always excluded.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
               "autonomous_caps": {
                 "description": "Override the default autonomous-mode blast-radius caps. Any field omitted falls back to the constant default.",
                 "type": "object",
@@ -45062,6 +45085,11 @@
             "items": {
               "type": "string"
             }
+          },
+          "autoOnceAt": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
           },
           "tool": {
             "type": "object",

@@ -45,6 +45,7 @@ export const messages = {
   "setup.sidebar": "/sidebar - \u4f1a\u8bdd\u4e0a\u4e0b\u6587",
   "permission.required": "\u9700\u8981\u6388\u6743",
   "permission.once": "\u4ec5\u5141\u8bb8\u8fd9\u4e00\u6b21",
+  "permission.onceCountdown": "\u4ec5\u5141\u8bb8\u8fd9\u4e00\u6b21 ({seconds}s)",
   "permission.always": "\u59cb\u7ec8\u5141\u8bb8",
   "permission.alwaysTitle": "\u59cb\u7ec8\u5141\u8bb8",
   "permission.future": "\u8fd9\u5c06\u5141\u8bb8\u6b64\u9879\u76ee\u4eca\u540e\u7684 {permission} \u8bf7\u6c42\u3002",

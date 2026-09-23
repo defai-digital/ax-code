@@ -44,6 +44,7 @@ export const messages = {
   "setup.sidebar": "/sidebar - contexto da sess\u00e3o",
   "permission.required": "Permiss\u00e3o necess\u00e1ria",
   "permission.once": "Permitir uma vez",
+  "permission.onceCountdown": "Permitir uma vez ({seconds}s)",
   "permission.always": "Permitir sempre",
   "permission.alwaysTitle": "Sempre permitir",
   "permission.future": "Isso permitir\u00e1 futuras solicita\u00e7\u00f5es de {permission} neste projeto.",
