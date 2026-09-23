@@ -5,16 +5,16 @@ export function isFujiStyle(style: string | undefined): style is FujiStyle {
 
 /** Day/night sky stops from the reference: top, mid, bottom. */
 export const FUJI_SKY_STOPS: Record<FujiStyle, readonly [string, string, string]> = {
-  "fuji-day": ["#78236e", "#e08a63", "#f2a65e"],
+  "fuji-day": ["#5a204e", "#8c445a", "#c47852"],
   "fuji-night": ["#101b36", "#182848", "#1d3557"],
 }
 
 const hexRgb = (hex: string): readonly [number, number, number] =>
   [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16)) as [number, number, number]
 
-/** Day sky midpoint: rose climbs higher than gold so the band reads warm sunset,
- *  not "dark sky then orange ground". The end stops stay byte-identical. */
-const DAY_SKY_MID = 0.35
+/** Day sky midpoint: balanced twilight dusk so the scene feels calm and
+ *  comfortable in dark terminals, not glaring bright. */
+const DAY_SKY_MID = 0.5
 
 /** Sample the vertical sky gradient. `t` is 0 at the top of the frame. */
 export function fujiSkyRgb(style: FujiStyle, t: number): readonly [number, number, number] {
@@ -62,28 +62,28 @@ export const FUJI_COLORS = {
     wheel: "#8ba6d1",
   },
   "fuji-day": {
-    sky: "#ffe5d9",
-    light: "#ffe66d",
-    orbBg: "#ffb46b",
-    glowBg: "#d98d63",
-    snow: "#fff1e6",
-    snowBg: "#f4c9b4",
-    mountain: "#b07a88",
-    mountainBg: "#432a42",
-    water: "#ffd9a8",
-    waterBg: "#a86278",
-    waterDeep: "#6f3a50",
-    blossom: "#dd6f92",
-    blossomBg: "#ff96b4",
-    trunk: "#6c584c",
+    sky: "#f0d5cc",
+    light: "#f5d78e",
+    orbBg: "#d9884c",
+    glowBg: "#994d3a",
+    snow: "#f2eae4",
+    snowBg: "#cca897",
+    mountain: "#8c5665",
+    mountainBg: "#3a2233",
+    water: "#e0b08a",
+    waterBg: "#7a4658",
+    waterDeep: "#4d2838",
+    blossom: "#b05572",
+    blossomBg: "#c97b91",
+    trunk: "#5a4840",
     track: "#5c4a52",
-    petal: "#ffd6e0",
-    skirt: "#c76e83",
+    petal: "#dfb0bc",
+    skirt: "#a85468",
     jr: "#ffd166",
     train: "#edf2f4",
     trainBg: "#1d3557",
-    underBg: "#402833",
-    wheel: "#ffd6c2",
+    underBg: "#331f28",
+    wheel: "#d4a896",
   },
 } as const satisfies Record<FujiStyle, Record<string, string>>
 

@@ -24,23 +24,23 @@ test.each(["fuji-day", "fuji-night"] as const)(
     expect(first).not.toEqual(moving)
     expect(first).toEqual(renderFujiPixels(780, 440, style, 2400))
     // Sky corners match the shared gradient.
-    expect(pixel(first, 780, 0, 0)).toEqual(style === "fuji-day" ? [120, 35, 110] : [16, 27, 54])
-    expect(pixel(first, 780, 0, 439)).toEqual(style === "fuji-day" ? [242, 166, 94] : [29, 53, 87])
+    expect(pixel(first, 780, 0, 0)).toEqual(style === "fuji-day" ? [90, 32, 78] : [16, 27, 54])
+    expect(pixel(first, 780, 0, 439)).toEqual(style === "fuji-day" ? [196, 120, 82] : [29, 53, 87])
     // Celestial bodies sit above the petal zone, so their centers never move.
     const orb =
       style === "fuji-day"
-        ? { at: [390, 26] as const, color: [255, 230, 109] }
+        ? { at: [390, 26] as const, color: [245, 215, 142] }
         : { at: [590, 18] as const, color: [226, 234, 252] }
     expect(pixel(first, 780, orb.at[0], orb.at[1])).toEqual(orb.color)
     expect(pixel(moving, 780, orb.at[0], orb.at[1])).toEqual(orb.color)
     // Mountain face and reflection column are static and petal-free here.
-    expect(pixel(first, 780, 316, 165)).toEqual(style === "fuji-day" ? [176, 122, 136] : [45, 68, 84])
-    expect(pixel(moving, 780, 316, 165)).toEqual(style === "fuji-day" ? [176, 122, 136] : [45, 68, 84])
+    expect(pixel(first, 780, 316, 165)).toEqual(style === "fuji-day" ? [140, 86, 101] : [45, 68, 84])
+    expect(pixel(moving, 780, 316, 165)).toEqual(style === "fuji-day" ? [140, 86, 101] : [45, 68, 84])
     const rx = style === "fuji-day" ? 395 : 595
-    expect(pixel(first, 780, rx, 242)).toEqual(style === "fuji-day" ? [255, 180, 107] : [203, 213, 225])
-    expect(pixel(moving, 780, rx, 242)).toEqual(style === "fuji-day" ? [255, 180, 107] : [203, 213, 225])
+    expect(pixel(first, 780, rx, 242)).toEqual(style === "fuji-day" ? [217, 136, 76] : [203, 213, 225])
+    expect(pixel(moving, 780, rx, 242)).toEqual(style === "fuji-day" ? [217, 136, 76] : [203, 213, 225])
     // The lake shimmers (two full waves per cycle) but the frame still loops.
-    expect(pixel(first, 780, 158, 231)).toEqual(style === "fuji-day" ? [160, 91, 112] : [46, 71, 105])
+    expect(pixel(first, 780, 158, 231)).toEqual(style === "fuji-day" ? [117, 65, 82] : [46, 71, 105])
     expect(pixel(shimmer, 780, 158, 231)).not.toEqual(pixel(first, 780, 158, 231))
     // The shinkansen body is absent at cycle start and fully present midway.
     const pearl: readonly [number, number, number] = [237, 242, 244]
