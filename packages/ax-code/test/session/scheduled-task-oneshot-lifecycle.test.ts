@@ -183,6 +183,43 @@ describe("ScheduledTask one-shot lifecycle", () => {
     })
   })
 
+  test("orphaned runs do not count toward the consecutive-failure auto-pause", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        try {
+          const now = Date.now()
+          const task = await ScheduledTask.create({
+            title: "Restart-plagued reminder",
+            prompt: "Keep going.",
+            schedule: { type: "once", runAt: now + 1_000 },
+          })
+
+          // Repeated backend restarts orphan the run (the orphan sweep's
+          // marker). Infrastructure failures are not task failures: the task
+          // must keep retrying instead of auto-pausing at the cap.
+          let dueAt = now + 2_000
+          for (let i = 1; i <= ScheduledTask.MAX_CONSECUTIVE_FAILURES; i++) {
+            const claimed = await claimOnce(task.id, dueAt)
+            await ScheduledTask.recordQueueOutcome(
+              task.id,
+              "failed",
+              new Error("orphaned: no outcome was recorded (backend likely restarted)"),
+              claimed.queueItem!.id,
+            )
+            const current = await ScheduledTask.get(task.id)
+            expect(current.status).toBe("active")
+            dueAt = current.nextRunAt! + 1
+          }
+        } finally {
+          vi.restoreAllMocks()
+        }
+      },
+    })
+  })
+
   test("a failed manual run-now keeps the pending one-shot; a successful one disables it", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

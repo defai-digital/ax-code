@@ -679,6 +679,62 @@ describe("TaskQueue", () => {
     })
   })
 
+  test("restart recovery requeues a steered row whose apply never landed", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const generation = "8b9b2313-8498-47f2-b9ad-f2fcfc4f6085"
+        const lost = await TaskQueue.enqueue({ kind: "prompt", title: "Steered then lost" })
+        await TaskQueue.cancelSteered(lost.id, {
+          steeredInto: generation,
+          steeredAt: Date.now() - TaskQueue.RESTART_RECOVERY_LIVENESS_MS - 1_000,
+        })
+
+        const recovered = await TaskQueue.recoverInterrupted()
+        expect(recovered.requeued.map((item) => item.id)).toEqual([lost.id])
+        const restored = await TaskQueue.get(lost.id)
+        expect(restored.status).toBe("queued")
+        expect(restored.payload["steeredInto"]).toBeUndefined()
+        expect(restored.payload["steeredAt"]).toBeUndefined()
+        expect(restored.payload["steeredAppliedAt"]).toBeUndefined()
+      },
+    })
+  })
+
+  test("restart recovery leaves applied or still-pending steers cancelled", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const generation = "8b9b2313-8498-47f2-b9ad-f2fcfc4f6085"
+        const applied = await TaskQueue.enqueue({ kind: "prompt", title: "Steered and applied" })
+        await TaskQueue.cancelSteered(applied.id, { steeredInto: generation, steeredAt: Date.now() - 60_000 })
+        await TaskQueue.markSteeredApplied(applied.id, generation)
+
+        // A steer younger than the liveness window may still be applied by a
+        // live peer generation; recovery must not touch it.
+        const pending = await TaskQueue.enqueue({ kind: "prompt", title: "Steer still pending" })
+        await TaskQueue.cancelSteered(pending.id, { steeredInto: generation, steeredAt: Date.now() })
+
+        const recovered = await TaskQueue.recoverInterrupted()
+        expect(recovered.requeued).toEqual([])
+        expect((await TaskQueue.get(applied.id)).status).toBe("cancelled")
+        expect((await TaskQueue.get(applied.id)).payload["steeredAppliedAt"]).toBeDefined()
+        expect((await TaskQueue.get(pending.id)).status).toBe("cancelled")
+        expect((await TaskQueue.get(pending.id)).payload["steeredAppliedAt"]).toBeUndefined()
+
+        // The stamp is idempotent and ignores a mismatched generation.
+        const stampedAt = (await TaskQueue.get(applied.id)).payload["steeredAppliedAt"]
+        await TaskQueue.markSteeredApplied(applied.id, "00000000-0000-0000-0000-000000000000")
+        await TaskQueue.markSteeredApplied(applied.id, generation)
+        expect((await TaskQueue.get(applied.id)).payload["steeredAppliedAt"]).toBe(stampedAt)
+      },
+    })
+  })
+
   test("retry clears the previous executor owner", async () => {
     await using tmp = await tmpdir({ git: true })
 

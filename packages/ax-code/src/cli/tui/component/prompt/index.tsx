@@ -165,10 +165,9 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     return job ? axEngineDownloadChip(job) : undefined
   })
 
-  // Accepted follow-ups are durable server tasks; this preference controls
-  // whether busy-session submissions use the follow-up queue.
-
-  const [queueModeEnabled] = kv.signal("prompt_queue_mode", true)
+  // Accepted follow-ups are durable server tasks; busy-session submissions
+  // always use the follow-up queue (the old `prompt_queue_mode` kv toggle was
+  // never written anywhere — queue mode is unconditional).
 
   const [localStatusTick, setLocalStatusTick] = createSignal(0)
   const statusTick = () => props.statusTick?.() ?? localStatusTick()
@@ -555,7 +554,6 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     toast,
     log,
     status,
-    queueModeEnabled,
     axEngineDownloadJob,
     setSubmitPending,
     submitPending,

@@ -46,6 +46,10 @@ export namespace ScheduledTask {
   const MAX_COALESCE_ITERATIONS = 10_000
   const DEFAULT_RUN_DEADLINE_MS = 30 * 60 * 1_000
   const ORPHAN_GRACE_MS = 10 * 60 * 1_000
+  // Marker for run rows failed by the orphan sweep (reconcileOrphanRuns) rather
+  // than by the task itself. Infrastructure failures must not feed the
+  // consecutive-failure auto-pause counter.
+  const ORPHAN_RUN_ERROR_PREFIX = "orphaned:"
   const ONESHOT_RETENTION_MS = 90 * 24 * 60 * 60 * 1_000
   const JITTER_MAX_FRACTION = 0.1
   // Capped below MISSED_RUN_GRACE_MS (minus poll latency) so a jitter-delayed
@@ -1068,7 +1072,7 @@ export namespace ScheduledTask {
       db.update(ScheduledTaskRunTable)
         .set({
           status: "failed",
-          error: "orphaned: no outcome was recorded (backend likely restarted)",
+          error: `${ORPHAN_RUN_ERROR_PREFIX} no outcome was recorded (backend likely restarted)`,
           time_completed: now,
           time_updated: now,
         })
@@ -1084,11 +1088,14 @@ export namespace ScheduledTask {
   }
 
   // Count trailing failed/timeout runs since the last completed run. Skipped
-  // occurrences do not participate (they are not execution outcomes).
+  // occurrences do not participate (they are not execution outcomes), and
+  // neither do orphaned runs: a backend restart abandoning an in-flight run
+  // is infrastructure noise, not a task failure — counting it lets repeated
+  // deploys auto-pause a healthy schedule.
   function consecutiveFailures(taskID: ScheduledTaskID): number {
     const rows = SessionShard.storeForProject(Instance.project.id).use((db) => {
       return db
-        .select({ status: ScheduledTaskRunTable.status })
+        .select({ status: ScheduledTaskRunTable.status, error: ScheduledTaskRunTable.error })
         .from(ScheduledTaskRunTable)
         .where(eq(ScheduledTaskRunTable.task_id, taskID))
         .orderBy(desc(ScheduledTaskRunTable.time_created), desc(ScheduledTaskRunTable.id))
@@ -1098,6 +1105,7 @@ export namespace ScheduledTask {
     let count = 0
     for (const row of rows) {
       if (row.status === "failed" || row.status === "timeout") {
+        if (row.error?.startsWith(ORPHAN_RUN_ERROR_PREFIX)) continue
         count++
         continue
       }

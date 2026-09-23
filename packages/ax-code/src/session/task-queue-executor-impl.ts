@@ -12,7 +12,10 @@ import { NamedError } from "@ax-code/util/error"
 import { lazy } from "../util/lazy"
 import { MessageV2 } from "./message-v2"
 import { SessionPrompt } from "./prompt"
-import { PromptIsolationPolicy, type PromptIsolationPolicy as PromptIsolationPolicyType } from "./prompt/prompt-runtime-policy"
+import {
+  PromptIsolationPolicy,
+  type PromptIsolationPolicy as PromptIsolationPolicyType,
+} from "./prompt/prompt-runtime-policy"
 import { TaskQueue } from "./task-queue"
 import { ScheduledTaskID, type SessionID, type TaskQueueID } from "./schema"
 import type {
@@ -45,6 +48,11 @@ type QueueExecution = {
 const activeStatuses = ["running", "blocked_permission", "blocked_question"] as const
 const WORKFLOW_PACING_WINDOW_MS = 60_000
 const DEFAULT_EXECUTION_TIMEOUT_MS = 72 * 60 * 60 * 1_000
+// How long a timed-out execution's cancellation may take to settle before the
+// timeout cleanup force-releases the session start key. Without the bound, a
+// cancellation that never settles (a wedged tool, a hung process teardown)
+// parks the session key forever and no successor ever drains.
+const CANCELLATION_SETTLE_MS = 30_000
 const EXECUTION_HEARTBEAT_MS = 30_000
 const workflowPacingTimers = new Map<TaskQueueID, ReturnType<typeof setTimeout>>()
 const startLocks = Instance.state(
@@ -303,7 +311,14 @@ async function runWithExecutionWatchdog(item: TaskQueue.Info, execution: QueueEx
           throw error
         })
       voidSafe(async () => {
-        await Promise.allSettled([run, cancellation])
+        // A misbehaving execution can ignore cancellation forever. Settle the
+        // cleanup after a bounded grace even then — the row is already failed
+        // by the deadline race — so the session start key is released and the
+        // queue cannot wedge behind a hung teardown.
+        await Promise.race([
+          Promise.allSettled([run, cancellation]),
+          new Promise((resolve) => setTimeout(resolve, CANCELLATION_SETTLE_MS)),
+        ])
         if (cleanup.disposed) return
         cleanup.pending.delete(item.id)
         // Settled queue promises do not prove OS-level process quiescence.

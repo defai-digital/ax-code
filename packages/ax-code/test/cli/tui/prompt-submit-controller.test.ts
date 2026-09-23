@@ -91,7 +91,6 @@ function setup(input: {
     toast: { show: vi.fn() },
     log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     status: () => ({ type: "idle" }),
-    queueModeEnabled: () => false,
     axEngineDownloadJob: () => undefined,
     setSubmitPending: vi.fn((value) => {
       pending = value
@@ -118,7 +117,6 @@ function setupNewSession() {
 
 test("busy follow-ups retain the draft until durable acknowledgement and reuse identity after a lost response", async () => {
   const { controller, host } = setup({ mode: "normal", workMode: "agent", text: "Review the patch" })
-  host.queueModeEnabled = () => true
   host.status = () => ({ type: "busy" })
   const attempts: Request[] = []
   host.sdk.fetch = async (url, init) => {
@@ -433,7 +431,6 @@ describe("TUI conversation language payload", () => {
 describe("send-now steering", () => {
   function steerSetup(input: { generation: string | null; receipt?: { status: string; reason?: string } }) {
     const fixture = setup({ mode: "normal", workMode: "agent", text: "use the other config file" })
-    fixture.host.queueModeEnabled = () => true
     fixture.host.status = () => ({ type: "busy" })
     const steering = vi.fn(async () => ({ data: { generation: input.generation } }))
     const steer = vi.fn(async () => ({ data: input.receipt ?? { status: "accepted" } }))
@@ -564,7 +561,6 @@ describe("empty-composer queue promotion", () => {
 
   function promotionSetup(rows: unknown[]) {
     const fixture = setup({ mode: "normal", workMode: "agent", text: "" })
-    fixture.host.queueModeEnabled = () => true
     fixture.host.status = () => ({ type: "busy" })
     fixture.host.sync.data.task_queue = rows
     return fixture
@@ -673,7 +669,6 @@ describe("empty-composer queue promotion", () => {
 
   test("an idle session with an empty composer stays a no-op", async () => {
     const fixture = setup({ mode: "normal", workMode: "agent", text: "" })
-    fixture.host.queueModeEnabled = () => true
     fixture.host.status = () => ({ type: "idle" })
     fixture.host.sync.data.task_queue = [followUpRow({ id: "tas_1", text: "queued", position: 0 })]
     await fixture.controller.submitSteer()

@@ -5,7 +5,7 @@ import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Instance } from "@/project/instance"
 import { ProjectID } from "@/project/schema"
-import { NotFoundError, and, asc, desc, eq, inArray, notInArray, sql } from "@/storage/db"
+import { NotFoundError, and, asc, desc, eq, gt, inArray, notInArray, sql } from "@/storage/db"
 import type { Database } from "@/storage/db"
 import { Log } from "@/util/log"
 import { JsonNumber } from "@/util/schema"
@@ -1243,11 +1243,15 @@ export namespace TaskQueue {
       if (!fresh) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
       const current = fromRow(fresh)
       if (!fromStatuses.includes(current.status)) return { item: current, raced: true as const }
+      // A fresh admission overwrites the previous steer audit; drop any stale
+      // applied stamp so a future lost steer of this row stays recoverable.
+      const payload: Payload = { ...current.payload, steeredInto: audit.steeredInto, steeredAt: audit.steeredAt }
+      delete payload["steeredAppliedAt"]
       const row = db
         .update(TaskQueueTable)
         .set({
           status: "cancelled",
-          payload: { ...current.payload, steeredInto: audit.steeredInto, steeredAt: audit.steeredAt },
+          payload,
           time_updated: now,
           time_completed: now,
         })
@@ -1265,6 +1269,33 @@ export namespace TaskQueue {
     publishUpdated(result.item)
     await syncWorkflowStatusIfNeeded(result.item)
     return result.item
+  }
+
+  /**
+   * Stamp an admitted steer as durably applied (called from the steering drain
+   * once the steered text is committed as a user message). Only a cancelled row
+   * whose `steeredInto` matches the applying generation is stamped. The write
+   * is best-effort and idempotent: a lost stamp conservatively leaves the row
+   * looking unapplied, which restart recovery requeues (a possible duplicate)
+   * rather than dropping (a lost follow-up).
+   */
+  export async function markSteeredApplied(id: TaskQueueID, generation: string): Promise<void> {
+    const now = Date.now()
+    SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+      const fresh = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get()
+      if (!fresh) return
+      if (fresh.status !== "cancelled") return
+      const current = fromRow(fresh)
+      if (current.payload["steeredInto"] !== generation) return
+      if (current.payload["steeredAppliedAt"] !== undefined) return
+      db.update(TaskQueueTable)
+        .set({
+          payload: { ...current.payload, steeredAppliedAt: now },
+          time_updated: now,
+        })
+        .where(eq(TaskQueueTable.id, id))
+        .run()
+    })
   }
 
   export async function stop(id: TaskQueueID): Promise<Info> {
@@ -1518,6 +1549,52 @@ export namespace TaskQueue {
           .returning()
           .get()
         if (updated) failed.push(fromRow(updated))
+      }
+
+      // Admitted-but-never-applied steers: the row was cancelled on admission
+      // (`steeredInto` set, no `steeredAppliedAt` stamp — see
+      // TaskQueue.markSteeredApplied). When the owning generation died before
+      // the apply landed (e.g. a backend restart between admission and the
+      // drain commit), the follow-up text would be lost with the cancelled
+      // row. Requeue rows whose steer is older than the liveness window: a
+      // still-live peer applies and stamps within it. Bounded to the last 24h
+      // so ancient steers do not resurface long after the user moved on, and
+      // clear the steer audit keys — the row returns to the plain queue.
+      const STEER_RECOVERY_WINDOW_MS = 24 * 60 * 60 * 1000
+      const steeredRows = db
+        .select()
+        .from(TaskQueueTable)
+        .where(
+          and(
+            eq(TaskQueueTable.project_id, Instance.project.id),
+            eq(TaskQueueTable.status, "cancelled"),
+            gt(TaskQueueTable.time_updated, now - STEER_RECOVERY_WINDOW_MS),
+          ),
+        )
+        .all()
+      for (const row of steeredRows) {
+        if (typeof row.payload["steeredInto"] !== "string") continue
+        if (row.payload["steeredAppliedAt"] !== undefined) continue
+        const steeredAt = typeof row.payload["steeredAt"] === "number" ? row.payload["steeredAt"] : 0
+        if (now - steeredAt < livenessMs) continue
+        const payload = { ...row.payload }
+        delete payload["steeredInto"]
+        delete payload["steeredAt"]
+        delete payload["steeredAppliedAt"]
+        const updated = db
+          .update(TaskQueueTable)
+          .set({
+            status: "queued",
+            error: null,
+            payload,
+            time_started: null,
+            time_completed: null,
+            time_updated: now,
+          })
+          .where(eq(TaskQueueTable.id, row.id))
+          .returning()
+          .get()
+        if (updated) requeued.push(fromRow(updated))
       }
 
       return { failed, requeued, preserved, live }

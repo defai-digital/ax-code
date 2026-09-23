@@ -99,7 +99,16 @@ export namespace TaskQueueSteer {
    * by the user are left alone. When the generation ended because the user
    * interrupted it, the recovered row is parked as paused, matching how an
    * interrupt treats every other waiting follow-up, rather than auto-started.
+   *
+   * `application_rejected` is reconciled the same way: it can only appear
+   * AFTER admission (a pre-commit apply failure, e.g. the generation ended
+   * mid-drain), so its row was already cancelled. Admission-time rejections
+   * (`admission_rejected`, `generation_not_active`) never cancelled the row —
+   * steer() restored them — and the cancelled+`steeredInto` row guard below
+   * keeps them excluded.
    */
+  const RECONCILABLE_REASONS = new Set(["generation_ended_before_application", "application_rejected"])
+
   export async function reconcileDiscarded(
     sessionID: string,
     receipts: readonly SessionSteering.Receipt[],
@@ -108,7 +117,7 @@ export namespace TaskQueueSteer {
     for (const receipt of receipts) {
       // Only receipts the generation actually discarded qualify; an applied
       // or otherwise rejected receipt must never resurrect a row.
-      if (receipt.status !== "rejected" || receipt.reason !== "generation_ended_before_application") continue
+      if (receipt.status !== "rejected" || !RECONCILABLE_REASONS.has(receipt.reason ?? "")) continue
       const match = CLIENT_ID.exec(receipt.clientID)
       if (!match) continue
       const parsed = TaskQueueID.zod.safeParse(match[1])
@@ -134,6 +143,23 @@ export namespace TaskQueueSteer {
         log.warn("could not requeue a discarded steered follow-up", { id, error })
       }
     }
+  }
+
+  /**
+   * Stamp a steered follow-up's queue row as durably applied, from the
+   * steering drain's post-commit callback. Non-`tq_` client IDs (composer-draft
+   * steers, which never touched the queue) parse nothing and no-op. Failures
+   * are logged and swallowed: the stamp is best-effort — a missing stamp only
+   * makes restart recovery conservatively requeue the row.
+   */
+  export async function markSteeredApplied(clientID: string, generation: string) {
+    const match = CLIENT_ID.exec(clientID)
+    if (!match) return
+    const parsed = TaskQueueID.zod.safeParse(match[1])
+    if (!parsed.success) return
+    await TaskQueue.markSteeredApplied(parsed.data, generation).catch((error) => {
+      log.warn("could not mark a steered follow-up as applied", { id: parsed.data, error })
+    })
   }
 
   export async function steer(id: TaskQueueID): Promise<Result> {

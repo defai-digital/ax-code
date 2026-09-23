@@ -111,7 +111,6 @@ export type PromptSubmitHost = {
     error: (message: string, extra?: Record<string, unknown>) => void
   }
   status: () => { type: string }
-  queueModeEnabled: () => boolean
   axEngineDownloadJob: () => AxEngineDownloadJobView | undefined
   setSubmitPending: (value: boolean) => void
   submitPending: () => boolean
@@ -225,7 +224,6 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
       !host.syncPromptInputFromRenderable() &&
       sessionID &&
       host.store.mode === "normal" &&
-      host.queueModeEnabled() &&
       isQueueableStatus(host.status().type)
     ) {
       await steerSavedFollowUps(sessionID)
@@ -305,7 +303,6 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
     const syncPromptInputFromRenderable = host.syncPromptInputFromRenderable
     const promptPartTypeId = host.promptPartTypeId()
     const status = host.status
-    const queueModeEnabled = host.queueModeEnabled
     const axEngineDownloadJob = host.axEngineDownloadJob
     const setSubmitPending = host.setSubmitPending
     const setSubmitStage = host.setSubmitStage
@@ -562,13 +559,7 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
       (slashName != null && sync.data.command.some((x: { name: string }) => x.name === slashName))
     const followup =
       retry?.followup ??
-      Boolean(
-        queueModeEnabled() &&
-          currentMode === "normal" &&
-          !isKnownSlashCommand &&
-          props.sessionID &&
-          isQueueableStatus(status().type),
-      )
+      Boolean(currentMode === "normal" && !isKnownSlashCommand && props.sessionID && isQueueableStatus(status().type))
     retrySubmission = { fingerprint, messageID, followup }
 
     // Send-now (steer): admit the text into the running generation at its

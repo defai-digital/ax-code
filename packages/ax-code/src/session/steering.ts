@@ -70,11 +70,19 @@ export namespace SessionSteering {
     current.active = undefined
     const discarded: Receipt[] = []
     for (const pending of current.receipts.values()) {
-      if (pending.receipt.status !== "accepted") continue
-      pending.receipt.status = "rejected"
-      pending.receipt.reason = "generation_ended_before_application"
-      pending.text = undefined
-      discarded.push({ ...pending.receipt })
+      if (pending.receipt.status === "accepted") {
+        pending.receipt.status = "rejected"
+        pending.receipt.reason = "generation_ended_before_application"
+        pending.text = undefined
+        discarded.push({ ...pending.receipt })
+        continue
+      }
+      // A receipt drain rejected before commit (application_rejected) also
+      // cancelled its queue row on admission; hand it to the same restoration
+      // path in case the drain-time reconciliation never ran.
+      if (pending.receipt.status === "rejected" && pending.receipt.reason === "application_rejected") {
+        discarded.push({ ...pending.receipt })
+      }
     }
     // An admitted-but-unapplied steer whose text came from a saved follow-up
     // must not be lost with the generation: the queue row was cancelled on
@@ -188,6 +196,11 @@ export namespace SessionSteering {
             item.receipt.messageID = messageID
             item.text = undefined
             applied = true
+            // A follow-up steer cancelled its queue row on admission; stamp the
+            // row applied so restart recovery never re-runs delivered text.
+            void import("./task-queue-steer")
+              .then(({ TaskQueueSteer }) => TaskQueueSteer.markSteeredApplied(item.receipt.clientID, generation))
+              .catch(() => undefined)
           },
         })
       } catch (error) {
@@ -197,6 +210,14 @@ export namespace SessionSteering {
           item.receipt.status = "rejected"
           item.receipt.reason = "application_rejected"
           item.text = undefined
+          // The row was cancelled on admission, so an apply that never
+          // committed must not lose the follow-up: restore it now (paused when
+          // the generation is aborting) instead of waiting for finish().
+          void import("./task-queue-steer")
+            .then(({ TaskQueueSteer }) =>
+              TaskQueueSteer.reconcileDiscarded(sessionID, [{ ...item.receipt }], { aborted: signal.aborted }),
+            )
+            .catch(() => undefined)
         }
       }
     }

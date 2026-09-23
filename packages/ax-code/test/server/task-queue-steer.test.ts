@@ -220,6 +220,39 @@ test("a steer admitted but never applied returns the row to the queue when the g
   })
 })
 
+test("a steer whose apply fails mid-drain returns the row to the queue", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const app = Server.Default()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({})
+      const controller = new AbortController()
+      SessionSteering.begin(session.id, controller.signal)
+      const item = await enqueueFollowUp(session.id, "apply failed, keep me")
+      expect((await steerRequest(app, tmp.path, item.id)).status).toBe(200)
+      expect((await TaskQueue.get(item.id)).status).toBe("cancelled")
+
+      // The drain's apply throws before commit (e.g. the user-message write
+      // fails), producing an application_rejected receipt; the admission
+      // already cancelled the row, so the follow-up must be restored.
+      const applied = await SessionSteering.drain(session.id, controller.signal, async () => {
+        throw new Error("user message write failed")
+      })
+      expect(applied).toBe(false)
+
+      const deadline = Date.now() + 5000
+      let row = await TaskQueue.get(item.id)
+      while (row.status === "cancelled" && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 25))
+        row = await TaskQueue.get(item.id)
+      }
+      expect(row.status).not.toBe("cancelled")
+      expect(["queued", "waiting_for_idle", "running", "paused"]).toContain(row.status)
+    },
+  })
+})
+
 test("an interrupted generation parks the recovered follow-up instead of auto-starting it", async () => {
   await using tmp = await tmpdir({ git: true })
   const app = Server.Default()
