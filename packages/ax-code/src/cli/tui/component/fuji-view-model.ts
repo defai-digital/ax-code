@@ -90,8 +90,14 @@ export function fujiRows(columns: number, rows: number, style: FujiStyle, elapse
     }
   }
   if (night) {
+    // Star field from the supplied reference, which spreads stars right across
+    // the sky instead of leaving the two original rows sparse. The pattern is
+    // fixed for the lifetime of the frame on purpose: the pixel transport keeps
+    // the upper region byte-identical between frames while only the train moves.
     paint(4, 0, ".       *              .                  *       .", colors.sky)
     paint(2, 1, "*         .                *            .     *", colors.sky)
+    paint(6, 2, ".     *     .    +      *    .     *    .", colors.sky)
+    paint(4, 3, "*    .    +     .     *     .    +    *", colors.sky)
     paint(31, 2, " .-. ", colors.light)
     paint(32, 2, ".-.", colors.light, colors.moonBg)
     paint(28, 3, "   (   )", colors.light)

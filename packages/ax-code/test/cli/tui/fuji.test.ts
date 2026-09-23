@@ -103,6 +103,21 @@ describe("Fuji Mountain scenes", () => {
     expect(fujiSkyRgb("fuji-night", 0)).toEqual([16, 27, 54])
     expect(fujiSkyRgb("fuji-night", 1)).toEqual([29, 53, 87])
   })
+
+  test("the night ending keeps a fixed star field without altering the daytime artwork", () => {
+    const text = (rows: ReturnType<typeof fujiRows>, index: number) => rows[index]!.map((run) => run.text).join("")
+    const night = fujiRows(74, 20, "fuji-night", 0)
+    // The supplied reference spreads stars across the sky, so the night ending
+    // adds a second band below the original two rows.
+    expect(text(night, 2)).toContain("+")
+    expect(text(night, 3)).toContain("+")
+    // Stars are decoration, not animation: only the train moves between frames.
+    expect(fujiRows(74, 20, "fuji-night", 1200).slice(0, 4)).toEqual(night.slice(0, 4))
+    // Daytime is the frozen reference artwork and must not gain the star band.
+    const day = fujiRows(74, 20, "fuji-day", 0)
+    expect(text(day, 2)).not.toContain("+")
+    expect(text(day, 2)).toContain(".---.")
+  })
 })
 
 test("daytime preserves the supplied reference artwork and colors at its original width", () => {
