@@ -606,13 +606,33 @@ describe("empty-composer queue promotion", () => {
   })
 
   test("a leading barrier steers nothing and keeps every row queued", async () => {
-    const paused = followUpRow({ id: "tas_1", text: "parked", position: 0, status: "paused" })
+    const command = { ...followUpRow({ id: "tas_1", text: "parked", position: 0 }), kind: "command" }
     const steerable = followUpRow({ id: "tas_2", text: "waiting behind", position: 1 })
-    const { controller, host, requests } = promotionSetup([paused, steerable])
+    const { controller, host, requests } = promotionSetup([command, steerable])
     await controller.submitSteer()
     expect(requests).toHaveLength(0)
     expect(host.toast.show).toHaveBeenCalledWith(
       expect.objectContaining({ variant: "info", message: "Nothing in the queue can steer the running turn" }),
+    )
+  })
+
+  test("a paused front row steers into the running turn", async () => {
+    const paused = followUpRow({ id: "tas_1", text: "parked", position: 0, status: "paused" })
+    const steerable = followUpRow({ id: "tas_2", text: "waiting behind", position: 1 })
+    const { controller, host, requests } = promotionSetup([paused, steerable])
+    host.sdk.fetch = async (url, init) => {
+      requests.push(new Request(url, init))
+      const id = String(url).split("/task-queue/")[1]!.split("/")[0]
+      const source = [paused, steerable].find((row) => row.id === id)!
+      return Response.json({ item: cancelledCopy(source), receipt: { status: "accepted" } })
+    }
+    await controller.submitSteer()
+    expect(requests.map((request) => request.url)).toEqual([
+      "http://localhost:4096/task-queue/tas_1/steer",
+      "http://localhost:4096/task-queue/tas_2/steer",
+    ])
+    expect(host.toast.show).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: "info", message: "Steered 2 follow-up(s) into the running turn" }),
     )
   })
 

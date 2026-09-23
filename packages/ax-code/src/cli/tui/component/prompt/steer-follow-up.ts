@@ -11,11 +11,13 @@
  * when the turn ends), with a toast that says exactly that.
  *
  * Queue promotion (ctrl+s with an empty composer) steers the steerable PREFIX
- * of the queue in FIFO order and stops at the first barrier — a paused,
- * blocked, running, or non-text row (queued command/prompt/shell rows have no
- * steerable body), an agent/variant/model override, or text
- * over the steering limit. Later rows never jump ahead of a barrier, so the
- * conversation keeps its causal order.
+ * of the queue in FIFO order and stops at the first barrier — a blocked,
+ * running, or otherwise non-pending row, a non-followup row (queued
+ * command/prompt/shell rows have no steerable body), an attachment, or text
+ * over the steering limit. Paused rows are steerable: the server holds them in
+ * place and restores the paused state on rejection, so interrupting a turn
+ * (which pauses waiting follow-ups) never wedges the gesture. Later rows never
+ * jump ahead of a barrier, so the conversation keeps its causal order.
  */
 
 import z from "zod"
@@ -47,20 +49,20 @@ export type SteerFollowUpOutcome =
 /** Reasons that mean "no live generation to steer": prioritize the row instead. */
 const FALLBACK_REASONS = new Set(["generation_not_active", "generation_ended_before_application"])
 
-export type SteerBarrier = "kind" | "paused" | "status" | "attachments" | "too_long" | "empty"
+export type SteerBarrier = "kind" | "status" | "attachments" | "too_long" | "empty"
 
 /**
- * Why a queue row cannot steer, or null when it can. Mirrors the server checks:
- * the row must be a text follow-up (command/prompt/shell rows have no steerable
- * body — the server rejects them with a 4xx), pending (not paused), and
- * text-only within the steering size limit. The body always snapshots the
- * composer's agent/model/variant, which steering intentionally ignores in favor
- * of the running turn's context.
+ * Why a queue row cannot steer, or null when it can. Mirrors the server checks
+ * (`TaskQueueSteer`): the row must be a follow-up (command/prompt/shell rows
+ * have no steerable body — the server rejects them with a 4xx) in a pending or
+ * paused status, and text-only within the steering size limit. Paused rows
+ * steer in place; the server holds them and restores the paused state on
+ * rejection. The body always snapshots the composer's agent/model/variant,
+ * which steering intentionally ignores in favor of the running turn's context.
  */
 export function steerBarrier(item: DurableFollowUp): SteerBarrier | null {
   if (item.kind !== "followup") return "kind"
-  if (item.status === "paused") return "paused"
-  if (item.status !== "queued" && item.status !== "waiting_for_idle") return "status"
+  if (item.status !== "queued" && item.status !== "waiting_for_idle" && item.status !== "paused") return "status"
   let body: ReturnType<typeof followUpBody>
   try {
     body = followUpBody(item)

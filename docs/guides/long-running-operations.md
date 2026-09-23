@@ -46,10 +46,15 @@ delivery is available to other clients through the steering API described in
 Saved follow-ups can also be steered after the fact: pressing `ctrl+s` with an
 empty composer promotes the steerable prefix of the queue in order and stops
 at the first non-steerable row, and the sidebar Follow-ups section and the
-`/queue` dialog offer the same per-row steer-now action. Steered rows are
-cancelled with a `steeredInto` audit trail and stay visible in the `/queue`
-history. When no generation is active, steer-now falls back to prioritizing
-the row to the front of the queue — it still starts only after the turn ends.
+`/queue` dialog offer the same per-row steer-now action. Paused rows are
+steerable in place — interrupting a turn pauses waiting follow-ups, and
+steering one delivers its text without resuming the rest of the queue. Only
+non-followup rows (queued slash commands, shell commands), rows with
+attachments, empty or oversize text, and rows already running or finished are
+barriers. Steered rows are cancelled with a `steeredInto` audit trail and stay
+visible in the `/queue` history. When no generation is active, steer-now falls
+back to prioritizing the row to the front of the queue — it still starts only
+after the turn ends.
 The composer clears only after acknowledgement. Reattach to the same session
 and use `/queue` to inspect, pause, edit, resume, or cancel them. Editing first
 pauses the item and preserves attachments and model selection; saving does not

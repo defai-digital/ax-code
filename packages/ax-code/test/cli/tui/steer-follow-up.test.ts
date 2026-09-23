@@ -42,8 +42,8 @@ describe("steerBarrier", () => {
     expect(steerBarrier(row({ id: "tas_2", status: "queued" }))).toBeNull()
   })
 
-  test("paused rows and non-pending statuses are barriers", () => {
-    expect(steerBarrier(row({ id: "tas_1", status: "paused" }))).toBe("paused")
+  test("paused rows steer in place; blocked or terminal statuses are barriers", () => {
+    expect(steerBarrier(row({ id: "tas_1", status: "paused" }))).toBeNull()
     expect(steerBarrier(row({ id: "tas_2", status: "running" }))).toBe("status")
     expect(steerBarrier(row({ id: "tas_3", status: "failed" }))).toBe("status")
   })
@@ -77,17 +77,17 @@ describe("steerBarrier", () => {
 })
 
 describe("steerablePrefix", () => {
-  test("takes the leading steerable rows and stops at the first barrier", () => {
+  test("takes the leading steerable rows, including paused rows, and stops at the first barrier", () => {
     const rows = [
       row({ id: "tas_1", position: 0 }),
-      row({ id: "tas_2", position: 1 }),
-      row({ id: "tas_3", position: 2, status: "paused" }),
+      row({ id: "tas_2", position: 1, status: "paused" }),
+      row({ id: "tas_3", position: 2, parts: [{ type: "file", url: "file:///tmp/a.ts" }] }),
       row({ id: "tas_4", position: 3 }),
     ]
     const prefix = steerablePrefix(rows)
     expect(prefix.items.map((item) => item.id)).toEqual(["tas_1", "tas_2"])
     expect(prefix.barrier?.item.id).toBe("tas_3")
-    expect(prefix.barrier?.reason).toBe("paused")
+    expect(prefix.barrier?.reason).toBe("attachments")
   })
 
   test("an all-steerable queue has no barrier; a leading barrier yields an empty prefix", () => {
@@ -287,12 +287,35 @@ describe("steerQueuedPrefix", () => {
   })
 
   test("a leading barrier steers nothing and issues no requests", async () => {
-    const rows = [row({ id: "tas_1", position: 0, status: "paused" }), row({ id: "tas_2", position: 1 })]
+    const command = {
+      ...row({ id: "tas_1", position: 0, body: { command: "goal", arguments: "ship the release" } }),
+      kind: "command" as const,
+    }
+    const rows = [command, row({ id: "tas_2", position: 1 })]
     const { fake, calls } = sdk({})
     const outcome = await steerQueuedPrefix(fake, rows)
     expect(outcome.steered).toHaveLength(0)
-    expect(outcome.barrier?.reason).toBe("paused")
+    expect(outcome.barrier?.reason).toBe("kind")
     expect(outcome.remaining).toBe(2)
     expect(calls).toHaveLength(0)
+  })
+
+  test("a paused front row steers instead of blocking the queue", async () => {
+    const rows = [row({ id: "tas_1", position: 0, status: "paused" }), row({ id: "tas_2", position: 1 })]
+    const { fake, calls } = sdk({
+      steer: (id) => ({
+        body: {
+          item: cancelledRow(rows.find((item) => item.id === id)!, "gen-1"),
+          receipt: { status: "accepted" },
+        },
+      }),
+    })
+    const outcome = await steerQueuedPrefix(fake, rows)
+    expect(outcome.steered.map((item) => item.id)).toEqual(["tas_1", "tas_2"])
+    expect(outcome.remaining).toBe(0)
+    expect(calls.map((call) => call.url)).toEqual([
+      "http://localhost:4096/task-queue/tas_1/steer",
+      "http://localhost:4096/task-queue/tas_2/steer",
+    ])
   })
 })

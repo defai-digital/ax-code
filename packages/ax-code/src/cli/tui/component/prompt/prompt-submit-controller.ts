@@ -252,6 +252,7 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
       queuedNext: outcome.queuedNext.length,
       remaining: outcome.remaining,
       failed: outcome.failed,
+      barrier: outcome.barrier ? `${outcome.barrier.reason} (${outcome.barrier.item.id})` : undefined,
     })
     if (outcome.failed && outcome.steered.length === 0 && outcome.queuedNext.length === 0) {
       host.toast.show({ variant: "error", message: t("ui.steerFailed", { message: outcome.failed }) })
