@@ -98,10 +98,13 @@ export function fujiRows(columns: number, rows: number, style: FujiStyle, elapse
     paint(2, 1, "*         .                *            .     *", colors.sky)
     paint(6, 2, ".     *     .    +      *    .     *    .", colors.sky)
     paint(4, 3, "*    .    +     .     *     .    +    *", colors.sky)
-    paint(31, 2, " .-. ", colors.light)
-    paint(32, 2, ".-.", colors.light, colors.moonBg)
-    paint(28, 3, "   (   )", colors.light)
-    paint(32, 3, "   ", colors.light, colors.moonBg)
+    // Keep the moon in the open sky instead of directly over the summit: the
+    // night moon fill and the snow cap are both pale, so stacking them merged
+    // into one white block above the peak in the pixel render.
+    paint(55, 1, " .-. ", colors.light)
+    paint(56, 1, ".-.", colors.light, colors.moonBg)
+    paint(52, 2, "   (   )", colors.light)
+    paint(56, 2, "   ", colors.light, colors.moonBg)
   } else {
     paint(0, 0, "         _ ._  _ _", colors.sky)
     paint(0, 1, "       (  _ )_ ( _  )", colors.sky)

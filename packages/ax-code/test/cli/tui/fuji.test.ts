@@ -111,7 +111,11 @@ describe("Fuji Mountain scenes", () => {
     // adds a second band below the original two rows.
     expect(text(night, 2)).toContain("+")
     expect(text(night, 3)).toContain("+")
-    // Stars are decoration, not animation: only the train moves between frames.
+    // The moon stays beside the summit. Its pale fill and the snow cap merged
+    // into a single white block when it sat directly above the peak.
+    expect(text(night, 1)).toContain(".-.")
+    expect(text(night, 1).indexOf(".-.")).toBeGreaterThan(40)
+    // Stars and moon are decoration, not animation: only the train moves.
     expect(fujiRows(74, 20, "fuji-night", 1200).slice(0, 4)).toEqual(night.slice(0, 4))
     // Daytime is the frozen reference artwork and must not gain the star band.
     const day = fujiRows(74, 20, "fuji-day", 0)
