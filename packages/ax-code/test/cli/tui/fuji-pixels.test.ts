@@ -3,20 +3,51 @@ import { inflateSync } from "node:zlib"
 import { renderFujiPixels } from "../../../src/cli/tui/component/fuji-pixels"
 import { createDigitalCodePixels, digitalCodePixelPlayer } from "../../../src/cli/tui/component/digital-code-pixels"
 
-test.each(["fuji-day", "fuji-night"] as const)("%s keeps the sky fixed while the train moves and loops", (style) => {
-  const first = renderFujiPixels(780, 440, style, 0)
-  const moving = renderFujiPixels(780, 440, style, 1200)
-  expect(first.length).toBe(780 * 440 * 3)
-  expect(first.subarray(0, 340 * 780 * 3)).toEqual(moving.subarray(0, 340 * 780 * 3))
-  expect(first).not.toEqual(moving)
-  expect(first).toEqual(renderFujiPixels(780, 440, style, 2400))
-  expect([...first.subarray(0, 3)]).toEqual(style === "fuji-day" ? [168, 218, 220] : [16, 27, 54])
-  expect([...first.subarray((439 * 780 + 0) * 3, (439 * 780 + 1) * 3)]).toEqual(
-    style === "fuji-day" ? [254, 229, 191] : [29, 53, 87],
-  )
-  // The train background remains the original deep blue, including blank cells.
-  expect(moving.includes(Buffer.from([29, 53, 87]))).toBe(true)
-})
+const pixel = (frame: Buffer, width: number, x: number, y: number) => [
+  ...frame.subarray((y * width + x) * 3, (y * width + x) * 3 + 3),
+]
+const countColor = (frame: Buffer, rgb: readonly [number, number, number]) => {
+  let found = 0
+  for (let i = 0; i < frame.length; i += 3) {
+    if (frame[i] === rgb[0] && frame[i + 1] === rgb[1] && frame[i + 2] === rgb[2]) found++
+  }
+  return found
+}
+
+test.each(["fuji-day", "fuji-night"] as const)(
+  "%s paints the shared scene and loops train, petals, and shimmer",
+  (style) => {
+    const first = renderFujiPixels(780, 440, style, 0)
+    const moving = renderFujiPixels(780, 440, style, 1200)
+    const shimmer = renderFujiPixels(780, 440, style, 600)
+    expect(first.length).toBe(780 * 440 * 3)
+    expect(first).not.toEqual(moving)
+    expect(first).toEqual(renderFujiPixels(780, 440, style, 2400))
+    // Sky corners match the shared gradient.
+    expect(pixel(first, 780, 0, 0)).toEqual(style === "fuji-day" ? [120, 35, 110] : [16, 27, 54])
+    expect(pixel(first, 780, 0, 439)).toEqual(style === "fuji-day" ? [255, 130, 35] : [29, 53, 87])
+    // Celestial bodies sit above the petal zone, so their centers never move.
+    const orb =
+      style === "fuji-day"
+        ? { at: [390, 26] as const, color: [255, 230, 109] }
+        : { at: [590, 18] as const, color: [226, 234, 252] }
+    expect(pixel(first, 780, orb.at[0], orb.at[1])).toEqual(orb.color)
+    expect(pixel(moving, 780, orb.at[0], orb.at[1])).toEqual(orb.color)
+    // Mountain face and reflection column are static and petal-free here.
+    expect(pixel(first, 780, 316, 165)).toEqual(style === "fuji-day" ? [74, 36, 56] : [45, 68, 84])
+    expect(pixel(moving, 780, 316, 165)).toEqual(style === "fuji-day" ? [74, 36, 56] : [45, 68, 84])
+    const rx = style === "fuji-day" ? 395 : 595
+    expect(pixel(first, 780, rx, 242)).toEqual(style === "fuji-day" ? [255, 158, 79] : [203, 213, 225])
+    expect(pixel(moving, 780, rx, 242)).toEqual(style === "fuji-day" ? [255, 158, 79] : [203, 213, 225])
+    // The lake shimmers (two full waves per cycle) but the frame still loops.
+    expect(pixel(first, 780, 158, 231)).toEqual(style === "fuji-day" ? [191, 97, 94] : [46, 71, 105])
+    expect(pixel(shimmer, 780, 158, 231)).not.toEqual(pixel(first, 780, 158, 231))
+    // The shinkansen body is absent at cycle start and fully present midway.
+    const pearl: readonly [number, number, number] = [237, 242, 244]
+    expect(countColor(first, pearl)).toBe(0)
+    expect(countColor(moving, pearl)).toBeGreaterThan(2000)
+  },
+)
 
 test("Fuji retains higher resolution without changing Digital Code bounds", () => {
   const fuji = createDigitalCodePixels(3840, 2160, "down", undefined, "fuji-day")

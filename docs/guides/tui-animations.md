@@ -2,7 +2,7 @@
 
 Status: Current
 Scope: TUI opening and ending animations and rendering fallbacks
-Last reviewed: 2026-09-15
+Last reviewed: 2026-09-23
 Owner: AX Code TUI maintainers
 
 See [Terminal rendering](terminal-rendering.md) for automatic terminal profiles,
@@ -16,17 +16,22 @@ Each TUI launch randomly selects one of five animation pairs with equal probabil
 - Fuji Mountain: daytime for the opening, night for the ending.
 - Mahjong: four-seat match for the opening, final point ledger for the ending.
 
-Fuji Mountain includes a snow-capped mountain, cherry blossoms, and a Shinkansen
-travelling across the foreground. The original 74-column, 20-row artwork is centered without changing its
-proportions; narrow terminals crop the text fallback. Daytime uses the supplied pale
-blue sky, static clouds, golden sun behind the summit, and pale pink blossoms;
-night uses a dark sky, stars, and moon. The original train artwork and both
-platform rows above it are preserved. The train keeps its left-facing nose and
-travels nose-first from right to left, repeating its journey with motion based on
-elapsed time and clipping safely at the screen edges. Local alternate-screen
+Fuji Mountain includes a snow-capped mountain, a reflective lake, cherry blossoms,
+falling petals, and a Shinkansen travelling across the foreground. The 74-column,
+20-row artwork is centered without changing its proportions; narrow terminals crop
+the text fallback. Daytime uses a purple-to-amber sunset sky, a setting sun above
+the summit with a horizon glow, warm snow, and sunset-pink blossoms; night uses a
+dark sky, stars, and moon with moonlit water. Both platform rows above the train
+are preserved. The train keeps its left-facing nose and travels nose-first from
+right to left, repeating its journey with motion based on elapsed time and clipping
+safely at the screen edges. Petal positions derive from elapsed time alone, so the
+scene loops with the train cycle; petals stay below the static sun, star, and moon
+rows. Local alternate-screen
 terminals with confirmed Kitty graphics support and reported pixel dimensions
-use antialiased stroke glyphs with fixed proportions, fitting the complete scene
-independently of the terminal font. Fuji pixel frames are bounded to 1920x1080.
+use freeform HD painting (gradient sky, shaded slopes, shimmering lake, shinkansen
+livery) driven by the same scene model — palette, train phase, and petal paths —
+as the text fallback, so both show the same scene for the same millisecond.
+Fuji pixel frames are bounded to 1920x1080.
 Unsupported terminals, remote sessions, multiplexers, and graphics failures use
 the native ASCII fallback. Ghostty uses the same capability checks; its name
 alone does not enable graphics.

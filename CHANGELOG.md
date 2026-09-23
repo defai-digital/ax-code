@@ -6,6 +6,11 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Changed
+
+- Refresh the Fuji Mountain TUI animation with a sunset day scene, reflective water, deterministic falling petals, and a new left-facing shinkansen. Timing, layout, and text/pixel fallback contracts are unchanged.
+- Render Fuji Mountain HD frames with freeform painting driven by the shared scene model instead of glyph rasterization. Bench and Mahjong keep the stroke-glyph path.
+
 ## [7.20.3] - 2026-09-22
 
 ### Changed

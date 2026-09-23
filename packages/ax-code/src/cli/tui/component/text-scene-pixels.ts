@@ -1,5 +1,6 @@
 import { isMahjongStyle, MAHJONG_COLUMNS, MAHJONG_ROWS } from "./mahjong-view-model"
-import { fujiSkyRgb, isFujiStyle } from "./fuji-view-model"
+import { isFujiStyle } from "./fuji-view-model"
+import { renderFujiPixels } from "./fuji-pixels"
 import { textSceneBackground, textSceneRows, type TextSceneStyle } from "./text-scene-view-model"
 
 // Original stroke glyphs for the scene's ASCII alphabet. No system font or
@@ -188,27 +189,16 @@ function glyphMask(char: string, width: number, height: number) {
 }
 
 export function renderTextScenePixels(width: number, height: number, style: TextSceneStyle, elapsedMs: number): Buffer {
+  // Fuji paints freeform HD frames from the shared scene model; the glyph
+  // rasterizer below serves the remaining text scenes.
+  if (isFujiStyle(style)) return renderFujiPixels(width, height, style, elapsedMs)
   const pixels = Buffer.alloc(width * height * 3)
   const sceneBackground = rgb(textSceneBackground(style))
-  const skyAt = (y: number) =>
-    isFujiStyle(style) ? fujiSkyRgb(style, height <= 1 ? 0 : y / (height - 1)) : sceneBackground
-  if (isFujiStyle(style)) {
-    for (let y = 0; y < height; y++) {
-      const color = skyAt(y)
-      for (let x = 0; x < width; x++) {
-        const index = (y * width + x) * 3
-        pixels[index] = color[0]!
-        pixels[index + 1] = color[1]!
-        pixels[index + 2] = color[2]!
-      }
-    }
-  } else {
-    pixels.fill(Buffer.from(sceneBackground))
-  }
+  pixels.fill(Buffer.from(sceneBackground))
   // Fit the complete reference composition, retaining its 1:2 cell aspect.
   // Pixel output is independent of terminal columns, font, and line spacing.
-  const columns = isMahjongStyle(style) ? MAHJONG_COLUMNS : isFujiStyle(style) ? 74 : 70
-  const sceneHeight = isMahjongStyle(style) ? MAHJONG_ROWS : isFujiStyle(style) ? 20 : 23
+  const columns = isMahjongStyle(style) ? MAHJONG_COLUMNS : 70
+  const sceneHeight = isMahjongStyle(style) ? MAHJONG_ROWS : 23
   const cellWidth = Math.max(1, Math.floor(Math.min(width / (columns + 4), height / ((sceneHeight + 2) * 2))))
   const cellHeight = cellWidth * 2
   const left = Math.floor((width - columns * cellWidth) / 2)
@@ -226,7 +216,7 @@ export function renderTextScenePixels(width: number, height: number, style: Text
         const mask = glyphMask(char, cellWidth, cellHeight)
         for (let y = 0; y < cellHeight; y++) {
           if (y0 + y < 0 || y0 + y >= height) continue
-          const background = runBackground ?? skyAt(y0 + y)
+          const background = runBackground ?? sceneBackground
           for (let x = 0; x < cellWidth; x++) {
             if (x0 + x < 0 || x0 + x >= width) continue
             const alpha = mask[y * cellWidth + x]!
