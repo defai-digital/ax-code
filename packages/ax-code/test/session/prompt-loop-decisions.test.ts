@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { pendingCompactionDecision } from "../../src/session/prompt/prompt-loop-decisions"
+import { compactionLoopBreakReason, pendingCompactionDecision } from "../../src/session/prompt/prompt-loop-decisions"
 
 describe("session.prompt-loop-decisions.pendingCompactionDecision", () => {
   test("'stop' on a non-overflow (proactive) compaction is escalated as 'error'", () => {
@@ -19,6 +19,12 @@ describe("session.prompt-loop-decisions.pendingCompactionDecision", () => {
 
   test("'continue' does not break the loop", () => {
     expect(pendingCompactionDecision({ result: "continue" })).toEqual({ type: "continue" })
+  })
+
+  test("a cancelled compaction stop is aborted, a provider stop stays an error", () => {
+    expect(compactionLoopBreakReason({ decision: "error", aborted: true })).toBe("aborted")
+    expect(compactionLoopBreakReason({ decision: "completed", aborted: true })).toBe("aborted")
+    expect(compactionLoopBreakReason({ decision: "error", aborted: false })).toBe("error")
   })
 
   test("'busy' schedules a retry until the busy-retry cap and then errors", () => {

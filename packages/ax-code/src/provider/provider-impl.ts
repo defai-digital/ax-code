@@ -1429,7 +1429,10 @@ export namespace Provider {
     const candidates: Array<{ id: string; family: string; tierRank: number }> = []
     for (const [id, m] of Object.entries(provider.models)) {
       if (!modelSelectableForProvider(provider.id, m)) continue
-      const family = m.family ?? id
+      // Discovery stores an unknown family as "". `??` would keep that blank
+      // and skip the id, so a gateway catalog whose ids already end in
+      // `-flash` never entered this scan.
+      const family = m.family?.trim() || id
       const tierRank = FAMILY_TIER_SUFFIXES.findIndex((s) => family === s || family.endsWith("-" + s))
       if (tierRank >= 0) candidates.push({ id, family, tierRank })
     }

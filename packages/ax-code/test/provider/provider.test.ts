@@ -2158,6 +2158,51 @@ test("getSmallModel respects config small_model override", async () => {
   })
 })
 
+test("getSmallModel uses the model id when the catalog family is blank", async () => {
+  const providerID = "gateway-blank-family"
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await fs.writeFile(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          enabled_providers: [providerID],
+          provider: {
+            [providerID]: {
+              npm: "@ai-sdk/openai-compatible",
+              name: "Gateway",
+              models: {
+                "lane-flash": {
+                  name: "Lane Flash",
+                  tool_call: true,
+                  limit: { context: 1_000_000, output: 8192 },
+                },
+                "lane-flash-lite": {
+                  name: "Lane Flash Lite",
+                  tool_call: true,
+                  limit: { context: 1_000_000, output: 8192 },
+                },
+              },
+            },
+          },
+        }),
+      )
+    },
+  })
+  await Auth.set(providerID, { type: "api", key: "test-gateway-key" })
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const model = await Provider.getSmallModel(ProviderID.make(providerID))
+        expect(String(model?.id)).toBe("lane-flash-lite")
+      },
+    })
+  } finally {
+    await Auth.remove(providerID)
+  }
+})
+
 test("getSmallModel follows a retired flash id on the current gateway", async () => {
   const providerID = "gateway-retired-flash"
   await using tmp = await tmpdir({

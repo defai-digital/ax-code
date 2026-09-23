@@ -89,11 +89,12 @@ export function pendingCompactionDecision(input: {
   busyRetries?: number
 }): PendingCompactionDecision {
   // Any "stop" from SessionCompaction.process indicates a bail (context-
-  // overflow bail, request-too-large bail, processor.message.error), an
-  // abort, or a non-retryable failure — never a successful completion. The
-  // previous "completed" mapping silently dropped the user's turn on a
-  // proactive (non-overflow) failure path; escalating it here forces the
-  // prompt loop to surface the error instead of reporting success.
+  // overflow bail, request-too-large bail, processor.message.error) or a
+  // non-retryable failure — never a successful completion. The previous
+  // "completed" mapping silently dropped the user's turn on a proactive
+  // (non-overflow) failure path. A cancelled prompt signal is not an error;
+  // compactionLoopBreakReason turns this stop into "aborted" when the
+  // caller was cancelled.
   if (input.result === "stop") {
     return { type: "break", reason: "error" }
   }
@@ -104,6 +105,19 @@ export function pendingCompactionDecision(input: {
     return { type: "retry", delayMs: 250 }
   }
   return { type: "continue" }
+}
+
+// A user cancel during compaction still makes SessionCompaction.process
+// return "stop". That stop must stay an error when the provider failed, and
+// become "aborted" when the prompt signal itself was cancelled — otherwise
+// the loop records session.end reason "error" and drains follow-ups the
+// user just stopped.
+export function compactionLoopBreakReason(input: {
+  decision: "completed" | "error"
+  aborted: boolean
+}): "completed" | "error" | "aborted" {
+  if (input.aborted) return "aborted"
+  return input.decision
 }
 
 export function shouldScheduleUsageCompaction(input: {

@@ -5,7 +5,11 @@ import type { Provider } from "../../provider/provider"
 import type { Permission } from "@/permission"
 import { SessionCompaction } from "../compaction"
 import { MessageV2 } from "../message-v2"
-import { pendingCompactionDecision, shouldScheduleUsageCompaction } from "./prompt-loop-decisions"
+import {
+  compactionLoopBreakReason,
+  pendingCompactionDecision,
+  shouldScheduleUsageCompaction,
+} from "./prompt-loop-decisions"
 import { estimateRequestTokens } from "./prompt-request"
 import { estimateRegistryToolSchemaTokens } from "./prompt-tools"
 import { SessionRetry } from "../retry"
@@ -22,7 +26,7 @@ export function hasUnresolvedMedia(parts: MessageV2.Part[]): boolean {
 }
 
 type PendingCompactionResult =
-  | { action: "break"; reason: "completed" | "error" }
+  | { action: "break"; reason: "completed" | "error" | "aborted" }
   | { action: "retry"; busyRetries: number }
   | { action: "processed"; busyRetries: 0 }
 
@@ -49,7 +53,10 @@ export async function processPendingCompaction(input: {
     busyRetries: input.busyRetries,
   })
   if (decision.type === "break") {
-    return { action: "break", reason: decision.reason }
+    return {
+      action: "break",
+      reason: compactionLoopBreakReason({ decision: decision.reason, aborted: input.abort.aborted }),
+    }
   }
   if (decision.type === "retry") {
     try {
@@ -57,7 +64,10 @@ export async function processPendingCompaction(input: {
       // state, so a busy-retry chain could stall session cancellation.
       await SessionRetry.sleep(decision.delayMs, input.abort)
     } catch {
-      return { action: "break", reason: "error" }
+      return {
+        action: "break",
+        reason: compactionLoopBreakReason({ decision: "error", aborted: input.abort.aborted }),
+      }
     }
     return { action: "retry", busyRetries: input.busyRetries + 1 }
   }
