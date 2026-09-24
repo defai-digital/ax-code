@@ -295,15 +295,20 @@ export namespace ObservedWindow {
         // but a real prompt at this size went through — rebuild a boundary
         // window from the proven success size.
         this.unknownRoutes.delete(routeKey)
+        const catalogFingerprint =
+          options.catalogLimit !== undefined && options.catalogLimit > 0
+            ? catalogFingerprintFor(options.catalogLimit)
+            : ""
+        // catalogFingerprint must be non-empty per schema (z.string().min(1)).
+        // If the caller didn't provide a catalogLimit, we cannot persist a valid
+        // record; the in-memory record still works for this session but won't
+        // survive a reload. Callers should always pass catalogLimit.
         this.records.set(routeKey, {
           window: tokens,
           evidence: "boundary",
           confirmations: 1,
           maxSuccessfulPromptTokens: this.floors.get(routeKey) ?? tokens,
-          catalogFingerprint:
-            options.catalogLimit !== undefined && options.catalogLimit > 0
-              ? catalogFingerprintFor(options.catalogLimit)
-              : (existing?.catalogFingerprint ?? ""),
+          catalogFingerprint,
           updatedAt: this.now(),
         })
         this.touch()

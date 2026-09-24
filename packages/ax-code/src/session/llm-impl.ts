@@ -20,7 +20,7 @@ import { completionClamp, calculateCompactionBudget, effectiveClampWindow } from
 import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
 import type { Agent } from "@/agent/agent"
-import type { MessageV2 } from "./message-v2"
+import { MessageV2 } from "./message-v2"
 import { Plugin } from "@/plugin"
 import { SystemPrompt } from "./system"
 import { Flag } from "@/flag/flag"
@@ -487,13 +487,27 @@ export namespace LLM {
       try {
         const routeKey = ObservedWindow.routeKeyFor(input.model)
         const ledger = TokenLedger.forSession(input.sessionID)
+        const messageIDs = input.messageIDs!
+        // Filter messageIDs and messages to match what toModelMessages produces
+        // (it drops messages with empty parts). This keeps the ledger's tail
+        // estimation aligned with the actual request sent to the model.
+        const nonEmptyIndices = input.messages
+          .map((msg, idx) =>
+            (Array.isArray(msg.content) && msg.content.length === 0) ||
+            (typeof msg.content === "string" && msg.content.trim() === "")
+              ? -1
+              : idx,
+          )
+          .filter((idx) => idx !== -1)
+        const filteredMessageIDs = nonEmptyIndices.map((idx) => messageIDs[idx])
+        const filteredMessages = nonEmptyIndices.map((idx) => input.messages[idx])
         const breakdown = ledger.current({
-          messageIDs: input.messageIDs,
+          messageIDs: filteredMessageIDs,
           revision: TokenLedger.revisionFor(input.sessionID),
           toolSchemaHash: TokenLedger.toolSchemaHashForRecord(tools),
           systemHash: TokenLedger.systemHashFor(input.system),
           routeKey,
-          tail: { system: input.system, messages: input.messages },
+          tail: { system: input.system, messages: filteredMessages },
           tools,
         })
         // ADR-139 D3/D4: a calibrated (possibly shrunken) window is the real
@@ -513,7 +527,17 @@ export namespace LLM {
           reserve: budget?.reserved ?? 0,
           staticCeiling: modelMaxOutputTokens,
         })
-        if (clamped !== undefined && clamped < maxOutputTokens) maxOutputTokens = clamped
+        if (clamped !== undefined) {
+          if (clamped < maxOutputTokens) maxOutputTokens = clamped
+        } else {
+          // Remaining window is at or below the output floor — the correct
+          // action is compaction, not sending a request that will overflow.
+          // Throw a ContextOverflowError so the processor's error handling
+          // triggers the compaction path (same as a real overflow response).
+          throw new MessageV2.ContextOverflowError({
+            message: "Completion clamp: remaining window below output floor",
+          })
+        }
       } catch (error) {
         log.warn("completion clamp failed; sending unclamped", { error })
       }
