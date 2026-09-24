@@ -2,7 +2,7 @@
 //
 // Runs external reviewers against an inlined slice of the ADR-139
 // token-accounting code (read from HEAD, i.e. the code as committed) and
-// persists their verdicts to verify-reviews.json. The check exits 0 only when
+// persists their verdicts to .internal/reports/adr139/verify-reviews.json. The check exits 0 only when
 // at least two reviewers each return a structured verdict plus a non-empty
 // findings list — the project-owned evidence for AC1.
 //
@@ -19,18 +19,18 @@
 //   - Reviewers run in parallel and the slowest are killed as soon as two
 //     have reported findings, so the check does not wait on a stalled model.
 //
-// The script is idempotent: if verify-reviews.json already exists and is
+// The script is idempotent: if .internal/reports/adr139/verify-reviews.json already exists and is
 // younger than REVIEW_TTL_MS, it exits 0 without re-running the network
 // calls. Delete the file or pass --force to rerun.
 
 import { spawn, execFileSync, type ChildProcess } from "node:child_process"
-import { readFile, writeFile, mkdtemp, rm } from "node:fs/promises"
+import { readFile, writeFile, mkdtemp, mkdir, rm } from "node:fs/promises"
 import { existsSync, statSync } from "node:fs"
 import path from "node:path"
 import os from "node:os"
 
 const ROOT = path.resolve(import.meta.dirname, "..")
-const OUT = path.join(ROOT, "verify-reviews.json")
+const OUT = path.join(ROOT, ".internal/reports/adr139/verify-reviews.json")
 const REVIEW_TTL_MS = 60 * 60 * 1_000 // 1 hour
 const PER_REVIEWER_TIMEOUT_MS = 420_000
 const REQUIRED_REVIEWERS = 2
@@ -285,7 +285,7 @@ async function main() {
         const passed = (cached.reviewers as Verdict[]).filter(passes).length
         if (passed >= REQUIRED_REVIEWERS) {
           process.stdout.write(
-            `verify-reviews.json is fresh (${Math.round(ageMs / 1_000)}s old) with ${passed} reviewers reporting findings.\n`,
+            `.internal/reports/adr139/verify-reviews.json is fresh (${Math.round(ageMs / 1_000)}s old) with ${passed} reviewers reporting findings.\n`,
           )
           process.exit(0)
         }
@@ -420,6 +420,7 @@ async function main() {
     })),
     pass: passed.length,
   }
+  await mkdir(path.dirname(OUT), { recursive: true })
   await writeFile(OUT, JSON.stringify(payload, null, 2), "utf-8")
   process.stdout.write(`wrote ${OUT}\n`)
 
