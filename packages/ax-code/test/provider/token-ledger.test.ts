@@ -73,7 +73,11 @@ describe("SessionTokenLedger", () => {
       anchorInput({ messageIDs: ["m1"], usage: { input: 500, cacheRead: 0, cacheWrite: 0, source: "exact" }, at: 1 }),
     )
     ledger.recordAnchor(
-      anchorInput({ messageIDs: ["m1", "m2"], usage: { input: 900, cacheRead: 0, cacheWrite: 0, source: "exact" }, at: 2 }),
+      anchorInput({
+        messageIDs: ["m1", "m2"],
+        usage: { input: 900, cacheRead: 0, cacheWrite: 0, source: "exact" },
+        at: 2,
+      }),
     )
     const found = ledger.findAnchor({ messageIDs: ["m1", "m2", "m3"], revision: "0" })
     expect(found?.index).toBe(1)
@@ -110,9 +114,7 @@ describe("SessionTokenLedger", () => {
     ledger.recordAnchor(anchorInput({ messageIDs: ["m1"], toolSchemaHash: "a", systemHash: "s" }))
     expect(ledger.findAnchor({ messageIDs: ["m1"], revision: "0", toolSchemaHash: "b" })).toBeUndefined()
     expect(ledger.findAnchor({ messageIDs: ["m1"], revision: "0", systemHash: "t" })).toBeUndefined()
-    expect(
-      ledger.findAnchor({ messageIDs: ["m1"], revision: "0", toolSchemaHash: "a", systemHash: "s" }),
-    ).toBeDefined()
+    expect(ledger.findAnchor({ messageIDs: ["m1"], revision: "0", toolSchemaHash: "a", systemHash: "s" })).toBeDefined()
     // Callers without hashes (context_status) still match on IDs + revision.
     expect(ledger.findAnchor({ messageIDs: ["m1"], revision: "0" })).toBeDefined()
   })
@@ -131,6 +133,26 @@ describe("SessionTokenLedger", () => {
     // m0 and m1 were evicted; m2 is the oldest remaining.
     expect(ledger.findAnchor({ messageIDs: ["m0", "m1"], revision: "0" })).toBeUndefined()
     expect(ledger.findAnchor({ messageIDs: ["m2", "m9"], revision: "0" })).toBeDefined()
+  })
+
+  test("switching routes never reuses another model's measured tokens", () => {
+    const ledger = new TokenLedger.SessionTokenLedger()
+    ledger.recordAnchor(anchorInput())
+    const tail = { system: [], messages: [userMessage("first"), userMessage("second")] }
+    const breakdown = ledger.current({
+      messageIDs: ["m1", "m2"],
+      revision: "0",
+      routeKey: "other-provider/other-model",
+      tail,
+    })
+    expect(breakdown.measured).toBe(0)
+    expect(breakdown.strategy).toBe("estimated")
+    expect(breakdown.total).toBe(TokenEstimate.requestTokens(tail))
+    expect(
+      ledger.findAnchor({ messageIDs: ["m1", "m2"], revision: "0", routeKey: "other-provider/other-model" }),
+    ).toBeUndefined()
+    ledger.recordAnchor(anchorInput({ routeKey: "other-provider/other-model" }))
+    expect(ledger.findAnchor({ messageIDs: ["m1", "m2"], revision: "0", routeKey: ROUTE })?.anchor.routeKey).toBe(ROUTE)
   })
 
   test("tracks the last computed total for overflow calibration", () => {
@@ -176,9 +198,7 @@ describe("SessionTokenLedger", () => {
       revision: "0",
       tail: { system, messages: [userMessage("y"), ...tail] },
     })
-    expect(unverified.estimated).toBe(
-      TokenEstimate.requestTokens({ system, messages: tail }),
-    )
+    expect(unverified.estimated).toBe(TokenEstimate.requestTokens({ system, messages: tail }))
     expect(unverified.measured).toBe(1_150)
   })
 
@@ -207,7 +227,8 @@ describe("SessionTokenLedger", () => {
     expect(ledger.findAnchor({ messageIDs: ["m1", "m2"], revision: "0" })?.hashVerified).toBe(false)
     expect(ledger.findAnchor({ messageIDs: ["m1", "m2"], revision: "0", systemHash: "s" })?.hashVerified).toBe(true)
     expect(
-      ledger.findAnchor({ messageIDs: ["m1", "m2"], revision: "0", systemHash: "s", toolSchemaHash: "t" })?.hashVerified,
+      ledger.findAnchor({ messageIDs: ["m1", "m2"], revision: "0", systemHash: "s", toolSchemaHash: "t" })
+        ?.hashVerified,
     ).toBe(true)
   })
 })

@@ -58,9 +58,7 @@ export namespace TokenLedger {
 
   /** Content fingerprint over message IDs + revision + hashes only — never bodies. */
   export function fingerprint(input: FingerprintInput): string {
-    return sha256(
-      [input.messageIDs.join("\n"), input.revision, input.toolSchemaHash, input.systemHash].join("\n"),
-    )
+    return sha256([input.messageIDs.join("\n"), input.revision, input.toolSchemaHash, input.systemHash].join("\n"))
   }
 
   export function systemHashFor(system: readonly string[]): string {
@@ -251,11 +249,13 @@ export namespace TokenLedger {
     private findEntry(input: {
       messageIDs: readonly string[]
       revision: string
+      routeKey?: RouteKey
       toolSchemaHash?: string
       systemHash?: string
     }): { entry: AnchorEntry; index: number; hashVerified: boolean } | undefined {
       for (let i = this.anchors.length - 1; i >= 0; i--) {
         const entry = this.anchors[i]!
+        if (input.routeKey !== undefined && entry.routeKey !== input.routeKey) continue
         if (entry.revision !== input.revision) continue
         if (input.toolSchemaHash !== undefined && entry.toolSchemaHash !== input.toolSchemaHash) continue
         if (input.systemHash !== undefined && entry.systemHash !== input.systemHash) continue
@@ -280,6 +280,7 @@ export namespace TokenLedger {
     findAnchor(input: {
       messageIDs: readonly string[]
       revision: string
+      routeKey?: RouteKey
       toolSchemaHash?: string
       systemHash?: string
     }): { anchor: Anchor; index: number; hashVerified: boolean } | undefined {

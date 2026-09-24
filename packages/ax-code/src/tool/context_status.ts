@@ -54,10 +54,7 @@ async function resolveBudget(model: Provider.Model): Promise<{
   windowSource: "catalog" | "observed" | "unknown"
   observedWindow?: number
 }> {
-  const resolution = await ObservedWindow.store().resolveWindow(
-    ObservedWindow.routeKeyFor(model),
-    model.limit.context,
-  )
+  const resolution = await ObservedWindow.store().resolveWindow(ObservedWindow.routeKeyFor(model), model.limit.context)
   const windowOptions: CompactionWindowOptions | undefined =
     resolution.kind === "observed"
       ? { observedWindow: resolution.window }
@@ -135,6 +132,7 @@ async function ledgerBreakdown(
   const found = ledger.findAnchor({
     messageIDs,
     revision: TokenLedger.revisionFor(ctx.sessionID),
+    routeKey: ObservedWindow.routeKeyFor(model),
   })
   if (!found) return undefined
   // Fresh conversion (no shared cache): transform plugins may mutate message

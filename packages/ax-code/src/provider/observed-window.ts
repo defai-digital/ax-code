@@ -244,7 +244,9 @@ export namespace ObservedWindow {
       }
       const payload = {
         version: 1 as const,
-        records: Object.fromEntries(this.records),
+        records: Object.fromEntries(
+          [...this.records].filter(([, record]) => record.evidence === "provider-stated" || record.confirmations >= 2),
+        ),
         unknown: [...this.unknownRoutes],
       }
       try {
@@ -407,9 +409,11 @@ export namespace ObservedWindow {
       if (routeKey === undefined) {
         this.records.clear()
         this.unknownRoutes.clear()
+        this.floors.clear()
       } else {
         this.records.delete(routeKey)
         this.unknownRoutes.delete(routeKey)
+        this.floors.delete(routeKey)
       }
       this.touch()
       await this.persist()
@@ -441,6 +445,7 @@ export namespace ObservedWindow {
       return existing
     }
     const created = new ObservedWindowStore({
+      // @scan-suppress security_scan - Fixed state filename under the active project's worktree; no route data enters the path.
       filePath: path.join(key, ".ax-code", "observed-windows.json"),
     })
     singletons.set(key, created)

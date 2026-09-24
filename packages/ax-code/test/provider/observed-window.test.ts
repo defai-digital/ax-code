@@ -22,9 +22,7 @@ describe("extractStatedLimit", () => {
   })
 
   test("vLLM 'context length is only N tokens'", () => {
-    expect(
-      ObservedWindow.extractStatedLimit("The prompt is too long: context length is only 8192 tokens"),
-    ).toBe(8_192)
+    expect(ObservedWindow.extractStatedLimit("The prompt is too long: context length is only 8192 tokens")).toBe(8_192)
   })
 
   test("xAI 'maximum prompt length is N' without the tokens suffix", () => {
@@ -42,9 +40,9 @@ describe("extractStatedLimit", () => {
   })
 
   test("structured context_window / max_model_len fields in the body", () => {
-    expect(
-      ObservedWindow.extractStatedLimit("HTTP 400", JSON.stringify({ error: { context_window: 24576 } })),
-    ).toBe(24_576)
+    expect(ObservedWindow.extractStatedLimit("HTTP 400", JSON.stringify({ error: { context_window: 24576 } }))).toBe(
+      24_576,
+    )
     expect(
       ObservedWindow.extractStatedLimit(
         "HTTP 400",
@@ -89,10 +87,20 @@ describe("ObservedWindowStore boundary model", () => {
     // In-memory effective immediately.
     expect(await first.effectiveWindow(ROUTE, CATALOG)).toBe(40_000)
     // Not persisted yet.
-    expect(await fs.access(filePath).then(() => true, () => false)).toBe(false)
+    expect(
+      await fs.access(filePath).then(
+        () => true,
+        () => false,
+      ),
+    ).toBe(false)
 
     await first.recordOverflow(ROUTE, 40_000, { catalogLimit: CATALOG })
-    expect(await fs.access(filePath).then(() => true, () => false)).toBe(true)
+    expect(
+      await fs.access(filePath).then(
+        () => true,
+        () => false,
+      ),
+    ).toBe(true)
 
     const reloaded = store({ filePath })
     expect(await reloaded.effectiveWindow(ROUTE, CATALOG)).toBe(40_000)
@@ -214,6 +222,17 @@ describe("ObservedWindowStore persistence validation", () => {
     expect(await s.effectiveWindow(ROUTE, CATALOG)).toBe(40_000)
   })
 
+  test("success does not persist a boundary without a second overflow", async () => {
+    await using tmp = await tmpdir()
+    const filePath = path.join(tmp.path, "observed-windows.json")
+    const s = store({ filePath })
+    await s.recordOverflow(ROUTE, 40_000, { catalogLimit: CATALOG })
+    await s.recordSuccess(ROUTE, 30_000, { catalogLimit: CATALOG })
+    expect(await store({ filePath }).effectiveWindow(ROUTE, CATALOG)).toBeUndefined()
+    await s.recordOverflow(ROUTE, 40_000, { catalogLimit: CATALOG })
+    expect(await store({ filePath }).effectiveWindow(ROUTE, CATALOG)).toBe(40_000)
+  })
+
   test("schema-invalid entries are dropped while valid ones survive", async () => {
     await using tmp = await tmpdir()
     const filePath = path.join(tmp.path, "observed-windows.json")
@@ -268,6 +287,26 @@ describe("ObservedWindowStore persistence validation", () => {
 })
 
 describe("ObservedWindowStore clear", () => {
+  test.each([true, false])("clear resets success floors (single route: %s)", async (single) => {
+    const s = store()
+    await s.recordSuccess(ROUTE, 80_000)
+    await s.clear(single ? ROUTE : undefined)
+    await s.recordOverflow(ROUTE, 20_000, { catalogLimit: CATALOG })
+    expect(await s.effectiveWindow(ROUTE, CATALOG)).toBe(20_000)
+  })
+
+  test("another route's write cannot persist an unconfirmed boundary", async () => {
+    await using tmp = await tmpdir()
+    const filePath = path.join(tmp.path, "observed-windows.json")
+    const s = store({ filePath })
+    await s.recordOverflow(ROUTE, 40_000, { catalogLimit: CATALOG })
+    await s.recordOverflow("other/route", 50_000, { statedLimit: 32_768, catalogLimit: CATALOG })
+    const reloaded = store({ filePath })
+    expect(await reloaded.effectiveWindow(ROUTE, CATALOG)).toBeUndefined()
+    expect(await reloaded.effectiveWindow("other/route", CATALOG)).toBe(32_768)
+    expect(await s.effectiveWindow(ROUTE, CATALOG)).toBe(40_000)
+  })
+
   test("clear(routeKey) drops one route; clear() drops everything", async () => {
     const s = store()
     await s.recordOverflow(ROUTE, 40_000, { catalogLimit: CATALOG })

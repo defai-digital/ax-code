@@ -221,6 +221,7 @@ const GoalResumeCommand = cmd({
     const directory = (() => {
       if (args.attach) return args.dir
       if (!args.dir) return callerCwd
+      // @scan-suppress security_scan - The local CLI caller explicitly selects the working directory; arbitrary directories are supported.
       const next = path.resolve(callerCwd, args.dir)
       process.chdir(next)
       return process.cwd()
