@@ -274,8 +274,8 @@ export namespace ObservedWindow {
       await this.ensureLoaded()
       if (!Number.isFinite(promptTokens) || promptTokens < 0) return
       const tokens = Math.floor(promptTokens)
+      const existing = this.currentRecord(routeKey, options.catalogLimit)
       this.floors.set(routeKey, Math.max(this.floors.get(routeKey) ?? 0, tokens))
-      const existing = this.records.get(routeKey)
       if (existing) {
         // Only a REAL ratchet refreshes the freshness clock. Refreshing it on
         // every success would pin a stale shrunken window forever: compaction
@@ -332,7 +332,12 @@ export namespace ObservedWindow {
       await this.ensureLoaded()
       const catalogLimit = Math.floor(options.catalogLimit)
       if (!Number.isFinite(catalogLimit) || catalogLimit <= 0) return
-      const existing = this.records.get(routeKey)
+      const statedLimit = options.statedLimit
+      const hasStatedLimit = statedLimit !== undefined && Number.isFinite(statedLimit) && statedLimit > 0
+      // Missing/invalid measurements are not evidence of a tiny window. In
+      // particular, the no-ledger fallback is zero and must not disable compaction.
+      if (!hasStatedLimit && (!Number.isFinite(promptTokens) || Math.floor(promptTokens) <= 0)) return
+      const existing = this.currentRecord(routeKey, catalogLimit)
       const floor = Math.max(this.floors.get(routeKey) ?? 0, existing?.maxSuccessfulPromptTokens ?? 0)
 
       if (options.statedLimit !== undefined && Number.isFinite(options.statedLimit) && options.statedLimit > 0) {
@@ -387,9 +392,20 @@ export namespace ObservedWindow {
       this.touch()
     }
 
-    private fresh(record: ObservedWindowRecord, catalogLimit: number): boolean {
-      if (this.now() - record.updatedAt > WINDOW_TTL_MS) return false
-      return record.catalogFingerprint === catalogFingerprintFor(catalogLimit)
+    private currentRecord(routeKey: string, catalogLimit?: number): ObservedWindowRecord | undefined {
+      const record = this.records.get(routeKey)
+      if (!record) return undefined
+      if (
+        this.now() - record.updatedAt <= WINDOW_TTL_MS &&
+        (catalogLimit === undefined || record.catalogFingerprint === catalogFingerprintFor(catalogLimit))
+      )
+        return record
+      // Invalidation must apply to writes as well as reads: stale stated
+      // evidence otherwise blocks new boundaries, or a success revives it.
+      this.records.delete(routeKey)
+      this.floors.delete(routeKey)
+      this.touch()
+      return undefined
     }
 
     /**
@@ -400,8 +416,9 @@ export namespace ObservedWindow {
     async resolveWindow(routeKey: string, catalogLimit: number): Promise<WindowResolution> {
       await this.ensureLoaded()
       if (this.unknownRoutes.has(routeKey)) return { kind: "unknown" }
-      const record = this.records.get(routeKey)
-      if (!record || !Number.isFinite(catalogLimit) || catalogLimit <= 0 || !this.fresh(record, catalogLimit)) {
+      if (!Number.isFinite(catalogLimit) || catalogLimit <= 0) return { kind: "catalog" }
+      const record = this.currentRecord(routeKey, catalogLimit)
+      if (!record) {
         return { kind: "catalog" }
       }
       return { kind: "observed", window: Math.min(record.window, Math.floor(catalogLimit)), record }
