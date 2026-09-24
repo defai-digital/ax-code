@@ -6,7 +6,25 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.20.4] - 2026-09-24
+
+### Fixed
+
+- Keep measured token anchors isolated to the active provider/model route after switching models.
+- Clear observed-window success floors when resetting calibration, and persist boundary estimates only after two overflow confirmations.
+- Harden queued follow-ups, scheduled tasks, restart recovery, and upstream stream-error retry classification.
+- Record cancelled compaction as aborted and resolve retired DeepSeek Flash IDs for small-model calls.
+
+### Added
+
+- Add a headless goal CLI with resume support and wall-clock time budgets.
+- Track provider-reported input tokens alongside estimates, calibrate observed context windows, and clamp completion budgets against remaining capacity.
+- Add an idle countdown for interactive one-time permission approval.
+
 ### Changed
+
+- Publish SDK 2.5.46 alongside AX Code 7.20.4.
+- Bundle signed AX Engine 7.5.7 on Apple Silicon Macs and require verified 7.5.7 or newer runtimes, rejecting prereleases below that floor.
 
 - Refresh the Fuji Mountain TUI animation with a sunset day scene, reflective water, deterministic falling petals, and a new left-facing shinkansen. Timing, layout, and text/pixel fallback contracts are unchanged.
 - Render Fuji Mountain HD frames with freeform painting driven by the shared scene model instead of glyph rasterization. Bench and Mahjong keep the stroke-glyph path.
