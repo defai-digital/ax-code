@@ -1,4 +1,5 @@
 import { SessionGoal } from "../goal"
+import { GoalPlan } from "../goal-plan"
 import { GoalPlanOrchestration } from "../goal-plan-orchestration"
 import type { MessageV2 } from "../message-v2"
 import { createStoppedAssistantTextResponse } from "./prompt-assistant-response"
@@ -160,19 +161,31 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
     return goalControlMessage(input, parsed.message)
   }
 
-  if (parsed.action !== "create") {
+  if (parsed.action !== "create" && parsed.action !== "replace") {
     throw new Error(`Unhandled goal action: ${parsed.action}`)
   }
 
-  // activate() rejects when an active/paused goal already exists, the budget
-  // is invalid, or the plan writer fails closed. Surface those as a control
-  // message instead of a 500/failed task.
+  // activate() rejects when the budget is invalid or the plan writer fails
+  // closed. A bare create is blocked only by a goal that is active, or paused
+  // WITH a frozen contract; a paused goal without a contract (the plan writer
+  // failed) has no contract or receipts to lose and is atomically overwritten.
+  // Surface rejections as a control message instead of a 500/failed task.
   const model = await commandModel({ model: input.model, sessionID: input.sessionID })
   let prepared: Awaited<ReturnType<typeof GoalPlanOrchestration.activate>>
   try {
     const current = await SessionGoal.get(input.sessionID)
-    if (current?.status === "active" || current?.status === "paused")
-      throw new Error("This session already has an active goal; pause, clear or revise it first")
+    const contracted = current ? GoalPlan.hasValidContract(input.sessionID, current.time.created) : false
+    if (
+      parsed.action === "create" &&
+      current &&
+      (current.status === "active" || (current.status === "paused" && contracted))
+    ) {
+      throw new Error(
+        current.status === "active"
+          ? "This session already has an active goal. Use /goal replace <objective> to supersede it, /goal revise <correction> to adjust the current plan, or /goal clear to discard it."
+          : "This session has a paused goal with a frozen plan. Use /goal resume to continue it, /goal replace <objective> to supersede it, or /goal clear to discard it.",
+      )
+    }
     if (parsed.tokenBudget !== undefined && (!Number.isSafeInteger(parsed.tokenBudget) || parsed.tokenBudget <= 0))
       throw new Error("Goal token budget must be a positive integer")
     if (
@@ -186,7 +199,7 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
       objective: parsed.objective,
       tokenBudget: parsed.tokenBudget,
       timeBudgetSeconds: parsed.timeBudgetSeconds,
-      replace: false,
+      replace: parsed.action === "replace" || current !== undefined,
       model,
       contextParts: input.parts,
       variant: input.variant,

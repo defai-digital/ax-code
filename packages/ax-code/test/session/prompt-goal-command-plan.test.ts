@@ -132,6 +132,7 @@ describe("executeGoalCommand plan writer", () => {
         expect(
           duplicate.parts.some((part) => part.type === "text" && part.text.includes("already has an active goal")),
         ).toBe(true)
+        expect(duplicate.parts.some((part) => part.type === "text" && part.text.includes("/goal replace"))).toBe(true)
         await Session.remove(session.id)
       },
     })
@@ -180,6 +181,153 @@ describe("executeGoalCommand plan writer", () => {
           GoalPlanWriter.resetWrite()
           await Session.remove(session.id)
         }
+      },
+    })
+  })
+
+  test("a fresh create supersedes a paused goal that never got a plan", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        GoalPlanWriter.setWrite(async () => {
+          throw new GoalPlan.Error("writer", "planner down")
+        })
+        const session = await Session.create({})
+        await executeGoalCommand(
+          {
+            sessionID: session.id,
+            command: "goal",
+            arguments: "first attempt",
+            agent: "build",
+            model: "test/test-model",
+          },
+          async () => ({ info: { role: "assistant" }, parts: [] }) as any,
+        )
+        // The fail-closed writer leaves a paused goal with no contract; giving
+        // the goal again must supersede it instead of rejecting the session.
+        expect((await SessionGoal.get(session.id))?.status).toBe("paused")
+        GoalPlanWriter.setWrite(GoalPlanWriter.stubWrite())
+        const prompts: PromptInput[] = []
+        await executeGoalCommand(
+          {
+            sessionID: session.id,
+            command: "goal",
+            arguments: "second attempt",
+            agent: "build",
+            model: "test/test-model",
+          },
+          async (input) => {
+            prompts.push(input)
+            return { info: { role: "assistant" }, parts: [] } as any
+          },
+        )
+        expect(prompts).toHaveLength(1)
+        const goal = await SessionGoal.get(session.id)
+        expect(goal?.status).toBe("active")
+        expect(goal?.objective).toBe("second attempt")
+        expect(GoalPlan.hasValidContract(session.id, goal!.time.created)).toBe(true)
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("replace supersedes an active goal and rewrites the plan", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        GoalPlanWriter.setWrite(GoalPlanWriter.stubWrite())
+        const session = await Session.create({})
+        await executeGoalCommand(
+          {
+            sessionID: session.id,
+            command: "goal",
+            arguments: "first",
+            agent: "build",
+            model: "test/test-model",
+          },
+          async () => ({ info: { role: "assistant" }, parts: [] }) as any,
+        )
+        let writerCalls = 0
+        GoalPlanWriter.setWrite(async (input) => {
+          writerCalls++
+          return GoalPlanWriter.stubWrite()(input)
+        })
+        const prompts: PromptInput[] = []
+        await executeGoalCommand(
+          {
+            sessionID: session.id,
+            command: "goal",
+            arguments: "replace second",
+            agent: "build",
+            model: "test/test-model",
+          },
+          async (input) => {
+            prompts.push(input)
+            return { info: { role: "assistant" }, parts: [] } as any
+          },
+        )
+        expect(writerCalls).toBe(1)
+        expect(prompts).toHaveLength(1)
+        const goal = await SessionGoal.get(session.id)
+        expect(goal?.objective).toBe("second")
+        expect(goal?.status).toBe("active")
+        expect(GoalPlan.hasValidContract(session.id, goal!.time.created)).toBe(true)
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("a paused goal with a frozen plan blocks a bare create with actionable guidance", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        let writerCalls = 0
+        GoalPlanWriter.setWrite(async (input) => {
+          writerCalls++
+          return GoalPlanWriter.stubWrite()(input)
+        })
+        const session = await Session.create({})
+        await executeGoalCommand(
+          {
+            sessionID: session.id,
+            command: "goal",
+            arguments: "first",
+            agent: "build",
+            model: "test/test-model",
+          },
+          async () => ({ info: { role: "assistant" }, parts: [] }) as any,
+        )
+        await executeGoalCommand(
+          {
+            sessionID: session.id,
+            command: "goal",
+            arguments: "pause",
+            agent: "build",
+            model: "test/test-model",
+          },
+          async () => ({ info: { role: "assistant" }, parts: [] }) as any,
+        )
+        writerCalls = 0
+        const duplicate = await executeGoalCommand(
+          {
+            sessionID: session.id,
+            command: "goal",
+            arguments: "second",
+            agent: "build",
+            model: "test/test-model",
+          },
+          async () => ({ info: { role: "assistant" }, parts: [] }) as any,
+        )
+        expect(writerCalls).toBe(0)
+        const text = duplicate.parts.find((part) => part.type === "text")
+        expect(text?.type === "text" && text.text.includes("paused goal with a frozen plan")).toBe(true)
+        expect(text?.type === "text" && text.text.includes("/goal resume")).toBe(true)
+        expect(text?.type === "text" && text.text.includes("/goal replace")).toBe(true)
+        expect((await SessionGoal.get(session.id))?.objective).toBe("first")
+        await Session.remove(session.id)
       },
     })
   })

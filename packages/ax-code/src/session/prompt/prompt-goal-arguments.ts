@@ -3,7 +3,7 @@ type GoalArgumentDecision =
   | { action: "error"; message: string }
   | { action: "revise"; correction: string }
   | {
-      action: "create"
+      action: "create" | "replace"
       objective: string
       tokenBudget?: number
       timeBudgetSeconds?: number
@@ -26,7 +26,7 @@ const TOKEN_BUDGET_HINT = "a positive whole number of tokens (e.g. /goal --budge
 const TIME_BUDGET_HINT = "a positive duration in seconds, minutes, or hours (e.g. /goal --time-budget 30m <objective>)"
 
 export function parseGoalArguments(raw: string): GoalArgumentDecision {
-  const text = raw.trim()
+  let text = raw.trim()
   if (!text) return { action: "view" }
   const lower = text.toLowerCase()
   if (lower === "pause") return { action: "pause" }
@@ -38,6 +38,20 @@ export function parseGoalArguments(raw: string): GoalArgumentDecision {
       message: "Use /goal revise <correction> to revise the frozen plan while retaining its history and budget.",
     }
   if (lower.startsWith("revise ")) return { action: "revise", correction: text.slice(7).trim() }
+  // "replace" supersedes the current goal with a new one (any state). Like
+  // "revise", the leading keyword is reserved: "/goal replace the parser"
+  // supersedes with objective "the parser" rather than creating a goal whose
+  // objective starts with the word "replace" — the same tradeoff revise makes.
+  if (lower === "replace")
+    return {
+      action: "error",
+      message: "Use /goal replace <objective> to supersede the current goal with a new one.",
+    }
+  let action: "create" | "replace" = "create"
+  if (lower.startsWith("replace ")) {
+    action = "replace"
+    text = text.slice("replace ".length).trim()
+  }
   // "status" is a common way to ask for the current goal; without this alias
   // it would silently CREATE a goal whose objective is the word "status".
   if (lower === "status") return { action: "view" }
@@ -117,11 +131,11 @@ export function parseGoalArguments(raw: string): GoalArgumentDecision {
       }
     }
     return {
-      action: "create",
+      action,
       ...(tokenBudget === undefined ? {} : { tokenBudget }),
       ...(timeBudgetSeconds === undefined ? {} : { timeBudgetSeconds }),
       objective: rest,
     }
   }
-  return { action: "create", objective: rest }
+  return { action, objective: rest }
 }

@@ -168,4 +168,29 @@ describe("parseGoalArguments", () => {
     if (decision.action !== "error") throw new Error("expected error")
     expect(decision.message).toContain("--time-budget requires a goal objective")
   })
+
+  test("replace supersedes: keyword form, budgets, and bare-keyword error", () => {
+    expect(parseGoalArguments("replace fix the bug")).toEqual({
+      action: "replace",
+      objective: "fix the bug",
+    })
+    expect(parseGoalArguments("REPLACE the parser")).toEqual({
+      action: "replace",
+      objective: "the parser",
+    })
+    expect(parseGoalArguments("replace --budget 500 --time-budget 30m fix the bug")).toEqual({
+      action: "replace",
+      tokenBudget: 500,
+      timeBudgetSeconds: 1800,
+      objective: "fix the bug",
+    })
+    // Like "revise", the leading keyword is reserved: an objective that starts
+    // with the word "replace" is read as a supersede.
+    const bare = parseGoalArguments("replace")
+    expect(bare.action).toBe("error")
+    if (bare.action !== "error") throw new Error("expected error")
+    expect(bare.message).toContain("/goal replace <objective>")
+    const flagsOnly = parseGoalArguments("replace --budget 500")
+    expect(flagsOnly.action).toBe("error")
+  })
 })

@@ -29,11 +29,21 @@ export function DialogGoal(props: { goal?: SessionGoal.PublicInfo | null; setPro
         onSelect: command(props.setPrompt, "/goal"),
       },
       {
-        title: goal ? "Start a new goal after clearing this one" : "Start a new goal",
+        title: goal ? "Start a new goal (replaces a finished or plan-less one)" : "Start a new goal",
         value: "goal.start",
         category: "Actions",
         onSelect: command(props.setPrompt, "/goal "),
       },
+      ...(goal
+        ? [
+            {
+              title: "Supersede with a new goal",
+              value: "goal.replace",
+              category: "Actions",
+              onSelect: command(props.setPrompt, "/goal replace "),
+            },
+          ]
+        : []),
     ]
 
     if (goal?.status === "active") {
