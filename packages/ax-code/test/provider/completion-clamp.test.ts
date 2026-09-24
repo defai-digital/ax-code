@@ -53,6 +53,37 @@ describe("completionClamp", () => {
     ).toBeUndefined()
   })
 
+  test("a staticCeiling below OUTPUT_FLOOR also returns undefined (don't leak tiny max_tokens)", () => {
+    // The remaining window is plenty, but the provider-reported cap is below
+    // the floor. Sending max_tokens=OUTPUT_FLOOR would be worse than compacting:
+    // the caller must observe undefined and trigger the preflight compaction path.
+    expect(
+      completionClamp({
+        context: CONTEXT,
+        used: 10_000,
+        reserve: 20_000,
+        staticCeiling: OUTPUT_FLOOR - 1,
+      }),
+    ).toBeUndefined()
+    expect(
+      completionClamp({
+        context: CONTEXT,
+        used: 10_000,
+        reserve: 20_000,
+        staticCeiling: OUTPUT_FLOOR,
+      }),
+    ).toBeUndefined()
+    // And the boundary stays clean above the floor.
+    expect(
+      completionClamp({
+        context: CONTEXT,
+        used: 10_000,
+        reserve: 20_000,
+        staticCeiling: OUTPUT_FLOOR + 1,
+      }),
+    ).toBe(OUTPUT_FLOOR + 1)
+  })
+
   test("returns undefined when the model declares no context window", () => {
     expect(completionClamp({ context: 0, used: 0, reserve: 0, staticCeiling: STATIC_CEILING })).toBeUndefined()
   })

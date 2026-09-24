@@ -103,6 +103,11 @@ export function calculateCompactionBudget(
  * callers pass them as `staticCeiling`. Returns undefined when the remaining
  * window is at or below the output floor: the correct action then is
  * compaction (existing preflight path), not a tiny max_tokens.
+ *
+ * The floor check runs against the FINAL clamped value, not just `remaining`:
+ * a tiny `staticCeiling` (e.g. a provider cap below OUTPUT_FLOOR) would
+ * otherwise leak through `min(staticCeiling, remaining)` and silently tell
+ * the caller to send a max_tokens no model can usefully reply to.
  */
 export function completionClamp(input: {
   context: number
@@ -114,7 +119,9 @@ export function completionClamp(input: {
   if (!Number.isFinite(context) || context <= 0) return undefined
   const remaining = context - Math.max(0, input.used) - Math.max(0, input.reserve)
   if (!Number.isFinite(remaining) || remaining <= OUTPUT_FLOOR) return undefined
-  return Math.max(0, Math.min(Math.floor(input.staticCeiling), Math.floor(remaining)))
+  const clamped = Math.max(0, Math.min(Math.floor(input.staticCeiling), Math.floor(remaining)))
+  if (clamped <= OUTPUT_FLOOR) return undefined
+  return clamped
 }
 
 /**

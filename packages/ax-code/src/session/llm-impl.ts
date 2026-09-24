@@ -539,6 +539,12 @@ export namespace LLM {
           })
         }
       } catch (error) {
+        // The else-branch above throws a ContextOverflowError on purpose so the
+        // processor's error handling turns it into `needsCompaction` (see
+        // processor.process). This catch must not swallow that sentinel:
+        // otherwise the throw is dead code and the doomed request is sent
+        // unclamped instead of compacting first.
+        if (MessageV2.ContextOverflowError.isInstance(error)) throw error
         log.warn("completion clamp failed; sending unclamped", { error })
       }
     }
