@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { DEFAULT_SETUP_PROVIDER_IDS } from "../../src/provider/default-setup-providers"
+import { DEFAULT_SETUP_PROVIDER_IDS, isApiCloudCatalogProvider } from "../../src/provider/default-setup-providers"
 import { ModelsDev } from "../../src/provider/models"
 import { ProviderTransform } from "../../src/provider/transform"
 import { shouldShowProviderInList } from "../../src/server/routes/provider"
@@ -95,5 +95,69 @@ describe("cloud API providers: DeepSeek + Meta Muse Spark", () => {
       reasoningSummary: "auto",
       include: ["reasoning.encrypted_content"],
     })
+  })
+})
+
+describe("isApiCloudCatalogProvider", () => {
+  test("admits full-catalog API cloud providers with at least one model", async () => {
+    const all = await ModelsDev.get()
+    expect(isApiCloudCatalogProvider("siliconflow", all["siliconflow"])).toBe(true)
+    expect(isApiCloudCatalogProvider("deepseek", all["deepseek"])).toBe(true)
+    expect(isApiCloudCatalogProvider("openrouter", all["openrouter"])).toBe(true)
+  })
+
+  test("rejects zero-model snapshot entries", async () => {
+    const all = await ModelsDev.get()
+    // ollama and ax-studio ship in the snapshot with zero models; lmstudio is
+    // runtime-injected the same way. None belongs on the api-cloud path.
+    expect(isApiCloudCatalogProvider("ollama", all["ollama"])).toBe(false)
+    expect(isApiCloudCatalogProvider("ax-studio", all["ax-studio"])).toBe(false)
+    expect(isApiCloudCatalogProvider("lmstudio", all["lmstudio"])).toBe(false)
+    expect(
+      isApiCloudCatalogProvider("zero-model-test", {
+        id: "zero-model-test",
+        name: "Zero Model Test",
+        env: [],
+        models: {},
+      }),
+    ).toBe(false)
+  })
+
+  test("rejects CLI adapters, local runtimes, private GPU vendors, and ax-engine", async () => {
+    const all = await ModelsDev.get()
+    expect(isApiCloudCatalogProvider("claude-code", all["claude-code"])).toBe(false)
+    expect(isApiCloudCatalogProvider("local-llm", all["local-llm"])).toBe(false)
+    expect(isApiCloudCatalogProvider("ax-engine", all["ax-engine"])).toBe(false)
+    // Id-based exclusions apply even when a fabricated record carries models.
+    const modeled = {
+      id: "nebius",
+      name: "Nebius Token Factory",
+      env: [],
+      npm: "@ai-sdk/openai-compatible",
+      models: { test: {} as ModelsDev.Model },
+    }
+    expect(isApiCloudCatalogProvider("nebius", modeled)).toBe(false)
+    expect(isApiCloudCatalogProvider("custom-private-gpu", { ...modeled, id: "custom-private-gpu" })).toBe(false)
+  })
+
+  test("rejects cli npm adapters even for unknown provider ids", () => {
+    const record = {
+      id: "future-cli",
+      name: "Future CLI",
+      env: [],
+      npm: "cli",
+      models: { generic: {} as ModelsDev.Model },
+    }
+    expect(isApiCloudCatalogProvider("future-cli", record)).toBe(false)
+  })
+
+  test("admits modeled records without an npm field", () => {
+    const record = {
+      id: "no-npm-cloud",
+      name: "No NPM Cloud",
+      env: [],
+      models: { generic: {} as ModelsDev.Model },
+    }
+    expect(isApiCloudCatalogProvider("no-npm-cloud", record)).toBe(true)
   })
 })

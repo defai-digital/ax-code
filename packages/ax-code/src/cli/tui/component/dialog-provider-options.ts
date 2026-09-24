@@ -1,4 +1,4 @@
-import { filter, pipe, sortBy } from "remeda"
+import { sortBy } from "remeda"
 import {
   AX_TRUST_PROVIDER_OPTION_ID,
   CLI_PLAN_PROVIDER_IDS,
@@ -21,6 +21,7 @@ import {
 export { AX_TRUST_PROVIDER_OPTION_ID, CUSTOM_API_PROVIDER_OPTION_ID } from "@/mode/provider-category"
 import { modelSelectableForProvider, providerModelSelectable } from "@/provider/model-selectability"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
+import { DEFAULT_SETUP_PROVIDER_IDS } from "@/provider/default-setup-providers"
 import { defaultModelIDForProvider } from "@/provider/implicit-default"
 import { isRecord } from "@/util/record"
 import type { ProviderListResponse } from "@ax-code/sdk/v2"
@@ -98,20 +99,43 @@ function providerDialogSortKey(providerID: string) {
   return LOCAL_LLM_PROVIDER_IDS.findIndex((id) => id === providerID)
 }
 
+const SUGGESTED_API_PROVIDER_RANK = new Map<string, number>(
+  DEFAULT_SETUP_PROVIDER_IDS.map((id, index) => [id, index]),
+)
+
+/**
+ * Suggested (curated) API providers keep their curated relative order ahead of
+ * the full catalog, which sorts by name A-Z. Non-api categories get a constant
+ * key so their existing ordering is untouched.
+ */
+function providerDialogApiRank(providerID: string, categoryOverrides?: ProviderConnectCategoryOverrides) {
+  if (providerConnectCategory(providerID, categoryOverrides) !== "api") return 0
+  return SUGGESTED_API_PROVIDER_RANK.get(providerID) ?? DEFAULT_SETUP_PROVIDER_IDS.length
+}
+
+function providerDialogSortKeys<T extends ProviderDialogProvider>(
+  providers: readonly T[],
+  categoryOverrides?: ProviderConnectCategoryOverrides,
+) {
+  return sortBy(
+    providers,
+    (provider) => providerConnectCategorySortKey(provider.id, categoryOverrides),
+    (provider) => providerDialogSortKey(provider.id),
+    (provider) => providerDialogApiRank(provider.id, categoryOverrides),
+    (provider) => provider.name,
+    (provider) => provider.id,
+  )
+}
+
 export function providerDialogProviders(input: {
   available: ProviderDialogProvider[]
   configured: ProviderDialogProvider[]
   categoryOverrides?: ProviderConnectCategoryOverrides
 }) {
   const providers = input.available.length > 0 ? input.available : input.configured
-  return pipe(
-    providers,
-    filter((provider) => !HIDDEN_PROVIDERS.has(provider.id)),
-    sortBy(
-      (provider) => providerConnectCategorySortKey(provider.id, input.categoryOverrides),
-      (provider) => providerDialogSortKey(provider.id),
-      (provider) => provider.name,
-    ),
+  return providerDialogSortKeys(
+    providers.filter((provider) => !HIDDEN_PROVIDERS.has(provider.id)),
+    input.categoryOverrides,
   )
 }
 
@@ -121,14 +145,7 @@ function withProviderDialogEntry<T extends ProviderDialogProvider>(
   categoryOverrides?: ProviderConnectCategoryOverrides,
 ) {
   if (providers.some((provider) => provider.id === entry.id)) return [...providers]
-  return pipe(
-    [...providers, entry as T],
-    sortBy(
-      (provider) => providerConnectCategorySortKey(provider.id, categoryOverrides),
-      (provider) => providerDialogSortKey(provider.id),
-      (provider) => provider.name,
-    ),
-  )
+  return providerDialogSortKeys([...providers, entry as T], categoryOverrides)
 }
 
 export function withCustomApiProviderDialogEntry<T extends ProviderDialogProvider>(

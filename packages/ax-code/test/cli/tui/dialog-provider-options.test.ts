@@ -413,6 +413,47 @@ describe("provider dialog options", () => {
     ).toEqual(["groq", "grok-build-cli", "ax-engine", "ollama", "alibaba-pai"])
   })
 
+  test("keeps suggested API cloud providers first in curated order, then sorts the catalog by name", () => {
+    expect(
+      providerDialogProviders({
+        available: [
+          provider("zhipuai", "Zhipu AI"),
+          provider("siliconflow", "SiliconFlow"),
+          provider("openrouter", "OpenRouter"),
+          provider("deepseek", "DeepSeek"),
+          provider("alibaba-coding-plan", "Alibaba Cloud Coding Plan"),
+          provider("grok-build-cli", "Grok Build CLI"),
+          provider("ollama", "Ollama"),
+        ],
+        configured: [],
+      }).map((item) => item.id),
+    ).toEqual([
+      // Curated relative order (DEFAULT_SETUP order), not name order.
+      "deepseek",
+      "openrouter",
+      "alibaba-coding-plan",
+      // Full-catalog API cloud providers by name A-Z.
+      "siliconflow",
+      "zhipuai",
+      // Non-api categories keep their existing ordering.
+      "grok-build-cli",
+      "ollama",
+    ])
+  })
+
+  test("breaks API cloud provider name ties by id", () => {
+    expect(
+      providerDialogProviders({
+        available: [
+          provider("beta-id", "Same Name"),
+          provider("alpha-id", "Same Name"),
+          provider("deepseek", "DeepSeek"),
+        ],
+        configured: [],
+      }).map((item) => item.id),
+    ).toEqual(["deepseek", "alpha-id", "beta-id"])
+  })
+
   test("requires normal tool-call capability for local runtime models", () => {
     expect(providerModelSelectable({ providerID: "ax-engine", toolcall: false })).toBe(false)
     expect(providerModelSelectable({ providerID: "grok-build-cli", toolcall: false })).toBe(true)

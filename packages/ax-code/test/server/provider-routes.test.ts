@@ -18,6 +18,7 @@ import { AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID } from "../../src/provider/ax-en
 import { AxEnginePaths } from "../../src/provider/ax-engine/paths"
 import { Log } from "../../src/util/log"
 import { Provider } from "../../src/provider/provider"
+import type { ModelsDev } from "../../src/provider/models"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
@@ -133,6 +134,82 @@ describe("provider routes", () => {
     expect(ids).not.toContain("antigravity-cli")
     expect(ids).not.toContain("kimi-cli")
     expect(ids).not.toContain("minimax-cli")
+  })
+
+  test("shows full-catalog API cloud providers by default while zero-model entries stay hidden", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const directory = encodeURIComponent(tmp.path)
+
+    const response = await Server.Default().request(`/provider?directory=${directory}`)
+    expect(response.status).toBe(200)
+
+    const body = (await response.json()) as { all: Array<{ id: string }> }
+    const ids = body.all.map((provider) => provider.id)
+    // Catalog API-cloud providers outside the curated set need no enabled_providers opt-in.
+    expect(ids).toContain("siliconflow")
+    expect(ids).toContain("iflowcn")
+    expect(ids).toContain("zhipuai")
+    // Zero-model snapshot entries do not qualify as API-cloud providers.
+    expect(ids).not.toContain("wallaby")
+    expect(ids).not.toContain("ainetcafe")
+    // Local runtimes stay visible through their own category path, as before.
+    expect(ids).toEqual(expect.arrayContaining(["ollama", "lmstudio", "mtplx", "omlx", "ax-studio", "local-llm"]))
+    // CLI adapters stay curated-only.
+    expect(ids).not.toContain("qoder-cli")
+    expect(ids).not.toContain("gemini-cli")
+  })
+
+  test("admits catalog API cloud providers through the default list path only with a qualifying record", () => {
+    const record: ModelsDev.Provider = {
+      id: "siliconflow",
+      name: "SiliconFlow",
+      env: [],
+      npm: "@ai-sdk/openai-compatible",
+      models: { "sf-test-model": {} as ModelsDev.Model },
+    }
+    expect(shouldShowProviderInList({ key: "siliconflow", provider: record, disabled: new Set() })).toBe(true)
+    expect(shouldShowProviderInList({ key: "siliconflow", provider: record, disabled: new Set(["siliconflow"]) })).toBe(
+      false,
+    )
+    expect(
+      shouldShowProviderInList({
+        key: "siliconflow",
+        provider: record,
+        disabled: new Set(),
+        enabled: new Set(["groq"]),
+      }),
+    ).toBe(false)
+    expect(
+      shouldShowProviderInList({
+        key: "siliconflow",
+        provider: record,
+        disabled: new Set(),
+        enabled: new Set(["siliconflow"]),
+      }),
+    ).toBe(true)
+    // Without a record the default path falls back to the native list only.
+    expect(shouldShowProviderInList({ key: "siliconflow", disabled: new Set() })).toBe(false)
+    // Zero-model and cli-shaped records never qualify.
+    expect(
+      shouldShowProviderInList({
+        key: "zero-model-test",
+        provider: { ...record, id: "zero-model-test", models: {} },
+        disabled: new Set(),
+      }),
+    ).toBe(false)
+    expect(
+      shouldShowProviderInList({
+        key: "future-cli",
+        provider: {
+          id: "future-cli",
+          name: "Future CLI",
+          env: [],
+          npm: "cli",
+          models: { generic: {} as ModelsDev.Model },
+        },
+        disabled: new Set(),
+      }),
+    ).toBe(false)
   })
 
   test.each(["ollama", "lmstudio", "mtplx", "omlx", "ax-studio", "local-llm", "custom-private-gpu"])(

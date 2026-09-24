@@ -42,7 +42,7 @@ import { isSupportedHost } from "@/provider/ax-engine/platform"
 import { normalizeModelID, normalizeQuantization } from "@/provider/ax-engine/model-cache"
 import { JsonBoolean, JsonNumber } from "@/util/schema"
 import { toErrorMessage } from "@/util/error-message"
-import { DEFAULT_SETUP_PROVIDER_IDS } from "@/provider/default-setup-providers"
+import { DEFAULT_SETUP_PROVIDER_IDS, isApiCloudCatalogProvider } from "@/provider/default-setup-providers"
 import { connectAlibabaPai } from "@/provider/alibaba-pai"
 import { connectPrivateGpu } from "@/provider/private-gpu/connect"
 import { isDedicatedPrivateGpuProviderID } from "@/provider/private-gpu/presets"
@@ -64,6 +64,7 @@ const NATIVE_PROVIDERS = new Set(["ax-engine", ...LOCAL_LLM_PROVIDER_IDS, ...DEF
 
 export function shouldShowProviderInList(input: {
   key: string
+  provider?: ModelsDev.Provider
   disabled: Set<string>
   enabled?: Set<string>
   axEngineSupported?: boolean
@@ -71,7 +72,11 @@ export function shouldShowProviderInList(input: {
   if (isRetiredProviderID(input.key)) return false
   if (input.disabled.has(input.key)) return false
   if (input.key === "ax-engine" && !input.axEngineSupported) return false
-  return input.enabled ? input.enabled.has(input.key) : NATIVE_PROVIDERS.has(input.key)
+  if (input.enabled) return input.enabled.has(input.key)
+  return (
+    NATIVE_PROVIDERS.has(input.key) ||
+    (input.provider !== undefined && isApiCloudCatalogProvider(input.key, input.provider))
+  )
 }
 
 export const AxEnginePrepareBody = z
@@ -260,7 +265,7 @@ export const ProviderRoutes = lazy(() =>
         const filteredProviders: Record<string, (typeof allProviders)[string]> = {}
         const axEngineSupported = await isSupportedHost().catch(() => false)
         for (const [key, value] of Object.entries(allProviders)) {
-          if (shouldShowProviderInList({ key, disabled, enabled, axEngineSupported })) {
+          if (shouldShowProviderInList({ key, provider: value, disabled, enabled, axEngineSupported })) {
             filteredProviders[key] = value
           }
         }
