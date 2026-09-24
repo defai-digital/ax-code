@@ -15,7 +15,7 @@ AX Code is an open-source coding-agent runtime for reviewable, reversible work. 
 
 Built by [DEFAI Digital](https://github.com/defai-digital).
 
-[![Release v7.20.3](https://img.shields.io/badge/Release-v7.20.3-2F6FED)](https://github.com/defai-digital/ax-code/releases/tag/v7.20.3)
+[![Release v7.20.4](https://img.shields.io/badge/Release-v7.20.4-2F6FED)](https://github.com/defai-digital/ax-code/releases/tag/v7.20.4)
 [![macOS Apple Silicon](https://img.shields.io/badge/macOS-Apple%20Silicon-000000?logo=apple&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
 [![Windows x64/ARM64](https://img.shields.io/badge/Windows-x64%20%2B%20ARM64-0078D4?logo=windows&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
 [![Ubuntu 24.04+ amd64/arm64](https://img.shields.io/badge/Ubuntu%2024.04%2B-amd64%20%2B%20arm64-E95420?logo=ubuntu&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
@@ -121,7 +121,7 @@ pays tool rounds, prompt growth, HTTP sidecar overhead, and cache state.
 The current matched peer numbers are native AX Engine versus MTPLX **2.11.3** on **20 September
 2026** (six measured samples, cold KV, MTP depth 3). The primary metric is **completion tokens/s
 including TTFT**. These are native-API measurements, not default `ax-engine serve` and not AX Code
-sessions. AX Code bundles signed AX Engine **7.5.6**.
+sessions. AX Code bundles signed AX Engine **7.5.7**.
 
 <p align="center">
   <img src="docs/images/tiel-vs-mtplx-2026-09-20.svg" width="820" alt="Grouped bar chart of completion throughput in tokens per second (including time to first token), AX Engine versus MTPLX 2.11.3, for the Tiel default pack and the Cyber-Tiel alternate pack on M5 Max 128 GiB, and the Tiel pack on M4 Pro 64 GiB. AX Engine leads both M5 Max cells; on M4 Pro the Tiel pack is essentially level with MTPLX.">
@@ -158,7 +158,7 @@ See [AX Engine Qwen 27B performance](https://github.com/defai-digital/ax-engine#
 
 The largest practical payoff is the local prefix cache. A repeated 285-token task with a full
 36,708-token KV cache returned its first payload in 0.04 seconds on MTPLX — see the
-[AX Code / OpenCode client retest](docs/guides/local-client-matrix-2026-09-19.md). AX Engine 7.5.6
+[AX Code / OpenCode client retest](docs/guides/local-client-matrix-2026-09-19.md). AX Engine 7.5.7
 or newer is required. Releases before 7.5.0 lack the Tiel MTP namespace loader fix and reject these packs
 with `MlxMtpRequiredButUnavailable`. MTP policy is required by default: an unavailable drafter
 fails startup instead of silently falling back to direct decoding, because a silent fallback would
@@ -279,7 +279,7 @@ recommend an Apple Silicon M4 Pro with 48 GB of unified memory or above (for exa
 M4 Pro 48 GB). The catalog's ~64 GiB figure is a conservative full-context planning estimate
 (weights, KV cache, buffers, and host reserve); use the live catalog fit result for your machine.
 Smaller Macs can still use AX Code with cloud/API models or connect to lighter local runtimes via
-the [MTPLX / oMLX presets](docs/providers/local-mlx-runtimes.md). AX Engine 7.5.6 or newer is
+the [MTPLX / oMLX presets](docs/providers/local-mlx-runtimes.md). AX Engine 7.5.7 or newer is
 required; releases before 7.5.0 fail with `MlxMtpRequiredButUnavailable`. See
 [AX Engine Model Selection](docs/providers/ax-engine-model-selection.md) for memory guidance, the
 managed activation contract, and the MTP policy.
@@ -399,7 +399,7 @@ The current Tiel versus MTPLX numbers, with host, metric, and caveats, are in th
 "Apple Silicon, managed local inference" section near the top of this README. Tiel uses
 model-selected `auto` tuning with MTP still required; Cyber-Tiel retains `agentic` (its managed
 read-task probes failed with both profiles, so it stays the alternate pack). These packs require
-AX Engine 7.5.6 or newer; the Homebrew 7.4.0 binary predates the Tiel MTP loader fix and fails
+AX Engine 7.5.7 or newer; the Homebrew 7.4.0 binary predates the Tiel MTP loader fix and fails
 with `MlxMtpRequiredButUnavailable`. See the
 [20 September four-machine summary](docs/guides/tiel-peer-2026-09-20.md),
 the historical [Tiel prefill/decode benchmark](docs/guides/tiel-runtime-phases-2026-09-19.md),
