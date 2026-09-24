@@ -6,6 +6,22 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.20.5] - 2026-09-24
+
+### Fixed
+
+- Discard expired or catalog-invalidated context-window evidence before updating calibration, including its obsolete success floor.
+- Ignore missing, negative, or non-finite overflow token measurements instead of disabling automatic compaction or recording invalid window bounds.
+- Keep completion clamps within the effective observed window, preserve the compaction sentinel below the output floor, and align token anchors with rendered request messages.
+- Allow valid small model output limits without entering an unavoidable compaction loop, and reject invalid non-finite output ceilings.
+- Prevent token-ledger drift feedback and stale calibration refresh from inflating or pinning token budgets.
+
+### Changed
+
+- Allow users to supersede a session goal explicitly with `/goal replace`, including recovery from failed goal-plan creation.
+- Show the full API-cloud provider catalog in `/connect`, ordered with suggested providers first.
+- Publish SDK 2.5.47 alongside AX Code 7.20.5.
+
 ## [7.20.4] - 2026-09-24
 
 ### Fixed
