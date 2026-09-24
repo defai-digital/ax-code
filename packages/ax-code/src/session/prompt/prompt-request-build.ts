@@ -75,6 +75,18 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
   // Loop checkpoints belong after the evidence. Changing the leading system
   // block invalidates local prefix snapshots on every reminder/recovery turn.
   const requestReminder = [projection.reminder, goalPlanReminder, input.turnInstruction].filter(Boolean).join("\n\n")
+  // Ordered durable message IDs parallel to the built request messages
+  // (ADR-139 D2). toModelMessages can drop empty messages or inject extra
+  // media messages, so the mapping is approximate by design — the ledger
+  // fingerprint only needs a stable ordered identifier list.
+  const sourceMessageIDs = projection.messages.map((message) => message.info.id)
+  const requestMessageIDs = [
+    ...sourceMessageIDs,
+    // Synthetic tail messages carry stable sentinel IDs so anchor prefixes
+    // stay aligned with the request they were recorded from.
+    ...(requestReminder ? ["ax-code:request-reminder"] : []),
+    ...(input.isLastStep ? ["ax-code:max-steps"] : []),
+  ]
   const convertMessages = async (mediaProjection: MediaProjection.Mode) => {
     const source =
       mediaProjection === "normal"
@@ -126,6 +138,7 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
   return {
     messages,
     requestMessagesSource,
+    requestMessageIDs,
     format,
     system: baseSystem,
     requestMessages: requestMessages.messages,

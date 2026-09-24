@@ -35,6 +35,8 @@ import { SessionShard } from "./shard"
 import { asRecord } from "@/util/record"
 import { toErrorMessage } from "../util/error-message"
 import { usageSource } from "@/provider/usage"
+import { ObservedWindow } from "@/provider/observed-window"
+import { TokenLedger } from "@/provider/token-ledger"
 import { AgentOptimizationTrace } from "@/session/agent-optimization-trace"
 import { longAgentProfileForModel } from "@/provider/agent-optimization-profile"
 import { LongAgentContextPacker } from "@/context/long-agent-packer"
@@ -1243,6 +1245,41 @@ export namespace SessionProcessor {
                       }
                     }
                   } else log.info("provider usage normalized", usageLog)
+                  // ADR-139 D2/D3: anchor the per-session ledger on exact
+                  // input-side usage and feed the observed-window success
+                  // floor with the served prompt size. Output/reasoning are
+                  // never part of the anchor quantity.
+                  {
+                    const routeKey = ObservedWindow.routeKeyFor(input.model)
+                    if (source === "exact") {
+                      const promptSize =
+                        usage.tokens.input + usage.tokens.cache.read + usage.tokens.cache.write
+                      void ObservedWindow.store()
+                        .recordSuccess(routeKey, promptSize, { catalogLimit: input.model.limit.context })
+                        .catch((error) => log.warn("observed-window recordSuccess failed", { error }))
+                    }
+                    const requestIDs = activeStreamInput.messageIDs
+                    if (requestIDs?.length) {
+                      const ledger = TokenLedger.forSession(input.sessionID)
+                      const predicted = ledger.lastTotal()
+                      const anchor = ledger.recordAnchor({
+                        messageIDs: requestIDs,
+                        revision: TokenLedger.revisionFor(input.sessionID),
+                        toolSchemaHash: TokenLedger.toolSchemaHashForRecord(activeStreamInput.tools ?? {}),
+                        systemHash: TokenLedger.systemHashFor(activeStreamInput.system ?? []),
+                        usage: {
+                          input: usage.tokens.input,
+                          cacheRead: usage.tokens.cache.read,
+                          cacheWrite: usage.tokens.cache.write,
+                          source,
+                        },
+                        routeKey,
+                      })
+                      if (anchor && predicted !== undefined) {
+                        TokenLedger.recordDrift(routeKey, predicted, anchor.measuredInputTokens)
+                      }
+                    }
+                  }
                   const finishReason =
                     typeof value.finishReason === "string"
                       ? value.finishReason
@@ -1582,7 +1619,12 @@ export namespace SessionProcessor {
               message: errMessage.slice(0, 2000),
               stepIndex: attempt,
             })
-            const error = MessageV2.fromError(e, { providerID: input.model.providerID })
+            const error = MessageV2.fromError(e, {
+              providerID: input.model.providerID,
+              routeKey: ObservedWindow.routeKeyFor(input.model),
+              sessionID: input.sessionID,
+              catalogLimit: input.model.limit.context,
+            })
             if (MessageV2.OutputLoopError.isInstance(error)) {
               // Truncate the looped text before the finalization below persists
               // it: the full repetition would re-induce the same pattern when

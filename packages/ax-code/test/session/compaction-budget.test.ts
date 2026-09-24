@@ -45,6 +45,52 @@ describe("calculateCompactionBudget", () => {
   test("returns undefined when context limit is unknown", () => {
     expect(calculateCompactionBudget({ providerID: "x", limit: { context: 0, output: 0 } })).toBeUndefined()
   })
+
+  test("an observed window replaces the catalog cap", () => {
+    const budget = calculateCompactionBudget(
+      { providerID: "anthropic", limit: { context: 200_000, output: 8_000 } },
+      undefined,
+      { observedWindow: 32_768 },
+    )
+    expect(budget).toEqual({ cap: 32_768, reserved: 3_277, usable: 29_491 })
+  })
+
+  test("an observed window replaces a tighter input cap too", () => {
+    const budget = calculateCompactionBudget(
+      { providerID: "anthropic", limit: { context: 200_000, input: 100_000, output: 8_000 } },
+      undefined,
+      { observedWindow: 32_768 },
+    )
+    expect(budget?.cap).toBe(32_768)
+  })
+
+  test("a non-positive observed window is ignored", () => {
+    const budget = calculateCompactionBudget(
+      { providerID: "anthropic", limit: { context: 200_000, output: 8_000 } },
+      undefined,
+      { observedWindow: 0 },
+    )
+    expect(budget?.cap).toBe(200_000)
+  })
+
+  test("an unknown window returns no budget (auto-compaction off)", () => {
+    expect(
+      calculateCompactionBudget(
+        { providerID: "anthropic", limit: { context: 200_000, output: 8_000 } },
+        undefined,
+        { windowUnknown: true },
+      ),
+    ).toBeUndefined()
+  })
+
+  test("explicit reserved still applies on top of an observed window", () => {
+    const budget = calculateCompactionBudget(
+      { providerID: "anthropic", limit: { context: 200_000, output: 8_000 } },
+      5_000,
+      { observedWindow: 32_768 },
+    )
+    expect(budget).toEqual({ cap: 32_768, reserved: 5_000, usable: 27_768 })
+  })
 })
 
 describe("effectiveTokenTotal", () => {

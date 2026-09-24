@@ -15,6 +15,7 @@ import {
   parsePackageJsonObject,
 } from "@/util/package-json"
 import { uniqueStrings } from "@/util/string-list"
+import { TokenEstimate } from "@/provider/token-estimate"
 
 const DEFAULT_MAX_TOKENS = 4000
 const DEFAULT_DEPTH = 3
@@ -52,9 +53,9 @@ export function decodeMemoryPackageJsonValue(value: unknown): MemoryPackageJsonI
   }
 }
 
-// Approximate token count (1 token ≈ 4 chars)
+// Delegates to the unified estimator (ADR-139 D5).
 function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4)
+  return TokenEstimate.textTokens(text)
 }
 
 const TRUNCATE_SUFFIX = "\n... (truncated)"

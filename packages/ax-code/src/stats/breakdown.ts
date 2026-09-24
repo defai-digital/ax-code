@@ -6,10 +6,16 @@
 
 import type { Provider } from "../provider/provider"
 import type { ContextBreakdown, ContextStatus } from "./types"
+import { TokenEstimate } from "../provider/token-estimate"
 
-// Approximate token count from text (1 token ≈ 4 characters)
+// Delegates to the unified estimator (ADR-139 D5). This file keeps its own
+// ~800-tokens-per-tool-definition heuristic — that constant is a display-level
+// approximation of the whole tool surface, not the per-schema estimate the
+// estimator module prices.
+export const TOOL_DEFINITION_TOKENS_ESTIMATE = 800
+
 export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4)
+  return TokenEstimate.textTokens(text)
 }
 
 export function calculateBreakdown(input: {
@@ -24,7 +30,7 @@ export function calculateBreakdown(input: {
     typeof contextLimit === "number" && Number.isFinite(contextLimit) && contextLimit > 0 ? contextLimit : 0
 
   const systemPrompt = estimateTokens(" ".repeat(input.systemPromptLength))
-  const toolDefinitions = input.toolCount * 800 // ~800 tokens per tool definition
+  const toolDefinitions = input.toolCount * TOOL_DEFINITION_TOKENS_ESTIMATE
   const memory = input.memoryTokens
   const conversationHistory = input.historyTokens
 

@@ -37,6 +37,19 @@ export type CompactionTokenUsage = {
 
 export type CompactionBudget = { cap: number; reserved: number; usable: number }
 
+// Observed-window (ADR-139 D3) budget options. `cap` replaces
+// `limit.input || limit.context` when an observed window exists; an unknown
+// window returns no budget at all — auto-compaction stays off for that route
+// (same shape as `limit.context === 0`).
+export type CompactionWindowOptions = {
+  observedWindow?: number
+  windowUnknown?: boolean
+}
+
+// Minimum max-output worth sending: below this the correct action is
+// compaction, not a tiny max_tokens (ADR-139 D4).
+export const OUTPUT_FLOOR = 1_024
+
 export function componentTokenTotal(tokens: CompactionTokenUsage) {
   return tokens.input + tokens.output + tokens.reasoning + tokens.cache.read + tokens.cache.write
 }
@@ -52,16 +65,26 @@ export function effectiveTokenTotal(tokens: CompactionTokenUsage) {
 export function calculateCompactionBudget(
   model: CompactionBudgetModel,
   configuredReserved?: number,
+  window?: CompactionWindowOptions,
 ): CompactionBudget | undefined {
+  if (window?.windowUnknown) return undefined
   const context = model.limit.context
   if (context === 0) return undefined
 
   // For prompt-cached providers (Claude) limit.input is the input cap and
   // is smaller than limit.context; otherwise context is the cap. Use `||`
   // so a stray `limit.input: 0` falls through to context — `??` would
-  // treat 0 as a valid cap and never compact.
+  // treat 0 as a valid cap and never compact. A calibrated observed window
+  // (ADR-139 D3) replaces both: it is the deployment's real, possibly
+  // shrunken, ceiling.
   const declaredInput = model.limit.input
-  const cap = declaredInput || context
+  const observed =
+    window?.observedWindow !== undefined &&
+    Number.isFinite(window.observedWindow) &&
+    window.observedWindow > 0
+      ? Math.floor(window.observedWindow)
+      : undefined
+  const cap = observed ?? (declaredInput || context)
   // AX Engine rejects prompt + requested output above context. New model
   // cards expose an explicit input cap, but retain a safe fallback for older
   // config overrides that only declare context/output.
@@ -72,4 +95,26 @@ export function calculateCompactionBudget(
   const reserved = configuredReserved ?? defaultReserved
   const usable = Math.max(0, cap - reserved)
   return { cap, reserved, usable }
+}
+
+/**
+ * Completion clamp against the TOTAL window (ADR-139 D4): cache reads occupy
+ * the window, so the output budget is `context - used - reserve`, where
+ * `reserve` is the same compaction reserve (one reserve pool, no
+ * double-reserving). Static per-provider ceilings stay the outer bound —
+ * callers pass them as `staticCeiling`. Returns undefined when the remaining
+ * window is at or below the output floor: the correct action then is
+ * compaction (existing preflight path), not a tiny max_tokens.
+ */
+export function completionClamp(input: {
+  context: number
+  used: number
+  reserve: number
+  staticCeiling: number
+}): number | undefined {
+  const context = Math.floor(input.context)
+  if (!Number.isFinite(context) || context <= 0) return undefined
+  const remaining = context - Math.max(0, input.used) - Math.max(0, input.reserve)
+  if (!Number.isFinite(remaining) || remaining <= OUTPUT_FLOOR) return undefined
+  return Math.max(0, Math.min(Math.floor(input.staticCeiling), Math.floor(remaining)))
 }

@@ -35,6 +35,7 @@ import type { Provider } from "@/provider/provider"
 import { providerModelKey } from "@/provider/model-key"
 import { ModelID, ProviderID } from "@/provider/schema"
 import { usageSource } from "@/provider/usage"
+import { TokenLedger } from "@/provider/token-ledger"
 import { Permission } from "@/permission"
 import { Global } from "@/global"
 import type { LanguageModelV2Usage } from "@ai-sdk/provider"
@@ -1022,8 +1023,12 @@ export namespace Session {
     }
     for (const desc of allDescendants) {
       Bus.publishDetached(Event.Deleted, { info: desc })
+      // Per-session derived state (token ledger, revision counter) dies with
+      // the session (ADR-139 D2); it is keyed by content, never persisted.
+      TokenLedger.disposeSession(desc.id)
     }
     Bus.publishDetached(Event.Deleted, { info: session })
+    TokenLedger.disposeSession(sessionID)
     // User lifecycle hooks (SessionEnd, reason "remove") — observation-only,
     // fire-and-forget; fired once for the removed session after deletion.
     fireLifecycleHook("SessionEnd", sessionID, { sessionID, reason: "remove" })

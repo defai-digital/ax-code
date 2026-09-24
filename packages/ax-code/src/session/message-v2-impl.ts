@@ -10,6 +10,7 @@ import { Database, NotFoundError, and, desc, eq, gt, inArray, lt, or } from "@/s
 import { MessageTable, PartTable, SessionTable } from "./session.sql"
 import { SessionShard } from "./shard"
 import { ProviderError } from "@/provider/error"
+import { ObservedWindow } from "@/provider/observed-window"
 import { AxEngineStartupError } from "@/provider/ax-engine/errors"
 import { iife } from "@/util/iife"
 import { Log } from "@/util/log"
@@ -1304,7 +1305,21 @@ export namespace MessageV2 {
     return fallback
   }
 
-  export function fromError(e: unknown, ctx: { providerID: ProviderID }): NonNullable<Assistant["error"]> {
+  /**
+   * Context for overflow calibration (ADR-139 D3): the resolved route key,
+   * session, and catalog context limit let the `context_overflow` branches
+   * below feed the observed-window store. Callers that don't have them (or
+   * must stay pure) omit them and no calibration happens. `request_too_large`
+   * never carries these and never calibrates a token window.
+   */
+  export type FromErrorContext = {
+    providerID: ProviderID
+    routeKey?: string
+    sessionID?: SessionID
+    catalogLimit?: number
+  }
+
+  export function fromError(e: unknown, ctx: FromErrorContext): NonNullable<Assistant["error"]> {
     switch (true) {
       case AxEngineStartupError.isInstance(e):
         return new MessageV2.APIError({
@@ -1359,6 +1374,13 @@ export namespace MessageV2 {
           error: e,
         })
         if (parsed.type === "context_overflow") {
+          void ObservedWindow.recordOverflowEvidence({
+            routeKey: ctx.routeKey,
+            sessionID: ctx.sessionID,
+            catalogLimit: ctx.catalogLimit,
+            message: parsed.message,
+            responseBody: parsed.responseBody,
+          })
           return new MessageV2.ContextOverflowError(
             {
               message: parsed.message,
@@ -1443,6 +1465,13 @@ export namespace MessageV2 {
           const parsed = ProviderError.parseStreamError(e)
           if (parsed) {
             if (parsed.type === "context_overflow") {
+              void ObservedWindow.recordOverflowEvidence({
+                routeKey: ctx.routeKey,
+                sessionID: ctx.sessionID,
+                catalogLimit: ctx.catalogLimit,
+                message: parsed.message,
+                responseBody: parsed.responseBody,
+              })
               return new MessageV2.ContextOverflowError(
                 {
                   message: parsed.message,

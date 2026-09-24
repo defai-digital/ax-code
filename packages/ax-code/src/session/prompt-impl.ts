@@ -1384,6 +1384,7 @@ export namespace SessionPrompt {
             system: request.system,
             systemProfile,
             messages: request.requestMessages,
+            messageIDs: request.requestMessageIDs,
             toolFailureCount: request.toolFailureCount,
             tools,
             model,

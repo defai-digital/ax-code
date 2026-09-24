@@ -17,6 +17,8 @@ import { Database } from "@/storage/db"
 import { SessionShard } from "./shard"
 import { MessageTable, PartTable } from "./session.sql"
 import { ModelID, ProviderID } from "@/provider/schema"
+import { ObservedWindow } from "@/provider/observed-window"
+import { TokenLedger } from "@/provider/token-ledger"
 import { ContextTier } from "./context-tier"
 import { CompactionFallback } from "./compaction-fallback"
 import { isLocalProvider } from "./prompt/prompt-provider-fallback"
@@ -76,14 +78,40 @@ export namespace SessionCompaction {
   /** The input budget for an actual compaction request, even when automatic compaction is disabled. */
   export async function requestBudget(model: Provider.Model) {
     const config = await Config.get()
-    return calculateCompactionBudget(model, config.compaction?.reserved)
+    // A known observed window replaces the catalog cap for manual compactions
+    // too; an unknown window falls back to the catalog (manual compaction is
+    // still attempted — only AUTO-compaction is disabled for those routes).
+    const resolved = await ObservedWindow.store().resolveWindow(
+      ObservedWindow.routeKeyFor(model),
+      model.limit.context,
+    )
+    return calculateCompactionBudget(
+      model,
+      config.compaction?.reserved,
+      resolved.kind === "observed" ? { observedWindow: resolved.window } : undefined,
+    )
   }
 
   /** The budget used to decide whether automatic compaction should run. */
   export async function budget(model: Provider.Model) {
     const config = await Config.get()
     if (config.compaction?.auto === false) return undefined
-    const result = calculateCompactionBudget(model, config.compaction?.reserved)
+    // Observed-window calibration (ADR-139 D3): a shrunken deployment window
+    // replaces the catalog cap; an unknown route disables auto-compaction
+    // (calculateCompactionBudget returns undefined, same as no context limit).
+    const resolved = await ObservedWindow.store().resolveWindow(
+      ObservedWindow.routeKeyFor(model),
+      model.limit.context,
+    )
+    const result = calculateCompactionBudget(
+      model,
+      config.compaction?.reserved,
+      resolved.kind === "observed"
+        ? { observedWindow: resolved.window }
+        : resolved.kind === "unknown"
+          ? { windowUnknown: true }
+          : undefined,
+    )
     if (!result) return undefined
     // Clamp tiny usable budgets off: if reserved nearly consumes the cap,
     // any realistic compacted message still overflows and compaction fires
@@ -799,6 +827,10 @@ When constructing the summary, try to stick to this template:
       }
       if (processor.message.error) return "stop"
       await Bus.publish(Event.Compacted, { sessionID: input.sessionID })
+      // History was rewritten: pre-compaction ledger anchors must stop
+      // matching so the ledger degrades to estimated until the next exact
+      // response re-anchors (ADR-139 D2).
+      TokenLedger.bumpRevision(input.sessionID)
       return "continue"
     }
     // Unreachable: every loop path returns, and the retry `continue` only runs

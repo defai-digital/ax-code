@@ -14,6 +14,9 @@ import {
 } from "ai"
 import { mergeDeep, pipe } from "remeda"
 import { ProviderTransform } from "@/provider/transform"
+import { ObservedWindow } from "@/provider/observed-window"
+import { TokenLedger } from "@/provider/token-ledger"
+import { completionClamp, calculateCompactionBudget } from "./compaction-budget"
 import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
 import type { Agent } from "@/agent/agent"
@@ -83,6 +86,13 @@ export namespace LLM {
     systemProfile?: SystemPrompt.Profile
     abort: AbortSignal
     messages: ModelMessage[]
+    /**
+     * Ordered durable message IDs parallel to `messages` (ADR-139 D2). When
+     * present, the token ledger fingerprints the request prefix and the
+     * completion clamp measures the remaining window; requests built without
+     * ID tracking skip both.
+     */
+    messageIDs?: readonly string[]
     small?: boolean
     /** Structured failure count captured before synthetic request reminders. */
     toolFailureCount?: number
@@ -454,7 +464,7 @@ export namespace LLM {
     )
 
     const modelMaxOutputTokens = ProviderTransform.maxOutputTokens(input.model)
-    const maxOutputTokens =
+    let maxOutputTokens =
       typeof input.maxOutputTokens === "number" && Number.isFinite(input.maxOutputTokens) && input.maxOutputTokens > 0
         ? Math.min(modelMaxOutputTokens, Math.floor(input.maxOutputTokens))
         : modelMaxOutputTokens
@@ -465,6 +475,37 @@ export namespace LLM {
     // thousands of tokens to a turn whose sole purpose is to synthesize an answer.
     const toolsEnabled = supportsToolCalls && input.toolChoice !== "none"
     const tools = toolsEnabled ? await resolveTools(input, cfg, localInference) : {}
+
+    // ADR-139 D4: clamp the completion budget against the TOTAL remaining
+    // window (catalog context minus the ledger's measured+estimated usage
+    // minus the shared compaction reserve — one reserve pool, no
+    // double-reserving). Static per-provider ceilings stay the outer bound.
+    // When the remaining window is at or below the output floor the clamp
+    // stays off: the correct action is the existing preflight/compaction
+    // path, not a tiny max_tokens.
+    if (input.model.limit.context > 0 && input.messageIDs?.length) {
+      try {
+        const ledger = TokenLedger.forSession(input.sessionID)
+        const breakdown = ledger.current({
+          messageIDs: input.messageIDs,
+          revision: TokenLedger.revisionFor(input.sessionID),
+          toolSchemaHash: TokenLedger.toolSchemaHashForRecord(tools),
+          systemHash: TokenLedger.systemHashFor(input.system),
+          routeKey: ObservedWindow.routeKeyFor(input.model),
+          tail: { system: input.system, messages: input.messages },
+        })
+        const budget = calculateCompactionBudget(input.model, cfg.compaction?.reserved)
+        const clamped = completionClamp({
+          context: input.model.limit.context,
+          used: breakdown.total,
+          reserve: budget?.reserved ?? 0,
+          staticCeiling: modelMaxOutputTokens,
+        })
+        if (clamped !== undefined && clamped < maxOutputTokens) maxOutputTokens = clamped
+      } catch (error) {
+        log.warn("completion clamp failed; sending unclamped", { error })
+      }
+    }
 
     // LiteLLM and some Anthropic proxies require the tools parameter to be present
     // when message history contains tool calls, even if no tools are being used.
