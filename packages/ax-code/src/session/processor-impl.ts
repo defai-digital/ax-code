@@ -1252,8 +1252,7 @@ export namespace SessionProcessor {
                   {
                     const routeKey = ObservedWindow.routeKeyFor(input.model)
                     if (source === "exact") {
-                      const promptSize =
-                        usage.tokens.input + usage.tokens.cache.read + usage.tokens.cache.write
+                      const promptSize = usage.tokens.input + usage.tokens.cache.read + usage.tokens.cache.write
                       void ObservedWindow.store()
                         .recordSuccess(routeKey, promptSize, { catalogLimit: input.model.limit.context })
                         .catch((error) => log.warn("observed-window recordSuccess failed", { error }))
@@ -1261,7 +1260,7 @@ export namespace SessionProcessor {
                     const requestIDs = activeStreamInput.messageIDs
                     if (requestIDs?.length) {
                       const ledger = TokenLedger.forSession(input.sessionID)
-                      const predicted = ledger.lastTotal()
+                      const predicted = ledger.lastPrediction()
                       const anchor = ledger.recordAnchor({
                         messageIDs: requestIDs,
                         revision: TokenLedger.revisionFor(input.sessionID),
@@ -1275,8 +1274,18 @@ export namespace SessionProcessor {
                         },
                         routeKey,
                       })
-                      if (anchor && predicted !== undefined) {
-                        TokenLedger.recordDrift(routeKey, predicted, anchor.measuredInputTokens)
+                      // Drift compares the RAW tail estimate against the
+                      // measured tail DELTA (new measured minus the anchor's
+                      // measured share). Comparing the corrected total against
+                      // the new measured value dilutes the tail error with the
+                      // exact anchor share, so the EWMA would converge to
+                      // sqrt(bias) instead of bias and never correct a
+                      // persistently under-estimated tail.
+                      if (anchor && predicted) {
+                        const measuredTail = anchor.measuredInputTokens - predicted.measured
+                        if (predicted.base > 0 && measuredTail > 0) {
+                          TokenLedger.recordDrift(routeKey, predicted.base, measuredTail)
+                        }
                       }
                     }
                   }

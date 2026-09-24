@@ -164,6 +164,62 @@ describe("SessionTokenLedger", () => {
     expect(ledger.lastTotal()).toBe(1_150)
   })
 
+  test("tool-schema hashing is order-insensitive so local-inference sorting cannot break anchors", () => {
+    const read = { description: "Read", inputSchema: { type: "object" } }
+    const bash = { description: "Bash", inputSchema: { type: "object" } }
+    // The clamp hashes the key-sorted surface the local-inference resolver
+    // returns; the anchor hashes the unsorted request surface. Same set must
+    // hash the same or every anchor silently stops matching.
+    expect(TokenLedger.toolSchemaHashForRecord({ read, bash })).toBe(
+      TokenLedger.toolSchemaHashForRecord({ bash, read }),
+    )
+  })
+
+  test("prices the tool surface only when no anchor matches", () => {
+    const ledger = new TokenLedger.SessionTokenLedger()
+    const tools = { big: { description: "d".repeat(4_000), inputSchema: { type: "object" } } }
+    const toolTokens = TokenEstimate.toolSchemaTokens([
+      { id: "big", description: "d".repeat(4_000), inputSchema: { type: "object" } },
+    ])
+    expect(toolTokens).toBeGreaterThan(0)
+    // No anchor yet: the whole tool surface must be estimated, otherwise the
+    // first request of a session under-counts `used` and over-clamps.
+    const unmatched = ledger.current({
+      messageIDs: ["m1", "m2"],
+      revision: "0",
+      routeKey: ROUTE,
+      tail: { system: [], messages: [] },
+      tools,
+    })
+    expect(unmatched.estimated).toBe(toolTokens)
+    // A matched anchor's measured tokens already covered the tool surface, so
+    // adding it again would double-count.
+    ledger.recordAnchor(anchorInput({ messageIDs: ["m1", "m2"] }))
+    const matched = ledger.current({
+      messageIDs: ["m1", "m2"],
+      revision: "0",
+      routeKey: ROUTE,
+      tail: { system: [], messages: [] },
+      tools,
+    })
+    expect(matched.measured).toBe(1_150)
+    expect(matched.estimated).toBe(0)
+  })
+
+  test("lastPrediction exposes the raw, drift-uncorrected tail base", () => {
+    const ledger = new TokenLedger.SessionTokenLedger()
+    expect(ledger.lastPrediction()).toBeUndefined()
+    TokenLedger.recordDrift(ROUTE, 100, 200) // EWMA -> 1.3
+    const tail = [userMessage("x".repeat(400))]
+    ledger.current({ messageIDs: ["m1"], revision: "0", routeKey: ROUTE, tail: { system: [], messages: tail } })
+    const rawBase = TokenEstimate.requestTokens({ system: [], messages: tail })
+    const prediction = ledger.lastPrediction()
+    expect(prediction?.measured).toBe(0)
+    // The base stays raw so the drift EWMA converges to the bias, not its sqrt.
+    expect(prediction?.base).toBe(rawBase)
+    expect(ledger.lastTotal()).toBe(Math.round(rawBase * 1.3))
+  })
+
   test("a hash-verified match does not double-count the system prompt", () => {
     const ledger = new TokenLedger.SessionTokenLedger()
     const toolSchemaHash = "tool-hash"

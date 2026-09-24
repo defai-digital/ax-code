@@ -277,13 +277,18 @@ export namespace ObservedWindow {
       this.floors.set(routeKey, Math.max(this.floors.get(routeKey) ?? 0, tokens))
       const existing = this.records.get(routeKey)
       if (existing) {
+        // Only a REAL ratchet refreshes the freshness clock. Refreshing it on
+        // every success would pin a stale shrunken window forever: compaction
+        // keeps prompts under the (wrong) cap, so the window can never ratchet
+        // up and the 30-day TTL documented for these records would never fire.
+        const ratcheted = tokens > existing.window
         this.records.set(routeKey, {
           ...existing,
           window: Math.max(existing.window, tokens),
           maxSuccessfulPromptTokens: Math.max(existing.maxSuccessfulPromptTokens, tokens),
-          updatedAt: this.now(),
+          updatedAt: ratcheted ? this.now() : existing.updatedAt,
         })
-        this.touch()
+        if (ratcheted || tokens > existing.maxSuccessfulPromptTokens) this.touch()
       }
       if (this.unknownRoutes.has(routeKey) && tokens >= MIN_PLAUSIBLE_WINDOW) {
         // Recovery: the route previously looked below the plausibility floor,

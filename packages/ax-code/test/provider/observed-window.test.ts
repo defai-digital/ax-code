@@ -156,6 +156,21 @@ describe("ObservedWindowStore boundary model", () => {
     expect((await s.resolveWindow(ROUTE, CATALOG)).kind).toBe("catalog")
   })
 
+  test("a non-ratcheting success does not refresh the TTL clock", async () => {
+    let now = 1_000_000
+    const s = store({ now: () => now })
+    await s.recordOverflow(ROUTE, 40_000, { catalogLimit: CATALOG })
+    await s.recordOverflow(ROUTE, 40_000, { catalogLimit: CATALOG })
+    expect(await s.effectiveWindow(ROUTE, CATALOG)).toBe(40_000)
+    now += ObservedWindow.WINDOW_TTL_MS - 1
+    // A success BELOW the calibrated window must not extend freshness, or a
+    // stale shrunken window (compaction keeps prompts under it, so it can
+    // never ratchet up) would be pinned forever.
+    await s.recordSuccess(ROUTE, 30_000, { catalogLimit: CATALOG })
+    now += 2
+    expect(await s.effectiveWindow(ROUTE, CATALOG)).toBeUndefined()
+  })
+
   test("catalog-fingerprint change invalidates the record", async () => {
     const s = store()
     await s.recordOverflow(ROUTE, 40_000, { catalogLimit: CATALOG })

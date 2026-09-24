@@ -79,9 +79,7 @@ export function calculateCompactionBudget(
   // shrunken, ceiling.
   const declaredInput = model.limit.input
   const observed =
-    window?.observedWindow !== undefined &&
-    Number.isFinite(window.observedWindow) &&
-    window.observedWindow > 0
+    window?.observedWindow !== undefined && Number.isFinite(window.observedWindow) && window.observedWindow > 0
       ? Math.floor(window.observedWindow)
       : undefined
   const cap = observed ?? (declaredInput || context)
@@ -117,4 +115,18 @@ export function completionClamp(input: {
   const remaining = context - Math.max(0, input.used) - Math.max(0, input.reserve)
   if (!Number.isFinite(remaining) || remaining <= OUTPUT_FLOOR) return undefined
   return Math.max(0, Math.min(Math.floor(input.staticCeiling), Math.floor(remaining)))
+}
+
+/**
+ * The window the completion clamp measures against (ADR-139 D3/D4): a
+ * calibrated observed window when one exists, otherwise the catalog limit.
+ * Clamping against the catalog limit on a shrunken route re-opens the exact
+ * overflow -> compact -> overflow loop the clamp exists to prevent, so the
+ * observed window must win here exactly as it does in the compaction budget.
+ */
+export function effectiveClampWindow(input: { catalogLimit: number; observedWindow?: number }): number {
+  if (input.observedWindow !== undefined && Number.isFinite(input.observedWindow) && input.observedWindow > 0) {
+    return Math.floor(input.observedWindow)
+  }
+  return input.catalogLimit
 }

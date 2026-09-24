@@ -16,7 +16,7 @@ import { mergeDeep, pipe } from "remeda"
 import { ProviderTransform } from "@/provider/transform"
 import { ObservedWindow } from "@/provider/observed-window"
 import { TokenLedger } from "@/provider/token-ledger"
-import { completionClamp, calculateCompactionBudget } from "./compaction-budget"
+import { completionClamp, calculateCompactionBudget, effectiveClampWindow } from "./compaction-budget"
 import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
 import type { Agent } from "@/agent/agent"
@@ -485,18 +485,30 @@ export namespace LLM {
     // path, not a tiny max_tokens.
     if (input.model.limit.context > 0 && input.messageIDs?.length) {
       try {
+        const routeKey = ObservedWindow.routeKeyFor(input.model)
         const ledger = TokenLedger.forSession(input.sessionID)
         const breakdown = ledger.current({
           messageIDs: input.messageIDs,
           revision: TokenLedger.revisionFor(input.sessionID),
           toolSchemaHash: TokenLedger.toolSchemaHashForRecord(tools),
           systemHash: TokenLedger.systemHashFor(input.system),
-          routeKey: ObservedWindow.routeKeyFor(input.model),
+          routeKey,
           tail: { system: input.system, messages: input.messages },
+          tools,
         })
-        const budget = calculateCompactionBudget(input.model, cfg.compaction?.reserved)
+        // ADR-139 D3/D4: a calibrated (possibly shrunken) window is the real
+        // ceiling. Clamping against the catalog limit would let a shrunken
+        // route send prompt + output past its window and re-enter the
+        // overflow -> compact -> overflow loop this clamp exists to prevent.
+        const resolved = await ObservedWindow.store().resolveWindow(routeKey, input.model.limit.context)
+        const observedWindow = resolved.kind === "observed" ? resolved.window : undefined
+        const budget = calculateCompactionBudget(
+          input.model,
+          cfg.compaction?.reserved,
+          observedWindow !== undefined ? { observedWindow } : undefined,
+        )
         const clamped = completionClamp({
-          context: input.model.limit.context,
+          context: effectiveClampWindow({ catalogLimit: input.model.limit.context, observedWindow }),
           used: breakdown.total,
           reserve: budget?.reserved ?? 0,
           staticCeiling: modelMaxOutputTokens,

@@ -68,28 +68,36 @@ export namespace TokenLedger {
   export function toolSchemaHashFor(
     tools: Iterable<{ id: string; description?: string; inputSchema: unknown }>,
   ): string {
-    let serialized = ""
-    for (const tool of tools) {
-      serialized += JSON.stringify({
+    // Order-insensitive: the same tool SET must hash the same whether the map
+    // was built unsorted by the caller (processor) or key-sorted by the
+    // local-inference resolver (session/llm-impl resolveTools). The hash is a
+    // change detector, so key order carries no meaning — hashing the raw
+    // iteration order made anchors silently unmatchable on local inference.
+    const serialized = [...tools].map((tool) =>
+      JSON.stringify({
         name: tool.id,
         description: tool.description ?? "",
         parameters: tool.inputSchema,
-      })
-    }
-    return sha256(serialized)
+      }),
+    )
+    serialized.sort()
+    return sha256(serialized.join("\n"))
   }
 
   /** Record-shaped variant for AI SDK `Tool` maps keyed by tool name. */
   export function toolSchemaHashForRecord(
     tools: Record<string, { description?: string; inputSchema?: unknown }>,
   ): string {
-    return toolSchemaHashFor(
-      Object.entries(tools).map(([id, tool]) => ({
-        id,
-        description: tool.description,
-        inputSchema: tool.inputSchema ?? {},
-      })),
-    )
+    return toolSchemaHashFor(toolInputs(tools))
+  }
+
+  /** Shape adapter shared by the record hash and the tool-token estimate. */
+  function toolInputs(tools: Record<string, { description?: string; inputSchema?: unknown }>) {
+    return Object.entries(tools).map(([id, tool]) => ({
+      id,
+      description: tool.description,
+      inputSchema: tool.inputSchema ?? {},
+    }))
   }
 
   const driftByRoute = new Map<RouteKey, number>()
@@ -184,10 +192,12 @@ export namespace TokenLedger {
 
   export class SessionTokenLedger {
     private anchors: AnchorEntry[] = []
-    // Last computed breakdown total — the best known prompt size for the
-    // session, used as the failure-size estimate when an overflow needs
-    // calibration evidence.
-    private last: { total: number; at: number } | undefined
+    // Last computed breakdown for the session, kept for two consumers: the
+    // total is the best known prompt size (overflow failure-size estimate),
+    // and the measured/base split feeds the drift EWMA. `base` is the RAW,
+    // drift-uncorrected tail estimate so drift feedback does not compare a
+    // value against itself.
+    private last: { total: number; measured: number; base: number; at: number } | undefined
 
     /**
      * Record one successful response as an anchor. Input-side exact usage
@@ -221,7 +231,9 @@ export namespace TokenLedger {
       }
       this.anchors.push(entry)
       while (this.anchors.length > ANCHOR_RING_MAX) this.anchors.shift()
-      this.last = { total: entry.measuredInputTokens, at: entry.at }
+      // An anchor is all measured, no estimated tail: keep `base`/`measured`
+      // at zero so a drift sample can never be drawn from a stale prediction.
+      this.last = { total: entry.measuredInputTokens, measured: 0, base: 0, at: entry.at }
       return {
         prefixFingerprint: entry.prefixFingerprint,
         measuredInputTokens: entry.measuredInputTokens,
@@ -320,12 +332,22 @@ export namespace TokenLedger {
       systemHash?: string
       routeKey?: RouteKey
       tail: { system: string[]; messages: ModelMessage[] }
+      /**
+       * Current tool surface, when the caller can supply it. Priced into the
+       * estimate only when NO anchor matches: a matched anchor's measured
+       * tokens already cover the tool schemas it was recorded with, so adding
+       * them again would double-count. Without it, the first request of a
+       * session (and the first after compaction) would omit the entire tool
+       * surface — often tens of thousands of tokens — and under-clamp.
+       */
+      tools?: Record<string, { description?: string; inputSchema?: unknown }>
     }): LedgerBreakdown {
       const found = this.findEntry(input)
       const tailMessages = found ? input.tail.messages.slice(found.index + 1) : input.tail.messages
       const tailSystem = found?.hashVerified ? [] : input.tail.system
       const routeKey = input.routeKey ?? found?.entry.routeKey
-      const base = TokenEstimate.requestTokens({ system: tailSystem, messages: tailMessages })
+      const toolTokens = !found && input.tools ? TokenEstimate.toolSchemaTokens(toolInputs(input.tools)) : 0
+      const base = TokenEstimate.requestTokens({ system: tailSystem, messages: tailMessages }) + toolTokens
       const estimated = Math.round(base * (routeKey !== undefined ? driftFor(routeKey) : 1))
       const media = TokenEstimate.mediaTokenTotal(tailMessages)
       const measured = found?.entry.measuredInputTokens ?? 0
@@ -344,13 +366,25 @@ export namespace TokenLedger {
         strategy,
         confidence: total > 0 ? measured / total : 0,
       }
-      this.last = { total, at: Date.now() }
+      this.last = { total, measured, base, at: Date.now() }
       return breakdown
     }
 
     /** Most recently computed prompt-size total for this session, if any. */
     lastTotal(): number | undefined {
       return this.last?.total
+    }
+
+    /**
+     * Measured share and RAW (drift-uncorrected) tail estimate of the last
+     * `current()` call, for drift feedback. The raw base is required: feeding
+     * the drift-corrected figure back into the EWMA makes the fixed point
+     * `sqrt(bias)` instead of `bias`, so a persistently under-estimated tail
+     * would never be corrected. Returns undefined when no prediction exists.
+     */
+    lastPrediction(): { measured: number; base: number } | undefined {
+      if (!this.last) return undefined
+      return { measured: this.last.measured, base: this.last.base }
     }
   }
 

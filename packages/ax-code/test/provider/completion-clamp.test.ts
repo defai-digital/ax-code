@@ -1,23 +1,26 @@
 import { describe, expect, test } from "vitest"
-import { completionClamp, calculateCompactionBudget, OUTPUT_FLOOR } from "@/session/compaction-budget"
+import {
+  completionClamp,
+  calculateCompactionBudget,
+  effectiveClampWindow,
+  OUTPUT_FLOOR,
+} from "@/session/compaction-budget"
 
 const CONTEXT = 200_000
 const STATIC_CEILING = 32_000
 
 describe("completionClamp", () => {
   test("clamps to the remaining window (context - used - reserve)", () => {
-    expect(
-      completionClamp({ context: CONTEXT, used: 170_000, reserve: 20_000, staticCeiling: STATIC_CEILING }),
-    ).toBe(10_000)
+    expect(completionClamp({ context: CONTEXT, used: 170_000, reserve: 20_000, staticCeiling: STATIC_CEILING })).toBe(
+      10_000,
+    )
   })
 
   test("static per-provider ceilings stay the outer bound", () => {
     expect(completionClamp({ context: CONTEXT, used: 10_000, reserve: 20_000, staticCeiling: STATIC_CEILING })).toBe(
       STATIC_CEILING,
     )
-    expect(
-      completionClamp({ context: CONTEXT, used: 10_000, reserve: 20_000, staticCeiling: 5_000 }),
-    ).toBe(5_000)
+    expect(completionClamp({ context: CONTEXT, used: 10_000, reserve: 20_000, staticCeiling: 5_000 })).toBe(5_000)
   })
 
   test("cache reads occupy the window via the used figure", () => {
@@ -92,5 +95,39 @@ describe("reserve sharing between compaction and the clamp", () => {
       staticCeiling: 100_000,
     })
     expect(clamped).toBe(CONTEXT - 100_000 - 50_000)
+  })
+})
+
+describe("effectiveClampWindow", () => {
+  test("a calibrated observed window wins over the catalog limit", () => {
+    expect(effectiveClampWindow({ catalogLimit: 131_072, observedWindow: 32_768 })).toBe(32_768)
+  })
+
+  test("falls back to the catalog limit without a usable observed window", () => {
+    expect(effectiveClampWindow({ catalogLimit: 131_072 })).toBe(131_072)
+    expect(effectiveClampWindow({ catalogLimit: 131_072, observedWindow: 0 })).toBe(131_072)
+    expect(effectiveClampWindow({ catalogLimit: 131_072, observedWindow: Number.NaN })).toBe(131_072)
+  })
+
+  test("a shrunken observed window tightens the clamp end to end", () => {
+    const model = { providerID: "anthropic", limit: { context: 131_072, output: 8_000 } }
+    const budget = calculateCompactionBudget(model, undefined, { observedWindow: 32_768 })!
+    expect(budget.cap).toBe(32_768)
+    // Catalog-based clamping would allow the full static ceiling here; the
+    // observed window leaves room for only ~9.5k, which is the whole point.
+    const catalogClamped = completionClamp({
+      context: effectiveClampWindow({ catalogLimit: 131_072 }),
+      used: 20_000,
+      reserve: budget.reserved,
+      staticCeiling: 16_000,
+    })
+    expect(catalogClamped).toBe(16_000)
+    const observedClamped = completionClamp({
+      context: effectiveClampWindow({ catalogLimit: 131_072, observedWindow: 32_768 }),
+      used: 20_000,
+      reserve: budget.reserved,
+      staticCeiling: 16_000,
+    })
+    expect(observedClamped).toBe(32_768 - 20_000 - budget.reserved)
   })
 })
