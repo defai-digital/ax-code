@@ -78,8 +78,16 @@ async function version(binaryPath: string): Promise<string | undefined> {
   return entry.result
 }
 
+// Coerce a probed version label without discarding a prerelease tag. A
+// prerelease sorts BELOW its release (7.5.7-rc.1 < 7.5.7), so stripping it (the
+// semver.coerce default) would let a pre-release clear a release floor. Build
+// metadata does not affect precedence and is still dropped.
+function coerceVersion(detected: string | undefined) {
+  return detected ? semver.coerce(detected, { includePrerelease: true }) : undefined
+}
+
 function unsupportedVersionBlocker(detected: string | undefined) {
-  const parsed = detected ? semver.coerce(detected) : undefined
+  const parsed = coerceVersion(detected)
   if (!parsed)
     return `${AX_ENGINE_ERROR.VersionUnsupported}: a verified AX Engine ${AX_ENGINE_MIN_VERSION} or later is required; detected ${detected ?? "unknown"}`
   if (semver.gte(parsed, AX_ENGINE_MIN_VERSION)) return undefined
@@ -87,16 +95,16 @@ function unsupportedVersionBlocker(detected: string | undefined) {
 }
 
 function lacksBundledContract(detected: string | undefined) {
-  const parsed = detected ? semver.coerce(detected) : undefined
+  const parsed = coerceVersion(detected)
   return !parsed || semver.lt(parsed, AX_ENGINE_BUNDLED_MIN_VERSION)
 }
 
 function coercedVersionLabel(detected: string | undefined) {
-  return semver.coerce(detected)?.version ?? detected ?? "unknown"
+  return coerceVersion(detected)?.version ?? detected ?? "unknown"
 }
 
 export function pinnedDownloadVersionBlocker(detected: string | undefined) {
-  const version = detected ? semver.coerce(detected) : undefined
+  const version = coerceVersion(detected)
   if (version && semver.gte(version, AX_ENGINE_PINNED_DOWNLOAD_MIN_VERSION)) return undefined
   return `${AX_ENGINE_ERROR.VersionUnsupported}: pinned Hub artifacts require a verified AX Engine ${AX_ENGINE_PINNED_DOWNLOAD_MIN_VERSION} or later`
 }

@@ -35,7 +35,7 @@ export const AX_ENGINE_API_KEY = "local"
 export const AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS = 8_192
 // Lowest AX Engine release AX Code will run. Configured binaryPath, AX_ENGINE_BIN,
 // PATH, managed overlays, and the bundled sidecar must report this version or newer.
-export const AX_ENGINE_MIN_VERSION = "7.5.6"
+export const AX_ENGINE_MIN_VERSION = "7.5.7"
 // First released tag containing the validated repository@revision downloader.
 export const AX_ENGINE_PINNED_DOWNLOAD_MIN_VERSION = "6.13.1"
 // First ax-engine version whose server accepts --max-output-tokens: the
@@ -422,7 +422,7 @@ export type AxEngineBinaryRelease = {
 }
 
 const AX_ENGINE_RELEASE_ORIGIN = "https://github.com"
-const AX_ENGINE_BINARY_RELEASE_URL = `${AX_ENGINE_RELEASE_ORIGIN}/defai-digital/ax-engine/releases/download/v7.5.6/ax-engine-v7.5.6-macos-arm64.tar.gz`
+const AX_ENGINE_BINARY_RELEASE_URL = `${AX_ENGINE_RELEASE_ORIGIN}/defai-digital/ax-engine/releases/download/v7.5.7/ax-engine-v7.5.7-macos-arm64.tar.gz`
 
 // Pinned self-contained macOS archive (binaries + MLX dylibs + metallib).
 // Darwin-arm64 AX Code releases stage this under engine/<version>/ as the
@@ -430,10 +430,10 @@ const AX_ENGINE_BINARY_RELEASE_URL = `${AX_ENGINE_RELEASE_ORIGIN}/defai-digital/
 // alternative, not the required clean-Mac path. AX_ENGINE_INSTALL_* overrides
 // remain for validating a different artifact.
 export const AX_ENGINE_BINARY_RELEASE: AxEngineBinaryRelease = {
-  version: "7.5.6",
-  assetName: "ax-engine-v7.5.6-macos-arm64.tar.gz",
+  version: "7.5.7",
+  assetName: "ax-engine-v7.5.7-macos-arm64.tar.gz",
   url: AX_ENGINE_BINARY_RELEASE_URL,
-  sha256: "3c13ad28c898054dddcf644143996b40b61da21bb9f22db26ad53cbb0e7d8729",
+  sha256: "0212b0615d7d7b4d4e9e68666c6440f5ac138a87203524aa027b4f659357173d",
   teamId: "N5ZUZDUJS6",
 }
 

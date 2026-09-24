@@ -71,7 +71,7 @@ function optionalTrimmed(value: string | undefined): string | undefined {
 // Resolve the ax-engine release the current host should install, or undefined
 // when there is none. The binary only ships for Apple Silicon macOS. An
 // AX_ENGINE_INSTALL_URL env override wins so a machine can target a specific
-// artifact without a code change. The default pin is the self-contained 7.5.6
+// artifact without a code change. The default pin is the self-contained 7.5.7
 // archive staged into darwin-arm64 AX Code releases.
 export function resolveInstallableRelease(
   platform: string = process.platform,
