@@ -288,4 +288,96 @@ describe("managed custom API provider model refresh", () => {
       globalThis.fetch = originalFetch
     }
   })
+
+  test("keeps a card-declared web search flag through discovery, config, and re-save", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const query = `directory=${encodeURIComponent(tmp.path)}`
+    const app = Server.Default()
+    const baseURL = "http://127.0.0.1:18082/v1"
+    const modelsByID = (view: unknown) =>
+      Object.fromEntries(
+        ((view as { models?: { id: string; websearch?: boolean }[] }).models ?? []).map((model) => [model.id, model]),
+      )
+
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      if (String(input) !== `${baseURL}/models`) return new Response("not found", { status: 404 })
+      return new Response(
+        JSON.stringify({
+          data: [
+            // OpenAI-compatible capability shape.
+            { id: "search-model", limit: { context: 100_000, output: 8_192 }, capabilities: { web_search: true } },
+            // AX Trust states the same thing under the top-level abilities block.
+            { id: "abilities-model", limit: { context: 100_000, output: 8_192 }, abilities: { web_search: true } },
+            // A card that declares nothing must not claim the capability.
+            { id: "plain-model", limit: { context: 100_000, output: 8_192 } },
+          ],
+        }),
+        { status: 200 },
+      )
+    }) as typeof fetch
+    try {
+      const created = await app.request(`/provider/custom/company-gateway?${query}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(providerBody({ baseURL, models: undefined })),
+      })
+      expect(created.status).toBe(200)
+      const discovered = modelsByID(await created.json())
+      expect(discovered["search-model"].websearch).toBe(true)
+      expect(discovered["abilities-model"].websearch).toBe(true)
+      expect(discovered["plain-model"].websearch).toBeUndefined()
+
+      const saved = (await Config.getGlobal()).provider?.["company-gateway"]?.models ?? {}
+      expect(saved["search-model"]?.websearch).toBe(true)
+      expect(saved["abilities-model"]?.websearch).toBe(true)
+      expect(saved["plain-model"]?.websearch).toBeUndefined()
+
+      // A re-save that reuses the stored model list (no refreshModels) must not
+      // drop the flag: that path rebuilds the list from saved config.
+      const resaved = await app.request(`/provider/custom/company-gateway?${query}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(providerBody({ baseURL, apiKey: undefined, models: undefined })),
+      })
+      expect(resaved.status).toBe(200)
+      const reused = modelsByID(await resaved.json())
+      expect(reused["search-model"].websearch).toBe(true)
+      expect(reused["abilities-model"].websearch).toBe(true)
+      expect((await Config.getGlobal()).provider?.["company-gateway"]?.models?.["search-model"]?.websearch).toBe(true)
+
+      // An explicit list that omits the field — how the TUI editor rebuilds
+      // models from the typed ID list — must not erase a stored declaration.
+      const explicit = await app.request(`/provider/custom/company-gateway?${query}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          providerBody({
+            baseURL,
+            apiKey: undefined,
+            models: [{ ...providerBody().models[0], id: "search-model", websearch: undefined }],
+          }),
+        ),
+      })
+      expect(explicit.status).toBe(200)
+      expect(modelsByID(await explicit.json())["search-model"].websearch).toBe(true)
+
+      // An explicit `false` is a denial, and does clear the flag.
+      const denied = await app.request(`/provider/custom/company-gateway?${query}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          providerBody({
+            baseURL,
+            apiKey: undefined,
+            models: [{ ...providerBody().models[0], id: "search-model", websearch: false }],
+          }),
+        ),
+      })
+      expect(denied.status).toBe(200)
+      expect(modelsByID(await denied.json())["search-model"].websearch).toBe(false)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
 })

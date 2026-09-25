@@ -126,6 +126,7 @@ function openAICompatibleCapabilities(item: OpenAICompatibleModelItem): Provider
       pdf: booleanValue(output.pdf, false),
     },
     interleaved: interleavedValue(capabilities.interleaved),
+    websearch: booleanValue(capabilities.web_search, false),
   }
 }
 

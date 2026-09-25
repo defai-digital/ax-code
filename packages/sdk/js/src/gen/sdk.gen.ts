@@ -5744,6 +5744,7 @@ export class Custom extends HeyApiClient {
         reasoning: boolean
         attachment: boolean
         temperature: boolean
+        websearch?: boolean
       }>
       refreshModels?: boolean
     },

@@ -124,6 +124,23 @@ describe("custom API provider model discovery", () => {
     expect(imageSupport([{ id: "grok-4.7" }])).toBe(false)
   })
 
+  test("reads a declared web search flag from capabilities or abilities", () => {
+    const websearch = (rows: unknown[]) => CustomApiProvider.parseDiscoveredModels({ data: rows })[0].websearch
+
+    expect(websearch([{ id: "glm-5.3", capabilities: { web_search: true } }])).toBe(true)
+    expect(websearch([{ id: "glm-5.3", capabilities: { web_search: false } }])).toBe(false)
+    // AX Trust emits the flag in both places; capabilities wins when they differ.
+    expect(websearch([{ id: "glm-5.3", abilities: { web_search: true } }])).toBe(true)
+    expect(websearch([{ id: "glm-5.3", capabilities: { web_search: false }, abilities: { web_search: true } }])).toBe(
+      false,
+    )
+    // A card that says nothing must not claim the capability.
+    expect(websearch([{ id: "glm-5.3" }])).toBeUndefined()
+    expect(websearch([{ id: "glm-5.3", capabilities: { toolcall: true } }])).toBeUndefined()
+    expect(websearch([{ id: "glm-5.3", abilities: { web_search: "yes" } }])).toBeUndefined()
+    expect(websearch([{ id: "glm-5.3", abilities: "web_search" }])).toBeUndefined()
+  })
+
   test("maps catalog keys across reseller prefixes and [1m] suffixes", () => {
     expect(CustomApiProvider.catalogModelKey("zai/glm-5.3[1m]")).toBe(CustomApiProvider.catalogModelKey("glm-5.3"))
     expect(

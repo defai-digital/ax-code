@@ -549,6 +549,11 @@ export namespace Provider {
               pdf: model.modalities?.output?.includes("pdf") ?? existingModel?.capabilities?.output?.pdf ?? false,
             },
             interleaved: model.interleaved ?? existingModel?.capabilities?.interleaved ?? false,
+            // Config-declared (and previously discovered then persisted) search
+            // flag. An absent declaration stays absent rather than inheriting
+            // the catalog record's `false`: only an explicit `true` claims the
+            // capability, so "not declared" must not read as a denial.
+            websearch: model.websearch,
           },
           options: mergeDeep(existingModel?.options ?? {}, model.options ?? {}),
           limit: (() => {

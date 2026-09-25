@@ -462,6 +462,101 @@ test.each([undefined, false] as const)(
   },
 )
 
+test("marks a gateway model whose card declares server-side web search", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+  await using api = await endpoint((_req, res) => {
+    res.end(
+      JSON.stringify({
+        data: [
+          {
+            id: "glm-5.3",
+            name: "GLM 5.3",
+            limit: { context: 1_000_000, output: 131_072 },
+            // The OpenAI-compatible discovery shape.
+            capabilities: {
+              reasoning: true,
+              toolcall: true,
+              temperature: true,
+              attachment: false,
+              web_search: true,
+            },
+          },
+          // AX Trust emits the same statement under the top-level abilities
+          // object; either placement must reach the TUI marker.
+          { id: "deepseek-flash", name: "DeepSeek Flash", abilities: { web_search: true } },
+          // A card that declares nothing must not be marked.
+          { id: "grok-4.7", name: "grok-4.7" },
+        ],
+      }),
+    )
+  })
+  const id = "ax-trust-websearch-flags"
+  await using tmp = await tmpdir({ config: config(id, api.url) })
+  await Auth.set(id, { type: "api", key: "test-token" })
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Provider.ready()
+        const declared = await Provider.getModel(ProviderID.make(id), ModelID.make("glm-5.3"))
+        expect(declared.capabilities.websearch).toBe(true)
+        expect(modelDisplayInfo(declared.id, declared).label).toBe("GLM 5.3 🌐")
+        expect(modelDisplayInfo(declared.id, declared).webSearch).toBe(true)
+        const viaAbilities = await Provider.getModel(ProviderID.make(id), ModelID.make("deepseek-flash"))
+        expect(viaAbilities.capabilities.websearch).toBe(true)
+        // Exact label depends on catalog-inherited image support; only the
+        // search marker is under test here.
+        expect(modelDisplayInfo(viaAbilities.id, viaAbilities).label).toContain("🌐")
+        const undeclared = await Provider.getModel(ProviderID.make(id), ModelID.make("grok-4.7"))
+        expect(undeclared.capabilities.websearch).toBeUndefined()
+        expect(modelDisplayInfo(undeclared.id, undeclared).webSearch).toBe(false)
+      },
+    })
+  } finally {
+    await Auth.remove(id)
+  }
+})
+
+test("carries a config-declared web search flag into the provider model", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+  const id = "config-websearch-gateway"
+  await using tmp = await tmpdir({
+    config: {
+      enabled_providers: [id],
+      provider: {
+        [id]: {
+          management: "custom-api",
+          npm: "@ai-sdk/openai-compatible",
+          options: { baseURL: "http://127.0.0.1:18082/v1" },
+          models: {
+            "glm-5.3": { name: "GLM 5.3", limit: { context: 1_000_000, output: 131_072 }, websearch: true },
+            plain: { name: "Plain", limit: { context: 128_000, output: 16_384 } },
+          },
+        },
+      },
+    },
+  })
+  await Auth.set(id, { type: "api", key: "test-token" })
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Provider.ready()
+        const declared = await Provider.getModel(ProviderID.make(id), ModelID.make("glm-5.3"))
+        expect(declared.capabilities.websearch).toBe(true)
+        expect(modelDisplayInfo(declared.id, declared).label).toContain("🌐")
+        // A stored row that never declared search keeps the distinction between
+        // "not declared" and "declared false".
+        const plain = await Provider.getModel(ProviderID.make(id), ModelID.make("plain"))
+        expect(plain.capabilities.websearch).toBeUndefined()
+        expect(modelDisplayInfo(plain.id, plain).webSearch).toBe(false)
+      },
+    })
+  } finally {
+    await Auth.remove(id)
+  }
+})
+
 test("reads the gateway's vision and modality flags instead of its attachment flag", async () => {
   vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
   await using api = await endpoint((_req, res) => {

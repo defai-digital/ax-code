@@ -559,6 +559,9 @@ export const Provider = ModelsDev.Provider.partial()
       .record(
         z.string(),
         ModelsDev.Model.partial().extend({
+          // Server-side web search as declared by the endpoint's model card
+          // (managed custom API / AX Trust discovery persists it here).
+          websearch: z.boolean().optional(),
           variants: z
             .record(
               z.string(),

@@ -12,7 +12,7 @@ export type DisplayCapableModel = {
   providerID?: string
   api?: { id?: string; npm?: string }
   name?: string
-  capabilities?: { input?: { image?: boolean }; toolcall?: boolean }
+  capabilities?: { input?: { image?: boolean }; toolcall?: boolean; websearch?: boolean }
 }
 
 export function supportsVision(model: { capabilities?: { input?: { image?: boolean } } } | undefined) {
@@ -25,6 +25,11 @@ export function supportsWebSearch(model: DisplayCapableModel | undefined) {
   const apiID = model.api?.id?.toLowerCase() ?? model.id?.toLowerCase() ?? ""
   const apiNpm = model.api?.npm
 
+  // An explicit `true` claims server-side web search even where the hardcoded
+  // allowlist below would not: the AX Trust gateway knows which SKUs it can
+  // search with. `false` is not a veto — the bundled snapshot sets it on every
+  // model, including the CLI models the allowlist exists to mark.
+  if (model.capabilities?.websearch === true) return true
   if (providerID && CLI_WEB_SEARCH_PROVIDER_IDS.has(providerID)) return true
   if (
     apiNpm === "@ai-sdk/openai-compatible" &&

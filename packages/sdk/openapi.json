@@ -31375,6 +31375,9 @@
                             },
                             "temperature": {
                               "type": "boolean"
+                            },
+                            "websearch": {
+                              "type": "boolean"
                             }
                           },
                           "required": [
@@ -31509,6 +31512,9 @@
                           },
                           "temperature": {
                             "type": "boolean"
+                          },
+                          "websearch": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -31623,6 +31629,9 @@
                           "type": "boolean"
                         },
                         "temperature": {
+                          "type": "boolean"
+                        },
+                        "websearch": {
                           "type": "boolean"
                         }
                       },
@@ -44626,6 +44635,9 @@
                     ]
                   }
                 ]
+              },
+              "websearch": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -45663,6 +45675,9 @@
                     },
                     "additionalProperties": {}
                   }
+                },
+                "websearch": {
+                  "type": "boolean"
                 }
               }
             }

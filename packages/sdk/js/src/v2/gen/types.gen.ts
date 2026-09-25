@@ -2974,6 +2974,7 @@ export type Model = {
       | {
           field: "reasoning_content" | "reasoning_details"
         }
+    websearch?: boolean
   }
   limit: {
     context: number
@@ -3293,6 +3294,7 @@ export type ProviderConfig = {
           [key: string]: unknown
         }
       }
+      websearch?: boolean
     }
   }
   management?: "custom-api" | "ax-trust"
@@ -14566,6 +14568,7 @@ export type ProviderCustomListResponses = {
       reasoning: boolean
       attachment: boolean
       temperature: boolean
+      websearch?: boolean
     }>
   }>
 }
@@ -14625,6 +14628,7 @@ export type ProviderCustomUpdateData = {
       reasoning: boolean
       attachment: boolean
       temperature: boolean
+      websearch?: boolean
     }>
     refreshModels?: boolean
   }
@@ -14669,6 +14673,7 @@ export type ProviderCustomUpdateResponses = {
       reasoning: boolean
       attachment: boolean
       temperature: boolean
+      websearch?: boolean
     }>
   }
 }

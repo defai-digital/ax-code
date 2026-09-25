@@ -70,6 +70,9 @@ export namespace CustomApiProvider {
       reasoning: z.boolean(),
       attachment: z.boolean(),
       temperature: z.boolean(),
+      // Optional so rows that say nothing stay "not declared" (fail-closed for
+      // the TUI search marker); declared rows come from the gateway card.
+      websearch: z.boolean().optional(),
     })
     .strict()
     .refine((model) => model.outputLimit <= model.contextWindow, {
@@ -300,6 +303,22 @@ export namespace CustomApiProvider {
     return fallback?.modalities?.input.includes("image") ?? false
   }
 
+  // A gateway card declares server-side web search as a boolean either under
+  // `capabilities.web_search` (the OpenAI-compatible discovery shape) or under
+  // a top-level `abilities.web_search`. AX Trust emits both, and some resellers
+  // emit only one. Anything that is not a boolean — including a missing field —
+  // stays undefined, so the TUI marker never claims a capability the card did
+  // not declare.
+  function webSearchCapable(
+    capabilities: Record<string, unknown> | undefined,
+    raw: Record<string, unknown> | undefined,
+  ): boolean | undefined {
+    if (typeof capabilities?.web_search === "boolean") return capabilities.web_search
+    const abilities = isRecord(raw?.abilities) ? raw.abilities : undefined
+    if (typeof abilities?.web_search === "boolean") return abilities.web_search
+    return undefined
+  }
+
   export function discoveredModel(
     id: string,
     name?: string,
@@ -329,6 +348,7 @@ export namespace CustomApiProvider {
       attachment: imageCapable(capabilities, raw, fallback),
       temperature:
         typeof capabilities?.temperature === "boolean" ? capabilities.temperature : (fallback?.temperature ?? true),
+      websearch: webSearchCapable(capabilities, raw),
     }
   }
 
@@ -448,6 +468,10 @@ export namespace CustomApiProvider {
             reasoning: model.reasoning,
             temperature: model.temperature,
             tool_call: model.toolCall,
+            // Persist the gateway's declared search flag. Without this the flag
+            // survives only the discovery that produced it: a later re-upsert
+            // rebuilds the model list from config and the declaration is gone.
+            websearch: model.websearch,
             limit: { context: model.contextWindow, output: model.outputLimit },
             modalities: {
               input: model.attachment ? (["text", "image"] as const) : (["text"] as const),
@@ -473,6 +497,7 @@ export namespace CustomApiProvider {
       reasoning: model.reasoning ?? false,
       attachment: model.attachment ?? false,
       temperature: model.temperature ?? false,
+      websearch: model.websearch,
     }))
     const parsed = View.safeParse({
       ...(provider.management === "ax-trust" ? { management: provider.management } : {}),
@@ -545,7 +570,22 @@ export namespace CustomApiProvider {
     previousProvider: Config.Provider | undefined,
     previousAuth: Auth.Info | undefined,
   ): Promise<Model[]> {
-    if (input.models && input.models.length > 0) return input.models
+    if (input.models && input.models.length > 0) {
+      // `websearch` is the only optional model field, so a caller that predates
+      // it — the TUI editor rebuilds the list from IDs, and any client whose
+      // view of the model omits it — leaves it out rather than denying it.
+      // Carry the stored declaration forward for those rows; an explicit `false`
+      // still clears it, and the next successful discovery replaces the row.
+      if (!previousProvider || !isManaged(previousProvider)) return input.models
+      const stored = new Map(
+        Object.entries(previousProvider.models ?? {}).map(([key, model]) => [model.id ?? key, model.websearch]),
+      )
+      return input.models.map((model) => {
+        if (model.websearch !== undefined) return model
+        const declared = stored.get(model.id)
+        return declared === undefined ? model : { ...model, websearch: declared }
+      })
+    }
     if (!input.refreshModels && previousProvider && isManaged(previousProvider)) {
       const previous = viewFromProvider("previous", previousProvider, false)
       const previousURL = previous.baseURL

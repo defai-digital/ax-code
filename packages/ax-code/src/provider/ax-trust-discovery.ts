@@ -52,7 +52,9 @@ function previousAxTrustModel(provider: ProviderInfo, remoteId: string) {
   return { key: aliased[0], model: aliased[1] }
 }
 
-// AX Trust advertises attachment as image support in its /models contract.
+// AX Trust model cards declare image support through `vision`, the input
+// modality list, or the generic `attachment` flag, in that order; discoveredModel
+// resolves that order into the single image/attachment value mapped below.
 // Keep execution options local; remote model cards only supply metadata.
 export async function discoverAxTrustModels(
   provider: ProviderInfo,
@@ -77,6 +79,9 @@ export async function discoverAxTrustModels(
           input: { text: true, image: model.attachment, audio: false, video: false, pdf: false },
           output: { text: true, image: false, audio: false, video: false, pdf: false },
           interleaved: fallback?.interleaved ?? previous?.capabilities.interleaved ?? false,
+          // Discovery resolves the gateway's declared search flag (or leaves it
+          // undefined when the card said nothing); carry it through verbatim.
+          websearch: model.websearch,
         },
         limit: { context: model.contextWindow, output: model.outputLimit },
         status: "active",

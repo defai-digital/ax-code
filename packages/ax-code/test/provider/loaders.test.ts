@@ -499,11 +499,14 @@ describe("offline provider loaders", () => {
                   input: { text: false, image: "yes" },
                   output: { audio: "no" },
                   interleaved: { field: "invalid" },
+                  // A non-boolean declaration must not become a claimed capability.
+                  web_search: "yes",
                 },
                 limit: { context: "large", output: {} },
                 max_context_length: "8192",
                 max_output_tokens: "2048",
               },
+              { id: "search-model", capabilities: { web_search: true } },
             ],
           }),
           {
@@ -533,7 +536,11 @@ describe("offline provider loaders", () => {
         expect(model.capabilities.input.image).toBe(false)
         expect(model.capabilities.output.audio).toBe(false)
         expect(model.capabilities.interleaved).toBe(false)
+        expect(model.capabilities.websearch).toBe(false)
         expect(model.limit).toEqual({ context: 128000, output: 4096 })
+        expect(
+          providers[ProviderID.make("ax-studio")].models[ModelID.make("search-model")].capabilities.websearch,
+        ).toBe(true)
       },
     })
   })

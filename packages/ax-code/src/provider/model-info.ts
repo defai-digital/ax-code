@@ -44,6 +44,12 @@ export const ProviderModel = z
           field: z.enum(["reasoning_content", "reasoning_details"]),
         }),
       ]),
+      // Provider-declared server-side web search (the AX Trust gateway emits
+      // `capabilities.web_search` / `abilities.web_search`). Optional on
+      // purpose: older gateways and cached records do not carry it, and an
+      // absent value must stay "not declared" rather than become a silent
+      // default — the TUI marker only renders on an explicit true.
+      websearch: z.boolean().optional(),
     }),
     limit: z.object({
       context: z.number(),
@@ -135,6 +141,10 @@ function fromModelsDevModel(provider: ModelsDev.Provider, model: ModelsDev.Model
           pdf: model.modalities?.output?.includes("pdf") ?? false,
         },
         interleaved: model.interleaved ?? false,
+        // models.dev publishes no search field, so a snapshot entry never
+        // declares server-side web search. Set it explicitly to keep the value
+        // present-but-false distinguishable from "unknown" discovery rows.
+        websearch: false,
       },
       release_date: model.release_date ?? "",
       variants: {},
