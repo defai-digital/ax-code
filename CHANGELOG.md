@@ -6,6 +6,21 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.20.7] - 2026-09-25
+
+### Fixed
+
+- Preserve a goal's assurance setting when replacing it while its old plan artifacts are being removed.
+- Redact credential-named Error fields in text and JSON logs, even when the error message has no recognizable credential pattern.
+- Report partial parallel-task results when a member fails before creating its session, and enforce the bounded swarm deadline for queued work.
+- Keep goal assurance state and artifact cleanup consistent across creation, replacement, and resume.
+
+### Changed
+
+- Make goal assurance opt-in and show its state in goal responses.
+- Bound and redact log entries at the writer boundary.
+- Publish SDK 2.5.49 alongside AX Code 7.20.7.
+
 ## [7.20.6] - 2026-09-25
 
 ### Changed
