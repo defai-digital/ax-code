@@ -22,6 +22,53 @@ import { Todo } from "../todo"
  * Returns `undefined` when no subsection is present so callers can skip the
  * reminder cleanly.
  */
+/**
+ * Whether this turn should carry the live pending-todo list.
+ *
+ * Autonomous mode always carries it. Otherwise it is carried only while the
+ * plan needs re-anchoring after a history rewrite: a compaction replaced the
+ * transcript (and its summary carries a snapshot of the list), and the model has
+ * not written todos since, so nothing in the request holds the current list.
+ *
+ * Derived from the message list alone — no timestamps, no per-session ledger —
+ * so it survives a restart and cannot drift from what the model can see.
+ */
+export function shouldSurfacePendingTodos(input: {
+  autonomous: boolean
+  messages?: readonly MessageV2.WithParts[]
+}): boolean {
+  if (input.autonomous) return true
+  const messages = input.messages
+  if (!messages || messages.length === 0) return false
+  let marker = -1
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i]?.parts.some((part) => part.type === "compaction")) {
+      marker = i
+      break
+    }
+  }
+  if (marker === -1) return false
+  // Only a COMPLETED todo write puts the list into the request history: a
+  // rejected, failed or cancelled call still leaves a tool part behind, and
+  // treating that as "the model rewrote the plan" would stop the rearm while
+  // the request still has no current list.
+  //
+  // Callers that pass a truncated slice rather than the compaction-filtered
+  // history simply never rearm — the fail-safe direction (no added context).
+  // History rewrites other than compaction (rollback, branch, fork) are out of
+  // scope here.
+  for (let i = marker + 1; i < messages.length; i++) {
+    if (
+      messages[i]?.parts.some(
+        (part) => part.type === "tool" && part.tool === "todowrite" && part.state.status === "completed",
+      )
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
 export async function buildTurnContext(input: {
   messages?: MessageV2.WithParts[]
   sessionID?: SessionID
@@ -34,7 +81,15 @@ export async function buildTurnContext(input: {
   // In autonomous mode, surface pending todos each turn so the model always
   // knows exactly what's left. This is live state visible at the start of
   // every reasoning cycle, not just an upfront instruction.
-  const pendingTodos = ScopedFlag.autonomous() && input.sessionID ? Todo.active(input.sessionID) : []
+  //
+  // Outside autonomous mode the block is normally omitted, with one exception:
+  // after a history rewrite the model's plan lives only in the compaction
+  // summary's snapshot, so the LIVE list is re-surfaced until the model writes
+  // todos again (see shouldSurfacePendingTodos).
+  const pendingTodos =
+    input.sessionID && shouldSurfacePendingTodos({ autonomous: ScopedFlag.autonomous(), messages: input.messages })
+      ? Todo.active(input.sessionID)
+      : []
   const pendingTodosSection =
     pendingTodos.length > 0
       ? [

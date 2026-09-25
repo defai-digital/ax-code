@@ -8,7 +8,7 @@ import type { MessageV2 } from "../../src/session/message-v2"
 import BUILD_SWITCH from "../../src/session/prompt/build-switch.txt"
 import { insertReminders } from "../../src/session/prompt/prompt-reminders"
 import { systemPrompt } from "../../src/session/prompt/prompt-system"
-import { buildTurnContext } from "../../src/session/prompt/prompt-turn-context"
+import { buildTurnContext, shouldSurfacePendingTodos } from "../../src/session/prompt/prompt-turn-context"
 import { Todo } from "../../src/session/todo"
 import { tmpdir } from "../fixture/fixture"
 
@@ -387,5 +387,167 @@ describe("system prompt cache stability", () => {
     expect(second).toContain("manual-env")
     expect(second).not.toContain("autonomous-env")
     expect(calls).toBe(2)
+  })
+})
+
+describe("turn context post-compaction todo rearm", () => {
+  function compactionMarker(id: string, sessionID: string) {
+    return {
+      info: { id, sessionID, role: "user" as const },
+      parts: [{ type: "compaction" as const }],
+    } as any as MessageV2.WithParts
+  }
+
+  function todoWriteMessage(id: string, sessionID: string, status: "completed" | "error" = "completed") {
+    return {
+      info: { id, sessionID, role: "assistant" as const, agent: "build" },
+      parts: [{ type: "tool" as const, tool: "todowrite", state: { status } }],
+    } as any as MessageV2.WithParts
+  }
+
+  test("re-surfaces the live list when the rewrite happened after the last todo write", async () => {
+    process.env.AX_CODE_AUTONOMOUS = "0"
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        Todo.update({
+          sessionID: session.id,
+          todos: [{ content: "still open", status: "in_progress", priority: "high" }],
+        })
+        const result = await buildTurnContext({
+          messages: [userMessage("m1", session.id), compactionMarker("m2", session.id)],
+          sessionID: session.id,
+        })
+        expect(result).toContain('<pending_todos count="1">')
+        expect(result).toContain("[IN_PROGRESS] still open")
+      },
+    })
+  })
+
+  test("stays quiet once the model writes todos after the rewrite", async () => {
+    process.env.AX_CODE_AUTONOMOUS = "0"
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        Todo.update({
+          sessionID: session.id,
+          todos: [{ content: "in context already", status: "pending", priority: "high" }],
+        })
+        const result = await buildTurnContext({
+          messages: [
+            userMessage("m1", session.id),
+            compactionMarker("m2", session.id),
+            todoWriteMessage("m3", session.id),
+          ],
+          sessionID: session.id,
+        })
+        expect(result ?? "").not.toContain("<pending_todos")
+      },
+    })
+  })
+
+  test("a failed todo write does not count as writing the plan", async () => {
+    // The tool part exists either way; only a completed call put the list into
+    // the request history.
+    process.env.AX_CODE_AUTONOMOUS = "0"
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        Todo.update({
+          sessionID: session.id,
+          todos: [{ content: "needs re-anchoring", status: "pending", priority: "high" }],
+        })
+        const result = await buildTurnContext({
+          messages: [
+            userMessage("m1", session.id),
+            compactionMarker("m2", session.id),
+            todoWriteMessage("m3", session.id, "error"),
+          ],
+          sessionID: session.id,
+        })
+        expect(result).toContain("<pending_todos")
+      },
+    })
+  })
+
+  test("does not surface todos in a session that never compacted", async () => {
+    process.env.AX_CODE_AUTONOMOUS = "0"
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        Todo.update({
+          sessionID: session.id,
+          todos: [{ content: "short session", status: "pending", priority: "high" }],
+        })
+        const result = await buildTurnContext({
+          messages: [userMessage("m1", session.id), editToolMessage("m2", session.id, "/repo/a.ts")],
+          sessionID: session.id,
+        })
+        expect(result ?? "").not.toContain("<pending_todos")
+      },
+    })
+  })
+
+  test("rear arms from the newest rewrite when a session compacted more than once", async () => {
+    process.env.AX_CODE_AUTONOMOUS = "0"
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        Todo.update({
+          sessionID: session.id,
+          todos: [{ content: "second epoch", status: "pending", priority: "high" }],
+        })
+        const messages = [
+          compactionMarker("m1", session.id),
+          todoWriteMessage("m2", session.id),
+          compactionMarker("m3", session.id),
+        ]
+        expect(shouldSurfacePendingTodos({ autonomous: false, messages })).toBe(true)
+        const result = await buildTurnContext({ messages, sessionID: session.id })
+        expect(result).toContain('<pending_todos count="1">')
+      },
+    })
+  })
+
+  test("autonomous mode surfaces todos with or without a rewrite", async () => {
+    expect(shouldSurfacePendingTodos({ autonomous: true })).toBe(true)
+    expect(shouldSurfacePendingTodos({ autonomous: false })).toBe(false)
+    const sessionID = "ses_rearm"
+    const messages = [userMessage("m1", sessionID), compactionMarker("m2", sessionID)]
+    expect(shouldSurfacePendingTodos({ autonomous: false, messages })).toBe(true)
+    expect(
+      shouldSurfacePendingTodos({ autonomous: false, messages: [...messages, todoWriteMessage("m3", sessionID)] }),
+    ).toBe(false)
+  })
+
+  test("ignores todo writes that predate the rewrite", async () => {
+    const sessionID = "ses_rearm_before"
+    // A write before the marker is inside the rewritten (and now summarised)
+    // history, so the live list still needs re-anchoring.
+    const messages = [
+      userMessage("m1", sessionID),
+      todoWriteMessage("m2", sessionID),
+      compactionMarker("m3", sessionID),
+    ]
+    expect(shouldSurfacePendingTodos({ autonomous: false, messages })).toBe(true)
+  })
+
+  test("re-arms from an orphaned marker whose summary never completed", async () => {
+    const sessionID = "ses_rearm_orphan"
+    // The marker is written before the summary is generated, so a crashed or
+    // aborted compaction leaves one behind. The live list is correct either way,
+    // so re-arming there is safe and keeps the rule simple.
+    const messages = [userMessage("m1", sessionID), compactionMarker("m2", sessionID)]
+    expect(shouldSurfacePendingTodos({ autonomous: false, messages })).toBe(true)
   })
 })
