@@ -24,8 +24,7 @@
 // calls. Delete the file or pass --force to rerun.
 
 import { spawn, execFileSync, type ChildProcess } from "node:child_process"
-import { readFile, writeFile, mkdtemp, mkdir, rm } from "node:fs/promises"
-import { existsSync, statSync } from "node:fs"
+import { open, writeFile, mkdtemp, mkdir, rm } from "node:fs/promises"
 import path from "node:path"
 import os from "node:os"
 
@@ -275,23 +274,32 @@ function passes(v: Verdict): boolean {
   )
 }
 
+// Open, stat, and read the same descriptor so a replaced cache file cannot
+// change between the freshness check and the parse.
+async function loadFreshReviewCache(): Promise<{ ageMs: number; passed: number } | undefined> {
+  let handle: Awaited<ReturnType<typeof open>> | undefined
+  try {
+    handle = await open(OUT, "r")
+    const ageMs = Date.now() - (await handle.stat()).mtimeMs
+    if (ageMs >= REVIEW_TTL_MS) return undefined
+    const cached = JSON.parse(await handle.readFile({ encoding: "utf-8" }))
+    return { ageMs, passed: (cached.reviewers as Verdict[]).filter(passes).length }
+  } catch {
+    return undefined
+  } finally {
+    await handle?.close().catch(() => undefined)
+  }
+}
+
 async function main() {
   const force = process.argv.includes("--force")
-  if (!force && existsSync(OUT)) {
-    const ageMs = Date.now() - statSync(OUT).mtimeMs
-    if (ageMs < REVIEW_TTL_MS) {
-      try {
-        const cached = JSON.parse(await readFile(OUT, "utf-8"))
-        const passed = (cached.reviewers as Verdict[]).filter(passes).length
-        if (passed >= REQUIRED_REVIEWERS) {
-          process.stdout.write(
-            `.internal/reports/adr139/verify-reviews.json is fresh (${Math.round(ageMs / 1_000)}s old) with ${passed} reviewers reporting findings.\n`,
-          )
-          process.exit(0)
-        }
-      } catch {
-        // Fall through and re-run.
-      }
+  if (!force) {
+    const fresh = await loadFreshReviewCache()
+    if (fresh && fresh.passed >= REQUIRED_REVIEWERS) {
+      process.stdout.write(
+        `.internal/reports/adr139/verify-reviews.json is fresh (${Math.round(fresh.ageMs / 1_000)}s old) with ${fresh.passed} reviewers reporting findings.\n`,
+      )
+      process.exit(0)
     }
   }
 

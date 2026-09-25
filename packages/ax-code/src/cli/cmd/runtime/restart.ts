@@ -1,4 +1,3 @@
-import { DEFAULT_SERVER_PORT } from "@/server/constants"
 import { RuntimeRegistry } from "@/runtime/runtime-registry"
 
 export function validateRuntimeRestartPort(port: unknown): number {

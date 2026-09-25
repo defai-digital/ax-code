@@ -149,18 +149,22 @@ export async function readAxEngineMtpSidecarNamespace(modelPath: string): Promis
  * namespace normalization. `undefined` means the probe was inconclusive.
  */
 export async function axEngineSupportsPrefixedMtpSidecar(binaryPath: string): Promise<boolean | undefined> {
+  let handle: Awaited<ReturnType<typeof fs.open>> | undefined
   try {
     const launcher = await fs.realpath(binaryPath)
     const server = await fs.realpath(containedFile(path.dirname(launcher), AX_ENGINE_SERVER_BINARY_NAME))
-    const stat = await fs.stat(server)
+    handle = await fs.open(server, "r")
+    const stat = await handle.stat()
     // @scan-suppress race_scan - Probe-cache entries are immutable observations; duplicate probes only replace equivalent metadata.
     const cached = binaryCapabilityCache.get(server)
     if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached.supports
-    const supports = (await fs.readFile(server)).includes(MTP_NAMESPACE_NORMALIZATION_MARKER)
+    const supports = (await handle.readFile()).includes(MTP_NAMESPACE_NORMALIZATION_MARKER)
     boundedCacheSet(binaryCapabilityCache, server, { mtimeMs: stat.mtimeMs, size: stat.size, supports })
     return supports
   } catch {
     return undefined
+  } finally {
+    await handle?.close().catch(() => undefined)
   }
 }
 

@@ -19,7 +19,7 @@
 
 import { execFileSync, spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
@@ -118,9 +118,9 @@ function runCodex(prompt, repoRoot) {
   )
   let output = ""
   try {
-    if (statSync(lastPath).isFile()) output = readFileSync(lastPath, "utf8")
+    output = readFileSync(lastPath, "utf8")
   } catch {
-    // fall back to stdout below
+    // Missing, unreadable, or not a regular file: fall back to stdout below.
   }
   if (!output.trim()) output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`
   rmSync(outDir, { recursive: true, force: true })
