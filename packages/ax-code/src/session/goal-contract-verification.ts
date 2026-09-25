@@ -19,13 +19,12 @@ export namespace GoalContractVerification {
     acceptanceEvidence?: Record<string, string>
     execution?: { messages: readonly GoalVerification.Message[]; source: SourceState; cwd: string }
   }): Decision {
-    const stored = GoalPlan.storedDigest(input.sessionID, input.created)
-    const result = GoalPlan.read(input.sessionID, input.created)
-    if (!stored && result.status === "missing") {
+    const found = GoalPlan.lookupContract(input.sessionID, input.created)
+    if (found.state === "missing") {
       // Pre-v1 goals and storage-primitive creates have no contract.
       return { ok: true }
     }
-    if (result.status !== "found" || !stored || stored !== GoalPlan.digestOf(result.contract)) {
+    if (found.state === "invalid") {
       return {
         ok: false,
         reason: "digest_mismatch",
@@ -35,7 +34,8 @@ export namespace GoalContractVerification {
           "then supply acceptanceEvidence for every AC id.",
       }
     }
-    const contract = result.contract
+    const contract = found.contract
+    const stored = found.digest
     if (contract.assurance) {
       const missing = input.execution
         ? GoalCheckVerification.missing({

@@ -528,6 +528,22 @@ export namespace SessionGoal {
     return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0
   }
 
+  /**
+   * Tell the user when the goal they are looking at has no usable assurance
+   * contract (item 2, option A). Deliberately a notice rather than a gate: the
+   * completion gate already applies the same `GoalPlan.contractState` rule, and
+   * `resume` already re-runs the planner fail-closed. This exists so the state
+   * is visible instead of inferred from a goal that silently completes under
+   * the basic gate.
+   */
+  function contractNotice(goal: Info): string {
+    const state = GoalPlan.lookupContract(goal.sessionID, goal.time.created).state
+    if (state === "present") return ""
+    if (state === "missing")
+      return "\nNo assurance contract: planning did not complete for this goal, so it completes under the basic gate (pending todos plus verification after the last change)."
+    return "\nAssurance contract unusable: the frozen acceptance criteria are missing or modified, so completion is refused until they are restored."
+  }
+
   export function format(goal: Info | undefined): string {
     if (!goal) return "No goal is set for this session."
     const remaining =
@@ -539,6 +555,6 @@ export namespace SessionGoal {
         : ` Remaining time: ${Math.max(0, goal.timeBudgetSeconds - goal.timeUsedSeconds)}s.`)
     const publicGoal = toPublic(goal)
     const plan = publicGoal?.planPath ? `\nPlan: ${publicGoal.planPath}` : ""
-    return `Goal ${goal.status}: ${goal.objective}\nTokens used: ${goal.tokensUsed}${goal.tokenBudget === undefined ? "" : `/${goal.tokenBudget}`}.${remaining}${time}${plan}`
+    return `Goal ${goal.status}: ${goal.objective}\nTokens used: ${goal.tokensUsed}${goal.tokenBudget === undefined ? "" : `/${goal.tokenBudget}`}.${remaining}${time}${plan}${contractNotice(goal)}`
   }
 }

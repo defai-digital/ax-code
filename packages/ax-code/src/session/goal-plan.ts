@@ -296,6 +296,30 @@ export namespace GoalPlan {
     }
   }
 
+  /**
+   * The single definition of "this goal has no usable contract": a goal whose
+   * plan was never written ("missing": pre-v1 goals, storage-primitive creates,
+   * and a planner that failed before writing) versus one whose artifacts exist
+   * but do not verify ("invalid": missing or mismatched digest, unreadable or
+   * unparseable plan). When present it carries the contract and its digest.
+   *
+   * `GoalContractVerification.decide` applies this to the completion gate and
+   * `SessionGoal.format` applies it to what the user sees, so the visible state
+   * and the gate can never disagree.
+   */
+  export type ContractLookup =
+    | { state: "present"; contract: Contract; digest: string }
+    | { state: "missing" }
+    | { state: "invalid" }
+
+  export function lookupContract(sessionID: SessionID, created: number): ContractLookup {
+    const stored = storedDigest(sessionID, created)
+    const result = read(sessionID, created)
+    if (!stored && result.status === "missing") return { state: "missing" }
+    if (result.status !== "found" || !stored || stored !== digestOf(result.contract)) return { state: "invalid" }
+    return { state: "present", contract: result.contract, digest: stored }
+  }
+
   export function storedDigest(sessionID: SessionID, created: number): string | undefined {
     try {
       const text = fs.readFileSync(digestPathFor(sessionID, created), "utf8").trim()

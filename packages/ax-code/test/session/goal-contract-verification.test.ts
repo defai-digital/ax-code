@@ -1,9 +1,11 @@
 import { describe, expect, test } from "vitest"
 import fs from "fs/promises"
+import path from "path"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { GoalContractVerification } from "../../src/session/goal-contract-verification"
 import { GoalPlan } from "../../src/session/goal-plan"
+import { SessionGoal } from "../../src/session/goal"
 import { tmpdir } from "../fixture/fixture"
 
 describe("GoalContractVerification", () => {
@@ -130,6 +132,60 @@ describe("GoalContractVerification", () => {
         expect(GoalPlan.storedDigest(session.id, expandedCreated)).toBeUndefined()
         await GoalPlan.remove(session.id, created)
         await Session.remove(session.id)
+      },
+    })
+  })
+})
+
+describe("goal contract visibility (item 2, option A)", () => {
+  test("a goal whose planning never completed says so wherever it is shown", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        // Created but never planned: the planner failed, or this is a pre-v1 goal.
+        const goal = await SessionGoal.create({ sessionID: session.id, objective: "ship the feature" })
+
+        expect(GoalPlan.lookupContract(session.id, goal.time.created)).toEqual({ state: "missing" })
+        const text = SessionGoal.format(goal)
+        expect(text).toContain("No assurance contract")
+        expect(text).toContain("basic gate")
+      },
+    })
+  })
+
+  test("a goal with a usable contract carries no notice", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const goal = await SessionGoal.create({ sessionID: session.id, objective: "ship it" })
+        await GoalPlan.write(session.id, goal.time.created, GoalPlan.render(GoalPlan.sample("ship it")))
+
+        expect(GoalPlan.lookupContract(session.id, goal.time.created).state).toBe("present")
+        const text = SessionGoal.format(goal)
+        expect(text).not.toContain("No assurance contract")
+        expect(text).not.toContain("contract unusable")
+      },
+    })
+  })
+
+  test("a contract whose digest no longer matches is reported as unusable", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const goal = await SessionGoal.create({ sessionID: session.id, objective: "ship it" })
+        // Write the plan without its digest: the artifacts exist but do not verify.
+        const plan = GoalPlan.pathFor(session.id, goal.time.created)
+        await fs.mkdir(path.dirname(plan), { recursive: true })
+        await fs.writeFile(plan, GoalPlan.render(GoalPlan.sample("ship it")), "utf8")
+
+        expect(GoalPlan.lookupContract(session.id, goal.time.created).state).toBe("invalid")
+        expect(SessionGoal.format(goal)).toContain("Assurance contract unusable")
       },
     })
   })
