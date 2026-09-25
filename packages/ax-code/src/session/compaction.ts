@@ -4,6 +4,7 @@ import { Session } from "."
 import { SessionID, MessageID, PartID } from "./schema"
 import { Provider } from "../provider/provider"
 import { MessageV2 } from "./message-v2"
+import { Todo } from "./todo"
 import z from "zod"
 import { Token } from "../util/token"
 import { Log } from "../util/log"
@@ -39,6 +40,100 @@ import { SessionEvidence } from "./evidence"
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
   const inFlight = new Set<string>()
+
+  /** Machine-readable marker on the synthetic plan-carryover part (ADR-141). */
+  export const PLAN_CARRYOVER_PURPOSE = "compaction_plan_carryover"
+  /**
+   * Stable first line of the plan-carryover part. Consumers that need to
+   * recognize the block (renderers, exporters, tests) match on this prefix
+   * instead of asserting the summary's part count — a compaction summary may
+   * carry a generated text part plus this one.
+   */
+  export const PLAN_CARRYOVER_HEADING = "## TODO List (system-carried state at compaction; not a new user request)"
+  /** Completed items kept for continuity; cancelled items are never carried. */
+  const PLAN_CARRYOVER_COMPLETED_TAIL = 3
+  /** Hard cap so a pathological list cannot consume the context it protects. */
+  const PLAN_CARRYOVER_MAX_ITEMS = 50
+
+  /**
+   * Render the plan-carryover block for a compaction summary. Pure helper:
+   * exported so the regression is unit-testable without driving the Provider
+   * stack (same precedent as `pickSourceUser` and `projectReplayParts`).
+   *
+   * The live plan is the state the model itself wrote, so the block is framed
+   * as system-carried state with explicit precedence over the summary's
+   * paraphrased `## Progress` / `## Next steps` prose. Cancelled items are
+   * dropped; only the most recent completed items are kept for continuity.
+   */
+  export function renderPlanCarryover(todos: readonly Todo.Info[]): string | undefined {
+    // A plan with nothing open carries no working state. The summary's own
+    // progress prose already covers finished work, and re-presenting a finished
+    // list invites the model to reopen items the user considers done.
+    if (!todos.some((todo) => todo.status === "pending" || todo.status === "in_progress")) return undefined
+    const completed = todos.filter((todo) => todo.status === "completed")
+    const keepCompleted = new Set(completed.slice(-PLAN_CARRYOVER_COMPLETED_TAIL))
+    const selected = todos.filter(
+      (todo) => todo.status !== "cancelled" && (todo.status !== "completed" || keepCompleted.has(todo)),
+    )
+    const shown = selected.slice(0, PLAN_CARRYOVER_MAX_ITEMS)
+    const omitted = selected.length - shown.length
+    return [
+      PLAN_CARRYOVER_HEADING,
+      ...Todo.formatLines(shown),
+      ...(omitted > 0 ? [`- (${omitted} more items omitted)`] : []),
+      "This list is the live plan: it supersedes any paraphrased progress or next steps written above.",
+      "Resume the in_progress item, keep the list updated with the todo tool, and do not treat it as new scope.",
+    ].join("\n")
+  }
+
+  /**
+   * Append the session's live plan to a compaction summary message. Best
+   * effort by contract: a missing or unreadable todo table must never fail a
+   * compaction, and an unchanged plan is appended once per summary message.
+   */
+  export async function appendPlanCarryover(input: { sessionID: SessionID; messageID: MessageID }): Promise<boolean> {
+    let todos: Todo.Info[]
+    try {
+      todos = Todo.get(input.sessionID)
+    } catch (error) {
+      log.warn("compaction plan carryover skipped: todo read failed", { sessionID: input.sessionID, error })
+      return false
+    }
+    const text = renderPlanCarryover(todos)
+    if (!text) return false
+    try {
+      // Idempotence is a read-then-insert, and the read is fail-closed: if we
+      // cannot prove the plan is absent, we do not write a second copy. That
+      // degrades to the pre-ADR-141 behaviour (the summary's own progress
+      // prose) rather than to a summary carrying the plan twice, and a silently
+      // bypassed guard is worse than a skipped best-effort append.
+      //
+      // Parts are ordered by (message_id, time_created, id), so the part keeps a
+      // generated ascending id: a hand-built id could sort ahead of the summary
+      // text when both land in the same millisecond. No path re-targets one
+      // summary message (the compaction retry loop builds a fresh message per
+      // attempt), so this read is the only guard needed.
+      const existing = await MessageV2.parts(input.messageID)
+      if (existing.some((part) => part.type === "text" && part.metadata?.purpose === PLAN_CARRYOVER_PURPOSE)) {
+        return false
+      }
+      await Session.updatePart({
+        id: PartID.ascending(),
+        messageID: input.messageID,
+        sessionID: input.sessionID,
+        type: "text",
+        synthetic: true,
+        text,
+        metadata: { purpose: PLAN_CARRYOVER_PURPOSE },
+      })
+      return true
+    } catch (error) {
+      // A failed read or append must degrade to "no plan carried", never to a
+      // failed compaction: the summary itself is already durable at this point.
+      log.warn("compaction plan carryover skipped", { sessionID: input.sessionID, error })
+      return false
+    }
+  }
 
   /**
    * Walk backward through `messages` to find the most recent user-role
@@ -826,6 +921,13 @@ When constructing the summary, try to stick to this template:
         }
       }
       if (processor.message.error) return "stop"
+      // ADR-141: a compaction must carry the session's live working plan.
+      // The summary template only paraphrases it, and the pre-compaction
+      // history (which held the real list) was just truncated at the marker.
+      await SessionCompaction.appendPlanCarryover({
+        sessionID: input.sessionID,
+        messageID: processor.message.id,
+      })
       await Bus.publish(Event.Compacted, { sessionID: input.sessionID })
       // History was rewritten: pre-compaction ledger anchors must stop
       // matching so the ledger degrades to estimated until the next exact
