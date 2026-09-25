@@ -280,6 +280,7 @@ export namespace TaskQueueSteer {
         sessionID: input.sessionID,
         clientID: input.clientID,
         queueClientID: clientID,
+        queueRowID: id,
       })
       if (attached?.status === "applied") {
         // The text was already delivered before this row existed. Remove the row
@@ -305,9 +306,14 @@ export namespace TaskQueueSteer {
         sessionID: input.sessionID,
         clientID: input.clientID,
         queueClientID: clientID,
+        queueRowID: id,
       })
       if (afterHold?.status === "applied") {
-        await markSteeredApplied(clientID, input.generation)
+        // Stamp synchronously: the apply is already durable, and an await here
+        // would reopen the window between the hold and the stamp that this whole
+        // ordering exists to close. The heartbeat has not started yet, so there
+        // is nothing to stop.
+        TaskQueue.markSteeredAppliedInTransaction(id, input.generation)
         return
       }
       startSteerHeartbeat(id, input.generation)

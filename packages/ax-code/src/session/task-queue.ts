@@ -1330,7 +1330,21 @@ export namespace TaskQueue {
    * rather than dropping (a lost follow-up).
    */
   export async function markSteeredApplied(id: TaskQueueID, generation: string): Promise<void> {
-    const now = Date.now()
+    markSteeredAppliedInTransaction(id, generation)
+  }
+
+  /**
+   * Synchronous, transaction-joining form of {@link markSteeredApplied}.
+   *
+   * `SessionShard.storeForProject(...).use` reuses an open transaction for the
+   * same project, so calling this from inside a write transaction (for example
+   * the steering drain's `beforeCommit`, which runs inside the same transaction
+   * as the user message it is admitting) makes the applied stamp commit
+   * atomically with that message. A crash can then no longer leave an awaiting
+   * steer row that restart recovery would restore — which would deliver the same
+   * text twice (ADR-146 residual).
+   */
+  export function markSteeredAppliedInTransaction(id: TaskQueueID, generation: string, now = Date.now()): void {
     SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const fresh = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get()
       if (!fresh) return

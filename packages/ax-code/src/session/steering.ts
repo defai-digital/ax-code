@@ -2,7 +2,8 @@ import { createHash, randomUUID } from "node:crypto"
 import z from "zod"
 import { Instance } from "@/project/instance"
 import { NamedError } from "@ax-code/util/error"
-import { MessageID, SessionID } from "./schema"
+import { MessageID, SessionID, type TaskQueueID } from "./schema"
+import { TaskQueue } from "./task-queue"
 
 export namespace SessionSteering {
   export const Input = z
@@ -44,6 +45,8 @@ export namespace SessionSteering {
      * off it; the receipt keeps the caller's client id so the API is unchanged.
      */
     queueClientID?: string
+    /** Row id of that durable identity, for the atomic applied stamp. */
+    queueRowID?: TaskQueueID
   }
   type Entry = { active?: { generation: string; signal: AbortSignal }; receipts: Map<string, Pending> }
   const state = Instance.state(() => new Map<SessionID, Entry>())
@@ -119,10 +122,12 @@ export namespace SessionSteering {
     sessionID: SessionID
     clientID: string
     queueClientID: string
+    queueRowID: TaskQueueID
   }): Receipt | undefined {
     const pending = state().get(input.sessionID)?.receipts.get(input.clientID)
     if (!pending || !pending.admitted) return undefined
     pending.queueClientID = input.queueClientID
+    pending.queueRowID = input.queueRowID
     return { ...pending.receipt, clientID: input.queueClientID }
   }
 
@@ -234,6 +239,12 @@ export namespace SessionSteering {
           beforeCommit() {
             if (signal.aborted || current.active?.generation !== generation || item.receipt.status !== "accepted")
               throw new Error("Steering generation ended before durable admission")
+            // Stamp the steer row to "applied" inside this same transaction, so
+            // the row and the admitted message are durable together (ADR-146).
+            // Without this a crash after the commit but before the asynchronous
+            // stamp leaves an awaiting row that restart recovery restores,
+            // delivering the same text a second time.
+            if (item.queueRowID) TaskQueue.markSteeredAppliedInTransaction(item.queueRowID, generation)
           },
           afterCommit() {
             item.receipt.status = "applied"

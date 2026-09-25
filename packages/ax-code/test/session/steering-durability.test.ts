@@ -114,10 +114,15 @@ test("an applied draft steer is stamped so recovery cannot replay it", async () 
       })
       const held = (await TaskQueue.list({ sessionID: session.id }))[0]!
 
-      const applied = await SessionSteering.drain(session.id, controller.signal, async ({ text, afterCommit }) => {
-        expect(text).toBe("apply this at the step boundary")
-        afterCommit()
-      })
+      const applied = await SessionSteering.drain(
+        session.id,
+        controller.signal,
+        async ({ text, beforeCommit, afterCommit }) => {
+          expect(text).toBe("apply this at the step boundary")
+          beforeCommit()
+          afterCommit()
+        },
+      )
       expect(applied).toBe(true)
 
       const row = await waitForRow(held.id, (candidate) => candidate.payload["steeredAppliedAt"] !== undefined)
@@ -234,6 +239,70 @@ test("a steer discarded while the row is written stays queued for the next turn"
       // Never cancelled into an awaiting state: the text has no other home, so
       // the next turn runs it.
       expect(rows[0]!.status).not.toBe("cancelled")
+    },
+  })
+})
+
+test("the applied stamp commits with the message, not on a later async pass", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const { session, generation, controller } = await draftSession()
+      await SessionPrompt.steer(session.id, {
+        expectedGeneration: generation,
+        clientID: "draft_atomic",
+        text: "stamp me with the message",
+      })
+      const held = (await TaskQueue.list({ sessionID: session.id }))[0]!
+
+      // The asynchronous belt (which also stops the heartbeat) must not be what
+      // makes this durable: with it disabled the row is still stamped, which is
+      // what closes the crash window between the commit and that pass.
+      const { TaskQueueSteer } = await import("../../src/session/task-queue-steer")
+      const belt = vi.spyOn(TaskQueueSteer, "markSteeredApplied").mockResolvedValue(undefined)
+      try {
+        // Mirror the production apply, which calls beforeCommit from inside the
+        // message transaction and afterCommit once it is durable.
+        await SessionSteering.drain(session.id, controller.signal, async ({ beforeCommit, afterCommit }) => {
+          beforeCommit()
+          afterCommit()
+        })
+      } finally {
+        belt.mockRestore()
+      }
+
+      const row = await TaskQueue.get(held.id)
+      expect(row.payload["steeredAppliedAt"]).toBeTypeOf("number")
+    },
+  })
+})
+
+test("an apply the transaction aborts leaves no applied stamp", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const { session, generation, controller } = await draftSession()
+      await SessionPrompt.steer(session.id, {
+        expectedGeneration: generation,
+        clientID: "draft_rollback",
+        text: "this one must not be stamped",
+      })
+      const held = (await TaskQueue.list({ sessionID: session.id }))[0]!
+
+      // End the generation inside the transaction: beforeCommit throws, so the
+      // message roll back and the stamp must roll back with it. Recovery still
+      // owns the text.
+      await SessionSteering.drain(session.id, controller.signal, async ({ beforeCommit }) => {
+        SessionSteering.finish(session.id, { interrupted: false })
+        beforeCommit()
+      })
+
+      const row = await TaskQueue.get(held.id)
+      expect(row.payload["steeredAppliedAt"]).toBeUndefined()
+      const recovered = await waitForRow(held.id, (candidate) => candidate.status !== "cancelled")
+      expect(["queued", "waiting_for_idle", "running"]).toContain(recovered.status)
     },
   })
 })
