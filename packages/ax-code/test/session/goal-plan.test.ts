@@ -289,4 +289,22 @@ describe("GoalPlan persistence", () => {
       },
     })
   })
+
+  test("remove deletes the unassured marker with the other goal artifacts", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const created = Date.now()
+        GoalPlan.markUnassured(session.id, created)
+        expect(GoalPlan.lookupContract(session.id, created).state).toBe("unassured")
+        await GoalPlan.remove(session.id, created)
+        // A leftover marker would report "assurance was declined" for a goal that
+        // was never planned, and the failed planner would never be retried.
+        expect(GoalPlan.lookupContract(session.id, created).state).toBe("missing")
+        await Session.remove(session.id)
+      },
+    })
+  })
 })

@@ -489,6 +489,11 @@ export namespace GoalPlan {
   export async function remove(sessionID: SessionID, created: number) {
     await fs.promises.unlink(pathFor(sessionID, created)).catch(() => undefined)
     await fs.promises.unlink(digestPathFor(sessionID, created)).catch(() => undefined)
+    // The marker is one of this goal's artifacts. Leaving it behind tells a later
+    // goal that lands on the same creation stamp "assurance was declined" instead
+    // of "nothing was planned yet", and lookupContract then skips the planner
+    // retry a failed planner is supposed to get.
+    await fs.promises.unlink(unassuredPathFor(sessionID, created)).catch(() => undefined)
   }
 
   export function sample(objective: string): Contract {
