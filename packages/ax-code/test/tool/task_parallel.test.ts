@@ -661,3 +661,152 @@ describe("task_parallel swarm failure polarity", () => {
     })
   })
 })
+
+describe("task_parallel swarm scale (item: swarm)", () => {
+  test("the member cap and the concurrency cap are separate", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+    const tool = await TaskParallelTool.init()
+    // 16 members are accepted (the pre-deadline cap of 8 is gone)...
+    expect(
+      tool.parameters.safeParse({
+        items: Array.from({ length: 16 }, (_, i) => `m${i}`),
+        prompt_template: "check {{item}}",
+        subagent_type: "explore",
+      }).success,
+    ).toBe(true)
+    // ...while in-flight width stays its own, smaller bound.
+    expect(
+      tool.parameters.safeParse({
+        items: ["a", "b"],
+        prompt_template: "check {{item}}",
+        subagent_type: "explore",
+        concurrency: 9,
+      }).success,
+    ).toBe(false)
+    expect(
+      tool.parameters.safeParse({
+        items: ["a", "b"],
+        prompt_template: "check {{item}}",
+        subagent_type: "explore",
+        concurrency: 8,
+      }).success,
+    ).toBe(true)
+      },
+    })
+  })
+
+  test("the call deadline returns partial results instead of holding the turn", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { ctx } = await parent(tmp.path)
+        const prompts: string[] = []
+        const real = Date.now
+        let offset = 0
+        const clock = vi.spyOn(Date, "now").mockImplementation(() => real() + offset)
+        vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
+          prompts.push(input.parts?.[0]?.text ?? "")
+          // The first member takes longer than the whole call's budget.
+          offset += 31 * 60 * 1000
+          return {
+            info: {
+              id: input.messageID,
+              sessionID: input.sessionID,
+              role: "assistant",
+              time: { created: real(), completed: real() },
+            },
+            parts: [{ type: "text", text: "first member finished" }],
+          } as any
+        }) as any)
+        try {
+          const result = await (
+            await TaskParallelTool.init()
+          ).execute(
+            {
+              items: ["one", "two", "three"],
+              prompt_template: "check {{item}}",
+              subagent_type: "explore",
+              concurrency: 1,
+            } as any,
+            ctx,
+          )
+          // Only the first member ran; the rest are reported, not omitted.
+          expect(prompts).toHaveLength(1)
+          expect(result.title).toContain("deadline reached")
+          const metadata = result.metadata as any
+          expect(metadata.deadlineReached).toBe(true)
+          expect(metadata.results).toHaveLength(3)
+          expect(metadata.results[0].ok).toBe(true)
+          expect(metadata.results[1]).toMatchObject({ ok: false, task_id: undefined })
+          expect(metadata.results[1].error).toContain("deadline")
+          expect(result.output).toContain("first member finished")
+          expect(result.output).toContain("deadline_cancelled")
+        } finally {
+          clock.mockRestore()
+          vi.restoreAllMocks()
+        }
+      },
+    })
+  })
+
+  test("one member's text is bounded in the parent's context", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { ctx } = await parent(tmp.path)
+        vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
+          return {
+            info: {
+              id: input.messageID,
+              sessionID: input.sessionID,
+              role: "assistant",
+              time: { created: Date.now(), completed: Date.now() },
+            },
+            parts: [{ type: "text", text: "x".repeat(9_000) }],
+          } as any
+        }) as any)
+        try {
+          const result = await (
+            await TaskParallelTool.init()
+          ).execute({ items: ["only"], prompt_template: "check {{item}}", subagent_type: "explore" } as any, ctx)
+          expect(result.output).toContain("truncated at 4000 characters")
+          expect(result.output).toContain("holds the full text")
+        } finally {
+          vi.restoreAllMocks()
+        }
+      },
+    })
+  })
+
+  test("a multi-writer swarm is refused before any child session exists", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { ctx } = await parent(tmp.path)
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt")
+        try {
+          await expect(
+            (await TaskParallelTool.init()).execute(
+              {
+                tasks: [
+                  { description: "a", prompt: "write a", subagent_type: "build" },
+                  { description: "b", prompt: "write b", subagent_type: "build" },
+                ],
+              } as any,
+              ctx,
+            ),
+          ).rejects.toThrow()
+          expect(promptSpy).not.toHaveBeenCalled()
+        } finally {
+          vi.restoreAllMocks()
+        }
+      },
+    })
+  })
+})

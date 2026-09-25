@@ -22,9 +22,29 @@ import { EnsemblePreflight } from "../mode/preflight"
 import type { ModelID, ProviderID } from "../provider/schema"
 
 const MAX_DEPTH = 5
-export const MAX_PARALLEL = 8
+/**
+ * Members a single swarm call may carry. Raised from 8 once the batch deadline
+ * below existed: the worst case is now bounded by that deadline rather than by
+ * members x per-member timeout, and the pool keeps the provider load flat.
+ */
+export const MAX_PARALLEL = 16
+/**
+ * Members allowed in flight. Deliberately a separate cap from `MAX_PARALLEL`:
+ * binding the two let a wider swarm run wider, which is not the same decision
+ * (the shared gateway quota is what a high in-flight count contends for).
+ */
+export const MAX_CONCURRENCY = 8
 /** Swarm members in flight at once. Members beyond this queue behind them. */
 const DEFAULT_CONCURRENCY = 4
+/**
+ * Whole-call wall clock. The call blocks the turn, so a wide swarm must not be
+ * able to hold it for members x per-member timeout (16 members at concurrency 4
+ * would otherwise reach ~48 minutes). On expiry the pool stops starting members,
+ * cancels the ones in flight, and the call returns partial results.
+ */
+const SWARM_DEADLINE_MS = 30 * 60 * 1000
+/** Characters of one member's final text inlined into the parent's context. */
+const MEMBER_TEXT_INLINE_LIMIT = 4_000
 /** Literal placeholder one `prompt_template` fans out over `items`. */
 const ITEM_PLACEHOLDER = "{{item}}"
 const SUBAGENT_TIMEOUT_MS = 10 * 60 * 1000
@@ -85,7 +105,7 @@ const parameters = z
       .number()
       .int()
       .min(1)
-      .max(MAX_PARALLEL)
+      .max(MAX_CONCURRENCY)
       .optional()
       .describe(`Members allowed to run at once (default ${DEFAULT_CONCURRENCY}). Members beyond this queue.`),
     output_schema: TaskOutputSchema.Parameter.optional().describe(
@@ -540,14 +560,28 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
       // order. A member that throws stops the pool from starting new work and
       // cancels the siblings that already started (unchanged contract).
       const concurrency = Math.min(params.concurrency ?? DEFAULT_CONCURRENCY, resolved.length)
+      const deadlineAt = Date.now() + SWARM_DEADLINE_MS
       const outcomes: Array<Awaited<ReturnType<typeof runOneTask>> | undefined> = []
+      // Members the deadline stopped before they were dispatched: reported as
+      // their own outcome so the caller sees every member, not just the settled
+      // ones, and so the numbering stays the caller's member order.
+      const deadlineSkipped = new Set<number>()
+      let deadlineHit = false
       let failure: { reason: unknown } | undefined
       let cursor = 0
       const runPool = async () => {
-        while (failure === undefined && !toolCtx.abort.aborted) {
+        while (failure === undefined && !toolCtx.abort.aborted && !deadlineHit) {
           const index = cursor++
           const entry = resolved[index]
           if (!entry) return
+          if (Date.now() >= deadlineAt) {
+            // Stop starting members, cancel the ones in flight so they cannot
+            // outlive the call, and let the aggregation report partial results.
+            deadlineHit = true
+            deadlineSkipped.add(index)
+            for (const child of started) void cancelChild(child.sessionID)
+            return
+          }
           const { task, agent } = entry
           try {
             outcomes[index] = await runOneTask({
@@ -569,38 +603,75 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
           }
         }
       }
+      // Whatever stopped the pool, let the members still in flight settle before
+      // reporting: an unawaited promise would keep running past the response.
+      if (deadlineHit) await cancelStarted()
       await Promise.all(Array.from({ length: Math.max(1, concurrency) }, () => runPool()))
       const settled = outcomes.filter((outcome): outcome is NonNullable<typeof outcome> => outcome !== undefined)
       const stopped = new Set(settled.map((outcome) => outcome.task_id))
-      for (const outcome of settled) {
-        await fireSubagentStop({
-          sessionID: outcome.task_id,
-          agent: outcome.subagent_type,
-          status: outcome.ok ? "completed" : "failed",
-        })
-      }
+      // Hooks run concurrently: they are independent notifications, and awaiting
+      // them one by one made a wide swarm's latency grow with its member count.
+      await Promise.all(
+        settled.map((outcome) =>
+          fireSubagentStop({
+            sessionID: outcome.task_id,
+            agent: outcome.subagent_type,
+            status: outcome.ok ? "completed" : "failed",
+          }),
+        ),
+      )
       if (failure) {
         await cancelStarted()
-        for (const child of started) {
-          if (stopped.has(child.sessionID)) continue
-          await fireSubagentStop({
-            sessionID: child.sessionID,
-            agent: child.agent,
-            status: "failed",
-          })
-          stopped.add(child.sessionID)
-        }
+        await Promise.all(
+          started
+            .filter((child) => !stopped.has(child.sessionID))
+            .map((child) => {
+              stopped.add(child.sessionID)
+              return fireSubagentStop({ sessionID: child.sessionID, agent: child.agent, status: "failed" })
+            }),
+        )
         throw failure.reason
       }
 
-      const okCount = settled.filter((r) => r.ok).length
-      const lines = settled.map((result, index) => {
-        const header = `### ${index + 1}. ${result.description} (@${result.subagent_type})`
-        const status = result.ok ? "ok" : "failed"
-        const body = result.ok ? result.text : [result.error, result.text].filter(Boolean).join("\n") || "No output"
+      // Every member is reported in the caller's order, including the ones the
+      // deadline stopped: a partial result that silently omitted them would read
+      // as if the swarm had been narrower than it was.
+      const reports = resolved.map(({ task }, index) => {
+        const outcome = outcomes[index]
+        if (outcome) return { task, outcome, status: outcome.ok ? ("ok" as const) : ("failed" as const) }
+        return {
+          task,
+          outcome: undefined,
+          status: deadlineHit ? ("deadline_cancelled" as const) : ("not_started" as const),
+        }
+      })
+      const okCount = reports.filter((report) => report.status === "ok").length
+      const lines = reports.map((report, index) => {
+        const header = `### ${index + 1}. ${report.task.description} (@${report.task.subagent_type})`
+        const result = report.outcome
+        if (!result) {
+          return [
+            header,
+            `status: ${report.status}`,
+            `task_id: -`,
+            "",
+            "<task_result>",
+            report.status === "deadline_cancelled"
+              ? `not started before the call's ${Math.round(SWARM_DEADLINE_MS / 60_000)}-minute deadline; run it as its own swarm or task`
+              : "not started",
+            "</task_result>",
+          ].join("\n")
+        }
+        const full = result.ok ? result.text : [result.error, result.text].filter(Boolean).join("\n") || "No output"
+        // Bound what one member contributes to the parent's context. The full
+        // text stays in the member's own session, reachable by task_id.
+        const truncated = full.length > MEMBER_TEXT_INLINE_LIMIT
+        const body = truncated
+          ? `${full.slice(0, MEMBER_TEXT_INLINE_LIMIT)}\n\n[truncated at ${MEMBER_TEXT_INLINE_LIMIT} characters; the member session ${result.task_id} holds the full text]`
+          : full
         return [
           header,
-          `status: ${status}`,
+          `status: ${report.status}`,
           `task_id: ${result.task_id}`,
           "",
           "<task_result>",
@@ -611,26 +682,47 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
       })
 
       return {
-        title: `Parallel digs ${okCount}/${settled.length} ok`,
+        title: `Parallel digs ${okCount}/${reports.length} ok${deadlineHit ? " (deadline reached)" : ""}`,
         metadata: {
-          results: settled.map((r) => ({
-            description: r.description,
-            subagent_type: r.subagent_type,
-            task_id: r.task_id,
-            ok: r.ok,
-            error: r.error,
-            ...(r.structuredStatus === undefined
-              ? {}
-              : {
-                  structuredStatus: r.structuredStatus,
-                  ...(r.structured === undefined ? {} : { structured: r.structured }),
-                }),
-          })),
+          results: reports.map((report) => {
+            const result = report.outcome
+            if (!result) {
+              return {
+                description: report.task.description,
+                subagent_type: report.task.subagent_type,
+                task_id: undefined,
+                ok: false,
+                error:
+                  report.status === "deadline_cancelled"
+                    ? "not started before the swarm deadline"
+                    : "not started",
+              }
+            }
+            return {
+              description: result.description,
+              subagent_type: result.subagent_type,
+              task_id: result.task_id,
+              ok: result.ok,
+              error: result.error,
+              ...(result.structuredStatus === undefined
+                ? {}
+                : {
+                    structuredStatus: result.structuredStatus,
+                    ...(result.structured === undefined ? {} : { structured: result.structured }),
+                  }),
+            }
+          }),
           writers: isolation.writers,
           readers: isolation.readers,
+          ...(deadlineHit ? { deadlineReached: true } : {}),
         },
         output: [
-          `Parallel explore finished: ${okCount}/${settled.length} succeeded.`,
+          `Parallel explore finished: ${okCount}/${reports.length} succeeded.`,
+          ...(deadlineHit
+            ? [
+                `The call reached its ${Math.round(SWARM_DEADLINE_MS / 60_000)}-minute deadline: members still running were cancelled and the rest were not started. Re-run the unfinished items.`,
+              ]
+            : []),
           isolation.writers.length > 0
             ? `Writers in this batch (serialized capability, single writer): ${isolation.writers.join(", ")}`
             : "All agents classified read-only.",

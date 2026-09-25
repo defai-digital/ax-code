@@ -21,10 +21,15 @@ Two call shapes:
    Prefer the task tool when you have a single dig.
 
 Limits:
-- 1–8 members per call
-- At most `concurrency` members run at once (default 4); the rest queue behind them
+- 1–16 members per call
+- At most `concurrency` members run at once (default 4, maximum 8); the rest queue behind them
+- The whole call has a 30-minute deadline: when it is reached, running members are
+  cancelled and the rest are reported as not started, so a wide swarm cannot hold
+  the turn for the sum of its members' timeouts. Re-run the unfinished items.
+- Each member's final text is inlined up to a bounded length; the rest stays in the
+  member session, which the returned task_id reopens
 - Each member is a separate subagent session with its own context
-- Nested task / task_parallel fan-out from children is denied
+- Nested fan-out from children is denied unless the agent has an explicit task permission
 - Same depth and timeout rules as the single task tool
 
 When the digs finish, summarize the combined evidence for the user. Each result includes a task_id you can resume later with the task tool.
