@@ -1,5 +1,6 @@
 import { taskParentConstraints } from "./task-constraints"
 import { assistantError, assistantErrorMessage, errorDetails, isAbortError } from "./task-errors"
+import { toErrorMessage } from "@/util/error-message"
 import { TaskOutputSchema } from "./task-output-schema"
 import { Tool } from "./tool"
 import DESCRIPTION from "./task_parallel.txt"
@@ -567,7 +568,7 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
       // ones, and so the numbering stays the caller's member order.
       const deadlineSkipped = new Set<number>()
       let deadlineHit = false
-      let failure: { reason: unknown } | undefined
+      let failure: { index: number; reason: unknown } | undefined
       let cursor = 0
       const runPool = async () => {
         while (failure === undefined && !toolCtx.abort.aborted && !deadlineHit) {
@@ -597,7 +598,13 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
               },
             })
           } catch (error) {
-            failure ??= { reason: error }
+            // A member that throws before its session exists is reported as that
+            // member's failure, not as the whole call's: discarding the members
+            // that already finished would throw away real work, and a wide swarm
+            // makes that loss more likely. An abort is the caller's own signal,
+            // so it still propagates.
+            if (toolCtx.abort.aborted || isAbortError(error)) throw error
+            failure ??= { index, reason: error }
             await cancelStarted()
             return
           }
@@ -630,19 +637,29 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
               return fireSubagentStop({ sessionID: child.sessionID, agent: child.agent, status: "failed" })
             }),
         )
-        throw failure.reason
       }
+      const callFailure = failure
 
       // Every member is reported in the caller's order, including the ones the
       // deadline stopped: a partial result that silently omitted them would read
       // as if the swarm had been narrower than it was.
+      const failureReason =
+        callFailure === undefined
+          ? undefined
+          : toErrorMessage(callFailure.reason, "member failed before its session existed")
       const reports = resolved.map(({ task }, index) => {
         const outcome = outcomes[index]
         if (outcome) return { task, outcome, status: outcome.ok ? ("ok" as const) : ("failed" as const) }
+        if (callFailure?.index === index) {
+          return { task, outcome: undefined, status: "failed" as const, error: failureReason! }
+        }
         return {
           task,
           outcome: undefined,
           status: deadlineHit ? ("deadline_cancelled" as const) : ("not_started" as const),
+          ...(callFailure === undefined
+            ? {}
+            : { error: `not started: sibling member ${callFailure.index + 1} failed before its session existed` }),
         }
       })
       const okCount = reports.filter((report) => report.status === "ok").length
@@ -650,17 +667,13 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
         const header = `### ${index + 1}. ${report.task.description} (@${report.task.subagent_type})`
         const result = report.outcome
         if (!result) {
-          return [
-            header,
-            `status: ${report.status}`,
-            `task_id: -`,
-            "",
-            "<task_result>",
-            report.status === "deadline_cancelled"
-              ? `not started before the call's ${Math.round(SWARM_DEADLINE_MS / 60_000)}-minute deadline; run it as its own swarm or task`
-              : "not started",
-            "</task_result>",
-          ].join("\n")
+          const reason =
+            "error" in report && report.error
+              ? report.error
+              : report.status === "deadline_cancelled"
+                ? `not started before the call's ${Math.round(SWARM_DEADLINE_MS / 60_000)}-minute deadline; run it as its own swarm or task`
+                : "not started"
+          return [header, `status: ${report.status}`, `task_id: -`, "", "<task_result>", reason, "</task_result>"].join("\n")
         }
         const full = result.ok ? result.text : [result.error, result.text].filter(Boolean).join("\n") || "No output"
         // Bound what one member contributes to the parent's context. The full
@@ -693,9 +706,11 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
                 task_id: undefined,
                 ok: false,
                 error:
-                  report.status === "deadline_cancelled"
-                    ? "not started before the swarm deadline"
-                    : "not started",
+                  "error" in report && report.error
+                    ? report.error
+                    : report.status === "deadline_cancelled"
+                      ? "not started before the swarm deadline"
+                      : "not started",
               }
             }
             return {

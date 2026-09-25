@@ -289,13 +289,21 @@ describe("task_parallel sibling lifecycle", () => {
             ctx,
           )
           await started
-          await expect(run).rejects.toThrow("database busy")
+          // The failing member is reported, and the already-started sibling is
+          // still cancelled; the call returns a partial result rather than
+          // discarding whatever else had finished.
+          const result = await run
           const children = await Session.children(parentSession.id)
           expect(children).toHaveLength(1)
           expect(cancel).toHaveBeenCalledWith(children[0]!.id, { interrupt: true })
           expect(stops.some((item: any) => item.sessionID === children[0]!.id && item.args?.status === "failed")).toBe(
             true,
           )
+          const metadata = result.metadata as any
+          expect(metadata.results).toHaveLength(2)
+          expect(metadata.results[1].ok).toBe(false)
+          expect(metadata.results[1].error).toContain("database busy")
+          expect(result.output).toContain("database busy")
         } finally {
           vi.restoreAllMocks()
         }
@@ -636,24 +644,30 @@ describe("task_parallel swarm failure polarity", () => {
           } as any
         }) as any)
         try {
-          await expect(
-            (await TaskParallelTool.init()).execute(
-              {
-                items: ["one", "two", "three"],
-                prompt_template: "check {{item}}",
-                subagent_type: "explore",
-                concurrency: 2,
-              } as any,
-              ctx,
-            ),
-          ).rejects.toThrow("database busy")
+          const result = await (
+            await TaskParallelTool.init()
+          ).execute(
+            {
+              items: ["one", "two", "three"],
+              prompt_template: "check {{item}}",
+              subagent_type: "explore",
+              concurrency: 2,
+            } as any,
+            ctx,
+          )
           // The third member was never dispatched: the pool stops pulling work
-          // once a member reports a systemic failure.
+          // once a member reports a systemic failure, and the call still returns
+          // a report for it instead of losing the members that had finished.
           expect(created).toBe(2)
           // The started sibling is cancelled (twice at most: once by the pool
           // worker, once by the final sweep, exactly as the pre-pool code did),
           // and no other session is touched.
           expect(new Set(cancels).size).toBe(1)
+          const metadata = result.metadata as any
+          expect(metadata.results).toHaveLength(3)
+          expect(metadata.results[1]).toMatchObject({ ok: false })
+          expect(metadata.results[1].error).toContain("database busy")
+          expect(metadata.results[2].error).toContain("sibling member 2 failed")
         } finally {
           vi.restoreAllMocks()
         }
