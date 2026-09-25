@@ -699,9 +699,15 @@ export namespace SessionPrompt {
     // non-busy compaction outcome (or any other task type) so the cap
     // only triggers on a genuinely stuck in-flight compaction, not on
     // accumulated busy events across unrelated turns.
-    let compactionBusyRetries = 0
-    let consecutiveContextOverflowCompactions = 0
-    let consecutiveRequestTooLargeCompactions = 0
+    // Consecutive-failure bookkeeping for the compaction path, grouped (item 4
+    // step 4). Each field keeps its initial value, its ceiling and every reset
+    // site. `consecutiveErrors` and `goalBudgetWrapUp` are deliberately NOT in
+    // here: they are general loop state, not part of this triad.
+    const compactionRetries = {
+      busy: 0,
+      contextOverflow: 0,
+      requestTooLarge: 0,
+    }
     let mediaProjection: MediaProjection.Mode = "normal"
     let mediaProjectionUserID: MessageID | undefined
     while (true) {
@@ -1058,13 +1064,13 @@ export namespace SessionPrompt {
           parentID: lastUser.id,
           abort,
           sessionID,
-          busyRetries: compactionBusyRetries,
+          busyRetries: compactionRetries.busy,
         })
         if (compaction.action === "break") {
           reason = compaction.reason
           break
         }
-        compactionBusyRetries = compaction.busyRetries
+        compactionRetries.busy = compaction.busyRetries
         if (compaction.action === "retry") {
           cachedMsgs = undefined
           continue
@@ -2412,8 +2418,8 @@ export namespace SessionPrompt {
         result,
         messageFinish: processor.message.finish,
         hasError: false,
-        priorContextOverflowCompactions: consecutiveContextOverflowCompactions,
-        priorRequestTooLargeCompactions: consecutiveRequestTooLargeCompactions,
+        priorContextOverflowCompactions: compactionRetries.contextOverflow,
+        priorRequestTooLargeCompactions: compactionRetries.requestTooLarge,
       })
       if (processorDecision.action === "stop") {
         if (processorDecision.message) {
@@ -2427,15 +2433,15 @@ export namespace SessionPrompt {
         break
       }
       if (processorDecision.action === "continue") {
-        consecutiveContextOverflowCompactions = 0
-        consecutiveRequestTooLargeCompactions = 0
+        compactionRetries.contextOverflow = 0
+        compactionRetries.requestTooLarge = 0
       }
 
       if (processorDecision.action === "compact") {
-        consecutiveContextOverflowCompactions =
-          processorDecision.triggerReason === "context_overflow_error" ? consecutiveContextOverflowCompactions + 1 : 0
-        consecutiveRequestTooLargeCompactions =
-          processorDecision.triggerReason === "request_too_large" ? consecutiveRequestTooLargeCompactions + 1 : 0
+        compactionRetries.contextOverflow =
+          processorDecision.triggerReason === "context_overflow_error" ? compactionRetries.contextOverflow + 1 : 0
+        compactionRetries.requestTooLarge =
+          processorDecision.triggerReason === "request_too_large" ? compactionRetries.requestTooLarge + 1 : 0
         await SessionCompaction.create({
           sessionID,
           agent: lastUser.agent,
