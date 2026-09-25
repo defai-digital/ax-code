@@ -32,7 +32,19 @@ export namespace SessionSteering {
     })
     .meta({ ref: "SteeringState" })
   export const Conflict = NamedError.create("SteeringConflict", z.object({ message: z.string() }))
-  type Pending = { digest: string; text?: string; receipt: Receipt; admitted: boolean; ready: Promise<void> }
+  type Pending = {
+    digest: string
+    text?: string
+    receipt: Receipt
+    admitted: boolean
+    ready: Promise<void>
+    /**
+     * Queue-backed identity for this steer, when the text also owns a durable
+     * row (ADR-146). Heartbeat, applied-stamp and discard reconciliation key
+     * off it; the receipt keeps the caller's client id so the API is unchanged.
+     */
+    queueClientID?: string
+  }
   type Entry = { active?: { generation: string; signal: AbortSignal }; receipts: Map<string, Pending> }
   const state = Instance.state(() => new Map<SessionID, Entry>())
 
@@ -74,14 +86,14 @@ export namespace SessionSteering {
         pending.receipt.status = "rejected"
         pending.receipt.reason = "generation_ended_before_application"
         pending.text = undefined
-        discarded.push({ ...pending.receipt })
+        discarded.push({ ...pending.receipt, clientID: pending.queueClientID ?? pending.receipt.clientID })
         continue
       }
       // A receipt drain rejected before commit (application_rejected) also
       // cancelled its queue row on admission; hand it to the same restoration
       // path in case the drain-time reconciliation never ran.
       if (pending.receipt.status === "rejected" && pending.receipt.reason === "application_rejected") {
-        discarded.push({ ...pending.receipt })
+        discarded.push({ ...pending.receipt, clientID: pending.queueClientID ?? pending.receipt.clientID })
       }
     }
     // An admitted-but-unapplied steer whose text came from a saved follow-up
@@ -94,6 +106,29 @@ export namespace SessionSteering {
         .then(({ TaskQueueSteer }) => TaskQueueSteer.reconcileDiscarded(sessionID, discarded, { aborted }))
         .catch(() => undefined)
     }
+  }
+
+  /**
+   * Attach a durable row identity to an already-accepted steer (ADR-146). The
+   * text was admitted into the running generation before the row existed, so
+   * the caller needs the current status back: when the drain already applied it
+   * the row must be stamped applied instead of waiting for a boundary that has
+   * passed. Returns undefined when no such admitted receipt exists.
+   */
+  export function attachDurable(input: {
+    sessionID: SessionID
+    clientID: string
+    queueClientID: string
+  }): Receipt | undefined {
+    const pending = state().get(input.sessionID)?.receipts.get(input.clientID)
+    if (!pending || !pending.admitted) return undefined
+    pending.queueClientID = input.queueClientID
+    return { ...pending.receipt, clientID: input.queueClientID }
+  }
+
+  /** The durable row identity already attached to this admitted steer, if any. */
+  export function durableIdentity(input: { sessionID: SessionID; clientID: string }): string | undefined {
+    return state().get(input.sessionID)?.receipts.get(input.clientID)?.queueClientID
   }
 
   export function view(sessionID: SessionID): z.infer<typeof View> {
@@ -187,8 +222,9 @@ export namespace SessionSteering {
       // this step boundary so a second backend booting while the steer waits
       // for its apply does not requeue and double-execute the follow-up (see
       // TaskQueue.recoverInterrupted). Non-queue client IDs no-op.
+      const durableClientID = item.queueClientID ?? item.receipt.clientID
       void import("./task-queue-steer")
-        .then(({ TaskQueueSteer }) => TaskQueueSteer.heartbeatSteered(item.receipt.clientID, generation))
+        .then(({ TaskQueueSteer }) => TaskQueueSteer.heartbeatSteered(durableClientID, generation))
         .catch(() => undefined)
       const messageID = MessageID.ascending()
       try {
@@ -207,7 +243,7 @@ export namespace SessionSteering {
             // A follow-up steer cancelled its queue row on admission; stamp the
             // row applied so restart recovery never re-runs delivered text.
             void import("./task-queue-steer")
-              .then(({ TaskQueueSteer }) => TaskQueueSteer.markSteeredApplied(item.receipt.clientID, generation))
+              .then(({ TaskQueueSteer }) => TaskQueueSteer.markSteeredApplied(durableClientID, generation))
               .catch(() => undefined)
           },
         })
@@ -223,7 +259,11 @@ export namespace SessionSteering {
           // the generation is aborting) instead of waiting for finish().
           void import("./task-queue-steer")
             .then(({ TaskQueueSteer }) =>
-              TaskQueueSteer.reconcileDiscarded(sessionID, [{ ...item.receipt }], { aborted: signal.aborted }),
+              TaskQueueSteer.reconcileDiscarded(
+                sessionID,
+                [{ ...item.receipt, clientID: item.queueClientID ?? item.receipt.clientID }],
+                { aborted: signal.aborted },
+              ),
             )
             .catch(() => undefined)
         }

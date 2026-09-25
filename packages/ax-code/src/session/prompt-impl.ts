@@ -251,7 +251,7 @@ export namespace SessionPrompt {
   export async function steer(sessionID: SessionID, input: SessionSteering.Input) {
     const session = await Session.get(sessionID)
     assertWorkSessionSendable({ metadata: session.metadata })
-    return SessionSteering.submit(sessionID, input, async () => {
+    const receipt = await SessionSteering.submit(sessionID, input, async () => {
       if (session.parentID) return
       const { LifecycleHooks } = await import("@/hooks/lifecycle")
       const result = await LifecycleHooks.runForWorkspace({
@@ -261,6 +261,20 @@ export namespace SessionPrompt {
       })
       if (result.blocked) throw new Error("UserPromptSubmit hook blocked steering")
     })
+    // ADR-146: an accepted draft steer must not be able to vanish. The queue
+    // steer reaches this function with its own durable row already held; a
+    // draft arrives with nothing, so give it a row now that it is admitted (a
+    // client that never received this receipt still holds its own draft).
+    if (receipt.status === "accepted") {
+      const { TaskQueueSteer } = await import("./task-queue-steer")
+      await TaskQueueSteer.persistAcceptedDraft({
+        sessionID,
+        clientID: input.clientID,
+        text: input.text,
+        generation: receipt.generation,
+      })
+    }
+    return receipt
   }
 
   function start(sessionID: SessionID) {

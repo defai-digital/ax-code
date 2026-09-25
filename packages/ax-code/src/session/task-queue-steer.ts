@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 import z from "zod"
 import { HTTPException } from "hono/http-exception"
 import { Log } from "@/util/log"
-import { TaskQueueID } from "./schema"
+import { TaskQueueID, type SessionID } from "./schema"
 import { SessionSteering } from "./steering"
 import { TaskQueue } from "./task-queue"
 import { TaskQueueExecutor } from "./task-queue-executor"
@@ -230,6 +230,109 @@ export namespace TaskQueueSteer {
     await TaskQueue.steerHeartbeat(parsed.data, generation).catch((error) => {
       log.warn("could not refresh a steered follow-up heartbeat", { id: parsed.data, error })
     })
+  }
+
+  /**
+   * Give an already-admitted composer-draft steer a durable row (ADR-146).
+   *
+   * The draft path admits text into the running generation before it is written
+   * anywhere durable, so a backend that dies between the `accepted` receipt and
+   * the apply loses it. The row is created AFTER admission on purpose: a client
+   * that never received a receipt still holds its own draft, so there is no
+   * window in which both sides have dropped the text, and a rejected admission
+   * never needs row cleanup.
+   *
+   * Best effort by contract — a persistence failure must not fail a steer that
+   * was already admitted. When the row cannot be cancelled it is removed rather
+   * than left queued, because a queued row would later run text the drain has
+   * already applied.
+   */
+  export async function persistAcceptedDraft(input: {
+    sessionID: SessionID
+    clientID: string
+    text: string
+    generation: string
+  }): Promise<void> {
+    // A queue-origin steer already owns the row it was steered from; creating a
+    // second one for the same text would deliver it twice.
+    if (CLIENT_ID.test(input.clientID)) return
+    // A retry of the same request (same caller client id) must not create a
+    // second row for text that already has one.
+    if (SessionSteering.durableIdentity({ sessionID: input.sessionID, clientID: input.clientID })) return
+    let id: TaskQueueID | undefined
+    try {
+      // Idempotent on (session, kind, source message) so a concurrent or
+      // repeated call collapses onto one row.
+      const item = await TaskQueue.enqueueIdempotent({
+        sessionID: input.sessionID,
+        kind: "followup",
+        title: draftTitle(input.text),
+        sourceMessageID: input.clientID,
+        payload: { body: { parts: [{ type: "text", text: input.text }] } },
+      })
+      id = item.id
+      const clientID = clientIDFor(id, input.generation, input.text)
+
+      // Attach the durable identity BEFORE the row becomes an awaiting steer, so
+      // the drain's applied-stamp uses the queue-backed id rather than a caller
+      // id that cannot address the row.
+      const attached = SessionSteering.attachDurable({
+        sessionID: input.sessionID,
+        clientID: input.clientID,
+        queueClientID: clientID,
+      })
+      if (attached?.status === "applied") {
+        // The text was already delivered before this row existed. Remove the row
+        // instead of cancelling it with steer audit keys: a queued row would run
+        // the text a second time, and a cancelled awaiting row would be restored
+        // by restart recovery.
+        await TaskQueue.remove(id).catch((error) => {
+          log.warn("could not remove an already-applied draft steer row", { id, error })
+        })
+        return
+      }
+      if (attached?.status !== "accepted") {
+        // The generation discarded the steer (or ended) while the row was being
+        // written, so nothing awaits it. Leave the row queued: the text was
+        // admitted and is no longer anywhere else, so the next turn runs it.
+        return
+      }
+
+      await TaskQueue.cancelSteered(id, { steeredInto: input.generation, steeredAt: Date.now() })
+      // The apply can land while the row is being held; stamp it rather than
+      // waiting for a boundary that has already passed.
+      const afterHold = SessionSteering.attachDurable({
+        sessionID: input.sessionID,
+        clientID: input.clientID,
+        queueClientID: clientID,
+      })
+      if (afterHold?.status === "applied") {
+        await markSteeredApplied(clientID, input.generation)
+        return
+      }
+      startSteerHeartbeat(id, input.generation)
+    } catch (error) {
+      log.warn("could not persist an accepted draft steer", { sessionID: input.sessionID, error })
+      if (id) {
+        // Remove an unusable row only when it would otherwise run text that was
+        // already delivered. A row that already carries this generation's steer
+        // audit is an earlier attempt's record: recovery owns it, leave it be.
+        const row = await TaskQueue.get(id).catch(() => undefined)
+        const alreadySteered = row?.status === "cancelled" && row.payload["steeredInto"] === input.generation
+        if (!alreadySteered) {
+          await TaskQueue.remove(id).catch((removeError) => {
+            log.warn("could not remove an unpersisted draft steer row", { id, error: removeError })
+          })
+        }
+      }
+      return
+    }
+  }
+
+  /** Bounded follow-up title for a steer that arrived as composer text. */
+  function draftTitle(text: string) {
+    const firstLine = text.split("\n").find((line) => line.trim().length > 0)?.trim() ?? text.trim()
+    return firstLine.length > 60 ? `${firstLine.slice(0, 57)}...` : firstLine || "steered draft"
   }
 
   export async function steer(id: TaskQueueID): Promise<Result> {
