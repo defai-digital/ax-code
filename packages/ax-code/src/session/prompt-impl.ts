@@ -552,14 +552,19 @@ export namespace SessionPrompt {
     // models that ignore word limits and re-fill the full model output budget.
     let pendingMaxOutputTokens: number | undefined
     let activeTurnProfile: TurnExecutionProfile | undefined
-    let consecutiveAxEngineReadOnlyTurns = 0
-    let axEngineReadOnlyNudged = false
-    // Across the current ax-engine read-only streak: any successful tool.
-    let axEngineReadOnlyHasEvidence = false
-    // One-shot: deferred force after a large successful tool result this streak.
-    let axEngineLargeEvidenceGraceUsed = false
-    let axEngineSynthesisRequested = false
-    let guardedSynthesisAttempts = 0
+    // The AX Engine read-only ladder's state, grouped as one object so the
+    // loop's scope carries a single name for this guard instead of six loose
+    // locals (item 4 of the loop review, step 1). Semantics are unchanged.
+    const axEngineReadOnly = {
+      turns: 0,
+      nudged: false,
+      // Across the current ax-engine read-only streak: any successful tool.
+      hasEvidence: false,
+      // One-shot: deferred force after a large successful tool result this streak.
+      largeEvidenceGraceUsed: false,
+      synthesisRequested: false,
+      synthesisAttempts: 0,
+    }
     const axEngineInspectionEvidence = new Set<string>()
 
     function armForceTextOnlyTurn(reason: ForceTextReason) {
@@ -624,11 +629,11 @@ export namespace SessionPrompt {
       failedToolNudges = 0
       failedMutationAttempts = 0
       recentMutatingTurnsRemaining = 0
-      consecutiveAxEngineReadOnlyTurns = 0
-      axEngineReadOnlyNudged = false
-      axEngineReadOnlyHasEvidence = false
-      axEngineLargeEvidenceGraceUsed = false
-      axEngineSynthesisRequested = false
+      axEngineReadOnly.turns = 0
+      axEngineReadOnly.nudged = false
+      axEngineReadOnly.hasEvidence = false
+      axEngineReadOnly.largeEvidenceGraceUsed = false
+      axEngineReadOnly.synthesisRequested = false
       forceTextOnlyTurn = false
       forceTextReason = undefined
       lastTurnWasForceTextOnly = false
@@ -638,9 +643,9 @@ export namespace SessionPrompt {
       // Pacing continuations are still the same task: never replenish an
       // in-flight synthesis retry or restore executable tools across them.
       pendingAxEngineTurnInstruction = undefined
-      if (guardedSynthesisAttempts > 0) {
+      if (axEngineReadOnly.synthesisAttempts > 0) {
         armForceTextOnlyTurn("ax_engine_read_only")
-        axEngineReadOnlyHasEvidence = true
+        axEngineReadOnly.hasEvidence = true
         pendingAxEngineTurnInstruction = AutonomousContinuationPrompt.localSynthesisRetry()
       }
       pendingMaxOutputTokens = undefined
@@ -1218,7 +1223,7 @@ export namespace SessionPrompt {
         providerID: model.providerID,
         forceTextOnly: forceTextOnlyTurn,
         forceReason: forceTextReason,
-        hasEvidence: axEngineReadOnlyHasEvidence,
+        hasEvidence: axEngineReadOnly.hasEvidence,
         isLastStep,
         omitTools: promptPolicy.omitTools,
         structured: lastUser.format?.type === "json_schema",
@@ -1467,12 +1472,12 @@ export namespace SessionPrompt {
           parts.some((part) => part.type === "text" && part.text.trim().length > 0) &&
           !(gate.status === "blocked" && gate.reason === "unexecutable_tool_text")
         if (!complete) {
-          guardedSynthesisAttempts += 1
-          if (guardedSynthesisAttempts < 2) {
+          axEngineReadOnly.synthesisAttempts += 1
+          if (axEngineReadOnly.synthesisAttempts < 2) {
             armForceTextOnlyTurn("ax_engine_read_only")
             pendingAxEngineTurnInstruction = AutonomousContinuationPrompt.localSynthesisRetry()
             // The evidence predates this failed synthesis; it is still present.
-            axEngineReadOnlyHasEvidence = true
+            axEngineReadOnly.hasEvidence = true
             if (modelFinished) {
               pendingAxEngineTurnInstruction = undefined
               await createAutonomousTextContinuation({
@@ -1492,7 +1497,7 @@ export namespace SessionPrompt {
           reason = "error"
           break
         }
-        guardedSynthesisAttempts = 0
+        axEngineReadOnly.synthesisAttempts = 0
       }
       if (!emptyModelTurn) emptyModelTurnRetries = 0
       if (!truncatedModelTurn) {
@@ -1514,11 +1519,11 @@ export namespace SessionPrompt {
         failedToolNudges = 0
         failedMutationAttempts = 0
         recentMutatingTurnsRemaining = 0
-        consecutiveAxEngineReadOnlyTurns = 0
-        axEngineReadOnlyNudged = false
-        axEngineReadOnlyHasEvidence = false
-        axEngineLargeEvidenceGraceUsed = false
-        axEngineSynthesisRequested = false
+        axEngineReadOnly.turns = 0
+        axEngineReadOnly.nudged = false
+        axEngineReadOnly.hasEvidence = false
+        axEngineReadOnly.largeEvidenceGraceUsed = false
+        axEngineReadOnly.synthesisRequested = false
       }
 
       // A provider turn that returns finish="other" with zero tokens is a
@@ -1771,11 +1776,11 @@ export namespace SessionPrompt {
             toolOnlyNudges = 0
             consecutiveFailedToolTurns = 0
             failedToolNudges = 0
-            consecutiveAxEngineReadOnlyTurns = 0
-            axEngineReadOnlyNudged = false
-            axEngineReadOnlyHasEvidence = false
-            axEngineLargeEvidenceGraceUsed = false
-            axEngineSynthesisRequested = false
+            axEngineReadOnly.turns = 0
+            axEngineReadOnly.nudged = false
+            axEngineReadOnly.hasEvidence = false
+            axEngineReadOnly.largeEvidenceGraceUsed = false
+            axEngineReadOnly.synthesisRequested = false
             pendingAxEngineTurnInstruction = undefined
             pendingMaxOutputTokens = undefined
             log.info("autonomous completion gate tool protocol recovery", {
@@ -2048,11 +2053,11 @@ export namespace SessionPrompt {
           toolOnlyNudges = 0
           consecutiveFailedToolTurns = 0
           failedToolNudges = 0
-          consecutiveAxEngineReadOnlyTurns = 0
-          axEngineReadOnlyNudged = false
-          axEngineReadOnlyHasEvidence = false
-          axEngineLargeEvidenceGraceUsed = false
-          axEngineSynthesisRequested = false
+          axEngineReadOnly.turns = 0
+          axEngineReadOnly.nudged = false
+          axEngineReadOnly.hasEvidence = false
+          axEngineReadOnly.largeEvidenceGraceUsed = false
+          axEngineReadOnly.synthesisRequested = false
           log.info("goal complete forces text-only final turn", {
             command: "session.prompt.loop",
             status: "force_text",
@@ -2099,21 +2104,21 @@ export namespace SessionPrompt {
         const axEngineReadOnlyTurn =
           model.providerID === AX_ENGINE_PROVIDER_ID && isReadOnlyExplorationTurn(currentParts)
         if (axEngineReadOnlyTurn) {
-          consecutiveAxEngineReadOnlyTurns += 1
-          if (hasUsableReadOnlyEvidence(currentParts)) axEngineReadOnlyHasEvidence = true
+          axEngineReadOnly.turns += 1
+          if (hasUsableReadOnlyEvidence(currentParts)) axEngineReadOnly.hasEvidence = true
           const freshLargeEvidence = hasLargeSuccessfulReadOnlyOutput(currentParts, AX_ENGINE_LARGE_TOOL_OUTPUT_CHARS)
           const repeatedEvidence =
             hasUsableReadOnlyEvidence(currentParts) &&
             isNoProgressToolTurn(currentParts, priorToolSignatures, sessionToolCycleSignatures(sessionID))
           const readOnlyTransition = readOnlyExplorationDecision({
-            consecutiveTurns: consecutiveAxEngineReadOnlyTurns,
-            nudged: axEngineReadOnlyNudged,
+            consecutiveTurns: axEngineReadOnly.turns,
+            nudged: axEngineReadOnly.nudged,
             nudgeThreshold: AX_ENGINE_READ_ONLY_TURN_NUDGE,
             forceThreshold: AX_ENGINE_READ_ONLY_TURN_FORCE,
-            hasUsableEvidence: axEngineReadOnlyHasEvidence,
+            hasUsableEvidence: axEngineReadOnly.hasEvidence,
             freshLargeEvidence,
-            largeEvidenceGraceUsed: axEngineLargeEvidenceGraceUsed,
-            synthesisRequested: axEngineSynthesisRequested,
+            largeEvidenceGraceUsed: axEngineReadOnly.largeEvidenceGraceUsed,
+            synthesisRequested: axEngineReadOnly.synthesisRequested,
             repeatedEvidence,
           })
           if (readOnlyTransition.action !== "ignore") {
@@ -2121,31 +2126,31 @@ export namespace SessionPrompt {
             if (forced) {
               armForceTextOnlyTurn("ax_engine_read_only")
             } else if (readOnlyTransition.action === "synthesize") {
-              axEngineSynthesisRequested = true
+              axEngineReadOnly.synthesisRequested = true
             } else {
-              axEngineReadOnlyNudged = true
+              axEngineReadOnly.nudged = true
               // Grace: force deferred because a large tool payload just landed.
               if (
                 freshLargeEvidence &&
-                !axEngineLargeEvidenceGraceUsed &&
-                consecutiveAxEngineReadOnlyTurns >= AX_ENGINE_READ_ONLY_TURN_FORCE &&
-                axEngineReadOnlyHasEvidence
+                !axEngineReadOnly.largeEvidenceGraceUsed &&
+                axEngineReadOnly.turns >= AX_ENGINE_READ_ONLY_TURN_FORCE &&
+                axEngineReadOnly.hasEvidence
               ) {
-                axEngineLargeEvidenceGraceUsed = true
+                axEngineReadOnly.largeEvidenceGraceUsed = true
               }
             }
             log.info("ax-engine read-only turn checkpoint", {
               command: "session.prompt.loop",
               status: readOnlyTransition.action,
               sessionID,
-              consecutiveTurns: consecutiveAxEngineReadOnlyTurns,
+              consecutiveTurns: axEngineReadOnly.turns,
               forced,
-              hasUsableEvidence: axEngineReadOnlyHasEvidence,
+              hasUsableEvidence: axEngineReadOnly.hasEvidence,
               freshLargeEvidence,
-              largeEvidenceGraceUsed: axEngineLargeEvidenceGraceUsed,
+              largeEvidenceGraceUsed: axEngineReadOnly.largeEvidenceGraceUsed,
             })
             pendingAxEngineTurnInstruction = AutonomousContinuationPrompt.axEngineReadOnlyCheckpoint({
-              consecutiveTurns: consecutiveAxEngineReadOnlyTurns,
+              consecutiveTurns: axEngineReadOnly.turns,
               forceThreshold: AX_ENGINE_READ_ONLY_TURN_FORCE,
               forced,
               synthesize: readOnlyTransition.action === "synthesize",
@@ -2154,11 +2159,11 @@ export namespace SessionPrompt {
             continue
           }
         } else {
-          consecutiveAxEngineReadOnlyTurns = 0
-          axEngineReadOnlyNudged = false
-          axEngineReadOnlyHasEvidence = false
-          axEngineLargeEvidenceGraceUsed = false
-          axEngineSynthesisRequested = false
+          axEngineReadOnly.turns = 0
+          axEngineReadOnly.nudged = false
+          axEngineReadOnly.hasEvidence = false
+          axEngineReadOnly.largeEvidenceGraceUsed = false
+          axEngineReadOnly.synthesisRequested = false
         }
         const failedToolTransition = failedToolTurnDecision({
           consecutiveFailedToolTurns,
