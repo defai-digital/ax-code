@@ -128,6 +128,7 @@ import {
   FAILED_TOOL_TURN_NUDGE,
   MAX_FAILED_TOOL_TURNS,
   MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
+  RECENT_MUTATION_GRACE_TURNS,
   effectivePacingMaxSteps,
   promptLoopLimits,
 } from "./prompt/prompt-loop-config"
@@ -2072,7 +2073,7 @@ export namespace SessionPrompt {
         }
 
         if (isMutatingProgressTurn(currentParts)) {
-          recentMutatingTurnsRemaining = 5
+          recentMutatingTurnsRemaining = RECENT_MUTATION_GRACE_TURNS
         } else if (recentMutatingTurnsRemaining > 0) {
           recentMutatingTurnsRemaining -= 1
         }
@@ -2245,7 +2246,6 @@ export namespace SessionPrompt {
           maxToolOnlyTurns,
           finalCheckpointHits: toolOnlyFinalCheckpointHits,
           recentProgress: recentMutatingTurnsRemaining > 0,
-          forcedWrapUps: toolOnlyFinalCheckpointHits,
         })
         if (toolOnlyTransition.action === "nudge") {
           const repeatForced = toolOnlyTransition.forced && toolOnlyFinalCheckpointHits > 0
