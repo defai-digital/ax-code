@@ -136,6 +136,20 @@ export function parseGoalArguments(raw: string): GoalArgumentDecision {
     rest = rest.slice(consumed).replace(/^\s+/, "")
   }
 
+  // A flag after the objective is a flag, not objective text: leaving
+  // "--assure" in the objective reads like a typo, turns assurance off while the
+  // user believes it is on, and the goal planner then freezes an objective
+  // carrying a stray flag. Only the trailing token is read this way, so an
+  // objective that mentions the flag mid-sentence stays prose.
+  const trailingAssure = /(?:^|\s)(--assure)(?:=(\S*))?\s*$/i.exec(rest)
+  if (trailingAssure) {
+    if (trailingAssure[2] !== undefined) {
+      return { action: "error", message: `--assure takes no value (e.g. /goal --assure <objective>).` }
+    }
+    assure = true
+    rest = rest.slice(0, trailingAssure.index).trim()
+  }
+
   if (assure === true && !rest) {
     return {
       action: "error",

@@ -193,4 +193,32 @@ describe("parseGoalArguments", () => {
     const flagsOnly = parseGoalArguments("replace --budget 500")
     expect(flagsOnly.action).toBe("error")
   })
+
+  test("--assure may follow the objective instead of preceding it", () => {
+    expect(parseGoalArguments("fix the parser --assure")).toEqual({
+      action: "create",
+      assure: true,
+      objective: "fix the parser",
+    })
+    expect(parseGoalArguments("replace second --assure")).toEqual({
+      action: "replace",
+      assure: true,
+      objective: "second",
+    })
+  })
+
+  test("an objective that merely mentions --assure keeps its text", () => {
+    // Only the trailing token is read as the flag; mid-sentence it is prose.
+    expect(parseGoalArguments("document the --assure flag")).toEqual({
+      action: "create",
+      objective: "document the --assure flag",
+    })
+  })
+
+  test("a trailing --assure that carries a value errors like the leading form", () => {
+    const decision = parseGoalArguments("fix the parser --assure=1")
+    expect(decision.action).toBe("error")
+    if (decision.action !== "error") throw new Error("expected error")
+    expect(decision.message).toContain("--assure takes no value")
+  })
 })
