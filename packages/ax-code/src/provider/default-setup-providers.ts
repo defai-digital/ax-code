@@ -87,9 +87,7 @@ export function normalizeConnectVendorName(name: string): string {
   return out.replace(/\s+/g, " ").trim()
 }
 
-const DEFAULT_SETUP_PROVIDER_INDEX = new Map<string, number>(
-  DEFAULT_SETUP_PROVIDER_IDS.map((id, index) => [id, index]),
-)
+const DEFAULT_SETUP_PROVIDER_INDEX = new Map<string, number>(DEFAULT_SETUP_PROVIDER_IDS.map((id, index) => [id, index]))
 
 function variantName(providers: Record<string, ModelsDev.Provider>, id: string) {
   return providers[id]?.name ?? id
@@ -142,7 +140,7 @@ export function dedupeApiCloudVendorVariants(
     const key = normalizeConnectVendorName(variantName(providers, id)) || id
     const members = groups.get(key)
     if (members) members.push(id)
-    else groups.set(key, [id])
+    else groups.set(key, [id]) // @scan-suppress lifecycle_scan - Invocation-local map is bounded by the provider list.
   }
   const dropped = new Set<string>()
   for (const members of groups.values()) {
