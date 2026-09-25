@@ -46,6 +46,7 @@ import { MediaProjection } from "./media-projection"
 import { Instance } from "@/project/instance"
 import { Filesystem } from "@/util/filesystem"
 import { FILE_PATH_ALIAS_KEYS } from "@/tool/file-path"
+import { FILE_TOUCHING_TOOLS, MUTATION_TOOLS } from "@/tool/mutation-tools"
 import { Env } from "@/util/env"
 
 export namespace SessionProcessor {
@@ -247,11 +248,13 @@ export namespace SessionProcessor {
     // O(1) membership for path dedup (PERF-09); was O(n) linear scan.
     const stepTouchedFilePaths = new Set<string>()
     let stepToolObservations: AgentOptimizationTrace.ToolObservation[] = []
-    const fileTouchingTools = new Set(["read", "edit", "write", "multiedit", "apply_patch"])
+    const fileTouchingTools = FILE_TOUCHING_TOOLS
     // Mutating subset of fileTouchingTools (read-only tools like `read` never
     // claim writes). Used to attribute patch-part files to this message's own
-    // file-writing tool calls (ADR-065 D2).
-    const fileMutatingTools = new Set(["edit", "write", "multiedit", "apply_patch", "notebook_edit"])
+    // file-writing tool calls (ADR-065 D2). Membership lives in
+    // `tool/mutation-tools.ts` so the goal gate and this attribution cannot
+    // drift apart again.
+    const fileMutatingTools = MUTATION_TOOLS
     // Absolute, forward-slash-normalized paths (same form Snapshot.patch emits
     // for `files`) written by COMPLETED mutating tool parts of this assistant
     // message. Populated at tool-result time; subtracted from patch-part
@@ -302,6 +305,19 @@ export namespace SessionProcessor {
       } else {
         const inputPath = claimInputPath(toolInput)
         if (inputPath) claimed.push(inputPath)
+        if (tool === "refactor_apply") {
+          // RefactorApplyTool takes a plan id, not a path: its result metadata
+          // carries the applied paths as a flat string array (top level and
+          // inside `result`), so input-path extraction alone would leave every
+          // refactor write in `externalFiles`.
+          for (const source of [metadata, asRecord(metadata)["result"]]) {
+            const files = asRecord(source)["filesChanged"]
+            if (!Array.isArray(files)) continue
+            for (const file of files) {
+              if (typeof file === "string") claimed.push(file)
+            }
+          }
+        }
         if (tool === "multiedit") {
           // multiedit can fan out across files: edits[].filePath overrides the
           // top-level filePath per edit (see tool/multiedit.ts).

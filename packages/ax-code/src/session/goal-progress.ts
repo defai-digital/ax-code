@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto"
 import { GoalCheckVerification } from "./goal-check-verification"
 import type { MessageV2 } from "./message-v2"
+import { MUTATION_TOOLS } from "../tool/mutation-tools"
 
-const MUTATIONS = new Set(["write", "edit", "apply_patch", "multiedit", "patch"])
 const goalPlanPath = (value: string) => /(?:^|[\\/])\.ax-code[\\/]goals(?:[\\/]|$)/.test(value)
 const ADMIN = new Set(["get_goal", "create_goal", "update_goal", "todowrite", "todoread"])
 
@@ -70,7 +70,7 @@ export function goalProgress(messages: readonly MessageV2.WithParts[], since: nu
       const signature = createHash("sha256")
         .update(part.tool)
         .update(evidence)
-        .update(MUTATIONS.has(part.tool) ? JSON.stringify(part.state.input) : "")
+        .update(MUTATION_TOOLS.has(part.tool) ? JSON.stringify(part.state.input) : "")
         .digest("hex")
       if (!seen.has(signature)) {
         seen.add(signature)

@@ -6,10 +6,9 @@
  */
 
 import { asRecordOrUndefined } from "../util/record"
+import { MUTATION_TOOLS } from "../tool/mutation-tools"
 
 export namespace IntelligenceNudge {
-  const MUTATION_TOOLS = new Set(["edit", "write", "apply_patch", "multiedit", "patch"])
-
   export type Message = {
     info?: { role?: string }
     parts?: readonly unknown[]

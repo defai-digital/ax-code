@@ -10,6 +10,7 @@
  * The compaction prune function uses these tiers to decide which parts to
  * remove first, rather than purely recency-based pruning.
  */
+import { MUTATION_TOOLS } from "@/tool/mutation-tools"
 
 import { MessageV2 } from "./message-v2"
 
@@ -109,12 +110,7 @@ export namespace ContextTier {
   }
 
   function isFileEditResult(msg: MessageV2.WithParts): boolean {
-    return msg.parts.some(
-      (p) =>
-        p.type === "tool" &&
-        p.state.status === "completed" &&
-        (p.tool === "edit" || p.tool === "write" || p.tool === "apply_patch"),
-    )
+    return msg.parts.some((p) => p.type === "tool" && p.state.status === "completed" && MUTATION_TOOLS.has(p.tool))
   }
 
   function isCompactionSummary(msg: MessageV2.WithParts): boolean {

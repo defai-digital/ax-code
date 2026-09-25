@@ -151,3 +151,58 @@ test("ignores historical, unsuccessful, and unrelated nested results", () => {
     }),
   ).toEqual({ paths: ["src"], additional: [], external: [] })
 })
+
+test("tracks refactor_apply applied paths reported as a flat string array", () => {
+  // RefactorApplyTool returns `filesChanged: string[]` at the metadata top level
+  // and inside `result`; it takes a plan id rather than a path, so without this
+  // every applied refactor would be missing from receipt freshness.
+  const result = goalSourceScope({
+    cwd,
+    created: 10,
+    sourcePaths: ["src/declared"],
+    messages: [
+      message(
+        {
+          applied: true,
+          planId: "rpl_1",
+          filesChanged: [absolute("src/applied/a.ts")],
+          result: { filesChanged: [absolute("src/applied/b.ts")] },
+        },
+        20,
+        "refactor_apply",
+      ),
+    ],
+  })
+  expect(result.additional).toEqual(["src/applied/a.ts", "src/applied/b.ts"])
+  expect(result.external).toEqual([])
+})
+
+test("does not track refactor_apply paths when the refactor aborted", () => {
+  const result = goalSourceScope({
+    cwd,
+    created: 10,
+    sourcePaths: ["src"],
+    messages: [
+      message({ applied: false, abortReason: "no-plan", filesChanged: [absolute("src/a.ts")] }, 20, "refactor_apply", "error"),
+    ],
+  })
+  expect(result.additional).toEqual([])
+})
+
+test("attributes a notebook_edit change by its notebook_path input", () => {
+  // notebook_path is tool-specific and not part of the message-level path
+  // aliases, so it has to be read explicitly or the notebook change never
+  // reaches receipt freshness.
+  const changed = {
+    info: { role: "assistant", time: { created: 20 } },
+    parts: [
+      {
+        type: "tool",
+        tool: "notebook_edit",
+        state: { status: "completed", input: { notebook_path: absolute("src/analysis.ipynb") } },
+      },
+    ],
+  }
+  const result = goalSourceScope({ cwd, created: 10, sourcePaths: ["src/declared"], messages: [changed] })
+  expect(result.additional).toEqual(["src/analysis.ipynb"])
+})

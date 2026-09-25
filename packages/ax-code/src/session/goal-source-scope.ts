@@ -1,6 +1,7 @@
 import path from "node:path"
 import { realpathSync } from "node:fs"
 import { asRecordOrUndefined } from "../util/record"
+import { MUTATION_TOOLS } from "../tool/mutation-tools"
 import type { GoalVerification } from "./goal-verification"
 
 // Resolve existing ancestors so deleted/moved files retain their workspace
@@ -58,8 +59,7 @@ export function goalSourceScope(input: {
     if (message.info?.role !== "assistant") continue
     for (const part of message.parts ?? []) {
       const record = asRecordOrUndefined(part)
-      if (record?.type !== "tool" || !["edit", "write", "apply_patch", "multiedit"].includes(String(record.tool)))
-        continue
+      if (record?.type !== "tool" || !MUTATION_TOOLS.has(String(record.tool))) continue
       const state = asRecordOrUndefined(record.state)
       if (state?.status !== "completed") continue
       // A tool can finish after goal creation within a message that started
@@ -70,6 +70,13 @@ export function goalSourceScope(input: {
       const metadata = asRecordOrUndefined(state.metadata)
       add(metadata?.filepath)
       add(asRecordOrUndefined(metadata?.filediff)?.file)
+      // NotebookEditTool's input is `notebook_path`, which is not one of the
+      // message-level path aliases, so its changed notebook is otherwise never
+      // attributed to this goal's source scope.
+      if (record.tool === "notebook_edit") {
+        add(asRecordOrUndefined(state.input)?.notebook_path)
+        add(metadata?.notebook_path)
+      }
       // MultiEditTool returns each executed edit's metadata in results, rather
       // than a top-level filediff. Do not infer changed paths from tool inputs.
       if (record.tool === "multiedit" && Array.isArray(metadata?.results)) {
@@ -84,6 +91,17 @@ export function goalSourceScope(input: {
           const file = asRecordOrUndefined(entry)
           add(file?.filePath)
           add(file?.movePath)
+        }
+      }
+      // RefactorApplyTool reports applied paths as a flat string array (both at
+      // the top level and inside its result), not as filePath records.
+      if (record.tool === "refactor_apply") {
+        if (Array.isArray(metadata?.filesChanged)) {
+          for (const file of metadata.filesChanged) add(file)
+        }
+        const result = asRecordOrUndefined(metadata?.result)
+        if (Array.isArray(result?.filesChanged)) {
+          for (const file of result.filesChanged) add(file)
         }
       }
     }

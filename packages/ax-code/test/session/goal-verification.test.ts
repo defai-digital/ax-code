@@ -296,4 +296,38 @@ describe("GoalVerification.decide", () => {
     if (decision.ok) throw new Error("expected rejection")
     expect(decision.reason).toBe("unverified_changes")
   })
+
+  test.each(["refactor_apply", "notebook_edit", "patch"])(
+    "a mutation performed through %s still requires verification",
+    (tool) => {
+      // These ids were missing from this gate's local mutation set while other
+      // accounting already counted them, so a change landing through either
+      // tool escaped the post-mutation verification requirement.
+      const decision = GoalVerification.decide({
+        messages: [assistant(toolPart(tool))],
+        pendingTodos: [],
+      })
+      expect(decision.ok).toBe(false)
+      if (decision.ok) throw new Error("expected rejection")
+      expect(decision.reason).toBe("unverified_changes")
+    },
+  )
+
+  test.each(["refactor_apply", "notebook_edit", "image_gen"])(
+    "a mutation through %s is satisfied by a later verification",
+    (tool) => {
+      const decision = GoalVerification.decide({
+        messages: [
+          assistant(toolPart(tool)),
+          assistant({
+            type: "tool",
+            tool: "bash",
+            state: { status: "completed", input: { command: "pnpm test" }, metadata: { exit: 0 } },
+          }),
+        ],
+        pendingTodos: [],
+      })
+      expect(decision).toEqual({ ok: true })
+    },
+  )
 })

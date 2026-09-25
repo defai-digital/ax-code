@@ -16,6 +16,7 @@ import { mergeDeep, pipe } from "remeda"
 import { ProviderTransform } from "@/provider/transform"
 import { ObservedWindow } from "@/provider/observed-window"
 import { TokenLedger } from "@/provider/token-ledger"
+import { FILE_TOUCHING_TOOLS } from "@/tool/mutation-tools"
 import { completionClamp, calculateCompactionBudget, effectiveClampWindow } from "./compaction-budget"
 import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
@@ -1448,14 +1449,15 @@ export namespace LLM {
 
   // Extract file paths accessed by file-touching tools from assistant messages.
   export function extractTouchedFiles(messages: ModelMessage[]): Array<{ path: string; summary: string }> {
-    const FILE_TOOLS = new Set(["read", "edit", "write", "multiedit", "apply_patch"])
     const paths = new Map<string, string>()
     for (const msg of messages) {
       if (msg.role !== "assistant" || !Array.isArray(msg.content)) continue
       for (const part of msg.content as Array<{ type: string; toolName?: string; input?: Record<string, unknown> }>) {
-        if (part.type !== "tool-call" || !FILE_TOOLS.has(part.toolName ?? "")) continue
+        if (part.type !== "tool-call" || !FILE_TOUCHING_TOOLS.has(part.toolName ?? "")) continue
         const inp = part.input as Record<string, unknown> | undefined
-        const filePath = (inp?.file_path ?? inp?.path) as string | undefined
+        // `notebook_edit` takes `notebook_path`; it is not in the alias list
+        // because it is tool-specific, so it is checked explicitly.
+        const filePath = (inp?.file_path ?? inp?.path ?? inp?.notebook_path) as string | undefined
         if (filePath && typeof filePath === "string") {
           paths.set(filePath, `accessed by ${part.toolName}`)
         }

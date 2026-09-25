@@ -1,6 +1,7 @@
 import type { MessageV2 } from "./message-v2"
 import type { ReplayEvent } from "@/replay/event"
 import { uniqueStrings } from "@/util/string-list"
+import { MUTATION_TOOLS } from "@/tool/mutation-tools"
 import z from "zod"
 import { isRecord } from "./record"
 
@@ -35,7 +36,6 @@ export namespace DecisionHints {
     metadata?: Record<string, unknown>
   }
 
-  const WRITE_TOOLS = new Set(["edit", "write", "multiedit", "apply_patch"])
   const VALIDATION_COMMAND =
     /\b(bun\s+(run\s+)?(test|typecheck|build|check)|bun\s+test|pnpm\s+.*\b(test|typecheck|build|check)\b|npm\s+.*\b(test|typecheck|build|check)\b|yarn\s+.*\b(test|typecheck|build|check)\b|cargo\s+(test|check|clippy)|tsc\b|eslint\b|vitest\b|jest\b|pytest\b|go\s+test\b|swift\s+test\b)\b/i
   const VALIDATION_DESCRIPTION = /\b(test|typecheck|build|lint|verify|validation)\b/i
@@ -257,7 +257,7 @@ export namespace DecisionHints {
   }
 
   function isCompletedWrite(action: ToolAction): boolean {
-    return action.status === "completed" && WRITE_TOOLS.has(action.tool)
+    return action.status === "completed" && MUTATION_TOOLS.has(action.tool)
   }
 
   function isValidationAction(action: ToolAction): boolean {

@@ -1,5 +1,6 @@
 import { isActiveTodo } from "./todo-status"
 import { asRecordOrUndefined } from "../util/record"
+import { MUTATION_TOOLS } from "../tool/mutation-tools"
 
 import { VerificationPolicy } from "./verification-policy"
 
@@ -45,7 +46,6 @@ export namespace GoalVerification {
     | { ok: false; reason: "pending_todos"; message: string }
     | { ok: false; reason: "unverified_changes"; message: string }
 
-  const MUTATION_TOOLS = new Set(["edit", "write", "apply_patch", "multiedit", "patch"])
   const VERIFICATION_TOOLS = new Set(["bash", "verify_project"])
 
   function isBashVerificationRun(state: Record<string, unknown> | undefined) {

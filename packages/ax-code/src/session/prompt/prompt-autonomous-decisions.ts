@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto"
+import { MUTATION_TOOLS } from "@/tool/mutation-tools"
 import type { AutonomousCompletionGate } from "@/control-plane/autonomous-completion-gate"
 
 const EMPTY_MODEL_TURN_INCOMPLETE_MESSAGE =
@@ -288,7 +289,10 @@ const READ_ONLY_EXPLORATION_TOOLS = new Set([
   "grep",
   "skill",
 ])
-const MUTATING_PROGRESS_TOOLS = new Set(["edit", "write", "multiedit", "apply_patch", "todowrite"])
+// Workspace writers plus `todowrite`, which is session state rather than a file
+// write but is still a progress signal for this turn. The writer ids come from
+// the shared classification so they cannot drift from the goal gate again.
+const MUTATING_PROGRESS_TOOLS = new Set([...MUTATION_TOOLS, "todowrite"])
 
 /** True when this turn persisted a source change or completed a mutating tool. */
 export function isMutatingProgressTurn(parts: readonly ToolActivityPart[] | undefined): boolean {
