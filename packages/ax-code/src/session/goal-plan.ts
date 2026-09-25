@@ -311,13 +311,39 @@ export namespace GoalPlan {
     | { state: "present"; contract: Contract; digest: string }
     | { state: "missing" }
     | { state: "invalid" }
+    | { state: "unassured" }
 
   export function lookupContract(sessionID: SessionID, created: number): ContractLookup {
     const stored = storedDigest(sessionID, created)
     const result = read(sessionID, created)
-    if (!stored && result.status === "missing") return { state: "missing" }
+    if (!stored && result.status === "missing") {
+      // "missing" and "unassured" both have no artifacts; the marker is what
+      // distinguishes "nobody ever planned this goal" (a planner failure, or a
+      // pre-v1 goal) from "assurance was deliberately not requested". The
+      // distinction matters on resume: a failed planner is retried, an
+      // unassured goal must not be silently upgraded to a contract.
+      return isUnassured(sessionID, created) ? { state: "unassured" } : { state: "missing" }
+    }
     if (result.status !== "found" || !stored || stored !== digestOf(result.contract)) return { state: "invalid" }
     return { state: "present", contract: result.contract, digest: stored }
+  }
+
+  function unassuredPathFor(sessionID: SessionID, created: number) {
+    return `${pathFor(sessionID, created)}.unassured`
+  }
+
+  function isUnassured(sessionID: SessionID, created: number): boolean {
+    return fs.existsSync(unassuredPathFor(sessionID, created))
+  }
+
+  /**
+   * Record that a goal was created deliberately without an assurance contract,
+   * so resume does not treat it as a planner that still has to run.
+   */
+  export function markUnassured(sessionID: SessionID, created: number): void {
+    const file = unassuredPathFor(sessionID, created)
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.writeFileSync(file, "", "utf8")
   }
 
   export function storedDigest(sessionID: SessionID, created: number): string | undefined {
@@ -330,11 +356,9 @@ export namespace GoalPlan {
   }
 
   export function hasValidContract(sessionID: SessionID, created: number): boolean {
-    const result = read(sessionID, created)
-    if (result.status !== "found") return false
-    const stored = storedDigest(sessionID, created)
-    if (!stored) return false
-    return stored === digestOf(result.contract)
+    // Delegates to the single definition so the gate and the surfaces that
+    // report the state cannot drift apart.
+    return lookupContract(sessionID, created).state === "present"
   }
 
   export function continuationGuidance(sessionID: SessionID, created: number) {

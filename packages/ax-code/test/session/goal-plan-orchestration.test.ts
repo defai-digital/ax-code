@@ -24,7 +24,7 @@ describe("GoalPlanOrchestration", () => {
         expect(prepared.goal.status).toBe("active")
         expect(prepared.reused).toBe(false)
         expect(GoalPlan.hasValidContract(session.id, prepared.goal.time.created)).toBe(true)
-        expect(GoalPlan.readCapped(prepared.path)).toContain("add a health endpoint")
+        expect(GoalPlan.readCapped(prepared.path!)).toContain("add a health endpoint")
         await Session.remove(session.id)
       },
     })
@@ -113,7 +113,7 @@ describe("GoalPlanOrchestration", () => {
         const digestPath = GoalPlan.digestPathFor(session.id, prepared.goal.time.created)
         const digestBefore = await fs.readFile(digestPath, "utf8")
         const corrupt = "# Plan: preserve the frozen contract\n\nthis is not a valid contract\n"
-        await fs.writeFile(prepared.path, corrupt)
+        await fs.writeFile(prepared.path!, corrupt)
         let calls = 0
         GoalPlanWriter.setWrite(async (input) => {
           calls++
@@ -124,7 +124,7 @@ describe("GoalPlanOrchestration", () => {
           "frozen goal contract",
         )
         expect(calls).toBe(0)
-        expect(await fs.readFile(prepared.path, "utf8")).toBe(corrupt)
+        expect(await fs.readFile(prepared.path!, "utf8")).toBe(corrupt)
         expect(await fs.readFile(digestPath, "utf8")).toBe(digestBefore)
         expect((await SessionGoal.get(session.id))?.status).toBe("paused")
         await Session.remove(session.id)
@@ -143,10 +143,10 @@ describe("GoalPlanOrchestration", () => {
           sessionID: session.id,
           objective: "fork this contract",
         })
-        const checked = (await fs.readFile(prepared.path, "utf8"))
+        const checked = (await fs.readFile(prepared.path!, "utf8"))
           .replace("- [ ] Inspect the current code", "- [x] Inspect the current code")
           .replace("- [ ] Implement the change", "- [x] Implement the change")
-        await fs.writeFile(prepared.path, checked)
+        await fs.writeFile(prepared.path!, checked)
         const sourceDigest = await fs.readFile(GoalPlan.digestPathFor(session.id, prepared.goal.time.created), "utf8")
         const fork = await Session.create({})
         const copied = await SessionGoal.copyTo({ from: session.id, to: fork.id })
@@ -161,7 +161,7 @@ describe("GoalPlanOrchestration", () => {
         expect(result.status).toBe("found")
         if (result.status !== "found") throw new Error("expected copied goal plan")
         expect(result.contract.acceptance[0]?.text).toContain("fork this contract")
-        expect(prepared.path).not.toBe(GoalPlan.pathFor(fork.id, copied!.time.created))
+        expect(prepared.path!).not.toBe(GoalPlan.pathFor(fork.id, copied!.time.created))
         await Session.remove(fork.id)
         await Session.remove(session.id)
       },
@@ -179,11 +179,11 @@ describe("GoalPlanOrchestration", () => {
           sessionID: session.id,
           objective: "recover the fork digest",
         })
-        const sourceMarkdown = (await fs.readFile(prepared.path, "utf8")).replace(
+        const sourceMarkdown = (await fs.readFile(prepared.path!, "utf8")).replace(
           "- [ ] Inspect the current code",
           "- [x] Inspect the current code",
         )
-        await fs.writeFile(prepared.path, sourceMarkdown)
+        await fs.writeFile(prepared.path!, sourceMarkdown)
         await fs.unlink(GoalPlan.digestPathFor(session.id, prepared.goal.time.created))
 
         const fork = await Session.create({})
@@ -275,7 +275,7 @@ describe("GoalPlanOrchestration", () => {
           sessionID: session.id,
           objective: "keep the forked contract",
         })
-        await fs.unlink(prepared.path)
+        await fs.unlink(prepared.path!)
         const fork = await Session.create({})
         try {
           const copied = await SessionGoal.copyTo({ from: session.id, to: fork.id })

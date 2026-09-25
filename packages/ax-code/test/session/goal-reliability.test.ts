@@ -195,7 +195,8 @@ describe("goal tool boundaries", () => {
       ctx.onGoalCreated = (created) => {
         nextCreated = created
       }
-      await (await CreateGoalTool.init()).execute({ objective: "Repair the parser" }, ctx)
+      // Assurance is opt-in: this test is about the planning path, so it asks for it.
+      await (await CreateGoalTool.init()).execute({ objective: "Repair the parser", assure: true }, ctx)
       expect(captured?.model).toEqual({ providerID: "selected-provider", modelID: "selected-model" })
       expect(ctx.goalBinding?.created).toBeUndefined()
       expect(nextCreated).toBe((await SessionGoal.get(id))?.time.created)
@@ -288,12 +289,12 @@ describe("explicit goal revisions", () => {
   test("retains old contracts and budget, assigns a fresh identity and records digest lineage", async () =>
     withSession(async (id) => {
       const first = await GoalPlanOrchestration.activate({ sessionID: id, objective: "Fix parser", tokenBudget: 1000 })
-      const previous = await fs.readFile(first.path, "utf8")
+      const previous = await fs.readFile(first.path!, "utf8")
       const revised = await GoalPlanOrchestration.revise({ sessionID: id, correction: "Also preserve empty input" })
       expect(revised.goal.time.created).toBeGreaterThan(first.goal.time.created)
       expect(revised.goal.tokenBudget).toBe(1000)
       expect(revised.goal.tokensUsed).toBe(first.goal.tokensUsed)
-      expect(await fs.readFile(first.path, "utf8")).toBe(previous)
+      expect(await fs.readFile(first.path!, "utf8")).toBe(previous)
       expect(revised.goal.objective).toContain("Also preserve empty input")
       const lineage = await fs.readFile(
         GoalPlan.digestPathFor(id, revised.goal.time.created).replace(/\.sha256$/, ".revision.json"),
@@ -388,9 +389,9 @@ describe("explicit goal revisions", () => {
         controller.abort(new Error("user cancelled planning"))
         return GoalPlanWriter.stubWrite()(input)
       })
-      await expect((await CreateGoalTool.init()).execute({ objective: "Fix parser" }, ctx)).rejects.toThrow(
-        "user cancelled",
-      )
+      await expect(
+        (await CreateGoalTool.init()).execute({ objective: "Fix parser", assure: true }, ctx),
+      ).rejects.toThrow("user cancelled")
       expect((await SessionGoal.get(id))?.status).toBe("paused")
     }))
   test("completed goals cannot spend a revision writer turn", async () =>

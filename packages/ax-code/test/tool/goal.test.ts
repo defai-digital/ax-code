@@ -98,3 +98,61 @@ describe("goal tools", () => {
     })
   })
 })
+
+describe("create_goal assurance is opt-in (item 2, option A)", () => {
+  test("starts immediately without a contract unless assure is set", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        let writerCalls = 0
+        GoalPlanWriter.setWrite(async (input) => {
+          writerCalls++
+          return GoalPlanWriter.stubWrite()(input)
+        })
+        try {
+          const session = await Session.create({})
+          const tool = await CreateGoalTool.init()
+          const result = await tool.execute({ objective: "keep main green" } as never, toolContext(session.id, tmp.path) as never)
+
+          expect(writerCalls).toBe(0)
+          const goal = await SessionGoal.get(session.id)
+          expect(goal?.status).toBe("active")
+          expect((result.metadata as any).planPath).toBeUndefined()
+          expect((result.metadata as any).goal.planPath).toBeUndefined()
+        } finally {
+          GoalPlanWriter.resetWrite()
+        }
+      },
+    })
+  })
+
+  test("assure plans first and reports the plan path", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        let writerCalls = 0
+        GoalPlanWriter.setWrite(async (input) => {
+          writerCalls++
+          return GoalPlanWriter.stubWrite()(input)
+        })
+        try {
+          const session = await Session.create({})
+          const tool = await CreateGoalTool.init()
+          const result = await tool.execute(
+            { objective: "ship the feature", assure: true } as never,
+            toolContext(session.id, tmp.path) as never,
+          )
+
+          expect(writerCalls).toBe(1)
+          const goal = await SessionGoal.get(session.id)
+          expect(goal?.status).toBe("active")
+          expect((result.metadata as any).planPath).toBeTruthy()
+        } finally {
+          GoalPlanWriter.resetWrite()
+        }
+      },
+    })
+  })
+})

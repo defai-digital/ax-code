@@ -531,7 +531,7 @@ export namespace SessionGoal {
   /**
    * Tell the user when the goal they are looking at has no usable assurance
    * contract (item 2, option A). Deliberately a notice rather than a gate: the
-   * completion gate already applies the same `GoalPlan.contractState` rule, and
+   * completion gate already applies the same `GoalPlan.lookupContract` rule, and
    * `resume` already re-runs the planner fail-closed. This exists so the state
    * is visible instead of inferred from a goal that silently completes under
    * the basic gate.
@@ -539,8 +539,10 @@ export namespace SessionGoal {
   function contractNotice(goal: Info): string {
     const state = GoalPlan.lookupContract(goal.sessionID, goal.time.created).state
     if (state === "present") return ""
+    if (state === "unassured")
+      return "\nNo assurance contract: assurance was not requested for this goal, so it completes under the basic gate (pending todos plus verification after the last change). /goal replace --assure <objective> supersedes it with a frozen contract."
     if (state === "missing")
-      return "\nNo assurance contract: planning did not complete for this goal, so it completes under the basic gate (pending todos plus verification after the last change)."
+      return "\nNo assurance contract: planning did not complete for this goal, so it completes under the basic gate (pending todos plus verification after the last change). /goal resume re-runs the planner."
     return "\nAssurance contract unusable: the frozen acceptance criteria are missing or modified, so completion is refused until they are restored."
   }
 

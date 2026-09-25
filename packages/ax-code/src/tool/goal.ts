@@ -72,7 +72,7 @@ export const GetGoalTool = Tool.define("get_goal", {
 
 export const CreateGoalTool = Tool.define("create_goal", {
   description:
-    "Create a goal only when explicitly requested by the user or system/developer instructions; do not infer goals from ordinary tasks. Set tokenBudget only when an explicit token budget is requested, and timeBudgetSeconds only when an explicit wall-clock limit is requested. Fails while an active or paused goal exists; only completed, blocked, or budget-limited goals are replaced.",
+    "Create a goal only when explicitly requested by the user or system/developer instructions; do not infer goals from ordinary tasks. The goal starts immediately without an assurance contract unless you pass assure, which first freezes acceptance criteria and executable checks and makes completion require their receipts; set assure when the user asked for provable completion, not by default. Set tokenBudget only when an explicit token budget is requested, and timeBudgetSeconds only when an explicit wall-clock limit is requested. Fails while an active or paused goal exists; only completed, blocked, or budget-limited goals are replaced.",
   parameters: z.object({
     objective: z.string().min(1).describe("The concrete objective to start pursuing."),
     tokenBudget: ToolNumber(z.number().int().positive())
@@ -81,6 +81,12 @@ export const CreateGoalTool = Tool.define("create_goal", {
     timeBudgetSeconds: ToolNumber(z.number().int().positive())
       .optional()
       .describe("Optional positive wall-clock budget for the new goal, in seconds."),
+    assure: z
+      .boolean()
+      .optional()
+      .describe(
+        "Run the plan writer before starting, so the goal carries frozen acceptance criteria and executable checks and cannot complete without their receipts. Omit unless the user asked for provable completion.",
+      ),
   }),
   async execute(params, ctx) {
     const selected = ctx.extra?.model
@@ -96,23 +102,40 @@ export const CreateGoalTool = Tool.define("create_goal", {
         ? lastUser.variant
         : undefined
     ctx.abort.throwIfAborted()
-    const prepared = await GoalPlanOrchestration.activate({
-      sessionID: ctx.sessionID,
-      objective: params.objective,
-      tokenBudget: params.tokenBudget,
-      timeBudgetSeconds: params.timeBudgetSeconds,
-      replace: false,
-      model,
-      variant,
-      abort: ctx.abort,
-    })
+    // Assurance is opt-in, matching /goal (item 2, option A): a plain create starts
+    // immediately with no contract, and SessionGoal.format reports that state.
+    const prepared = params.assure
+      ? await GoalPlanOrchestration.activate({
+          sessionID: ctx.sessionID,
+          objective: params.objective,
+          tokenBudget: params.tokenBudget,
+          timeBudgetSeconds: params.timeBudgetSeconds,
+          replace: false,
+          model,
+          variant,
+          abort: ctx.abort,
+        })
+      : await (async () => {
+          const goal = await SessionGoal.create({
+            sessionID: ctx.sessionID,
+            objective: params.objective,
+            tokenBudget: params.tokenBudget,
+            timeBudgetSeconds: params.timeBudgetSeconds,
+            status: "active",
+          })
+          // Record the intent so resume does not silently upgrade this goal to a
+          // frozen contract it never asked for.
+          GoalPlan.markUnassured(ctx.sessionID, goal.time.created)
+          return { goal }
+        })()
     ctx.onGoalCreated?.(prepared.goal.time.created)
     return {
       title: "Created goal",
       output: goalOutput(prepared.goal),
       metadata: {
         goal: SessionGoal.publicInfo(prepared.goal),
-        planPath: prepared.path,
+        // Absent for an unassured create: there is no plan to point at.
+        planPath: "path" in prepared ? prepared.path : undefined,
       },
     }
   },

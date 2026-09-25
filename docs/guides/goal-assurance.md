@@ -116,6 +116,20 @@ execution time; it does not prove external state has remained unchanged. Rerun
 affected checks after changing configuration, databases or deployments. AX Code
 does not automatically discover all legacy behavior or certify migration parity.
 
+## When planning runs
+
+Planning is opt-in on both surfaces. `/goal <objective>` and `create_goal`
+without `assure` start the goal immediately: it carries no frozen acceptance
+criteria, and completion is judged by the working plan (pending todos) plus a
+passing verification after the last change. `/goal --assure <objective>` and
+`create_goal` with `assure: true` run the plan writer first, which is what makes
+the executed-check receipts below a completion requirement.
+
+A goal without a contract says so wherever it is shown (`/goal view`, the goal
+dialog, the control messages), so its completion gate is never something you have
+to infer. `/goal replace` keeps assurance when the goal being replaced has a valid
+contract.
+
 ## Planning context and model selection
 
 Goal planning inherits the selected session model through both `/goal` and the

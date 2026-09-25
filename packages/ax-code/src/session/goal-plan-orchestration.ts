@@ -11,12 +11,18 @@ import type { ModelID, ProviderID } from "../provider/schema"
 export namespace GoalPlanOrchestration {
   const log = Log.create({ service: "session.goal-plan-orchestration" })
 
-  export type Prepared = {
-    goal: SessionGoal.Info
-    path: string
-    reused: boolean
-    revision?: { previousPath: string; changes: string[] }
-  }
+  /**
+   * A planned goal carries the frozen plan's path; a goal created or resumed
+   * without an assurance contract has none, and callers branch on that.
+   */
+  export type Prepared =
+    | {
+        goal: SessionGoal.Info
+        path: string
+        reused: boolean
+        revision?: { previousPath: string; changes: string[] }
+      }
+    | { goal: SessionGoal.Info; path?: undefined; reused: boolean; revision?: undefined }
 
   export async function prepare(input: {
     sessionID: SessionID
@@ -107,6 +113,23 @@ export namespace GoalPlanOrchestration {
     if (!existing) throw new Error("No goal is set for this session")
     if (existing.tokenBudget !== undefined && existing.tokensUsed >= existing.tokenBudget)
       throw new Error("Cannot resume a budget-limited goal without increasing the token budget")
+    const state = GoalPlan.lookupContract(input.sessionID, existing.time.created)
+    if (state.state === "unassured") {
+      // Assurance was deliberately not requested for this goal. Resume must not
+      // silently upgrade it to a frozen contract: the goal would then demand
+      // acceptance evidence from a plan the user never asked for, contradicting
+      // the "no assurance contract" state the surfaces report.
+      input.abort?.throwIfAborted()
+      const goal =
+        existing.status === "active"
+          ? existing
+          : await SessionGoal.setStatus({
+              sessionID: input.sessionID,
+              status: "active",
+              expected: { created: existing.time.created, status: existing.status, updated: existing.time.updated },
+            })
+      return { goal, reused: true }
+    }
     const stored = GoalPlan.storedDigest(input.sessionID, existing.time.created)
     const result = GoalPlan.read(input.sessionID, existing.time.created)
     if (result.status === "found" && stored === GoalPlan.digestOf(result.contract)) {
@@ -264,9 +287,10 @@ export namespace GoalPlanOrchestration {
    * completion gate will actually require instead of being pointed at a plan
    * that does not exist.
    */
-  export function objectivePrompt(input: { objective: string }) {
+  export function objectivePrompt(input: { objective: string; resumed?: boolean }) {
+    const opener = input.resumed ? `Goal resumed: ${input.objective}` : `Goal set: ${input.objective}`
     return (
-      `Goal set: ${input.objective}\n\n` +
+      `${opener}\n\n` +
       `This goal has no assurance contract: no frozen acceptance criteria and no executed-check receipts. ` +
       `Completion is judged by the working plan you keep — seed todos from the objective, keep them current, ` +
       `and mark an item completed only when its work is done — plus verification after your last change ` +

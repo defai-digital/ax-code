@@ -20,8 +20,9 @@ export namespace GoalContractVerification {
     execution?: { messages: readonly GoalVerification.Message[]; source: SourceState; cwd: string }
   }): Decision {
     const found = GoalPlan.lookupContract(input.sessionID, input.created)
-    if (found.state === "missing") {
-      // Pre-v1 goals and storage-primitive creates have no contract.
+    if (found.state === "missing" || found.state === "unassured") {
+      // Pre-v1 goals, storage-primitive creates, and goals deliberately created
+      // without assurance (item 2, option A) have no contract to satisfy.
       return { ok: true }
     }
     if (found.state === "invalid") {

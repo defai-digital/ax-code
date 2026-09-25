@@ -99,10 +99,12 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
       parts: [
         {
           type: "text",
-          text: GoalPlanOrchestration.resumePrompt({
-            objective: prepared.goal.objective,
-            path: prepared.path,
-          }),
+          text: prepared.path
+            ? GoalPlanOrchestration.resumePrompt({
+                objective: prepared.goal.objective,
+                path: prepared.path,
+              })
+            : GoalPlanOrchestration.objectivePrompt({ objective: prepared.goal.objective, resumed: true }),
         },
         ...(input.parts ?? []),
       ],
@@ -146,7 +148,11 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
       parts: [
         {
           type: "text",
-          text: GoalPlanOrchestration.implementerPrompt({ objective: prepared.goal.objective, path: prepared.path }),
+          // A revision always writes a plan, so the path is present here.
+          text: GoalPlanOrchestration.implementerPrompt({
+            objective: prepared.goal.objective,
+            path: prepared.path!,
+          }),
         },
         ...(input.parts ?? []),
       ],
@@ -194,12 +200,23 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
     )
       throw new Error("Goal time budget must be a positive integer number of seconds")
     await cancelRunningSession(input.sessionID)
+    // Superseding a goal used to leave its plan artifacts behind (only `clear`
+    // removed them). Remove them for both branches: the row is being replaced, so
+    // its files are dead weight, and the bare path makes replacement common.
+    if (current) GoalPlan.remove(input.sessionID, current.time.created)
     // Assurance is opt-in (item 2, option A): a plain /goal starts immediately, so
     // the planner's startup cost is not paid by goals that do not need a frozen
     // contract, and SessionGoal.format reports the resulting state ("no assurance
     // contract") wherever the goal is shown. Replacing a goal that already has a
     // valid contract keeps its assurance rather than silently weakening it.
-    const assure = parsed.assure === true || (parsed.action === "replace" && contracted)
+    // Keep assurance when the goal being replaced had contract artifacts of any
+    // kind (present or damaged), so replacing never silently downgrades a goal
+    // that was created with assurance. An explicitly unassured goal, or one that
+    // was never planned, stays that way unless --assure is passed.
+    const replacedState = current ? GoalPlan.lookupContract(input.sessionID, current.time.created).state : undefined
+    const assure =
+      parsed.assure === true ||
+      (parsed.action === "replace" && (replacedState === "present" || replacedState === "invalid"))
     if (assure) {
       prepared = await GoalPlanOrchestration.activate({
         sessionID: input.sessionID,
@@ -212,16 +229,18 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
         variant: input.variant,
       })
     } else {
-      prepared = {
-        goal: await SessionGoal.create({
-          sessionID: input.sessionID,
-          objective: parsed.objective,
-          tokenBudget: parsed.tokenBudget,
-          timeBudgetSeconds: parsed.timeBudgetSeconds,
-          replace: parsed.action === "replace" || current !== undefined,
-          status: "active",
-        }),
-      }
+      const goal = await SessionGoal.create({
+        sessionID: input.sessionID,
+        objective: parsed.objective,
+        tokenBudget: parsed.tokenBudget,
+        timeBudgetSeconds: parsed.timeBudgetSeconds,
+        replace: parsed.action === "replace" || current !== undefined,
+        status: "active",
+      })
+      // Record the intent so resume does not treat this as a planner that still
+      // has to run, and supersede the previous goal's artifacts.
+      GoalPlan.markUnassured(input.sessionID, goal.time.created)
+      prepared = { goal }
     }
   } catch (error) {
     return goalControlMessage(input, toErrorMessage(error, "Goal command failed."))

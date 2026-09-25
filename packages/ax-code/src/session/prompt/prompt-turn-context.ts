@@ -109,6 +109,9 @@ export async function buildTurnContext(input: {
   // wrapper (neutralizing any injected closing tag) so goal content can never
   // masquerade as runtime structure.
   const safeObjective = goal?.objective.replace(/<\/untrusted_objective>/gi, "< /untrusted_objective>")
+  // Cheap file check, once per turn, so a goal without a contract is reminded of
+  // its actual completion gate on every turn rather than only in its first prompt.
+  const goalContractState = goal ? GoalPlan.lookupContract(goal.sessionID, goal.time.created).state : undefined
   const goalSection =
     goal && goal.status !== "complete"
       ? [
@@ -120,6 +123,13 @@ export async function buildTurnContext(input: {
           goal.status === "active"
             ? `  Keep working toward this objective until it is complete, blocked, paused, cleared, or budget-limited.`
             : `  Do not start new substantive work for this goal unless the runtime resumes it.`,
+          ...(goalContractState !== "present"
+            ? [
+                goalContractState === "unassured"
+                  ? `  No assurance contract: assurance was not requested for this goal. Completion is judged by the pending todos plus verification after your last change; no acceptance evidence or executed-check receipts apply.`
+                  : `  No assurance contract: planning has not completed for this goal. Completion is judged by the pending todos plus verification after your last change.`,
+              ]
+            : []),
           ...(goalGuidance?.path ? [`  Plan: ${goalGuidance.path}`] : []),
           ...(goalGuidance?.nextStep ? [`  Next checklist step: ${goalGuidance.nextStep}`] : []),
           ...(goalGuidance?.context ? [goalGuidance.context] : []),

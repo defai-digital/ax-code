@@ -9,6 +9,7 @@ import { SessionPrompt } from "../../src/session/prompt"
 import { executeGoalCommand } from "../../src/session/prompt/prompt-goal-command"
 import type { PromptInput } from "../../src/session/prompt/prompt-input"
 import { tmpdir } from "../fixture/fixture"
+import { access } from "node:fs/promises"
 
 const model = {
   providerID: "test",
@@ -378,7 +379,9 @@ describe("goal assurance is opt-in (item 2, option A)", () => {
           const goal = await SessionGoal.get(session.id)
           expect(goal?.status).toBe("active")
           expect(goal?.objective).toBe("keep main green")
-          expect(GoalPlan.lookupContract(session.id, goal!.time.created)).toEqual({ state: "missing" })
+          // "unassured" (not "missing"): the marker records that planning was
+          // deliberately skipped, which is what resume must respect.
+          expect(GoalPlan.lookupContract(session.id, goal!.time.created).state).toBe("unassured")
           const text =
             prompts[0]?.parts
               .filter((part) => part.type === "text")
@@ -447,6 +450,76 @@ describe("goal assurance is opt-in (item 2, option A)", () => {
         // and no implementer prompt was submitted.
         expect(await SessionGoal.get(session.id)).toBeUndefined()
         expect(prompts).toHaveLength(0)
+      },
+    })
+  })
+
+  test("resuming an unassured goal does not silently attach a contract", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        let writerCalls = 0
+        GoalPlanWriter.setWrite(async (input) => {
+          writerCalls++
+          return GoalPlanWriter.stubWrite()(input)
+        })
+        try {
+          const session = await Session.create({})
+          const prompts: PromptInput[] = []
+          const run = (args: string) =>
+            executeGoalCommand(
+              { sessionID: session.id, command: "goal", arguments: args, agent: "build", model: "test/test-model" },
+              async (input) => {
+                prompts.push(input)
+                return { info: { role: "assistant" }, parts: [] } as any
+              },
+            )
+          await run("keep main green")
+          await run("pause")
+          await run("resume")
+
+          expect(writerCalls).toBe(0)
+          const goal = await SessionGoal.get(session.id)
+          expect(goal?.status).toBe("active")
+          expect(GoalPlan.lookupContract(session.id, goal!.time.created).state).toBe("unassured")
+          const parts = (prompts.at(-1)?.parts ?? []) as Array<{ type: string; text?: string }>
+          const text = parts
+            .filter((part) => part.type === "text")
+            .map((part) => part.text ?? "")
+            .join("\n")
+          expect(text).toContain("no assurance contract")
+          expect(text).not.toContain("frozen plan")
+        } finally {
+          GoalPlanWriter.resetWrite()
+        }
+      },
+    })
+  })
+
+  test("replacing a goal removes the superseded goal's plan artifacts", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        GoalPlanWriter.setWrite(GoalPlanWriter.stubWrite())
+        try {
+          const session = await Session.create({})
+          const run = (args: string) =>
+            executeGoalCommand(
+              { sessionID: session.id, command: "goal", arguments: args, agent: "build", model: "test/test-model" },
+              async () => ({ info: { role: "assistant" }, parts: [] }) as any,
+            )
+          await run("--assure first")
+          const first = (await SessionGoal.get(session.id))!
+          const oldPlan = GoalPlan.pathFor(session.id, first.time.created)
+          await expect(access(oldPlan)).resolves.toBeUndefined()
+
+          await run("replace second")
+          await expect(access(oldPlan)).rejects.toThrow()
+        } finally {
+          GoalPlanWriter.resetWrite()
+        }
       },
     })
   })
