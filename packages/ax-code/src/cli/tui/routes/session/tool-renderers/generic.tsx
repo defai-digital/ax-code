@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createMemo, createSignal, Show } from "solid-js"
 import stripAnsi from "strip-ansi"
 import { useTheme } from "@tui/context/theme"
@@ -6,6 +7,8 @@ import { useSessionRouteContext } from "../context"
 import { BlockTool, InlineTool, type ToolProps } from "./primitives"
 
 export function GenericTool(props: ToolProps<any>) {
+  const uiText = useLanguage().t
+
   const { theme } = useTheme()
   const ctx = useSessionRouteContext()
   const output = createMemo(() => stripAnsi(props.output?.trim() ?? ""))
@@ -40,7 +43,7 @@ export function GenericTool(props: ToolProps<any>) {
         <box gap={1}>
           <text fg={theme.text}>{limited()}</text>
           <Show when={overflow()}>
-            <text fg={theme.textMuted}>{expanded() ? "Click to collapse" : "Click to expand"}</text>
+            <text fg={theme.textMuted}>{expanded() ? uiText("ui.clickToCollapse") : uiText("ui.clickToExpand")}</text>
           </Show>
         </box>
       </BlockTool>

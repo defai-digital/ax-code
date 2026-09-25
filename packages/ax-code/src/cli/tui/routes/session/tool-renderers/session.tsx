@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createMemo, For, Match, Switch } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 import type { ReadTool } from "@/tool/read"
@@ -10,6 +11,8 @@ import { todoWriteView } from "../view-model"
 import { BlockTool, InlineTool, type ToolProps } from "./primitives"
 
 export function Read(props: ToolProps<typeof ReadTool>) {
+  const uiText = useLanguage().t
+
   const { theme } = useTheme()
   const isRunning = createMemo(() => props.part.state.status === "running")
   const loaded = createMemo(() => {
@@ -28,13 +31,13 @@ export function Read(props: ToolProps<typeof ReadTool>) {
         spinner={isRunning()}
         part={props.part}
       >
-        Read {normalize(props.input.filePath)} {detail(props.input, ["filePath"])}
+        {uiText("ui.read")} {normalize(props.input.filePath)} {detail(props.input, ["filePath"])}
       </InlineTool>
       <For each={loaded()}>
         {(filepath) => (
           <box paddingLeft={3}>
             <text paddingLeft={3} fg={theme.textMuted}>
-              ↳ Loaded {normalize(filepath)}
+              {uiText("ui.loaded")} {normalize(filepath)}
             </text>
           </box>
         )}
@@ -44,6 +47,8 @@ export function Read(props: ToolProps<typeof ReadTool>) {
 }
 
 export function TodoWrite(props: ToolProps<typeof TodoWriteTool>) {
+  const uiText = useLanguage().t
+
   const view = createMemo(() =>
     todoWriteView({
       status: props.part.state.status,
@@ -56,7 +61,7 @@ export function TodoWrite(props: ToolProps<typeof TodoWriteTool>) {
   return (
     <Switch>
       <Match when={view().state === "items"}>
-        <BlockTool title="# Todos" part={props.part}>
+        <BlockTool title={uiText("ui.todos")} part={props.part}>
           <box>
             <For each={view().todos}>{(todo) => <TodoItem status={todo.status} content={todo.content} />}</For>
           </box>
@@ -64,12 +69,12 @@ export function TodoWrite(props: ToolProps<typeof TodoWriteTool>) {
       </Match>
       <Match when={view().state === "empty"}>
         <InlineTool icon="✓" pending="Updating todos..." complete={true} part={props.part}>
-          No todos
+          {uiText("ui.noTodos")}
         </InlineTool>
       </Match>
       <Match when={true}>
         <InlineTool icon="⚙" pending="Updating todos..." complete={false} part={props.part}>
-          Updating todos...
+          {uiText("ui.updatingTodos")}
         </InlineTool>
       </Match>
     </Switch>
@@ -77,6 +82,8 @@ export function TodoWrite(props: ToolProps<typeof TodoWriteTool>) {
 }
 
 export function Question(props: ToolProps<typeof QuestionTool>) {
+  const uiText = useLanguage().t
+
   const { theme } = useTheme()
   const count = createMemo(() => props.input.questions?.length ?? 0)
 
@@ -88,7 +95,7 @@ export function Question(props: ToolProps<typeof QuestionTool>) {
   return (
     <Switch>
       <Match when={props.metadata.answers}>
-        <BlockTool title="# Questions" part={props.part}>
+        <BlockTool title={uiText("ui.questions")} part={props.part}>
           <box gap={1}>
             <For each={props.input.questions ?? []}>
               {(q, i) => (

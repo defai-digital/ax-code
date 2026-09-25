@@ -8,6 +8,7 @@ changes belong to AX Coder.
 
 ### Changed
 
+- Rename the TUI animation and its theme to Digital Code, preserving existing preferences. Render the rain and startup logo in randomly selected neon purple and blue.
 - Restrict managed AX Engine model selection to Qwen3.8 27B AXQ 6-bit MTP.
 
 ## [7.18.0] - 2026-09-15
@@ -105,7 +106,7 @@ changes belong to AX Coder.
 
 ### Added
 
-- Play the Matrix rain overlay once when the TUI starts, on by default and disabled with the "Matrix rain on startup" command toggle; it still honors `animations_enabled` and the compiled-runtime policy.
+- Play the Digital Code overlay once when the TUI starts, on by default and disabled with the "Digital Code on startup" command toggle; it still honors `animations_enabled` and the compiled-runtime policy.
 
 ### Changed
 
@@ -142,7 +143,7 @@ changes belong to AX Coder.
 
 ### Added
 
-- Opt-in Matrix rain overlay when a scheduled task completes, plus a manual Play Matrix rain command.
+- Opt-in Digital Code overlay when a scheduled task completes, plus a manual Play Digital Code command.
 
 ### Changed
 
@@ -151,7 +152,7 @@ changes belong to AX Coder.
 ### Fixed
 
 - Arm idle recap on first observation of a settled session and when switching to one, so resume and session navigation get an automatic recap instead of waiting for another idle edge.
-- Dismiss the Matrix rain overlay if a dialog opens while it is playing.
+- Dismiss the Digital Code overlay if a dialog opens while it is playing.
 
 ## [7.16.1] - 2026-09-12
 

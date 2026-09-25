@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createMemo, createResource, onMount } from "solid-js"
 import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
 import { useDialog } from "@tui/ui/dialog"
@@ -37,6 +38,8 @@ async function loadCapabilityCatalog(sdk: ReturnType<typeof useSDK>, signal: Abo
 }
 
 export function DialogCapabilityCatalog() {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const sdk = useSDK()
 
@@ -57,5 +60,11 @@ export function DialogCapabilityCatalog() {
     })),
   )
 
-  return <DialogSelect title="Capability Catalog" placeholder="Search capabilities..." options={options()} />
+  return (
+    <DialogSelect
+      title={uiText("ui.capabilityCatalog")}
+      placeholder={uiText("ui.searchCapabilities")}
+      options={options()}
+    />
+  )
 }

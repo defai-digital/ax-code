@@ -1,3 +1,4 @@
+import { english, type Translate } from "../../i18n"
 import { formatDuration } from "@/util/format"
 import { Locale } from "@/util/locale"
 import type { CompactionBudget } from "@/session/compaction-budget"
@@ -185,22 +186,23 @@ function shortFooterText(value: string, max = 32) {
   return `${normalized.slice(0, max - 3)}...`
 }
 
-function goalStatusLabel(status: FooterGoalStatus) {
+function goalStatusLabel(status: FooterGoalStatus, uiText: Translate) {
   switch (status) {
     case "active":
-      return "Goal"
+      return uiText("ui.goal")
     case "paused":
-      return "Goal paused"
+      return uiText("ui.goalPaused")
     case "complete":
-      return "Goal complete"
+      return uiText("ui.goalComplete")
     case "blocked":
-      return "Goal blocked"
+      return uiText("ui.goalBlocked")
     case "budget_limited":
-      return "Goal budget"
+      return uiText("ui.goalBudget")
   }
 }
 
 export function footerGoalChip(input: {
+  t?: Translate
   goal?: FooterGoalInfo | null
   maxObjective?: number
   // Compact drops the resume hint and the " tok" suffix for space-starved
@@ -212,11 +214,12 @@ export function footerGoalChip(input: {
   // rather than a warning "Goal paused" chip that suggests /goal resume.
   planning?: boolean
 }): FooterGoalChip | undefined {
+  const uiText = input.t ?? english
   const goal = input.goal
   if (!goal) return
 
   const planning = !!input.planning && (goal.status === "paused" || goal.status === "budget_limited")
-  const status = planning ? "Planning goal" : goalStatusLabel(goal.status)
+  const status = planning ? uiText("ui.planningGoal") : goalStatusLabel(goal.status, uiText)
   const objective = shortFooterText(goal.objective, input.maxObjective ?? 36)
   const tokens =
     goal.tokenBudget === undefined || goal.tokensUsed === undefined
@@ -252,38 +255,42 @@ function lowerFirst(value: string) {
   return `${value.charAt(0).toLowerCase()}${value.slice(1)}`
 }
 
-function footerTaskLabel(tool?: string) {
-  if (!tool) return "Using tool"
+function footerTaskLabel(tool: string | undefined, uiText: Translate) {
+  if (!tool) return uiText("ui.usingTool")
 
   const normalized = tool.replace(/[_-]+/g, " ").trim().toLowerCase()
-  if (normalized.includes("todo")) return "Updating todos"
+  if (normalized.includes("todo")) return uiText("ui.updatingTodos2")
   if (
     ["lsp", "code intelligence", "codesearch", "impact analyze", "debug analyze"].some((name) =>
       normalized.includes(name),
     )
   )
-    return "Analyzing code"
-  if (["grep", "glob", "ls", "list", "read", "scan"].some((name) => normalized.includes(name))) return "Scanning files"
-  if (["bash", "shell", "terminal", "command"].some((name) => normalized.includes(name))) return "Running command"
+    return uiText("ui.analyzingCode")
+  if (["grep", "glob", "ls", "list", "read", "scan"].some((name) => normalized.includes(name)))
+    return uiText("ui.scanningFiles")
+  if (["bash", "shell", "terminal", "command"].some((name) => normalized.includes(name)))
+    return uiText("ui.runningCommand")
   if (["edit", "write", "patch", "diff", "refactor apply"].some((name) => normalized.includes(name)))
-    return "Editing files"
-  if (["task", "agent", "subagent"].some((name) => normalized.includes(name))) return "Subtask"
-  if (["web", "fetch", "search"].some((name) => normalized.includes(name))) return "Searching web"
-  if (["plan", "hypothesis"].some((name) => normalized.includes(name))) return "Planning"
-  if (normalized.includes("question")) return "Input needed"
-  if (normalized.includes("skill")) return "Loading skill"
-  if (normalized.includes("memory")) return "Saving memory"
-  if (normalized.includes("batch")) return "Running tools"
+    return uiText("ui.editingFiles")
+  if (["task", "agent", "subagent"].some((name) => normalized.includes(name))) return uiText("ui.subtask")
+  if (["web", "fetch", "search"].some((name) => normalized.includes(name))) return uiText("ui.searchingWeb")
+  if (["plan", "hypothesis"].some((name) => normalized.includes(name))) return uiText("ui.planning")
+  if (normalized.includes("question")) return uiText("ui.inputNeeded")
+  if (normalized.includes("skill")) return uiText("ui.loadingSkill")
+  if (normalized.includes("memory")) return uiText("ui.savingMemory")
+  if (normalized.includes("batch")) return uiText("ui.runningTools")
 
-  return `Running ${footerToolLabel(tool)}`
+  return uiText("ui.runningTool", { tool: footerToolLabel(tool) })
 }
 
 export function footerSessionStatusView(input: {
+  t?: Translate
   status?: FooterSessionStatus
   messages?: readonly FooterMessage[]
   now?: number
   stalledAfterMs?: number
 }): FooterSessionStatusView {
+  const uiText = input.t ?? english
   const status = input.status
   if (!status || status.type === "idle") return { stale: false, tone: "muted" }
 
@@ -293,7 +300,7 @@ export function footerSessionStatusView(input: {
     const remaining = Math.max(0, Math.round((status.next - now) / MS_PER_SECOND))
     const duration = formatDuration(remaining)
     return {
-      label: duration ? `Retrying in ${duration}` : "Retrying",
+      label: duration ? uiText("ui.retryingInDuration", { duration }) : uiText("ui.retrying"),
       stale: false,
       tone: "warning",
     }
@@ -306,11 +313,11 @@ export function footerSessionStatusView(input: {
     startedAt !== undefined ? Math.max(1, Math.floor((now - startedAt) / MS_PER_SECOND)) : undefined
   const elapsed = elapsedSeconds !== undefined ? formatDuration(elapsedSeconds) : ""
 
-  let label = "Thinking"
+  let label = uiText("ui.thinking")
   if (status.waitState === "tool") {
-    label = footerTaskLabel(status.activeTool)
+    label = footerTaskLabel(status.activeTool, uiText)
   } else if (status.waitState === "llm") {
-    label = "Thinking"
+    label = uiText("ui.thinking")
   }
 
   const staleAfterMs =
@@ -326,13 +333,13 @@ export function footerSessionStatusView(input: {
   // Tool waits do not emit periodic progress heartbeats, so presenting
   // `inactive` as a second timer mostly duplicates the elapsed duration.
   // The warning marker and "Still..." copy already surface the stale state.
-  const staleHint = status.waitState ? undefined : `Inactive ${inactive}`
+  const staleHint = status.waitState ? undefined : uiText("ui.inactiveDuration", { duration: inactive })
   const waitingText =
     status.waitState === "tool"
-      ? `Still ${lowerFirst(label)}`
+      ? uiText("ui.stillActivity", { activity: lowerFirst(label) })
       : status.waitState === "llm"
-        ? "Still waiting for model"
-        : "Still working"
+        ? uiText("ui.stillWaitingForModel")
+        : uiText("ui.stillWorking")
   const waiting = elapsed ? `${waitingText} - ${elapsed}` : waitingText
   const labelWithHint = staleHint ? `${waiting} - ${staleHint}` : waiting
 
@@ -379,11 +386,13 @@ export function hasActiveSubagentInSessionTree(input: {
 // the prompt row still looks live; activity, elapsed, and stale copy belong
 // on the top rail so they are not printed three times.
 export function footerSubagentStatusView(input: {
+  t?: Translate
   sessions: readonly { id: string; parentID?: string }[]
   statuses?: Record<string, FooterSessionStatus | undefined>
   parentSessionID: string
   now?: number
 }): (FooterSessionStatusView & { running: number }) | undefined {
+  const uiText = input.t ?? english
   let running = 0
   const descendants = createSessionTreeIndex(input.sessions).subtree(input.parentSessionID)
   descendants.delete(input.parentSessionID)
@@ -395,7 +404,7 @@ export function footerSubagentStatusView(input: {
   if (running === 0) return undefined
 
   return {
-    label: running === 1 ? "Subagent" : `${running} subagents`,
+    label: running === 1 ? uiText("ui.subagent") : uiText("ui.countSubagents", { count: running }),
     stale: false,
     tone: "working",
     running,

@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { TextAttributes } from "ax-tui"
 import { useTheme } from "@tui/context/theme"
 import { createMemo, For, onMount, Show } from "solid-js"
@@ -5,6 +6,8 @@ import { useDialog } from "../../ui/dialog"
 import { SessionGraph } from "./graph"
 
 export function DialogDreGraph(props: { sessionID: string }) {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const { theme } = useTheme()
 
@@ -30,7 +33,7 @@ export function DialogDreGraph(props: { sessionID: string }) {
     <box paddingLeft={2} paddingRight={2} paddingBottom={1} flexDirection="column" gap={1}>
       <box flexDirection="row" justifyContent="space-between">
         <text attributes={TextAttributes.BOLD} fg={theme.text}>
-          DRE Graph
+          {uiText("ui.dreGraph")}
         </text>
         <text fg={theme.textMuted} onMouseUp={() => dialog.clear()}>
           esc
@@ -41,14 +44,14 @@ export function DialogDreGraph(props: { sessionID: string }) {
         fallback={
           <box paddingTop={1}>
             <text fg={theme.textMuted}>
-              No execution graph recorded. Run a session with tools or routes to populate execution evidence.
+              {uiText("ui.noExecutionGraphRecordedRunASessionWithToolsOrRoutesToPopulateExecutionEvidence")}
             </text>
           </box>
         }
       >
         <box>
           <text fg={theme.accent} attributes={TextAttributes.BOLD}>
-            Visual
+            {uiText("ui.visual")}
           </text>
         </box>
         <scrollbox maxHeight={10} paddingLeft={1} scrollbarOptions={{ visible: false }}>
@@ -61,7 +64,7 @@ export function DialogDreGraph(props: { sessionID: string }) {
         <Show when={items().length > 0}>
           <box paddingTop={1}>
             <text fg={theme.accent} attributes={TextAttributes.BOLD}>
-              Detail
+              {uiText("ui.detail")}
             </text>
           </box>
           <scrollbox maxHeight={12} paddingLeft={1} paddingRight={1} scrollbarOptions={{ visible: false }}>

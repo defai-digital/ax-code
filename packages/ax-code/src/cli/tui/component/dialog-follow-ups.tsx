@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createMemo, createSignal } from "solid-js"
 import { useDialog } from "@tui/ui/dialog"
 import { DialogSelect } from "@tui/ui/dialog-select"
@@ -16,6 +17,8 @@ import {
 import { Keybind } from "@/util/keybind"
 
 export function DialogFollowUps(props: { sessionID: string; onAttention: () => void }) {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const sync = useSync()
   const sdk = useSDK()
@@ -53,7 +56,7 @@ export function DialogFollowUps(props: { sessionID: string; onAttention: () => v
               payload: { ...paused.payload, body: { ...body, parts } },
             }),
           )
-          toast.show({ message: "Saved; follow-up remains paused until resumed", variant: "info" })
+          toast.show({ message: uiText("ui.savedFollowUpRemainsPausedUntilResumed"), variant: "info" })
         }
       }
     } catch (error) {
@@ -71,17 +74,17 @@ export function DialogFollowUps(props: { sessionID: string; onAttention: () => v
     }
     const mutable = ["queued", "waiting_for_idle", "paused"].includes(item.status)
     const actions: Array<{ title: string; value: "pause" | "resume" | "cancel" | "retry" | "edit" | "stop" }> = [
-      ...(mutable ? [{ title: "Edit (pause first)", value: "edit" as const }] : []),
+      ...(mutable ? [{ title: uiText("ui.editPauseFirst"), value: "edit" as const }] : []),
       ...(item.status === "paused"
-        ? [{ title: "Resume", value: "resume" as const }]
+        ? [{ title: uiText("ui.resume"), value: "resume" as const }]
         : mutable
-          ? [{ title: "Pause", value: "pause" as const }]
+          ? [{ title: uiText("ui.pause"), value: "pause" as const }]
           : []),
       ...(item.status === "failed"
-        ? [{ title: "Retry after inspecting previous output", value: "retry" as const }]
+        ? [{ title: uiText("ui.retryAfterInspectingPreviousOutput"), value: "retry" as const }]
         : []),
-      ...(mutable ? [{ title: "Cancel follow-up", value: "cancel" as const }] : []),
-      ...(item.status === "running" ? [{ title: "Stop active turn", value: "stop" as const }] : []),
+      ...(mutable ? [{ title: uiText("ui.cancelFollowUp"), value: "cancel" as const }] : []),
+      ...(item.status === "running" ? [{ title: uiText("ui.stopActiveTurn"), value: "stop" as const }] : []),
     ]
     dialog.replace(() => (
       <DialogSelect
@@ -112,7 +115,7 @@ export function DialogFollowUps(props: { sessionID: string; onAttention: () => v
         {
           title: history() ? "Show pending only" : "Show completed and cancelled history",
           value: null,
-          description: "Toggle history",
+          description: uiText("ui.toggleHistory"),
         },
       ]}
       onSelect={(option) => (option.value ? select(option.value) : showHistory((value) => !value))}

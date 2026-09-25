@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { TextAttributes } from "ax-tui"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
@@ -10,6 +11,8 @@ export type DialogAlertProps = {
 }
 
 export function DialogAlert(props: DialogAlertProps) {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const { theme } = useTheme()
 
@@ -42,7 +45,7 @@ export function DialogAlert(props: DialogAlertProps) {
             dialog.clear()
           }}
         >
-          <text fg={theme.selectedListItemText}>ok</text>
+          <text fg={theme.selectedListItemText}>{uiText("ui.ok")}</text>
         </box>
       </box>
     </box>

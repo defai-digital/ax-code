@@ -160,6 +160,8 @@ function TextBody(props: { title: string; description?: string; icon?: string })
 // so the underlying permission policy rules (allow/deny/ask for
 // "edit") apply unchanged. See PRD-debug-refactor-engine.md Tier 1c.
 function RefactorApplyBody(props: { request: PermissionRequest }) {
+  const uiText = useLanguage().t
+
   const { t } = useLanguage()
   const { theme } = useTheme()
   const meta = props.request.metadata ?? {}
@@ -193,7 +195,10 @@ function RefactorApplyBody(props: { request: PermissionRequest }) {
           metadata so users see exactly what will change. */}
       <Show when={files.length > 0}>
         <box flexDirection="column" gap={0}>
-          <text fg={theme.textMuted}>Files ({files.length})</text>
+          <text fg={theme.textMuted}>
+            {uiText("ui.files")}
+            {files.length})
+          </text>
           <box>
             <For each={files.slice(0, 10)}>{(f) => <text fg={theme.text}>{"  " + normalizePath(f)}</text>}</For>
             <Show when={files.length > 10}>
@@ -205,7 +210,7 @@ function RefactorApplyBody(props: { request: PermissionRequest }) {
       <Show when={preflight}>
         <box paddingTop={1}>
           <text fg={theme.textMuted}>
-            Pre-flight runs typecheck, lint, and tests in a scratch worktree only. No real files change.
+            {uiText("ui.preFlightRunsTypecheckLintAndTestsInAScratchWorktreeOnlyNoRealFilesChange")}
           </text>
         </box>
       </Show>
@@ -214,6 +219,8 @@ function RefactorApplyBody(props: { request: PermissionRequest }) {
 }
 
 export function PermissionPrompt(props: { request: PermissionRequest }) {
+  const uiText = useLanguage().t
+
   const { t } = useLanguage()
   const [expanded, setExpanded] = createSignal(false)
   const sdk = useSDK()
@@ -482,7 +489,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
     if (permission === "webmcp") {
       return {
         icon: "↗",
-        title: "Experimental WebMCP bridge call",
+        title: uiText("ui.experimentalWebmcpBridgeCall"),
         body: (
           <box paddingLeft={1} flexDirection="column">
             <For each={webMcpApprovalLines(props.request.metadata ?? {})}>
@@ -673,7 +680,9 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
               </box>
               <Show when={requestingAgent()}>
                 <box paddingLeft={2} flexShrink={0}>
-                  <text fg={theme.textMuted}>Requested by {requestingAgent()} agent</text>
+                  <text fg={theme.textMuted}>
+                    {uiText("ui.requestedBy")} {requestingAgent()} {uiText("ui.agent")}
+                  </text>
                 </box>
               </Show>
             </box>

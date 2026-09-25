@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createMemo, onMount } from "solid-js"
 import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
 import { useSync } from "@tui/context/sync"
@@ -6,6 +7,8 @@ import { SessionCompareView } from "./compare"
 import { SessionSemanticDiff } from "@/session/semantic-diff"
 
 export function DialogCompare(props: { currentID: string; sessions: SessionCompareView.Session[] }) {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const sync = useSync()
 
@@ -28,9 +31,9 @@ export function DialogCompare(props: { currentID: string; sessions: SessionCompa
     if (items.length === 0) {
       return [
         {
-          title: "No compare target available",
+          title: uiText("ui.noCompareTargetAvailable"),
           value: "empty",
-          description: "Create a fork from this session to compare alternatives.",
+          description: uiText("ui.createAForkFromThisSessionToCompareAlternatives"),
           category: "Overview",
         },
       ]
@@ -51,7 +54,7 @@ export function DialogCompare(props: { currentID: string; sessions: SessionCompa
     }))
   })
 
-  return <DialogSelect title="Compare Sessions" options={options()} skipFilter={false} />
+  return <DialogSelect title={uiText("ui.compareSessions")} options={options()} skipFilter={false} />
 }
 
 export function DialogCompareDetail(props: {
@@ -59,6 +62,8 @@ export function DialogCompareDetail(props: {
   otherID: string
   sessions: SessionCompareView.Session[]
 }) {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const sync = useSync()
 
@@ -83,9 +88,9 @@ export function DialogCompareDetail(props: {
     if (!detail) {
       return [
         {
-          title: "Compare target missing",
+          title: uiText("ui.compareTargetMissing"),
           value: "missing",
-          description: "The selected branch is no longer available.",
+          description: uiText("ui.theSelectedBranchIsNoLongerAvailable"),
           category: "Overview",
         },
       ]
@@ -100,5 +105,5 @@ export function DialogCompareDetail(props: {
     }))
   })
 
-  return <DialogSelect title="Execution Compare" options={options()} skipFilter={false} />
+  return <DialogSelect title={uiText("ui.executionCompare")} options={options()} skipFilter={false} />
 }

@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createMemo, onMount } from "solid-js"
 import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
 import { type DialogContext, useDialog } from "../../ui/dialog"
@@ -9,6 +10,8 @@ export function DialogRollback(props: {
   messages: Parameters<typeof SessionRollbackView.load>[1]
   onSelect?: (point: SessionRollbackView.Point) => Promise<void> | void
 }) {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const toast = useToast()
 
@@ -24,9 +27,9 @@ export function DialogRollback(props: {
     if (detail.length === 0) {
       return [
         {
-          title: "No rollback points recorded",
+          title: uiText("ui.noRollbackPointsRecorded"),
           value: "empty",
-          description: "Run a session with step activity to capture rollback targets.",
+          description: uiText("ui.runASessionWithStepActivityToCaptureRollbackTargets"),
           category: "Overview",
         },
       ]
@@ -56,5 +59,5 @@ export function DialogRollback(props: {
     }))
   })
 
-  return <DialogSelect title="Rollback Points" options={options()} skipFilter={false} />
+  return <DialogSelect title={uiText("ui.rollbackPoints")} options={options()} skipFilter={false} />
 }

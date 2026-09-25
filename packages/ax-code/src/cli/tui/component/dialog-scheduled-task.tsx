@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createMemo, createSignal, onCleanup, onMount } from "solid-js"
 import { TextAttributes } from "ax-tui"
 import { useDialog } from "@tui/ui/dialog"
@@ -42,6 +43,8 @@ function StatusBadge(props: { task: ScheduledTaskInfo }) {
 }
 
 export function DialogScheduledTask() {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const sdk = useSDK()
   const toast = useToast()
@@ -86,9 +89,9 @@ export function DialogScheduledTask() {
     if (rows.length > 0) return rows
     return [
       {
-        title: "No scheduled tasks",
+        title: uiText("ui.noScheduledTasks"),
         value: "empty",
-        description: "Ask the agent to schedule work. It only runs while this project backend is alive.",
+        description: uiText("ui.askTheAgentToScheduleWorkItOnlyRunsWhileThisProjectBackendIsAlive"),
         disabled: true,
       },
     ]
@@ -118,7 +121,7 @@ export function DialogScheduledTask() {
 
   return (
     <DialogSelect
-      title="Scheduled Tasks"
+      title={uiText("ui.scheduledTasks")}
       options={options()}
       onMove={() => setToDelete(undefined)}
       onSelect={(option) => {
@@ -148,7 +151,7 @@ export function DialogScheduledTask() {
         },
         {
           keybind: Keybind.parse("ctrl+r")[0],
-          title: "run now",
+          title: uiText("ui.runNow"),
           onTrigger: (option) => {
             const task = taskByID(option.value)
             if (!task) return
@@ -161,7 +164,7 @@ export function DialogScheduledTask() {
         },
         {
           keybind: Keybind.parse("ctrl+d")[0],
-          title: "delete",
+          title: uiText("ui.delete"),
           onTrigger: (option) => {
             const task = taskByID(option.value)
             if (!task) return
@@ -179,6 +182,8 @@ export function DialogScheduledTask() {
 }
 
 function DialogScheduledTaskRuns(props: { task: ScheduledTaskInfo }) {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const route = useRoute()
   const sync = useSync()
@@ -227,7 +232,7 @@ function DialogScheduledTaskRuns(props: { task: ScheduledTaskInfo }) {
         if (!run) return
         const sessionID = automationSessionID(run)
         if (!sessionID) {
-          toast.show({ message: "No recorded automation session for this run", variant: "info" })
+          toast.show({ message: uiText("ui.noRecordedAutomationSessionForThisRun"), variant: "info" })
           return
         }
         dialog.clear()

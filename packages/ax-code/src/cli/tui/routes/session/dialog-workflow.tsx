@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 // Workflow dialog component (ADR-035).
 //
 // This dialog is owned by the workflow runtime / AX Code Desktop, not by the
@@ -41,6 +42,8 @@ function isAbortError(error: unknown) {
 }
 
 export function DialogWorkflow() {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const toast = useToast()
   const sdk = useSDK()
@@ -77,7 +80,7 @@ export function DialogWorkflow() {
       {
         title: runs.loading ? "Refreshing workflow runs" : "Refresh workflow runs",
         value: "workflow.refresh",
-        description: "Reload recent project workflow runs from the server.",
+        description: uiText("ui.reloadRecentProjectWorkflowRunsFromTheServer"),
         category: "Actions",
         disabled: runs.loading,
         onSelect: () => {
@@ -100,10 +103,12 @@ export function DialogWorkflow() {
     ]
   })
 
-  return <DialogSelect title="Workflow Runs" options={options()} skipFilter={false} />
+  return <DialogSelect title={uiText("ui.workflowRuns")} options={options()} skipFilter={false} />
 }
 
 function DialogWorkflowDetail(props: { runID: string }) {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const toast = useToast()
   const sdk = useSDK()
@@ -139,9 +144,9 @@ function DialogWorkflowDetail(props: { runID: string }) {
     const current = detail()
     const actions: DialogSelectOption<string>[] = [
       {
-        title: "Back to workflow runs",
+        title: uiText("ui.backToWorkflowRuns"),
         value: "workflow.detail.back",
-        description: "Return to the project workflow run list.",
+        description: uiText("ui.returnToTheProjectWorkflowRunList"),
         category: "Actions",
         onSelect: (ctx) => {
           ctx.replace(() => <DialogWorkflow />)
@@ -150,7 +155,7 @@ function DialogWorkflowDetail(props: { runID: string }) {
       {
         title: detail.loading ? "Refreshing workflow run" : "Refresh workflow run",
         value: "workflow.detail.refresh",
-        description: "Reload this workflow run detail from the server.",
+        description: uiText("ui.reloadThisWorkflowRunDetailFromTheServer"),
         category: "Actions",
         disabled: detail.loading,
         onSelect: () => {
@@ -158,9 +163,9 @@ function DialogWorkflowDetail(props: { runID: string }) {
         },
       },
       {
-        title: "View workflow eval summary",
+        title: uiText("ui.viewWorkflowEvalSummary"),
         value: "workflow.detail.eval-summary",
-        description: "Inspect promotion gate, budget, verification, token usage, and finding outcome metrics.",
+        description: uiText("ui.inspectPromotionGateBudgetVerificationTokenUsageAndFindingOutcomeMetrics"),
         category: "Actions",
         onSelect: (ctx) => {
           ctx.replace(() => <DialogWorkflowEvalSummary runID={props.runID} />)
@@ -172,9 +177,9 @@ function DialogWorkflowDetail(props: { runID: string }) {
       return [
         ...actions,
         {
-          title: "Workflow run unavailable",
+          title: uiText("ui.workflowRunUnavailable"),
           value: "workflow.detail.empty",
-          description: "The run detail could not be loaded yet.",
+          description: uiText("ui.theRunDetailCouldNotBeLoadedYet"),
           category: "Overview",
           disabled: true,
         },
@@ -267,10 +272,12 @@ function DialogWorkflowDetail(props: { runID: string }) {
     }
   }
 
-  return <DialogSelect title="Workflow Run Detail" options={options()} skipFilter={false} />
+  return <DialogSelect title={uiText("ui.workflowRunDetail")} options={options()} skipFilter={false} />
 }
 
 function DialogWorkflowEvalSummary(props: { runID: string }) {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const toast = useToast()
   const sdk = useSDK()
@@ -309,9 +316,9 @@ function DialogWorkflowEvalSummary(props: { runID: string }) {
     const current = summary()
     const actions: DialogSelectOption<string>[] = [
       {
-        title: "Back to workflow run",
+        title: uiText("ui.backToWorkflowRun"),
         value: "workflow.eval.back",
-        description: "Return to the workflow run detail.",
+        description: uiText("ui.returnToTheWorkflowRunDetail"),
         category: "Actions",
         onSelect: (ctx) => {
           ctx.replace(() => <DialogWorkflowDetail runID={props.runID} />)
@@ -320,7 +327,7 @@ function DialogWorkflowEvalSummary(props: { runID: string }) {
       {
         title: summary.loading ? "Refreshing workflow eval summary" : "Refresh workflow eval summary",
         value: "workflow.eval.refresh",
-        description: "Reload this workflow run's evaluation metrics.",
+        description: uiText("ui.reloadThisWorkflowRunSEvaluationMetrics"),
         category: "Actions",
         disabled: summary.loading,
         onSelect: () => {
@@ -333,9 +340,9 @@ function DialogWorkflowEvalSummary(props: { runID: string }) {
       return [
         ...actions,
         {
-          title: "Workflow eval summary unavailable",
+          title: uiText("ui.workflowEvalSummaryUnavailable"),
           value: "workflow.eval.empty",
-          description: "The workflow evaluation summary could not be loaded yet.",
+          description: uiText("ui.theWorkflowEvaluationSummaryCouldNotBeLoadedYet"),
           category: "Overview",
           disabled: true,
         },
@@ -345,10 +352,12 @@ function DialogWorkflowEvalSummary(props: { runID: string }) {
     return [...actions, ...workflowEvalSummaryItems(current)]
   })
 
-  return <DialogSelect title="Workflow Eval Summary" options={options()} skipFilter={false} />
+  return <DialogSelect title={uiText("ui.workflowEvalSummary")} options={options()} skipFilter={false} />
 }
 
 function DialogWorkflowArtifact(props: { runID: string; artifactID: string }) {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const toast = useToast()
   const sdk = useSDK()
@@ -387,9 +396,9 @@ function DialogWorkflowArtifact(props: { runID: string; artifactID: string }) {
     const artifact = artifacts()?.find((item) => item.id === props.artifactID)
     const actions: DialogSelectOption<string>[] = [
       {
-        title: "Back to workflow run",
+        title: uiText("ui.backToWorkflowRun"),
         value: "workflow.artifact.back",
-        description: "Return to the workflow run detail.",
+        description: uiText("ui.returnToTheWorkflowRunDetail"),
         category: "Actions",
         onSelect: (ctx) => {
           ctx.replace(() => <DialogWorkflowDetail runID={props.runID} />)
@@ -398,7 +407,7 @@ function DialogWorkflowArtifact(props: { runID: string; artifactID: string }) {
       {
         title: artifacts.loading ? "Refreshing workflow artifact" : "Refresh workflow artifact",
         value: "workflow.artifact.refresh",
-        description: "Reload this workflow artifact with its detailed payload.",
+        description: uiText("ui.reloadThisWorkflowArtifactWithItsDetailedPayload"),
         category: "Actions",
         disabled: artifacts.loading,
         onSelect: () => {
@@ -411,9 +420,9 @@ function DialogWorkflowArtifact(props: { runID: string; artifactID: string }) {
       return [
         ...actions,
         {
-          title: "Workflow artifact unavailable",
+          title: uiText("ui.workflowArtifactUnavailable"),
           value: "workflow.artifact.empty",
-          description: "The artifact payload could not be loaded yet.",
+          description: uiText("ui.theArtifactPayloadCouldNotBeLoadedYet"),
           category: "Overview",
           disabled: true,
         },
@@ -423,7 +432,7 @@ function DialogWorkflowArtifact(props: { runID: string; artifactID: string }) {
     return [...actions, ...workflowArtifactDetailItems(artifact)]
   })
 
-  return <DialogSelect title="Workflow Artifact" options={options()} skipFilter={false} />
+  return <DialogSelect title={uiText("ui.workflowArtifact")} options={options()} skipFilter={false} />
 }
 
 function workflowControlPastTense(action: WorkflowRunControlAction) {

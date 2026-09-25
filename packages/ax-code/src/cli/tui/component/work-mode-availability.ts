@@ -1,3 +1,4 @@
+import { english, type Translate } from "../i18n"
 import { WorkMode } from "@/mode/work-mode"
 import { isNonChatModelID, modelSelectableForProvider } from "@/provider/model-selectability"
 
@@ -50,11 +51,13 @@ export function countingProviders(providers: readonly AvailabilityProvider[]): n
 }
 
 export function workModeAvailability(input: {
+  t?: Translate
   mode: WorkMode.Id
   providers: readonly AvailabilityProvider[]
   providerLoaded: boolean
   config?: WorkModeConfig
 }): WorkModeAvailability {
+  const t = input.t ?? english
   if (input.mode === "agent") return { state: "available", members: 1 }
   if (!input.providerLoaded) return { state: "checking", members: 0 }
 
@@ -62,10 +65,7 @@ export function workModeAvailability(input: {
   const enabled =
     input.mode === "council" ? input.config?.council?.enabled !== false : input.config?.arena?.enabled === true
   if (!enabled) {
-    const detail =
-      input.mode === "council"
-        ? "Council is disabled (modes.council.enabled: false)"
-        : "Arena is off (set modes.arena.enabled: true to enable)"
+    const detail = input.mode === "council" ? t("mode.councilDisabled") : t("mode.arenaDisabled")
     return { state: "unavailable", members: 0, reason: "off", detail }
   }
 
@@ -79,7 +79,7 @@ export function workModeAvailability(input: {
       state: "unavailable",
       members: 0,
       reason: "max 1",
-      detail: `${label} needs ${setting} ≥ 2 to compare models`,
+      detail: t("mode.cap", { mode: label, setting }),
     }
   }
 
@@ -89,7 +89,7 @@ export function workModeAvailability(input: {
       state: "unavailable",
       members: 0,
       reason: "needs 2",
-      detail: `${label} needs ≥2 providers with selectable models (${providers} connected)`,
+      detail: t("mode.providers", { mode: label, count: providers }),
     }
   }
   return { state: "available", members: Math.min(configuredCap, providers) }
@@ -109,12 +109,15 @@ export type WorkModePickerOption = {
 
 /** Explicit picker rows: Agent is always selectable; ensemble rows name cost and disable when they cannot run. */
 export function workModePickerOptions(input: {
+  t?: Translate
   providers: readonly AvailabilityProvider[]
   providerLoaded: boolean
   config?: WorkModeConfig
 }): WorkModePickerOption[] {
+  const t = input.t ?? english
   return WorkMode.ALL.map((mode) => {
     const availability = workModeAvailability({
+      t,
       mode,
       providers: input.providers,
       providerLoaded: input.providerLoaded,
@@ -123,25 +126,26 @@ export function workModePickerOptions(input: {
     if (mode === "agent") {
       return {
         value: mode,
-        title: "Agent",
-        description: "One agent · edits files · default",
+        title: t("category.agent"),
+        description: t("mode.agentDescription"),
         disabled: false,
       }
     }
-    const role = mode === "council" ? "advisory, no file edits" : "plan or isolated worktrees"
-    const unit = mode === "council" ? "reviewers" : "contestants"
     if (availability.state === "available") {
       return {
         value: mode,
         title: WorkMode.label(mode),
-        description: `Up to ${availability.members} ${unit} · ${role}`,
+        description: t(mode === "council" ? "mode.councilMembers" : "mode.arenaMembers", {
+          count: availability.members,
+        }),
         disabled: false,
       }
     }
     return {
       value: mode,
       title: WorkMode.label(mode),
-      description: availability.detail ?? (availability.state === "checking" ? "Checking providers…" : "Unavailable"),
+      description:
+        availability.detail ?? (availability.state === "checking" ? t("mode.checking") : t("mode.unavailable")),
       disabled: true,
     }
   })
@@ -182,13 +186,20 @@ export function withWorkModeHintSeen(store: unknown, mode: WorkMode.Id): Record<
 export function workModeHint(
   mode: WorkMode.Id,
   availability: WorkModeAvailability,
-  options?: { explained?: boolean },
+  options?: { explained?: boolean; t?: Translate },
 ): string | undefined {
+  const t = options?.t ?? english
   if (mode === "agent") return undefined
   const label = WorkMode.label(mode)
-  if (availability.state === "checking") return `${label} mode · checking providers…`
-  if (availability.state === "unavailable") return `${availability.detail} — submit is blocked`
+  if (availability.state === "checking")
+    return t === english ? `${label} mode · checking providers…` : `${label} · ${t("mode.checking")}`
+  if (availability.state === "unavailable")
+    return t("mode.blocked", { detail: availability.detail ?? t("mode.unavailable") })
   if (options?.explained) return undefined
+  if (t !== english)
+    return t("mode.approval", {
+      detail: t(mode === "council" ? "mode.councilMembers" : "mode.arenaMembers", { count: availability.members }),
+    })
   if (mode === "council")
     return `Council mode · up to ${availability.members} reviewers · advisory · approval on first use`
   return `Arena mode · up to ${availability.members} contestants · plan or isolated implementation · approval on first use`
@@ -215,7 +226,22 @@ export function workModeCycleToast(
   next: WorkMode.Id,
   availability: WorkModeAvailability,
   skipped: readonly { mode: WorkMode.Id; detail: string }[],
+  t: Translate = english,
 ): string {
+  if (t !== english) {
+    const mode = next === "agent" ? t("category.agent") : WorkMode.label(next)
+    const landing =
+      t("mode.selected", { mode }) +
+      (next === "agent"
+        ? ""
+        : ` · ${t(next === "council" ? "mode.councilMembers" : "mode.arenaMembers", { count: availability.members })}`)
+    return skipped.length
+      ? t("mode.skipped", {
+          detail: landing,
+          items: skipped.map((item) => `${WorkMode.label(item.mode)} (${item.detail})`).join(", "),
+        })
+      : landing
+  }
   const label = WorkMode.label(next)
   const landing =
     next === "agent"

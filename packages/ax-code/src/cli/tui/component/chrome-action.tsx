@@ -1,3 +1,4 @@
+import { useLanguage } from "../context/language"
 import { createSignal, type JSX } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 
@@ -18,4 +19,10 @@ export function ChromeAction(props: { onMouseUp: () => void; children: JSX.Eleme
       </text>
     </box>
   )
+}
+
+/** Both rails use one reactive width label; only the command and value differ. */
+export function ChromeWidthAction(props: { width: number; onMouseUp: () => void }) {
+  const { t } = useLanguage()
+  return <ChromeAction onMouseUp={props.onMouseUp}>{t("ui.widthWidth", { width: props.width })}</ChromeAction>
 }

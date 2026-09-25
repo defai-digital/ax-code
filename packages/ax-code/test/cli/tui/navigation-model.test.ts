@@ -118,3 +118,27 @@ describe("preferred navigation width", () => {
     expect(navigationLayout(160, true, value).railWidth).toBe(28)
   })
 })
+
+describe("current navigation path", () => {
+  test("adds only ancestors, retains manual expansion, and leaves inputs unchanged", async () => {
+    const { navigationExpandedAncestors } = await import("../../../src/cli/tui/navigation/navigation-model")
+    const expanded = new Set(["unrelated"])
+    expect([...navigationExpandedAncestors(sessions, "deep", expanded)]).toEqual(["unrelated", "child", "root"])
+    expect([...expanded]).toEqual(["unrelated"])
+    expect([...navigationExpandedAncestors(sessions, "missing", expanded)]).toEqual(["unrelated"])
+  })
+  test("terminates on malformed cyclic parents and tolerates unloaded parents", async () => {
+    const { navigationExpandedAncestors } = await import("../../../src/cli/tui/navigation/navigation-model")
+    expect(
+      navigationExpandedAncestors(
+        [
+          { id: "a", parentID: "b" },
+          { id: "b", parentID: "a" },
+        ],
+        "a",
+        new Set(),
+      ).size,
+    ).toBe(2)
+    expect(navigationExpandedAncestors([{ id: "a", parentID: "missing" }], "a", new Set()).size).toBe(0)
+  })
+})

@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createEffect, createMemo, createSignal, onCleanup, Show } from "solid-js"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { usePromptRef } from "@tui/context/prompt"
@@ -13,6 +14,8 @@ import { createRecapController, type RecapSnapshot } from "./recap-controller"
 /** Read-only catch-up, available manually on resumed sessions and automatically
  *  once the whole session tree (including subagent runs) has settled. */
 export function IdleRecap(props: { sessionID: string }) {
+  const uiText = useLanguage().t
+
   const sync = useSync()
   const sdk = useSDK()
   const promptRef = usePromptRef()
@@ -72,9 +75,9 @@ export function IdleRecap(props: { sessionID: string }) {
 
   command.register(() => [
     {
-      title: "Show conversation recap",
+      title: uiText("ui.showConversationRecap"),
       value: "session.recap",
-      category: "Session",
+      category: uiText("common.session"),
       slash: { name: "recap" },
       onSelect: (dialog) => {
         dialog.clear()
@@ -89,7 +92,7 @@ export function IdleRecap(props: { sessionID: string }) {
         <box marginTop={1} flexShrink={0}>
           <box paddingTop={1} paddingBottom={1} paddingLeft={2} backgroundColor={theme.backgroundPanel}>
             <text fg={theme.textMuted} wrapMode="word">
-              <span style={{ fg: theme.text, bold: true }}>Conversation recap</span>
+              <span style={{ fg: theme.text, bold: true }}>{uiText("ui.conversationRecap")}</span>
               {" · "}
               {text()}
             </text>

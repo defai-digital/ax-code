@@ -1,3 +1,6 @@
+import { useLanguage } from "../context/language"
+import { english, type Translate } from "../i18n"
+import { stringWidth } from "@/bun/node-compat"
 // Shared mode chip row (work mode / run mode / sandbox).
 //
 // Rendered in the session sidebar footer and, on Home, in the prompt footer
@@ -21,20 +24,20 @@ import { workModeAvailability, workModeChipView, workModeChipVisible } from "./w
 // instead of a hardcoded green/blue/purple/pink set. Labels distinguish
 // work modes; brand identity stays on the Home logo gradient.
 
-const SANDBOX_LABEL = "Sandbox"
-
 /** Display width of a single chip, including its toggle glyph and padding. */
 export function modeChipWidth(label: string) {
-  return footerToggleLabel(label, false).length
+  return stringWidth(footerToggleLabel(label, false))
 }
 
 /** Total row width of the visible chips in their current state. Agent has no work-mode chip. */
-export function modeChipsRowWidth(input: { workMode: WorkMode.Id; runMode: RunMode }) {
+export function modeChipsRowWidth(input: { workMode: WorkMode.Id; runMode: RunMode; t?: Translate }) {
+  const t = input.t ?? english
   const work = workModeChipVisible(input.workMode) ? modeChipWidth(WorkMode.label(input.workMode)) : 0
-  return work + modeChipWidth(runModeLabel(input.runMode)) + modeChipWidth(SANDBOX_LABEL)
+  return work + modeChipWidth(runModeLabel(input.runMode, t)) + modeChipWidth(t("mode.sandbox"))
 }
 
 export function ModeChips() {
+  const t = useLanguage().t
   const sync = useSync()
   const kv = useKV()
   const { theme } = useTheme()
@@ -57,69 +60,70 @@ export function ModeChips() {
     ),
   )
 
-  function modeChip(input: {
-    label: string
-    active: boolean
-    activeFg: unknown
-    inactiveFg: unknown
-    background?: unknown
-    onMouseUp: () => void
-  }) {
-    const fg = input.active
+  return (
+    <box flexDirection="row" flexWrap="wrap" flexShrink={1} maxWidth="100%">
+      <Show when={workModeChipVisible(chipWorkMode())}>
+        <ModeToggle
+          label={workModeView().label}
+          active={workModeView().active}
+          activeFg={theme.text}
+          inactiveFg={theme.textMuted}
+          background={theme.primary}
+          onMouseUp={() => command.trigger("app.clear.work_mode")}
+        />
+      </Show>
+      <ModeToggle
+        label={runModeLabel(chipRunMode(), t)}
+        active={chipRunMode() !== "none"}
+        activeFg={theme.text}
+        inactiveFg={theme.textMuted}
+        background={theme.warning}
+        onMouseUp={() => command.trigger("app.cycle.run_mode")}
+      />
+      <ModeToggle
+        label={t("mode.sandbox")}
+        active={sync.data.isolation.mode !== "full-access"}
+        activeFg={theme.text}
+        inactiveFg={theme.error}
+        background={theme.success}
+        onMouseUp={() => command.trigger("app.toggle.sandbox")}
+      />
+    </box>
+  )
+}
+
+export function ModeToggle(input: {
+  label: string
+  active: boolean
+  activeFg: unknown
+  inactiveFg: unknown
+  background?: unknown
+  onMouseUp: () => void
+}) {
+  const { theme } = useTheme()
+  const fg = () =>
+    input.active
       ? input.background
         ? selectedForeground(theme, input.background as RGBA)
         : input.activeFg
       : input.inactiveFg
 
-    // onMouseUp lives on the wrapping <box>, not the inner <text>: text
-    // elements in AX Code TUI primarily handle text selection, and click events
-    // on them are unreliable when nested inside a flex box.
-    return (
-      <box flexShrink={0} onMouseUp={input.onMouseUp}>
-        <text>
-          <span
-            style={{
-              fg: fg as RGBA,
-              bg: input.active ? (input.background as RGBA) : undefined,
-              bold: input.active,
-            }}
-          >
-            {footerToggleLabel(input.label, input.active)}
-          </span>
-        </text>
-      </box>
-    )
-  }
-
+  // onMouseUp lives on the wrapping <box>, not the inner <text>: text
+  // elements in AX Code TUI primarily handle text selection, and click events
+  // on them are unreliable when nested inside a flex box.
   return (
-    <box flexDirection="row" flexShrink={0}>
-      <Show when={workModeChipVisible(chipWorkMode())}>
-        {modeChip({
-          // Armed ensemble mode only. Click returns to Agent; /work-mode opens the picker.
-          label: workModeView().label,
-          active: workModeView().active,
-          activeFg: theme.text,
-          inactiveFg: theme.textMuted,
-          background: theme.primary,
-          onMouseUp: () => command.trigger("app.clear.work_mode"),
-        })}
-      </Show>
-      {modeChip({
-        label: runModeLabel(chipRunMode()),
-        active: chipRunMode() !== "none",
-        activeFg: theme.text,
-        inactiveFg: theme.textMuted,
-        background: theme.warning,
-        onMouseUp: () => command.trigger("app.cycle.run_mode"),
-      })}
-      {modeChip({
-        label: SANDBOX_LABEL,
-        active: sync.data.isolation.mode !== "full-access",
-        activeFg: theme.text,
-        inactiveFg: theme.error,
-        background: theme.success,
-        onMouseUp: () => command.trigger("app.toggle.sandbox"),
-      })}
+    <box flexShrink={0} onMouseUp={input.onMouseUp}>
+      <text>
+        <span
+          style={{
+            fg: fg() as RGBA,
+            bg: input.active ? (input.background as RGBA) : undefined,
+            bold: input.active,
+          }}
+        >
+          {footerToggleLabel(input.label, input.active)}
+        </span>
+      </text>
     </box>
   )
 }

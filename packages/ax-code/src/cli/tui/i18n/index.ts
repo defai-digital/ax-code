@@ -1,10 +1,19 @@
+import { messages as vi } from "./locales/vi"
+import { messages as tr } from "./locales/tr"
+import { messages as id } from "./locales/id"
+import { messages as ru } from "./locales/ru"
+import { messages as de } from "./locales/de"
+import { messages as fr } from "./locales/fr"
+import { messages as ptBR } from "./locales/pt-BR"
+import { messages as es } from "./locales/es"
+import { LOCALES } from "../../../config/languages"
+export { LOCALES }
 import { messages as en } from "./locales/en"
 import { messages as zhTW } from "./locales/zh-TW"
 import { messages as zhCN } from "./locales/zh-CN"
 import { messages as ja } from "./locales/ja"
 import { messages as ko } from "./locales/ko"
 
-export const LOCALES = ["en", "zh-TW", "zh-CN", "ja", "ko"] as const
 export type InterfaceLanguage = (typeof LOCALES)[number]
 export type ConversationLanguage = InterfaceLanguage | "auto"
 export type MessageKey = keyof typeof en
@@ -12,13 +21,35 @@ export type Dictionary = Record<MessageKey, string>
 export type MessageParams = Record<string, string | number>
 export type Translate = (key: MessageKey, params?: MessageParams) => string
 
-export const dictionaries: Record<InterfaceLanguage, Dictionary> = { en, "zh-TW": zhTW, "zh-CN": zhCN, ja, ko }
+export const dictionaries: Record<InterfaceLanguage, Dictionary> = {
+  en,
+  "zh-TW": zhTW,
+  "zh-CN": zhCN,
+  ja,
+  ko,
+  es,
+  "pt-BR": ptBR,
+  fr,
+  de,
+  ru,
+  id,
+  tr,
+  vi,
+}
 export const LANGUAGE_LABELS: Record<InterfaceLanguage, string> = {
   en: "English",
   "zh-TW": "\u7e41\u9ad4\u4e2d\u6587",
   "zh-CN": "\u7b80\u4f53\u4e2d\u6587",
   ja: "\u65e5\u672c\u8a9e",
   ko: "\ud55c\uad6d\uc5b4",
+  es: "Espa\u00f1ol",
+  "pt-BR": "Portugu\u00eas (Brasil)",
+  fr: "Fran\u00e7ais",
+  de: "Deutsch",
+  ru: "\u0420\u0443\u0441\u0441\u043a\u0438\u0439",
+  id: "Bahasa Indonesia",
+  tr: "T\u00fcrk\u00e7e",
+  vi: "Ti\u1ebfng Vi\u1ec7t",
 }
 
 export function isInterfaceLanguage(value: unknown): value is InterfaceLanguage {
@@ -49,6 +80,14 @@ const CONVERSATION_NAMES: Record<InterfaceLanguage, string> = {
   "zh-CN": "Simplified Chinese, not Traditional Chinese",
   ja: "Japanese",
   ko: "Korean",
+  es: "Spanish",
+  "pt-BR": "Brazilian Portuguese",
+  fr: "French",
+  de: "German",
+  ru: "Russian",
+  id: "Indonesian",
+  tr: "Turkish",
+  vi: "Vietnamese",
 }
 
 export function conversationInstruction(locale: ConversationLanguage): string | undefined {

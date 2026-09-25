@@ -1,3 +1,4 @@
+import { english, type Translate } from "@tui/i18n"
 import { batch, type Accessor, type Setter } from "solid-js"
 import type { CliRenderer, ScrollBoxRenderable } from "ax-tui"
 import type { DialogContext } from "@tui/ui/dialog"
@@ -29,6 +30,7 @@ type Toast = {
 }
 
 export function displayCommands(input: {
+  t?: Translate
   conceal: Accessor<boolean>
   currentModel: () => Model | undefined
   dialogReplaceActivity: (dialog: DialogContext) => void
@@ -89,10 +91,12 @@ export function displayCommands(input: {
   suggested: boolean
   toast: Toast
 }) {
+  const uiText = input.t ?? english
+
   const metadataDensityLabel = {
-    auto: "Auto",
-    full: "Full",
-    compact: "Compact",
+    auto: uiText("ui.auto"),
+    full: uiText("ui.full"),
+    compact: uiText("ui.compact"),
   } as const
 
   function nextMetadataDensity(current: "auto" | "full" | "compact"): "auto" | "full" | "compact" {
@@ -103,10 +107,10 @@ export function displayCommands(input: {
 
   return [
     {
-      title: "Rename session",
+      title: uiText("ui.renameSession"),
       value: "session.rename",
       keybind: "session_rename",
-      category: "Session",
+      category: uiText("common.session"),
       slash: {
         name: "rename",
         hidden: true,
@@ -114,21 +118,21 @@ export function displayCommands(input: {
       onSelect: (dialog: DialogContext) => input.dialogReplaceRename(dialog),
     },
     {
-      title: "View session goal",
+      title: uiText("ui.viewSessionGoal"),
       value: "session.goal",
-      category: "Session",
+      category: uiText("common.session"),
       onSelect: (dialog: DialogContext) => input.dialogReplaceGoal(dialog),
     },
     {
-      title: "View activity history",
+      title: uiText("ui.viewActivityHistory"),
       value: "session.activity",
-      category: "Session",
+      category: uiText("common.session"),
       onSelect: (dialog: DialogContext) => input.dialogReplaceActivity(dialog),
     },
     {
-      title: "View capability catalog",
+      title: uiText("ui.viewCapabilityCatalog"),
       value: "session.capability.catalog",
-      category: "Session",
+      category: uiText("common.session"),
       slash: {
         name: "capabilities",
         aliases: ["capability"],
@@ -137,22 +141,22 @@ export function displayCommands(input: {
       onSelect: (dialog: DialogContext) => input.dialogReplaceCapability(dialog),
     },
     {
-      title: "View session trust (DRE)",
+      title: uiText("ui.viewSessionTrustDre"),
       value: "session.trust",
-      category: "Session",
+      category: uiText("common.session"),
       onSelect: (dialog: DialogContext) => input.dialogReplaceDre(dialog),
     },
     {
-      title: "View quality readiness",
+      title: uiText("ui.viewQualityReadiness"),
       value: "session.quality",
-      category: "Session",
+      category: uiText("common.session"),
       enabled: input.hasQualityReadiness(),
       onSelect: (dialog: DialogContext) => input.dialogReplaceQuality(dialog),
     },
     {
-      title: "View workflow runs",
+      title: uiText("ui.viewWorkflowRuns"),
       value: "session.workflow.runs",
-      category: "Session",
+      category: uiText("common.session"),
       enabled: input.workflowRuntimeEnabled,
       hidden: !input.workflowRuntimeEnabled,
       slash: {
@@ -163,15 +167,15 @@ export function displayCommands(input: {
       onSelect: (dialog: DialogContext) => input.dialogReplaceWorkflow(dialog),
     },
     {
-      title: "View execution graph (DRE)",
+      title: uiText("ui.viewExecutionGraphDre"),
       value: "session.dre.graph",
-      category: "Session",
+      category: uiText("common.session"),
       onSelect: (dialog: DialogContext) => input.dialogReplaceDreGraph(dialog),
     },
     {
-      title: "Open DRE dashboard in browser",
+      title: uiText("ui.openDreDashboardInBrowser"),
       value: "session.dre.web",
-      category: "Session",
+      category: uiText("common.session"),
       onSelect: async (dialog: DialogContext) => {
         await DreGraphServer.page({
           base: input.sdk.url,
@@ -181,7 +185,7 @@ export function displayCommands(input: {
           .then((url) => open(url.toString()))
           .catch(() =>
             input.toast.show({
-              message: "Failed to open DRE graph in the browser",
+              message: uiText("ui.failedToOpenDreGraphInTheBrowser"),
               variant: "error",
             }),
           )
@@ -189,30 +193,30 @@ export function displayCommands(input: {
       },
     },
     {
-      title: "View branch ranking",
+      title: uiText("ui.viewBranchRanking"),
       value: "session.branch",
-      category: "Session",
+      category: uiText("common.session"),
       enabled: input.children().length > 1,
       onSelect: (dialog: DialogContext) => input.dialogReplaceBranch(dialog),
     },
     {
-      title: "Compare branch executions",
+      title: uiText("ui.compareBranchExecutions"),
       value: "session.compare",
-      category: "Session",
+      category: uiText("common.session"),
       enabled: input.children().length > 1,
       onSelect: (dialog: DialogContext) => input.dialogReplaceCompare(dialog),
     },
     {
-      title: "View rollback points",
+      title: uiText("ui.viewRollbackPoints"),
       value: "session.rollback",
-      category: "Session",
+      category: uiText("common.session"),
       onSelect: (dialog: DialogContext) => input.dialogReplaceRollback(dialog),
     },
     {
-      title: "View session diff",
+      title: uiText("ui.viewSessionDiff"),
       value: "session.diff",
       keybind: "session_diff_view",
-      category: "Session",
+      category: uiText("common.session"),
       slash: {
         name: "diff",
         hidden: true,
@@ -220,10 +224,10 @@ export function displayCommands(input: {
       onSelect: (dialog: DialogContext) => input.dialogReplaceDiffViewer(dialog),
     },
     {
-      title: "Jump to message",
+      title: uiText("ui.jumpToMessage"),
       value: "session.timeline",
       keybind: "session_timeline",
-      category: "Session",
+      category: uiText("common.session"),
       slash: {
         name: "timeline",
         hidden: true,
@@ -231,10 +235,10 @@ export function displayCommands(input: {
       onSelect: (dialog: DialogContext) => input.dialogReplaceTimeline(dialog),
     },
     {
-      title: "Fork from message",
+      title: uiText("ui.forkFromMessage"),
       value: "session.fork",
       keybind: "session_fork",
-      category: "Session",
+      category: uiText("common.session"),
       slash: {
         name: "fork",
         hidden: true,
@@ -242,10 +246,10 @@ export function displayCommands(input: {
       onSelect: (dialog: DialogContext) => input.dialogReplaceFork(dialog),
     },
     {
-      title: "Compact session",
+      title: uiText("ui.compactSession"),
       value: "session.compact",
       keybind: "session_compact",
-      category: "Session",
+      category: uiText("common.session"),
       slash: {
         name: "compact",
         aliases: ["summarize"],
@@ -255,7 +259,7 @@ export function displayCommands(input: {
         if (!model) {
           input.toast.show({
             variant: "warning",
-            message: "Connect a provider to summarize this session",
+            message: uiText("ui.connectAProviderToSummarizeThisSession"),
             duration: 3000,
           })
           dialog.clear()
@@ -291,10 +295,12 @@ export function displayCommands(input: {
       },
     },
     {
-      title: input.sidebarVisible() ? "Hide sidebar" : "Show sidebar",
+      title: input.sidebarVisible()
+        ? uiText("action.hide", { item: uiText("display.sidebar") })
+        : uiText("action.show", { item: uiText("display.sidebar") }),
       value: "session.sidebar.toggle",
       keybind: "sidebar_toggle",
-      category: "Session",
+      category: uiText("common.session"),
       slash: {
         name: "sidebar",
         aliases: ["toggle-sidebar"],
@@ -309,95 +315,109 @@ export function displayCommands(input: {
       },
     },
     {
-      title: input.conceal() ? "Disable code concealment" : "Enable code concealment",
+      title: input.conceal()
+        ? uiText("action.hide", { item: uiText("display.conceal") })
+        : uiText("action.show", { item: uiText("display.conceal") }),
       value: "session.toggle.conceal",
       keybind: "messages_toggle_conceal" as const,
-      category: "Session",
+      category: uiText("common.session"),
       onSelect: (dialog: DialogContext) => {
         input.setConceal((prev) => !prev)
         dialog.clear()
       },
     },
     {
-      title: `Message metadata: ${metadataDensityLabel[input.metadataDensity()]}`,
+      title: uiText("display.metadata", { mode: metadataDensityLabel[input.metadataDensity()] }),
       value: "session.toggle.metadata_density",
-      category: "Session",
+      category: uiText("common.session"),
       onSelect: (dialog: DialogContext) => {
         input.setMetadataDensity(nextMetadataDensity(input.metadataDensity()))
         dialog.clear()
       },
     },
     {
-      title: input.showTimestamps() ? "Hide timestamps" : "Show timestamps",
+      title: input.showTimestamps()
+        ? uiText("action.hide", { item: uiText("display.timestamps") })
+        : uiText("action.show", { item: uiText("display.timestamps") }),
       value: "session.toggle.timestamps",
-      category: "Session",
+      category: uiText("common.session"),
       onSelect: (dialog: DialogContext) => {
         input.setTimestamps((prev) => (prev === "show" ? "hide" : "show"))
         dialog.clear()
       },
     },
     {
-      title: input.showThinking() ? "Hide thinking" : "Show thinking",
+      title: input.showThinking()
+        ? uiText("action.hide", { item: uiText("display.thinking") })
+        : uiText("action.show", { item: uiText("display.thinking") }),
       value: "session.toggle.thinking",
       keybind: "display_thinking",
-      category: "Session",
+      category: uiText("common.session"),
       onSelect: (dialog: DialogContext) => {
         input.setShowThinking((prev) => !prev)
         dialog.clear()
       },
     },
     {
-      title: input.showDetails() ? "Hide tool details" : "Show tool details",
+      title: input.showDetails()
+        ? uiText("action.hide", { item: uiText("display.toolDetails") })
+        : uiText("action.show", { item: uiText("display.toolDetails") }),
       value: "session.toggle.actions",
       keybind: "tool_details",
-      category: "Session",
+      category: uiText("common.session"),
       onSelect: (dialog: DialogContext) => {
         input.setShowDetails((prev) => !prev)
         dialog.clear()
       },
     },
     {
-      title: input.showAssistantStats() ? "Hide assistant stats" : "Show assistant stats",
+      title: input.showAssistantStats()
+        ? uiText("action.hide", { item: uiText("display.assistantStats") })
+        : uiText("action.show", { item: uiText("display.assistantStats") }),
       value: "session.toggle.assistant_stats",
-      category: "Session",
+      category: uiText("common.session"),
       onSelect: (dialog: DialogContext) => {
         input.setShowAssistantStats((prev) => !prev)
         dialog.clear()
       },
     },
     {
-      title: "Toggle session scrollbar",
+      title: uiText("ui.toggleSessionScrollbar"),
       value: "session.toggle.scrollbar",
       keybind: "scrollbar_toggle",
-      category: "Session",
+      category: uiText("common.session"),
       onSelect: (dialog: DialogContext) => {
         input.setShowScrollbar((prev) => !prev)
         dialog.clear()
       },
     },
     {
-      title: input.showHeader() ? "Hide header" : "Show header",
+      title: input.showHeader()
+        ? uiText("action.hide", { item: uiText("display.header") })
+        : uiText("action.show", { item: uiText("display.header") }),
       value: "session.toggle.header",
-      category: "Session",
+      category: uiText("common.session"),
       onSelect: (dialog: DialogContext) => {
         input.setShowHeader((prev) => !prev)
         dialog.clear()
       },
     },
     {
-      title: input.showGenericToolOutput() ? "Hide generic tool output" : "Show generic tool output",
+      title: input.showGenericToolOutput()
+        ? uiText("action.hide", { item: uiText("display.toolOutput") })
+        : uiText("action.show", { item: uiText("display.toolOutput") }),
       value: "session.toggle.generic_tool_output",
-      category: "Session",
+      category: uiText("common.session"),
       onSelect: (dialog: DialogContext) => {
         input.setShowGenericToolOutput((prev) => !prev)
         dialog.clear()
       },
     },
     {
-      title: "Page up",
+      title: uiText("ui.pageUp"),
       value: "session.page.up",
       keybind: "messages_page_up",
-      category: "Session",
+      category: uiText("common.session"),
       hidden: true,
       onSelect: (dialog: DialogContext) => {
         input.scroll.scrollBy(scrollDelta("page-up", input.scroll.height))
@@ -405,10 +425,10 @@ export function displayCommands(input: {
       },
     },
     {
-      title: "Page down",
+      title: uiText("ui.pageDown"),
       value: "session.page.down",
       keybind: "messages_page_down",
-      category: "Session",
+      category: uiText("common.session"),
       hidden: true,
       onSelect: (dialog: DialogContext) => {
         input.scroll.scrollBy(scrollDelta("page-down", input.scroll.height))
@@ -416,10 +436,10 @@ export function displayCommands(input: {
       },
     },
     {
-      title: "Line up",
+      title: uiText("ui.lineUp"),
       value: "session.line.up",
       keybind: "messages_line_up",
-      category: "Session",
+      category: uiText("common.session"),
       disabled: true,
       onSelect: (dialog: DialogContext) => {
         input.scroll.scrollBy(scrollDelta("line-up", input.scroll.height))
@@ -427,10 +447,10 @@ export function displayCommands(input: {
       },
     },
     {
-      title: "Line down",
+      title: uiText("ui.lineDown"),
       value: "session.line.down",
       keybind: "messages_line_down",
-      category: "Session",
+      category: uiText("common.session"),
       disabled: true,
       onSelect: (dialog: DialogContext) => {
         input.scroll.scrollBy(scrollDelta("line-down", input.scroll.height))
@@ -438,10 +458,10 @@ export function displayCommands(input: {
       },
     },
     {
-      title: "Half page up",
+      title: uiText("ui.halfPageUp"),
       value: "session.half.page.up",
       keybind: "messages_half_page_up",
-      category: "Session",
+      category: uiText("common.session"),
       hidden: true,
       onSelect: (dialog: DialogContext) => {
         input.scroll.scrollBy(scrollDelta("half-page-up", input.scroll.height))
@@ -449,10 +469,10 @@ export function displayCommands(input: {
       },
     },
     {
-      title: "Half page down",
+      title: uiText("ui.halfPageDown"),
       value: "session.half.page.down",
       keybind: "messages_half_page_down",
-      category: "Session",
+      category: uiText("common.session"),
       hidden: true,
       onSelect: (dialog: DialogContext) => {
         input.scroll.scrollBy(scrollDelta("half-page-down", input.scroll.height))
@@ -460,10 +480,10 @@ export function displayCommands(input: {
       },
     },
     {
-      title: "First message",
+      title: uiText("ui.firstMessage"),
       value: "session.first",
       keybind: "messages_first",
-      category: "Session",
+      category: uiText("common.session"),
       hidden: true,
       onSelect: (dialog: DialogContext) => {
         input.scroll.scrollTo(scrollTo("first", input.scroll.scrollHeight))
@@ -471,10 +491,10 @@ export function displayCommands(input: {
       },
     },
     {
-      title: "Last message",
+      title: uiText("ui.lastMessage"),
       value: "session.last",
       keybind: "messages_last",
-      category: "Session",
+      category: uiText("common.session"),
       hidden: true,
       onSelect: (dialog: DialogContext) => {
         input.scroll.scrollTo(scrollTo("last", input.scroll.scrollHeight))
@@ -482,36 +502,36 @@ export function displayCommands(input: {
       },
     },
     {
-      title: "Jump to current input",
+      title: uiText("ui.jumpToCurrentInput"),
       value: "session.messages_last_user",
       keybind: "messages_last_user",
-      category: "Session",
+      category: uiText("common.session"),
       onSelect: (dialog: DialogContext) => {
         input.jumpToLastUser()
         dialog.clear()
       },
     },
     {
-      title: "Next message",
+      title: uiText("ui.nextMessage"),
       value: "session.message.next",
       keybind: "messages_next",
-      category: "Session",
+      category: uiText("common.session"),
       hidden: true,
       onSelect: (dialog: DialogContext) => input.scrollToMessage("next", dialog),
     },
     {
-      title: "Previous message",
+      title: uiText("ui.previousMessage"),
       value: "session.message.previous",
       keybind: "messages_previous",
-      category: "Session",
+      category: uiText("common.session"),
       hidden: true,
       onSelect: (dialog: DialogContext) => input.scrollToMessage("prev", dialog),
     },
     {
-      title: "Copy last assistant message",
+      title: uiText("ui.copyLastAssistantMessage"),
       value: "messages.copy",
       keybind: "messages_copy",
-      category: "Session",
+      category: uiText("common.session"),
       onSelect: (dialog: DialogContext) => {
         const result = lastAssistantText(input.messages(), input.parts, input.session()?.revert?.messageID)
         if ("error" in result) {
@@ -521,15 +541,17 @@ export function displayCommands(input: {
         }
 
         Clipboard.copy(result.text)
-          .then(() => input.toast.show({ message: "Message copied to clipboard!", variant: "success", duration: 1500 }))
-          .catch(() => input.toast.show({ message: "Failed to copy to clipboard", variant: "error" }))
+          .then(() =>
+            input.toast.show({ message: uiText("ui.messageCopiedToClipboard"), variant: "success", duration: 1500 }),
+          )
+          .catch(() => input.toast.show({ message: uiText("ui.failedToCopyToClipboard"), variant: "error" }))
         dialog.clear()
       },
     },
     {
-      title: "Copy session transcript",
+      title: uiText("ui.copySessionTranscript"),
       value: "session.copy",
-      category: "Session",
+      category: uiText("common.session"),
       slash: {
         name: "copy",
         hidden: true,
@@ -538,7 +560,7 @@ export function displayCommands(input: {
         try {
           const data = input.session()
           if (!data) {
-            input.toast.show({ message: "Session is no longer available", variant: "warning" })
+            input.toast.show({ message: uiText("ui.sessionIsNoLongerAvailable"), variant: "warning" })
             dialog.clear()
             return
           }
@@ -549,18 +571,22 @@ export function displayCommands(input: {
             agents: input.agents,
           })
           await Clipboard.copy(transcript)
-          input.toast.show({ message: "Session transcript copied to clipboard!", variant: "success", duration: 1500 })
+          input.toast.show({
+            message: uiText("ui.sessionTranscriptCopiedToClipboard"),
+            variant: "success",
+            duration: 1500,
+          })
         } catch {
-          input.toast.show({ message: "Failed to copy session transcript", variant: "error" })
+          input.toast.show({ message: uiText("ui.failedToCopySessionTranscript"), variant: "error" })
         }
         dialog.clear()
       },
     },
     {
-      title: "Export session transcript",
+      title: uiText("ui.exportSessionTranscript"),
       value: "session.export",
       keybind: "session_export",
-      category: "Session",
+      category: uiText("common.session"),
       slash: {
         name: "export",
         hidden: true,
@@ -569,7 +595,7 @@ export function displayCommands(input: {
         try {
           const data = input.session()
           if (!data) {
-            input.toast.show({ message: "Session is no longer available", variant: "warning" })
+            input.toast.show({ message: uiText("ui.sessionIsNoLongerAvailable"), variant: "warning" })
             dialog.clear()
             return
           }
@@ -609,10 +635,13 @@ export function displayCommands(input: {
             if (result.status === "saved") {
               await Filesystem.write(file, result.content)
             }
-            input.toast.show({ message: `Session exported to ${options.filename.trim()}`, variant: "success" })
+            input.toast.show({
+              message: uiText("status.exported", { path: options.filename.trim() }),
+              variant: "success",
+            })
           }
         } catch {
-          input.toast.show({ message: "Failed to export session", variant: "error" })
+          input.toast.show({ message: uiText("ui.failedToExportSession"), variant: "error" })
         }
         dialog.clear()
       },

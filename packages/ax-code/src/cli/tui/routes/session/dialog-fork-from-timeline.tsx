@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createMemo, onMount } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
@@ -13,6 +14,8 @@ import { promptState } from "./messages"
 const log = Log.create({ service: "tui.dialog-fork-from-timeline" })
 
 export function DialogForkFromTimeline(props: { sessionID: string; onMove: (messageID: string) => void }) {
+  const uiText = useLanguage().t
+
   const sync = useSync()
   const dialog = useDialog()
   const sdk = useSDK()
@@ -71,9 +74,9 @@ export function DialogForkFromTimeline(props: { sessionID: string; onMove: (mess
     if (result.length === 0) {
       return [
         {
-          title: "No fork target available",
+          title: uiText("ui.noForkTargetAvailable"),
           value: "empty",
-          description: "No user messages with text content are available to fork from.",
+          description: uiText("ui.noUserMessagesWithTextContentAreAvailableToForkFrom"),
           category: "Overview",
           disabled: true,
         },
@@ -89,7 +92,7 @@ export function DialogForkFromTimeline(props: { sessionID: string; onMove: (mess
         if (option.disabled) return
         props.onMove(option.value)
       }}
-      title="Fork from message"
+      title={uiText("ui.forkFromMessage")}
       options={options()}
     />
   )

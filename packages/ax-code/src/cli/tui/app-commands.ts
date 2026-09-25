@@ -16,12 +16,7 @@ import { workModeCycleToast } from "./component/work-mode-availability"
 import type { CommandOption } from "./component/dialog-command"
 import type { TuiDialogLoaders } from "./tui-dialogs"
 import { DialogConfirm } from "@tui/ui/dialog-confirm"
-import {
-  confirmNavigationClear,
-  NAVIGATION_CLEAR_MESSAGE,
-  NAVIGATION_CLEAR_TITLE,
-  navigationFilter,
-} from "./navigation/navigation-model"
+import { confirmNavigationClear, navigationFilter } from "./navigation/navigation-model"
 import { NAVIGATION_DOCK_MIN_WIDTH } from "./navigation/navigation-layout"
 
 export type AppCommandSandbox = {
@@ -72,6 +67,8 @@ export type AppCommandsInput = {
 }
 
 export function appCommands(input: AppCommandsInput): CommandOption[] {
+  const uiText = input.t ?? english
+
   const t = input.t ?? english
   const {
     dialogs,
@@ -105,7 +102,7 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
     playReverseDigitalCode,
   } = input
 
-  return [
+  const commands: CommandOption[] = [
     {
       title: t("command.switchSession"),
       value: "session.list",
@@ -153,6 +150,26 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
+      title: t("navigation.find"),
+      value: "session.navigation.find",
+      category: t("common.session"),
+      slash: { name: "navigation-find" },
+      onSelect: () => {
+        void dialogs.showNavigationDialog()
+      },
+    },
+    {
+      title: t("navigation.options"),
+      value: "session.navigation.options",
+      category: t("common.session"),
+      slash: { name: "navigation-options" },
+      onSelect: () => {
+        void dialogs.showNavigationOptionsDialog((value) => {
+          void commands.find((option) => option.value === value)?.onSelect?.(dialog)
+        })
+      },
+    },
+    {
       title: t("command.navigationWidth"),
       value: "session.navigation.width",
       category: t("common.session"),
@@ -177,7 +194,12 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       slash: { name: "navigation-clear" },
       onSelect: async () => {
         await confirmNavigationClear({
-          ask: () => DialogConfirm.show(dialog, NAVIGATION_CLEAR_TITLE, NAVIGATION_CLEAR_MESSAGE),
+          ask: () =>
+            DialogConfirm.show(
+              dialog,
+              uiText("ui.clearNavigationList"),
+              uiText("ui.hideOlderIdleSessionsFromThisListSessionsAndFilesAreKeptUseSessionsToResumeThem"),
+            ),
           apply: (at) => kv.set("navigation_cleared_at", at),
         })
       },
@@ -510,13 +532,13 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       category: t("category.system"),
     },
     {
-      title: "Open Web UI",
+      title: uiText("ui.openWebUi"),
       value: "webui.open",
       slash: {
         name: "webui",
         hidden: true,
       },
-      description: "Start or open the AX Code browser UI",
+      description: uiText("ui.startOrOpenTheAxCodeBrowserUi"),
       category: t("category.system"),
       onSelect: (dialog) => {
         dialog.clear()
@@ -540,13 +562,13 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
-      title: "Open Desktop",
+      title: uiText("ui.openDesktop"),
       value: "desktop.handoff",
       slash: {
         name: "desktop",
         hidden: true,
       },
-      description: "Get guidance for AX Code Desktop dashboards and workflow supervision",
+      description: uiText("ui.getGuidanceForAxCodeDesktopDashboardsAndWorkflowSupervision"),
       category: t("category.system"),
       onSelect: (dialog) => {
         const result = resolveDesktopHandoff({
@@ -666,7 +688,7 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
     },
     {
       title: t("command.opening"),
-      description: t("ui.previewTheOpeningDigitalCodeAnimation"),
+      description: uiText("ui.previewTheOpeningDigitalCodeAnimation"),
       value: "app.digital_code.play",
       category: t("category.system"),
       onSelect: (dialog) => {
@@ -676,7 +698,7 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
     },
     {
       title: t("command.ending"),
-      description: t("ui.previewTheEndingDigitalCodeAnimationThatPlaysWhenYouExit"),
+      description: uiText("ui.previewTheEndingDigitalCodeAnimationThatPlaysWhenYouExit"),
       value: "app.digital_code.play_reverse",
       category: t("category.system"),
       onSelect: (dialog) => {
@@ -686,9 +708,9 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
     },
     {
       title: kv.get("digital_code_on_task_complete", false)
-        ? t("ui.disableDigitalCodeOnTaskCompletion")
-        : t("ui.enableDigitalCodeOnTaskCompletion"),
-      description: t("ui.playTheOverlayOnceAScheduledTaskRunCompletes"),
+        ? uiText("ui.disableDigitalCodeOnTaskCompletion")
+        : uiText("ui.enableDigitalCodeOnTaskCompletion"),
+      description: uiText("ui.playTheOverlayOnceAScheduledTaskRunCompletes"),
       value: "app.toggle.digital_code",
       category: t("category.system"),
       onSelect: (dialog) => {
@@ -698,9 +720,9 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
     },
     {
       title: kv.get("digital_code_on_start", DIGITAL_CODE_ON_START_DEFAULT)
-        ? t("ui.disableDigitalCodeOnStartup")
-        : t("ui.enableDigitalCodeOnStartup"),
-      description: t("ui.playTheOverlayOnceWhenTheTuiLaunches"),
+        ? uiText("ui.disableDigitalCodeOnStartup")
+        : uiText("ui.enableDigitalCodeOnStartup"),
+      description: uiText("ui.playTheOverlayOnceWhenTheTuiLaunches"),
       value: "app.toggle.digital_code_on_start",
       category: t("category.system"),
       onSelect: (dialog) => {
@@ -710,7 +732,7 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
     },
     {
       title: kv.get("nerd_font_enabled", false) ? t("command.nerdOff") : t("command.nerdOn"),
-      description: "Recommended terminal font: Cascadia Code Nerd Font",
+      description: uiText("ui.recommendedTerminalFontCascadiaCodeNerdFont"),
       value: "app.toggle.nerd_font",
       category: t("category.system"),
       onSelect: (dialog) => {
@@ -738,7 +760,7 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
-      title: t("command.runMode", { mode: runModeLabel(currentRunMode()) }),
+      title: t("command.runMode", { mode: runModeLabel(currentRunMode(), t) }),
       value: "app.cycle.run_mode",
       category: t("category.system"),
       onSelect: (dialog) => {
@@ -748,8 +770,7 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
     },
     {
       title: t("command.workMode", { mode: WorkMode.label(WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT))) }),
-      description:
-        "Agent: one agent · Council: multi-model advisory review (needs ≥2 providers) · Arena: best-of-N comparison (opt-in)",
+      description: t("mode.overview"),
       value: "app.cycle.work_mode",
       category: t("category.agent"),
       slash: {
@@ -768,7 +789,7 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       onSelect: (dialog) => {
         kv.set("work_mode", WorkMode.DEFAULT)
         toast.show({
-          message: workModeCycleToast("agent", { state: "available", members: 1 }, []),
+          message: workModeCycleToast("agent", { state: "available", members: 1 }, [], t),
           variant: "info",
           duration: 2500,
         })
@@ -848,4 +869,5 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
   ]
+  return commands
 }

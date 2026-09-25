@@ -238,6 +238,8 @@ function sessionErrorNotifyKey(props: { sessionID?: string; error?: unknown }): 
 }
 
 function App(props: { onSnapshot?: () => Promise<string[]> }) {
+  const uiText = useLanguage().t
+
   const { t } = useLanguage()
   const route = useRoute()
   const dimensions = useTerminalDimensions()
@@ -275,9 +277,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       onSelect: () => dialog.replace(() => <DialogSetup />),
     },
     {
-      title: "Manage saved follow-ups",
+      title: uiText("ui.manageSavedFollowUps"),
       value: "session.followups",
-      category: "Session",
+      category: uiText("common.session"),
       slash: { name: "queue" },
       enabled: route.data.type === "session",
       onSelect: () => {
@@ -316,14 +318,14 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         .catch((error) => {
           if (abort.signal.aborted) return
           Log.Default.warn("follow-up refresh failed", { error })
-          toast.show({ message: "Saved follow-ups could not be refreshed; reconnect to retry", variant: "warning" })
+          toast.show({ message: uiText("ui.savedFollowUpsCouldNotBeRefreshedReconnectToRetry"), variant: "warning" })
         })
         .finally(unsubscribe)
     })
   })
   const promptRef = usePromptRef()
   const [sessionRoute, setSessionRoute] = createSignal<Component | undefined>()
-  // Short-lived ASCII digital-rain overlay. Manual preview is always
+  // Short-lived ASCII Digital Code overlay. Manual preview is always
   // available; startup playback is on by default (`digital_code_on_start`
   // opts out) and task-completion playback is opt-in
   // (`digital_code_on_task_complete`).
@@ -491,7 +493,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     })
     if (!sessionRouteLoadFailed) {
       sessionRouteLoadFailed = true
-      toast.show({ message: "Failed to load session view", variant: "error" })
+      toast.show({ message: uiText("ui.failedToLoadSessionView"), variant: "error" })
     }
     if (input.navigateHome) route.navigate({ type: "home" })
   }
@@ -538,7 +540,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
 
     await Clipboard.copy(text)
       .then(() => {
-        toast.show({ message: "Copied to clipboard", variant: "info", duration: 1500 })
+        toast.show({ message: uiText("ui.copiedToClipboard"), variant: "info", duration: 1500 })
         renderer.clearSelection()
       })
       .catch(toast.error)
@@ -863,7 +865,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     setCurrent: (value) => sync.set("smartLlm", value),
     label: {
       warn: "failed to update smart llm setting",
-      message: "Failed to save fast-model routing setting",
+      message: uiText("ui.failedToSaveFastModelRoutingSetting"),
     },
   })
   // Autonomous and Super-Long are a dependent pair (Super-Long requires
@@ -946,7 +948,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
             scheduleRetry(() => attemptFork(attempt + 1))
             return
           }
-          toast.show({ message: "Failed to fork session", variant: "error" })
+          toast.show({ message: uiText("ui.failedToForkSession"), variant: "error" })
         })
         .catch((error) => {
           if (forkRetryDisposed) return
@@ -960,7 +962,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
             scheduleRetry(() => attemptFork(attempt + 1))
             return
           }
-          toast.show({ message: "Failed to fork session", variant: "error" })
+          toast.show({ message: uiText("ui.failedToForkSession"), variant: "error" })
         })
     }
 
@@ -1015,7 +1017,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     // toast if there is genuinely nothing to continue. Runs at most once.
     if (continueFallbackStarted) return
     continueFallbackStarted = true
-    const notify = () => toast.show({ message: "No previous session to continue", variant: "info" })
+    const notify = () => toast.show({ message: uiText("ui.noPreviousSessionToContinue"), variant: "info" })
     sdk.client.session
       .list({})
       .then((result) => {
@@ -1189,7 +1191,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         route.navigate({ type: "home" })
         toast.show({
           variant: "info",
-          message: "The current session was deleted",
+          message: uiText("ui.theCurrentSessionWasDeleted"),
         })
       }
     }),
@@ -1258,7 +1260,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
           "Update failed"
         toast.show({
           variant: "error",
-          title: "Update Failed",
+          title: uiText("ui.updateFailed"),
           message: reason,
           duration: 10000,
         })
@@ -1408,6 +1410,8 @@ function ErrorComponent(props: {
   onExit: () => Promise<void>
   mode?: "dark" | "light"
 }) {
+  const uiText = useLanguage().t
+
   const term = useTerminalDimensions()
   const renderer = useRenderer()
 
@@ -1469,23 +1473,23 @@ function ErrorComponent(props: {
     <box flexDirection="column" gap={1} backgroundColor={colors.bg}>
       <box flexDirection="row" gap={1} alignItems="center">
         <text attributes={TextAttributes.BOLD} fg={colors.text}>
-          Please report an issue.
+          {uiText("ui.pleaseReportAnIssue")}
         </text>
         <box onMouseUp={copyIssueURL} backgroundColor={colors.primary} padding={1}>
           <text attributes={TextAttributes.BOLD} fg={colors.bg}>
-            Copy issue URL (exception info pre-filled)
+            {uiText("ui.copyIssueUrlExceptionInfoPreFilled")}
           </text>
         </box>
-        {copied() && <text fg={colors.muted}>Successfully copied</text>}
+        {copied() && <text fg={colors.muted}>{uiText("ui.successfullyCopied")}</text>}
         {copyError() && <text fg={colors.muted}>{copyError()}</text>}
       </box>
       <box flexDirection="row" gap={2} alignItems="center">
-        <text fg={colors.text}>A fatal error occurred!</text>
+        <text fg={colors.text}>{uiText("ui.aFatalErrorOccurred")}</text>
         <box onMouseUp={props.reset} backgroundColor={colors.primary} padding={1}>
-          <text fg={colors.bg}>Reset TUI</text>
+          <text fg={colors.bg}>{uiText("ui.resetTui")}</text>
         </box>
         <box onMouseUp={handleExit} backgroundColor={colors.primary} padding={1}>
-          <text fg={colors.bg}>Exit</text>
+          <text fg={colors.bg}>{uiText("ui.exit2")}</text>
         </box>
       </box>
       <scrollbox height={Math.floor(term().height * 0.7)}>

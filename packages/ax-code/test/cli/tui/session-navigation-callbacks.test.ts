@@ -4,6 +4,7 @@ import { SessionNavigation } from "../../../src/cli/tui/component/session-naviga
 import { NavigationBar } from "../../../src/cli/tui/component/navigation-bar"
 import { DialogNavigationWidth, DialogSidebarWidth } from "../../../src/cli/tui/component/dialog-navigation-width"
 import { DialogSessionList } from "../../../src/cli/tui/component/dialog-session-list"
+import { DialogNavigationOptions } from "../../../src/cli/tui/component/dialog-navigation-options"
 import { DialogAttention } from "../../../src/cli/tui/component/dialog-attention"
 
 const mocked = vi.hoisted(() => ({
@@ -177,75 +178,76 @@ function navigationProps(initial: ReadonlySet<string> = new Set()) {
 }
 
 describe("session navigation callbacks", () => {
-  test("dispatches commands through the existing command registry", () => {
+  test("keeps New, Find and Options visible without an empty attention card", () => {
     const tree = mount(() => SessionNavigation(navigationProps()))
     click(tree, "+ New session")
-    click(tree, "Known requests (0)")
-    click(tree, "/navigation")
-    expect(mocked.trigger.mock.calls).toEqual([["session.new"], ["session.attention"], ["session.navigation"]])
+    click(tree, "Find session…")
+    click(tree, "Navigation options ›")
+    expect(mocked.trigger.mock.calls).toEqual([
+      ["session.new"],
+      ["session.navigation.find"],
+      ["session.navigation.options"],
+    ])
+    expect(text(tree)).not.toContain("Across workspaces")
     expect(mocked.navigate).not.toHaveBeenCalled()
     expect(mocked.reply).not.toHaveBeenCalled()
   })
 
-  test("project and footer details expose navigation help without changing the session", () => {
-    const tree = mount(() => SessionNavigation(navigationProps()))
-    click(tree, "workspace")
-    click(tree, "Details")
-    click(tree, "Width 28")
+  test("project identity opens details and options delegate to existing commands", () => {
+    click(
+      mount(() => SessionNavigation(navigationProps())),
+      "workspace",
+    )
+    const picker = mount(() => DialogNavigationOptions({ onCommand: mocked.trigger }))
+    const options = picker.props.options as { title: string; value: string }[]
+    const select = picker.props.onSelect as (option: { value: string }) => void
+    expect(options.map((option) => option.value)).toEqual([
+      "session.navigation.info",
+      "session.navigation.width",
+      "session.navigation.clear",
+      "session.navigation",
+    ])
+    for (const option of options) select(option)
     expect(mocked.trigger.mock.calls).toEqual([
       ["session.navigation.info"],
       ["session.navigation.info"],
       ["session.navigation.width"],
+      ["session.navigation.clear"],
+      ["session.navigation"],
     ])
     expect(mocked.navigate).not.toHaveBeenCalled()
     expect(mocked.reply).not.toHaveBeenCalled()
   })
 
-  test("shows the persisted navigation width preference instead of the clamped rail", () => {
-    mocked.kv.navigation_width = 40
+  test("restores hidden history without deleting sessions or resetting pins", () => {
+    mocked.kv.navigation_cleared_at = 10
     const tree = mount(() => SessionNavigation(navigationProps()))
-    expect(text(tree)).toContain("Width 40")
-    expect(text(tree)).not.toContain("Width 24")
-    click(tree, "Width 40")
-    expect(mocked.trigger).toHaveBeenCalledExactlyOnceWith("session.navigation.width")
+    expect(text(tree)).not.toContain("Earlier session")
+    click(tree, "Show hidden sessions")
+    expect(mocked.setKV).toHaveBeenCalledExactlyOnceWith("navigation_cleared_at", 0)
+    expect(text(mount(() => SessionNavigation(navigationProps())))).toContain("Earlier session")
+    expect(mocked.navigate).not.toHaveBeenCalled()
+    expect(mocked.reply).not.toHaveBeenCalled()
   })
 
-  test("clears historical rows from the rail without deleting or opening sessions", async () => {
+  test("options can restore a cleared history even when the rail has no hidden rows", () => {
+    mocked.kv.navigation_cleared_at = 10
+    const picker = mount(() => DialogNavigationOptions({ onCommand: mocked.trigger }))
+    const options = picker.props.options as { value: string }[]
+    const restore = options.find((option) => option.value === "restore")!
+    expect(restore).toBeDefined()
+    ;(picker.props.onSelect as (option: { value: string }) => void)(restore)
+    expect(mocked.setKV).toHaveBeenCalledExactlyOnceWith("navigation_cleared_at", 0)
+    expect(mocked.trigger).not.toHaveBeenCalled()
+  })
+
+  test("reveals the current nested session without changing persisted expansion", () => {
+    mocked.current = "child"
     const props = navigationProps()
     const tree = mount(() => SessionNavigation(props))
-    expect(text(tree)).toContain("Earlier session")
-    click(tree, "Clear")
-    await Promise.resolve()
-    expect(mocked.confirm).toHaveBeenCalledWith(
-      expect.anything(),
-      "Clear navigation history",
-      expect.stringContaining("clear the navigation bar history"),
-    )
-    expect(mocked.setKV).toHaveBeenCalledExactlyOnceWith("navigation_cleared_at", expect.any(Number))
-    expect(mocked.navigate).not.toHaveBeenCalled()
-    expect(mocked.reply).not.toHaveBeenCalled()
-    expect(mocked.trigger).not.toHaveBeenCalled()
-    mocked.kv.navigation_cleared_at = 10
-    mocked.invalidate()
-    disposals.pop()!()
-    const cleared = mount(() => SessionNavigation(props))
-    expect(text(cleared)).toContain("Parent session")
-    expect(text(cleared)).not.toContain("Earlier session")
-    expect(sessionPicker(false).options.map((option) => option.value)).toEqual(["root", "idle"])
-    expect(sessionPicker(true).options.map((option) => option.value)).toEqual(["root", "child"])
-    expect(mocked.reply).not.toHaveBeenCalled()
-  })
-
-  test("keeps the rail list when the clear confirmation is cancelled", async () => {
-    mocked.confirm.mockResolvedValueOnce(false)
-    const tree = mount(() => SessionNavigation(navigationProps()))
-    expect(text(tree)).toContain("Earlier session")
-    click(tree, "Clear")
-    await Promise.resolve()
-    expect(mocked.setKV).not.toHaveBeenCalled()
-    expect(text(tree)).toContain("Earlier session")
-    expect(mocked.navigate).not.toHaveBeenCalled()
-    expect(mocked.reply).not.toHaveBeenCalled()
+    expect(text(tree)).toContain("Child session")
+    expect(props.expanded.size).toBe(0)
+    expect(props.setExpanded).not.toHaveBeenCalled()
   })
 
   test("persists the selected filter across remounts and permits switching back", () => {
@@ -307,7 +309,7 @@ describe("session navigation callbacks", () => {
 
   test("session titles navigate and exclude sessions belonging to another workspace", () => {
     const tree = mount(() => SessionNavigation(navigationProps()))
-    click(tree, "1 Parent session")
+    click(tree, "Parent session")
     expect(mocked.navigate).toHaveBeenCalledExactlyOnceWith({ type: "session", sessionID: "root" })
     expect(text(tree)).not.toContain("Other workspace")
     expect(mocked.reply).not.toHaveBeenCalled()
@@ -321,7 +323,7 @@ describe("session navigation callbacks", () => {
     const tree = mount(() => SessionNavigation(navigationProps()))
     expect(text(tree)).toContain("Approval needed")
     expect(text(tree)).toContain("Across workspaces")
-    click(tree, "Known requests (2)")
+    click(tree, "Needs attention2Across workspaces")
     expect(mocked.trigger).toHaveBeenCalledExactlyOnceWith("session.attention")
     expect(mocked.reply).not.toHaveBeenCalled()
   })
@@ -331,7 +333,7 @@ describe("session navigation callbacks", () => {
     const tree = mount(() => SessionNavigation(navigationProps()))
     expect(text(tree)).toContain("Cached; disconnected")
     expect(text(tree)).not.toContain("Work")
-    click(tree, "1 Parent session")
+    click(tree, "Parent session")
     expect(mocked.navigate).toHaveBeenCalledOnce()
     expect(mocked.reply).not.toHaveBeenCalled()
   })

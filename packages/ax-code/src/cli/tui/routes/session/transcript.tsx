@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createMemo, createSignal, ErrorBoundary, For, Match, Show, Switch } from "solid-js"
 import { Dynamic } from "solid-js/web"
 import { SplitBorder } from "@tui/component/border"
@@ -81,6 +82,8 @@ export function UserMessage(props: {
   index: number
   pending?: string
 }) {
+  const uiText = useLanguage().t
+
   const ctx = use()
   const local = useLocal()
   const text = createMemo(() => props.parts.filter((part): part is TextPart => part.type === "text" && !part.synthetic))
@@ -133,7 +136,7 @@ export function UserMessage(props: {
           >
             <text marginBottom={1}>
               <span style={{ fg: color() }}>◆ </span>
-              <span style={{ fg: theme.text }}>you</span>
+              <span style={{ fg: theme.text }}>{uiText("ui.you")}</span>
             </text>
             <For each={text()}>{(part) => <text fg={theme.text}>{part.text}</text>}</For>
             <Show when={files().length}>
@@ -165,7 +168,9 @@ export function UserMessage(props: {
                       </text>
                     </Show>
                     <Show when={effort()}>
-                      <text fg={theme.textMuted}>effort {effort()}</text>
+                      <text fg={theme.textMuted}>
+                        {uiText("ui.effort")} {effort()}
+                      </text>
                     </Show>
                     <Show when={compactDelegated()}>
                       <text fg={theme.textMuted}>↳ {compactDelegated()}</text>
@@ -178,7 +183,7 @@ export function UserMessage(props: {
                         </Show>
                       }
                     >
-                      <text fg={color()}>queued</text>
+                      <text fg={color()}>{uiText("ui.queued2")}</text>
                     </Show>
                   </box>
                 </Match>
@@ -190,7 +195,9 @@ export function UserMessage(props: {
                       </text>
                     </Show>
                     <Show when={effort()}>
-                      <text fg={theme.textMuted}>effort {effort()}</text>
+                      <text fg={theme.textMuted}>
+                        {uiText("ui.effort")} {effort()}
+                      </text>
                     </Show>
                     <For each={route().delegated}>
                       {(item) => {
@@ -198,7 +205,10 @@ export function UserMessage(props: {
                         const fg = createMemo(() => selectedForeground(theme, bg()))
                         return (
                           <text fg={theme.textMuted}>
-                            <span style={{ bg: bg(), fg: fg(), bold: true }}> DELEGATED {item.label} </span>
+                            <span style={{ bg: bg(), fg: fg(), bold: true }}>
+                              {" "}
+                              {uiText("ui.delegated")} {item.label}{" "}
+                            </span>
                           </text>
                         )
                       }}
@@ -216,7 +226,7 @@ export function UserMessage(props: {
                       }
                     >
                       <text fg={theme.textMuted}>
-                        <span style={{ bg: color(), fg: queuedFg(), bold: true }}> QUEUED </span>
+                        <span style={{ bg: color(), fg: queuedFg(), bold: true }}> {uiText("ui.queued")} </span>
                       </text>
                     </Show>
                   </box>
@@ -270,6 +280,8 @@ export function RouteIndicator(props: {
 }
 
 export function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; last: boolean }) {
+  const uiText = useLanguage().t
+
   const local = useLocal()
   const { theme } = useTheme()
   const sync = useSync()
@@ -340,7 +352,7 @@ export function AssistantMessage(props: { message: AssistantMessage; parts: Part
     <>
       <Show when={isThinking()}>
         <box paddingLeft={3} marginTop={1} flexDirection="row" gap={1}>
-          <Spinner color={theme.textMuted}>Thinking</Spinner>
+          <Spinner color={theme.textMuted}>{uiText("ui.thinking")}</Spinner>
         </box>
       </Show>
       <For each={displayParts()}>
@@ -381,7 +393,7 @@ export function AssistantMessage(props: { message: AssistantMessage; parts: Part
         <box paddingTop={1} paddingLeft={3}>
           <text fg={theme.text}>
             {keybind.print("session_child_first")}
-            <span style={{ fg: theme.textMuted }}> view subagents</span>
+            <span style={{ fg: theme.textMuted }}> {uiText("ui.viewSubagents")}</span>
           </text>
         </box>
       </Show>
@@ -428,7 +440,10 @@ export function AssistantMessage(props: { message: AssistantMessage; parts: Part
                 <span style={{ fg: theme.textMuted }}> · {stats()!.rate}</span>
               </Show>
               <Show when={stats()?.cacheHit}>
-                <span style={{ fg: theme.textMuted }}> · cache {stats()!.cacheHit}</span>
+                <span style={{ fg: theme.textMuted }}>
+                  {" "}
+                  {uiText("ui.cache")} {stats()!.cacheHit}
+                </span>
               </Show>
               <For each={toolSummary()}>
                 {(item) => (
@@ -439,7 +454,7 @@ export function AssistantMessage(props: { message: AssistantMessage; parts: Part
                 )}
               </For>
               <Show when={props.message.error?.name === "MessageAbortedError"}>
-                <span style={{ fg: theme.textMuted }}> · interrupted</span>
+                <span style={{ fg: theme.textMuted }}> {uiText("ui.interrupted")}</span>
               </Show>
             </text>
           </box>
@@ -515,6 +530,8 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
 }
 
 function TextPart(props: { last: boolean; part: TextPart; message: AssistantMessage }) {
+  const uiText = useLanguage().t
+
   const ctx = use()
   const { theme, syntax } = useTheme()
   const kv = useKV()
@@ -620,7 +637,7 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
         </Switch>
         <Show when={overflow()}>
           <text fg={theme.textMuted} onMouseUp={() => setExpanded((prev) => !prev)}>
-            {expanded() ? "Click to collapse" : `... ${lines().length - 50} more lines · click to expand`}
+            {expanded() ? uiText("ui.clickToCollapse") : `... ${lines().length - 50} more lines · click to expand`}
           </text>
         </Show>
       </box>
@@ -631,6 +648,8 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
 // Pending messages moved to individual tool pending functions
 
 function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMessage }) {
+  const uiText = useLanguage().t
+
   const ctx = use()
   const sync = useSync()
   const { theme } = useTheme()
@@ -671,7 +690,9 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
         fallback={
           <box paddingLeft={3} flexDirection="row" gap={1}>
             <text fg={theme.warning}>{"▲"}</text>
-            <text fg={theme.textMuted}>failed to render {props.part.tool} output</text>
+            <text fg={theme.textMuted}>
+              {uiText("ui.failedToRender")} {props.part.tool} {uiText("ui.output")}
+            </text>
           </box>
         }
       >
@@ -687,6 +708,8 @@ function CoalescedTool(props: {
   expanded: boolean
   onToggle: (next: boolean) => void
 }) {
+  const uiText = useLanguage().t
+
   const { theme } = useTheme()
   const label = createMemo(() => coalescedToolLabel(props.group.tool, props.group.parts.length))
   // Any in-flight part means the group is still mid-stream — without
@@ -709,7 +732,7 @@ function CoalescedTool(props: {
       <For each={props.group.parts}>{(part) => <ToolPart last={false} part={part} message={props.message} />}</For>
       <box paddingLeft={3}>
         <text paddingLeft={3} fg={theme.borderSubtle} onMouseUp={() => props.onToggle(false)}>
-          ▾ collapse
+          {uiText("ui.collapse")}
         </text>
       </box>
     </Show>

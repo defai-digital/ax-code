@@ -110,6 +110,16 @@ export function createTuiDialogLoaders(input: {
           return () => <DialogSessionList />
         },
       }),
+    showNavigationOptionsDialog: (onCommand: (value: string) => void) =>
+      replaceLazyDialog({
+        ...host,
+        warn: "failed to load navigation options",
+        fail: "Failed to open navigation options",
+        load: async () => {
+          const { DialogNavigationOptions } = await import("@tui/component/dialog-navigation-options")
+          return () => <DialogNavigationOptions onCommand={onCommand} />
+        },
+      }),
     showNavigationWidthDialog: () =>
       replaceLazyDialog({
         ...host,

@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { ScrollBoxRenderable, TextAttributes } from "ax-tui"
 import { useTheme } from "@tui/context/theme"
 import { useDialog } from "./dialog"
@@ -6,18 +7,19 @@ import { useKeybind } from "@tui/context/keybind"
 import { createMemo, For } from "solid-js"
 import { dialogHelpBodyHeight, dialogHelpGroups } from "./dialog-help-view-model"
 
-// Content is generated from the Keybinds config schema (labels) and the
-// resolved keybinds (printed keys, including user overrides), so the dialog
-// can no longer drift from the bindings that are actually active.
-const GROUPS = dialogHelpGroups()
+// Schema identities, localized labels and resolved keybinds stay in sync.
+// Recompute labels when the interface language changes while this dialog is open.
 
 export function DialogHelp() {
+  const uiText = useLanguage().t
+  const groups = createMemo(() => dialogHelpGroups(uiText))
+
   const dialog = useDialog()
   const { theme } = useTheme()
   const keybind = useKeybind()
   const dimensions = useTerminalDimensions()
   const contentRows = createMemo(() => {
-    return GROUPS.reduce((rows, group) => {
+    return groups().reduce((rows, group) => {
       const visibleBinds = group.binds.filter((bind) => keybind.print(bind.key)).length
       return rows + 1 + visibleBinds
     }, 0)
@@ -42,7 +44,7 @@ export function DialogHelp() {
     <box paddingLeft={2} paddingRight={2} gap={1}>
       <box flexDirection="row" justifyContent="space-between">
         <text attributes={TextAttributes.BOLD} fg={theme.text}>
-          Keyboard Shortcuts
+          {uiText("ui.keyboardShortcuts")}
         </text>
         <text fg={theme.textMuted} onMouseUp={() => dialog.clear()}>
           esc
@@ -61,7 +63,7 @@ export function DialogHelp() {
           },
         }}
       >
-        <For each={GROUPS}>
+        <For each={groups()}>
           {(group) => (
             <box>
               <text fg={theme.text}>

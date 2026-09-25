@@ -288,6 +288,7 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
       // the submit with the reason and the fix, and the draft is preserved
       // (ADR-097). The selected mode is kept, not force-reverted.
       const availability = workModeAvailability({
+        t,
         mode: activeWorkMode,
         providers: sync.data.provider as readonly AvailabilityProvider[],
         providerLoaded: sync.data.provider_loaded,
@@ -297,8 +298,8 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
         toast.show({
           message:
             availability.state === "checking"
-              ? `${WorkMode.label(activeWorkMode)} mode is still checking providers — try again in a moment`
-              : `${availability.detail} — prompt not sent`,
+              ? `${WorkMode.label(activeWorkMode)} · ${t("mode.checking")}`
+              : t("mode.notSent", { detail: availability.detail ?? t("mode.unavailable") }),
           variant: "warning",
         })
         log.info("tui.prompt.submit: work mode unavailable", {

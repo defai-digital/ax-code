@@ -29,7 +29,7 @@ describe("tui provider dialog SDK-error handling", () => {
     expect(guard).toBeGreaterThan(0)
     // dispose + bootstrap + success toast must all sit after the error guard.
     expect(block.indexOf("sdk.client.instance.dispose", guard)).toBeGreaterThan(guard)
-    expect(block.indexOf("Connected ${provider.name}", guard)).toBeGreaterThan(guard)
+    expect(block.indexOf('t("status.connected", { name: provider.name })', guard)).toBeGreaterThan(guard)
   })
 
   test("CLI provider disconnect checks auth.remove result before success", async () => {
@@ -38,7 +38,7 @@ describe("tui provider dialog SDK-error handling", () => {
     expect(block).toContain("const removed = await sdk.client.auth.remove(")
     const guard = block.indexOf("if (removed.error)")
     expect(guard).toBeGreaterThan(0)
-    expect(block.indexOf("Disconnected ${provider.name}", guard)).toBeGreaterThan(guard)
+    expect(block.indexOf('t("status.disconnected", { name: provider.name })', guard)).toBeGreaterThan(guard)
   })
 
   test("API provider remove checks auth.remove result before success", async () => {
@@ -50,7 +50,7 @@ describe("tui provider dialog SDK-error handling", () => {
 
   test("ApiMethod checks auth.set result before advancing to the model picker", async () => {
     const src = await fs.readFile(DIALOG_PROVIDER_SRC, "utf8")
-    const block = sliceFrom(src, "API key is required", 800)
+    const block = sliceFrom(src, 'uiText("ui.apiKeyIsRequired")', 800)
     expect(block).toContain("const stored = await sdk.client.auth.set(")
     const guard = block.indexOf("if (stored.error)")
     expect(guard).toBeGreaterThan(0)

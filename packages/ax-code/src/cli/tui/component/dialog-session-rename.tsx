@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { DialogPrompt } from "@tui/ui/dialog-prompt"
 import { useDialog } from "@tui/ui/dialog"
 import { useSync } from "@tui/context/sync"
@@ -19,6 +20,8 @@ function errorMessage(error: unknown, fallback: string) {
 }
 
 export function DialogSessionRename(props: DialogSessionRenameProps) {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const sync = useSync()
   const sdk = useSDK()
@@ -26,7 +29,7 @@ export function DialogSessionRename(props: DialogSessionRenameProps) {
 
   return (
     <DialogPrompt
-      title="Rename Session"
+      title={uiText("ui.renameSession2")}
       value={session()?.title}
       onConfirm={async (value) => {
         const result = await sdk.client.session.update({

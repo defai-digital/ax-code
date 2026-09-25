@@ -298,7 +298,7 @@ describe("AX Code TUI stability guardrails", () => {
     expect(app).toContain("handleSessionRouteLoadFailure")
     expect(app).toContain('ensureSessionRouteLoaded("route").catch((error) => {')
     expect(app).toContain('ensureSessionRouteLoaded("startup-preload")')
-    expect(app).toContain('message: "Failed to load session view"')
+    expect(app).toContain('message: uiText("ui.failedToLoadSessionView")')
     expect(app).toContain('route.navigate({ type: "home" })')
   })
 
@@ -365,7 +365,7 @@ describe("AX Code TUI stability guardrails", () => {
       'message: typeof revertError === "string" ? revertError : "Failed to revert message"',
     )
     expect(dialogMessage).toContain("props.setPrompt(promptState(sync.data.part[msg.id] ?? []))")
-    expect(dialogMessage).toContain('message: "Message is no longer available"')
+    expect(dialogMessage).toContain('message: uiText("ui.messageIsNoLongerAvailable")')
     expect(dialogMessage).toContain("dialog.clear()")
   })
 
@@ -376,7 +376,7 @@ describe("AX Code TUI stability guardrails", () => {
     expect(dialogMessage).toContain('message: error instanceof Error ? error.message : "Failed to copy message"')
     expect(dialogMessage).toContain('log.warn("dialog message fork failed"')
     expect(dialogMessage).toContain('message: error instanceof Error ? error.message : "Failed to fork session"')
-    expect(dialogMessage).toContain('message: "Message is no longer available"')
+    expect(dialogMessage).toContain('message: uiText("ui.messageIsNoLongerAvailable")')
     expect(dialogMessage).toContain("messageID: msg.id")
     expect(dialogMessage).toContain("promptState(sync.data.part[msg.id] ?? [])")
   })
@@ -387,9 +387,9 @@ describe("AX Code TUI stability guardrails", () => {
     expect(timelineForkDialog).toContain('log.warn("timeline fork failed"')
     expect(timelineForkDialog).toContain('message: error instanceof Error ? error.message : "Failed to fork session"')
     expect(timelineForkDialog).toContain("promptState(sync.data.part[message.id] ?? [])")
-    expect(timelineForkDialog).toContain('title: "No fork target available"')
+    expect(timelineForkDialog).toContain('title: uiText("ui.noForkTargetAvailable")')
     expect(timelineForkDialog).toContain(
-      'description: "No user messages with text content are available to fork from."',
+      'description: uiText("ui.noUserMessagesWithTextContentAreAvailableToForkFrom")',
     )
     expect(timelineForkDialog).toContain("if (option.disabled) return")
   })
@@ -397,8 +397,8 @@ describe("AX Code TUI stability guardrails", () => {
   test("keeps the timeline dialog from rendering as a blank empty state", async () => {
     const timelineDialog = await fs.readFile(TIMELINE_DIALOG_SRC, "utf8")
 
-    expect(timelineDialog).toContain('title: "No timeline message available"')
-    expect(timelineDialog).toContain('description: "No user messages with text content are available in this session."')
+    expect(timelineDialog).toContain('title: uiText("ui.noTimelineMessageAvailable")')
+    expect(timelineDialog).toContain('description: uiText("ui.noUserMessagesWithTextContentAreAvailableInThisSession")')
     expect(timelineDialog).toContain("disabled: true")
     expect(timelineDialog).toContain("if (option.disabled) return")
   })
@@ -407,7 +407,7 @@ describe("AX Code TUI stability guardrails", () => {
     const sessionListDialog = await fs.readFile(SESSION_LIST_DIALOG_SRC, "utf8")
 
     expect(sessionListDialog).toContain(".catch(() => false)")
-    expect(sessionListDialog).toContain('message: "Failed to delete session"')
+    expect(sessionListDialog).toContain('message: uiText("ui.failedToDeleteSession")')
     expect(sessionListDialog).toContain("sync.data.session.filter((session) => session.id !== option.value)")
   })
 
@@ -443,7 +443,7 @@ describe("AX Code TUI stability guardrails", () => {
 
     expect(workspaceListDialog).toContain(".then((result) => !result.error)")
     expect(workspaceListDialog).toContain(".catch(() => false)")
-    expect(workspaceListDialog).toContain('message: "Failed to delete workspace"')
+    expect(workspaceListDialog).toContain('message: uiText("ui.failedToDeleteWorkspace")')
   })
 
   test("handles workspace open and create failures without leaking unhandled rejections", async () => {
@@ -466,7 +466,7 @@ describe("AX Code TUI stability guardrails", () => {
     expect(displayCommands).toContain("void Promise.resolve()")
     expect(displayCommands).toContain("input.sdk.client.session.summarize({")
     expect(displayCommands).toContain('message: error instanceof Error ? error.message : "Failed to summarize session"')
-    expect(displayCommands).toContain('message: "Connect a provider to summarize this session"')
+    expect(displayCommands).toContain('message: uiText("ui.connectAProviderToSummarizeThisSession")')
     expect(displayCommands).toContain("dialog.clear()")
   })
 
@@ -481,7 +481,7 @@ describe("AX Code TUI stability guardrails", () => {
     const displayCommands = await fs.readFile(DISPLAY_COMMANDS_SRC, "utf8")
 
     expect(displayCommands).toContain('value: "session.dre.web"')
-    expect(displayCommands).toContain('message: "Failed to open DRE graph in the browser"')
+    expect(displayCommands).toContain('message: uiText("ui.failedToOpenDreGraphInTheBrowser")')
     expect(displayCommands).toContain(".finally(() => dialog.clear())")
   })
 
@@ -489,7 +489,7 @@ describe("AX Code TUI stability guardrails", () => {
     const displayCommands = await fs.readFile(DISPLAY_COMMANDS_SRC, "utf8")
 
     expect(displayCommands).toContain(
-      'input.toast.show({ message: "Session is no longer available", variant: "warning" })',
+      'input.toast.show({ message: uiText("ui.sessionIsNoLongerAvailable"), variant: "warning" })',
     )
     expect(displayCommands).toContain("if (!data) {")
     expect(displayCommands).toContain("dialog.clear()")
@@ -555,7 +555,7 @@ describe("AX Code TUI stability guardrails", () => {
     expect(app).toContain("sdk.event.on(SessionApi.Event.Deleted.type")
     expect(app).toContain('if (route.data.type === "session" && route.data.sessionID === evt.properties.info.id)')
     expect(app).toContain('route.navigate({ type: "home" })')
-    expect(app).toContain('message: "The current session was deleted"')
+    expect(app).toContain('message: uiText("ui.theCurrentSessionWasDeleted")')
   })
 
   test("keeps startup routing scoped to session-list readiness instead of full sync completion", async () => {
@@ -706,7 +706,7 @@ describe("AX Code TUI stability guardrails", () => {
     expect(dialogProvider).toContain("onConfirm={async (value) =>")
     expect(dialogProvider).toContain("autoClose={false}")
     // Empty API key keeps the dialog open with a message instead of closing.
-    expect(dialogProvider).toContain('message: "API key is required"')
+    expect(dialogProvider).toContain('message: uiText("ui.apiKeyIsRequired")')
     // Invalid oauth code stays in the dialog and shows the inline error state,
     // surfacing the server's message rather than a generic "Invalid code".
     expect(dialogProvider).toContain('setError(sdkErrorMessage(result.error, "Invalid code"))')
@@ -719,8 +719,12 @@ describe("AX Code TUI stability guardrails", () => {
     expect(dialogProvider).toContain("await sync.bootstrap()")
     expect(dialogProvider).toContain("function selectDefaultModelForProvider(")
     expect(dialogProvider).toContain("local.model.set({ providerID, modelID }, { recent: true })")
-    expect(dialogProvider).toContain('toast.show({ variant: "success", message: `Disconnected ${provider.name}` })')
-    expect(dialogProvider).toContain('toast.show({ variant: "success", message: `Connected ${provider.name}` })')
+    expect(dialogProvider).toContain(
+      'toast.show({ variant: "success", message: t("status.disconnected", { name: provider.name }) })',
+    )
+    expect(dialogProvider).toContain(
+      'toast.show({ variant: "success", message: t("status.connected", { name: provider.name }) })',
+    )
     expect(dialogProvider).toContain("dialog.replace(() => <DialogModel providerID={provider.id} />)")
     expect(dialogProvider).toContain("dialog.clear()")
   })
@@ -745,7 +749,7 @@ describe("AX Code TUI stability guardrails", () => {
     expect(dialogs).toContain('fail: "Failed to open help"')
 
     expect(prompt).toContain("if (dialog.stack.at(-1) !== marker) return")
-    expect(prompt).toContain('toast.show({ message: "Failed to open provider dialog", variant: "error" })')
+    expect(prompt).toContain('toast.show({ message: uiText("ui.failedToOpenProviderDialog"), variant: "error" })')
   })
 
   test("opens docs through a failure-safe app command", async () => {
@@ -778,7 +782,7 @@ describe("AX Code TUI stability guardrails", () => {
     expect(app).toContain("retryTimers.delete(cancel)")
     expect(app).toContain('name: "app-session-fork-retry"')
     expect(app).toContain("if (forkRetryDisposed) return")
-    expect(app).toContain('toast.show({ message: "Failed to fork session", variant: "error" })')
+    expect(app).toContain('toast.show({ message: uiText("ui.failedToForkSession"), variant: "error" })')
     expect(app).toContain("if (continued || !sync.data.session_loaded || !args.continue) return")
     expect(app).toContain(
       "if (startupForkStarted || !sync.data.session_loaded || !args.sessionID || !args.fork) return",
@@ -1050,7 +1054,7 @@ describe("AX Code TUI stability guardrails", () => {
     expect(autocomplete).not.toContain('"prd"')
     expect(autocomplete).toContain("defaultCommandSlashAllowlist")
     expect(autocomplete).not.toContain('serverCommand.source === "skill") continue')
-    expect(displayCommands).toContain('title: "View session goal"')
+    expect(displayCommands).toContain('title: uiText("ui.viewSessionGoal")')
     expect(displayCommands).toContain('value: "session.goal"')
     expect(displayCommands).not.toContain('name: "goal"')
   })
@@ -1287,7 +1291,7 @@ describe("AX Code TUI stability guardrails", () => {
 
     expect(app).toContain("renderer.console.onCopySelection = async (text: string) => {")
     expect(app).toContain(".then(() => {")
-    expect(app).toContain('toast.show({ message: "Copied to clipboard", variant: "info", duration: 1500 })')
+    expect(app).toContain('toast.show({ message: uiText("ui.copiedToClipboard"), variant: "info", duration: 1500 })')
     expect(app).toContain("renderer.clearSelection()")
   })
 
@@ -1317,7 +1321,7 @@ describe("AX Code TUI stability guardrails", () => {
     expect(prompt).toContain("input.cursorOffset === endDisplayOffset(input.plainText)")
     expect(prompt).toContain("input.cursorOffset = endDisplayOffset(input.plainText)")
     expect(prompt).not.toContain("stringWidth(input.plainText)")
-    expect(promptCommands).toContain('message: "No editor configured. Set VISUAL or EDITOR to use /editor."')
+    expect(promptCommands).toContain('message: uiText("ui.noEditorConfiguredSetVisualOrEditorToUseEditor")')
     // A server-generated user message (auto-route, plan_exit) moves the agent
     // chip and restores its model only for this session. Persisting it as the
     // agent's global override would shadow config pins in unrelated sessions.

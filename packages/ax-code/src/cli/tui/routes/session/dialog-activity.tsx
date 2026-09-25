@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createMemo, onMount } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
@@ -7,6 +8,8 @@ import { useDialog } from "../../ui/dialog"
 import { activityItems as items, statusLabel } from "./activity"
 
 export function DialogActivity(props: { sessionID: string }) {
+  const uiText = useLanguage().t
+
   const sync = useSync()
   const dialog = useDialog()
 
@@ -28,5 +31,5 @@ export function DialogActivity(props: { sessionID: string }) {
     }))
   })
 
-  return <DialogSelect title="Activity History" options={options()} skipFilter={false} />
+  return <DialogSelect title={uiText("ui.activityHistory")} options={options()} skipFilter={false} />
 }

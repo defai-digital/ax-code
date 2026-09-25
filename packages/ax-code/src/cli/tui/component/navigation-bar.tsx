@@ -1,3 +1,5 @@
+import { useLanguage } from "@tui/context/language"
+import { stringWidth } from "@/bun/node-compat"
 import { createMemo, Show } from "solid-js"
 import { useSDK } from "@tui/context/sdk"
 import { useSync } from "@tui/context/sync"
@@ -11,17 +13,26 @@ import { sidebarRestoreEntry } from "../sidebar-restore-view-model"
 
 /** A visible navigation entry survives both responsive collapse and opt-out. */
 export function NavigationBar(props: { width: number; showSidebarRestore?: boolean }) {
+  const uiText = useLanguage().t
   const sdk = useSDK()
   const sync = useSync()
   const { theme } = useTheme()
   const command = useCommandDialog()
   const pending = createMemo(() => knownAttentionRequests(sync.data.permission, sync.data.question).length)
-  const entry = () => (props.width >= 24 && (!pending() || props.width >= 40) ? "Sessions /navigation" : "Sessions")
+  const entry = () =>
+    props.width >= 24 && (!pending() || props.width >= 40) ? uiText("ui.sessionsNavigation") : uiText("ui.sessions")
   const sidebarEntry = () => (props.showSidebarRestore ? sidebarRestoreEntry(props.width) : "")
-  const attentionLabel = () => `Pending ${pending()}${sdk.sseConnected ? "" : "*"}`
-  const pendingChipWidth = () => (pending() ? attentionLabel().length + 4 : 0)
+  const attentionLabel = () => uiText("ui.pendingCount", { count: pending() }) + (sdk.sseConnected ? "" : "*")
+  const pendingChipWidth = () => (pending() ? stringWidth(attentionLabel()) + 4 : 0)
+  const showSchedule = () => props.width >= (pending() > 0 ? 50 : 36)
   const projectWidth = () =>
-    props.width - 1 - entry().length - 2 - pendingChipWidth() - (sidebarEntry() ? sidebarEntry().length + 2 : 0)
+    props.width -
+    1 -
+    stringWidth(entry()) -
+    2 -
+    pendingChipWidth() -
+    (showSchedule() ? 16 : 0) -
+    (sidebarEntry() ? stringWidth(sidebarEntry()) + 2 : 0)
   return (
     <box
       height={1}
@@ -50,11 +61,11 @@ export function NavigationBar(props: { width: number; showSidebarRestore?: boole
             </text>
           </box>
         </Show>
-        <Show when={props.width >= (pending() > 0 ? 50 : 36)}>
+        <Show when={showSchedule()}>
           <ScheduleStatus width={14} compact />
         </Show>
         <Show when={projectWidth() >= 12}>
-          <box onMouseUp={() => command.trigger("session.navigation.info")}>
+          <box flexShrink={0} onMouseUp={() => command.trigger("session.navigation.info")}>
             <text fg={theme.textMuted} selectable={false}>
               {truncateToCellWidth(projectLabel(sdk.directory ?? sync.data.path.directory), projectWidth())}
             </text>

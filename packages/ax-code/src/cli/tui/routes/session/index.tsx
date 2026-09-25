@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { applyInitialPromptDraft } from "@tui/component/prompt/session-drafts"
 import { useContentDimensions } from "@tui/context/content-dimensions"
 import {
@@ -150,6 +151,8 @@ class CustomSpeedScroll implements ScrollAcceleration {
 }
 
 export function Session() {
+  const uiText = useLanguage().t
+
   const route = useRouteData("session")
   const { navigate } = useRoute()
   const sync = useSync()
@@ -586,7 +589,7 @@ export function Session() {
       sync.session.sync(route.sessionID, { force: true, missing: "throw" }).catch((error) => {
         log.warn("session resync after reconnect failed", { error, sessionID: route.sessionID })
         toast.show({
-          message: "Reconnected, but refreshing the session state failed",
+          message: uiText("ui.reconnectedButRefreshingTheSessionStateFailed"),
           variant: "error",
         })
       }),
@@ -829,7 +832,7 @@ export function Session() {
   async function runTranscriptSearch(dialog: DialogContext) {
     const query = await DialogPrompt.show(dialog, "Search transcript", {
       value: searchQuery,
-      placeholder: "Search messages",
+      placeholder: uiText("ui.searchMessages"),
     })
     const needle = query?.trim()
     if (!needle) return
@@ -861,9 +864,9 @@ export function Session() {
   const command = useCommandDialog()
   command.register(() => [
     {
-      title: "Retry loading undo history",
+      title: uiText("ui.retryLoadingUndoHistory"),
       value: "session.undo-history",
-      category: "Session",
+      category: uiText("common.session"),
       enabled: !!session()?.revert?.messageID,
       slash: { name: "undo-history" },
       onSelect: async (dialog) => {
@@ -871,9 +874,9 @@ export function Session() {
       },
     },
     {
-      title: "Restore all reverted messages and files",
+      title: uiText("ui.restoreAllRevertedMessagesAndFiles"),
       value: "session.restore-all",
-      category: "Session",
+      category: uiText("common.session"),
       enabled: !!session()?.revert?.messageID,
       slash: { name: "restore-all" },
       onSelect: async () => {
@@ -906,7 +909,7 @@ export function Session() {
     {
       title: subagentPanelCollapsed() ? "Expand active agents" : "Collapse active agents",
       value: "session.subagents.toggle",
-      category: "Session",
+      category: uiText("common.session"),
       enabled: subagentTasks().running > 1,
       onSelect: (dialog) => {
         setSubagentPanelCollapsed((value) => !value)
@@ -914,6 +917,7 @@ export function Session() {
       },
     },
     ...displayCommands({
+      t: uiText,
       conceal,
       currentModel: () => local.model.current(),
       dialogReplaceActivity: (dialog) => dialog.replace(() => <DialogActivity sessionID={route.sessionID} />),
@@ -1071,7 +1075,7 @@ export function Session() {
     ...qualityActions().map((action) => ({
       title: action.title,
       value: sessionQualityActionValue(action),
-      category: "Quality",
+      category: uiText("ui.quality"),
       onSelect: (dialog: DialogContext) => {
         if (prompt) {
           prompt.set(action.prompt)
@@ -1088,7 +1092,7 @@ export function Session() {
     // before sending — this is cheaper than a bespoke dialog per tool
     // and still discoverable via the command palette.
     {
-      title: "Debug an error (DRE)",
+      title: uiText("ui.debugAnErrorDre"),
       value: "debug.analyze",
       category: "Debugging",
       enabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
@@ -1104,7 +1108,7 @@ export function Session() {
       },
     },
     {
-      title: "Analyze change impact (DRE)",
+      title: uiText("ui.analyzeChangeImpactDre"),
       value: "debug.impact",
       category: "Debugging",
       enabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
@@ -1120,7 +1124,7 @@ export function Session() {
       },
     },
     {
-      title: "Find duplicate code (DRE)",
+      title: uiText("ui.findDuplicateCodeDre"),
       value: "debug.dedup",
       category: "Debugging",
       enabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
@@ -1135,7 +1139,7 @@ export function Session() {
       },
     },
     {
-      title: "Scan for hardcoded values (DRE)",
+      title: uiText("ui.scanForHardcodedValuesDre"),
       value: "debug.hardcode",
       category: "Debugging",
       enabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
@@ -1151,7 +1155,7 @@ export function Session() {
       },
     },
     {
-      title: "Plan a refactor (DRE)",
+      title: uiText("ui.planARefactorDre"),
       value: "debug.refactor",
       category: "Debugging",
       enabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
@@ -1167,7 +1171,7 @@ export function Session() {
       },
     },
     {
-      title: "List pending refactor plans (DRE)",
+      title: uiText("ui.listPendingRefactorPlansDre"),
       value: "debug.plans",
       category: "Debugging",
       enabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
@@ -1176,7 +1180,7 @@ export function Session() {
         const plans = sync.data.debugEngine.plans
         if (plans.length === 0) {
           toast.show({
-            message: "No pending refactor plans",
+            message: uiText("ui.noPendingRefactorPlans"),
             variant: "success",
             duration: 3000,
           })
@@ -1203,10 +1207,10 @@ export function Session() {
       },
     },
     {
-      title: "Undo previous message",
+      title: uiText("ui.undoPreviousMessage"),
       value: "session.undo",
       keybind: "messages_undo",
-      category: "Session",
+      category: uiText("common.session"),
       enabled: !!session()?.revert?.messageID || !!undoMessageID(messages(), undefined),
       slash: {
         name: "undo",
@@ -1259,10 +1263,10 @@ export function Session() {
       },
     },
     {
-      title: "Redo",
+      title: uiText("ui.redo"),
       value: "session.redo",
       keybind: "messages_redo",
-      category: "Session",
+      category: uiText("common.session"),
       enabled: !!session()?.revert?.messageID,
       slash: {
         name: "redo",
@@ -1277,7 +1281,7 @@ export function Session() {
         const messageID = redoMessageID(messages(), session()?.revert?.messageID)
         if (messageID === null) {
           toast.show({
-            message: "The undo point is outside the loaded history. Redo cannot safely choose a turn.",
+            message: uiText("ui.theUndoPointIsOutsideTheLoadedHistoryRedoCannotSafelyChooseATurn"),
             variant: "error",
           })
           return
@@ -1314,10 +1318,10 @@ export function Session() {
       },
     },
     {
-      title: "Search transcript",
+      title: uiText("ui.searchTranscript"),
       value: "session.search",
       keybind: "session_search",
-      category: "Session",
+      category: uiText("common.session"),
       slash: {
         name: "search",
         hidden: true,
@@ -1325,10 +1329,10 @@ export function Session() {
       onSelect: (dialog) => runTranscriptSearch(dialog),
     },
     {
-      title: "Go to child session",
+      title: uiText("ui.goToChildSession"),
       value: "session.child.first",
       keybind: "session_child_first",
-      category: "Session",
+      category: uiText("common.session"),
       hidden: true,
       onSelect: (dialog) => {
         moveFirstChild()
@@ -1336,10 +1340,10 @@ export function Session() {
       },
     },
     {
-      title: "Go to parent session",
+      title: uiText("ui.goToParentSession"),
       value: "session.parent",
       keybind: "session_parent",
-      category: "Session",
+      category: uiText("common.session"),
       hidden: true,
       enabled: !!session()?.parentID,
       onSelect: childSessionHandler((dialog) => {
@@ -1354,10 +1358,10 @@ export function Session() {
       }),
     },
     {
-      title: "Next child session",
+      title: uiText("ui.nextChildSession"),
       value: "session.child.next",
       keybind: "session_child_cycle",
-      category: "Session",
+      category: uiText("common.session"),
       hidden: true,
       enabled: !!session()?.parentID,
       onSelect: childSessionHandler((dialog) => {
@@ -1366,10 +1370,10 @@ export function Session() {
       }),
     },
     {
-      title: "Previous child session",
+      title: uiText("ui.previousChildSession"),
       value: "session.child.previous",
       keybind: "session_child_cycle_reverse",
-      category: "Session",
+      category: uiText("common.session"),
       hidden: true,
       enabled: !!session()?.parentID,
       onSelect: childSessionHandler((dialog) => {
@@ -1572,40 +1576,41 @@ export function Session() {
                 <box flexGrow={1} alignItems="center" justifyContent="center" paddingTop={4} paddingBottom={2}>
                   <text>
                     <span style={{ fg: theme.accent }}>◦</span>
-                    <span style={{ fg: theme.textMuted }}> Start typing to chat</span>
+                    <span style={{ fg: theme.textMuted }}> {uiText("ui.startTypingToChat")}</span>
                   </text>
                   <text>
                     <span style={{ fg: theme.accent }}>◦</span>
-                    <span style={{ fg: theme.textMuted }}> /help for commands</span>
+                    <span style={{ fg: theme.textMuted }}> {uiText("ui.helpForCommands")}</span>
                   </text>
                 </box>
               </Show>
               <Show when={sync.data.message_truncated[route.sessionID]}>
                 <box paddingLeft={2} paddingBottom={1}>
                   <text fg={theme.textMuted}>
-                    ▲ Showing the most recent {messages().length} messages — earlier history is not loaded
+                    {uiText("ui.showingTheMostRecent")} {messages().length}{" "}
+                    {uiText("ui.messagesEarlierHistoryIsNotLoaded")}
                   </text>
                 </box>
               </Show>
               <Show when={sync.data.message_memory_limited[route.sessionID]}>
                 <box paddingLeft={2} paddingBottom={1}>
                   <text fg={theme.warning}>
-                    Transcript memory budget exceeded: keeping the newest whole message or Undo history.
+                    {uiText("ui.transcriptMemoryBudgetExceededKeepingTheNewestWholeMessageOrUndoHistory")}
                   </text>
                 </box>
               </Show>
               <Show when={sync.data.message_reload[route.sessionID]}>
                 <box paddingLeft={2} paddingBottom={1}>
-                  <text fg={theme.warning}>Some pending transcript updates were released to limit memory.</text>
+                  <text fg={theme.warning}>{uiText("ui.somePendingTranscriptUpdatesWereReleasedToLimitMemory")}</text>
                   <text
                     fg={theme.text}
                     onMouseUp={() =>
                       void sync.session
                         .sync(route.sessionID, { force: true })
-                        .catch(() => toast.show({ message: "Failed to reload transcript", variant: "error" }))
+                        .catch(() => toast.show({ message: uiText("ui.failedToReloadTranscript"), variant: "error" }))
                     }
                   >
-                    Reload transcript from saved history
+                    {uiText("ui.reloadTranscriptFromSavedHistory")}
                   </text>
                 </box>
               </Show>
@@ -1617,10 +1622,10 @@ export function Session() {
                       : historyError() || "Older history is needed for Undo / Restore."}
                   </text>
                   <text fg={theme.text} onMouseUp={() => void ensureRevertHistory()}>
-                    Retry history loading: /undo-history
+                    {uiText("ui.retryHistoryLoadingUndoHistory")}
                   </text>
                   <text fg={theme.text} onMouseUp={() => command.trigger("session.restore-all")}>
-                    Restore all reverted messages and files: /restore-all
+                    {uiText("ui.restoreAllRevertedMessagesAndFilesRestoreAll")}
                   </text>
                 </box>
               </Show>
@@ -1702,7 +1707,11 @@ export function Session() {
             <box flexShrink={0}>
               <Show when={queuedFollowUps().length > 0}>
                 <box height={1} flexShrink={0} paddingLeft={2} onMouseUp={() => command.trigger("session.followups")}>
-                  <text fg={theme.accent}>Follow-ups ({queuedFollowUps().length}) · /queue</text>
+                  <text fg={theme.accent}>
+                    {uiText("ui.followUps2")}
+                    {queuedFollowUps().length}
+                    {uiText("ui.queue")}
+                  </text>
                 </box>
               </Show>
               <Show when={permissions().length > 0}>

@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createMemo, onMount } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
@@ -13,6 +14,8 @@ export function DialogTimeline(props: {
   onMove: (messageID: string) => void
   setPrompt?: (prompt: PromptInfo) => void
 }) {
+  const uiText = useLanguage().t
+
   const sync = useSync()
   const dialog = useDialog()
 
@@ -44,9 +47,9 @@ export function DialogTimeline(props: {
     if (result.length === 0) {
       return [
         {
-          title: "No timeline message available",
+          title: uiText("ui.noTimelineMessageAvailable"),
           value: "empty",
-          description: "No user messages with text content are available in this session.",
+          description: uiText("ui.noUserMessagesWithTextContentAreAvailableInThisSession"),
           category: "Overview",
           disabled: true,
         },
@@ -62,7 +65,7 @@ export function DialogTimeline(props: {
         if (option.disabled) return
         props.onMove(option.value)
       }}
-      title="Timeline"
+      title={uiText("ui.timeline")}
       options={options()}
     />
   )

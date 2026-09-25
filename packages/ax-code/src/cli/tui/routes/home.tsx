@@ -40,6 +40,8 @@ let startupPromptConsumed = false
 let homeDefaultWorkModeApplied = false
 
 export function Home() {
+  const uiText = useLanguage().t
+
   const { t } = useLanguage()
   const sync = useSync()
   const { theme } = useTheme()
@@ -101,7 +103,7 @@ export function Home() {
           <text fg={theme.text}>
             <Switch>
               <Match when={mcpError()}>
-                <span style={{ fg: theme.error }}>•</span> mcp errors{" "}
+                <span style={{ fg: theme.error }}>•</span> {uiText("ui.mcpErrors")}{" "}
                 <span style={{ fg: theme.textMuted }}>ctrl+x s</span>
               </Match>
               <Match when={true}>
@@ -156,7 +158,7 @@ export function Home() {
         recordTuiStartupOnce("tui.startup.homePromptProviderFailed")
         toast.show({
           variant: "error",
-          message: "Providers failed to load — could not auto-submit the --prompt argument",
+          message: uiText("ui.providersFailedToLoadCouldNotAutoSubmitThePromptArgument"),
           duration: 8000,
         })
       },

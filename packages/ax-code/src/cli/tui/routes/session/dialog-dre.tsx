@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createMemo, onMount } from "solid-js"
 import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
 import { useSync } from "@tui/context/sync"
@@ -6,6 +7,8 @@ import { SessionDreView } from "./dre"
 import { SessionSemanticDiff } from "@/session/semantic-diff"
 
 export function DialogDre(props: { sessionID: string }) {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const sync = useSync()
 
@@ -18,9 +21,9 @@ export function DialogDre(props: { sessionID: string }) {
     if (!detail) {
       return [
         {
-          title: "No analysis data yet",
+          title: uiText("ui.noAnalysisDataYet"),
           value: "empty",
-          description: "Analysis populates after the session uses tools or agent routes. Keep chatting.",
+          description: uiText("ui.analysisPopulatesAfterTheSessionUsesToolsOrAgentRoutesKeepChatting"),
           category: "Overview",
         },
       ]
@@ -35,5 +38,5 @@ export function DialogDre(props: { sessionID: string }) {
     }))
   })
 
-  return <DialogSelect title="Analysis" options={options()} skipFilter={false} />
+  return <DialogSelect title={uiText("ui.analysis")} options={options()} skipFilter={false} />
 }

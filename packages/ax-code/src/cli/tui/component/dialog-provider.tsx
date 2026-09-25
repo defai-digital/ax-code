@@ -412,6 +412,7 @@ export function createDialogProviderOptions() {
               run: async () => {
                 if (provider.id === CUSTOM_API_PROVIDER_OPTION_ID || provider.id === AX_TRUST_PROVIDER_OPTION_ID) {
                   const saved = await configureCustomApiProvider({
+                    t,
                     dialog,
                     sdk,
                     theme,
@@ -419,7 +420,7 @@ export function createDialogProviderOptions() {
                   })
                   if (!saved) return
                   await sync.bootstrap()
-                  toast.show({ variant: "success", message: `Saved ${saved.name}` })
+                  toast.show({ variant: "success", message: t("status.saved", { name: saved.name }) })
                   await openModelDialogForProvider(saved.providerID, saved.name)
                   return
                 }
@@ -435,17 +436,27 @@ export function createDialogProviderOptions() {
                     (candidate) => candidate.providerID === provider.id,
                   )
                   if (!existing) throw new Error(`Managed custom provider ${provider.id} is unavailable`)
-                  const action = await customApiProviderManagementMenu({ dialog, provider: existing })
+                  const action = await customApiProviderManagementMenu({
+                    t,
+                    dialog,
+                    provider: existing,
+                  })
                   if (action === null) return
                   if (action === "use") {
                     await openModelDialogForProvider(existing.providerID, existing.name)
                     return
                   }
                   if (action === "update") {
-                    const saved = await configureCustomApiProvider({ dialog, sdk, theme, existing })
+                    const saved = await configureCustomApiProvider({
+                      t,
+                      dialog,
+                      sdk,
+                      theme,
+                      existing,
+                    })
                     if (!saved) return
                     await sync.bootstrap()
-                    toast.show({ variant: "success", message: `Updated ${saved.name}` })
+                    toast.show({ variant: "success", message: t("status.updated", { name: saved.name }) })
                     await openModelDialogForProvider(saved.providerID, saved.name)
                     return
                   }
@@ -471,10 +482,17 @@ export function createDialogProviderOptions() {
                     })
                     return
                   }
-                  if (!(await confirmCustomApiProviderDelete({ dialog, provider: existing }))) return
+                  if (
+                    !(await confirmCustomApiProviderDelete({
+                      t,
+                      dialog,
+                      provider: existing,
+                    }))
+                  )
+                    return
                   await deleteCustomApiProvider(sdk, existing.providerID)
                   await sync.bootstrap()
-                  toast.show({ variant: "success", message: `Deleted ${existing.name}` })
+                  toast.show({ variant: "success", message: t("status.deleted", { name: existing.name }) })
                   dialog.clear()
                   return
                 }
@@ -523,7 +541,7 @@ export function createDialogProviderOptions() {
                       }
                       await sdk.client.instance.dispose()
                       await sync.bootstrap()
-                      toast.show({ variant: "success", message: `Disconnected ${provider.name}` })
+                      toast.show({ variant: "success", message: t("status.disconnected", { name: provider.name }) })
                       dialog.clear()
                       return
                     }
@@ -578,7 +596,7 @@ export function createDialogProviderOptions() {
                     await axEngineRequest(sdk, "stop")
                     await sdk.client.instance.dispose()
                     await sync.bootstrap()
-                    toast.show({ variant: "success", message: "AX Engine local runtime stopped" })
+                    toast.show({ variant: "success", message: t("ui.axEngineLocalRuntimeStopped") })
                     dialog.clear()
                     return
                   }
@@ -756,7 +774,7 @@ export function createDialogProviderOptions() {
                     })
                     if (action === "use") {
                       await selectDefaultModelForProvider(provider.id, provider.name)
-                      toast.show({ variant: "success", message: `Using ${provider.name}` })
+                      toast.show({ variant: "success", message: t("status.using", { name: provider.name }) })
                       dialog.clear()
                     } else if (action === "disable") {
                       await setProviderDisabled({
@@ -776,7 +794,7 @@ export function createDialogProviderOptions() {
                       }
                       await sdk.client.instance.dispose()
                       await sync.bootstrap()
-                      toast.show({ variant: "success", message: `Disconnected ${provider.name}` })
+                      toast.show({ variant: "success", message: t("status.disconnected", { name: provider.name }) })
                       dialog.clear()
                     }
                   } else {
@@ -792,7 +810,7 @@ export function createDialogProviderOptions() {
                     await sdk.client.instance.dispose()
                     await sync.bootstrap()
                     await selectDefaultModelForProvider(provider.id, provider.name)
-                    toast.show({ variant: "success", message: `Connected ${provider.name}` })
+                    toast.show({ variant: "success", message: t("status.connected", { name: provider.name }) })
                     dialog.clear()
                   }
                   return
@@ -858,7 +876,7 @@ export function createDialogProviderOptions() {
                     }
                     await sdk.client.instance.dispose()
                     await sync.bootstrap()
-                    toast.show({ variant: "success", message: `Disconnected ${provider.name}` })
+                    toast.show({ variant: "success", message: t("status.disconnected", { name: provider.name }) })
                     dialog.clear()
                     return
                   }
@@ -1089,7 +1107,7 @@ export function DialogProvider() {
                         }
                         await sdk.client.instance.dispose()
                         await sync.bootstrap()
-                        toast.show({ variant: "success", message: `Disconnected ${providerID}` })
+                        toast.show({ variant: "success", message: t("status.disconnected", { name: providerID }) })
                         dialog.clear()
                       }
                     },
@@ -1114,6 +1132,8 @@ interface AutoMethodProps {
   authorization: ProviderAuthAuthorization
 }
 function AutoMethod(props: AutoMethodProps) {
+  const uiText = useLanguage().t
+
   const { theme } = useTheme()
   const sdk = useSDK()
   const dialog = useDialog()
@@ -1124,7 +1144,7 @@ function AutoMethod(props: AutoMethodProps) {
     if (evt.name === "c" && !evt.ctrl && !evt.meta) {
       const code = props.authorization.instructions.match(/[A-Z0-9]{4}-[A-Z0-9]{4,5}/)?.[0] ?? props.authorization.url
       Clipboard.copy(code)
-        .then(() => toast.show({ message: "Copied to clipboard", variant: "info", duration: 1500 }))
+        .then(() => toast.show({ message: uiText("ui.copiedToClipboard"), variant: "info", duration: 1500 }))
         .catch(toast.error)
     }
   })
@@ -1181,9 +1201,9 @@ function AutoMethod(props: AutoMethodProps) {
         <Link href={props.authorization.url} fg={theme.primary} />
         <text fg={theme.textMuted}>{props.authorization.instructions}</text>
       </box>
-      <text fg={theme.textMuted}>Waiting for authorization...</text>
+      <text fg={theme.textMuted}>{uiText("ui.waitingForAuthorization")}</text>
       <text fg={theme.text}>
-        c <span style={{ fg: theme.textMuted }}>copy</span>
+        c <span style={{ fg: theme.textMuted }}>{uiText("ui.copy2")}</span>
       </text>
     </box>
   )
@@ -1250,6 +1270,8 @@ interface ApiMethodProps {
   title: string
 }
 function ApiMethod(props: ApiMethodProps) {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const sdk = useSDK()
   const sync = useSync()
@@ -1258,7 +1280,7 @@ function ApiMethod(props: ApiMethodProps) {
   return (
     <DialogPrompt
       title={props.title}
-      placeholder="API key"
+      placeholder={uiText("ui.apiKey")}
       description={undefined}
       autoClose={false}
       onConfirm={async (value) => {
@@ -1268,7 +1290,7 @@ function ApiMethod(props: ApiMethodProps) {
         // (autoClose is false) and surfaces via toast instead of falsely
         // advancing to the model picker. See #257.
         if (!value) {
-          toast.show({ message: "API key is required", variant: "error" })
+          toast.show({ message: uiText("ui.apiKeyIsRequired"), variant: "error" })
           return
         }
         const stored = await sdk.client.auth.set({

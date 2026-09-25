@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { directoryRequestHeaders } from "@tui/util/request-headers"
 import { urlAllowlistServerRoute } from "@tui/util/server-url"
@@ -110,6 +111,8 @@ export function DialogAxEngineDownload(props: {
   toast: ReturnType<typeof useToast>
   onApplySelection: () => void
 }) {
+  const uiText = useLanguage().t
+
   const downloads = useAxEngineDownloads()
   return (
     <DialogSelect<string>
@@ -146,7 +149,7 @@ export function DialogAxEngineDownload(props: {
         },
         {
           value: "self",
-          title: "I'll download it myself",
+          title: uiText("ui.iLlDownloadItMyself"),
           description: `ax-engine download ${props.offer.hfRepo}`,
           onSelect: (dialog) => {
             dialog.clear()

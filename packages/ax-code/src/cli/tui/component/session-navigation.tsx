@@ -1,25 +1,21 @@
-import type { RGBA } from "ax-tui"
-import { createMemo, For, Show, type Setter } from "solid-js"
+import { useLanguage } from "@tui/context/language"
+import type { BoxRenderable, ScrollBoxRenderable } from "ax-tui"
+import { createEffect, createMemo, createSignal, For, onCleanup, Show, type Setter } from "solid-js"
 import { useKV } from "@tui/context/kv"
-import { NAVIGATION_WIDTH_DEFAULT, chromeWidth } from "../chrome-width"
-import { navigationPanelInnerWidth, navigationRailInnerWidth } from "../navigation/navigation-layout"
+import { navigationRailInnerWidth } from "../navigation/navigation-layout"
 import {
   activeNavigationSessions,
-  confirmNavigationClear,
-  NAVIGATION_CLEAR_MESSAGE,
-  NAVIGATION_CLEAR_TITLE,
+  navigationExpandedAncestors,
   navigationFilter,
   projectLabel,
   visibleAfterNavigationClear,
 } from "../navigation/navigation-model"
-import { useDialog } from "@tui/ui/dialog"
-import { DialogConfirm } from "@tui/ui/dialog-confirm"
 import { useSync } from "@tui/context/sync"
 import { useSDK } from "@tui/context/sdk"
 import { useRoute } from "@tui/context/route"
 import { useTheme } from "@tui/context/theme"
 import { useLocal } from "@tui/context/local"
-import { ChromeAction } from "./chrome-action"
+import { scheduleTuiTimeout } from "../util/timer"
 import { useCommandDialog } from "./dialog-command"
 import { ScheduleStatus } from "./schedule-status"
 import { SplitBorder } from "./border"
@@ -27,26 +23,19 @@ import { sessionNavigationEntries } from "./session-list-data"
 import { createSessionActivityIndex, knownAttentionRequests } from "../util/session-activity"
 import { truncateToCellWidth } from "../routes/session/last-input-view-model"
 
-function RailRule(props: { width: number; color: RGBA }) {
-  return (
-    <text flexShrink={0} fg={props.color} selectable={false}>
-      {"─".repeat(Math.max(0, props.width))}
-    </text>
-  )
-}
-
 export function SessionNavigation(props: {
   width: number
   expanded: ReadonlySet<string>
   setExpanded: Setter<ReadonlySet<string>>
 }) {
+  const uiText = useLanguage().t
+
   const sync = useSync()
   const kv = useKV()
   const sdk = useSDK()
   const route = useRoute()
   const local = useLocal()
   const command = useCommandDialog()
-  const dialog = useDialog()
   const { theme } = useTheme()
   const expanded = () => props.expanded
   const setExpanded = (value: Parameters<Setter<ReadonlySet<string>>>[0]) => props.setExpanded(value)
@@ -79,10 +68,14 @@ export function SessionNavigation(props: {
       observed: observed(),
     }),
   )
-  const rows = createMemo(() => sessionNavigationEntries(visibleSessions(), local.session.pinned(), expanded()))
+  const effectiveExpanded = createMemo(() => navigationExpandedAncestors(visibleSessions(), current(), expanded()))
+  const rows = createMemo(() =>
+    sessionNavigationEntries(visibleSessions(), local.session.pinned(), effectiveExpanded()),
+  )
   const clearedHint = createMemo(() => scopedSessions().length > visibleSessions().length)
   const activity = createMemo(() =>
     createSessionActivityIndex({
+      t: uiText,
       sessions: sessions(),
       statuses: sync.data.session_status,
       permissions: sync.data.permission,
@@ -92,15 +85,36 @@ export function SessionNavigation(props: {
   const pendingCount = createMemo(() => knownAttentionRequests(sync.data.permission, sync.data.question).length)
   const slots = createMemo(() => new Map(local.session.slots().map((id, index) => [id, index + 1])))
   const innerWidth = () => navigationRailInnerWidth(props.width)
-  const panelWidth = () => navigationPanelInnerWidth(props.width)
-  const preferredWidth = () => chromeWidth(kv.get("navigation_width"), NAVIGATION_WIDTH_DEFAULT)
-
-  function clearNavigationList() {
-    void confirmNavigationClear({
-      ask: () => DialogConfirm.show(dialog, NAVIGATION_CLEAR_TITLE, NAVIGATION_CLEAR_MESSAGE),
-      apply: (at) => kv.set("navigation_cleared_at", at),
-    })
+  let scroll: ScrollBoxRenderable | undefined
+  const rowNodes = new Map<string, BoxRenderable>()
+  const rowIdentity = createMemo(() =>
+    rows()
+      .map((row) => row.session.id)
+      .join(":"),
+  )
+  let stopReveal = () => {}
+  function revealCurrent() {
+    stopReveal()
+    stopReveal = scheduleTuiTimeout(
+      () => {
+        const id = current()
+        const node = id ? rowNodes.get(id) : undefined
+        if (!node || !scroll || node.isDestroyed || scroll.isDestroyed) return
+        const top = node.y - scroll.viewport.y
+        const bottom = top + node.height
+        if (top < 0) scroll.scrollBy(top)
+        else if (bottom > scroll.viewport.height) scroll.scrollBy(bottom - scroll.viewport.height)
+      },
+      { name: "navigation-reveal-current", delayMs: 50, unref: true },
+    )
   }
+  onCleanup(() => stopReveal())
+  createEffect(() => {
+    current()
+    rowIdentity()
+    props.width
+    revealCurrent()
+  })
 
   return (
     <box
@@ -111,55 +125,62 @@ export function SessionNavigation(props: {
       paddingBottom={1}
       paddingLeft={1}
       paddingRight={0}
-      gap={1}
       backgroundColor={theme.backgroundPanel}
       border={["right"]}
       borderColor={theme.border}
       customBorderChars={SplitBorder.customBorderChars}
     >
-      <box flexShrink={0} backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
-        <text flexShrink={0} fg={theme.text} selectable={false}>
-          <b>Project</b>
+      <box flexShrink={0} marginBottom={1} onMouseUp={() => command.trigger("session.navigation.info")}>
+        <text fg={theme.text} selectable={false}>
+          <b>{truncateToCellWidth(projectLabel(directory()), innerWidth())}</b>
         </text>
-        <box flexShrink={0} onMouseUp={() => command.trigger("session.navigation.info")}>
-          <text fg={theme.text} selectable={false}>
-            <b>{truncateToCellWidth(projectLabel(directory()), panelWidth())}</b>
-          </text>
-        </box>
-        <box flexShrink={0} onMouseUp={() => command.trigger("session.new")}>
-          <text fg={theme.primary} selectable={false}>
-            + New session
-          </text>
-        </box>
-        <ScheduleStatus width={panelWidth()} />
       </box>
-      <box flexShrink={0} backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
-        <text flexShrink={0} fg={theme.text} selectable={false}>
-          <b>Across workspaces</b>
+      <box flexShrink={0} backgroundColor={theme.backgroundElement} onMouseUp={() => command.trigger("session.new")}>
+        <text fg={theme.primary} selectable={false}>
+          {truncateToCellWidth(uiText("ui.newSession"), innerWidth())}
         </text>
-        <box flexShrink={0} onMouseUp={() => command.trigger("session.attention")}>
-          <text fg={pendingCount() ? theme.warning : theme.textMuted} selectable={false}>
-            {truncateToCellWidth(`Known requests (${pendingCount()})`, panelWidth())}
+      </box>
+      <box flexShrink={0} marginBottom={1} onMouseUp={() => command.trigger("session.navigation.find")}>
+        <text fg={theme.textMuted} selectable={false}>
+          {truncateToCellWidth(uiText("navigation.find"), innerWidth())}
+        </text>
+      </box>
+      <Show when={pendingCount() > 0}>
+        <box flexShrink={0} marginBottom={1} onMouseUp={() => command.trigger("session.attention")}>
+          <box flexDirection="row" gap={1}>
+            <text fg={observed() ? theme.warning : theme.textMuted} selectable={false}>
+              {truncateToCellWidth(
+                uiText("navigation.attention"),
+                Math.max(0, innerWidth() - String(pendingCount()).length - 1),
+              )}
+            </text>
+            <text flexShrink={0} fg={observed() ? theme.warning : theme.textMuted} selectable={false}>
+              {pendingCount()}
+            </text>
+          </box>
+          <text fg={theme.textMuted} selectable={false}>
+            {truncateToCellWidth(uiText("ui.acrossWorkspaces"), innerWidth())}
           </text>
         </box>
-        <Show when={!sdk.sseConnected}>
-          <text flexShrink={0} fg={theme.textMuted} selectable={false}>
-            {truncateToCellWidth("Cached; disconnected", panelWidth())}
-          </text>
-        </Show>
-      </box>
-      <box flexShrink={0} flexDirection="row" gap={1}>
+      </Show>
+      <Show when={!sdk.sseConnected}>
+        <text flexShrink={0} fg={theme.textMuted} selectable={false}>
+          {truncateToCellWidth(uiText("ui.cachedDisconnected"), innerWidth())}
+        </text>
+      </Show>
+      <box flexShrink={0} flexDirection="row" gap={1} marginBottom={1}>
         <For each={["recent", "active"] as const}>
           {(value) => (
             <box
               flexShrink={0}
-              paddingLeft={1}
               paddingRight={1}
               backgroundColor={filter() === value ? theme.backgroundElement : undefined}
               onMouseUp={() => kv.set("navigation_filter", value)}
             >
               <text fg={filter() === value ? theme.primary : theme.textMuted} selectable={false}>
-                <span style={{ bold: filter() === value }}>{value === "recent" ? "Recent" : "Active"}</span>
+                <span style={{ bold: filter() === value }}>
+                  {value === "recent" ? uiText("common.recent") : uiText("ui.active")}
+                </span>
               </text>
             </box>
           )}
@@ -167,49 +188,60 @@ export function SessionNavigation(props: {
       </box>
       <Show when={filter() === "active"}>
         <text flexShrink={0} fg={theme.textMuted} selectable={false} wrapMode="word">
-          {observed() ? "Includes current session" : "Cached sessions; reconnect to filter"}
+          {observed() ? uiText("ui.includesCurrentSession") : uiText("ui.cachedSessionsReconnectToFilter")}
         </text>
       </Show>
       <scrollbox
+        onSizeChange={revealCurrent}
+        ref={(node) => {
+          scroll = node
+        }}
         flexGrow={1}
         minHeight={0}
         verticalScrollbarOptions={{
-          trackOptions: {
-            backgroundColor: theme.background,
-            foregroundColor: theme.borderActive,
-          },
+          trackOptions: { backgroundColor: theme.backgroundPanel, foregroundColor: theme.borderActive },
         }}
       >
         <Show when={rows().length === 0}>
           <text flexShrink={0} fg={theme.textMuted} selectable={false} wrapMode="word">
             {!sync.data.session_loaded
-              ? "Loading sessions"
+              ? uiText("ui.loadingSessions")
               : filter() === "active" && !clearedHint()
-                ? "No active sessions"
+                ? uiText("ui.noActiveSessions")
                 : clearedHint()
-                  ? "Cleared; /sessions to resume"
-                  : "No sessions here"}
+                  ? uiText("ui.clearedSessionsToResume")
+                  : uiText("ui.noSessionsHere")}
           </text>
         </Show>
         <For each={rows()}>
           {(row) => {
-            const state = createMemo(() =>
-              sdk.sseConnected && sync.data.session_loaded ? activity().get(row.session.id) : undefined,
-            )
+            const state = createMemo(() => (observed() ? activity().get(row.session.id) : undefined))
+            const [hover, setHover] = createSignal(false)
             const indent = () => Math.min(row.depth, 3)
             const slot = () => slots().get(row.session.id)
             const selected = () => current() === row.session.id
             const label = () => state()?.label ?? ""
-            const titleWidth = () => Math.max(0, innerWidth() - 3 - indent())
+            // Reserve the scrollbar, selection marker, disclosure, and pinned slot.
+            const titleWidth = () => Math.max(0, innerWidth() - 4 - indent() - (slot() ? 2 : 0))
             const openSession = () => route.navigate({ type: "session", sessionID: row.session.id })
+            onCleanup(() => rowNodes.delete(row.session.id))
             return (
               <box
+                ref={(node) => rowNodes.set(row.session.id, node)}
+                flexShrink={0}
                 flexDirection="row"
                 marginLeft={indent()}
-                backgroundColor={selected() ? theme.backgroundElement : undefined}
+                onMouseOver={() => setHover(true)}
+                onMouseOut={() => setHover(false)}
+                backgroundColor={selected() ? theme.backgroundElement : hover() ? theme.background : undefined}
               >
-                <box width={1} flexShrink={0} backgroundColor={selected() ? theme.primary : undefined} />
-                <box flexGrow={1} minWidth={0} flexDirection="column">
+                <box
+                  width={1}
+                  flexShrink={0}
+                  backgroundColor={selected() ? theme.primary : undefined}
+                  onMouseUp={openSession}
+                />
+                <box flexGrow={1} minWidth={0}>
                   <box flexDirection="row">
                     <box
                       width={2}
@@ -225,23 +257,28 @@ export function SessionNavigation(props: {
                         })
                       }}
                     >
-                      <text flexShrink={0} fg={selected() ? theme.text : theme.textMuted} selectable={false}>
-                        {row.hasChildren ? (expanded().has(row.session.id) ? "−" : "+") : " "}
+                      <text fg={theme.textMuted} selectable={false}>
+                        {row.hasChildren ? (effectiveExpanded().has(row.session.id) ? "−" : "+") : " "}
                       </text>
                     </box>
                     <box flexGrow={1} minWidth={0} onMouseUp={openSession}>
                       <text fg={selected() ? theme.primary : theme.text} selectable={false}>
-                        {truncateToCellWidth(`${slot() ? `${slot()} ` : ""}${row.session.title}`, titleWidth())}
+                        <span style={{ bold: selected() }}>{truncateToCellWidth(row.session.title, titleWidth())}</span>
                       </text>
                     </box>
+                    <Show when={slot()}>
+                      <text flexShrink={0} fg={theme.textMuted} selectable={false}>
+                        {slot()}{" "}
+                      </text>
+                    </Show>
                   </box>
                   <Show when={label()}>
                     <box flexDirection="row" gap={1} paddingLeft={2} onMouseUp={openSession}>
                       <text flexShrink={0} fg={state()?.attention ? theme.warning : theme.primary} selectable={false}>
-                        •
+                        {state()?.attention ? "!" : "•"}
                       </text>
                       <text fg={state()?.attention ? theme.warning : theme.textMuted} selectable={false}>
-                        {truncateToCellWidth(label(), Math.max(0, titleWidth() - 2))}
+                        {truncateToCellWidth(label(), Math.max(0, innerWidth() - 6 - indent()))}
                       </text>
                     </box>
                   </Show>
@@ -251,17 +288,19 @@ export function SessionNavigation(props: {
           }}
         </For>
       </scrollbox>
-      <box flexShrink={0} gap={1}>
-        <RailRule width={innerWidth()} color={theme.borderSubtle} />
-        <box flexShrink={0} flexDirection="row" gap={2}>
-          <ChromeAction onMouseUp={() => command.trigger("session.navigation.info")}>Details</ChromeAction>
-          <ChromeAction onMouseUp={clearNavigationList}>Clear</ChromeAction>
+      <Show when={clearedHint()}>
+        <box flexShrink={0} onMouseUp={() => kv.set("navigation_cleared_at", 0)}>
+          <text fg={theme.primary} selectable={false}>
+            {truncateToCellWidth(uiText("navigation.showHidden"), innerWidth())}
+          </text>
         </box>
-        <box flexShrink={0} flexDirection="row" gap={2} flexWrap="wrap">
-          <ChromeAction onMouseUp={() => command.trigger("session.navigation")}>/navigation</ChromeAction>
-          <ChromeAction
-            onMouseUp={() => command.trigger("session.navigation.width")}
-          >{`Width ${preferredWidth()}`}</ChromeAction>
+      </Show>
+      <box flexShrink={0} marginTop={1}>
+        <ScheduleStatus width={innerWidth()} compact />
+        <box onMouseUp={() => command.trigger("session.navigation.options")}>
+          <text fg={theme.textMuted} selectable={false}>
+            {truncateToCellWidth(uiText("navigation.options"), Math.max(0, innerWidth() - 2))} ›
+          </text>
         </box>
       </box>
     </box>

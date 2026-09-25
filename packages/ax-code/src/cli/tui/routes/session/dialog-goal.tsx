@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createMemo } from "solid-js"
 import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
 import type { DialogContext } from "@tui/ui/dialog"
@@ -10,6 +11,8 @@ function goalSummary(goal: SessionGoal.PublicInfo | null | undefined) {
 }
 
 export function DialogGoal(props: { goal?: SessionGoal.PublicInfo | null; setPrompt: (value: string) => void }) {
+  const uiText = useLanguage().t
+
   const options = createMemo((): DialogSelectOption<string>[] => {
     const goal = props.goal
     const items: DialogSelectOption<string>[] = [
@@ -34,7 +37,7 @@ export function DialogGoal(props: { goal?: SessionGoal.PublicInfo | null; setPro
 
     if (goal?.status === "active") {
       items.push({
-        title: "Pause current goal",
+        title: uiText("ui.pauseCurrentGoal"),
         value: "goal.pause",
         category: "Actions",
         onSelect: command(props.setPrompt, "/goal pause"),
@@ -48,7 +51,7 @@ export function DialogGoal(props: { goal?: SessionGoal.PublicInfo | null; setPro
     const budgetExhausted = goal?.tokenBudget !== undefined && (goal?.remainingTokens ?? 0) <= 0
     if ((goal?.status === "paused" || goal?.status === "blocked") && !budgetExhausted) {
       items.push({
-        title: "Resume current goal",
+        title: uiText("ui.resumeCurrentGoal"),
         value: "goal.resume",
         category: "Actions",
         onSelect: command(props.setPrompt, "/goal resume"),
@@ -57,7 +60,7 @@ export function DialogGoal(props: { goal?: SessionGoal.PublicInfo | null; setPro
 
     if (goal) {
       items.push({
-        title: "Clear current goal",
+        title: uiText("ui.clearCurrentGoal"),
         value: "goal.clear",
         category: "Actions",
         onSelect: command(props.setPrompt, "/goal clear"),
@@ -67,7 +70,7 @@ export function DialogGoal(props: { goal?: SessionGoal.PublicInfo | null; setPro
     return items
   })
 
-  return <DialogSelect title="Session Goal" options={options()} skipFilter />
+  return <DialogSelect title={uiText("ui.sessionGoal")} options={options()} skipFilter />
 }
 
 function command(setPrompt: (value: string) => void, value: string) {
