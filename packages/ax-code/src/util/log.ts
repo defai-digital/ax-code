@@ -472,6 +472,10 @@ export namespace Log {
     const fields = extra || {}
     const out: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(fields)) {
+      if (SECRET_KEY_NAME.test(key)) {
+        out[key] = "[redacted]"
+        continue
+      }
       // Errors are folded into a plain object here instead of being left to
       // pino's serializer: that path writes message and stack verbatim, so a
       // stack carrying a credential would reach the JSON log unredacted.
@@ -540,11 +544,9 @@ export namespace Log {
         .filter(([_, value]) => value !== undefined && value !== null)
         .map(([key, value]) => {
           const prefix = `${key}=`
+          if (SECRET_KEY_NAME.test(key)) return prefix + "[redacted]"
           if (value instanceof Error) return prefix + formatError(value)
           if (typeof value === "object") return prefix + stringifyLogObject(value)
-          // Key-aware, like the JSON path: a credential-named field loses its
-          // value even when the value itself carries no recognisable pattern.
-          if (SECRET_KEY_NAME.test(key)) return prefix + "[redacted]"
           return prefix + redactLogText(safeLogString(value))
         })
         .join(" ")

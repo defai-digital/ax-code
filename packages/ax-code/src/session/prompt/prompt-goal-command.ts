@@ -200,10 +200,6 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
     )
       throw new Error("Goal time budget must be a positive integer number of seconds")
     await cancelRunningSession(input.sessionID)
-    // Superseding a goal used to leave its plan artifacts behind (only `clear`
-    // removed them). Remove them for both branches: the row is being replaced, so
-    // its files are dead weight, and the bare path makes replacement common.
-    if (current) GoalPlan.remove(input.sessionID, current.time.created)
     // Assurance is opt-in (item 2, option A): a plain /goal starts immediately, so
     // the planner's startup cost is not paid by goals that do not need a frozen
     // contract, and SessionGoal.format reports the resulting state ("no assurance
@@ -217,6 +213,10 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
     const assure =
       parsed.assure === true ||
       (parsed.action === "replace" && (replacedState === "present" || replacedState === "invalid"))
+    // Decide whether the replacement inherits assurance before removing the
+    // previous goal's contract. Await cleanup so a delayed unlink cannot race
+    // the new goal's plan or the response to this command.
+    if (current) await GoalPlan.remove(input.sessionID, current.time.created)
     if (assure) {
       prepared = await GoalPlanOrchestration.activate({
         sessionID: input.sessionID,

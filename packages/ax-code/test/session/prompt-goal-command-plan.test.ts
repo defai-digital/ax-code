@@ -10,6 +10,7 @@ import { executeGoalCommand } from "../../src/session/prompt/prompt-goal-command
 import type { PromptInput } from "../../src/session/prompt/prompt-input"
 import { tmpdir } from "../fixture/fixture"
 import { access } from "node:fs/promises"
+import { unlinkSync } from "node:fs"
 
 const model = {
   providerID: "test",
@@ -519,6 +520,42 @@ describe("goal assurance is opt-in (item 2, option A)", () => {
           await expect(access(oldPlan)).rejects.toThrow()
         } finally {
           GoalPlanWriter.resetWrite()
+        }
+      },
+    })
+  })
+
+  test("replacement preserves assurance when old artifacts disappear during cleanup", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        GoalPlanWriter.setWrite(GoalPlanWriter.stubWrite())
+        const session = await Session.create({})
+        const run = (args: string) =>
+          executeGoalCommand(
+            { sessionID: session.id, command: "goal", arguments: args, agent: "build", model: "test/test-model" },
+            async () => ({ info: { role: "assistant" }, parts: [] }) as any,
+          )
+        try {
+          await run("--assure first")
+          const first = (await SessionGoal.get(session.id))!
+          expect(GoalPlan.lookupContract(session.id, first.time.created).state).toBe("present")
+          const remove = vi.spyOn(GoalPlan, "remove").mockImplementation(async (sessionID, created) => {
+            unlinkSync(GoalPlan.pathFor(sessionID, created))
+            unlinkSync(GoalPlan.digestPathFor(sessionID, created))
+          })
+          try {
+            await run("replace second")
+          } finally {
+            remove.mockRestore()
+          }
+          const second = (await SessionGoal.get(session.id))!
+          expect(second.objective).toBe("second")
+          expect(GoalPlan.lookupContract(session.id, second.time.created).state).toBe("present")
+        } finally {
+          GoalPlanWriter.resetWrite()
+          await Session.remove(session.id)
         }
       },
     })

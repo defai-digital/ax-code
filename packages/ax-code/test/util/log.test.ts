@@ -339,6 +339,26 @@ describe("log boundary redaction", () => {
     expect(output).toContain("[redacted]")
   })
 
+  test("a credential-named Error is redacted in text and JSON logs", async () => {
+    const lines = await textLines()
+    const opaqueValue = "opaque-credential-value"
+    Log.create({ service: "redact-error-field-text" }).warn("request failed", {
+      token: new Error(opaqueValue),
+    })
+    expect(lines.join("")).not.toContain(opaqueValue)
+    expect(lines.join("")).toContain("token=[redacted]")
+
+    await using tmp = await tmpdir()
+    await Log.init({ print: false, dir: tmp.path, name: "redact-error-field" })
+    Log.create({ service: "redact-error-field" }).warn("request failed", {
+      token: new Error(opaqueValue),
+    })
+
+    const json = await fs.readFile(path.join(tmp.path, "redact-error-field.json.log"), "utf8")
+    expect(json).not.toContain(opaqueValue)
+    expect(JSON.parse(json.trim()).token).toBe("[redacted]")
+  })
+
   test("names that merely contain a secret word are not redacted", async () => {
     const lines = await textLines()
     Log.create({ service: "redact-strict" }).info("counts", {
