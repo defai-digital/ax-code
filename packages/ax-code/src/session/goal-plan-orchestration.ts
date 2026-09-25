@@ -258,6 +258,23 @@ export namespace GoalPlanOrchestration {
     )
   }
 
+  /**
+   * Prompt for a goal created without `--assure` (item 2, option A): it starts
+   * immediately and carries no assurance contract, so the model is told what the
+   * completion gate will actually require instead of being pointed at a plan
+   * that does not exist.
+   */
+  export function objectivePrompt(input: { objective: string }) {
+    return (
+      `Goal set: ${input.objective}\n\n` +
+      `This goal has no assurance contract: no frozen acceptance criteria and no executed-check receipts. ` +
+      `Completion is judged by the working plan you keep — seed todos from the objective, keep them current, ` +
+      `and mark an item completed only when its work is done — plus verification after your last change ` +
+      `(run the project's checks with bash or verify_project).\n\n` +
+      `Work until the goal is complete, blocked, paused, cleared, or budget-limited.`
+    )
+  }
+
   export function resumePrompt(input: { objective: string; path: string }) {
     return (
       `Goal resumed: ${input.objective}\n\n` +

@@ -60,6 +60,25 @@ exists it must also supply evidence for every acceptance criterion.
 /loop 10m check CI status and act on failures
 ```
 
+## Goal assurance is opt-in
+
+`/goal <objective>` starts immediately: it attaches no frozen acceptance contract,
+so completion is judged by the working plan the agent keeps (pending todos) plus a
+passing verification after its last change. `/goal view` (and the goal dialog's
+"View goal details") says so explicitly — "No assurance contract" — so the state is
+never something you have to infer.
+
+`/goal --assure <objective>` runs the plan writer first, which freezes acceptance
+criteria, source references and executable checks; completion then also requires a
+current successful receipt for every required check (`verify_project` with its
+`goalCheck` id). Use it when the goal's "done" must be provable rather than
+described.
+
+`--assure` combines with the budget flags in either order
+(`/goal --assure --budget 500000 <objective>`). `/goal replace <objective>` keeps
+assurance when the goal being replaced has a valid contract, so replacing can
+never silently weaken a goal that was already assured.
+
 ## Goal budgets and ceilings
 
 An active goal lifts the per-run auto-continuation cap (`session.max_continuations`)

@@ -7,6 +7,12 @@ type GoalArgumentDecision =
       objective: string
       tokenBudget?: number
       timeBudgetSeconds?: number
+      /**
+       * Run the plan writer and require an assurance contract. Opt-in: without
+       * it a goal starts immediately and completes under the basic gate (item 2,
+       * option A).
+       */
+      assure?: true
     }
 
 // Wall-clock budget units for --time-budget: bare numbers are seconds, with
@@ -66,11 +72,23 @@ export function parseGoalArguments(raw: string): GoalArgumentDecision {
   let rest = text
   let tokenBudget: number | undefined
   let timeBudgetSeconds: number | undefined
+  let assure: boolean | undefined
   let lastFlag: string | undefined
   let lastValue: string | undefined
   for (;;) {
     // `--budgeting is hard` is a plain objective: the flag word must be
     // followed by whitespace, `=`, or the end of the input.
+    // Boolean flag, so it consumes no value: `/goal --assure <objective>`.
+    const bare = /^(--assure)(?=[\s=]|$)/i.exec(rest)
+    if (bare) {
+      const after = rest.slice(bare[0].length)
+      if (after.startsWith("=")) {
+        return { action: "error", message: `${bare[1]} takes no value (e.g. /goal --assure <objective>).` }
+      }
+      assure = true
+      rest = after.replace(/^\s+/, "")
+      continue
+    }
     const flag = /^(--token-budget|--time-budget|--budget)(?=[\s=]|$)/i.exec(rest)
     if (!flag) break
     const name = flag[1]!.toLowerCase()
@@ -118,6 +136,14 @@ export function parseGoalArguments(raw: string): GoalArgumentDecision {
     rest = rest.slice(consumed).replace(/^\s+/, "")
   }
 
+  if (assure === true && !rest) {
+    return {
+      action: "error",
+      message:
+        `--assure requires a goal objective (e.g. /goal --assure <objective>). ` +
+        `Assurance applies only to a new goal; run /goal with no arguments to view the current goal.`,
+    }
+  }
   if (tokenBudget !== undefined || timeBudgetSeconds !== undefined) {
     // --budget N without an objective is not a valid create. Error explicitly
     // instead of silently showing the goal view — the user's intent (set a
@@ -134,8 +160,9 @@ export function parseGoalArguments(raw: string): GoalArgumentDecision {
       action,
       ...(tokenBudget === undefined ? {} : { tokenBudget }),
       ...(timeBudgetSeconds === undefined ? {} : { timeBudgetSeconds }),
+      ...(assure === true ? { assure } : {}),
       objective: rest,
     }
   }
-  return { action, objective: rest }
+  return { action, ...(assure === true ? { assure } : {}), objective: rest }
 }

@@ -171,7 +171,7 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
   // failed) has no contract or receipts to lose and is atomically overwritten.
   // Surface rejections as a control message instead of a 500/failed task.
   const model = await commandModel({ model: input.model, sessionID: input.sessionID })
-  let prepared: Awaited<ReturnType<typeof GoalPlanOrchestration.activate>>
+  let prepared: { goal: SessionGoal.Info; path?: string }
   try {
     const current = await SessionGoal.get(input.sessionID)
     const contracted = current ? GoalPlan.hasValidContract(input.sessionID, current.time.created) : false
@@ -194,16 +194,35 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
     )
       throw new Error("Goal time budget must be a positive integer number of seconds")
     await cancelRunningSession(input.sessionID)
-    prepared = await GoalPlanOrchestration.activate({
-      sessionID: input.sessionID,
-      objective: parsed.objective,
-      tokenBudget: parsed.tokenBudget,
-      timeBudgetSeconds: parsed.timeBudgetSeconds,
-      replace: parsed.action === "replace" || current !== undefined,
-      model,
-      contextParts: input.parts,
-      variant: input.variant,
-    })
+    // Assurance is opt-in (item 2, option A): a plain /goal starts immediately, so
+    // the planner's startup cost is not paid by goals that do not need a frozen
+    // contract, and SessionGoal.format reports the resulting state ("no assurance
+    // contract") wherever the goal is shown. Replacing a goal that already has a
+    // valid contract keeps its assurance rather than silently weakening it.
+    const assure = parsed.assure === true || (parsed.action === "replace" && contracted)
+    if (assure) {
+      prepared = await GoalPlanOrchestration.activate({
+        sessionID: input.sessionID,
+        objective: parsed.objective,
+        tokenBudget: parsed.tokenBudget,
+        timeBudgetSeconds: parsed.timeBudgetSeconds,
+        replace: parsed.action === "replace" || current !== undefined,
+        model,
+        contextParts: input.parts,
+        variant: input.variant,
+      })
+    } else {
+      prepared = {
+        goal: await SessionGoal.create({
+          sessionID: input.sessionID,
+          objective: parsed.objective,
+          tokenBudget: parsed.tokenBudget,
+          timeBudgetSeconds: parsed.timeBudgetSeconds,
+          replace: parsed.action === "replace" || current !== undefined,
+          status: "active",
+        }),
+      }
+    }
   } catch (error) {
     return goalControlMessage(input, toErrorMessage(error, "Goal command failed."))
   }
@@ -217,10 +236,12 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
     parts: [
       {
         type: "text",
-        text: GoalPlanOrchestration.implementerPrompt({
-          objective: prepared.goal.objective,
-          path: prepared.path,
-        }),
+        text: prepared.path
+          ? GoalPlanOrchestration.implementerPrompt({
+              objective: prepared.goal.objective,
+              path: prepared.path,
+            })
+          : GoalPlanOrchestration.objectivePrompt({ objective: prepared.goal.objective }),
       },
       ...(input.parts ?? []),
     ],

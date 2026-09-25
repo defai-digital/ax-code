@@ -32,7 +32,7 @@ describe("executeGoalCommand plan writer", () => {
           {
             sessionID: session.id,
             command: "goal",
-            arguments: "add a health endpoint",
+            arguments: "--assure add a health endpoint",
             agent: "build",
             model: "test/test-model",
           },
@@ -79,7 +79,7 @@ describe("executeGoalCommand plan writer", () => {
           {
             sessionID: session.id,
             command: "goal",
-            arguments: "this must stay paused",
+            arguments: "--assure this must stay paused",
             agent: "build",
             model: "test/test-model",
           },
@@ -111,7 +111,7 @@ describe("executeGoalCommand plan writer", () => {
           {
             sessionID: session.id,
             command: "goal",
-            arguments: "first",
+            arguments: "--assure first",
             agent: "build",
             model: "test/test-model",
           },
@@ -198,7 +198,7 @@ describe("executeGoalCommand plan writer", () => {
           {
             sessionID: session.id,
             command: "goal",
-            arguments: "first attempt",
+            arguments: "--assure first attempt",
             agent: "build",
             model: "test/test-model",
           },
@@ -226,7 +226,10 @@ describe("executeGoalCommand plan writer", () => {
         const goal = await SessionGoal.get(session.id)
         expect(goal?.status).toBe("active")
         expect(goal?.objective).toBe("second attempt")
-        expect(GoalPlan.hasValidContract(session.id, goal!.time.created)).toBe(true)
+        // A bare create is unassured by default (item 2, option A): superseding the
+        // failed goal does not silently attach a contract. The `replace` case below
+        // covers the planning path, and SessionGoal.format reports this state.
+        expect(GoalPlan.hasValidContract(session.id, goal!.time.created)).toBe(false)
         await Session.remove(session.id)
       },
     })
@@ -243,7 +246,7 @@ describe("executeGoalCommand plan writer", () => {
           {
             sessionID: session.id,
             command: "goal",
-            arguments: "first",
+            arguments: "--assure first",
             agent: "build",
             model: "test/test-model",
           },
@@ -294,7 +297,7 @@ describe("executeGoalCommand plan writer", () => {
           {
             sessionID: session.id,
             command: "goal",
-            arguments: "first",
+            arguments: "--assure first",
             agent: "build",
             model: "test/test-model",
           },
@@ -328,6 +331,122 @@ describe("executeGoalCommand plan writer", () => {
         expect(text?.type === "text" && text.text.includes("/goal replace")).toBe(true)
         expect((await SessionGoal.get(session.id))?.objective).toBe("first")
         await Session.remove(session.id)
+      },
+    })
+  })
+})
+
+describe("goal assurance is opt-in (item 2, option A)", () => {
+  test("a plain /goal starts immediately, plans nothing, and is told it has no contract", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        let writerCalls = 0
+        GoalPlanWriter.setWrite(async (input) => {
+          writerCalls++
+          return GoalPlanWriter.stubWrite()(input)
+        })
+        try {
+          const session = await Session.create({})
+          const prompts: PromptInput[] = []
+          await executeGoalCommand(
+            {
+              sessionID: session.id,
+              command: "goal",
+              arguments: "keep main green",
+              agent: "build",
+              model: "test/test-model",
+            },
+            async (input) => {
+              prompts.push(input)
+              return {
+                info: {
+                  id: "msg_goal_objective" as any,
+                  sessionID: session.id,
+                  role: "assistant",
+                  time: { created: Date.now() },
+                  agent: "build",
+                  model,
+                },
+                parts: [],
+              } as any
+            },
+          )
+
+          expect(writerCalls).toBe(0)
+          const goal = await SessionGoal.get(session.id)
+          expect(goal?.status).toBe("active")
+          expect(goal?.objective).toBe("keep main green")
+          expect(GoalPlan.lookupContract(session.id, goal!.time.created)).toEqual({ state: "missing" })
+          const text =
+            prompts[0]?.parts
+              .filter((part) => part.type === "text")
+              .map((part) => (part as { text: string }).text)
+              .join("\n") ?? ""
+          expect(text).toContain("no assurance contract")
+          // ...and the goal says so wherever it is shown.
+          expect(SessionGoal.format(goal!)).toContain("No assurance contract")
+        } finally {
+          GoalPlanWriter.resetWrite()
+        }
+      },
+    })
+  })
+
+  test("--assure still plans and attaches a contract", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        let writerCalls = 0
+        GoalPlanWriter.setWrite(async (input) => {
+          writerCalls++
+          return GoalPlanWriter.stubWrite()(input)
+        })
+        try {
+          const session = await Session.create({})
+          await executeGoalCommand(
+            {
+              sessionID: session.id,
+              command: "goal",
+              arguments: "--assure ship the feature",
+              agent: "build",
+              model: "test/test-model",
+            },
+            async () => ({ info: { id: "msg_assure" as any, sessionID: session.id, role: "assistant", time: { created: Date.now() }, agent: "build", model }, parts: [] }) as any,
+          )
+
+          expect(writerCalls).toBe(1)
+          const goal = await SessionGoal.get(session.id)
+          expect(goal?.status).toBe("active")
+          expect(GoalPlan.lookupContract(session.id, goal!.time.created).state).toBe("present")
+          expect(SessionGoal.format(goal!)).not.toContain("No assurance contract")
+        } finally {
+          GoalPlanWriter.resetWrite()
+        }
+      },
+    })
+  })
+
+  test("--assure with no objective is an error, not a silent create", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const prompts: PromptInput[] = []
+        await executeGoalCommand(
+          { sessionID: session.id, command: "goal", arguments: "--assure", agent: "build", model: "test/test-model" },
+          async (input) => {
+            prompts.push(input)
+            return { info: { id: "msg_assure_err" as any, sessionID: session.id, role: "assistant", time: { created: Date.now() }, agent: "build", model }, parts: [] } as any
+          },
+        )
+        // The guidance is a control message, not a goal run: nothing was created
+        // and no implementer prompt was submitted.
+        expect(await SessionGoal.get(session.id)).toBeUndefined()
+        expect(prompts).toHaveLength(0)
       },
     })
   })
