@@ -42,7 +42,11 @@ import { isSupportedHost } from "@/provider/ax-engine/platform"
 import { normalizeModelID, normalizeQuantization } from "@/provider/ax-engine/model-cache"
 import { JsonBoolean, JsonNumber } from "@/util/schema"
 import { toErrorMessage } from "@/util/error-message"
-import { DEFAULT_SETUP_PROVIDER_IDS, isApiCloudCatalogProvider } from "@/provider/default-setup-providers"
+import {
+  DEFAULT_SETUP_PROVIDER_IDS,
+  dedupeApiCloudVendorVariants,
+  isApiCloudCatalogProvider,
+} from "@/provider/default-setup-providers"
 import { connectAlibabaPai } from "@/provider/alibaba-pai"
 import { connectPrivateGpu } from "@/provider/private-gpu/connect"
 import { isDedicatedPrivateGpuProviderID } from "@/provider/private-gpu/presets"
@@ -272,10 +276,17 @@ export const ProviderRoutes = lazy(() =>
 
         const connectedRaw = await Provider.list()
         const connected = mapValues(connectedRaw, redactProviderInfo)
+        // Collapse vendor-variant duplication (region/plan rows of one vendor)
+        // in the default-visible set. Connected variants stay listed: they are
+        // merged back below and are passed as the keep-set here. An explicitly
+        // enabled but unconnected variant passes the filter above and is then
+        // collapsed by the vendor rule — connecting it is the escape hatch.
+        const visibleIDs = new Set(dedupeApiCloudVendorVariants(filteredProviders, new Set(Object.keys(connected))))
         // fromModelsDevProvider may return undefined for malformed
         // entries. Drop those so the dialog never sees holes.
         const converted: Record<string, Provider.Info> = {}
         for (const [id, raw] of Object.entries(filteredProviders)) {
+          if (!visibleIDs.has(id)) continue
           const result = Provider.fromModelsDevProvider(raw)
           if (result) converted[id] = result
         }

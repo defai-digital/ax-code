@@ -19,6 +19,8 @@ import { AxEnginePaths } from "../../src/provider/ax-engine/paths"
 import { Log } from "../../src/util/log"
 import { Provider } from "../../src/provider/provider"
 import type { ModelsDev } from "../../src/provider/models"
+import { normalizeConnectVendorName } from "../../src/provider/default-setup-providers"
+import { providerConnectCategory } from "../../src/mode/provider-category"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
@@ -107,9 +109,9 @@ describe("provider routes", () => {
     expect(ids).toContain("huggingface")
     expect(ids).toContain("unorouter")
     expect(ids).toContain("zai")
-    expect(ids).toContain("zai-coding-plan")
+    expect(ids).not.toContain("zai-coding-plan")
     expect(ids).toContain("minimax-coding-plan")
-    expect(ids).toContain("minimax-cn-coding-plan")
+    expect(ids).not.toContain("minimax-cn-coding-plan")
     // Cloud API providers (DeepSeek official + Meta Muse Spark)
     expect(ids).toContain("deepseek")
     expect(ids).toContain("meta")
@@ -157,6 +159,33 @@ describe("provider routes", () => {
     // CLI adapters stay curated-only.
     expect(ids).not.toContain("qoder-cli")
     expect(ids).not.toContain("gemini-cli")
+  })
+
+  test("collapses vendor-variant rows in the default provider list", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const directory = encodeURIComponent(tmp.path)
+
+    const response = await Server.Default().request(`/provider?directory=${directory}`)
+    expect(response.status).toBe(200)
+
+    const body = (await response.json()) as { all: Array<{ id: string; name: string }> }
+    const apiRows = body.all.filter((provider) => providerConnectCategory(provider.id) === "api")
+    const byVendor = new Map<string, string[]>()
+    for (const provider of apiRows) {
+      const key = normalizeConnectVendorName(provider.name)
+      byVendor.set(key, [...(byVendor.get(key) ?? []), provider.id])
+    }
+    const duplicates = [...byVendor.entries()].filter(([, members]) => members.length > 1)
+    expect(duplicates).toEqual([])
+
+    const ids = body.all.map((provider) => provider.id)
+    expect(ids).toContain("siliconflow")
+    expect(ids).not.toContain("siliconflow-cn")
+    expect(ids).toContain("zhipuai")
+    expect(ids).not.toContain("zhipuai-coding-plan")
+    // Name-only distinct products stay separate rows.
+    expect(ids).toContain("perplexity")
+    expect(ids).toContain("perplexity-agent")
   })
 
   test("admits catalog API cloud providers through the default list path only with a qualifying record", () => {
