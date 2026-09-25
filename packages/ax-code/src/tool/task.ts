@@ -26,7 +26,7 @@ export const MAX_BACKGROUND_SUBAGENTS = 8
 export class BackgroundCapacityError extends Error {
   constructor() {
     super(
-      `Maximum concurrent background subagents (${MAX_BACKGROUND_SUBAGENTS}) reached. Wait for one to finish, stop one, or run this task in the foreground.`,
+      `Maximum concurrent background subagents (${MAX_BACKGROUND_SUBAGENTS}) reached. This limit counts background tasks only — the members of one task_parallel call do not use it, so a wide swarm can run alongside it. Wait for one to finish, stop one, or run this task in the foreground.`,
     )
     this.name = "BackgroundCapacityError"
   }

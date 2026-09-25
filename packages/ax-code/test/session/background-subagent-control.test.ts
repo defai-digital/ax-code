@@ -169,7 +169,11 @@ describe("background subagent control", () => {
               extra: {},
             } as any,
           ),
-        ).rejects.toThrow(/Maximum concurrent background subagents/)
+        ).rejects.toThrow(
+          // The message must say which limit this is: a parent can legitimately
+          // have a wide swarm alongside its background tasks.
+          /Maximum concurrent background subagents.*counts background tasks only/s,
+        )
       },
     })
   })
