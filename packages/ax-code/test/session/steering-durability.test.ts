@@ -4,6 +4,8 @@ import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
 import { SessionSteering } from "../../src/session/steering"
 import { TaskQueue } from "../../src/session/task-queue"
+import { MessageWrite } from "../../src/session/message-write"
+import { applySteeredMessage } from "../../src/session/prompt/prompt-steering-apply"
 import { tmpdir } from "../fixture/fixture"
 
 afterEach(async () => {
@@ -303,6 +305,100 @@ test("an apply the transaction aborts leaves no applied stamp", async () => {
       expect(row.payload["steeredAppliedAt"]).toBeUndefined()
       const recovered = await waitForRow(held.id, (candidate) => candidate.status !== "cancelled")
       expect(["queued", "waiting_for_idle", "running"]).toContain(recovered.status)
+    },
+  })
+})
+
+test("the steer applies through the real message write path and stamps in the same transaction", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const { session, generation, controller } = await draftSession()
+      // A real user turn supplies the execution settings a steer inherits.
+      const base = await Session.updateMessage({
+        id: "msg_steer_base" as never,
+        sessionID: session.id,
+        role: "user",
+        time: { created: Date.now() },
+        agent: "build",
+        model: { providerID: "test" as never, modelID: "test-model" as never },
+        tools: {},
+        mode: "build",
+      } as never)
+      if (base.role !== "user") throw new Error("expected a user message")
+
+      await SessionPrompt.steer(session.id, {
+        expectedGeneration: generation,
+        clientID: "draft_real_path",
+        text: "durable through the real write path",
+      })
+      const held = (await TaskQueue.list({ sessionID: session.id }))[0]!
+
+      const applied = await SessionSteering.drain(session.id, controller.signal, async (steering) => {
+        await applySteeredMessage({ sessionID: session.id, base, steering })
+      })
+      expect(applied).toBe(true)
+
+      // Both durably landed, and the message carries the steered text.
+      const messages = await Session.messages({ sessionID: session.id })
+      const appliedMessage = messages.find((message) =>
+        message.parts.some((part) => part.type === "text" && part.text === "durable through the real write path"),
+      )
+      expect(appliedMessage).toBeDefined()
+      const row = await TaskQueue.get(held.id)
+      expect(row.payload["steeredAppliedAt"]).toBeTypeOf("number")
+    },
+  })
+})
+
+test("a failed message write rolls the applied stamp back with it", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const { session, generation, controller } = await draftSession()
+      const base = await Session.updateMessage({
+        id: "msg_steer_base_fail" as never,
+        sessionID: session.id,
+        role: "user",
+        time: { created: Date.now() },
+        agent: "build",
+        model: { providerID: "test" as never, modelID: "test-model" as never },
+        tools: {},
+        mode: "build",
+      } as never)
+      if (base.role !== "user") throw new Error("expected a user message")
+
+      await SessionPrompt.steer(session.id, {
+        expectedGeneration: generation,
+        clientID: "draft_failed_write",
+        text: "must not be stamped",
+      })
+      const held = (await TaskQueue.list({ sessionID: session.id }))[0]!
+
+      const write = vi.spyOn(MessageWrite, "message").mockImplementation(() => {
+        throw new Error("disk full")
+      })
+      try {
+        await SessionSteering.drain(session.id, controller.signal, async (steering) => {
+          await applySteeredMessage({ sessionID: session.id, base, steering })
+        })
+      } finally {
+        write.mockRestore()
+      }
+
+      // The transaction aborted: no stamp, no message, and the text is still the
+      // awaiting steer that recovery owns.
+      const row = await TaskQueue.get(held.id)
+      expect(row.payload["steeredAppliedAt"]).toBeUndefined()
+      expect(row.payload["steeredInto"]).toBe(generation)
+      const messages = await Session.messages({ sessionID: session.id })
+      expect(
+        messages.some((message) =>
+          message.parts.some((part) => part.type === "text" && part.text === "must not be stamped"),
+        ),
+      ).toBe(false)
     },
   })
 })

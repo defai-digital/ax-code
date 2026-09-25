@@ -99,6 +99,7 @@ import {
 } from "./prompt/prompt-autonomous-decisions"
 import { canPreserveLocalSynthesisTools, guardLocalSynthesisTools } from "./prompt/local-synthesis"
 import { toErrorMessage } from "../util/error-message"
+import { applySteeredMessage } from "./prompt/prompt-steering-apply"
 import { insertReminders } from "./prompt/prompt-reminders"
 import { executeShellCommand } from "./prompt/prompt-shell-command"
 import { executePromptCommand } from "./prompt/prompt-command-execution"
@@ -741,23 +742,7 @@ export namespace SessionPrompt {
       let steeredTextApplied = false
       if (steeringBase) {
         steeredTextApplied = await SessionSteering.drain(sessionID, abort, async (steering) => {
-          await createUserMessage(
-            {
-              sessionID,
-              messageID: steering.messageID,
-              agentRouting: "preserve",
-              agent: steeringBase.agent,
-              model: steeringBase.model,
-              variant: steeringBase.variant,
-              tools: steeringBase.tools,
-              isolation: steeringBase.isolation,
-              system: steeringBase.system,
-              format: steeringBase.format,
-              requestedDepth: steeringBase.requestedDepth,
-              parts: [{ type: "text", text: steering.text }],
-            },
-            steering,
-          )
+          await applySteeredMessage({ sessionID, base: steeringBase, steering })
         })
         if (steeredTextApplied) {
           ;({ msgs, cached: cachedMsgs } = await loopMessages({ sessionID, cached: undefined }))
