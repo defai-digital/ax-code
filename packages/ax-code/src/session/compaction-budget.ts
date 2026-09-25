@@ -99,16 +99,13 @@ export function calculateCompactionBudget(
  * Completion clamp against the TOTAL window (ADR-139 D4): cache reads occupy
  * the window, so the output budget is `context - used - reserve`, where
  * `reserve` is the same compaction reserve (one reserve pool, no
- * double-reserving). Static per-provider ceilings stay the outer bound.
- * Returns undefined when the remaining window is at or below the output
- * floor: the correct action then is compaction (existing preflight path),
- * not a tiny max_tokens.
+ * double-reserving). Static per-provider ceilings stay the outer bound —
+ * callers pass them as `staticCeiling`. Returns undefined when the remaining
+ * window is at or below the output floor: the correct action then is
+ * compaction (existing preflight path), not a tiny max_tokens.
  *
- * The floor gates the WINDOW side only. A static per-provider output ceiling
- * at or below the floor is the model's normal shape — fixture and small
- * local models declare output caps of 1024 or less — and the request still
- * fits the window; compaction can never raise a static output cap, so the
- * clamp honors the ceiling instead of forcing a compact → overflow spiral.
+ * The floor applies to remaining context, not a provider's static output cap.
+ * A smaller configured/provider cap is valid: compaction cannot increase it.
  */
 export function completionClamp(input: {
   context: number
@@ -120,7 +117,9 @@ export function completionClamp(input: {
   if (!Number.isFinite(context) || context <= 0) return undefined
   const remaining = context - Math.max(0, input.used) - Math.max(0, input.reserve)
   if (!Number.isFinite(remaining) || remaining <= OUTPUT_FLOOR) return undefined
-  return Math.max(0, Math.min(Math.floor(input.staticCeiling), Math.floor(remaining)))
+  const ceiling = Math.floor(input.staticCeiling)
+  if (!Number.isFinite(ceiling) || ceiling <= 0) return undefined
+  return Math.min(ceiling, Math.floor(remaining))
 }
 
 /**

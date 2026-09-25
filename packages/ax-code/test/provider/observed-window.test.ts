@@ -64,6 +64,43 @@ describe("extractStatedLimit", () => {
 })
 
 describe("ObservedWindowStore boundary model", () => {
+  test.each(["expiry", "catalog"] as const)(
+    "invalidated stated evidence permits recalibration after %s",
+    async (reason) => {
+      let now = 1_000_000
+      const s = store({ now: () => now })
+      await s.recordSuccess(ROUTE, 80_000, { catalogLimit: CATALOG })
+      await s.recordOverflow(ROUTE, 100_000, { statedLimit: 90_000, catalogLimit: CATALOG })
+      if (reason === "expiry") now += ObservedWindow.WINDOW_TTL_MS + 1
+      const catalogLimit = reason === "catalog" ? 65_536 : CATALOG
+      await s.recordOverflow(ROUTE, 20_000, { catalogLimit })
+      expect(await s.effectiveWindow(ROUTE, catalogLimit)).toBe(20_000)
+    },
+  )
+
+  test("success after expiry cannot revive stale calibration", async () => {
+    let now = 1_000_000
+    const s = store({ now: () => now })
+    await s.recordOverflow(ROUTE, 40_000, { statedLimit: 32_768, catalogLimit: CATALOG })
+    now += ObservedWindow.WINDOW_TTL_MS + 1
+    await s.recordSuccess(ROUTE, 40_000, { catalogLimit: CATALOG })
+    expect((await s.resolveWindow(ROUTE, CATALOG)).kind).toBe("catalog")
+    await s.recordOverflow(ROUTE, 30_000, { catalogLimit: CATALOG })
+    expect(await s.effectiveWindow(ROUTE, CATALOG)).toBe(40_000)
+  })
+
+  test.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+    "ignores unusable overflow size %s without disabling compaction",
+    async (tokens) => {
+      const s = store()
+      await s.recordOverflow(ROUTE, tokens, { catalogLimit: CATALOG })
+      expect(await s.resolveWindow(ROUTE, CATALOG)).toEqual({ kind: "catalog" })
+      expect(s.snapshot()).toEqual({ records: {}, unknown: [] })
+      await s.recordOverflow(ROUTE, tokens, { statedLimit: 32_768, catalogLimit: CATALOG })
+      expect(await s.effectiveWindow(ROUTE, CATALOG)).toBe(32_768)
+    },
+  )
+
   test("stated limit wins with one confirmation and persists immediately", async () => {
     await using tmp = await tmpdir()
     const filePath = path.join(tmp.path, ".ax-code", "observed-windows.json")

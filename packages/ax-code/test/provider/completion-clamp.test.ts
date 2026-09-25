@@ -53,38 +53,17 @@ describe("completionClamp", () => {
     ).toBeUndefined()
   })
 
-  test("a staticCeiling below OUTPUT_FLOOR is honored when the window has room", () => {
-    // Small declared output caps are the model's normal shape: fixture and
-    // small local models declare output limits of 1024 or less. The request
-    // still fits the window and compaction can never raise a static output
-    // cap, so the clamp returns the ceiling instead of forcing a
-    // compact -> overflow spiral.
-    expect(
-      completionClamp({
-        context: CONTEXT,
-        used: 10_000,
-        reserve: 20_000,
-        staticCeiling: OUTPUT_FLOOR - 1,
-      }),
-    ).toBe(OUTPUT_FLOOR - 1)
-    expect(
-      completionClamp({
-        context: CONTEXT,
-        used: 10_000,
-        reserve: 20_000,
-        staticCeiling: OUTPUT_FLOOR,
-      }),
-    ).toBe(OUTPUT_FLOOR)
-    // The window-side floor still prefers compaction when the remaining
-    // window is the binding constraint, whatever the ceiling says.
-    expect(
-      completionClamp({
-        context: CONTEXT,
-        used: CONTEXT - OUTPUT_FLOOR - 20_000,
-        reserve: 20_000,
-        staticCeiling: OUTPUT_FLOOR - 1,
-      }),
-    ).toBeUndefined()
+  test.each([1, 1000, OUTPUT_FLOOR - 1, OUTPUT_FLOOR, OUTPUT_FLOOR + 1])(
+    "honors a static output ceiling of %s when context has room",
+    (staticCeiling) => {
+      // Compaction cannot increase a provider's output cap. Small configured
+      // caps must still reach the provider when the context window has room.
+      expect(completionClamp({ context: CONTEXT, used: 10_000, reserve: 20_000, staticCeiling })).toBe(staticCeiling)
+    },
+  )
+
+  test.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])("rejects invalid static ceiling %s", (staticCeiling) => {
+    expect(completionClamp({ context: CONTEXT, used: 0, reserve: 0, staticCeiling })).toBeUndefined()
   })
 
   test("returns undefined when the model declares no context window", () => {

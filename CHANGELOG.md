@@ -6,7 +6,41 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.20.5] - 2026-09-24
+
+### Fixed
+
+- Discard expired or catalog-invalidated context-window evidence before updating calibration, including its obsolete success floor.
+- Ignore missing, negative, or non-finite overflow token measurements instead of disabling automatic compaction or recording invalid window bounds.
+- Keep completion clamps within the effective observed window, preserve the compaction sentinel below the output floor, and align token anchors with rendered request messages.
+- Allow valid small model output limits without entering an unavoidable compaction loop, and reject invalid non-finite output ceilings.
+- Prevent token-ledger drift feedback and stale calibration refresh from inflating or pinning token budgets.
+
 ### Changed
+
+- Allow users to supersede a session goal explicitly with `/goal replace`, including recovery from failed goal-plan creation.
+- Show the full API-cloud provider catalog in `/connect`, ordered with suggested providers first.
+- Publish SDK 2.5.47 alongside AX Code 7.20.5.
+
+## [7.20.4] - 2026-09-24
+
+### Fixed
+
+- Keep measured token anchors isolated to the active provider/model route after switching models.
+- Clear observed-window success floors when resetting calibration, and persist boundary estimates only after two overflow confirmations.
+- Harden queued follow-ups, scheduled tasks, restart recovery, and upstream stream-error retry classification.
+- Record cancelled compaction as aborted and resolve retired DeepSeek Flash IDs for small-model calls.
+
+### Added
+
+- Add a headless goal CLI with resume support and wall-clock time budgets.
+- Track provider-reported input tokens alongside estimates, calibrate observed context windows, and clamp completion budgets against remaining capacity.
+- Add an idle countdown for interactive one-time permission approval.
+
+### Changed
+
+- Publish SDK 2.5.46 alongside AX Code 7.20.4.
+- Bundle signed AX Engine 7.5.7 on Apple Silicon Macs and require verified 7.5.7 or newer runtimes, rejecting prereleases below that floor.
 
 - Refresh the Fuji Mountain TUI animation with a sunset day scene, reflective water, deterministic falling petals, and a new left-facing shinkansen. Timing, layout, and text/pixel fallback contracts are unchanged.
 - Render Fuji Mountain HD frames with freeform painting driven by the shared scene model instead of glyph rasterization. Bench and Mahjong keep the stroke-glyph path.
