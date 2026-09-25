@@ -89,7 +89,8 @@ Upstream: [TypeScript 7 announcement](https://devblogs.microsoft.com/typescript/
 
 The native 7.0.2 server can return an earlier diagnostic snapshot when file-watch
 traffic overlaps saved edits. AX Code closes and reopens changed documents for
-that exact server version before requesting diagnostics. This sends the full
-changed document; unchanged documents still reuse overlapping requests. Other
+that exact server version before requesting diagnostics. One bounded document
+query flushes the deferred close before reopening; other queries wait for this
+replacement. This sends the full changed document; unchanged documents still reuse overlapping requests. Other
 server versions keep their negotiated synchronization mode. An interrupted
 replacement remains incomplete until the language server restarts.

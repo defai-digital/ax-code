@@ -4,11 +4,13 @@
 // allowed it; Node does not). The previous `require("net")` was unused.
 
 let nextId = 1
+const receivedMethods = []
 let initializeParams
 let diagnosticReport = null
 let holdDiagnostics = false
 let diagnosticRequests = 0
 let diagnosticRefreshTimer
+let heldDocumentSymbol
 const heldDiagnostics = []
 const initializeCapabilities = (() => {
   const raw = process.env.FAKE_LSP_CAPABILITIES_JSON
@@ -118,6 +120,14 @@ function handle(raw) {
   } catch {
     return
   }
+  if (typeof data.method === "string") {
+    receivedMethods.push(data.method)
+    if (receivedMethods.length > 256) receivedMethods.shift()
+  }
+  if (data.method === "test/receivedMethods") {
+    send({ jsonrpc: "2.0", id: data.id, result: receivedMethods })
+    return
+  }
   if (data.method === "initialize") {
     initializeParams = data.params
     const respond = () => {
@@ -159,6 +169,17 @@ function handle(raw) {
       for (const id of heldDiagnostics.splice(0)) send({ jsonrpc: "2.0", id, result: diagnosticReport })
     }
     send({ jsonrpc: "2.0", id: data.id, result: { requests: diagnosticRequests } })
+    return
+  }
+  if (data.method === "textDocument/documentSymbol" && process.env.FAKE_LSP_HOLD_DOCUMENT_SYMBOL === "1") {
+    heldDocumentSymbol = data.id
+    send({ jsonrpc: "2.0", method: "test/barrierStarted" })
+    return
+  }
+  if (data.method === "$/cancelRequest" && data.params.id === heldDocumentSymbol) {
+    send({ jsonrpc: "2.0", id: heldDocumentSymbol, result: [] })
+    send({ jsonrpc: "2.0", method: "test/barrierReleased" })
+    heldDocumentSymbol = undefined
     return
   }
   if (data.method === "textDocument/diagnostic") {

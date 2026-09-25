@@ -395,15 +395,8 @@ test.each([
     await client.notify.open({ path: source, waitForDiagnostics: true })
     const originalNotify = client.connection.sendNotification.bind(client.connection)
     const notify = vi.spyOn(client.connection, "sendNotification")
-    const timeline: string[] = []
     let interleaved: Promise<unknown> | undefined
-    const originalRequest = client.connection.sendRequest.bind(client.connection)
-    vi.spyOn(client.connection, "sendRequest").mockImplementation(((method: any, ...args: any[]) => {
-      timeline.push(method)
-      return originalRequest(method, ...args)
-    }) as typeof client.connection.sendRequest)
     notify.mockImplementation(((method: any, ...args: any[]) => {
-      timeline.push(method)
       if (method === "textDocument/didClose")
         queueMicrotask(() => {
           interleaved = client.connection.sendRequest("test/initializeParams")
@@ -420,7 +413,13 @@ test.each([
     )
     if (serverInfo.reopen) {
       await interleaved
-      expect(timeline[timeline.indexOf("textDocument/didClose") + 1]).toBe("textDocument/didOpen")
+      const received = await client.connection.sendRequest<string[]>("test/receivedMethods")
+      const closeIndex = received.lastIndexOf("textDocument/didClose")
+      expect(received.slice(closeIndex, closeIndex + 3)).toEqual([
+        "textDocument/didClose",
+        "textDocument/documentSymbol",
+        "textDocument/didOpen",
+      ])
       expect(sync[1]?.[1]).toMatchObject({ textDocument: { version: 1, text: "export const answer = 43\n" } })
       // Failure between close and open must not permit a false clean result.
       notify.mockImplementation((async (method: any, ...params: any[]) => {
@@ -443,3 +442,52 @@ test.each([
     await client.shutdown()
   }
 })
+
+test("a timed-out native replacement never reopens from a late barrier response", async () => {
+  await using tmp = await tmpdir()
+  const source = path.join(tmp.path, "source.ts")
+  await fs.writeFile(source, "export const answer = 42\n")
+  const child = spawn(process.execPath, [fileURLToPath(new URL("./fixture/fake-lsp-server.js", import.meta.url))], {
+    env: {
+      ...process.env,
+      FAKE_LSP_HOLD_DOCUMENT_SYMBOL: "1",
+      FAKE_LSP_SERVER_INFO: JSON.stringify({ name: "typescript-go", version: "7.0.2" }),
+      FAKE_LSP_CAPABILITIES_JSON: JSON.stringify({
+        diagnosticProvider: { interFileDependencies: true },
+        textDocumentSync: { openClose: true, change: 2, save: true },
+      }),
+    },
+  })
+  const client = await LSPClient.create({ serverID: "typescript", root: tmp.path, server: { process: child } })
+  try {
+    await client.connection.sendRequest("test/diagnostics", { report: { kind: "full", items: [] } })
+    await client.notify.open({ path: source, waitForDiagnostics: true })
+    const notify = vi.spyOn(client.connection, "sendNotification")
+    let began!: () => void
+    let late!: () => void
+    const started = new Promise<void>((resolve) => {
+      began = resolve
+    })
+    const released = new Promise<void>((resolve) => {
+      late = resolve
+    })
+    client.connection.onNotification("test/barrierStarted", began)
+    client.connection.onNotification("test/barrierReleased", late)
+    await fs.writeFile(source, "export const answer = 43\n")
+    const replacing = expect(client.notify.open({ path: source })).rejects.toThrow(/timed out|timeout/i)
+    await withTimeout(started, 3000)
+    const querying = expect(client.connection.sendRequest("test/initializeParams")).rejects.toThrow(
+      /incomplete|timed out/,
+    )
+    await replacing
+    await querying
+    await withTimeout(released, 3000)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(notify.mock.calls.some(([method]) => method === "textDocument/didOpen")).toBe(false)
+    expect(client.diagnosticsDegraded).toBe(true)
+    await expect(collect([client])).rejects.toThrow("incomplete")
+  } finally {
+    vi.restoreAllMocks()
+    await client.shutdown()
+  }
+}, 25_000)
