@@ -426,7 +426,12 @@ async function runOneTask(input: {
     }
   } catch (e) {
     await SessionPrompt.cancel(session.id).catch(() => undefined)
-    if (ctx.abort.aborted || isAbortError(e)) {
+    // Only the caller's own abort is the whole call's business: it tears the tree
+    // down and leaves nothing to report. A member cancelled together with its
+    // siblings — the swarm deadline, a sibling failing before its session existed
+    // — rejects with an AbortError too, and that is this member's outcome, not a
+    // reason to discard the members that already finished.
+    if (ctx.abort.aborted) {
       await Session.remove(session.id).catch(() => undefined)
       throw e
     }
@@ -563,10 +568,6 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
       const concurrency = Math.min(params.concurrency ?? DEFAULT_CONCURRENCY, resolved.length)
       const deadlineAt = Date.now() + SWARM_DEADLINE_MS
       const outcomes: Array<Awaited<ReturnType<typeof runOneTask>> | undefined> = []
-      // Members the deadline stopped before they were dispatched: reported as
-      // their own outcome so the caller sees every member, not just the settled
-      // ones, and so the numbering stays the caller's member order.
-      const deadlineSkipped = new Set<number>()
       let deadlineHit = false
       let failure: { index: number; reason: unknown } | undefined
       let cursor = 0
@@ -576,11 +577,13 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
           const entry = resolved[index]
           if (!entry) return
           if (Date.now() >= deadlineAt) {
-            // Stop starting members, cancel the ones in flight so they cannot
-            // outlive the call, and let the aggregation report partial results.
+            // Stop starting members and cancel the ones in flight so they cannot
+            // outlive the call; the aggregation below still reports every member.
+            // The await earns its keep: `cancelStarted` also marks the siblings as
+            // cancelled, so a member whose session is created after this instant is
+            // cancelled too instead of running on past the deadline it never saw.
             deadlineHit = true
-            deadlineSkipped.add(index)
-            for (const child of started) void cancelChild(child.sessionID)
+            await cancelStarted()
             return
           }
           const { task, agent } = entry
@@ -612,7 +615,6 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
       }
       // Whatever stopped the pool, let the members still in flight settle before
       // reporting: an unawaited promise would keep running past the response.
-      if (deadlineHit) await cancelStarted()
       await Promise.all(Array.from({ length: Math.max(1, concurrency) }, () => runPool()))
       const settled = outcomes.filter((outcome): outcome is NonNullable<typeof outcome> => outcome !== undefined)
       const stopped = new Set(settled.map((outcome) => outcome.task_id))

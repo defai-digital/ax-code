@@ -767,6 +767,163 @@ describe("task_parallel swarm scale (item: swarm)", () => {
     })
   })
 
+  test("a member whose session appears after the deadline is still cancelled", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { ctx } = await parent(tmp.path)
+        const originalCreate = Session.create
+        const real = Date.now
+        let offset = 0
+        const clock = vi.spyOn(Date, "now").mockImplementation(() => real() + offset)
+        let releaseHeld!: () => void
+        const held = new Promise<void>((resolve) => {
+          releaseHeld = resolve
+        })
+        let holding = false
+        vi.spyOn(Session, "create").mockImplementation((async (input: any) => {
+          // Hold the second member inside session creation, so its session only
+          // appears after another worker has already declared the deadline.
+          if (!holding && input?.title?.includes("two")) {
+            holding = true
+            await held
+          }
+          return originalCreate(input)
+        }) as any)
+        const cancelled = new Set<string>()
+        // A member is "live" when its prompt began before anyone cancelled it.
+        const livePrompt = new Set<string>()
+        const waiters = new Map<string, () => void>()
+        vi.spyOn(SessionPrompt, "cancel").mockImplementation((async (sessionID: any) => {
+          cancelled.add(sessionID)
+          // The deadline's cancellation is what lets the held create finish.
+          releaseHeld()
+          waiters.get(sessionID)?.()
+        }) as any)
+        vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
+          const text = input.parts?.[0]?.text ?? ""
+          if (cancelled.has(input.sessionID)) throw new Error("aborted")
+          livePrompt.add(input.sessionID)
+          if (text.includes("one")) {
+            // The first member finishes and pushes the clock past the deadline.
+            offset += 31 * 60 * 1000
+            return {
+              info: {
+                id: input.messageID,
+                sessionID: input.sessionID,
+                role: "assistant",
+                time: { created: real(), completed: real() },
+              },
+              parts: [{ type: "text", text: "first member finished" }],
+            } as any
+          }
+          if (cancelled.has(input.sessionID)) throw new Error("aborted")
+          // A member nobody cancels would hang here for good; the fallback keeps a
+          // regression failing on the assertion instead of on the test clock.
+          await Promise.race([
+            new Promise<void>((resolve) => waiters.set(input.sessionID, resolve)),
+            new Promise<void>((resolve) => setTimeout(resolve, 2_000)),
+          ])
+          throw new Error("aborted")
+        }) as any)
+        try {
+          const result = await (
+            await TaskParallelTool.init()
+          ).execute(
+            {
+              items: ["one", "two", "three"],
+              prompt_template: "check {{item}}",
+              subagent_type: "explore",
+              concurrency: 2,
+            } as any,
+            ctx,
+          )
+          const metadata = result.metadata as any
+          expect(metadata.deadlineReached).toBe(true)
+          expect(metadata.results[0].ok).toBe(true)
+          // The member that was still starting up when the deadline landed must be
+          // cancelled before it does any work, not left running past the deadline
+          // until it fails on its own. Cancellation state alone would not prove
+          // that: a member that fails also gets its session cancelled afterwards,
+          // in `runOneTask`'s own catch.
+          const late = metadata.results[1].task_id
+          expect(late).toBeTruthy()
+          expect(livePrompt.has(late)).toBe(false)
+          expect(metadata.results[2].error).toContain("deadline")
+        } finally {
+          clock.mockRestore()
+          vi.restoreAllMocks()
+        }
+      },
+    })
+  })
+
+  test("a member cancelled mid-turn is reported instead of failing the call", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { ctx } = await parent(tmp.path)
+        const real = Date.now
+        let offset = 0
+        const clock = vi.spyOn(Date, "now").mockImplementation(() => real() + offset)
+        let releaseHang!: () => void
+        const hang = new Promise<void>((resolve) => {
+          releaseHang = resolve
+        })
+        vi.spyOn(SessionPrompt, "cancel").mockImplementation((async () => {
+          releaseHang()
+        }) as any)
+        vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
+          const text = input.parts?.[0]?.text ?? ""
+          if (text.includes("one")) {
+            // The first member finishes and pushes the clock past the deadline.
+            offset += 31 * 60 * 1000
+            return {
+              info: {
+                id: input.messageID,
+                sessionID: input.sessionID,
+                role: "assistant",
+                time: { created: real(), completed: real() },
+              },
+              parts: [{ type: "text", text: "first member finished" }],
+            } as any
+          }
+          // A session cancelled before it produced any assistant message rejects
+          // with an AbortError — the real prompt loop does exactly this
+          // (prompt-loop-result.ts). It must not take the whole call down.
+          await hang
+          throw new DOMException("Aborted", "AbortError")
+        }) as any)
+        try {
+          const result = await (
+            await TaskParallelTool.init()
+          ).execute(
+            {
+              items: ["one", "two", "three"],
+              prompt_template: "check {{item}}",
+              subagent_type: "explore",
+              concurrency: 2,
+            } as any,
+            ctx,
+          )
+          const metadata = result.metadata as any
+          expect(metadata.deadlineReached).toBe(true)
+          expect(metadata.results[0].ok).toBe(true)
+          expect(metadata.results[1]).toMatchObject({ ok: false })
+          expect(metadata.results[1].task_id).toBeTruthy()
+          expect(metadata.results[1].error).toContain("AbortError")
+          expect(metadata.results[2].error).toContain("deadline")
+          expect(result.output).toContain("first member finished")
+        } finally {
+          clock.mockRestore()
+          vi.restoreAllMocks()
+        }
+      },
+    })
+  })
+
   test("one member's text is bounded in the parent's context", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
