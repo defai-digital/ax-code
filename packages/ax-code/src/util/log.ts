@@ -4,6 +4,7 @@ import fs from "fs/promises"
 import { createWriteStream } from "fs"
 import pino from "pino"
 import { Global } from "../global"
+import { Env } from "./env"
 import z from "zod"
 import { Glob } from "./glob"
 import { toErrorMessage } from "./error-message"
@@ -375,12 +376,71 @@ export namespace Log {
     await prune(dir).catch(() => {})
   }
 
+  /** Field value cap. A single huge value must not dominate an entry. */
+  const LOG_VALUE_MAX_CHARS = 2_048
+  /**
+   * Message cap. Deliberately far wider than a typical one-line message: the
+   * formatter folds a cause chain into this string, and a small cap would
+   * routinely destroy the diagnostics a failure report exists for.
+   */
+  const LOG_MESSAGE_MAX_CHARS = 2_000
+  /** Whole rendered entry cap, so a structured extra cannot grow without bound. */
+  const LOG_ENTRY_MAX_CHARS = 4_096
+
+  /**
+   * Whole-word secret key names, normalized. Stricter than a substring match on
+   * purpose: `keyboard`, `tokenCount` and `monkey` are not credentials, and
+   * over-redacting makes logs useless while looking safe.
+   */
+  const SECRET_KEY_NAME = /^(?:token|secret|password|passwd|credential|authorization|api[_-]?key|pat|webhook)$/i
+  const PRIVATE_KEY_BLOCK = /-----BEGIN[^-]*PRIVATE KEY-----[\s\S]*?-----END[^-]*PRIVATE KEY-----/g
+  /**
+   * Cheap gate before the (three-pass) redaction regexes: ordinary log lines
+   * carry none of these, and this keeps the hot path free of regex work.
+   */
+  const MAYBE_SECRET = /[=:]|bearer|:\/\/|@|BEGIN/i
+
+  function truncate(value: string, limit: number): string {
+    if (value.length <= limit) return value
+    return `${value.slice(0, limit)}…[+${value.length - limit} chars truncated]`
+  }
+
+  /**
+   * Redact a string that is about to reach a log sink, then cap it. Redaction
+   * runs first: the value patterns match to the end of a token, so capping first
+   * could split a secret and leave its first half on disk.
+   */
+  function redactLogText(value: string, limit = LOG_VALUE_MAX_CHARS): string {
+    if (!MAYBE_SECRET.test(value)) return truncate(value, limit)
+    const redacted = Env.redactSecrets(Env.redactInlineEnvAssignments(value)).replace(PRIVATE_KEY_BLOCK, "[redacted private key]")
+    return truncate(redacted, limit)
+  }
+
+  /**
+   * Redact a structured value: a credential-named key loses its whole value, and
+   * everything else is redacted as text when it is a string and recursed into
+   * when it is a container.
+   */
+  function redactLogValue(key: string, value: unknown, depth = 0): unknown {
+    if (SECRET_KEY_NAME.test(key)) return "[redacted]"
+    if (typeof value === "string") return redactLogText(value)
+    if (value === null || typeof value !== "object") return value
+    if (depth >= 6) return "[depth limit]"
+    if (Array.isArray(value)) return value.map((item, index) => redactLogValue(String(index), item, depth + 1))
+    const out: Record<string, unknown> = {}
+    for (const [nestedKey, nestedValue] of Object.entries(value as Record<string, unknown>)) {
+      out[nestedKey] = redactLogValue(nestedKey, nestedValue, depth + 1)
+    }
+    return out
+  }
+
   function formatError(error: Error, depth = 0): string {
-    const result = error.message
+    const result = redactLogText(error.message, LOG_MESSAGE_MAX_CHARS)
     return error.cause instanceof Error && depth < 10
       ? result + " Caused by: " + formatError(error.cause, depth + 1)
       : result
   }
+
 
   // Pino's built-in error serializer only applies to the `err` key. This
   // codebase mostly logs errors under `error`, where the JSON log receives
@@ -388,13 +448,30 @@ export namespace Log {
   // failures on 2026-08-29 were recorded as "error":{} with zero usable
   // diagnostics. Normalize Error values under any other key into a plain
   // object so the JSON log keeps name + message (cause chain folded into
-  // the message, matching the text log's formatError). `err` is left for
-  // pino's richer serializer (stack included).
+  // the message, matching the text log's formatError).
+  //
+  // `err` used to be left to pino's richer serializer, but that path writes
+  // message and stack verbatim, so a stack carrying a credential reached the
+  // JSON log unredacted. It is serialized here now, with the same redaction as
+  // everything else and the stack preserved for the JSON log's consumers.
   function pinoExtra(extra: Record<string, unknown> | undefined): Record<string, unknown> {
     const fields = extra || {}
     const out: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(fields)) {
-      out[key] = key !== "err" && value instanceof Error ? { name: value.name, message: formatError(value) } : value
+      // Errors are folded into a plain object here instead of being left to
+      // pino's serializer: that path writes message and stack verbatim, so a
+      // stack carrying a credential would reach the JSON log unredacted.
+      out[key] =
+        value instanceof Error
+          ? {
+              name: value.name,
+              message: formatError(value),
+              // Only `err` carried a stack before, because pino's serializer
+              // supplied it. It is serialized here now (pino would bypass
+              // redaction), so the stack has to be redacted too.
+              ...(key === "err" && typeof value.stack === "string" ? { stack: redactLogText(value.stack) } : {}),
+            }
+          : redactLogValue(key, value)
     }
     return out
   }
@@ -402,9 +479,11 @@ export namespace Log {
   function stringifyLogObject(value: object): string {
     const seen = new WeakSet<object>()
     try {
-      return (
-        JSON.stringify(value, (_key, next) => {
+      return redactLogText(
+        JSON.stringify(value, (key, next) => {
+          if (SECRET_KEY_NAME.test(key)) return "[redacted]"
           if (typeof next === "bigint") return next.toString()
+          if (typeof next === "string") return redactLogText(next)
           if (typeof next === "object" && next !== null) {
             if (seen.has(next)) return "[Circular]"
             seen.add(next)
@@ -449,16 +528,22 @@ export namespace Log {
           const prefix = `${key}=`
           if (value instanceof Error) return prefix + formatError(value)
           if (typeof value === "object") return prefix + stringifyLogObject(value)
-          return prefix + safeLogString(value)
+          // Key-aware, like the JSON path: a credential-named field loses its
+          // value even when the value itself carries no recognisable pattern.
+          if (SECRET_KEY_NAME.test(key)) return prefix + "[redacted]"
+          return prefix + redactLogText(safeLogString(value))
         })
         .join(" ")
       const next = new Date()
       const diff = next.getTime() - last
       last = next.getTime()
       return (
-        [next.toISOString().split(".")[0], "+" + diff + "ms", prefix, safeLogString(message)]
-          .filter(Boolean)
-          .join(" ") + "\n"
+        truncate(
+          [next.toISOString().split(".")[0], "+" + diff + "ms", prefix, redactLogText(safeLogString(message), LOG_MESSAGE_MAX_CHARS)]
+            .filter(Boolean)
+            .join(" "),
+          LOG_ENTRY_MAX_CHARS,
+        ) + "\n"
       )
     }
     // Pino child is created lazily — only when pinoLogger is active (file mode)

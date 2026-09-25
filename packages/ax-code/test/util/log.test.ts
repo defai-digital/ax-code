@@ -296,3 +296,92 @@ describe("Log.create", () => {
     expect(text).toContain("[Unprintable]")
   })
 })
+
+describe("log boundary redaction", () => {
+  async function textLines() {
+    const lines: string[] = []
+    await Log.init(
+      { print: true },
+      {
+        stderrWrite: (msg) => {
+          lines.push(msg)
+        },
+      },
+    )
+    return lines
+  }
+
+  test("ordinary text is untouched", async () => {
+    const lines = await textLines()
+    Log.create({ service: "redact-control" }).info("session resync after reconnect failed", {
+      sessionID: "ses_test",
+    })
+    const output = lines.join("")
+    expect(output).toContain("session resync after reconnect failed")
+    expect(output).toContain("sessionID=ses_test")
+    expect(output).not.toContain("[redacted]")
+  })
+
+  test("a credential-named extra field loses its value", async () => {
+    const lines = await textLines()
+    Log.create({ service: "redact-field" }).warn("provider refresh failed", {
+      apiKey: "sk-live-abcdef123456",
+      nested: { authorization: "Bearer eyJhbGciOi" },
+    })
+    const output = lines.join("")
+    expect(output).not.toContain("sk-live-abcdef123456")
+    expect(output).not.toContain("eyJhbGciOi")
+    expect(output).toContain("[redacted]")
+  })
+
+  test("names that merely contain a secret word are not redacted", async () => {
+    const lines = await textLines()
+    Log.create({ service: "redact-strict" }).info("counts", {
+      tokenCount: 42,
+      keyboard: "us",
+      monkey: "banana",
+    })
+    const output = lines.join("")
+    // Over-redaction makes logs useless while looking safe.
+    expect(output).toContain("42")
+    expect(output).toContain("us")
+    expect(output).toContain("banana")
+  })
+
+  test("a credential in an error message and its cause chain is redacted", async () => {
+    const lines = await textLines()
+    const root = new Error("connect failed with password=hunter2")
+    const wrapped = new Error("Authorization: Bearer eyJhbGciOiJIUzI1NiJ9", { cause: root })
+    Log.create({ service: "redact-error" }).error("upstream call failed", { error: wrapped })
+    const output = lines.join("")
+    expect(output).not.toContain("hunter2")
+    expect(output).not.toContain("eyJhbGciOiJIUzI1NiJ9")
+    expect(output).toContain("upstream call failed")
+    expect(output).toContain("Caused by")
+  })
+
+  test("the err key's stack is redacted in the JSON log", async () => {
+    await using tmp = await tmpdir()
+    await Log.init({ print: false, dir: tmp.path, name: "redact-err-stack" })
+    const error = new Error("boom")
+    // A stack is the path that bypassed redaction while pino serialized it.
+    error.stack = "Error: boom\n    at run (password=hunter2)"
+    Log.create({ service: "redact-err-stack" }).warn("plain boom", { err: error })
+
+    const content = await fs.readFile(path.join(tmp.path, "redact-err-stack.json.log"), "utf8")
+    const entry = JSON.parse(content.trim().split("\n").find((line) => line.includes("plain boom"))!)
+    expect(entry.err.message).toBe("boom")
+    expect(typeof entry.err.stack).toBe("string")
+    expect(entry.err.stack).not.toContain("hunter2")
+    expect(entry.err.stack).toContain("[redacted]")
+  })
+
+  test("a large value is truncated after redaction, never splitting the secret", async () => {
+    const lines = await textLines()
+    const padding = "p".repeat(2_040)
+    Log.create({ service: "redact-cap" }).info("large", { note: `${padding} password=hunter2` })
+    const output = lines.join("")
+    expect(output).not.toContain("hunter2")
+    expect(output).toContain("chars truncated")
+  })
+})
