@@ -1054,6 +1054,7 @@ export type Event =
   | EventMessagePartRemoved
   | EventPermissionAsked
   | EventPermissionReplied
+  | EventTodoUpdated
   | EventSessionStatus
   | EventSessionIdle
   | EventQuestionAsked
@@ -1063,7 +1064,6 @@ export type Event =
   | EventTaskQueueUpdated
   | EventTaskQueueDeleted
   | EventSessionCompacted
-  | EventTodoUpdated
   | EventFileEdited
   | EventMcpToolsChanged
   | EventMcpBrowserOpenFailed
@@ -2055,9 +2055,8 @@ export type EventTaskQueueCreated = {
       id: string
       projectID: string
       directory: string
-      worktree?: string
       sessionID?: string
-      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "automation"
       status:
         | "queued"
         | "waiting_for_idle"
@@ -2108,9 +2107,8 @@ export type EventTaskQueueUpdated = {
       id: string
       projectID: string
       directory: string
-      worktree?: string
       sessionID?: string
-      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "automation"
       status:
         | "queued"
         | "waiting_for_idle"
@@ -4352,9 +4350,8 @@ export type TaskQueueSteerResult = {
     id: string
     projectID: string
     directory: string
-    worktree?: string
     sessionID?: string
-    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "automation"
     status:
       | "queued"
       | "waiting_for_idle"
@@ -6135,9 +6132,8 @@ export type TaskQueueListResponses = {
     id: string
     projectID: string
     directory: string
-    worktree?: string
     sessionID?: string
-    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "automation"
     status:
       | "queued"
       | "waiting_for_idle"
@@ -6176,9 +6172,8 @@ export type TaskQueueListResponse = TaskQueueListResponses[keyof TaskQueueListRe
 export type TaskQueueEnqueueData = {
   body?: {
     sessionID?: string
-    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "automation"
     title: string
-    worktree?: string
     agent?: string
     model?: unknown
     sourceMessageID?: string
@@ -6220,9 +6215,8 @@ export type TaskQueueEnqueueResponses = {
     id: string
     projectID: string
     directory: string
-    worktree?: string
     sessionID?: string
-    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "automation"
     status:
       | "queued"
       | "waiting_for_idle"
@@ -6331,9 +6325,8 @@ export type TaskQueueGetResponses = {
     id: string
     projectID: string
     directory: string
-    worktree?: string
     sessionID?: string
-    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "automation"
     status:
       | "queued"
       | "waiting_for_idle"
@@ -6419,9 +6412,8 @@ export type TaskQueueStatusResponses = {
     id: string
     projectID: string
     directory: string
-    worktree?: string
     sessionID?: string
-    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "automation"
     status:
       | "queued"
       | "waiting_for_idle"
@@ -6461,7 +6453,6 @@ export type TaskQueueEditData = {
   body?: {
     expectedUpdatedAt?: number
     title?: string
-    worktree?: string | null
     agent?: string | null
     model?: unknown
     payload?: {
@@ -6506,9 +6497,8 @@ export type TaskQueueEditResponses = {
     id: string
     projectID: string
     directory: string
-    worktree?: string
     sessionID?: string
-    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "automation"
     status:
       | "queued"
       | "waiting_for_idle"
@@ -6579,9 +6569,8 @@ export type TaskQueuePauseResponses = {
     id: string
     projectID: string
     directory: string
-    worktree?: string
     sessionID?: string
-    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "automation"
     status:
       | "queued"
       | "waiting_for_idle"
@@ -6652,9 +6641,8 @@ export type TaskQueueResumeResponses = {
     id: string
     projectID: string
     directory: string
-    worktree?: string
     sessionID?: string
-    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "automation"
     status:
       | "queued"
       | "waiting_for_idle"
@@ -6725,9 +6713,8 @@ export type TaskQueueCancelResponses = {
     id: string
     projectID: string
     directory: string
-    worktree?: string
     sessionID?: string
-    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "automation"
     status:
       | "queued"
       | "waiting_for_idle"
@@ -6798,9 +6785,8 @@ export type TaskQueueRetryResponses = {
     id: string
     projectID: string
     directory: string
-    worktree?: string
     sessionID?: string
-    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "automation"
     status:
       | "queued"
       | "waiting_for_idle"
@@ -6871,9 +6857,8 @@ export type TaskQueueSendNowResponses = {
     id: string
     projectID: string
     directory: string
-    worktree?: string
     sessionID?: string
-    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "automation"
     status:
       | "queued"
       | "waiting_for_idle"
@@ -6988,9 +6973,8 @@ export type TaskQueueReorderResponses = {
     id: string
     projectID: string
     directory: string
-    worktree?: string
     sessionID?: string
-    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "automation"
     status:
       | "queued"
       | "waiting_for_idle"
@@ -7791,9 +7775,8 @@ export type ScheduledTaskRunNowResponses = {
       id: string
       projectID: string
       directory: string
-      worktree?: string
       sessionID?: string
-      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "automation"
       status:
         | "queued"
         | "waiting_for_idle"
@@ -7921,9 +7904,8 @@ export type ScheduledTaskRunDueResponses = {
       id: string
       projectID: string
       directory: string
-      worktree?: string
       sessionID?: string
-      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "automation"
       status:
         | "queued"
         | "waiting_for_idle"
@@ -13702,9 +13684,8 @@ export type SessionPromptAsyncResponses = {
     id: string
     projectID: string
     directory: string
-    worktree?: string
     sessionID?: string
-    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "automation"
     status:
       | "queued"
       | "waiting_for_idle"
@@ -13788,9 +13769,8 @@ export type SessionCommandAsyncResponses = {
     id: string
     projectID: string
     directory: string
-    worktree?: string
     sessionID?: string
-    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "automation"
     status:
       | "queued"
       | "waiting_for_idle"
@@ -13923,9 +13903,8 @@ export type SessionShellAsyncResponses = {
     id: string
     projectID: string
     directory: string
-    worktree?: string
     sessionID?: string
-    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "automation"
     status:
       | "queued"
       | "waiting_for_idle"

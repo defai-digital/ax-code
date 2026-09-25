@@ -21,7 +21,7 @@ async function loadSession() {
 }
 
 export namespace TaskQueue {
-  export const Kind = z.enum(["prompt", "command", "shell", "followup", "subagent", "review", "automation"])
+  export const Kind = z.enum(["prompt", "command", "shell", "followup", "subagent", "automation"])
   export type Kind = z.infer<typeof Kind>
 
   export const Status = z.enum([
@@ -44,7 +44,6 @@ export namespace TaskQueue {
     id: TaskQueueID.zod,
     projectID: ProjectID.zod,
     directory: z.string(),
-    worktree: z.string().optional(),
     sessionID: SessionID.zod.optional(),
     kind: Kind,
     status: Status,
@@ -76,7 +75,6 @@ export namespace TaskQueue {
     sessionID: SessionID.zod.optional(),
     kind: Kind,
     title: z.string().trim().min(1).max(200),
-    worktree: z.string().trim().min(1).max(500).optional(),
     agent: z.string().optional(),
     model: z.unknown().optional(),
     sourceMessageID: z.string().optional(),
@@ -111,7 +109,6 @@ export namespace TaskQueue {
     .object({
       expectedUpdatedAt: z.number().optional(),
       title: z.string().trim().min(1).max(200).optional(),
-      worktree: z.string().trim().min(1).max(500).nullable().optional(),
       agent: z.string().trim().min(1).nullable().optional(),
       model: z.unknown().optional(),
       payload: Payload.optional(),
@@ -143,7 +140,6 @@ export namespace TaskQueue {
       id: row.id,
       projectID: row.project_id,
       directory: row.directory,
-      worktree: row.worktree ?? undefined,
       sessionID: row.session_id ?? undefined,
       kind: row.kind,
       status: row.status,
@@ -297,7 +293,6 @@ export namespace TaskQueue {
         id: options.id ?? TaskQueueID.ascending(),
         project_id: projectID,
         directory: Instance.directory,
-        worktree: parsed.worktree,
         kind: parsed.kind,
         status: "queued",
         priority: parsed.priority,
@@ -476,7 +471,6 @@ export namespace TaskQueue {
         project_id: projectID,
         session_id: parsed.sessionID,
         directory: Instance.directory,
-        worktree: parsed.worktree,
         kind: parsed.kind,
         status: "queued",
         priority: parsed.priority,
@@ -1792,7 +1786,6 @@ export namespace TaskQueue {
       time_updated: now,
     }
     if (parsed.title !== undefined) updates.title = parsed.title
-    if ("worktree" in parsed) updates.worktree = parsed.worktree ?? null
     if ("agent" in parsed) updates.agent = parsed.agent ?? null
     if ("model" in parsed) updates.model = parsed.model ?? null
     if (parsed.payload !== undefined) {

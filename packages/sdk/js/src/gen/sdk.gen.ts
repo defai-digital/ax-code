@@ -1415,9 +1415,8 @@ export class TaskQueue extends HeyApiClient {
     parameters: {
       directory?: string
       sessionID?: string
-      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "automation"
       title: string
-      worktree?: string
       agent?: string
       model?: unknown
       sourceMessageID?: string
@@ -1439,7 +1438,6 @@ export class TaskQueue extends HeyApiClient {
             { in: "body", key: "sessionID" },
             { in: "body", key: "kind" },
             { in: "body", key: "title" },
-            { in: "body", key: "worktree" },
             { in: "body", key: "agent" },
             { in: "body", key: "model" },
             { in: "body", key: "sourceMessageID" },
@@ -1584,7 +1582,6 @@ export class TaskQueue extends HeyApiClient {
       directory?: string
       expectedUpdatedAt?: number
       title?: string
-      worktree?: string | null
       agent?: string | null
       model?: unknown
       payload?: {
@@ -1603,7 +1600,6 @@ export class TaskQueue extends HeyApiClient {
             { in: "query", key: "directory" },
             { in: "body", key: "expectedUpdatedAt" },
             { in: "body", key: "title" },
-            { in: "body", key: "worktree" },
             { in: "body", key: "agent" },
             { in: "body", key: "model" },
             { in: "body", key: "payload" },

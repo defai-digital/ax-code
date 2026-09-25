@@ -699,7 +699,7 @@ describe("WorkflowScheduler", () => {
           expect(queue).toHaveLength(8)
           expect(queue.every((item) => item.kind === "subagent")).toBe(true)
           expect(queue.every((item) => item.sessionID?.startsWith("ses_"))).toBe(true)
-          expect(queue.every((item) => item.worktree === tmp.path)).toBe(true)
+          expect(queue.every((item) => item.directory === tmp.path)).toBe(true)
           expect(queue.every((item) => item.sourceTaskID === "scheduled_task_issue_triage")).toBe(true)
           expect(queue[0]?.payload.workflow).toMatchObject({
             runID: run.id,
@@ -773,24 +773,25 @@ describe("WorkflowScheduler", () => {
           const queue = await TaskQueue.list()
           expect(queue).toHaveLength(1)
           const item = queue[0]!
-          expect(item.worktree).toBeDefined()
-          const itemWorktree = item.worktree!
-          dedicatedWorktree = itemWorktree
-          const itemDirectoryReal = await fs.realpath(item.directory)
-          const itemWorktreeReal = await fs.realpath(itemWorktree)
+          // The child's runtime directory is the queue row's own directory:
+          // worktree-required children are enqueued inside an instance bound to
+          // the dedicated worktree, so no separate worktree field is needed.
+          const itemDirectory = item.directory
+          dedicatedWorktree = itemDirectory
+          const itemDirectoryReal = await fs.realpath(itemDirectory)
           const parentReal = await fs.realpath(tmp.path)
-          expect(itemDirectoryReal).toBe(itemWorktreeReal)
-          expect(itemWorktreeReal).not.toBe(parentReal)
+          expect(itemDirectoryReal).not.toBe(parentReal)
           expect(item.payload.writePolicy).toBe("worktree-required")
-          expect(WorkflowTaskQueue.readPayload(item.payload)?.worktree).toMatchObject({
-            mode: "dedicated",
-            directory: itemWorktree,
-          })
+          const payloadWorktree = WorkflowTaskQueue.readPayload(item.payload)?.worktree
+          expect(payloadWorktree).toMatchObject({ mode: "dedicated" })
+          // Compare resolved paths: the row's directory is normalized while the
+          // payload keeps the raw worktree path.
+          expect(await fs.realpath(payloadWorktree!.directory)).toBe(itemDirectoryReal)
 
           const childSessionID = result.children[0]?.sessionID
           expect(childSessionID).toBeDefined()
           const childSession = await Session.get(childSessionID!)
-          expect(await fs.realpath(childSession.directory)).toBe(itemWorktreeReal)
+          expect(await fs.realpath(childSession.directory)).toBe(itemDirectoryReal)
         },
       })
     } finally {

@@ -142,7 +142,6 @@ export const TaskQueueTable = sqliteTable(
       .$type<SessionID>()
       .references(() => SessionTable.id, { onDelete: "cascade" }),
     directory: text().notNull(),
-    worktree: text(),
     kind: text().notNull(),
     status: text().notNull(),
     priority: integer().notNull().default(0),

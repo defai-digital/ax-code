@@ -78,6 +78,9 @@ describe("task queue routes", () => {
             sessionID: session.id,
             kind: "automation",
             title: "Queue a route-level task",
+            // Sent by older clients. The queue no longer stores a worktree (the
+            // row's `directory` already carries the runtime directory), so the
+            // route must ignore the key rather than reject the request.
             worktree: "wt-route",
             payload: { prompt: "ship gui" },
             priority: "5",
@@ -88,26 +91,24 @@ describe("task queue routes", () => {
           id: string
           sessionID: string
           status: string
-          worktree?: string
           priority: number
         }
         expect(created.id).toStartWith("tsk_")
         expect(created.sessionID).toBe(session.id)
         expect(created.status).toBe("queued")
-        expect(created.worktree).toBe("wt-route")
         expect(created.priority).toBe(5)
 
         const listResponse = await app.request(`/task-queue?${directoryQuery}&sessionID=${created.sessionID}`)
         expect(listResponse.status).toBe(200)
-        const list = (await listResponse.json()) as Array<{ id: string; worktree?: string }>
+        const list = (await listResponse.json()) as Array<{ id: string }>
         expect(list.map((item) => item.id)).toEqual([created.id])
-        expect(list[0]?.worktree).toBe("wt-route")
 
         const editResponse = await app.request(`/task-queue/${created.id}/edit?${directoryQuery}`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             title: "Edited route-level task",
+            // Tolerated for the same reason as the create body above.
             worktree: null,
             payload: { prompt: "ship edited gui" },
             priority: "3",

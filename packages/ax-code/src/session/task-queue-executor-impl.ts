@@ -722,8 +722,6 @@ function queueItemExecution(item: TaskQueue.Info): QueueExecution | undefined {
     }
     case "subagent":
       return subagentExecution(item)
-    case "review":
-      return undefined
   }
 }
 

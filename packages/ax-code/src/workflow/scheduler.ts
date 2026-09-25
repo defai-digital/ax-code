@@ -130,7 +130,6 @@ export namespace WorkflowScheduler {
                 sessionID: session.id,
                 kind: "subagent",
                 title: `${initial.spec.name}: ${phase.name} #${childPlan.index + 1}`,
-                worktree: target.worktree,
                 agent: childPlan.agent,
                 model: childPlan.model,
                 sourceTaskID: initial.sourceTaskID,
@@ -309,7 +308,6 @@ export namespace WorkflowScheduler {
 
 type WorkflowChildRuntimeTarget = {
   directory: string
-  worktree: string
   payload: {
     mode: "current" | "dedicated"
     directory: string
@@ -326,7 +324,6 @@ async function prepareChildRuntimeTarget(
   if (childPlan.writePolicy !== "worktree-required") {
     return {
       directory: Instance.directory,
-      worktree: Instance.worktree,
       payload: {
         mode: "current",
         directory: Instance.worktree,
@@ -340,7 +337,6 @@ async function prepareChildRuntimeTarget(
   await bootstrap()
   return {
     directory: info.directory,
-    worktree: info.directory,
     payload: {
       mode: "dedicated",
       directory: info.directory,

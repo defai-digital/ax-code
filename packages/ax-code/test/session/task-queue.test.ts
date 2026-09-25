@@ -74,7 +74,6 @@ describe("TaskQueue", () => {
             sessionID: session.id,
             kind: "prompt",
             title: "Run desktop follow-up",
-            worktree: "wt-desktop",
             agent: "build",
             model: { providerID: "test", modelID: "test-model" },
             sourceMessageID: "msg_task_queue_source",
@@ -87,7 +86,6 @@ describe("TaskQueue", () => {
           expect(created.projectID).toBe(session.projectID)
           expect(created.sessionID).toBe(session.id)
           expect(created.status).toBe("queued")
-          expect(created.worktree).toBe("wt-desktop")
           expect(created.agent).toBe("build")
           expect(created.model).toEqual({ providerID: "test", modelID: "test-model" })
           expect(created.sourceMessageID).toBe("msg_task_queue_source")
@@ -101,7 +99,6 @@ describe("TaskQueue", () => {
 
           const list = await TaskQueue.list({ sessionID: session.id })
           expect(list.map((item) => item.id)).toEqual([created.id])
-          expect(list[0]?.worktree).toBe("wt-desktop")
 
           const paused = await TaskQueue.pause(created.id)
           expect(paused.status).toBe("paused")
@@ -136,13 +133,11 @@ describe("TaskQueue", () => {
           const edited = await TaskQueue.edit({
             id: created.id,
             title: "Run edited desktop follow-up",
-            worktree: null,
             agent: "review",
             payload: { prompt: "continue with the edited queue item" },
             priority: 3,
           })
           expect(edited.title).toBe("Run edited desktop follow-up")
-          expect(edited.worktree).toBeUndefined()
           expect(edited.agent).toBe("review")
           expect(edited.payload).toEqual({ prompt: "continue with the edited queue item" })
           expect(edited.priority).toBe(3)
@@ -316,7 +311,7 @@ describe("TaskQueue", () => {
       directory: tmp.path,
       fn: async () => {
         const running = await TaskQueue.enqueue({ kind: "prompt", title: "Interrupted prompt" })
-        const blocked = await TaskQueue.enqueue({ kind: "review", title: "Interrupted review" })
+        const blocked = await TaskQueue.enqueue({ kind: "prompt", title: "Interrupted review" })
         const waiting = await TaskQueue.enqueue({ kind: "automation", title: "Waiting for idle" })
         const queued = await TaskQueue.enqueue({ kind: "followup", title: "Still queued" })
         const workflow = { runID: "wfr_test", phaseID: "wfp_test", specPhaseID: "scan" }
@@ -583,7 +578,7 @@ describe("TaskQueue", () => {
       fn: async () => {
         const session = await Session.create({})
         const running = await TaskQueue.enqueue({ sessionID: session.id, kind: "prompt", title: "Live prompt" })
-        const blocked = await TaskQueue.enqueue({ kind: "review", title: "Live review" })
+        const blocked = await TaskQueue.enqueue({ kind: "prompt", title: "Live review" })
         const waiting = await TaskQueue.enqueue({ kind: "automation", title: "Live wait" })
         await TaskQueue.setStatus({ id: running.id, status: "running" })
         await TaskQueue.setStatus({ id: blocked.id, status: "blocked_permission", error: "approval required" })
@@ -931,7 +926,7 @@ describe("TaskQueue", () => {
       directory: tmp.path,
       fn: async () => {
         for (let index = 0; index < 501; index++) {
-          await TaskQueue.enqueue({ kind: "review", title: `Manual item ${index}` })
+          await TaskQueue.enqueue({ kind: "prompt", title: `Manual item ${index}` })
         }
         const scheduled = await TaskQueue.enqueue({
           kind: "automation",
@@ -955,7 +950,7 @@ describe("TaskQueue", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const first = await TaskQueue.enqueue({ kind: "review", title: "Review first branch" })
+        const first = await TaskQueue.enqueue({ kind: "prompt", title: "Review first branch" })
         const second = await TaskQueue.enqueue({ kind: "automation", title: "Run smoke checks" })
 
         expect((await TaskQueue.list()).map((item) => item.id)).toEqual([first.id, second.id])
@@ -983,7 +978,7 @@ describe("TaskQueue", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const valid = await TaskQueue.enqueue({ kind: "review", title: "Review branch" })
+        const valid = await TaskQueue.enqueue({ kind: "prompt", title: "Review branch" })
         const now = Date.now()
         Database.use((db) => {
           db.insert(TaskQueueTable)
@@ -991,7 +986,7 @@ describe("TaskQueue", () => {
               id: TaskQueueID.make("tsk_corrupt_status"),
               project_id: Instance.project.id,
               directory: Instance.directory,
-              kind: "review",
+              kind: "prompt",
               status: "not-a-status",
               priority: 0,
               position: 1,

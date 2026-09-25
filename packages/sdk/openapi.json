@@ -2355,9 +2355,6 @@
                       "directory": {
                         "type": "string"
                       },
-                      "worktree": {
-                        "type": "string"
-                      },
                       "sessionID": {
                         "type": "string",
                         "pattern": "^ses_.*"
@@ -2370,7 +2367,6 @@
                           "shell",
                           "followup",
                           "subagent",
-                          "review",
                           "automation"
                         ]
                       },
@@ -2523,9 +2519,6 @@
                     "directory": {
                       "type": "string"
                     },
-                    "worktree": {
-                      "type": "string"
-                    },
                     "sessionID": {
                       "type": "string",
                       "pattern": "^ses_.*"
@@ -2538,7 +2531,6 @@
                         "shell",
                         "followup",
                         "subagent",
-                        "review",
                         "automation"
                       ]
                     },
@@ -2670,7 +2662,6 @@
                       "shell",
                       "followup",
                       "subagent",
-                      "review",
                       "automation"
                     ]
                   },
@@ -2678,11 +2669,6 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 200
-                  },
-                  "worktree": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 500
                   },
                   "agent": {
                     "type": "string"
@@ -2770,9 +2756,6 @@
                     "directory": {
                       "type": "string"
                     },
-                    "worktree": {
-                      "type": "string"
-                    },
                     "sessionID": {
                       "type": "string",
                       "pattern": "^ses_.*"
@@ -2785,7 +2768,6 @@
                         "shell",
                         "followup",
                         "subagent",
-                        "review",
                         "automation"
                       ]
                     },
@@ -3018,9 +3000,6 @@
                     "directory": {
                       "type": "string"
                     },
-                    "worktree": {
-                      "type": "string"
-                    },
                     "sessionID": {
                       "type": "string",
                       "pattern": "^ses_.*"
@@ -3033,7 +3012,6 @@
                         "shell",
                         "followup",
                         "subagent",
-                        "review",
                         "automation"
                       ]
                     },
@@ -3227,9 +3205,6 @@
                     "directory": {
                       "type": "string"
                     },
-                    "worktree": {
-                      "type": "string"
-                    },
                     "sessionID": {
                       "type": "string",
                       "pattern": "^ses_.*"
@@ -3242,7 +3217,6 @@
                         "shell",
                         "followup",
                         "subagent",
-                        "review",
                         "automation"
                       ]
                     },
@@ -3380,18 +3354,6 @@
                     "minLength": 1,
                     "maxLength": 200
                   },
-                  "worktree": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 500
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
                   "agent": {
                     "anyOf": [
                       {
@@ -3470,9 +3432,6 @@
                     "directory": {
                       "type": "string"
                     },
-                    "worktree": {
-                      "type": "string"
-                    },
                     "sessionID": {
                       "type": "string",
                       "pattern": "^ses_.*"
@@ -3485,7 +3444,6 @@
                         "shell",
                         "followup",
                         "subagent",
-                        "review",
                         "automation"
                       ]
                     },
@@ -3648,9 +3606,6 @@
                     "directory": {
                       "type": "string"
                     },
-                    "worktree": {
-                      "type": "string"
-                    },
                     "sessionID": {
                       "type": "string",
                       "pattern": "^ses_.*"
@@ -3663,7 +3618,6 @@
                         "shell",
                         "followup",
                         "subagent",
-                        "review",
                         "automation"
                       ]
                     },
@@ -3826,9 +3780,6 @@
                     "directory": {
                       "type": "string"
                     },
-                    "worktree": {
-                      "type": "string"
-                    },
                     "sessionID": {
                       "type": "string",
                       "pattern": "^ses_.*"
@@ -3841,7 +3792,6 @@
                         "shell",
                         "followup",
                         "subagent",
-                        "review",
                         "automation"
                       ]
                     },
@@ -4004,9 +3954,6 @@
                     "directory": {
                       "type": "string"
                     },
-                    "worktree": {
-                      "type": "string"
-                    },
                     "sessionID": {
                       "type": "string",
                       "pattern": "^ses_.*"
@@ -4019,7 +3966,6 @@
                         "shell",
                         "followup",
                         "subagent",
-                        "review",
                         "automation"
                       ]
                     },
@@ -4182,9 +4128,6 @@
                     "directory": {
                       "type": "string"
                     },
-                    "worktree": {
-                      "type": "string"
-                    },
                     "sessionID": {
                       "type": "string",
                       "pattern": "^ses_.*"
@@ -4197,7 +4140,6 @@
                         "shell",
                         "followup",
                         "subagent",
-                        "review",
                         "automation"
                       ]
                     },
@@ -4433,9 +4375,6 @@
                     "directory": {
                       "type": "string"
                     },
-                    "worktree": {
-                      "type": "string"
-                    },
                     "sessionID": {
                       "type": "string",
                       "pattern": "^ses_.*"
@@ -4448,7 +4387,6 @@
                         "shell",
                         "followup",
                         "subagent",
-                        "review",
                         "automation"
                       ]
                     },
@@ -6917,9 +6855,6 @@
                         "directory": {
                           "type": "string"
                         },
-                        "worktree": {
-                          "type": "string"
-                        },
                         "sessionID": {
                           "type": "string",
                           "pattern": "^ses_.*"
@@ -6932,7 +6867,6 @@
                             "shell",
                             "followup",
                             "subagent",
-                            "review",
                             "automation"
                           ]
                         },
@@ -7334,9 +7268,6 @@
                           "directory": {
                             "type": "string"
                           },
-                          "worktree": {
-                            "type": "string"
-                          },
                           "sessionID": {
                             "type": "string",
                             "pattern": "^ses_.*"
@@ -7349,7 +7280,6 @@
                               "shell",
                               "followup",
                               "subagent",
-                              "review",
                               "automation"
                             ]
                           },
@@ -29164,9 +29094,6 @@
                     "directory": {
                       "type": "string"
                     },
-                    "worktree": {
-                      "type": "string"
-                    },
                     "sessionID": {
                       "type": "string",
                       "pattern": "^ses_.*"
@@ -29179,7 +29106,6 @@
                         "shell",
                         "followup",
                         "subagent",
-                        "review",
                         "automation"
                       ]
                     },
@@ -29496,9 +29422,6 @@
                     "directory": {
                       "type": "string"
                     },
-                    "worktree": {
-                      "type": "string"
-                    },
                     "sessionID": {
                       "type": "string",
                       "pattern": "^ses_.*"
@@ -29511,7 +29434,6 @@
                         "shell",
                         "followup",
                         "subagent",
-                        "review",
                         "automation"
                       ]
                     },
@@ -29870,9 +29792,6 @@
                     "directory": {
                       "type": "string"
                     },
-                    "worktree": {
-                      "type": "string"
-                    },
                     "sessionID": {
                       "type": "string",
                       "pattern": "^ses_.*"
@@ -29885,7 +29804,6 @@
                         "shell",
                         "followup",
                         "subagent",
-                        "review",
                         "automation"
                       ]
                     },
@@ -38396,6 +38314,9 @@
             "$ref": "#/components/schemas/Event.permission.replied"
           },
           {
+            "$ref": "#/components/schemas/Event.todo.updated"
+          },
+          {
             "$ref": "#/components/schemas/Event.session.status"
           },
           {
@@ -38421,9 +38342,6 @@
           },
           {
             "$ref": "#/components/schemas/Event.session.compacted"
-          },
-          {
-            "$ref": "#/components/schemas/Event.todo.updated"
           },
           {
             "$ref": "#/components/schemas/Event.file.edited"
@@ -42025,9 +41943,6 @@
                   "directory": {
                     "type": "string"
                   },
-                  "worktree": {
-                    "type": "string"
-                  },
                   "sessionID": {
                     "type": "string",
                     "pattern": "^ses_.*"
@@ -42040,7 +41955,6 @@
                       "shell",
                       "followup",
                       "subagent",
-                      "review",
                       "automation"
                     ]
                   },
@@ -42197,9 +42111,6 @@
                   "directory": {
                     "type": "string"
                   },
-                  "worktree": {
-                    "type": "string"
-                  },
                   "sessionID": {
                     "type": "string",
                     "pattern": "^ses_.*"
@@ -42212,7 +42123,6 @@
                       "shell",
                       "followup",
                       "subagent",
-                      "review",
                       "automation"
                     ]
                   },
@@ -50170,9 +50080,6 @@
               "directory": {
                 "type": "string"
               },
-              "worktree": {
-                "type": "string"
-              },
               "sessionID": {
                 "type": "string",
                 "pattern": "^ses_.*"
@@ -50185,7 +50092,6 @@
                   "shell",
                   "followup",
                   "subagent",
-                  "review",
                   "automation"
                 ]
               },
