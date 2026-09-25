@@ -38308,6 +38308,15 @@
             "$ref": "#/components/schemas/Event.message.part.removed"
           },
           {
+            "$ref": "#/components/schemas/Event.task.queue.created"
+          },
+          {
+            "$ref": "#/components/schemas/Event.task.queue.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.task.queue.deleted"
+          },
+          {
             "$ref": "#/components/schemas/Event.permission.asked"
           },
           {
@@ -38330,15 +38339,6 @@
           },
           {
             "$ref": "#/components/schemas/Event.question.rejected"
-          },
-          {
-            "$ref": "#/components/schemas/Event.task.queue.created"
-          },
-          {
-            "$ref": "#/components/schemas/Event.task.queue.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.task.queue.deleted"
           },
           {
             "$ref": "#/components/schemas/Event.session.compacted"

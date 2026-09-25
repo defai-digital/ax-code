@@ -337,7 +337,11 @@ export namespace TaskQueueSteer {
 
   /** Bounded follow-up title for a steer that arrived as composer text. */
   function draftTitle(text: string) {
-    const firstLine = text.split("\n").find((line) => line.trim().length > 0)?.trim() ?? text.trim()
+    const firstLine =
+      text
+        .split("\n")
+        .find((line) => line.trim().length > 0)
+        ?.trim() ?? text.trim()
     return firstLine.length > 60 ? `${firstLine.slice(0, 57)}...` : firstLine || "steered draft"
   }
 
@@ -378,8 +382,9 @@ export namespace TaskQueueSteer {
     const hold = item.status === "paused" ? { info: item, changed: false } : await TaskQueue.pauseIfActive(id)
     const held = hold.info
 
-    async function restore(): Promise<TaskQueue.Info> {
+    async function restore(interrupted = false): Promise<TaskQueue.Info> {
       if (!hold.changed) return held
+      if (interrupted) return TaskQueue.get(id).catch(() => held)
       try {
         const resumed = await TaskQueue.resume(id)
         // Re-evaluate immediately (mirroring retry): the row returns to
@@ -400,10 +405,45 @@ export namespace TaskQueueSteer {
       throw error
     }
 
+    // The receipt can apply or end while SessionPrompt.steer is returning.
+    // Give the drain the row identity before cancellation; any later apply can
+    // then stamp the row in its message transaction. If it already applied,
+    // put the stamp in the cancellation write itself.
+    const attached = SessionSteering.attachDurable({
+      sessionID,
+      clientID,
+      queueClientID: clientID,
+      queueRowID: id,
+    })
+    const admission = SessionSteering.admissionState({ sessionID, clientID })
+    const latestReceipt = admission?.receipt ?? attached ?? receipt
+    if (latestReceipt.status === "rejected" && receipt.status !== "rejected") {
+      return { item: await restore(admission?.interrupted), receipt: latestReceipt }
+    }
+
     if (receipt.status === "accepted" || receipt.status === "applied") {
       const steeredAt = Date.now()
       try {
-        const cancelled = await TaskQueue.cancelSteered(id, { steeredInto: generation, steeredAt })
+        const cancelled = await TaskQueue.cancelSteered(id, {
+          steeredInto: generation,
+          steeredAt,
+          steeredAppliedAt: latestReceipt.status === "applied" ? steeredAt : undefined,
+        })
+        const afterCancel = SessionSteering.admissionState({ sessionID, clientID })
+        if (afterCancel?.receipt.status === "applied") {
+          // cancelSteered can yield after its write. If the apply landed during
+          // that yield, its transaction already stamped the row; this is also
+          // an idempotent repair for an apply that beat the cancellation write.
+          TaskQueue.markSteeredAppliedInTransaction(id, generation)
+          stopSteerHeartbeat(id)
+          return { item: await TaskQueue.get(id), receipt: afterCancel.receipt }
+        }
+        if (afterCancel?.receipt.status === "rejected") {
+          await reconcileDiscarded(sessionID, [{ ...afterCancel.receipt, clientID }], {
+            aborted: afterCancel.interrupted,
+          })
+          return { item: await TaskQueue.get(id), receipt: afterCancel.receipt }
+        }
         // Keep the row's owner heartbeat fresh for the whole waiting window —
         // the drain only beats at step boundaries, and the gap between
         // admission and the next boundary can span a multi-minute tool call.

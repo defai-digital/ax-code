@@ -1274,7 +1274,7 @@ export namespace TaskQueue {
    */
   export async function cancelSteered(
     id: TaskQueueID,
-    audit: { steeredInto: string; steeredAt: number },
+    audit: { steeredInto: string; steeredAt: number; steeredAppliedAt?: number },
   ): Promise<Info> {
     const fromStatuses: Status[] = ["queued", "waiting_for_idle", "paused"]
     const now = Date.now()
@@ -1296,7 +1296,8 @@ export namespace TaskQueue {
         steeredAt: audit.steeredAt,
         steeredHeartbeatAt: now,
       }
-      delete payload["steeredAppliedAt"]
+      if (audit.steeredAppliedAt === undefined) delete payload["steeredAppliedAt"]
+      else payload["steeredAppliedAt"] = audit.steeredAppliedAt
       const row = db
         .update(TaskQueueTable)
         .set({

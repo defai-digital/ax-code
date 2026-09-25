@@ -47,6 +47,8 @@ export namespace SessionSteering {
     queueClientID?: string
     /** Row id of that durable identity, for the atomic applied stamp. */
     queueRowID?: TaskQueueID
+    /** Whether finish interrupted the generation before this receipt applied. */
+    endedInterrupted?: boolean
   }
   type Entry = { active?: { generation: string; signal: AbortSignal }; receipts: Map<string, Pending> }
   const state = Instance.state(() => new Map<SessionID, Entry>())
@@ -85,6 +87,7 @@ export namespace SessionSteering {
     current.active = undefined
     const discarded: Receipt[] = []
     for (const pending of current.receipts.values()) {
+      pending.endedInterrupted = aborted
       if (pending.receipt.status === "accepted") {
         pending.receipt.status = "rejected"
         pending.receipt.reason = "generation_ended_before_application"
@@ -134,6 +137,13 @@ export namespace SessionSteering {
   /** The durable row identity already attached to this admitted steer, if any. */
   export function durableIdentity(input: { sessionID: SessionID; clientID: string }): string | undefined {
     return state().get(input.sessionID)?.receipts.get(input.clientID)?.queueClientID
+  }
+
+  /** Inspect the latest receipt while a queue row crosses into durable steer ownership. */
+  export function admissionState(input: { sessionID: SessionID; clientID: string }) {
+    const pending = state().get(input.sessionID)?.receipts.get(input.clientID)
+    if (!pending?.admitted) return undefined
+    return { receipt: { ...pending.receipt }, interrupted: pending.endedInterrupted === true }
   }
 
   export function view(sessionID: SessionID): z.infer<typeof View> {

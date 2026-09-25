@@ -224,6 +224,98 @@ test("a steer admitted but never applied returns the row to the queue when the g
   })
 })
 
+test("an apply before queue cancellation is stamped before the steer returns", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({})
+      const controller = new AbortController()
+      SessionSteering.begin(session.id, controller.signal)
+      const item = await enqueueFollowUp(session.id, "apply while the queue row is held")
+      const cancelSteered = TaskQueue.cancelSteered.bind(TaskQueue)
+      vi.spyOn(TaskQueueSteer, "markSteeredApplied").mockResolvedValue(undefined)
+      vi.spyOn(TaskQueue, "cancelSteered").mockImplementation(async (id, audit) => {
+        const applied = await SessionSteering.drain(
+          session.id,
+          controller.signal,
+          async ({ beforeCommit, afterCommit }) => {
+            beforeCommit()
+            afterCommit()
+          },
+        )
+        expect(applied).toBe(true)
+        return cancelSteered(id, audit)
+      })
+
+      const result = await TaskQueueSteer.steer(item.id)
+      expect(result.receipt?.status).toBe("applied")
+      const row = await TaskQueue.get(item.id)
+      expect(row.status).toBe("cancelled")
+      expect(row.payload["steeredAppliedAt"]).toBeTypeOf("number")
+      const recovered = await TaskQueue.recoverInterrupted({ now: Date.now() + 120_000, livenessMs: 0 })
+      expect(recovered.requeued.some((candidate) => candidate.id === item.id)).toBe(false)
+    },
+  })
+})
+
+test("an already applied steer is stamped in the cancellation write", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({})
+      const controller = new AbortController()
+      SessionSteering.begin(session.id, controller.signal)
+      const item = await enqueueFollowUp(session.id, "already applied before cancellation")
+      const submit = SessionPrompt.steer.bind(SessionPrompt)
+      vi.spyOn(SessionPrompt, "steer").mockImplementation(async (sessionID, input) => {
+        const receipt = await submit(sessionID, input)
+        expect(
+          await SessionSteering.drain(sessionID, controller.signal, async ({ beforeCommit, afterCommit }) => {
+            beforeCommit()
+            afterCommit()
+          }),
+        ).toBe(true)
+        return receipt
+      })
+      const cancelSteered = TaskQueue.cancelSteered.bind(TaskQueue)
+      const cancel = vi.spyOn(TaskQueue, "cancelSteered").mockImplementation(async (id, audit) => {
+        expect(audit.steeredAppliedAt).toBeTypeOf("number")
+        return cancelSteered(id, audit)
+      })
+
+      const result = await TaskQueueSteer.steer(item.id)
+      expect(result.receipt?.status).toBe("applied")
+      expect(cancel).toHaveBeenCalledOnce()
+      expect((await TaskQueue.get(item.id)).payload["steeredAppliedAt"]).toBeTypeOf("number")
+    },
+  })
+})
+
+test("a generation ending before queue cancellation restores the held follow-up", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({})
+      SessionSteering.begin(session.id, new AbortController().signal)
+      const item = await enqueueFollowUp(session.id, "return this after the turn ends")
+      const cancelSteered = TaskQueue.cancelSteered.bind(TaskQueue)
+      vi.spyOn(TaskQueue, "cancelSteered").mockImplementation(async (id, audit) => {
+        SessionSteering.finish(session.id, { interrupted: true })
+        return cancelSteered(id, audit)
+      })
+
+      const result = await TaskQueueSteer.steer(item.id)
+      expect(result.receipt?.status).toBe("rejected")
+      const row = await TaskQueue.get(item.id)
+      expect(row.status).toBe("paused")
+      expect(row.payload["steeredInto"]).toBeUndefined()
+    },
+  })
+})
+
 test("a steer whose apply fails mid-drain returns the row to the queue", async () => {
   await using tmp = await tmpdir({ git: true })
   const app = Server.Default()

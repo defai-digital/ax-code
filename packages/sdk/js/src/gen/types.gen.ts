@@ -1052,6 +1052,9 @@ export type Event =
   | EventMessagePartUpdated
   | EventMessagePartDelta
   | EventMessagePartRemoved
+  | EventTaskQueueCreated
+  | EventTaskQueueUpdated
+  | EventTaskQueueDeleted
   | EventPermissionAsked
   | EventPermissionReplied
   | EventTodoUpdated
@@ -1060,9 +1063,6 @@ export type Event =
   | EventQuestionAsked
   | EventQuestionReplied
   | EventQuestionRejected
-  | EventTaskQueueCreated
-  | EventTaskQueueUpdated
-  | EventTaskQueueDeleted
   | EventSessionCompacted
   | EventFileEdited
   | EventMcpToolsChanged
