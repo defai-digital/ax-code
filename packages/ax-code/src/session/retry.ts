@@ -353,9 +353,9 @@ export namespace SessionRetry {
    * The attempt budget for a retryable error. Concurrency-limit hits get the
    * extended CONCURRENCY_RETRY_MAX_ATTEMPTS budget because a saturated shared
    * pool routinely outlasts the generic budget; every other retryable
-   * condition keeps RETRY_MAX_ATTEMPTS. processor-impl.ts still reads
-   * RETRY_MAX_ATTEMPTS directly today and will consume this helper in a later
-   * wave.
+   * condition keeps RETRY_MAX_ATTEMPTS. Callers that classify the provider
+   * error themselves must go through this helper rather than reading
+   * RETRY_MAX_ATTEMPTS directly (processor-impl.ts does).
    */
   export function maxAttemptsFor(error?: MessageV2.APIError): number {
     return error !== undefined && isConcurrencyLimit(error) ? CONCURRENCY_RETRY_MAX_ATTEMPTS : RETRY_MAX_ATTEMPTS
