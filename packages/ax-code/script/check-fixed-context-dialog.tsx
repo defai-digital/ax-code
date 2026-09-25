@@ -18,7 +18,8 @@ const { LanguageProvider, useLanguage } = await import("../src/cli/tui/context/l
 const { ThemeProvider } = await import("../src/cli/tui/context/theme")
 const { KeybindProvider } = await import("../src/cli/tui/context/keybind")
 const { ToastProvider } = await import("../src/cli/tui/ui/toast")
-const { DialogProvider, useDialog } = await import("../src/cli/tui/ui/dialog")
+const { DialogProvider, DialogStack, useDialog } = await import("../src/cli/tui/ui/dialog")
+const { CommandProvider } = await import("../src/cli/tui/component/dialog-command")
 const { DialogPrompt } = await import("../src/cli/tui/ui/dialog-prompt")
 const { FixedContextDialog } = await import("../src/cli/tui/component/dialog-fixed-context")
 const { createEffect } = await import("solid-js")
@@ -46,8 +47,11 @@ function Providers(props: ParentProps) {
             <ThemeProvider mode="dark">
               <KeybindProvider>
                 <DialogProvider>
-                  <Controls />
-                  {props.children}
+                  <CommandProvider>
+                    <Controls />
+                    {props.children}
+                    <DialogStack />
+                  </CommandProvider>
                 </DialogProvider>
               </KeybindProvider>
             </ThemeProvider>

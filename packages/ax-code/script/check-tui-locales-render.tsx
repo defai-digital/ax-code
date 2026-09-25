@@ -17,7 +17,8 @@ const { LanguageProvider, useLanguage } = await import("../src/cli/tui/context/l
 const { ThemeProvider } = await import("../src/cli/tui/context/theme")
 const { KeybindProvider } = await import("../src/cli/tui/context/keybind")
 const { ToastProvider } = await import("../src/cli/tui/ui/toast")
-const { DialogProvider, useDialog } = await import("../src/cli/tui/ui/dialog")
+const { DialogProvider, DialogStack, useDialog } = await import("../src/cli/tui/ui/dialog")
+const { CommandProvider, useCommandDialog } = await import("../src/cli/tui/component/dialog-command")
 const { SetupWizard } = await import("../src/cli/tui/component/setup-wizard")
 const { DialogLanguage } = await import("../src/cli/tui/component/dialog-language")
 const { DialogHelp } = await import("../src/cli/tui/ui/dialog-help")
@@ -56,8 +57,11 @@ function Providers(props: ParentProps) {
             <ThemeProvider mode="dark">
               <KeybindProvider>
                 <DialogProvider>
-                  <Controls />
-                  {props.children}
+                  <CommandProvider>
+                    <Controls />
+                    {props.children}
+                    <DialogStack />
+                  </CommandProvider>
                 </DialogProvider>
               </KeybindProvider>
             </ThemeProvider>
@@ -226,6 +230,22 @@ try {
           `${locale}: leaked selection listeners`,
         )
       }
+      // defai-digital/ax-code#470: dialogs render inside DialogStack, which must
+      // be mounted within CommandProvider. DialogSetup calls useCommandDialog()
+      // and crashed on first run when the stack rendered outside the command
+      // context.
+      function CommandContextProbe() {
+        const command = useCommandDialog()
+        return <text>{`command-context:${typeof command.trigger}`}</text>
+      }
+      dialog.replace(() => <CommandContextProbe />)
+      await setup.flush()
+      assert(
+        setup.captureCharFrame().includes("command-context:function"),
+        "dialog rendered outside CommandProvider cannot use useCommandDialog()",
+      )
+      dialog.clear()
+      await setup.flush()
       // Live switch without a remount updates the actual dialog tree.
       language.setLocale("en")
       dialog.replace(() => <DialogLanguage />)

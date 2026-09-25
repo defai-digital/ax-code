@@ -222,31 +222,42 @@ const ctx = createContext<DialogContext>()
 
 export function DialogProvider(props: ParentProps) {
   const value = init()
+  return (
+    <ctx.Provider value={value}>
+      <ContextMenuProvider value={value.contextMenu}>{props.children}</ContextMenuProvider>
+    </ctx.Provider>
+  )
+}
+
+// Renders the active dialog stack plus the screen-level context-menu overlay.
+// Mount this inside CommandProvider, sibling to the app content: DialogProvider
+// only provides context, so mounting the stack in its own JSX would render
+// dialogs outside CommandProvider and useCommandDialog() would throw on open
+// (first-run setup crashed this way, defai-digital/ax-code#470).
+export function DialogStack() {
+  const value = useDialog()
   const renderer = useRenderer()
   const toast = useToast()
   return (
-    <ctx.Provider value={value}>
-      <ContextMenuProvider value={value.contextMenu}>
-        {props.children}
-        <box
-          position="absolute"
-          onMouseDown={(evt: MouseEvent) => contextMenuMouseDown(evt, value.contextMenu, renderer)}
-          onMouseUp={
-            !Flag.AX_CODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT ? () => Selection.copy(renderer, toast) : undefined
-          }
-          onMouseScroll={() => value.contextMenu.close()}
-        >
-          <Show when={value.stack.at(-1)}>
-            {(item) => (
-              <Dialog onClose={() => value.clear()} size={value.size}>
-                {item().element}
-              </Dialog>
-            )}
-          </Show>
-        </box>
-        <ContextMenuOverlay menu={value.contextMenu} />
-      </ContextMenuProvider>
-    </ctx.Provider>
+    <>
+      <box
+        position="absolute"
+        onMouseDown={(evt: MouseEvent) => contextMenuMouseDown(evt, value.contextMenu, renderer)}
+        onMouseUp={
+          !Flag.AX_CODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT ? () => Selection.copy(renderer, toast) : undefined
+        }
+        onMouseScroll={() => value.contextMenu.close()}
+      >
+        <Show when={value.stack.at(-1)}>
+          {(item) => (
+            <Dialog onClose={() => value.clear()} size={value.size}>
+              {item().element}
+            </Dialog>
+          )}
+        </Show>
+      </box>
+      <ContextMenuOverlay menu={value.contextMenu} />
+    </>
   )
 }
 

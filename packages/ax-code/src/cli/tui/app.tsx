@@ -29,7 +29,7 @@ import { Flag } from "@/flag/flag"
 import { WorkMode } from "@/mode/work-mode"
 import { providerModelKey } from "@/provider/model-key"
 
-import { DialogProvider, useDialog } from "@tui/ui/dialog"
+import { DialogProvider, DialogStack, useDialog } from "@tui/ui/dialog"
 import { contextMenuMouseDown, useContextMenu } from "@tui/ui/context-menu"
 import { SDKProvider, useSDK } from "@tui/context/sdk"
 import { SyncProvider, useSync } from "@tui/context/sync"
@@ -207,6 +207,7 @@ export function tui(input: TuiInput) {
                                                     </PromptRefProvider>
                                                   </PromptHistoryProvider>
                                                 </FrecencyProvider>
+                                                <DialogStack />
                                               </CommandProvider>
                                             </DialogProvider>
                                           </AxEngineDownloadsProvider>

@@ -30,10 +30,11 @@ export function DialogLoading(props: DialogLoadingProps) {
   )
 }
 
-// Returns a thunk so dialog.replace() defers component construction until
-// the DialogProvider's <Show> render scope. Calling <DialogLoading/> eagerly
-// from an async onSelect callback runs it outside the provider's ctx.Provider
-// and useDialog() throws "must be used within a DialogProvider".
+// Returns a thunk so dialog.replace() defers component construction until the
+// DialogStack <Show> render scope inside the provider tree. Calling
+// <DialogLoading/> eagerly from an async onSelect callback runs it outside the
+// provider's ctx.Provider and useDialog() throws "must be used within a
+// DialogProvider".
 export function renderDialogLoading(props: DialogLoadingProps): () => JSX.Element {
   return () => <DialogLoading {...props} />
 }
