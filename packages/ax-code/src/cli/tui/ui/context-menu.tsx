@@ -10,9 +10,14 @@ import { Clipboard } from "@tui/util/clipboard"
 import { isRenderableAlive } from "@tui/util/renderable-safety"
 import { clipboardTextPaste } from "@tui/component/prompt/view-model"
 import { stringWidth } from "@/bun/node-compat"
-import { contextMenuAvailability, contextMenuPlacement, type ContextMenuAvailability } from "./context-menu-model"
+import {
+  contextMenuAvailability,
+  contextMenuPlacement,
+  scheduledTaskMenuItems,
+  type ContextMenuState,
+} from "./context-menu-model"
 
-export type ContextMenuState = ContextMenuAvailability & { x: number; y: number }
+export type { ContextMenuState } from "./context-menu-model"
 
 export type PromptPasteRegistration = {
   focused: () => boolean
@@ -85,7 +90,7 @@ export function contextMenuMouseDown(evt: MouseEvent, menu: ContextMenu, rendere
   }
   evt.preventDefault()
   evt.stopPropagation()
-  menu.openAt({ x: evt.x, y: evt.y, ...availability })
+  menu.openAt({ kind: "clipboard", x: evt.x, y: evt.y, ...availability })
 }
 
 export function ContextMenuOverlay(props: { menu: ContextMenu }) {
@@ -94,16 +99,35 @@ export function ContextMenuOverlay(props: { menu: ContextMenu }) {
   const renderer = useRenderer()
   const toast = useToast()
   const uiText = useLanguage().t
-  const [hover, setHover] = createSignal<"copy" | "paste">()
+  const [hover, setHover] = createSignal<"copy" | "paste" | "delete">()
+  const [taskDeleteArmed, setTaskDeleteArmed] = createSignal(false)
 
   const view = createMemo(() => {
     const state = props.menu.current
     if (!state) return null
+    // Two border columns plus one column of padding on each side.
+    if (state.kind === "scheduled-task") {
+      const items = scheduledTaskMenuItems(taskDeleteArmed()).map((item) => ({
+        id: item.id,
+        label: uiText(item.labelKey),
+        danger: item.danger,
+      }))
+      const width = Math.max(...items.map((item) => stringWidth(item.label))) + 4
+      const height = items.length + 2
+      const placement = contextMenuPlacement({
+        x: state.x,
+        y: state.y,
+        width,
+        height,
+        termWidth: dimensions().width,
+        termHeight: dimensions().height,
+      })
+      return { kind: "scheduled-task" as const, items, width, ...placement }
+    }
     const items = [
       { id: "copy" as const, label: uiText("ui.copy"), enabled: state.copy },
       { id: "paste" as const, label: uiText("ui.paste"), enabled: state.paste },
     ]
-    // Two border columns plus one column of padding on each side.
     const width = Math.max(...items.map((item) => stringWidth(item.label))) + 4
     const height = items.length + 2
     const placement = contextMenuPlacement({
@@ -114,8 +138,18 @@ export function ContextMenuOverlay(props: { menu: ContextMenu }) {
       termWidth: dimensions().width,
       termHeight: dimensions().height,
     })
-    return { items, width, ...placement }
+    return { kind: "clipboard" as const, items, width, ...placement }
   })
+
+  // Every open replaces the state object, so keying the reset on state
+  // identity also covers reopening the menu on the same row: the armed
+  // confirm copy must never survive across menus.
+  createEffect(
+    on(
+      () => props.menu.current,
+      () => setTaskDeleteArmed(false),
+    ),
+  )
 
   // A resize invalidates the cell coordinates the menu was opened at.
   createEffect(
@@ -129,6 +163,17 @@ export function ContextMenuOverlay(props: { menu: ContextMenu }) {
   function copy() {
     props.menu.close()
     Selection.copy(renderer, toast)
+  }
+
+  function taskDelete() {
+    const state = props.menu.current
+    if (!state || state.kind !== "scheduled-task") return
+    if (!taskDeleteArmed()) {
+      setTaskDeleteArmed(true)
+      return
+    }
+    props.menu.close()
+    state.onDelete()
   }
 
   function paste() {
@@ -180,26 +225,49 @@ export function ContextMenuOverlay(props: { menu: ContextMenu }) {
           // menu before mouse-up activates the item.
           onMouseDown={(evt: MouseEvent) => evt.stopPropagation()}
         >
-          <For each={view().items}>
-            {(item) => (
-              <text
-                fg={!item.enabled ? theme.border : hover() === item.id ? theme.text : theme.textMuted}
-                bg={item.enabled && hover() === item.id ? theme.backgroundElement : undefined}
-                selectable={false}
-                onMouseOver={() => {
-                  if (item.enabled) setHover(item.id)
-                }}
-                onMouseOut={() => setHover(undefined)}
-                onMouseUp={() => {
-                  if (!item.enabled) return
-                  if (item.id === "copy") copy()
-                  else paste()
-                }}
-              >
-                {item.label}
-              </text>
-            )}
-          </For>
+          {(() => {
+            const current = view()
+            if (current.kind === "scheduled-task") {
+              return (
+                <For each={current.items}>
+                  {(item) => (
+                    <text
+                      fg={item.danger ? theme.error : theme.text}
+                      bg={hover() === item.id ? theme.backgroundElement : undefined}
+                      selectable={false}
+                      onMouseOver={() => setHover(item.id)}
+                      onMouseOut={() => setHover(undefined)}
+                      onMouseUp={() => taskDelete()}
+                    >
+                      {item.label}
+                    </text>
+                  )}
+                </For>
+              )
+            }
+            return (
+              <For each={current.items}>
+                {(item) => (
+                  <text
+                    fg={!item.enabled ? theme.border : hover() === item.id ? theme.text : theme.textMuted}
+                    bg={item.enabled && hover() === item.id ? theme.backgroundElement : undefined}
+                    selectable={false}
+                    onMouseOver={() => {
+                      if (item.enabled) setHover(item.id)
+                    }}
+                    onMouseOut={() => setHover(undefined)}
+                    onMouseUp={() => {
+                      if (!item.enabled) return
+                      if (item.id === "copy") copy()
+                      else paste()
+                    }}
+                  >
+                    {item.label}
+                  </text>
+                )}
+              </For>
+            )
+          })()}
         </box>
       )}
     </Show>

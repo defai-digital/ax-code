@@ -1,10 +1,14 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js"
+import { MouseButton, type MouseEvent } from "ax-tui"
 import type { Session, TaskQueueGetResponse } from "@ax-code/sdk/v2"
 import { Locale } from "@/util/locale"
 import { useSDK } from "@tui/context/sdk"
 import { useKV } from "@tui/context/kv"
 import { useRoute } from "@tui/context/route"
 import { useTheme } from "@tui/context/theme"
+import { useLanguage } from "@tui/context/language"
+import { useToast } from "@tui/ui/toast"
+import { useContextMenu } from "@tui/ui/context-menu"
 import { useCommandDialog } from "./dialog-command"
 import {
   SCHEDULED_TASK_EVENTS,
@@ -116,10 +120,13 @@ export function scheduledSessionLinks(
 }
 
 export function ScheduledSessionNavigation(props: { width: number; sessions: readonly Session[] }) {
+  const uiText = useLanguage().t
   const sdk = useSDK()
   const kv = useKV()
   const route = useRoute()
   const command = useCommandDialog()
+  const toast = useToast()
+  const contextMenu = useContextMenu()
   const { theme } = useTheme()
   const [tasks, setTasks] = createSignal<ScheduledTaskInfo[]>([])
   const [runs, setRuns] = createSignal<ReadonlyMap<string, ScheduledTaskRunInfo>>(new Map())
@@ -184,6 +191,36 @@ export function ScheduledSessionNavigation(props: { width: number; sessions: rea
       unref: true,
     })
   }
+
+  async function deleteTask(taskID: string) {
+    try {
+      const result = await sdk.client.scheduledTask.delete({ scheduledTaskID: taskID })
+      if (result.error) {
+        toast.show({ message: uiText("ui.failedToDeleteScheduledTask"), variant: "error" })
+        return
+      }
+      requestRefresh()
+    } catch {
+      toast.show({ message: uiText("ui.failedToDeleteScheduledTask"), variant: "error" })
+    }
+  }
+
+  // A task can vanish from the rail while its context menu is open (SSE
+  // refresh after a delete elsewhere). Clicking through would run a stale
+  // handler, so close the menu instead.
+  createEffect(() => {
+    const menu = contextMenu.current
+    if (menu?.kind !== "scheduled-task") return
+    if (links().some((link) => link.taskID === menu.taskID)) return
+    contextMenu.close()
+  })
+
+  // The rail is the only opener of scheduled-task menus; a menu must not
+  // outlive the rail itself (e.g. the navigation rail unmounts on layout
+  // changes). Tasks draining to zero close the menu via the links effect.
+  onCleanup(() => {
+    if (contextMenu.current?.kind === "scheduled-task") contextMenu.close()
+  })
 
   onMount(() => {
     void refresh()
@@ -255,7 +292,24 @@ export function ScheduledSessionNavigation(props: { width: number; sessions: rea
                   ? theme.backgroundPanel
                   : undefined
               }
-              onMouseUp={() => {
+              onMouseDown={(evt: MouseEvent) => {
+                // Only the right button opens the task menu; every other
+                // button must keep bubbling so a press elsewhere still closes
+                // an open menu through the app-root handler.
+                if (evt.button !== MouseButton.RIGHT) return
+                evt.stopPropagation()
+                evt.preventDefault()
+                contextMenu.openAt({
+                  kind: "scheduled-task",
+                  x: evt.x,
+                  y: evt.y,
+                  taskID: link.taskID,
+                  onDelete: () => void deleteTask(link.taskID),
+                })
+              }}
+              onMouseUp={(evt: MouseEvent) => {
+                // The terminating release of a right-click must not navigate.
+                if (evt.button !== MouseButton.LEFT) return
                 if (link.sessionID) route.navigate({ type: "session", sessionID: link.sessionID })
                 else command.trigger("scheduled.list")
               }}

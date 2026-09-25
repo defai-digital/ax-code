@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest"
-import { contextMenuAvailability, contextMenuPlacement } from "../../../src/cli/tui/ui/context-menu-model"
+import {
+  contextMenuAvailability,
+  contextMenuPlacement,
+  scheduledTaskMenuItems,
+} from "../../../src/cli/tui/ui/context-menu-model"
 
 describe("context menu availability", () => {
   test("does not open when neither copy nor paste applies", () => {
@@ -30,5 +34,14 @@ describe("context menu placement", () => {
       left: 0,
       top: 0,
     })
+  })
+})
+
+describe("scheduled task menu items", () => {
+  test("offers the plain delete label before the destructive action is armed", () => {
+    expect(scheduledTaskMenuItems(false)).toEqual([{ id: "delete", labelKey: "ui.deleteTask", danger: false }])
+  })
+  test("armed state swaps to the confirm label and the danger color", () => {
+    expect(scheduledTaskMenuItems(true)).toEqual([{ id: "delete", labelKey: "ui.deleteTaskConfirm", danger: true }])
   })
 })
