@@ -22,7 +22,11 @@ import { EnsemblePreflight } from "../mode/preflight"
 import type { ModelID, ProviderID } from "../provider/schema"
 
 const MAX_DEPTH = 5
-const MAX_PARALLEL = 8
+export const MAX_PARALLEL = 8
+/** Swarm members in flight at once. Members beyond this queue behind them. */
+const DEFAULT_CONCURRENCY = 4
+/** Literal placeholder one `prompt_template` fans out over `items`. */
+const ITEM_PLACEHOLDER = "{{item}}"
 const SUBAGENT_TIMEOUT_MS = 10 * 60 * 1000
 const SUBAGENT_FINALIZE_TIMEOUT_MS = 2 * 60 * 1000
 const log = Log.create({ service: "task-parallel-tool" })
@@ -50,13 +54,115 @@ const TaskItem = z.object({
   output_schema: TaskOutputSchema.Parameter.optional(),
 })
 
-const parameters = z.object({
-  tasks: z
-    .array(TaskItem)
-    .min(1, "Provide at least one task")
-    .max(MAX_PARALLEL, `At most ${MAX_PARALLEL} parallel tasks`)
-    .describe("Independent subagent tasks to run concurrently"),
-})
+const parameters = z
+  .object({
+    tasks: z
+      .array(TaskItem)
+      .min(1, "Provide at least one task")
+      .max(MAX_PARALLEL, `At most ${MAX_PARALLEL} parallel tasks`)
+      .optional()
+      .describe("Independent subagent tasks to run concurrently, each with its own full prompt"),
+    items: z
+      .array(z.string().min(1))
+      .min(1, "Provide at least one item")
+      .max(MAX_PARALLEL, `At most ${MAX_PARALLEL} items`)
+      .optional()
+      .describe(
+        `Items to fan one prompt_template over. Each item replaces every ${ITEM_PLACEHOLDER} occurrence, so one brief covers N members instead of writing N prompts.`,
+      ),
+    prompt_template: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        `Prompt shared by every item, containing the literal ${ITEM_PLACEHOLDER} placeholder. Validation runs before any member starts.`,
+      ),
+    subagent_type: z
+      .string()
+      .optional()
+      .describe("Agent type for every item member. Required with items; the whole swarm uses one type."),
+    concurrency: z
+      .number()
+      .int()
+      .min(1)
+      .max(MAX_PARALLEL)
+      .optional()
+      .describe(`Members allowed to run at once (default ${DEFAULT_CONCURRENCY}). Members beyond this queue.`),
+    output_schema: TaskOutputSchema.Parameter.optional().describe(
+      "Optional JSON Schema every item member must return. One schema per swarm, not per item.",
+    ),
+  })
+  .describe("Provide either tasks, or items with prompt_template and subagent_type — never both")
+
+export type TaskParallelItem = z.infer<typeof TaskItem>
+
+/**
+ * Expand and validate the two accepted call shapes into one member list. Pure
+ * so the regression is unit-testable without driving the Provider stack, and so
+ * every rejection happens BEFORE a child session, permission ask or worktree
+ * exists — a malformed swarm costs nothing.
+ */
+export function expandTaskParallelInput(input: {
+  tasks?: readonly TaskParallelItem[]
+  items?: readonly string[]
+  promptTemplate?: string
+  subagentType?: string
+  outputSchema?: TaskParallelItem["output_schema"]
+}): { ok: true; tasks: TaskParallelItem[] } | { ok: false; message: string } {
+  const hasTasks = (input.tasks?.length ?? 0) > 0
+  const hasItems = (input.items?.length ?? 0) > 0
+  if (hasTasks && (hasItems || input.promptTemplate !== undefined)) {
+    return { ok: false, message: "Provide either tasks, or items with prompt_template — not both" }
+  }
+  if (!hasTasks && !hasItems) {
+    return { ok: false, message: "Provide tasks, or items with prompt_template and subagent_type" }
+  }
+  if (hasTasks) {
+    const tasks = [...input.tasks!]
+    if (tasks.length > MAX_PARALLEL) return { ok: false, message: `At most ${MAX_PARALLEL} parallel tasks` }
+    return { ok: true, tasks }
+  }
+
+  const items = input.items!
+  // The schema already caps this; the pure function enforces it too so a direct
+  // caller cannot build an over-cap swarm.
+  if (items.length > MAX_PARALLEL) return { ok: false, message: `At most ${MAX_PARALLEL} items` }
+  if (input.promptTemplate === undefined) {
+    return { ok: false, message: "prompt_template is required when items are provided" }
+  }
+  if (!input.promptTemplate.includes(ITEM_PLACEHOLDER)) {
+    return { ok: false, message: `prompt_template must contain the literal ${ITEM_PLACEHOLDER} placeholder` }
+  }
+  if (input.subagentType === undefined) {
+    return { ok: false, message: "subagent_type is required when items are provided" }
+  }
+  // Single pass, no rescan: an item that itself contains the placeholder text
+  // is substituted verbatim, never expanded again.
+  const tasks = items.map((item) => ({
+    description: swarmMemberDescription(item),
+    prompt: input.promptTemplate!.split(ITEM_PLACEHOLDER).join(item),
+    subagent_type: input.subagentType!,
+    ...(input.outputSchema === undefined ? {} : { output_schema: input.outputSchema }),
+  }))
+  const seen = new Set<string>()
+  for (const task of tasks) {
+    // Compare trimmed prompts: two items that differ only in surrounding
+    // whitespace fill to the same brief, which the model almost never intends.
+    const key = task.prompt.trim()
+    if (seen.has(key)) {
+      return { ok: false, message: "Every item must produce a distinct prompt; two items filled identically" }
+    }
+    seen.add(key)
+  }
+  return { ok: true, tasks }
+}
+
+/** Human label for one item member: first line, bounded, never empty. */
+function swarmMemberDescription(item: string) {
+  const firstLine = item.split("\n").find((line) => line.trim().length > 0)?.trim() ?? item.trim()
+  const bounded = firstLine.length > 60 ? `${firstLine.slice(0, 57)}...` : firstLine
+  return bounded.length > 0 ? bounded : "swarm member"
+}
 
 type TaskItemInput = z.infer<typeof TaskItem>
 
@@ -350,14 +456,29 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
         toolCtx.extra?.bypassAgentCheck === true,
       )
 
+      // Expand and validate before any gate can create state: a malformed swarm
+      // must not reach the permission ask, agent resolution or a child session.
+      const expansion = expandTaskParallelInput({
+        tasks: params.tasks,
+        items: params.items,
+        promptTemplate: params.prompt_template,
+        subagentType: params.subagent_type,
+        outputSchema: params.output_schema,
+      })
+      if (!expansion.ok) throw new Error(expansion.message)
+      const members = expansion.tasks
+      const swarmItems = (params.items?.length ?? 0) > 0
+
       if (!toolCtx.extra?.bypassAgentCheck) {
-        const types = [...new Set(params.tasks.map((t) => t.subagent_type))]
+        const types = [...new Set(members.map((t) => t.subagent_type))]
         await toolCtx.ask({
           permission: "task",
           patterns: types,
           always: ["*"],
           metadata: {
-            description: `parallel ${params.tasks.length} tasks`,
+            description: swarmItems
+              ? `swarm ${members.length} items from one template`
+              : `parallel ${members.length} tasks`,
             subagent_types: types,
             parallel: true,
           },
@@ -365,7 +486,7 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
       }
 
       const resolved = await Promise.all(
-        params.tasks.map(async (task) => {
+        members.map(async (task) => {
           const agent = await Agent.get(task.subagent_type)
           if (!agent) throw new Error(`Unknown agent type: ${task.subagent_type}`)
           return { task, agent }
@@ -391,9 +512,9 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
       }
 
       toolCtx.metadata({
-        title: `Parallel digs (${params.tasks.length})`,
+        title: `Parallel digs (${members.length})`,
         metadata: {
-          count: params.tasks.length,
+          count: members.length,
           writers: isolation.writers,
           readers: isolation.readers,
         },
@@ -413,27 +534,43 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
         failed = true
         await Promise.all(started.map((child) => cancelChild(child.sessionID)))
       }
-      const outcomes = await Promise.allSettled(
-        resolved.map(async ({ task, agent }) =>
-          runOneTask({
-            params: task,
-            ctx: toolCtx,
-            model: (await agentModel(agent)) ?? defaultModel,
-            config,
-            agent,
-            constraints,
-            onSessionCreated: (sessionID) => {
-              started.push({ sessionID, agent: agent.name })
-              if (failed) void cancelChild(sessionID)
-            },
-          }).catch(async (error) => {
+      // Bounded fan-out: at most `concurrency` members run at once, the rest
+      // queue behind them. Results are stored at their member index so the
+      // aggregation below keeps the caller's ordering regardless of finish
+      // order. A member that throws stops the pool from starting new work and
+      // cancels the siblings that already started (unchanged contract).
+      const concurrency = Math.min(params.concurrency ?? DEFAULT_CONCURRENCY, resolved.length)
+      const outcomes: Array<Awaited<ReturnType<typeof runOneTask>> | undefined> = []
+      let failure: { reason: unknown } | undefined
+      let cursor = 0
+      const runPool = async () => {
+        while (failure === undefined && !toolCtx.abort.aborted) {
+          const index = cursor++
+          const entry = resolved[index]
+          if (!entry) return
+          const { task, agent } = entry
+          try {
+            outcomes[index] = await runOneTask({
+              params: task,
+              ctx: toolCtx,
+              model: (await agentModel(agent)) ?? defaultModel,
+              config,
+              agent,
+              constraints,
+              onSessionCreated: (sessionID) => {
+                started.push({ sessionID, agent: agent.name })
+                if (failed) void cancelChild(sessionID)
+              },
+            })
+          } catch (error) {
+            failure ??= { reason: error }
             await cancelStarted()
-            throw error
-          }),
-        ),
-      )
-      const rejected = outcomes.find((outcome) => outcome.status === "rejected")
-      const settled = outcomes.flatMap((outcome) => (outcome.status === "fulfilled" ? [outcome.value] : []))
+            return
+          }
+        }
+      }
+      await Promise.all(Array.from({ length: Math.max(1, concurrency) }, () => runPool()))
+      const settled = outcomes.filter((outcome): outcome is NonNullable<typeof outcome> => outcome !== undefined)
       const stopped = new Set(settled.map((outcome) => outcome.task_id))
       for (const outcome of settled) {
         await fireSubagentStop({
@@ -442,7 +579,7 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
           status: outcome.ok ? "completed" : "failed",
         })
       }
-      if (rejected) {
+      if (failure) {
         await cancelStarted()
         for (const child of started) {
           if (stopped.has(child.sessionID)) continue
@@ -453,7 +590,7 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
           })
           stopped.add(child.sessionID)
         }
-        throw rejected.reason
+        throw failure.reason
       }
 
       const okCount = settled.filter((r) => r.ok).length
