@@ -9,7 +9,7 @@ import { ProviderID, ModelID } from "../../src/provider/schema"
 import { Auth } from "../../src/auth"
 import { Bus } from "../../src/bus"
 import { CustomApiProvider } from "../../src/provider/custom-api-provider"
-import { exactCatalogFallbackModels } from "../../src/provider/ax-trust-discovery"
+import { exactCatalogFallbackModels, FIRST_PARTY_CATALOG_IDS } from "../../src/provider/ax-trust-discovery"
 import { modelDisplayInfo } from "../../src/cli/tui/component/model-vision-label"
 
 afterEach(() => {
@@ -324,7 +324,7 @@ test.each([undefined, false] as const)(
           const model = await Provider.getModel(ProviderID.make(id), ModelID.make("deepseek-flash"))
           if (attachment === undefined) {
             expect(model.name).toBe("DeepSeek V4.1 Flash")
-            expect(model.limit).toEqual({ context: 1_000_000, output: 384_000 })
+            expect(model.limit).toEqual({ context: 1_000_000, output: 393_216 })
             expect(model.capabilities).toMatchObject({
               reasoning: true,
               toolcall: true,
@@ -387,6 +387,24 @@ test("exact catalog fallbacks keep first-party IDs and ignore prefixes", () => {
   expect(fallbacks["my-glm-5.3"]).toBeUndefined()
 })
 
+// A fallback catalog id that names no provider silently disables the fallback
+// for every model it was meant to cover, which is how `qwen/qwen3.8-27b`
+// advertised no image input. Pin each entry against the bundled snapshot.
+test("every fallback catalog id names a provider carried by the bundled snapshot", async () => {
+  const { ModelsDev } = await import("../../src/provider/models")
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const catalog = await ModelsDev.get()
+      for (const providerID of FIRST_PARTY_CATALOG_IDS) {
+        const rows = Object.keys(catalog[providerID]?.models ?? {})
+        expect(rows.length, `${providerID} carries no models in the bundled snapshot`).toBeGreaterThan(0)
+      }
+    },
+  })
+})
+
 test.each([undefined, false] as const)(
   "fills exact GLM metadata and preserves advertised attachment=%s",
   async (attachment) => {
@@ -443,3 +461,55 @@ test.each([undefined, false] as const)(
     }
   },
 )
+
+test("reads the gateway's vision and modality flags instead of its attachment flag", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+  await using api = await endpoint((_req, res) => {
+    res.end(
+      JSON.stringify({
+        data: [
+          // The real AX Trust card for a text-only deployment: the generic
+          // attachment flag is true while vision and the modality list are not.
+          {
+            id: "glm-5.3-flash",
+            name: "GLM-5.3-Flash",
+            limit: { context: 1_000_000, output: 131_072 },
+            capabilities: { attachment: true, vision: false, reasoning: true, toolcall: true, temperature: true },
+            modalities: { input: ["text"], output: ["text"] },
+          },
+          // The real card for a multimodal deployment.
+          {
+            id: "gemini-3.8-flash",
+            name: "Gemini 3.8 Flash",
+            limit: { context: 1_048_576, output: 65_536 },
+            capabilities: { attachment: true, vision: true, reasoning: true, toolcall: true, temperature: true },
+            modalities: { input: ["text", "image", "audio", "video"], output: ["text", "audio"] },
+          },
+          // A sparse card states nothing, so nothing is claimed for it.
+          { id: "grok-4.7", name: "grok-4.7" },
+        ],
+      }),
+    )
+  })
+  const id = "ax-trust-vision-flags"
+  await using tmp = await tmpdir({ config: config(id, api.url) })
+  await Auth.set(id, { type: "api", key: "test-token" })
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Provider.ready()
+        const textOnly = await Provider.getModel(ProviderID.make(id), ModelID.make("glm-5.3-flash"))
+        expect(textOnly.capabilities.input.image).toBe(false)
+        expect(modelDisplayInfo(textOnly.id, textOnly).vision).toBe(false)
+        const multimodal = await Provider.getModel(ProviderID.make(id), ModelID.make("gemini-3.8-flash"))
+        expect(multimodal.capabilities.input.image).toBe(true)
+        expect(modelDisplayInfo(multimodal.id, multimodal).label).toBe("Gemini 3.8 Flash 👀")
+        const sparse = await Provider.getModel(ProviderID.make(id), ModelID.make("grok-4.7"))
+        expect(sparse.capabilities.input.image).toBe(false)
+      },
+    })
+  } finally {
+    await Auth.remove(id)
+  }
+})

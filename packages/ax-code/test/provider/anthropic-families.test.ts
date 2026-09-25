@@ -71,7 +71,7 @@ describe("anthropic families", () => {
     expect(anthropic).toBeDefined()
     const latest = latestAnthropicFamilyModels(anthropic!)
     expect(latest.map((model) => model.id)).toEqual([
-      "claude-opus-5",
+      "claude-opus-5-5",
       "claude-sonnet-5",
       "claude-haiku-4-5",
       "claude-fable-5-1",

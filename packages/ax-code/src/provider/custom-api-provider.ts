@@ -276,6 +276,30 @@ export namespace CustomApiProvider {
     return { context, output }
   }
 
+  // A gateway card carries up to three statements about image input. An
+  // explicit `vision` flag wins, then the model's own input modality list (the
+  // shape `fromModelsDevModel` already reads for models.dev cards), then the
+  // generic `attachment` flag. `attachment` alone is too coarse: AX Trust
+  // reports attachment=true alongside vision=false for text-only deployments,
+  // and this value is read as image support by the TUI vision marker and the
+  // visual router, so a coarse true sends images to a model that cannot read
+  // them. A first-party catalog row is the last resort for sparse cards.
+  // `vision` is read from `capabilities` or the top-level `abilities` block,
+  // the same dual shape the gateway uses for its other declared abilities.
+  function imageCapable(
+    capabilities: Record<string, unknown> | undefined,
+    raw: Record<string, unknown> | undefined,
+    fallback: ModelsDev.Model | undefined,
+  ): boolean {
+    if (typeof capabilities?.vision === "boolean") return capabilities.vision
+    const abilities = isRecord(raw?.abilities) ? raw.abilities : undefined
+    if (typeof abilities?.vision === "boolean") return abilities.vision
+    const declared = isRecord(raw?.modalities) && Array.isArray(raw.modalities.input) ? raw.modalities.input : undefined
+    if (declared && declared.length > 0) return declared.some((modality) => modality === "image")
+    if (typeof capabilities?.attachment === "boolean") return capabilities.attachment
+    return fallback?.modalities?.input.includes("image") ?? false
+  }
+
   export function discoveredModel(
     id: string,
     name?: string,
@@ -302,10 +326,7 @@ export namespace CustomApiProvider {
         typeof capabilities?.reasoning === "boolean"
           ? capabilities.reasoning
           : (fallback?.reasoning ?? (caps ? caps.thinking !== "blocked" : false)),
-      attachment:
-        typeof capabilities?.attachment === "boolean"
-          ? capabilities.attachment
-          : (fallback?.modalities?.input.includes("image") ?? false),
+      attachment: imageCapable(capabilities, raw, fallback),
       temperature:
         typeof capabilities?.temperature === "boolean" ? capabilities.temperature : (fallback?.temperature ?? true),
     }

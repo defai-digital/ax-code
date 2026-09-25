@@ -3,12 +3,31 @@ import type { ProviderInfo, ProviderModel } from "./model-info"
 import { ModelID } from "./schema"
 import { ModelsDev } from "./models"
 
-// First-party vendors whose exact model IDs AX Trust resells. Sparse gateway
-// cards inherit family / interleaved / reasoning from these catalogs only.
-// Do not scan reseller catalogs: those cards disagree on windows and
+// First-party vendor catalogs whose exact model IDs AX Trust resells. Sparse
+// gateway cards inherit family / interleaved / reasoning from these tables
+// only. Do not scan reseller catalogs: those cards disagree on windows and
 // interleaved. Do not match family or prefix: a gateway alias may target a
 // different model (`my-glm-5.3` is not `glm-5.3`).
-const FIRST_PARTY_CATALOG_IDS = ["deepseek", "zhipuai", "zai", "minimax", "moonshotai", "moonshot", "alibaba"] as const
+//
+// Order is precedence: each vendor's own origin rows are consulted before the
+// same vendor's plan routes, so another vendor's SKU hosted in a plan catalog
+// can never outrank the origin vendor.
+//
+// Every id must name a provider the bundled snapshot actually carries with at
+// least one model row. `moonshotai`, `moonshot` and `alibaba` were dropped
+// because no provider carries those names, which silently disabled the
+// fallback for every model they were meant to cover — `qwen/qwen3.8-27b`
+// shipped with attachment=false for exactly that reason. The existence of
+// every entry is pinned by test/provider/ax-trust-discovery.test.ts.
+export const FIRST_PARTY_CATALOG_IDS = [
+  "deepseek",
+  "zhipuai",
+  "zai",
+  "minimax",
+  "kimi-cloud-plan",
+  "alibaba-token-plan",
+  "alibaba-token-plan-cn",
+] as const
 
 export function exactCatalogFallbackModels(
   catalog: Record<string, { models?: Record<string, ModelsDev.Model> }>,

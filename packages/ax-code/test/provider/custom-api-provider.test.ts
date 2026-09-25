@@ -95,6 +95,35 @@ describe("custom API provider model discovery", () => {
     ])
   })
 
+  test("resolves image support from vision and modalities before the attachment flag", () => {
+    const imageSupport = (rows: unknown[]) => CustomApiProvider.parseDiscoveredModels({ data: rows })[0].attachment
+
+    // AX Trust reports attachment=true alongside vision=false for text-only
+    // deployments, and a coarse true routes images at a model that cannot read
+    // them, so the generic flag alone must not imply image support.
+    expect(imageSupport([{ id: "glm-5.3-flash", capabilities: { attachment: true, vision: false } }])).toBe(false)
+    expect(
+      imageSupport([
+        { id: "glm-5.3-flash", capabilities: { attachment: true, vision: false }, modalities: { input: ["text"] } },
+      ]),
+    ).toBe(false)
+    // The model's own input modality list outranks the attachment flag both ways.
+    expect(imageSupport([{ id: "gemini-3.8-flash", modalities: { input: ["text", "image", "audio"] } }])).toBe(true)
+    expect(
+      imageSupport([{ id: "gemini-3.8-flash", capabilities: { attachment: true }, modalities: { input: ["text"] } }]),
+    ).toBe(false)
+    // vision can be true while the generic flag is absent or false, and it is
+    // read from either block the gateway uses.
+    expect(imageSupport([{ id: "vision-only", capabilities: { attachment: false, vision: true } }])).toBe(true)
+    expect(imageSupport([{ id: "vision-only", abilities: { vision: true } }])).toBe(true)
+    expect(
+      imageSupport([{ id: "glm-5.3-flash", abilities: { vision: false }, capabilities: { attachment: true } }]),
+    ).toBe(false)
+    // Sparse cards carry no statement either way; catalog inheritance for them
+    // is covered in ax-trust-discovery.test.ts.
+    expect(imageSupport([{ id: "grok-4.7" }])).toBe(false)
+  })
+
   test("maps catalog keys across reseller prefixes and [1m] suffixes", () => {
     expect(CustomApiProvider.catalogModelKey("zai/glm-5.3[1m]")).toBe(CustomApiProvider.catalogModelKey("glm-5.3"))
     expect(
