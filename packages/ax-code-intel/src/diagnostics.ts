@@ -1,6 +1,5 @@
 import type { LSPClient } from "./client"
 import type { SemanticEnvelope } from "./envelope"
-import * as LSPEnvelopeRunner from "./envelope-runner"
 import * as LSPPerf from "./perf"
 
 export type NormalizedSeverity = "error" | "warning" | "info" | "hint"
@@ -22,7 +21,15 @@ export type AggregateInput = {
 
 export async function collect(clients: LSPClient.Info[]): Promise<Record<string, LSPClient.Diagnostic[]>> {
   const results: Record<string, LSPClient.Diagnostic[]> = {}
-  for (const result of await LSPEnvelopeRunner.runAll(clients, async (client) => client.diagnostics)) {
+  // The raw record API cannot encode partial results. Refresh native pull
+  // inventories and propagate incompleteness instead of returning false clean.
+  const inventories = await Promise.all(
+    clients.map(async (client) => {
+      await client.refreshDiagnosticInventory?.()
+      return new Map(client.diagnostics)
+    }),
+  )
+  for (const result of inventories) {
     for (const [path, diagnostics] of result.entries()) {
       const arr = results[path] || []
       arr.push(...diagnostics)
@@ -36,12 +43,21 @@ export async function aggregateEnvelope(
   clients: LSPClient.Info[],
   file?: string,
 ): Promise<SemanticEnvelope<NormalizedDiagnostic[]>> {
-  return LSPPerf.metered("diagnosticsAggregated", file ? { file } : {}, async () =>
-    aggregate(
+  return LSPPerf.metered("diagnosticsAggregated", file ? { file } : {}, async () => {
+    const result = aggregate(
       clients.map((client) => ({ serverID: client.serverID, diagnostics: client.diagnostics })),
       { file, now: Date.now() },
-    ),
-  )
+    )
+    if (
+      clients.some((client) =>
+        file ? (client.diagnosticsStale?.(file) ?? client.diagnosticsDegraded) : client.diagnosticsDegraded,
+      )
+    ) {
+      result.degraded = true
+      result.completeness = "partial"
+    }
+    return result
+  })
 }
 
 export function normalizeSeverity(s: number | undefined): NormalizedSeverity {

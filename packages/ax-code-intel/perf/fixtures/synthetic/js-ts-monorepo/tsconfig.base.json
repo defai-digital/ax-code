@@ -4,11 +4,10 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "strict": true,
-    "baseUrl": ".",
     "paths": {
-      "@perf/core": ["packages/core/src/index.ts"],
-      "@perf/api": ["packages/api/src/index.ts"],
-      "@perf/cli": ["packages/cli/src/index.ts"]
+      "@perf/core": ["./packages/core/src/index.ts"],
+      "@perf/api": ["./packages/api/src/index.ts"],
+      "@perf/cli": ["./packages/cli/src/index.ts"]
     }
   }
 }

@@ -56,6 +56,7 @@ describe("LSP call hierarchy aggregation", () => {
       fn: async () => {
         configSpy = vi.spyOn(Config, "get").mockResolvedValue({
           lsp: {
+            typescript: { disabled: true },
             fake: {
               command: [process.execPath, serverPath],
               extensions: [".ts"],
@@ -94,6 +95,7 @@ describe("LSP call hierarchy aggregation", () => {
       fn: async () => {
         configSpy = vi.spyOn(Config, "get").mockResolvedValue({
           lsp: {
+            typescript: { disabled: true },
             fake: {
               command: [process.execPath, serverPath],
               extensions: [".ts"],

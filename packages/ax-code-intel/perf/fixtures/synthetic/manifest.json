@@ -5,7 +5,7 @@
       "id": "js-ts-monorepo",
       "language": "ts",
       "serverId": "typescript",
-      "serverBinary": "typescript-language-server",
+      "serverBinary": "typescript-native",
       "diagnosticFile": "packages/api/src/handler.ts",
       "diagnosticEditLine": "export const PERF_PROBE: number = \"nope\"",
       "files": {
@@ -38,7 +38,7 @@
         "packages/core/src/text.ts": "6fdfd50b216179afadae8c7d91dc073c628da4b5f5cef788a02c7b228acd5a81",
         "packages/core/src/validators.ts": "af906456663ceccdd00e471ae2ed3ca2e25bbec7208c1f951c461f501737982a",
         "packages/core/tsconfig.json": "8f6e85eeaa8025fe7b2f01763e03f32540d3e2869ae857490d685098460f4e3a",
-        "tsconfig.base.json": "312ddcb0e6ada2902c9b8b0da410507c23f16c44970fb18c15a2677493d43ff0",
+        "tsconfig.base.json": "c0686ae69f2ff3a14cf19c0a316e738b48d08d5e32c09d2d5e4310cb44981eb3",
         "tsconfig.json": "2aac615001ff3bfb25794f927ba7f249447b8ad3dc42fb2a1855ce30a4b78a28"
       },
       "queries": {

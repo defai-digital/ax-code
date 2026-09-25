@@ -145,10 +145,8 @@ export function perfTmpRoot(): string {
 // language servers resolve their toolchain from the process cwd, so running
 // them under the repo picks up the repo's rust-toolchain.toml (the
 // rust-analyzer rustup proxy fails against the machine's default toolchain)
-// and lets Node module resolution walk up to the repo's node_modules (the
-// typescript server def resolves typescript/lib/tsserver.js relative to the
-// workspace root). AX_CODE_PERF_TMP overrides the root for concurrent-run
-// isolation — point it inside the repo if you rely on that resolution.
+// TypeScript resolves the shipped native compiler independently of fixture cwd.
+// AX_CODE_PERF_TMP overrides the root for concurrent-run isolation.
 export async function materializeFixture(
   fixture: FixtureDescriptor,
 ): Promise<{ workDir: string; cleanup: () => Promise<void> }> {

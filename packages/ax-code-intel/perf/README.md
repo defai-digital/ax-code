@@ -11,11 +11,11 @@ code changes except one additive field (`peakRssKb`) on `src/perf.ts`'s
 
 The harness measures real language servers; install at least one:
 
-| Language | Server binary                | Fixture          |
-| -------- | ---------------------------- | ---------------- |
-| JS/TS    | `typescript-language-server` | `js-ts-monorepo` |
-| Python   | `pyright-langserver`         | `python-project` |
-| Rust     | `rust-analyzer`              | `rust-workspace` |
+| Language | Server binary                             | Fixture          |
+| -------- | ----------------------------------------- | ---------------- |
+| JS/TS    | `typescript-native` (shipped Go compiler) | `js-ts-monorepo` |
+| Python   | `pyright-langserver`                      | `python-project` |
+| Rust     | `rust-analyzer`                           | `rust-workspace` |
 
 Preflight is a real LSP handshake, not a version-flag probe: for each
 fixture the harness materializes a copy, spawns the server through the
@@ -31,8 +31,8 @@ runner resolves named tools from PATH via `env(1)` instead of `npx`.
 Fixtures are materialized under the repo's gitignored `.tmp/perf/` by
 default (override with `AX_CODE_PERF_TMP`). Running servers with a cwd
 inside the repo matters: the rust-analyzer rustup proxy resolves the repo's
-`rust-toolchain.toml`, and the typescript server def resolves
-`typescript/lib/tsserver.js` by walking up to the repo's `node_modules`.
+`rust-toolchain.toml`. TypeScript resolves the pinned native compiler shipped
+with AX Code independently of fixture cwd.
 
 ## Running
 
@@ -68,14 +68,14 @@ table also prints each row's sample count and min/max so a small-sample p95
 
 ## What each scenario measures
 
-| Scenario              | Metric                                                                                                                 | How                                                                                                                                |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `cold-start`          | p50/p95 of spawn + `initialize` wall time                                                                              | Fresh server process per launch, N launches, teardown between                                                                      |
-| `warm-query:<method>` | Steady-state p50/p95 for hover / definition / references                                                               | One server lifetime; warmup queries discarded, then N measured per method                                                          |
-| `peak-rss`            | Peak RSS (KB) of the server process during the warm-query run                                                          | 100 ms poller (`/proc` on Linux, `ps` on macOS)                                                                                    |
-| `cache-hit-rate`      | Post-warmup hit share of the cache-probe path                                                                          | Warm pass, repeat pass (hits), one-line edit (miss), repeat (re-hit); counts come from the perf ring buffer                        |
-| `diagnostic-latency`  | `textDocument/diagnostic` round-trip after an edit (pull mode), or didChange → publishDiagnostics flip (push fallback) | Toggles a fixture line that introduces a real type error; pull mode for pyright/rust-analyzer, push for typescript-language-server |
-| `graph-builder`       | Wall time + LSP RPC count of a touch-driven file crawl                                                                 | `notify.open` across every source file, counting connection messages                                                               |
+| Scenario              | Metric                                                                                                                 | How                                                                                                                                         |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cold-start`          | p50/p95 of spawn + `initialize` wall time                                                                              | Fresh server process per launch, N launches, teardown between                                                                               |
+| `warm-query:<method>` | Steady-state p50/p95 for hover / definition / references                                                               | One server lifetime; warmup queries discarded, then N measured per method                                                                   |
+| `peak-rss`            | Peak RSS (KB) of the server process during the warm-query run                                                          | 100 ms poller (`/proc` on Linux, `ps` on macOS)                                                                                             |
+| `cache-hit-rate`      | Post-warmup hit share of the cache-probe path                                                                          | Warm pass, repeat pass (hits), one-line edit (miss), repeat (re-hit); counts come from the perf ring buffer                                 |
+| `diagnostic-latency`  | `textDocument/diagnostic` round-trip after an edit (pull mode), or didChange → publishDiagnostics flip (push fallback) | Toggles a fixture line that introduces a real type error; pull mode for TypeScript 7/pyright/rust-analyzer; push fallback for older servers |
+| `graph-builder`       | Wall time + LSP RPC count of a touch-driven file crawl                                                                 | `notify.open` across every source file, counting connection messages                                                                        |
 
 All scenarios drive the real production path: server defs spawn the process,
 `LSPClient` handles the protocol, and queries go through the same

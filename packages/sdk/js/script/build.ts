@@ -300,7 +300,7 @@ try {
   await fs.mkdir(path.join(tmp, "cache"), { recursive: true })
   await fs.mkdir(path.join(tmp, "state"), { recursive: true })
 
-  await run(process.execPath, [packageBin("typescript", "tsc"), "--build", "--force"])
+  await run(process.execPath, [packageBin("@typescript/native", "tsc"), "--build", "--force"])
 
   // Generate the OpenAPI document through the non-TUI Node entrypoint. The TUI
   // entrypoint requires Node's FFI tier, but SDK generation must run on the
@@ -386,7 +386,7 @@ try {
   // docs survive verbatim. Runs while openapi.json is still on disk.
   await documentGeneratedSources(dir)
   await fs.rm(path.join(dir, "dist"), { recursive: true, force: true })
-  await run(process.execPath, [packageBin("typescript", "tsc"), "--build", "--force"])
+  await run(process.execPath, [packageBin("@typescript/native", "tsc"), "--build", "--force"])
   await fs.cp(path.resolve(dir, "../proto"), path.join(dir, "dist", "proto"), { recursive: true })
   await fs.rm(path.join(dir, "openapi.json"), { force: true })
 } finally {

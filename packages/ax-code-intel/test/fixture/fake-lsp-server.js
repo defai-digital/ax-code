@@ -4,6 +4,11 @@
 // allowed it; Node does not). The previous `require("net")` was unused.
 
 let nextId = 1
+let initializeParams
+let diagnosticReport = null
+let holdDiagnostics = false
+let diagnosticRequests = 0
+const heldDiagnostics = []
 const initializeCapabilities = (() => {
   const raw = process.env.FAKE_LSP_CAPABILITIES_JSON
   if (!raw) return {}
@@ -113,6 +118,7 @@ function handle(raw) {
     return
   }
   if (data.method === "initialize") {
+    initializeParams = data.params
     const respond = () => {
       send({ jsonrpc: "2.0", id: data.id, result: { capabilities: initializeCapabilities } })
       initializeResponded = true
@@ -123,6 +129,31 @@ function handle(raw) {
     } else {
       respond()
     }
+    return
+  }
+  if (data.method === "test/initializeParams") {
+    send({ jsonrpc: "2.0", id: data.id, result: initializeParams })
+    return
+  }
+  if (data.method === "test/publishDiagnostics") {
+    send({ jsonrpc: "2.0", method: "textDocument/publishDiagnostics", params: data.params })
+    send({ jsonrpc: "2.0", id: data.id, result: null })
+    return
+  }
+  if (data.method === "test/diagnostics") {
+    diagnosticReport = data.params.report
+    holdDiagnostics = data.params.hold === true
+    if (!holdDiagnostics) {
+      for (const id of heldDiagnostics.splice(0)) send({ jsonrpc: "2.0", id, result: diagnosticReport })
+    }
+    send({ jsonrpc: "2.0", id: data.id, result: { requests: diagnosticRequests } })
+    return
+  }
+  if (data.method === "textDocument/diagnostic") {
+    diagnosticRequests++
+    send({ jsonrpc: "2.0", method: "test/pullStarted" })
+    if (holdDiagnostics) heldDiagnostics.push(data.id)
+    else send({ jsonrpc: "2.0", id: data.id, result: diagnosticReport })
     return
   }
   if (data.method === "initialized") {

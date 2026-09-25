@@ -6,7 +6,7 @@
   "license": "Apache-2.0",
   "private": true,
   "scripts": {
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:unit": "tsx script/test-groups.ts unit",
@@ -63,7 +63,6 @@
     "@types/which": "3.0.4",
     "@types/ws": "^8.18.1",
     "@types/yargs": "17.0.33",
-    "@typescript/native-preview": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "@vitest/expect": "catalog:",
     "drizzle-kit": "catalog:",
@@ -75,7 +74,8 @@
     "typescript": "catalog:",
     "vitest": "catalog:",
     "vscode-languageserver-types": "3.17.5",
-    "why-is-node-running": "3.2.2"
+    "why-is-node-running": "3.2.2",
+    "@typescript/native": "catalog:"
   },
   "dependencies": {
     "@actions/core": "catalog:",

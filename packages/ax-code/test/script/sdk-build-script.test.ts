@@ -9,7 +9,7 @@ describe("SDK build script", () => {
   test("avoids platform-specific .bin shims", async () => {
     const text = await readFile(sdkBuildScript, "utf-8")
 
-    expect(text).toContain('packageBin("typescript", "tsc")')
+    expect(text).toContain('packageBin("@typescript/native", "tsc")')
     expect(text).toContain("process.execPath")
     expect(text).not.toContain("node_modules/.bin")
     expect(text).not.toContain('node_modules", ".bin"')

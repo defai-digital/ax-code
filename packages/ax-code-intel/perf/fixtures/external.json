@@ -7,7 +7,7 @@
       "sha": "e516c3baf22615e20934116abebfed6c000222c2",
       "language": "ts",
       "serverId": "typescript",
-      "serverBinary": "typescript-language-server",
+      "serverBinary": "typescript-native",
       "diagnosticFile": "packages/zod/src/v4/classic/schemas.ts",
       "diagnosticEditLine": "export const PERF_PROBE: number = \"nope\"",
       "queries": {

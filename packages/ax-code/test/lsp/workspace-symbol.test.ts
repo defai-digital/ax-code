@@ -234,6 +234,7 @@ describe("LSP.workspaceSymbol", () => {
       fn: async () => {
         configSpy = vi.spyOn(Config, "get").mockResolvedValue({
           lsp: {
+            typescript: { disabled: true },
             fake: {
               command: [process.execPath, serverPath],
               extensions: [".ts"],
