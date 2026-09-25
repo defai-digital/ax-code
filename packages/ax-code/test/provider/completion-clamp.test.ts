@@ -53,10 +53,12 @@ describe("completionClamp", () => {
     ).toBeUndefined()
   })
 
-  test("a staticCeiling below OUTPUT_FLOOR also returns undefined (don't leak tiny max_tokens)", () => {
-    // The remaining window is plenty, but the provider-reported cap is below
-    // the floor. Sending max_tokens=OUTPUT_FLOOR would be worse than compacting:
-    // the caller must observe undefined and trigger the preflight compaction path.
+  test("a staticCeiling below OUTPUT_FLOOR is honored when the window has room", () => {
+    // Small declared output caps are the model's normal shape: fixture and
+    // small local models declare output limits of 1024 or less. The request
+    // still fits the window and compaction can never raise a static output
+    // cap, so the clamp returns the ceiling instead of forcing a
+    // compact -> overflow spiral.
     expect(
       completionClamp({
         context: CONTEXT,
@@ -64,7 +66,7 @@ describe("completionClamp", () => {
         reserve: 20_000,
         staticCeiling: OUTPUT_FLOOR - 1,
       }),
-    ).toBeUndefined()
+    ).toBe(OUTPUT_FLOOR - 1)
     expect(
       completionClamp({
         context: CONTEXT,
@@ -72,16 +74,17 @@ describe("completionClamp", () => {
         reserve: 20_000,
         staticCeiling: OUTPUT_FLOOR,
       }),
-    ).toBeUndefined()
-    // And the boundary stays clean above the floor.
+    ).toBe(OUTPUT_FLOOR)
+    // The window-side floor still prefers compaction when the remaining
+    // window is the binding constraint, whatever the ceiling says.
     expect(
       completionClamp({
         context: CONTEXT,
-        used: 10_000,
+        used: CONTEXT - OUTPUT_FLOOR - 20_000,
         reserve: 20_000,
-        staticCeiling: OUTPUT_FLOOR + 1,
+        staticCeiling: OUTPUT_FLOOR - 1,
       }),
-    ).toBe(OUTPUT_FLOOR + 1)
+    ).toBeUndefined()
   })
 
   test("returns undefined when the model declares no context window", () => {

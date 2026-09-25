@@ -99,15 +99,16 @@ export function calculateCompactionBudget(
  * Completion clamp against the TOTAL window (ADR-139 D4): cache reads occupy
  * the window, so the output budget is `context - used - reserve`, where
  * `reserve` is the same compaction reserve (one reserve pool, no
- * double-reserving). Static per-provider ceilings stay the outer bound —
- * callers pass them as `staticCeiling`. Returns undefined when the remaining
- * window is at or below the output floor: the correct action then is
- * compaction (existing preflight path), not a tiny max_tokens.
+ * double-reserving). Static per-provider ceilings stay the outer bound.
+ * Returns undefined when the remaining window is at or below the output
+ * floor: the correct action then is compaction (existing preflight path),
+ * not a tiny max_tokens.
  *
- * The floor check runs against the FINAL clamped value, not just `remaining`:
- * a tiny `staticCeiling` (e.g. a provider cap below OUTPUT_FLOOR) would
- * otherwise leak through `min(staticCeiling, remaining)` and silently tell
- * the caller to send a max_tokens no model can usefully reply to.
+ * The floor gates the WINDOW side only. A static per-provider output ceiling
+ * at or below the floor is the model's normal shape — fixture and small
+ * local models declare output caps of 1024 or less — and the request still
+ * fits the window; compaction can never raise a static output cap, so the
+ * clamp honors the ceiling instead of forcing a compact → overflow spiral.
  */
 export function completionClamp(input: {
   context: number
@@ -119,9 +120,7 @@ export function completionClamp(input: {
   if (!Number.isFinite(context) || context <= 0) return undefined
   const remaining = context - Math.max(0, input.used) - Math.max(0, input.reserve)
   if (!Number.isFinite(remaining) || remaining <= OUTPUT_FLOOR) return undefined
-  const clamped = Math.max(0, Math.min(Math.floor(input.staticCeiling), Math.floor(remaining)))
-  if (clamped <= OUTPUT_FLOOR) return undefined
-  return clamped
+  return Math.max(0, Math.min(Math.floor(input.staticCeiling), Math.floor(remaining)))
 }
 
 /**
