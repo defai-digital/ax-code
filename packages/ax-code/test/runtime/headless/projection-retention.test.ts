@@ -111,8 +111,52 @@ describe("transcript retention regressions", () => {
 })
 
 // These assertions measure retained serialized payload, not process RSS.
-import { enforceTranscriptBudget, refreshProjectionSizes } from "../../../src/runtime/headless/projection-retention"
+import {
+  enforceTranscriptBudget,
+  refreshProjectionSizes,
+  adaptiveTranscriptMaxBytes,
+  MAX_TRANSCRIPT_BYTES,
+  MAX_TRANSCRIPT_BYTES_PRESSURE_FLOOR,
+} from "../../../src/runtime/headless/projection-retention"
 import { applySessionSyncSnapshot } from "../../../src/cli/tui/context/sync-session-store"
+
+describe("adaptiveTranscriptMaxBytes", () => {
+  test("returns the full budget below the pressure band", () => {
+    expect(adaptiveTranscriptMaxBytes(0)).toBe(MAX_TRANSCRIPT_BYTES)
+    expect(adaptiveTranscriptMaxBytes(0.5)).toBe(MAX_TRANSCRIPT_BYTES)
+    expect(adaptiveTranscriptMaxBytes(Number.NaN)).toBe(MAX_TRANSCRIPT_BYTES)
+  })
+
+  test("interpolates inside the pressure band and floors past its end", () => {
+    const midpoint = adaptiveTranscriptMaxBytes(0.7)
+    expect(midpoint).toBeLessThan(MAX_TRANSCRIPT_BYTES)
+    expect(midpoint).toBeGreaterThan(MAX_TRANSCRIPT_BYTES_PRESSURE_FLOOR)
+    expect(adaptiveTranscriptMaxBytes(0.9)).toBe(MAX_TRANSCRIPT_BYTES_PRESSURE_FLOOR)
+    expect(adaptiveTranscriptMaxBytes(1)).toBe(MAX_TRANSCRIPT_BYTES_PRESSURE_FLOOR)
+  })
+})
+
+describe("session leave prune", () => {
+  test("drops session_error and message flag bags but keeps interactive maps and status", () => {
+    const { state, message } = fixture()
+    const withBags = Object.assign(state, {
+      session_error: { session: { message: "boom" } },
+      session_status: { session: { type: "busy" } },
+      message_truncated: { session: true },
+      message_reload: { session: true },
+      message_memory_limited: { session: true },
+    })
+    message("m1")
+    applySessionLeavePrune(withBags, "session")
+    expect(withBags.session_error).toEqual({})
+    // ADR-047 D3: the live status map survives navigation with permission/question.
+    expect(withBags.session_status).toEqual({ session: { type: "busy" } })
+    expect(withBags.message_truncated).toEqual({})
+    expect(withBags.message_reload).toEqual({})
+    expect(withBags.message_memory_limited).toEqual({})
+    expect(state.message.session).toBeUndefined()
+  })
+})
 
 describe("whole-message byte budget", () => {
   test("evicts oldest whole messages and preserves an oversized newest message visibly", () => {

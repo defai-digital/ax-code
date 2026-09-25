@@ -1,4 +1,5 @@
-import { enforceTranscriptBudget } from "@/runtime/headless/projection-retention"
+import { enforceTranscriptBudget, adaptiveTranscriptMaxBytes } from "@/runtime/headless/projection-retention"
+import { getHeapStatistics } from "node:v8"
 import { retainTranscriptEvent, transcriptEventSession } from "./sync-transcript-event"
 import type { PermissionRequest, QuestionRequest } from "@ax-code/sdk/v2"
 import { produce, type SetStoreFunction } from "solid-js/store"
@@ -20,6 +21,43 @@ import {
 type HeadlessReplyPermission = NonNullable<HeadlessProjectionEffectHandlers["replyPermission"]>
 type HeadlessReplyQuestion = NonNullable<HeadlessProjectionEffectHandlers["replyQuestion"]>
 type SyncTaskQueueItem = { id: string; sessionID?: string } & Record<string, unknown>
+
+// Fraction of the V8 heap limit at which the app layer is warned about heap
+// pressure (the transcript budget starts shrinking well before this point).
+const HEAP_PRESSURE_WARN_THRESHOLD = 0.8
+// Minimum spacing between memory_pressure store writes; the dispatcher runs
+// per SSE event, so an uncapped write would churn the store at stream rate.
+const HEAP_PRESSURE_WARN_MIN_INTERVAL_MS = 60_000
+// getHeapStatistics() walks the heap spaces; sample at most this often.
+const HEAP_PRESSURE_SAMPLE_INTERVAL_MS = 2_000
+
+function defaultHeapPressureSource(): number {
+  try {
+    const stats = getHeapStatistics()
+    if (!stats.heap_size_limit) return 0
+    return stats.used_heap_size / stats.heap_size_limit
+  } catch {
+    return 0
+  }
+}
+
+let heapPressureSource: () => number = defaultHeapPressureSource
+let heapPressureCache: { at: number; ratio: number } | undefined
+
+/** Test hook: replace the heap pressure source (used/limit ratio, 0..1). */
+export function setHeapPressureSourceForTests(source: (() => number) | undefined) {
+  heapPressureSource = source ?? defaultHeapPressureSource
+  heapPressureCache = undefined
+}
+
+export function currentHeapPressureRatio(now = Date.now()): number {
+  if (heapPressureCache && now - heapPressureCache.at < HEAP_PRESSURE_SAMPLE_INTERVAL_MS) {
+    return heapPressureCache.ratio
+  }
+  const ratio = Math.min(1, Math.max(0, heapPressureSource()))
+  heapPressureCache = { at: now, ratio }
+  return ratio
+}
 
 export interface SyncEventStoreState<
   TSession extends { id: string },
@@ -45,6 +83,10 @@ export interface SyncEventStoreState<
   message: Record<string, TMessage[]>
   part: Record<string, TPart[]>
   vcs: { branch: string } | undefined
+  // Set when the V8 heap approaches its hard limit: the transcript budget was
+  // narrowed adaptively and the app layer surfaces a warning with recovery
+  // guidance instead of dying silently at FatalProcessOutOfMemory.
+  memory_pressure?: { ratio: number; at: number }
 }
 
 export interface DispatchStoreBackedSyncEventInput<
@@ -208,12 +250,23 @@ function dispatchHeadlessProjectionEvent<
             transcriptEventSession(input.event) ??
             (input.event.type === "session.updated" ? input.event.properties.info.id : undefined)
           if (input.getActiveSessionID && transcriptSessionID && transcriptSessionID === input.getActiveSessionID()) {
+            const pressure = currentHeapPressureRatio()
             enforceTranscriptBudget(draft, transcriptSessionID, {
               maxMessages: input.maxSessionMessages,
+              maxBytes: adaptiveTranscriptMaxBytes(pressure),
               preserve: !!draft.session.find(
                 (session) => session.id === transcriptSessionID && (session as { revert?: unknown }).revert,
               ),
             })
+            // Warn at most once a minute while the heap is near its hard limit,
+            // so the user can /compact or restart before the process is aborted.
+            if (pressure >= HEAP_PRESSURE_WARN_THRESHOLD) {
+              const last = draft.memory_pressure
+              const now = Date.now()
+              if (!last || now - last.at >= HEAP_PRESSURE_WARN_MIN_INTERVAL_MS) {
+                draft.memory_pressure = { ratio: pressure, at: now }
+              }
+            }
           }
         }),
       )

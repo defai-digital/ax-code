@@ -270,6 +270,7 @@ export const messages = {
   "ui.deleteTask": "Aufgabe l\u00f6schen",
   "ui.deleteTaskConfirm": "Erneut klicken, um das L\u00f6schen zu best\u00e4tigen",
   "ui.failedToDeleteScheduledTask": "Geplante Aufgabe konnte nicht gel\u00f6scht werden",
+  "ui.memoryPressure": "TUI-Speicher hoch ({percent}% des Limits): Das Transkriptfenster wurde verkleinert. Erw\xe4ge /compact oder einen Neustart der TUI.",
   "ui.rename": "umbenennen",
   "ui.toggle": "umschalten",
   "ui.status": "Status",

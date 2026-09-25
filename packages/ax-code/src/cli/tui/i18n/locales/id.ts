@@ -269,6 +269,7 @@ export const messages = {
   "ui.deleteTask": "Hapus tugas",
   "ui.deleteTaskConfirm": "Klik lagi untuk mengonfirmasi penghapusan",
   "ui.failedToDeleteScheduledTask": "Gagal menghapus tugas terjadwal",
+  "ui.memoryPressure": "Memori TUI tinggi ({percent}% dari batas): jendela transkripsi diperkecil. Pertimbangkan /compact atau mulai ulang TUI.",
   "ui.rename": "ganti nama",
   "ui.toggle": "alih",
   "ui.status": "Status",

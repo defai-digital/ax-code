@@ -356,6 +356,15 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         .finally(unsubscribe)
     })
   })
+  createEffect(() => {
+    const pressure = sync.data.memory_pressure
+    if (!pressure) return
+    Log.Default.warn("tui heap pressure high", { ratio: pressure.ratio })
+    toast.show({
+      message: uiText("ui.memoryPressure", { percent: String(Math.round(pressure.ratio * 100)) }),
+      variant: "warning",
+    })
+  })
   const promptRef = usePromptRef()
   const [sessionRoute, setSessionRoute] = createSignal<Component | undefined>()
   // Short-lived paired animation overlay. Manual preview is always

@@ -272,6 +272,7 @@ export const messages = {
   "ui.deleteTask": "Eliminar tarea",
   "ui.deleteTaskConfirm": "Haga clic de nuevo para confirmar la eliminaci\u00f3n",
   "ui.failedToDeleteScheduledTask": "No se pudo eliminar la tarea programada",
+  "ui.memoryPressure": "Memoria de la TUI alta ({percent}% del l\xedmite): la ventana de transcripci\xf3n se redujo. Considera /compact o reiniciar la TUI.",
   "ui.rename": "renombrar",
   "ui.toggle": "alternar",
   "ui.status": "Estado",

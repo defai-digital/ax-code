@@ -277,6 +277,7 @@ export const messages = {
   "ui.deleteTask": "\u522a\u9664\u5de5\u4f5c",
   "ui.deleteTaskConfirm": "\u518d\u6309\u4e00\u4e0b\u4ee5\u78ba\u8a8d\u522a\u9664",
   "ui.failedToDeleteScheduledTask": "\u522a\u9664\u6392\u7a0b\u5de5\u4f5c\u5931\u6557",
+  "ui.memoryPressure": "TUI \u8a18\u61b6\u9ad4\u504f\u9ad8\uff08\u5df2\u9054\u4e0a\u9650\u7684 {percent}%\uff09\uff1a\u5df2\u7e2e\u5c0f\u5de5\u4f5c\u8a18\u9304\u8996\u7a97\u3002\u5efa\u8b70\u57f7\u884c /compact \u6216\u91cd\u65b0\u555f\u52d5 TUI\u3002",
   "ui.rename": "\u91cd\u65b0\u547d\u540d",
   "ui.toggle": "\u5207\u63db",
   "ui.status": "\u72c0\u614b",

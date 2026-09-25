@@ -288,6 +288,7 @@ export const messages = {
   "ui.deleteTask": "X\u00f3a t\u00e1c v\u1ee5",
   "ui.deleteTaskConfirm": "Nh\u1ea5p l\u1ea1i \u0111\u1ec3 x\u00e1c nh\u1eadn x\u00f3a",
   "ui.failedToDeleteScheduledTask": "X\u00f3a t\u00e1c v\u1ee5 \u0111\u00e3 l\u00ean l\u1ecbch th\u1ea5t b\u1ea1i",
+  "ui.memoryPressure": "B\u1ed9 nh\u1edb TUI cao ({percent}% gi\u1edbi h\u1ea1n): c\u1eeda s\u1ed5 b\u1ea3n ghi \u0111\xe3 \u0111\u01b0\u1ee3c thu h\u1eb9p. C\xe2n nh\u1eafc /compact ho\u1eb7c kh\u1edfi \u0111\u1ed9ng l\u1ea1i TUI.",
   "ui.rename": "\u0111\u1ed5i t\u00ean",
   "ui.toggle": "chuy\u1ec3n \u0111\u1ed5i",
   "ui.status": "Tr\u1ea1ng th\u00e1i",

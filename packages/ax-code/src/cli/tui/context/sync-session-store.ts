@@ -181,6 +181,12 @@ export function applySessionDeleteCleanup<
  * Drop heavy transcript projection for a session the user just left, without
  * removing the session list row or in-flight permission/question/status.
  * Re-entry reloads heavy fields via the normal session sync path (ADR-047 D3).
+ *
+ * Permission/question asks and the live status map intentionally survive
+ * navigation (they stay answerable/visible from other surfaces, ADR-047 D3);
+ * session_error and the message_* flag bags are view state and are dropped
+ * with the transcript so long TUI runs that visit many sessions do not
+ * retain them indefinitely.
  */
 export function applySessionLeavePrune<TMessage extends { id: string }, TPart, TDiff, TRisk, TGoal, TTodo>(
   store: {
@@ -190,6 +196,10 @@ export function applySessionLeavePrune<TMessage extends { id: string }, TPart, T
     todo: Record<string, TTodo[]>
     message: Record<string, TMessage[]>
     part: Record<string, TPart[]>
+    session_error?: Record<string, unknown>
+    message_truncated?: Record<string, boolean>
+    message_reload?: Record<string, boolean>
+    message_memory_limited?: Record<string, boolean>
   },
   sessionID: string,
 ) {
@@ -200,6 +210,10 @@ export function applySessionLeavePrune<TMessage extends { id: string }, TPart, T
   delete store.session_diff[sessionID]
   delete store.todo[sessionID]
   delete store.message[sessionID]
+  if (store.session_error) delete store.session_error[sessionID]
+  if (store.message_truncated) delete store.message_truncated[sessionID]
+  if (store.message_reload) delete store.message_reload[sessionID]
+  if (store.message_memory_limited) delete store.message_memory_limited[sessionID]
 }
 
 /**

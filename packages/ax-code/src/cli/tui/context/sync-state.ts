@@ -62,6 +62,9 @@ export interface SyncStoreState {
   // silently presenting the tail as the whole conversation.
   transcript_generation: number
   active_session?: string
+  // Last heap-pressure warning written by the sync dispatcher. Consumed by the
+  // app layer to toast recovery guidance; absent under normal memory.
+  memory_pressure?: { ratio: number; at: number }
   message_memory_limited: Record<string, boolean>
   message_reload: Record<string, boolean>
   message_truncated: Record<string, boolean>
@@ -138,6 +141,7 @@ export function createInitialSyncState(): SyncStoreState {
     todo: {},
     message: {},
     transcript_generation: 0,
+    memory_pressure: undefined,
     message_memory_limited: {},
     message_reload: {},
     message_truncated: {},

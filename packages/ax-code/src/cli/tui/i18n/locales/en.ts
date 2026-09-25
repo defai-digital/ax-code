@@ -267,6 +267,8 @@ export const messages = {
   "ui.deleteTask": "Delete task",
   "ui.deleteTaskConfirm": "Click again to confirm delete",
   "ui.failedToDeleteScheduledTask": "Failed to delete scheduled task",
+  "ui.memoryPressure":
+    "TUI memory high ({percent}% of limit): the transcript window was narrowed. Consider /compact or restarting the TUI.",
   "ui.rename": "rename",
   "ui.toggle": "toggle",
   "ui.status": "Status",

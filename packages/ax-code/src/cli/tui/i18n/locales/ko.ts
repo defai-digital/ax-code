@@ -293,6 +293,7 @@ export const messages = {
   "ui.deleteTask": "\uc791\uc5c5 \uc0ad\uc81c",
   "ui.deleteTaskConfirm": "\ub2e4\uc2dc \ud074\ub9ad\ud558\uc5ec \uc0ad\uc81c \ud655\uc778",
   "ui.failedToDeleteScheduledTask": "\uc791\uc5c5 \uc0ad\uc81c \uc2e4\ud328",
+  "ui.memoryPressure": "TUI \uba54\ubaa8\ub9ac\uac00 \ud55c\ub3c4\uc758 {percent}%\uc5d0 \ub3c4\ub2ec\ud558\uc5ec \ub300\ud654 \ub0b4\uc5ed \ucc3d\uc774 \ucd95\uc18c\ub418\uc5c8\uc2b5\ub2c8\ub2e4. /compact \ub610\ub294 TUI \uc7ac\uc2dc\uc791\uc744 \uace0\ub824\ud558\uc138\uc694.",
   "ui.rename": "\uc774\ub984 \ubcc0\uacbd",
   "ui.toggle": "\uc804\ud658",
   "ui.status": "\uc0c1\ud0dc",

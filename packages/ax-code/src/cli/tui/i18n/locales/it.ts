@@ -271,6 +271,7 @@ export const messages = {
   "ui.deleteTask": "Elimina attivit\u00e0",
   "ui.deleteTaskConfirm": "Fai di nuovo clic per confermare l\u2019eliminazione",
   "ui.failedToDeleteScheduledTask": "Eliminazione dell\u2019attivit\u00e0 pianificata non riuscita",
+  "ui.memoryPressure": "Memoria del TUI elevata ({percent}% del limite): la finestra della trascrizione \xe8 stata ridotta. Considera /compact o il riavvio del TUI.",
   "ui.rename": "rinomina",
   "ui.toggle": "alterna",
   "ui.status": "Stato",

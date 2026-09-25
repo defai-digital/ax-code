@@ -276,6 +276,7 @@ export const messages = {
   "ui.deleteTask": "G\u00f6revi sil",
   "ui.deleteTaskConfirm": "Onaylamak i\u00e7in tekrar t\u0131klay\u0131n",
   "ui.failedToDeleteScheduledTask": "Planlanan g\u00f6rev silinemedi",
+  "ui.memoryPressure": "TUI belle\u011fi y\xfcksek (limitin {percent}'i): transkript penceresi daralt\u0131ld\u0131. /compact komutunu deneyin veya TUI'yi yeniden ba\u015flat\u0131n.",
   "ui.rename": "yeniden adland\u0131r",
   "ui.toggle": "de\u011fi\u015ftir",
   "ui.status": "Durum",

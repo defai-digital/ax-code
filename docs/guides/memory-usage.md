@@ -51,6 +51,8 @@ These limits apply within each AX Code process. They do not limit total RAM, coo
 
 The TUI keeps heavy transcript events for the viewed session. Inactive sessions retain summaries, status and pending approvals/questions; opening them reloads saved history from SQLite. The normal display window is 100 messages with a 16 MiB serialized-payload budget. Old complete messages are released first. The newest indivisible message and recovered Undo/Restore history can exceed the soft budget; the TUI displays an indicator. These are projection limits, not limits on durable session history or model context.
 
+When the V8 heap approaches its hard limit, the transcript budget narrows automatically (down to a 2 MiB floor at 90% heap use) so the retained set sheds before the process reaches `FatalProcessOutOfMemory`; past 80% the TUI also surfaces a warning suggesting `/compact` or a restart. Pressure recovers after a full GC, but already-evicted history stays gone until reloaded.
+
 Parts arriving before their parent message use a bounded pending area (128 message IDs / 1 MiB). If pending content must be released, the TUI offers a reload from saved history. Late events for evicted messages cannot permanently recreate orphan parts.
 
 The evidence cache defaults to bounded memory (128 entries / 4 MiB serialized values per instance). RocksDB remains opt-in; changing the cache backend alone does not reduce model tool calls. See [Evidence cache](evidence-cache.md).

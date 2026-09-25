@@ -274,6 +274,7 @@ export const messages = {
   "ui.deleteTask": "Supprimer la t\u00e2che",
   "ui.deleteTaskConfirm": "Cliquez \u00e0 nouveau pour confirmer la suppression",
   "ui.failedToDeleteScheduledTask": "\u00c9chec de la suppression de la t\u00e2che planifi\u00e9e",
+  "ui.memoryPressure": "M\xe9moire du TUI \xe9lev\xe9e ({percent}% de la limite) : la fen\xeatre de transcription a \xe9t\xe9 r\xe9duite. Envisagez /compact ou un red\xe9marrage du TUI.",
   "ui.rename": "renommer",
   "ui.toggle": "basculer",
   "ui.status": "\u00c9tat",

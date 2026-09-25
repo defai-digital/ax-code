@@ -18,6 +18,12 @@ import {
 
 const DEFAULT_MAX_SESSION_MESSAGES = 100
 
+// The server keeps the full durable task-queue history (completed rows
+// accumulate indefinitely); the client projection only needs a recent window
+// for supervision UI. Task ids are time-ordered, so the id-sorted array's
+// head is the oldest entry.
+const MAX_PROJECTED_TASK_QUEUE_ITEMS = 500
+
 export interface HeadlessProjectionState<
   TSession extends { id: string },
   TTodo,
@@ -191,6 +197,9 @@ export function applyHeadlessProjectionEvent<
       // optional fields (notably error), so a patch merge would retain
       // stale state (e.g. a cleared error surviving a retry).
       upsertByID(state.task_queue, event.properties.item, true)
+      if (state.task_queue.length > MAX_PROJECTED_TASK_QUEUE_ITEMS) {
+        state.task_queue.splice(0, state.task_queue.length - MAX_PROJECTED_TASK_QUEUE_ITEMS)
+      }
       return { handled: true, effects }
 
     case "task.queue.deleted":

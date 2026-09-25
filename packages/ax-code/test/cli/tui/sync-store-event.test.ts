@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import { createStore } from "solid-js/store"
 import {
   dispatchStoreBackedSyncEvent,
+  setHeapPressureSourceForTests,
   type SyncEventStoreState,
 } from "../../../src/cli/tui/context/sync-store-event"
 import type { SyncedSessionRisk } from "../../../src/cli/tui/context/sync-session-risk"
@@ -683,5 +684,124 @@ describe("tui sync store event", () => {
 
     expect(scheduled).toEqual(["workflow", "workflow"])
     expect(synced).toEqual(["workflow", "workflow"])
+  })
+})
+
+describe("heap-pressure adaptive transcript budget", () => {
+  function dispatchTo(store: ReturnType<typeof createTestStore>[0], setStore: ReturnType<typeof createTestStore>[1], event: unknown, activeSessionID = "ses_1") {
+    return dispatchStoreBackedSyncEvent<
+      Session,
+      Todo,
+      Diff,
+      Status,
+      Message,
+      Part,
+      SyncEventStoreState<Session, Todo, Diff, Status, Message, Part>
+    >({
+      event: event as never,
+      autonomous: false,
+      setStore,
+      getActiveSessionID: () => activeSessionID,
+      clearSessionSyncState: () => undefined,
+      replyPermission: () => undefined,
+      replyQuestion: () => undefined,
+      syncMcpStatus: () => undefined,
+      syncLspStatus: () => undefined,
+      syncDebugEngine: () => undefined,
+      bootstrap: () => undefined,
+      onWarn: () => undefined,
+      maxSessionMessages: 100,
+    })
+  }
+
+  test("high heap pressure narrows the admitted transcript toward the floor", () => {
+    setHeapPressureSourceForTests(() => 0.95)
+    try {
+      const [store, setStore] = createTestStore()
+      dispatchTo(store, setStore, { type: "session.created", properties: { info: { id: "ses_1" } } })
+      // 30 messages × 200 KB text parts ≈ 6 MB, well above the 2 MB pressure floor.
+      for (let index = 0; index < 30; index++) {
+        dispatchTo(store, setStore, {
+          type: "message.updated",
+          properties: { info: { id: `msg_${String(index).padStart(3, "0")}`, sessionID: "ses_1" } },
+        })
+        dispatchTo(store, setStore, {
+          type: "message.part.updated",
+          properties: {
+            part: {
+              id: `part_${index}`,
+              messageID: `msg_${String(index).padStart(3, "0")}`,
+              sessionID: "ses_1",
+              type: "text",
+              text: "x".repeat(200 * 1024),
+            },
+          },
+        })
+      }
+      const retained = store.message.ses_1 ?? []
+      expect(retained.length).toBeGreaterThan(0)
+      expect(retained.length).toBeLessThan(30)
+      expect(retained[retained.length - 1].id).toBe("msg_029")
+      // The pressure warning is written for the app layer to surface.
+      expect(store.memory_pressure?.ratio).toBe(0.95)
+    } finally {
+      setHeapPressureSourceForTests(undefined)
+    }
+  })
+
+  test("normal pressure keeps the full budget and writes no memory_pressure", () => {
+    setHeapPressureSourceForTests(() => 0.1)
+    try {
+      const [store, setStore] = createTestStore()
+      dispatchTo(store, setStore, { type: "session.created", properties: { info: { id: "ses_1" } } })
+      for (let index = 0; index < 30; index++) {
+        dispatchTo(store, setStore, {
+          type: "message.updated",
+          properties: { info: { id: `msg_${String(index).padStart(3, "0")}`, sessionID: "ses_1" } },
+        })
+        dispatchTo(store, setStore, {
+          type: "message.part.updated",
+          properties: {
+            part: {
+              id: `part_${index}`,
+              messageID: `msg_${String(index).padStart(3, "0")}`,
+              sessionID: "ses_1",
+              type: "text",
+              text: "x".repeat(200 * 1024),
+            },
+          },
+        })
+      }
+      expect(store.message.ses_1).toHaveLength(30)
+      expect(store.memory_pressure).toBeUndefined()
+    } finally {
+      setHeapPressureSourceForTests(undefined)
+    }
+  })
+
+  test("memory_pressure updates are rate-limited to one per minute", () => {
+    setHeapPressureSourceForTests(() => 0.95)
+    try {
+      const [store, setStore] = createTestStore()
+      dispatchTo(store, setStore, { type: "session.created", properties: { info: { id: "ses_1" } } })
+      for (let index = 0; index < 5; index++) {
+        dispatchTo(store, setStore, {
+          type: "message.updated",
+          properties: { info: { id: `msg_${index}`, sessionID: "ses_1" } },
+        })
+      }
+      const first = store.memory_pressure
+      expect(first).toBeDefined()
+      // Further dispatches within the same minute must not rewrite the flag.
+      for (let index = 5; index < 10; index++) {
+        dispatchTo(store, setStore, {
+          type: "message.updated",
+          properties: { info: { id: `msg_${index}`, sessionID: "ses_1" } },
+        })
+      }
+      expect(store.memory_pressure).toBe(first)
+    } finally {
+      setHeapPressureSourceForTests(undefined)
+    }
   })
 })

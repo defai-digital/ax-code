@@ -3,6 +3,34 @@ export const MAX_TRANSCRIPT_BYTES = 16 * 1024 * 1024
 export const MAX_PENDING_MESSAGES = 128
 export const MAX_PENDING_BYTES = 1024 * 1024
 
+/**
+ * Floor for the heap-pressure-adaptive transcript budget. When the V8 heap
+ * approaches its hard limit (the TUI aborts via FatalProcessOutOfMemory when
+ * it is reached), the admitted transcript shrinks toward this floor so the
+ * retained set sheds faster than the heap fills. 2 MiB keeps the visible
+ * window useful while dropping the ~4-5x render-pipeline copies that dominate
+ * frontend heap growth on long-running sessions.
+ */
+export const MAX_TRANSCRIPT_BYTES_PRESSURE_FLOOR = 2 * 1024 * 1024
+
+// Pressure band (fraction of the V8 heap limit in use) over which the
+// transcript budget interpolates from MAX_TRANSCRIPT_BYTES to the floor.
+const PRESSURE_BAND_START = 0.5
+const PRESSURE_BAND_END = 0.9
+
+/**
+ * Maps a heap pressure ratio (used_heap_size / heap_size_limit) to the
+ * transcript byte budget. Below the band the full budget applies; inside the
+ * band it shrinks linearly; past the end only the floor applies. Pure so the
+ * TUI dispatch layer can feed it a cached sampler and tests can pin the curve.
+ */
+export function adaptiveTranscriptMaxBytes(pressureRatio: number): number {
+  if (!Number.isFinite(pressureRatio) || pressureRatio <= PRESSURE_BAND_START) return MAX_TRANSCRIPT_BYTES
+  if (pressureRatio >= PRESSURE_BAND_END) return MAX_TRANSCRIPT_BYTES_PRESSURE_FLOOR
+  const t = (pressureRatio - PRESSURE_BAND_START) / (PRESSURE_BAND_END - PRESSURE_BAND_START)
+  return Math.round(MAX_TRANSCRIPT_BYTES - t * (MAX_TRANSCRIPT_BYTES - MAX_TRANSCRIPT_BYTES_PRESSURE_FLOOR))
+}
+
 type State = {
   message: Record<string, Array<{ id: string }>>
   part: Record<string, unknown[]>

@@ -461,6 +461,39 @@ describe("headless projection", () => {
     expect(state.task_queue).toEqual([])
   })
 
+  test("caps the projected task queue to the most recent window", () => {
+    const state = createHeadlessProjectionState<
+      Session,
+      Todo,
+      Diff,
+      Status,
+      Message,
+      Part,
+      unknown,
+      unknown,
+      TaskQueueItem
+    >()
+
+    for (let index = 0; index < 600; index++) {
+      applyHeadlessProjectionEvent(state, {
+        type: "task.queue.created",
+        properties: { item: { id: `task_${String(index).padStart(4, "0")}`, status: "completed" } },
+      })
+    }
+
+    // Oldest rows fall off; the id-sorted tail (newest) is retained.
+    expect(state.task_queue).toHaveLength(500)
+    expect(state.task_queue[0].id).toBe("task_0100")
+    expect(state.task_queue[499].id).toBe("task_0599")
+
+    // Updates to retained rows still merge in place.
+    applyHeadlessProjectionEvent(state, {
+      type: "task.queue.updated",
+      properties: { item: { id: "task_0599", status: "running" } },
+    })
+    expect(state.task_queue[499]).toEqual({ id: "task_0599", status: "running" })
+  })
+
   test("tracks and clears session errors", () => {
     const state = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
 
