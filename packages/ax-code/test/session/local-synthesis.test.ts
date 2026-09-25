@@ -33,7 +33,6 @@ test("only evidence-backed local convergence can preserve tool definitions", () 
   for (const forceReason of [
     "goal_complete",
     "response_only",
-    "truncated_recovery",
     "tool_only_breaker",
     "other",
   ] as const) {

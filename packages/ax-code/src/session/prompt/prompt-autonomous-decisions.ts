@@ -453,7 +453,6 @@ export type ForceTextReason =
   | "response_only"
   | "goal_complete"
   | "tool_only_breaker"
-  | "truncated_recovery"
   | "other"
 
 /**

@@ -1729,7 +1729,9 @@ export namespace SessionPrompt {
               })
               pendingMaxOutputTokens = AX_ENGINE_TRUNCATED_CODE_RECOVERY_MAX_OUTPUT_TOKENS
             } else {
-              armForceTextOnlyTurn("truncated_recovery")
+              // Folded into "other" (item 4 step 5): nothing reads this reason
+              // distinctly, and the log line below already names the trigger.
+              armForceTextOnlyTurn("other")
               pendingAxEngineTurnInstruction = AutonomousContinuationPrompt.axEngineTruncatedModelTurnRecovery()
               pendingMaxOutputTokens = AX_ENGINE_TRUNCATED_RECOVERY_MAX_OUTPUT_TOKENS
             }
