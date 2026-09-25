@@ -823,4 +823,43 @@ describe("task_parallel swarm scale (item: swarm)", () => {
       },
     })
   })
+  test("a 16-member swarm asks for permission exactly once", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { ctx } = await parent(tmp.path)
+        const asks: any[] = []
+        vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
+          return {
+            info: {
+              id: input.messageID,
+              sessionID: input.sessionID,
+              role: "assistant",
+              time: { created: Date.now(), completed: Date.now() },
+            },
+            parts: [{ type: "text", text: "done" }],
+          } as any
+        }) as any)
+        try {
+          const result = await (
+            await TaskParallelTool.init()
+          ).execute(
+            {
+              items: Array.from({ length: 16 }, (_, i) => `m${i}`),
+              prompt_template: "check {{item}}",
+              subagent_type: "explore",
+            } as any,
+            { ...ctx, ask: async (input: any) => void asks.push(input) } as any,
+          )
+          expect(asks).toHaveLength(1)
+          expect(asks[0]).toMatchObject({ permission: "task", metadata: { parallel: true } })
+          expect(asks[0].metadata.subagent_types).toEqual(["explore"])
+          expect((result.metadata as any).results).toHaveLength(16)
+        } finally {
+          vi.restoreAllMocks()
+        }
+      },
+    })
+  })
 })
