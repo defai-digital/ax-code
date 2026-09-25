@@ -494,10 +494,16 @@ export namespace SessionPrompt {
     let lastPendingTodoSignature: string | undefined
     let lastTodoDeadlineSignature: string | undefined
     let lastTodoContextSignature: string | undefined
-    let stagnantTodoRetries = 0
-    let missingAnswerRetries = 0
-    let emptyModelTurnRetries = 0
-    let truncatedModelTurnRetries = 0
+    // Recovery-retry budgets, grouped for the same reason as the AX Engine guard
+    // above (item 4 step 4). Semantics unchanged: each field keeps its initial
+    // value, its ceiling and its reset sites.
+    const retries = {
+      stagnantTodo: 0,
+      missingAnswer: 0,
+      emptyTurn: 0,
+      truncatedTurn: 0,
+      unexecutableToolText: 0,
+    }
     let previousTruncatedModelOutputPrefix: string | undefined
     // Consecutive no-progress tool-calling turns (repeated read-only
     // signatures). Incremented only when the turn is inspection-only and
@@ -543,7 +549,6 @@ export namespace SessionPrompt {
     // answering — tools must be re-enabled for that recovery turn.
     let lastTurnWasForceTextOnly = false
     let lastTurnForceTextReason: ForceTextReason | undefined
-    let unexecutableToolTextRecoveries = 0
     // AX Engine runtime control is request-local policy, not user content.
     // Keep the instruction in memory until a provider turn successfully
     // consumes it; never persist it as a synthetic chat message.
@@ -639,7 +644,7 @@ export namespace SessionPrompt {
       forceTextReason = undefined
       lastTurnWasForceTextOnly = false
       lastTurnForceTextReason = undefined
-      unexecutableToolTextRecoveries = 0
+      retries.unexecutableToolText = 0
       axEngineInspectionEvidence.clear()
       // Pacing continuations are still the same task: never replenish an
       // in-flight synthesis retry or restore executable tools across them.
@@ -666,7 +671,7 @@ export namespace SessionPrompt {
       if (resetTodoDeadlineSignature) {
         lastTodoDeadlineSignature = undefined
       }
-      // Todo progress tracking (todoRetries / stagnantTodoRetries /
+      // Todo progress tracking (todoRetries / retries.stagnantTodo /
       // lastPendingTodoSignature) deliberately survives continuation
       // boundaries: pendingTodoContinuationDecision refreshes the budgets
       // itself whenever the pending-todo content set actually changes, so a
@@ -1500,9 +1505,9 @@ export namespace SessionPrompt {
         }
         axEngineReadOnly.synthesisAttempts = 0
       }
-      if (!emptyModelTurn) emptyModelTurnRetries = 0
+      if (!emptyModelTurn) retries.emptyTurn = 0
       if (!truncatedModelTurn) {
-        truncatedModelTurnRetries = 0
+        retries.truncatedTurn = 0
         previousTruncatedModelOutputPrefix = undefined
       }
       // Reset the tool-only streak HERE, not in the tracking block further
@@ -1569,7 +1574,7 @@ export namespace SessionPrompt {
         // One retry for the entire invocation, in supervised and autonomous
         // modes. Existing step/deadline limits still apply; tool calls are
         // never reconstructed from reasoning or replayed by this recovery.
-        if (missingAnswerRetries >= 1) {
+        if (retries.missingAnswer >= 1) {
           await publishPromptFailure({
             sessionID,
             assistant: processor.message,
@@ -1578,14 +1583,14 @@ export namespace SessionPrompt {
           reason = "stalled"
           break
         }
-        missingAnswerRetries += 1
+        retries.missingAnswer += 1
         log.warn("missing answer recovery", {
           command: "session.prompt.loop",
           status: "retry",
           errorCode: "MISSING_MODEL_ANSWER",
           sessionID,
           messageID: processor.message.id,
-          attempt: missingAnswerRetries,
+          attempt: retries.missingAnswer,
         })
         // A failed forced summary must not regain tools through this path.
         if (lastTurnWasForceTextOnly) armForceTextOnlyTurn(lastTurnForceTextReason ?? "other")
@@ -1640,13 +1645,13 @@ export namespace SessionPrompt {
           sessionID,
           assistant: processor.message,
           emptyModelTurn,
-          emptyModelTurnRetries,
+          emptyModelTurnRetries: retries.emptyTurn,
           maxEmptyModelTurnRetries,
           todoRetries,
           pendingCount: pendingTodos.length,
           cause: emptyModelTurn ? describeStreamErrorCause(processor.streamError) : undefined,
         })
-        emptyModelTurnRetries = emptyTurnTransition.emptyModelTurnRetries
+        retries.emptyTurn = emptyTurnTransition.emptyModelTurnRetries
         todoRetries = emptyTurnTransition.todoRetries
 
         if (emptyTurnTransition.action === "stop") {
@@ -1695,13 +1700,13 @@ export namespace SessionPrompt {
           sessionID,
           assistant: processor.message,
           truncatedModelTurn,
-          truncatedModelTurnRetries,
+          truncatedModelTurnRetries: retries.truncatedTurn,
           maxTruncatedModelTurnRetries: effectiveMaxTruncatedModelTurnRetries,
           pendingCount: pendingTodos.length,
           previousOutputPrefix: previousTruncatedModelOutputPrefix,
           currentOutputPrefix: currentTruncatedModelOutputPrefix,
         })
-        truncatedModelTurnRetries = truncatedTurnTransition.truncatedModelTurnRetries
+        retries.truncatedTurn = truncatedTurnTransition.truncatedModelTurnRetries
 
         if (truncatedTurnTransition.action === "stop") {
           reason = truncatedTurnTransition.reason
@@ -1756,7 +1761,7 @@ export namespace SessionPrompt {
         ) {
           const unexecutableRecovery = unexecutableToolTextRecoveryDecision({
             lastTurnWasForceTextOnly,
-            recoveriesUsed: unexecutableToolTextRecoveries,
+            recoveriesUsed: retries.unexecutableToolText,
             maxRecoveries: MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
             forceReason: lastTurnForceTextReason,
             axEngineToolsAvailable:
@@ -1767,7 +1772,7 @@ export namespace SessionPrompt {
           })
           if (unexecutableRecovery.action === "recover") {
             const wasForcedTextOnly = lastTurnWasForceTextOnly
-            unexecutableToolTextRecoveries += 1
+            retries.unexecutableToolText += 1
             forceTextOnlyTurn = false
             forceTextReason = undefined
             lastTurnWasForceTextOnly = false
@@ -1790,7 +1795,7 @@ export namespace SessionPrompt {
               status: "recover",
               errorCode: "UNEXECUTABLE_TOOL_TEXT",
               sessionID,
-              recoveries: unexecutableToolTextRecoveries,
+              recoveries: retries.unexecutableToolText,
               maxRecoveries: MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
             })
             await createAutonomousTextContinuation({
@@ -1879,7 +1884,7 @@ export namespace SessionPrompt {
           // A successful identical read after malformed markup is still the
           // same stall. Only real progress may replenish the local budget.
           if (model.providerID !== AX_ENGINE_PROVIDER_ID || modelFinished || mutation || freshEvidence) {
-            unexecutableToolTextRecoveries = 0
+            retries.unexecutableToolText = 0
           }
         }
 
@@ -1914,7 +1919,7 @@ export namespace SessionPrompt {
             maxTodoRetries,
             pendingTodos,
             lastPendingTodoSignature,
-            stagnantTodoRetries,
+            stagnantTodoRetries: retries.stagnantTodo,
             maxSteps,
           })
 
@@ -1925,7 +1930,7 @@ export namespace SessionPrompt {
 
           lastPendingTodoSignature = todoContinuation.lastPendingTodoSignature
           todoRetries = todoContinuation.todoRetries
-          stagnantTodoRetries = todoContinuation.stagnantTodoRetries
+          retries.stagnantTodo = todoContinuation.stagnantTodoRetries
           await createAutonomousTextContinuation({
             sessionID,
             messages: latestMessages,
