@@ -390,15 +390,27 @@ export namespace Log {
   /**
    * Whole-word secret key names, normalized. Stricter than a substring match on
    * purpose: `keyboard`, `tokenCount` and `monkey` are not credentials, and
-   * over-redacting makes logs useless while looking safe.
+   * over-redacting makes logs useless while looking safe. `auth`, `bearer` and
+   * `cookie` are here because a header dump names them exactly that way, and the
+   * `token`/`key`-suffixed spellings are what OAuth clients emit.
    */
-  const SECRET_KEY_NAME = /^(?:token|secret|password|passwd|credential|authorization|api[_-]?key|pat|webhook)$/i
+  const SECRET_KEY_NAME =
+    /^(?:token|secret|password|passwd|credential|credentials|authorization|auth|bearer|cookie|pat|webhook|api[_-]?key|x[_-]?api[_-]?key|private[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret)$/i
   const PRIVATE_KEY_BLOCK = /-----BEGIN[^-]*PRIVATE KEY-----[\s\S]*?-----END[^-]*PRIVATE KEY-----/g
   /**
-   * Cheap gate before the (three-pass) redaction regexes: ordinary log lines
-   * carry none of these, and this keeps the hot path free of regex work.
+   * Credential *value* shapes: the same set the pre-commit hook refuses to
+   * commit, plus a JWT. A key name cannot catch these — a provider echoes a key
+   * as bare prose ("Incorrect API key provided: sk-…") with no `key=` anywhere.
    */
-  const MAYBE_SECRET = /[=:]|bearer|:\/\/|@|BEGIN/i
+  const SECRET_VALUE =
+    /(?:sk-[a-zA-Z0-9]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{20,}|xoxb-[0-9]{10,}-[a-zA-Z0-9]{24,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})/g
+  /**
+   * Cheap gate before the redaction regexes: ordinary log lines carry none of
+   * these, and this keeps the hot path free of regex work. Every shape
+   * `redactLogText` knows needs one of its prefixes here — a bare JWT, for
+   * instance, carries no `=`, `:`, `@` or scheme to trip the gate on.
+   */
+  const MAYBE_SECRET = /[=:]|bearer|:\/\/|@|BEGIN|sk-|eyJ|AKIA|AIza|ghp_|github_pat_|xoxb-/i
 
   function truncate(value: string, limit: number): string {
     if (value.length <= limit) return value
@@ -412,7 +424,9 @@ export namespace Log {
    */
   function redactLogText(value: string, limit = LOG_VALUE_MAX_CHARS): string {
     if (!MAYBE_SECRET.test(value)) return truncate(value, limit)
-    const redacted = Env.redactSecrets(Env.redactInlineEnvAssignments(value)).replace(PRIVATE_KEY_BLOCK, "[redacted private key]")
+    const redacted = Env.redactSecrets(Env.redactInlineEnvAssignments(value))
+      .replace(PRIVATE_KEY_BLOCK, "[redacted private key]")
+      .replace(SECRET_VALUE, "[redacted secret]")
     return truncate(redacted, limit)
   }
 
@@ -546,32 +560,37 @@ export namespace Log {
         ) + "\n"
       )
     }
-    // Pino child is created lazily — only when pinoLogger is active (file mode)
+    // Pino child is created lazily — only when pinoLogger is active (file mode).
+    // Its tags are a sink too, so they take the same key-aware redaction as the
+    // text path; `Log.tag("token", …)` must not land in the JSON log verbatim.
     let child: pino.Logger | undefined
-    const pino_child = () => (child ??= pinoLogger?.child(tags || {}))
+    const pino_child = () => (child ??= pinoLogger?.child(pinoExtra(tags)))
+    // The JSON file log carries the message too: redact and cap it exactly like
+    // the text sink, or a credential named in a message reaches disk unredacted.
+    const pinoMessage = (message: unknown) => redactLogText(safeLogString(message ?? ""), LOG_MESSAGE_MAX_CHARS)
     const result: Logger = {
       debug(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("DEBUG")) {
           write("DEBUG " + build(message, extra))
-          pino_child()?.debug(pinoExtra(extra), safeLogString(message ?? ""))
+          pino_child()?.debug(pinoExtra(extra), pinoMessage(message))
         }
       },
       info(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("INFO")) {
           write("INFO  " + build(message, extra))
-          pino_child()?.info(pinoExtra(extra), safeLogString(message ?? ""))
+          pino_child()?.info(pinoExtra(extra), pinoMessage(message))
         }
       },
       error(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("ERROR")) {
           write("ERROR " + build(message, extra))
-          pino_child()?.error(pinoExtra(extra), safeLogString(message ?? ""))
+          pino_child()?.error(pinoExtra(extra), pinoMessage(message))
         }
       },
       warn(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("WARN")) {
           write("WARN  " + build(message, extra))
-          pino_child()?.warn(pinoExtra(extra), safeLogString(message ?? ""))
+          pino_child()?.warn(pinoExtra(extra), pinoMessage(message))
         }
       },
       tag(key: string, value: string) {

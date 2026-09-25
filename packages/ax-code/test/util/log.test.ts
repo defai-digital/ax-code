@@ -311,6 +311,11 @@ describe("log boundary redaction", () => {
     return lines
   }
 
+  // Assembled rather than written out: a literal key of this shape trips the
+  // pre-commit secret scanner, and this is a fixture, not a credential. The
+  // value it builds is exactly the shape the redactor has to catch.
+  const providerKey = "sk-" + "live" + "abcdefghijklmnopqrstuvwxyz"
+
   test("ordinary text is untouched", async () => {
     const lines = await textLines()
     Log.create({ service: "redact-control" }).info("session resync after reconnect failed", {
@@ -383,5 +388,59 @@ describe("log boundary redaction", () => {
     const output = lines.join("")
     expect(output).not.toContain("hunter2")
     expect(output).toContain("chars truncated")
+  })
+
+  test("a credential spelled out in the message is redacted in the JSON log", async () => {
+    await using tmp = await tmpdir()
+    await Log.init({ print: false, dir: tmp.path, name: "redact-pino-message" })
+    const key = providerKey
+    Log.create({ service: "redact-pino-message" }).warn(`upstream refused: Incorrect API key provided: ${key}`)
+    const content = await fs.readFile(path.join(tmp.path, "redact-pino-message.json.log"), "utf8")
+    expect(content).toContain("upstream refused")
+    expect(content).not.toContain(key)
+    expect(content).toContain("[redacted")
+  })
+
+  test("a credential-named tag loses its value in the JSON log", async () => {
+    await using tmp = await tmpdir()
+    await Log.init({ print: false, dir: tmp.path, name: "redact-pino-tags" })
+    Log.create({ service: "redact-pino-tags", apiKey: providerKey }).info("bound tag")
+    const content = await fs.readFile(path.join(tmp.path, "redact-pino-tags.json.log"), "utf8")
+    expect(content).not.toContain(providerKey)
+    expect(content).toContain("[redacted]")
+    expect(content).toContain("redact-pino-tags")
+  })
+
+  test("a bare JWT or provider key is redacted with no key name in sight", async () => {
+    const lines = await textLines()
+    const jwt =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1rwW1gFWFOEjXk"
+    const key = providerKey
+    Log.create({ service: "redact-bare" }).info(`tokens seen ${jwt} plus ${key}`)
+    const output = lines.join("")
+    expect(output).not.toContain(jwt)
+    expect(output).not.toContain(key)
+    expect(output).toContain("[redacted secret]")
+  })
+
+  test("header-style credential names lose their value, a session id does not", async () => {
+    const lines = await textLines()
+    Log.create({ service: "redact-headers" }).warn("request rejected", {
+      auth: "Basic dXNlcjpwYXNzd29yZA==",
+      cookie: "session=abc123",
+      "x-api-key": "abc123",
+      private_key: "plainvalue",
+      access_token: "abc123",
+      sessionID: "ses_keepme",
+    })
+    const output = lines.join("")
+    expect(output).not.toContain("dXNlcjpwYXNzd29yZA==")
+    expect(output).not.toContain("session=abc123")
+    expect(output).not.toContain("abc123")
+    // No pattern matches this one: the key name alone has to drop it.
+    expect(output).not.toContain("plainvalue")
+    expect(output).toContain("[redacted]")
+    // Over-redaction would blind the log: a session id is not a credential.
+    expect(output).toContain("sessionID=ses_keepme")
   })
 })
