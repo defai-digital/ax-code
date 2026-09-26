@@ -2,23 +2,24 @@ import { describe, expect, test, vi } from "vitest"
 import { chooseAnimationPair, launchAnimationPair } from "../../../src/cli/tui/component/animation-pair"
 
 describe("launch animation pairing", () => {
-  test.each([0, 0.1, 0.2 - Number.EPSILON])(
-    "draw %s pairs the Digital Code opening with its reverse ending",
-    (draw) => {
-      expect(chooseAnimationPair(() => draw)).toEqual({ opening: "digital-code", ending: "digital-code" })
-    },
-  )
-  test.each([0.2, 0.3, 0.4 - Number.EPSILON])("draw %s pairs classic foliage with golden foliage", (draw) => {
-    expect(chooseAnimationPair(() => draw)).toEqual({ opening: "classic-foliage", ending: "golden-foliage" })
-  })
-  test.each([0.4, 0.5, 0.6 - Number.EPSILON])("draw %s pairs Midnight Dream with Sunset Serenade", (draw) => {
-    expect(chooseAnimationPair(() => draw)).toEqual({ opening: "midnight-dream", ending: "sunset-serenade" })
-  })
-  test.each([0.6, 0.7, 0.8 - Number.EPSILON])("draw %s pairs daytime Fuji with night Fuji", (draw) => {
-    expect(chooseAnimationPair(() => draw)).toEqual({ opening: "fuji-day", ending: "fuji-night" })
+  test.each([
+    [[0, 0.05, 1 / 9 - Number.EPSILON], { opening: "digital-code", ending: "digital-code" }],
+    [[1 / 9, 1.5 / 9, 2 / 9 - Number.EPSILON], { opening: "classic-foliage", ending: "golden-foliage" }],
+    [[2 / 9, 2.5 / 9, 3 / 9 - Number.EPSILON], { opening: "midnight-dream", ending: "sunset-serenade" }],
+    [[3 / 9, 3.5 / 9, 4 / 9 - Number.EPSILON], { opening: "fuji-day", ending: "fuji-night" }],
+    [[4 / 9, 4.5 / 9, 5 / 9 - Number.EPSILON], { opening: "mahjong-match", ending: "mahjong-ending" }],
+    [[5 / 9, 5.5 / 9, 6 / 9 - Number.EPSILON], { opening: "city-night", ending: "city-dawn" }],
+    [[6 / 9, 6.5 / 9, 7 / 9 - Number.EPSILON], { opening: "festival-fireworks", ending: "festival-lanterns" }],
+    [[7 / 9, 7.5 / 9, 8 / 9 - Number.EPSILON], { opening: "snowfall", ending: "winter-night" }],
+    [[8 / 9, 0.95, 0.999999], { opening: "volcano-eruption", ending: "volcano-calm" }],
+  ] as [number[], { opening: string; ending: string }][])("draw %s selects %s", (draws, pair) => {
+    for (const draw of draws) expect(chooseAnimationPair(() => draw)).toEqual(pair)
   })
   test("reading previews and the ending never draws again or changes the opening", () => {
-    const random = vi.fn().mockReturnValueOnce(0.125).mockReturnValue(0.375)
+    const random = vi
+      .fn()
+      .mockReturnValueOnce(0.05)
+      .mockReturnValue(1.5 / 9)
     const pair = chooseAnimationPair(random)
     for (let preview = 0; preview < 10; preview++) {
       expect(pair.opening).toBe("digital-code")
@@ -28,10 +29,6 @@ describe("launch animation pairing", () => {
     expect(Object.isFrozen(pair)).toBe(true)
     expect(chooseAnimationPair(random).opening).toBe("classic-foliage")
   })
-})
-
-test.each([0.8, 0.9, 0.999999])("draw %s pairs Mahjong match with final points", (draw) => {
-  expect(chooseAnimationPair(() => draw)).toEqual({ opening: "mahjong-match", ending: "mahjong-ending" })
 })
 
 describe("launch pair caching", () => {

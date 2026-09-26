@@ -8,13 +8,17 @@ Owner: AX Code TUI maintainers
 See [Terminal rendering](terminal-rendering.md) for automatic terminal profiles,
 manual overrides, and the difference between pixel graphics and text rendering.
 
-Each TUI launch randomly selects one of five animation pairs with equal probability (20% each):
+Each TUI launch randomly selects one of nine animation pairs with equal probability (1/9 each):
 
 - Digital Code: purple/blue falling code for the opening, reverse code for the ending.
 - Foliage: classic autumn leaves for the opening, golden leaves for the ending.
 - Bench: Midnight Dream for the opening, Sunset Serenade for the ending.
 - Fuji Mountain: daytime for the opening, night for the ending.
 - Mahjong: four-seat match for the opening, final point ledger for the ending.
+- City: neon night skyline for the opening, dawn skyline for the ending.
+- Festival: fireworks for the opening, rising lanterns for the ending.
+- Snow: pine snowfall for the opening, winter night for the ending.
+- Volcano: eruption for the opening, calm crater for the ending.
 
 Fuji Mountain includes a snow-capped mountain, a reflective lake, cherry blossoms,
 falling petals, and a Shinkansen travelling across the foreground. The 74-column,
@@ -96,3 +100,28 @@ glyph widths do not affect it. Text fallback uses ASCII suit codes (`1C`, `2B`,
 `RD`, `GD`, `WD`) and `##` for concealed tiles. Narrow text screens crop the
 centered scene. Resize, missing graphics capability, and image cleanup follow
 the same lifecycle as Fuji and Bench.
+
+City uses a night skyline with a moon, stars, and twinkling windows for the
+opening, and a dawn skyline with a low sun for the ending. Both share one
+scene model — palette, tower layout, window phases, and street lamps — so the
+text fallback and the freeform HD painting show the same scene for the same
+millisecond, bounded to 1920x1080. Preview with `/city` or `/city-ending`.
+
+Festival opens with three staggered fireworks bursts looping on a shared
+cycle, and ends with glowing lanterns rising past the moon. Burst positions,
+particle stages, lantern paths, and town lights come from one scene model
+shared by the text fallback and the freeform HD painting, bounded to
+1920x1080. Preview with `/festival` or `/festival-ending`.
+
+Snow opens with pine snowfall under a pale sun and ends on a starry winter
+night over the same forest. Pines, sparkling ground, and the moon or sun stay
+fixed while deterministic flakes fall below the static celestial rows; the
+full sky loops with the flake cycle. Text fallback and freeform HD painting
+share the scene model, bounded to 1920x1080. Preview with `/snow` or
+`/snow-ending`.
+
+Volcano opens on an eruption — pulsing crater, lava flow, smoke, and rising
+embers — and ends on a calm crater under moon and stars. Cone shape, crater
+glow, lava channel, and particle paths come from one scene model shared by
+the text fallback and the freeform HD painting, bounded to 1920x1080.
+Preview with `/volcano` or `/volcano-ending`.

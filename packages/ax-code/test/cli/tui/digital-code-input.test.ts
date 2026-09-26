@@ -67,7 +67,15 @@ async function mount(
     | "fuji-day"
     | "mahjong-match"
     | "mahjong-ending"
-    | "fuji-night" = "digital-code",
+    | "fuji-night"
+    | "city-night"
+    | "city-dawn"
+    | "festival-fireworks"
+    | "festival-lanterns"
+    | "snowfall"
+    | "winter-night"
+    | "volcano-eruption"
+    | "volcano-calm" = "digital-code",
 ) {
   const onDone = vi.fn()
   createRoot((cleanup) => {
@@ -149,6 +157,14 @@ test.each([
   "sunset-serenade",
   "mahjong-match",
   "mahjong-ending",
+  "city-night",
+  "city-dawn",
+  "festival-fireworks",
+  "festival-lanterns",
+  "snowfall",
+  "winter-night",
+  "volcano-eruption",
+  "volcano-calm",
 ] as const)("%s pixel playback deletes its image on skip before unmount", async (style) => {
   const descriptor = Object.getOwnPropertyDescriptor(process.stdout, "isTTY")
   Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: true })
@@ -206,6 +222,14 @@ test.each([
   "fuji-night",
   "mahjong-match",
   "mahjong-ending",
+  "city-night",
+  "city-dawn",
+  "festival-fireworks",
+  "festival-lanterns",
+  "snowfall",
+  "winter-night",
+  "volcano-eruption",
+  "volcano-calm",
 ] as const)("%s consumes exit input and restores handlers on cleanup", async (style) => {
   const prompt = vi.fn()
   mocks.renderer.keyInput.onInternal("keypress", prompt)

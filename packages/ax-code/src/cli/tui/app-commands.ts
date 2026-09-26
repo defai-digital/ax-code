@@ -708,7 +708,15 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
               ? uiText("animation.fujiDay")
               : input.animationPair?.opening === "mahjong-match"
                 ? uiText("animation.mahjongMatch")
-                : uiText("animation.classicFoliage"),
+                : input.animationPair?.opening === "city-night"
+                  ? uiText("animation.cityNight")
+                  : input.animationPair?.opening === "festival-fireworks"
+                    ? uiText("animation.festivalFireworks")
+                    : input.animationPair?.opening === "snowfall"
+                      ? uiText("animation.snowfall")
+                      : input.animationPair?.opening === "volcano-eruption"
+                        ? uiText("animation.volcanoEruption")
+                        : uiText("animation.classicFoliage"),
       slash: { name: "ov", aliases: ["op"], hidden: true },
       value: "app.digital_code.play",
       category: t("category.system"),
@@ -728,7 +736,15 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
               ? uiText("animation.fujiNight")
               : input.animationPair?.ending === "mahjong-ending"
                 ? uiText("animation.mahjongEnding")
-                : uiText("animation.goldenFoliage"),
+                : input.animationPair?.ending === "city-dawn"
+                  ? uiText("animation.cityDawn")
+                  : input.animationPair?.ending === "festival-lanterns"
+                    ? uiText("animation.festivalLanterns")
+                    : input.animationPair?.ending === "winter-night"
+                      ? uiText("animation.winterNight")
+                      : input.animationPair?.ending === "volcano-calm"
+                        ? uiText("animation.volcanoCalm")
+                        : uiText("animation.goldenFoliage"),
       slash: { name: "ev", hidden: true },
       value: "app.digital_code.play_reverse",
       category: t("category.system"),
