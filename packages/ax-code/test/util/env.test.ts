@@ -269,6 +269,10 @@ describe("Env.sanitize", () => {
   test("redacts Authorization Basic credentials and leaves look-alikes intact", () => {
     // The field pattern used to stop after the space, leaving the base64 body.
     expect(Env.redactSecrets("Authorization: Basic dXNlcjpwYXNzd29yZA==")).toBe("Authorization=[redacted]")
+    // The structured sink already treats `cookie` as a credential name; the
+    // header spelling must be caught here too (`\bcookie\b` covers Set-Cookie).
+    expect(Env.redactSecrets("Cookie: session=abc123")).toBe("Cookie=[redacted]")
+    expect(Env.redactSecrets("Set-Cookie: sid=xyz; Path=/")).toBe("Set-Cookie=[redacted]; Path=/")
     // A missing password, a non-URI scheme, an scp-style remote, and a bare
     // username must not be treated as embedded credentials.
     expect(Env.redactSecrets("https://example.com:443/path")).toBe("https://example.com:443/path")

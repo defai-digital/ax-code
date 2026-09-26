@@ -424,7 +424,11 @@ export namespace Log {
    */
   function redactLogText(value: string, limit = LOG_VALUE_MAX_CHARS): string {
     if (!MAYBE_SECRET.test(value)) return truncate(value, limit)
-    const redacted = Env.redactSecrets(Env.redactInlineEnvAssignments(value))
+    // Order matters: redactSecrets first, then redactInlineEnvAssignments. The
+    // reverse order re-matches its own placeholder for a keyword-named key and
+    // emits `API_KEY=[redacted]]`. Same composition as the persisted bash-input
+    // redactor in `session/processor-impl.ts`.
+    const redacted = Env.redactInlineEnvAssignments(Env.redactSecrets(value))
       .replace(PRIVATE_KEY_BLOCK, "[redacted private key]")
       .replace(SECRET_VALUE, "[redacted secret]")
     return truncate(redacted, limit)
@@ -454,7 +458,6 @@ export namespace Log {
       ? result + " Caused by: " + formatError(error.cause, depth + 1)
       : result
   }
-
 
   // Pino's built-in error serializer only applies to the `err` key. This
   // codebase mostly logs errors under `error`, where the JSON log receives
@@ -507,7 +510,7 @@ export namespace Log {
             seen.add(next)
           }
           return next
-        }) ?? safeLogString(value)
+        }) ?? safeLogString(value),
       )
     } catch (error) {
       return `[Unserializable: ${toErrorMessage(error)}]`
@@ -555,7 +558,12 @@ export namespace Log {
       last = next.getTime()
       return (
         truncate(
-          [next.toISOString().split(".")[0], "+" + diff + "ms", prefix, redactLogText(safeLogString(message), LOG_MESSAGE_MAX_CHARS)]
+          [
+            next.toISOString().split(".")[0],
+            "+" + diff + "ms",
+            prefix,
+            redactLogText(safeLogString(message), LOG_MESSAGE_MAX_CHARS),
+          ]
             .filter(Boolean)
             .join(" "),
           LOG_ENTRY_MAX_CHARS,

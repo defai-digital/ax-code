@@ -135,15 +135,17 @@ export namespace Env {
   /** Redact common key/value, authorization, and URI-credential spellings in child logs. */
   export function redactSecrets(value: string): string {
     const jsonRedacted = value.replace(
-      /(["'])(token|secret|password|passwd|credential|authorization|api[_-]?key)\1\s*:\s*(["'])[^"'\r\n]*\3/gi,
+      /(["'])(token|secret|password|passwd|credential|authorization|cookie|api[_-]?key)\1\s*:\s*(["'])[^"'\r\n]*\3/gi,
       (_match, quote: string, key: string, valueQuote: string) =>
         `${quote}${key}${quote}:${valueQuote}[redacted]${valueQuote}`,
     )
     const fieldsRedacted = jsonRedacted.replace(
-      // `basic` alongside `bearer`: `Authorization: Basic <base64>` otherwise
-      // left the encoded `user:password` behind — the pattern stopped at the
-      // space after "Basic" and only "Basic" was redacted.
-      /\b(token|secret|password|passwd|credential|authorization|api[_-]?key)\b\s*(?:=|:)\s*(?:(?:bearer|basic)\s+)?[^\s,;}\]]+/gi,
+      // `basic` alongside `bearer`, and `cookie` alongside `authorization`:
+      // `Authorization: Basic <base64>` left the encoded credential behind, and
+      // a `Cookie:` header was not matched at all even though the structured
+      // sink (`SECRET_KEY_NAME` in `util/log.ts`) and MCP trust already treat
+      // `cookie` as a credential name. `\bcookie\b` also covers `Set-Cookie`.
+      /\b(token|secret|password|passwd|credential|authorization|cookie|api[_-]?key)\b\s*(?:=|:)\s*(?:(?:bearer|basic)\s+)?[^\s,;}\]]+/gi,
       (_match, key: string) => `${key}=[redacted]`,
     )
     // Any RFC 3986 scheme, not just http(s): connection strings such as

@@ -355,6 +355,16 @@ describe("log boundary redaction", () => {
     expect(output).toContain("db.internal/app")
   })
 
+  test("a keyword-named assignment redacts without doubling the placeholder", async () => {
+    const lines = await textLines()
+    const value = "placeholder" + "-token-value"
+    Log.create({ service: "redact-assign" }).warn("env dump: API_KEY=" + value)
+    const output = lines.join("")
+    expect(output).not.toContain(value)
+    expect(output).toContain("API_KEY=[redacted]")
+    expect(output).not.toContain("[redacted]]")
+  })
+
   test("a credential-named Error is redacted in text and JSON logs", async () => {
     const lines = await textLines()
     const opaqueValue = "opaque-credential-value"

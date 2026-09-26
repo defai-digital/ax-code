@@ -90,23 +90,32 @@ export namespace SessionProcessor {
    * execution. Returns a shallow copy so the caller's input is untouched.
    */
   export function redactPersistedBashInput(tool: string, input: Record<string, unknown>): Record<string, unknown> {
+    // Credentials reach a bash command as `KEY=` assignments (handled by
+    // redactInlineEnvAssignments) but also as HTTP headers (`Authorization:
+    // Bearer …`, `X-Api-Key: …`), CLI flags (`--password=…`) and quoted URLs
+    // (`https://u:pw@host`). The persisted copy is never re-executed, so the
+    // full redaction is applied here. Order matters: run redactSecrets FIRST,
+    // then redactInlineEnvAssignments. The reverse order leaves the placeholder
+    // itself looking like an assignment to a keyword-named key and re-emits it,
+    // turning `API_KEY=secret` into `API_KEY=[redacted]]`.
+    const redact = (value: string) => Env.redactInlineEnvAssignments(Env.redactSecrets(value))
     if (tool === "bash") {
       const command =
         typeof input["command"] === "string" && input["command"].trim() !== "" ? input["command"] : undefined
       const cmd = typeof input["cmd"] === "string" && input["cmd"].trim() !== "" ? input["cmd"] : undefined
       const raw = command ?? cmd
       if (raw === undefined) return input
-      const next: Record<string, unknown> = { ...input, command: Env.redactInlineEnvAssignments(raw) }
+      const next: Record<string, unknown> = { ...input, command: redact(raw) }
       delete next.cmd
       return next
     }
     if (tool === "monitor") {
       if (typeof input["command"] !== "string") return input
-      return { ...input, command: Env.redactInlineEnvAssignments(input["command"]) }
+      return { ...input, command: redact(input["command"]) }
     }
     if (tool === "bash_input") {
       if (typeof input["input"] !== "string") return input
-      return { ...input, input: Env.redactInlineEnvAssignments(input["input"]) }
+      return { ...input, input: redact(input["input"]) }
     }
     return input
   }
