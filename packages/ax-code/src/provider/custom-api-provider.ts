@@ -300,14 +300,15 @@ export namespace CustomApiProvider {
     const declared = isRecord(raw?.modalities) && Array.isArray(raw.modalities.input) ? raw.modalities.input : undefined
     if (declared && declared.length > 0) return declared.some((modality) => modality === "image")
     if (typeof capabilities?.attachment === "boolean") return capabilities.attachment
-    // `modalities` is optional on a catalog row and `input` may be absent even
-    // when `modalities` is present (a hand-built or schema-drifted fallback),
-    // so the final access must be optional too. Without the `?.` before
-    // `includes`, a fallback row carrying `modalities` without `input` throws
-    // `TypeError: Cannot read properties of undefined (reading 'includes')`
-    // instead of resolving to "not capable" — the same shape
-    // `fromModelsDevModel` already guards as `modalities?.input?.includes(...)`.
-    return fallback?.modalities?.input?.includes("image") ?? false
+    // A catalog row is a trust boundary (bundled snapshot / AX_CODE_MODELS_PATH
+    // / AX_CODE_MODELS_URL), so the fallback list must be validated as an array
+    // before it is read, exactly like the gateway's `raw.modalities.input`
+    // above. A row whose `modalities` is present without `input` — or carries a
+    // non-array `input` — must resolve to "not capable" instead of throwing
+    // (`undefined.includes(...)`). `fromModelsDevModel` guards the same shape as
+    // `modalities?.input?.includes(...)`.
+    const fallbackInput = fallback?.modalities?.input
+    return Array.isArray(fallbackInput) ? fallbackInput.includes("image") : false
   }
 
   // A gateway card declares server-side web search as a boolean either under

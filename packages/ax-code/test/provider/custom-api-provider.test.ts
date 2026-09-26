@@ -139,6 +139,21 @@ describe("custom API provider model discovery", () => {
         outputLimit: 16_384,
       }),
     ])
+
+    // A non-array `input` (drifted row) must also resolve to "not capable"
+    // rather than throw `input.includes is not a function`.
+    const nonArray = { "drift-model": { limit: { context: 1, output: 1 }, modalities: { input: "text" } } } as any
+    expect(CustomApiProvider.parseDiscoveredModels({ data: [{ id: "drift-model" }] }, false, nonArray)).toEqual([
+      expect.objectContaining({ id: "drift-model", attachment: false }),
+    ])
+
+    // A well-formed array still outranks the absent generic flag.
+    const wellFormed = {
+      "vision-row": { limit: { context: 1, output: 1 }, modalities: { input: ["text", "image"] } },
+    } as any
+    expect(CustomApiProvider.parseDiscoveredModels({ data: [{ id: "vision-row" }] }, false, wellFormed)).toEqual([
+      expect.objectContaining({ id: "vision-row", attachment: true }),
+    ])
   })
 
   test("reads a declared web search flag from capabilities or abilities", () => {
