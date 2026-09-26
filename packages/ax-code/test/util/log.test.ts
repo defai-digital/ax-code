@@ -342,6 +342,19 @@ describe("log boundary redaction", () => {
     expect(output).toContain("[redacted]")
   })
 
+  test("a non-HTTP connection string in a message is redacted", async () => {
+    const lines = await textLines()
+    // Assembled at runtime: the shape the redactor must catch, not a literal
+    // credential. A free-text connection string has no KEY= for the inline
+    // assignment pass to match.
+    const url = "postgres://" + "admin" + ":" + "s3cret" + "@db.internal/app"
+    Log.create({ service: "redact-uri" }).warn("database unreachable: " + url)
+    const output = lines.join("")
+    expect(output).not.toContain("s3cret")
+    expect(output).toContain("[redacted]")
+    expect(output).toContain("db.internal/app")
+  })
+
   test("a credential-named Error is redacted in text and JSON logs", async () => {
     const lines = await textLines()
     const opaqueValue = "opaque-credential-value"
@@ -397,7 +410,12 @@ describe("log boundary redaction", () => {
     Log.create({ service: "redact-err-stack" }).warn("plain boom", { err: error })
 
     const content = await fs.readFile(path.join(tmp.path, "redact-err-stack.json.log"), "utf8")
-    const entry = JSON.parse(content.trim().split("\n").find((line) => line.includes("plain boom"))!)
+    const entry = JSON.parse(
+      content
+        .trim()
+        .split("\n")
+        .find((line) => line.includes("plain boom"))!,
+    )
     expect(entry.err.message).toBe("boom")
     expect(typeof entry.err.stack).toBe("string")
     expect(entry.err.stack).not.toContain("hunter2")

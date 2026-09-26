@@ -251,6 +251,32 @@ describe("Env.sanitize", () => {
     expect(Env.redactSecrets("https://alice:secret@example.com/path")).toBe("https://alice:[redacted]@example.com/path")
   })
 
+  test("redacts URI credentials for any scheme, not just http(s)", () => {
+    // Connection strings reach the log writer and 4 other sinks as free text,
+    // so there is no KEY= assignment for redactInlineEnvAssignments to catch.
+    expect(Env.redactSecrets("postgres://admin:s3cret@db.internal/app")).toBe(
+      "postgres://admin:[redacted]@db.internal/app",
+    )
+    expect(Env.redactSecrets("redis://default:hunter2@cache:6379")).toBe("redis://default:[redacted]@cache:6379")
+    expect(Env.redactSecrets("mongodb+srv://u:p@cluster/db")).toBe("mongodb+srv://u:[redacted]@cluster/db")
+    // Redis/Docker empty-username form.
+    expect(Env.redactSecrets("redis://:hunter2@cache:6379")).toBe("redis://:[redacted]@cache:6379")
+    expect(Env.redactSecrets("connect failed: postgres://root:topsecret@10.0.0.5/prod")).toBe(
+      "connect failed: postgres://root:[redacted]@10.0.0.5/prod",
+    )
+  })
+
+  test("redacts Authorization Basic credentials and leaves look-alikes intact", () => {
+    // The field pattern used to stop after the space, leaving the base64 body.
+    expect(Env.redactSecrets("Authorization: Basic dXNlcjpwYXNzd29yZA==")).toBe("Authorization=[redacted]")
+    // A missing password, a non-URI scheme, an scp-style remote, and a bare
+    // username must not be treated as embedded credentials.
+    expect(Env.redactSecrets("https://example.com:443/path")).toBe("https://example.com:443/path")
+    expect(Env.redactSecrets("mailto:user@example.com")).toBe("mailto:user@example.com")
+    expect(Env.redactSecrets("git@github.com:org/repo.git")).toBe("git@github.com:org/repo.git")
+    expect(Env.redactSecrets("ssh://git@host/repo")).toBe("ssh://git@host/repo")
+  })
+
   test("forwards CLI provider API keys only through explicit CLI provider overlay", () => {
     const originalGemini = process.env.GEMINI_API_KEY
     const originalOpenAI = process.env.OPENAI_API_KEY

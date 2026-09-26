@@ -132,7 +132,7 @@ export namespace Env {
     }
   }
 
-  /** Redact common key/value and HTTP authorization spellings in child logs. */
+  /** Redact common key/value, authorization, and URI-credential spellings in child logs. */
   export function redactSecrets(value: string): string {
     const jsonRedacted = value.replace(
       /(["'])(token|secret|password|passwd|credential|authorization|api[_-]?key)\1\s*:\s*(["'])[^"'\r\n]*\3/gi,
@@ -140,11 +140,20 @@ export namespace Env {
         `${quote}${key}${quote}:${valueQuote}[redacted]${valueQuote}`,
     )
     const fieldsRedacted = jsonRedacted.replace(
-      /\b(token|secret|password|passwd|credential|authorization|api[_-]?key)\b\s*(?:=|:)\s*(?:bearer\s+)?[^\s,;}\]]+/gi,
+      // `basic` alongside `bearer`: `Authorization: Basic <base64>` otherwise
+      // left the encoded `user:password` behind — the pattern stopped at the
+      // space after "Basic" and only "Basic" was redacted.
+      /\b(token|secret|password|passwd|credential|authorization|api[_-]?key)\b\s*(?:=|:)\s*(?:(?:bearer|basic)\s+)?[^\s,;}\]]+/gi,
       (_match, key: string) => `${key}=[redacted]`,
     )
+    // Any RFC 3986 scheme, not just http(s): connection strings such as
+    // `postgres://`, `redis://`, `mongodb+srv://`, and `amqp://` carry
+    // `user:password@` userinfo too, and a free-text log message has no `KEY=`
+    // assignment for `redactInlineEnvAssignments` to catch. The username may be
+    // empty (`redis://:password@host` is a documented form). The sibling
+    // `URL_USERINFO_VALUE` already accepts every scheme for assignments.
     return fieldsRedacted.replace(
-      /\b(https?:\/\/)([^\s/:@]+):([^\s/@]+)@/gi,
+      /\b([a-z][a-z0-9+.-]*:\/\/)([^\s/:@]*):([^\s/@]+)@/gi,
       (_match, scheme: string, username: string) => `${scheme}${username}:[redacted]@`,
     )
   }
