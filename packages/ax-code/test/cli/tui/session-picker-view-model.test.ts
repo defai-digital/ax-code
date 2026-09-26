@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { recentSessions, recentSessionTitle } from "@/cli/tui/component/session-picker-view-model"
+import { recentSessions, recentSessionTitle, sessionRecapPreview } from "@/cli/tui/component/session-picker-view-model"
 import { resolveSessionFirstRoute } from "@/cli/tui/navigation/launch-policy"
 import { detectNerdFontTerminal, resolveNerdFontEnabled } from "@/cli/tui/ui/glyphs"
 
@@ -46,6 +46,27 @@ describe("recentSessionTitle", () => {
 
   test("keeps short titles unchanged", () => {
     expect(recentSessionTitle({ title: "Fix tests" })).toBe("Fix tests")
+  })
+})
+
+describe("sessionRecapPreview", () => {
+  test("collapses model output to a single trimmed line", () => {
+    expect(sessionRecapPreview({ text: "  Fixed the\npicker   preview. " })).toBe("Fixed the picker preview.")
+  })
+
+  test("returns undefined without a usable recap", () => {
+    expect(sessionRecapPreview(undefined)).toBeUndefined()
+    expect(sessionRecapPreview({})).toBeUndefined()
+    expect(sessionRecapPreview({ text: "   " })).toBeUndefined()
+  })
+
+  test("truncates long recaps on grapheme boundaries", () => {
+    const result = sessionRecapPreview({ text: "x".repeat(200) }, 20)
+    expect(result).toBeDefined()
+    expect(Array.from(result!).length).toBeLessThanOrEqual(20)
+    expect(result!.endsWith("\u2026")).toBe(true)
+    // Astral-plane characters must survive truncation intact.
+    expect(sessionRecapPreview({ text: "\u{1F600}".repeat(50) }, 5)).toBe("\u{1F600}".repeat(4) + "\u2026")
   })
 })
 

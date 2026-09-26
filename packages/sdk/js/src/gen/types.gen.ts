@@ -2683,6 +2683,11 @@ export type GlobalSession = {
     snapshot?: string
     diff?: string
   }
+  lastRecap?: {
+    text: string
+    time: number
+    scope: "turn" | "conversation"
+  }
   metadata?: {
     [key: string]: unknown
   }
@@ -3480,6 +3485,11 @@ export type Session = {
     partID?: string
     snapshot?: string
     diff?: string
+  }
+  lastRecap?: {
+    text: string
+    time: number
+    scope: "turn" | "conversation"
   }
   metadata?: {
     [key: string]: unknown

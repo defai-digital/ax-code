@@ -33,6 +33,7 @@ import {
   orderRootSessions,
   sessionNavigationEntries,
 } from "./session-list-data"
+import { sessionRecapPreview } from "./session-picker-view-model"
 import { createSessionActivityIndex } from "../util/session-activity"
 
 const log = Log.create({ service: "tui.dialog-session-list" })
@@ -225,7 +226,9 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
         title: isDeleting
           ? `Press ${keybind.print("session_delete")} again to confirm`
           : `${"  ".repeat(Math.min(depth, 3))}${x.title}`,
-        description: state?.label,
+        // Activity state wins when a session is working; otherwise the stored
+        // recap preview tells the user what the session was about (ADR-148).
+        description: state?.label ?? sessionRecapPreview(x.lastRecap),
         descriptionFg: state?.attention ? theme.warning : theme.textMuted,
         bg: isDeleting ? theme.error : undefined,
         value: x.id,

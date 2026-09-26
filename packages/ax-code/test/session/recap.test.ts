@@ -191,6 +191,7 @@ describe("recap generation boundary", () => {
   function setup(history: MessageV2.WithParts[]) {
     vi.spyOn(Session, "messages").mockResolvedValue(history)
     vi.spyOn(Session, "get").mockResolvedValue({ id: sessionID } as Session.Info)
+    const persist = vi.spyOn(Session, "setLastRecap").mockResolvedValue({ id: sessionID } as Session.Info)
     const agent = vi.spyOn(Agent, "get").mockResolvedValue({ name: "recap" } as Agent.Info)
     vi.spyOn(Provider, "resolveRequestedModel").mockImplementation(async (model) => model)
     const model = { id: "small", providerID: "openai" } as Provider.Model
@@ -200,7 +201,7 @@ describe("recap generation boundary", () => {
       .mockResolvedValue({ text: Promise.resolve("Fixed login; tests passed.") } as unknown as Awaited<
         ReturnType<typeof LLM.stream>
       >)
-    return { agent, model, stream }
+    return { agent, model, persist, stream }
   }
 
   test("conversation generation is bounded, tool-free, and outside the transcript", async () => {
@@ -227,6 +228,51 @@ describe("recap generation boundary", () => {
     expect(stream.mock.calls[0][0].messages[0].content).not.toContain("Fix the login bug")
   })
 
+  test("persists the generated recap with its scope for the session picker", async () => {
+    const history = [
+      userMessage([text("Fix the login bug")]),
+      assistantMessage([text("Tests passed")], undefined, { time: { created: 1, completed: 2 } }),
+    ]
+    const { persist } = setup(history)
+    expect(await SessionRecap.generate({ sessionID, scope: "conversation" })).toEqual({
+      text: "Fixed login; tests passed.",
+    })
+    expect(persist).toHaveBeenCalledWith({
+      sessionID,
+      recap: { text: "Fixed login; tests passed.", time: expect.any(Number), scope: "conversation" },
+    })
+    persist.mockClear()
+    await SessionRecap.generate({ sessionID })
+    expect(persist).toHaveBeenCalledWith({
+      sessionID,
+      recap: { text: "Fixed login; tests passed.", time: expect.any(Number), scope: "turn" },
+    })
+  })
+
+  test("returns the recap even when the durable write fails", async () => {
+    const history = [
+      userMessage([text("Fix the login bug")]),
+      assistantMessage([text("Tests passed")], undefined, { time: { created: 1, completed: 2 } }),
+    ]
+    const { persist } = setup(history)
+    persist.mockRejectedValue(new Error("database is locked"))
+    expect(await SessionRecap.generate({ sessionID })).toEqual({ text: "Fixed login; tests passed." })
+    expect(persist).toHaveBeenCalledOnce()
+  })
+
+  test("does not persist unusable model output", async () => {
+    const history = [
+      userMessage([text("Fix the login bug")]),
+      assistantMessage([text("Tests passed")], undefined, { time: { created: 1, completed: 2 } }),
+    ]
+    const { persist, stream } = setup(history)
+    stream.mockResolvedValue({ text: Promise.resolve("<think>only thinking</think>") } as unknown as Awaited<
+      ReturnType<typeof LLM.stream>
+    >)
+    expect(await SessionRecap.generate({ sessionID })).toBeUndefined()
+    expect(persist).not.toHaveBeenCalled()
+  })
+
   test.each(["empty", "user-only", "incomplete", "failed", "engine"])(
     "skips model calls for %s history",
     async (kind) => {
@@ -237,10 +283,13 @@ describe("recap generation boundary", () => {
         time: { created: 1, completed: kind === "incomplete" ? undefined : 2 },
         ...(kind === "failed" ? { error: { name: "UnknownError", data: { message: "failed" } } } : {}),
       })
-      const { agent, stream } = setup(kind === "empty" ? [] : kind === "user-only" ? [user] : [user, assistant])
+      const { agent, persist, stream } = setup(
+        kind === "empty" ? [] : kind === "user-only" ? [user] : [user, assistant],
+      )
       expect(await SessionRecap.generate({ sessionID })).toBeUndefined()
       expect(agent).not.toHaveBeenCalled()
       expect(stream).not.toHaveBeenCalled()
+      expect(persist).not.toHaveBeenCalled()
     },
   )
 })

@@ -18,6 +18,11 @@ type RecapView = { text?: string; loading?: boolean }
  *  latency after it. */
 export const RECAP_PREGENERATE_LEAD_MS = 2_500
 
+/** One bounded automatic retry after a failed attempt (ADR-148). The
+ *  automatic lane is silent, so a single transient failure would otherwise
+ *  leave no banner until the next revision. */
+export const RECAP_RETRY_DELAY_MS = 30_000
+
 /** Owns one presentation request; invalidation also rejects late successful responses. */
 export function createRecapController(host: {
   snapshot: () => RecapSnapshot
@@ -33,10 +38,13 @@ export function createRecapController(host: {
   let previous: RecapSnapshot | undefined
   let cancelArm: (() => void) | undefined
   let cancelReveal: (() => void) | undefined
+  let cancelRetry: (() => void) | undefined
   let active: { abort: AbortController; manual: boolean } | undefined
   /** Pregenerated text held for the delay mark; undefined when nothing is held. */
   let held: string | undefined
   let attempted = false
+  /** The one automatic retry has been spent in this arm window. */
+  let retried = false
   let disposed = false
 
   function cancelTimers() {
@@ -44,7 +52,11 @@ export function createRecapController(host: {
     cancelArm = undefined
     cancelReveal?.()
     cancelReveal = undefined
+    cancelRetry?.()
+    cancelRetry = undefined
     held = undefined
+    // A cleared window re-arms from scratch, including its retry budget.
+    retried = false
   }
 
   function invalidate() {
@@ -118,7 +130,32 @@ export function createRecapController(host: {
     }
   }
 
-  async function request(manual: boolean) {
+  /** Spend the window's single automatic retry. The scheduled callback
+   *  re-checks the live snapshot, so typing, navigation, a revision change, a
+   *  disabled config, or a busy tree all cancel the retry even before the
+   *  timer is torn down. Manual requests never retry: they report the failure
+   *  to the user, who can ask again. */
+  function scheduleRetry() {
+    if (retried || disposed) return
+    retried = true
+    cancelRetry?.()
+    cancelRetry = host.schedule(() => {
+      cancelRetry = undefined
+      const snapshot = host.snapshot()
+      if (snapshot.status !== "idle" || snapshot.treeBusy || !snapshot.enabled || snapshot.input) return
+      void request(false, true)
+    }, RECAP_RETRY_DELAY_MS)
+  }
+
+  /** A produced recap satisfies the window, so a pending retry (for example
+   *  from an earlier failure) is retired instead of calling the model again. */
+  function settleRetry() {
+    cancelRetry?.()
+    cancelRetry = undefined
+    retried = true
+  }
+
+  async function request(manual: boolean, retry = false) {
     if (disposed) return
     update()
     const snapshot = host.snapshot()
@@ -130,7 +167,7 @@ export function createRecapController(host: {
     if (!snapshot.hasMessages) return notify("There is no conversation history to recap.")
     if (active?.manual) return notify("A conversation recap is already being generated.")
     if (active && !manual) return
-    if (!manual && (!snapshot.enabled || snapshot.input || attempted)) return
+    if (!manual && !retry && (!snapshot.enabled || snapshot.input || attempted)) return
     // A manual request replaces an in-flight automatic pregeneration.
     active?.abort.abort()
     cancelArm?.()
@@ -155,20 +192,26 @@ export function createRecapController(host: {
       if (result.error) {
         notify("Could not generate a conversation recap. Try /recap again.")
         host.show({})
+        if (!manual) scheduleRetry()
       } else if (!result.data?.text) {
         notify("No recap is available for this conversation or provider yet.")
         host.show({})
-      } else if (manual || cancelReveal === undefined) {
-        host.show({ text: result.data.text })
+        if (!manual) scheduleRetry()
       } else {
-        // Reveal is still pending: hold the pregenerated text for the delay mark.
-        held = result.data.text
+        settleRetry()
+        if (manual || cancelReveal === undefined) {
+          host.show({ text: result.data.text })
+        } else {
+          // Reveal is still pending: hold the pregenerated text for the delay mark.
+          held = result.data.text
+        }
       }
     } catch {
       update()
       if (active !== current || disposed) return
       notify("Could not generate a conversation recap. Try /recap again.")
       host.show({})
+      if (!manual) scheduleRetry()
     } finally {
       if (active === current) active = undefined
     }

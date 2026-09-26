@@ -80,6 +80,18 @@ export namespace Session {
 
   type SessionRow = typeof SessionTable.$inferSelect
 
+  /** Upper bound for a stored recap's text. Storage contract for
+   *  `Info.lastRecap`; `session/recap.ts` truncates generated text to the same
+   *  bound before persisting. */
+  export const LAST_RECAP_MAX_CHARS = 400
+
+  export const LastRecap = z.object({
+    text: z.string().min(1).max(LAST_RECAP_MAX_CHARS),
+    time: z.number(),
+    scope: z.enum(["turn", "conversation"]),
+  })
+  export type LastRecap = z.output<typeof LastRecap>
+
   function parseRow(row: SessionRow) {
     const summary =
       row.summary_additions !== null || row.summary_deletions !== null || row.summary_files !== null
@@ -92,6 +104,9 @@ export namespace Session {
         : undefined
     const share = row.share_url ? { url: row.share_url } : undefined
     const revert = row.revert ?? undefined
+    // A display hint must never hide an otherwise valid session: a legacy or
+    // corrupt recap payload is dropped here instead of failing Info below.
+    const lastRecap = row.last_recap ? LastRecap.safeParse(row.last_recap).data : undefined
     const next = Info.safeParse({
       id: row.id,
       slug: row.slug,
@@ -103,6 +118,7 @@ export namespace Session {
       summary,
       share,
       revert,
+      lastRecap,
       permission: row.permission ?? undefined,
       metadata: row.metadata ?? undefined,
       time: {
@@ -153,6 +169,7 @@ export namespace Session {
       revert: info.revert ?? null,
       permission: info.permission,
       metadata: info.metadata ?? null,
+      last_recap: info.lastRecap ?? null,
       time_created: info.time.created,
       time_updated: info.time.updated,
       time_compacting: info.time.compacting,
@@ -208,6 +225,9 @@ export namespace Session {
           diff: z.string().optional(),
         })
         .optional(),
+      // Durable display hint from the most recent recap generation (ADR-148).
+      // Optional: sessions that never produced a usable recap carry none.
+      lastRecap: LastRecap.optional(),
       metadata: z.record(z.string(), z.unknown()).optional(),
     })
     .meta({
@@ -631,11 +651,22 @@ export namespace Session {
     async (input) => updateAndPublish(input.sessionID, { permission: input.permission, time_updated: Date.now() }),
   )
 
+  /** Persist the last generated recap (ADR-148). Deliberately does NOT touch
+   *  `time_updated`: a display hint must not reorder the session list or look
+   *  like user activity to other clients. */
+  export const setLastRecap = fn(z.object({ sessionID: SessionID.zod, recap: LastRecap.nullable() }), async (input) =>
+    updateAndPublish(input.sessionID, { last_recap: input.recap }),
+  )
+
   export const setRevert = fn(
     z.object({ sessionID: SessionID.zod, revert: Info.shape.revert, summary: Info.shape.summary }),
     async (input) =>
       updateAndPublish(input.sessionID, {
         revert: input.revert ?? null,
+        // A recap describes work the rollback may have undone; drop it so the
+        // picker never advertises reverted work (ADR-148). It regenerates
+        // after the next settled turn.
+        last_recap: input.revert ? null : undefined,
         summary_additions: input.summary?.additions,
         summary_deletions: input.summary?.deletions,
         summary_files: input.summary?.files,

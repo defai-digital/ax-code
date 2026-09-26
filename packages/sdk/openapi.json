@@ -43938,6 +43938,31 @@
               "messageID"
             ]
           },
+          "lastRecap": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              },
+              "time": {
+                "type": "number"
+              },
+              "scope": {
+                "type": "string",
+                "enum": [
+                  "turn",
+                  "conversation"
+                ]
+              }
+            },
+            "required": [
+              "text",
+              "time",
+              "scope"
+            ]
+          },
           "metadata": {
             "type": "object",
             "propertyNames": {
@@ -46174,6 +46199,31 @@
             },
             "required": [
               "messageID"
+            ]
+          },
+          "lastRecap": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              },
+              "time": {
+                "type": "number"
+              },
+              "scope": {
+                "type": "string",
+                "enum": [
+                  "turn",
+                  "conversation"
+                ]
+              }
+            },
+            "required": [
+              "text",
+              "time",
+              "scope"
             ]
           },
           "metadata": {

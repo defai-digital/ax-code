@@ -11,6 +11,7 @@ import { Timestamps } from "../storage/schema.sql"
 
 type PartData = Omit<MessageV2.Part, "id" | "sessionID" | "messageID">
 type InfoData = Omit<MessageV2.Info, "id" | "sessionID">
+export type SessionLastRecapData = { text: string; time: number; scope: "turn" | "conversation" }
 
 export const SessionTable = sqliteTable(
   "session",
@@ -42,6 +43,9 @@ export const SessionTable = sqliteTable(
     time_compacting: integer(),
     time_archived: integer(),
     metadata: text({ mode: "json" }).$type<Record<string, unknown>>(),
+    // Durable last recap (ADR-148): a bounded display hint for the session
+    // picker, written only by SessionRecap.generate. Never model context.
+    last_recap: text({ mode: "json" }).$type<SessionLastRecapData>(),
   },
   (table) => [
     foreignKey({

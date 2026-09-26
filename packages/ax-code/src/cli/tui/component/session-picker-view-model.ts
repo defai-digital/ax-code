@@ -1,6 +1,8 @@
 // Renderer-free view-model helpers for session picker and session-first launch (ADR-035).
 // Covered by the TUI layering guard — keep free of Solid and renderer imports.
 
+import { Locale } from "@/util/locale"
+
 export interface RecentSessionLike {
   id: string
   title?: string
@@ -21,4 +23,13 @@ export function recentSessionTitle(session: { title?: string }, maxLength = 64):
   if (!title || title.length === 0) return "Untitled session"
   if (title.length <= maxLength) return title
   return `${title.slice(0, Math.max(1, maxLength - 3)).trimEnd()}...`
+}
+
+/** One-line recap preview for the session picker (ADR-148). The recap is model
+ *  output, so collapse it to a single trimmed line and cut it with the picker's
+ *  grapheme-aware truncation (arbitrary Unicode would otherwise split). */
+export function sessionRecapPreview(recap: { text?: string } | undefined, maxLength = 72): string | undefined {
+  const text = recap?.text?.replace(/\s+/gu, " ").trim()
+  if (!text) return undefined
+  return Locale.truncate(text, maxLength)
 }

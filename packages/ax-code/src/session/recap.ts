@@ -17,7 +17,12 @@ const RECAP_CONTEXT_MAX_CHARS = RECAP_CONTEXT_MAX_TOKENS * 4
 /** Recap generation must not share the prompt-loop abort signal (same
  *  rationale as title generation): loop completion cancels that signal. */
 const RECAP_TIMEOUT_MS = 30_000
-const RECAP_MAX_LEN = 400
+/** Upper bound for generated text. The storage contract lives on
+ *  `Session.LastRecap`; it is read lazily because this module can load inside
+ *  the session module graph before that namespace is initialized. */
+function maxRecapLen() {
+  return Session.LAST_RECAP_MAX_CHARS
+}
 
 export function shouldSkipAutomaticRecap(input: { providerID: MessageV2.User["model"]["providerID"] }) {
   return input.providerID === AX_ENGINE_PROVIDER_ID
@@ -141,7 +146,8 @@ export function cleanGeneratedRecap(text: string): string | undefined {
   cleaned = cleaned.replace(/^(summary|recap)\s*:\s*/i, "").trim()
   if (!cleaned) return undefined
 
-  return cleaned.length > RECAP_MAX_LEN ? cleaned.slice(0, RECAP_MAX_LEN - 3) + "..." : cleaned
+  const max = maxRecapLen()
+  return cleaned.length > max ? cleaned.slice(0, max - 3) + "..." : cleaned
 }
 
 export namespace SessionRecap {
@@ -212,6 +218,18 @@ export namespace SessionRecap {
         })
       }
       if (!cleaned) return undefined
+      // Durable display hint for the session picker (ADR-148). Best-effort:
+      // a failed write must not cost the caller a usable recap.
+      const scope = input.scope ?? "turn"
+      await Session.setLastRecap({
+        sessionID: input.sessionID,
+        recap: { text: cleaned, time: Date.now(), scope },
+      }).catch((error: unknown) => {
+        log.warn("failed to persist recap", {
+          sessionID: input.sessionID,
+          error: DiagnosticLog.redactForLog(error),
+        })
+      })
       return { text: cleaned }
     } catch (err: unknown) {
       log.warn("failed to generate recap", {

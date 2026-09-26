@@ -49,6 +49,9 @@ function setup(initial: Partial<RecapSnapshot> = {}) {
     get pending() {
       return deferreds[0]!
     },
+    pendingAt(index: number) {
+      return deferreds[index]!
+    },
     update,
   }
 }
@@ -389,6 +392,115 @@ describe("idle recap pregeneration", () => {
     await vi.advanceTimersByTimeAsync(10000)
     expect(t.notify).not.toHaveBeenCalled()
     expect(t.request).toHaveBeenCalledOnce()
+    t.controller.dispose()
+  })
+})
+
+describe("automatic recap retry", () => {
+  /** Fail the first automatic attempt and let the controller settle. */
+  async function failFirstAttempt(t: ReturnType<typeof setup>, failure: "null" | "throw" = "null") {
+    t.update({ status: "busy" })
+    t.update({ status: "idle" })
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(t.request).toHaveBeenCalledOnce()
+    if (failure === "throw") t.pending.reject(new Error("offline"))
+    else t.pending.resolve({ data: { text: null } })
+    await vi.advanceTimersByTimeAsync(0)
+  }
+
+  test("retries a failed automatic attempt once after the retry delay", async () => {
+    const t = setup()
+    await failFirstAttempt(t)
+    await vi.advanceTimersByTimeAsync(29_999)
+    expect(t.request).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(t.request).toHaveBeenCalledTimes(2)
+    expect(t.request).toHaveBeenLastCalledWith(expect.objectContaining({ scope: "turn" }))
+    t.pendingAt(1).resolve({ data: { text: "Recovered recap." } })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(t.show).toHaveBeenLastCalledWith({ text: "Recovered recap." })
+    t.controller.dispose()
+  })
+
+  test("retries a thrown automatic failure and stops after the second failure", async () => {
+    const t = setup()
+    await failFirstAttempt(t, "throw")
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(t.request).toHaveBeenCalledTimes(2)
+    t.pendingAt(1).resolve({ error: { status: 502 } })
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(t.request).toHaveBeenCalledTimes(2)
+    t.controller.dispose()
+  })
+
+  test("typing before the retry cancels it", async () => {
+    const t = setup()
+    await failFirstAttempt(t)
+    t.update({ input: "next" })
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(t.request).toHaveBeenCalledOnce()
+    t.controller.dispose()
+  })
+
+  test("a revision change cancels the retry and arms a fresh attempt", async () => {
+    const t = setup()
+    await failFirstAttempt(t)
+    t.update({ revision: "turn_2" })
+    await vi.advanceTimersByTimeAsync(4999)
+    expect(t.request).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(t.request).toHaveBeenCalledTimes(2)
+    t.pendingAt(1).resolve({ data: { text: "Fresh." } })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(t.show).toHaveBeenLastCalledWith({ text: "Fresh." })
+    t.controller.dispose()
+  })
+
+  test("a manual recap that succeeds cancels the pending retry", async () => {
+    const t = setup()
+    await failFirstAttempt(t)
+    const done = t.controller.manual()
+    expect(t.request).toHaveBeenCalledTimes(2)
+    t.pendingAt(1).resolve({ data: { text: "Manual catch-up." } })
+    await done
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(t.request).toHaveBeenCalledTimes(2)
+    expect(t.show).toHaveBeenLastCalledWith({ text: "Manual catch-up." })
+    t.controller.dispose()
+  })
+
+  test("pregeneration failures retry inside the same quiet window", async () => {
+    const t = setup({ pregenerate: true })
+    t.update({ status: "busy" })
+    t.update({ status: "idle" })
+    await vi.advanceTimersByTimeAsync(2500)
+    t.pending.resolve({ data: { text: null } })
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(t.request).toHaveBeenCalledTimes(2)
+    t.pendingAt(1).resolve({ data: { text: "Late recovery." } })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(t.show).toHaveBeenLastCalledWith({ text: "Late recovery." })
+    t.controller.dispose()
+  })
+
+  test.each(["disable", "dispose"])("a %s before the retry cancels it", async (event) => {
+    const t = setup()
+    await failFirstAttempt(t)
+    if (event === "disable") t.update({ enabled: false })
+    if (event === "dispose") t.controller.dispose()
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(t.request).toHaveBeenCalledOnce()
+    t.controller.dispose()
+  })
+
+  test("navigating away before the retry arms the new session instead", async () => {
+    const t = setup()
+    await failFirstAttempt(t)
+    t.update({ sessionID: "ses_b" })
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(t.request).toHaveBeenCalledTimes(2)
+    expect(t.request).toHaveBeenLastCalledWith(expect.objectContaining({ sessionID: "ses_b" }))
     t.controller.dispose()
   })
 })
