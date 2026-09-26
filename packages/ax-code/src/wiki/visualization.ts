@@ -1,3 +1,5 @@
+import { NamedError } from "@ax-code/util/error"
+import z from "zod"
 import { constants } from "node:fs"
 import { open, realpath, unlink } from "node:fs/promises"
 import path from "node:path"
@@ -9,6 +11,14 @@ import { renderWikiGraphHtml } from "@ax-code/ax-wiki-viewer/node"
 import { parseJsonStrict } from "../util/json-value"
 
 export namespace WikiVisualization {
+  export const Unavailable = NamedError.create(
+    "WikiVisualizationUnavailable",
+    z.object({
+      message: z.string(),
+      reason: z.enum(["missing", "too_large"]),
+    }),
+  )
+
   const MAX_MANIFEST_BYTES = 4 * 1024 * 1024
 
   export async function snapshot(root: string, wikiDir = "ax-wiki") {
@@ -18,7 +28,10 @@ export namespace WikiVisualization {
     const manifestPath = path.join(canonicalRoot, wikiDir, ".manifest.json")
     const resolved = await realpath(manifestPath).catch((error) => {
       if (error && typeof error === "object" && "code" in error && error.code === "ENOENT")
-        throw new Error("No Wiki manifest found. Generate a Wiki explicitly before viewing it.")
+        throw new Unavailable({
+          reason: "missing",
+          message: "No Wiki manifest found. Generate a Wiki explicitly before viewing it.",
+        })
       throw error
     })
     if (resolved !== manifestPath) throw new Error("Wiki visualization refuses symlinked manifests")
@@ -26,8 +39,9 @@ export namespace WikiVisualization {
     let raw: string
     try {
       const before = await handle.stat()
-      if (!before.isFile() || before.size > MAX_MANIFEST_BYTES)
-        throw new Error("Wiki manifest must be a regular file no larger than 4 MiB")
+      if (before.size > MAX_MANIFEST_BYTES)
+        throw new Unavailable({ reason: "too_large", message: "Wiki manifest exceeds the 4 MiB limit." })
+      if (!before.isFile()) throw new Error("Wiki manifest must be a regular file")
       const buffer = Buffer.alloc(MAX_MANIFEST_BYTES + 1)
       let size = 0
       while (size < buffer.length) {

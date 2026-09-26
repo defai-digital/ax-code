@@ -1,3 +1,6 @@
+import { WikiVisualization } from "../../wiki/visualization"
+import { WikiGraphSchema } from "../../wiki/visualization-schema"
+import { resolveWikiRuntimeConfig } from "../../wiki/config"
 import { Hono } from "hono"
 import { HTTPException } from "hono/http-exception"
 import { askFixedContext, FixedContextInput, FixedContextOutput } from "../../provider/fixed-context-operation"
@@ -29,6 +32,50 @@ async function canonicalSandboxDirectory(directory: string) {
 
 export const ExperimentalRoutes = lazy(() =>
   new Hono()
+    .get(
+      "/wiki-visualization",
+      describeRoute({
+        summary: "Get Wiki visualization snapshot",
+        description:
+          "Read the configured Wiki manifest in the current runtime project. Returns a bounded page/source evidence snapshot without reading source files, generation or indexing.",
+        operationId: "wiki.visualization",
+        responses: {
+          200: {
+            description: "Recorded Wiki evidence snapshot",
+            content: { "application/json": { schema: resolver(WikiGraphSchema) } },
+          },
+          ...errors(400),
+        },
+      }),
+      validator("query", z.object({ directory: z.string().optional() }).strict()),
+      async (c) => {
+        c.header("Cache-Control", "no-store")
+        try {
+          const config = await resolveWikiRuntimeConfig()
+          const graph = await WikiVisualization.snapshot(Instance.directory, config.dir)
+          if (Buffer.byteLength(JSON.stringify(graph)) > 2 * 1024 * 1024) {
+            throw new WikiVisualization.Unavailable({
+              reason: "too_large",
+              message: "Wiki visualization snapshot exceeds the 2 MiB response limit.",
+            })
+          }
+          return c.json(WikiGraphSchema.parse(graph))
+        } catch (error) {
+          const known = WikiVisualization.Unavailable.isInstance(error)
+          return c.json(
+            {
+              name: "WikiVisualizationUnavailable",
+              status: 400,
+              code: known ? error.data.reason : "invalid",
+              message: known
+                ? error.message
+                : "Wiki artifacts are invalid or unreadable. Repair the configured Wiki, then try again.",
+            },
+            400,
+          )
+        }
+      },
+    )
     .post(
       "/fixed-context",
       describeRoute({

@@ -4596,6 +4596,34 @@ export type WebMcpProfileConfig = {
   executablePath?: string
 }
 
+/** AX Code API schema `WikiVisualizationGraph` (auto-generated from the OpenAPI contract). */
+export type WikiVisualizationGraph = {
+  schemaVersion: 1
+  snapshot: string
+  scope: "wiki-manifest"
+  codeRelationships: "unavailable"
+  nodes: Array<{
+    id: string
+    kind: "page" | "source"
+    label: string
+    path: string
+    freshness: "fresh" | "stale" | "unknown"
+    recordedReferences: number
+    observedHash?: string
+  }>
+  edges: Array<{
+    from: string
+    to: string
+    kind: "references-source"
+    freshness: "fresh" | "stale" | "unknown"
+    recordedHash?: string
+  }>
+  omitted: {
+    nodes: number
+    edges: number
+  }
+}
+
 /** AX Code API schema `WorkflowArtifactCompactEventRecord` (auto-generated from the OpenAPI contract). */
 export type WorkflowArtifactCompactEventRecord = {
   id: string
@@ -11873,6 +11901,38 @@ export type WorkflowRoutineRunResponses = {
 
 /** Successful response payload for `POST /workflow-routines/run` — Run workflow routine */
 export type WorkflowRoutineRunResponse = WorkflowRoutineRunResponses[keyof WorkflowRoutineRunResponses]
+
+/** Request payload shape for `GET /experimental/wiki-visualization` — Get Wiki visualization snapshot */
+export type WikiVisualizationData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/experimental/wiki-visualization"
+}
+
+/** Error response payloads for `GET /experimental/wiki-visualization` — Get Wiki visualization snapshot */
+export type WikiVisualizationErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+}
+
+/** Error response payload for `GET /experimental/wiki-visualization` — Get Wiki visualization snapshot */
+export type WikiVisualizationError = WikiVisualizationErrors[keyof WikiVisualizationErrors]
+
+/** Success response payloads for `GET /experimental/wiki-visualization` — Get Wiki visualization snapshot */
+export type WikiVisualizationResponses = {
+  /**
+   * Recorded Wiki evidence snapshot
+   */
+  200: WikiVisualizationGraph
+}
+
+/** Successful response payload for `GET /experimental/wiki-visualization` — Get Wiki visualization snapshot */
+export type WikiVisualizationResponse = WikiVisualizationResponses[keyof WikiVisualizationResponses]
 
 /** Request payload shape for `POST /experimental/fixed-context` — Ask about fixed files */
 export type ExperimentalAskData = {

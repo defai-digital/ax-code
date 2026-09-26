@@ -1,3 +1,4 @@
+import { useWikiVisualization } from "@tui/context/wiki-visualization"
 import { useLanguage } from "@tui/context/language"
 import { TimelineRail } from "./timeline-rail"
 import { turnPreview } from "./timeline-rail-model"
@@ -475,6 +476,7 @@ export function Session() {
   })
 
   const toast = useToast()
+  const wikiVisualization = useWikiVisualization()
   const sdk = useSDK()
   createEffect(() => {
     sdk.setWorkspace(session()?.directory)
@@ -931,6 +933,8 @@ export function Session() {
       },
     },
     ...displayCommands({
+      openWikiVisualization: () => wikiVisualization.open(() => session()?.directory),
+      wikiVisualizationOpening: wikiVisualization.opening,
       t: uiText,
       conceal,
       currentModel: () => local.model.current(),

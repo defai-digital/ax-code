@@ -1,6 +1,18 @@
 import type { Dictionary } from "../index"
 
 export const messages = {
+  "ui.openWikiVisualization": "Wiki \uadf8\ub798\ud504 \uc5f4\uae30",
+  "ui.openingWikiVisualization": "Wiki \uadf8\ub798\ud504 \uc5ec\ub294 \uc911\u2026",
+  "ui.wikiSnapshotCaption": "Wiki \uc2a4\ub0c5\uc0f7 /wiki-viz",
+  "ui.wikiBrowserFallback":
+    "\ube0c\ub77c\uc6b0\uc800\uac00 \uc5f4\ub9ac\uc9c0 \uc54a\uc558\uc2b5\ub2c8\ub2e4: \ub9c1\ud06c \ubcf5\uc0ac",
+  "ui.wikiSnapshotMissing":
+    "Wiki \uc2a4\ub0c5\uc0f7\uc774 \uc5c6\uc2b5\ub2c8\ub2e4. \uba3c\uc800 Wiki\ub97c \uc0dd\uc131\ud558\uc138\uc694.",
+  "ui.wikiUnsupportedRuntime":
+    "Wiki \uc2dc\uac01\ud654\ub97c \uc9c0\uc6d0\ud558\ub3c4\ub85d \uc5f0\uacb0\ub41c \ub7f0\ud0c0\uc784\uc744 \uc5c5\ub370\uc774\ud2b8\ud558\uc138\uc694.",
+  "ui.wikiRequestFailed":
+    "Wiki\ub97c \uc5f4 \uc218 \uc5c6\uc2b5\ub2c8\ub2e4. \uad8c\ud55c, \uc791\uc5c5 \uacf5\uac04 \ubc0f Wiki \ud30c\uc77c\uc744 \ud655\uc778\ud558\uc138\uc694.",
+
   "language.title": "\uc5b8\uc5b4 \uc124\uc815",
   "language.interface": "\uc778\ud130\ud398\uc774\uc2a4 \uc5b8\uc5b4",
   "language.conversation": "\ub300\ud654 \uc5b8\uc5b4",

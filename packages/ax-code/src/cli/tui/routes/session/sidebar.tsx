@@ -1,3 +1,4 @@
+import { useWikiVisualization } from "@tui/context/wiki-visualization"
 import { useLanguage } from "@tui/context/language"
 import { DialogFollowUps } from "../../component/dialog-follow-ups"
 import { useContentDimensions } from "@tui/context/content-dimensions"
@@ -363,6 +364,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
       ).length,
   )
 
+  const wikiVisualization = useWikiVisualization()
   const directory = useDirectory()
 
   const hasProviders = createMemo(() => sync.data.provider.length > 0)
@@ -1047,6 +1049,18 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                 </box>
               </box>
             </Show>
+            <box flexDirection="column" gap={0}>
+              <text fg={theme.textMuted}>{uiText("ui.wikiSnapshotCaption")}</text>
+              <ChromeAction
+                onMouseUp={() => {
+                  if (!wikiVisualization.opening()) command.trigger("session.wiki.viz")
+                }}
+              >
+                {wikiVisualization.opening()
+                  ? uiText("ui.openingWikiVisualization")
+                  : uiText("ui.openWikiVisualization")}
+              </ChromeAction>
+            </box>
             <text>
               <Show
                 when={directory().split("/").length > 1}

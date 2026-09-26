@@ -1,6 +1,16 @@
 import type { Dictionary } from "../index"
 
 export const messages = {
+  "ui.openWikiVisualization": "\u958b\u555f Wiki \u5716\u8b5c",
+  "ui.openingWikiVisualization": "\u6b63\u5728\u958b\u555f Wiki \u5716\u8b5c\u2026",
+  "ui.wikiSnapshotCaption": "Wiki \u5feb\u7167 /wiki-viz",
+  "ui.wikiBrowserFallback": "\u700f\u89bd\u5668\u672a\u958b\u555f\uff1a\u8acb\u8907\u88fd\u9023\u7d50",
+  "ui.wikiSnapshotMissing": "\u5c1a\u7121 Wiki \u5feb\u7167\uff0c\u8acb\u5148\u7522\u751f Wiki\u3002",
+  "ui.wikiUnsupportedRuntime":
+    "\u8acb\u66f4\u65b0\u9023\u7dda\u4e2d\u7684 runtime \u4ee5\u652f\u63f4 Wiki \u5716\u8b5c\u3002",
+  "ui.wikiRequestFailed":
+    "\u7121\u6cd5\u958b\u555f\u6b64 Wiki \u5feb\u7167\uff0c\u8acb\u6aa2\u67e5\u6b0a\u9650\u3001\u5de5\u4f5c\u5340\u8207 Wiki \u6a94\u6848\u3002",
+
   "language.title": "\u8a9e\u8a00\u8a2d\u5b9a",
   "language.interface": "\u4ecb\u9762\u8a9e\u8a00",
   "language.conversation": "\u5c0d\u8a71\u8a9e\u8a00",

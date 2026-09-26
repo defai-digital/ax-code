@@ -46,6 +46,21 @@ binds only to `127.0.0.1` and serves only the snapshot. Exported files contain p
 titles, relative source paths, and recorded content hashes; review these before
 sharing. No source snippets, absolute project root, or model settings are exported.
 
+## Open from the TUI
+
+In a session, use **Open Wiki graph** near the project path at the bottom of the
+right sidebar, or enter `/wiki-viz`. The same action is available in the command
+palette when the sidebar is hidden. It opens the system browser; if that fails,
+a dialog offers the local link for copying and a retry action.
+
+The snapshot comes from the connected runtime and its configured Wiki directory,
+when attached through a supported runtime connection. Existing local-only connection
+policy still applies. Both the TUI and runtime must support
+this endpoint. This action does not generate a missing Wiki. Each activation
+fetches a fresh snapshot; an unchanged snapshot reuses the local viewer. A changed
+snapshot replaces it and closes the previous link. Closing the TUI closes the
+viewer. This browser link remains local to the TUI machine.
+
 ## Embed in another project
 
 The workspace packages can be built and packed for an independent consumer:

@@ -327,6 +327,8 @@ import type {
   TuiShowToastResponses,
   TuiSubmitPromptResponses,
   VcsGetResponses,
+  WikiVisualizationErrors,
+  WikiVisualizationResponses,
   WorkflowRoutineCreateErrors,
   WorkflowRoutineCreateResponses,
   WorkflowRoutineListErrors,
@@ -3396,6 +3398,28 @@ export class WorkflowRoutine extends HeyApiClient {
         ...options?.headers,
         ...params.headers,
       },
+    })
+  }
+}
+
+/** AX Code API schema `Wiki` (auto-generated from the OpenAPI contract). */
+export class Wiki extends HeyApiClient {
+  /**
+   * Get Wiki visualization snapshot
+   *
+   * Read the configured Wiki manifest in the current runtime project. Returns a bounded page/source evidence snapshot without reading source files, generation or indexing.
+   */
+  public visualization<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<WikiVisualizationResponses, WikiVisualizationErrors, ThrowOnError>({
+      url: "/experimental/wiki-visualization",
+      ...options,
+      ...params,
     })
   }
 }
@@ -7923,6 +7947,11 @@ export class AxCodeClient extends HeyApiClient {
   private _workflowRoutine?: WorkflowRoutine
   get workflowRoutine(): WorkflowRoutine {
     return (this._workflowRoutine ??= new WorkflowRoutine({ client: this.client }))
+  }
+
+  private _wiki?: Wiki
+  get wiki(): Wiki {
+    return (this._wiki ??= new Wiki({ client: this.client }))
   }
 
   private _experimental?: Experimental

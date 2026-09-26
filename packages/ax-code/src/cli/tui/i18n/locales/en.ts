@@ -1,4 +1,12 @@
 export const messages = {
+  "ui.openWikiVisualization": "Open Wiki graph",
+  "ui.openingWikiVisualization": "Opening Wiki graph...",
+  "ui.wikiSnapshotCaption": "Wiki snapshot /wiki-viz",
+  "ui.wikiBrowserFallback": "Browser did not open: copy the link",
+  "ui.wikiSnapshotMissing": "No Wiki snapshot. Generate a Wiki first.",
+  "ui.wikiUnsupportedRuntime": "Update the connected runtime to support Wiki visualization.",
+  "ui.wikiRequestFailed": "Could not open this Wiki snapshot. Check access, workspace and Wiki artifacts.",
+
   "language.title": "Language settings",
   "language.interface": "Interface language",
   "language.conversation": "Conversation language",

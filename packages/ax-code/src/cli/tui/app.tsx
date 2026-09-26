@@ -1,3 +1,7 @@
+import open from "open"
+import { WikiVisualization } from "@/wiki/visualization"
+import { createWikiVisualizationManager } from "@tui/util/wiki-visualization"
+import { WikiVisualizationProvider } from "@tui/context/wiki-visualization"
 import { launchAnimationPair } from "./component/animation-pair"
 import type { OverlayStyle } from "./component/foliage-view-model"
 import { LanguageProvider, useLanguage } from "./context/language"
@@ -141,6 +145,10 @@ export function tui(input: TuiInput) {
   // promise to prevent immediate exit
   return new Promise<void>((resolve, reject) => {
     void (async () => {
+      const wikiVisualization = createWikiVisualizationManager({
+        serve: (graph) => WikiVisualization.serve(WikiVisualization.render(graph)),
+        openBrowser: open,
+      })
       const unguard = win32InstallCtrlCGuard()
       const unresize = installResizeInputGuard()
       try {
@@ -163,9 +171,15 @@ export function tui(input: TuiInput) {
         win32DisableProcessedInput()
 
         const onExit = async () => {
-          unresize()
-          unguard?.()
-          resolve()
+          try {
+            await wikiVisualization.dispose()
+            resolve()
+          } catch (error) {
+            reject(error)
+          } finally {
+            unresize()
+            unguard?.()
+          }
         }
 
         renderTui(
@@ -197,18 +211,20 @@ export function tui(input: TuiInput) {
                                         <PromptStashProvider>
                                           <AxEngineDownloadsProvider>
                                             <DialogProvider>
-                                              <CommandProvider>
-                                                <FrecencyProvider>
-                                                  <PromptHistoryProvider>
-                                                    <PromptRefProvider>
-                                                      <VisualCapabilityProvider>
-                                                        <App onSnapshot={input.onSnapshot} />
-                                                      </VisualCapabilityProvider>
-                                                    </PromptRefProvider>
-                                                  </PromptHistoryProvider>
-                                                </FrecencyProvider>
-                                                <DialogStack />
-                                              </CommandProvider>
+                                              <WikiVisualizationProvider manager={wikiVisualization}>
+                                                <CommandProvider>
+                                                  <FrecencyProvider>
+                                                    <PromptHistoryProvider>
+                                                      <PromptRefProvider>
+                                                        <VisualCapabilityProvider>
+                                                          <App onSnapshot={input.onSnapshot} />
+                                                        </VisualCapabilityProvider>
+                                                      </PromptRefProvider>
+                                                    </PromptHistoryProvider>
+                                                  </FrecencyProvider>
+                                                  <DialogStack />
+                                                </CommandProvider>
+                                              </WikiVisualizationProvider>
                                             </DialogProvider>
                                           </AxEngineDownloadsProvider>
                                         </PromptStashProvider>
@@ -232,9 +248,16 @@ export function tui(input: TuiInput) {
         )
         recordTuiStartup("tui.startup.renderDispatched")
       } catch (error) {
-        unresize()
-        unguard?.()
-        reject(error)
+        let failure = error
+        try {
+          await wikiVisualization.dispose()
+        } catch (cleanupError) {
+          failure = new AggregateError([error, cleanupError], "TUI startup and Wiki cleanup failed")
+        } finally {
+          unresize()
+          unguard?.()
+          reject(failure)
+        }
       }
     })()
   })

@@ -1,6 +1,14 @@
 import type { Dictionary } from "../index"
 
 export const messages = {
+  "ui.openWikiVisualization": "Apri grafo Wiki",
+  "ui.openingWikiVisualization": "Apertura grafo Wiki\u2026",
+  "ui.wikiSnapshotCaption": "Istantanea Wiki /wiki-viz",
+  "ui.wikiBrowserFallback": "Il browser non si \u00e8 aperto: copia il link",
+  "ui.wikiSnapshotMissing": "Nessuna istantanea Wiki. Genera prima una Wiki.",
+  "ui.wikiUnsupportedRuntime": "Aggiorna il runtime connesso per visualizzare Wiki.",
+  "ui.wikiRequestFailed": "Impossibile aprire Wiki. Controlla accessi, area di lavoro e file Wiki.",
+
   "language.title": "Lingua",
   "language.interface": "Lingua dell'interfaccia",
   "language.conversation": "Lingua di conversazione",

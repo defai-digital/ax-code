@@ -30,6 +30,8 @@ type Toast = {
 }
 
 export function displayCommands(input: {
+  openWikiVisualization?: () => Promise<void>
+  wikiVisualizationOpening?: Accessor<boolean>
   t?: Translate
   conceal: Accessor<boolean>
   currentModel: () => Model | undefined
@@ -106,6 +108,17 @@ export function displayCommands(input: {
   }
 
   return [
+    {
+      title: uiText("ui.openWikiVisualization"),
+      value: "session.wiki.viz",
+      category: uiText("common.session"),
+      enabled: !input.wikiVisualizationOpening?.(),
+      slash: { name: "wiki-viz" },
+      onSelect: (dialog: DialogContext) => {
+        dialog.clear()
+        void input.openWikiVisualization?.()
+      },
+    },
     {
       title: uiText("ui.renameSession"),
       value: "session.rename",

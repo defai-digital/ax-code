@@ -1,6 +1,14 @@
 import type { Dictionary } from "../index"
 
 export const messages = {
+  "ui.openWikiVisualization": "Buka graf Wiki",
+  "ui.openingWikiVisualization": "Membuka graf Wiki\u2026",
+  "ui.wikiSnapshotCaption": "Snapshot Wiki /wiki-viz",
+  "ui.wikiBrowserFallback": "Browser tidak terbuka: salin tautan",
+  "ui.wikiSnapshotMissing": "Belum ada snapshot Wiki. Buat Wiki terlebih dahulu.",
+  "ui.wikiUnsupportedRuntime": "Perbarui runtime terhubung untuk visualisasi Wiki.",
+  "ui.wikiRequestFailed": "Wiki tidak dapat dibuka. Periksa akses, ruang kerja, dan berkas Wiki.",
+
   "language.title": "Bahasa",
   "language.interface": "Bahasa antarmuka",
   "language.conversation": "Bahasa percakapan",

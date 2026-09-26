@@ -1,6 +1,16 @@
 import type { Dictionary } from "../index"
 
 export const messages = {
+  "ui.openWikiVisualization": "M\u1edf \u0111\u1ed3 th\u1ecb Wiki",
+  "ui.openingWikiVisualization": "\u0110ang m\u1edf \u0111\u1ed3 th\u1ecb Wiki\u2026",
+  "ui.wikiSnapshotCaption": "\u1ea2nh ch\u1ee5p Wiki /wiki-viz",
+  "ui.wikiBrowserFallback": "Tr\u00ecnh duy\u1ec7t kh\u00f4ng m\u1edf: sao ch\u00e9p li\u00ean k\u1ebft",
+  "ui.wikiSnapshotMissing": "Ch\u01b0a c\u00f3 \u1ea3nh ch\u1ee5p Wiki. H\u00e3y t\u1ea1o Wiki tr\u01b0\u1edbc.",
+  "ui.wikiUnsupportedRuntime":
+    "C\u1eadp nh\u1eadt runtime \u0111ang k\u1ebft n\u1ed1i \u0111\u1ec3 h\u1ed7 tr\u1ee3 tr\u1ef1c quan h\u00f3a Wiki.",
+  "ui.wikiRequestFailed":
+    "Kh\u00f4ng th\u1ec3 m\u1edf Wiki. Ki\u1ec3m tra quy\u1ec1n truy c\u1eadp, kh\u00f4ng gian l\u00e0m vi\u1ec7c v\u00e0 t\u1ec7p Wiki.",
+
   "language.title": "Ng\u00f4n ng\u1eef",
   "language.interface": "Ng\u00f4n ng\u1eef giao di\u1ec7n",
   "language.conversation": "Ng\u00f4n ng\u1eef h\u1ed9i tho\u1ea1i",

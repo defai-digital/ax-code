@@ -1,6 +1,16 @@
 import type { Dictionary } from "../index"
 
 export const messages = {
+  "ui.openWikiVisualization": "Wiki grafi\u011fini a\u00e7",
+  "ui.openingWikiVisualization": "Wiki grafi\u011fi a\u00e7\u0131l\u0131yor\u2026",
+  "ui.wikiSnapshotCaption": "Wiki anl\u0131k g\u00f6r\u00fcnt\u00fcs\u00fc /wiki-viz",
+  "ui.wikiBrowserFallback": "Taray\u0131c\u0131 a\u00e7\u0131lmad\u0131: ba\u011flant\u0131y\u0131 kopyalay\u0131n",
+  "ui.wikiSnapshotMissing": "Wiki anl\u0131k g\u00f6r\u00fcnt\u00fcs\u00fc yok. \u00d6nce bir Wiki olu\u015fturun.",
+  "ui.wikiUnsupportedRuntime":
+    "Wiki g\u00f6rselle\u015ftirmesi i\u00e7in ba\u011fl\u0131 \u00e7al\u0131\u015fma zaman\u0131n\u0131 g\u00fcncelleyin.",
+  "ui.wikiRequestFailed":
+    "Wiki a\u00e7\u0131lamad\u0131. Eri\u015fim, \u00e7al\u0131\u015fma alan\u0131 ve Wiki dosyalar\u0131n\u0131 kontrol edin.",
+
   "language.title": "Diller",
   "language.interface": "Aray\u00fcz dili",
   "language.conversation": "Konu\u015fma dili",
