@@ -315,6 +315,9 @@ describe("log boundary redaction", () => {
   // pre-commit secret scanner, and this is a fixture, not a credential. The
   // value it builds is exactly the shape the redactor has to catch.
   const providerKey = "sk-" + "live" + "abcdefghijklmnopqrstuvwxyz"
+  // A literal Basic-auth token trips GitHub secret scanning. Same fixture,
+  // built at runtime from the standard placeholder user and password.
+  const basicAuthToken = Buffer.from("user" + ":" + "password").toString("base64")
 
   test("ordinary text is untouched", async () => {
     const lines = await textLines()
@@ -446,7 +449,7 @@ describe("log boundary redaction", () => {
   test("header-style credential names lose their value, a session id does not", async () => {
     const lines = await textLines()
     Log.create({ service: "redact-headers" }).warn("request rejected", {
-      auth: "Basic dXNlcjpwYXNzd29yZA==",
+      auth: "Basic " + basicAuthToken,
       cookie: "session=abc123",
       "x-api-key": "abc123",
       private_key: "plainvalue",
@@ -454,7 +457,7 @@ describe("log boundary redaction", () => {
       sessionID: "ses_keepme",
     })
     const output = lines.join("")
-    expect(output).not.toContain("dXNlcjpwYXNzd29yZA==")
+    expect(output).not.toContain(basicAuthToken)
     expect(output).not.toContain("session=abc123")
     expect(output).not.toContain("abc123")
     // No pattern matches this one: the key name alone has to drop it.
