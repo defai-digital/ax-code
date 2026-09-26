@@ -90,15 +90,12 @@ export namespace SessionProcessor {
    * execution. Returns a shallow copy so the caller's input is untouched.
    */
   export function redactPersistedBashInput(tool: string, input: Record<string, unknown>): Record<string, unknown> {
-    // Credentials reach a bash command as `KEY=` assignments (handled by
-    // redactInlineEnvAssignments) but also as HTTP headers (`Authorization:
-    // Bearer …`, `X-Api-Key: …`), CLI flags (`--password=…`) and quoted URLs
-    // (`https://u:pw@host`). The persisted copy is never re-executed, so the
-    // full redaction is applied here. Order matters: run redactSecrets FIRST,
-    // then redactInlineEnvAssignments. The reverse order leaves the placeholder
-    // itself looking like an assignment to a keyword-named key and re-emits it,
-    // turning `API_KEY=secret` into `API_KEY=[redacted]]`.
-    const redact = (value: string) => Env.redactInlineEnvAssignments(Env.redactSecrets(value))
+    // Credentials reach a bash command as `KEY=` assignments but also as HTTP
+    // headers (`Authorization: Bearer …`, `X-Api-Key: …`, `Cookie: …`), CLI
+    // flags (`--password=…`) and quoted URLs (`https://u:pw@host`). The
+    // persisted copy is never re-executed, so the full redaction is applied.
+    // `redactForRecord` owns the pass order (see `util/env.ts`).
+    const redact = Env.redactForRecord
     if (tool === "bash") {
       const command =
         typeof input["command"] === "string" && input["command"].trim() !== "" ? input["command"] : undefined

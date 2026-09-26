@@ -147,7 +147,7 @@ export namespace SessionEvidence {
     for (const row of rows.slice(0, SCAN_LIMIT)) {
       consumed++
       if (!row.text) continue
-      const safe = Env.redactSecrets(Env.redactInlineEnvAssignments(row.text))
+      const safe = Env.redactForRecord(row.text)
       const match = query.query ? safe.toLowerCase().indexOf(query.query.toLowerCase()) : 0
       if (match < 0) continue
       const start = Math.max(0, match - 200)

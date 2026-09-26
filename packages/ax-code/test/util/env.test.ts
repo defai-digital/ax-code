@@ -281,6 +281,21 @@ describe("Env.sanitize", () => {
     expect(Env.redactSecrets("ssh://git@host/repo")).toBe("ssh://git@host/repo")
   })
 
+  test("redactForRecord composes both passes without doubling the placeholder", () => {
+    // Order is fixed inside the helper: an assignment to a keyword-named key is
+    // redacted once, not re-matched into `[redacted]]`.
+    expect(Env.redactForRecord("API_KEY=placeholder-token-value ./run")).toBe("API_KEY=[redacted] ./run")
+    expect(Env.redactForRecord("TOKEN=abc123")).toBe("TOKEN=[redacted]")
+    // Header, flag, and URI credentials are covered by the same call.
+    expect(Env.redactForRecord('curl -H "Authorization: Bearer sk-x" https://api')).toContain(
+      "Authorization=[redacted]",
+    )
+    expect(Env.redactForRecord("mysql --password=supersecret -e 'select 1'")).toContain("password=[redacted]")
+    expect(Env.redactForRecord("curl 'redis://:hunter2@cache:6379'")).not.toContain("hunter2")
+    // Text with no credential shape is untouched.
+    expect(Env.redactForRecord("plain text with no secrets")).toBe("plain text with no secrets")
+  })
+
   test("forwards CLI provider API keys only through explicit CLI provider overlay", () => {
     const originalGemini = process.env.GEMINI_API_KEY
     const originalOpenAI = process.env.OPENAI_API_KEY

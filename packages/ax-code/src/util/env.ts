@@ -160,6 +160,20 @@ export namespace Env {
     )
   }
 
+  /**
+   * Full redaction for a string that will be persisted, shown, or recorded:
+   * URI/header/flag credentials (`redactSecrets`) plus shell `KEY=VALUE`
+   * assignments (`redactInlineEnvAssignments`). The order is fixed here on
+   * purpose — running the assignment pass first re-matches its own `[redacted]`
+   * placeholder for a keyword-named key and emits `API_KEY=[redacted]]`, so
+   * callers must not compose the two passes themselves. Use this everywhere a
+   * redacted copy is stored (log sinks, session evidence, persisted tool input,
+   * tool descriptions).
+   */
+  export function redactForRecord(value: string): string {
+    return redactInlineEnvAssignments(redactSecrets(value))
+  }
+
   // Assignment starts after shell separators. A flag's `-` is deliberately
   // not a boundary, so spellings like `--env=production` stay unchanged.
   const INLINE_ENV_ASSIGNMENT = /(^|[\s;|&(])([A-Za-z_][A-Za-z0-9_]*=)/g

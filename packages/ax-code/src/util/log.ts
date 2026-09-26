@@ -424,11 +424,7 @@ export namespace Log {
    */
   function redactLogText(value: string, limit = LOG_VALUE_MAX_CHARS): string {
     if (!MAYBE_SECRET.test(value)) return truncate(value, limit)
-    // Order matters: redactSecrets first, then redactInlineEnvAssignments. The
-    // reverse order re-matches its own placeholder for a keyword-named key and
-    // emits `API_KEY=[redacted]]`. Same composition as the persisted bash-input
-    // redactor in `session/processor-impl.ts`.
-    const redacted = Env.redactInlineEnvAssignments(Env.redactSecrets(value))
+    const redacted = Env.redactForRecord(value)
       .replace(PRIVATE_KEY_BLOCK, "[redacted private key]")
       .replace(SECRET_VALUE, "[redacted secret]")
     return truncate(redacted, limit)
