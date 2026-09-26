@@ -2,7 +2,7 @@
 
 Status: Current
 Scope: TUI opening and ending animations and rendering fallbacks
-Last reviewed: 2026-09-23
+Last reviewed: 2026-09-26
 Owner: AX Code TUI maintainers
 
 See [Terminal rendering](terminal-rendering.md) for automatic terminal profiles,
@@ -80,10 +80,12 @@ animation, not an interactive game. Its ending shows a fixed illustrative score
 ledger and never starts another round during exit. Preview with `/mahjong` or
 `/mahjong-ending` (also searchable as `Mahjong` in Ctrl+P).
 
-On confirmed local graphics terminals, Mahjong fits the complete 76x25 scene
-using the reported pixel dimensions, bounded to 1920x1080. Tile faces are drawn
-directly from original vector strokes; terminal emoji fonts and ambiguous glyph
-widths do not affect them. Text fallback uses ASCII suit codes (`1C`, `2B`,
+On confirmed local graphics terminals, Mahjong uses freeform HD painting
+(felt gradient, table frame, labels, tile faces with pips, bars, and honor
+plates) driven by the same scene model — palette, layout anchors, match phase,
+and blink phase — as the text fallback, so both show the same scene for the
+same millisecond, bounded to 1920x1080. Terminal emoji fonts and ambiguous
+glyph widths do not affect it. Text fallback uses ASCII suit codes (`1C`, `2B`,
 `RD`, `GD`, `WD`) and `##` for concealed tiles. Narrow text screens crop the
 centered scene. Resize, missing graphics capability, and image cleanup follow
 the same lifecycle as Fuji and Bench.

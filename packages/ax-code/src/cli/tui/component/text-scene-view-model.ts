@@ -10,13 +10,7 @@ export function textSceneBackground(style: TextSceneStyle) {
   if (isMahjongStyle(style)) return MAHJONG_BACKGROUND
   return isFujiStyle(style) ? fujiBackground(style) : benchBackground(style)
 }
-export function textSceneRows(
-  width: number,
-  height: number,
-  style: TextSceneStyle,
-  elapsedMs: number,
-  pixels = false,
-): SceneRun[][] {
-  if (isMahjongStyle(style)) return mahjongRows(width, height, style, elapsedMs, pixels)
+export function textSceneRows(width: number, height: number, style: TextSceneStyle, elapsedMs: number): SceneRun[][] {
+  if (isMahjongStyle(style)) return mahjongRows(width, height, style, elapsedMs)
   return isFujiStyle(style) ? fujiRows(width, height, style, elapsedMs) : benchRows(width, height, style, elapsedMs)
 }
