@@ -1,12 +1,6 @@
 import { renderTextScenePixels } from "./text-scene-pixels"
 import { isTextSceneStyle } from "./text-scene-view-model"
-import {
-  createFoliage,
-  advanceFoliage,
-  renderFoliagePixels,
-  type Foliage,
-  type OverlayStyle,
-} from "./foliage-view-model"
+import { isFoliageVariant, renderFoliagePixels, type OverlayStyle } from "./foliage-view-model"
 import { deflateSync } from "node:zlib"
 import { randomInt } from "node:crypto"
 import {
@@ -157,9 +151,7 @@ export function kittyDigitalCodeFrame(
 export function digitalCodePixelPlayer(write: (data: string) => void) {
   const id = randomInt(1, 0x7fffffff)
   let frame: DigitalCodePixels | undefined
-  let foliage: Foliage | undefined
   const started = performance.now()
-  let previous = started
   let size = ""
   let closed = false
   const clear = () => write(kittyDigitalCodeDeleteSequence(id))
@@ -179,15 +171,8 @@ export function digitalCodePixelPlayer(write: (data: string) => void) {
         if (frame) clear()
         frame = createDigitalCodePixels(input.width, input.height, input.direction, undefined, input.style)
         size = next
-        foliage =
-          input.style && input.style !== "digital-code" && !isTextSceneStyle(input.style)
-            ? createFoliage(frame.width, frame.height, input.style)
-            : undefined
-        previous = performance.now()
       } else frame.rain = advanceDigitalCode(frame.rain)
       const now = performance.now()
-      if (foliage) foliage = advanceFoliage(foliage, now - previous)
-      previous = now
       write(
         kittyDigitalCodeFrame(
           id,
@@ -196,8 +181,8 @@ export function digitalCodePixelPlayer(write: (data: string) => void) {
           input.rows,
           isTextSceneStyle(input.style)
             ? renderTextScenePixels(frame.width, frame.height, input.style, input.elapsedMs ?? now - started)
-            : foliage
-              ? renderFoliagePixels(foliage)
+            : isFoliageVariant(input.style)
+              ? renderFoliagePixels(frame.width, frame.height, input.style, input.elapsedMs ?? now - started)
               : undefined,
         ),
       )

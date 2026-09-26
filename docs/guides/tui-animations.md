@@ -36,19 +36,26 @@ Unsupported terminals, remote sessions, multiplexers, and graphics failures use
 the native ASCII fallback. Ghostty uses the same capability checks; its name
 alone does not enable graphics.
 
-Bench uses an ASCII tropical shoreline with swaying palm fronds and rolling
-waves. Midnight Dream has a moonlit navy sky and twinkling stars; Sunset Serenade
-has warm colors and a sun descending toward the horizon. Like Fuji, it uses antialiased pixel rendering (up to 1920x1080) when local
-Kitty graphics support and pixel dimensions are confirmed. The complete 70x23
-scene fits independently of terminal font and line spacing. Native text remains
-the fallback when graphics are unavailable; no graphics protocol is required.
+Bench uses a tropical shoreline with swaying palm fronds and rolling waves.
+Midnight Dream has a moonlit navy sky, twinkling stars, and a fixed moon;
+Sunset Serenade has warm colors and a sun that descends toward the horizon
+and settles while the surf keeps moving. Both use freeform HD painting
+(gradient sky, stars, sun/moon disk, palm, surf, sand, title) driven by the
+same scene model — palette, layout anchors, and elapsed-time phases — as the
+text fallback, so both show the same scene for the same millisecond, bounded
+to 1920x1080. The text fallback adapts the 70x23 composition to narrow
+screens. Native text remains the fallback when graphics are unavailable; no
+graphics protocol is required.
 
 The selected pair stays fixed for the lifetime of the TUI. Ending playback never
 makes a separate random choice. Replaying previews or completing tasks does not
 change the selected pair. Animation opt-outs do not trigger another selection.
 
 Foliage leaves fall downward with different speeds, sizes, and gentle sideways
-sway. Each frame is cleared so leaves leave no trails.
+sway. Leaf parameters derive from a fixed per-variant seed and positions from
+elapsed time alone, so the text outlines and the HD silhouettes show the same
+leaves for the same millisecond and the full scene loops with its cycle. Each
+frame is cleared so leaves leave no trails.
 
 | Command                | Preview                                        |
 | ---------------------- | ---------------------------------------------- |

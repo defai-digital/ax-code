@@ -152,3 +152,40 @@ export function glyphMask(char: string, width: number, height: number) {
   masks.set(char, mask)
   return mask
 }
+
+/**
+ * Blend a label onto existing pixels without punching holes in the scene
+ * behind it. Cells advance one full cell per character from the origin.
+ */
+export function blitGlyphText(
+  pixels: Buffer,
+  width: number,
+  height: number,
+  x0: number,
+  y0: number,
+  cellWidth: number,
+  cellHeight: number,
+  text: string,
+  color: readonly [number, number, number],
+) {
+  let column = 0
+  for (const char of text) {
+    if (char !== " ") {
+      const mask = glyphMask(char, cellWidth, cellHeight)
+      const cx = x0 + column * cellWidth,
+        cy = y0
+      for (let y = 0; y < cellHeight; y++) {
+        if (cy + y < 0 || cy + y >= height) continue
+        for (let x = 0; x < cellWidth; x++) {
+          if (cx + x < 0 || cx + x >= width) continue
+          const alpha = mask[y * cellWidth + x]!
+          if (alpha <= 0) continue
+          const i = ((cy + y) * width + cx + x) * 3
+          for (let channel = 0; channel < 3; channel++)
+            pixels[i + channel] = Math.round(pixels[i + channel]! + alpha * (color[channel]! - pixels[i + channel]!))
+        }
+      }
+    }
+    column += 1
+  }
+}

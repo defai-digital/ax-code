@@ -1,34 +1,47 @@
 import { describe, expect, test } from "vitest"
 import { inflateSync } from "node:zlib"
 import {
-  advanceFoliage,
-  createFoliage,
-  foliageCells,
   FOLIAGE_COLORS,
+  FOLIAGE_CYCLE_MS,
+  foliageCells,
+  foliageLeaves,
+  isFoliageVariant,
   renderFoliagePixels,
 } from "../../../src/cli/tui/component/foliage-view-model"
 import { digitalCodePixelPlayer } from "../../../src/cli/tui/component/digital-code-pixels"
 
 describe("falling foliage", () => {
-  test("bounded particles move downward with elapsed time, recycle, and resize", () => {
-    const frame = createFoliage(1280, 720, "classic-foliage", () => 0.5)
-    expect(frame.leaves).toHaveLength(45)
-    const once = advanceFoliage(frame, 100)
-    const twice = advanceFoliage(advanceFoliage(frame, 50), 50)
-    expect(once.leaves[0]!.y).toBeCloseTo(twice.leaves[0]!.y)
-    expect(once.leaves[0]!.y).toBeGreaterThan(frame.leaves[0]!.y)
-    expect(once.leaves[0]!.phase).toBeGreaterThan(frame.leaves[0]!.phase)
-    frame.leaves[0]!.y = 1000
-    expect(advanceFoliage(frame, 50).leaves[0]!.y).toBe(-30)
-    expect(advanceFoliage(frame, 50, 40, 20).width).toBe(40)
-    expect(advanceFoliage(frame, 50, 40, 20).leaves.length).toBeLessThanOrEqual(45)
-  })
+  test.each(["classic-foliage", "golden-foliage"] as const)(
+    "%s falls deterministically and loops with the cycle",
+    (variant) => {
+      const first = foliageLeaves(320, 180, variant, 0)
+      const moving = foliageLeaves(320, 180, variant, 1200)
+      expect(first).toHaveLength(12)
+      expect(first).toEqual(foliageLeaves(320, 180, variant, 0))
+      expect(first).not.toEqual(moving)
+      expect(first).toEqual(foliageLeaves(320, 180, variant, FOLIAGE_CYCLE_MS))
+      expect(foliageLeaves(320, 180, variant, -100)).toEqual(first)
+      // Fall and sway advance with elapsed time alone.
+      expect(moving[0]!.phase).toBeGreaterThan(first[0]!.phase)
+      expect(moving[0]!.y).not.toBe(first[0]!.y)
+      for (const leaf of first) {
+        expect(leaf.color).toBeGreaterThanOrEqual(0)
+        expect(leaf.color).toBeLessThan(FOLIAGE_COLORS[variant].length)
+        expect(leaf.shape).toBeGreaterThanOrEqual(0)
+        expect(leaf.shape).toBeLessThan(3)
+        expect(leaf.y).toBeGreaterThanOrEqual(-40)
+        expect(leaf.y).toBeLessThan(210)
+      }
+      expect(isFoliageVariant(variant)).toBe(true)
+    },
+  )
   test.each(["classic-foliage", "golden-foliage"] as const)(
     "%s uses its own colors and clears old pixels",
     (variant) => {
-      const frame = createFoliage(320, 180, variant, () => 0.5)
-      const pixels = renderFoliagePixels(frame)
+      const pixels = renderFoliagePixels(320, 180, variant, 0)
       expect(pixels.length).toBe(320 * 180 * 3)
+      expect(pixels).toEqual(renderFoliagePixels(320, 180, variant, 0))
+      expect(pixels).not.toEqual(renderFoliagePixels(320, 180, variant, 1200))
       expect(pixels.some((v) => v !== 5)).toBe(true)
       const colors = new Set(
         FOLIAGE_COLORS[variant].flatMap((c) => [c.join(","), c.map((v) => Math.round(v * 0.65)).join(",")]),
@@ -37,14 +50,12 @@ describe("falling foliage", () => {
         const color = [...pixels.subarray(i, i + 3)].join(",")
         expect(color === "5,5,5" || colors.has(color)).toBe(true)
       }
-      const empty = renderFoliagePixels({ ...frame, leaves: [] })
-      expect(empty.every((v) => v === 5)).toBe(true)
       for (const [width, height] of [
         [1, 1],
         [36, 20],
         [80, 30],
       ]) {
-        const rows = foliageCells(frame, width!, height!)
+        const rows = foliageCells(640, 384, variant, 500, width!, height!)
         expect(rows).toHaveLength(height!)
         for (const row of rows) {
           const text = row.map((r) => r.text).join("")
@@ -54,22 +65,6 @@ describe("falling foliage", () => {
       }
     },
   )
-  test("clamps an injected random source that returns 1 into the palette and shape ranges", () => {
-    // Regression: leaf() used an unclamped Math.floor(random() * N), unlike the
-    // sibling glyph() guard in digital-code-view-model.ts. A random of exactly 1
-    // produced an out-of-range color/shape, and renderFoliagePixels/foliageCells
-    // then dereferenced the undefined palette entry and threw.
-    const frame = createFoliage(80, 40, "classic-foliage", () => 1)
-    expect(frame.leaves.length).toBeGreaterThan(0)
-    for (const leaf of frame.leaves) {
-      expect(leaf.color).toBeGreaterThanOrEqual(0)
-      expect(leaf.color).toBeLessThan(FOLIAGE_COLORS["classic-foliage"].length)
-      expect(leaf.shape).toBeGreaterThanOrEqual(0)
-      expect(leaf.shape).toBeLessThan(3)
-    }
-    expect(() => renderFoliagePixels(frame)).not.toThrow()
-    expect(() => foliageCells(frame, 80, 40)).not.toThrow()
-  })
   test("pixel transport switches styles and deletes its image only once on disposal", () => {
     const output: string[] = []
     const player = digitalCodePixelPlayer((data) => output.push(data))

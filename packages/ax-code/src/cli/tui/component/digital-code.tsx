@@ -1,5 +1,5 @@
 import { textSceneRows, textSceneBackground, isTextSceneStyle, type SceneRun } from "./text-scene-view-model"
-import { createFoliage, advanceFoliage, foliageCells, type OverlayStyle } from "./foliage-view-model"
+import { foliageCells, isFoliageVariant, type OverlayStyle } from "./foliage-view-model"
 import { For, Show, createSignal, onCleanup, onMount } from "solid-js"
 import { RGBA, TextAttributes, resolveRenderLib } from "ax-tui"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "ax-tui/solid"
@@ -69,18 +69,21 @@ export function DigitalCode(props: {
     direction: props.direction,
   })
   const [rows, setRows] = createSignal(digitalCodeRows(state))
-  let foliage =
-    props.style && props.style !== "digital-code" && !isTextSceneStyle(props.style)
-      ? createFoliage(dimensions().width * 8, dimensions().height * 16, props.style)
-      : undefined
+  const foliageVariant = isFoliageVariant(props.style) ? props.style : undefined
   const scene = isTextSceneStyle(props.style) ? props.style : undefined
   const started = performance.now()
-  let previous = started
   const [leafRows, setLeafRows] = createSignal<SceneRun[][]>(
     scene
       ? textSceneRows(dimensions().width, dimensions().height, scene, 0)
-      : foliage
-        ? foliageCells(foliage, dimensions().width, dimensions().height)
+      : foliageVariant
+        ? foliageCells(
+            dimensions().width * 8,
+            dimensions().height * 16,
+            foliageVariant,
+            0,
+            dimensions().width,
+            dimensions().height,
+          )
         : [],
   )
   let pixels: ReturnType<typeof digitalCodePixelPlayer> | undefined
@@ -131,8 +134,6 @@ export function DigitalCode(props: {
       const size = dimensions()
       state = tickDigitalCode(state, size)
       const now = performance.now()
-      if (foliage) foliage = advanceFoliage(foliage, now - previous, size.width * 8, size.height * 16)
-      previous = now
       const resolution = renderer.resolution
       const supported =
         !pixelsFailed &&
@@ -163,7 +164,10 @@ export function DigitalCode(props: {
         }
       } else clearPixels()
       if (scene) setLeafRows(textSceneRows(size.width, size.height, scene, now - started))
-      else if (foliage) setLeafRows(foliageCells(foliage, size.width, size.height))
+      else if (foliageVariant)
+        setLeafRows(
+          foliageCells(size.width * 8, size.height * 16, foliageVariant, now - started, size.width, size.height),
+        )
       else setRows(digitalCodeRows(state))
     },
     { name: "digital-code-tick", delayMs: DIGITAL_CODE_TICK_MS, unref: true },
@@ -220,7 +224,7 @@ export function DigitalCode(props: {
       backgroundColor={scene ? RGBA.fromHex(textSceneBackground(scene)) : BACKGROUND}
       onMouseDown={() => finish("skip")}
     >
-      <Show when={foliage || scene}>
+      <Show when={foliageVariant || scene}>
         <For each={leafRows()}>
           {(row) => (
             <text>
@@ -235,7 +239,7 @@ export function DigitalCode(props: {
           )}
         </For>
       </Show>
-      <Show when={!foliage && !scene}>
+      <Show when={!foliageVariant && !scene}>
         <For each={rows()}>
           {(row) => (
             <text>

@@ -15,7 +15,7 @@ import {
   mahjongTileFace,
   type MahjongStyle,
 } from "./mahjong-view-model"
-import { glyphMask } from "./text-scene-glyphs"
+import { blitGlyphText } from "./text-scene-glyphs"
 
 type RGB = readonly [number, number, number]
 const hex = (value: string): RGB =>
@@ -81,22 +81,7 @@ export function renderMahjongPixels(width: number, height: number, style: Mahjon
       cellH = Math.max(1, Math.round(ch))
     let column = sceneX
     for (const char of text) {
-      if (char !== " ") {
-        const mask = glyphMask(char, cellW, cellH)
-        const x0 = Math.round(column * cw),
-          y0 = Math.round(sceneY * ch)
-        for (let y = 0; y < cellH; y++) {
-          if (y0 + y < 0 || y0 + y >= h) continue
-          for (let x = 0; x < cellW; x++) {
-            if (x0 + x < 0 || x0 + x >= w) continue
-            const alpha = mask[y * cellW + x]!
-            if (alpha <= 0) continue
-            const i = ((y0 + y) * w + x0 + x) * 3
-            for (let channel = 0; channel < 3; channel++)
-              pixels[i + channel] = Math.round(pixels[i + channel]! + alpha * (color[channel]! - pixels[i + channel]!))
-          }
-        }
-      }
+      blitGlyphText(pixels, w, h, Math.round(column * cw), Math.round(sceneY * ch), cellW, cellH, char, color)
       column += 1
     }
   }
