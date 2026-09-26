@@ -1,6 +1,12 @@
 import { describe, expect, test } from "vitest"
 import { inflateSync } from "node:zlib"
-import { DIGITAL_CODE_LEVEL_RGB } from "../../../src/cli/tui/component/digital-code-view-model"
+import {
+  advanceDigitalCode,
+  createDigitalCode,
+  DIGITAL_CODE_LEVEL_RGB,
+  digitalCodeCellLevel,
+  digitalCodeRows,
+} from "../../../src/cli/tui/component/digital-code-view-model"
 import {
   createDigitalCodePixels,
   DIGITAL_CODE_PIXEL_MAX_HEIGHT,
@@ -129,5 +135,82 @@ describe("Digital Code pixel transport", () => {
     const writes: string[] = []
     digitalCodePixelPlayer((data) => writes.push(data)).dispose()
     expect(writes).toEqual([])
+  })
+})
+
+function seeded(seed: number) {
+  let state = seed >>> 0
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0
+    let t = state
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+describe("Digital Code text/pixel agreement", () => {
+  // Cell literals below intentionally mirror DIGITAL_CODE_PIXEL_CELL_WIDTH /
+  // HEIGHT instead of importing them, so the mapping cannot drift silently.
+  test.each(["down", "up"] as const)("%s rain paints the same drops in text and pixels", (direction) => {
+    for (const seed of [3, 17, 42]) {
+      let state = createDigitalCode({ width: 40, height: 12, direction, random: seeded(seed) })
+      for (let tick = 0; tick <= 5; tick++) {
+        const rows = digitalCodeRows(state)
+        const pixels = renderDigitalCodePixels({ width: 40 * 7, height: 12 * 6, rain: state })
+        const textAt = (x: number, y: number) => rows[y]!.map((run) => run.text).join("")[x]
+        const runAt = (x: number, y: number) => {
+          let column = 0
+          for (const run of rows[y]!) {
+            if (x < column + run.text.length) return run
+            column += run.text.length
+          }
+          throw new Error(`no run covers ${x},${y}`)
+        }
+        // Every in-screen trail cell shows its glyph, level, hue, and weight
+        // in text, and ink in the matching pixel block.
+        for (const column of state.columns) {
+          const headRow = Math.floor(column.head)
+          for (let offset = 0; offset < column.length; offset++) {
+            const y = direction === "up" ? headRow + offset : headRow - offset
+            if (y < 0 || y >= state.height) continue
+            expect(textAt(column.x, y)).toBe(column.chars[offset] ?? " ")
+            const run = runAt(column.x, y)
+            expect(run.level).toBe(digitalCodeCellLevel(direction, offset, column.length))
+            expect(run.hue).toBe(column.hues[offset] ?? column.hue)
+            expect(run.bold).toBe(column.heavy)
+            const px = column.x * 7
+            const py = Math.floor(column.head * 6) + (direction === "up" ? offset * 6 : -offset * 6)
+            let inRange = false
+            let ink = false
+            for (let yy = py + 1; yy <= py + 5; yy++) {
+              for (let xx = px; xx < px + 5; xx++) {
+                if (xx < 0 || yy < 0 || xx >= 40 * 7 || yy >= 12 * 6) continue
+                inRange = true
+                const i = (yy * 40 * 7 + xx) * 3
+                if (pixels[i] !== 0 || pixels[i + 1] !== 0 || pixels[i + 2] !== 0) ink = true
+              }
+            }
+            if (inRange) expect(ink, `missing ink for ${column.x},${y} offset ${offset}`).toBe(true)
+          }
+        }
+        // No ink anywhere except a glyph block or its one-pixel glow margin.
+        const allowed = new Set<number>()
+        for (const column of state.columns) {
+          for (let offset = 0; offset < column.length; offset++) {
+            const py = Math.floor(column.head * 6) + (direction === "up" ? offset * 6 : -offset * 6)
+            if (py < -7 || py >= 12 * 6) continue
+            for (let yy = py - 1; yy <= py + 7; yy++)
+              for (let xx = column.x * 7 - 1; xx <= column.x * 7 + 5; xx++)
+                if (xx >= 0 && yy >= 0 && xx < 40 * 7 && yy < 12 * 6) allowed.add(yy * 40 * 7 + xx)
+          }
+        }
+        for (let i = 0; i < pixels.length; i += 3) {
+          if (pixels[i] === 0 && pixels[i + 1] === 0 && pixels[i + 2] === 0) continue
+          expect(allowed.has(i / 3), `stray ink at pixel ${i / 3}`).toBe(true)
+        }
+        state = advanceDigitalCode(state)
+      }
+    }
   })
 })

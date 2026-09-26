@@ -54,6 +54,11 @@ export const DIGITAL_CODE_TAIL_MUTATION_CHANCE = 0.35
 // heavy meteor inside fixed terminal cells. Keep a few lighter streaks for depth.
 export const DIGITAL_CODE_HEAVY_COLUMN_CHANCE = 0.85
 export const DIGITAL_CODE_RESPAWN_GAP = 20
+/** HD cell footprint shared by the rain grid sizing and the pixel painter.
+ * Cells are 7px wide (5px bitmap plus glow); rows advance 6px so the 7px
+ * glyphs overlap slightly, independently of terminal font and line spacing. */
+export const DIGITAL_CODE_PIXEL_CELL_WIDTH = 7
+export const DIGITAL_CODE_PIXEL_CELL_HEIGHT = 6
 
 /** Neon hues are chosen once per drop and stay stable until it respawns. */
 export type DigitalCodeHue = "purple" | "blue" | "highlight"

@@ -9,6 +9,8 @@ import {
   digitalCodeCellLevel,
   DIGITAL_CODE_LEVEL_RGB,
   DIGITAL_CODE_LEVELS,
+  DIGITAL_CODE_PIXEL_CELL_HEIGHT,
+  DIGITAL_CODE_PIXEL_CELL_WIDTH,
   type DigitalCodeDirection,
   type DigitalCodeHue,
   type DigitalCodeRandom,
@@ -70,7 +72,12 @@ export function createDigitalCodePixels(
   return {
     width: w,
     height: h,
-    rain: createDigitalCode({ width: Math.floor(w / 7), height: Math.ceil(h / 6), direction, random }),
+    rain: createDigitalCode({
+      width: Math.floor(w / DIGITAL_CODE_PIXEL_CELL_WIDTH),
+      height: Math.ceil(h / DIGITAL_CODE_PIXEL_CELL_HEIGHT),
+      direction,
+      random,
+    }),
   }
 }
 export type DigitalCodePixels = ReturnType<typeof createDigitalCodePixels>
@@ -90,8 +97,10 @@ export function renderDigitalCodePixels(frame: DigitalCodePixels): Buffer {
   }
   for (const column of rain.columns) {
     for (let offset = column.length - 1; offset >= 0; offset--) {
-      const x = column.x * 7
-      const y = Math.floor(column.head * 6) + (rain.direction === "up" ? offset * 6 : -offset * 6)
+      const x = column.x * DIGITAL_CODE_PIXEL_CELL_WIDTH
+      const y =
+        Math.floor(column.head * DIGITAL_CODE_PIXEL_CELL_HEIGHT) +
+        (rain.direction === "up" ? offset * DIGITAL_CODE_PIXEL_CELL_HEIGHT : -offset * DIGITAL_CODE_PIXEL_CELL_HEIGHT)
       if (y < -7 || y >= height) continue
       const level = digitalCodeCellLevel(rain.direction, offset, column.length)
       const hue = column.hues[offset] ?? column.hue
