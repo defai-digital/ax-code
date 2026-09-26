@@ -67,6 +67,8 @@ const SYNC_BOOTSTRAP_PHASE_PLAN_SRC = path.join(TUI_ROOT, "context/sync-bootstra
 const SYNC_BOOTSTRAP_REQUEST_SRC = path.join(TUI_ROOT, "context/sync-bootstrap-request.ts")
 const SYNC_BOOTSTRAP_RUNNER_SRC = path.join(TUI_ROOT, "context/sync-bootstrap-runner.ts")
 const HOME_SRC = path.join(TUI_ROOT, "routes/home.tsx")
+const RENDER_ADAPTER_SRC = path.join(TUI_ROOT, "routes/session/render-adapter.tsx")
+const TRANSCRIPT_VIEW_SRC = path.join(TUI_ROOT, "routes/session/transcript.tsx")
 const STARTUP_TRACE_SRC = path.join(TUI_ROOT, "util/startup-trace.ts")
 const BACKGROUND_TASK_SRC = path.join(TUI_ROOT, "util/background-task.ts")
 const LIFECYCLE_SRC = path.join(TUI_ROOT, "util/lifecycle.ts")
@@ -90,6 +92,30 @@ const SOURCE_SOLID_LOADER_SRC = path.join(REPO_ROOT, "script/solid-loader.mjs")
 const NODE_PTY_PATCH_SRC = path.join(REPO_ROOT, "patches/node-pty-prebuilt-multiarch@0.10.1-pre.5.patch")
 
 describe("AX Code TUI stability guardrails", () => {
+  test("keeps finished code visible while its highlight resolves", async () => {
+    const adapter = await fs.readFile(RENDER_ADAPTER_SRC, "utf8")
+
+    // ax-tui 1.0.3 paints nothing for a filetyped `code` while
+    // `drawUnstyledText` is false and the async tree-sitter highlight is still
+    // running (src/renderables/Code.ts:99,289-315): the block collapsed and
+    // returned with different wrapping. The framework default (true) draws the
+    // plain buffer first and lets the highlight replace it, which is also how
+    // Kimi Code keeps a streamed block stable.
+    // See .internal/reports/2026-09-26-tui-transcript-stability-plan.md.
+    expect(adapter).toContain("drawUnstyledText={props.drawUnstyledText ?? true}")
+    expect(adapter).not.toContain("drawUnstyledText={props.drawUnstyledText ?? false}")
+  })
+
+  test("does not fold a finished reply the user watched stream", async () => {
+    const transcript = await fs.readFile(TRANSCRIPT_VIEW_SRC, "utf8")
+
+    // The fold used to fire on `isFinal()`, collapsing a >50-line answer and
+    // re-anchoring the sticky bottom the moment the turn completed.
+    expect(transcript).toContain("untrack(() => isFinal())")
+    expect(transcript).toContain("transcriptFoldView(")
+    expect(transcript).not.toMatch(/isFinal\(\)\s*&&\s*lines\(\)\.length\s*>\s*\d+/)
+  })
+
   test("keeps AX Code TUI wired as the default renderer path", async () => {
     const app = await fs.readFile(APP_SRC, "utf8")
     const renderer = await fs.readFile(RENDERER_SRC, "utf8")

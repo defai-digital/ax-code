@@ -41,7 +41,7 @@
     "prebuild:native:debug": "node script/only-allow-pnpm.mjs",
     "build:native:debug": "tsx script/build-native.ts --debug",
     "precheck:tui": "node script/only-allow-pnpm.mjs",
-    "check:tui": "pnpm --dir packages/ax-code run check:tui-layering && pnpm --dir packages/ax-code run check:tui-snapshot && pnpm --dir packages/ax-code run check:tui-locales && pnpm --dir packages/ax-code run check:prompt-footer && pnpm --dir packages/ax-code run check:session-tree-memo",
+    "check:tui": "pnpm --dir packages/ax-code run check:tui-layering && pnpm --dir packages/ax-code run check:tui-snapshot && pnpm --dir packages/ax-code run check:tui-locales && pnpm --dir packages/ax-code run check:prompt-footer && pnpm --dir packages/ax-code run check:transcript-code-render && pnpm --dir packages/ax-code run check:session-tree-memo",
     "preperf:intel": "node script/only-allow-pnpm.mjs",
     "perf:intel": "tsx packages/ax-code-intel/perf/src/harness.ts",
     "preperf:intel:smoke": "node script/only-allow-pnpm.mjs",

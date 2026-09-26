@@ -22,6 +22,7 @@
     "check:tui-layering": "tsx script/check-tui-layering.ts",
     "check:fixed-context-dialog": "node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node script/check-fixed-context-dialog.tsx",
     "check:prompt-footer": "node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node script/check-prompt-footer-render.tsx",
+    "check:transcript-code-render": "node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node script/check-transcript-code-render.tsx",
     "check:session-tree-memo": "node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node script/check-session-tree-memo.ts",
     "check:tui-snapshot": "node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node script/check-tui-snapshot.ts",
     "check:golden-frames": "node ../../script/node-ffi-runner.mjs --import tsx --conditions=node script/check-golden-frames.ts",

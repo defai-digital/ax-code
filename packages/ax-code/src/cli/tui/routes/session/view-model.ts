@@ -3,11 +3,7 @@ import stripAnsi from "strip-ansi"
 import { userRoute, type AgentInfo } from "./route"
 import { filetype } from "./format"
 import { formatTokenCount, formatTokenRate } from "./footer-view-model"
-import {
-  DECODE_RATE_MIN_TOKENS,
-  DECODE_RATE_MIN_WINDOW_MS,
-  turnDecodeStats,
-} from "./step-windows"
+import { DECODE_RATE_MIN_TOKENS, DECODE_RATE_MIN_WINDOW_MS, turnDecodeStats } from "./step-windows"
 import { Locale } from "@/util/locale"
 import { parseTuiJsonPayload } from "../../util/json"
 
@@ -299,4 +295,50 @@ export function streamingTextRenderMode(input: {
 }): StreamingTextRenderMode {
   if (!input.final) return "plain"
   return input.experimentalMarkdown ? "markdown" : "code"
+}
+
+/** A finished reply folds by default once it exceeds this many lines. */
+export const TRANSCRIPT_FOLD_LINE_LIMIT = 50
+
+export type TranscriptFoldView = {
+  /** The reply is long enough that folding is offered. */
+  foldable: boolean
+  /** The reply is currently rendered folded (head lines plus an ellipsis). */
+  folded: boolean
+  /** Lines the fold hides; 0 when unfolded. */
+  hiddenLines: number
+  visibleText: string
+}
+
+/**
+ * Fold policy for one text part.
+ *
+ * Folding is a *history* affordance: a part that was already final when it
+ * mounted (`finalAtMount`) has no reader waiting on it, so it folds by
+ * default. A part the user watched stream must not fold when it finalizes —
+ * the fold used to fire on `isFinal()`, so a long answer lost most of its rows
+ * and the sticky bottom re-anchored at the exact moment the turn completed.
+ * Kimi Code's transcript follows the same rule: cap the height before content
+ * grows, never shrink afterwards (`components/messages/tool-call.ts`).
+ *
+ * The caller renders the toggle row whenever `foldable` is true, so the row
+ * count does not change when a part finalizes either. `userFold` is the
+ * explicit toggle and wins in both directions; `undefined` follows the
+ * default for that part.
+ */
+export function transcriptFoldView(input: {
+  lines: readonly string[]
+  finalAtMount: boolean
+  userFold: boolean | undefined
+}): TranscriptFoldView {
+  const foldable = input.lines.length > TRANSCRIPT_FOLD_LINE_LIMIT
+  const folded = foldable && (input.userFold ?? input.finalAtMount)
+  const text = input.lines.join("\n")
+  if (!folded) return { foldable, folded: false, hiddenLines: 0, visibleText: text }
+  return {
+    foldable,
+    folded: true,
+    hiddenLines: input.lines.length - TRANSCRIPT_FOLD_LINE_LIMIT,
+    visibleText: input.lines.slice(0, TRANSCRIPT_FOLD_LINE_LIMIT).join("\n") + "\n...",
+  }
 }

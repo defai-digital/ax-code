@@ -1,5 +1,5 @@
 import { useLanguage } from "@tui/context/language"
-import { createMemo, createSignal, ErrorBoundary, For, Match, Show, Switch } from "solid-js"
+import { createMemo, createSignal, ErrorBoundary, For, Match, Show, Switch, untrack } from "solid-js"
 import { Dynamic } from "solid-js/web"
 import { SplitBorder } from "@tui/component/border"
 import { Spinner } from "@tui/component/spinner"
@@ -31,6 +31,7 @@ import {
   compactDelegatedLabel,
   streamingTextRenderMode,
   transcriptDisplayText,
+  transcriptFoldView,
   userMessageMetadataDensity,
 } from "./view-model"
 import { SessionCodeRenderer } from "./render-adapter"
@@ -549,7 +550,10 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
   const ctx = use()
   const { theme, syntax } = useTheme()
   const kv = useKV()
-  const [expanded, setExpanded] = createSignal(false)
+  // The fold policy is captured at mount: a reply the user watched stream must
+  // not fold when it finalizes (see `transcriptFoldView`). `userFold` is the
+  // explicit toggle and wins once set.
+  const [userFold, setUserFold] = createSignal<boolean | undefined>(undefined)
   // Throttle rich markdown paint while streaming. Store can update faster;
   // re-parsing full markdown every delta dominates TUI main-thread cost, and
   // the interval scales with document length to keep long streams near-linear.
@@ -561,12 +565,9 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
   const trimmed = createMemo(() => transcriptDisplayText(paintedText()).trim())
   const lines = createMemo(() => trimmed().split("\n"))
   const isFinal = createMemo(() => !!props.message.finish && !["tool-calls", "unknown"].includes(props.message.finish))
-  // Only fold long completed text. Streaming text always renders in full (via throttle).
-  const overflow = createMemo(() => isFinal() && lines().length > 50)
-  const visibleText = createMemo(() => {
-    if (expanded() || !overflow()) return trimmed()
-    return lines().slice(0, 50).join("\n") + "\n..."
-  })
+  const finalAtMount = untrack(() => isFinal())
+  const fold = createMemo(() => transcriptFoldView({ lines: lines(), finalAtMount, userFold: userFold() }))
+  const visibleText = createMemo(() => fold().visibleText)
 
   // While streaming, paint the throttled snapshot as plain text — a cheap
   // wrap + buffer write per frame instead of a full markdown parse/highlight
@@ -649,9 +650,11 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
             />
           </Match>
         </Switch>
-        <Show when={overflow()}>
-          <text fg={theme.textMuted} onMouseUp={() => setExpanded((prev) => !prev)}>
-            {expanded() ? uiText("ui.clickToCollapse") : `... ${lines().length - 50} more lines · click to expand`}
+        <Show when={fold().foldable}>
+          <text fg={theme.textMuted} onMouseUp={() => setUserFold(!fold().folded)}>
+            {fold().folded
+              ? `... ${fold().hiddenLines} more lines · ${uiText("ui.clickToExpand")}`
+              : uiText("ui.clickToCollapse")}
           </text>
         </Show>
       </box>

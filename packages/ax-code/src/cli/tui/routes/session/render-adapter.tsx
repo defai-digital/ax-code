@@ -31,7 +31,13 @@ export function SessionCodeRenderer(props: SessionCodeRendererProps) {
   return (
     <code
       filetype={props.display.filetype}
-      drawUnstyledText={props.drawUnstyledText ?? false}
+      // Paint the plain buffer until the async tree-sitter highlight resolves
+      // (the framework default). `false` left `_shouldRenderTextBuffer` false
+      // while the worker ran, so a finished reply painted nothing and came back
+      // with different wrapping — the block visibly blinked at finalize.
+      // Kimi Code keeps the cheap version visible the same way: transient plain
+      // text, one highlight at the end.
+      drawUnstyledText={props.drawUnstyledText ?? true}
       streaming={props.streaming}
       syntaxStyle={props.syntaxStyle as any}
       content={props.display.content}
