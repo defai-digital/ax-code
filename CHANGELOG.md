@@ -6,6 +6,17 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.20.9] - 2026-09-26
+
+### Fixed
+
+- Stabilize transcript streaming and completed-message rendering.
+- Improve file-edit previews and keep live shell output showing the newest text.
+
+### Changed
+
+- Prepare AX Code 7.20.9 and SDK 2.5.51.
+
 ## [7.20.8] - 2026-09-25
 
 ### Changed
