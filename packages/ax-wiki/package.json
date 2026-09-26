@@ -11,7 +11,8 @@
     ".": "./src/index.ts",
     "./core": "./src/core.ts",
     "./node": "./src/node.ts",
-    "./testing": "./src/testing.ts"
+    "./testing": "./src/testing.ts",
+    "./graph": "./src/graph.ts"
   },
   "publishConfig": {
     "main": "./dist/index.js",
@@ -36,6 +37,11 @@
         "types": "./dist/testing.d.ts",
         "import": "./dist/testing.js",
         "default": "./dist/testing.js"
+      },
+      "./graph": {
+        "types": "./dist/graph.d.ts",
+        "import": "./dist/graph.js",
+        "default": "./dist/graph.js"
       }
     }
   },

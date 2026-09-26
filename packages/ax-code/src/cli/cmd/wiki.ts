@@ -1,5 +1,7 @@
 import type { Argv } from "yargs"
 import path from "node:path"
+import open from "open"
+import { WikiVisualization } from "../../wiki/visualization"
 import { bootstrap } from "../bootstrap"
 import { UI } from "../ui"
 import { Filesystem } from "../../util/filesystem"
@@ -320,11 +322,55 @@ export const WikiRelatedCommand = cmd({
   },
 })
 
+export const WikiVizCommand = cmd({
+  command: "viz",
+  describe: "view an existing Wiki evidence snapshot in a browser or export offline HTML",
+  builder: (yargs: Argv) =>
+    commonOptions(yargs)
+      .option("open", { type: "boolean", default: false, describe: "open the system browser" })
+      .option("export", { type: "string", describe: "create an offline HTML file and exit (never overwrite)" })
+      .check((args) => {
+        if (args.open && args.export !== undefined) throw new Error("--open cannot be combined with --export")
+        return true
+      }),
+  handler: async (args) => {
+    const document = await withWiki(args, async ({ root, config }) =>
+      WikiVisualization.render(await WikiVisualization.snapshot(root, config.dir)),
+    )
+    if (args.export !== undefined) {
+      if (!args.export.trim()) throw new Error("--export requires a destination")
+      const destination = path.resolve(Filesystem.callerCwd(), args.export)
+      await WikiVisualization.exportHtml(destination, document.html)
+      UI.println(`Wrote Wiki evidence snapshot: ${destination}`)
+      return
+    }
+    const server = await WikiVisualization.serve(document)
+    let finish!: () => void
+    const stopped = new Promise<void>((resolve) => {
+      finish = resolve
+    })
+    const stop = () => finish()
+    process.once("SIGINT", stop)
+    process.once("SIGTERM", stop)
+    try {
+      UI.println(`Wiki evidence snapshot: ${server.url}`)
+      UI.println("Fixed snapshot; current sources are unverified. Press Ctrl+C to stop.")
+      if (args.open) await open(server.url).catch(() => UI.println("Could not open the browser; use the link above."))
+      await stopped
+    } finally {
+      process.off("SIGINT", stop)
+      process.off("SIGTERM", stop)
+      await server.close()
+    }
+  },
+})
+
 export const WikiCommand = cmd({
   command: "wiki",
   describe: "native source-backed AX Wiki — complementary to ax-code index",
   builder: (yargs) =>
     yargs
+      .command(WikiVizCommand)
       .command(WikiStatusCommand)
       .command(WikiDoctorCommand)
       .command(WikiPlanCommand)

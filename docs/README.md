@@ -58,6 +58,7 @@ For standalone questions about selected files through AX Trust caching, see
 
 ## Runtime guides
 
+- [Wiki evidence visualization](guides/wiki-visualization.md) — open a local graph of recorded Wiki page/source relationships or export offline HTML.
 - [Conversation Recap](guides/conversation-recap.md) — catch up on recent work with `/recap` and configure idle banners.
 - [Audio Notifications](guides/audio-notifications.md) — system sounds and opt-in spoken alerts when a run needs your attention.
 - [Execution Evidence](guides/execution-evidence.md) — graph, compare, replay, risk, rollback, branch, trace, and

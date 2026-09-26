@@ -1,0 +1,47 @@
+{
+  "name": "@ax-code/ax-wiki-viewer",
+  "version": "0.1.0",
+  "description": "Reusable offline AX Wiki evidence viewer",
+  "type": "module",
+  "license": "Apache-2.0",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./node": "./src/node.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./node": {
+        "types": "./dist/node.d.ts",
+        "import": "./dist/node.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "node script/bundle.mjs && tsc --build tsconfig.build.json",
+    "check:bundle": "node script/bundle.mjs --check",
+    "typecheck": "tsc --noEmit",
+    "test": "node script/bundle.mjs --check && vitest run",
+    "test:browser": "node script/browser-smoke.mjs",
+    "test:consumer": "node script/consumer-smoke.mjs"
+  },
+  "dependencies": {
+    "@ax-code/ax-wiki": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@typescript/native": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "esbuild": "catalog:",
+    "playwright-core": "catalog:"
+  }
+}
