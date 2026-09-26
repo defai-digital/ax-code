@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import path from "path"
 import { eq } from "drizzle-orm"
 import { Instance } from "../../src/project/instance"
@@ -12,11 +12,12 @@ const projectRoot = path.join(__dirname, "../..")
 Log.init({ print: false })
 
 describe("session last recap", () => {
-  test("persists the recap without bumping time_updated", async () => {
+  test("setting and clearing the recap preserve the latest activity timestamp", async () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
         const session = await Session.create({})
+        const now = vi.spyOn(Date, "now").mockReturnValue(session.time.updated + 60_000)
         try {
           const recap = {
             text: "Added the durable recap and reran the focused tests.",
@@ -30,7 +31,24 @@ describe("session last recap", () => {
 
           const reloaded = await Session.get(session.id)
           expect(reloaded.lastRecap).toEqual(recap)
+          expect(reloaded.time.updated).toBe(session.time.updated)
+
+          // Real activity must still advance the timestamp. A later recap clear
+          // must preserve that current value, not restore the creation time.
+          const touchedAt = session.time.updated + 120_000
+          now.mockReturnValue(touchedAt)
+          await Session.touch(session.id)
+          expect((await Session.get(session.id)).time.updated).toBe(touchedAt)
+
+          now.mockReturnValue(touchedAt + 60_000)
+          const cleared = await Session.setLastRecap({ sessionID: session.id, recap: null })
+          expect(cleared.lastRecap).toBeUndefined()
+          expect(cleared.time.updated).toBe(touchedAt)
+          const reloadedClear = await Session.get(session.id)
+          expect(reloadedClear.lastRecap).toBeUndefined()
+          expect(reloadedClear.time.updated).toBe(touchedAt)
         } finally {
+          now.mockRestore()
           await Session.remove(session.id)
         }
       },

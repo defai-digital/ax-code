@@ -655,7 +655,12 @@ export namespace Session {
    *  `time_updated`: a display hint must not reorder the session list or look
    *  like user activity to other clients. */
   export const setLastRecap = fn(z.object({ sessionID: SessionID.zod, recap: LastRecap.nullable() }), async (input) =>
-    updateAndPublish(input.sessionID, { last_recap: input.recap }),
+    updateAndPublish(input.sessionID, {
+      last_recap: input.recap,
+      // Omission invokes the ORM's $onUpdate timestamp. Preserve the column in
+      // the same UPDATE so concurrent activity cannot be overwritten by a read.
+      time_updated: sql`${SessionTable.time_updated}`,
+    }),
   )
 
   export const setRevert = fn(
