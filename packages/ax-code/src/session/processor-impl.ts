@@ -1832,8 +1832,20 @@ export namespace SessionProcessor {
                       sessionID: input.sessionID,
                     })
                   })
-                  if (input.abort.aborted) break
-                  continue
+                  if (input.abort.aborted) {
+                    // An abort during the retry sleep must reach the normal
+                    // give-up flow below: it finalizes this attempt's parts,
+                    // persists the assistant message and returns "stop". A bare
+                    // `break` left the retry loop before that finalization and
+                    // returned `undefined`, so an aborted turn skipped part
+                    // finalization and looked like a normal empty turn to the
+                    // prompt loop.
+                    input.assistantMessage.error = new MessageV2.AbortedError({
+                      message: "Aborted while retrying after a transient provider failure",
+                    }).toObject()
+                  } else {
+                    continue
+                  }
                 }
                 const apiErrorMessage =
                   apiError && typeof apiError.data?.message === "string" ? apiError.data.message : retry
@@ -1841,7 +1853,9 @@ export namespace SessionProcessor {
                 // below) so a later automatic-requeue decision does not need
                 // to parse "(stopped after N retries)" text.
                 const terminalErrorCode = apiError ? SessionRetry.terminalErrorCode(apiError) : undefined
-                input.assistantMessage.error =
+                // `??=`: an abort recorded above is the terminal cause and must
+                // not be relabeled as a retry-budget exhaustion.
+                input.assistantMessage.error ??=
                   apiError && apiError.data
                     ? new MessageV2.APIError({
                         ...apiError.data,

@@ -328,7 +328,7 @@ describe("chaos: abort signal", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const { process } = await setup(tmp)
+        const { session, user, createProcessor } = await setup(tmp)
         const controller = new AbortController()
         const err = new MessageV2.APIError({ message: "Rate limited", isRetryable: true }).toObject()
         streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
@@ -337,8 +337,24 @@ describe("chaos: abort signal", () => {
         sleepSpy = vi.spyOn(SessionRetry, "sleep").mockImplementation(async () => {
           controller.abort()
         })
-        const result = await process(controller.signal)
+        // The processor must own the abort signal the retry sleep observes:
+        // `process({ abort })` only forwards it to the stream input, so a
+        // processor created without one never sees the abort and the loop
+        // exhausts its retry budget instead of exercising this path.
+        const processor = createProcessor(controller.signal)
+        const agent = (await Agent.get("build"))!
+        const result = await processor.process({
+          user: user as MessageV2.User,
+          agent,
+          abort: controller.signal,
+          sessionID: session.id,
+          system: [],
+          messages: [],
+          tools: {},
+          model,
+        })
         expect(result).toBe("stop")
+        expect(processor.message.error).toBeDefined()
       },
     })
   })
