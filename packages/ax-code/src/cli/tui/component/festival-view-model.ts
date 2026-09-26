@@ -36,6 +36,7 @@ export const FESTIVAL_LANTERN_COLORS = {
   core: "#ffe6b3",
   glow: "#4a2f1a",
   halo: "#6b4423",
+  dark: "#241610",
 } as const
 export const FESTIVAL_MOONLIGHT = "#e8ecf8"
 
@@ -83,6 +84,24 @@ export function festivalParticles(elapsedMs: number, burst: number): FestivalPar
     const angle = (2 * Math.PI * k) / BURST_PARTICLES + burst * 0.4
     return { x: center.x + Math.cos(angle) * reach, y: center.y + Math.sin(angle) * reach * 0.8, stage }
   })
+}
+
+export type FestivalRocket = { x: number; y: number }
+/**
+ * The ascending rocket before a burst: visible while the burst age is in the
+ * last 600ms of the cycle, climbing from the town row to the burst center.
+ */
+export function festivalRocket(elapsedMs: number, burst: number): FestivalRocket | null {
+  const center = FESTIVAL_BURSTS[burst]!
+  const age = festivalBurstAge(elapsedMs, burst)
+  if (age < FESTIVAL_CYCLE_MS - 600) return null
+  const p = (age - (FESTIVAL_CYCLE_MS - 600)) / 600
+  return { x: center.x, y: FESTIVAL_TOWN_ROW + (center.y - FESTIVAL_TOWN_ROW) * p }
+}
+
+/** Lantern flames flicker together on a 400ms beat, bright at rest. */
+export function festivalLanternBright(elapsedMs: number): boolean {
+  return Math.floor(Math.max(0, elapsedMs) / 200) % 2 === 0
 }
 
 export type FestivalLantern = { x: number; y: number }
@@ -134,6 +153,13 @@ export function festivalRows(columns: number, rows: number, style: FestivalStyle
   for (const dot of FESTIVAL_TOWN) paint(dot, FESTIVAL_TOWN_ROW, "*", colors.townDot)
   if (fireworks) {
     for (let burst = 0; burst < FESTIVAL_BURSTS.length; burst++) {
+      const rocket = festivalRocket(elapsedMs, burst)
+      if (rocket) {
+        paint(rocket.x, rocket.y, "*", FESTIVAL_BURST_BRIGHT)
+        for (let k = 1; k <= 3; k++) {
+          if (rocket.y + k <= FESTIVAL_TOWN_ROW) paint(rocket.x, rocket.y + k, "|", FESTIVAL_BURST_DIM[burst]!)
+        }
+      }
       for (const particle of festivalParticles(elapsedMs, burst)) {
         if (particle.stage < 0) continue
         const char = particle.stage === 0 ? "*" : particle.stage === 1 ? "+" : "."
@@ -147,9 +173,10 @@ export function festivalRows(columns: number, rows: number, style: FestivalStyle
       }
     }
   } else {
+    const flame = festivalLanternBright(elapsedMs) ? FESTIVAL_LANTERN_COLORS.glow : FESTIVAL_LANTERN_COLORS.dark
     for (const lantern of festivalLanterns(elapsedMs)) {
       paint(lantern.x - 1, lantern.y - 1, ".-.", FESTIVAL_LANTERN_COLORS.body)
-      paint(lantern.x - 1, lantern.y, "( )", FESTIVAL_LANTERN_COLORS.body, FESTIVAL_LANTERN_COLORS.glow)
+      paint(lantern.x - 1, lantern.y, "( )", FESTIVAL_LANTERN_COLORS.body, flame)
       paint(lantern.x - 1, lantern.y + 1, "'-'", FESTIVAL_LANTERN_COLORS.body)
     }
   }

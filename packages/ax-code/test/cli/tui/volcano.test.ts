@@ -69,6 +69,26 @@ test.each(["volcano-eruption", "volcano-calm"] as const)("%s renders determinist
   expect(text).toContain("\\")
 })
 
+test("eruption surges lava under lit crater lips", () => {
+  const eruption = volcanoRows(76, 24, "volcano-eruption", 0)
+  const line = (row: number) => eruption[row]!.map((run) => run.text).join("")
+  expect(line(8)[34]).toBe("^")
+  expect(line(8)[42]).toBe("^")
+  // White-hot surges ride rows 11, 14, and 17 at rest; row 13 stays plain lava.
+  expect(line(14)[44]).toBe("*")
+  expect(line(14)[45]).toBe("*")
+  expect(line(13)[44]).toBe("|")
+  // The pool surface shimmers one column per beat.
+  expect(volcanoRows(76, 24, "volcano-eruption", 350)[19]).not.toEqual(eruption[19])
+})
+
+test("calm stars twinkle under a fixed moon", () => {
+  const first = volcanoRows(76, 24, "volcano-calm", 0)
+  expect(first[0]!.map((run) => run.text).join("")).toContain("*")
+  expect(volcanoRows(76, 24, "volcano-calm", 500)[0]).not.toEqual(first[0])
+  expect(first[8]!.map((run) => run.text).join("")[34]).toBe("^")
+})
+
 test("eruption runs lava and smoke while calm keeps moon and stars", () => {
   const eruption = volcanoRows(76, 24, "volcano-eruption", 0)
   const calm = volcanoRows(76, 24, "volcano-calm", 0)

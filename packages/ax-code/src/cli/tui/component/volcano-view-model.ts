@@ -15,6 +15,17 @@ export const VOLCANO_CRATER = { x0: 34, x1: 42, y0: 8, y1: 9 } as const
 export const VOLCANO_LAVA_X = 44
 export const VOLCANO_GROUND_TOP = 19
 export const VOLCANO_MOON = { x: 14, y: 2 } as const
+/** Calm-night stars in row-major order, shared by the text and pixel twinkle phase. */
+export const VOLCANO_STARS = [
+  { x: 3, y: 0 },
+  { x: 8, y: 0 },
+  { x: 15, y: 0 },
+  { x: 23, y: 0 },
+  { x: 29, y: 0 },
+  { x: 30, y: 1 },
+  { x: 37, y: 1 },
+  { x: 44, y: 1 },
+] as const
 
 /** Palette shared by the text and pixel renderers. */
 export const VOLCANO_COLORS = {
@@ -27,6 +38,7 @@ export const VOLCANO_COLORS = {
     glowDeep: "#c33d1e",
     lava: "#ff7a2a",
     lavaBright: "#ffd166",
+    surge: "#fff0d0",
     ember: "#ff9a3c",
     smoke: "#6a6a7a",
     ground: "#1a0f16",
@@ -41,6 +53,7 @@ export const VOLCANO_COLORS = {
     glowDeep: "#4a1a12",
     lava: "#ff7a2a",
     lavaBright: "#ffd166",
+    surge: "#fff0d0",
     ember: "#c46a3a",
     smoke: "#6a6a7a",
     ground: "#11182a",
@@ -91,13 +104,29 @@ export function volcanoEmbers(elapsedMs: number): VolcanoEmber[] {
 }
 
 export type VolcanoSmoke = { x: number; y: number; size: number }
-/** Gray puffs climbing above the crater, growing as they rise. */
+/** Gray puffs climbing above the crater, growing as they rise and drifting downwind. */
 export function volcanoSmoke(elapsedMs: number): VolcanoSmoke[] {
   const t = Math.max(0, elapsedMs)
   return [0, 1, 2].map((i) => {
     const y = 6 - ((((i * 3 + t * 0.004) % 10) + 10) % 10)
-    return { x: 34 + i * 4, y, size: 1 + (6 - y) * 0.25 }
+    return { x: 34 + i * 4 + (6 - y) * 0.8, y, size: 1 + (6 - y) * 0.25 }
   })
+}
+
+/** Star `i` of VOLCANO_STARS shines bright on a shared 1200ms twinkle round. */
+export function volcanoStarBright(elapsedMs: number, i: number): boolean {
+  return (Math.floor(Math.max(0, elapsedMs) / 400) + i) % 3 === 0
+}
+
+/** White-hot surge rows travelling down the lava channel on a 960ms round. */
+export function volcanoSurgeRows(elapsedMs: number): number[] {
+  const step = Math.floor(Math.max(0, elapsedMs) / 120)
+  return [0, 1, 2].map((k) => 10 + ((step + 1 + k * 3) % 8))
+}
+
+/** Lava pool shimmer phase, one column shift per 300ms. */
+export function volcanoPoolStep(elapsedMs: number): number {
+  return Math.floor(Math.max(0, elapsedMs) / 300) % 3
 }
 
 export function volcanoRows(columns: number, rows: number, style: VolcanoStyle, elapsedMs: number): FujiRun[][] {
@@ -121,8 +150,9 @@ export function volcanoRows(columns: number, rows: number, style: VolcanoStyle, 
     }
   }
   if (!eruption) {
-    paint(3, 0, ".    *      .       *      .", colors.sky)
-    paint(30, 1, "*      .      *", colors.sky)
+    VOLCANO_STARS.forEach((star, i) => {
+      paint(star.x, star.y, volcanoStarBright(elapsedMs, i) ? "*" : ".", colors.sky)
+    })
     paint(VOLCANO_MOON.x - 1, VOLCANO_MOON.y - 1, ".-.", colors.sky)
     paint(VOLCANO_MOON.x - 2, VOLCANO_MOON.y, "(   )", colors.sky)
   }
@@ -137,13 +167,21 @@ export function volcanoRows(columns: number, rows: number, style: VolcanoStyle, 
   if (eruption) {
     paint(crater.x0, crater.y0, "*".repeat(craterWidth), colors.glowHot, colors.glowDeep)
     paint(crater.x0, crater.y1, "+".repeat(craterWidth), colors.glowDeep, colors.rock)
-    for (let y = 10; y <= 17; y++) paint(VOLCANO_LAVA_X, y, "||", colors.lava, colors.rock)
+    paint(crater.x0, crater.y0, "^", colors.lavaBright, colors.glowDeep)
+    paint(crater.x1, crater.y0, "^", colors.lavaBright, colors.glowDeep)
+    const surges = volcanoSurgeRows(elapsedMs)
+    for (let y = 10; y <= 17; y++) {
+      if (surges.includes(y)) paint(VOLCANO_LAVA_X, y, "**", colors.surge, colors.lava)
+      else paint(VOLCANO_LAVA_X, y, "||", colors.lava, colors.rock)
+    }
     for (const puff of volcanoSmoke(elapsedMs)) {
       paint(Math.round(puff.x) - 1, Math.round(puff.y), puff.size > 2 ? "O" : "o", colors.smoke)
     }
   } else {
     paint(crater.x0, crater.y0, ".".repeat(craterWidth), colors.glowDeep, colors.rock)
     paint(crater.x0, crater.y1, ".".repeat(craterWidth), colors.glowDeep, colors.rock)
+    paint(crater.x0, crater.y0, "^", colors.rim, colors.rock)
+    paint(crater.x1, crater.y0, "^", colors.rim, colors.rock)
   }
   for (const ember of volcanoEmbers(elapsedMs)) {
     if (ember.visible) paint(ember.x, ember.y, ember.char, colors.ember)
@@ -152,7 +190,11 @@ export function volcanoRows(columns: number, rows: number, style: VolcanoStyle, 
     paint(0, y, " ".repeat(VOLCANO_COLUMNS), colors.ground, colors.ground)
   }
   if (eruption) {
-    paint(40, 19, "~~~~~~~~~", colors.lavaBright, colors.pool)
+    const step = volcanoPoolStep(elapsedMs)
+    for (let x = 40; x <= 48; x++) {
+      const crest = (x + step) % 3 === 0
+      paint(x, 19, crest ? "~" : "=", crest ? colors.lavaBright : colors.lava, colors.pool)
+    }
     paint(40, 20, "~~~~~~~~~", colors.pool, colors.pool)
   }
   return grid.map((row) => {

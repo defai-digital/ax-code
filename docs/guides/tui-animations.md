@@ -101,27 +101,31 @@ glyph widths do not affect it. Text fallback uses ASCII suit codes (`1C`, `2B`,
 centered scene. Resize, missing graphics capability, and image cleanup follow
 the same lifecycle as Fuji and Bench.
 
-City uses a night skyline with a moon, stars, and twinkling windows for the
-opening, and a dawn skyline with a low sun for the ending. Both share one
-scene model — palette, tower layout, window phases, and street lamps — so the
-text fallback and the freeform HD painting show the same scene for the same
-millisecond, bounded to 1920x1080. Preview with `/city` or `/city-ending`.
+City uses a night skyline with a moon, twinkling stars, and twinkling
+windows for the opening, and a dawn skyline with a low sun for the ending.
+Rooftop beacons blink on the tallest towers while two cars cross the street
+in opposite directions. Both share one scene model — palette, tower layout,
+window phases, beacons, cars, and street lamps — so the text fallback and the
+freeform HD painting show the same scene for the same millisecond, bounded to
+1920x1080. Preview with `/city` or `/city-ending`.
 
 Festival opens with three staggered fireworks bursts looping on a shared
-cycle, and ends with glowing lanterns rising past the moon. Burst positions,
-particle stages, lantern paths, and town lights come from one scene model
-shared by the text fallback and the freeform HD painting, bounded to
-1920x1080. Preview with `/festival` or `/festival-ending`.
+cycle, each heralded by an ascending rocket and an ignition flash, and ends
+with flickering capped lanterns rising past the moon. Burst positions,
+particle stages, rocket paths, lantern paths, and town lights come from one
+scene model shared by the text fallback and the freeform HD painting, bounded
+to 1920x1080. Preview with `/festival` or `/festival-ending`.
 
 Snow opens with pine snowfall under a pale sun and ends on a starry winter
-night over the same forest. Pines, sparkling ground, and the moon or sun stay
-fixed while deterministic flakes fall below the static celestial rows; the
-full sky loops with the flake cycle. Text fallback and freeform HD painting
-share the scene model, bounded to 1920x1080. Preview with `/snow` or
-`/snow-ending`.
+night over the same forest. Snow-capped ridge peaks stand behind the pines
+while near and far flakes fall with gusting sway below the static celestial
+rows and the ground sparks glint; the full sky loops with the flake cycle.
+Text fallback and freeform HD painting share the scene model, bounded to
+1920x1080. Preview with `/snow` or `/snow-ending`.
 
-Volcano opens on an eruption — pulsing crater, lava flow, smoke, and rising
-embers — and ends on a calm crater under moon and stars. Cone shape, crater
-glow, lava channel, and particle paths come from one scene model shared by
-the text fallback and the freeform HD painting, bounded to 1920x1080.
-Preview with `/volcano` or `/volcano-ending`.
+Volcano opens on an eruption — breathing heat halo, pulsing crater with lit
+rim lips, surging lava flow, drifting smoke, shimmering lava pool, and rising
+embers — and ends on a calm crater under twinkling stars and a fixed moon.
+Cone shape, crater glow, lava channel, and particle paths come from one scene
+model shared by the text fallback and the freeform HD painting, bounded to
+1920x1080. Preview with `/volcano` or `/volcano-ending`.

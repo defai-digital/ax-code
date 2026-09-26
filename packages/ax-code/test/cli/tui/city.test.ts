@@ -76,6 +76,38 @@ test.each(["city-night", "city-dawn"] as const)("%s renders its skyline determin
   expect(first[22]!.map((run) => run.text).join("")).toContain("*")
 })
 
+test.each(["city-night", "city-dawn"] as const)("%s blinks beacons and runs cars", (style) => {
+  // Tallest-tower beacon tip (68,3) plus the (52,5) mast blink on a shared beat.
+  expect(
+    cityRows(72, 24, style, 0)[3]!
+      .map((run) => run.text)
+      .join("")[68],
+  ).toBe("*")
+  expect(
+    cityRows(72, 24, style, 600)[3]!
+      .map((run) => run.text)
+      .join("")[68],
+  ).toBe(".")
+  expect(
+    cityRows(72, 24, style, 0)[5]!
+      .map((run) => run.text)
+      .join("")[52],
+  ).toBe("*")
+  // Eastbound car head reaches column 18 at t=1000 with a tail two cells back.
+  const traffic = cityRows(72, 24, style, 1000)[23]!
+    .map((run) => run.text)
+    .join("")
+  expect(traffic[18]).toBe("o")
+  expect(traffic[16]).toBe("-")
+  expect(cityRows(72, 24, style, 0)[23]).not.toEqual(cityRows(72, 24, style, 1000)[23])
+})
+
+test("night stars twinkle on a shared round", () => {
+  const first = cityRows(72, 24, "city-night", 0)[0]
+  expect(first!.map((run) => run.text).join("")).toContain("*")
+  expect(cityRows(72, 24, "city-night", 500)[0]).not.toEqual(first)
+})
+
 test("night and dawn keep distinct skies", () => {
   const night = cityRows(72, 24, "city-night", 0)
   const dawn = cityRows(72, 24, "city-dawn", 0)

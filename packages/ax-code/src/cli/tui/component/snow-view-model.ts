@@ -27,6 +27,11 @@ export const SNOW_SPARKS = [
 ] as const
 export const SNOW_SUN = { x: 58.5, y: 2 } as const
 export const SNOW_MOON = { x: 14.5, y: 2 } as const
+/** Distant peaks behind the pines: apex plus slope rows at one cell per row. */
+export const SNOW_RIDGE = [
+  { ax: 36, ay: 8, rows: 6 },
+  { ax: 15, ay: 6, rows: 6 },
+] as const
 
 /** Palette shared by the text and pixel renderers. */
 export const SNOW_COLORS = {
@@ -39,6 +44,8 @@ export const SNOW_COLORS = {
     flake: "#ffffff",
     orb: "#f5e9c8",
     ground: "#eef3fa",
+    ridge: "#7c8fb4",
+    sparkDim: "#aeb9cc",
   },
   "winter-night": {
     sky: "#8ba0c8",
@@ -49,6 +56,8 @@ export const SNOW_COLORS = {
     flake: "#e8eef8",
     orb: "#e8eef8",
     ground: "#7e93b8",
+    ridge: "#2c3c60",
+    sparkDim: "#4a5a78",
   },
 } as const satisfies Record<SnowStyle, Record<string, string>>
 
@@ -81,13 +90,20 @@ export type SnowFlake = { x: number; y: number; char: string }
  */
 export function snowFlakes(elapsedMs: number): SnowFlake[] {
   const phase = (Math.max(0, elapsedMs) % SNOW_CYCLE_MS) / SNOW_CYCLE_MS
+  // Two wind gusts per cycle swell the sideways sway and die back down.
+  const gust = 1 + 0.5 * Math.sin(4 * Math.PI * phase)
   return Array.from({ length: 14 }, (_, i) => {
     const y = 3 + ((((i * 17 + 1) % 13) + phase * (8 + (i % 4) * 2)) % 13)
-    const sway = (1 + (i % 2)) * Math.sin(2 * Math.PI * (phase * (1 + (i % 2)) + i / 14))
+    const sway = (1 + (i % 2)) * Math.sin(2 * Math.PI * (phase * (1 + (i % 2)) + i / 14)) * gust
     const drifted = ((i * 31 + 5) % SNOW_COLUMNS) - phase * (4 + (i % 3) * 3) + sway
     const x = ((drifted % SNOW_COLUMNS) + SNOW_COLUMNS) % SNOW_COLUMNS
-    return { x, y, char: i % 4 === 0 ? "*" : "." }
+    return { x, y, char: i % 5 === 0 ? "@" : i % 3 === 0 ? "*" : "." }
   })
+}
+
+/** Ground spark `i` of SNOW_SPARKS glints on a shared 500ms beat. */
+export function snowSparkBright(elapsedMs: number, i: number): boolean {
+  return (Math.floor(Math.max(0, elapsedMs) / 250) + i) % 2 === 0
 }
 
 export function snowRows(columns: number, rows: number, style: SnowStyle, elapsedMs: number): FujiRun[][] {
@@ -121,7 +137,17 @@ export function snowRows(columns: number, rows: number, style: SnowStyle, elapse
   for (let y = SNOW_GROUND_TOP + 1; y < SNOW_ROWS; y++) {
     paint(0, y, " ".repeat(SNOW_COLUMNS), colors.ground, colors.ground)
   }
-  for (const spark of SNOW_SPARKS) paint(spark.x, spark.y, "*", colors.snow, colors.ground)
+  SNOW_SPARKS.forEach((spark, i) => {
+    const glint = snowSparkBright(elapsedMs, i)
+    paint(spark.x, spark.y, glint ? "*" : ".", glint ? colors.snow : colors.sparkDim, colors.ground)
+  })
+  for (const peak of SNOW_RIDGE) {
+    paint(peak.ax, peak.ay, "*", colors.snow)
+    for (let dy = 1; dy <= peak.rows; dy++) {
+      paint(peak.ax - dy, peak.ay + dy, "/", colors.ridge)
+      paint(peak.ax + dy, peak.ay + dy, "\\", colors.ridge)
+    }
+  }
   for (const pine of SNOW_PINES) {
     const apex = SNOW_BASE - pine.h + 1
     for (let r = 0; r < pine.h; r++) {
@@ -131,6 +157,8 @@ export function snowRows(columns: number, rows: number, style: SnowStyle, elapse
     paint(pine.x, apex, "*", colors.snow, colors.pine)
     paint(pine.x - 2, apex + 3, "*", colors.snow, colors.pine)
     paint(pine.x + 2, apex + 5, "*", colors.snow, colors.pine)
+    paint(pine.x - 3, apex + 6, "*", colors.snow, colors.pine)
+    paint(pine.x + 3, apex + 7, "*", colors.snow, colors.pine)
     paint(pine.x - 1, SNOW_BASE + 1, "||", colors.trunk)
     paint(pine.x - 1, SNOW_BASE + 2, "||", colors.trunk)
   }

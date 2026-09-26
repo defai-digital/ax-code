@@ -12,8 +12,11 @@ import {
   volcanoEmbers,
   volcanoGlow,
   volcanoHalf,
+  volcanoPoolStep,
   volcanoSkyRgb,
   volcanoSmoke,
+  volcanoStarBright,
+  volcanoSurgeRows,
   type VolcanoStyle,
 } from "./volcano-view-model"
 
@@ -28,7 +31,8 @@ const lerp = (from: RGB, to: RGB, t: number): RGB =>
   ]
 
 /**
- * Freeform HD renderer. The cone, crater glow, lava, smoke, embers, and
+ * Freeform HD renderer. The cone under a heat halo, pulsing crater with
+ * lit rim lips, surging lava, drifting smoke, embers, shimmering pool, and
  * ground are painted directly from the shared scene model, so the HD frame
  * and the text fallback show the same scene for the same millisecond. Pure
  * and deterministic: everything derives from `elapsedMs`.
@@ -98,10 +102,20 @@ export function renderVolcanoPixels(width: number, height: number, style: Volcan
       const sx = (i * 197 + 31) % w,
         sy = (i * 131 + 7) % bandH
       if (Math.hypot(sx - X(VOLCANO_MOON.x), sy - Y(VOLCANO_MOON.y)) < 50) continue
-      set(sx, sy, sky)
+      if (volcanoStarBright(elapsedMs, i)) disk(sx, sy, 1, sky)
+      else set(sx, sy, sky)
     }
     disk(X(VOLCANO_MOON.x), Y(VOLCANO_MOON.y), Math.max(1, Math.round(Math.min(cw, ch) * 0.9)), sky)
   }
+
+  // Heat halo behind the cone: pulsing with the crater beat in eruption, faint in calm.
+  const haloDeep = hex(c.glowDeep),
+    haloRock = hex(c.rock)
+  const haloR = eruption ? 34 + 14 * volcanoGlow(elapsedMs) : 26
+  const haloX = X(VOLCANO_CX),
+    haloY = Y((VOLCANO_CRATER.y0 + VOLCANO_CRATER.y1) / 2)
+  disk(haloX, haloY, haloR + 14, lerp(haloDeep, haloRock, 0.5))
+  disk(haloX, haloY, haloR, haloDeep)
 
   const rock = hex(c.rock),
     rim = hex(c.rim)
@@ -127,6 +141,10 @@ export function renderVolcanoPixels(width: number, height: number, style: Volcan
   if (eruption) {
     rect(X(VOLCANO_LAVA_X), Y(10), X(VOLCANO_LAVA_X + 2), Y(18), lava)
     rect(X(VOLCANO_LAVA_X) + cw / 4, Y(10), X(VOLCANO_LAVA_X + 2) - cw / 4, Y(18), lavaBright)
+    const surge = hex(c.surge)
+    for (const row of volcanoSurgeRows(elapsedMs)) {
+      disk(X(VOLCANO_LAVA_X + 1), Y(row + 0.5), 4, surge)
+    }
     const smoke = hex(c.smoke)
     for (const puff of volcanoSmoke(elapsedMs)) {
       disk(X(puff.x + 0.5), Y(puff.y + 0.5), Math.max(2, Math.round(puff.size * Math.min(cw, ch) * 0.5)), smoke)
@@ -151,13 +169,20 @@ export function renderVolcanoPixels(width: number, height: number, style: Volcan
     Math.max(1, Math.round(Math.min(cw, ch))),
     eruption ? lerp(glowHot, lavaBright, phase) : glowHot,
   )
+  if (eruption) {
+    disk(X(VOLCANO_CRATER.x0), craterY, 2, lavaBright)
+    disk(X(VOLCANO_CRATER.x1), craterY, 2, lavaBright)
+  }
 
   const ground = hex(c.ground)
   rect(0, Y(VOLCANO_GROUND_TOP), w, h, ground)
   if (eruption) {
     const pool = hex(c.pool)
-    rect(X(40), Y(19), X(49), Y(21), pool)
-    rect(X(40), Y(19), X(49), Y(20), lavaBright)
+    const step = volcanoPoolStep(elapsedMs)
+    for (let x = 40; x <= 48; x++) {
+      rect(X(x), Y(19), X(x + 1), Y(20), (x + step) % 3 === 0 ? lavaBright : pool)
+    }
+    rect(X(40), Y(20), X(49), Y(21), pool)
   }
 
   return pixels

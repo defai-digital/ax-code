@@ -36,6 +36,13 @@ test("the crater pulses while calm, lava, and smoke follow their styles", () => 
   expect(pixel(renderVolcanoPixels(WIDTH, HEIGHT, "volcano-calm", 900), 380, 170)).toEqual([122, 42, 30])
   expect(pixel(hot, 445, 270)).toEqual([255, 209, 102])
   expect(pixel(calm, 445, 270)).toEqual([28, 35, 51])
+  // A white-hot surge crosses the channel at rest.
+  expect(pixel(hot, 450, 290)).toEqual([255, 240, 208])
+  // The heat halo above the crater breathes with the pulse beat.
+  expect(pixel(hot, 380, 125)).not.toEqual(pixel(renderVolcanoPixels(WIDTH, HEIGHT, "volcano-eruption", 300), 380, 125))
+  // The left crater lip glows in eruption and stays bare rock in calm.
+  expect(pixel(hot, 340, 170)).toEqual([255, 209, 102])
+  expect(pixel(calm, 340, 170)).toEqual([61, 74, 107])
 })
 
 test("Volcano stays within the HD bound", () => {

@@ -71,3 +71,21 @@ test("day and night share the forest with distinct sky and snow", () => {
   expect(day.flat().some((run) => run.background === "#eef3fa")).toBe(true)
   expect(night.flat().some((run) => run.background === "#7e93b8")).toBe(true)
 })
+
+test.each(["snowfall", "winter-night"] as const)("%s layers ridge, near flakes, and glinting sparks", (style) => {
+  const first = snowRows(74, 20, style, 0)
+  const line = (row: number) => first[row]!.map((run) => run.text).join("")
+  // Distant peak slopes peek through the pine gaps.
+  expect(line(11)[33]).toBe("/")
+  expect(line(8)[17]).toBe("\\")
+  expect(first.flat().some((run) => run.color === (style === "snowfall" ? "#7c8fb4" : "#2c3c60"))).toBe(true)
+  // Near flakes render large.
+  expect(first.map((row) => row.map((run) => run.text).join("")).join("\n")).toContain("@")
+  // The first ground spark glints bright, then dims.
+  expect(line(17)[5]).toBe("*")
+  expect(
+    snowRows(74, 20, style, 300)[17]!
+      .map((run) => run.text)
+      .join("")[5],
+  ).toBe(".")
+})

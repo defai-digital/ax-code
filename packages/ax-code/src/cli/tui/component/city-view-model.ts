@@ -12,6 +12,19 @@ export const CITY_STREET_TOP = 22
 export const CITY_LAMPS = [6, 20, 34, 48, 62] as const
 export const CITY_MOON = { x: 60, y: 2 } as const
 export const CITY_SUN = { x: 12, y: 3 } as const
+export const CITY_CAR_ROW = 23
+/** Night stars in row-major order, shared by the text and pixel twinkle phase. */
+export const CITY_STARS = [
+  { x: 2, y: 0 },
+  { x: 7, y: 0 },
+  { x: 14, y: 0 },
+  { x: 22, y: 0 },
+  { x: 28, y: 0 },
+  { x: 6, y: 1 },
+  { x: 12, y: 1 },
+  { x: 19, y: 1 },
+  { x: 26, y: 1 },
+] as const
 
 /** Palette shared by the text and pixel renderers. */
 export const CITY_COLORS = {
@@ -19,23 +32,33 @@ export const CITY_COLORS = {
     sky: "#aab4e0",
     skyBottom: "#1b2451",
     building: "#141a38",
+    shade: "#1f284c",
     edge: "#2a3560",
     windowLit: "#ffd166",
     windowDim: "#3a4668",
     orb: "#e8ecf8",
     lamp: "#ffca7a",
     street: "#0d1128",
+    beacon: "#ff5252",
+    beaconDim: "#7a2e2e",
+    head: "#fff6da",
+    tail: "#ff6b5e",
   },
   "city-dawn": {
     sky: "#e8b48a",
     skyBottom: "#e08050",
     building: "#241a3a",
+    shade: "#473255",
     edge: "#6a4a70",
     windowLit: "#ffe6a3",
     windowDim: "#5a4a68",
     orb: "#ffcf6e",
     lamp: "#ffca7a",
     street: "#2a1f3d",
+    beacon: "#ff5252",
+    beaconDim: "#7a2e2e",
+    head: "#fff6da",
+    tail: "#ff6b5e",
   },
 } as const satisfies Record<CityStyle, Record<string, string>>
 
@@ -88,6 +111,34 @@ export function cityWindowLit(style: CityStyle, i: number, wx: number, wy: numbe
   return Math.floor(Math.max(0, elapsedMs) / 500) % 2 === 1 ? !base : base
 }
 
+/** Star `i` of CITY_STARS shines bright on a shared 1200ms twinkle round. */
+export function cityStarBright(elapsedMs: number, i: number): boolean {
+  return (Math.floor(Math.max(0, elapsedMs) / 400) + i) % 3 === 0
+}
+
+export type CityAntenna = { x: number; tipY: number }
+/** Rooftop masts on towers at least fourteen rows tall; the mast rises two cells above the roof. */
+export function cityAntennas(): CityAntenna[] {
+  return cityBuildings()
+    .filter((building) => CITY_STREET_TOP - 1 - building.top >= 14)
+    .map((building) => ({ x: building.x + Math.floor(building.w / 2), tipY: building.top - 2 }))
+}
+
+/** Aircraft-warning beacons blink together on a 1200ms beat, bright at rest. */
+export function cityBeaconBright(elapsedMs: number): boolean {
+  return Math.floor(Math.max(0, elapsedMs) / 600) % 2 === 0
+}
+
+export type CityCar = { x: number; dir: 1 | -1 }
+/** Two cars cross the street row in opposite directions with wraparound laps. */
+export function cityCars(elapsedMs: number): CityCar[] {
+  const t = Math.max(0, elapsedMs)
+  return [
+    { x: ((t / 50) % 76) - 2, dir: 1 },
+    { x: 74 - ((t / 60) % 76), dir: -1 },
+  ]
+}
+
 export function cityRows(columns: number, rows: number, style: CityStyle, elapsedMs: number): FujiRun[][] {
   const width = Math.max(0, Math.floor(columns)),
     height = Math.max(0, Math.floor(rows))
@@ -108,8 +159,9 @@ export function cityRows(columns: number, rows: number, style: CityStyle, elapse
     }
   }
   if (night) {
-    paint(2, 0, ".    *      .       *      .", colors.sky)
-    paint(6, 1, "*     .      *      .", colors.sky)
+    CITY_STARS.forEach((star, i) => {
+      paint(star.x, star.y, cityStarBright(elapsedMs, i) ? "*" : ".", colors.sky)
+    })
   }
   const orb = night ? CITY_MOON : CITY_SUN
   paint(orb.x - 1, orb.y - 1, ".-.", colors.orb)
@@ -124,9 +176,18 @@ export function cityRows(columns: number, rows: number, style: CityStyle, elapse
       paint(window.x, window.y, lit ? "*" : ".", lit ? colors.windowLit : colors.windowDim, colors.building)
     }
   })
+  const beacon = cityBeaconBright(elapsedMs)
+  for (const antenna of cityAntennas()) {
+    paint(antenna.x, antenna.tipY + 1, "|", colors.edge)
+    paint(antenna.x, antenna.tipY, beacon ? "*" : ".", beacon ? colors.beacon : colors.edge)
+  }
   paint(0, CITY_STREET_TOP, " ".repeat(CITY_COLUMNS), colors.street, colors.street)
   paint(0, CITY_STREET_TOP + 1, " ".repeat(CITY_COLUMNS), colors.street, colors.street)
   for (const lamp of CITY_LAMPS) paint(lamp, CITY_STREET_TOP, "*", colors.lamp, colors.street)
+  for (const car of cityCars(elapsedMs)) {
+    paint(Math.round(car.x), CITY_CAR_ROW, "o", colors.head, colors.street)
+    paint(Math.round(car.x) - 2 * car.dir, CITY_CAR_ROW, "-", colors.tail, colors.street)
+  }
   return grid.map((row) => {
     const runs: FujiRun[] = []
     for (const cell of row) {

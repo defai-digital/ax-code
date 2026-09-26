@@ -27,6 +27,14 @@ test.each(["snowfall", "winter-night"] as const)("%s paints the shared forest an
   const ground: readonly [number, number, number] = day ? [238, 243, 250] : [126, 147, 184]
   expect(pixel(first, 375, 350)).toEqual(ground)
   expect(pixel(moving, 375, 350)).toEqual(ground)
+  // The tall peak fills the gap between the middle pines.
+  const ridge: readonly [number, number, number] = day ? [124, 143, 180] : [44, 60, 96]
+  expect(pixel(first, 335, 230)).toEqual(ridge)
+  // The first ground spark glints bright, then dims.
+  const snow: readonly [number, number, number] = day ? [255, 255, 255] : [223, 232, 245]
+  const sparkDim: readonly [number, number, number] = day ? [174, 185, 204] : [74, 90, 120]
+  expect(pixel(first, 55, 350)).toEqual(snow)
+  expect(pixel(renderSnowPixels(WIDTH, HEIGHT, style, 300), 55, 350)).toEqual(sparkDim)
 })
 
 test("Snow stays within the HD bound", () => {

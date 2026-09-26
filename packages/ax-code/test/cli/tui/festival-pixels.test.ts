@@ -39,6 +39,9 @@ test("bursts bloom and fade around the shared cycle", () => {
   // Bursts never reach the town row.
   expect(pixel(first, 385, 450)).toEqual([255, 209, 102])
   expect(pixel(renderFestivalPixels(WIDTH, HEIGHT, "festival-fireworks", 1800), 385, 450)).toEqual([255, 209, 102])
+  // Burst two lifts its rocket off the town row at t=1800.
+  expect(pixel(renderFestivalPixels(WIDTH, HEIGHT, "festival-fireworks", 1800), 585, 450)).toEqual([255, 242, 204])
+  expect(pixel(first, 585, 450)).not.toEqual([255, 242, 204])
 })
 
 test("lanterns rise past a fixed moon", () => {
@@ -47,6 +50,9 @@ test("lanterns rise past a fixed moon", () => {
   expect(pixel(renderFestivalPixels(WIDTH, HEIGHT, "festival-lanterns", 1800), 505, 50)).toEqual([232, 236, 248])
   const core: readonly [number, number, number] = [255, 230, 179]
   expect(countColor(first, core)).toBeGreaterThan(30)
+  // Flames die down together at t=200 while the dark caps stay on.
+  expect(countColor(renderFestivalPixels(WIDTH, HEIGHT, "festival-lanterns", 200), core)).toBe(0)
+  expect(countColor(first, [36, 22, 16])).toBeGreaterThan(0)
 })
 
 test("Festival stays within the HD bound", () => {

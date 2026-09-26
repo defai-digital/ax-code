@@ -1,4 +1,5 @@
 import {
+  CITY_CAR_ROW,
   CITY_COLUMNS,
   CITY_LAMPS,
   CITY_MOON,
@@ -6,8 +7,12 @@ import {
   CITY_STREET_TOP,
   CITY_SUN,
   CITY_COLORS,
+  cityAntennas,
+  cityBeaconBright,
   cityBuildings,
+  cityCars,
   citySkyRgb,
+  cityStarBright,
   cityWindowLit,
   cityWindows,
   type CityStyle,
@@ -18,10 +23,11 @@ const hex = (value: string): RGB =>
   [1, 3, 5].map((offset) => parseInt(value.slice(offset, offset + 2), 16)) as [number, number, number]
 
 /**
- * Freeform HD renderer. The skyline (gradient sky, stars, orb, towers with
- * twinkling windows, street lamps) is painted directly from the shared scene
- * model, so the HD frame and the text fallback show the same scene for the
- * same millisecond. Pure and deterministic: everything derives from `elapsedMs`.
+ * Freeform HD renderer. The skyline (gradient sky, twinkling stars, orb,
+ * shaded towers with twinkling windows, blinking rooftop beacons, street
+ * lamps, passing cars) is painted directly from the shared scene model, so
+ * the HD frame and the text fallback show the same scene for the same
+ * millisecond. Pure and deterministic: everything derives from `elapsedMs`.
  */
 export function renderCityPixels(width: number, height: number, style: CityStyle, elapsedMs: number): Buffer {
   const w = Math.max(0, Math.floor(width)),
@@ -89,18 +95,21 @@ export function renderCityPixels(width: number, height: number, style: CityStyle
       const sx = (i * 197 + 31) % w,
         sy = (i * 131 + 7) % bandH
       if (Math.hypot(sx - X(CITY_MOON.x), sy - Y(CITY_MOON.y)) < 60) continue
-      set(sx, sy, sky)
+      if (cityStarBright(elapsedMs, i)) disk(sx, sy, 1, sky)
+      else set(sx, sy, sky)
     }
   }
   const orbAt = night ? CITY_MOON : CITY_SUN
   disk(X(orbAt.x), Y(orbAt.y), Math.max(1, Math.round(Math.min(cw, ch) * 1.1)), orb)
 
   const building = hex(c.building),
+    shade = hex(c.shade),
     edge = hex(c.edge),
     lit = hex(c.windowLit),
     dim = hex(c.windowDim)
   cityBuildings().forEach((tower, i) => {
     rect(X(tower.x), Y(tower.top), X(tower.x + tower.w), Y(CITY_STREET_TOP - 1), building)
+    rect(X(tower.x), Y(tower.top), X(tower.x + tower.w), Y(tower.top + 2), shade)
     rect(X(tower.x), Y(tower.top), X(tower.x + tower.w), Y(tower.top) + 2, edge)
     for (const window of cityWindows(tower)) {
       const color = cityWindowLit(style, i, window.wx, window.wy, elapsedMs) ? lit : dim
@@ -108,11 +117,26 @@ export function renderCityPixels(width: number, height: number, style: CityStyle
     }
   })
 
+  const beacon = hex(c.beacon),
+    beaconDim = hex(c.beaconDim)
+  const beaconOn = cityBeaconBright(elapsedMs)
+  for (const antenna of cityAntennas()) {
+    const mx = X(antenna.x) + cw / 2
+    rect(mx - 1, Y(antenna.tipY + 1), mx + 1, Y(antenna.tipY + 2), edge)
+    disk(mx, Y(antenna.tipY + 0.5), 2, beaconOn ? beacon : beaconDim)
+  }
+
   const street = hex(c.street),
     lamp = hex(c.lamp)
   rect(0, Y(CITY_STREET_TOP), w, h, street)
   for (const lx of CITY_LAMPS) {
     disk(X(lx + 0.5), Y(CITY_STREET_TOP + 0.5), Math.max(1, Math.round(Math.min(cw, ch) * 0.3)), lamp)
+  }
+  const head = hex(c.head),
+    tail = hex(c.tail)
+  for (const car of cityCars(elapsedMs)) {
+    disk(X(car.x + 0.5), Y(CITY_CAR_ROW + 0.5), 2, head)
+    disk(X(car.x - 2 * car.dir + 0.5), Y(CITY_CAR_ROW + 0.5), 1, tail)
   }
 
   return pixels

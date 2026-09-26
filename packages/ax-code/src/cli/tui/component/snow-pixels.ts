@@ -4,6 +4,7 @@ import {
   SNOW_GROUND_TOP,
   SNOW_MOON,
   SNOW_PINES,
+  SNOW_RIDGE,
   SNOW_ROWS,
   SNOW_SPARKS,
   SNOW_SUN,
@@ -11,6 +12,7 @@ import {
   snowFlakes,
   snowPineHalf,
   snowSkyRgb,
+  snowSparkBright,
   type SnowStyle,
 } from "./snow-view-model"
 
@@ -19,11 +21,12 @@ const hex = (value: string): RGB =>
   [1, 3, 5].map((offset) => parseInt(value.slice(offset, offset + 2), 16)) as [number, number, number]
 
 /**
- * Freeform HD renderer. The forest (gradient sky, orb, pines, snowfall,
- * sparkling ground) is painted directly from the shared scene model, so the
- * HD frame and the text fallback show the same scene for the same
- * millisecond. Pure and deterministic: everything derives from `elapsedMs`,
- * and the full sky loops with the cycle.
+ * Freeform HD renderer. The forest (gradient sky, orb, distant ridge,
+ * snow-laden pines, gusting snowfall, glinting ground) is painted directly
+ * from the shared scene model, so the HD frame and the text fallback show
+ * the same scene for the same millisecond. Pure and deterministic:
+ * everything derives from `elapsedMs`, and the full sky loops with the
+ * cycle.
  */
 export function renderSnowPixels(width: number, height: number, style: SnowStyle, elapsedMs: number): Buffer {
   const w = Math.max(0, Math.floor(width)),
@@ -100,8 +103,32 @@ export function renderSnowPixels(width: number, height: number, style: SnowStyle
   const ground = hex(c.ground),
     snow = hex(c.snow)
   rect(0, Y(SNOW_GROUND_TOP), w, h, ground)
-  for (const spark of SNOW_SPARKS) {
-    disk(X(spark.x + 0.5), Y(spark.y + 0.5), 2, snow)
+  const sparkDim = hex(c.sparkDim)
+  SNOW_SPARKS.forEach((spark, i) => {
+    if (snowSparkBright(elapsedMs, i)) disk(X(spark.x + 0.5), Y(spark.y + 0.5), 2, snow)
+    else disk(X(spark.x + 0.5), Y(spark.y + 0.5), 1, sparkDim)
+  })
+
+  const ridge = hex(c.ridge)
+  const triangle = (ax: number, ay: number, bx: number, by: number, color: RGB) => {
+    const ya = Math.max(0, Math.floor(Y(ay))),
+      yb = Math.min(h, Math.ceil(Y(by)))
+    for (let y = ya; y < yb; y++) {
+      const p = by <= ay ? 0 : (y / ch - ay) / (by - ay)
+      const half = Math.max(0, bx * p)
+      const xa = Math.max(0, Math.floor(X(ax - half))),
+        xb = Math.min(w, Math.ceil(X(ax + half)))
+      let i = (y * w + xa) * 3
+      for (let x = xa; x < xb; x++) {
+        pixels[i++] = color[0]!
+        pixels[i++] = color[1]!
+        pixels[i++] = color[2]!
+      }
+    }
+  }
+  for (const peak of SNOW_RIDGE) {
+    triangle(peak.ax, peak.ay, peak.rows, peak.ay + peak.rows, ridge)
+    triangle(peak.ax, peak.ay, 1.5, peak.ay + 2, snow)
   }
 
   const pine = hex(c.pine),
@@ -113,12 +140,14 @@ export function renderSnowPixels(width: number, height: number, style: SnowStyle
       rect(X(tree.x - half), Y(apex + r), X(tree.x + half + 1), Y(apex + r + 1), pine)
     }
     rect(X(tree.x - 2), Y(apex), X(tree.x + 3), Y(apex + 2), snow)
+    disk(X(tree.x - 1.5), Y(apex + 4), 2, snow)
+    disk(X(tree.x + 2), Y(apex + 6), 2, snow)
     rect(X(tree.x - 1), Y(SNOW_BASE + 1), X(tree.x + 1), Y(SNOW_BASE + 3), trunk)
   }
 
   const flake = hex(c.flake)
   for (const drop of snowFlakes(elapsedMs)) {
-    disk(X(drop.x + 0.5), Y(drop.y + 0.5), drop.char === "*" ? 2 : 1, flake)
+    disk(X(drop.x + 0.5), Y(drop.y + 0.5), drop.char === "@" ? 3 : drop.char === "*" ? 2 : 1, flake)
   }
 
   return pixels

@@ -39,6 +39,14 @@ test.each(["city-night", "city-dawn"] as const)("%s paints the shared skyline fr
   expect(pixel(first, 35, 390)).toEqual(body)
   expect(pixel(moving, 35, 390)).toEqual(body)
   expect(countColor(first, lit)).toBeGreaterThan(200)
+  // Tower crowns carry a lighter shade band.
+  const shade: readonly [number, number, number] = night ? [31, 40, 76] : [71, 50, 85]
+  expect(pixel(first, 35, 270)).toEqual(shade)
+  // The tallest-tower beacon blinks red above the roofline.
+  expect(pixel(first, 685, 70)).toEqual([255, 82, 82])
+  expect(pixel(moving, 685, 70)).toEqual([122, 46, 46])
+  // The eastbound car head crosses column 18 at t=1000.
+  expect(pixel(renderCityPixels(WIDTH, HEIGHT, style, 1000), 185, 470)).toEqual([255, 246, 218])
 })
 
 test("City stays within the HD bound", () => {

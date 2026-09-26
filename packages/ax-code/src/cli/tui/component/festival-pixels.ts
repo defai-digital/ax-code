@@ -12,8 +12,11 @@ import {
   FESTIVAL_TOWN,
   FESTIVAL_TOWN_ROW,
   FESTIVAL_COLORS,
+  festivalBurstAge,
+  festivalLanternBright,
   festivalLanterns,
   festivalParticles,
+  festivalRocket,
   festivalSkyRgb,
   type FestivalStyle,
 } from "./festival-view-model"
@@ -23,10 +26,11 @@ const hex = (value: string): RGB =>
   [1, 3, 5].map((offset) => parseInt(value.slice(offset, offset + 2), 16)) as [number, number, number]
 
 /**
- * Freeform HD renderer. Bursts, lanterns, moon, and town lights are painted
- * directly from the shared scene model, so the HD frame and the text fallback
- * show the same scene for the same millisecond. Pure and deterministic:
- * everything derives from `elapsedMs`, and both scenes loop with the cycle.
+ * Freeform HD renderer. Rockets, bursts with ignition flashes, flickering
+ * capped lanterns, moon, and town lights are painted directly from the
+ * shared scene model, so the HD frame and the text fallback show the same
+ * scene for the same millisecond. Pure and deterministic: everything
+ * derives from `elapsedMs`, and both scenes loop with the cycle.
  */
 export function renderFestivalPixels(width: number, height: number, style: FestivalStyle, elapsedMs: number): Buffer {
   const w = Math.max(0, Math.floor(width)),
@@ -112,9 +116,15 @@ export function renderFestivalPixels(width: number, height: number, style: Festi
 
   if (fireworks) {
     const bright = hex(FESTIVAL_BURST_BRIGHT)
+    const unit = Math.min(cw, ch)
     for (let burst = 0; burst < FESTIVAL_BURSTS.length; burst++) {
+      const center = FESTIVAL_BURSTS[burst]!
       const hue = hex(FESTIVAL_BURST_HUES[burst]!),
         dim = hex(FESTIVAL_BURST_DIM[burst]!)
+      // Ignition flash: a brief glow under the opening sparks.
+      if (festivalBurstAge(elapsedMs, burst) < 150) {
+        disk(X(center.x), Y(center.y), Math.max(2, Math.round(unit * 2.5)), dim)
+      }
       for (const particle of festivalParticles(elapsedMs, burst)) {
         if (particle.stage < 0) continue
         disk(
@@ -124,19 +134,32 @@ export function renderFestivalPixels(width: number, height: number, style: Festi
           particle.stage === 0 ? bright : particle.stage === 1 ? hue : dim,
         )
       }
+      const rocket = festivalRocket(elapsedMs, burst)
+      if (rocket) {
+        for (let k = 3; k >= 1; k--) disk(X(rocket.x), Y(rocket.y + k), 1, dim)
+        disk(X(rocket.x), Y(rocket.y), 2, bright)
+      }
     }
   } else {
     const lamp = FESTIVAL_LANTERN_COLORS
     const halo = hex(lamp.halo),
       body = hex(lamp.body),
-      core = hex(lamp.core)
+      core = hex(lamp.core),
+      dark = hex(lamp.dark)
     const unit = Math.min(cw, ch)
+    const flameOn = festivalLanternBright(elapsedMs)
     for (const lantern of festivalLanterns(elapsedMs)) {
       const cx = X(lantern.x),
         cy = Y(lantern.y)
       disk(cx, cy, Math.max(2, Math.round(unit * 1.1)), halo)
       disk(cx, cy, Math.max(2, Math.round(unit * 0.7)), body)
-      disk(cx, cy, Math.max(1, Math.round(unit * 0.4)), core)
+      if (flameOn) disk(cx, cy, Math.max(1, Math.round(unit * 0.4)), core)
+      else disk(cx, cy, Math.max(1, Math.round(unit * 0.3)), body)
+      const capW = Math.max(2, Math.round(unit * 0.4)),
+        capH = Math.max(1, Math.round(unit * 0.2)),
+        capY = Math.max(2, Math.round(unit * 0.7))
+      rect(cx - capW, cy - capY - capH, cx + capW, cy - capY + capH, dark)
+      rect(cx - capW, cy + capY - capH, cx + capW, cy + capY + capH, dark)
     }
   }
 

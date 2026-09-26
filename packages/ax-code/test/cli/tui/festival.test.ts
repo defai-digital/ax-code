@@ -74,6 +74,29 @@ test("fireworks open on a fresh burst above a lit town", () => {
   expect(rows[22]!.map((run) => run.text).join("")).toContain("*")
 })
 
+test("rockets climb from the town row before each burst", () => {
+  // Burst two (58,10) has age 3000 at t=1800, so its rocket just lifts off.
+  const liftoff = festivalRows(76, 25, "festival-fireworks", 1800)
+  expect(liftoff[22]!.map((run) => run.text).join("")[58]).toBe("*")
+  expect(
+    festivalRows(76, 25, "festival-fireworks", 0)[22]!
+      .map((run) => run.text)
+      .join("")[58],
+  ).toBe(" ")
+  // Mid-flight the head clears the town row with a fading trail behind it.
+  const flight = festivalRows(76, 25, "festival-fireworks", 2100)
+  expect(flight[16]!.map((run) => run.text).join("")[58]).toBe("*")
+  expect(flight[18]!.map((run) => run.text).join("")[58]).toBe("|")
+})
+
+test("lantern flames flicker between glow and dark", () => {
+  const bright = festivalRows(76, 25, "festival-lanterns", 0).flat()
+  const dimmed = festivalRows(76, 25, "festival-lanterns", 200).flat()
+  expect(bright.some((run) => run.background === "#241610")).toBe(false)
+  expect(dimmed.some((run) => run.background === "#241610")).toBe(true)
+  expect(dimmed.some((run) => run.background === "#4a2f1a")).toBe(false)
+})
+
 test("lanterns rise past the moon above a lit town", () => {
   const text = festivalRows(76, 25, "festival-lanterns", 0)
     .map((row) => row.map((run) => run.text).join(""))
