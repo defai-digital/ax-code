@@ -3,6 +3,7 @@ import { AX_WIKI_DIR_DEFAULT, sanitizeWikiDir } from "@ax-code/ax-wiki"
 import { Config } from "../config/config"
 
 export type WikiRuntimeConfig = AxWikiConfig & {
+  auto: boolean
   enabled: boolean
   dir: string
   model?: string
@@ -11,6 +12,7 @@ export type WikiRuntimeConfig = AxWikiConfig & {
 }
 
 type WikiConfigSlice = AxWikiConfig & {
+  auto?: boolean
   enabled?: boolean
   dir?: string
   model?: string
@@ -39,6 +41,7 @@ export async function resolveWikiRuntimeConfig(
   return {
     ...(slice ?? {}),
     enabled: slice?.enabled !== false,
+    auto: slice?.auto !== false,
     dir: sanitizeWikiDir(overrides.dir ?? slice?.dir, AX_WIKI_DIR_DEFAULT),
     model: overrides.model?.trim() || slice?.model?.trim() || undefined,
     autoInjectAgents: slice?.autoInjectAgents !== false,

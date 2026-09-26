@@ -1,3 +1,4 @@
+import { wikiProjectRoot } from "../../wiki/root"
 import type { Argv } from "yargs"
 import path from "node:path"
 import open from "open"
@@ -31,7 +32,9 @@ function rootFromArgs(directory?: string): string {
 
 async function withWiki<T>(args: CommonArgs, fn: (input: { root: string; config: WikiRuntimeConfig }) => Promise<T>) {
   const root = rootFromArgs(args.directory)
-  return bootstrap(root, async () => fn({ root, config: await resolveWikiRuntimeConfig(args) }))
+  return bootstrap(root, async () =>
+    fn({ root: await wikiProjectRoot(), config: await resolveWikiRuntimeConfig(args) }),
+  )
 }
 
 export function wikiStatusExitCode(status: Pick<WikiStatus, "exists" | "healthy" | "freshness">): number {

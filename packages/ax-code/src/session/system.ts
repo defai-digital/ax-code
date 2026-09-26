@@ -1,3 +1,4 @@
+import { wikiProjectRoot } from "../wiki/root"
 import path from "path"
 import { existsSync } from "fs"
 
@@ -249,7 +250,7 @@ export namespace SystemPrompt {
         }
       ).wiki
       // enabled defaults to true when unset; only explicit false suppresses.
-      const wikiBlock = await maybeRenderAxWikiProtocol(Instance.directory, {
+      const wikiBlock = await maybeRenderAxWikiProtocol(await wikiProjectRoot(), {
         enabled: wikiCfg?.enabled !== false,
         wikiDir: wikiCfg?.dir,
         config: wikiCfg,
@@ -259,7 +260,7 @@ export namespace SystemPrompt {
       log.warn("execution modes protocol resolve failed", { error })
       if (executionModesProtocol.length === 0) executionModesProtocol = [ModeProtocol.renderExecutionModes()]
       try {
-        const wikiBlock = await maybeRenderAxWikiProtocol(Instance.directory)
+        const wikiBlock = await maybeRenderAxWikiProtocol(await wikiProjectRoot())
         if (wikiBlock) wikiProtocol = [wikiBlock]
       } catch (wikiError) {
         log.warn("repo wiki protocol resolve failed", { error: wikiError })

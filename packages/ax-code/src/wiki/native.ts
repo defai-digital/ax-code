@@ -1,3 +1,5 @@
+import { createWikiBuildLock } from "@ax-code/ax-wiki/node"
+import { assertWikiDirectorySafe } from "@ax-code/ax-wiki"
 import { execFile } from "node:child_process"
 import path from "node:path"
 import { promisify } from "node:util"
@@ -312,7 +314,7 @@ async function evidenceProvider(
       query: `${input.page.title}. ${input.page.purpose}`,
       seeds: input.sources
         .slice(0, 16)
-        .map((source) => ({ kind: "file" as const, value: path.join(Instance.directory, source.path) })),
+        .map((source) => ({ kind: "file" as const, value: path.join(input.root, source.path) })),
       maxSymbols: 12,
       maxSnippets: 6,
       maxDepth: 1,
@@ -361,6 +363,11 @@ export async function planNativeWiki(input: { root: string; dir?: string }): Pro
 }
 
 export async function runNativeWiki(input: {
+  signal?: AbortSignal
+  allowSource?: (relative: string) => boolean
+  allowWrite?: (relative: string) => boolean
+  includeGraphEvidence?: boolean
+  lockTimeoutMs?: number
   root: string
   action: WikiAction
   dir?: string
@@ -370,54 +377,69 @@ export async function runNativeWiki(input: {
 }): Promise<WikiBuildResult> {
   const config = await resolveWikiRuntimeConfig({ dir: input.dir, model: input.model })
   if (!config.enabled) throw new Error("AX Wiki is disabled by wiki.enabled=false")
-  const model = await resolveModel(config.model)
-  const repositoryHead = await gitHeadCommit(input.root)
-  const snapshot: EvidenceSnapshot = {
-    root: input.root,
-    revision: {
-      head: repositoryHead,
-      dirty: await gitWorktreeDirty(input.root),
-    },
-    capturedAt: new Date().toISOString(),
-  }
-  const generator = async (request: WikiPageGenerationRequest): Promise<WikiPageGenerationResult> => {
-    const abort = new AbortController()
-    const timer = setTimeout(() => abort.abort(), 180_000)
-    try {
-      const result = streamObject({
-        model: model.language,
-        maxOutputTokens: model.maxOutputTokens,
-        schema: PAGE_SCHEMA,
-        abortSignal: abort.signal,
-        messages: [
-          { role: "system", content: PAGE_SYSTEM },
-          { role: "user", content: pagePrompt(request) },
-        ],
-      })
-      for await (const part of result.fullStream) {
-        if (part.type === "error") throw part.error
-      }
-      return await result.object
-    } finally {
-      clearTimeout(timer)
+  input.signal?.throwIfAborted()
+  await assertWikiDirectorySafe(input.root, config.dir)
+  const lock = await createWikiBuildLock(input.root, config.dir, { acquireTimeoutMs: input.lockTimeoutMs }).acquire()
+  try {
+    input.signal?.throwIfAborted()
+    const model = await resolveModel(config.model)
+    input.signal?.throwIfAborted()
+    const repositoryHead = await gitHeadCommit(input.root)
+    const snapshot: EvidenceSnapshot = {
+      root: input.root,
+      revision: {
+        head: repositoryHead,
+        dirty: await gitWorktreeDirty(input.root),
+      },
+      capturedAt: new Date().toISOString(),
     }
-  }
-  return buildAxWiki({
-    root: input.root,
-    wikiDir: config.dir,
-    action: input.action,
-    generator,
-    evidenceProvider: { provide: (request) => evidenceProvider(request, snapshot) },
-    config: engineConfig(config),
-    model: model.label,
-    repositoryHead,
-    force: input.force,
-    onProgress: input.onProgress,
-    generatorIdentity: {
-      name: AX_WIKI_GENERATOR,
-      version: Installation.VERSION,
-      promptVersion: WIKI_PROMPT_VERSION,
+    const generator = async (request: WikiPageGenerationRequest): Promise<WikiPageGenerationResult> => {
+      const abort = new AbortController()
+      const timer = setTimeout(() => abort.abort(), 180_000)
+      try {
+        const result = streamObject({
+          model: model.language,
+          maxOutputTokens: model.maxOutputTokens,
+          schema: PAGE_SCHEMA,
+          abortSignal: input.signal ? AbortSignal.any([abort.signal, input.signal]) : abort.signal,
+          messages: [
+            { role: "system", content: PAGE_SYSTEM },
+            { role: "user", content: pagePrompt(request) },
+          ],
+        })
+        for await (const part of result.fullStream) {
+          if (part.type === "error") throw part.error
+        }
+        return await result.object
+      } finally {
+        clearTimeout(timer)
+      }
+    }
+    return await buildAxWiki({
+      signal: input.signal,
+      allowSource: input.allowSource,
+      allowWrite: input.allowWrite,
+      root: input.root,
+      wikiDir: config.dir,
+      action: input.action,
+      generator,
+      evidenceProvider:
+        input.includeGraphEvidence === false
+          ? undefined
+          : { provide: (request) => evidenceProvider(request, snapshot) },
+      config: engineConfig(config),
       model: model.label,
-    },
-  })
+      repositoryHead,
+      force: input.force,
+      onProgress: input.onProgress,
+      generatorIdentity: {
+        name: AX_WIKI_GENERATOR,
+        version: Installation.VERSION,
+        promptVersion: WIKI_PROMPT_VERSION,
+        model: model.label,
+      },
+    })
+  } finally {
+    await lock.release()
+  }
 }

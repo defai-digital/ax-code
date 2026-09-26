@@ -45,6 +45,8 @@ export type WikiEvidenceReader = (input: {
 }) => Promise<WikiSourceEvidence[]>
 
 export type WikiBuildPureInput = {
+  signal?: AbortSignal
+  allowWrite?: (relative: string) => boolean
   root: string
   wikiDir: string
   action: WikiAction
@@ -156,6 +158,12 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
   const plan = createWikiPlan(sources, config)
   const planHash = sha256(stableJson(plan))
   onProgress?.({ type: "plan", pageCount: plan.pages.length })
+  for (const page of plan.pages) {
+    if (input.allowWrite?.(`${input.wikiDir}/${page.path}`) === false)
+      throw new Error("Wiki output write permission is not allowed")
+  }
+  if (input.allowWrite?.(`${input.wikiDir}/.manifest.json`) === false)
+    throw new Error("Wiki manifest write permission is not allowed")
   const currentSourceHashes = sourceHashMap(sources)
   const changed = changedSources(previous, currentSourceHashes)
   const existing = new Map<string, string>()
@@ -167,6 +175,7 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
   const pageCache = new Map<string, CachedPageEvidence>()
   const prospectiveFingerprints = new Map<string, string>()
   for (const page of plan.pages) {
+    input.signal?.throwIfAborted()
     const selected = selectPageSources(sources, page, config.maxSourcesPerPage ?? 80)
     const bundle = input.evidenceProvider
       ? await input.evidenceProvider.provide({ root: input.root, page, sources: selected })
@@ -188,6 +197,7 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
   const conflicts: string[] = []
   const targets: WikiPlanPage[] = []
   for (const page of plan.pages) {
+    input.signal?.throwIfAborted()
     const content = existing.get(page.path)
     const previousPage = previous?.pages[page.path]
     const fingerprintChanged =
@@ -227,6 +237,7 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
     { content: string; result: WikiPageGenerationResult; sources: WikiSourceEvidence[] }
   >()
   for (let index = 0; index < targets.length; index++) {
+    input.signal?.throwIfAborted()
     const page = targets[index]!
     onProgress?.({ type: "page_start", path: page.path, index: index + 1, total: targets.length })
     const cached = pageCache.get(page.path)
@@ -239,6 +250,7 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
     const graphContext = typedEvidence
       ? renderEvidenceBundle(typedEvidence)
       : await input.graphContext?.({ page, sources: selected })
+    input.signal?.throwIfAborted()
     const result = await input.generator({
       action,
       root: input.root,
@@ -256,11 +268,13 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
     const rendered = renderWikiPage({ page, result, sources: evidence })
     const content = mergeProtectedSections(rendered, existing.get(page.path))
     generated.set(page.path, { content, result, sources: evidence })
+    input.signal?.throwIfAborted()
     onProgress?.({ type: "page_complete", path: page.path, index: index + 1, total: targets.length })
   }
 
   const candidate = new Map<string, string>()
   for (const page of plan.pages) {
+    input.signal?.throwIfAborted()
     const content = generated.get(page.path)?.content ?? existing.get(page.path)
     if (content !== undefined) candidate.set(page.path, content)
   }
@@ -268,6 +282,7 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
   const now = (input.now ?? (() => new Date()))().toISOString()
   const manifestPages: Record<string, WikiManifestPage> = {}
   for (const page of plan.pages) {
+    input.signal?.throwIfAborted()
     const content = candidate.get(page.path)
     if (!content) continue
     const fresh = generated.get(page.path)

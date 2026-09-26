@@ -1,6 +1,12 @@
 import type { Dictionary } from "../index"
 
 export const messages = {
+  "ui.wikiQueued": "Wiki : en attente",
+  "ui.wikiRunning": "Wiki : g\u00e9n\u00e9ration",
+  "ui.wikiReady": "Wiki : pr\u00eate",
+  "ui.wikiDisabled": "Wiki : maintenance d\u00e9sactiv\u00e9e",
+  "ui.wikiFailed": "Wiki : \u00e9chec de g\u00e9n\u00e9ration",
+
   "ui.openWikiVisualization": "Ouvrir le graphe Wiki",
   "ui.openingWikiVisualization": "Ouverture du graphe Wiki\u2026",
   "ui.wikiSnapshotCaption": "Instantan\u00e9 Wiki /wiki-viz",

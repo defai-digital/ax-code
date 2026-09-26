@@ -1,5 +1,6 @@
+import { constants } from "node:fs"
 import { randomUUID } from "node:crypto"
-import { mkdir, open, readFile, rename, rm } from "node:fs/promises"
+import { lstat, mkdir, open, readFile, rename, rm } from "node:fs/promises"
 import path from "node:path"
 import { discoverSources, readSourceEvidence } from "./discovery.js"
 import {
@@ -21,7 +22,7 @@ function isEnoent(error: unknown): boolean {
 
 async function readJson<T>(file: string): Promise<T | undefined> {
   try {
-    return JSON.parse(await readFile(file, "utf8")) as T
+    return JSON.parse(await readCompilerConfig(file, 4 * 1024 * 1024)) as T
   } catch (error) {
     // A missing manifest is "no previous build". A corrupt one is a real error:
     // silently treating it as absent would disable the conflict guard and let a
@@ -31,17 +32,43 @@ async function readJson<T>(file: string): Promise<T | undefined> {
   }
 }
 
-export async function loadAxWikiConfig(root: string): Promise<AxWikiConfig> {
+async function readCompilerConfig(file: string, limit = 128_000): Promise<string> {
+  if ((await lstat(file)).isSymbolicLink()) throw new Error("Wiki compiler config cannot be a symlink")
+  const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+  try {
+    const info = await handle.stat()
+    if (!info.isFile() || info.size > limit) throw new Error(`Wiki input must be a regular file within ${limit} bytes`)
+    const buffer = Buffer.alloc(limit + 1)
+    let size = 0
+    while (size < buffer.length) {
+      const read = await handle.read(buffer, size, buffer.length - size, size)
+      if (!read.bytesRead) break
+      size += read.bytesRead
+    }
+    if (size > limit) throw new Error(`Wiki input exceeds ${limit} bytes`)
+    return buffer.subarray(0, size).toString("utf8")
+  } finally {
+    await handle.close()
+  }
+}
+
+export async function loadAxWikiConfig(root: string, allowRead?: (relative: string) => boolean): Promise<AxWikiConfig> {
   const configFile = resolveInside(root, AX_WIKI_CONFIG)
   let config: AxWikiConfig | undefined
   try {
-    config = JSON.parse(await readFile(configFile, "utf8")) as AxWikiConfig
+    if (allowRead?.(AX_WIKI_CONFIG) !== false) config = JSON.parse(await readCompilerConfig(configFile)) as AxWikiConfig
   } catch (error) {
     if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) {
       throw new Error(`Invalid AX Wiki config: ${configFile}`, { cause: error })
     }
   }
-  const instructions = await readFile(resolveInside(root, AX_WIKI_INSTRUCTIONS), "utf8").catch(() => undefined)
+  const instructions =
+    allowRead?.(AX_WIKI_INSTRUCTIONS) === false
+      ? undefined
+      : await readCompilerConfig(resolveInside(root, AX_WIKI_INSTRUCTIONS)).catch((error) => {
+          if (isEnoent(error)) return undefined
+          throw error
+        })
   return { ...(config ?? {}), instructions: instructions?.trim() || config?.instructions }
 }
 
@@ -98,23 +125,33 @@ async function syncDirectory(directory: string): Promise<void> {
  * implementation.
  */
 export async function buildAxWiki(input: WikiBuildInput): Promise<WikiBuildResult> {
+  input.signal?.throwIfAborted()
   const root = path.resolve(input.root)
   const wikiDir = sanitizeWikiDir(input.wikiDir)
   await assertWikiDirectorySafe(root, wikiDir)
-  const diskConfig = await loadAxWikiConfig(root)
+  const diskConfig = await loadAxWikiConfig(root, input.allowSource)
   const explicitConfig = Object.fromEntries(
     Object.entries(input.config ?? {}).filter((entry) => entry[1] !== undefined),
   ) as AxWikiConfig
   const config: AxWikiConfig = { ...diskConfig, ...explicitConfig }
   const previous = await loadWikiManifest(root, wikiDir)
-  const sources = await discoverSources({ root, wikiDir, config })
+  const sources = await discoverSources({ root, wikiDir, config, signal: input.signal, allowSource: input.allowSource })
   input.onProgress?.({ type: "discover", sourceCount: sources.length })
   if (sources.length === 0) throw new Error("AX Wiki found no readable repository sources")
 
-  const readExistingPage = (pagePath: string): Promise<string | undefined> =>
-    readFile(resolveInside(root, path.posix.join(wikiDir, pagePath)), "utf8").catch(() => undefined)
+  const readExistingPage = (pagePath: string): Promise<string | undefined> => {
+    input.signal?.throwIfAborted()
+    if (input.allowSource?.(`${wikiDir}/${pagePath}`) === false)
+      throw new Error("Wiki page read permission is not allowed")
+    return readCompilerConfig(resolveInside(root, path.posix.join(wikiDir, pagePath)), 1024 * 1024).catch((error) => {
+      if (isEnoent(error)) return undefined
+      throw error
+    })
+  }
 
   const pure = await buildPure({
+    signal: input.signal,
+    allowWrite: input.allowWrite,
     root,
     wikiDir,
     action: input.action,
@@ -142,19 +179,33 @@ export async function buildAxWiki(input: WikiBuildInput): Promise<WikiBuildResul
   // finally so a failed/rolled-back build never strands the lock.
   const lockHandle = input.lock ? await input.lock.acquire() : undefined
   try {
+    input.signal?.throwIfAborted()
+    for (const pagePath of new Set([...pure.generated.keys(), ...pure.removedPages])) {
+      if (input.allowWrite?.(`${wikiDir}/${pagePath}`) === false)
+        throw new Error("Wiki output write permission is not allowed")
+      const current = await readExistingPage(pagePath)
+      if (current !== pure.existingPages.get(pagePath))
+        throw new Error("Wiki content changed during compilation; retry without overwriting manual edits")
+    }
+    const latestManifest = await loadWikiManifest(root, wikiDir)
+    if (JSON.stringify(latestManifest) !== JSON.stringify(previous))
+      throw new Error("Wiki manifest changed during compilation; retry")
     const writtenPages: string[] = []
     const deletedPages: string[] = []
     try {
       for (const [pagePath, item] of pure.generated) {
+        input.signal?.throwIfAborted()
         const output = resolveInside(root, path.posix.join(wikiDir, pagePath))
         await atomicWrite(output, item.content)
         writtenPages.push(pagePath)
         input.onProgress?.({ type: "write", path: pagePath })
       }
       for (const pagePath of pure.removedPages) {
+        input.signal?.throwIfAborted()
         await rm(resolveInside(root, path.posix.join(wikiDir, pagePath)), { force: true })
         deletedPages.push(pagePath)
       }
+      input.signal?.throwIfAborted()
       await atomicWrite(
         resolveInside(root, path.posix.join(wikiDir, AX_WIKI_MANIFEST)),
         `${JSON.stringify(pure.manifest, null, 2)}\n`,

@@ -1,4 +1,10 @@
 export const messages = {
+  "ui.wikiQueued": "Wiki: waiting for idle",
+  "ui.wikiRunning": "Wiki: generating",
+  "ui.wikiReady": "Wiki: ready",
+  "ui.wikiDisabled": "Wiki: maintenance disabled",
+  "ui.wikiFailed": "Wiki: generation failed",
+
   "ui.openWikiVisualization": "Open Wiki graph",
   "ui.openingWikiVisualization": "Opening Wiki graph...",
   "ui.wikiSnapshotCaption": "Wiki snapshot /wiki-viz",

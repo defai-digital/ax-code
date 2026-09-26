@@ -281,3 +281,79 @@ describe("AX Wiki build lifecycle", () => {
     ).toBe(true)
   })
 })
+
+describe("background compilation boundaries", () => {
+  test("cancellation during generation leaves no manifest or partial page writes", async () => {
+    const root = await fixture()
+    const controller = new AbortController()
+    const make = generator()
+    await expect(
+      buildAxWiki({
+        root,
+        action: "generate",
+        signal: controller.signal,
+        generator: async (request) => {
+          const result = await make(request)
+          controller.abort()
+          return result
+        },
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" })
+    expect(await loadWikiManifest(root)).toBeUndefined()
+    expect(make).toHaveBeenCalledTimes(1)
+  })
+  test("permission-denied source bytes never reach the generator and denied outputs call no model", async () => {
+    const root = await fixture()
+    await writeFile(
+      path.join(root, "packages/core/src/private.ts"),
+      "export const privateValue = 'fixture-private-evidence'\n",
+    )
+    await writeFile(path.join(root, "ax-wiki.instructions.md"), "fixture-private-instructions")
+    const make = generator()
+    const result = await buildAxWiki({
+      root,
+      action: "generate",
+      generator: make,
+      allowSource: (relative) => !relative.endsWith("private.ts") && relative !== "ax-wiki.instructions.md",
+    })
+    expect(Object.keys(result.manifest.sources)).not.toContain("packages/core/src/private.ts")
+    expect(JSON.stringify(make.mock.calls)).not.toContain("fixture-private-evidence")
+    expect(JSON.stringify(make.mock.calls)).not.toContain("fixture-private-instructions")
+    make.mockClear()
+    await expect(buildAxWiki({ root, action: "generate", generator: make, allowWrite: () => false })).rejects.toThrow(
+      "permission",
+    )
+    expect(make).not.toHaveBeenCalled()
+  })
+  test("manual edits made while generation is in flight are preserved", async () => {
+    const root = await fixture()
+    const make = generator()
+    await buildAxWiki({ root, action: "generate", generator: make })
+    const page = path.join(root, "ax-wiki", "quickstart.md")
+    const before = await readFile(page, "utf8")
+    await writeFile(path.join(root, "packages/core/src/index.ts"), "export function coreValue() { return 2 }\n")
+    let changed = false
+    await expect(
+      buildAxWiki({
+        root,
+        action: "generate",
+        generator: async (request) => {
+          if (!changed) {
+            changed = true
+            await writeFile(page, before + "\nMaintainer edit during build.\n")
+          }
+          return make(request)
+        },
+      }),
+    ).rejects.toThrow("changed during compilation")
+    expect(await readFile(page, "utf8")).toContain("Maintainer edit during build.")
+  })
+  test("compiler instruction symlinks cannot read outside the project", async () => {
+    const root = await fixture()
+    await writeFile(path.join(root, "private.txt"), "fixture-private-value")
+    await symlink(path.join(root, "private.txt"), path.join(root, "ax-wiki.instructions.md"))
+    const make = generator()
+    await expect(buildAxWiki({ root, action: "generate", generator: make })).rejects.toThrow()
+    expect(make).not.toHaveBeenCalled()
+  })
+})

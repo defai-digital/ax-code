@@ -1,3 +1,5 @@
+import { WikiMaintenanceSchema } from "./maintenance-schema"
+import type { WikiMaintenanceStatus } from "./idle-controller"
 import { NamedError } from "@ax-code/util/error"
 import z from "zod"
 import { constants } from "node:fs"
@@ -6,7 +8,7 @@ import path from "node:path"
 import { createHash, randomBytes } from "node:crypto"
 import { createServer } from "node:http"
 import { assertWikiDirectorySafe } from "@ax-code/ax-wiki/node"
-import { graphRelativePath, projectWikiManifest } from "@ax-code/ax-wiki/graph"
+import { graphRelativePath, projectWikiManifest, parseWikiGraph } from "@ax-code/ax-wiki/graph"
 import { renderWikiGraphHtml } from "@ax-code/ax-wiki-viewer/node"
 import { parseJsonStrict } from "../util/json-value"
 
@@ -92,7 +94,13 @@ export namespace WikiVisualization {
     await handle.close()
   }
 
-  export async function serve(document: ReturnType<typeof renderWikiGraphHtml>) {
+  export async function serve(
+    document: ReturnType<typeof renderWikiGraphHtml>,
+    live?: {
+      state(): string
+      document(): ReturnType<typeof renderWikiGraphHtml> | undefined
+    },
+  ) {
     const capability = `/wiki/${randomBytes(32).toString("hex")}`
     let authority = ""
     const server = createServer({ maxHeaderSize: 8192, headersTimeout: 5000, requestTimeout: 10000 }, (req, res) => {
@@ -101,7 +109,22 @@ export namespace WikiVisualization {
       res.setHeader("X-Content-Type-Options", "nosniff")
       res.setHeader("Cross-Origin-Opener-Policy", "same-origin")
       res.setHeader("Cross-Origin-Resource-Policy", "same-origin")
-      res.setHeader("Content-Security-Policy", `${document.csp}; frame-ancestors 'none'`)
+      let active = document
+      let stateBody: string | undefined
+      let frame = false
+      if (live && req.url === `${capability}/state`) stateBody = live.state()
+      if (
+        live &&
+        req.url?.startsWith(`${capability}/graph?revision=`) &&
+        /^sha256%3A[a-f0-9]{64}$/.test(req.url.slice(`${capability}/graph?revision=`.length))
+      ) {
+        const graph = live.document()
+        if (graph) {
+          active = graph
+          frame = true
+        }
+      }
+      res.setHeader("Content-Security-Policy", `${active.csp}; frame-ancestors ${frame ? "'self'" : "'none'"}`)
       if (
         req.headers.host !== authority ||
         (req.headers.origin !== undefined && req.headers.origin !== `http://${authority}`) ||
@@ -110,7 +133,7 @@ export namespace WikiVisualization {
         res.writeHead(403).end()
         return
       }
-      if (req.url !== capability) {
+      if (req.url !== capability && stateBody === undefined && !frame) {
         res.writeHead(404).end()
         return
       }
@@ -125,9 +148,13 @@ export namespace WikiVisualization {
         res.writeHead(400).end()
         return
       }
-      res.setHeader("Content-Type", "text/html; charset=utf-8")
-      res.setHeader("Content-Length", Buffer.byteLength(document.html))
-      res.end(req.method === "HEAD" ? undefined : document.html)
+      const body = stateBody ?? active.html
+      res.setHeader(
+        "Content-Type",
+        stateBody === undefined ? "text/html; charset=utf-8" : "application/json; charset=utf-8",
+      )
+      res.setHeader("Content-Length", Buffer.byteLength(body))
+      res.end(req.method === "HEAD" ? undefined : body)
     })
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject)
@@ -150,6 +177,40 @@ export namespace WikiVisualization {
           server.close((error) => (error ? reject(error) : resolve()))
           server.closeAllConnections()
         }))
+      },
+    }
+  }
+
+  /** Live shell owns no runtime connection: the TUI supplies detached state. */
+  export async function serveLive() {
+    let state: WikiMaintenanceStatus & { snapshot?: string } = {
+      phase: "queued",
+      reason: "idle",
+      completed: 0,
+      total: 0,
+      revision: 0,
+    }
+    let graph: ReturnType<typeof renderWikiGraphHtml> | undefined
+    const script = `let shown="";const stateUrl=location.pathname+"/state";const label=document.getElementById("status");const view=document.getElementById("graph");async function poll(){try{const r=await fetch(stateUrl,{cache:"no-store"});if(!r.ok)throw Error();const s=await r.json();const reasons={idle:"Waiting for project idle",busy:"Waiting for active sessions and queued work",permissions:"Wiki generation is blocked by read/write permissions",disabled:"Automatic Wiki maintenance is disabled",non_git:"Open the graph again to request Wiki generation for this non-Git directory",building:"Generating Wiki",complete:"Wiki ready",failed:"Wiki maintenance failed or is unavailable. Check the runtime connection and configured model, then reopen the graph to retry."};label.textContent=(reasons[s.reason]||"Wiki status unavailable")+(s.phase==="running"&&s.total?" ("+s.completed+"/"+s.total+")":"");if(s.snapshot&&s.snapshot!==shown){shown=s.snapshot;view.src=location.pathname+"/graph?revision="+encodeURIComponent(s.snapshot);view.hidden=false;}setTimeout(poll,1500)}catch{label.textContent="AX Code connection closed or unavailable. Reopen the graph from the TUI."}}poll();`
+    const digest = createHash("sha256").update(script).digest("base64")
+    const csp = `default-src 'none'; script-src 'sha256-${digest}'; style-src 'unsafe-inline'; connect-src 'self'; frame-src 'self'; base-uri 'none'; form-action 'none'`
+    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="${csp}"><meta name="referrer" content="no-referrer"><title>AX Wiki</title><style>body{margin:0;background:#101827;color:#e5edf7;font:15px system-ui}header{padding:16px}h1{margin:0 0 8px;font-size:20px}iframe{width:100%;height:calc(100vh - 100px);border:0;background:white}p{margin:0}</style></head><body><header><h1>AX Wiki</h1><p id="status" role="status" aria-live="polite">Preparing Wiki. Waiting for project idle.</p></header><iframe id="graph" title="Wiki page and source evidence graph" hidden></iframe><script>${script}</script></body></html>`
+    const listener = await serve(
+      { html, csp },
+      {
+        state: () => JSON.stringify(state),
+        document: () => graph,
+      },
+    )
+    return {
+      ...listener,
+      update(next: WikiMaintenanceStatus, snapshot?: unknown) {
+        const detached = WikiMaintenanceSchema.parse(next)
+        if (snapshot !== undefined) {
+          const parsed = parseWikiGraph(snapshot)
+          if (state.snapshot !== parsed.snapshot) graph = renderWikiGraphHtml(parsed)
+          state = { ...detached, snapshot: parsed.snapshot }
+        } else state = { ...detached, snapshot: state.snapshot }
       },
     }
   }

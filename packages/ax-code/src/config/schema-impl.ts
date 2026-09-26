@@ -1316,6 +1316,12 @@ export const Info = z
       ),
     wiki: z
       .object({
+        auto: z
+          .boolean()
+          .optional()
+          .describe(
+            "Maintain Wiki in the background after interactive project idle. Default: true; false disables automatic maintenance.",
+          ),
         enabled: z
           .boolean()
           .optional()

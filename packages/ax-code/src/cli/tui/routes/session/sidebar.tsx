@@ -1051,6 +1051,26 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
             </Show>
             <box flexDirection="column" gap={0}>
               <text fg={theme.textMuted}>{uiText("ui.wikiSnapshotCaption")}</text>
+              <Show when={wikiVisualization.maintenance()}>
+                {(status) => (
+                  <text fg={status().phase === "failed" ? theme.error : theme.textMuted}>
+                    {uiText(
+                      status().phase === "running"
+                        ? "ui.wikiRunning"
+                        : status().phase === "ready"
+                          ? "ui.wikiReady"
+                          : status().phase === "disabled"
+                            ? "ui.wikiDisabled"
+                            : status().phase === "failed"
+                              ? "ui.wikiFailed"
+                              : "ui.wikiQueued",
+                    )}
+                    {status().phase === "running" && status().total > 0
+                      ? ` ${status().completed}/${status().total}`
+                      : ""}
+                  </text>
+                )}
+              </Show>
               <ChromeAction
                 onMouseUp={() => {
                   if (!wikiVisualization.opening()) command.trigger("session.wiki.viz")

@@ -28,6 +28,7 @@ let wiki!: ReturnType<typeof useWikiVisualization>
 let sdk!: ReturnType<typeof useSDK>
 let ready = false
 let requests = 0
+let registrations = 0
 let closed = 0
 let load!: (response: Response) => void
 let pending: Promise<Response> | undefined
@@ -36,7 +37,11 @@ const transport: typeof fetch = async (input, init) => {
   const request = new Request(input, init)
   assert.equal(request.headers.get("authorization"), "Bearer fixture-secret")
   assert.equal(request.headers.get("x-opencode-directory"), "/remote/project")
-  return pending ?? Response.json(graph)
+  if (pending) return pending
+  const url = new URL(request.url)
+  if (url.pathname.endsWith("/enable") && ++registrations === 1) return Response.json({}, { status: 503 })
+  if (url.pathname.endsWith("wiki-visualization")) return Response.json({ code: "missing" }, { status: 400 })
+  return Response.json({ phase: "queued", reason: "idle", completed: 0, total: 0, revision: 0 })
 }
 const manager = createWikiVisualizationManager({
   serve: async () => ({
@@ -99,6 +104,13 @@ try {
     await setup.flush()
   }
   assert(ready)
+  await wiki.enable("build")
+  const registrationDeadline = Date.now() + 6000
+  while (registrations < 2 && Date.now() < registrationDeadline) {
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    await setup.flush()
+  }
+  assert.equal(registrations, 2, "Transient registration failure must retry")
   await wiki.open()
   await setup.flush()
   assert(setup.captureCharFrame().includes("Browser did not open: copy the link"))
@@ -111,16 +123,23 @@ try {
     load = resolve
   })
   const activation = wiki.open()
+  await activation
   await setup.flush()
-  assert(wiki.opening())
+  assert(!wiki.opening())
+  assert(setup.captureCharFrame().includes("fixture-capability"))
+  setup.mockInput.pressKey("ESCAPE")
+  await new Promise((resolve) => setTimeout(resolve, 160))
+  await setup.flush()
   sdk.setWorkspace("/remote/other")
-  load(Response.json(graph))
+  load(Response.json({ phase: "ready", reason: "complete", completed: 1, total: 1, revision: 1 }))
   await activation
   await setup.flush()
   assert(!wiki.opening())
   assert(!setup.captureCharFrame().includes("fixture-capability"))
-  assert.equal(requests, 2)
-  console.log("PASS: native Wiki fallback, authenticated runtime scope, loading and workspace-change checks")
+  assert(requests >= 2)
+  console.log(
+    "PASS: native immediate Wiki page, startup retry, missing/pending snapshots, authenticated runtime scope and workspace-change checks",
+  )
 } finally {
   await manager.dispose()
   assert.equal(closed, 1)

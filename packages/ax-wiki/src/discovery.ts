@@ -182,6 +182,8 @@ async function readHashedSource(input: {
 }
 
 export async function discoverSources(input: {
+  signal?: AbortSignal
+  allowSource?: (relative: string) => boolean
   root: string
   wikiDir: string
   config?: AxWikiConfig
@@ -192,10 +194,14 @@ export async function discoverSources(input: {
   const config = input.config ?? {}
   const candidates = (await gitFiles(root, input.strict)) ?? (await walkFiles(root, root, input.strict))
   const unique = [...new Set(candidates.map(normalizePath))].sort()
-  const eligible = unique.filter((relative) => shouldInclude(relative, input.wikiDir, config))
-  const hashed = await mapWithBoundedConcurrency(eligible, DISCOVERY_READ_CONCURRENCY, (relative) =>
-    readHashedSource({ root, relative, maxSourceBytes: config.maxSourceBytes ?? 512_000, strict: input.strict }),
+  input.signal?.throwIfAborted()
+  const eligible = unique.filter(
+    (relative) => shouldInclude(relative, input.wikiDir, config) && input.allowSource?.(relative) !== false,
   )
+  const hashed = await mapWithBoundedConcurrency(eligible, DISCOVERY_READ_CONCURRENCY, (relative) => {
+    input.signal?.throwIfAborted()
+    return readHashedSource({ root, relative, maxSourceBytes: config.maxSourceBytes ?? 512_000, strict: input.strict })
+  })
   return hashed.filter((source): source is WikiSource => source !== undefined)
 }
 

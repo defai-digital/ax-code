@@ -1,3 +1,4 @@
+import { wikiProjectRoot } from "../../wiki/root"
 import type { CommandModule } from "yargs"
 import path from "node:path"
 import { Context, type DepthLevel } from "../../context"
@@ -78,6 +79,7 @@ export const InitCommand: CommandModule<
     }
 
     await bootstrap(root, async () => {
+      const root = await wikiProjectRoot()
       const config = await resolveWikiRuntimeConfig()
       if (!args.wiki) {
         try {

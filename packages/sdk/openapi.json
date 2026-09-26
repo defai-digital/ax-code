@@ -25585,6 +25585,171 @@
         ]
       }
     },
+    "/experimental/wiki-maintenance/enable": {
+      "post": {
+        "operationId": "wiki.enable",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Enable interactive Wiki maintenance",
+        "responses": {
+          "200": {
+            "description": "Wiki maintenance status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WikiMaintenanceStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "agent": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "active": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "agent"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.wiki.enable({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/experimental/wiki-maintenance/refresh": {
+      "post": {
+        "operationId": "wiki.refresh",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Request Wiki maintenance after foreground work settles",
+        "responses": {
+          "200": {
+            "description": "Wiki maintenance status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WikiMaintenanceStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "agent": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "active": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "agent"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.wiki.refresh({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/experimental/wiki-maintenance": {
+      "get": {
+        "operationId": "wiki.maintenance",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Get Wiki maintenance status without starting work",
+        "responses": {
+          "200": {
+            "description": "Wiki maintenance status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WikiMaintenanceStatus"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.wiki.maintenance({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/experimental/wiki-visualization": {
       "get": {
         "operationId": "wiki.visualization",
@@ -38136,6 +38301,10 @@
             "description": "Native source-backed AX Wiki. Complements structural ax-code index; does not replace code_intelligence.",
             "type": "object",
             "properties": {
+              "auto": {
+                "description": "Maintain Wiki in the background after interactive project idle. Default: true; false disables automatic maintenance.",
+                "type": "boolean"
+              },
               "enabled": {
                 "description": "When true (default), inject <repo_wiki> system protocol if the wiki directory exists. Set false to suppress.",
                 "type": "boolean"
@@ -50903,6 +51072,56 @@
           "allowedOrigins"
         ],
         "additionalProperties": false
+      },
+      "WikiMaintenanceStatus": {
+        "type": "object",
+        "properties": {
+          "phase": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "ready",
+              "disabled",
+              "failed"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "busy",
+              "permissions",
+              "disabled",
+              "non_git",
+              "building",
+              "complete",
+              "failed"
+            ]
+          },
+          "completed": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "phase",
+          "reason",
+          "completed",
+          "total",
+          "revision"
+        ]
       },
       "WikiVisualizationGraph": {
         "type": "object",

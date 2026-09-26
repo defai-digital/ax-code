@@ -1,3 +1,5 @@
+import { WikiAutomatic } from "../../wiki/automatic"
+import { wikiProjectRoot } from "../../wiki/root"
 import { WikiVisualization } from "../../wiki/visualization"
 import { WikiGraphSchema } from "../../wiki/visualization-schema"
 import { resolveWikiRuntimeConfig } from "../../wiki/config"
@@ -32,6 +34,62 @@ async function canonicalSandboxDirectory(directory: string) {
 
 export const ExperimentalRoutes = lazy(() =>
   new Hono()
+    .post(
+      "/wiki-maintenance/enable",
+      describeRoute({
+        summary: "Enable interactive Wiki maintenance",
+        operationId: "wiki.enable",
+        responses: {
+          200: {
+            description: "Wiki maintenance status",
+            content: { "application/json": { schema: resolver(WikiAutomatic.Status) } },
+          },
+          ...errors(400),
+        },
+      }),
+      validator("json", z.object({ agent: z.string().min(1).max(128), active: z.boolean().optional() }).strict()),
+      async (c) => {
+        c.header("Cache-Control", "no-store")
+        return c.json(await WikiAutomatic.enable(c.req.valid("json").agent, c.req.valid("json").active))
+      },
+    )
+    .post(
+      "/wiki-maintenance/refresh",
+      describeRoute({
+        summary: "Request Wiki maintenance after foreground work settles",
+        operationId: "wiki.refresh",
+        responses: {
+          200: {
+            description: "Wiki maintenance status",
+            content: { "application/json": { schema: resolver(WikiAutomatic.Status) } },
+          },
+          ...errors(400),
+        },
+      }),
+      validator("json", z.object({ agent: z.string().min(1).max(128), active: z.boolean().optional() }).strict()),
+      async (c) => {
+        c.header("Cache-Control", "no-store")
+        return c.json(await WikiAutomatic.refresh(c.req.valid("json").agent, c.req.valid("json").active))
+      },
+    )
+    .get(
+      "/wiki-maintenance",
+      describeRoute({
+        summary: "Get Wiki maintenance status without starting work",
+        operationId: "wiki.maintenance",
+        responses: {
+          200: {
+            description: "Wiki maintenance status",
+            content: { "application/json": { schema: resolver(WikiAutomatic.Status) } },
+          },
+        },
+      }),
+      validator("query", z.object({ directory: z.string().optional() }).strict()),
+      (c) => {
+        c.header("Cache-Control", "no-store")
+        return c.json(WikiAutomatic.status())
+      },
+    )
     .get(
       "/wiki-visualization",
       describeRoute({
@@ -52,7 +110,7 @@ export const ExperimentalRoutes = lazy(() =>
         c.header("Cache-Control", "no-store")
         try {
           const config = await resolveWikiRuntimeConfig()
-          const graph = await WikiVisualization.snapshot(Instance.directory, config.dir)
+          const graph = await WikiVisualization.snapshot(await wikiProjectRoot(), config.dir)
           if (Buffer.byteLength(JSON.stringify(graph)) > 2 * 1024 * 1024) {
             throw new WikiVisualization.Unavailable({
               reason: "too_large",

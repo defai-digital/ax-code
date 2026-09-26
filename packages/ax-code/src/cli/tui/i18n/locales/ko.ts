@@ -1,6 +1,12 @@
 import type { Dictionary } from "../index"
 
 export const messages = {
+  "ui.wikiQueued": "Wiki: \uc720\ud734 \uc0c1\ud0dc \ub300\uae30",
+  "ui.wikiRunning": "Wiki: \uc0dd\uc131 \uc911",
+  "ui.wikiReady": "Wiki: \uc900\ube44 \uc644\ub8cc",
+  "ui.wikiDisabled": "Wiki: \uc790\ub3d9 \uad00\ub9ac \ube44\ud65c\uc131\ud654",
+  "ui.wikiFailed": "Wiki: \uc0dd\uc131 \uc2e4\ud328",
+
   "ui.openWikiVisualization": "Wiki \uadf8\ub798\ud504 \uc5f4\uae30",
   "ui.openingWikiVisualization": "Wiki \uadf8\ub798\ud504 \uc5ec\ub294 \uc911\u2026",
   "ui.wikiSnapshotCaption": "Wiki \uc2a4\ub0c5\uc0f7 /wiki-viz",

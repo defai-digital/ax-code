@@ -160,8 +160,12 @@ export async function relatedWikiPages(input: {
 
 export type WikiFreshness = "fresh" | "stale" | "unknown"
 
-async function sourceConfig(root: string, overrides?: AxWikiConfig): Promise<AxWikiConfig> {
-  const disk = await loadAxWikiConfig(root)
+async function sourceConfig(
+  root: string,
+  overrides?: AxWikiConfig,
+  allowRead?: (relative: string) => boolean,
+): Promise<AxWikiConfig> {
+  const disk = await loadAxWikiConfig(root, allowRead)
   const explicit = Object.fromEntries(Object.entries(overrides ?? {}).filter(([, value]) => value !== undefined))
   return { ...disk, ...explicit }
 }
@@ -188,6 +192,8 @@ export type WikiStatus = {
 }
 
 export async function getWikiStatus(input: {
+  signal?: AbortSignal
+  allowSource?: (relative: string) => boolean
   root: string
   wikiDir?: string
   repositoryHead?: string
@@ -216,9 +222,11 @@ export async function getWikiStatus(input: {
   if (healthy && manifest) {
     try {
       const sources = await discoverSources({
+        signal: input.signal,
+        allowSource: input.allowSource,
         root,
         wikiDir,
-        config: await sourceConfig(root, input.config),
+        config: await sourceConfig(root, input.config, input.allowSource),
         strict: true,
       })
       freshness = staleByHead || sourcesDiffer(sources, manifest.sources) ? "stale" : "fresh"

@@ -1,7 +1,7 @@
 import open from "open"
 import { WikiVisualization } from "@/wiki/visualization"
 import { createWikiVisualizationManager } from "@tui/util/wiki-visualization"
-import { WikiVisualizationProvider } from "@tui/context/wiki-visualization"
+import { useWikiVisualization, WikiVisualizationProvider } from "@tui/context/wiki-visualization"
 import { launchAnimationPair } from "./component/animation-pair"
 import type { OverlayStyle } from "./component/foliage-view-model"
 import { LanguageProvider, useLanguage } from "./context/language"
@@ -146,7 +146,7 @@ export function tui(input: TuiInput) {
   return new Promise<void>((resolve, reject) => {
     void (async () => {
       const wikiVisualization = createWikiVisualizationManager({
-        serve: (graph) => WikiVisualization.serve(WikiVisualization.render(graph)),
+        serve: () => WikiVisualization.serveLive(),
         openBrowser: open,
       })
       const unguard = win32InstallCtrlCGuard()
@@ -303,10 +303,12 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   onCleanup(() => unregisterTuiSequenceTarget(sequenceTarget))
   const dialog = useDialog()
   const contextMenu = useContextMenu()
+  const wikiVisualization = useWikiVisualization()
   const local = useLocal()
   const kv = useKV()
   const command = useCommandDialog()
   const sdk = useSDK()
+
   const toast = useToast()
   const { theme, mode, setMode, locked, lock, unlock } = useTheme()
   const sync = useSync()
@@ -389,6 +391,13 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     })
   })
   const promptRef = usePromptRef()
+  const wikiDraftActive = createMemo(() => !!promptRef.current?.current.input.trim())
+  createEffect(() => {
+    const agent = local.agent.current().name
+    sdk.directory
+    const active = wikiDraftActive()
+    void wikiVisualization.enable(agent, active)
+  })
   const [sessionRoute, setSessionRoute] = createSignal<Component | undefined>()
   // Short-lived paired animation overlay. Manual preview is always
   // available; startup playback is on by default (`digital_code_on_start`

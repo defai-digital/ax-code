@@ -105,3 +105,36 @@ test("serves only the capability snapshot with exact authority, origin and metho
   await server.close()
   await expect(get()).rejects.toThrow()
 })
+
+describe("live Wiki onboarding page", () => {
+  test("serves loading before any graph, updates detached public state and embeds graph only on its origin", async () => {
+    await using tmp = await tmpdir()
+    await setup(tmp.path)
+    const listener = await WikiVisualization.serveLive()
+    try {
+      const page = await fetch(listener.url)
+      expect(page.status).toBe(200)
+      expect(await page.text()).toContain("Preparing Wiki")
+      expect(page.headers.get("content-security-policy")).toContain("connect-src 'self'")
+      const initial = await (await fetch(listener.url + "/state")).json()
+      expect(initial.phase).toBe("queued")
+      const graph = await WikiVisualization.snapshot(tmp.path)
+      listener.update({ phase: "ready", reason: "complete", completed: 1, total: 1, revision: 1 }, graph)
+      const ready = await (await fetch(listener.url + "/state")).json()
+      expect(ready.snapshot).toBe(graph.snapshot)
+      expect(JSON.stringify(ready)).not.toContain(tmp.path)
+      const child = await fetch(listener.url + "/graph?revision=" + encodeURIComponent(graph.snapshot))
+      expect(child.status).toBe(200)
+      expect(child.headers.get("content-security-policy")).toContain("frame-ancestors 'self'")
+      expect(await child.text()).toContain("wiki-viewer")
+      expect((await fetch(listener.url + "/state", { headers: { origin: "https://external.example" } })).status).toBe(
+        403,
+      )
+      expect((await fetch(listener.url + "/state", { method: "POST" })).status).toBe(405)
+      expect((await fetch(listener.url + "/other")).status).toBe(404)
+    } finally {
+      await listener.close()
+    }
+    await expect(fetch(listener.url)).rejects.toThrow()
+  })
+})

@@ -937,6 +937,10 @@ export type Config = {
    */
   wiki?: {
     /**
+     * Maintain Wiki in the background after interactive project idle. Default: true; false disables automatic maintenance.
+     */
+    auto?: boolean
+    /**
      * When true (default), inject <repo_wiki> system protocol if the wiki directory exists. Set false to suppress.
      */
     enabled?: boolean
@@ -4594,6 +4598,15 @@ export type WebMcpProfileConfig = {
    * Optional explicit Chrome 150+ executable; never attaches to an existing browser session
    */
   executablePath?: string
+}
+
+/** AX Code API schema `WikiMaintenanceStatus` (auto-generated from the OpenAPI contract). */
+export type WikiMaintenanceStatus = {
+  phase: "queued" | "running" | "ready" | "disabled" | "failed"
+  reason: "idle" | "busy" | "permissions" | "disabled" | "non_git" | "building" | "complete" | "failed"
+  completed: number
+  total: number
+  revision: number
 }
 
 /** AX Code API schema `WikiVisualizationGraph` (auto-generated from the OpenAPI contract). */
@@ -11901,6 +11914,97 @@ export type WorkflowRoutineRunResponses = {
 
 /** Successful response payload for `POST /workflow-routines/run` — Run workflow routine */
 export type WorkflowRoutineRunResponse = WorkflowRoutineRunResponses[keyof WorkflowRoutineRunResponses]
+
+/** Request payload shape for `POST /experimental/wiki-maintenance/enable` — Enable interactive Wiki maintenance */
+export type WikiEnableData = {
+  body?: {
+    agent: string
+    active?: boolean
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/experimental/wiki-maintenance/enable"
+}
+
+/** Error response payloads for `POST /experimental/wiki-maintenance/enable` — Enable interactive Wiki maintenance */
+export type WikiEnableErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+}
+
+/** Error response payload for `POST /experimental/wiki-maintenance/enable` — Enable interactive Wiki maintenance */
+export type WikiEnableError = WikiEnableErrors[keyof WikiEnableErrors]
+
+/** Success response payloads for `POST /experimental/wiki-maintenance/enable` — Enable interactive Wiki maintenance */
+export type WikiEnableResponses = {
+  /**
+   * Wiki maintenance status
+   */
+  200: WikiMaintenanceStatus
+}
+
+/** Successful response payload for `POST /experimental/wiki-maintenance/enable` — Enable interactive Wiki maintenance */
+export type WikiEnableResponse = WikiEnableResponses[keyof WikiEnableResponses]
+
+/** Request payload shape for `POST /experimental/wiki-maintenance/refresh` — Request Wiki maintenance after foreground work settles */
+export type WikiRefreshData = {
+  body?: {
+    agent: string
+    active?: boolean
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/experimental/wiki-maintenance/refresh"
+}
+
+/** Error response payloads for `POST /experimental/wiki-maintenance/refresh` — Request Wiki maintenance after foreground work settles */
+export type WikiRefreshErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+}
+
+/** Error response payload for `POST /experimental/wiki-maintenance/refresh` — Request Wiki maintenance after foreground work settles */
+export type WikiRefreshError = WikiRefreshErrors[keyof WikiRefreshErrors]
+
+/** Success response payloads for `POST /experimental/wiki-maintenance/refresh` — Request Wiki maintenance after foreground work settles */
+export type WikiRefreshResponses = {
+  /**
+   * Wiki maintenance status
+   */
+  200: WikiMaintenanceStatus
+}
+
+/** Successful response payload for `POST /experimental/wiki-maintenance/refresh` — Request Wiki maintenance after foreground work settles */
+export type WikiRefreshResponse = WikiRefreshResponses[keyof WikiRefreshResponses]
+
+/** Request payload shape for `GET /experimental/wiki-maintenance` — Get Wiki maintenance status without starting work */
+export type WikiMaintenanceData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/experimental/wiki-maintenance"
+}
+
+/** Success response payloads for `GET /experimental/wiki-maintenance` — Get Wiki maintenance status without starting work */
+export type WikiMaintenanceResponses = {
+  /**
+   * Wiki maintenance status
+   */
+  200: WikiMaintenanceStatus
+}
+
+/** Successful response payload for `GET /experimental/wiki-maintenance` — Get Wiki maintenance status without starting work */
+export type WikiMaintenanceResponse = WikiMaintenanceResponses[keyof WikiMaintenanceResponses]
 
 /** Request payload shape for `GET /experimental/wiki-visualization` — Get Wiki visualization snapshot */
 export type WikiVisualizationData = {

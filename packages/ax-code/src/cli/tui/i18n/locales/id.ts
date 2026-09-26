@@ -1,6 +1,12 @@
 import type { Dictionary } from "../index"
 
 export const messages = {
+  "ui.wikiQueued": "Wiki: menunggu waktu luang",
+  "ui.wikiRunning": "Wiki: membuat",
+  "ui.wikiReady": "Wiki: siap",
+  "ui.wikiDisabled": "Wiki: pemeliharaan nonaktif",
+  "ui.wikiFailed": "Wiki: pembuatan gagal",
+
   "ui.openWikiVisualization": "Buka graf Wiki",
   "ui.openingWikiVisualization": "Membuka graf Wiki\u2026",
   "ui.wikiSnapshotCaption": "Snapshot Wiki /wiki-viz",

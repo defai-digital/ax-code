@@ -154,6 +154,9 @@ export type WikiBuildLockHandle = { release(): Promise<void> }
 export type WikiBuildLock = { acquire(): Promise<WikiBuildLockHandle> }
 
 export type WikiBuildInput = {
+  signal?: AbortSignal
+  allowSource?: (relative: string) => boolean
+  allowWrite?: (relative: string) => boolean
   root: string
   wikiDir?: string
   action: WikiAction

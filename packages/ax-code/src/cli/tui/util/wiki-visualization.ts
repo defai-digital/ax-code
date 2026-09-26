@@ -1,3 +1,5 @@
+import { WikiMaintenanceSchema } from "@/wiki/maintenance-schema"
+import type { WikiMaintenanceStatus } from "@/wiki/idle-controller"
 import { createHash } from "node:crypto"
 import z from "zod"
 import { NamedError } from "@ax-code/util/error"
@@ -15,12 +17,15 @@ export const WikiVizError = NamedError.create(
 )
 
 /** Read the connected runtime's snapshot, never the TUI machine's project files. */
-export async function fetchWikiVisualization(input: {
+async function readWikiResponse(input: {
+  endpoint?: string
+  method?: "GET" | "POST"
+  body?: unknown
   base: string
   directory?: string
   fetch: typeof fetch
   signal: AbortSignal
-}): Promise<WikiGraph> {
+}): Promise<unknown> {
   const controller = new AbortController()
   const abort = () => controller.abort()
   input.signal.addEventListener("abort", abort, { once: true })
@@ -28,11 +33,20 @@ export async function fetchWikiVisualization(input: {
   const timer = setTimeout(abort, 10_000)
   const limit = 2 * 1024 * 1024
   try {
-    const response = await input.fetch(new URL("experimental/wiki-visualization", input.base.replace(/\/?$/, "/")), {
-      headers: directoryRequestHeaders({ directory: input.directory, accept: "application/json" }),
-      signal: controller.signal,
-      redirect: "error",
-    })
+    const response = await input.fetch(
+      new URL(input.endpoint ?? "experimental/wiki-visualization", input.base.replace(/\/?$/, "/")),
+      {
+        method: input.method,
+        body: input.body === undefined ? undefined : JSON.stringify(input.body),
+        headers: directoryRequestHeaders({
+          directory: input.directory,
+          accept: "application/json",
+          contentType: input.body === undefined ? undefined : "application/json",
+        }),
+        signal: controller.signal,
+        redirect: "error",
+      },
+    )
     if (response.status === 401 || response.status === 403) {
       await response.body?.cancel()
       throw new WikiVizError({ reason: "unauthorized", message: "The connected runtime denied access to this Wiki." })
@@ -72,11 +86,7 @@ export async function fetchWikiVisualization(input: {
       const reason = code === "missing" || code === "too_large" || code === "invalid" ? code : "failed"
       throw new WikiVizError({ reason, message: "The connected runtime could not provide a Wiki snapshot." })
     }
-    try {
-      return parseWikiGraph(value)
-    } catch {
-      throw new WikiVizError({ reason: "invalid", message: "The runtime returned an invalid Wiki snapshot." })
-    }
+    return value
   } catch (error) {
     if (input.signal.aborted) throw new DOMException("Wiki visualization was cancelled", "AbortError")
     if (WikiVizError.isInstance(error)) throw error
@@ -90,11 +100,63 @@ export async function fetchWikiVisualization(input: {
   }
 }
 
-type Listener = { url: string; close(): Promise<void> }
+export async function fetchWikiVisualization(input: {
+  base: string
+  directory?: string
+  fetch: typeof fetch
+  signal: AbortSignal
+}): Promise<WikiGraph> {
+  const value = await readWikiResponse(input)
+  try {
+    return parseWikiGraph(value)
+  } catch {
+    throw new WikiVizError({ reason: "invalid", message: "The runtime returned an invalid Wiki snapshot." })
+  }
+}
+export async function requestWikiMaintenance(input: {
+  base: string
+  directory?: string
+  fetch: typeof fetch
+  signal: AbortSignal
+  action?: "enable" | "refresh"
+  agent?: string
+  active?: boolean
+}): Promise<WikiMaintenanceStatus> {
+  const value = await readWikiResponse({
+    ...input,
+    endpoint: "experimental/wiki-maintenance" + (input.action ? "/" + input.action : ""),
+    method: input.action ? "POST" : "GET",
+    body: input.action ? { agent: input.agent ?? "build", active: input.active ?? false } : undefined,
+  })
+  return WikiMaintenanceSchema.parse(value)
+}
+export async function wikiPollDelay(signal: AbortSignal, ms = 1500) {
+  signal.throwIfAborted()
+  await new Promise<void>((resolve, reject) => {
+    const abort = () => {
+      clearTimeout(timer)
+      reject(new DOMException("Wiki poll stopped", "AbortError"))
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", abort)
+      resolve()
+    }, ms)
+    signal.addEventListener("abort", abort, { once: true })
+  })
+}
+
+export type WikiViewerListener = {
+  url: string
+  close(): Promise<void>
+  update?(status: WikiMaintenanceStatus, graph?: WikiGraph): void
+}
+type Listener = WikiViewerListener
 type Activation = {
   scope: string
   load(signal: AbortSignal): Promise<WikiGraph>
   isCurrent(): boolean
+  monitor?: (listener: Listener, signal: AbortSignal) => Promise<void>
+  refresh?: (listener: Listener, signal: AbortSignal) => Promise<void>
 }
 
 /** One owned bridge across routes; callers supply captured runtime context. */
@@ -102,7 +164,14 @@ export function createWikiVisualizationManager(input: {
   serve(graph: WikiGraph): Promise<Listener>
   openBrowser(url: string): Promise<unknown>
 }) {
-  let current: { scope: string; identity: string; listener: Listener } | undefined
+  let current:
+    | {
+        scope: string
+        identity: string
+        listener: Listener
+        monitor?: { controller: AbortController; promise: Promise<void>; ended: boolean }
+      }
+    | undefined
   let flight:
     | { scope: string; controller: AbortController; promise: Promise<{ url: string; opened: boolean }> }
     | undefined
@@ -112,6 +181,14 @@ export function createWikiVisualizationManager(input: {
   const subscribers = new Set<(opening: boolean) => void>()
   const notify = () => {
     for (const subscriber of subscribers) subscriber(!!flight)
+  }
+  async function closeCurrent() {
+    if (!current) return
+    const previous = current
+    previous.monitor?.controller.abort()
+    await previous.monitor?.promise.catch(() => {})
+    await previous.listener.close()
+    if (current === previous) current = undefined
   }
   function activate(request: Activation) {
     if (disposed) return Promise.reject(new DOMException("Wiki viewer is disposed", "AbortError"))
@@ -141,10 +218,14 @@ export function createWikiVisualizationManager(input: {
         const graph = parseWikiGraph(await request.load(controller.signal))
         check()
         const identity = createHash("sha256").update(JSON.stringify(graph)).digest("hex")
-        if (!current || current.scope !== request.scope || current.identity !== identity) {
+        if (
+          !current ||
+          current.scope !== request.scope ||
+          current.identity !== identity ||
+          (request.monitor && current.monitor?.ended)
+        ) {
           if (current) {
-            await current.listener.close()
-            current = undefined
+            await closeCurrent()
             check()
           }
           const listener = await input.serve(graph)
@@ -155,9 +236,23 @@ export function createWikiVisualizationManager(input: {
             throw error
           }
           current = { scope: request.scope, identity, listener }
+          if (request.monitor) {
+            const monitorController = new AbortController()
+            const monitor = { controller: monitorController, promise: Promise.resolve(), ended: false }
+            monitor.promise = request.monitor(listener, monitorController.signal).finally(() => {
+              monitor.ended = true
+            })
+            current.monitor = monitor
+            void monitor.promise.catch(() => {})
+          }
         }
         check()
         const url = current.listener.url
+        if (request.refresh) {
+          void request
+            .refresh(current.listener, current.monitor?.controller.signal ?? controller.signal)
+            .catch(() => {})
+        }
         let opened = true
         let timer: ReturnType<typeof setTimeout> | undefined
         let abort: (() => void) | undefined
@@ -203,8 +298,7 @@ export function createWikiVisualizationManager(input: {
       flight?.controller.abort()
       disposal = (async () => {
         await flight?.promise.catch(() => {})
-        await current?.listener.close()
-        current = undefined
+        await closeCurrent()
         subscribers.clear()
       })()
       return disposal

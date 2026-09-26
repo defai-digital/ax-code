@@ -35,7 +35,7 @@ Tab to an item and press Enter; Escape returns focus to search. Reset restores
 the overview. At most 200 nodes and 500 relationships are included, with omitted
 counts displayed. Search covers the included snapshot, not omitted items.
 
-The graph is a fixed snapshot of `.manifest.json`. It does not generate a Wiki,
+The CLI graph is a fixed snapshot of `.manifest.json`. It does not generate a Wiki,
 run a model, reindex code, or automatically refresh. It shows recorded page-to-source
 membership, not function calls or a complete dependency graph. Current source
 contents are not read, so freshness is explicitly unknown. Paths identify recorded
@@ -53,13 +53,30 @@ right sidebar, or enter `/wiki-viz`. The same action is available in the command
 palette when the sidebar is hidden. It opens the system browser; if that fails,
 a dialog offers the local link for copying and a retry action.
 
-The snapshot comes from the connected runtime and its configured Wiki directory,
-when attached through a supported runtime connection. Existing local-only connection
-policy still applies. Both the TUI and runtime must support
-this endpoint. This action does not generate a missing Wiki. Each activation
-fetches a fresh snapshot; an unchanged snapshot reuses the local viewer. A changed
-snapshot replaces it and closes the previous link. Closing the TUI closes the
-viewer. This browser link remains local to the TUI machine.
+The browser opens immediately, including when the project has no Wiki yet. It shows
+waiting, generation progress or failure and loads the page/source graph when a
+snapshot is available. Opening the graph requests generation or incremental update;
+it skips the normal idle delay but waits for active sessions, queued work and a
+nonempty TUI draft. A failed browser launch offers a copyable link.
+
+Interactive AX Code enables background Wiki maintenance by default. After 30 seconds
+of quiet, it generates a missing Wiki or updates stale artifacts. It uses the configured
+Wiki model (or AX Code's default model), source and page budgets, and current agent
+read/write permissions. Foreground work cancels maintenance; incomplete builds do not
+publish partial manifests. Manual edits and protected content are preserved. Maintenance
+does not update AGENTS.md or CLAUDE.md. Headless commands do not enable this scheduler.
+
+Git projects use the canonical worktree root, including sessions started inside a
+package. Non-Git directories support an explicit graph request but do not generate
+on startup. Existing local-only runtime connection policy applies. Both the TUI and
+runtime must support these endpoints. Closing the TUI closes its browser bridge.
+The sidebar displays Wiki maintenance state and page progress.
+
+Disable only background maintenance with `"wiki": { "auto": false }` in AX Code
+configuration; an explicit graph request can still generate a Wiki. Set `enabled`
+to `false` to disable generation and Wiki prompt injection. Existing snapshots remain
+viewable. Failed jobs retry with backoff up to three automatic attempts, then wait
+for a source/configuration change or an explicit graph request.
 
 ## Embed in another project
 

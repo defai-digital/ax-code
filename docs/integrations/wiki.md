@@ -83,6 +83,7 @@ Configure the integration in project `ax-code.json`:
 {
   "wiki": {
     "enabled": true,
+    "auto": true,
     "dir": "ax-wiki",
     "model": "openai/gpt-5-mini",
     "autoInjectAgents": true,
@@ -97,6 +98,28 @@ Configure the integration in project `ax-code.json`:
 `include`, `exclude`, `maxSourceBytes`, and `maxPageSourceBytes` control evidence discovery and budgets. `instructions` adds project-specific compiler guidance. For a fully curated plan, configure `pages` entries with `path`, `title`, `purpose`, and `selectors`; an explicit plan must include `quickstart.md`.
 
 You can also place compiler guidance in `ax-wiki.instructions.md` and core engine configuration in `ax-wiki.config.json`. Explicit AX Code runtime settings override the core config where both are supplied.
+
+## Default interactive maintenance
+
+Opening a project in the AX Code TUI enables background Wiki maintenance by default.
+After 30 seconds of project idle, missing artifacts are generated and stale artifacts
+are updated incrementally. Busy/retrying sessions, queued work and a nonempty draft
+take priority and cancel background generation. The current agent's read/write
+permissions apply; read-only agents do not generate. No agent instruction files are
+rewritten by this background workflow.
+
+Use `"wiki": { "auto": false }` to disable background maintenance, or `enabled: false`
+to disable compilation and prompt injection. `auto` defaults true and does not write
+configuration. It uses the configured Wiki model or the AX Code default model, with
+a 10-minute job deadline and up to three automatic attempts with backoff. An explicit
+graph request or a source/configuration change allows another attempt. Headless runs
+and CI do not enable the interactive scheduler. Non-Git directories require an explicit
+request. In Git projects, Wiki generation and consumption use the nearest worktree
+root, so opening AX Code in a package does not create a separate package Wiki.
+
+The session sidebar and `/wiki-viz` open a local progress page immediately and request
+maintenance. Once a snapshot is ready, that page shows recorded Wiki page/source
+relationships. See [Wiki visualization](../guides/wiki-visualization.md).
 
 ## Agent routing
 

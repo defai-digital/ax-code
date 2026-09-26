@@ -327,6 +327,11 @@ import type {
   TuiShowToastResponses,
   TuiSubmitPromptResponses,
   VcsGetResponses,
+  WikiEnableErrors,
+  WikiEnableResponses,
+  WikiMaintenanceResponses,
+  WikiRefreshErrors,
+  WikiRefreshResponses,
   WikiVisualizationErrors,
   WikiVisualizationResponses,
   WorkflowRoutineCreateErrors,
@@ -3404,6 +3409,93 @@ export class WorkflowRoutine extends HeyApiClient {
 
 /** AX Code API schema `Wiki` (auto-generated from the OpenAPI contract). */
 export class Wiki extends HeyApiClient {
+  /**
+   * Enable interactive Wiki maintenance
+   */
+  public enable<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      agent: string
+      active?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "agent" },
+            { in: "body", key: "active" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<WikiEnableResponses, WikiEnableErrors, ThrowOnError>({
+      url: "/experimental/wiki-maintenance/enable",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Request Wiki maintenance after foreground work settles
+   */
+  public refresh<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      agent: string
+      active?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "agent" },
+            { in: "body", key: "active" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<WikiRefreshResponses, WikiRefreshErrors, ThrowOnError>({
+      url: "/experimental/wiki-maintenance/refresh",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Get Wiki maintenance status without starting work
+   */
+  public maintenance<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<WikiMaintenanceResponses, unknown, ThrowOnError>({
+      url: "/experimental/wiki-maintenance",
+      ...options,
+      ...params,
+    })
+  }
+
   /**
    * Get Wiki visualization snapshot
    *
