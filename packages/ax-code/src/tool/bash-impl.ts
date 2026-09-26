@@ -391,7 +391,10 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
       .replaceAll("${maxBytes}", String(Truncate.MAX_BYTES)),
     parameters,
     async execute(params: z.infer<typeof parameters>, ctx) {
-      const description = params.description ?? Env.redactForRecord(params.command).slice(0, 80)
+      // The title (and the tool result's `description` metadata) is user-visible
+      // and durable: a model that pastes the command into `description` must not
+      // leak a credential through that field instead of `command`.
+      const description = Env.redactForRecord(params.description ?? params.command).slice(0, 80)
       if (params.workdir !== undefined) {
         resolveToolFilePath(params.workdir, Instance.directory)
       }

@@ -114,7 +114,7 @@ export async function verifyGoalCheck(checkID: string, ctx: Tool.Context) {
       `Exit code: ${run.exitCode ?? "unavailable"}`,
       `Envelope: ${envelopeId}`,
       ...[goalSourceScopeNotice(scopeAfter.additional, scopeAfter.external)].filter(Boolean),
-      ...run.errors.map((error) => Env.redactSecrets(error)),
+      ...run.errors.map((error) => Env.redactForRecord(error)),
       ...(!GoalCheckVerification.sameSource(sourceBefore, sourceAfter)
         ? ["Source changed during verification or became unavailable; rerun against stable source."]
         : []),

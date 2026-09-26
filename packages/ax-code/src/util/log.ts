@@ -388,23 +388,6 @@ export namespace Log {
   const LOG_ENTRY_MAX_CHARS = 4_096
 
   /**
-   * Whole-word secret key names, normalized. Stricter than a substring match on
-   * purpose: `keyboard`, `tokenCount` and `monkey` are not credentials, and
-   * over-redacting makes logs useless while looking safe. `auth`, `bearer` and
-   * `cookie` are here because a header dump names them exactly that way, and the
-   * `token`/`key`-suffixed spellings are what OAuth clients emit.
-   */
-  const SECRET_KEY_NAME =
-    /^(?:token|secret|password|passwd|credential|credentials|authorization|auth|bearer|cookie|pat|webhook|api[_-]?key|x[_-]?api[_-]?key|private[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret)$/i
-  const PRIVATE_KEY_BLOCK = /-----BEGIN[^-]*PRIVATE KEY-----[\s\S]*?-----END[^-]*PRIVATE KEY-----/g
-  /**
-   * Credential *value* shapes: the same set the pre-commit hook refuses to
-   * commit, plus a JWT. A key name cannot catch these — a provider echoes a key
-   * as bare prose ("Incorrect API key provided: sk-…") with no `key=` anywhere.
-   */
-  const SECRET_VALUE =
-    /(?:sk-[a-zA-Z0-9]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{20,}|xoxb-[0-9]{10,}-[a-zA-Z0-9]{24,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})/g
-  /**
    * Cheap gate before the redaction regexes: ordinary log lines carry none of
    * these, and this keeps the hot path free of regex work. Every shape
    * `redactLogText` knows needs one of its prefixes here — a bare JWT, for
@@ -420,14 +403,45 @@ export namespace Log {
   /**
    * Redact a string that is about to reach a log sink, then cap it. Redaction
    * runs first: the value patterns match to the end of a token, so capping first
-   * could split a secret and leave its first half on disk.
+   * could split a secret and leave its first half on disk. The credential-shape
+   * and private-key passes live in `Env.redactForRecord` so the log and the
+   * durable records hide the same spellings.
    */
   function redactLogText(value: string, limit = LOG_VALUE_MAX_CHARS): string {
     if (!MAYBE_SECRET.test(value)) return truncate(value, limit)
     const redacted = Env.redactForRecord(value)
-      .replace(PRIVATE_KEY_BLOCK, "[redacted private key]")
-      .replace(SECRET_VALUE, "[redacted secret]")
     return truncate(redacted, limit)
+  }
+
+  /**
+   * Own-serializer objects (`Date` and classes that implement `toJSON`) are
+   * rebuilt through their own serializer. `Object.entries` sees no own
+   * enumerable property on a Date, so the rebuild below used to record `at:{}`
+   * in the JSON sink while the text sink still showed the timestamp. Objects
+   * without `toJSON` (Map, RegExp) stringify as `{}` under `JSON.stringify`
+   * too, so for them the rebuild matches pino.
+   */
+  function jsonSerializable(value: object): unknown {
+    const toJSON = (value as { toJSON?: unknown }).toJSON
+    if (typeof toJSON !== "function" || value instanceof Error) return undefined
+    try {
+      return toJSON.call(value)
+    } catch {
+      return undefined
+    }
+  }
+
+  /**
+   * Enumerate an extra's own properties without letting a throwing getter
+   * escape. `Object.entries` invokes enumerable getters, and lazy getters are
+   * common on HTTP client / ORM objects that end up in a failure log.
+   */
+  function safeEntries(value: object): Array<[string, unknown]> {
+    try {
+      return Object.entries(value as Record<string, unknown>)
+    } catch (error) {
+      return [["[unserializable]", `[Unserializable: ${toErrorMessage(error)}]`]]
+    }
   }
 
   /**
@@ -436,13 +450,15 @@ export namespace Log {
    * when it is a container.
    */
   function redactLogValue(key: string, value: unknown, depth = 0): unknown {
-    if (SECRET_KEY_NAME.test(key)) return "[redacted]"
+    if (Env.isCredentialKeyName(key)) return "[redacted]"
     if (typeof value === "string") return redactLogText(value)
     if (value === null || typeof value !== "object") return value
     if (depth >= 6) return "[depth limit]"
     if (Array.isArray(value)) return value.map((item, index) => redactLogValue(String(index), item, depth + 1))
+    const serialized = jsonSerializable(value)
+    if (serialized !== undefined) return redactLogValue(key, serialized, depth + 1)
     const out: Record<string, unknown> = {}
-    for (const [nestedKey, nestedValue] of Object.entries(value as Record<string, unknown>)) {
+    for (const [nestedKey, nestedValue] of safeEntries(value)) {
       out[nestedKey] = redactLogValue(nestedKey, nestedValue, depth + 1)
     }
     return out
@@ -470,25 +486,44 @@ export namespace Log {
   function pinoExtra(extra: Record<string, unknown> | undefined): Record<string, unknown> {
     const fields = extra || {}
     const out: Record<string, unknown> = {}
-    for (const [key, value] of Object.entries(fields)) {
-      if (SECRET_KEY_NAME.test(key)) {
-        out[key] = "[redacted]"
-        continue
+    let keys: string[]
+    try {
+      // Enumerate the keys before reading any value: `Object.entries` reads
+      // every getter at once, so one throwing lazy getter (HTTP client / ORM
+      // objects) would drop all the safe fields of the entry along with it.
+      keys = Object.keys(fields)
+    } catch (error) {
+      // A throwing ownKeys trap. The JSON sink still needs one line, and a
+      // logging call must not become the failure it is reporting.
+      return { error: `[Unserializable: ${toErrorMessage(error)}]` }
+    }
+    for (const key of keys) {
+      try {
+        const value = fields[key]
+        if (Env.isCredentialKeyName(key)) {
+          out[key] = "[redacted]"
+          continue
+        }
+        // Errors are folded into a plain object here instead of being left to
+        // pino's serializer: that path writes message and stack verbatim, so a
+        // stack carrying a credential would reach the JSON log unredacted.
+        out[key] =
+          value instanceof Error
+            ? {
+                name: value.name,
+                message: formatError(value),
+                // Only `err` carried a stack before, because pino's serializer
+                // supplied it. It is serialized here now (pino would bypass
+                // redaction), so the stack has to be redacted too.
+                ...(key === "err" && typeof value.stack === "string" ? { stack: redactLogText(value.stack) } : {}),
+              }
+            : redactLogValue(key, value)
+      } catch (error) {
+        // Reading the value (a throwing `name`, `message`, `stack`, or nested
+        // getter) failed. Keep the key visible with a marker instead of
+        // dropping the entry or letting the throw escape.
+        out[key] = `[Unserializable: ${toErrorMessage(error)}]`
       }
-      // Errors are folded into a plain object here instead of being left to
-      // pino's serializer: that path writes message and stack verbatim, so a
-      // stack carrying a credential would reach the JSON log unredacted.
-      out[key] =
-        value instanceof Error
-          ? {
-              name: value.name,
-              message: formatError(value),
-              // Only `err` carried a stack before, because pino's serializer
-              // supplied it. It is serialized here now (pino would bypass
-              // redaction), so the stack has to be redacted too.
-              ...(key === "err" && typeof value.stack === "string" ? { stack: redactLogText(value.stack) } : {}),
-            }
-          : redactLogValue(key, value)
     }
     return out
   }
@@ -498,7 +533,7 @@ export namespace Log {
     try {
       return redactLogText(
         JSON.stringify(value, (key, next) => {
-          if (SECRET_KEY_NAME.test(key)) return "[redacted]"
+          if (Env.isCredentialKeyName(key)) return "[redacted]"
           if (typeof next === "bigint") return next.toString()
           if (typeof next === "string") return redactLogText(next)
           if (typeof next === "object" && next !== null) {
@@ -536,35 +571,46 @@ export namespace Log {
     let last = Date.now()
 
     function build(message: unknown, extra?: Record<string, unknown>) {
-      const prefix = Object.entries({
-        ...tags,
-        ...extra,
-      })
-        .filter(([_, value]) => value !== undefined && value !== null)
-        .map(([key, value]) => {
-          const prefix = `${key}=`
-          if (SECRET_KEY_NAME.test(key)) return prefix + "[redacted]"
-          if (value instanceof Error) return prefix + formatError(value)
-          if (typeof value === "object") return prefix + stringifyLogObject(value)
-          return prefix + redactLogText(safeLogString(value))
-        })
-        .join(" ")
       const next = new Date()
       const diff = next.getTime() - last
       last = next.getTime()
-      return (
-        truncate(
-          [
-            next.toISOString().split(".")[0],
-            "+" + diff + "ms",
-            prefix,
-            redactLogText(safeLogString(message), LOG_MESSAGE_MAX_CHARS),
-          ]
-            .filter(Boolean)
-            .join(" "),
-          LOG_ENTRY_MAX_CHARS,
-        ) + "\n"
-      )
+      try {
+        const prefix = Object.entries({
+          ...tags,
+          ...extra,
+        })
+          .filter(([_, value]) => value !== undefined && value !== null)
+          .map(([key, value]) => {
+            const prefix = `${key}=`
+            if (Env.isCredentialKeyName(key)) return prefix + "[redacted]"
+            if (value instanceof Error) return prefix + formatError(value)
+            if (typeof value === "object") return prefix + stringifyLogObject(value)
+            return prefix + redactLogText(safeLogString(value))
+          })
+          .join(" ")
+        return (
+          truncate(
+            [
+              next.toISOString().split(".")[0],
+              "+" + diff + "ms",
+              prefix,
+              redactLogText(safeLogString(message), LOG_MESSAGE_MAX_CHARS),
+            ]
+              .filter(Boolean)
+              .join(" "),
+            LOG_ENTRY_MAX_CHARS,
+          ) + "\n"
+        )
+      } catch (error) {
+        // A throwing getter on `tags`/`extra` escapes both the spread and
+        // `Object.entries`. Degrade to one marker line that still carries the
+        // message: a logging call must not become the failure it is reporting.
+        return (
+          `${next.toISOString().split(".")[0]} +${diff}ms ` +
+          `[Unserializable entry: ${redactLogText(toErrorMessage(error))}] ` +
+          `${redactLogText(safeLogString(message), LOG_MESSAGE_MAX_CHARS)}\n`
+        )
+      }
     }
     // Pino child is created lazily — only when pinoLogger is active (file mode).
     // Its tags are a sink too, so they take the same key-aware redaction as the

@@ -881,7 +881,7 @@ export namespace MCP {
         },
       })
       const onStderr = (chunk: Buffer) => {
-        const line = Env.redactSecrets(chunk.toString().trimEnd()).slice(0, MAX_STDERR_LINE)
+        const line = Env.redactForRecord(chunk.toString().trimEnd()).slice(0, MAX_STDERR_LINE)
         if (line) log.info("mcp stderr", { key, line })
       }
       transport.stderr?.on("data", onStderr)

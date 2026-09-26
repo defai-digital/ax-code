@@ -61,7 +61,7 @@ export function goalPlanningContext(messages: readonly MessageV2.WithParts[], pa
       }
     }
     if (!lines.length) continue
-    const record = Env.redactSecrets(`User record ${message.id}:\n${lines.join("\n")}`)
+    const record = Env.redactForRecord(`User record ${message.id}:\n${lines.join("\n")}`)
     const size = Buffer.byteLength(record, "utf8") + 2
     if (bytes + size > GOAL_CONTEXT_BYTES) {
       omitted = candidates.length - index

@@ -91,6 +91,33 @@ describe("tool.bash", () => {
     },
   )
 
+  test.skipIf(process.platform === "win32")(
+    "redacts a model-supplied description that carries a credential",
+    async () => {
+      await using tmp = await tmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          // Assembled at runtime: the shape the redactor must catch, not a credential.
+          const key = "sk-" + "live" + "abcdefghijklmnopqrstuvwxyz"
+          const result = await bash.execute(
+            {
+              command: `"${process.execPath}" -e "process.stdout.write('ok')"`,
+              description: `fetched with ${key} and Authorization: Bearer ${key}`,
+            },
+            { ...ctx, metadata: vi.fn() },
+          )
+
+          expect(result.output).toBe("ok")
+          expect(result.title).not.toContain(key)
+          expect(result.metadata.description).toBe(result.title)
+          expect(JSON.stringify(result)).not.toContain(key)
+        },
+      })
+    },
+  )
+
   test("preserves interleaved UTF-8 sequences split across foreground stream chunks", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {

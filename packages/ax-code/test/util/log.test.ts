@@ -230,6 +230,49 @@ describe("Log.create", () => {
     expect(lines.join("")).toContain('metadata={"name":"root","self":"[Circular]"}')
   })
 
+  test("preserves Date extras in the JSON log instead of recording {}", async () => {
+    await using tmp = await tmpdir()
+    await Log.init({ print: false, dir: tmp.path, name: "json-date-test" })
+
+    // `Object.entries` sees no own property on a Date, so the rebuilding
+    // redactor used to write `{}` here while the text sink showed the
+    // timestamp — the JSON diagnostics lost exactly the field they exist for.
+    Log.create({ service: "test-json-date" }).info("renewal scheduled", { at: new Date("2026-09-26T00:00:00.000Z") })
+
+    const content = await fs.readFile(path.join(tmp.path, "json-date-test.json.log"), "utf8")
+    const line = content
+      .trim()
+      .split("\n")
+      .find((entry) => entry.includes("renewal scheduled"))
+    expect(line).toBeDefined()
+    expect(JSON.parse(line!).at).toBe("2026-09-26T00:00:00.000Z")
+  })
+
+  test("does not throw when an extra getter throws, and keeps the safe fields", async () => {
+    await using tmp = await tmpdir()
+    await Log.init({ print: false, dir: tmp.path, name: "json-getter-test" })
+
+    const extra: Record<string, unknown> = { sessionID: "ses_getter" }
+    Object.defineProperty(extra, "response", {
+      enumerable: true,
+      get() {
+        throw new Error("lazy getter failed")
+      },
+    })
+
+    expect(() => Log.create({ service: "test-json-getter" }).error("upstream failed", extra)).not.toThrow()
+
+    const content = await fs.readFile(path.join(tmp.path, "json-getter-test.json.log"), "utf8")
+    const line = content
+      .trim()
+      .split("\n")
+      .find((entry) => entry.includes("upstream failed"))
+    expect(line).toBeDefined()
+    const entry = JSON.parse(line!)
+    expect(entry.sessionID).toBe("ses_getter")
+    expect(entry.response).toContain("Unserializable")
+  })
+
   test("serializes Error extras in the JSON log instead of dropping them as {}", async () => {
     await using tmp = await tmpdir()
     await Log.init({ print: false, dir: tmp.path, name: "json-error-test" })

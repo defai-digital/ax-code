@@ -296,6 +296,94 @@ describe("Env.sanitize", () => {
     expect(Env.redactForRecord("plain text with no secrets")).toBe("plain text with no secrets")
   })
 
+  test("redactForRecord survives re-application at a nested record sink", () => {
+    // Redaction is applied at more than one layer in production: the log sink
+    // re-redacts a value its caller already redacted (MCP stderr in
+    // `mcp/impl.ts`) and session evidence re-redacts persisted tool output. A
+    // second pass used to match only `[redacted` because the value run stops at
+    // `]`, re-emitting the placeholder as `--password=[redacted]]`.
+    const shapes = [
+      "mysql --password=supersecret -e 'select 1'",
+      'curl -H "Authorization: Bearer sk-x" https://api',
+      "curl -H 'X-Api-Key: abcdef' https://api",
+      "Set-Cookie: sid=xyz; Path=/",
+      "cookie=abc",
+      "API_KEY=placeholder-token-value ./run",
+      "FOO=postgres://u:pw@host/db run",
+      '{"password":"hunter2","keep":1}',
+    ]
+    for (const shape of shapes) {
+      const once = Env.redactForRecord(shape)
+      expect(Env.redactForRecord(once)).toBe(once)
+    }
+    expect(Env.redactForRecord("mysql --password=[redacted] -e 'select 1'")).toBe(
+      "mysql --password=[redacted] -e 'select 1'",
+    )
+    // A placeholder followed by more characters still consumes the suffix
+    // rather than leaving it as the visible remainder.
+    expect(Env.redactForRecord("mysql --password=[redacted]tail -e 'select 1'")).toBe(
+      "mysql --password=[redacted] -e 'select 1'",
+    )
+  })
+
+  test("redacts a quoted value with spaces as one unit", () => {
+    // The value run stops at the first space, so a quoted credential used to
+    // leave its tail in the record: `--password="hunter2 extra"` became
+    // `--password=[redacted] extra"`.
+    expect(Env.redactForRecord('mysql --password="hunter2 extra" -e "select 1"')).toBe(
+      'mysql --password=[redacted] -e "select 1"',
+    )
+    expect(Env.redactForRecord("mysql --password='hunter2 extra' -e 'select 1'")).toBe(
+      "mysql --password=[redacted] -e 'select 1'",
+    )
+  })
+
+  test("redacts bare credential value shapes that no key name can catch", () => {
+    // The log sink already hides these shapes; a durable record must not keep
+    // them just because nothing here carries a key, an `=` or a header.
+    const key = "sk-" + "live" + "abcdefghijklmnopqrstuvwxyz"
+    const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abcdefghijklmnop"
+    expect(Env.redactSecrets(`echo ${key}`)).toBe("echo [redacted secret]")
+    expect(Env.redactForRecord(`echo ${key}`)).toBe("echo [redacted secret]")
+    expect(Env.redactForRecord(`curl -H "Auth: ${jwt}" https://api`)).not.toContain(jwt)
+    // Assembled at runtime: a literal private-key header trips the pre-commit
+    // scanner, and this is a fixture, not a credential.
+    const keyHeader = "-----BEGIN " + "RSA PRIVATE KEY-----"
+    const keyFooter = "-----END " + "RSA PRIVATE KEY-----"
+    expect(Env.redactForRecord(`${keyHeader}\nMIIE\n${keyFooter}`)).toBe("[redacted private key]")
+    // Idempotent: the placeholder must survive a second pass.
+    expect(Env.redactForRecord("echo [redacted secret]")).toBe("echo [redacted secret]")
+  })
+
+  test("redacts an escaped quote inside a JSON secret value", () => {
+    // `[^"'\r\n]*` treated the quote of an escaped `\"` as the closing
+    // delimiter, so the tail of the secret survived and the record was left
+    // malformed: `{"password":"[redacted]"two"}`.
+    expect(Env.redactForRecord('{"password":"one\\"two"}')).toBe('{"password":"[redacted]"}')
+    expect(Env.redactForRecord('{"token":"a\\"b\\"c","safe":"yes"}')).toBe('{"token":"[redacted]","safe":"yes"}')
+  })
+
+  test("redacts a truncated private key dump with no END marker", () => {
+    // A size-capped tool output or a record cut mid-write leaves the header
+    // without its terminator; everything after it is key material.
+    expect(Env.redactForRecord("-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAAbG9jYWxob3N0")).toBe(
+      "[redacted private key]",
+    )
+  })
+
+  test("redacts credential-bearing query values in a URL", () => {
+    // `Env.sanitize` already treats these parameter names as credential
+    // carriers for env values; the record pass now hides the same values.
+    expect(Env.redactForRecord("curl 'https://s3.example.com/b/k?X-Amz-Signature=5f3a9c1e&format=raw'")).toBe(
+      "curl 'https://s3.example.com/b/k?X-Amz-Signature=[redacted]&format=raw'",
+    )
+    expect(Env.redactForRecord("https://example.com/file?format=raw")).toBe("https://example.com/file?format=raw")
+    // Idempotent, and the parameter name is preserved for diagnostics.
+    expect(Env.redactForRecord("https://s3.example.com/b?X-Amz-Signature=[redacted]")).toBe(
+      "https://s3.example.com/b?X-Amz-Signature=[redacted]",
+    )
+  })
+
   test("forwards CLI provider API keys only through explicit CLI provider overlay", () => {
     const originalGemini = process.env.GEMINI_API_KEY
     const originalOpenAI = process.env.OPENAI_API_KEY

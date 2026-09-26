@@ -164,6 +164,32 @@ describe("AuditReport.generate", () => {
     })
   })
 
+  test("redacts credentials in the action-log target cell", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "Audit report target redaction" })
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "tool.call",
+          sessionID: session.id,
+          tool: "webfetch",
+          callID: "call-fetch",
+          input: { url: "https://alice:s3cret@example.com/page" },
+        })
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const report = await AuditReport.generate(session.id)
+        expect(report).not.toContain("s3cret")
+        expect(report).toContain("alice:[redacted]@example.com")
+
+        EventQuery.deleteBySession(session.id)
+      },
+    })
+  })
+
   test("renders validation from structured verification envelopes", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

@@ -82,19 +82,75 @@ export namespace SessionProcessor {
     return input.replace(/<\/?system-reminder\b[^>]*>/gi, "[tag-stripped]")
   }
 
+  // Tool-input keys whose value is always a URL: a credential in the userinfo
+  // has no other field to be recognized by, and the whole string is what the
+  // record and the audit report render.
+  const CREDENTIAL_URL_FIELD_NAMES = new Set(["url", "uri", "href", "endpoint", "base_url", "baseurl", "webhook"])
+  const TOOL_INPUT_REDACTION_DEPTH = 3
+
   /**
-   * Redact inline credential assignments from a bash tool input before it is
-   * persisted (event log, message parts, doom-loop fingerprints). The
-   * stream's original `value.input` still drives actual tool execution
-   * upstream of the processor — never route this redacted copy back into
-   * execution. Returns a shallow copy so the caller's input is untouched.
+   * Redact one persisted tool-input value, returning the original reference when
+   * nothing in it is a credential. Copy-on-write keeps the common case — a tool
+   * input with no credential field, including a large document payload — free of
+   * allocations on the per-tool-call path.
    */
-  export function redactPersistedBashInput(tool: string, input: Record<string, unknown>): Record<string, unknown> {
-    // Credentials reach a bash command as `KEY=` assignments but also as HTTP
-    // headers (`Authorization: Bearer …`, `X-Api-Key: …`, `Cookie: …`), CLI
-    // flags (`--password=…`) and quoted URLs (`https://u:pw@host`). The
-    // persisted copy is never re-executed, so the full redaction is applied.
-    // `redactForRecord` owns the pass order (see `util/env.ts`).
+  function redactToolInputValue(key: string, value: unknown, depth: number): unknown {
+    if (Env.isCredentialKeyName(key)) return "[redacted]"
+    if (typeof value === "string") {
+      if (!CREDENTIAL_URL_FIELD_NAMES.has(key.toLowerCase())) return value
+      const redacted = Env.redactSecrets(value)
+      return redacted === value ? value : redacted
+    }
+    if (value === null || typeof value !== "object" || depth >= TOOL_INPUT_REDACTION_DEPTH) return value
+    // Array elements inherit the parent key: a URL field can hold a list, and
+    // the element index is not a field name of its own.
+    if (Array.isArray(value)) {
+      let next: unknown[] | undefined
+      for (let index = 0; index < value.length; index++) {
+        const item = value[index]
+        const redacted = redactToolInputValue(key, item, depth + 1)
+        if (redacted === item) continue
+        next ??= [...value]
+        next[index] = redacted
+      }
+      return next ?? value
+    }
+    let next: Record<string, unknown> | undefined
+    for (const [nestedKey, nestedValue] of Object.entries(value as Record<string, unknown>)) {
+      const redacted = redactToolInputValue(nestedKey, nestedValue, depth + 1)
+      if (redacted === nestedValue) continue
+      next ??= { ...(value as Record<string, unknown>) }
+      next[nestedKey] = redacted
+    }
+    return next ?? value
+  }
+
+  function redactToolInputFields(input: Record<string, unknown>): Record<string, unknown> {
+    let next: Record<string, unknown> | undefined
+    for (const [key, value] of Object.entries(input)) {
+      const redacted = redactToolInputValue(key, value, 0)
+      if (redacted === value) continue
+      next ??= { ...input }
+      next[key] = redacted
+    }
+    return next ?? input
+  }
+
+  /**
+   * Redact a tool input before it is persisted (event log, message parts,
+   * doom-loop fingerprints). The stream's original `value.input` still drives
+   * actual tool execution upstream of the processor — never route this redacted
+   * copy back into execution, and never mutate the caller's object in place.
+   *
+   * Credentials reach a command as `KEY=` assignments but also as HTTP headers
+   * (`Authorization: Bearer …`, `X-Api-Key: …`, `Cookie: …`), CLI flags
+   * (`--password=…`) and quoted URLs (`https://u:pw@host`), so a
+   * `bash`/`monitor`/`bash_input` input takes the full record redaction.
+   * `redactForRecord` owns the pass order (see `util/env.ts`). Every other tool
+   * keeps its document content verbatim and loses only credential-named fields
+   * and URL userinfo.
+   */
+  export function redactPersistedToolInput(tool: string, input: Record<string, unknown>): Record<string, unknown> {
     const redact = Env.redactForRecord
     if (tool === "bash") {
       const command =
@@ -104,17 +160,22 @@ export namespace SessionProcessor {
       if (raw === undefined) return input
       const next: Record<string, unknown> = { ...input, command: redact(raw) }
       delete next.cmd
+      // A model that pastes the command into `description` must not leak the
+      // credential through the field that becomes the tool title.
+      if (typeof input["description"] === "string") next["description"] = redact(input["description"])
       return next
     }
     if (tool === "monitor") {
       if (typeof input["command"] !== "string") return input
-      return { ...input, command: redact(input["command"]) }
+      const next: Record<string, unknown> = { ...input, command: redact(input["command"]) }
+      if (typeof input["description"] === "string") next["description"] = redact(input["description"])
+      return next
     }
     if (tool === "bash_input") {
       if (typeof input["input"] !== "string") return input
       return { ...input, input: redact(input["input"]) }
     }
-    return input
+    return redactToolInputFields(input)
   }
 
   export type Info = Awaited<ReturnType<typeof create>>
@@ -225,8 +286,8 @@ export namespace SessionProcessor {
         input:
           toolInputCache[input.toolCallId] ??
           (input.eventInput
-            ? safeStringify(redactPersistedBashInput(input.tool, jsonSafeInput(input.eventInput)))
-            : safeStringify(redactPersistedBashInput(input.tool, jsonSafeInput(input.fallbackInput)))),
+            ? safeStringify(redactPersistedToolInput(input.tool, jsonSafeInput(input.eventInput)))
+            : safeStringify(redactPersistedToolInput(input.tool, jsonSafeInput(input.fallbackInput)))),
         output: input.output === undefined ? undefined : (input.outputFingerprint ?? canonicalize(input.output)),
       })
       if (recentToolRing.length > recentToolRingLimit) recentToolRing.shift()
@@ -761,7 +822,7 @@ export namespace SessionProcessor {
                   // stepParts feeds the durable `llm.output` event and
                   // `tool.call` feeds the event log — persist the redacted
                   // copy; execution already consumed the original upstream.
-                  const persistedInput = redactPersistedBashInput(value.toolName, toolInput)
+                  const persistedInput = redactPersistedToolInput(value.toolName, toolInput)
                   stepParts.push({
                     type: "tool_call",
                     callID: value.toolCallId,
@@ -796,7 +857,7 @@ export namespace SessionProcessor {
                     toolcalls[value.toolCallId] = match
                   }
                   if (match) {
-                    const storedInput = redactPersistedBashInput(value.toolName, jsonSafeInput(value.input))
+                    const storedInput = redactPersistedToolInput(value.toolName, jsonSafeInput(value.input))
                     const part = await Session.updatePart.force({
                       ...match,
                       tool: value.toolName,
@@ -944,7 +1005,7 @@ export namespace SessionProcessor {
                     const storedInput =
                       value.input === undefined
                         ? match.state.input
-                        : redactPersistedBashInput(match.tool, jsonSafeInput(value.input))
+                        : redactPersistedToolInput(match.tool, jsonSafeInput(value.input))
                     // Reuse the form computed at tool-call time so doom-loop
                     // comparisons stay consistent and we avoid a second full
                     // object-graph walk on large tool inputs (PERF-02).
@@ -1063,7 +1124,7 @@ export namespace SessionProcessor {
                     const toolInput =
                       value.input === undefined
                         ? match.state.input
-                        : redactPersistedBashInput(match.tool, jsonSafeInput(value.input))
+                        : redactPersistedToolInput(match.tool, jsonSafeInput(value.input))
 
                     // Self-correction: analyze the failure BEFORE persisting
                     // the tool error so we can append the reflection prompt

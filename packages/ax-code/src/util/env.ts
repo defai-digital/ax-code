@@ -112,6 +112,26 @@ export namespace Env {
     return SECRET_PATTERN.test(name)
   }
 
+  /**
+   * Whole-word credential key names, normalized. Stricter than a substring
+   * match on purpose: `keyboard`, `tokenCount` and `monkey` are not credentials,
+   * and over-redacting makes records useless while looking safe. `auth`,
+   * `bearer` and `cookie` are here because a header dump names them exactly that
+   * way, and the `token`/`key`-suffixed spellings are what OAuth clients emit.
+   */
+  const CREDENTIAL_KEY_NAME =
+    /^(?:token|secret|password|passwd|credential|credentials|authorization|auth|bearer|cookie|pat|webhook|api[_-]?key|x[_-]?api[_-]?key|private[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret)$/i
+
+  /**
+   * True when a structured key names a credential, so the whole value behind it
+   * must be hidden. Shared by the log sink (`util/log.ts`) and the persisted
+   * tool-input redactor (`session/processor-impl.ts`) so both layers hide the
+   * same keys.
+   */
+  export function isCredentialKeyName(name: string): boolean {
+    return CREDENTIAL_KEY_NAME.test(name)
+  }
+
   export function isProcessInjectionName(name: string): boolean {
     return PROCESS_INJECTION_NAMES.has(name)
   }
@@ -119,7 +139,18 @@ export namespace Env {
   // Presigned URLs and webhook-style links often carry credentials in the
   // query string rather than as userinfo. Treat common credential parameter
   // names as sensitive so an innocently named variable cannot forward them.
-  const CREDENTIAL_URL_QUERY = /(signature|credential|token|secret|password|passwd|api[_-]?key|access[_-]?key)=/i
+  // One name list feeds both the env filter below and the record redactor, so
+  // the two layers of the same boundary cannot drift apart.
+  const CREDENTIAL_QUERY_NAMES = "signature|credential|token|secret|password|passwd|api[_-]?key|access[_-]?key"
+  const CREDENTIAL_URL_QUERY = new RegExp(`(?:${CREDENTIAL_QUERY_NAMES})=`, "i")
+  // The value behind such a parameter, up to the next `&`, fragment or
+  // delimiter. The optional name prefix keeps vendor spellings working
+  // (`X-Amz-Signature`, `my-access-key`) because the name list is matched
+  // without word boundaries, exactly like the detector above.
+  const CREDENTIAL_QUERY_VALUE = new RegExp(
+    `([?&][A-Za-z0-9_.-]{0,32}?(?:${CREDENTIAL_QUERY_NAMES})=)[^&#\\s"'<>]*`,
+    "gi",
+  )
 
   function containsUrlCredential(value: string | undefined): boolean {
     if (!value || !value.includes("://")) return false
@@ -132,10 +163,19 @@ export namespace Env {
     }
   }
 
-  /** Redact common key/value, authorization, and URI-credential spellings in child logs. */
+  /**
+   * Redact key/value, authorization, cookie, URI-credential spellings and bare
+   * credential *value* shapes (`sk-…`, a JWT, a private-key block) from a
+   * string. Shared by the log sink and (through `redactForRecord`) every
+   * durable record, so a secret is hidden in the same way wherever it lands.
+   */
   export function redactSecrets(value: string): string {
     const jsonRedacted = value.replace(
-      /(["'])(token|secret|password|passwd|credential|authorization|cookie|api[_-]?key)\1\s*:\s*(["'])[^"'\r\n]*\3/gi,
+      // The value class excludes a bare backslash and consumes escape pairs as
+      // a unit: `[^"'\r\n]*` treated the quote of an escaped `\"` as the
+      // closing delimiter, so `{"password":"one\"two"}` became
+      // `{"password":"[redacted]"two"}` — a leaked tail and malformed JSON.
+      /(["'])(token|secret|password|passwd|credential|authorization|cookie|api[_-]?key)\1\s*:\s*(["'])(?:\\.|[^"'\r\n\\])*\3/gi,
       (_match, quote: string, key: string, valueQuote: string) =>
         `${quote}${key}${quote}:${valueQuote}[redacted]${valueQuote}`,
     )
@@ -143,9 +183,22 @@ export namespace Env {
       // `basic` alongside `bearer`, and `cookie` alongside `authorization`:
       // `Authorization: Basic <base64>` left the encoded credential behind, and
       // a `Cookie:` header was not matched at all even though the structured
-      // sink (`SECRET_KEY_NAME` in `util/log.ts`) and MCP trust already treat
-      // `cookie` as a credential name. `\bcookie\b` also covers `Set-Cookie`.
-      /\b(token|secret|password|passwd|credential|authorization|cookie|api[_-]?key)\b\s*(?:=|:)\s*(?:(?:bearer|basic)\s+)?[^\s,;}\]]+/gi,
+      // sink (`Env.isCredentialKeyName`) and MCP trust already treat `cookie` as
+      // a credential name. `\bcookie\b` also covers `Set-Cookie`.
+      //
+      // The value alternation consumes an existing `[redacted]` placeholder as
+      // one unit before falling back to a bare word. Without it a second pass
+      // matches only `[redacted` (the run stops at `]`) and re-emits the
+      // placeholder with the bracket still there — `--password=[redacted]]`.
+      // Redaction has to survive re-application: the log sink re-redacts values
+      // that callers already redacted (`mcp/impl.ts` MCP stderr) and session
+      // evidence re-redacts persisted tool output, so a nested application is a
+      // production path, not a hypothetical one.
+      //
+      // Quoted values are consumed with their quotes: a bare run stops at the
+      // first space, so `--password="hunter2 extra"` used to leave ` extra"`
+      // behind — the tail of a quoted credential stayed in the record.
+      /\b(token|secret|password|passwd|credential|authorization|cookie|api[_-]?key)\b\s*(?:=|:)\s*(?:(?:bearer|basic)\s+)?(?:"(?:[^"\\\r\n]|\\.)*"|'(?:[^'\\\r\n]|\\.)*'|\[redacted\][^\s,;}\]]*|[^\s,;}\]]+)/gi,
       (_match, key: string) => `${key}=[redacted]`,
     )
     // Any RFC 3986 scheme, not just http(s): connection strings such as
@@ -154,11 +207,34 @@ export namespace Env {
     // assignment for `redactInlineEnvAssignments` to catch. The username may be
     // empty (`redis://:password@host` is a documented form). The sibling
     // `URL_USERINFO_VALUE` already accepts every scheme for assignments.
-    return fieldsRedacted.replace(
-      /\b([a-z][a-z0-9+.-]*:\/\/)([^\s/:@]*):([^\s/@]+)@/gi,
-      (_match, scheme: string, username: string) => `${scheme}${username}:[redacted]@`,
-    )
+    return fieldsRedacted
+      .replace(
+        /\b([a-z][a-z0-9+.-]*:\/\/)([^\s/:@]*):([^\s/@]+)@/gi,
+        (_match, scheme: string, username: string) => `${scheme}${username}:[redacted]@`,
+      )
+      .replace(CREDENTIAL_QUERY_VALUE, "$1[redacted]")
+      .replace(PRIVATE_KEY_BLOCK, "[redacted private key]")
+      // A truncated key dump (`head -c`, a size-capped tool output, a record cut
+      // mid-write) has no END marker, so the paired pattern above never matches
+      // and the base64 body survived. Everything after an unpaired header is key
+      // material, so redact the remainder. Idempotent: the placeholder carries
+      // no BEGIN marker.
+      .replace(UNPAIRED_PRIVATE_KEY_BLOCK, "[redacted private key]")
+      .replace(SECRET_VALUE, "[redacted secret]")
   }
+
+  /**
+   * Credential *value* shapes: the same set the pre-commit hook refuses to
+   * commit, plus a JWT. No key name can catch these — a provider echoes a key as
+   * bare prose ("Incorrect API key provided: sk-…") with no `key=` anywhere, and
+   * a command can carry one with no assignment or header around it. They are
+   * redacted here rather than in the log sink so every durable record (persisted
+   * tool input, session evidence, goal check output) loses them too.
+   */
+  const PRIVATE_KEY_BLOCK = /-----BEGIN[^-]*PRIVATE KEY-----[\s\S]*?-----END[^-]*PRIVATE KEY-----/g
+  const UNPAIRED_PRIVATE_KEY_BLOCK = /-----BEGIN[^-]*PRIVATE KEY-----[\s\S]*/g
+  const SECRET_VALUE =
+    /(?:sk-[a-zA-Z0-9]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{20,}|xoxb-[0-9]{10,}-[a-zA-Z0-9]{24,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})/g
 
   /**
    * Full redaction for a string that will be persisted, shown, or recorded:

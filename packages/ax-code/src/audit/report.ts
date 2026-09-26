@@ -6,6 +6,7 @@ import { SessionVerifications } from "../session/verifications"
 import type { VerificationEnvelope } from "../quality/verification-envelope"
 import { Risk } from "../risk/score"
 import { truncate } from "../util/format"
+import { Env } from "../util/env"
 import { stringList } from "../util/string-list"
 import path from "path"
 
@@ -74,7 +75,16 @@ function firstText(v: unknown): string {
   return ""
 }
 
+/**
+ * Render one tool call's target cell. Defense in depth: the event log already
+ * carries a redacted input for bash and credential-named fields, but this also
+ * redacts inputs recorded before that policy existed.
+ */
 export function extractTarget(tool: string, input: Record<string, unknown>): string {
+  return Env.redactSecrets(extractTargetCell(tool, input))
+}
+
+function extractTargetCell(tool: string, input: Record<string, unknown>): string {
   if (tool === "impact_analyze") {
     if (Array.isArray(input.changes) && input.changes.length > 0) {
       const first = input.changes[0]

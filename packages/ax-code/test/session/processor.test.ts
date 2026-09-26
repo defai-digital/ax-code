@@ -1920,7 +1920,7 @@ describe("session.processor", () => {
     })
   })
 
-  test("persists redacted bash input while leaving non-bash inputs untouched", async () => {
+  test("persists redacted bash input and hides only credential fields of other tools", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -1954,6 +1954,19 @@ describe("session.processor", () => {
               input: { pattern: "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI" },
               output: { output: "match", title: "Glob", metadata: {}, attachments: [] },
             }
+            yield { type: "tool-input-start", id: "call_fetch", toolName: "webfetch" }
+            yield {
+              type: "tool-call",
+              toolCallId: "call_fetch",
+              toolName: "webfetch",
+              input: { url: "https://alice:s3cret@example.com/page" },
+            }
+            yield {
+              type: "tool-result",
+              toolCallId: "call_fetch",
+              input: { url: "https://alice:s3cret@example.com/page" },
+              output: { output: "fetched", title: "WebFetch", metadata: {}, attachments: [] },
+            }
             yield {
               type: "finish-step",
               finishReason: "stop",
@@ -1968,7 +1981,7 @@ describe("session.processor", () => {
         expect(result).toBe("continue")
         const saved = await MessageV2.get({ sessionID: streamInput.sessionID, messageID: processor.message.id })
         const toolParts = saved.parts.filter((part) => part.type === "tool")
-        expect(toolParts).toHaveLength(2)
+        expect(toolParts).toHaveLength(3)
 
         const bashPart = toolParts.find((part) => part.tool === "bash")
         expect(bashPart).toBeDefined()
@@ -1980,8 +1993,17 @@ describe("session.processor", () => {
         const globPart = toolParts.find((part) => part.tool === "glob")
         expect(globPart).toBeDefined()
         if (globPart?.state.status === "completed") {
-          // Non-bash tools persist verbatim — only bash `command` is redacted.
+          // A `pattern` is document content, not a credential field, so it is
+          // persisted verbatim.
           expect(globPart.state.input).toEqual({ pattern: "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI" })
+        }
+
+        const fetchPart = toolParts.find((part) => part.tool === "webfetch")
+        expect(fetchPart).toBeDefined()
+        if (fetchPart?.state.status === "completed") {
+          // A URL-valued field is a credential carrier on every tool, not just
+          // bash: the persisted copy loses the userinfo.
+          expect(fetchPart.state.input).toEqual({ url: "https://alice:[redacted]@example.com/page" })
         }
       },
     })
