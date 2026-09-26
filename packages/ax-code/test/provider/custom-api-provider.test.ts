@@ -124,6 +124,23 @@ describe("custom API provider model discovery", () => {
     expect(imageSupport([{ id: "grok-4.7" }])).toBe(false)
   })
 
+  test("does not throw when a fallback catalog row omits limit and modalities.input", () => {
+    // The fallback catalog is a trust boundary (bundled snapshot / env path /
+    // URL). `ModelsDev.Model` requires `limit` and requires `input` whenever
+    // `modalities` is present, but a drifted or hand-built row must resolve to
+    // defaults / "not capable" instead of throwing on the unguarded optional
+    // access (`fallback?.limit.context`, `fallback?.modalities?.input.includes`).
+    const fallbacks = { "drift-model": { modalities: { output: ["text"] } } } as any
+    expect(CustomApiProvider.parseDiscoveredModels({ data: [{ id: "drift-model" }] }, false, fallbacks)).toEqual([
+      expect.objectContaining({
+        id: "drift-model",
+        attachment: false,
+        contextWindow: 128_000,
+        outputLimit: 16_384,
+      }),
+    ])
+  })
+
   test("reads a declared web search flag from capabilities or abilities", () => {
     const websearch = (rows: unknown[]) => CustomApiProvider.parseDiscoveredModels({ data: rows })[0].websearch
 

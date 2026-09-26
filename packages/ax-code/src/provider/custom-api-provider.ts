@@ -300,7 +300,14 @@ export namespace CustomApiProvider {
     const declared = isRecord(raw?.modalities) && Array.isArray(raw.modalities.input) ? raw.modalities.input : undefined
     if (declared && declared.length > 0) return declared.some((modality) => modality === "image")
     if (typeof capabilities?.attachment === "boolean") return capabilities.attachment
-    return fallback?.modalities?.input.includes("image") ?? false
+    // `modalities` is optional on a catalog row and `input` may be absent even
+    // when `modalities` is present (a hand-built or schema-drifted fallback),
+    // so the final access must be optional too. Without the `?.` before
+    // `includes`, a fallback row carrying `modalities` without `input` throws
+    // `TypeError: Cannot read properties of undefined (reading 'includes')`
+    // instead of resolving to "not capable" — the same shape
+    // `fromModelsDevModel` already guards as `modalities?.input?.includes(...)`.
+    return fallback?.modalities?.input?.includes("image") ?? false
   }
 
   // A gateway card declares server-side web search as a boolean either under
@@ -329,8 +336,13 @@ export namespace CustomApiProvider {
     const inherited = inheritCustomApiModelLimit({
       modelID: id,
       limit: {
-        context: payload.context ?? fallback?.limit.context,
-        output: payload.output ?? fallback?.limit.output,
+        // `limit` is required on a validated catalog row but the fallback table
+        // is a trust boundary (bundled snapshot / AX_CODE_MODELS_PATH / URL), so
+        // a drifted row without `limit` must fall back to the defaults instead
+        // of throwing on `undefined.context`. Same optional-chain shape as the
+        // `imageCapable` fallback below.
+        context: payload.context ?? fallback?.limit?.context,
+        output: payload.output ?? fallback?.limit?.output,
       },
     })
     const caps = findRegisteredModelCapabilities(id)
