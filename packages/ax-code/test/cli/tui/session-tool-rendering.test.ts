@@ -2,8 +2,10 @@ import { describe, expect, test } from "vitest"
 import path from "path"
 import fs from "fs/promises"
 import {
+  BASH_LIVE_WINDOW_LINES,
   SESSION_TOOL_RENDERER_KEYS,
   bashDisplayMode,
+  bashLiveWindow,
   coalescedToolLabel,
   isKnownSessionToolRenderer,
   sessionToolRendererKey,
@@ -52,13 +54,25 @@ describe("tui session tool rendering policy", () => {
     expect(coalescedToolLabel("custom_tool", 6)).toBe("custom_tool · 6")
   })
 
-  test("bash rows stay a stable one-liner while running, block only after completion", () => {
-    // Streamed output must not grow the transcript mid-call (transcript reflow
-    // per output chunk); the block appears exactly once, when the call ends.
-    expect(bashDisplayMode({ running: true, hasOutput: false })).toBe("inline")
-    expect(bashDisplayMode({ running: true, hasOutput: true })).toBe("inline")
-    expect(bashDisplayMode({ running: false, hasOutput: false })).toBe("inline")
-    expect(bashDisplayMode({ running: false, hasOutput: true })).toBe("block")
+  test("a bash card keeps its block shape from the first live snapshot", () => {
+    // The row must not change type when the call finishes. The old rule kept a
+    // one-liner while running and swapped in a bordered block at completion, so
+    // every finished command shifted the transcript by the block's chrome
+    // (border, padding, margin). The block now appears as soon as the tool has
+    // published a live snapshot, which it does from the first tick.
+    expect(bashDisplayMode({ hasOutput: false })).toBe("inline")
+    expect(bashDisplayMode({ hasOutput: true })).toBe("block")
+  })
+
+  test("the running window shows the newest output inside the finished row budget", () => {
+    const short = ["one", "two", "three"]
+    expect(bashLiveWindow(short)).toEqual({ text: "one\ntwo\nthree", hidden: 0 })
+
+    const long = Array.from({ length: 25 }, (_, index) => `line ${index + 1}`)
+    const window = bashLiveWindow(long)
+    expect(window.text.split("\n")).toHaveLength(BASH_LIVE_WINDOW_LINES)
+    expect(window.text.startsWith("line 16")).toBe(true)
+    expect(window.hidden).toBe(25 - BASH_LIVE_WINDOW_LINES)
   })
 
   test("keeps extracted renderer modules independent from the route index", async () => {

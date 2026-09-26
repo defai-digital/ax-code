@@ -30,6 +30,7 @@ import {
   codeDisplayView,
   compactDelegatedLabel,
   streamingTextRenderMode,
+  stripFenceLines,
   transcriptDisplayText,
   transcriptFoldView,
   userMessageMetadataDensity,
@@ -493,7 +494,10 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
   const ctx = use()
   const content = createMemo(() => {
     // Some providers send encrypted reasoning data that appears as [REDACTED].
-    return transcriptDisplayText(props.part.text.replaceAll("[REDACTED]", "")).trim()
+    // Fence rows are dropped for the same reason as `TextPart`: the finished
+    // `code` render below runs with conceal off and keeps every other
+    // character, so the swap does not re-wrap.
+    return stripFenceLines(transcriptDisplayText(props.part.text.replaceAll("[REDACTED]", ""))).trim()
   })
   // Throttle the rendered copy while reasoning streams — the renderer
   // re-processes the full document per paint.
@@ -534,7 +538,7 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
               display={display()}
               streaming={false}
               syntaxStyle={subtleSyntax()}
-              conceal={ctx.conceal()}
+              conceal={false}
               fg={theme.textMuted}
             />
           </Match>
@@ -562,13 +566,7 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
     final: () => !!props.message.finish && !["tool-calls", "unknown"].includes(props.message.finish),
   })
 
-  const trimmed = createMemo(() => transcriptDisplayText(paintedText()).trim())
-  const lines = createMemo(() => trimmed().split("\n"))
   const isFinal = createMemo(() => !!props.message.finish && !["tool-calls", "unknown"].includes(props.message.finish))
-  const finalAtMount = untrack(() => isFinal())
-  const fold = createMemo(() => transcriptFoldView({ lines: lines(), finalAtMount, userFold: userFold() }))
-  const visibleText = createMemo(() => fold().visibleText)
-
   // While streaming, paint the throttled snapshot as plain text — a cheap
   // wrap + buffer write per frame instead of a full markdown parse/highlight
   // (which re-processes the whole accumulated document per paint). The rich
@@ -577,6 +575,23 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
   const renderMode = createMemo(() =>
     streamingTextRenderMode({ final: isFinal(), experimentalMarkdown: Flag.AX_CODE_EXPERIMENTAL_MARKDOWN }),
   )
+  // The finished markdown render consumes fence rows structurally, so the
+  // streamed source drops them too and the finalize swap changes no row. The
+  // plain `code` fallback keeps them (see the conceal note below), so it strips
+  // nothing. Concealment is off for the finished render (below) so marker and
+  // link syntax survives exactly as streamed: with `conceal` on the renderer
+  // also hides heading/emphasis/code-span markers, and every marker change can
+  // re-wrap a line (measured: 8 rows raw vs 5 concealed for one paragraph plus
+  // a fence). Assistant prose therefore keeps its markdown source, which is what
+  // Kimi Code shows, and the finalize swap becomes a pure styling change.
+  const trimmed = createMemo(() => {
+    const text = transcriptDisplayText(paintedText())
+    return (renderMode() === "markdown" ? stripFenceLines(text) : text).trim()
+  })
+  const lines = createMemo(() => trimmed().split("\n"))
+  const finalAtMount = untrack(() => isFinal())
+  const fold = createMemo(() => transcriptFoldView({ lines: lines(), finalAtMount, userFold: userFold() }))
+  const visibleText = createMemo(() => fold().visibleText)
 
   // Autonomous-mode visual: in-flight text inside an active loop gets a
   // diff-add green background (max signal that the run is producing
@@ -635,7 +650,7 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
               syntaxStyle={syntax()}
               streaming={false}
               content={visibleText()}
-              conceal={ctx.conceal()}
+              conceal={false}
               fg={theme.markdownText}
               bg={isLiveAutonomous() ? autonomousBg() : theme.background}
             />
@@ -645,7 +660,7 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
               display={codeDisplayView({ filePath: "message.md", content: visibleText() })}
               streaming={false}
               syntaxStyle={syntax()}
-              conceal={ctx.conceal()}
+              conceal={false}
               fg={theme.text}
             />
           </Match>

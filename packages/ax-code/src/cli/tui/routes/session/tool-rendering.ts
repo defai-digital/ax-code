@@ -44,9 +44,29 @@ export function coalescedToolLabel(tool: string, count: number): string {
   return `${tool} · ${count}`
 }
 
-// While a bash call is running the row stays a stable one-liner (Kimi-style
-// tool status); the output block only replaces it once the call finishes, so
-// streamed output chunks never reflow the transcript mid-call.
-export function bashDisplayMode(input: { running: boolean; hasOutput: boolean }): "inline" | "block" {
-  return !input.running && input.hasOutput ? "block" : "inline"
+// A bash call keeps ONE row shape. As soon as the tool has published a live
+// snapshot (it publishes an empty one from the first tick) the card renders in
+// its final block shape and the output window fills in, so completion only
+// stops the spinner. The old rule kept a one-liner while running and swapped in
+// a block at completion, which shifted everything below by the block's chrome
+// (border, padding, margin) at the end of every command. Kimi Code caps a block
+// before it grows; see .internal/reports/2026-09-26-tui-transcript-stability-plan.md.
+export function bashDisplayMode(input: { hasOutput: boolean }): "inline" | "block" {
+  return input.hasOutput ? "block" : "inline"
+}
+
+/** Rows the running bash card shows from the newest output. */
+export const BASH_LIVE_WINDOW_LINES = 10
+
+/**
+ * Newest-output window for a running bash call. The tool publishes a tail
+ * snapshot past its metadata cap, so the window is the newest lines either way;
+ * `hidden` counts the snapshot lines above the window.
+ */
+export function bashLiveWindow(lines: readonly string[]): { text: string; hidden: number } {
+  if (lines.length <= BASH_LIVE_WINDOW_LINES) return { text: lines.join("\n"), hidden: 0 }
+  return {
+    text: lines.slice(-BASH_LIVE_WINDOW_LINES).join("\n"),
+    hidden: lines.length - BASH_LIVE_WINDOW_LINES,
+  }
 }

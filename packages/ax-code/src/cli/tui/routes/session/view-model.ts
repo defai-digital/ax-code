@@ -300,6 +300,49 @@ export function streamingTextRenderMode(input: {
 /** A finished reply folds by default once it exceeds this many lines. */
 export const TRANSCRIPT_FOLD_LINE_LIMIT = 50
 
+/**
+ * A fenced code block delimiter: up to three leading spaces, three or more
+ * backticks or tildes, and an optional info string. Matches the lines the
+ * markdown renderer consumes structurally, so the streamed plain text and the
+ * finished render agree on the row count.
+ */
+const FENCE_LINE = /^ {0,3}(?:`{3,}[^`]*|~{3,}.*)$/
+/**
+ * A trailing fence that is still being written (` ``, ````` ``` `````). Dropped
+ * too, so the row does not appear and then vanish when the third delimiter
+ * character lands.
+ */
+const PARTIAL_TRAILING_FENCE = /^ {0,3}[`~]{1,2}$/
+
+/**
+ * Drop fence-only lines from the streamed plain text.
+ *
+ * The finished render never paints them: the markdown renderable consumes a
+ * fenced block structurally, and the `code` renderable drops them when conceal
+ * is on. Streaming paints the raw source, so without this the block grows by
+ * two rows per code fence the moment the message finalizes (measured: 5 rows
+ * raw vs 3 rows finished for a single fenced block). See
+ * `.internal/reports/2026-09-26-tui-transcript-stability-plan.md`.
+ */
+export function stripFenceLines(text: string): string {
+  const lines = text.split("\n")
+  const kept: string[] = []
+  let changed = false
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index]!
+    // The last line may be a fence the model is still writing (` ``, ````` ``` `````).
+    // Dropping it keeps the row from appearing and then vanishing when the third
+    // delimiter character lands.
+    const trailing = index === lines.length - 1 && PARTIAL_TRAILING_FENCE.test(line)
+    if (FENCE_LINE.test(line) || trailing) {
+      changed = true
+      continue
+    }
+    kept.push(line)
+  }
+  return changed ? kept.join("\n") : text
+}
+
 export type TranscriptFoldView = {
   /** The reply is long enough that folding is offered. */
   foldable: boolean

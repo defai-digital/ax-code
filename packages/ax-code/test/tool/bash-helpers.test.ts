@@ -12,8 +12,10 @@ import {
   isStaticPathArg,
   refProcessIfAvailable,
   safeUtf8PrefixLength,
+  safeUtf8SuffixLength,
   staticallyCheckablePathArgs,
   stripShellQuotes,
+  tailBashMetadata,
   truncateBashMetadata,
 } from "../../src/tool/bash-helpers"
 
@@ -164,6 +166,22 @@ describe("tool.bash helpers", () => {
 
     expect(result).toBe("你\n\n...")
     expect(result).not.toContain("\uFFFD")
+  })
+
+  test("tails metadata by UTF-8 byte length without splitting characters", () => {
+    // The live progress snapshot keeps the newest output, so the transcript's
+    // running window shows the tail rather than a frozen head.
+    expect(tailBashMetadata("hello", 5)).toBe("hello")
+    expect(tailBashMetadata("0123456789", 4)).toBe("...\n\n6789")
+    expect(tailBashMetadata("你你", 5)).toBe("...\n\n你")
+    expect(tailBashMetadata("你你", 5)).not.toContain("\uFFFD")
+  })
+
+  test("counts the longest UTF-8 suffix without splitting a character", () => {
+    expect(safeUtf8SuffixLength(Buffer.from("abc", "utf8"), 2)).toBe(2)
+    expect(safeUtf8SuffixLength(Buffer.from("你你", "utf8"), 5)).toBe(3)
+    // Windows landing inside a character drop the whole character.
+    expect(safeUtf8SuffixLength(Buffer.from("a你", "utf8"), 2)).toBe(0)
   })
 
   test("keeps a valid leading byte when checking the next UTF-8 byte would overrun", () => {

@@ -194,6 +194,34 @@ export function truncateBashMetadata(input: string, maxBytes: number): string {
   return truncateUtf8ByBytes(input, maxBytes) + "\n\n..."
 }
 
+/**
+ * Mirror of `truncateBashMetadata` that keeps the newest output. The live
+ * progress snapshot uses this: while a command runs the transcript shows the
+ * tail, and the head stops changing once the cap is crossed, so a tail is both
+ * the useful window and never a byte-identical duplicate publish.
+ */
+export function tailBashMetadata(input: string, maxBytes: number): string {
+  if (Buffer.byteLength(input, "utf8") <= maxBytes) return input
+  return "...\n\n" + truncateUtf8FromEnd(input, maxBytes)
+}
+
+function truncateUtf8FromEnd(input: string, maxBytes: number): string {
+  const bytes = Buffer.from(input, "utf8")
+  if (bytes.byteLength <= maxBytes) return input
+  const start = bytes.byteLength - safeUtf8SuffixLength(bytes, maxBytes)
+  return bytes.subarray(start).toString("utf8")
+}
+
+/** Byte count of the longest UTF-8 suffix that fits in `maxBytes` without splitting a character. */
+export function safeUtf8SuffixLength(chunk: Buffer, maxBytes: number): number {
+  const bounded = Math.min(Math.max(0, maxBytes), chunk.length)
+  let start = chunk.length - bounded
+  // A continuation byte (0b10xxxxxx) has no leading byte in the window; skip the
+  // whole character so the decoded suffix never starts mid-sequence.
+  while (start < chunk.length && (chunk[start]! & 0xc0) === 0x80) start++
+  return chunk.length - start
+}
+
 export function safeUtf8PrefixLength(chunk: Buffer, maxBytes: number): number {
   const bounded = Math.min(Math.max(0, maxBytes), chunk.length)
   let end = 0

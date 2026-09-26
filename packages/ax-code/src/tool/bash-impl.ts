@@ -59,6 +59,7 @@ import {
   staticallyCheckablePathArgs,
   staticallyCreatedPathArgs,
   stripShellQuotes,
+  tailBashMetadata,
   truncateBashMetadata,
 } from "./bash-helpers"
 import { recordDestructiveApproval } from "./ops-shared"
@@ -1580,17 +1581,16 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         // Initialize metadata with empty output
         publishMetadata("")
 
-        // Once output has crossed the metadata-length cap, every subsequent
-        // append() call would publish a byte-identical truncated snapshot
-        // (the first MAX_METADATA_LENGTH bytes never change once we've seen
-        // them). Skip those duplicate publishes to avoid flooding the bus
-        // and the TUI on high-volume streams (e.g. `find /`).
         // Coalesce live progress publishes so a high-volume stream (e.g.
         // `find /`) does not issue one DB write + bus broadcast per stdout
         // chunk. The final output is returned by the tool result (never via
-        // publishMetadata), so a throttled snapshot is never lost.
+        // publishMetadata), so a throttled snapshot is never lost. A snapshot
+        // that has not changed since the last publish is skipped: past the
+        // metadata cap the transcript shows the *tail*, which keeps moving while
+        // the command produces output, so a live card stays live without ever
+        // repeating a byte-identical publish.
         const METADATA_PUBLISH_INTERVAL_MS = 100
-        let lastPublishedBytes = -1
+        let lastPublishedSnapshot: string | undefined
         let lastPublishedAt = 0
 
         const stdoutDecoder = new StringDecoder("utf8")
@@ -1614,10 +1614,13 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           const now = Date.now()
           if (now - lastPublishedAt < METADATA_PUBLISH_INTERVAL_MS) return
           const outputMetadataBytes = Buffer.byteLength(output, "utf8")
-          const isPastCap = outputMetadataBytes > MAX_METADATA_LENGTH
-          if (isPastCap && lastPublishedBytes > MAX_METADATA_LENGTH) return
-          publishMetadata(isPastCap ? truncateBashMetadata(output, MAX_METADATA_LENGTH) : output)
-          lastPublishedBytes = outputMetadataBytes
+          // Past the cap the transcript's live window needs the newest lines,
+          // and the head would be a frozen duplicate: publish the tail.
+          const snapshot =
+            outputMetadataBytes > MAX_METADATA_LENGTH ? tailBashMetadata(output, MAX_METADATA_LENGTH) : output
+          if (snapshot === lastPublishedSnapshot) return
+          publishMetadata(snapshot)
+          lastPublishedSnapshot = snapshot
           lastPublishedAt = now
         }
 

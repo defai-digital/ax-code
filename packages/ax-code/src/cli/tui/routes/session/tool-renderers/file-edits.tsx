@@ -11,7 +11,7 @@ import { Global } from "@/global"
 import { Locale } from "@/util/locale"
 import { detail, diagnostics, diffSummary, capLines, normalize, workdir } from "../format"
 import { codeDisplayView, diffDisplayView } from "../view-model"
-import { bashDisplayMode } from "../tool-rendering"
+import { bashDisplayMode, bashLiveWindow } from "../tool-rendering"
 import { SessionCodeRenderer, SessionDiffRenderer } from "../render-adapter"
 import { useSessionRouteContext } from "../context"
 import { BlockTool, InlineTool, type ToolProps } from "./primitives"
@@ -34,6 +34,9 @@ export function Bash(props: ToolProps<typeof BashTool>) {
     if (expanded()) return capped().text
     return [...lines().slice(0, 10), "..."].join("\n")
   })
+  // While the call runs the card shows the newest output in the same row budget,
+  // so completion swaps text rather than resizing the block.
+  const live = createMemo(() => bashLiveWindow(lines()))
 
   const workdirDisplay = createMemo(() => {
     return workdir(sync.data.path.directory, Global.Path.home, props.input.workdir)
@@ -49,26 +52,29 @@ export function Bash(props: ToolProps<typeof BashTool>) {
 
   return (
     <Switch>
-      <Match
-        when={bashDisplayMode({ running: isRunning(), hasOutput: props.metadata.output !== undefined }) === "block"}
-      >
+      <Match when={bashDisplayMode({ hasOutput: props.metadata.output !== undefined }) === "block"}>
         <BlockTool
           title={title()}
           part={props.part}
           spinner={isRunning()}
-          onClick={overflow() ? () => setExpanded((prev) => !prev) : undefined}
+          onClick={overflow() && !isRunning() ? () => setExpanded((prev) => !prev) : undefined}
         >
           <box gap={1}>
             <text fg={theme.text}>$ {props.input.command}</text>
             <Show when={output()}>
-              <text fg={theme.text}>{limited()}</text>
+              <text fg={theme.text}>{isRunning() ? live().text : limited()}</text>
             </Show>
-            <Show when={expanded() && capped().truncated}>
+            <Show when={isRunning() && live().hidden > 0}>
+              <text fg={theme.textMuted}>
+                … {live().hidden} {uiText("ui.linesTotal")}
+              </text>
+            </Show>
+            <Show when={!isRunning() && expanded() && capped().truncated}>
               <text fg={theme.textMuted}>
                 {uiText("ui.truncated")} {capped().total} {uiText("ui.linesTotal")}
               </text>
             </Show>
-            <Show when={overflow()}>
+            <Show when={!isRunning() && overflow()}>
               <text fg={theme.textMuted}>{expanded() ? uiText("ui.clickToCollapse") : uiText("ui.clickToExpand")}</text>
             </Show>
           </box>
