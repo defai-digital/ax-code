@@ -3,15 +3,13 @@ import type { FujiRun } from "./fuji-view-model"
 export type MahjongStyle = "mahjong-match" | "mahjong-ending"
 export const MAHJONG_COLUMNS = 76
 export const MAHJONG_ROWS = 25
-export const MAHJONG_BACKGROUND = "#042f22"
 export function isMahjongStyle(style: string | undefined): style is MahjongStyle {
   return style === "mahjong-match" || style === "mahjong-ending"
 }
 
-/** Match timeline: twelve 400ms steps per cycle. Shared by both renderers. */
-export const MAHJONG_STEP_MS = 400
-export const MAHJONG_STEPS = 12
-export const MAHJONG_CYCLE_MS = MAHJONG_STEP_MS * MAHJONG_STEPS
+/** Match timeline: twelve 400ms steps per cycle. */
+const MAHJONG_STEP_MS = 400
+const MAHJONG_STEPS = 12
 
 /** Palette shared by the text and pixel renderers. */
 export const MAHJONG_COLORS = {
@@ -28,6 +26,7 @@ export const MAHJONG_COLORS = {
   tileBackInk: "#34d399",
   suits: ["#2563eb", "#059669", "#dc2626", "#b45309"],
 } as const
+export const MAHJONG_BACKGROUND = MAHJONG_COLORS.felt
 
 /** Sample the vertical felt gradient. `t` is 0 at the top of the frame. */
 export function mahjongFeltRgb(t: number): readonly [number, number, number] {
@@ -77,7 +76,7 @@ export const MAHJONG_ENDING_LAYOUT = {
   blinkRow: 21,
 } as const
 
-export const MAHJONG_SEATS = ["SOUTH", "EAST", "NORTH", "WEST"] as const
+const MAHJONG_SEATS = ["SOUTH", "EAST", "NORTH", "WEST"] as const
 export const MAHJONG_SCORES = [32000, 23000, 21000, 24000] as const
 const SUITS = ["1C", "2C", "3C", "4C", "5C", "6C", "1B", "2B", "3B", "4B", "RD", "GD", "WD"]
 
@@ -98,7 +97,7 @@ export function mahjongScoreLine(seat: number): string {
   return `${MAHJONG_SEATS[seat]!.padEnd(8)} ${String(MAHJONG_SCORES[seat]).padStart(5)} PTS`
 }
 
-export type MahjongTileFace = { family: "circles" | "bamboo" | "honor"; count: number }
+type MahjongTileFace = { family: "circles" | "bamboo" | "honor"; count: number }
 /** Tile index 0-5 are circles, 6-9 bamboo bars, 10-12 honor plates. */
 export function mahjongTileFace(tile: number): MahjongTileFace {
   if (tile <= 5) return { family: "circles", count: tile + 1 }

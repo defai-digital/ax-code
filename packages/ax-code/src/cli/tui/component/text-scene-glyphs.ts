@@ -119,7 +119,7 @@ const LINE_HEIGHT = 15.6
 // Cache one raster size only, keeping resize and preview memory bounded.
 let cachedSize = ""
 const masks = new Map<string, Float32Array>()
-export function glyphMask(char: string, width: number, height: number) {
+function glyphMask(char: string, width: number, height: number) {
   const key = `${width}:${height}`
   if (key !== cachedSize) {
     masks.clear()

@@ -50,7 +50,7 @@ function mulberry32(seed: number) {
   }
 }
 
-export type Leaf = {
+type Leaf = {
   x: number
   y: number
   size: number
@@ -60,7 +60,7 @@ export type Leaf = {
   shape: number
 }
 
-export function foliageLeafCount(width: number, height: number): number {
+function foliageLeafCount(width: number, height: number): number {
   return Math.min(45, Math.max(4, Math.floor((width * height) / 4500)))
 }
 
@@ -96,7 +96,7 @@ export function foliageLeaves(width: number, height: number, variant: FoliageVar
   })
 }
 
-export function foliagePosition(item: Leaf, width: number) {
+function foliagePosition(item: Leaf, width: number) {
   return { x: (((item.x + Math.sin(item.phase) * item.swing) % width) + width) % width, y: item.y }
 }
 

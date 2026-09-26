@@ -180,7 +180,11 @@ export function digitalCodePixelPlayer(write: (data: string) => void) {
         if (frame) clear()
         frame = createDigitalCodePixels(input.width, input.height, input.direction, undefined, input.style)
         size = next
-      } else frame.rain = advanceDigitalCode(frame.rain)
+      } else if (!isTextSceneStyle(input.style) && !isFoliageVariant(input.style)) {
+        // Scene and foliage styles never render the rain; don't pay per-frame
+        // column copies for state nobody reads. Style switches rebuild anyway.
+        frame.rain = advanceDigitalCode(frame.rain)
+      }
       const now = performance.now()
       write(
         kittyDigitalCodeFrame(
