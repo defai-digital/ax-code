@@ -76,6 +76,24 @@ function seedCall(projectID: ProjectID, from: CodeNodeID, to: CodeNodeID, file: 
   })
 }
 
+async function seedCandidates(
+  projectID: ProjectID,
+  root: string,
+  candidates: Array<{ name: string; file: string; kind?: CodeNodeKind; startLine?: number; readable?: boolean }>,
+) {
+  const files = new Map<string, string[]>()
+  const symbols = candidates.map((candidate) => {
+    const file = path.join(root, candidate.file)
+    const lines = files.get(file) ?? []
+    const startLine = candidate.startLine ?? lines.length
+    lines[startLine] = `export function ${candidate.name}() { return true }`
+    if (candidate.readable !== false) files.set(file, lines)
+    return { id: seedSymbol(projectID, { ...candidate, file, startLine }), file, name: candidate.name }
+  })
+  for (const [file, lines] of files) await writeFile(file, lines.join("\n"))
+  return symbols
+}
+
 describe("GraphContext.build", () => {
   test("builds a bounded context pack with snippets and LSP provenance", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -257,6 +275,18 @@ describe("GraphContext.build", () => {
         expect(pack.snippets).toHaveLength(0)
         expect(pack.output).not.toContain("outside-secret-token")
 
+        const safe = path.join(tmp.path, "safe.ts")
+        await writeFile(safe, "export function leakSecretSafe() { return true }\n")
+        seedSymbol(projectID, { name: "leakSecretSafe", file: safe })
+        const backfilled = await GraphContext.build(projectID, {
+          query: "leakSecret",
+          maxSymbols: 2,
+          maxSnippets: 1,
+          scope: "worktree",
+        })
+        expect(backfilled.snippets.map((snippet) => snippet.file)).toEqual([safe])
+        expect(backfilled.output).not.toContain("outside-secret-token")
+
         CodeIntelligence.__clearProject(projectID)
       },
     })
@@ -361,5 +391,204 @@ describe("GraphContext.build", () => {
         CodeIntelligence.__clearProject(projectID)
       },
     })
+  })
+})
+
+test("covers candidate files before repeating a busy file and reports omissions", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const projectID = Instance.project.id
+      CodeIntelligence.__clearProject(projectID)
+
+      await seedCandidates(projectID, tmp.path, [
+        { name: "paymentAlpha", file: "a.ts" },
+        { name: "paymentBeta", file: "a.ts" },
+        { name: "paymentGamma", file: "a.ts" },
+        { name: "paymentHandler", file: "b.ts" },
+        { name: "paymentStorage", file: "c.ts" },
+      ])
+      const pack = await GraphContext.build(projectID, { query: "payment", maxSymbols: 4 })
+      expect(pack.symbols.map((symbol) => symbol.name)).toEqual([
+        "paymentAlpha",
+        "paymentHandler",
+        "paymentStorage",
+        "paymentBeta",
+      ])
+      expect(pack.omitted.symbols).toBe(1)
+      expect(pack.candidateCapped).toBe(false)
+
+      CodeIntelligence.__clearProject(projectID)
+    },
+  })
+})
+
+test("preserves exact query hits ahead of weaker matches in other files", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const projectID = Instance.project.id
+      CodeIntelligence.__clearProject(projectID)
+
+      const seeds = await seedCandidates(projectID, tmp.path, [
+        { name: "payment", file: "a.ts", kind: "variable" },
+        { name: "storage", file: "a.ts", kind: "variable" },
+        { name: "paymentHandler", file: "b.ts" },
+        { name: "storageHandler", file: "c.ts" },
+      ])
+      const pack = await GraphContext.build(projectID, {
+        query: "payment storage",
+        maxSymbols: 2,
+        seeds: [{ kind: "file", value: seeds[0].file }],
+      })
+      expect(pack.symbols.map((symbol) => symbol.name)).toEqual(["payment", "storage"])
+      expect(pack.omitted.symbols).toBe(2)
+
+      CodeIntelligence.__clearProject(projectID)
+    },
+  })
+})
+
+test("keeps explicit symbol and exact name seeds above query matches", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const projectID = Instance.project.id
+      CodeIntelligence.__clearProject(projectID)
+
+      const seeds = await seedCandidates(projectID, tmp.path, [
+        { name: "chosen", file: "z.ts", kind: "variable" },
+        { name: "named", file: "y.ts", kind: "variable" },
+        { name: "payment", file: "a.ts" },
+        { name: "namedExtra", file: "b.ts" },
+      ])
+      const pack = await GraphContext.build(projectID, {
+        query: "payment chosen named",
+        maxSymbols: 2,
+        seeds: [
+          { kind: "symbol", value: seeds[0].id },
+          { kind: "name", value: "named" },
+        ],
+      })
+      expect(pack.symbols.map((symbol) => symbol.name)).toEqual(["named", "chosen"])
+      expect(pack.omitted.symbols).toBe(2)
+
+      CodeIntelligence.__clearProject(projectID)
+    },
+  })
+})
+
+test("diversifies file seeds used by native Wiki without promoting substring collisions", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const projectID = Instance.project.id
+      CodeIntelligence.__clearProject(projectID)
+
+      const seeds = await seedCandidates(projectID, tmp.path, [
+        { name: "valid", file: "a.ts" },
+        { name: "validExtra", file: "a.ts" },
+        { name: "validate", file: "z.ts", kind: "variable" },
+        { name: "other", file: "b.ts" },
+      ])
+      const inputs = [seeds[0].file, seeds[2].file, seeds[3].file].map((file) => ({
+        kind: "file" as const,
+        value: file,
+      }))
+      const exact = await GraphContext.build(projectID, { query: "validate", seeds: inputs, maxSymbols: 1 })
+      expect(exact.symbols[0].name).toBe("validate")
+      const wiki = await GraphContext.build(projectID, { query: "Architecture overview", seeds: inputs, maxSymbols: 3 })
+      expect(new Set(wiki.symbols.map((symbol) => symbol.file)).size).toBe(3)
+
+      CodeIntelligence.__clearProject(projectID)
+    },
+  })
+})
+
+test("fills same-file requests and preserves source order across insertion permutations", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const projectID = Instance.project.id
+      CodeIntelligence.__clearProject(projectID)
+
+      const candidates = [
+        { name: "paymentLast", file: "a.ts", startLine: 8 },
+        { name: "paymentFirst", file: "a.ts", startLine: 0 },
+        { name: "paymentMiddle", file: "a.ts", startLine: 4 },
+      ]
+      const order = async (input: typeof candidates) => {
+        await seedCandidates(projectID, tmp.path, input)
+        const pack = await GraphContext.build(projectID, { query: "payment", maxSymbols: 3, maxSnippets: 0 })
+        expect(pack.snippets).toHaveLength(0)
+        expect(pack.omitted.snippets).toBe(3)
+        expect(pack.omitted.symbols).toBe(0)
+        return pack.symbols.map((symbol) => symbol.name)
+      }
+      const forward = await order(candidates)
+      CodeIntelligence.__clearProject(projectID)
+      const reverse = await order([...candidates].reverse())
+      expect(forward).toEqual(["paymentFirst", "paymentMiddle", "paymentLast"])
+      expect(reverse).toEqual(forward)
+
+      CodeIntelligence.__clearProject(projectID)
+    },
+  })
+})
+
+test("selects snippets across readable files even when exact symbols share a file", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const projectID = Instance.project.id
+      CodeIntelligence.__clearProject(projectID)
+
+      await seedCandidates(projectID, tmp.path, [
+        { name: "payment", file: "a.ts" },
+        { name: "storage", file: "a.ts" },
+        { name: "paymentHandler", file: "b.ts" },
+      ])
+      const pack = await GraphContext.build(projectID, {
+        query: "payment storage",
+        maxSymbols: 3,
+        maxSnippets: 2,
+      })
+      expect(pack.symbols.map((symbol) => symbol.name)).toEqual(["payment", "storage", "paymentHandler"])
+      expect(pack.snippets.map((snippet) => snippet.symbol.name)).toEqual(["payment", "paymentHandler"])
+      expect(pack.omitted.snippets).toBe(1)
+
+      CodeIntelligence.__clearProject(projectID)
+    },
+  })
+})
+
+test("backfills snippet slots after an unavailable file without adding unselected symbols", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const projectID = Instance.project.id
+      CodeIntelligence.__clearProject(projectID)
+
+      await seedCandidates(projectID, tmp.path, [
+        { name: "payment", file: "missing.ts", readable: false },
+        { name: "paymentAlpha", file: "a.ts" },
+        { name: "paymentBeta", file: "a.ts" },
+        { name: "paymentGamma", file: "a.ts" },
+      ])
+      const pack = await GraphContext.build(projectID, { query: "payment", maxSymbols: 3, maxSnippets: 2 })
+      expect(pack.symbols.map((symbol) => symbol.name)).toEqual(["payment", "paymentAlpha", "paymentBeta"])
+      expect(pack.snippets.map((snippet) => snippet.symbol.name)).toEqual(["paymentAlpha", "paymentBeta"])
+      expect(pack.omitted.symbols).toBe(1)
+      expect(pack.omitted.snippets).toBe(1)
+
+      CodeIntelligence.__clearProject(projectID)
+    },
   })
 })

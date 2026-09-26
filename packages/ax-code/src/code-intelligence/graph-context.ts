@@ -174,8 +174,39 @@ function kindScore(kind: CodeNodeKind): number {
 function rankSymbols(query: string, symbols: CodeIntelligence.Symbol[]): CodeIntelligence.Symbol[] {
   const lowerQuery = query.toLowerCase()
   return [...symbols].sort(
-    (a, b) => scoreSymbol(lowerQuery, b) - scoreSymbol(lowerQuery, a) || a.file.localeCompare(b.file),
+    (a, b) =>
+      scoreSymbol(lowerQuery, b) - scoreSymbol(lowerQuery, a) ||
+      a.file.localeCompare(b.file) ||
+      a.range.start.line - b.range.start.line ||
+      a.range.start.character - b.range.start.character ||
+      a.qualifiedName.localeCompare(b.qualifiedName) ||
+      a.id.localeCompare(b.id),
   )
+}
+
+// Diversity is a selection policy within a match tier, never a relevance bonus.
+// Explicit symbol/name seeds outrank exact query names, which outrank prefixes
+// and file membership. File seeds (including Wiki's) do not pin every member.
+type MatchTier = 0 | 1 | 2
+
+function selectSymbols(
+  ranked: CodeIntelligence.Symbol[],
+  limit: number,
+  tiers: ReadonlyMap<CodeNodeID, MatchTier> = new Map(),
+): CodeIntelligence.Symbol[] {
+  const occurrences = new Map<MatchTier, Map<string, number>>()
+  return ranked
+    .map((symbol, rank) => {
+      const tier = tiers.get(symbol.id) ?? 0
+      let files = occurrences.get(tier)
+      if (!files) occurrences.set(tier, (files = new Map()))
+      const occurrence = files.get(symbol.file) ?? 0
+      files.set(symbol.file, occurrence + 1)
+      return { symbol, rank, tier, occurrence }
+    })
+    .sort((a, b) => b.tier - a.tier || a.occurrence - b.occurrence || a.rank - b.rank)
+    .slice(0, limit)
+    .map((entry) => entry.symbol)
 }
 
 function scoreSymbol(lowerQuery: string, symbol: CodeIntelligence.Symbol): number {
@@ -545,33 +576,38 @@ export namespace GraphContext {
     const maxSnippets = Math.min(Math.max(opts.maxSnippets ?? DEFAULT_MAX_SNIPPETS, 0), 12)
     const maxDepth = Math.min(Math.max(opts.maxDepth ?? 1, 1), 3)
     const candidates: CodeIntelligence.Symbol[] = []
+    const tiers = new Map<CodeNodeID, MatchTier>()
     // A lookup that returns exactly MAX_CANDIDATES may have more matches that
     // were dropped; record that so downstream completeness is not overstated.
     let candidateCapped = false
-    const addCandidates = (found: CodeIntelligence.Symbol[]) => {
+    const addCandidates = (found: CodeIntelligence.Symbol[], tier: MatchTier = 0) => {
       if (found.length >= MAX_CANDIDATES) candidateCapped = true
       candidates.push(...found)
+      for (const symbol of found) {
+        if (tier > (tiers.get(symbol.id) ?? 0)) tiers.set(symbol.id, tier)
+      }
     }
 
     for (const seed of opts.seeds ?? []) {
       if (seed.kind === "symbol") {
         const symbol = CodeIntelligence.getSymbol(projectID, CodeNodeID.make(seed.value), { scope })
-        if (symbol) candidates.push(symbol)
+        if (symbol) addCandidates([symbol], 2)
       } else if (seed.kind === "file") {
         candidates.push(...CodeIntelligence.symbolsInFile(projectID, seed.value, { scope }))
       } else {
-        addCandidates(CodeIntelligence.findSymbol(projectID, seed.value, { limit: MAX_CANDIDATES, scope }))
+        addCandidates(CodeIntelligence.findSymbol(projectID, seed.value, { limit: MAX_CANDIDATES, scope }), 2)
         addCandidates(CodeIntelligence.findSymbolByPrefix(projectID, seed.value, { limit: MAX_CANDIDATES, scope }))
       }
     }
 
     for (const term of queryTerms(opts.query)) {
-      addCandidates(CodeIntelligence.findSymbol(projectID, term, { limit: MAX_CANDIDATES, scope }))
+      addCandidates(CodeIntelligence.findSymbol(projectID, term, { limit: MAX_CANDIDATES, scope }), 1)
       addCandidates(CodeIntelligence.findSymbolByPrefix(projectID, term, { limit: MAX_CANDIDATES, scope }))
     }
 
     const allSymbols = rankSymbols(opts.query, uniqueByID(candidates))
-    const symbols = allSymbols.slice(0, maxSymbols)
+    // Only diversify retrieved candidates: a capped lookup can still omit files.
+    const symbols = selectSymbols(allSymbols, maxSymbols, tiers)
     const callersBySeed = new Map<string, CodeIntelligence.CallChainNode[]>()
     const relationships: Relationship[] = []
     let totalRelationships = 0
@@ -626,13 +662,12 @@ export namespace GraphContext {
       if (!linesByFile.has(symbol.file)) linesByFile.set(symbol.file, await readFileLines(symbol.file, scope))
     }
 
-    const snippets = symbols
-      .slice(0, maxSnippets)
-      .map((symbol) => {
-        const lines = linesByFile.get(symbol.file)
-        return lines ? snippetFromLines(symbol, lines) : undefined
-      })
-      .filter((item): item is Snippet => item !== undefined)
+    // Unavailable files consume no snippet slots. Breadth here is independent of
+    // match tiers, but snippets must still belong to the final selected symbols.
+    const snippets = selectSymbols(
+      symbols.filter((symbol) => linesByFile.get(symbol.file) !== undefined),
+      maxSnippets,
+    ).map((symbol) => snippetFromLines(symbol, linesByFile.get(symbol.file)!))
 
     // Prior-session symbol notes (ADR-056). Attached to selected symbols and
     // rendered in a structurally distinct section so the agent can reuse prior
