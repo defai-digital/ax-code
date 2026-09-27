@@ -2,7 +2,7 @@
 
 Status: Active  
 Scope: current-state  
-Last reviewed: 2026-07-18
+Last reviewed: 2026-09-27
 Owner: AX Code runtime
 
 AX Wiki is AX Code's native repository-wiki compiler. It turns tracked source, configuration, tests, workflows, and existing documentation into a small source-backed Markdown knowledge base under `ax-wiki/`. It uses the same provider configuration and model routing as AX Code; there is no separate executable or credential store.
@@ -58,6 +58,32 @@ AX Wiki writes Markdown pages and `ax-wiki/.manifest.json`. Each page has frontm
 The manifest stores the deterministic plan hash, repository source hashes, page hashes, generation model, git revision, and generation time. Pages are written atomically; the manifest is written last and only after the complete in-memory candidate passes validation.
 
 Source discovery prefers Git's tracked and unignored file list, excludes generated/build/vendor directories and the wiki itself, skips binary or oversized files, and refuses paths or symlinks outside the repository.
+
+## Subsystem navigation
+
+The default plan keeps quickstart, architecture, and development pages. A module
+that exceeds one page's source-count or evidence-byte budget can also receive
+focused pages such as `modules/core/src/session.md`. These pages cover direct
+subdirectories under the module's `src`, `lib`, or `app` directory, with at least
+three code files per subsystem and two eligible subsystems in the module.
+
+Subsystem pages include their implementation subtree and matching files under
+the module's `test` or `tests` directory. Their generation instructions request
+entry points, runtime flow, boundaries, concrete change locations, and relevant
+tests. Module pages place up to two test files immediately after the highest-ranked
+source so tests can participate in bounded evidence selection.
+
+The total default budget stays at 12 pages, including the three overview pages.
+Module overviews and subsystem pages compete for remaining slots by source count;
+a subsystem is included only after its parent overview. Larger subsystems can
+therefore displace smaller package pages. Preview the result with `ax-code wiki plan`.
+Increase `maxPages` (up to 40 for automatic plans), or configure explicit `pages`
+when a particular subsystem needs guaranteed coverage. Explicit plans remain
+authoritative and do not receive automatic subsystem pages.
+
+This improves navigation and evidence focus; it does not verify generated prose or
+guarantee that an agent reads the wiki. Follow citations back to current source
+before relying on implementation details.
 
 ## Incremental updates and manual content
 

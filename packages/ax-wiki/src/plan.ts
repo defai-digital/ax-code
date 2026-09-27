@@ -4,6 +4,73 @@ import { safeRelativePath } from "./paths.js"
 import type { AxWikiConfig, WikiPlan, WikiPlanPage, WikiSource } from "./types.js"
 
 const RESERVED_DIRS = new Set(["docs", "test", "tests", ".github", "scripts", "script", "tools", "examples"])
+const SOURCE_ROOTS = new Set(["src", "lib", "app"])
+const TEST_DIRS = new Set(["test", "tests", "__tests__", "fixtures", "__fixtures__"])
+
+type PageCandidate = {
+  page: WikiPlanPage
+  prefix: string
+  fileCount: number
+  module?: { name: string; prefix: string; fileCount: number }
+}
+
+function allocatePagePath(stem: string, usedPaths: Set<string>): string {
+  let pagePath = `${stem}.md`
+  let suffix = 2
+  while (usedPaths.has(pagePath)) pagePath = `${stem}-${suffix++}.md`
+  usedPaths.add(pagePath)
+  return pagePath
+}
+
+function subsystemCandidates(
+  sources: WikiSource[],
+  parent: PageCandidate,
+  config: AxWikiConfig,
+  usedPaths: Set<string>,
+): PageCandidate[] {
+  const module = parent.module!
+  const inventory = sources.filter((source) => source.path.startsWith(module.prefix))
+  const evidenceBytes = inventory.reduce((total, source) => total + Math.min(source.bytes, 32_000), 0)
+  if (inventory.length <= (config.maxSourcesPerPage ?? 80) && evidenceBytes <= (config.maxPageSourceBytes ?? 160_000))
+    return []
+
+  const groups = new Map<string, { root: string; name: string; prefix: string; fileCount: number }>()
+  for (const source of inventory) {
+    if (source.category !== "code") continue
+    const parts = source.path.slice(module.prefix.length).split("/")
+    const [root, name] = parts
+    if (parts.length < 3 || !SOURCE_ROOTS.has(root!) || parts.slice(1, -1).some((part) => TEST_DIRS.has(part))) continue
+    const prefix = `${module.prefix}${root}/${name}/`
+    const group = groups.get(prefix) ?? { root: root!, name: name!, prefix, fileCount: 0 }
+    group.fileCount++
+    groups.set(prefix, group)
+  }
+  const eligible = [...groups.values()].filter((group) => group.fileCount >= 3)
+  if (eligible.length < 2) return []
+
+  // Allocate names independently of candidate rank so source-count changes do not
+  // swap colliding subsystem identities.
+  return eligible
+    .sort((left, right) => left.prefix.localeCompare(right.prefix))
+    .map((group) => ({
+      prefix: group.prefix,
+      fileCount: group.fileCount,
+      page: {
+        path: allocatePagePath(`${parent.page.path.slice(0, -3)}/${group.root}/${slug(group.name)}`, usedPaths),
+        title: `${title(module.name)} / ${title(group.name)} Subsystem`,
+        purpose: `Explain ${group.prefix}: entry points, runtime flow, boundaries, concrete change locations, and relevant tests. Cite supplied files and identify missing evidence rather than guessing.`,
+        selectors: [
+          `${group.prefix}**`,
+          ...["test", "tests"].flatMap((directory) => [
+            `${module.prefix}${directory}/${group.name}/**`,
+            `${module.prefix}${directory}/${group.name}.test.*`,
+            `${module.prefix}${directory}/${group.name}.spec.*`,
+          ]),
+        ],
+        kind: "module",
+      },
+    }))
+}
 
 function slug(input: string): string {
   return (
@@ -124,21 +191,25 @@ export function createWikiPlan(sources: WikiSource[], config: AxWikiConfig = {})
   ]
 
   if (!configured) {
-    for (const module of modules) {
-      if (pages.length >= maxPages) break
-      let pagePath = `modules/${slug(module.name)}.md`
-      let suffix = 2
-      while (usedPaths.has(pagePath) || pages.some((page) => page.path === pagePath)) {
-        pagePath = `modules/${slug(module.name)}-${suffix++}.md`
-      }
-      pages.push({
-        path: pagePath,
+    const candidates: PageCandidate[] = modules.map((module) => ({
+      module,
+      prefix: module.prefix,
+      fileCount: module.fileCount,
+      page: {
+        path: allocatePagePath(`modules/${slug(module.name)}`, usedPaths),
         title: `${title(module.name)} Module`,
         purpose: `Explain the responsibilities, public surface, internal flow, dependencies, and change guidance for ${module.prefix}.`,
         selectors: [`${module.prefix}**`],
         kind: "module",
-      })
-      usedPaths.add(pagePath)
+      },
+    }))
+    while (candidates.length && pages.length < maxPages) {
+      candidates.sort((left, right) => right.fileCount - left.fileCount || left.prefix.localeCompare(right.prefix))
+      const candidate = candidates.shift()!
+      pages.push(candidate.page)
+      if (candidate.module && pages.length < maxPages) {
+        candidates.push(...subsystemCandidates(sources, candidate, config, usedPaths))
+      }
     }
   }
 
@@ -176,8 +247,15 @@ function sourceScore(source: WikiSource): number {
 }
 
 export function selectPageSources(sources: WikiSource[], page: WikiPlanPage, maxSources = 80): WikiSource[] {
-  return sources
+  const ranked = sources
     .filter((source) => sourceMatchesPage(source, page))
     .sort((left, right) => sourceScore(right) - sourceScore(left) || left.path.localeCompare(right.path))
-    .slice(0, Math.max(1, maxSources))
+  const limit = Math.max(1, maxSources)
+  if (page.kind !== "module" || ranked.length === 0) return ranked.slice(0, limit)
+  // Put a small test sample early enough to survive both source-count and byte
+  // limits. Keep the best entry point first and never duplicate a selected file.
+  const first = ranked[0]!
+  const tests = ranked.filter((source) => source.category === "test" && source !== first).slice(0, 2)
+  const selected = new Set([first, ...tests])
+  return [...selected, ...ranked.filter((source) => !selected.has(source))].slice(0, limit)
 }
