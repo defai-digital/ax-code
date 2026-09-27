@@ -46,7 +46,13 @@ test("browser entry bundles without Node, polyfills, or AX Code runtime", async 
   expect(
     Object.keys(result.metafile!.inputs)
       .map((file) => path.resolve(file))
-      .every((file) => /ax-wiki(?:-viewer)?\/src\/(?:graph|index)\.ts$/.test(file)),
+      .every(
+        (file) =>
+          /ax-wiki\/src\/graph\.ts$/.test(file) ||
+          /ax-wiki-viewer\/src\/(?:index|force-layout)\.ts$/.test(file) ||
+          /[/\\]node_modules[/\\]d3-(?:force|dispatch|quadtree|timer)[/\\]/.test(file),
+      ),
   ).toBe(true)
   expect(result.outputFiles[0].text).not.toMatch(/\b(?:require\(|process\.|Buffer\b)|node:/)
+  expect(result.outputFiles[0].text).not.toMatch(/\beval\(|new Function|fetch\(|XMLHttpRequest|WebSocket/)
 })
