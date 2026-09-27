@@ -75,3 +75,34 @@ test("settles animated layouts without running forever", async () => {
   expect(ticks).toBeGreaterThan(0)
   expect(ticks).toBeLessThanOrEqual(300)
 })
+
+test("reheat restarts a settled simulation and moves neighbors", async () => {
+  let ends = 0
+  let resolveSecond!: () => void
+  const secondEnd = new Promise<void>((resolve) => (resolveSecond = resolve))
+  const layout = createForceLayout(graph, {
+    reducedMotion: false,
+    onEnd: () => {
+      ends++
+      if (ends === 2) resolveSecond()
+    },
+  })
+  try {
+    while (ends < 1) await new Promise((resolve) => setTimeout(resolve, 100))
+    const hub = layout.byId.get("page:guide.md")!
+    const neighbor = layout.byId.get("source:src/a.ts")!
+    const before = [neighbor.x, neighbor.y]
+    hub.fx = hub.x + 100
+    hub.fy = hub.y
+    layout.reheat(0.3)
+    await Promise.race([
+      secondEnd,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("reheat never settled")), 30000)),
+    ])
+    expect(ends).toBe(2)
+    expect(Math.hypot(hub.x - (hub.fx as number), hub.y - (hub.fy as number))).toBe(0)
+    expect(Math.hypot(neighbor.x - before[0], neighbor.y - before[1])).toBeGreaterThan(0.5)
+  } finally {
+    layout.stop()
+  }
+}, 60000)

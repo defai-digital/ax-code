@@ -9,7 +9,12 @@ import { projectWikiManifest } from "@ax-code/ax-wiki/graph"
 import { renderWikiGraphHtml } from "../dist/node.js"
 
 const dir = await mkdtemp(path.join(tmpdir(), "wiki-viewer-browser-"))
-const browser = await chromium.launch({ executablePath: process.env.AX_WIKI_CHROMIUM || undefined, headless: true })
+const browser = await chromium.launch({
+  executablePath: process.env.AX_WIKI_CHROMIUM || undefined,
+  headless: true,
+  // Keep timers and frames flowing so force-layout reheats behave like a visible browser.
+  args: ["--disable-background-timer-throttling", "--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding"],
+})
 try {
   const graph = projectWikiManifest(
     {
@@ -63,6 +68,110 @@ try {
   assert.equal(await page.locator(".list button").count(), 2)
   await page.keyboard.press("Escape")
   assert.equal(await page.evaluate(() => document.activeElement?.tagName), "INPUT")
+  assert.match(await page.locator(".legend").innerText(), /size = visible connections/)
+  await page.getByRole("searchbox").fill("Arch")
+  await page.keyboard.press("Enter")
+  assert.match(await page.locator(".Detail").innerText(), /Page: Architecture/)
+  assert.equal(await page.locator(".list button").count(), 1)
+  await page.evaluate(() => document.querySelector("svg").dispatchEvent(new MouseEvent("click", { bubbles: true })))
+  assert.match(await page.locator(".Detail").innerText(), /Select a page or source/)
+  assert.equal(await page.locator(".list button").count(), 1)
+  await page.getByRole("searchbox").fill("")
+  assert.equal(await page.locator(".list button").count(), 4)
+  await page.evaluate(() => document.querySelector("svg g.node").dispatchEvent(new Event("mouseenter")))
+  assert.equal(await page.evaluate(() => [...document.querySelectorAll("svg g.node")].filter((g) => g.getAttribute("opacity") === "0.15").length), 2)
+  await page.evaluate(() => document.querySelector("svg g.node").dispatchEvent(new Event("mouseleave")))
+  assert.equal(await page.evaluate(() => [...document.querySelectorAll("svg g.node")].filter((g) => g.getAttribute("opacity") === "0.15").length), 0)
+  // Synthetic pointer drag: exact client coords with no mouse-driver aiming, so the
+  // drop point is exact whether the simulation is still settling or already dead.
+  // Poll from Node: in-page waitForFunction evaluates strings, which the export CSP blocks.
+  const drag = await page.evaluate(() => {
+    const group = document.querySelectorAll("svg g.node")[0]
+    const box = group.querySelector("circle").getBoundingClientRect()
+    const sx = box.x + box.width / 2,
+      sy = box.y + box.height / 2
+    const opts = (x, y) => ({ clientX: x, clientY: y, pointerId: 7, bubbles: true, isPrimary: true })
+    group.dispatchEvent(new PointerEvent("pointerdown", opts(sx, sy)))
+    for (const [dx, dy] of [
+      [20, 10],
+      [40, 20],
+      [60, 30],
+      [80, 40],
+    ])
+      group.dispatchEvent(new PointerEvent("pointermove", opts(sx + dx, sy + dy)))
+    group.dispatchEvent(new PointerEvent("pointerup", opts(sx + 80, sy + 40)))
+    const drop = new DOMPoint(sx + 80, sy + 40).matrixTransform(
+      document.querySelector("svg").getScreenCTM().inverse(),
+    )
+    return {
+      before: [...document.querySelectorAll("svg g.node")].map((g) => g.getAttribute("transform")),
+      drop: [drop.x, drop.y],
+    }
+  })
+  async function awaitMoved(index, predicate, timeoutMs, message) {
+    const start = Date.now()
+    for (;;) {
+      const current = await page.evaluate(
+        (i) => document.querySelectorAll("svg g.node")[i].getAttribute("transform"),
+        index,
+      )
+      if (predicate(current)) return
+      if (Date.now() - start > timeoutMs) throw new Error(message)
+      await page.waitForTimeout(200)
+    }
+  }
+  await awaitMoved(
+    0,
+    (transform) => {
+      const [, x, y] = /translate\(([^,]+),([^)]+)\)/.exec(transform).map(Number)
+      return Math.hypot(x - drag.drop[0], y - drag.drop[1]) < 0.5
+    },
+    15000,
+    "dragged node never reached the drop point",
+  )
+  await awaitMoved(1, (transform) => transform !== drag.before[1], 15000, "neighbor never moved after reheat")
+  // The click right after a drag is suppressed instead of selecting.
+  await page.evaluate(() => document.querySelectorAll("svg g.node")[0].dispatchEvent(new MouseEvent("click", { bubbles: true })))
+  assert.match(await page.locator(".Detail").innerText(), /Select a page or source/)
+  await page.locator("svg g.node circle").first().click()
+  assert.match(await page.locator(".Detail").innerText(), /Page: Architecture/)
+
+  // Reduced motion positions drags synchronously with no reheating.
+  const calm = await browser.newPage({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" })
+  await calm.goto(pathToFileURL(output).href)
+  await calm.getByRole("heading", { name: "AX Wiki evidence map" }).waitFor()
+  const calmDrag = await calm.evaluate(() => {
+    const group = document.querySelectorAll("svg g.node")[0]
+    const box = group.querySelector("circle").getBoundingClientRect()
+    const sx = box.x + box.width / 2,
+      sy = box.y + box.height / 2
+    const opts = (x, y) => ({ clientX: x, clientY: y, pointerId: 7, bubbles: true, isPrimary: true })
+    const before = [...document.querySelectorAll("svg g.node")].map((g) => g.getAttribute("transform"))
+    group.dispatchEvent(new PointerEvent("pointerdown", opts(sx, sy)))
+    for (const [dx, dy] of [
+      [20, 10],
+      [40, 20],
+      [60, 30],
+      [80, 40],
+    ])
+      group.dispatchEvent(new PointerEvent("pointermove", opts(sx + dx, sy + dy)))
+    group.dispatchEvent(new PointerEvent("pointerup", opts(sx + 80, sy + 40)))
+    const drop = new DOMPoint(sx + 80, sy + 40).matrixTransform(
+      document.querySelector("svg").getScreenCTM().inverse(),
+    )
+    return {
+      before,
+      drop: [drop.x, drop.y],
+      landed: document.querySelectorAll("svg g.node")[0].getAttribute("transform"),
+      neighbor: document.querySelectorAll("svg g.node")[1].getAttribute("transform"),
+    }
+  })
+  const [, landedX, landedY] = /translate\(([^,]+),([^)]+)\)/.exec(calmDrag.landed).map(Number)
+  assert.ok(Math.hypot(landedX - calmDrag.drop[0], landedY - calmDrag.drop[1]) < 1e-6)
+  assert.equal(calmDrag.neighbor, calmDrag.before[1])
+  await calm.evaluate(() => document.querySelectorAll("svg g.node")[0].dispatchEvent(new MouseEvent("click", { bubbles: true })))
+  assert.match(await calm.locator(".Detail").innerText(), /Select a page or source/)
+  await calm.close()
   await page.getByRole("button", { name: "Show all / reset" }).click()
   if (process.env.AX_WIKI_VIEWER_SCREENSHOT)
     await page.screenshot({ path: process.env.AX_WIKI_VIEWER_SCREENSHOT, fullPage: true })
@@ -115,6 +224,31 @@ try {
     isolated: true,
     cleaned: true,
   })
+  const badges = await api.evaluate(() => {
+    const host = document.createElement("main")
+    document.body.appendChild(host)
+    const handle = WikiViewer.mount(host, {
+      schemaVersion: 1,
+      snapshot: "badge-fixture",
+      scope: "wiki-manifest",
+      codeRelationships: "unavailable",
+      nodes: [
+        { id: "page:g.md", kind: "page", label: "G", path: "g.md", freshness: "unknown", recordedReferences: 5 },
+        { id: "source:s.ts", kind: "source", label: "s.ts", path: "s.ts", freshness: "unknown", recordedReferences: 1 },
+      ],
+      edges: [{ from: "page:g.md", to: "source:s.ts", kind: "references-source", freshness: "unknown" }],
+      omitted: { nodes: 4, edges: 4 },
+    })
+    const found = {
+      count: host.querySelectorAll(".badge").length,
+      label: host.querySelector(".badge text")?.textContent,
+      note: host.querySelector(".badge title")?.textContent,
+    }
+    handle.dispose()
+    host.remove()
+    return found
+  })
+  assert.deepEqual(badges, { count: 1, label: "+4", note: "+4 recorded references not in this snapshot" })
   console.log(
     JSON.stringify({
       browser: browser.version(),

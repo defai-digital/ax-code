@@ -10,8 +10,10 @@ export const viewerCss = `
 .axwv button{cursor:pointer}.axwv button:hover{background:#30455c}.axwv :focus-visible{outline:3px solid #78dacc;outline-offset:2px}
 .axwv .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}.axwv .layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(260px,1fr);gap:16px}
 .axwv .canvas{height:520px;overflow:hidden;border:1px solid #64778b;border-radius:8px}.axwv svg{width:100%;height:100%}
-.axwv .node{cursor:pointer}.axwv svg text{pointer-events:none;font-size:10px;fill:#edf6ff;text-anchor:middle}
+.axwv .node{cursor:grab;touch-action:none}.axwv .node.dragging{cursor:grabbing}.axwv svg text{pointer-events:none;font-size:10px;fill:#edf6ff;text-anchor:middle}
 .axwv .edge{fill:none;stroke:#64778b}.axwv .arrow{fill:none;stroke:#b5c5d7}
+.axwv .badge text{font-size:7.5px;font-weight:700;fill:#dce6f2}
+.axwv .legend{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;margin:8px 0 0;font-size:12px;color:#b5c5d7}
 .axwv .list{max-height:260px;overflow:auto;padding:0;list-style:none}.axwv .list button{width:100%;text-align:left;margin:3px 0;overflow-wrap:anywhere}
 .axwv .detail{white-space:pre-wrap;overflow-wrap:anywhere}.axwv .muted{color:#b5c5d7}.axwv .selected{border-color:#78dacc}
 @media(max-width:760px){.axwv .layout{grid-template-columns:1fr}.axwv .canvas{height:360px}}
@@ -50,6 +52,8 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   let layout: ForceLayout | undefined
   let selected: string | undefined
   let hovered: string | undefined
+  let suppressClick = false
+  let lastVisible: WikiGraphNode[] = []
   let query = "",
     kind = "all",
     zoom = 1,
@@ -57,7 +61,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     offsetY = 0,
     disposed = false,
     cameraTouched = false,
-    settled = false
+    hasFitted = false
   const doc = element.ownerDocument
   const reducedMotion =
     doc.defaultView?.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
@@ -110,7 +114,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   svg.setAttribute("role", "img")
   svg.setAttribute(
     "aria-label",
-    "Page to source relationships; use the adjacent list for keyboard navigation. When focused, plus and minus zoom, arrow keys pan.",
+    "Page to source relationships; use the adjacent list for keyboard navigation. When focused, plus and minus zoom, arrow keys pan. Drag nodes to rearrange; activating empty canvas clears the selection.",
   )
   svg.tabIndex = 0
   canvas.append(svg)
@@ -124,6 +128,25 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   detail.className = "Detail"
   const navigation = html("div", root)
   navigation.className = "controls"
+  const legend = html("div", root)
+  legend.className = "legend"
+  legend.setAttribute("aria-label", "Map legend")
+  for (const [swatch, text] of [
+    [PAGE_FILL, "pages (left)"],
+    [SOURCE_FILL, "sources (right)"],
+  ] as const) {
+    const item = doc.createElement("span")
+    const dot = doc.createElement("span")
+    dot.textContent = "● "
+    dot.style.color = swatch
+    item.append(dot, doc.createTextNode(text))
+    legend.append(item)
+  }
+  for (const text of ["size = visible connections", "+N = recorded references not in this snapshot"]) {
+    const item = doc.createElement("span")
+    item.textContent = text
+    legend.append(item)
+  }
 
   const svgNS = "http://www.w3.org/2000/svg"
   const edgeLayer = doc.createElementNS(svgNS, "g")
@@ -135,14 +158,26 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   let nodeEls: NodeEls[] = []
   const nodeElsById = new Map<string, NodeEls>()
 
-  function neighborhood(): Set<string> | undefined {
-    if (!selected || !layout) return undefined
-    const near = new Set([selected])
+  function neighborhoodOf(id: string): Set<string> | undefined {
+    if (!layout) return undefined
+    const near = new Set([id])
     for (const link of layout.links) {
-      if (link.from === selected) near.add(link.to)
-      else if (link.to === selected) near.add(link.from)
+      if (link.from === id) near.add(link.to)
+      else if (link.to === id) near.add(link.from)
     }
     return near
+  }
+
+  function neighborhood(): Set<string> | undefined {
+    return selected === undefined ? undefined : neighborhoodOf(selected)
+  }
+
+  /** Canvas-only focus: selection wins, hover previews, neither touches list or detail. */
+  function canvasFocus(): { id: string; near: Set<string> } | undefined {
+    const id = selected ?? hovered
+    if (id === undefined) return undefined
+    const near = neighborhoodOf(id)
+    return near === undefined ? undefined : { id, near }
   }
 
   function matches(node: WikiGraphNode): boolean {
@@ -226,14 +261,16 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
 
   function applyEmphasis() {
     if (!layout) return
-    const near = neighborhood()
+    const focus = canvasFocus()
+    const near = focus?.near
+    const focusId = focus?.id
     for (const { path, arrow, edge } of edgeEls) {
       const a = layout.byId.get(edge.from)!,
         b = layout.byId.get(edge.to)!
       const dimmed =
         (kind !== "all" && (a.kind !== kind || b.kind !== kind)) ||
         (near !== undefined && (!near.has(edge.from) || !near.has(edge.to)))
-      const incident = selected !== undefined && (edge.from === selected || edge.to === selected)
+      const incident = focusId !== undefined && (edge.from === focusId || edge.to === focusId)
       path.setAttribute("opacity", dimmed ? String(DIMMED_EDGE) : incident ? String(FOCUS_EDGE_OPACITY) : String(REST_EDGE))
       path.setAttribute("stroke", incident && !dimmed ? FOCUS_EDGE : "#64778b")
       arrow.setAttribute("opacity", dimmed ? String(DIMMED_EDGE) : incident ? String(FOCUS_EDGE_OPACITY) : String(REST_EDGE))
@@ -245,7 +282,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
         !matches(info) ||
         (near !== undefined && !near.has(node.id))
       group.setAttribute("opacity", dimmed ? String(DIMMED_NODE) : "1")
-      if (node.id === selected) {
+      if (node.id === selected || (selected === undefined && node.id === hovered)) {
         circle.setAttribute("stroke", SELECT_RING)
         circle.setAttribute("stroke-width", "3")
       } else if (node.kind === "page") {
@@ -255,7 +292,8 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
         circle.removeAttribute("stroke")
         circle.removeAttribute("stroke-width")
       }
-      const showLabel = node.kind === "page" || zoom >= 2 || node.id === hovered || (near !== undefined && near.has(node.id))
+      const emphasized = near !== undefined && near.has(node.id)
+      const showLabel = emphasized || (node.kind === "page" ? zoom >= 0.7 : zoom >= 2)
       label.setAttribute("display", showLabel ? "" : "none")
     }
   }
@@ -277,6 +315,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     const visible = graph.nodes.filter(
       (node) => (!near || near.has(node.id)) && (kind === "all" || node.kind === kind) && matches(node),
     )
+    lastVisible = visible
     list.replaceChildren()
     for (const node of visible) {
       const item = html("li", list)
@@ -286,7 +325,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       if (node.id === selected) button.className = "selected"
       button.onclick = () => select(node)
     }
-    return visible.length
+    return visible
   }
 
   function renderDetail() {
@@ -317,9 +356,9 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   function render() {
     positionElements()
     applyEmphasis()
-    const matchCount = renderList()
+    const visible = renderList()
     renderDetail()
-    renderStatus(matchCount)
+    renderStatus(visible.length)
   }
 
   function buildElements() {
@@ -351,7 +390,33 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       const title = doc.createElementNS(svgNS, "title")
       title.textContent = `${info.label} (${node.kind}, ${info.freshness}, ${plural(node.degree, "connection", "connections")} shown)`
       group.append(circle, label, title)
-      group.addEventListener("click", () => select(info))
+      const omitted = info.recordedReferences - node.degree
+      if (omitted > 0) {
+        const badge = doc.createElementNS(svgNS, "g")
+        badge.setAttribute("class", "badge")
+        const pill = doc.createElementNS(svgNS, "circle")
+        pill.setAttribute("cx", String(node.radius * 0.75))
+        pill.setAttribute("cy", String(-node.radius * 0.75))
+        pill.setAttribute("r", "7.5")
+        pill.setAttribute("fill", "#1c2c3c")
+        pill.setAttribute("stroke", "#b5c5d7")
+        pill.setAttribute("stroke-width", "1.2")
+        const count = doc.createElementNS(svgNS, "text")
+        count.setAttribute("x", String(node.radius * 0.75))
+        count.setAttribute("y", String(-node.radius * 0.75 + 2.5))
+        count.textContent = omitted > 99 ? "+99" : `+${omitted}`
+        const note = doc.createElementNS(svgNS, "title")
+        note.textContent = `+${omitted} recorded references not in this snapshot`
+        badge.append(pill, count, note)
+        group.append(badge)
+      }
+      group.addEventListener("click", () => {
+        if (suppressClick) {
+          suppressClick = false
+          return
+        }
+        select(info)
+      })
       group.addEventListener("mouseenter", () => {
         hovered = node.id
         applyEmphasis()
@@ -359,6 +424,53 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       group.addEventListener("mouseleave", () => {
         if (hovered === node.id) hovered = undefined
         applyEmphasis()
+      })
+      group.addEventListener("pointerdown", (event) => {
+        if (disposed || layout === undefined) return
+        // No preventDefault: touch scrolling is already disabled via touch-action,
+        // and canceling pointerdown would risk the click-to-select path.
+        const pointerId = event.pointerId
+        const startX = event.clientX,
+          startY = event.clientY
+        let moved = false
+        try {
+          group.setPointerCapture(pointerId)
+        } catch {
+          // Capture may fail for synthetic or edge-case pointers; the drag
+          // still tracks as long as moves reach the group.
+        }
+        const move = (moveEvent: PointerEvent) => {
+          if (moveEvent.pointerId !== pointerId) return
+          if (!moved && Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 3) return
+          moved = true
+          group.classList.add("dragging")
+          const ctm = svg.getScreenCTM()
+          if (!ctm) return
+          const world = new DOMPoint(moveEvent.clientX, moveEvent.clientY).matrixTransform(ctm.inverse())
+          node.fx = world.x
+          node.fy = world.y
+          if (reducedMotion) {
+            // No simulation ticks run under reduced motion, so a drag positions
+            // the node directly; neighbors stay put and no reheating occurs.
+            node.x = world.x
+            node.y = world.y
+          }
+          positionElements()
+        }
+        const up = (upEvent: PointerEvent) => {
+          if (upEvent.pointerId !== pointerId) return
+          group.removeEventListener("pointermove", move)
+          group.removeEventListener("pointerup", up)
+          group.removeEventListener("pointercancel", up)
+          group.classList.remove("dragging")
+          if (moved) {
+            suppressClick = true
+            if (!reducedMotion && layout !== undefined) layout.reheat(0.3)
+          }
+        }
+        group.addEventListener("pointermove", move)
+        group.addEventListener("pointerup", up)
+        group.addEventListener("pointercancel", up)
       })
       nodeLayer.append(group)
       const els = { group, circle, label, node }
@@ -369,30 +481,26 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
 
   function buildLayout() {
     layout?.stop()
-    settled = false
+    hasFitted = false
     layout = createForceLayout(graph, {
       reducedMotion,
       onTick: positionElements,
       onEnd: () => {
-        settled = true
         positionElements()
-        if (!cameraTouched) fitView()
+        if (!hasFitted) {
+          hasFitted = true
+          if (!cameraTouched) fitView()
+        }
       },
     })
-    if (reducedMotion) {
-      settled = true
-      positionElements()
-    }
+    if (reducedMotion) positionElements()
     buildElements()
   }
 
   function select(node: WikiGraphNode) {
+    // Selection only changes emphasis, never positions, so a still-running
+    // simulation simply settles beneath it instead of reflowing.
     selected = node.id
-    // Pin positions so a still-running simulation cannot reflow under the cursor.
-    if (layout && !settled) for (const pinned of layout.nodes) {
-      pinned.fx = pinned.x
-      pinned.fy = pinned.y
-    }
     render()
     detailHeading.focus()
   }
@@ -465,10 +573,22 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     applyEmphasis()
   }
 
+  svg.addEventListener("click", (event) => {
+    if (event.target === svg && selected !== undefined) {
+      selected = undefined
+      render()
+    }
+  })
   search.oninput = () => {
     selected = undefined
     query = search.value.toLowerCase()
     render()
+  }
+  search.onkeydown = (event) => {
+    if (event.key === "Enter" && lastVisible.length > 0) {
+      event.preventDefault()
+      select(lastVisible[0])
+    }
   }
   filter.onchange = () => {
     selected = undefined
@@ -490,7 +610,12 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   }
   root.onkeydown = (event) => {
     if (event.key === "Escape") {
-      search.focus()
+      if (doc.activeElement === search && selected !== undefined) {
+        selected = undefined
+        render()
+      } else {
+        search.focus()
+      }
     }
   }
   element.append(root)
@@ -527,6 +652,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       root.onkeydown = null
       svg.onkeydown = null
       search.oninput = null
+      search.onkeydown = null
       filter.onchange = null
       reset.onclick = null
     },

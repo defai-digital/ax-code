@@ -35,6 +35,8 @@ export type ForceLayout = {
   links: LayoutLink[]
   byId: ReadonlyMap<string, LayoutNode>
   stop(): void
+  /** Reheat a settled simulation (e.g. after a drag); resets the tick budget. */
+  reheat(alpha?: number): void
 }
 
 /** Node radius from visible degree; recorded totals must never size the drawing. */
@@ -97,20 +99,24 @@ export function createForceLayout(
     .alphaDecay(0.04)
 
   let ended = false
+  let ticks = 0
   const finish = () => {
     if (ended) return
     ended = true
     simulation.stop()
     options.onEnd?.()
   }
-
-  if (options.reducedMotion) {
+  const runSync = (alpha: number) => {
     simulation.stop()
+    simulation.alpha(alpha)
     for (let tick = 0; tick < LAYOUT_LIMITS.maxTicks && simulation.alpha() > simulation.alphaMin(); tick++)
       simulation.tick()
     finish()
+  }
+
+  if (options.reducedMotion) {
+    runSync(1)
   } else {
-    let ticks = 0
     simulation.on("tick", () => {
       ticks++
       if (ticks >= LAYOUT_LIMITS.maxTicks) finish()
@@ -119,5 +125,19 @@ export function createForceLayout(
     simulation.on("end", finish)
   }
 
-  return { nodes, links, byId, stop: () => simulation.stop() }
+  return {
+    nodes,
+    links,
+    byId,
+    stop: () => simulation.stop(),
+    reheat: (alpha = 0.3) => {
+      if (options.reducedMotion) {
+        runSync(alpha)
+        return
+      }
+      ended = false
+      ticks = 0
+      simulation.alpha(alpha).restart()
+    },
+  }
 }
