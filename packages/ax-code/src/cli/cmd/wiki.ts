@@ -342,6 +342,7 @@ export const WikiVizCommand = cmd({
     )
     if (args.export !== undefined) {
       if (!args.export.trim()) throw new Error("--export requires a destination")
+      // @scan-suppress security_scan - Caller-selected export path. This command writes only the HTML the user named.
       const destination = path.resolve(Filesystem.callerCwd(), args.export)
       await WikiVisualization.exportHtml(destination, document.html)
       UI.println(`Wrote Wiki evidence snapshot: ${destination}`)

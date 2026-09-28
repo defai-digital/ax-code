@@ -27,6 +27,7 @@ export namespace WikiVisualization {
     graphRelativePath(wikiDir)
     const canonicalRoot = await realpath(root)
     await assertWikiDirectorySafe(canonicalRoot, wikiDir)
+    // @scan-suppress security_scan - wikiDir is a relative graph path, and the manifest realpath must match this join.
     const manifestPath = path.join(canonicalRoot, wikiDir, ".manifest.json")
     const resolved = await realpath(manifestPath).catch((error) => {
       if (error && typeof error === "object" && "code" in error && error.code === "ENOENT")
@@ -191,6 +192,7 @@ export namespace WikiVisualization {
       revision: 0,
     }
     let graph: ReturnType<typeof renderWikiGraphHtml> | undefined
+    // @scan-suppress security_scan - Browser script polling its own page. stateUrl is a same-origin path, not a server request.
     const script = `let shown="";const stateUrl=location.pathname+"/state";const label=document.getElementById("status");const view=document.getElementById("graph");async function poll(){try{const r=await fetch(stateUrl,{cache:"no-store"});if(!r.ok)throw Error();const s=await r.json();const reasons={idle:"Waiting for project idle",busy:"Waiting for active sessions and queued work",permissions:"Wiki generation is blocked by read/write permissions",disabled:"Automatic Wiki maintenance is disabled",non_git:"Open the graph again to request Wiki generation for this non-Git directory",building:"Generating Wiki",complete:"Wiki ready",failed:"Wiki maintenance failed or is unavailable. Check the runtime connection and configured model, then reopen the graph to retry."};label.textContent=(reasons[s.reason]||"Wiki status unavailable")+(s.phase==="running"&&s.total?" ("+s.completed+"/"+s.total+")":"");if(s.snapshot&&s.snapshot!==shown){shown=s.snapshot;view.src=location.pathname+"/graph?revision="+encodeURIComponent(s.snapshot);view.hidden=false;}setTimeout(poll,1500)}catch{label.textContent="AX Code connection closed or unavailable. Reopen the graph from the TUI."}}poll();`
     const digest = createHash("sha256").update(script).digest("base64")
     const csp = `default-src 'none'; script-src 'sha256-${digest}'; style-src 'unsafe-inline'; connect-src 'self'; frame-src 'self'; base-uri 'none'; form-action 'none'`

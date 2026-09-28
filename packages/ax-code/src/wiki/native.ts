@@ -314,6 +314,7 @@ async function evidenceProvider(
       query: `${input.page.title}. ${input.page.purpose}`,
       seeds: input.sources
         .slice(0, 16)
+        // @scan-suppress security_scan - Wiki source paths are repository-relative records from discovery.
         .map((source) => ({ kind: "file" as const, value: path.join(input.root, source.path) })),
       maxSymbols: 12,
       maxSnippets: 6,

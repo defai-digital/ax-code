@@ -199,9 +199,12 @@ function selectSymbols(
     .map((symbol, rank) => {
       const tier = tiers.get(symbol.id) ?? 0
       let files = occurrences.get(tier)
-      if (!files) occurrences.set(tier, (files = new Map()))
+      if (!files) {
+        files = new Map()
+        occurrences.set(tier, files) // @scan-suppress lifecycle_scan - Call-local map bounded by ranked.length.
+      }
       const occurrence = files.get(symbol.file) ?? 0
-      files.set(symbol.file, occurrence + 1)
+      files.set(symbol.file, occurrence + 1) // @scan-suppress lifecycle_scan - Call-local map bounded by ranked.length.
       return { symbol, rank, tier, occurrence }
     })
     .sort((a, b) => b.tier - a.tier || a.occurrence - b.occurrence || a.rank - b.rank)

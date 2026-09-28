@@ -141,6 +141,7 @@ export async function wikiPollDelay(signal: AbortSignal, ms = 1500) {
       signal.removeEventListener("abort", abort)
       resolve()
     }, ms)
+    // @scan-suppress race_scan - The executor attaches this listener before the await settles, and once removes it on abort.
     signal.addEventListener("abort", abort, { once: true })
   })
 }

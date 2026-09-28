@@ -110,6 +110,7 @@ export namespace WikiAutomatic {
           rules.length > 0 &&
           rules.every(
             (set) =>
+              // @scan-suppress security_scan - Permission subject only. This join does not open a file.
               Permission.evaluate(permission, path.join(root, relative), set).action === "allow" &&
               Permission.evaluate(permission, relative, set).action === "allow",
           )
