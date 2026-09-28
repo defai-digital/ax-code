@@ -1,13 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1268" viewBox="0 0 960 1268" role="img" font-family="Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1368" viewBox="0 0 960 1368" role="img" font-family="Helvetica, Arial, sans-serif">
   <title>AX Code components and workflow</title>
-  <desc>Surfaces enter one runtime. The prompt loop resolves a provider, streams the model, and runs tools after permission checks. Snapshots and the event log keep each step reviewable. Council is advisory. Arena ranks worktree candidates. Nothing merges automatically.</desc>
-  <rect width="960" height="1268" fill="#f6f7f8"/>
+  <desc>Surfaces enter one runtime. Extracted packages cover the wiki, its viewer, language servers, and deterministic reasoning. The prompt loop resolves a provider, streams the model, and runs tools after permission checks. Snapshots and the event log keep each step reviewable.</desc>
+  <rect width="960" height="1368" fill="#f6f7f8"/>
 
   <text x="32" y="42" fill="#142033" font-size="22" font-weight="700">AX Code components and workflow</text>
   <text x="32" y="66" fill="#5c6b7a" font-size="13">One runtime records the session, runs tools under permission, and leaves the merge decision with you.</text>
 
   <!-- Components -->
-  <rect x="20" y="88" width="920" height="572" rx="14" fill="#ffffff" stroke="#d9dee7"/>
+  <rect x="20" y="88" width="920" height="676" rx="14" fill="#ffffff" stroke="#d9dee7"/>
   <text x="40" y="118" fill="#142033" font-size="16" font-weight="700">Components</text>
   <text x="40" y="146" fill="#5c6b7a" font-size="11" font-weight="700" letter-spacing="1.1">SURFACES</text>
 
@@ -24,9 +24,9 @@
     <text x="804" y="186">ACP and VS Code</text>
   </g>
   <g fill="#5c6b7a" font-size="11" text-anchor="middle">
-    <text x="144" y="206">ax-code</text>
+    <text x="144" y="206">ax-code, ax-tui</text>
     <text x="364" y="206">ax-code run, ask</text>
-    <text x="584" y="206">serve, OpenAPI</text>
+    <text x="584" y="206">serve, ax-code-sdk</text>
     <text x="804" y="206">editor hosts</text>
   </g>
 
@@ -73,94 +73,114 @@
   <text x="646" y="472" fill="#6b4514" font-size="12">OpenAI-compatible servers,</text>
   <text x="646" y="490" fill="#6b4514" font-size="12">private GPU, AX Trust gateway.</text>
 
-  <text x="40" y="548" fill="#5c6b7a" font-size="11" font-weight="700" letter-spacing="1.1">ALONGSIDE THE LOOP</text>
+  <text x="40" y="548" fill="#8a5a12" font-size="11" font-weight="700" letter-spacing="1.1">PACKAGES</text>
+  <g fill="#fbf4e8" stroke="#e2c89a">
+    <rect x="40" y="560" width="208" height="68" rx="8"/>
+    <rect x="260" y="560" width="208" height="68" rx="8"/>
+    <rect x="480" y="560" width="208" height="68" rx="8"/>
+    <rect x="700" y="560" width="208" height="68" rx="8"/>
+  </g>
+  <g fill="#6b4514" font-size="13" font-weight="700" text-anchor="middle">
+    <text x="144" y="586">ax-wiki</text>
+    <text x="364" y="586">ax-wiki-viewer</text>
+    <text x="584" y="586">ax-code-intel</text>
+    <text x="804" y="586">ax-code-reason</text>
+  </g>
+  <g fill="#8a5a12" font-size="11" text-anchor="middle">
+    <text x="144" y="606">source-backed wiki</text>
+    <text x="364" y="606">evidence graph</text>
+    <text x="584" y="606">language servers</text>
+    <text x="804" y="606">debug and refactor</text>
+  </g>
+
+  <text x="40" y="656" fill="#5c6b7a" font-size="11" font-weight="700" letter-spacing="1.1">NATIVE AND INTEGRATIONS</text>
   <g fill="#ffffff" stroke="#d9dee7">
-    <rect x="40" y="560" width="208" height="76" rx="8"/>
-    <rect x="260" y="560" width="208" height="76" rx="8"/>
-    <rect x="480" y="560" width="208" height="76" rx="8"/>
-    <rect x="700" y="560" width="208" height="76" rx="8"/>
+    <rect x="40" y="668" width="208" height="76" rx="8"/>
+    <rect x="260" y="668" width="208" height="76" rx="8"/>
+    <rect x="480" y="668" width="208" height="76" rx="8"/>
+    <rect x="700" y="668" width="208" height="76" rx="8"/>
   </g>
   <g fill="#142033" font-size="13" font-weight="700" text-anchor="middle">
-    <text x="144" y="588">MCP servers</text>
-    <text x="364" y="588">Code graph</text>
-    <text x="584" y="588">Native addons</text>
-    <text x="804" y="588">Arena worktrees</text>
+    <text x="144" y="696">Plugin</text>
+    <text x="364" y="696">Native addons</text>
+    <text x="584" y="696">GitHub Action</text>
+    <text x="804" y="696">MCP</text>
   </g>
   <g fill="#5c6b7a" font-size="11" text-anchor="middle">
-    <text x="144" y="608">external tools</text>
-    <text x="364" y="608">LSP, blast radius</text>
-    <text x="584" y="608">index, fs, diff,</text>
-    <text x="584" y="622">parser, terminal</text>
-    <text x="804" y="608">isolated candidates</text>
+    <text x="144" y="716">@ax-code/plugin</text>
+    <text x="364" y="714">index, fs, diff, parser,</text>
+    <text x="364" y="728">terminal</text>
+    <text x="584" y="716">issues and pull requests</text>
+    <text x="804" y="716">external tool servers</text>
   </g>
 
   <!-- Workflow -->
-  <rect x="20" y="680" width="920" height="420" rx="14" fill="#ffffff" stroke="#d9dee7"/>
-  <text x="40" y="710" fill="#142033" font-size="16" font-weight="700">Session workflow</text>
-  <text x="40" y="732" fill="#5c6b7a" font-size="12">One turn stays in the prompt loop until the model stops calling tools, a limit is hit, or you cancel.</text>
+  <rect x="20" y="780" width="920" height="420" rx="14" fill="#ffffff" stroke="#d9dee7"/>
+  <text x="40" y="810" fill="#142033" font-size="16" font-weight="700">Session workflow</text>
+  <text x="40" y="832" fill="#5c6b7a" font-size="12">One turn stays in the prompt loop until the model stops calling tools, a limit is hit, or you cancel.</text>
 
   <g fill="#ffffff" stroke="#d9dee7">
-    <rect x="40" y="752" width="208" height="112" rx="8"/>
-    <rect x="260" y="752" width="208" height="112" rx="8"/>
-    <rect x="480" y="752" width="208" height="112" rx="8"/>
-    <rect x="700" y="752" width="208" height="112" rx="8"/>
-    <rect x="40" y="876" width="208" height="112" rx="8"/>
-    <rect x="260" y="876" width="208" height="112" rx="8"/>
-    <rect x="480" y="876" width="208" height="112" rx="8"/>
-    <rect x="700" y="876" width="208" height="112" rx="8"/>
+    <rect x="40" y="852" width="208" height="112" rx="8"/>
+    <rect x="260" y="852" width="208" height="112" rx="8"/>
+    <rect x="480" y="852" width="208" height="112" rx="8"/>
+    <rect x="700" y="852" width="208" height="112" rx="8"/>
+    <rect x="40" y="976" width="208" height="112" rx="8"/>
+    <rect x="260" y="976" width="208" height="112" rx="8"/>
+    <rect x="480" y="976" width="208" height="112" rx="8"/>
+    <rect x="700" y="976" width="208" height="112" rx="8"/>
   </g>
   <g fill="#1f4e79" font-size="12" font-weight="700">
-    <text x="56" y="776">1  Record</text>
-    <text x="276" y="776">2  Resolve</text>
-    <text x="496" y="776">3  Prompt</text>
-    <text x="716" y="776">4  Stream</text>
-    <text x="56" y="900">5  Admit</text>
-    <text x="276" y="900">6  Act</text>
-    <text x="496" y="900">7  Evidence</text>
-    <text x="716" y="900">8  Decide</text>
+    <text x="56" y="876">1  Record</text>
+    <text x="276" y="876">2  Resolve</text>
+    <text x="496" y="876">3  Prompt</text>
+    <text x="716" y="876">4  Stream</text>
+    <text x="56" y="1000">5  Admit</text>
+    <text x="276" y="1000">6  Act</text>
+    <text x="496" y="1000">7  Evidence</text>
+    <text x="716" y="1000">8  Decide</text>
   </g>
   <g fill="#3d4c5c" font-size="12">
-    <text x="56" y="800">Store the user message.</text>
-    <text x="56" y="818">Mark the session busy.</text>
-    <text x="276" y="800">Choose provider and model.</text>
-    <text x="276" y="818">Hybrid may place the step</text>
-    <text x="276" y="836">on local or cloud.</text>
-    <text x="496" y="800">Assemble AGENTS.md, tools,</text>
-    <text x="496" y="818">skills, and the code graph.</text>
-    <text x="496" y="836">Compact when context is full.</text>
-    <text x="716" y="800">Text, reasoning, and tool</text>
-    <text x="716" y="818">calls become message parts</text>
-    <text x="716" y="836">on the live surface.</text>
-    <text x="56" y="924">Run the PreToolUse hook,</text>
-    <text x="56" y="942">then the permission check.</text>
-    <text x="56" y="960">Denial stops that call.</text>
-    <text x="276" y="924">Run the tool inside the</text>
-    <text x="276" y="942">isolation mode. Writes</text>
-    <text x="276" y="960">take the write gate.</text>
-    <text x="496" y="924">Snapshot the file change</text>
-    <text x="496" y="942">outside the repository.</text>
-    <text x="496" y="960">Append the event log.</text>
-    <text x="716" y="924">Compare, risk, replay,</text>
-    <text x="716" y="942">and rollback are ready.</text>
-    <text x="716" y="960">You choose what stays.</text>
+    <text x="56" y="900">Store the user message.</text>
+    <text x="56" y="918">Mark the session busy.</text>
+    <text x="276" y="900">Choose provider and model.</text>
+    <text x="276" y="918">Hybrid may place the step</text>
+    <text x="276" y="936">on local or cloud.</text>
+    <text x="496" y="900">Assemble AGENTS.md, tools,</text>
+    <text x="496" y="918">skills, and the code graph.</text>
+    <text x="496" y="936">Compact when context is full.</text>
+    <text x="716" y="900">Text, reasoning, and tool</text>
+    <text x="716" y="918">calls become message parts</text>
+    <text x="716" y="936">on the live surface.</text>
+    <text x="56" y="1024">Run the PreToolUse hook,</text>
+    <text x="56" y="1042">then the permission check.</text>
+    <text x="56" y="1060">Denial stops that call.</text>
+    <text x="276" y="1024">Run the tool inside the</text>
+    <text x="276" y="1042">isolation mode. Writes</text>
+    <text x="276" y="1060">take the write gate.</text>
+    <text x="496" y="1024">Snapshot the file change</text>
+    <text x="496" y="1042">outside the repository.</text>
+    <text x="496" y="1060">Append the event log.</text>
+    <text x="716" y="1024">Compare, risk, replay,</text>
+    <text x="716" y="1042">and rollback are ready.</text>
+    <text x="716" y="1060">You choose what stays.</text>
   </g>
-  <rect x="40" y="1004" width="868" height="76" rx="6" fill="#f4f6f8"/>
-  <text x="56" y="1028" fill="#3d4c5c" font-size="12">Tool results return to step 2 until the model finishes. Autonomous mode may append a continuation</text>
-  <text x="56" y="1046" fill="#3d4c5c" font-size="12">while a goal or todo is still open. ax-code ask is separate: it rereads selected files and sends</text>
-  <text x="56" y="1064" fill="#3d4c5c" font-size="12">no session history and no tools.</text>
+  <rect x="40" y="1104" width="868" height="76" rx="6" fill="#f4f6f8"/>
+  <text x="56" y="1128" fill="#3d4c5c" font-size="12">Tool results return to step 2 until the model finishes. Autonomous mode may append a continuation</text>
+  <text x="56" y="1146" fill="#3d4c5c" font-size="12">while a goal or todo is still open. ax-code ask is separate: it rereads selected files and sends</text>
+  <text x="56" y="1164" fill="#3d4c5c" font-size="12">no session history and no tools.</text>
 
   <!-- Modes -->
-  <rect x="20" y="1120" width="920" height="124" rx="14" fill="#ffffff" stroke="#d9dee7"/>
-  <text x="40" y="1150" fill="#142033" font-size="16" font-weight="700">How work is placed</text>
-  <text x="196" y="1150" fill="#5c6b7a" font-size="12">The default path is one agent. Council and arena are opt-in placements of the same runtime.</text>
+  <rect x="20" y="1220" width="920" height="124" rx="14" fill="#ffffff" stroke="#d9dee7"/>
+  <text x="40" y="1250" fill="#142033" font-size="16" font-weight="700">How work is placed</text>
+  <text x="196" y="1250" fill="#5c6b7a" font-size="12">The default path is one agent. Council and arena are opt-in placements of the same runtime.</text>
 
-  <rect x="40" y="1168" width="278" height="56" rx="8" fill="#eef2f6" stroke="#c5d0dc"/>
-  <rect x="335" y="1168" width="278" height="56" rx="8" fill="#fbf4e8" stroke="#e2c89a"/>
-  <rect x="630" y="1168" width="278" height="56" rx="8" fill="#e7f6ee" stroke="#176341"/>
-  <text x="56" y="1190" fill="#243044" font-size="13" font-weight="700">Agent</text>
-  <text x="56" y="1208" fill="#3d4c5c" font-size="12">One model. One loop. Default.</text>
-  <text x="351" y="1190" fill="#6b4514" font-size="13" font-weight="700">Council</text>
-  <text x="351" y="1208" fill="#6b4514" font-size="12">Advisory review. No edits.</text>
-  <text x="646" y="1190" fill="#176341" font-size="13" font-weight="700">Arena</text>
-  <text x="646" y="1208" fill="#176341" font-size="12">Worktrees ranked by your checks.</text>
+  <rect x="40" y="1268" width="278" height="56" rx="8" fill="#eef2f6" stroke="#c5d0dc"/>
+  <rect x="335" y="1268" width="278" height="56" rx="8" fill="#fbf4e8" stroke="#e2c89a"/>
+  <rect x="630" y="1268" width="278" height="56" rx="8" fill="#e7f6ee" stroke="#176341"/>
+  <text x="56" y="1290" fill="#243044" font-size="13" font-weight="700">Agent</text>
+  <text x="56" y="1308" fill="#3d4c5c" font-size="12">One model. One loop. Default.</text>
+  <text x="351" y="1290" fill="#6b4514" font-size="13" font-weight="700">Council</text>
+  <text x="351" y="1308" fill="#6b4514" font-size="12">Advisory review. No edits.</text>
+  <text x="646" y="1290" fill="#176341" font-size="13" font-weight="700">Arena</text>
+  <text x="646" y="1308" fill="#176341" font-size="12">Worktrees ranked by your checks.</text>
 </svg>
