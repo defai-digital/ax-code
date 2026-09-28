@@ -1,0 +1,166 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1268" viewBox="0 0 960 1268" role="img" font-family="Helvetica, Arial, sans-serif">
+  <title>AX Code components and workflow</title>
+  <desc>Surfaces enter one runtime. The prompt loop resolves a provider, streams the model, and runs tools after permission checks. Snapshots and the event log keep each step reviewable. Council is advisory. Arena ranks worktree candidates. Nothing merges automatically.</desc>
+  <rect width="960" height="1268" fill="#f6f7f8"/>
+
+  <text x="32" y="42" fill="#142033" font-size="22" font-weight="700">AX Code components and workflow</text>
+  <text x="32" y="66" fill="#5c6b7a" font-size="13">One runtime records the session, runs tools under permission, and leaves the merge decision with you.</text>
+
+  <!-- Components -->
+  <rect x="20" y="88" width="920" height="572" rx="14" fill="#ffffff" stroke="#d9dee7"/>
+  <text x="40" y="118" fill="#142033" font-size="16" font-weight="700">Components</text>
+  <text x="40" y="146" fill="#5c6b7a" font-size="11" font-weight="700" letter-spacing="1.1">SURFACES</text>
+
+  <g fill="#ffffff" stroke="#d9dee7">
+    <rect x="40" y="158" width="208" height="68" rx="8"/>
+    <rect x="260" y="158" width="208" height="68" rx="8"/>
+    <rect x="480" y="158" width="208" height="68" rx="8"/>
+    <rect x="700" y="158" width="208" height="68" rx="8"/>
+  </g>
+  <g fill="#142033" font-size="13" font-weight="700" text-anchor="middle">
+    <text x="144" y="186">Terminal UI</text>
+    <text x="364" y="186">Headless CLI</text>
+    <text x="584" y="186">HTTP and SDK</text>
+    <text x="804" y="186">ACP and VS Code</text>
+  </g>
+  <g fill="#5c6b7a" font-size="11" text-anchor="middle">
+    <text x="144" y="206">ax-code</text>
+    <text x="364" y="206">ax-code run, ask</text>
+    <text x="584" y="206">serve, OpenAPI</text>
+    <text x="804" y="206">editor hosts</text>
+  </g>
+
+  <rect x="40" y="242" width="868" height="32" rx="6" fill="#f4f6f8"/>
+  <text x="474" y="262" fill="#3d4c5c" font-size="12" text-anchor="middle">Every surface writes the same session. The prompt loop is the path that calls a model.</text>
+
+  <text x="40" y="300" fill="#243044" font-size="11" font-weight="700" letter-spacing="1.1">CORE RUNTIME</text>
+  <g fill="#eef2f6" stroke="#c5d0dc">
+    <rect x="40" y="312" width="138" height="72" rx="8"/>
+    <rect x="186" y="312" width="138" height="72" rx="8"/>
+    <rect x="332" y="312" width="138" height="72" rx="8"/>
+    <rect x="478" y="312" width="138" height="72" rx="8"/>
+    <rect x="624" y="312" width="138" height="72" rx="8"/>
+    <rect x="770" y="312" width="138" height="72" rx="8"/>
+  </g>
+  <g fill="#243044" font-size="13" font-weight="700" text-anchor="middle">
+    <text x="109" y="342">Session</text>
+    <text x="255" y="342">Prompt loop</text>
+    <text x="401" y="342">Agent</text>
+    <text x="547" y="342">Tools</text>
+    <text x="693" y="342">Permission</text>
+    <text x="839" y="342">Evidence</text>
+  </g>
+  <g fill="#5c6b7a" font-size="11" text-anchor="middle">
+    <text x="109" y="362">SQLite messages</text>
+    <text x="255" y="362">SessionPrompt</text>
+    <text x="401" y="362">route, prompt</text>
+    <text x="547" y="362">explicit calls</text>
+    <text x="693" y="362">sandbox boundary</text>
+    <text x="839" y="362">snapshot, replay</text>
+  </g>
+
+  <text x="40" y="412" fill="#1f4e79" font-size="11" font-weight="700" letter-spacing="1.1">PROVIDERS</text>
+  <rect x="40" y="424" width="278" height="96" rx="8" fill="#e7f0f8" stroke="#1f4e79"/>
+  <rect x="335" y="424" width="278" height="96" rx="8" fill="#e7f6ee" stroke="#176341"/>
+  <rect x="630" y="424" width="278" height="96" rx="8" fill="#fbf4e8" stroke="#e2c89a"/>
+  <text x="56" y="450" fill="#1f4e79" font-size="14" font-weight="700">Cloud API and CLI</text>
+  <text x="56" y="472" fill="#1f4e79" font-size="12">Hosted catalogs and vendor</text>
+  <text x="56" y="490" fill="#1f4e79" font-size="12">CLI login sessions.</text>
+  <text x="351" y="450" fill="#176341" font-size="14" font-weight="700">AX Engine</text>
+  <text x="351" y="472" fill="#176341" font-size="12">Managed sidecar. Loopback</text>
+  <text x="351" y="490" fill="#176341" font-size="12">OpenAI-compatible /v1.</text>
+  <text x="646" y="450" fill="#6b4514" font-size="14" font-weight="700">Local and AX Trust</text>
+  <text x="646" y="472" fill="#6b4514" font-size="12">OpenAI-compatible servers,</text>
+  <text x="646" y="490" fill="#6b4514" font-size="12">private GPU, AX Trust gateway.</text>
+
+  <text x="40" y="548" fill="#5c6b7a" font-size="11" font-weight="700" letter-spacing="1.1">ALONGSIDE THE LOOP</text>
+  <g fill="#ffffff" stroke="#d9dee7">
+    <rect x="40" y="560" width="208" height="76" rx="8"/>
+    <rect x="260" y="560" width="208" height="76" rx="8"/>
+    <rect x="480" y="560" width="208" height="76" rx="8"/>
+    <rect x="700" y="560" width="208" height="76" rx="8"/>
+  </g>
+  <g fill="#142033" font-size="13" font-weight="700" text-anchor="middle">
+    <text x="144" y="588">MCP servers</text>
+    <text x="364" y="588">Code graph</text>
+    <text x="584" y="588">Native addons</text>
+    <text x="804" y="588">Arena worktrees</text>
+  </g>
+  <g fill="#5c6b7a" font-size="11" text-anchor="middle">
+    <text x="144" y="608">external tools</text>
+    <text x="364" y="608">LSP, blast radius</text>
+    <text x="584" y="608">index, fs, diff,</text>
+    <text x="584" y="622">parser, terminal</text>
+    <text x="804" y="608">isolated candidates</text>
+  </g>
+
+  <!-- Workflow -->
+  <rect x="20" y="680" width="920" height="420" rx="14" fill="#ffffff" stroke="#d9dee7"/>
+  <text x="40" y="710" fill="#142033" font-size="16" font-weight="700">Session workflow</text>
+  <text x="40" y="732" fill="#5c6b7a" font-size="12">One turn stays in the prompt loop until the model stops calling tools, a limit is hit, or you cancel.</text>
+
+  <g fill="#ffffff" stroke="#d9dee7">
+    <rect x="40" y="752" width="208" height="112" rx="8"/>
+    <rect x="260" y="752" width="208" height="112" rx="8"/>
+    <rect x="480" y="752" width="208" height="112" rx="8"/>
+    <rect x="700" y="752" width="208" height="112" rx="8"/>
+    <rect x="40" y="876" width="208" height="112" rx="8"/>
+    <rect x="260" y="876" width="208" height="112" rx="8"/>
+    <rect x="480" y="876" width="208" height="112" rx="8"/>
+    <rect x="700" y="876" width="208" height="112" rx="8"/>
+  </g>
+  <g fill="#1f4e79" font-size="12" font-weight="700">
+    <text x="56" y="776">1  Record</text>
+    <text x="276" y="776">2  Resolve</text>
+    <text x="496" y="776">3  Prompt</text>
+    <text x="716" y="776">4  Stream</text>
+    <text x="56" y="900">5  Admit</text>
+    <text x="276" y="900">6  Act</text>
+    <text x="496" y="900">7  Evidence</text>
+    <text x="716" y="900">8  Decide</text>
+  </g>
+  <g fill="#3d4c5c" font-size="12">
+    <text x="56" y="800">Store the user message.</text>
+    <text x="56" y="818">Mark the session busy.</text>
+    <text x="276" y="800">Choose provider and model.</text>
+    <text x="276" y="818">Hybrid may place the step</text>
+    <text x="276" y="836">on local or cloud.</text>
+    <text x="496" y="800">Assemble AGENTS.md, tools,</text>
+    <text x="496" y="818">skills, and the code graph.</text>
+    <text x="496" y="836">Compact when context is full.</text>
+    <text x="716" y="800">Text, reasoning, and tool</text>
+    <text x="716" y="818">calls become message parts</text>
+    <text x="716" y="836">on the live surface.</text>
+    <text x="56" y="924">Run the PreToolUse hook,</text>
+    <text x="56" y="942">then the permission check.</text>
+    <text x="56" y="960">Denial stops that call.</text>
+    <text x="276" y="924">Run the tool inside the</text>
+    <text x="276" y="942">isolation mode. Writes</text>
+    <text x="276" y="960">take the write gate.</text>
+    <text x="496" y="924">Snapshot the file change</text>
+    <text x="496" y="942">outside the repository.</text>
+    <text x="496" y="960">Append the event log.</text>
+    <text x="716" y="924">Compare, risk, replay,</text>
+    <text x="716" y="942">and rollback are ready.</text>
+    <text x="716" y="960">You choose what stays.</text>
+  </g>
+  <rect x="40" y="1004" width="868" height="76" rx="6" fill="#f4f6f8"/>
+  <text x="56" y="1028" fill="#3d4c5c" font-size="12">Tool results return to step 2 until the model finishes. Autonomous mode may append a continuation</text>
+  <text x="56" y="1046" fill="#3d4c5c" font-size="12">while a goal or todo is still open. ax-code ask is separate: it rereads selected files and sends</text>
+  <text x="56" y="1064" fill="#3d4c5c" font-size="12">no session history and no tools.</text>
+
+  <!-- Modes -->
+  <rect x="20" y="1120" width="920" height="124" rx="14" fill="#ffffff" stroke="#d9dee7"/>
+  <text x="40" y="1150" fill="#142033" font-size="16" font-weight="700">How work is placed</text>
+  <text x="196" y="1150" fill="#5c6b7a" font-size="12">The default path is one agent. Council and arena are opt-in placements of the same runtime.</text>
+
+  <rect x="40" y="1168" width="278" height="56" rx="8" fill="#eef2f6" stroke="#c5d0dc"/>
+  <rect x="335" y="1168" width="278" height="56" rx="8" fill="#fbf4e8" stroke="#e2c89a"/>
+  <rect x="630" y="1168" width="278" height="56" rx="8" fill="#e7f6ee" stroke="#176341"/>
+  <text x="56" y="1190" fill="#243044" font-size="13" font-weight="700">Agent</text>
+  <text x="56" y="1208" fill="#3d4c5c" font-size="12">One model. One loop. Default.</text>
+  <text x="351" y="1190" fill="#6b4514" font-size="13" font-weight="700">Council</text>
+  <text x="351" y="1208" fill="#6b4514" font-size="12">Advisory review. No edits.</text>
+  <text x="646" y="1190" fill="#176341" font-size="13" font-weight="700">Arena</text>
+  <text x="646" y="1208" fill="#176341" font-size="12">Worktrees ranked by your checks.</text>
+</svg>

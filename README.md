@@ -347,6 +347,14 @@ Release archives are verified with minisign. Platform support, update paths, sig
 
 **Poor fit:** inline autocomplete; a single quick disposable edit; fully managed cloud delegation; workflows where you will not use Git or run repository checks. A lighter editor assistant is the better tool for those.
 
+## Components and workflow
+
+![AX Code components and workflow](docs/images/ax-code-components.svg)
+
+The terminal UI, `ax-code run`, the local HTTP server and TypeScript SDK, and ACP or VS Code hosts enter the same runtime. A turn stores the user message, resolves a provider, and streams the model. Each tool call passes a hook and a permission check, then runs inside the configured isolation mode. File changes are snapshotted outside the repository, and the step is appended to the event log. `ax-code session compare`, `risk`, `replay`, and `rollback` read that record.
+
+Council reviews stay advisory. Arena implement builds candidates in isolated Git worktrees and ranks them with the repository's own checks. AX Code does not merge the winner. AX Engine stays a sidecar: AX Code starts `ax-engine serve` and calls it on loopback. Cloud APIs, vendor CLIs, local OpenAI-compatible servers, private GPU endpoints, and AX Trust share the same provider boundary.
+
 ## Surfaces
 
 The same runtime, session store, and evidence model back every surface.
