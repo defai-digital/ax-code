@@ -10,7 +10,7 @@ import { Permission } from "../permission"
 import { SessionStatus } from "../session/status"
 import { TaskQueue } from "../session/task-queue"
 import { FileWatcher } from "../file/watcher"
-import { getWikiStatus } from "@ax-code/ax-wiki"
+import { getWikiStatus } from "@ax-code/ax-wiki/node"
 import { createWikiIdleController } from "./idle-controller"
 import { resolveWikiRuntimeConfig, engineConfig } from "./config"
 import { runNativeWiki } from "./native"
@@ -120,6 +120,7 @@ export namespace WikiAutomatic {
         onError: (error) =>
           Log.Default.warn("Wiki background maintenance failed", {
             failure: error instanceof Error ? error.name : "UnknownError",
+            message: error instanceof Error ? error.message.slice(0, 200) : undefined,
           }),
         policy: async () => {
           const { cfg, allowed } = await context()

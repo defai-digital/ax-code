@@ -2,7 +2,8 @@ import path from "node:path"
 import { afterEach, describe, expect, test, vi } from "vitest"
 
 const { generateObject } = vi.hoisted(() => ({ generateObject: vi.fn() }))
-vi.mock("ai", () => ({
+vi.mock("ai", async (load) => ({
+  ...(await load<typeof import("ai")>()),
   streamObject: (request: unknown) => {
     let result: any
     return {
@@ -17,8 +18,8 @@ vi.mock("ai", () => ({
   },
 }))
 
-vi.mock("@ax-code/ax-wiki", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@ax-code/ax-wiki")>()
+vi.mock("@ax-code/ax-wiki/node", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@ax-code/ax-wiki/node")>()
   return {
     ...actual,
     buildAxWiki: vi.fn(),
@@ -31,12 +32,18 @@ vi.mock("../../src/code-intelligence/graph-context", () => ({
   },
 }))
 
-import { buildAxWiki, type EvidenceBundle, type WikiPageGenerationRequest, type WikiSource } from "@ax-code/ax-wiki"
+import {
+  buildAxWiki,
+  type EvidenceBundle,
+  type WikiPageGenerationRequest,
+  type WikiSource,
+} from "@ax-code/ax-wiki/node"
 import { GraphContext, type GraphContextPack } from "../../src/code-intelligence/graph-context"
 import { CodeNodeID } from "../../src/code-intelligence/id"
 import { Installation } from "../../src/installation"
 import { Instance } from "../../src/project/instance"
-import { runNativeWiki } from "../../src/wiki/native"
+import { repairWikiPageText, runNativeWiki } from "../../src/wiki/native"
+import { parseJsonStrict } from "../../src/util/json-value"
 import { tmpdir } from "../fixture/fixture"
 
 afterEach(() => {
@@ -336,5 +343,59 @@ describe("wiki native generator", () => {
       vi.mocked(generateObject).mock.calls[0]?.[0] as { messages: Array<{ role: string; content: string }> }
     ).messages.find((message) => message.role === "user")?.content
     expect(prompt).toContain("completeness: partial")
+  })
+})
+
+describe("wiki native page repair", () => {
+  test("attaches a deterministic repair that rescues bound-only violations", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await runNative(tmp.path)
+    const request = vi.mocked(generateObject).mock.calls[0]?.[0] as {
+      experimental_repairText?: (options: { text: string; error: unknown }) => Promise<string | null>
+    }
+    expect(request.experimental_repairText).toEqual(expect.any(Function))
+
+    const overflowing = JSON.stringify({
+      summary: `The ${"very ".repeat(160)}long summary`,
+      body: "A long enough generated wiki page body so the schema minimum length is satisfied.",
+      symbols: Array.from({ length: 120 }, (_, index) => `symbol${index}`),
+    })
+    const repaired = await request.experimental_repairText!({ text: overflowing, error: new Error("too big") })
+    expect(repaired).not.toBeNull()
+    const value = parseJsonStrict(repaired!) as { summary: string; symbols: string[] }
+    expect(value.symbols).toHaveLength(80)
+    expect(value.summary.length).toBeLessThanOrEqual(600)
+  })
+
+  test("returns null for unparseable text and for output without bound violations", () => {
+    expect(repairWikiPageText("not json")).toBeNull()
+    expect(
+      repairWikiPageText(
+        JSON.stringify({ summary: "a within-bounds summary value", body: "x".repeat(100), symbols: ["alpha"] }),
+      ),
+    ).toBeNull()
+  })
+
+  test("caps symbols at 80 and drops non-string entries", () => {
+    const repaired = repairWikiPageText(
+      JSON.stringify({
+        summary: "a within-bounds summary value",
+        body: "x".repeat(100),
+        symbols: [...Array.from({ length: 90 }, (_, index) => `s${index}`), 42, null],
+      }),
+    )
+    expect(repaired).not.toBeNull()
+    const value = parseJsonStrict(repaired!) as { symbols: unknown[] }
+    expect(value.symbols).toHaveLength(80)
+    expect(value.symbols.every((symbol) => typeof symbol === "string")).toBe(true)
+  })
+
+  test("clamps over-long summaries to the schema maximum", () => {
+    const repaired = repairWikiPageText(
+      JSON.stringify({ summary: "y".repeat(700), body: "x".repeat(100), symbols: [] }),
+    )
+    expect(repaired).not.toBeNull()
+    const value = parseJsonStrict(repaired!) as { summary: string }
+    expect(value.summary.length).toBeLessThanOrEqual(600)
   })
 })

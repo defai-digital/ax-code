@@ -23,6 +23,7 @@ const CORE_FILES = [
   "frontmatter.ts",
   "validate.ts",
   "build-pure.ts",
+  "discovery-concurrency.ts",
 ]
 
 const FORBIDDEN_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [

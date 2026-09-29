@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
 import { writeFile, mkdir } from "node:fs/promises"
-import { buildAxWiki } from "@ax-code/ax-wiki"
+import { buildAxWiki } from "@ax-code/ax-wiki/node"
 import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"
 import { EventQuery } from "../../src/replay/query"

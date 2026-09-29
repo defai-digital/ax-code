@@ -11,7 +11,7 @@ import {
   renderWikiPage,
   upsertAxWikiBlock,
   writeWikiCards,
-} from "../src"
+} from "../src/node.js"
 
 describe("AX Wiki artifacts", () => {
   test("round-trips generated frontmatter including empty lists", () => {

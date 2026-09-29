@@ -1,4 +1,5 @@
-import { access, readFile, readdir, stat } from "node:fs/promises"
+import { constants as fsConstants } from "node:fs"
+import { access, open, readdir, stat } from "node:fs/promises"
 import path from "node:path"
 import { discoverSources, readSourceEvidence } from "./discovery.js"
 import { parseFrontmatter } from "./frontmatter.js"
@@ -45,11 +46,20 @@ export async function loadWikiPages(input: { root: string; wikiDir?: string }): 
   for (const file of files) {
     let content: string
     try {
-      content = await readFile(file, "utf8")
+      // O_NOFOLLOW mirrors discovery: a page swapped for a symlink between the
+      // directory walk and the read must not leak content from outside the
+      // wiki tree. A swapped symlink (ELOOP) is skipped like a removed page.
+      const handle = await open(file, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
+      try {
+        content = await handle.readFile("utf8")
+      } finally {
+        await handle.close()
+      }
     } catch (error) {
-      // A page removed between readdir and readFile (a concurrent build writing
+      // A page removed between readdir and read (a concurrent build writing
       // while status/cards/lint read) should be skipped, not crash the command.
-      if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") continue
+      if (error && typeof error === "object" && "code" in error && (error.code === "ENOENT" || error.code === "ELOOP"))
+        continue
       throw error
     }
     const meta = parseFrontmatter(content)

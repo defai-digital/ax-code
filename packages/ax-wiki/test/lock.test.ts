@@ -1,4 +1,5 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
+import { spawn } from "node:child_process"
+import { mkdtemp, mkdir, readFile, rm, utimes, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { afterEach, describe, expect, test } from "vitest"
@@ -124,5 +125,119 @@ describe("buildAxWiki lock integration (gate C7)", () => {
     // Validation precedes the write phase, so the lock is never taken and the
     // filesystem is left untouched.
     expect(events).toEqual([])
+  })
+})
+
+describe("createWikiBuildLock hardening", () => {
+  test("release does not delete a lock that was stolen and re-acquired", async () => {
+    const root = await tmp()
+    let clock = 1_000
+    const lock = createWikiBuildLock(root, "ax-wiki", { now: () => clock, staleMs: 100 })
+    const first = await lock.acquire()
+    clock += 1_000 // go stale without releasing
+    const second = await lock.acquire()
+    await first.release()
+    // The stale holder's release must not remove the new holder's lock.
+    await expect(readFile(path.join(root, "ax-wiki/.build-lock"), "utf8")).resolves.toContain('"pid"')
+    await second.release()
+    await expect(readFile(path.join(root, "ax-wiki/.build-lock"), "utf8")).rejects.toThrow()
+  })
+
+  test("release is idempotent", async () => {
+    const root = await tmp()
+    const lock = createWikiBuildLock(root, "ax-wiki")
+    const handle = await lock.acquire()
+    await handle.release()
+    await expect(handle.release()).resolves.toBeUndefined()
+  })
+
+  test("a lock owned by a dead same-host process is stale immediately", async () => {
+    const root = await tmp()
+    const child = spawn(process.execPath, ["-e", "process.exit(0)"])
+    await new Promise<void>((resolve) => child.once("exit", () => resolve()))
+    const file = path.join(root, "ax-wiki/.build-lock")
+    await mkdir(path.dirname(file), { recursive: true })
+    await writeFile(file, JSON.stringify({ pid: child.pid, startedAt: Date.now(), host: os.hostname(), token: "dead" }))
+    // Even with a huge staleMs budget, a dead owner makes the lock stealable.
+    const lock = createWikiBuildLock(root, "ax-wiki", {
+      retryIntervalMs: 5,
+      acquireTimeoutMs: 3_000,
+      staleMs: 3_600_000,
+    })
+    const handle = await lock.acquire()
+    await handle.release()
+  })
+
+  test("a corrupt or future-dated lockfile is treated as stale", async () => {
+    const root = await tmp()
+    const file = path.join(root, "ax-wiki/.build-lock")
+    await mkdir(path.dirname(file), { recursive: true })
+    const lock = createWikiBuildLock(root, "ax-wiki", { retryIntervalMs: 5, acquireTimeoutMs: 3_000 })
+    await writeFile(file, JSON.stringify({ pid: 1, startedAt: null, host: "other-host" }))
+    const first = await lock.acquire()
+    await first.release()
+    await writeFile(file, JSON.stringify({ pid: 1, startedAt: Date.now() + 3_600_000, host: "other-host", token: "y" }))
+    const second = await lock.acquire()
+    await second.release()
+  })
+
+  test("a live holder's heartbeat keeps the lock past the startedAt budget", async () => {
+    const root = await tmp()
+    const holder = createWikiBuildLock(root, "ax-wiki", { staleMs: 300, heartbeatMs: 50 })
+    const first = await holder.acquire()
+    // Wait well past staleMs: startedAt is ancient, but the heartbeat keeps
+    // the mtime fresh, so a waiter must time out instead of stealing.
+    await new Promise((resolve) => setTimeout(resolve, 600))
+    const waiter = createWikiBuildLock(root, "ax-wiki", {
+      staleMs: 300,
+      retryIntervalMs: 10,
+      acquireTimeoutMs: 400,
+    })
+    await expect(waiter.acquire()).rejects.toThrow(/held by another process/)
+    await first.release()
+    const second = await waiter.acquire()
+    await second.release()
+  })
+
+  test("an old body with a fresh mtime is not stolen", async () => {
+    const root = await tmp()
+    const file = path.join(root, "ax-wiki/.build-lock")
+    await mkdir(path.dirname(file), { recursive: true })
+    // A live same-host holder with an ancient startedAt: the fresh heartbeat
+    // mtime is the staleness truth, not startedAt.
+    await writeFile(
+      file,
+      JSON.stringify({ pid: process.pid, startedAt: Date.now() - 60_000, host: os.hostname(), token: "live" }),
+    )
+    const stamp = new Date()
+    await utimes(file, stamp, stamp)
+    // The waiter's timeout is shorter than the staleness budget: if the fresh
+    // mtime were ignored and startedAt ruled, the lock would be stolen at once.
+    const waiter = createWikiBuildLock(root, "ax-wiki", {
+      staleMs: 300,
+      retryIntervalMs: 10,
+      acquireTimeoutMs: 150,
+    })
+    await expect(waiter.acquire()).rejects.toThrow(/held by another process/)
+  })
+
+  test("a cross-host holder's heartbeat mtime also keeps the lock", async () => {
+    const root = await tmp()
+    const file = path.join(root, "ax-wiki/.build-lock")
+    await mkdir(path.dirname(file), { recursive: true })
+    // A holder on another host (shared filesystem): the pid check does not
+    // apply, but the heartbeat mtime is still fresher than startedAt.
+    await writeFile(
+      file,
+      JSON.stringify({ pid: 42, startedAt: Date.now() - 60_000, host: "other-host", token: "remote" }),
+    )
+    const stamp = new Date()
+    await utimes(file, stamp, stamp)
+    const waiter = createWikiBuildLock(root, "ax-wiki", {
+      staleMs: 300,
+      retryIntervalMs: 10,
+      acquireTimeoutMs: 150,
+    })
+    await expect(waiter.acquire()).rejects.toThrow(/held by another process/)
   })
 })

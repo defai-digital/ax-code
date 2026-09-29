@@ -48,7 +48,7 @@ sharing. No source snippets, absolute project root, or model settings are export
 
 ## Open from the TUI
 
-In a session, use **Open Wiki graph** near the project path at the bottom of the
+In a session, use **Wiki graph** near the project path at the bottom of the
 right sidebar, or enter `/wiki-viz`. The same action is available in the command
 palette when the sidebar is hidden. It opens the system browser; if that fails,
 a dialog offers the local link for copying and a retry action.

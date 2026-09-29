@@ -5,7 +5,7 @@ export const messages = {
   "ui.wikiDisabled": "Wiki: maintenance disabled",
   "ui.wikiFailed": "Wiki: generation failed",
 
-  "ui.openWikiVisualization": "Open Wiki graph",
+  "ui.openWikiVisualization": "Wiki graph",
   "ui.openingWikiVisualization": "Opening Wiki graph...",
   "ui.wikiSnapshotCaption": "Wiki snapshot /wiki-viz",
   "ui.wikiBrowserFallback": "Browser did not open: copy the link",

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto"
 import { mkdir, open, rename, rm } from "node:fs/promises"
 import path from "node:path"
 import { discoverSources, readSourceEvidence } from "./discovery.js"
+import { createWikiBuildLock } from "./lock.js"
 import {
   AX_WIKI_CONFIG,
   AX_WIKI_DIR_DEFAULT,
@@ -18,6 +19,46 @@ import { buildPure } from "./build-pure.js"
 
 function isEnoent(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "ENOENT")
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
+/** Shape-check untrusted config JSON; wrong-typed fields fail closed. */
+function assertAxWikiConfigShape(value: unknown, file: string): asserts value is AxWikiConfig {
+  const invalid = (reason: string) => new Error(`Invalid AX Wiki config: ${reason} (${file})`)
+  if (!isPlainObject(value)) throw invalid("expected an object")
+  for (const key of ["include", "exclude"] as const) {
+    const item = value[key]
+    if (item !== undefined && (!Array.isArray(item) || item.some((entry) => typeof entry !== "string"))) {
+      throw invalid(`${key} must be an array of strings`)
+    }
+  }
+  for (const key of ["maxPages", "maxSourcesPerPage", "maxSourceBytes", "maxPageSourceBytes"] as const) {
+    const item = value[key]
+    if (item !== undefined && (typeof item !== "number" || !Number.isFinite(item) || item <= 0)) {
+      throw invalid(`${key} must be a positive number`)
+    }
+  }
+  if (value.instructions !== undefined && typeof value.instructions !== "string") {
+    throw invalid("instructions must be a string")
+  }
+  if (value.pages !== undefined) {
+    if (!Array.isArray(value.pages)) throw invalid("pages must be an array")
+    for (const page of value.pages) {
+      if (
+        !isPlainObject(page) ||
+        typeof page.path !== "string" ||
+        typeof page.title !== "string" ||
+        typeof page.purpose !== "string" ||
+        !Array.isArray(page.selectors) ||
+        page.selectors.some((selector) => typeof selector !== "string")
+      ) {
+        throw invalid("pages entries must have string path/title/purpose and a string selectors array")
+      }
+    }
+  }
 }
 
 async function readJson<T>(file: string): Promise<T | undefined> {
@@ -64,7 +105,11 @@ export async function loadAxWikiConfig(root: string, allowRead?: (relative: stri
   const configFile = resolveInside(root, AX_WIKI_CONFIG)
   let config: AxWikiConfig | undefined
   try {
-    if (allowRead?.(AX_WIKI_CONFIG) !== false) config = JSON.parse(await readCompilerConfig(configFile)) as AxWikiConfig
+    if (allowRead?.(AX_WIKI_CONFIG) !== false) {
+      const parsed: unknown = JSON.parse(await readCompilerConfig(configFile))
+      assertAxWikiConfigShape(parsed, configFile)
+      config = parsed
+    }
   } catch (error) {
     if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) {
       throw new Error(`Invalid AX Wiki config: ${configFile}`, { cause: error })
@@ -82,10 +127,19 @@ export async function loadAxWikiConfig(root: string, allowRead?: (relative: stri
 
 export async function loadWikiManifest(root: string, wikiDir = AX_WIKI_DIR_DEFAULT): Promise<WikiManifest | undefined> {
   await assertWikiDirectorySafe(root, wikiDir)
-  const manifest = await readJson<WikiManifest>(
-    resolveInside(root, path.posix.join(sanitizeWikiDir(wikiDir), AX_WIKI_MANIFEST)),
-  )
+  const file = resolveInside(root, path.posix.join(sanitizeWikiDir(wikiDir), AX_WIKI_MANIFEST))
+  const manifest = await readJson<WikiManifest>(file)
   if (!manifest || manifest.generator !== AX_WIKI_GENERATOR || manifest.schemaVersion !== 1) return undefined
+  // Valid JSON with a wrong shape is corruption, not "no previous build":
+  // treating it as absent would disable the conflict guard.
+  if (
+    typeof manifest.planHash !== "string" ||
+    !isPlainObject(manifest.sources) ||
+    !isPlainObject(manifest.pages) ||
+    Object.values(manifest.pages).some((page) => !isPlainObject(page) || typeof page.title !== "string")
+  ) {
+    throw new Error(`AX Wiki manifest has an invalid shape: ${file}`)
+  }
   return manifest
 }
 
@@ -182,10 +236,12 @@ export async function buildAxWiki(input: WikiBuildInput): Promise<WikiBuildResul
   })
 
   const existing = pure.existingPages
-  // Gate C7: when a lock is injected, serialize the write critical section so two
-  // concurrent builds on the same root cannot race on rename/rm. Released in the
-  // finally so a failed/rolled-back build never strands the lock.
-  const lockHandle = input.lock ? await input.lock.acquire() : undefined
+  // Gate C7: serialize the write critical section so two concurrent builds on
+  // the same root cannot race on rename/rm. Callers holding a wider lock (AX
+  // Code serializes the full pipeline) pass it through; without an injected
+  // lock the write phase falls back to the default filesystem lock. Released
+  // in the finally so a failed/rolled-back build never strands the lock.
+  const lockHandle = await (input.lock ?? createWikiBuildLock(root, wikiDir)).acquire()
   try {
     input.signal?.throwIfAborted()
     for (const pagePath of new Set([...pure.generated.keys(), ...pure.removedPages])) {
@@ -261,6 +317,6 @@ export async function buildAxWiki(input: WikiBuildInput): Promise<WikiBuildResul
       validation: pure.validation,
     }
   } finally {
-    if (lockHandle) await lockHandle.release().catch(() => {})
+    await lockHandle.release().catch(() => {})
   }
 }

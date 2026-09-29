@@ -77,6 +77,7 @@ const keep = [
   ".tmp",
   ".turbo",
   ".vscode",
+  "ax-wiki",
   "crates",
   "debug-log",
   "docs",

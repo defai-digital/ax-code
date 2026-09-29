@@ -1,9 +1,9 @@
-import { createWikiBuildLock } from "@ax-code/ax-wiki/node"
-import { assertWikiDirectorySafe } from "@ax-code/ax-wiki"
 import { execFile } from "node:child_process"
 import path from "node:path"
 import { promisify } from "node:util"
 import {
+  createWikiBuildLock,
+  assertWikiDirectorySafe,
   AX_WIKI_EVIDENCE_SCHEMA_VERSION,
   AX_WIKI_GENERATOR,
   buildAxWiki,
@@ -28,23 +28,27 @@ import {
   type WikiPageGenerationResult,
   type WikiPlan,
   type WikiSource,
-} from "@ax-code/ax-wiki"
-import { streamObject } from "ai"
+} from "@ax-code/ax-wiki/node"
+import { NoObjectGeneratedError, streamObject } from "ai"
 import z from "zod"
 import { GraphContext } from "../code-intelligence/graph-context"
 import { Installation } from "../installation"
 import { Instance } from "../project/instance"
 import { Provider } from "../provider/provider"
+import { parseJsonResult } from "../util/json-value"
 import { Log } from "../util/log"
 import { ProviderTransform } from "../provider/transform"
 import { engineConfig, resolveWikiRuntimeConfig } from "./config"
 
 const execFileAsync = promisify(execFile)
 
+const PAGE_SUMMARY_MAX = 600
+const PAGE_SYMBOLS_MAX = 80
+
 const PAGE_SCHEMA = z.object({
-  summary: z.string().min(20).max(600),
+  summary: z.string().min(20).max(PAGE_SUMMARY_MAX),
   body: z.string().min(80),
-  symbols: z.array(z.string()).max(80).default([]),
+  symbols: z.array(z.string()).max(PAGE_SYMBOLS_MAX).default([]),
 })
 
 const PAGE_SYSTEM = `You are the AX Wiki compiler inside AX Code.
@@ -66,6 +70,30 @@ Return a json object with summary (20-600 characters), body (at least 80 charact
 
 const WIKI_PROMPT_VERSION = "native-page-v2"
 const EVIDENCE_PRODUCER = "ax-code-code-intelligence"
+
+/**
+ * Repair a complete JSON code fence and field bounds without inventing any
+ * missing content. Incomplete JSON still fails and may use the bounded retry.
+ */
+export function repairWikiPageText(text: string): string | null {
+  const fenced = text.trim().match(/^```(?:json)?\s*\n([\s\S]*?)\n```$/i)
+  const parsed = parseJsonResult(fenced?.[1] ?? text)
+  if (!parsed.ok || !parsed.value || typeof parsed.value !== "object" || Array.isArray(parsed.value)) return null
+  const record = parsed.value as Record<string, unknown>
+  let changed = fenced !== null
+  if (Array.isArray(record.symbols)) {
+    const strings = record.symbols.filter((symbol): symbol is string => typeof symbol === "string")
+    if (strings.length !== record.symbols.length || strings.length > PAGE_SYMBOLS_MAX) {
+      record.symbols = strings.slice(0, PAGE_SYMBOLS_MAX)
+      changed = true
+    }
+  }
+  if (typeof record.summary === "string" && record.summary.length > PAGE_SUMMARY_MAX) {
+    record.summary = record.summary.slice(0, PAGE_SUMMARY_MAX).trimEnd()
+    changed = true
+  }
+  return changed ? JSON.stringify(record) : null
+}
 
 function sourceEvidence(request: WikiPageGenerationRequest): string {
   return request.sources
@@ -397,21 +425,47 @@ export async function runNativeWiki(input: {
     const generator = async (request: WikiPageGenerationRequest): Promise<WikiPageGenerationResult> => {
       const abort = new AbortController()
       const timer = setTimeout(() => abort.abort(), 180_000)
+      const signal = input.signal ? AbortSignal.any([abort.signal, input.signal]) : abort.signal
       try {
-        const result = streamObject({
-          model: model.language,
-          maxOutputTokens: model.maxOutputTokens,
-          schema: PAGE_SCHEMA,
-          abortSignal: input.signal ? AbortSignal.any([abort.signal, input.signal]) : abort.signal,
-          messages: [
-            { role: "system", content: PAGE_SYSTEM },
-            { role: "user", content: pagePrompt(request) },
-          ],
-        })
-        for await (const part of result.fullStream) {
-          if (part.type === "error") throw part.error
+        const prompt = pagePrompt(request)
+        for (let attempt = 0; ; attempt++) {
+          signal.throwIfAborted()
+          try {
+            const result = streamObject({
+              model: model.language,
+              maxOutputTokens: model.maxOutputTokens,
+              schema: PAGE_SCHEMA,
+              experimental_repairText: async ({ text }) => repairWikiPageText(text),
+              abortSignal: signal,
+              messages: [
+                {
+                  role: "system",
+                  content:
+                    PAGE_SYSTEM +
+                    (attempt === 0
+                      ? ""
+                      : "\nThe previous attempt did not produce a valid page object. Return only one complete JSON object, without code fences or surrounding prose. Keep the body concise, escape newlines and quotes inside JSON strings, and close every string, array, and object."),
+                },
+                { role: "user", content: prompt },
+              ],
+            })
+            for await (const part of result.fullStream) {
+              if (part.type === "error") throw part.error
+            }
+            return await result.object
+          } catch (error) {
+            if (!NoObjectGeneratedError.isInstance(error) || signal.aborted) throw error
+            log.warn("wiki page structured output failed", {
+              page: request.page.path,
+              model: model.label,
+              attempt: attempt + 1,
+              retry: attempt === 0,
+              finishReason: error.finishReason,
+              responseCharacters: error.text?.length ?? 0,
+            })
+            if (attempt > 0) throw error
+          }
         }
-        return await result.object
       } finally {
         clearTimeout(timer)
       }
@@ -424,6 +478,11 @@ export async function runNativeWiki(input: {
       wikiDir: config.dir,
       action: input.action,
       generator,
+      // The full-pipeline lock is already held above; hand it to the write
+      // phase so buildAxWiki does not deadlock on its default filesystem lock.
+      // Release is idempotent: the write phase releases first, and the outer
+      // finally below is then a no-op.
+      lock: { acquire: async () => lock },
       evidenceProvider:
         input.includeGraphEvidence === false
           ? undefined

@@ -10,6 +10,7 @@ import { AX_WIKI_CONFIG, AX_WIKI_INSTRUCTIONS, normalizePath, resolveInside } fr
 import type { AxWikiConfig, WikiSource } from "./types.js"
 
 const execFileAsync = promisify(execFile)
+const GIT_LS_FILES_TIMEOUT_MS = 60_000
 const SKIP_DIRS = new Set([".git", "node_modules", "dist", "build", "target", ".cache", ".turbo", "coverage"])
 const SKIP_FILES = new Set(["pnpm-lock.yaml", "package-lock.json", "yarn.lock", "bun.lock", "bun.lockb"])
 const TEXT_EXTENSIONS = new Set([
@@ -76,16 +77,27 @@ const LANGUAGE_BY_EXTENSION: Record<string, string> = {
   ".zig": "Zig",
 }
 
-async function gitFiles(root: string, strict = false): Promise<string[] | undefined> {
+async function gitFiles(root: string, strict = false, signal?: AbortSignal): Promise<string[] | undefined> {
   try {
     const { stdout } = await execFileAsync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], {
       cwd: root,
       encoding: "buffer",
       maxBuffer: 32 * 1024 * 1024,
+      // A wedged git child must not pin a background discovery job forever.
+      timeout: GIT_LS_FILES_TIMEOUT_MS,
+      signal,
     })
     return stdout.toString("utf8").split("\0").filter(Boolean).map(normalizePath)
   } catch (error) {
     const failure = error as { code?: string | number; stderr?: string | Buffer }
+    // A caller abort (or the timeout kill) must never fall back to a walk that
+    // would certify a differently-scoped inventory.
+    if (signal?.aborted) throw error
+    // A maxBuffer overflow means the git inventory is incomplete; falling back
+    // to a walk would silently mix gitignored files into the source set.
+    if (failure.code === "ENOBUFS") {
+      throw new Error(`AX Wiki source discovery exceeded the git ls-files buffer at ${root}`, { cause: error })
+    }
     // A non-Git tree (or unavailable Git executable) uses filesystem discovery.
     // Other enumeration failures must not verify an incomplete inventory as fresh.
     if (strict && failure.code !== "ENOENT" && !String(failure.stderr).includes("not a git repository")) throw error
@@ -93,20 +105,31 @@ async function gitFiles(root: string, strict = false): Promise<string[] | undefi
   }
 }
 
-async function walkFiles(root: string, directory = root, strict = false): Promise<string[]> {
+async function walkFiles(root: string, directory = root, strict = false, signal?: AbortSignal): Promise<string[]> {
   const output: string[] = []
-  let entries
-  try {
-    entries = await readdir(directory, { withFileTypes: true })
-  } catch (error) {
-    if (strict) throw error
-    return output
-  }
-  for (const entry of entries) {
-    if (entry.isDirectory() && SKIP_DIRS.has(entry.name)) continue
-    const absolute = path.join(directory, entry.name)
-    if (entry.isDirectory()) output.push(...(await walkFiles(root, absolute, strict)))
-    else if (entry.isFile() || entry.isSymbolicLink()) output.push(normalizePath(path.relative(root, absolute)))
+  // Level-synchronous BFS: directories within one level are read with bounded
+  // concurrency instead of a fully serial depth-first walk.
+  let level = [directory]
+  while (level.length > 0) {
+    signal?.throwIfAborted()
+    const listing = await mapWithBoundedConcurrency(level, DISCOVERY_READ_CONCURRENCY, async (current) => {
+      try {
+        return await readdir(current, { withFileTypes: true })
+      } catch (error) {
+        if (strict) throw error
+        return []
+      }
+    })
+    const next: string[] = []
+    for (let index = 0; index < level.length; index++) {
+      for (const entry of listing[index] ?? []) {
+        if (entry.isDirectory() && SKIP_DIRS.has(entry.name)) continue
+        const absolute = path.join(level[index]!, entry.name)
+        if (entry.isDirectory()) next.push(absolute)
+        else if (entry.isFile() || entry.isSymbolicLink()) output.push(normalizePath(path.relative(root, absolute)))
+      }
+    }
+    level = next
   }
   return output
 }
@@ -192,7 +215,8 @@ export async function discoverSources(input: {
 }): Promise<WikiSource[]> {
   const root = path.resolve(input.root)
   const config = input.config ?? {}
-  const candidates = (await gitFiles(root, input.strict)) ?? (await walkFiles(root, root, input.strict))
+  const candidates =
+    (await gitFiles(root, input.strict, input.signal)) ?? (await walkFiles(root, root, input.strict, input.signal))
   const unique = [...new Set(candidates.map(normalizePath))].sort()
   input.signal?.throwIfAborted()
   const eligible = unique.filter(

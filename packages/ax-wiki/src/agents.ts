@@ -1,7 +1,7 @@
-import { randomUUID } from "node:crypto"
 import { constants as fsConstants } from "node:fs"
-import { open, rename, rm, writeFile } from "node:fs/promises"
+import { open } from "node:fs/promises"
 import path from "node:path"
+import { atomicWrite } from "./build.js"
 import { AX_WIKI_DIR_DEFAULT, AX_WIKI_END, AX_WIKI_START, sanitizeWikiDir } from "./paths.js"
 
 export function hasAxWikiBlock(content: string): boolean {
@@ -79,16 +79,9 @@ export async function ensureAgentsWikiPointers(
     if (next === existing) continue
     previews[name] = next
     updated.push(name)
-    if (!options.dryRun) {
-      const temporary = `${file}.tmp-${randomUUID()}`
-      try {
-        await writeFile(temporary, next, "utf8")
-        await rename(temporary, file)
-      } catch (error) {
-        await rm(temporary, { force: true }).catch(() => {})
-        throw error
-      }
-    }
+    // Same temp+rename+fsync path as wiki page writes: a power loss must not
+    // leave an empty or torn instruction file behind.
+    if (!options.dryRun) await atomicWrite(file, next)
   }
   return { updated, previews }
 }

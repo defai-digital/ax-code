@@ -49,6 +49,9 @@ packages/integration-vscode/out/
 .direnv/
 debug-log/
 
+# Generated AX Wiki output (dogfooded self-wiki; regenerated on demand)
+/ax-wiki/
+
 # Temp files
 ~$*
 *.tsbuildinfo

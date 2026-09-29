@@ -12,6 +12,7 @@
 // `build.ts`; only the effect boundaries moved.
 
 import { fingerprintEvidenceBundle, renderEvidenceBundle, type EvidenceBundle } from "./contracts.js"
+import { mapWithBoundedConcurrency } from "./discovery-concurrency.js"
 import { parseFrontmatter, renderWikiPage } from "./frontmatter.js"
 import { sha256, stableJson } from "./hash.js"
 import type { EvidenceProvider } from "./ports.js"
@@ -37,6 +38,11 @@ import { validateWikiCandidate } from "./validate.js"
 
 /** A source with the evidence slice read for a page. */
 export type WikiSourceEvidence = WikiSource & { content: string; truncated: boolean }
+
+/** Bounded parallelism for existing-page reads (plain file I/O). */
+const PAGE_READ_CONCURRENCY = 8
+/** Bounded parallelism for evidence prefetch (LSP/graph queries are heavier). */
+const EVIDENCE_FETCH_CONCURRENCY = 4
 
 /** Reads evidence content for a set of selected sources. Injected effect. */
 export type WikiEvidenceReader = (input: {
@@ -167,29 +173,44 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
   const currentSourceHashes = sourceHashMap(sources)
   const changed = changedSources(previous, currentSourceHashes)
   const existing = new Map<string, string>()
-  for (const page of new Set([...plan.pages.map((item) => item.path), ...Object.keys(previous?.pages ?? {})])) {
-    const content = await input.readExistingPage(page)
+  const candidatePaths = [...new Set([...plan.pages.map((item) => item.path), ...Object.keys(previous?.pages ?? {})])]
+  const existingReads = await mapWithBoundedConcurrency(candidatePaths, PAGE_READ_CONCURRENCY, async (page) => {
+    input.signal?.throwIfAborted()
+    return [page, await input.readExistingPage(page)] as const
+  })
+  for (const [page, content] of existingReads) {
     if (content !== undefined) existing.set(page, content)
   }
 
   const pageCache = new Map<string, CachedPageEvidence>()
+  for (const page of plan.pages) {
+    pageCache.set(page.path, { selected: selectPageSources(sources, page, config.maxSourcesPerPage ?? 80) })
+  }
+  if (input.evidenceProvider) {
+    const provider = input.evidenceProvider
+    // Prefetch every page's typed evidence with bounded concurrency; results are
+    // keyed by page path, so fingerprints stay deterministic regardless of
+    // completion order.
+    const bundles = await mapWithBoundedConcurrency(plan.pages, EVIDENCE_FETCH_CONCURRENCY, async (page) => {
+      input.signal?.throwIfAborted()
+      const cached = pageCache.get(page.path)!
+      return [page.path, await provider.provide({ root: input.root, page, sources: cached.selected })] as const
+    })
+    for (const [pagePath, bundle] of bundles) pageCache.get(pagePath)!.bundle = bundle
+  }
   const prospectiveFingerprints = new Map<string, string>()
   for (const page of plan.pages) {
     input.signal?.throwIfAborted()
-    const selected = selectPageSources(sources, page, config.maxSourcesPerPage ?? 80)
-    const bundle = input.evidenceProvider
-      ? await input.evidenceProvider.provide({ root: input.root, page, sources: selected })
-      : undefined
-    pageCache.set(page.path, { selected, bundle })
+    const cached = pageCache.get(page.path)!
     prospectiveFingerprints.set(
       page.path,
       pageFingerprint({
         config,
-        sourceHashes: Object.fromEntries(selected.map((source) => [source.path, source.hash])),
+        sourceHashes: Object.fromEntries(cached.selected.map((source) => [source.path, source.hash])),
         generatorIdentity: input.generatorIdentity,
         model: input.model,
         semanticRevision: input.semanticRevision,
-        evidenceFingerprint: bundle ? fingerprintEvidenceBundle(bundle) : undefined,
+        evidenceFingerprint: cached.bundle ? fingerprintEvidenceBundle(cached.bundle) : undefined,
       }),
     )
   }

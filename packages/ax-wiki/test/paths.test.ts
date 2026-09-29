@@ -2,7 +2,13 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { afterAll, beforeAll, describe, expect, test } from "vitest"
-import { assertWikiDirectorySafe, normalizePath, resolveInside, safeRelativePath, sanitizeWikiDir } from "../src"
+import {
+  assertWikiDirectorySafe,
+  normalizePath,
+  resolveInside,
+  safeRelativePath,
+  sanitizeWikiDir,
+} from "../src/node.js"
 
 describe("AX Wiki path containment", () => {
   test("sanitizeWikiDir falls back for unsafe or empty input", () => {

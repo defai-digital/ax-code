@@ -10,7 +10,7 @@
 // additive; consumers should ignore unknown fields and treat a newer schemaVersion
 // as readable-but-possibly-richer.
 
-import { sha256, stableJson } from "./hash.js"
+import { compareStableStrings, sha256, stableJson } from "./hash.js"
 
 export const AX_WIKI_EVIDENCE_SCHEMA_VERSION = 1 as const
 
@@ -267,7 +267,7 @@ function stableProvenance(provenance: Provenance): {
 }
 
 function compareStable(left: unknown, right: unknown): number {
-  return stableJson(left).localeCompare(stableJson(right))
+  return compareStableStrings(stableJson(left), stableJson(right))
 }
 
 function stableEvidencePayload(bundle: EvidenceBundle): unknown {
@@ -346,10 +346,21 @@ export function utf8ByteSpan(
   startCodePoint: number,
   endCodePoint: number,
 ): { byteStart: number; byteEnd: number } {
-  const codePoints = [...text]
-  const start = Math.max(0, Math.min(startCodePoint, codePoints.length))
-  const end = Math.max(start, Math.min(endCodePoint, codePoints.length))
-  const byteStart = Buffer.byteLength(codePoints.slice(0, start).join(""), "utf8")
-  const byteEnd = byteStart + Buffer.byteLength(codePoints.slice(start, end).join(""), "utf8")
-  return { byteStart, byteEnd }
+  const start = Math.max(0, startCodePoint)
+  const end = Math.max(start, endCodePoint)
+  // Single pass with no intermediate arrays or joined copies: byte offsets are
+  // accumulated until both endpoints are resolved (endpoints past the string
+  // clamp to its total byte length).
+  let index = 0
+  let byteOffset = 0
+  let byteStart: number | undefined
+  let byteEnd: number | undefined
+  for (const char of text) {
+    if (index === start && byteStart === undefined) byteStart = byteOffset
+    if (index === end && byteEnd === undefined) byteEnd = byteOffset
+    if (byteStart !== undefined && byteEnd !== undefined) return { byteStart, byteEnd }
+    byteOffset += Buffer.byteLength(char, "utf8")
+    index++
+  }
+  return { byteStart: byteStart ?? byteOffset, byteEnd: byteEnd ?? byteOffset }
 }

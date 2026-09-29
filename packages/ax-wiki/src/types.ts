@@ -147,8 +147,11 @@ export type WikiBuildProgress =
 
 /**
  * Optional advisory lock serializing concurrent builds on the same root (gate C7).
- * Injected so the pure core never touches a lockfile directly; the node subpath
- * provides a filesystem implementation (`createWikiBuildLock`).
+ * Injected so the pure core never touches a lockfile directly; when omitted,
+ * `buildAxWiki` serializes its write phase with the default filesystem lock
+ * (`createWikiBuildLock` from the `./node` subpath). Handles are idempotent:
+ * `release()` is a no-op after the first call and only removes the lockfile
+ * while the caller still owns it.
  */
 export type WikiBuildLockHandle = { release(): Promise<void> }
 export type WikiBuildLock = { acquire(): Promise<WikiBuildLockHandle> }

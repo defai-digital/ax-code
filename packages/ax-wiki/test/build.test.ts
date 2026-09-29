@@ -14,7 +14,7 @@ import {
   mergeProtectedSections,
   type WikiPageGenerationRequest,
   type WikiPageGenerator,
-} from "../src"
+} from "../src/node.js"
 
 const roots: string[] = []
 
@@ -355,5 +355,32 @@ describe("background compilation boundaries", () => {
     const make = generator()
     await expect(buildAxWiki({ root, action: "generate", generator: make })).rejects.toThrow()
     expect(make).not.toHaveBeenCalled()
+  })
+})
+
+describe("AX Wiki build input validation and default lock", () => {
+  test("rejects a config with a wrong-typed field", async () => {
+    const root = await fixture()
+    await writeFile(path.join(root, "ax-wiki.config.json"), JSON.stringify({ maxPages: "many" }))
+    await expect(buildAxWiki({ root, action: "generate", generator: generator() })).rejects.toThrow(
+      "Invalid AX Wiki config",
+    )
+  })
+
+  test("rejects a manifest with a structurally invalid shape", async () => {
+    const root = await fixture()
+    await mkdir(path.join(root, "ax-wiki"), { recursive: true })
+    await writeFile(
+      path.join(root, "ax-wiki/.manifest.json"),
+      JSON.stringify({ schemaVersion: 1, generator: "ax-wiki", planHash: "x", sources: [], pages: {} }),
+    )
+    await expect(buildAxWiki({ root, action: "update", generator: generator() })).rejects.toThrow("invalid shape")
+  })
+
+  test("uses and releases the default filesystem lock when none is injected", async () => {
+    const root = await fixture()
+    await buildAxWiki({ root, action: "generate", generator: generator() })
+    // The default lock is released after the write phase: no lockfile remains.
+    await expect(readFile(path.join(root, "ax-wiki/.build-lock"), "utf8")).rejects.toThrow()
   })
 })

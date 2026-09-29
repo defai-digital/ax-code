@@ -36,7 +36,7 @@ import { Config } from "../config/config"
 import type { ModePolicy } from "../mode/policy"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import { ToolProfile } from "@/tool/profile"
-import { maybeRenderAxWikiProtocol, type AxWikiConfig } from "@ax-code/ax-wiki"
+import { maybeRenderAxWikiProtocol, type AxWikiConfig } from "@ax-code/ax-wiki/node"
 
 export namespace SystemPrompt {
   const log = Log.create({ service: "session.system-prompt" })
