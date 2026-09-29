@@ -1,5 +1,13 @@
 /** Browser-safe view projection. No filesystem, hashing, or runtime imports. */
+import { provenanceOfSymbol } from "./grounding.js"
+import type { SymbolProvenance } from "./grounding.js"
+
+export type { SymbolProvenance } from "./grounding.js"
 export type GraphFreshness = "fresh" | "stale" | "unknown"
+export type SymbolAnchor = {
+  name: string
+  provenance: SymbolProvenance
+}
 export type WikiGraphNode = {
   id: string
   kind: "page" | "source"
@@ -9,6 +17,10 @@ export type WikiGraphNode = {
   /** Total recorded incident relationships, including those omitted from this view. */
   recordedReferences: number
   observedHash?: string
+  /** Page nodes carry the recorded manifest summary verbatim (v2; "" when absent). */
+  summary: string
+  /** Page nodes carry anchored symbols with provenance (v2; [] when absent). */
+  symbols: SymbolAnchor[]
 }
 export type WikiGraphEdge = {
   from: string
@@ -26,7 +38,15 @@ export type WikiGraph = {
   edges: WikiGraphEdge[]
   omitted: { nodes: number; edges: number }
 }
-export const GRAPH_LIMITS = { nodes: 200, edges: 500, pages: 10_000, references: 50_000 } as const
+export const GRAPH_LIMITS = {
+  nodes: 200,
+  edges: 500,
+  pages: 10_000,
+  references: 50_000,
+  symbolsPerNode: 32,
+  symbolName: 256,
+  summary: 2048,
+} as const
 
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Expected an object")
@@ -61,6 +81,26 @@ function count(value: unknown): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) throw new Error("Invalid count")
   return value
 }
+function provenance(value: unknown): SymbolProvenance {
+  if (value !== "verified" && value !== "inferred" && value !== "unavailable") throw new Error("Invalid provenance")
+  return value
+}
+function summaryText(value: unknown): string {
+  if (value === undefined || value === "") return ""
+  return text(value, GRAPH_LIMITS.summary)
+}
+function symbolAnchors(value: unknown): SymbolAnchor[] {
+  if (value === undefined) return []
+  if (!Array.isArray(value) || value.length > GRAPH_LIMITS.symbolsPerNode) throw new Error("Invalid node symbols")
+  const seen = new Set<string>()
+  return value.map((raw) => {
+    const anchor = record(raw)
+    const name = text(anchor.name, GRAPH_LIMITS.symbolName)
+    if (seen.has(name)) throw new Error("Duplicate node symbol")
+    seen.add(name)
+    return { name, provenance: provenance(anchor.provenance) }
+  })
+}
 /** Validate and detach an allowlisted graph; extra producer fields never reach exports. */
 export function parseWikiGraph(input: unknown): WikiGraph {
   const value = record(input)
@@ -87,6 +127,8 @@ export function parseWikiGraph(input: unknown): WikiGraph {
       freshness: freshness(node.freshness),
       recordedReferences: count(node.recordedReferences),
       observedHash: hash(node.observedHash),
+      summary: summaryText(node.summary),
+      symbols: symbolAnchors(node.symbols),
     }
     ids.set(id, parsed)
     return parsed
@@ -133,6 +175,8 @@ export function projectWikiManifest(
   options: {
     snapshot: string
     observed?: ReadonlyMap<string, string | null>
+    /** Bounded source excerpts keyed by root-relative path, used for symbol provenance. */
+    sourceContents?: ReadonlyMap<string, string>
   },
 ): WikiGraph {
   const manifest = record(input)
@@ -148,6 +192,14 @@ export function projectWikiManifest(
     if (!Array.isArray(page.sources) || (references += page.sources.length) > GRAPH_LIMITS.references)
       throw new Error("Manifest exceeds reference limit")
     const hashes = record(page.sourceHashes)
+    const cited = [...new Set(page.sources.map(graphRelativePath))].sort()
+    const reported = page.symbols === undefined ? [] : page.symbols
+    if (!Array.isArray(reported) || reported.length > GRAPH_LIMITS.symbolsPerNode)
+      throw new Error("Manifest exceeds node symbol limit")
+    const excerpts = cited
+      .map((source) => options.sourceContents?.get(source))
+      .filter((value): value is string => value !== undefined)
+    const supplied = excerpts.length > 0 ? excerpts : undefined
     const id = `page:${location}`
     const node: WikiGraphNode = {
       id,
@@ -156,10 +208,15 @@ export function projectWikiManifest(
       label: text(page.title),
       freshness: "unknown",
       recordedReferences: 0,
+      summary: summaryText(page.summary),
+      symbols: [...new Set(reported.map((raw) => text(raw, GRAPH_LIMITS.symbolName)))].map((name) => ({
+        name,
+        provenance: provenanceOfSymbol(name, supplied),
+      })),
     }
     allNodes.set(id, node)
     const states: GraphFreshness[] = []
-    for (const source of [...new Set(page.sources.map(graphRelativePath))].sort()) {
+    for (const source of cited) {
       const recordedHash = hash(Object.hasOwn(hashes, source) ? hashes[source] : undefined)
       const observation = options.observed?.get(source)
       const observed = observation === null ? null : hash(observation)
@@ -187,6 +244,8 @@ export function projectWikiManifest(
         freshness: combined,
         recordedReferences: (existing?.recordedReferences ?? 0) + 1,
         observedHash: observed ?? undefined,
+        summary: "",
+        symbols: [],
       })
       allEdges.push({ from: id, to: target, kind: "references-source", freshness: state, recordedHash })
       states.push(state)

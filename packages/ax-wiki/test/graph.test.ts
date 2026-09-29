@@ -154,3 +154,98 @@ test("retains stale evidence beyond the view cap and discloses each node's full 
     ),
   ).toThrow(/content hash/)
 })
+
+test("projects recorded summaries and provenanced symbol anchors", () => {
+  const graph = projectWikiManifest(
+    {
+      schemaVersion: 1,
+      generator: "ax-wiki",
+      pages: {
+        "guide.md": {
+          title: "Guide",
+          summary: "Guide summary.",
+          symbols: ["Foo", "Ghost", "Foo"],
+          sources: ["src/a.ts", "src/b.ts"],
+          sourceHashes: {},
+        },
+        "other.md": {
+          title: "Other",
+          summary: "",
+          symbols: ["Widget"],
+          sources: ["src/c.ts"],
+          sourceHashes: {},
+        },
+      },
+    },
+    { snapshot: "symbols", sourceContents: new Map([["src/a.ts", "export class Foo {}"]]) },
+  )
+  expect(graph.schemaVersion).toBe(1)
+  const guide = graph.nodes.find((n) => n.id === "page:guide.md")!
+  expect(guide.summary).toBe("Guide summary.")
+  expect(guide.symbols).toEqual([
+    { name: "Foo", provenance: "verified" },
+    { name: "Ghost", provenance: "inferred" },
+  ])
+  const other = graph.nodes.find((n) => n.id === "page:other.md")!
+  expect(other.summary).toBe("")
+  expect(other.symbols).toEqual([{ name: "Widget", provenance: "unavailable" }])
+  const source = graph.nodes.find((n) => n.id === "source:src/a.ts")!
+  expect(source.summary).toBe("")
+  expect(source.symbols).toEqual([])
+})
+
+test("defaults missing manifest summary and symbols for hand-written manifests", () => {
+  const graph = projectWikiManifest(manifest(), { snapshot: "fixture" })
+  expect(graph.nodes[0].summary).toBe("")
+  expect(graph.nodes[0].symbols).toEqual([])
+})
+
+test("enforces symbol and summary caps with clear failures", () => {
+  const page = (symbols: unknown, summary: unknown) => ({
+    schemaVersion: 1,
+    generator: "ax-wiki",
+    pages: { "guide.md": { title: "Guide", summary, symbols, sources: ["src/a.ts"], sourceHashes: {} } },
+  })
+  expect(
+    projectWikiManifest(
+      page(
+        Array.from({ length: 32 }, (_, i) => `s${i}`),
+        "x",
+      ),
+      { snapshot: "ok" },
+    ).nodes[0].symbols,
+  ).toHaveLength(32)
+  expect(() => projectWikiManifest(page(Array(33).fill("s"), "x"), { snapshot: "many" })).toThrow(/node symbol limit/)
+  expect(() => projectWikiManifest(page(["x".repeat(257)], "x"), { snapshot: "long" })).toThrow()
+  expect(() => projectWikiManifest(page([], "x".repeat(2049)), { snapshot: "long" })).toThrow()
+  expect(() => projectWikiManifest(page(["ok", 7], "x"), { snapshot: "bad" })).toThrow()
+  expect(projectWikiManifest(page([], "x".repeat(2048)), { snapshot: "edge" }).nodes[0].summary).toHaveLength(2048)
+})
+
+test("parses populated nodes and rejects bad provenance, duplicates, and versions", () => {
+  const graph = projectWikiManifest(manifest(), { snapshot: "fixture" })
+  const populated = {
+    ...graph,
+    nodes: [{ ...graph.nodes[0], summary: "S", symbols: [{ name: "A", provenance: "verified" }] }, graph.nodes[1]],
+  }
+  expect(parseWikiGraph(populated).nodes[0].symbols).toEqual([{ name: "A", provenance: "verified" }])
+  const bad = (node: unknown) => ({ ...graph, nodes: [node, graph.nodes[1]] })
+  expect(() => parseWikiGraph(bad({ ...graph.nodes[0], symbols: [{ name: "A", provenance: "maybe" }] }))).toThrow(
+    /provenance/,
+  )
+  expect(() =>
+    parseWikiGraph(
+      bad({
+        ...graph.nodes[0],
+        symbols: [
+          { name: "A", provenance: "verified" },
+          { name: "A", provenance: "verified" },
+        ],
+      }),
+    ),
+  ).toThrow(/Duplicate/)
+  expect(() => parseWikiGraph({ ...graph, schemaVersion: 3 })).toThrow(/Unsupported/)
+  expect(() => parseWikiGraph({ ...graph, schemaVersion: "1" })).toThrow(/Unsupported/)
+  const detached = parseWikiGraph({ ...graph, nodes: [{ ...graph.nodes[0], injected: "x" }, graph.nodes[1]] })
+  expect(detached.nodes[0]).not.toHaveProperty("injected")
+})

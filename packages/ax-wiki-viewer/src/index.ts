@@ -383,8 +383,14 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       const hash = edge.recordedHash ? `\nRecorded SHA-256: ${edge.recordedHash}` : ""
       return `${marker} ${other.label}\n${other.path} · ${edge.freshness}${hash}`
     })
+    const summary = node.summary ? `\nSummary: ${node.summary}` : ""
+    const anchors =
+      node.symbols.length > 0
+        ? `\n\nAnchored symbols (${node.symbols.length}):\n${node.symbols.map((anchor) => `- ${anchor.name} (${anchor.provenance})`).join("\n")}`
+        : ""
     detail.textContent =
-      `${node.kind === "page" ? "Page" : "Source"}: ${node.label}\nLocation: ${node.path}\nFreshness: ${node.freshness} — ${FRESHNESS_NOTE[node.freshness]}\n${line}\nProvenance: Wiki manifest membership` +
+      `${node.kind === "page" ? "Page" : "Source"}: ${node.label}\nLocation: ${node.path}${summary}\nFreshness: ${node.freshness} — ${FRESHNESS_NOTE[node.freshness]}\n${line}\nProvenance: Wiki manifest membership` +
+      anchors +
       (rows.length ? `\n\n${rows.join("\n")}` : "")
   }
 

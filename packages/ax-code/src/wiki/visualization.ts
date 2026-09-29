@@ -7,7 +7,7 @@ import { open, realpath, unlink } from "node:fs/promises"
 import path from "node:path"
 import { createHash, randomBytes } from "node:crypto"
 import { createServer } from "node:http"
-import { assertWikiDirectorySafe } from "@ax-code/ax-wiki/node"
+import { assertWikiDirectorySafe, readGroundingExcerpts } from "@ax-code/ax-wiki/node"
 import { graphRelativePath, projectWikiManifest, parseWikiGraph } from "@ax-code/ax-wiki/graph"
 import { renderWikiGraphHtml } from "@ax-code/ax-wiki-viewer/node"
 import { parseJsonStrict } from "../util/json-value"
@@ -22,6 +22,21 @@ export namespace WikiVisualization {
   )
 
   const MAX_MANIFEST_BYTES = 4 * 1024 * 1024
+
+  /** Collect cited source paths defensively; malformed shapes yield no excerpts. */
+  function collectCitedSources(manifest: unknown): string[] {
+    if (!manifest || typeof manifest !== "object") return []
+    const pages = (manifest as { pages?: unknown }).pages
+    if (!pages || typeof pages !== "object" || Array.isArray(pages)) return []
+    const cited = new Set<string>()
+    for (const page of Object.values(pages)) {
+      if (!page || typeof page !== "object") continue
+      const sources = (page as { sources?: unknown }).sources
+      if (!Array.isArray(sources)) continue
+      for (const source of sources) if (typeof source === "string" && source) cited.add(source)
+    }
+    return [...cited]
+  }
 
   export async function snapshot(root: string, wikiDir = "ax-wiki") {
     graphRelativePath(wikiDir)
@@ -64,7 +79,14 @@ export namespace WikiVisualization {
     } finally {
       await handle.close()
     }
-    const graph = projectWikiManifest(parseJsonStrict(raw), { snapshot: "pending" })
+    const parsed = parseJsonStrict(raw)
+    let sourceContents: Map<string, string> | undefined
+    try {
+      sourceContents = await readGroundingExcerpts(canonicalRoot, collectCitedSources(parsed))
+    } catch {
+      sourceContents = undefined
+    }
+    const graph = projectWikiManifest(parsed, { snapshot: "pending", sourceContents })
     // Identity covers the complete recorded manifest, including evidence beyond the view cap.
     // Canonical JSON prevents insertion order alone from changing snapshot identity.
     const canonical = (value: unknown, depth = 0): unknown => {

@@ -3,7 +3,7 @@ import os from "node:os"
 import path from "node:path"
 import { afterEach, describe, expect, test } from "vitest"
 import { DISCOVERY_READ_CONCURRENCY, mapWithBoundedConcurrency } from "../src/discovery-concurrency.js"
-import { discoverSources, readSourceEvidence } from "../src/discovery.js"
+import { discoverSources, readGroundingExcerpts, readSourceEvidence } from "../src/discovery.js"
 import { sha256 } from "../src/hash.js"
 import type { WikiSource } from "../src/types.js"
 
@@ -255,4 +255,52 @@ describe("discoverSources", () => {
       expect(sources[1]).toMatchObject({ path: "z.md", hash: sha256(keepZ), bytes: keepZ.byteLength })
     },
   )
+})
+
+describe("readGroundingExcerpts", () => {
+  test("returns sorted deduped excerpts for readable files", async () => {
+    const root = await fixture()
+    await writeFile(path.join(root, "b.ts"), "export const b = 1\n")
+    await writeFile(path.join(root, "a.ts"), "export class Foo {}\n")
+    const excerpts = await readGroundingExcerpts(root, ["b.ts", "a.ts", "b.ts"])
+    expect([...excerpts.keys()]).toEqual(["a.ts", "b.ts"])
+    expect(excerpts.get("a.ts")).toBe("export class Foo {}\n")
+  })
+
+  test("skips missing files, symlinks, and root escapes without failing", async () => {
+    const root = await fixture()
+    await writeFile(path.join(root, "a.ts"), "export class Foo {}\n")
+    await symlink("a.ts", path.join(root, "link.ts"))
+    const excerpts = await readGroundingExcerpts(root, ["missing.ts", "link.ts", "../escape.ts", "a.ts"])
+    expect([...excerpts.keys()]).toEqual(["a.ts"])
+  })
+
+  test("respects per-file, total, and path-count budgets in sorted order", async () => {
+    const root = await fixture()
+    await writeFile(path.join(root, "a.ts"), "0123456789")
+    await writeFile(path.join(root, "b.ts"), "abcdefghij")
+    await writeFile(path.join(root, "c.ts"), "ABCDEFGHIJ")
+    const budgeted = await readGroundingExcerpts(root, ["c.ts", "b.ts", "a.ts"], {
+      perFileBytes: 6,
+      totalBytes: 8,
+      maxPaths: 1000,
+    })
+    expect([...budgeted.keys()]).toEqual(["a.ts", "b.ts"])
+    expect(budgeted.get("a.ts")).toBe("012345")
+    expect(budgeted.get("b.ts")).toBe("ab")
+    const counted = await readGroundingExcerpts(root, ["c.ts", "b.ts", "a.ts"], {
+      perFileBytes: 100,
+      totalBytes: 10000,
+      maxPaths: 2,
+    })
+    expect([...counted.keys()]).toEqual(["a.ts", "b.ts"])
+  })
+
+  test("skips empty files", async () => {
+    const root = await fixture()
+    await writeFile(path.join(root, "empty.ts"), "")
+    await writeFile(path.join(root, "full.ts"), "x\n")
+    const excerpts = await readGroundingExcerpts(root, ["empty.ts", "full.ts"])
+    expect([...excerpts.keys()]).toEqual(["full.ts"])
+  })
 })

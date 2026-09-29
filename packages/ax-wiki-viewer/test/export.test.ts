@@ -48,7 +48,7 @@ test("browser entry bundles without Node, polyfills, or AX Code runtime", async 
       .map((file) => path.resolve(file))
       .every(
         (file) =>
-          /ax-wiki\/src\/graph\.ts$/.test(file) ||
+          /ax-wiki\/src\/(?:graph|grounding)\.ts$/.test(file) ||
           /ax-wiki-viewer\/src\/(?:index|force-layout|visibility)\.ts$/.test(file) ||
           /[/\\]node_modules[/\\]d3-(?:force|dispatch|quadtree|timer)[/\\]/.test(file),
       ),

@@ -292,3 +292,37 @@ export async function readSourceEvidence(input: {
     return { ...source, content, truncated: truncated || source.bytes > perFile }
   })
 }
+
+export const GROUNDING_EXCERPT_LIMITS = { perFileBytes: 16_384, totalBytes: 1_048_576, maxPaths: 1000 } as const
+
+/**
+ * Bounded source prefixes for symbol provenance, keyed by root-relative path.
+ * Sorted input order decides which files fit the total budget; unreadable
+ * files are skipped (fail-open to `unavailable` provenance), never fatal.
+ */
+export async function readGroundingExcerpts(
+  root: string,
+  paths: readonly string[],
+  limits: { perFileBytes: number; totalBytes: number; maxPaths: number } = GROUNDING_EXCERPT_LIMITS,
+): Promise<Map<string, string>> {
+  const selected = [...new Set(paths)].sort().slice(0, Math.max(0, limits.maxPaths))
+  const excerpts = new Map<string, string>()
+  let remaining = Math.max(0, limits.totalBytes)
+  for (const relative of selected) {
+    if (remaining <= 0) break
+    let absolute: string
+    try {
+      absolute = resolveInside(root, relative)
+    } catch {
+      continue
+    }
+    const budget = Math.min(remaining, Math.max(0, limits.perFileBytes))
+    const raw = await readSourcePrefixNoFollow(absolute, budget)
+    if (raw.length === 0) continue
+    const { content } = decodeUtf8BytePrefix(raw, budget)
+    if (!content) continue
+    excerpts.set(relative, content)
+    remaining -= raw.length
+  }
+  return excerpts
+}

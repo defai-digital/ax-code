@@ -27,13 +27,21 @@ try {
       pages: {
         "guide.md": {
           title: '</script><img src=x onerror="window.attacked=true">',
+          summary: "Guide summary.",
+          symbols: ["Foo", "Ghost"],
           sources: ["src/a.ts", "src/b.ts"],
           sourceHashes: {},
         },
-        "architecture.md": { title: "Architecture", sources: ["src/b.ts"], sourceHashes: {} },
+        "architecture.md": {
+          title: "Architecture",
+          summary: "Architecture summary.",
+          symbols: ["Widget"],
+          sources: ["src/b.ts"],
+          sourceHashes: {},
+        },
       },
     },
-    { snapshot: "browser-fixture" },
+    { snapshot: "browser-fixture", sourceContents: new Map([["src/a.ts", "export class Foo {}"]]) },
   )
   const output = path.join(dir, "wiki.html")
   await writeFile(output, renderWikiGraphHtml(graph).html)
@@ -120,6 +128,8 @@ try {
   await page.keyboard.press("Enter")
   assert.match(await page.locator(".Detail").innerText(), /Cites 1 of 1 source in this snapshot/)
   assert.match(await page.locator(".Detail").innerText(), /Provenance: Wiki manifest membership/)
+  assert.match(await page.locator(".Detail").innerText(), /Summary: Architecture summary\./)
+  assert.match(await page.locator(".Detail").innerText(), /Widget \(unavailable\)/)
   assert.equal(await page.evaluate(() => document.activeElement?.textContent), "Evidence")
   assert.equal(await page.locator(".list button").count(), 2)
   await page.keyboard.press("Escape")
@@ -137,6 +147,11 @@ try {
   await page.getByRole("searchbox").fill("")
   assert.equal(await page.locator(".list button").count(), 4)
   assert.equal(await page.locator(".notice").isHidden(), true)
+  await page.locator(".list button").nth(2).click()
+  assert.match(await page.locator(".Detail").innerText(), /Summary: Guide summary\./)
+  assert.match(await page.locator(".Detail").innerText(), /Foo \(verified\)/)
+  assert.match(await page.locator(".Detail").innerText(), /Ghost \(inferred\)/)
+  await page.evaluate(() => document.querySelector("svg").dispatchEvent(new MouseEvent("click", { bubbles: true })))
   await page.evaluate(() => document.querySelector("svg g.node").dispatchEvent(new Event("mouseenter")))
   assert.equal(
     await page.evaluate(

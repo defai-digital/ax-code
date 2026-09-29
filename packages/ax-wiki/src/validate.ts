@@ -1,4 +1,5 @@
 import path from "node:path"
+import { symbolGrounded } from "./grounding.js"
 import { parseFrontmatter } from "./frontmatter.js"
 import { extractProtectedSections, managedContentHash, protectedSectionsBalanced } from "./protected.js"
 import { AX_WIKI_GENERATOR } from "./types.js"
@@ -21,21 +22,6 @@ function markdownLinkTargets(content: string): string[] {
     from = close + 1
   }
   return targets
-}
-
-function symbolGrounded(symbol: string, contents: string[]): boolean {
-  const candidates = new Set<string>([symbol])
-  const separator = symbol.includes("::") ? "::" : symbol.includes(".") ? "." : undefined
-  if (separator) {
-    const last = symbol.split(separator).filter(Boolean).pop()
-    if (last) candidates.add(last)
-  }
-  for (const content of contents) {
-    for (const candidate of candidates) {
-      if (candidate && content.includes(candidate)) return true
-    }
-  }
-  return false
 }
 
 export function validateWikiCandidate(input: {

@@ -35,6 +35,35 @@ describe("Wiki visualization snapshot", () => {
     await writeFile(path.join(tmp.path, "ax-wiki", ".manifest.json"), before.replace('"Guide"', '"Changed"'))
     expect((await WikiVisualization.snapshot(tmp.path)).snapshot).not.toBe(graph.snapshot)
   })
+  test("projects recorded summaries and symbol provenance from source excerpts", async () => {
+    await using tmp = await tmpdir()
+    await mkdir(path.join(tmp.path, "ax-wiki"))
+    await mkdir(path.join(tmp.path, "src"))
+    await writeFile(path.join(tmp.path, "src", "a.ts"), "export class Foo {}\n")
+    await writeFile(
+      path.join(tmp.path, "ax-wiki", ".manifest.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        generator: "ax-wiki",
+        pages: {
+          "guide.md": {
+            title: "Guide",
+            summary: "Guide summary.",
+            symbols: ["Foo", "Ghost"],
+            sources: ["src/a.ts", "src/missing.ts"],
+            sourceHashes: {},
+          },
+        },
+      }),
+    )
+    const graph = await WikiVisualization.snapshot(tmp.path)
+    const page = graph.nodes.find((n) => n.id === "page:guide.md")!
+    expect(page.summary).toBe("Guide summary.")
+    expect(page.symbols).toEqual([
+      { name: "Foo", provenance: "verified" },
+      { name: "Ghost", provenance: "inferred" },
+    ])
+  })
   test("rejects missing, corrupt, oversized, symlinked manifests and unsafe directories", async () => {
     await using tmp = await tmpdir()
     await expect(WikiVisualization.snapshot(tmp.path)).rejects.toThrow(/No Wiki/)
