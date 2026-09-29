@@ -23341,6 +23341,112 @@
         ]
       }
     },
+    "/workflow-routines/delete": {
+      "post": {
+        "operationId": "workflowRoutine.delete",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Delete workflow routine",
+        "description": "Delete a local workflow routine by route: removes the saved routine trigger template (user or project scope) and any scheduled task linked to it. Built-in routine templates cannot be deleted.",
+        "responses": {
+          "200": {
+            "description": "Deleted workflow routine.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "route": {
+                      "type": "string"
+                    },
+                    "removedTemplates": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "removedScheduledTasks": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "route",
+                    "removedTemplates",
+                    "removedScheduledTasks"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "route": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160,
+                    "pattern": "^workflow\\/[a-z][a-z0-9-/]*$"
+                  }
+                },
+                "required": [
+                  "route"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.workflowRoutine.delete({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/workflow-routines/run": {
       "post": {
         "operationId": "workflowRoutine.run",

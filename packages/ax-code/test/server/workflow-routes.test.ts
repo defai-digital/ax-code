@@ -754,4 +754,69 @@ describe("workflow routes", () => {
       else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
     }
   })
+
+  test("deletes workflow routines and their linked scheduled tasks", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      const app = Server.Default()
+      const directoryQuery = `directory=${encodeURIComponent(tmp.path)}`
+
+      const createResponse = await app.request(`/workflow-routines?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          templateID: "builtin:noop-dry-run",
+          scope: "project",
+          mode: "scheduled",
+          schedule: "0 9 * * *",
+          timezone: "America/Toronto",
+          enabled: true,
+          trust: "trusted",
+        }),
+      })
+      expect(createResponse.status).toBe(200)
+      const created = (await createResponse.json()) as { scheduledTaskID?: string }
+      expect(created.scheduledTaskID).toBeString()
+
+      const deleteResponse = await app.request(`/workflow-routines/delete?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ route: "workflow/noop-dry-run" }),
+      })
+      expect(deleteResponse.status).toBe(200)
+      expect(await deleteResponse.json()).toEqual({
+        route: "workflow/noop-dry-run",
+        removedTemplates: ["project:noop-dry-run"],
+        removedScheduledTasks: [created.scheduledTaskID],
+      })
+
+      const listResponse = await app.request(`/workflow-routines?${directoryQuery}`)
+      expect(listResponse.status).toBe(200)
+      const routines = (await listResponse.json()) as { route: string }[]
+      expect(routines.find((entry) => entry.route === "workflow/noop-dry-run")).toBeUndefined()
+
+      const tasksResponse = await app.request(`/scheduled-task?${directoryQuery}`)
+      expect(tasksResponse.status).toBe(200)
+      expect(await tasksResponse.json()).toEqual([])
+
+      const missingResponse = await app.request(`/workflow-routines/delete?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ route: "workflow/noop-dry-run" }),
+      })
+      expect(missingResponse.status).toBe(404)
+
+      const builtinResponse = await app.request(`/workflow-routines/delete?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ route: "workflow/issue-triage" }),
+      })
+      expect(builtinResponse.status).toBe(409)
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
 })

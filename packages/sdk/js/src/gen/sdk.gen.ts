@@ -336,6 +336,8 @@ import type {
   WikiVisualizationResponses,
   WorkflowRoutineCreateErrors,
   WorkflowRoutineCreateResponses,
+  WorkflowRoutineDeleteErrors,
+  WorkflowRoutineDeleteResponses,
   WorkflowRoutineListErrors,
   WorkflowRoutineListResponses,
   WorkflowRoutineRunErrors,
@@ -3331,6 +3333,45 @@ export class WorkflowRoutine extends HeyApiClient {
       ThrowOnError
     >({
       url: "/workflow-routines",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Delete workflow routine
+   *
+   * Delete a local workflow routine by route: removes the saved routine trigger template (user or project scope) and any scheduled task linked to it. Built-in routine templates cannot be deleted.
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      route: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "route" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      WorkflowRoutineDeleteResponses,
+      WorkflowRoutineDeleteErrors,
+      ThrowOnError
+    >({
+      url: "/workflow-routines/delete",
       ...options,
       ...params,
       headers: {

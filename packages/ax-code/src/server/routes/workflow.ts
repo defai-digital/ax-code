@@ -23,7 +23,7 @@ import {
   applyWorkflowModelPolicyOverride,
   isWorkflowRuntimeEnabled,
 } from "@/workflow/spec"
-import { WorkflowTemplate } from "@/workflow/template"
+import { WorkflowTemplate, WorkflowTemplateRemovalError } from "@/workflow/template"
 import {
   WorkflowArtifactEventRecord,
   WorkflowArtifactID,
@@ -111,6 +111,7 @@ const WorkflowRoutineRunBody = z.object({
   startOptions: WorkflowScheduler.StartOptions.partial().optional(),
 })
 const WorkflowRoutineCreateBody = WorkflowRoutineTrigger.CreateInput
+const WorkflowRoutineDeleteBody = WorkflowRoutineTrigger.RemoveInput
 
 const WorkflowRetryQuery = z.object({
   phaseID: WorkflowPhaseID.zod.optional(),
@@ -604,6 +605,32 @@ export const WorkflowRoutineRoutes = lazy(() =>
       }),
       validator("json", WorkflowRoutineCreateBody),
       async (c) => c.json(await WorkflowRoutineTrigger.create(c.req.valid("json"))),
+    )
+    .post(
+      "/delete",
+      describeRoute({
+        summary: "Delete workflow routine",
+        description:
+          "Delete a local workflow routine by route: removes the saved routine trigger template (user or project scope) and any scheduled task linked to it. Built-in routine templates cannot be deleted.",
+        operationId: "workflowRoutine.delete",
+        responses: {
+          200: {
+            description: "Deleted workflow routine.",
+            content: { "application/json": { schema: resolver(WorkflowRoutineTrigger.RemoveResult) } },
+          },
+          ...errors(400, 404, 409),
+        },
+      }),
+      validator("json", WorkflowRoutineDeleteBody),
+      async (c) => {
+        try {
+          return c.json(await WorkflowRoutineTrigger.remove(c.req.valid("json")))
+        } catch (error) {
+          if (error instanceof WorkflowRoutineNotFoundError) throw new HTTPException(404, { message: error.message })
+          if (error instanceof WorkflowTemplateRemovalError) throw new HTTPException(409, { message: error.message })
+          throw error
+        }
+      },
     )
     .post(
       "/run",

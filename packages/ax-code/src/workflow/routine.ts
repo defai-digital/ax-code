@@ -3,7 +3,7 @@ import { JsonBoolean } from "@/util/schema"
 import { SessionID } from "../session/schema"
 import { WorkflowScheduler } from "./scheduler"
 import { WorkflowInputValues, WorkflowModelPolicyOverride } from "./spec"
-import { WorkflowTemplate } from "./template"
+import { WorkflowTemplate, WorkflowTemplateRemovalError } from "./template"
 
 export namespace WorkflowRoutineTrigger {
   const Route = z
@@ -95,6 +95,18 @@ export namespace WorkflowRoutineTrigger {
   })
   export type RunInput = z.input<typeof RunInput>
 
+  export const RemoveInput = z.object({
+    route: Route,
+  })
+  export type RemoveInput = z.input<typeof RemoveInput>
+
+  export const RemoveResult = z.object({
+    route: z.string(),
+    removedTemplates: z.array(z.string()),
+    removedScheduledTasks: z.array(z.string()),
+  })
+  export type RemoveResult = z.infer<typeof RemoveResult>
+
   export async function list(): Promise<Info[]> {
     const templates = await WorkflowTemplate.list()
     const scheduledTasks = await scheduledTasksByTemplateID()
@@ -178,6 +190,43 @@ export namespace WorkflowRoutineTrigger {
     const routine = routineInfo(template)
     if (!routine) throw new WorkflowRoutineNotFoundError(parsed.route)
     return { routine, template, run: detail }
+  }
+
+  // Delete a routine by route: removes the saved trigger template copy (user or
+  // project scope) and any scheduled task linked to it, so the routine stops
+  // firing and disappears from routine listings. Built-in routine templates ship
+  // with the product and cannot be removed.
+  export async function remove(input: RemoveInput): Promise<RemoveResult> {
+    const parsed = RemoveInput.parse(input)
+    const templates = await WorkflowTemplate.list()
+    const matching = templates.filter((template) => {
+      const routine = template.spec.routine
+      if (!routine || routine.mode === "manual") return false
+      return (routine.apiRoute ?? `workflow/${template.spec.id}`) === parsed.route
+    })
+    const removable = matching.filter((template) => template.source !== "builtin")
+    if (removable.length === 0) {
+      if (matching.length > 0) {
+        throw new WorkflowTemplateRemovalError(
+          matching[0]!.id,
+          "Built-in routine templates ship with the product and cannot be removed.",
+        )
+      }
+      throw new WorkflowRoutineNotFoundError(parsed.route)
+    }
+    const { ScheduledTask } = await import("../session/scheduled-task")
+    const tasks = await ScheduledTask.list()
+    const removedScheduledTasks: string[] = []
+    const removedTemplates: string[] = []
+    for (const template of removable) {
+      for (const task of tasks.filter((candidate) => candidate.workflowTemplateID === template.id)) {
+        await ScheduledTask.remove(task.id)
+        removedScheduledTasks.push(task.id)
+      }
+      await WorkflowTemplate.remove(template.id)
+      removedTemplates.push(template.id)
+    }
+    return { route: parsed.route, removedTemplates, removedScheduledTasks }
   }
 
   async function findApiRoutineTemplate(route: string): Promise<WorkflowTemplate.Info> {

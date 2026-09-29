@@ -168,6 +168,19 @@ export namespace WorkflowTemplate {
     return Info.parse(toInfo(source, promoted, file))
   }
 
+  export async function remove(id: ID): Promise<boolean> {
+    const parsed = ID.parse(id)
+    const { source, specID } = splitID(parsed)
+    if (source === "builtin")
+      throw new WorkflowTemplateRemovalError(parsed, "Built-in templates ship with the product and cannot be removed.")
+
+    const file = templatePath(source, specID)
+    const stored = await readStoredTemplate(file)
+    if (!stored) throw new WorkflowTemplateNotFoundError(parsed)
+    await fs.rm(file)
+    return true
+  }
+
   export async function saveFromRun(input: SaveFromRunInput): Promise<Info> {
     const parsed = SaveFromRunInput.parse(input)
     const run = await WorkflowRun.getDetail(parsed.runID)
@@ -311,5 +324,12 @@ export class WorkflowTemplatePromotionError extends Error {
   constructor(id: WorkflowTemplate.ID, reason: string) {
     super(`Workflow template cannot be promoted: ${id}. ${reason}`)
     this.name = "WorkflowTemplatePromotionError"
+  }
+}
+
+export class WorkflowTemplateRemovalError extends Error {
+  constructor(id: WorkflowTemplate.ID, reason: string) {
+    super(`Workflow template cannot be removed: ${id}. ${reason}`)
+    this.name = "WorkflowTemplateRemovalError"
   }
 }

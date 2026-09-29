@@ -531,6 +531,30 @@ const WorkflowRoutineCreateCommand = cmd({
   },
 })
 
+const WorkflowRoutineDeleteCommand = cmd({
+  command: "delete-routine <route>",
+  describe: "delete a local workflow routine and any scheduled task linked to it",
+  builder: (yargs: Argv) =>
+    yargs
+      .positional("route", {
+        type: "string",
+        demandOption: true,
+        describe: "workflow routine route, for example workflow/daily-review",
+      })
+      .option("json", jsonOption()),
+  async handler(args) {
+    await withWorkflowRuntime(async () => {
+      const options = args as unknown as { route: string } & JsonOption
+      const result = await WorkflowRoutineTrigger.remove({ route: options.route })
+      if (options.json) {
+        writeJson(result)
+        return
+      }
+      process.stdout.write(`Deleted routine ${result.route}${EOL}`)
+    })
+  },
+})
+
 const WorkflowRunStartCommand = cmd({
   command: "start <templateID>",
   describe: "create and start a workflow run from a template",
@@ -979,6 +1003,7 @@ export const WorkflowCommand = cmd({
       .command(WorkflowEvalCaseListCommand)
       .command(WorkflowEvalCaseRunCommand)
       .command(WorkflowRoutineCreateCommand)
+      .command(WorkflowRoutineDeleteCommand)
       .command(WorkflowRunStartCommand)
       .command(WorkflowRoutineRunCommand)
       .command(WorkflowRunStatusCommand)

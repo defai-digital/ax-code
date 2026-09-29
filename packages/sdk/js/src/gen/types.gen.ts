@@ -11464,6 +11464,52 @@ export type WorkflowRoutineCreateResponses = {
 /** Successful response payload for `POST /workflow-routines` — Create workflow routine */
 export type WorkflowRoutineCreateResponse = WorkflowRoutineCreateResponses[keyof WorkflowRoutineCreateResponses]
 
+/** Request payload shape for `POST /workflow-routines/delete` — Delete workflow routine */
+export type WorkflowRoutineDeleteData = {
+  body?: {
+    route: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/workflow-routines/delete"
+}
+
+/** Error response payloads for `POST /workflow-routines/delete` — Delete workflow routine */
+export type WorkflowRoutineDeleteErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
+}
+
+/** Error response payload for `POST /workflow-routines/delete` — Delete workflow routine */
+export type WorkflowRoutineDeleteError = WorkflowRoutineDeleteErrors[keyof WorkflowRoutineDeleteErrors]
+
+/** Success response payloads for `POST /workflow-routines/delete` — Delete workflow routine */
+export type WorkflowRoutineDeleteResponses = {
+  /**
+   * Deleted workflow routine.
+   */
+  200: {
+    route: string
+    removedTemplates: Array<string>
+    removedScheduledTasks: Array<string>
+  }
+}
+
+/** Successful response payload for `POST /workflow-routines/delete` — Delete workflow routine */
+export type WorkflowRoutineDeleteResponse = WorkflowRoutineDeleteResponses[keyof WorkflowRoutineDeleteResponses]
+
 /** Request payload shape for `POST /workflow-routines/run` — Run workflow routine */
 export type WorkflowRoutineRunData = {
   body?: {

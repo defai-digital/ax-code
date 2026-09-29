@@ -6,6 +6,8 @@ import {
   WorkflowRoutineNotFoundError,
   WorkflowRoutineTrigger,
   WorkflowTemplate,
+  WorkflowTemplateNotFoundError,
+  WorkflowTemplateRemovalError,
   parseWorkflowSpecV1,
 } from "../../src/workflow"
 import { tmpdir } from "../fixture/fixture"
@@ -203,6 +205,87 @@ describe("WorkflowRoutineTrigger", () => {
             enabled: true,
           }),
         ).rejects.toThrow("webhook routines must remain disabled")
+      },
+    })
+  })
+
+  test("deletes routines together with their linked scheduled tasks", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const routine = await WorkflowRoutineTrigger.create({
+          templateID: "builtin:noop-dry-run",
+          scope: "project",
+          trust: "trusted",
+          mode: "scheduled",
+          schedule: "0 9 * * *",
+          timezone: "America/Toronto",
+          enabled: true,
+        })
+        expect(routine.scheduledTaskID).toBeString()
+
+        const { ScheduledTask } = await import("../../src/session/scheduled-task")
+        expect(await ScheduledTask.list()).toHaveLength(1)
+
+        const result = await WorkflowRoutineTrigger.remove({ route: routine.route })
+        expect(result).toEqual({
+          route: routine.route,
+          removedTemplates: ["project:noop-dry-run"],
+          removedScheduledTasks: [routine.scheduledTaskID],
+        })
+
+        const routines = await WorkflowRoutineTrigger.list()
+        expect(routines.find((entry) => entry.route === routine.route)).toBeUndefined()
+        expect(await ScheduledTask.list()).toEqual([])
+        await expect(WorkflowTemplate.get("project:noop-dry-run")).rejects.toThrow(WorkflowTemplateNotFoundError)
+        await expect(WorkflowRoutineTrigger.remove({ route: routine.route })).rejects.toThrow(
+          WorkflowRoutineNotFoundError,
+        )
+      },
+    })
+  })
+
+  test("deletes API routine triggers without scheduled tasks", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const routine = await WorkflowRoutineTrigger.create({
+          templateID: "builtin:noop-dry-run",
+          scope: "project",
+          route: "workflow/local-delete-noop",
+        })
+        expect(routine.mode).toBe("api")
+
+        const result = await WorkflowRoutineTrigger.remove({ route: "workflow/local-delete-noop" })
+        expect(result).toEqual({
+          route: "workflow/local-delete-noop",
+          removedTemplates: ["project:noop-dry-run"],
+          removedScheduledTasks: [],
+        })
+
+        const routines = await WorkflowRoutineTrigger.list()
+        expect(routines.find((entry) => entry.route === "workflow/local-delete-noop")).toBeUndefined()
+      },
+    })
+  })
+
+  test("refuses to delete built-in routine templates", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(WorkflowRoutineTrigger.remove({ route: "workflow/issue-triage" })).rejects.toThrow(
+          WorkflowTemplateRemovalError,
+        )
+        // The built-in template is untouched.
+        await expect(WorkflowTemplate.get("builtin:issue-triage")).resolves.toMatchObject({
+          id: "builtin:issue-triage",
+        })
       },
     })
   })
