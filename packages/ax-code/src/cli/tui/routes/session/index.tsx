@@ -698,6 +698,9 @@ export function Session() {
 
   useKeyboard((evt) => {
     if (!session()?.parentID) return
+    // An open dialog owns the keyboard: app-exit chords (ctrl+d by default)
+    // double as dialog actions there (e.g. /schedule delete, session delete).
+    if (dialog.stack.length > 0) return
     if (keybind.match("app_exit", evt)) {
       void exit.flourish()
     }

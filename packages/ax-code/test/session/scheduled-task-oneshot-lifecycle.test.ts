@@ -5,6 +5,9 @@ import { NotificationEvent } from "../../src/notification/events"
 import { ScheduledTask } from "../../src/session/scheduled-task"
 import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
 import type { ScheduledTaskID } from "../../src/session/schema"
+import { ScheduledTaskTable } from "../../src/session/session.sql"
+import { SessionShard } from "../../src/session/shard"
+import { eq } from "../../src/storage/db"
 import { tmpdir } from "../fixture/fixture"
 
 type Toast = {
@@ -369,6 +372,77 @@ describe("ScheduledTask one-shot lifecycle", () => {
         const current = await ScheduledTask.get(task.id)
         expect(current.status).toBe("active")
         expect(current.nextRunAt).toBeGreaterThan(due.nextRunAt!)
+      },
+    })
+  })
+
+  test("a fired one-shot can be resumed when the same update supplies a new future schedule", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const now = Date.now()
+        const task = await ScheduledTask.create({
+          title: "One-time reminder",
+          prompt: "Ping once.",
+          schedule: { type: "once", runAt: now + 1_000 },
+        })
+        const claimed = await claimOnce(task.id, now + 2_000)
+        await ScheduledTask.recordQueueOutcome(task.id, "completed", undefined, claimed.queueItem!.id)
+        expect((await ScheduledTask.get(task.id)).status).toBe("disabled")
+
+        // Move the persisted schedule into the real past: the resume guard
+        // compares runAt against the wall clock, and the simulated claim above
+        // leaves runAt a second in the future.
+        SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+          db.update(ScheduledTaskTable)
+            .set({ schedule: { type: "once", runAt: now - 60_000 } })
+            .where(eq(ScheduledTaskTable.id, task.id))
+            .run()
+        })
+
+        // Resuming against the OLD (now-past) schedule stays rejected.
+        await expect(ScheduledTask.resume(task.id)).rejects.toThrow(/already ran/)
+
+        // The same request carrying a new future schedule is valid: the guard
+        // must evaluate the incoming schedule, not the consumed one.
+        const revived = await ScheduledTask.update({
+          id: task.id,
+          status: "active",
+          schedule: { type: "once", runAt: now + 3_600_000 },
+        })
+        expect(revived.status).toBe("active")
+        expect(revived.nextRunAt).toBe(now + 3_600_000)
+      },
+    })
+  })
+
+  test("maxRunDurationMs cannot change while a run is in progress", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const task = await ScheduledTask.create({
+          title: "Long runner",
+          prompt: "Run long.",
+          schedule: { type: "once", runAt: Date.now() + 60_000 },
+          maxRunDurationMs: 3_600_000,
+        })
+        await ScheduledTask.runNow(task.id)
+
+        // Shrinking mid-run would let the orphan sweep mislabel the live run
+        // and admit a second concurrent execution.
+        await expect(ScheduledTask.update({ id: task.id, maxRunDurationMs: 60_000 })).rejects.toThrow(/in progress/)
+
+        // Re-saving the same value is a no-op and stays allowed.
+        const noop = await ScheduledTask.update({ id: task.id, maxRunDurationMs: 3_600_000 })
+        expect(noop.maxRunDurationMs).toBe(3_600_000)
+
+        // Unrelated edits are unaffected.
+        const renamed = await ScheduledTask.update({ id: task.id, title: "Renamed" })
+        expect(renamed.title).toBe("Renamed")
       },
     })
   })

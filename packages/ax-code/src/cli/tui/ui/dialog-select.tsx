@@ -312,17 +312,28 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
       return
     }
 
-    for (const item of props.keybind ?? []) {
-      if (item.disabled || !item.keybind) continue
-      if (Keybind.match(item.keybind, keybind.parse(evt))) {
-        const s = selected()
-        if (s) {
-          evt.preventDefault()
-          void runDialogSelectAction(
-            () => item.onTrigger(s),
-            "dialog select keybind failed",
-            `Failed to run ${item.title}`,
-          )
+    // A bare-key dialog shortcut (e.g. space to pause/resume) must not fire
+    // while the user is typing a filter query: the key belongs to the input,
+    // and triggering the action would also swallow the character.
+    const typingQuery =
+      store.filter.length > 0 &&
+      !evt.ctrl &&
+      !evt.meta &&
+      !evt.super &&
+      (evt.name === "space" || evt.name === " " || evt.sequence?.length === 1)
+    if (!typingQuery) {
+      for (const item of props.keybind ?? []) {
+        if (item.disabled || !item.keybind) continue
+        if (Keybind.match(item.keybind, keybind.parse(evt))) {
+          const s = selected()
+          if (s) {
+            evt.preventDefault()
+            void runDialogSelectAction(
+              () => item.onTrigger(s),
+              "dialog select keybind failed",
+              `Failed to run ${item.title}`,
+            )
+          }
         }
       }
     }

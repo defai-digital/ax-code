@@ -3,6 +3,7 @@ import { createRoot } from "solid-js"
 import { KeyEvent, parseKeypress } from "ax-tui"
 import { DialogProvider, type DialogContext } from "../../../src/cli/tui/ui/dialog"
 import { DialogSelect, type DialogSelectRef } from "../../../src/cli/tui/ui/dialog-select"
+import { Keybind } from "../../../src/util/keybind"
 
 const mocked = vi.hoisted(() => ({
   dialog: undefined as DialogContext | undefined,
@@ -34,7 +35,12 @@ vi.mock("@tui/context/theme", () => ({
   useTheme: () => ({ theme: {} }),
   selectedForeground: () => undefined,
 }))
-vi.mock("@tui/context/keybind", () => ({ useKeybind: () => ({}) }))
+vi.mock("@tui/context/keybind", async () => {
+  const { Keybind } = await import("../../../src/util/keybind")
+  return {
+    useKeybind: () => ({ parse: (evt: Parameters<typeof Keybind.fromParsedKey>[0]) => Keybind.fromParsedKey(evt) }),
+  }
+})
 vi.mock("@tui/ui/toast", () => ({ useToast: () => ({ show: vi.fn() }) }))
 
 type Element = { type: unknown; props: Record<string, unknown> }
@@ -206,5 +212,67 @@ describe("dialog select Escape", () => {
     expect(first.input.value).toBe("model")
     expect(first.dialog.stack).toHaveLength(0)
     expect(onClose).toHaveBeenCalledOnce()
+  })
+})
+
+describe("dialog select printable keybinds", () => {
+  function mountWithSpaceKeybind() {
+    const dialog = mocked.dialog!
+    dialog.replace(() => undefined, vi.fn())
+    const onTrigger = vi.fn()
+    return createRoot((dispose) => {
+      disposals.push(dispose)
+      let ref!: DialogSelectRef<string>
+      const tree = DialogSelect({
+        title: "Scheduled tasks",
+        options: [{ title: "Task", value: "sch_1" }],
+        keybind: [{ keybind: Keybind.parse("space")[0], title: "pause/resume", onTrigger }],
+        ref: (value) => (ref = value),
+      })
+      const inputElement = findElement(tree, (element) => element.type === "input")!
+      const onInput = inputElement.props.onInput as (value: string) => void
+      let value = ""
+      const input = {
+        isDestroyed: false,
+        focus: vi.fn(),
+        get value() {
+          return value
+        },
+        set value(next: string) {
+          if (value === next) return
+          value = next
+          onInput(next)
+        },
+      }
+      ;(inputElement.props.ref as (input: unknown) => void)(input)
+      return { input, ref, onTrigger, dispose }
+    })
+  }
+
+  test("a space keybind fires on an empty filter but types once a query exists", async () => {
+    const flush = () => new Promise((resolve) => setImmediate(resolve))
+    const { input, ref, onTrigger } = mountWithSpaceKeybind()
+
+    // Empty filter: the shortcut works as before (the trigger is dispatched in
+    // a microtask by the dialog's failure-isolating action runner).
+    const bound = press(" ")
+    await flush()
+    expect(onTrigger).toHaveBeenCalledTimes(1)
+    expect(bound.defaultPrevented).toBe(true)
+
+    // Typing a multi-word query: space must reach the filter input instead of
+    // pausing/resuming the highlighted task.
+    input.value = "deploy"
+    const typed = press(" ")
+    await flush()
+    expect(onTrigger).toHaveBeenCalledTimes(1)
+    expect(typed.defaultPrevented).toBe(false)
+    expect(ref.filter).toBe("deploy")
+
+    // Clearing the query restores the shortcut.
+    input.value = ""
+    press(" ")
+    await flush()
+    expect(onTrigger).toHaveBeenCalledTimes(2)
   })
 })

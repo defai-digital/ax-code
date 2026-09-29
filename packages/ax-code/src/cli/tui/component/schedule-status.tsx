@@ -16,9 +16,14 @@ export function ScheduleStatus(props: { width: number; compact?: boolean; showWh
   const [tasks, setTasks] = createSignal<ScheduledTaskInfo[]>([])
   const [loadState, setLoadState] = createSignal<ScheduleLoadState>("loading")
 
+  // Out-of-order refresh races: a slower response must not overwrite newer data.
+  let refreshGeneration = 0
+
   async function refresh() {
+    const current = ++refreshGeneration
     try {
       const result = await sdk.client.scheduledTask.list()
+      if (current !== refreshGeneration) return
       if (result.error) {
         setLoadState("error")
         return
@@ -27,6 +32,7 @@ export function ScheduleStatus(props: { width: number; compact?: boolean; showWh
       setLoadState("ready")
     } catch {
       // Navigation chrome must not toast on a background poll.
+      if (current !== refreshGeneration) return
       setLoadState("error")
     }
   }

@@ -674,6 +674,56 @@ describe("TaskQueue", () => {
     })
   })
 
+  test("restart recovery records the outcome for an interrupted scheduled-task run", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const now = Date.now()
+        const task = await ScheduledTask.create({
+          title: "One-time reminder",
+          prompt: "Ping me.",
+          schedule: { type: "once", runAt: now + 1_000 },
+        })
+        // The scheduler tick claims the occurrence: next_run_at is consumed
+        // (set null) while the run executes.
+        const claimed = (await ScheduledTask.runDue(now + 2_000)).find((item) => item.task.id === task.id)
+        expect(claimed?.queueItem).toBeDefined()
+        const queueItem = claimed!.queueItem!
+        expect((await ScheduledTask.get(task.id)).nextRunAt).toBeUndefined()
+
+        // Simulate the prompt executing (session attached) when the backend
+        // died: the row's owner pid is gone, so recovery treats it as
+        // interrupted instead of live.
+        const session = await Session.create({})
+        await TaskQueue.setStatus({ id: queueItem!.id, status: "running" })
+        await TaskQueue.attachSession(queueItem!.id, session.id)
+        SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+          db.update(TaskQueueTable)
+            .set({
+              payload: { scheduledTaskID: task.id, executorOwner: { pid: 2_147_483_647, boot: "gone", time: now } },
+            })
+            .where(eq(TaskQueueTable.id, queueItem!.id))
+            .run()
+        })
+
+        const recovered = await TaskQueue.recoverInterrupted({ now: now + 1_000 })
+        expect(recovered.failed.map((item) => item.id)).toEqual([queueItem!.id])
+
+        const runs = await ScheduledTask.listRuns({ taskID: task.id })
+        expect(runs.filter((run) => run.status === "running")).toHaveLength(0)
+        expect(runs.some((run) => run.status === "failed" && (run.error ?? "").includes("interrupted"))).toBe(true)
+
+        // The failure policy re-arms the one-time reminder instead of losing it.
+        const after = await ScheduledTask.get(task.id)
+        expect(after.status).toBe("active")
+        expect(after.nextRunAt).toBeGreaterThan(now)
+      },
+    })
+  })
+
   test("restart recovery requeues a steered row whose apply never landed", async () => {
     await using tmp = await tmpdir({ git: true })
 

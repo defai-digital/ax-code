@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { ScheduledTask } from "../../src/session/scheduled-task"
+import { TaskQueue } from "../../src/session/task-queue"
 import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
 import { tmpdir } from "../fixture/fixture"
 
@@ -84,6 +85,60 @@ describe("ScheduledTask run-now overlap protection", () => {
         vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
         const second = await ScheduledTask.runNow(task.id)
         expect(second.queueItem).toBeDefined()
+      },
+    })
+  })
+
+  test("delete stops the in-flight run instead of letting it execute to completion", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const now = Date.now()
+        const task = await ScheduledTask.create({
+          title: "Disposable",
+          prompt: "Run me.",
+          schedule: { type: "once", runAt: now + 60_000 },
+        })
+        const { queueItem } = await ScheduledTask.runNow(task.id)
+        expect(queueItem).toBeDefined()
+
+        await ScheduledTask.remove(task.id)
+
+        await expect(ScheduledTask.get(task.id)).rejects.toThrow()
+        expect((await TaskQueue.get(queueItem!.id)).status).toBe("cancelled")
+      },
+    })
+  })
+
+  test("a one-time occurrence blocked by an open run records one skipped_overlap, not one per poll", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const now = Date.now()
+        const task = await ScheduledTask.create({
+          title: "Reminder",
+          prompt: "Ping.",
+          schedule: { type: "once", runAt: now + 60_000 },
+        })
+        // A manual run is still in progress when the scheduled occurrence comes
+        // due: run-now never advances next_run_at, so the tick keeps seeing it.
+        await ScheduledTask.runNow(task.id)
+
+        await ScheduledTask.runDue(now + 120_000)
+        let runs = await ScheduledTask.listRuns({ taskID: task.id })
+        expect(runs.filter((run) => run.status === "skipped_overlap")).toHaveLength(1)
+
+        // Every poll while the same run stays open re-arms the one-shot; the
+        // repeat skips must collapse instead of flooding run history.
+        await ScheduledTask.runDue(now + 120_000 + 2 * 60_000)
+        await ScheduledTask.runDue(now + 120_000 + 4 * 60_000)
+        runs = await ScheduledTask.listRuns({ taskID: task.id })
+        expect(runs.filter((run) => run.status === "skipped_overlap")).toHaveLength(1)
+        expect(runs.filter((run) => run.status === "running")).toHaveLength(1)
       },
     })
   })

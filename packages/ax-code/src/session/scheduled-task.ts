@@ -541,8 +541,11 @@ export namespace ScheduledTask {
     const now = Date.now()
     // Resuming an already-fired one-time task would re-run validateSchedule with
     // a now-past runAt and surface a confusing "not in the future" error. Give a
-    // targeted message instead.
+    // targeted message instead. A request that also supplies a NEW schedule is
+    // validated against that schedule below, so the stale-runAt guard must not
+    // fire on the old one.
     if (
+      parsed.schedule === undefined &&
       parsed.status === "active" &&
       current.status !== "active" &&
       current.schedule.type === "once" &&
@@ -562,6 +565,21 @@ export namespace ScheduledTask {
     const nextSchedule = parsed.schedule ?? current.schedule
     if (parsed.schedule !== undefined || (parsed.status === "active" && current.status !== "active")) {
       validateSchedule(nextSchedule, now)
+    }
+    // Overlap/orphan accounting derives a run's staleness from the task's
+    // CURRENT deadline, while the executing run still enforces the deadline
+    // captured at claim. Changing it mid-run would let the orphan sweep
+    // mislabel a live run as abandoned and admit a second concurrent run.
+    const nextDeadline = Object.hasOwn(parsed, "maxRunDurationMs")
+      ? (parsed.maxRunDurationMs ?? undefined)
+      : current.maxRunDurationMs
+    if (
+      nextDeadline !== current.maxRunDurationMs &&
+      hasOpenRun(parsed.id, now, current.maxRunDurationMs ?? DEFAULT_RUN_DEADLINE_MS)
+    ) {
+      throw new HTTPException(409, {
+        message: `Scheduled task ${parsed.id} has a run in progress; maxRunDurationMs cannot be changed until it finishes.`,
+      })
     }
     const updates: Partial<typeof ScheduledTaskTable.$inferInsert> = {
       time_updated: now,
@@ -607,6 +625,22 @@ export namespace ScheduledTask {
 
   export async function remove(id: ScheduledTaskID): Promise<boolean> {
     const task = await get(id)
+    // Deleting must also stop the in-flight run: without an interrupt the
+    // executing queue item would keep running to completion after the task is
+    // gone, and its outcome would be discarded against a deleted task.
+    const openQueueID = SessionShard.storeForProject(Instance.project.id).use((db) => {
+      const row = db
+        .select({ queueID: ScheduledTaskRunTable.queue_id })
+        .from(ScheduledTaskRunTable)
+        .where(and(eq(ScheduledTaskRunTable.task_id, id), eq(ScheduledTaskRunTable.status, "running")))
+        .get()
+      return row?.queueID ?? undefined
+    })
+    if (openQueueID) {
+      await TaskQueue.stop(TaskQueueID.make(openQueueID)).catch((error) => {
+        log.warn("scheduled task in-flight run stop failed during delete", { taskID: id, error: toErrorMessage(error) })
+      })
+    }
     SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       db.delete(ScheduledTaskTable).where(eq(ScheduledTaskTable.id, id)).run()
     })
@@ -804,10 +838,12 @@ export namespace ScheduledTask {
       // skips this fire and records it, rather than double-executing.
       if (hasOpenRun(task.id, now, deadlineMs)) {
         const next = nextRunAt(task.schedule, now)
-        const skipped = recordSkippedOccurrence(task, next, "skipped_overlap", now, 1)
+        const skipped = recordSkippedOccurrence(task, next, "skipped_overlap", now, 1, undefined, {
+          collapseRepeat: task.schedule.type === "once",
+        })
         if (skipped) {
           publishUpdated(skipped.task)
-          publishSkipped(skipped.task, skipped.run)
+          if (skipped.run) publishSkipped(skipped.task, skipped.run)
           log.info("skipped overlapping scheduled task occurrence", { taskID: task.id })
         }
         continue
@@ -831,7 +867,7 @@ export namespace ScheduledTask {
         const skipped = recordSkippedOccurrence(task, next, "missed_skip", now, coalesced.count, task.nextRunAt)
         if (skipped) {
           publishUpdated(skipped.task)
-          publishSkipped(skipped.task, skipped.run)
+          if (skipped.run) publishSkipped(skipped.task, skipped.run)
           log.info("skipped missed scheduled task occurrence", {
             taskID: task.id,
             occurrenceAt: task.nextRunAt,
@@ -927,7 +963,11 @@ export namespace ScheduledTask {
 
   // CAS-advance a task whose occurrence is being skipped (overlap or missed-skip),
   // recording the skip as a terminal run row in the same transaction. Returns
-  // undefined when another poller won the claim race.
+  // undefined when another poller won the claim race. With collapseRepeat, a
+  // repeat skip of the same open occurrence re-arms without recording a row:
+  // the one-time overlap re-arm otherwise fires this path on every poll,
+  // flooding the bounded run history and toasting once per minute for a single
+  // blocked occurrence.
   function recordSkippedOccurrence(
     task: Info,
     next: number | undefined,
@@ -935,7 +975,8 @@ export namespace ScheduledTask {
     now: number,
     coalescedCount: number,
     occurrenceAt?: number,
-  ): { task: Info; run: RunInfo } | undefined {
+    options?: { collapseRepeat?: boolean },
+  ): { task: Info; run: RunInfo | undefined } | undefined {
     return SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
       const claimed = db
         .update(ScheduledTaskTable)
@@ -963,6 +1004,16 @@ export namespace ScheduledTask {
         .returning()
         .get()
       if (!claimed) return undefined
+      if (options?.collapseRepeat) {
+        const last = db
+          .select({ status: ScheduledTaskRunTable.status })
+          .from(ScheduledTaskRunTable)
+          .where(eq(ScheduledTaskRunTable.task_id, task.id))
+          .orderBy(desc(ScheduledTaskRunTable.time_created), desc(ScheduledTaskRunTable.id))
+          .limit(1)
+          .get()
+        if (last?.status === status) return { task: fromRow(claimed), run: undefined }
+      }
       const run = insertRunRow(db, {
         taskID: task.id,
         triggerType: "scheduled",

@@ -54,9 +54,15 @@ export function DialogScheduledTask() {
   const [toDelete, setToDelete] = createSignal<string>()
   const [busy, setBusy] = createSignal<string | null>(null)
 
+  // Out-of-order refresh races: several scheduled.task events can arrive in a
+  // burst and the slower response must not overwrite newer data.
+  let refreshGeneration = 0
+
   async function refresh() {
+    const current = ++refreshGeneration
     try {
       const result = await sdk.client.scheduledTask.list()
+      if (current !== refreshGeneration) return
       if (result.error) {
         log.warn("scheduled task list load failed", { error: result.error })
         toast.show({ message: errorMessage(result.error, "Failed to load scheduled tasks"), variant: "error" })
@@ -64,6 +70,7 @@ export function DialogScheduledTask() {
       }
       setTasks(result.data ?? [])
     } catch (error) {
+      if (current !== refreshGeneration) return
       log.warn("scheduled task list load failed", { error })
       toast.show({ message: errorMessage(error, "Failed to load scheduled tasks"), variant: "error" })
     }

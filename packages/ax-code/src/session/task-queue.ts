@@ -10,7 +10,7 @@ import type { Database } from "@/storage/db"
 import { Log } from "@/util/log"
 import { JsonNumber } from "@/util/schema"
 import { SessionMetadata } from "./metadata"
-import { MessageID, PartID, SessionID, TaskQueueID } from "./schema"
+import { MessageID, PartID, ScheduledTaskID, SessionID, TaskQueueID } from "./schema"
 import { TaskQueueTable } from "./session.sql"
 import { SessionShard } from "./shard"
 
@@ -1755,6 +1755,25 @@ export namespace TaskQueue {
     for (const item of [...changed.failed, ...changed.requeued]) {
       publishUpdated(item)
       await syncWorkflowStatusIfNeeded(item)
+    }
+    // An interrupted scheduled-task run still has a `running` run row keyed by
+    // this queue item, and a one-time task's next_run_at was already consumed
+    // at claim. Recording the outcome lets the failure policy re-arm the task;
+    // without it the task wedges active and never fires again.
+    for (const item of changed.failed) {
+      const scheduledTaskID = item.kind === "automation" ? item.payload["scheduledTaskID"] : undefined
+      if (typeof scheduledTaskID !== "string" || !scheduledTaskID.startsWith("sch_")) continue
+      try {
+        const { ScheduledTask } = await import("./scheduled-task")
+        await ScheduledTask.recordQueueOutcome(
+          ScheduledTaskID.make(scheduledTaskID),
+          "failed",
+          new Error(item.error ?? "Task interrupted by backend restart"),
+          item.id,
+        )
+      } catch (error) {
+        log.warn("scheduled task outcome sync after restart recovery failed", { scheduledTaskID, error })
+      }
     }
     for (const item of changed.preserved) {
       await syncWorkflowStatusIfNeeded(item)

@@ -67,6 +67,16 @@ describe("dialog-scheduled-task view model", () => {
     expect(description).toContain("running now")
   })
 
+  test("taskDescription hides the stale next run for paused tasks", () => {
+    // Pausing keeps next_run_at in the row; once it passes, the paused task
+    // must not advertise a "next" fire that will never happen.
+    const past = Date.now() - 60_000
+    const description = taskDescription(task({ status: "paused", nextRunAt: past }))
+    expect(description).toContain("daily 09:00")
+    expect(description).not.toContain("next ")
+    expect(description).not.toContain("running now")
+  })
+
   test("taskDescription marks disabled tasks as finished and surfaces errors", () => {
     const description = taskDescription(task({ status: "disabled", lastRunAt: Date.now(), error: "boom" }))
     expect(description).toContain("finished")

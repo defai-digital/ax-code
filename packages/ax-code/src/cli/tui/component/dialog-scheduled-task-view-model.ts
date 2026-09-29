@@ -38,14 +38,16 @@ export function taskStatusLabel(task: ScheduledTaskInfo): string {
 
 // One summary line under the task title: when it runs next, when it last ran,
 // and the last error if any. An active one-shot with no next run is currently
-// executing (its next run is only re-armed on failure).
+// executing (its next run is only re-armed on failure). A paused task keeps its
+// stale next_run_at, but it never fires — showing "next <past time>" would be
+// misleading, so only active tasks get a next/running hint.
 export function taskDescription(task: ScheduledTaskInfo): string {
   const parts = [scheduleSummary(task.schedule)]
   if (task.status === "disabled") {
     parts.push(task.lastRunAt ? `finished ${Locale.todayTimeOrDateTime(task.lastRunAt)}` : "finished")
-  } else if (task.nextRunAt !== undefined) {
+  } else if (task.status === "active" && task.nextRunAt !== undefined) {
     parts.push(`next ${Locale.todayTimeOrDateTime(task.nextRunAt)}`)
-  } else if (task.lastRunAt !== undefined) {
+  } else if (task.status === "active" && task.lastRunAt !== undefined) {
     parts.push("running now")
   }
   if (task.error) parts.push(`error: ${formatScheduleError(task.error)}`)
