@@ -34,6 +34,8 @@ import z from "zod"
 import { GraphContext } from "../code-intelligence/graph-context"
 import { Installation } from "../installation"
 import { Instance } from "../project/instance"
+import { AX_ENGINE_PROVIDER_ID } from "../provider/ax-engine/constants"
+import { isDedicatedPrivateGpuProviderID } from "../provider/private-gpu/presets"
 import { Provider } from "../provider/provider"
 import { parseJsonResult } from "../util/json-value"
 import { Log } from "../util/log"
@@ -48,6 +50,25 @@ const execFileAsync = promisify(execFile)
 
 const PAGE_SUMMARY_MAX = 600
 const PAGE_SYMBOLS_MAX = 80
+const PAGE_SYMBOL_NAME_MAX = 256
+// The aux ceiling is 32_000. GLM-class models spend that budget on hidden
+// reasoning and emit no object chunks before the page deadline. 8_192 with
+// low reasoning effort finishes a page inside the deadline.
+export const WIKI_PAGE_OUTPUT_TOKEN_MAX = 8_192
+const WIKI_PAGE_TIMEOUT_MS = 180_000
+const WIKI_LOW_EFFORT_EXCLUDED_PROVIDERS = new Set([
+  AX_ENGINE_PROVIDER_ID,
+  "groq",
+  "openrouter",
+  "nvidia",
+  "lilac",
+  "ollama",
+  "lmstudio",
+  "mtplx",
+  "omlx",
+  "ax-studio",
+  "local-llm",
+])
 
 const PAGE_SCHEMA = z.object({
   summary: z.string().min(20).max(PAGE_SUMMARY_MAX),
@@ -129,8 +150,103 @@ export function repairWikiPageText(text: string): string | null {
       record.symbolSummaries = kept
       changed = true
     }
+  } else if (isRecord(record.symbolSummaries)) {
+    // GLM returns `{ "feature0": "Exported function..." }` instead of
+    // `[{ name, summary }]`. The schema rejects that object, and a retry
+    // repeats it. Coerce the map; do not invent glosses.
+    const kept: Array<{ name: string; summary: string }> = []
+    for (const [key, value] of Object.entries(record.symbolSummaries)) {
+      if (kept.length >= SYMBOL_SUMMARIES_MAX) break
+      const gloss = symbolGloss(key, value)
+      if (gloss) kept.push(gloss)
+    }
+    record.symbolSummaries = kept
+    changed = true
   }
   return changed ? JSON.stringify(record) : null
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value)
+}
+
+function symbolGloss(nameHint: string, value: unknown): { name: string; summary: string } | undefined {
+  let name = nameHint.trim()
+  let summary = ""
+  if (typeof value === "string") {
+    summary = value.trim()
+  } else if (isRecord(value)) {
+    if (typeof value.name === "string" && value.name.trim()) name = value.name.trim()
+    if (typeof value.summary === "string") summary = value.summary.trim()
+  } else {
+    return undefined
+  }
+  name = name.slice(0, PAGE_SYMBOL_NAME_MAX)
+  summary = summary.slice(0, SYMBOL_SUMMARY_MAX).trimEnd()
+  if (!name || summary.length < 10) return undefined
+  return { name, summary }
+}
+
+export function wikiPageOutputTokens(model: Provider.Model): number {
+  return Math.min(ProviderTransform.auxMaxOutputTokens(model), WIKI_PAGE_OUTPUT_TOKEN_MAX)
+}
+
+/**
+ * Page generation is an auxiliary call. Reuse the small-request thinking
+ * switches, and ask GLM gateways for low reasoning effort. `reasoningEffort`
+ * is a chat-options schema field; extra body fields (`thinking`,
+ * `enable_thinking`, `chat_template_kwargs`) must stay on the provider id so
+ * the OpenAI-compatible SDK copies them into the request.
+ */
+export function wikiPageProviderOptions(model: Provider.Model): Record<string, Record<string, any>> | undefined {
+  const small = ProviderTransform.smallOptions(model)
+  const extras: Record<string, any> = { ...small }
+  const declaredEffort = extras.reasoningEffort
+  delete extras.reasoningEffort
+  delete extras.reasoning_effort
+  const reasoningEffort =
+    typeof declaredEffort === "string"
+      ? declaredEffort
+      : Object.keys(extras).length === 0 && wikiGlmNeedsLowEffort(model)
+        ? "low"
+        : undefined
+  const options: Record<string, Record<string, any>> = {}
+  if (reasoningEffort && model.providerID !== "openaiCompatible") {
+    options.openaiCompatible = { reasoningEffort }
+  }
+  const providerBody: Record<string, any> = { ...extras }
+  if (reasoningEffort) providerBody.reasoningEffort = reasoningEffort
+  if (Object.keys(providerBody).length > 0) options[model.providerID] = providerBody
+  return Object.keys(options).length > 0 ? options : undefined
+}
+
+function wikiGlmNeedsLowEffort(model: Provider.Model): boolean {
+  if (model.capabilities.reasoning !== true) return false
+  if (model.api.npm !== "@ai-sdk/openai-compatible") return false
+  if (model.options?.nativeReasoning === false) return false
+  if (WIKI_LOW_EFFORT_EXCLUDED_PROVIDERS.has(model.providerID)) return false
+  if (model.providerID.startsWith("zai") || model.providerID.startsWith("zhipuai")) return false
+  if (isDedicatedPrivateGpuProviderID(model.providerID)) return false
+  if (wikiHostRejectsReasoningEffort(model.api.url)) return false
+  const id = `${model.id} ${model.api.id}`.toLowerCase()
+  return /(?:^|[^a-z0-9])glm(?:[^a-z0-9]|\d|$)/.test(id)
+}
+
+function wikiHostRejectsReasoningEffort(url: string | undefined): boolean {
+  if (!url) return false
+  try {
+    const host = new URL(url).hostname
+    return (
+      host === "openrouter.ai" ||
+      host === "api.groq.com" ||
+      host === "integrate.api.nvidia.com" ||
+      host === "dashscope.aliyuncs.com" ||
+      host.endsWith(".maas.aliyuncs.com") ||
+      (host.startsWith("dashscope-") && host.endsWith(".aliyuncs.com"))
+    )
+  } catch {
+    return false
+  }
 }
 
 function sourceEvidence(request: WikiPageGenerationRequest): string {
@@ -221,7 +337,8 @@ async function resolveModel(model?: string, sessionID?: SessionID) {
     reference,
     label: `${reference.providerID}/${reference.modelID}`,
     language: await Provider.getLanguage(resolved),
-    maxOutputTokens: ProviderTransform.auxMaxOutputTokens(resolved),
+    maxOutputTokens: wikiPageOutputTokens(resolved),
+    providerOptions: wikiPageProviderOptions(resolved),
   }
 }
 
@@ -498,7 +615,7 @@ export async function runNativeWiki(input: {
     }
     const generator = async (request: WikiPageGenerationRequest): Promise<WikiPageGenerationResult> => {
       const abort = new AbortController()
-      const timer = setTimeout(() => abort.abort(), 180_000)
+      const timer = setTimeout(() => abort.abort(), WIKI_PAGE_TIMEOUT_MS)
       const signal = input.signal ? AbortSignal.any([abort.signal, input.signal]) : abort.signal
       try {
         const prompt = pagePrompt(request)
@@ -511,6 +628,7 @@ export async function runNativeWiki(input: {
               schema: PAGE_SCHEMA,
               experimental_repairText: async ({ text }) => repairWikiPageText(text),
               abortSignal: signal,
+              ...(model.providerOptions ? { providerOptions: model.providerOptions } : {}),
               messages: [
                 {
                   role: "system",
@@ -528,7 +646,11 @@ export async function runNativeWiki(input: {
             }
             return await result.object
           } catch (error) {
-            if (!NoObjectGeneratedError.isInstance(error) || signal.aborted) throw error
+            // Keep a foreground cancel intact. A page deadline must name the
+            // page and must not be retried as a schema failure.
+            if (input.signal?.aborted) throw error
+            if (abort.signal.aborted) throw new Error(`Wiki page generation timed out: ${request.page.path}`)
+            if (!NoObjectGeneratedError.isInstance(error)) throw error
             log.warn("wiki page structured output failed", {
               page: request.page.path,
               model: model.label,

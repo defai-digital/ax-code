@@ -42,7 +42,14 @@ import { GraphContext, type GraphContextPack } from "../../src/code-intelligence
 import { CodeNodeID } from "../../src/code-intelligence/id"
 import { Installation } from "../../src/installation"
 import { Instance } from "../../src/project/instance"
-import { repairWikiPageText, resolveWikiModelRef, runNativeWiki } from "../../src/wiki/native"
+import {
+  repairWikiPageText,
+  resolveWikiModelRef,
+  runNativeWiki,
+  wikiPageOutputTokens,
+  wikiPageProviderOptions,
+  WIKI_PAGE_OUTPUT_TOKEN_MAX,
+} from "../../src/wiki/native"
 import { parseJsonStrict } from "../../src/util/json-value"
 import { Provider } from "../../src/provider/provider"
 import { Session } from "../../src/session"
@@ -175,6 +182,7 @@ describe("wiki native generator", () => {
     const request = vi.mocked(generateObject).mock.calls[0]?.[0] as { maxOutputTokens?: number }
     expect(request.maxOutputTokens).toEqual(expect.any(Number))
     expect(request.maxOutputTokens).toBeGreaterThan(0)
+    expect(request.maxOutputTokens).toBeLessThanOrEqual(WIKI_PAGE_OUTPUT_TOKEN_MAX)
     expect(generateObject.mock.calls[0][0].messages[0].content).toContain("json object with summary")
   })
 
@@ -443,6 +451,139 @@ describe("wiki native page repair", () => {
         }),
       ),
     ).toBeNull()
+  })
+
+  test("coerces an object map of symbol glosses into the array schema", () => {
+    const map: Record<string, unknown> = {}
+    for (let index = 0; index < 25; index++) {
+      map[`feature${index}`] = `Exported function that returns the constant \`${index}\`.`
+    }
+    map.tiny = "short"
+    map["  "] = "Nameless key is dropped from the gloss list."
+    map.nested = { name: "renamed", summary: "Uses the record name when the model nests the gloss." }
+    map.drop = 42
+    const repaired = repairWikiPageText(
+      JSON.stringify({
+        summary: "a within-bounds summary value",
+        body: "x".repeat(100),
+        symbols: ["feature0"],
+        symbolSummaries: map,
+      }),
+    )
+    expect(repaired).not.toBeNull()
+    const value = parseJsonStrict(repaired!) as { symbolSummaries: Array<{ name: string; summary: string }> }
+    expect(value.symbolSummaries).toHaveLength(20)
+    expect(value.symbolSummaries[0]).toEqual({
+      name: "feature0",
+      summary: "Exported function that returns the constant `0`.",
+    })
+    expect(value.symbolSummaries.map((gloss) => gloss.name)).not.toContain("tiny")
+    expect(value.symbolSummaries.map((gloss) => gloss.name)).not.toContain("renamed")
+    expect(value.symbolSummaries.every((gloss) => gloss.summary.length <= 300)).toBe(true)
+    expect(value.symbolSummaries.every((gloss) => gloss.summary.length >= 10)).toBe(true)
+  })
+
+  test("uses a nested gloss name and turns an empty map into an empty array", () => {
+    const nested = repairWikiPageText(
+      JSON.stringify({
+        summary: "a within-bounds summary value",
+        body: "x".repeat(100),
+        symbols: ["feature0"],
+        symbolSummaries: {
+          feature0: { summary: "Exported function that returns the constant `0`." },
+          alias: { name: "canonical", summary: "Prefers the nested name over the map key." },
+        },
+      }),
+    )
+    const nestedValue = parseJsonStrict(nested!) as { symbolSummaries: Array<{ name: string; summary: string }> }
+    expect(nestedValue.symbolSummaries).toEqual([
+      { name: "feature0", summary: "Exported function that returns the constant `0`." },
+      { name: "canonical", summary: "Prefers the nested name over the map key." },
+    ])
+
+    const empty = repairWikiPageText(
+      JSON.stringify({
+        summary: "a within-bounds summary value",
+        body: "x".repeat(100),
+        symbols: [],
+        symbolSummaries: {},
+      }),
+    )
+    const emptyValue = parseJsonStrict(empty!) as { symbolSummaries: unknown[] }
+    expect(emptyValue.symbolSummaries).toEqual([])
+  })
+})
+
+function wikiModel(overrides: {
+  id: string
+  providerID?: string
+  apiID?: string
+  url?: string
+  reasoning?: boolean
+}): Provider.Model {
+  const id = overrides.id
+  return {
+    id,
+    providerID: overrides.providerID ?? "defai-01-ax-trust-com",
+    name: id,
+    api: {
+      id: overrides.apiID ?? id,
+      url: overrides.url ?? "https://defai-01.ax-trust.com/v1",
+      npm: "@ai-sdk/openai-compatible",
+    },
+    capabilities: {
+      temperature: true,
+      reasoning: overrides.reasoning ?? true,
+      attachment: false,
+      toolcall: true,
+      input: { text: true, audio: false, image: false, video: false, pdf: false },
+      output: { text: true, audio: false, image: false, video: false, pdf: false },
+      interleaved: false,
+    },
+    limit: { context: 128_000, output: 128_000 },
+    status: "active",
+    options: {},
+    headers: {},
+    release_date: "2026-01-01",
+  } as Provider.Model
+}
+
+describe("wiki page generation budget", () => {
+  test("caps a large aux output limit and keeps a smaller model limit", () => {
+    expect(wikiPageOutputTokens(wikiModel({ id: "glm-5.3-flash" }))).toBe(WIKI_PAGE_OUTPUT_TOKEN_MAX)
+    const small = wikiModel({ id: "glm-5.3-flash" })
+    small.limit.output = 1_024
+    expect(wikiPageOutputTokens(small)).toBe(1_024)
+  })
+
+  test("asks a GLM flash gateway for low reasoning effort", () => {
+    expect(wikiPageProviderOptions(wikiModel({ id: "glm-5.3-flash" }))).toEqual({
+      openaiCompatible: { reasoningEffort: "low" },
+      "defai-01-ax-trust-com": { reasoningEffort: "low" },
+    })
+  })
+
+  test("keeps the GLM thinking switch on the provider id", () => {
+    expect(wikiPageProviderOptions(wikiModel({ id: "glm-5.3", apiID: "glm-5.3" }))).toEqual({
+      openaiCompatible: { reasoningEffort: "low" },
+      "defai-01-ax-trust-com": { reasoningEffort: "low", thinking: { type: "enabled" } },
+    })
+  })
+
+  test("puts a thinking-off switch on the provider id without forcing reasoning effort", () => {
+    expect(wikiPageProviderOptions(wikiModel({ id: "deepseek-flash", apiID: "deepseek-flash" }))).toEqual({
+      "defai-01-ax-trust-com": { thinking: { type: "disabled" } },
+    })
+  })
+
+  test("does not send reasoning effort for excluded or non-GLM models", () => {
+    expect(wikiPageProviderOptions(wikiModel({ id: "glm-5.3-flash", providerID: "groq" }))).toBeUndefined()
+    expect(wikiPageProviderOptions(wikiModel({ id: "gpt-4.1", reasoning: false }))).toBeUndefined()
+    expect(
+      wikiPageProviderOptions(
+        wikiModel({ id: "glm-5.3-flash", url: "https://dashscope.aliyuncs.com/compatible-mode/v1" }),
+      ),
+    ).toBeUndefined()
   })
 })
 
