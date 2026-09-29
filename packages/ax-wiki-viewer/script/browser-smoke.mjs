@@ -13,7 +13,11 @@ const browser = await chromium.launch({
   executablePath: process.env.AX_WIKI_CHROMIUM || undefined,
   headless: true,
   // Keep timers and frames flowing so force-layout reheats behave like a visible browser.
-  args: ["--disable-background-timer-throttling", "--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding"],
+  args: [
+    "--disable-background-timer-throttling",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-renderer-backgrounding",
+  ],
 })
 try {
   const graph = projectWikiManifest(
@@ -56,9 +60,35 @@ try {
   assert.equal(await page.locator(".list button").count(), 1)
   assert.equal(await page.locator("svg g.node").count(), 4)
   await page.getByRole("searchbox").fill("")
-  await page.getByRole("combobox").selectOption("source")
+  assert.match(await page.getByRole("status").innerText(), /4 of 4 nodes · 3 of 3 edges in view/)
+  assert.equal(await page.locator(".overlay").isHidden(), true)
+  assert.equal(await page.locator(".notice").isHidden(), true)
+  await page.getByRole("button", { name: "pages (2)" }).click()
   assert.equal(await page.locator(".list button").count(), 2)
   assert.equal(await page.locator("svg g.node").count(), 4)
+  assert.equal(await page.getByRole("button", { name: "pages (2)" }).getAttribute("aria-pressed"), "false")
+  assert.match(await page.getByRole("status").innerText(), /2 of 4 nodes · 0 of 3 edges in view/)
+  assert.equal(await page.locator(".notice").isHidden(), false)
+  assert.match(await page.locator(".notice").innerText(), /no edges in view/)
+  await page.getByRole("button", { name: "pages (2)" }).click()
+  assert.equal(await page.getByRole("button", { name: "pages (2)" }).getAttribute("aria-pressed"), "true")
+  assert.equal(await page.locator(".list button").count(), 4)
+  await page.getByRole("button", { name: "Unknown (4)" }).click()
+  assert.equal(await page.locator(".list button").count(), 0)
+  assert.equal(await page.locator(".overlay").isHidden(), false)
+  assert.match(await page.locator(".overlay").innerText(), /No nodes match the current filters/)
+  assert.match(await page.getByRole("status").innerText(), /0 of 4 nodes · 0 of 3 edges in view/)
+  await page.getByRole("button", { name: "Reset filters" }).click()
+  assert.equal(await page.locator(".overlay").isHidden(), true)
+  assert.equal(await page.locator(".list button").count(), 4)
+  assert.equal(
+    await page.evaluate(() =>
+      [...document.querySelectorAll(".axwv *")].every((el) =>
+        [...el.attributes].every((attr) => !attr.name.startsWith("on")),
+      ),
+    ),
+    true,
+  )
   await page.getByRole("button", { name: "Show all / reset" }).click()
   await page.locator(".list button").filter({ hasText: "page: Architecture" }).focus()
   await page.keyboard.press("Enter")
@@ -70,18 +100,31 @@ try {
   assert.equal(await page.evaluate(() => document.activeElement?.tagName), "INPUT")
   assert.match(await page.locator(".legend").innerText(), /size = visible connections/)
   await page.getByRole("searchbox").fill("Arch")
+  assert.equal(await page.locator(".notice").isHidden(), false)
+  assert.match(await page.locator(".notice").innerText(), /single node/)
   await page.keyboard.press("Enter")
-  assert.match(await page.locator(".Detail").innerText(), /Page: Architecture/)
+  assert.match(await page.locator(".detail").innerText(), /Page: Architecture/)
   assert.equal(await page.locator(".list button").count(), 1)
   await page.evaluate(() => document.querySelector("svg").dispatchEvent(new MouseEvent("click", { bubbles: true })))
   assert.match(await page.locator(".Detail").innerText(), /Select a page or source/)
   assert.equal(await page.locator(".list button").count(), 1)
   await page.getByRole("searchbox").fill("")
   assert.equal(await page.locator(".list button").count(), 4)
+  assert.equal(await page.locator(".notice").isHidden(), true)
   await page.evaluate(() => document.querySelector("svg g.node").dispatchEvent(new Event("mouseenter")))
-  assert.equal(await page.evaluate(() => [...document.querySelectorAll("svg g.node")].filter((g) => g.getAttribute("opacity") === "0.15").length), 2)
+  assert.equal(
+    await page.evaluate(
+      () => [...document.querySelectorAll("svg g.node")].filter((g) => g.getAttribute("opacity") === "0.15").length,
+    ),
+    2,
+  )
   await page.evaluate(() => document.querySelector("svg g.node").dispatchEvent(new Event("mouseleave")))
-  assert.equal(await page.evaluate(() => [...document.querySelectorAll("svg g.node")].filter((g) => g.getAttribute("opacity") === "0.15").length), 0)
+  assert.equal(
+    await page.evaluate(
+      () => [...document.querySelectorAll("svg g.node")].filter((g) => g.getAttribute("opacity") === "0.15").length,
+    ),
+    0,
+  )
   // Synthetic pointer drag: exact client coords with no mouse-driver aiming, so the
   // drop point is exact whether the simulation is still settling or already dead.
   // Poll from Node: in-page waitForFunction evaluates strings, which the export CSP blocks.
@@ -100,9 +143,7 @@ try {
     ])
       group.dispatchEvent(new PointerEvent("pointermove", opts(sx + dx, sy + dy)))
     group.dispatchEvent(new PointerEvent("pointerup", opts(sx + 80, sy + 40)))
-    const drop = new DOMPoint(sx + 80, sy + 40).matrixTransform(
-      document.querySelector("svg").getScreenCTM().inverse(),
-    )
+    const drop = new DOMPoint(sx + 80, sy + 40).matrixTransform(document.querySelector("svg").getScreenCTM().inverse())
     return {
       before: [...document.querySelectorAll("svg g.node")].map((g) => g.getAttribute("transform")),
       drop: [drop.x, drop.y],
@@ -131,7 +172,9 @@ try {
   )
   await awaitMoved(1, (transform) => transform !== drag.before[1], 15000, "neighbor never moved after reheat")
   // The click right after a drag is suppressed instead of selecting.
-  await page.evaluate(() => document.querySelectorAll("svg g.node")[0].dispatchEvent(new MouseEvent("click", { bubbles: true })))
+  await page.evaluate(() =>
+    document.querySelectorAll("svg g.node")[0].dispatchEvent(new MouseEvent("click", { bubbles: true })),
+  )
   assert.match(await page.locator(".Detail").innerText(), /Select a page or source/)
   await page.locator("svg g.node circle").first().click()
   assert.match(await page.locator(".Detail").innerText(), /Page: Architecture/)
@@ -156,9 +199,7 @@ try {
     ])
       group.dispatchEvent(new PointerEvent("pointermove", opts(sx + dx, sy + dy)))
     group.dispatchEvent(new PointerEvent("pointerup", opts(sx + 80, sy + 40)))
-    const drop = new DOMPoint(sx + 80, sy + 40).matrixTransform(
-      document.querySelector("svg").getScreenCTM().inverse(),
-    )
+    const drop = new DOMPoint(sx + 80, sy + 40).matrixTransform(document.querySelector("svg").getScreenCTM().inverse())
     return {
       before,
       drop: [drop.x, drop.y],
@@ -169,7 +210,9 @@ try {
   const [, landedX, landedY] = /translate\(([^,]+),([^)]+)\)/.exec(calmDrag.landed).map(Number)
   assert.ok(Math.hypot(landedX - calmDrag.drop[0], landedY - calmDrag.drop[1]) < 1e-6)
   assert.equal(calmDrag.neighbor, calmDrag.before[1])
-  await calm.evaluate(() => document.querySelectorAll("svg g.node")[0].dispatchEvent(new MouseEvent("click", { bubbles: true })))
+  await calm.evaluate(() =>
+    document.querySelectorAll("svg g.node")[0].dispatchEvent(new MouseEvent("click", { bubbles: true })),
+  )
   assert.match(await calm.locator(".Detail").innerText(), /Select a page or source/)
   await calm.close()
   await page.getByRole("button", { name: "Show all / reset" }).click()
@@ -249,6 +292,42 @@ try {
     return found
   })
   assert.deepEqual(badges, { count: 1, label: "+4", note: "+4 recorded references not in this snapshot" })
+  const stale = await api.evaluate(() => {
+    const host = document.createElement("main")
+    document.body.appendChild(host)
+    const handle = WikiViewer.mount(host, {
+      schemaVersion: 1,
+      snapshot: "stale-fixture",
+      scope: "wiki-manifest",
+      codeRelationships: "unavailable",
+      nodes: [
+        { id: "page:g.md", kind: "page", label: "G", path: "g.md", freshness: "stale", recordedReferences: 1 },
+        { id: "source:s.ts", kind: "source", label: "s.ts", path: "s.ts", freshness: "fresh", recordedReferences: 1 },
+      ],
+      edges: [{ from: "page:g.md", to: "source:s.ts", kind: "references-source", freshness: "stale" }],
+      omitted: { nodes: 0, edges: 0 },
+    })
+    const rings = [...host.querySelectorAll("circle.ring")]
+    const found = {
+      count: rings.length,
+      stroke: rings[0]?.getAttribute("stroke"),
+      animation: rings[0] ? getComputedStyle(rings[0]).animationName : "missing",
+      hidden: rings[0]?.getAttribute("aria-hidden"),
+      freshHasRing: host.querySelectorAll("svg g.node")[1]?.querySelector("circle.ring") !== null,
+      tooltip: host.querySelectorAll("svg g.node")[0]?.querySelector("title")?.textContent,
+      chips: [...host.querySelectorAll(".chip")].map((chip) => chip.textContent),
+    }
+    handle.dispose()
+    host.remove()
+    return found
+  })
+  assert.equal(stale.count, 1)
+  assert.equal(stale.stroke, "#e0a63c")
+  assert.equal(stale.animation, "none")
+  assert.equal(stale.hidden, "true")
+  assert.equal(stale.freshHasRing, false)
+  assert.match(stale.tooltip, /stale/)
+  assert.deepEqual(stale.chips, ["Fresh (1)", "Stale (1)"])
   console.log(
     JSON.stringify({
       browser: browser.version(),

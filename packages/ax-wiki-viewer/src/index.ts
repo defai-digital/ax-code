@@ -2,6 +2,16 @@ import { parseWikiGraph } from "@ax-code/ax-wiki/graph"
 import type { WikiGraphEdge, WikiGraphNode } from "@ax-code/ax-wiki/graph"
 import { LAYOUT_WORLD, createForceLayout } from "./force-layout.js"
 import type { ForceLayout, LayoutNode } from "./force-layout.js"
+import {
+  countsBarText,
+  defaultFilters,
+  isDefaultFilters,
+  isNodeVisible,
+  overlayText,
+  viewCounts,
+  viewState,
+} from "./visibility.js"
+import type { FreshnessState, NodeKind, ViewFilters } from "./visibility.js"
 
 export const viewerCss = `
 .axwv{font:14px system-ui,sans-serif;color:#dce6f2;background:#101923;padding:20px;border-radius:12px;box-sizing:border-box}
@@ -9,13 +19,20 @@ export const viewerCss = `
 .axwv button,.axwv input,.axwv select{font:inherit;color:inherit;background:#1c2c3c;border:1px solid #64778b;border-radius:6px;padding:8px}
 .axwv button{cursor:pointer}.axwv button:hover{background:#30455c}.axwv :focus-visible{outline:3px solid #78dacc;outline-offset:2px}
 .axwv .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}.axwv .layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(260px,1fr);gap:16px}
-.axwv .canvas{height:520px;overflow:hidden;border:1px solid #64778b;border-radius:8px}.axwv svg{width:100%;height:100%}
+.axwv .canvas{position:relative;height:520px;overflow:hidden;border:1px solid #64778b;border-radius:8px}.axwv svg{width:100%;height:100%}
 .axwv .node{cursor:grab;touch-action:none}.axwv .node.dragging{cursor:grabbing}.axwv svg text{pointer-events:none;font-size:10px;fill:#edf6ff;text-anchor:middle}
 .axwv .edge{fill:none;stroke:#64778b}.axwv .arrow{fill:none;stroke:#b5c5d7}
 .axwv .badge text{font-size:7.5px;font-weight:700;fill:#dce6f2}
 .axwv .legend{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;margin:8px 0 0;font-size:12px;color:#b5c5d7}
 .axwv .list{max-height:260px;overflow:auto;padding:0;list-style:none}.axwv .list button{width:100%;text-align:left;margin:3px 0;overflow-wrap:anywhere}
 .axwv .detail{white-space:pre-wrap;overflow-wrap:anywhere}.axwv .muted{color:#b5c5d7}.axwv .selected{border-color:#78dacc}
+.axwv .chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}
+.axwv .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.axwv .chip[aria-pressed="false"],.axwv .kind[aria-pressed="false"]{opacity:.6;text-decoration:line-through}
+.axwv .counts{font-variant-numeric:tabular-nums}
+.axwv .notice{border:1px solid #64778b;border-radius:8px;padding:8px 12px;color:#b5c5d7}
+.axwv .overlay{position:absolute;inset:0;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;text-align:center;background:rgba(16,25,35,.94);padding:24px}
+.axwv .overlay p{margin:0;max-width:52ch}
 @media(max-width:760px){.axwv .layout{grid-template-columns:1fr}.axwv .canvas{height:360px}}
 `
 
@@ -25,6 +42,9 @@ const PAGE_FILL = "#245d65"
 const SOURCE_FILL = "#30455c"
 const PAGE_RING = "#9fb3c8"
 const SELECT_RING = "#78dacc"
+const STALE_RING = "#e0a63c"
+const FRESH_DOT = "#7cc78a"
+const UNKNOWN_DOT = "#64778b"
 const FOCUS_EDGE = "#8fa6bb"
 const DIMMED_NODE = 0.15
 const DIMMED_EDGE = 0.12
@@ -54,8 +74,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   let hovered: string | undefined
   let suppressClick = false
   let lastVisible: WikiGraphNode[] = []
-  let query = "",
-    kind = "all",
+  let filters: ViewFilters = defaultFilters(),
     zoom = 1,
     offsetX = 0,
     offsetY = 0,
@@ -63,8 +82,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     cameraTouched = false,
     hasFitted = false
   const doc = element.ownerDocument
-  const reducedMotion =
-    doc.defaultView?.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
+  const reducedMotion = doc.defaultView?.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
   const root = doc.createElement("section")
   root.className = "axwv"
   if (options.injectStyles !== false) {
@@ -85,7 +103,9 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     "Wiki page → referenced source. Recorded membership, not a code dependency or call graph. Node size is how many of those listings are in this snapshot.",
   )
   const status = html("p", root)
+  status.className = "counts"
   status.setAttribute("role", "status")
+  status.setAttribute("aria-live", "polite")
   const identity = html("details", root)
   html("summary", identity, "Snapshot details")
   const identityText = html("p", identity)
@@ -95,17 +115,17 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   const search = html("input", searchLabel)
   search.type = "search"
   search.placeholder = "Page or source path"
-  const typeLabel = html("label", controls, "Show ")
-  const filter = html("select", typeLabel)
-  for (const [value, label] of [
-    ["all", "Pages and sources"],
-    ["page", "Pages"],
-    ["source", "Sources"],
-  ]) {
-    const option = html("option", filter, label)
-    option.value = value
-  }
   const reset = html("button", controls, "Show all / reset")
+  const chips = html("div", root)
+  chips.className = "chips"
+  chips.setAttribute("role", "group")
+  chips.setAttribute("aria-label", "Filter by freshness")
+  const legend = html("div", root)
+  legend.className = "legend"
+  legend.setAttribute("aria-label", "Map legend")
+  const notice = html("p", root)
+  notice.className = "notice"
+  notice.style.display = "none"
   const layoutRoot = html("div", root)
   layoutRoot.className = "layout"
   const canvas = html("div", layoutRoot)
@@ -118,6 +138,11 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   )
   svg.tabIndex = 0
   canvas.append(svg)
+  const overlay = html("div", canvas)
+  overlay.className = "overlay"
+  overlay.style.display = "none"
+  const overlayMessage = html("p", overlay)
+  const overlayReset = html("button", overlay, "Reset filters")
   const aside = html("div", layoutRoot)
   html("h2", aside, "Explore")
   const list = html("ul", aside)
@@ -128,25 +153,6 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   detail.className = "Detail"
   const navigation = html("div", root)
   navigation.className = "controls"
-  const legend = html("div", root)
-  legend.className = "legend"
-  legend.setAttribute("aria-label", "Map legend")
-  for (const [swatch, text] of [
-    [PAGE_FILL, "pages (left)"],
-    [SOURCE_FILL, "sources (right)"],
-  ] as const) {
-    const item = doc.createElement("span")
-    const dot = doc.createElement("span")
-    dot.textContent = "● "
-    dot.style.color = swatch
-    item.append(dot, doc.createTextNode(text))
-    legend.append(item)
-  }
-  for (const text of ["size = visible connections", "+N = recorded references not in this snapshot"]) {
-    const item = doc.createElement("span")
-    item.textContent = text
-    legend.append(item)
-  }
 
   const svgNS = "http://www.w3.org/2000/svg"
   const edgeLayer = doc.createElementNS(svgNS, "g")
@@ -180,8 +186,9 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     return near === undefined ? undefined : { id, near }
   }
 
-  function matches(node: WikiGraphNode): boolean {
-    return !query || `${node.label} ${node.path}`.toLowerCase().includes(query)
+  let visibleById = new Map<string, boolean>()
+  function refreshVisibility() {
+    visibleById = new Map(graph.nodes.map((node) => [node.id, isNodeVisible(node, filters)]))
   }
 
   function viewBox() {
@@ -206,11 +213,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       maxX = Math.max(maxX, node.x + pad)
       maxY = Math.max(maxY, node.y + pad)
     }
-    zoom = Math.min(
-      1,
-      LAYOUT_WORLD.width / (maxX - minX),
-      LAYOUT_WORLD.height / (maxY - minY),
-    )
+    zoom = Math.min(1, LAYOUT_WORLD.width / (maxX - minX), LAYOUT_WORLD.height / (maxY - minY))
     zoom = Math.max(MIN_ZOOM, zoom)
     offsetX = (minX + maxX) / 2 - LAYOUT_WORLD.width / zoom / 2
     offsetY = (minY + maxY) / 2 - LAYOUT_WORLD.height / zoom / 2
@@ -265,22 +268,23 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     const near = focus?.near
     const focusId = focus?.id
     for (const { path, arrow, edge } of edgeEls) {
-      const a = layout.byId.get(edge.from)!,
-        b = layout.byId.get(edge.to)!
       const dimmed =
-        (kind !== "all" && (a.kind !== kind || b.kind !== kind)) ||
+        visibleById.get(edge.from) !== true ||
+        visibleById.get(edge.to) !== true ||
         (near !== undefined && (!near.has(edge.from) || !near.has(edge.to)))
       const incident = focusId !== undefined && (edge.from === focusId || edge.to === focusId)
-      path.setAttribute("opacity", dimmed ? String(DIMMED_EDGE) : incident ? String(FOCUS_EDGE_OPACITY) : String(REST_EDGE))
+      path.setAttribute(
+        "opacity",
+        dimmed ? String(DIMMED_EDGE) : incident ? String(FOCUS_EDGE_OPACITY) : String(REST_EDGE),
+      )
       path.setAttribute("stroke", incident && !dimmed ? FOCUS_EDGE : "#64778b")
-      arrow.setAttribute("opacity", dimmed ? String(DIMMED_EDGE) : incident ? String(FOCUS_EDGE_OPACITY) : String(REST_EDGE))
+      arrow.setAttribute(
+        "opacity",
+        dimmed ? String(DIMMED_EDGE) : incident ? String(FOCUS_EDGE_OPACITY) : String(REST_EDGE),
+      )
     }
     for (const { group, circle, label, node } of nodeEls) {
-      const info = graph.nodes.find((candidate) => candidate.id === node.id)!
-      const dimmed =
-        (kind !== "all" && node.kind !== kind) ||
-        !matches(info) ||
-        (near !== undefined && !near.has(node.id))
+      const dimmed = visibleById.get(node.id) !== true || (near !== undefined && !near.has(node.id))
       group.setAttribute("opacity", dimmed ? String(DIMMED_NODE) : "1")
       if (node.id === selected || (selected === undefined && node.id === hovered)) {
         circle.setAttribute("stroke", SELECT_RING)
@@ -298,23 +302,29 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     }
   }
 
-  function renderStatus(matchCount: number) {
-    let text = `${graph.nodes.length} nodes and ${graph.edges.length} relationships in this snapshot. Not included from the recorded Wiki: ${graph.omitted.nodes} nodes, ${graph.omitted.edges} relationships. Unknown freshness means current sources are unverified.`
-    if (query) text += ` ${matchCount} of ${graph.nodes.length} match the search.`
-    if (selected) {
-      const node = graph.nodes.find((candidate) => candidate.id === selected)
-      const near = neighborhood()
-      if (node && near) text += ` Focus: ${node.kind} "${node.label}" with ${near.size - 1} connected in this view.`
+  function renderCounts() {
+    const counts = viewCounts(graph, filters)
+    const state = viewState(graph, filters)
+    status.textContent = countsBarText(counts, state)
+    identityText.textContent = `Snapshot: ${graph.snapshot}\nScope: recorded Wiki manifest. Code relationships unavailable.\nWiki page → referenced source. Recorded membership, not a code dependency or call graph. Node size is how many of those listings are in this snapshot.`
+    if (state === "empty" || state === "zero-match" || state === "all-kinds-hidden") {
+      overlay.style.display = "flex"
+      overlayMessage.textContent = overlayText(state, counts)
+      overlayReset.style.display = isDefaultFilters(filters) ? "none" : ""
+      notice.style.display = "none"
+    } else {
+      overlay.style.display = "none"
+      if (state === "ok") notice.style.display = "none"
+      else {
+        notice.style.display = ""
+        notice.textContent = overlayText(state, counts)
+      }
     }
-    status.textContent = text
-    identityText.textContent = `Snapshot: ${graph.snapshot}\nScope: recorded Wiki manifest. Code relationships unavailable.`
   }
 
   function renderList() {
     const near = neighborhood()
-    const visible = graph.nodes.filter(
-      (node) => (!near || near.has(node.id)) && (kind === "all" || node.kind === kind) && matches(node),
-    )
+    const visible = graph.nodes.filter((node) => (!near || near.has(node.id)) && isNodeVisible(node, filters))
     lastVisible = visible
     list.replaceChildren()
     for (const node of visible) {
@@ -325,7 +335,6 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       if (node.id === selected) button.className = "selected"
       button.onclick = () => select(node)
     }
-    return visible
   }
 
   function renderDetail() {
@@ -353,12 +362,68 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       (rows.length ? `\n\n${rows.join("\n")}` : "")
   }
 
+  const FRESHNESS_ORDER: FreshnessState[] = ["fresh", "stale", "unknown"]
+  const FRESHNESS_LABEL: Record<FreshnessState, string> = { fresh: "Fresh", stale: "Stale", unknown: "Unknown" }
+  const FRESHNESS_DOT: Record<FreshnessState, string> = { fresh: FRESH_DOT, stale: STALE_RING, unknown: UNKNOWN_DOT }
+  const KIND_ORDER: NodeKind[] = ["page", "source"]
+
+  /**
+   * Toggle structure follows the graph; pressed state follows the filters.
+   * Rebuilt only on graph change so toggling never steals keyboard focus.
+   */
+  function buildToggles() {
+    const counts = viewCounts(graph, defaultFilters())
+    chips.replaceChildren()
+    for (const state of FRESHNESS_ORDER) {
+      if (counts.byFreshness[state] === 0) continue
+      const button = doc.createElement("button")
+      button.className = "chip"
+      const dot = doc.createElement("span")
+      dot.className = "dot"
+      dot.style.background = FRESHNESS_DOT[state]
+      dot.setAttribute("aria-hidden", "true")
+      button.append(dot, doc.createTextNode(`${FRESHNESS_LABEL[state]} (${counts.byFreshness[state]})`))
+      button.setAttribute("aria-pressed", String(filters.freshness[state]))
+      button.onclick = () => {
+        filters.freshness[state] = !filters.freshness[state]
+        button.setAttribute("aria-pressed", String(filters.freshness[state]))
+        selected = undefined
+        render()
+      }
+      chips.append(button)
+    }
+    legend.replaceChildren()
+    for (const kind of KIND_ORDER) {
+      const button = doc.createElement("button")
+      button.className = "kind"
+      const dot = doc.createElement("span")
+      dot.className = "dot"
+      dot.style.background = kind === "page" ? PAGE_FILL : SOURCE_FILL
+      dot.setAttribute("aria-hidden", "true")
+      button.append(dot, doc.createTextNode(`${kind === "page" ? "pages" : "sources"} (${counts.byKind[kind]})`))
+      button.setAttribute("aria-pressed", String(filters.kinds[kind]))
+      button.onclick = () => {
+        filters.kinds[kind] = !filters.kinds[kind]
+        button.setAttribute("aria-pressed", String(filters.kinds[kind]))
+        selected = undefined
+        render()
+      }
+      legend.append(button)
+    }
+    for (const text of ["size = visible connections", "+N = recorded references not in this snapshot"]) {
+      const item = doc.createElement("span")
+      item.textContent = text
+      legend.append(item)
+    }
+  }
+
   function render() {
+    refreshVisibility()
     positionElements()
     applyEmphasis()
-    const visible = renderList()
+    renderList()
     renderDetail()
-    renderStatus(visible.length)
+    renderCounts()
   }
 
   function buildElements() {
@@ -390,6 +455,16 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       const title = doc.createElementNS(svgNS, "title")
       title.textContent = `${info.label} (${node.kind}, ${info.freshness}, ${plural(node.degree, "connection", "connections")} shown)`
       group.append(circle, label, title)
+      if (info.freshness === "stale") {
+        const ring = doc.createElementNS(svgNS, "circle")
+        ring.setAttribute("class", "ring")
+        ring.setAttribute("r", String(node.radius + 3.5))
+        ring.setAttribute("fill", "none")
+        ring.setAttribute("stroke", STALE_RING)
+        ring.setAttribute("stroke-width", "2")
+        ring.setAttribute("aria-hidden", "true")
+        group.insertBefore(ring, label)
+      }
       const omitted = info.recordedReferences - node.degree
       if (omitted > 0) {
         const badge = doc.createElementNS(svgNS, "g")
@@ -574,7 +649,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   })
   search.oninput = () => {
     selected = undefined
-    query = search.value.toLowerCase()
+    filters.query = search.value
     render()
   }
   search.onkeydown = (event) => {
@@ -583,24 +658,21 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       select(lastVisible[0])
     }
   }
-  filter.onchange = () => {
+  const doReset = () => {
     selected = undefined
-    kind = filter.value
-    render()
-  }
-  reset.onclick = () => {
-    selected = undefined
-    query = ""
-    kind = "all"
+    filters = defaultFilters()
     search.value = ""
-    filter.value = "all"
-    if (layout) for (const node of layout.nodes) {
-      node.fx = null
-      node.fy = null
-    }
+    if (layout)
+      for (const node of layout.nodes) {
+        node.fx = null
+        node.fy = null
+      }
     fitView()
+    buildToggles()
     render()
   }
+  reset.onclick = doReset
+  overlayReset.onclick = doReset
   root.onkeydown = (event) => {
     if (event.key === "Escape") {
       if (doc.activeElement === search && selected !== undefined) {
@@ -613,6 +685,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   }
   element.append(root)
   buildLayout()
+  buildToggles()
   fitView()
   render()
   return {
@@ -621,12 +694,11 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       const next = parseWikiGraph(input)
       if (next.snapshot !== graph.snapshot) {
         selected = undefined
-        query = ""
-        kind = "all"
+        filters = defaultFilters()
         search.value = ""
-        filter.value = "all"
         graph = next
         buildLayout()
+        buildToggles()
         fitView()
       } else {
         graph = next
@@ -646,8 +718,8 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       svg.onkeydown = null
       search.oninput = null
       search.onkeydown = null
-      filter.onchange = null
       reset.onclick = null
+      overlayReset.onclick = null
     },
   }
 }
