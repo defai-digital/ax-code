@@ -9,7 +9,7 @@ export type SymbolAnchor = {
   provenance: SymbolProvenance
 }
 export type WikiGraphNodeKind = "page" | "source" | "symbol"
-export type WikiGraphEdgeKind = "references-source" | "contains"
+export type WikiGraphEdgeKind = "references-source" | "contains" | "uses"
 /** Caller-supplied symbol inventory entry; validated strictly at projection. */
 export type InventorySymbol = {
   name: string
@@ -164,12 +164,15 @@ export function parseWikiGraph(input: unknown): WikiGraph {
     const from = text(edge.from, 1100),
       to = text(edge.to, 1100)
     const kind = edge.kind
-    if (kind !== "references-source" && kind !== "contains") throw new Error("Invalid graph relationship or endpoint")
+    if (kind !== "references-source" && kind !== "contains" && kind !== "uses")
+      throw new Error("Invalid graph relationship or endpoint")
     const fromKind = ids.get(from)?.kind
     const toKind = ids.get(to)?.kind
     if (kind === "references-source" && (fromKind !== "page" || toKind !== "source"))
       throw new Error("Invalid graph relationship or endpoint")
     if (kind === "contains" && (fromKind !== "source" || toKind !== "symbol"))
+      throw new Error("Invalid graph relationship or endpoint")
+    if (kind === "uses" && (fromKind !== "source" || toKind !== "source" || from === to))
       throw new Error("Invalid graph relationship or endpoint")
     const pair = JSON.stringify([from, to])
     if (pairs.has(pair)) throw new Error("Duplicate relationship")
@@ -183,7 +186,8 @@ export function parseWikiGraph(input: unknown): WikiGraph {
     }
   })
   // recordedReferences counts references-source relationships only; contains
-  // edges are inventory-derived and covered by omission accounting instead.
+  // and uses edges are inventory-derived and covered by omission accounting
+  // instead.
   const incidents = new Map<string, number>()
   for (const edge of edges) {
     if (edge.kind !== "references-source") continue
@@ -215,6 +219,8 @@ export function projectWikiManifest(
     sourceContents?: ReadonlyMap<string, string>
     /** Caller-supplied symbol inventory keyed by root-relative source path. */
     inventory?: ReadonlyMap<string, InventorySymbol[]>
+    /** Caller-supplied resolved import targets keyed by root-relative source path. */
+    imports?: ReadonlyMap<string, string[]>
   },
 ): WikiGraph {
   const manifest = record(input)
@@ -223,6 +229,15 @@ export function projectWikiManifest(
   if (pages.length > GRAPH_LIMITS.pages) throw new Error("Manifest exceeds page limit")
   const allNodes = new Map<string, WikiGraphNode>()
   const allEdges: WikiGraphEdge[] = []
+  // One source is visited per citing page; without this guard its
+  // inventory-derived edges would repeat and fail pair validation.
+  const pushedPairs = new Set<string>()
+  const pushEdge = (edge: WikiGraphEdge) => {
+    const pair = `${edge.kind} ${edge.from} ${edge.to}`
+    if (pushedPairs.has(pair)) return
+    pushedPairs.add(pair)
+    allEdges.push(edge)
+  }
   const citedByPage: Array<{ id: string; cited: string[] }> = []
   let references = 0
   for (const [pagePath, raw] of pages) {
@@ -291,7 +306,7 @@ export function projectWikiManifest(
         detail: "",
         qualified: "",
       })
-      allEdges.push({ from: id, to: target, kind: "references-source", freshness: state, recordedHash })
+      pushEdge({ from: id, to: target, kind: "references-source", freshness: state, recordedHash })
       states.push(state)
       node.recordedReferences++
     }
@@ -338,7 +353,22 @@ export function projectWikiManifest(
           detail: text(`${kind} ${qualified}`, GRAPH_LIMITS.detail),
           qualified,
         })
-        allEdges.push({ from: target, to: symbolId, kind: "contains", freshness: sourceNode.freshness })
+        pushEdge({ from: target, to: symbolId, kind: "contains", freshness: sourceNode.freshness })
+      }
+      // Resolved static imports between cited sources. Targets outside the
+      // manifest membership never become edges; self imports are meaningless.
+      for (const raw of options.imports?.get(source) ?? []) {
+        const resolved = graphRelativePath(raw)
+        if (resolved === source) continue
+        const targetNode = allNodes.get(`source:${resolved}`)
+        if (!targetNode) continue
+        const freshness =
+          sourceNode.freshness === "stale" || targetNode.freshness === "stale"
+            ? "stale"
+            : sourceNode.freshness === "unknown" || targetNode.freshness === "unknown"
+              ? "unknown"
+              : "fresh"
+        pushEdge({ from: target, to: `source:${resolved}`, kind: "uses", freshness })
       }
     }
   }

@@ -4634,7 +4634,7 @@ export type WikiVisualizationGraph = {
   edges: Array<{
     from: string
     to: string
-    kind: "references-source" | "contains"
+    kind: "references-source" | "contains" | "uses"
     freshness: "fresh" | "stale" | "unknown"
     recordedHash?: string
   }>

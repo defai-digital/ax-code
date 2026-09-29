@@ -149,7 +149,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   svg.setAttribute("role", "img")
   svg.setAttribute(
     "aria-label",
-    "Page to source relationships; use the adjacent list for keyboard navigation. When focused, plus and minus zoom, arrow keys pan. Drag nodes to rearrange; activating empty canvas clears the selection.",
+    "Page to source references and source to source imports; use the adjacent list for keyboard navigation. When focused, plus and minus zoom, arrow keys pan. Drag nodes to rearrange; activating empty canvas clears the selection.",
   )
   svg.tabIndex = 0
   canvas.append(svg)
@@ -328,7 +328,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     const counts = viewCounts(graph, filters)
     const state = viewState(graph, filters)
     status.textContent = countsBarText(counts, state, filters.query)
-    identityText.textContent = `Snapshot: ${graph.snapshot}\nScope: recorded Wiki manifest. Code relationships unavailable.\nWiki page → referenced source. Recorded membership, not a code dependency or call graph. Node size is how many of those listings are in this snapshot.`
+    identityText.textContent = `Snapshot: ${graph.snapshot}\nScope: recorded Wiki manifest plus verified JS/TS imports. Code call graph unavailable.\nWiki page → referenced source; source → imported source. Recorded membership and static imports, not a call graph. Node size is visible connections in this snapshot.`
     if (state === "empty" || state === "zero-match" || state === "all-kinds-hidden") {
       overlay.style.display = "flex"
       overlayMessage.textContent = overlayText(state, counts)
@@ -370,17 +370,24 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     }
     const related = graph.edges.filter((edge) => edge.from === node.id || edge.to === node.id)
     const citing = related.filter((edge) => edge.kind === "references-source")
+    const usesOut = related.filter((edge) => edge.kind === "uses" && edge.from === node.id)
+    const usesIn = related.filter((edge) => edge.kind === "uses" && edge.to === node.id)
     const kindLabel = node.kind === "page" ? "Page" : node.kind === "source" ? "Source" : "Symbol"
     const line =
       node.kind === "page"
         ? `Cites ${citing.length} of ${plural(node.recordedReferences, "source", "sources")} in this snapshot.`
         : node.kind === "source"
-          ? `Cited by ${citing.length} of ${plural(node.recordedReferences, "page", "pages")} in this snapshot.`
+          ? `Cited by ${citing.length} of ${plural(node.recordedReferences, "page", "pages")} in this snapshot. Imports ${plural(usesOut.length, "source", "sources")}, imported by ${plural(usesIn.length, "source", "sources")} in this snapshot.`
           : `Contained by ${plural(related.length, "source", "sources")} in this snapshot.`
     const rows = related.map((edge) => {
       if (edge.kind === "contains" && node.kind === "source") {
         const other = graph.nodes.find((candidate) => candidate.id === edge.to)!
         return `→ ${other.detail || other.label}`
+      }
+      if (edge.kind === "uses") {
+        const outgoing = edge.from === node.id
+        const other = graph.nodes.find((candidate) => candidate.id === (outgoing ? edge.to : edge.from))!
+        return `${outgoing ? "→" : "←"} ${other.label}\n${other.path} · ${edge.freshness} · ${outgoing ? "imports" : "imported by"}`
       }
       const otherId = node.kind === "page" ? edge.to : edge.from
       const other = graph.nodes.find((candidate) => candidate.id === otherId)!

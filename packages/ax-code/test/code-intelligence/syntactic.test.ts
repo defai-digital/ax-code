@@ -202,6 +202,72 @@ describe("SyntacticExtractor.extract", () => {
   })
 })
 
+describe("SyntacticExtractor.extractImports", () => {
+  test("extracts static, side-effect, and re-export specifiers verbatim", async () => {
+    const refs = await SyntacticExtractor.extractImports(
+      "typescript",
+      [
+        `import { a } from "./a"`,
+        `import b from '../b'`,
+        `import "./side-effect"`,
+        `import type { T } from "./types"`,
+        `export { c } from "./c"`,
+        `export * from "./all"`,
+        `export * as ns from "./ns"`,
+        "",
+      ].join("\n"),
+    )
+    expect(refs!.map((ref) => ref.specifier).sort()).toEqual(
+      ["../b", "./a", "./all", "./c", "./ns", "./side-effect", "./types"].sort(),
+    )
+    expect(refs!.every((ref) => Number.isInteger(ref.line) && ref.line >= 0)).toBe(true)
+  })
+
+  test("extracts require and dynamic import calls, including nested ones", async () => {
+    const refs = await SyntacticExtractor.extractImports(
+      "javascript",
+      [
+        `const a = require("./a")`,
+        `async function load() {`,
+        `  const b = await import("./lazy")`,
+        `  return b`,
+        `}`,
+        `const c = require("bare-package")`,
+        "",
+      ].join("\n"),
+    )
+    expect(refs!.map((ref) => ref.specifier).sort()).toEqual(["./a", "./lazy", "bare-package"].sort())
+  })
+
+  test("skips interpolated templates and non-string arguments", async () => {
+    const refs = await SyntacticExtractor.extractImports(
+      "typescript",
+      [
+        "const name = `./${kind}`",
+        "const mod = await import(`./locales/${name}`)",
+        "const other = require(getName())",
+        "",
+      ].join("\n"),
+    )
+    expect(refs).toEqual([])
+  })
+
+  test("returns undefined for unsupported languages and oversized sources", async () => {
+    expect(SyntacticExtractor.importsSupported("shellscript")).toBe(false)
+    expect(SyntacticExtractor.importsSupported("go")).toBe(false)
+    expect(await SyntacticExtractor.extractImports("shellscript", "setup() { true; }\n")).toBeUndefined()
+    expect(await SyntacticExtractor.extractImports("go", "package p\n")).toBeUndefined()
+    const huge = `import x from "./x"\n`.repeat(100_000) // > 1.5MB
+    expect(await SyntacticExtractor.extractImports("typescript", huge)).toBeUndefined()
+  })
+
+  test("caps the number of imports per file", async () => {
+    const source = Array.from({ length: 300 }, (_, i) => `import x${i} from "./m${i}"`).join("\n")
+    const refs = await SyntacticExtractor.extractImports("typescript", source)
+    expect(refs!.length).toBe(256)
+  })
+})
+
 describe("builder.indexFile syntactic fallback", () => {
   test("writes tagged nodes with completeness partial when LSP has no symbols", async () => {
     await using tmp = await tmpdir({ git: true })

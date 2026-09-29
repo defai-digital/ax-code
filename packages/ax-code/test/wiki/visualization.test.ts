@@ -92,6 +92,30 @@ describe("Wiki visualization snapshot", () => {
     expect(contains).toHaveLength(symbols.length)
     expect(contains.every((e) => e.from === "source:src/a.ts")).toBe(true)
   })
+  test("projects resolved imports as uses edges between cited sources", async () => {
+    await using tmp = await tmpdir()
+    await mkdir(path.join(tmp.path, "ax-wiki"))
+    await mkdir(path.join(tmp.path, "src"))
+    await writeFile(
+      path.join(tmp.path, "src", "a.ts"),
+      `import { b } from "./b"\nimport "bare-package"\nexport const a = b\n`,
+    )
+    await writeFile(path.join(tmp.path, "src", "b.ts"), "export const b = 1\n")
+    await writeFile(
+      path.join(tmp.path, "ax-wiki", ".manifest.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        generator: "ax-wiki",
+        pages: {
+          "guide.md": { title: "Guide", sources: ["src/a.ts", "src/b.ts"], sourceHashes: {} },
+        },
+      }),
+    )
+    const graph = await WikiVisualization.snapshot(tmp.path)
+    expect(graph.edges.filter((e) => e.kind === "uses")).toEqual([
+      { from: "source:src/a.ts", to: "source:src/b.ts", kind: "uses", freshness: "unknown" },
+    ])
+  })
   test("rejects missing, corrupt, oversized, symlinked manifests and unsafe directories", async () => {
     await using tmp = await tmpdir()
     await expect(WikiVisualization.snapshot(tmp.path)).rejects.toThrow(/No Wiki/)

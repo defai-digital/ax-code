@@ -35,6 +35,29 @@ test("exports inert labels with a matching script hash and no network allowances
   expect(renderWikiGraphHtml(graph).html).toBe(html)
 })
 
+test("exports graphs with import edges without changing the offline contract", () => {
+  const linked = projectWikiManifest(
+    {
+      schemaVersion: 1,
+      generator: "ax-wiki",
+      pages: {
+        "guide.md": { title: "Guide", sources: ["src/a.ts", "src/b.ts"], sourceHashes: {} },
+      },
+    },
+    {
+      snapshot: "imports",
+      inventory: new Map([["src/a.ts", [{ name: "a", qualified: "a", kind: "function" }]]]),
+      imports: new Map([["src/a.ts", ["src/b.ts"]]]),
+    },
+  )
+  expect(linked.edges.some((edge) => edge.kind === "uses")).toBe(true)
+  const { html, csp } = renderWikiGraphHtml(linked)
+  expect(html).toContain("uses")
+  expect(html.match(/<\/script>/g)).toHaveLength(1)
+  expect(csp).toContain("connect-src 'none'")
+  expect(csp).not.toContain("script-src 'unsafe-inline'")
+})
+
 test("browser entry bundles without Node, polyfills, or AX Code runtime", async () => {
   const result = await build({
     entryPoints: [fileURLToPath(new URL("../src/index.ts", import.meta.url))],

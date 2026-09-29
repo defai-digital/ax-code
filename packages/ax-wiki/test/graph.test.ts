@@ -363,3 +363,91 @@ test("shares view caps across symbols with neighborhoods together", () => {
   expect(graph.nodes[1].id).toBe("source:src/a.ts")
   expect(graph.omitted).toEqual({ nodes: 102, edges: 102 })
 })
+
+test("projects uses edges between cited sources with combined freshness", () => {
+  const graph = projectWikiManifest(
+    {
+      schemaVersion: 1,
+      generator: "ax-wiki",
+      pages: {
+        "guide.md": {
+          title: "Guide",
+          sources: ["src/a.ts", "src/b.ts"],
+          sourceHashes: { "src/a.ts": hash, "src/b.ts": hash },
+        },
+      },
+    },
+    {
+      snapshot: "imports",
+      observed: new Map([
+        ["src/a.ts", hash],
+        ["src/b.ts", null],
+      ]),
+      imports: new Map([
+        ["src/a.ts", ["src/b.ts", "src/b.ts", "src/a.ts", "src/uncited.ts"]],
+        ["src/b.ts", ["src/a.ts"]],
+      ]),
+    },
+  )
+  const uses = graph.edges.filter((e) => e.kind === "uses")
+  // Duplicates, self imports, and uncited targets never become edges.
+  expect(uses.map((e) => [e.from, e.to])).toEqual([
+    ["source:src/a.ts", "source:src/b.ts"],
+    ["source:src/b.ts", "source:src/a.ts"],
+  ])
+  // Either endpoint stale marks the edge stale.
+  expect(uses.every((e) => e.freshness === "stale")).toBe(true)
+  expect(graph.nodes.find((n) => n.id === "source:src/a.ts")!.recordedReferences).toBe(1)
+})
+
+test("emits inventory-derived edges once when pages share a source", () => {
+  const input = {
+    schemaVersion: 1,
+    generator: "ax-wiki",
+    pages: {
+      "guide.md": { title: "Guide", sources: ["src/a.ts", "src/b.ts"], sourceHashes: {} },
+      "other.md": { title: "Other", sources: ["src/a.ts"], sourceHashes: {} },
+    },
+  }
+  const graph = projectWikiManifest(input, {
+    snapshot: "shared",
+    inventory: new Map([["src/a.ts", [{ name: "Foo", qualified: "Foo", kind: "class" }]]]),
+    imports: new Map([["src/a.ts", ["src/b.ts"]]]),
+  })
+  expect(graph.edges.map((e) => [e.from, e.to, e.kind])).toEqual([
+    ["page:guide.md", "source:src/a.ts", "references-source"],
+    ["page:guide.md", "source:src/b.ts", "references-source"],
+    ["page:other.md", "source:src/a.ts", "references-source"],
+    ["source:src/a.ts", "symbol:src/a.ts#Foo", "contains"],
+    ["source:src/a.ts", "source:src/b.ts", "uses"],
+  ])
+})
+
+test("validates uses endpoints strictly", () => {
+  const graph = projectWikiManifest(
+    {
+      schemaVersion: 1,
+      generator: "ax-wiki",
+      pages: { "guide.md": { title: "Guide", sources: ["src/a.ts", "src/b.ts"], sourceHashes: {} } },
+    },
+    { snapshot: "fixture" },
+  )
+  const ok = {
+    ...graph,
+    edges: [...graph.edges, { from: "source:src/a.ts", to: "source:src/b.ts", kind: "uses", freshness: "unknown" }],
+  }
+  expect(parseWikiGraph(ok).edges).toHaveLength(3)
+  const bad = (edge: unknown) => ({ ...ok, edges: [...graph.edges, edge] })
+  expect(() =>
+    parseWikiGraph(bad({ from: "page:guide.md", to: "source:src/b.ts", kind: "uses", freshness: "unknown" })),
+  ).toThrow(/relationship/)
+  expect(() =>
+    parseWikiGraph(bad({ from: "source:src/a.ts", to: "source:src/a.ts", kind: "uses", freshness: "unknown" })),
+  ).toThrow(/relationship/)
+  expect(() =>
+    parseWikiGraph(bad({ from: "source:src/a.ts", to: "source:src/b.ts", kind: "depends-on", freshness: "unknown" })),
+  ).toThrow(/relationship/)
+  expect(() =>
+    projectWikiManifest(manifest(), { snapshot: "bad", imports: new Map([["src/a.ts", ["../escape.ts"]]]) }),
+  ).toThrow()
+})

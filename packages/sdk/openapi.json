@@ -51366,6 +51366,10 @@
                     {
                       "type": "string",
                       "const": "contains"
+                    },
+                    {
+                      "type": "string",
+                      "const": "uses"
                     }
                   ]
                 },

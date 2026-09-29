@@ -90,12 +90,16 @@ export namespace WikiVisualization {
       sourceContents = undefined
     }
     let inventory: Map<string, InventorySymbol[]> | undefined
+    let imports: Map<string, string[]> | undefined
     try {
-      inventory = await WikiInventory.build(canonicalRoot, cited)
+      const all = await WikiInventory.buildAll(canonicalRoot, cited)
+      inventory = new Map([...all].map(([relative, entry]) => [relative, entry.symbols]))
+      imports = new Map([...all].map(([relative, entry]) => [relative, entry.imports]))
     } catch {
       inventory = undefined
+      imports = undefined
     }
-    const graph = projectWikiManifest(parsed, { snapshot: "pending", sourceContents, inventory })
+    const graph = projectWikiManifest(parsed, { snapshot: "pending", sourceContents, inventory, imports })
     // Identity covers the complete recorded manifest, including evidence beyond the view cap.
     // Canonical JSON prevents insertion order alone from changing snapshot identity.
     const canonical = (value: unknown, depth = 0): unknown => {

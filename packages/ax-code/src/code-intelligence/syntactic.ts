@@ -43,6 +43,10 @@ export namespace SyntacticExtractor {
   // the LSP path.
   const MAX_SYMBOLS_PER_FILE = 2_000
 
+  // Cap import specifiers per file; beyond this the file is generated or
+  // pathological and its dependency fan-out is not worth resolving.
+  const MAX_IMPORTS_PER_FILE = 256
+
   // Matches builder-impl MAX_SYMBOL_DEPTH. Native symbols are nested;
   // flatten them with the same bound so a cyclic or pathological tree
   // cannot recurse without limit.
@@ -74,6 +78,12 @@ export namespace SyntacticExtractor {
     signature: string | null
   }
 
+  /** Raw module specifier as written (resolved by the caller, never here). */
+  export type ImportRef = {
+    specifier: string
+    line: number
+  }
+
   // detectLanguage() output → grammar wasm shipped as an npm package.
   // Only list languages whose grammars are in the dependency tree; the
   // builder consults supported() before reading the file for us.
@@ -90,6 +100,15 @@ export namespace SyntacticExtractor {
     // ERB is mixed HTML/Ruby. Never treat it as a native Ruby parse.
     if (lang === "erb") return false
     return nativeHasGrammar(lang)
+  }
+
+  /**
+   * Languages whose module specifiers the WASM import walker understands.
+   * Native-only languages yield no import data (undefined, never empty
+   * claims) until the native parser learns import extraction.
+   */
+  export function importsSupported(lang: string): boolean {
+    return lang in GRAMMARS && lang !== "shellscript"
   }
 
   function nativeHasGrammar(lang: string): boolean {
@@ -160,6 +179,17 @@ export namespace SyntacticExtractor {
     endPosition: { row: number; column: number }
   }
 
+  // Bump this identity whenever the import walker or bundled grammar contract changes.
+  const IMPORT_CACHE_VERSION = "syntactic-imports-v1"
+  const CachedImports = z
+    .array(
+      z.object({
+        specifier: z.string().max(1024),
+        line: z.number().int().min(0),
+      }),
+    )
+    .max(MAX_IMPORTS_PER_FILE)
+
   // Bump this identity whenever the extractor or bundled grammar contract changes.
   const CACHE_VERSION = "syntactic-v2"
   const CachedSymbols = z
@@ -210,6 +240,45 @@ export namespace SyntacticExtractor {
     // that the WASM path already tests.
     if (lang in GRAMMARS) return extractWasm(lang, text)
     return extractNative(lang, text)
+  }
+
+  /**
+   * Raw module specifiers (`import`, `export ... from`, `require`,
+   * dynamic `import()`) for JS/TS-family sources. Specifiers are returned
+   * verbatim; resolution to repo files is the caller's job. Returns
+   * undefined for unsupported languages and oversized sources.
+   */
+  export async function extractImports(lang: string, text: string): Promise<ImportRef[] | undefined> {
+    if (!importsSupported(lang) || text.length > MAX_SOURCE_BYTES) return undefined
+    if (evidenceCacheMode() === "off") return extractImportsFresh(lang, text)
+    const key = EvidenceCache.key(IMPORT_CACHE_VERSION, lang, grammarIdentity(lang), EvidenceCache.digest(text))
+    const cached = await EvidenceCache.get(key, CachedImports)
+    if (cached) return cached
+    const refs = await extractImportsFresh(lang, text)
+    if (refs) await EvidenceCache.put(key, refs)
+    return refs
+  }
+
+  async function extractImportsFresh(lang: string, text: string): Promise<ImportRef[] | undefined> {
+    const language = await loadLanguage(lang)
+    if (!language) return undefined
+    const { Parser } = await runtime()
+    const parser = new Parser()
+    let tree: { rootNode: unknown; delete(): void } | null = null
+    try {
+      parser.setLanguage(language)
+      tree = parser.parse(text)
+      if (!tree) return undefined
+      const refs: ImportRef[] = []
+      walkJsTsImports(tree.rootNode as TSNode, refs)
+      return refs
+    } catch (err) {
+      log.warn("syntactic import extraction failed", { lang, err: toErrorMessage(err) })
+      return undefined
+    } finally {
+      tree?.delete()
+      parser.delete?.()
+    }
   }
 
   function extractNative(lang: string, text: string): Symbol[] | undefined {
@@ -447,6 +516,45 @@ export namespace SyntacticExtractor {
         const kind: CodeNodeKind = value && JS_VALUE_FUNCTION_TYPES.has(value.type) ? "method" : "variable"
         if (!push(symbols, declaration(member, kind, classQualified, name))) return
       }
+    }
+  }
+
+  // ─── JavaScript / TypeScript imports ───────────────────────────────
+  //
+  // Static `import` / `export ... from` expose the module string through
+  // the `source` field in both grammars; dynamic `import()` and
+  // `require()` are call_expressions with a leading string argument.
+  // Only complete string literals qualify — template strings with
+  // substitutions cannot name a module statically.
+
+  function stringValue(node: TSNode | null): string | undefined {
+    if (!node || node.type !== "string") return undefined
+    const raw = node.text
+    if (raw.length < 2) return undefined
+    const quote = raw[0]
+    if ((quote !== '"' && quote !== "'" && quote !== "`") || raw[raw.length - 1] !== quote) return undefined
+    const inner = raw.slice(1, -1)
+    if (!inner || inner.length > 1024 || inner.includes("${")) return undefined
+    return inner
+  }
+
+  function callSpecifier(node: TSNode): string | undefined {
+    if (node.type !== "call_expression") return undefined
+    const fn = node.childForFieldName("function")
+    if (fn?.type !== "import" && !(fn?.type === "identifier" && fn.text === "require")) return undefined
+    const args = node.childForFieldName("arguments")
+    if (!args || args.namedChildCount === 0) return undefined
+    return stringValue(args.namedChild(0))
+  }
+
+  function walkJsTsImports(node: TSNode, refs: ImportRef[]): void {
+    for (let i = 0; i < node.namedChildCount; i++) {
+      const child = node.namedChild(i)
+      if (!child) continue
+      if (refs.length >= MAX_IMPORTS_PER_FILE) return
+      const specifier = stringValue(child.childForFieldName("source")) ?? callSpecifier(child)
+      if (specifier) refs.push({ specifier, line: child.startPosition.row })
+      walkJsTsImports(child, refs)
     }
   }
 

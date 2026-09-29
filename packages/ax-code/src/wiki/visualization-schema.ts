@@ -36,7 +36,7 @@ export const WikiGraphSchema = z
         z.object({
           from: z.string().max(1100),
           to: z.string().max(1100),
-          kind: z.union([z.literal("references-source"), z.literal("contains")]),
+          kind: z.union([z.literal("references-source"), z.literal("contains"), z.literal("uses")]),
           freshness,
           recordedHash: contentHash.optional(),
         }),
