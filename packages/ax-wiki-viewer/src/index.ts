@@ -505,13 +505,6 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     detailHeading.focus()
   }
 
-  function clearCamera() {
-    zoom = 1
-    offsetX = offsetY = 0
-    cameraTouched = false
-    viewBox()
-  }
-
   for (const [label, action] of [
     [
       "Zoom in",

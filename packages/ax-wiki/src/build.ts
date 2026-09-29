@@ -1,6 +1,6 @@
 import { constants } from "node:fs"
 import { randomUUID } from "node:crypto"
-import { lstat, mkdir, open, readFile, rename, rm } from "node:fs/promises"
+import { mkdir, open, rename, rm } from "node:fs/promises"
 import path from "node:path"
 import { discoverSources, readSourceEvidence } from "./discovery.js"
 import {
@@ -33,8 +33,16 @@ async function readJson<T>(file: string): Promise<T | undefined> {
 }
 
 async function readCompilerConfig(file: string, limit = 128_000): Promise<string> {
-  if ((await lstat(file)).isSymbolicLink()) throw new Error("Wiki compiler config cannot be a symlink")
-  const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+  // O_NOFOLLOW refuses a symlink without a separate lstat/open race.
+  let handle
+  try {
+    handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ELOOP") {
+      throw new Error("Wiki compiler config cannot be a symlink", { cause: error })
+    }
+    throw error
+  }
   try {
     const info = await handle.stat()
     if (!info.isFile() || info.size > limit) throw new Error(`Wiki input must be a regular file within ${limit} bytes`)

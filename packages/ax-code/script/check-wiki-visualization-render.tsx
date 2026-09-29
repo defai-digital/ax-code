@@ -19,11 +19,6 @@ const { ToastProvider } = await import("../src/cli/tui/ui/toast")
 const { DialogProvider, DialogStack } = await import("../src/cli/tui/ui/dialog")
 const { WikiVisualizationProvider, useWikiVisualization } = await import("../src/cli/tui/context/wiki-visualization")
 const { createWikiVisualizationManager } = await import("../src/cli/tui/util/wiki-visualization")
-const { projectWikiManifest } = await import("@ax-code/ax-wiki/graph")
-const graph = projectWikiManifest(
-  { schemaVersion: 1, generator: "ax-wiki", pages: {} },
-  { snapshot: "sha256:" + "a".repeat(64) },
-)
 let wiki!: ReturnType<typeof useWikiVisualization>
 let sdk!: ReturnType<typeof useSDK>
 let ready = false
