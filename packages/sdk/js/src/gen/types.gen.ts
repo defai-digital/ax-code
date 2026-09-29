@@ -11973,6 +11973,7 @@ export type WikiEnableData = {
   body?: {
     agent: string
     active?: boolean
+    sessionID?: string
   }
   path?: never
   query?: {
@@ -12008,6 +12009,7 @@ export type WikiRefreshData = {
   body?: {
     agent: string
     active?: boolean
+    sessionID?: string
   }
   path?: never
   query?: {

@@ -42,8 +42,11 @@ import { GraphContext, type GraphContextPack } from "../../src/code-intelligence
 import { CodeNodeID } from "../../src/code-intelligence/id"
 import { Installation } from "../../src/installation"
 import { Instance } from "../../src/project/instance"
-import { repairWikiPageText, runNativeWiki } from "../../src/wiki/native"
+import { repairWikiPageText, resolveWikiModelRef, runNativeWiki } from "../../src/wiki/native"
 import { parseJsonStrict } from "../../src/util/json-value"
+import { Provider } from "../../src/provider/provider"
+import { Session } from "../../src/session"
+import { SessionID } from "../../src/session/schema"
 import { tmpdir } from "../fixture/fixture"
 
 afterEach(() => {
@@ -184,7 +187,7 @@ describe("wiki native generator", () => {
     expect(input?.generatorIdentity).toEqual({
       name: "ax-wiki",
       version: Installation.VERSION,
-      promptVersion: "native-page-v2",
+      promptVersion: "native-page-v3",
       model: input?.model,
     })
   })
@@ -397,5 +400,102 @@ describe("wiki native page repair", () => {
     expect(repaired).not.toBeNull()
     const value = parseJsonStrict(repaired!) as { summary: string }
     expect(value.summary.length).toBeLessThanOrEqual(600)
+  })
+
+  test("caps symbol glosses and drops invalid entries", () => {
+    const entries = Array.from({ length: 25 }, (_, index) => ({
+      name: `s${index}`,
+      summary: `Gloss number ${index} here.`,
+    }))
+    entries[5] = { name: "s5", summary: `  ${"z".repeat(400)}  ` }
+    entries[7] = { name: "short", summary: "tiny" }
+    const repaired = repairWikiPageText(
+      JSON.stringify({
+        summary: "a within-bounds summary value",
+        body: "x".repeat(100),
+        symbols: ["alpha"],
+        symbolSummaries: [
+          ...entries,
+          { name: "", summary: "Nameless gloss is dropped from the page." },
+          { name: "short", summary: "tiny" },
+          null,
+          "nope",
+        ],
+      }),
+    )
+    expect(repaired).not.toBeNull()
+    const value = parseJsonStrict(repaired!) as { symbolSummaries: Array<{ name: string; summary: string }> }
+    expect(value.symbolSummaries).toHaveLength(19)
+    expect(value.symbolSummaries.map((gloss) => gloss.name)).not.toContain("short")
+    expect(value.symbolSummaries.find((gloss) => gloss.name === "s5")!.summary).toBe("z".repeat(300))
+    expect(value.symbolSummaries.every((gloss) => gloss.summary.length <= 300)).toBe(true)
+    expect(value.symbolSummaries.every((gloss) => gloss.summary.length >= 10)).toBe(true)
+  })
+
+  test("returns null when symbol glosses are already within bounds", () => {
+    expect(
+      repairWikiPageText(
+        JSON.stringify({
+          summary: "a within-bounds summary value",
+          body: "x".repeat(100),
+          symbols: ["alpha"],
+          symbolSummaries: [{ name: "alpha", summary: "Starts the runtime cleanly." }],
+        }),
+      ),
+    ).toBeNull()
+  })
+})
+
+describe("wiki model resolution", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  const PIN = { providerID: "pinned-provider", modelID: "pinned-model" }
+  const SESSION_MODEL = { providerID: "session-provider", modelID: "session-model" }
+  const FALLBACK = { providerID: "default-provider", modelID: "default-model" }
+  const ID = SessionID.make("ses_wiki_model_fixture")
+
+  function userMessage(model: unknown) {
+    return [{ info: { role: "user", model } }] as never
+  }
+
+  test("an explicit pin wins without consulting the session", async () => {
+    vi.spyOn(Provider, "resolvePinnedModel").mockResolvedValue(PIN as never)
+    const messages = vi.spyOn(Session, "messages")
+    const fallback = vi.spyOn(Provider, "defaultModel")
+    expect(await resolveWikiModelRef({ model: "pinned-provider/pinned-model", sessionID: ID })).toEqual(PIN)
+    expect(messages).not.toHaveBeenCalled()
+    expect(fallback).not.toHaveBeenCalled()
+  })
+
+  test("falls back to the invoking session model when no pin is given", async () => {
+    vi.spyOn(Session, "messages").mockResolvedValue(userMessage(SESSION_MODEL))
+    vi.spyOn(Provider, "resolveRequestedModel").mockResolvedValue(SESSION_MODEL as never)
+    const fallback = vi.spyOn(Provider, "defaultModel")
+    expect(await resolveWikiModelRef({ sessionID: ID })).toEqual(SESSION_MODEL)
+    expect(fallback).not.toHaveBeenCalled()
+  })
+
+  test("uses the last user message when the session ran several models", async () => {
+    vi.spyOn(Session, "messages").mockResolvedValue([
+      { info: { role: "user", model: { providerID: "old-provider", modelID: "old-model" } } },
+      { info: { role: "assistant" } },
+      { info: { role: "user", model: SESSION_MODEL } },
+    ] as never)
+    const requested = vi.spyOn(Provider, "resolveRequestedModel").mockResolvedValue(SESSION_MODEL as never)
+    expect(await resolveWikiModelRef({ sessionID: ID })).toEqual(SESSION_MODEL)
+    expect(requested).toHaveBeenCalledWith(SESSION_MODEL)
+  })
+
+  test("falls back to the default model without user messages or on lookup failure", async () => {
+    vi.spyOn(Provider, "defaultModel").mockResolvedValue(FALLBACK as never)
+    vi.spyOn(Session, "messages").mockResolvedValue([])
+    expect(await resolveWikiModelRef({ sessionID: ID })).toEqual(FALLBACK)
+    vi.restoreAllMocks()
+    vi.spyOn(Provider, "defaultModel").mockResolvedValue(FALLBACK as never)
+    vi.spyOn(Session, "messages").mockRejectedValue(new Error("gone"))
+    expect(await resolveWikiModelRef({ sessionID: ID })).toEqual(FALLBACK)
+    expect(await resolveWikiModelRef({})).toEqual(FALLBACK)
   })
 })

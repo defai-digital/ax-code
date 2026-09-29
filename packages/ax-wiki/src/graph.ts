@@ -25,7 +25,10 @@ export type WikiGraphNode = {
   /** Total recorded incident relationships, including those omitted from this view. */
   recordedReferences: number
   observedHash?: string
-  /** Page nodes carry the recorded manifest summary verbatim (v2; "" when absent). */
+  /**
+   * Page nodes carry the recorded manifest summary verbatim; symbol nodes
+   * carry the recorded model-written gloss ("" when absent).
+   */
   summary: string
   /** Page nodes carry anchored symbols with provenance (v2; [] when absent). */
   symbols: SymbolAnchor[]
@@ -56,6 +59,7 @@ export const GRAPH_LIMITS = {
   pages: 10_000,
   references: 50_000,
   symbolsPerNode: 32,
+  symbolGlosses: 64,
   symbolName: 256,
   summary: 2048,
   detail: 512,
@@ -229,6 +233,7 @@ export function projectWikiManifest(
   if (pages.length > GRAPH_LIMITS.pages) throw new Error("Manifest exceeds page limit")
   const allNodes = new Map<string, WikiGraphNode>()
   const allEdges: WikiGraphEdge[] = []
+  type PageGloss = { name: string; summary: string }
   // One source is visited per citing page; without this guard its
   // inventory-derived edges would repeat and fail pair validation.
   const pushedPairs = new Set<string>()
@@ -238,7 +243,7 @@ export function projectWikiManifest(
     pushedPairs.add(pair)
     allEdges.push(edge)
   }
-  const citedByPage: Array<{ id: string; cited: string[] }> = []
+  const citedByPage: Array<{ id: string; cited: string[]; glosses: PageGloss[] }> = []
   let references = 0
   for (const [pagePath, raw] of pages) {
     const page = record(raw)
@@ -250,6 +255,13 @@ export function projectWikiManifest(
     const reported = page.symbols === undefined ? [] : page.symbols
     if (!Array.isArray(reported) || reported.length > GRAPH_LIMITS.symbolsPerNode)
       throw new Error("Manifest exceeds node symbol limit")
+    const glossRaw = page.symbolSummaries === undefined ? [] : page.symbolSummaries
+    if (!Array.isArray(glossRaw) || glossRaw.length > GRAPH_LIMITS.symbolGlosses)
+      throw new Error("Manifest exceeds symbol gloss limit")
+    const glosses = glossRaw.map((raw) => {
+      const gloss = record(raw)
+      return { name: text(gloss.name, GRAPH_LIMITS.symbolName), summary: summaryText(gloss.summary) }
+    })
     const excerpts = cited
       .map((source) => options.sourceContents?.get(source))
       .filter((value): value is string => value !== undefined)
@@ -271,7 +283,7 @@ export function projectWikiManifest(
       qualified: "",
     }
     allNodes.set(id, node)
-    citedByPage.push({ id, cited })
+    citedByPage.push({ id, cited, glosses })
     const states: GraphFreshness[] = []
     for (const source of cited) {
       const recordedHash = hash(Object.hasOwn(hashes, source) ? hashes[source] : undefined)
@@ -316,6 +328,19 @@ export function projectWikiManifest(
         ? "unknown"
         : "fresh"
   }
+  // Glosses attach by bare symbol name; pages are already sorted, so the
+  // first citing page wins deterministically when several gloss one name.
+  const glossBySource = new Map<string, Map<string, string>>()
+  for (const { cited, glosses } of citedByPage) {
+    for (const source of cited) {
+      let map = glossBySource.get(source)
+      if (!map) {
+        map = new Map()
+        glossBySource.set(source, map)
+      }
+      for (const gloss of glosses) if (!map.has(gloss.name)) map.set(gloss.name, gloss.summary)
+    }
+  }
   // Order page, source, then that source's symbols so neighborhoods stay
   // together under the view caps; symbols inherit final source freshness.
   const ordered: WikiGraphNode[] = []
@@ -348,7 +373,7 @@ export function projectWikiManifest(
           path: source,
           freshness: sourceNode.freshness,
           recordedReferences: 0,
-          summary: "",
+          summary: glossBySource.get(source)?.get(name) ?? "",
           symbols: [],
           detail: text(`${kind} ${qualified}`, GRAPH_LIMITS.detail),
           qualified,

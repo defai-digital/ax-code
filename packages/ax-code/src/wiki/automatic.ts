@@ -8,6 +8,7 @@ import { Instance } from "../project/instance"
 import { Agent } from "../agent/agent"
 import { Permission } from "../permission"
 import { SessionStatus } from "../session/status"
+import type { SessionID } from "../session/schema"
 import { TaskQueue } from "../session/task-queue"
 import { FileWatcher } from "../file/watcher"
 import { getWikiStatus } from "@ax-code/ax-wiki/node"
@@ -23,6 +24,7 @@ export namespace WikiAutomatic {
     directory: string
     agent: string
     active: boolean
+    sessionID?: SessionID
     idle(): Promise<boolean>
     rules(): Promise<Permission.Ruleset>
   }
@@ -56,7 +58,7 @@ export namespace WikiAutomatic {
     const relative = path.relative(root, file)
     return relative === "" || (!relative.startsWith(".." + path.sep) && relative !== ".." && !path.isAbsolute(relative))
   }
-  async function attach(agent: string, active = false) {
+  async function attach(agent: string, active = false, sessionID?: SessionID) {
     const scope = state()
     const ticket = ++scope.generation
     const root = await wikiProjectRoot()
@@ -70,6 +72,7 @@ export namespace WikiAutomatic {
       directory: Instance.directory,
       agent,
       active,
+      sessionID,
       run: Instance.bind(async (fn) => fn()),
       idle: Instance.bind(
         async () =>
@@ -157,6 +160,7 @@ export namespace WikiAutomatic {
               includeGraphEvidence: false,
               allowSource: (relative) => allowed("read", relative),
               allowWrite: (relative) => allowed("edit", relative),
+              sessionID: selected.sessionID,
               onProgress: progress,
             }),
           )
@@ -168,13 +172,14 @@ export namespace WikiAutomatic {
     const previous = entry.owners.get(Instance.directory)
     entry.owners.set(Instance.directory, owner)
     scope.entry = entry
-    if (!previous || previous.agent !== agent || previous.active !== active) entry.controller.activity()
+    if (!previous || previous.agent !== agent || previous.active !== active || previous.sessionID !== sessionID)
+      entry.controller.activity()
     return entry
   }
   /** Only explicit interactive registration or refresh enables maintenance. */
-  export async function enable(agent: string, active = false) {
+  export async function enable(agent: string, active = false, sessionID?: SessionID) {
     return (
-      (await attach(agent, active))?.controller.status() ?? {
+      (await attach(agent, active, sessionID))?.controller.status() ?? {
         phase: "disabled" as const,
         reason: "disabled" as const,
         completed: 0,
@@ -183,9 +188,9 @@ export namespace WikiAutomatic {
       }
     )
   }
-  export async function refresh(agent: string, active?: boolean) {
+  export async function refresh(agent: string, active?: boolean, sessionID?: SessionID) {
     const previous = state().entry?.owners.get(Instance.directory)
-    const entry = await attach(agent, active ?? previous?.active ?? false)
+    const entry = await attach(agent, active ?? previous?.active ?? false, sessionID ?? previous?.sessionID)
     entry?.controller.request()
     return (
       entry?.controller.status() ?? {

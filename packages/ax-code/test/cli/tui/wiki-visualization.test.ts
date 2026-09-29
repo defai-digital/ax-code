@@ -1,6 +1,10 @@
 import { describe, expect, test, vi } from "vitest"
 import { projectWikiManifest } from "@ax-code/ax-wiki/graph"
-import { createWikiVisualizationManager, fetchWikiVisualization } from "../../../src/cli/tui/util/wiki-visualization"
+import {
+  createWikiVisualizationManager,
+  fetchWikiVisualization,
+  requestWikiMaintenance,
+} from "../../../src/cli/tui/util/wiki-visualization"
 
 const graph = projectWikiManifest(
   {
@@ -176,5 +180,31 @@ describe("runtime Wiki snapshot transport", () => {
         }),
       ).rejects.toMatchObject({ data: { reason } })
     }
+  })
+  test("maintenance registration carries the invoking session to the runtime", async () => {
+    const status = { phase: "ready", reason: "complete", completed: 0, total: 0, revision: 0 }
+    const transport = vi.fn<typeof fetch>(async () => Response.json(status))
+    await requestWikiMaintenance({
+      base: "http://runtime/",
+      fetch: transport,
+      signal: new AbortController().signal,
+      action: "enable",
+      agent: "build",
+      active: false,
+      sessionID: "ses_invoking_session",
+    })
+    expect(String(transport.mock.calls[0][0])).toBe("http://runtime/experimental/wiki-maintenance/enable")
+    expect(JSON.parse(String(transport.mock.calls[0][1]?.body))).toEqual({
+      agent: "build",
+      active: false,
+      sessionID: "ses_invoking_session",
+    })
+    await requestWikiMaintenance({
+      base: "http://runtime/",
+      fetch: transport,
+      signal: new AbortController().signal,
+      action: "refresh",
+    })
+    expect(JSON.parse(String(transport.mock.calls[1][1]?.body))).toEqual({ agent: "build", active: false })
   })
 })

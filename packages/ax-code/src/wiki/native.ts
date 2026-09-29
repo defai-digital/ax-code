@@ -38,7 +38,11 @@ import { Provider } from "../provider/provider"
 import { parseJsonResult } from "../util/json-value"
 import { Log } from "../util/log"
 import { ProviderTransform } from "../provider/transform"
+import { Session } from "../session"
+import { MessageV2 } from "../session/message-v2"
+import type { SessionID } from "../session/schema"
 import { engineConfig, resolveWikiRuntimeConfig } from "./config"
+import { SYMBOL_SUMMARIES_MAX, SYMBOL_SUMMARY_MAX } from "@ax-code/ax-wiki/node"
 
 const execFileAsync = promisify(execFile)
 
@@ -49,6 +53,15 @@ const PAGE_SCHEMA = z.object({
   summary: z.string().min(20).max(PAGE_SUMMARY_MAX),
   body: z.string().min(80),
   symbols: z.array(z.string()).max(PAGE_SYMBOLS_MAX).default([]),
+  symbolSummaries: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(256),
+        summary: z.string().min(10).max(SYMBOL_SUMMARY_MAX),
+      }),
+    )
+    .max(SYMBOL_SUMMARIES_MAX)
+    .default([]),
 })
 
 const PAGE_SYSTEM = `You are the AX Wiki compiler inside AX Code.
@@ -64,11 +77,12 @@ Rules:
 - Cite evidence inline with repository-relative paths in backticks.
 - Link to other planned pages with relative Markdown links when genuinely useful.
 - Record important exact symbols in the symbols array; do not add guessed symbols.
+- Gloss at most 20 of the most architecturally important symbols from the symbols array in symbolSummaries: each entry names one symbol and summarizes it in 1-2 sentences (10-300 characters) grounded in the evidence.
 - If evidence is incomplete, say what is uncertain and how to verify it.
 - Do not include a Sources section; AX Wiki adds the authoritative source list.
-Return a json object with summary (20-600 characters), body (at least 80 characters of Markdown), and symbols (an array of at most 80 exact symbol strings).`
+Return a json object with summary (20-600 characters), body (at least 80 characters of Markdown), symbols (an array of at most 80 exact symbol strings), and symbolSummaries (an array of at most 20 {name, summary} objects for symbols from the symbols array).`
 
-const WIKI_PROMPT_VERSION = "native-page-v2"
+const WIKI_PROMPT_VERSION = "native-page-v3"
 const EVIDENCE_PRODUCER = "ax-code-code-intelligence"
 
 /**
@@ -91,6 +105,30 @@ export function repairWikiPageText(text: string): string | null {
   if (typeof record.summary === "string" && record.summary.length > PAGE_SUMMARY_MAX) {
     record.summary = record.summary.slice(0, PAGE_SUMMARY_MAX).trimEnd()
     changed = true
+  }
+  if (Array.isArray(record.symbolSummaries)) {
+    const kept: Array<{ name: string; summary: string }> = []
+    let repaired = record.symbolSummaries.length > SYMBOL_SUMMARIES_MAX
+    for (const entry of record.symbolSummaries.slice(0, SYMBOL_SUMMARIES_MAX)) {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        repaired = true
+        continue
+      }
+      const candidate = entry as Record<string, unknown>
+      const name = typeof candidate.name === "string" ? candidate.name.trim() : ""
+      const summary =
+        typeof candidate.summary === "string" ? candidate.summary.trim().slice(0, SYMBOL_SUMMARY_MAX).trimEnd() : ""
+      if (!name || summary.length < 10) {
+        repaired = true
+        continue
+      }
+      if (name !== candidate.name || summary !== candidate.summary) repaired = true
+      kept.push({ name, summary })
+    }
+    if (repaired) {
+      record.symbolSummaries = kept
+      changed = true
+    }
   }
   return changed ? JSON.stringify(record) : null
 }
@@ -140,10 +178,44 @@ ${sourceEvidence(request)}`
 
 const log = Log.create({ service: "wiki" })
 
-async function resolveModel(model?: string) {
-  const pinned = model ? await Provider.resolvePinnedModel(Provider.parseModel(model)) : undefined
-  if (model && !pinned) log.warn("wiki model is unavailable; using the default model", { model })
-  const reference = pinned ?? (await Provider.defaultModel())
+/**
+ * Model precedence for Wiki generation: an explicit pin first, then the
+ * invoking session's model (the model the user runs the session with),
+ * then the AX Code default. Failures resolving the session model fall
+ * back to the default with a warning instead of failing the build.
+ */
+export async function resolveWikiModelRef(input: { model?: string; sessionID?: SessionID }) {
+  const pinned = input.model ? await Provider.resolvePinnedModel(Provider.parseModel(input.model)) : undefined
+  if (input.model && !pinned)
+    log.warn("wiki model is unavailable; trying the session or default model", { model: input.model })
+  if (pinned) return pinned
+  if (input.sessionID) {
+    const session = await resolveSessionModelRef(input.sessionID)
+    if (session) return session
+  }
+  return Provider.defaultModel()
+}
+
+async function resolveSessionModelRef(sessionID: SessionID) {
+  try {
+    const history = await Session.messages({ sessionID })
+    const lastUser = [...history].reverse().find((message) => message.info.role === "user")?.info as
+      | MessageV2.User
+      | undefined
+    const model = lastUser?.model
+    if (!model?.providerID || !model?.modelID) return undefined
+    return Provider.resolveRequestedModel({ providerID: model.providerID, modelID: model.modelID })
+  } catch (error) {
+    log.warn("wiki session model is unavailable; using the default model", {
+      sessionID,
+      err: error instanceof Error ? error.message : String(error),
+    })
+    return undefined
+  }
+}
+
+async function resolveModel(model?: string, sessionID?: SessionID) {
+  const reference = await resolveWikiModelRef({ model, sessionID })
   const resolved = await Provider.getModel(reference.providerID, reference.modelID)
   return {
     reference,
@@ -401,6 +473,8 @@ export async function runNativeWiki(input: {
   action: WikiAction
   dir?: string
   model?: string
+  /** Invoking session: its model is used when no explicit model is pinned. */
+  sessionID?: SessionID
   force?: boolean
   onProgress?: (progress: WikiBuildProgress) => void
 }): Promise<WikiBuildResult> {
@@ -411,7 +485,7 @@ export async function runNativeWiki(input: {
   const lock = await createWikiBuildLock(input.root, config.dir, { acquireTimeoutMs: input.lockTimeoutMs }).acquire()
   try {
     input.signal?.throwIfAborted()
-    const model = await resolveModel(config.model)
+    const model = await resolveModel(config.model, input.sessionID)
     input.signal?.throwIfAborted()
     const repositoryHead = await gitHeadCommit(input.root)
     const snapshot: EvidenceSnapshot = {

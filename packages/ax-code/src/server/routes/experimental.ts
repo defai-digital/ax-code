@@ -47,10 +47,20 @@ export const ExperimentalRoutes = lazy(() =>
           ...errors(400),
         },
       }),
-      validator("json", z.object({ agent: z.string().min(1).max(128), active: z.boolean().optional() }).strict()),
+      validator(
+        "json",
+        z
+          .object({
+            agent: z.string().min(1).max(128),
+            active: z.boolean().optional(),
+            sessionID: SessionID.zod.optional(),
+          })
+          .strict(),
+      ),
       async (c) => {
         c.header("Cache-Control", "no-store")
-        return c.json(await WikiAutomatic.enable(c.req.valid("json").agent, c.req.valid("json").active))
+        const body = c.req.valid("json")
+        return c.json(await WikiAutomatic.enable(body.agent, body.active, body.sessionID))
       },
     )
     .post(
@@ -66,10 +76,20 @@ export const ExperimentalRoutes = lazy(() =>
           ...errors(400),
         },
       }),
-      validator("json", z.object({ agent: z.string().min(1).max(128), active: z.boolean().optional() }).strict()),
+      validator(
+        "json",
+        z
+          .object({
+            agent: z.string().min(1).max(128),
+            active: z.boolean().optional(),
+            sessionID: SessionID.zod.optional(),
+          })
+          .strict(),
+      ),
       async (c) => {
         c.header("Cache-Control", "no-store")
-        return c.json(await WikiAutomatic.refresh(c.req.valid("json").agent, c.req.valid("json").active))
+        const body = c.req.valid("json")
+        return c.json(await WikiAutomatic.refresh(body.agent, body.active, body.sessionID))
       },
     )
     .get(

@@ -25739,6 +25739,10 @@
                   },
                   "active": {
                     "type": "boolean"
+                  },
+                  "sessionID": {
+                    "type": "string",
+                    "pattern": "^ses_.*"
                   }
                 },
                 "required": [
@@ -25805,6 +25809,10 @@
                   },
                   "active": {
                     "type": "boolean"
+                  },
+                  "sessionID": {
+                    "type": "string",
+                    "pattern": "^ses_.*"
                   }
                 },
                 "required": [

@@ -451,3 +451,90 @@ test("validates uses endpoints strictly", () => {
     projectWikiManifest(manifest(), { snapshot: "bad", imports: new Map([["src/a.ts", ["../escape.ts"]]]) }),
   ).toThrow()
 })
+
+test("projects recorded symbol glosses onto symbol nodes", () => {
+  const graph = projectWikiManifest(
+    {
+      schemaVersion: 1,
+      generator: "ax-wiki",
+      pages: {
+        "guide.md": {
+          title: "Guide",
+          sources: ["src/a.ts"],
+          sourceHashes: {},
+          symbolSummaries: [
+            { name: "Foo", summary: "Holds the balance." },
+            { name: "Ghost", summary: "Not in this source." },
+          ],
+        },
+      },
+    },
+    {
+      snapshot: "gloss",
+      inventory: new Map([
+        [
+          "src/a.ts",
+          [
+            { name: "Foo", qualified: "Foo", kind: "class" },
+            { name: "bar", qualified: "Foo.bar", kind: "method" },
+          ],
+        ],
+      ]),
+    },
+  )
+  expect(graph.nodes.find((n) => n.id === "symbol:src/a.ts#Foo")!.summary).toBe("Holds the balance.")
+  expect(graph.nodes.find((n) => n.id === "symbol:src/a.ts#Foo.bar")!.summary).toBe("")
+  expect(graph.nodes.find((n) => n.id === "source:src/a.ts")!.summary).toBe("")
+})
+
+test("first citing page wins when several pages gloss one symbol", () => {
+  const graph = projectWikiManifest(
+    {
+      schemaVersion: 1,
+      generator: "ax-wiki",
+      pages: {
+        "b-guide.md": {
+          title: "B",
+          sources: ["src/a.ts"],
+          sourceHashes: {},
+          symbolSummaries: [{ name: "Foo", summary: "Second gloss." }],
+        },
+        "a-guide.md": {
+          title: "A",
+          sources: ["src/a.ts"],
+          sourceHashes: {},
+          symbolSummaries: [{ name: "Foo", summary: "First gloss." }],
+        },
+      },
+    },
+    {
+      snapshot: "gloss-order",
+      inventory: new Map([["src/a.ts", [{ name: "Foo", qualified: "Foo", kind: "class" }]]]),
+    },
+  )
+  expect(graph.nodes.find((n) => n.id === "symbol:src/a.ts#Foo")!.summary).toBe("First gloss.")
+})
+
+test("rejects malformed and over-limit gloss lists", () => {
+  const bare = () => ({
+    schemaVersion: 1,
+    generator: "ax-wiki",
+    pages: {
+      "guide.md": { title: "Guide", sources: ["src/a.ts"], sourceHashes: {} },
+    },
+  })
+  const bad = (symbolSummaries: unknown) => {
+    const input = bare()
+    ;(input.pages["guide.md"] as Record<string, unknown>).symbolSummaries = symbolSummaries
+    return input
+  }
+  expect(() => projectWikiManifest(bad("nope"), { snapshot: "bad" })).toThrow(/gloss/)
+  expect(() => projectWikiManifest(bad([{ name: "", summary: "x" }]), { snapshot: "bad" })).toThrow()
+  expect(() =>
+    projectWikiManifest(
+      bad(Array.from({ length: 65 }, (_, i) => ({ name: `s${i}`, summary: "Long enough gloss text." }))),
+      { snapshot: "bad" },
+    ),
+  ).toThrow(/gloss/)
+  expect(projectWikiManifest(bare(), { snapshot: "ok" }).nodes.every((n) => n.summary === "")).toBe(true)
+})

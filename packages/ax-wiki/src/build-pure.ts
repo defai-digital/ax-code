@@ -33,8 +33,28 @@ import type {
   WikiSource,
   WikiValidationReport,
 } from "./types.js"
-import { AX_WIKI_GENERATOR } from "./types.js"
+import { AX_WIKI_GENERATOR, SYMBOL_SUMMARIES_MAX, SYMBOL_SUMMARY_MAX } from "./types.js"
+import type { SymbolSummary } from "./types.js"
 import { validateWikiCandidate } from "./validate.js"
+
+/**
+ * Bound recorded glosses: trimmed, first per name wins, capped in count and
+ * length. Never invents content; over-cap input is cut, not failed.
+ */
+function sanitizeGlosses(glosses: readonly SymbolSummary[] | undefined): SymbolSummary[] {
+  const seen = new Set<string>()
+  const output: SymbolSummary[] = []
+  for (const gloss of glosses ?? []) {
+    if (output.length >= SYMBOL_SUMMARIES_MAX) break
+    if (!gloss || typeof gloss.name !== "string" || typeof gloss.summary !== "string") continue
+    const name = gloss.name.trim()
+    const summary = gloss.summary.trim()
+    if (!name || !summary || seen.has(name)) continue
+    seen.add(name)
+    output.push({ name, summary: summary.slice(0, SYMBOL_SUMMARY_MAX).trimEnd() })
+  }
+  return output
+}
 
 /** A source with the evidence slice read for a page. */
 export type WikiSourceEvidence = WikiSource & { content: string; truncated: boolean }
@@ -322,6 +342,9 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
       sourceHashes: pageSourceHashes,
       summary: fresh?.result.summary.trim() ?? meta.summary ?? previous?.pages[page.path]?.summary ?? "",
       symbols: fresh?.result.symbols ?? meta.symbols,
+      symbolSummaries: sanitizeGlosses(
+        fresh?.result.symbolSummaries ?? meta.symbolSummaries ?? previous?.pages[page.path]?.symbolSummaries ?? [],
+      ),
       contentHash: sha256(content),
       managedHash: managedContentHash(content),
       generatedAt: fresh ? now : (previous?.pages[page.path]?.generatedAt ?? now),

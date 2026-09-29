@@ -3458,6 +3458,7 @@ export class Wiki extends HeyApiClient {
       directory?: string
       agent: string
       active?: boolean
+      sessionID?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -3469,6 +3470,7 @@ export class Wiki extends HeyApiClient {
             { in: "query", key: "directory" },
             { in: "body", key: "agent" },
             { in: "body", key: "active" },
+            { in: "body", key: "sessionID" },
           ],
         },
       ],
@@ -3493,6 +3495,7 @@ export class Wiki extends HeyApiClient {
       directory?: string
       agent: string
       active?: boolean
+      sessionID?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -3504,6 +3507,7 @@ export class Wiki extends HeyApiClient {
             { in: "query", key: "directory" },
             { in: "body", key: "agent" },
             { in: "body", key: "active" },
+            { in: "body", key: "sessionID" },
           ],
         },
       ],

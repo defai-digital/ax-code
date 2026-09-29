@@ -137,6 +137,21 @@ export function validateWikiCandidate(input: {
         }
       }
     }
+    // Gloss names should come from the recorded symbols array; a gloss for
+    // an unlisted name is kept but flagged, mirroring ungrounded_symbol.
+    if (meta.symbolSummaries.length > 0) {
+      const listed = new Set(meta.symbols.map((symbol) => symbol.trim()).filter(Boolean))
+      for (const gloss of meta.symbolSummaries) {
+        if (!listed.has(gloss.name)) {
+          issues.push({
+            level: "warning",
+            code: "wiki.gloss_unlisted_symbol",
+            page: pagePath,
+            message: `${pagePath} glosses a symbol not in its symbols array: ${gloss.name}`,
+          })
+        }
+      }
+    }
     for (const href of markdownLinkTargets(content)) {
       const target = href.split("#")[0]!
       if (!target || /^(https?:|mailto:|#)/.test(target) || target.startsWith("/")) continue

@@ -121,12 +121,19 @@ export async function requestWikiMaintenance(input: {
   action?: "enable" | "refresh"
   agent?: string
   active?: boolean
+  sessionID?: string
 }): Promise<WikiMaintenanceStatus> {
   const value = await readWikiResponse({
     ...input,
     endpoint: "experimental/wiki-maintenance" + (input.action ? "/" + input.action : ""),
     method: input.action ? "POST" : "GET",
-    body: input.action ? { agent: input.agent ?? "build", active: input.active ?? false } : undefined,
+    body: input.action
+      ? {
+          agent: input.agent ?? "build",
+          active: input.active ?? false,
+          ...(input.sessionID ? { sessionID: input.sessionID } : {}),
+        }
+      : undefined,
   })
   return WikiMaintenanceSchema.parse(value)
 }

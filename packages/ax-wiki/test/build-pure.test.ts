@@ -105,6 +105,35 @@ describe("buildPure (in-memory, no filesystem)", () => {
     expect(a.manifest.planHash).toBe(b.manifest.planHash)
     expect([...a.candidate.entries()]).toEqual([...b.candidate.entries()])
   })
+
+  test("records sanitized symbol glosses in the manifest", async () => {
+    const gen = generator()
+    gen.mockImplementation(async (request: WikiPageGenerationRequest) => ({
+      summary: `Source-backed guide for ${request.page.title} and its repository responsibilities.`,
+      body: `## Purpose\n\nThis page explains ${request.page.purpose} The claims are grounded in the selected repository files and should be verified against code before structural changes.\n\n## Change guidance\n\nStart with the cited source files, run the repository tests, and use code intelligence for exact callers and references.`,
+      symbols: ["coreValue"],
+      symbolSummaries: [
+        { name: "coreValue", summary: "Returns the core value." },
+        { name: " coreValue ", summary: "Duplicate gloss is dropped." },
+        { name: "", summary: "Nameless gloss is dropped." },
+        { name: "long", summary: `${"y".repeat(400)} tail` },
+      ],
+    }))
+    const result = await buildPure({ ...baseInput(), generator: gen })
+    expect(result.validation.ok).toBe(true)
+    const pages = Object.values(result.manifest.pages)
+    expect(pages.length).toBeGreaterThan(0)
+    for (const page of pages) {
+      // Deduped, trimmed, and length-clamped.
+      expect(page.symbolSummaries).toEqual([
+        { name: "coreValue", summary: "Returns the core value." },
+        { name: "long", summary: "y".repeat(300) },
+      ])
+      expect(page.symbolSummaries!.every((gloss) => gloss.summary.length <= 300)).toBe(true)
+    }
+    // The unlisted-name gloss is kept in the manifest but flagged.
+    expect(result.validation.issues.some((issue) => issue.code === "wiki.gloss_unlisted_symbol")).toBe(true)
+  })
 })
 
 describe("completeness truth table (gate C2/C4)", () => {

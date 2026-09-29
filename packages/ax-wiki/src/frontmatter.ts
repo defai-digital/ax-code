@@ -22,6 +22,39 @@ function unique(values: string[]): string[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort()
 }
 
+/** First gloss per trimmed name wins; empties are dropped. */
+function uniqueGlosses(glosses: Array<{ name: string; summary: string }>): Array<{ name: string; summary: string }> {
+  const seen = new Set<string>()
+  const output: Array<{ name: string; summary: string }> = []
+  for (const gloss of glosses) {
+    if (!gloss || typeof gloss.name !== "string" || typeof gloss.summary !== "string") continue
+    const name = gloss.name.trim()
+    const summary = gloss.summary.trim()
+    if (!name || !summary || seen.has(name)) continue
+    seen.add(name)
+    output.push({ name, summary })
+  }
+  return output
+}
+
+/** Only the machine-written inline JSON array parses; anything else yields []. */
+function parseGlosses(lines: string[], key: string): Array<{ name: string; summary: string }> {
+  const pattern = keyPattern(key)
+  let inline: string | undefined
+  for (const line of lines) {
+    const match = line.match(pattern)
+    if (match) inline = match[1]!.trim()
+  }
+  if (!inline || !inline.startsWith("[")) return []
+  try {
+    const parsed: unknown = JSON.parse(inline)
+    if (!Array.isArray(parsed)) return []
+    return uniqueGlosses(parsed as Array<{ name: string; summary: string }>)
+  } catch {
+    return []
+  }
+}
+
 function stripLeadingHeading(body: string): string {
   const trimmed = body.trim()
   if (!trimmed.startsWith("#")) return trimmed
@@ -44,6 +77,7 @@ export function renderWikiPage(input: {
 }): string {
   const symbols = unique(input.result.symbols ?? [])
   const sourcePaths = unique(input.sources.map((source) => source.path))
+  const glosses = uniqueGlosses(input.result.symbolSummaries ?? [])
   const body = stripLeadingHeading(input.result.body)
   const lines = [
     "---",
@@ -52,6 +86,9 @@ export function renderWikiPage(input: {
     "generated_by: ax-wiki",
     symbols.length ? "symbols:" : "symbols: []",
     ...symbols.map((symbol) => `  - ${jsonQuoted(symbol)}`),
+    // Glosses render as one inline JSON array: a valid YAML flow value that
+    // round-trips without a multi-line mapping parser.
+    `symbol_summaries: ${JSON.stringify(glosses)}`,
     sourcePaths.length ? "sources:" : "sources: []",
     ...sourcePaths.map((source) => `  - ${jsonQuoted(source)}`),
     "---",
@@ -148,12 +185,13 @@ export function parseFrontmatter(content: string): {
   summary?: string
   generatedBy?: string
   symbols: string[]
+  symbolSummaries: Array<{ name: string; summary: string }>
   sources: string[]
   body: string
 } {
   const text = content.replace(/^\uFEFF/, "")
   const lines = text.split(/\r?\n/)
-  if (lines[0]?.trim() !== "---") return { symbols: [], sources: [], body: content }
+  if (lines[0]?.trim() !== "---") return { symbols: [], symbolSummaries: [], sources: [], body: content }
   // The closing delimiter is a line of its own: `---foo` or a `---` prefix
   // inside a value never ends the frontmatter block.
   let end = -1
@@ -163,13 +201,14 @@ export function parseFrontmatter(content: string): {
       break
     }
   }
-  if (end < 0) return { symbols: [], sources: [], body: content }
+  if (end < 0) return { symbols: [], symbolSummaries: [], sources: [], body: content }
   const front = lines.slice(1, end)
   return {
     title: parseScalar(front, "title"),
     summary: parseScalar(front, "summary"),
     generatedBy: parseScalar(front, "generated_by"),
     symbols: parseList(front, "symbols"),
+    symbolSummaries: parseGlosses(front, "symbol_summaries"),
     sources: parseList(front, "sources"),
     // Leading blank lines are stripped; the first content line keeps its
     // indentation (a leading indented code block must survive the round trip).

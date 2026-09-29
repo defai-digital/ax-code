@@ -62,7 +62,18 @@ export type WikiPageGenerationResult = {
   body: string
   summary: string
   symbols?: string[]
+  symbolSummaries?: SymbolSummary[]
 }
+
+/** One model-written symbol gloss, recorded verbatim with its page. */
+export type SymbolSummary = {
+  name: string
+  summary: string
+}
+
+/** At most 20 glossed symbols per page; each gloss at most 300 characters. */
+export const SYMBOL_SUMMARIES_MAX = 20
+export const SYMBOL_SUMMARY_MAX = 300
 
 export type WikiPageGenerator = (request: WikiPageGenerationRequest) => Promise<WikiPageGenerationResult>
 
@@ -97,6 +108,8 @@ export type WikiManifestPage = {
   sourceHashes: Record<string, string>
   summary: string
   symbols: string[]
+  /** Absent on manifests written before symbol glosses existed. */
+  symbolSummaries?: SymbolSummary[]
   contentHash: string
   managedHash: string
   generatedAt: string

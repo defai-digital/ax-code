@@ -174,3 +174,30 @@ test("deleting a busy session releases its project maintenance blocker", async (
     },
   })
 })
+test("registration carries the invoking session through to generation", async () => {
+  await using tmp = await tmpdir({ git: true })
+  vi.spyOn(Agent, "get").mockImplementation(async (name) => ({
+    name,
+    mode: "primary",
+    native: true,
+    options: {},
+    permission: Permission.fromConfig({ "*": "allow" }),
+  }))
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({})
+      await WikiAutomatic.enable("build", false, session.id)
+      await WikiAutomatic.refresh("build")
+      await wait()
+      expect(state.build).toHaveBeenCalledTimes(1)
+      // Refresh without a session keeps the registered one.
+      expect(state.build.mock.calls[0][0]).toMatchObject({ sessionID: session.id })
+      const other = await Session.create({})
+      await WikiAutomatic.refresh("build", false, other.id)
+      await wait()
+      expect(state.build).toHaveBeenCalledTimes(2)
+      expect(state.build.mock.calls[1][0]).toMatchObject({ sessionID: other.id })
+    },
+  })
+})

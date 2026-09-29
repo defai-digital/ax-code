@@ -396,7 +396,8 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     const agent = local.agent.current().name
     sdk.directory
     const active = wikiDraftActive()
-    void wikiVisualization.enable(agent, active)
+    const sessionID = route.data.type === "session" ? route.data.sessionID : undefined
+    void wikiVisualization.enable(agent, active, sessionID)
   })
   const [sessionRoute, setSessionRoute] = createSignal<Component | undefined>()
   // Short-lived paired animation overlay. Manual preview is always

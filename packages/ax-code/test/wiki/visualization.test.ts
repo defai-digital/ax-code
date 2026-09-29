@@ -116,6 +116,30 @@ describe("Wiki visualization snapshot", () => {
       { from: "source:src/a.ts", to: "source:src/b.ts", kind: "uses", freshness: "unknown" },
     ])
   })
+  test("projects recorded symbol glosses onto inventoried symbol nodes", async () => {
+    await using tmp = await tmpdir()
+    await mkdir(path.join(tmp.path, "ax-wiki"))
+    await mkdir(path.join(tmp.path, "src"))
+    await writeFile(path.join(tmp.path, "src", "a.ts"), "export class Foo {\n  bar() {\n    return 1\n  }\n}\n")
+    await writeFile(
+      path.join(tmp.path, "ax-wiki", ".manifest.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        generator: "ax-wiki",
+        pages: {
+          "guide.md": {
+            title: "Guide",
+            sources: ["src/a.ts"],
+            sourceHashes: {},
+            symbolSummaries: [{ name: "Foo", summary: "Holds the balance." }],
+          },
+        },
+      }),
+    )
+    const graph = await WikiVisualization.snapshot(tmp.path)
+    expect(graph.nodes.find((n) => n.id === "symbol:src/a.ts#Foo")!.summary).toBe("Holds the balance.")
+    expect(graph.nodes.find((n) => n.id === "symbol:src/a.ts#Foo::bar")!.summary).toBe("")
+  })
   test("rejects missing, corrupt, oversized, symlinked manifests and unsafe directories", async () => {
     await using tmp = await tmpdir()
     await expect(WikiVisualization.snapshot(tmp.path)).rejects.toThrow(/No Wiki/)

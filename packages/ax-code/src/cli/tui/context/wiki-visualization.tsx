@@ -29,15 +29,17 @@ export const { use: useWikiVisualization, provider: WikiVisualizationProvider } 
     const lifetime = new AbortController()
     let currentAgent = "build"
     let currentActive = false
+    let currentSessionID: string | undefined
     let registration: AbortController | undefined
     const refreshFailures = new WeakSet<WikiViewerListener>()
     onCleanup(() => {
       lifetime.abort()
       registration?.abort()
     })
-    async function enable(agent: string, active = false) {
+    async function enable(agent: string, active = false, sessionID?: string) {
       currentAgent = agent
       currentActive = active
+      currentSessionID = sessionID
       registration?.abort()
       registration = new AbortController()
       const signal = AbortSignal.any([lifetime.signal, registration.signal])
@@ -63,6 +65,7 @@ export const { use: useWikiVisualization, provider: WikiVisualizationProvider } 
               signal,
               agent,
               active,
+              sessionID,
               action: registered ? undefined : "enable",
             })
             if (!isCurrent()) return
@@ -126,6 +129,7 @@ export const { use: useWikiVisualization, provider: WikiVisualizationProvider } 
                 action: "refresh",
                 agent: currentAgent,
                 active: currentActive,
+                sessionID: currentSessionID,
               })
               if (signal.aborted || !isCurrent()) return
               refreshFailures.delete(listener)

@@ -395,7 +395,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       const hash = edge.recordedHash ? `\nRecorded SHA-256: ${edge.recordedHash}` : ""
       return `${marker} ${other.label}\n${other.path} · ${edge.freshness}${hash}`
     })
-    const summary = node.summary ? `\nSummary: ${node.summary}` : ""
+    const summary = node.summary ? `\n${node.kind === "symbol" ? "Model summary" : "Summary"}: ${node.summary}` : ""
     const extra = node.detail ? `\nDetail: ${node.detail}` : ""
     const anchors =
       node.symbols.length > 0

@@ -11,7 +11,14 @@ const PAGE: WikiPlanPage = {
 }
 
 function render(
-  overrides: { title?: string; summary?: string; body?: string; symbols?: string[]; sources?: string[] } = {},
+  overrides: {
+    title?: string
+    summary?: string
+    body?: string
+    symbols?: string[]
+    symbolSummaries?: Array<{ name: string; summary: string }>
+    sources?: string[]
+  } = {},
 ) {
   return renderWikiPage({
     page: { ...PAGE, title: overrides.title ?? PAGE.title },
@@ -19,6 +26,7 @@ function render(
       summary: overrides.summary ?? "A summary that is comfortably longer than twenty characters.",
       body: overrides.body ?? "## Purpose\n\nEnough body content to pass the minimum length check for generated pages.",
       symbols: overrides.symbols ?? ["alpha", "beta"],
+      symbolSummaries: overrides.symbolSummaries,
     },
     sources: (overrides.sources ?? ["src/index.ts"]).map((source) => ({
       path: source,
@@ -138,5 +146,29 @@ describe("renderWikiPage injection guards", () => {
     const withNewline = render({ sources: ["src/a.ts\n- injected"] })
     // The line break is collapsed: no new list item line appears.
     expect(withNewline).not.toContain("\n- injected")
+  })
+
+  test("round-trips symbol glosses through an inline JSON array", () => {
+    const parsed = parseFrontmatter(
+      render({
+        symbolSummaries: [
+          { name: "alpha", summary: "Starts the runtime." },
+          { name: " beta ", summary: "  Stops the runtime.  " },
+          { name: "alpha", summary: "Duplicate gloss is dropped." },
+        ],
+      }),
+    )
+    expect(parsed.symbolSummaries).toEqual([
+      { name: "alpha", summary: "Starts the runtime." },
+      { name: "beta", summary: "Stops the runtime." },
+    ])
+  })
+
+  test("missing or malformed gloss frontmatter yields no glosses", () => {
+    expect(parseFrontmatter(render()).symbolSummaries).toEqual([])
+    const content = render().replace("symbol_summaries: []", 'symbol_summaries: [{"name": 42}]')
+    expect(parseFrontmatter(content).symbolSummaries).toEqual([])
+    const broken = render().replace("symbol_summaries: []", "symbol_summaries: [oops")
+    expect(parseFrontmatter(broken).symbolSummaries).toEqual([])
   })
 })
