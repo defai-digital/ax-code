@@ -9,8 +9,10 @@ import {
   SNOW_SPARKS,
   SNOW_SUN,
   SNOW_COLORS,
+  snowFlakeGlyph,
   snowFlakes,
   snowPineHalf,
+  snowShadowDX,
   snowSkyRgb,
   snowSparkBright,
   type SnowStyle,
@@ -19,6 +21,11 @@ import {
 type RGB = readonly [number, number, number]
 const hex = (value: string): RGB =>
   [1, 3, 5].map((offset) => parseInt(value.slice(offset, offset + 2), 16)) as [number, number, number]
+const mix = (a: RGB, b: RGB, t: number): RGB => [
+  Math.round(a[0] + (b[0] - a[0]) * t),
+  Math.round(a[1] + (b[1] - a[1]) * t),
+  Math.round(a[2] + (b[2] - a[2]) * t),
+]
 
 /**
  * Freeform HD renderer. The forest (gradient sky, orb, distant ridge,
@@ -98,12 +105,21 @@ export function renderSnowPixels(width: number, height: number, style: SnowStyle
     }
   }
   const orbAt = night ? SNOW_MOON : SNOW_SUN
-  disk(X(orbAt.x), Y(orbAt.y), Math.max(1, Math.round(Math.min(cw, ch) * 1.1)), orb)
+  const orbR = Math.max(1, Math.round(Math.min(cw, ch) * 1.1))
+  const skyAtOrb = snowSkyRgb(style, h <= 1 ? 0 : Y(orbAt.y) / (h - 1))
+  disk(X(orbAt.x), Y(orbAt.y), orbR * 2.1, mix(orb, skyAtOrb, 0.85))
+  disk(X(orbAt.x), Y(orbAt.y), orbR * 1.6, mix(orb, skyAtOrb, 0.62))
+  disk(X(orbAt.x), Y(orbAt.y), orbR, orb)
 
   const ground = hex(c.ground),
     snow = hex(c.snow)
   rect(0, Y(SNOW_GROUND_TOP), w, h, ground)
   const sparkDim = hex(c.sparkDim)
+  const shadowDX = snowShadowDX(style)
+  for (const tree of SNOW_PINES) {
+    rect(X(tree.x - 4 + shadowDX), Y(SNOW_GROUND_TOP + 1), X(tree.x + 5 + shadowDX), Y(SNOW_GROUND_TOP + 2), sparkDim)
+    rect(X(tree.x - 2 + shadowDX), Y(SNOW_GROUND_TOP + 2), X(tree.x + 3 + shadowDX), Y(SNOW_GROUND_TOP + 3), sparkDim)
+  }
   SNOW_SPARKS.forEach((spark, i) => {
     if (snowSparkBright(elapsedMs, i)) disk(X(spark.x + 0.5), Y(spark.y + 0.5), 2, snow)
     else disk(X(spark.x + 0.5), Y(spark.y + 0.5), 1, sparkDim)
@@ -132,12 +148,16 @@ export function renderSnowPixels(width: number, height: number, style: SnowStyle
   }
 
   const pine = hex(c.pine),
+    pineDeep = hex(c.pineDeep),
     trunk = hex(c.trunk)
   for (const tree of SNOW_PINES) {
     const apex = SNOW_BASE - tree.h + 1
     for (let r = 0; r < tree.h; r++) {
       const half = snowPineHalf(r)
-      rect(X(tree.x - half), Y(apex + r), X(tree.x + half + 1), Y(apex + r + 1), pine)
+      const edge = r % 2 === 0 ? snow : pine
+      rect(X(tree.x - half), Y(apex + r), X(tree.x + half + 1), Y(apex + r + 1), pineDeep)
+      rect(X(tree.x - half), Y(apex + r), X(tree.x - half + 1), Y(apex + r + 1), edge)
+      rect(X(tree.x + half), Y(apex + r), X(tree.x + half + 1), Y(apex + r + 1), edge)
     }
     rect(X(tree.x - 2), Y(apex), X(tree.x + 3), Y(apex + 2), snow)
     disk(X(tree.x - 1.5), Y(apex + 4), 2, snow)
@@ -147,7 +167,14 @@ export function renderSnowPixels(width: number, height: number, style: SnowStyle
 
   const flake = hex(c.flake)
   for (const drop of snowFlakes(elapsedMs)) {
-    disk(X(drop.x + 0.5), Y(drop.y + 0.5), drop.char === "@" ? 3 : drop.char === "*" ? 2 : 1, flake)
+    const glyph = snowFlakeGlyph(drop.char, elapsedMs)
+    const cx = X(drop.x + 0.5),
+      cy = Y(drop.y + 0.5)
+    disk(cx, cy, glyph === "@" ? 3 : glyph === "*" ? 2 : 1, flake)
+    if (glyph === "@") {
+      rect(cx - 4, cy, cx + 5, cy + 1, flake)
+      rect(cx, cy - 4, cx + 1, cy + 5, flake)
+    }
   }
 
   return pixels

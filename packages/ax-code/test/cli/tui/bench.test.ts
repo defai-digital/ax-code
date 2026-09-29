@@ -4,7 +4,12 @@ import {
   BENCH_ROWS,
   benchBackground,
   benchCenterX,
+  benchClouds,
+  benchFaintStarBright,
+  benchFaintStarRow,
+  benchHaloTicks,
   benchHorizon,
+  benchReflection,
   benchRows,
   benchStarGlyph,
   benchStarRow,
@@ -86,5 +91,58 @@ describe("Bench shared scene model", () => {
   test.each(["midnight-dream", "sunset-serenade"] as const)("%s renders deterministic frames", (style) => {
     expect(benchRows(70, 23, style, 1000)).toEqual(benchRows(70, 23, style, 1000))
     expect(benchRows(70, 23, style, 0)).not.toEqual(benchRows(70, 23, style, 1000))
+  })
+})
+
+describe("Bench beautification", () => {
+  test("sunset clouds drift deterministically while midnight has none", () => {
+    expect(benchClouds("midnight-dream", 0, 70)).toEqual([])
+    const first = benchClouds("sunset-serenade", 0, 70)
+    expect(first).toHaveLength(2)
+    expect(benchClouds("sunset-serenade", 0, 70)).toEqual(first)
+    expect(benchClouds("sunset-serenade", 2000, 70)).not.toEqual(first)
+    expect(benchClouds("sunset-serenade", -100, 70)).toEqual(first)
+    const rows = benchRows(70, 23, "sunset-serenade", 0)
+    expect(rows.flat().some((run) => run.color === "#f5b8a8")).toBe(true)
+    expect(
+      benchRows(70, 23, "midnight-dream", 0)
+        .flat()
+        .some((run) => run.color === "#f5b8a8"),
+    ).toBe(false)
+  })
+  test("midnight faint stars interleave the main field on an offset phase", () => {
+    expect(benchFaintStarRow(7, 18)).toBe(2)
+    expect(benchFaintStarBright(0, 7)).toBe(true)
+    expect(benchFaintStarBright(100, 7)).toBe(false)
+    const night = benchRows(70, 23, "midnight-dream", 0)
+    const line = (row: number) => night[row]!.map((run) => run.text).join("")
+    expect(line(2)[7]).toBe("*")
+    const day = benchRows(70, 23, "sunset-serenade", 0)
+    expect(day[2]!.map((run) => run.text).join("")[7]).not.toBe("*")
+  })
+  test("sun reflection shimmers under the body with the wave phase", () => {
+    const cells = benchReflection(0, 70, 18)
+    expect(cells.length).toBeGreaterThan(0)
+    for (const cell of cells) {
+      expect(cell.x).toBeGreaterThanOrEqual(51)
+      expect(cell.x).toBeLessThanOrEqual(53)
+      expect(cell.y).toBeGreaterThanOrEqual(18)
+      expect(cell.y).toBeLessThanOrEqual(19)
+    }
+    expect(benchReflection(300, 70, 18)).not.toEqual(cells)
+    expect(benchHaloTicks(49, 1)).toContainEqual({ x: 48, y: 3 })
+    const rows = benchRows(70, 23, "midnight-dream", 0)
+    expect(rows[3]!.map((run) => run.text).join("")[48]).toBe(":")
+  })
+  test("palm coconuts, shells, and wet sand decorate both styles", () => {
+    for (const style of ["midnight-dream", "sunset-serenade"] as const) {
+      const rows = benchRows(70, 23, style, 0)
+      const text = rows.map((r) => r.map((c) => c.text).join("")).join("\n")
+      expect(text).toContain("o")
+      const line = (row: number) => rows[row]!.map((run) => run.text).join("")
+      expect(line(21)[10]).toBe("o")
+      expect(line(21)[45]).toBe("*")
+      expect(rows.flat().some((run) => run.color === (style === "midnight-dream" ? "#a8824f" : "#c08a5a"))).toBe(true)
+    }
   })
 })

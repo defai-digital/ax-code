@@ -5,6 +5,12 @@ import {
   mahjongMatch,
   mahjongStep,
   mahjongEndingBlink,
+  mahjongLatestMarker,
+  mahjongRank,
+  mahjongRankColor,
+  mahjongRankedLine,
+  mahjongSeatLabel,
+  mahjongWallFill,
 } from "../../../src/cli/tui/component/mahjong-view-model"
 import { renderTextScenePixels } from "../../../src/cli/tui/component/text-scene-pixels"
 import { digitalCodePixelPlayer } from "../../../src/cli/tui/component/digital-code-pixels"
@@ -39,6 +45,47 @@ test.each(["mahjong-match", "mahjong-ending"] as const)("%s has a safe text fall
     for (const row of rows) expect(row.map((run) => run.text).join("")).toMatch(new RegExp(`^[\\x20-\\x7e]{${w}}$`))
   }
 })
+test("open tiles wear suit colors and the active seat takes the spotlight", () => {
+  const rows = mahjongRows(76, 25, "mahjong-match", 1200)
+  expect(rows.flat().some((run) => run.color === "#2563eb")).toBe(true)
+  expect(mahjongSeatLabel("WEST")).toEqual({ x: 5, y: 8, text: "WEST" })
+  const line = (row: number) => rows[row]!.map((run) => run.text).join("")
+  expect(line(8).slice(5, 9)).toBe("WEST")
+  expect(rows[8]!.some((run) => run.background === "#065f46")).toBe(true)
+  expect(line(11)).toContain("-- MATCH VIEW --")
+})
+
+test("latest discard marker and wall bar track the match timeline", () => {
+  expect(mahjongLatestMarker(0)).toBeNull()
+  expect(mahjongLatestMarker(1200)).toEqual({ x: 31, y: 7 })
+  expect(mahjongWallFill(84)).toBe(20)
+  expect(mahjongWallFill(0)).toBe(0)
+  const rows = mahjongRows(76, 25, "mahjong-match", 1200)
+  const line = (row: number) => rows[row]!.map((run) => run.text).join("")
+  expect(line(7).slice(31, 33)).toBe("**")
+  expect(line(22)).toContain("WALL: 81")
+  expect(line(22)).toContain("[" + "#".repeat(19) + "-]")
+})
+
+test("ending ranks seats with medals between decorative rules", () => {
+  expect([mahjongRank(0), mahjongRank(1), mahjongRank(2), mahjongRank(3)]).toEqual([1, 3, 4, 2])
+  expect(mahjongRankColor(1)).toBe("#fbbf24")
+  expect(mahjongRankedLine(0)).toBe("[1] SOUTH    32000 PTS")
+  const rows = mahjongRows(76, 25, "mahjong-ending", 400)
+  const line = (row: number) => rows[row]!.map((run) => run.text).join("")
+  expect(line(9)).toContain("[1] SOUTH    32000 PTS")
+  expect(line(5)).toContain("- - - - - -")
+  expect(line(17)).toContain("- - - - - -")
+})
+
+test.each(["mahjong-match", "mahjong-ending"] as const)("%s frames an inner border", (style) => {
+  const rows = mahjongRows(76, 25, style, 1200)
+  const line = (row: number) => rows[row]!.map((run) => run.text).join("")
+  expect(line(2)[3]).toBe("+")
+  expect(line(23)[72]).toBe("+")
+  expect(rows.flat().some((run) => run.color === "#047857")).toBe(true)
+})
+
 test("ending is a score ledger without returning to match playback", () => {
   for (const ms of [0, 3000, 100000]) {
     const output = text(mahjongRows(76, 25, "mahjong-ending", ms))

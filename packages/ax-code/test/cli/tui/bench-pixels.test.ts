@@ -65,6 +65,29 @@ test("midnight stars twinkle with the shared phase while sunset has none", () =>
   expect(pixel(day, 35, 30)).not.toEqual([255, 205, 117])
 })
 
+test("sun halo and shimmering reflection decorate both styles", () => {
+  for (const style of ["midnight-dream", "sunset-serenade"] as const) {
+    const first = renderBenchPixels(WIDTH, HEIGHT, style, 0)
+    // The halo ring beside the body is neither raw sky nor body ink.
+    const sky = pixel(first, 100, 52)
+    const halo = style === "midnight-dream" ? pixel(first, 525, 52) : pixel(first, 525, 270)
+    expect(halo).not.toEqual(sky)
+    expect(halo).not.toEqual(style === "midnight-dream" ? [226, 234, 252] : [255, 205, 117])
+    // The reflection shimmers with the shared wave phase.
+    const light: readonly [number, number, number] = style === "midnight-dream" ? [226, 234, 252] : [255, 205, 117]
+    expect(pixel(first, 525, 370)).toEqual(light)
+    expect(pixel(renderBenchPixels(WIDTH, HEIGHT, style, 300), 525, 370)).not.toEqual(light)
+  }
+})
+
+test("sunset clouds drift while midnight keeps a clear sky", () => {
+  const cloud: readonly [number, number, number] = [245, 184, 168]
+  const sunset = renderBenchPixels(WIDTH, HEIGHT, "sunset-serenade", 0)
+  expect(pixel(sunset, 40, 80)).toEqual(cloud)
+  expect(pixel(renderBenchPixels(WIDTH, HEIGHT, "sunset-serenade", 4000), 40, 80)).not.toEqual(cloud)
+  expect(pixel(renderBenchPixels(WIDTH, HEIGHT, "midnight-dream", 0), 40, 80)).not.toEqual(cloud)
+})
+
 test("Bench stays within the HD bound", () => {
   const frame = createDigitalCodePixels(3840, 2160, "down", undefined, "midnight-dream")
   expect([frame.width, frame.height]).toEqual([1920, 1080])

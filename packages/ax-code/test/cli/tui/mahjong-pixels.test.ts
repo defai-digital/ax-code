@@ -57,6 +57,25 @@ test("ending keeps a static ledger with a shared blink phase", () => {
   expect(pixel(blink, 385, 430)).toEqual([251, 191, 36])
 })
 
+test("match spotlights the turn seat with suit pips and a wall bar", () => {
+  const moving = renderMahjongPixels(WIDTH, HEIGHT, "mahjong-match", 1200)
+  // Suit pips tint the open faces.
+  expect(countColor(moving, [37, 99, 235])).toBeGreaterThan(0)
+  // The WEST label (scene 5,8) sits on a spotlight pill at step 3.
+  expect(pixel(moving, 45, 170)).toEqual([6, 95, 70])
+  // The wall bar (scene row 22) fills 19 of 20 cells at wall 81.
+  expect(pixel(moving, 200, 450)).toEqual([52, 211, 153])
+  expect(pixel(moving, 345, 450)).toEqual([4, 120, 87])
+  // The inner border frames the table.
+  expect(pixel(moving, 30, 200)).toEqual([4, 120, 87])
+})
+
+test("ending medals the winner between decorative rules", () => {
+  const first = renderMahjongPixels(WIDTH, HEIGHT, "mahjong-ending", 0)
+  expect(pixel(first, 245, 190)).toEqual([251, 191, 36])
+  expect(pixel(first, 30, 200)).toEqual([4, 120, 87])
+})
+
 test("Mahjong stays within the HD bound", () => {
   const frame = createDigitalCodePixels(3840, 2160, "down", undefined, "mahjong-match")
   expect([frame.width, frame.height]).toEqual([1920, 1080])

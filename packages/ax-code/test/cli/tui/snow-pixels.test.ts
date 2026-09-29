@@ -37,6 +37,22 @@ test.each(["snowfall", "winter-night"] as const)("%s paints the shared forest an
   expect(pixel(renderSnowPixels(WIDTH, HEIGHT, style, 300), 55, 350)).toEqual(sparkDim)
 })
 
+test.each(["snowfall", "winter-night"] as const)("%s halos the orb and shadows the ground", (style) => {
+  const day = style === "snowfall"
+  const first = renderSnowPixels(WIDTH, HEIGHT, style, 0)
+  // The halo ring is neither raw sky nor orb ink.
+  const sky = pixel(first, 370, 20)
+  const halo = pixel(first, day ? 585 : 145, 20)
+  expect(halo).not.toEqual(sky)
+  expect(halo).not.toEqual(day ? [245, 233, 200] : [232, 238, 248])
+  // Pine shadows pool on the ground away from the orb side.
+  const shadow: readonly [number, number, number] = day ? [174, 185, 204] : [74, 90, 120]
+  expect(pixel(first, 250, 350)).toEqual(shadow)
+  // The third peak fills the gap between the right pines.
+  const ridge: readonly [number, number, number] = day ? [124, 143, 180] : [44, 60, 96]
+  expect(pixel(first, 560, 240)).toEqual(ridge)
+})
+
 test("Snow stays within the HD bound", () => {
   const frame = createDigitalCodePixels(3840, 2160, "down", undefined, "snowfall")
   expect([frame.width, frame.height]).toEqual([1920, 1080])

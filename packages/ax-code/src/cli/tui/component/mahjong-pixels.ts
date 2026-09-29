@@ -1,18 +1,26 @@
 import {
   MAHJONG_COLUMNS,
   MAHJONG_ENDING_LAYOUT,
+  MAHJONG_INNER,
   MAHJONG_MATCH_LAYOUT,
   MAHJONG_ROWS,
   MAHJONG_SCORES,
   MAHJONG_TABLE,
+  MAHJONG_WALL_BAR_LEN,
+  MAHJONG_WALL_BAR_X,
   MAHJONG_COLORS,
   mahjongCenterX,
   mahjongEndingBlink,
   mahjongFeltRgb,
+  mahjongLatestMarker,
   mahjongMatch,
-  mahjongScoreLine,
+  mahjongRank,
+  mahjongRankColor,
+  mahjongRankedLine,
+  mahjongSeatLabel,
   mahjongSuitColor,
   mahjongTileFace,
+  mahjongWallFill,
   type MahjongStyle,
 } from "./mahjong-view-model"
 import { blitGlyphText } from "./text-scene-glyphs"
@@ -20,6 +28,11 @@ import { blitGlyphText } from "./text-scene-glyphs"
 type RGB = readonly [number, number, number]
 const hex = (value: string): RGB =>
   [1, 3, 5].map((offset) => parseInt(value.slice(offset, offset + 2), 16)) as [number, number, number]
+const mix = (a: RGB, b: RGB, t: number): RGB => [
+  Math.round(a[0] + (b[0] - a[0]) * t),
+  Math.round(a[1] + (b[1] - a[1]) * t),
+  Math.round(a[2] + (b[2] - a[2]) * t),
+]
 
 /**
  * Freeform HD renderer. Unlike the glyph rasterizer used by the remaining text
@@ -98,13 +111,19 @@ export function renderMahjongPixels(width: number, height: number, style: Mahjon
   }
 
   // Table frame from the shared scene-space bounds.
-  const frame = hex(c.frame)
+  const frame = hex(c.frame),
+    frameDim = hex(c.frameDim)
   const table = MAHJONG_TABLE
   const frameT = Math.max(1, Math.round(Math.min(cw, ch) * 0.15))
   rect(X(table.left), Y(table.top), X(table.right + 1), Y(table.top) + frameT, frame)
   rect(X(table.left), Y(table.bottom + 1) - frameT, X(table.right + 1), Y(table.bottom + 1), frame)
   rect(X(table.left), Y(table.top), X(table.left) + frameT, Y(table.bottom + 1), frame)
   rect(X(table.right + 1) - frameT, Y(table.top), X(table.right + 1), Y(table.bottom + 1), frame)
+  const inner = MAHJONG_INNER
+  rect(X(inner.left), Y(inner.top), X(inner.right + 1), Y(inner.top) + frameT, frameDim)
+  rect(X(inner.left), Y(inner.bottom + 1) - frameT, X(inner.right + 1), Y(inner.bottom + 1), frameDim)
+  rect(X(inner.left), Y(inner.top), X(inner.left) + frameT, Y(inner.bottom + 1), frameDim)
+  rect(X(inner.right + 1) - frameT, Y(inner.top), X(inner.right + 1), Y(inner.bottom + 1), frameDim)
 
   const ink = hex(c.ink),
     accent = hex(c.accent),
@@ -138,6 +157,18 @@ export function renderMahjongPixels(width: number, height: number, style: Mahjon
     rect(x0, y0 + tileH - et, x0 + tileW, y0 + tileH, edge)
     rect(x0, y0, x0 + et, y0 + tileH, edge)
     rect(x0 + tileW - et, y0, x0 + tileW, y0 + tileH, edge)
+    // Top highlight and bottom shadow give the ivory face a carved relief.
+    const white: RGB = [255, 255, 255]
+    rect(x0 + et, y0 + et, x0 + tileW - et, y0 + et + 1, mix(face, white, 0.6))
+    rect(x0 + et, y0 + tileH - et - 1, x0 + tileW - et, y0 + tileH - et, mix(face, edge, 0.35))
+    // Rounded corners blend back into the felt gradient.
+    const cut = Math.max(1, Math.round(Math.min(tileW, tileH) * 0.08))
+    const feltTop = mahjongFeltRgb(h <= 1 ? 0 : Math.floor(y0) / (h - 1))
+    const feltBottom = mahjongFeltRgb(h <= 1 ? 0 : Math.min(h - 1, Math.ceil(y0 + tileH) - 1) / (h - 1))
+    rect(x0, y0, x0 + cut, y0 + 1, feltTop)
+    rect(x0 + tileW - cut, y0, x0 + tileW, y0 + 1, feltTop)
+    rect(x0, y0 + tileH - 1, x0 + cut, y0 + tileH, feltBottom)
+    rect(x0 + tileW - cut, y0 + tileH - 1, x0 + tileW, y0 + tileH, feltBottom)
     const suit = hex(mahjongSuitColor(tileIndex))
     const glyph = mahjongTileFace(tileIndex)
     const cx = x0 + tileW / 2,
@@ -176,9 +207,16 @@ export function renderMahjongPixels(width: number, height: number, style: Mahjon
     blit(mahjongCenterX(title), ending.titleRow, title, accent)
     const ledger = "FINAL POINT LEDGER"
     blit(mahjongCenterX(ledger), ending.ledgerTitleRow, ledger, info)
+    const rule = "- - - - - -"
+    blit(mahjongCenterX(rule), ending.ledgerTitleRow - 1, rule, frame)
+    blit(mahjongCenterX(rule), ending.thanksRow - 2, rule, frame)
     for (let i = 0; i < MAHJONG_SCORES.length; i++) {
-      const line = mahjongScoreLine(i)
-      blit(mahjongCenterX(line), ending.firstScoreRow + i * ending.scoreRowGap, line, i === 0 ? accent : ink)
+      const rank = mahjongRank(i)
+      const line = mahjongRankedLine(i)
+      const color = hex(mahjongRankColor(rank))
+      const row = ending.firstScoreRow + i * ending.scoreRowGap
+      blit(mahjongCenterX(line), row, line, color)
+      disk(X(mahjongCenterX(line) - 2.5), Y(row + 0.5), Math.max(1, Math.round(Math.min(cw, ch) * 0.35)), color)
     }
     const thanks = "THANK YOU FOR PLAYING"
     blit(mahjongCenterX(thanks), ending.thanksRow, thanks, good)
@@ -189,26 +227,54 @@ export function renderMahjongPixels(width: number, height: number, style: Mahjon
   } else {
     const layout = MAHJONG_MATCH_LAYOUT
     const match = mahjongMatch(elapsedMs)
+    const seat = (name: string) => {
+      const label = mahjongSeatLabel(name)
+      if (match.turn === name) {
+        rect(X(label.x - 1), Y(label.y), X(label.x + label.text.length + 1), Y(label.y + 1), back)
+        blit(label.x, label.y, label.text, accent)
+      } else {
+        blit(label.x, label.y, label.text, ink)
+      }
+    }
     const title = "MAHJONG MATCH"
     blit(mahjongCenterX(title), layout.titleRow, title, accent)
-    const north = "NORTH"
-    blit(mahjongCenterX(north), layout.northLabelRow, north, ink)
+    seat("NORTH")
     tiles(layout.northHandX, layout.northHandRow, match.hands[2]!, true)
     tiles(layout.discardsX, layout.northDiscardsRow, match.discards[2]!)
-    blit(layout.westX, layout.sideLabelRow, "WEST", ink)
-    blit(layout.eastX, layout.sideLabelRow, "EAST", ink)
+    seat("WEST")
+    seat("EAST")
     tiles(layout.westX, layout.sideHandRow, match.hands[3]!.slice(0, 4), true)
     tiles(layout.eastX, layout.sideHandRow, match.hands[1]!.slice(0, 4), true)
     tiles(layout.westX, layout.sideDiscardsRow, match.discards[3]!)
     tiles(layout.eastX, layout.sideDiscardsRow, match.discards[1]!)
-    const view = "MATCH VIEW"
+    const view = "-- MATCH VIEW --"
     blit(mahjongCenterX(view), layout.viewRow, view, info)
     tiles(layout.discardsX, layout.southDiscardsRow, match.discards[0]!)
-    const south = "YOU (SOUTH)"
-    blit(mahjongCenterX(south), layout.southLabelRow, south, ink)
+    seat("SOUTH")
     tiles(layout.southHandX, layout.southHandRow, match.hands[0]!)
+    const marker = mahjongLatestMarker(elapsedMs)
+    if (marker) rect(X(marker.x), Y(marker.y + 0.75), X(marker.x + 2), Y(marker.y + 1), accent)
     blit(mahjongCenterX(match.action), layout.actionRow, match.action, info)
     blit(layout.westX, layout.statusRow, `WALL: ${match.wall}`, good)
+    const fill = mahjongWallFill(match.wall)
+    const barTop = Y(layout.statusRow),
+      barBottom = Y(layout.statusRow + 1)
+    rect(X(MAHJONG_WALL_BAR_X + 1), barTop, X(MAHJONG_WALL_BAR_X + 1 + fill), barBottom, good)
+    rect(
+      X(MAHJONG_WALL_BAR_X + 1 + fill),
+      barTop,
+      X(MAHJONG_WALL_BAR_X + 1 + MAHJONG_WALL_BAR_LEN),
+      barBottom,
+      frameDim,
+    )
+    rect(X(MAHJONG_WALL_BAR_X), barTop, X(MAHJONG_WALL_BAR_X) + 2, barBottom, ink)
+    rect(
+      X(MAHJONG_WALL_BAR_X + 1 + MAHJONG_WALL_BAR_LEN),
+      barTop,
+      X(MAHJONG_WALL_BAR_X + 2 + MAHJONG_WALL_BAR_LEN) - 2,
+      barBottom,
+      ink,
+    )
     blit(layout.turnX, layout.statusRow, `TURN: ${match.turn}`, accent)
   }
 

@@ -31,6 +31,7 @@ export const SNOW_MOON = { x: 14.5, y: 2 } as const
 export const SNOW_RIDGE = [
   { ax: 36, ay: 8, rows: 6 },
   { ax: 15, ay: 6, rows: 6 },
+  { ax: 56, ay: 9, rows: 4 },
 ] as const
 
 /** Palette shared by the text and pixel renderers. */
@@ -39,6 +40,7 @@ export const SNOW_COLORS = {
     sky: "#8a9bb8",
     skyBottom: "#d8e2f0",
     pine: "#2f6b4f",
+    pineDeep: "#23563f",
     trunk: "#6b4f3a",
     snow: "#ffffff",
     flake: "#ffffff",
@@ -51,6 +53,7 @@ export const SNOW_COLORS = {
     sky: "#8ba0c8",
     skyBottom: "#24385e",
     pine: "#1d4032",
+    pineDeep: "#16352a",
     trunk: "#3a2c22",
     snow: "#dfe8f5",
     flake: "#e8eef8",
@@ -106,6 +109,32 @@ export function snowSparkBright(elapsedMs: number, i: number): boolean {
   return (Math.floor(Math.max(0, elapsedMs) / 250) + i) % 2 === 0
 }
 
+/** Flake twinkle glyph on a shared 500ms beat; far flakes stay dim. */
+export function snowFlakeGlyph(char: string, elapsedMs: number): string {
+  const beat = Math.floor(Math.max(0, elapsedMs) / 500) % 2
+  if (char === "@") return beat ? "*" : "@"
+  if (char === "*") return beat ? "." : "*"
+  return char
+}
+
+/** Static halo ticks around the sun/moon orb. */
+export function snowHaloTicks(style: SnowStyle) {
+  const orb = style === "winter-night" ? SNOW_MOON : SNOW_SUN
+  const ox = Math.round(orb.x),
+    oy = Math.round(orb.y)
+  return [
+    { x: ox - 4, y: oy },
+    { x: ox + 4, y: oy },
+    { x: ox, y: oy - 2 },
+    { x: ox, y: oy + 2 },
+  ]
+}
+
+/** Ground shadows pool away from the orb side. */
+export function snowShadowDX(style: SnowStyle): number {
+  return style === "snowfall" ? -1 : 1
+}
+
 export function snowRows(columns: number, rows: number, style: SnowStyle, elapsedMs: number): FujiRun[][] {
   const width = Math.max(0, Math.floor(columns)),
     height = Math.max(0, Math.floor(rows))
@@ -130,12 +159,21 @@ export function snowRows(columns: number, rows: number, style: SnowStyle, elapse
   if (night) {
     paint(3, 0, ".    *      .       *      .", colors.sky)
     paint(28, 1, "*      .      *", colors.sky)
+    paint(45, 1, ".      *", colors.sky)
   }
   paint(Math.round(orb.x) - 2, Math.round(orb.y) - 1, ".-.", colors.orb)
   paint(Math.round(orb.x) - 3, Math.round(orb.y), "(   )", colors.orb)
+  for (const tick of snowHaloTicks(style)) {
+    paint(tick.x, tick.y, ".", colors.orb)
+  }
   paint(0, SNOW_GROUND_TOP, " ".repeat(SNOW_COLUMNS), colors.ground, colors.ground)
   for (let y = SNOW_GROUND_TOP + 1; y < SNOW_ROWS; y++) {
     paint(0, y, " ".repeat(SNOW_COLUMNS), colors.ground, colors.ground)
+  }
+  const shadowDX = snowShadowDX(style)
+  for (const pine of SNOW_PINES) {
+    paint(pine.x - 4 + shadowDX, SNOW_GROUND_TOP + 1, " ".repeat(9), colors.sparkDim, colors.sparkDim)
+    paint(pine.x - 2 + shadowDX, SNOW_GROUND_TOP + 2, " ".repeat(5), colors.sparkDim, colors.sparkDim)
   }
   SNOW_SPARKS.forEach((spark, i) => {
     const glint = snowSparkBright(elapsedMs, i)
@@ -152,7 +190,10 @@ export function snowRows(columns: number, rows: number, style: SnowStyle, elapse
     const apex = SNOW_BASE - pine.h + 1
     for (let r = 0; r < pine.h; r++) {
       const half = snowPineHalf(r)
-      paint(pine.x - half, apex + r, "/" + " ".repeat(Math.max(0, half * 2 - 1)) + "\\", colors.pine, colors.pine)
+      const edge = r % 2 === 0 ? colors.snow : colors.pine
+      paint(pine.x - half, apex + r, "/", edge, colors.pine)
+      paint(pine.x - half + 1, apex + r, " ".repeat(Math.max(0, half * 2 - 1)), colors.pineDeep, colors.pineDeep)
+      paint(pine.x + half, apex + r, "\\", edge, colors.pine)
     }
     paint(pine.x, apex, "*", colors.snow, colors.pine)
     paint(pine.x - 2, apex + 3, "*", colors.snow, colors.pine)
@@ -163,7 +204,7 @@ export function snowRows(columns: number, rows: number, style: SnowStyle, elapse
     paint(pine.x - 1, SNOW_BASE + 2, "||", colors.trunk)
   }
   for (const flake of snowFlakes(elapsedMs)) {
-    paint(flake.x, flake.y, flake.char, colors.flake)
+    paint(flake.x, flake.y, snowFlakeGlyph(flake.char, elapsedMs), colors.flake)
   }
   return grid.map((row) => {
     const runs: FujiRun[] = []

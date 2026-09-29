@@ -41,9 +41,12 @@ the native ASCII fallback. Ghostty uses the same capability checks; its name
 alone does not enable graphics.
 
 Bench uses a tropical shoreline with swaying palm fronds and rolling waves.
-Midnight Dream has a moonlit navy sky, twinkling stars, and a fixed moon;
-Sunset Serenade has warm colors and a sun that descends toward the horizon
-and settles while the surf keeps moving. Both use freeform HD painting
+Midnight Dream has a moonlit navy sky, twinkling stars plus a faint offset
+star layer, and a fixed haloed moon; Sunset Serenade has warm colors,
+drifting clouds, and a haloed sun that descends toward the horizon and
+settles while the surf keeps moving. The sun and moon cast a shimmering
+reflection on the surf, the palm carries coconuts, and the sand holds shells
+above a darker wet band. Both use freeform HD painting
 (gradient sky, stars, sun/moon disk, palm, surf, sand, title) driven by the
 same scene model — palette, layout anchors, and elapsed-time phases — as the
 text fallback, so both show the same scene for the same millisecond, bounded
@@ -85,11 +88,13 @@ fonts are not required. The animation resizes with the terminal. Escape or a mou
 click dismisses playback; ending playback captures input until it finishes so
 keystrokes and pasted text cannot start new work during shutdown.
 
-Mahjong uses a dark green table, concealed opponent hands, visible player tiles,
-rotating discards, wall count, and turn indicator. This is a decorative match
-animation, not an interactive game. Its ending shows a fixed illustrative score
-ledger and never starts another round during exit. Preview with `/mahjong` or
-`/mahjong-ending` (also searchable as `Mahjong` in Ctrl+P).
+Mahjong uses a dark green table with an inner border, concealed opponent hands,
+suit-colored visible tiles, rotating discards with a latest-discard marker, a
+wall progress bar, and a spotlight pill on the turn seat. This is a decorative
+match animation, not an interactive game. Its ending shows a fixed ranked medal
+ledger between decorative rules and never starts another round during exit.
+Preview with `/mahjong` or `/mahjong-ending` (also searchable as `Mahjong` in
+Ctrl+P).
 
 On confirmed local graphics terminals, Mahjong uses freeform HD painting
 (felt gradient, table frame, labels, tile faces with pips, bars, and honor
@@ -116,12 +121,14 @@ particle stages, rocket paths, lantern paths, and town lights come from one
 scene model shared by the text fallback and the freeform HD painting, bounded
 to 1920x1080. Preview with `/festival` or `/festival-ending`.
 
-Snow opens with pine snowfall under a pale sun and ends on a starry winter
-night over the same forest. Snow-capped ridge peaks stand behind the pines
-while near and far flakes fall with gusting sway below the static celestial
-rows and the ground sparks glint; the full sky loops with the flake cycle.
-Text fallback and freeform HD painting share the scene model, bounded to
-1920x1080. Preview with `/snow` or `/snow-ending`.
+Snow opens with pine snowfall under a pale haloed sun and ends on a starry
+winter night over the same forest. Three snow-capped ridge peaks stand behind
+the pines while near and far flakes fall with gusting sway and twinkle below
+the static celestial rows; pine tiers alternate snow and pine edges over deep
+interiors, shadows pool beneath the trunks, and the ground sparks glint. The
+full sky loops with the flake cycle. Text fallback and freeform HD painting
+share the scene model, bounded to 1920x1080. Preview with `/snow` or
+`/snow-ending`.
 
 Volcano opens on an eruption — breathing heat halo, pulsing crater with lit
 rim lips, surging lava flow, drifting smoke, shimmering lava pool, and rising
