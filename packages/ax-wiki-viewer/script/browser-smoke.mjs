@@ -89,6 +89,32 @@ try {
     ),
     true,
   )
+  await page.getByRole("searchbox").fill("s")
+  assert.equal(await page.locator(".list button").count(), 2)
+  assert.match(await page.getByRole("status").innerText(), /2 of 4 match/)
+  await page.keyboard.press("Enter")
+  assert.match(await page.locator(".Detail").innerText(), /Source: src\/b\.ts/)
+  await page.evaluate(() => document.querySelector("svg").dispatchEvent(new MouseEvent("click", { bubbles: true })))
+  assert.equal(await page.locator(".list button").count(), 2)
+  await page.getByRole("searchbox").focus()
+  await page.keyboard.press("Enter")
+  assert.match(await page.locator(".Detail").innerText(), /Source: src\/a\.ts/)
+  await page.getByRole("searchbox").fill("")
+  assert.equal(await page.locator(".list button").count(), 4)
+  await page.locator(".list button").first().focus()
+  assert.equal(
+    await page.evaluate(
+      () => [...document.querySelectorAll("svg g.node")].filter((g) => g.getAttribute("opacity") === "0.15").length,
+    ),
+    2,
+  )
+  await page.getByRole("searchbox").focus()
+  assert.equal(
+    await page.evaluate(
+      () => [...document.querySelectorAll("svg g.node")].filter((g) => g.getAttribute("opacity") === "0.15").length,
+    ),
+    0,
+  )
   await page.getByRole("button", { name: "Show all / reset" }).click()
   await page.locator(".list button").filter({ hasText: "page: Architecture" }).focus()
   await page.keyboard.press("Enter")

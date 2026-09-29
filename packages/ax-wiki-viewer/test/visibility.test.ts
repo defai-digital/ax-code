@@ -154,6 +154,21 @@ test("focus direction reads outgoing, incoming, unrelated, and self-loop edges",
   expect(focusDirection({ from: "a", to: "a" }, "a")).toBeNull()
 })
 
+test("match candidates ignore the query but respect kind and freshness filters", () => {
+  const queried = { ...defaultFilters(), query: "guide" }
+  const counts = viewCounts(graph, queried)
+  expect(counts.matchCandidates).toBe(5)
+  expect(counts.visibleNodes).toBe(1)
+  expect(countsBarText(counts, "single-node", "guide")).toContain("1 of 5 match")
+  const kinds = { ...defaultFilters(), kinds: { page: true, source: false }, query: "s" }
+  expect(viewCounts(graph, kinds).matchCandidates).toBe(2)
+})
+
+test("blank queries add no match suffix", () => {
+  const counts = viewCounts(graph, { ...defaultFilters(), query: "   " })
+  expect(countsBarText(counts, "ok", "   ")).toBe("5 of 5 nodes · 4 of 4 edges in view")
+})
+
 test("counting never mutates its inputs", () => {
   const filters = defaultFilters()
   const frozen = structuredClone(filters)

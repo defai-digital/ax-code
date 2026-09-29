@@ -58,6 +58,8 @@ export type ViewCounts = {
   byKind: Record<NodeKind, number>
   /** Snapshot totals per freshness; chip labels. */
   byFreshness: Record<FreshnessState, number>
+  /** Nodes passing kind and freshness filters; the match-count denominator. */
+  matchCandidates: number
 }
 
 /**
@@ -69,9 +71,11 @@ export function viewCounts(graph: WikiGraph, filters: ViewFilters): ViewCounts {
   const byKind: Record<NodeKind, number> = { page: 0, source: 0 }
   const byFreshness: Record<FreshnessState, number> = { fresh: 0, stale: 0, unknown: 0 }
   const visible = new Set<string>()
+  let matchCandidates = 0
   for (const node of graph.nodes) {
     byKind[node.kind]++
     byFreshness[node.freshness]++
+    if (filters.kinds[node.kind] && filters.freshness[node.freshness]) matchCandidates++
     if (isNodeVisible(node, filters)) visible.add(node.id)
   }
   let visibleEdges = 0
@@ -87,6 +91,7 @@ export function viewCounts(graph: WikiGraph, filters: ViewFilters): ViewCounts {
     omittedEdges: graph.omitted.edges,
     byKind,
     byFreshness,
+    matchCandidates,
   }
 }
 
@@ -107,13 +112,14 @@ function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`
 }
 
-export function countsBarText(counts: ViewCounts, state: ViewState): string {
+export function countsBarText(counts: ViewCounts, state: ViewState, query = ""): string {
   // Compact bar form: "N of M nodes · N of M edges in view".
   let text = `${counts.visibleNodes} of ${counts.recordedNodes} nodes · ${counts.visibleEdges} of ${counts.recordedEdges} edges in view`
   if (counts.filteredNodes > 0)
     text += ` · ${plural(counts.filteredNodes, "node", "nodes")} and ${plural(counts.filteredEdges, "edge", "edges")} hidden by filters`
   if (counts.omittedNodes + counts.omittedEdges > 0)
     text += ` · ${plural(counts.omittedNodes, "node", "nodes")} and ${plural(counts.omittedEdges, "edge", "edges")} beyond the view cap`
+  if (query.trim() !== "") text += ` · ${counts.visibleNodes} of ${counts.matchCandidates} match`
   if (state === "zero-match" || state === "all-kinds-hidden") text += " · no nodes in view"
   else if (state === "single-node") text += " · single node in view"
   else if (state === "no-edges") text += " · no edges in view"

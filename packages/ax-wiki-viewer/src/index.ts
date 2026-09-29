@@ -76,6 +76,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   let hovered: string | undefined
   let suppressClick = false
   let lastVisible: WikiGraphNode[] = []
+  let matchIndex = 0
   let filters: ViewFilters = defaultFilters(),
     zoom = 1,
     offsetX = 0,
@@ -314,7 +315,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   function renderCounts() {
     const counts = viewCounts(graph, filters)
     const state = viewState(graph, filters)
-    status.textContent = countsBarText(counts, state)
+    status.textContent = countsBarText(counts, state, filters.query)
     identityText.textContent = `Snapshot: ${graph.snapshot}\nScope: recorded Wiki manifest. Code relationships unavailable.\nWiki page → referenced source. Recorded membership, not a code dependency or call graph. Node size is how many of those listings are in this snapshot.`
     if (state === "empty" || state === "zero-match" || state === "all-kinds-hidden") {
       overlay.style.display = "flex"
@@ -343,6 +344,22 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       button.title = `${plural(degree, "connection", "connections")} shown of ${plural(node.recordedReferences, "recorded reference", "recorded references")}`
       if (node.id === selected) button.className = "selected"
       button.onclick = () => select(node)
+      button.onmouseenter = () => {
+        hovered = node.id
+        applyEmphasis()
+      }
+      button.onmouseleave = () => {
+        if (hovered === node.id) hovered = undefined
+        applyEmphasis()
+      }
+      button.onfocus = () => {
+        hovered = node.id
+        applyEmphasis()
+      }
+      button.onblur = () => {
+        if (hovered === node.id) hovered = undefined
+        applyEmphasis()
+      }
     }
   }
 
@@ -397,6 +414,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
         filters.freshness[state] = !filters.freshness[state]
         button.setAttribute("aria-pressed", String(filters.freshness[state]))
         selected = undefined
+        matchIndex = 0
         render()
       }
       chips.append(button)
@@ -415,6 +433,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
         filters.kinds[kind] = !filters.kinds[kind]
         button.setAttribute("aria-pressed", String(filters.kinds[kind]))
         selected = undefined
+        matchIndex = 0
         render()
       }
       legend.append(button)
@@ -664,17 +683,21 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   search.oninput = () => {
     selected = undefined
     filters.query = search.value
+    matchIndex = 0
     render()
   }
   search.onkeydown = (event) => {
     if (event.key === "Enter" && lastVisible.length > 0) {
       event.preventDefault()
-      select(lastVisible[0])
+      const node = lastVisible[matchIndex % lastVisible.length]
+      matchIndex++
+      select(node)
     }
   }
   const doReset = () => {
     selected = undefined
     filters = defaultFilters()
+    matchIndex = 0
     search.value = ""
     if (layout)
       for (const node of layout.nodes) {
@@ -706,6 +729,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     update(input: unknown) {
       if (disposed) throw new Error("Viewer is disposed")
       const next = parseWikiGraph(input)
+      matchIndex = 0
       if (next.snapshot !== graph.snapshot) {
         selected = undefined
         filters = defaultFilters()
@@ -725,7 +749,13 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       disposed = true
       layout?.stop()
       layout = undefined
-      for (const button of root.querySelectorAll("button")) button.onclick = null
+      for (const button of root.querySelectorAll("button")) {
+        button.onclick = null
+        button.onmouseenter = null
+        button.onmouseleave = null
+        button.onfocus = null
+        button.onblur = null
+      }
       root.remove()
       root.replaceChildren()
       root.onkeydown = null
