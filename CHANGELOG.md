@@ -14,6 +14,7 @@ changes belong to AX Coder.
 - Restore symbol-node layout and multiline detail rendering in the Wiki evidence viewer.
 - Harden scheduled-task deadlines, restart recovery, overlap handling, and one-time retry behavior.
 - Fix Windows ARM PTY rebuilding on Visual Studio 2026 and Wiki generation timeouts on reasoning models.
+- Update IP address classification and HTTP client dependencies to patched security releases.
 
 ### Added
 
