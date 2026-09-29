@@ -6,6 +6,26 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.21.0] - 2026-09-29
+
+### Fixed
+
+- Keep scheduled-task outcomes idempotent so late callbacks cannot cancel a failed one-time task's retry or overwrite a successful result.
+- Restore symbol-node layout and multiline detail rendering in the Wiki evidence viewer.
+- Harden scheduled-task deadlines, restart recovery, overlap handling, and one-time retry behavior.
+- Fix Windows ARM PTY rebuilding on Visual Studio 2026 and Wiki generation timeouts on reasoning models.
+
+### Added
+
+- Add a reusable Wiki evidence viewer with source-backed symbol and import relationships, search navigation, and idle maintenance from the TUI.
+- Show durable recap previews in the session picker with one bounded automatic retry.
+- Add workflow routine deletion and scheduled-task bulk cleanup.
+
+### Changed
+
+- Improve graph-context coverage and terminal scene rendering.
+- Publish SDK 2.5.52 alongside AX Code 7.21.0.
+
 ## [7.20.9] - 2026-09-26
 
 ### Fixed
