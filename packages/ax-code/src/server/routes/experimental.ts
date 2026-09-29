@@ -95,7 +95,7 @@ export const ExperimentalRoutes = lazy(() =>
       describeRoute({
         summary: "Get Wiki visualization snapshot",
         description:
-          "Read the configured Wiki manifest in the current runtime project. Returns a bounded page/source evidence snapshot without reading source files, generation or indexing.",
+          "Read the configured Wiki manifest in the current runtime project. Returns a bounded page/source/symbol evidence snapshot, reading bounded source prefixes for symbol provenance and inventory without generation or indexing.",
         operationId: "wiki.visualization",
         responses: {
           200: {

@@ -1,6 +1,8 @@
 import { expect, test } from "vitest"
 import { parseWikiGraph, projectWikiManifest } from "@ax-code/ax-wiki/graph"
 import {
+  buildOutline,
+  countOutlineSymbols,
   countsBarText,
   defaultFilters,
   focusDirection,
@@ -59,7 +61,7 @@ test("default filters reveal every snapshot node and edge", () => {
 })
 
 test("kind toggles hide nodes and their incident edges without touching recorded totals", () => {
-  const filters = { ...defaultFilters(), kinds: { page: true, source: false } }
+  const filters = { ...defaultFilters(), kinds: { page: true, source: false, symbol: true } }
   const counts = viewCounts(graph, filters)
   expect(counts.visibleNodes).toBe(2)
   expect(counts.visibleEdges).toBe(0)
@@ -87,9 +89,9 @@ test("query matches label and path case-insensitively", () => {
 
 test("chip and legend label counts equal snapshot totals", () => {
   const counts = viewCounts(graph, defaultFilters())
-  expect(counts.byKind).toEqual({ page: 2, source: 3 })
+  expect(counts.byKind).toEqual({ page: 2, source: 3, symbol: 0 })
   expect(counts.byFreshness).toEqual({ fresh: 1, stale: 3, unknown: 1 })
-  expect(counts.byKind.page + counts.byKind.source).toBe(graph.nodes.length)
+  expect(counts.byKind.page + counts.byKind.source + counts.byKind.symbol).toBe(graph.nodes.length)
   expect(counts.byFreshness.fresh + counts.byFreshness.stale + counts.byFreshness.unknown).toBe(graph.nodes.length)
 })
 
@@ -127,11 +129,11 @@ test("degenerate states are named instead of rendering a blank canvas", () => {
     omitted: { nodes: 0, edges: 0 },
   })
   expect(viewState(empty, defaultFilters())).toBe("empty")
-  const kindsOff = { ...defaultFilters(), kinds: { page: false, source: false } }
+  const kindsOff = { ...defaultFilters(), kinds: { page: false, source: false, symbol: false } }
   expect(viewState(graph, kindsOff)).toBe("all-kinds-hidden")
   const single = { ...defaultFilters(), query: "other.md" }
   expect(viewState(graph, single)).toBe("single-node")
-  const noEdges = { ...defaultFilters(), kinds: { page: true, source: false } }
+  const noEdges = { ...defaultFilters(), kinds: { page: true, source: false, symbol: true } }
   expect(viewState(graph, noEdges)).toBe("no-edges")
   expect(overlayText("zero-match", viewCounts(graph, { ...defaultFilters(), query: "nope" }))).toContain(
     "No nodes match",
@@ -160,13 +162,48 @@ test("match candidates ignore the query but respect kind and freshness filters",
   expect(counts.matchCandidates).toBe(5)
   expect(counts.visibleNodes).toBe(1)
   expect(countsBarText(counts, "single-node", "guide")).toContain("1 of 5 match")
-  const kinds = { ...defaultFilters(), kinds: { page: true, source: false }, query: "s" }
+  const kinds = { ...defaultFilters(), kinds: { page: true, source: false, symbol: true }, query: "s" }
   expect(viewCounts(graph, kinds).matchCandidates).toBe(2)
 })
 
 test("blank queries add no match suffix", () => {
   const counts = viewCounts(graph, { ...defaultFilters(), query: "   " })
   expect(countsBarText(counts, "ok", "   ")).toBe("5 of 5 nodes · 4 of 4 edges in view")
+})
+
+test("builds the outline nested by qualified prefix", () => {
+  const withSymbols = projectWikiManifest(
+    {
+      schemaVersion: 1,
+      generator: "ax-wiki",
+      pages: { "guide.md": { title: "Guide", sources: ["src/a.ts"], sourceHashes: {} } },
+    },
+    {
+      snapshot: "outline",
+      inventory: new Map([
+        [
+          "src/a.ts",
+          [
+            { name: "bar", qualified: "Foo.bar", kind: "method" },
+            { name: "Foo", qualified: "Foo", kind: "class" },
+            { name: "solo", qualified: "solo", kind: "function" },
+          ],
+        ],
+      ]),
+    },
+  )
+  const outline = viewCounts(withSymbols, defaultFilters()).outline
+  expect(outline.map((source) => source.path)).toEqual(["src/a.ts"])
+  expect(outline[0].symbols.map((symbol) => symbol.label)).toEqual(["Foo", "solo"])
+  expect(outline[0].symbols[0].children.map((symbol) => symbol.label)).toEqual(["bar"])
+  expect(outline[0].symbols[0].children[0].detail).toBe("method Foo.bar")
+  expect(countOutlineSymbols(outline)).toBe(3)
+  expect(buildOutline(withSymbols)).toEqual(outline)
+})
+
+test("outline ignores non-contains edges and stays empty without symbols", () => {
+  expect(viewCounts(graph, defaultFilters()).outline).toEqual([])
+  expect(countOutlineSymbols([])).toBe(0)
 })
 
 test("counting never mutates its inputs", () => {

@@ -249,3 +249,117 @@ test("parses populated nodes and rejects bad provenance, duplicates, and version
   const detached = parseWikiGraph({ ...graph, nodes: [{ ...graph.nodes[0], injected: "x" }, graph.nodes[1]] })
   expect(detached.nodes[0]).not.toHaveProperty("injected")
 })
+
+test("projects symbol nodes and contains edges with inherited freshness", () => {
+  const graph = projectWikiManifest(
+    {
+      schemaVersion: 1,
+      generator: "ax-wiki",
+      pages: {
+        "guide.md": { title: "Guide", sources: ["src/a.ts"], sourceHashes: { "src/a.ts": hash } },
+      },
+    },
+    {
+      snapshot: "inventory",
+      observed: new Map([["src/a.ts", hash]]),
+      inventory: new Map([
+        [
+          "src/a.ts",
+          [
+            { name: "Foo", qualified: "Foo", kind: "class" },
+            { name: "bar", qualified: "Foo.bar", kind: "method" },
+            { name: "bar", qualified: "Foo.bar", kind: "method" },
+          ],
+        ],
+        ["src/uncited.ts", [{ name: "Nope", qualified: "Nope", kind: "function" }]],
+      ]),
+    },
+  )
+  expect(graph.nodes.map((n) => n.id)).toEqual([
+    "page:guide.md",
+    "source:src/a.ts",
+    "symbol:src/a.ts#Foo",
+    "symbol:src/a.ts#Foo.bar",
+  ])
+  const symbol = graph.nodes.find((n) => n.id === "symbol:src/a.ts#Foo.bar")!
+  expect(symbol).toMatchObject({
+    kind: "symbol",
+    label: "bar",
+    path: "src/a.ts",
+    detail: "method Foo.bar",
+    freshness: "fresh",
+    recordedReferences: 0,
+  })
+  expect(graph.edges.map((e) => [e.from, e.to, e.kind])).toEqual([
+    ["page:guide.md", "source:src/a.ts", "references-source"],
+    ["source:src/a.ts", "symbol:src/a.ts#Foo", "contains"],
+    ["source:src/a.ts", "symbol:src/a.ts#Foo.bar", "contains"],
+  ])
+  expect(graph.nodes.find((n) => n.id === "source:src/a.ts")!.recordedReferences).toBe(1)
+})
+
+test("validates contains endpoints and inventory entries strictly", () => {
+  const graph = projectWikiManifest(manifest(), { snapshot: "fixture" })
+  const symbol = {
+    id: "symbol:src/a.ts#Foo",
+    kind: "symbol",
+    label: "Foo",
+    path: "src/a.ts",
+    freshness: "unknown",
+    recordedReferences: 0,
+    summary: "",
+    symbols: [],
+    detail: "class Foo",
+  }
+  const ok = {
+    ...graph,
+    nodes: [...graph.nodes, symbol],
+    edges: [
+      ...graph.edges,
+      { from: "source:src/a.ts", to: "symbol:src/a.ts#Foo", kind: "contains", freshness: "unknown" },
+    ],
+  }
+  expect(parseWikiGraph(ok).edges).toHaveLength(2)
+  const bad = (edge: unknown) => ({ ...ok, edges: [...graph.edges, edge] })
+  expect(() =>
+    parseWikiGraph(bad({ from: "page:guide.md", to: "symbol:src/a.ts#Foo", kind: "contains", freshness: "unknown" })),
+  ).toThrow(/relationship/)
+  expect(() =>
+    parseWikiGraph(bad({ from: "source:src/a.ts", to: "source:src/a.ts", kind: "contains", freshness: "unknown" })),
+  ).toThrow(/relationship/)
+  expect(() =>
+    parseWikiGraph(
+      bad({ from: "page:guide.md", to: "symbol:src/a.ts#Foo", kind: "references-source", freshness: "unknown" }),
+    ),
+  ).toThrow(/relationship/)
+  expect(() =>
+    projectWikiManifest(manifest(), {
+      snapshot: "bad",
+      inventory: new Map([["src/a.ts", [{ name: "", qualified: "x", kind: "class" }]]]),
+    }),
+  ).toThrow()
+  expect(() =>
+    projectWikiManifest(manifest(), {
+      snapshot: "bad",
+      inventory: new Map([["src/a.ts", [{ name: "x".repeat(257), qualified: "x", kind: "class" }]]]),
+    }),
+  ).toThrow()
+})
+
+test("shares view caps across symbols with neighborhoods together", () => {
+  const inventory = new Map([
+    ["src/a.ts", Array.from({ length: 300 }, (_, i) => ({ name: `s${i}`, qualified: `s${i}`, kind: "function" }))],
+  ])
+  const graph = projectWikiManifest(
+    {
+      schemaVersion: 1,
+      generator: "ax-wiki",
+      pages: { "guide.md": { title: "Guide", sources: ["src/a.ts"], sourceHashes: {} } },
+    },
+    { snapshot: "capped", inventory },
+  )
+  expect(graph.nodes).toHaveLength(200)
+  expect(graph.nodes[0].id).toBe("page:guide.md")
+  expect(graph.nodes[1].id).toBe("source:src/a.ts")
+  expect(graph.omitted).toEqual({ nodes: 102, edges: 102 })
+})

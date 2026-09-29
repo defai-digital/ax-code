@@ -9,6 +9,8 @@ import { createHash, randomBytes } from "node:crypto"
 import { createServer } from "node:http"
 import { assertWikiDirectorySafe, readGroundingExcerpts } from "@ax-code/ax-wiki/node"
 import { graphRelativePath, projectWikiManifest, parseWikiGraph } from "@ax-code/ax-wiki/graph"
+import type { InventorySymbol } from "@ax-code/ax-wiki/graph"
+import { WikiInventory } from "./inventory"
 import { renderWikiGraphHtml } from "@ax-code/ax-wiki-viewer/node"
 import { parseJsonStrict } from "../util/json-value"
 
@@ -80,13 +82,20 @@ export namespace WikiVisualization {
       await handle.close()
     }
     const parsed = parseJsonStrict(raw)
+    const cited = collectCitedSources(parsed)
     let sourceContents: Map<string, string> | undefined
     try {
-      sourceContents = await readGroundingExcerpts(canonicalRoot, collectCitedSources(parsed))
+      sourceContents = await readGroundingExcerpts(canonicalRoot, cited)
     } catch {
       sourceContents = undefined
     }
-    const graph = projectWikiManifest(parsed, { snapshot: "pending", sourceContents })
+    let inventory: Map<string, InventorySymbol[]> | undefined
+    try {
+      inventory = await WikiInventory.build(canonicalRoot, cited)
+    } catch {
+      inventory = undefined
+    }
+    const graph = projectWikiManifest(parsed, { snapshot: "pending", sourceContents, inventory })
     // Identity covers the complete recorded manifest, including evidence beyond the view cap.
     // Canonical JSON prevents insertion order alone from changing snapshot identity.
     const canonical = (value: unknown, depth = 0): unknown => {

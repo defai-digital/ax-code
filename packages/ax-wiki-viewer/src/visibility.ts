@@ -1,8 +1,8 @@
-import type { WikiGraph, WikiGraphNode } from "@ax-code/ax-wiki/graph"
+import type { WikiGraph, WikiGraphNode, WikiGraphNodeKind } from "@ax-code/ax-wiki/graph"
 
 /** Browser-safe view filtering. DOM-free so unit tests and the viewer share one definition of visible. */
 
-export type NodeKind = "page" | "source"
+export type NodeKind = WikiGraphNodeKind
 export type FreshnessState = "fresh" | "stale" | "unknown"
 
 export type ViewFilters = {
@@ -12,7 +12,11 @@ export type ViewFilters = {
 }
 
 export function defaultFilters(): ViewFilters {
-  return { query: "", kinds: { page: true, source: true }, freshness: { fresh: true, stale: true, unknown: true } }
+  return {
+    query: "",
+    kinds: { page: true, source: true, symbol: true },
+    freshness: { fresh: true, stale: true, unknown: true },
+  }
 }
 
 export function isDefaultFilters(filters: ViewFilters): boolean {
@@ -20,6 +24,7 @@ export function isDefaultFilters(filters: ViewFilters): boolean {
     filters.query.trim() === "" &&
     filters.kinds.page &&
     filters.kinds.source &&
+    filters.kinds.symbol &&
     filters.freshness.fresh &&
     filters.freshness.stale &&
     filters.freshness.unknown
@@ -56,6 +61,8 @@ export type ViewCounts = {
   omittedEdges: number
   /** Snapshot totals per kind; legend labels. */
   byKind: Record<NodeKind, number>
+  /** Outline rows: sources with contained symbols nested by qualified prefix. */
+  outline: OutlineSource[]
   /** Snapshot totals per freshness; chip labels. */
   byFreshness: Record<FreshnessState, number>
   /** Nodes passing kind and freshness filters; the match-count denominator. */
@@ -67,8 +74,68 @@ export type ViewCounts = {
  * counts bar, overlay) derives from this, so displayed counts cannot drift.
  * Invariants: visible + filtered + omitted = recorded, for nodes and edges.
  */
+export type OutlineSymbol = { id: string; label: string; detail: string; children: OutlineSymbol[] }
+export type OutlineSource = { id: string; label: string; path: string; symbols: OutlineSymbol[] }
+
+/** Parent qualified name, mirroring the grounding separator rule. */
+function parentQualified(qualified: string): string | undefined {
+  const separator = qualified.includes("::") ? "::" : qualified.includes(".") ? "." : undefined
+  if (!separator) return undefined
+  const parts = qualified.split(separator).filter(Boolean)
+  if (parts.length < 2) return undefined
+  return parts.slice(0, -1).join(separator)
+}
+
+function nestSymbols(symbols: WikiGraphNode[]): OutlineSymbol[] {
+  const byQualified = new Map<string, OutlineSymbol>()
+  const roots: OutlineSymbol[] = []
+  const ordered = [...symbols].sort((a, b) => {
+    const x = a.qualified || a.label
+    const y = b.qualified || b.label
+    return x < y ? -1 : x > y ? 1 : 0
+  })
+  for (const symbol of ordered) {
+    const entry: OutlineSymbol = { id: symbol.id, label: symbol.label, detail: symbol.detail, children: [] }
+    const qualified = symbol.qualified || symbol.label
+    const parent = parentQualified(qualified)
+    const host = parent === undefined ? undefined : byQualified.get(parent)
+    if (host) host.children.push(entry)
+    else roots.push(entry)
+    if (!byQualified.has(qualified)) byQualified.set(qualified, entry)
+  }
+  return roots
+}
+
+/** Build the file-to-symbol outline from contains edges. */
+export function buildOutline(graph: WikiGraph): OutlineSource[] {
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]))
+  const perSource = new Map<string, WikiGraphNode[]>()
+  for (const edge of graph.edges) {
+    if (edge.kind !== "contains") continue
+    const source = byId.get(edge.from)
+    const symbol = byId.get(edge.to)
+    if (!source || source.kind !== "source" || !symbol || symbol.kind !== "symbol") continue
+    const list = perSource.get(source.id) ?? []
+    list.push(symbol)
+    perSource.set(source.id, list)
+  }
+  return [...perSource.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([id, symbols]) => {
+      const source = byId.get(id)!
+      return { id, label: source.label, path: source.path, symbols: nestSymbols(symbols) }
+    })
+}
+
+/** Total symbol rows in an outline, for the display cap more-count. */
+export function countOutlineSymbols(outline: readonly OutlineSource[]): number {
+  const walk = (symbols: readonly OutlineSymbol[]): number =>
+    symbols.reduce((total, symbol) => total + 1 + walk(symbol.children), 0)
+  return outline.reduce((total, source) => total + walk(source.symbols), 0)
+}
+
 export function viewCounts(graph: WikiGraph, filters: ViewFilters): ViewCounts {
-  const byKind: Record<NodeKind, number> = { page: 0, source: 0 }
+  const byKind: Record<NodeKind, number> = { page: 0, source: 0, symbol: 0 }
   const byFreshness: Record<FreshnessState, number> = { fresh: 0, stale: 0, unknown: 0 }
   const visible = new Set<string>()
   let matchCandidates = 0
@@ -90,6 +157,7 @@ export function viewCounts(graph: WikiGraph, filters: ViewFilters): ViewCounts {
     omittedNodes: graph.omitted.nodes,
     omittedEdges: graph.omitted.edges,
     byKind,
+    outline: buildOutline(graph),
     byFreshness,
     matchCandidates,
   }
@@ -100,7 +168,7 @@ export type ViewState = "ok" | "empty" | "zero-match" | "all-kinds-hidden" | "si
 /** Names the degenerate view instead of rendering a blank canvas. */
 export function viewState(graph: WikiGraph, filters: ViewFilters): ViewState {
   if (graph.nodes.length === 0) return "empty"
-  if (!filters.kinds.page && !filters.kinds.source) return "all-kinds-hidden"
+  if (!filters.kinds.page && !filters.kinds.source && !filters.kinds.symbol) return "all-kinds-hidden"
   const counts = viewCounts(graph, filters)
   if (counts.visibleNodes === 0) return "zero-match"
   if (counts.visibleNodes === 1) return "single-node"

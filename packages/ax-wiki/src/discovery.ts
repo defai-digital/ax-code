@@ -293,6 +293,25 @@ export async function readSourceEvidence(input: {
   })
 }
 
+/**
+ * Bounded UTF-8 prefix of one root-relative file. Symlinks, escapes,
+ * non-files, empty files, and read errors yield undefined (fail-open),
+ * never throw.
+ */
+export async function readFilePrefix(root: string, relative: string, maxBytes: number): Promise<string | undefined> {
+  if (maxBytes <= 0) return undefined
+  let absolute: string
+  try {
+    absolute = resolveInside(root, relative)
+  } catch {
+    return undefined
+  }
+  const raw = await readSourcePrefixNoFollow(absolute, maxBytes)
+  if (raw.length === 0) return undefined
+  const { content } = decodeUtf8BytePrefix(raw, maxBytes)
+  return content || undefined
+}
+
 export const GROUNDING_EXCERPT_LIMITS = { perFileBytes: 16_384, totalBytes: 1_048_576, maxPaths: 1000 } as const
 
 /**
@@ -310,19 +329,11 @@ export async function readGroundingExcerpts(
   let remaining = Math.max(0, limits.totalBytes)
   for (const relative of selected) {
     if (remaining <= 0) break
-    let absolute: string
-    try {
-      absolute = resolveInside(root, relative)
-    } catch {
-      continue
-    }
     const budget = Math.min(remaining, Math.max(0, limits.perFileBytes))
-    const raw = await readSourcePrefixNoFollow(absolute, budget)
-    if (raw.length === 0) continue
-    const { content } = decodeUtf8BytePrefix(raw, budget)
+    const content = await readFilePrefix(root, relative, budget)
     if (!content) continue
     excerpts.set(relative, content)
-    remaining -= raw.length
+    remaining -= Buffer.byteLength(content)
   }
   return excerpts
 }

@@ -25869,7 +25869,7 @@
           }
         ],
         "summary": "Get Wiki visualization snapshot",
-        "description": "Read the configured Wiki manifest in the current runtime project. Returns a bounded page/source evidence snapshot without reading source files, generation or indexing.",
+        "description": "Read the configured Wiki manifest in the current runtime project. Returns a bounded page/source/symbol evidence snapshot, reading bounded source prefixes for symbol provenance and inventory without generation or indexing.",
         "responses": {
           "200": {
             "description": "Recorded Wiki evidence snapshot",
@@ -51262,7 +51262,8 @@
                   "type": "string",
                   "enum": [
                     "page",
-                    "source"
+                    "source",
+                    "symbol"
                   ]
                 },
                 "label": {
@@ -51289,6 +51290,43 @@
                 "observedHash": {
                   "type": "string",
                   "pattern": "^[a-f0-9]{64}$"
+                },
+                "summary": {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                "symbols": {
+                  "maxItems": 32,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "maxLength": 256
+                      },
+                      "provenance": {
+                        "type": "string",
+                        "enum": [
+                          "verified",
+                          "inferred",
+                          "unavailable"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "provenance"
+                    ]
+                  }
+                },
+                "detail": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "qualified": {
+                  "type": "string",
+                  "maxLength": 1024
                 }
               },
               "required": [
@@ -51297,7 +51335,11 @@
                 "label",
                 "path",
                 "freshness",
-                "recordedReferences"
+                "recordedReferences",
+                "summary",
+                "symbols",
+                "detail",
+                "qualified"
               ]
             }
           },
@@ -51316,8 +51358,16 @@
                   "maxLength": 1100
                 },
                 "kind": {
-                  "type": "string",
-                  "const": "references-source"
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "const": "references-source"
+                    },
+                    {
+                      "type": "string",
+                      "const": "contains"
+                    }
+                  ]
                 },
                 "freshness": {
                   "type": "string",

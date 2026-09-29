@@ -3,7 +3,7 @@ import os from "node:os"
 import path from "node:path"
 import { afterEach, describe, expect, test } from "vitest"
 import { DISCOVERY_READ_CONCURRENCY, mapWithBoundedConcurrency } from "../src/discovery-concurrency.js"
-import { discoverSources, readGroundingExcerpts, readSourceEvidence } from "../src/discovery.js"
+import { discoverSources, readFilePrefix, readGroundingExcerpts, readSourceEvidence } from "../src/discovery.js"
 import { sha256 } from "../src/hash.js"
 import type { WikiSource } from "../src/types.js"
 
@@ -302,5 +302,21 @@ describe("readGroundingExcerpts", () => {
     await writeFile(path.join(root, "full.ts"), "x\n")
     const excerpts = await readGroundingExcerpts(root, ["empty.ts", "full.ts"])
     expect([...excerpts.keys()]).toEqual(["full.ts"])
+  })
+})
+
+describe("readFilePrefix", () => {
+  test("reads a bounded prefix and fails open on bad inputs", async () => {
+    const root = await fixture()
+    await writeFile(path.join(root, "a.ts"), "0123456789")
+    await writeFile(path.join(root, "empty.ts"), "")
+    await symlink("a.ts", path.join(root, "link.ts"))
+    expect(await readFilePrefix(root, "a.ts", 4)).toBe("0123")
+    expect(await readFilePrefix(root, "a.ts", 100)).toBe("0123456789")
+    expect(await readFilePrefix(root, "missing.ts", 100)).toBeUndefined()
+    expect(await readFilePrefix(root, "link.ts", 100)).toBeUndefined()
+    expect(await readFilePrefix(root, "../escape.ts", 100)).toBeUndefined()
+    expect(await readFilePrefix(root, "empty.ts", 100)).toBeUndefined()
+    expect(await readFilePrefix(root, "a.ts", 0)).toBeUndefined()
   })
 })

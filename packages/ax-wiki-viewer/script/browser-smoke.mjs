@@ -71,6 +71,7 @@ try {
   assert.match(await page.getByRole("status").innerText(), /4 of 4 nodes · 3 of 3 edges in view/)
   assert.equal(await page.locator(".overlay").isHidden(), true)
   assert.equal(await page.locator(".notice").isHidden(), true)
+  assert.equal(await page.locator(".outline").isHidden(), true)
   await page.getByRole("button", { name: "pages (2)" }).click()
   assert.equal(await page.locator(".list button").count(), 2)
   assert.equal(await page.locator("svg g.node").count(), 4)
@@ -142,7 +143,7 @@ try {
   assert.match(await page.locator(".detail").innerText(), /Page: Architecture/)
   assert.equal(await page.locator(".list button").count(), 1)
   await page.evaluate(() => document.querySelector("svg").dispatchEvent(new MouseEvent("click", { bubbles: true })))
-  assert.match(await page.locator(".Detail").innerText(), /Select a page or source/)
+  assert.match(await page.locator(".Detail").innerText(), /Select a page, source, or symbol/)
   assert.equal(await page.locator(".list button").count(), 1)
   await page.getByRole("searchbox").fill("")
   assert.equal(await page.locator(".list button").count(), 4)
@@ -216,7 +217,7 @@ try {
   await page.evaluate(() =>
     document.querySelectorAll("svg g.node")[0].dispatchEvent(new MouseEvent("click", { bubbles: true })),
   )
-  assert.match(await page.locator(".Detail").innerText(), /Select a page or source/)
+  assert.match(await page.locator(".Detail").innerText(), /Select a page, source, or symbol/)
   await page.locator("svg g.node circle").first().click()
   assert.match(await page.locator(".Detail").innerText(), /Page: Architecture/)
   assert.deepEqual(
@@ -269,7 +270,7 @@ try {
   await calm.evaluate(() =>
     document.querySelectorAll("svg g.node")[0].dispatchEvent(new MouseEvent("click", { bubbles: true })),
   )
-  assert.match(await calm.locator(".Detail").innerText(), /Select a page or source/)
+  assert.match(await calm.locator(".Detail").innerText(), /Select a page, source, or symbol/)
   await calm.close()
   await page.getByRole("button", { name: "Show all / reset" }).click()
   if (process.env.AX_WIKI_VIEWER_SCREENSHOT)
@@ -384,6 +385,98 @@ try {
   assert.equal(stale.freshHasRing, false)
   assert.match(stale.tooltip, /stale/)
   assert.deepEqual(stale.chips, ["Fresh (1)", "Stale (1)"])
+  const outline = await api.evaluate(() => {
+    const host = document.createElement("main")
+    document.body.appendChild(host)
+    const handle = WikiViewer.mount(host, {
+      schemaVersion: 1,
+      snapshot: "outline-fixture",
+      scope: "wiki-manifest",
+      codeRelationships: "unavailable",
+      nodes: [
+        {
+          id: "page:g.md",
+          kind: "page",
+          label: "G",
+          path: "g.md",
+          freshness: "unknown",
+          recordedReferences: 1,
+          summary: "",
+          symbols: [],
+          detail: "",
+          qualified: "",
+        },
+        {
+          id: "source:s.ts",
+          kind: "source",
+          label: "s.ts",
+          path: "s.ts",
+          freshness: "unknown",
+          recordedReferences: 1,
+          summary: "",
+          symbols: [],
+          detail: "",
+          qualified: "",
+        },
+        {
+          id: "symbol:s.ts#Foo",
+          kind: "symbol",
+          label: "Foo",
+          path: "s.ts",
+          freshness: "unknown",
+          recordedReferences: 0,
+          summary: "",
+          symbols: [],
+          detail: "class Foo",
+          qualified: "Foo",
+        },
+        {
+          id: "symbol:s.ts#Foo.bar",
+          kind: "symbol",
+          label: "bar",
+          path: "s.ts",
+          freshness: "unknown",
+          recordedReferences: 0,
+          summary: "",
+          symbols: [],
+          detail: "method Foo.bar",
+          qualified: "Foo.bar",
+        },
+      ],
+      edges: [
+        { from: "page:g.md", to: "source:s.ts", kind: "references-source", freshness: "unknown" },
+        { from: "source:s.ts", to: "symbol:s.ts#Foo", kind: "contains", freshness: "unknown" },
+        { from: "source:s.ts", to: "symbol:s.ts#Foo.bar", kind: "contains", freshness: "unknown" },
+      ],
+      omitted: { nodes: 0, edges: 0 },
+    })
+    const details = [...host.querySelectorAll("details")].find(
+      (d) => d.querySelector("summary")?.textContent === "Outline",
+    )
+    const buttons = [...host.querySelectorAll(".outline button")]
+    const found = {
+      outlineShown: details?.style.display !== "none",
+      rows: buttons.map((button) => button.textContent),
+      nested: host.querySelectorAll(".outline ul ul").length,
+      symbolFill: host.querySelectorAll("svg g.node circle")[2]?.getAttribute("fill"),
+      legend: [...host.querySelectorAll(".legend button")].map((button) => button.textContent),
+    }
+    buttons.find((button) => button.textContent === "method Foo.bar")?.click()
+    found.detail = host.querySelector(".Detail")?.textContent
+    found.afterSelect = host.querySelectorAll(".list button").length
+    handle.dispose()
+    host.remove()
+    return found
+  })
+  assert.equal(outline.outlineShown, true)
+  assert.deepEqual(outline.rows, ["s.ts", "class Foo", "method Foo.bar"])
+  assert.equal(outline.nested, 2)
+  assert.equal(outline.symbolFill, "#7d6a45")
+  assert.deepEqual(outline.legend, ["pages (1)", "sources (1)", "symbols (2)"])
+  assert.match(outline.detail, /Symbol: bar/)
+  assert.match(outline.detail, /Detail: method Foo\.bar/)
+  assert.match(outline.detail, /Contained by 1 source/)
+  assert.equal(outline.afterSelect, 2)
   console.log(
     JSON.stringify({
       browser: browser.version(),

@@ -3,6 +3,7 @@ import type { WikiGraphEdge, WikiGraphNode } from "@ax-code/ax-wiki/graph"
 import { LAYOUT_WORLD, createForceLayout } from "./force-layout.js"
 import type { ForceLayout, LayoutNode } from "./force-layout.js"
 import {
+  countOutlineSymbols,
   countsBarText,
   defaultFilters,
   focusDirection,
@@ -12,7 +13,7 @@ import {
   viewCounts,
   viewState,
 } from "./visibility.js"
-import type { FreshnessState, NodeKind, ViewFilters } from "./visibility.js"
+import type { FreshnessState, NodeKind, OutlineSymbol, ViewFilters } from "./visibility.js"
 
 export const viewerCss = `
 .axwv{font:14px system-ui,sans-serif;color:#dce6f2;background:#101923;padding:20px;border-radius:12px;box-sizing:border-box}
@@ -34,6 +35,11 @@ export const viewerCss = `
 .axwv .notice{border:1px solid #64778b;border-radius:8px;padding:8px 12px;color:#b5c5d7}
 .axwv .overlay{position:absolute;inset:0;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;text-align:center;background:rgba(16,25,35,.94);padding:24px}
 .axwv .overlay p{margin:0;max-width:52ch}
+.axwv details{margin:12px 0}
+.axwv .outline ul{list-style:none;margin:2px 0;padding-left:18px}
+.axwv .outline>ul{padding-left:0}
+.axwv .outline button{background:none;border-color:transparent;padding:4px 8px;text-align:left;overflow-wrap:anywhere}
+.axwv .outline button:hover{background:#30455c;border-color:#64778b}
 @media(max-width:760px){.axwv .layout{grid-template-columns:1fr}.axwv .canvas{height:360px}}
 `
 
@@ -41,11 +47,13 @@ const MIN_ZOOM = 0.25
 const MAX_ZOOM = 8
 const PAGE_FILL = "#245d65"
 const SOURCE_FILL = "#30455c"
+const SYMBOL_FILL = "#7d6a45"
 const PAGE_RING = "#9fb3c8"
 const SELECT_RING = "#78dacc"
 const STALE_RING = "#e0a63c"
 const FRESH_DOT = "#7cc78a"
 const UNKNOWN_DOT = "#64778b"
+const OUTLINE_ROWS = 50
 const FOCUS_OUT = "#e0a63c"
 const FOCUS_IN = "#78dacc"
 const DIMMED_NODE = 0.15
@@ -126,6 +134,10 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   const legend = html("div", root)
   legend.className = "legend"
   legend.setAttribute("aria-label", "Map legend")
+  const outlineWrap = html("details", root)
+  html("summary", outlineWrap, "Outline")
+  const outlineBody = html("div", outlineWrap)
+  outlineBody.className = "outline"
   const notice = html("p", root)
   notice.className = "notice"
   notice.style.display = "none"
@@ -344,22 +356,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       button.title = `${plural(degree, "connection", "connections")} shown of ${plural(node.recordedReferences, "recorded reference", "recorded references")}`
       if (node.id === selected) button.className = "selected"
       button.onclick = () => select(node)
-      button.onmouseenter = () => {
-        hovered = node.id
-        applyEmphasis()
-      }
-      button.onmouseleave = () => {
-        if (hovered === node.id) hovered = undefined
-        applyEmphasis()
-      }
-      button.onfocus = () => {
-        hovered = node.id
-        applyEmphasis()
-      }
-      button.onblur = () => {
-        if (hovered === node.id) hovered = undefined
-        applyEmphasis()
-      }
+      previewOn(button, node.id)
     }
   }
 
@@ -367,16 +364,24 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     const node = graph.nodes.find((candidate) => candidate.id === selected)
     if (!node) {
       detail.textContent = graph.nodes.length
-        ? "Select a page or source to inspect its recorded evidence. Selection focuses its one-hop neighborhood."
+        ? "Select a page, source, or symbol to inspect its recorded evidence. Selection focuses its one-hop neighborhood."
         : "No matching items. Clear search or reset the view."
       return
     }
     const related = graph.edges.filter((edge) => edge.from === node.id || edge.to === node.id)
+    const citing = related.filter((edge) => edge.kind === "references-source")
+    const kindLabel = node.kind === "page" ? "Page" : node.kind === "source" ? "Source" : "Symbol"
     const line =
       node.kind === "page"
-        ? `Cites ${related.length} of ${plural(node.recordedReferences, "source", "sources")} in this snapshot.`
-        : `Cited by ${related.length} of ${plural(node.recordedReferences, "page", "pages")} in this snapshot.`
+        ? `Cites ${citing.length} of ${plural(node.recordedReferences, "source", "sources")} in this snapshot.`
+        : node.kind === "source"
+          ? `Cited by ${citing.length} of ${plural(node.recordedReferences, "page", "pages")} in this snapshot.`
+          : `Contained by ${plural(related.length, "source", "sources")} in this snapshot.`
     const rows = related.map((edge) => {
+      if (edge.kind === "contains" && node.kind === "source") {
+        const other = graph.nodes.find((candidate) => candidate.id === edge.to)!
+        return `→ ${other.detail || other.label}`
+      }
       const otherId = node.kind === "page" ? edge.to : edge.from
       const other = graph.nodes.find((candidate) => candidate.id === otherId)!
       const marker = node.kind === "page" ? "→" : "←"
@@ -384,12 +389,13 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       return `${marker} ${other.label}\n${other.path} · ${edge.freshness}${hash}`
     })
     const summary = node.summary ? `\nSummary: ${node.summary}` : ""
+    const extra = node.detail ? `\nDetail: ${node.detail}` : ""
     const anchors =
       node.symbols.length > 0
         ? `\n\nAnchored symbols (${node.symbols.length}):\n${node.symbols.map((anchor) => `- ${anchor.name} (${anchor.provenance})`).join("\n")}`
         : ""
     detail.textContent =
-      `${node.kind === "page" ? "Page" : "Source"}: ${node.label}\nLocation: ${node.path}${summary}\nFreshness: ${node.freshness} — ${FRESHNESS_NOTE[node.freshness]}\n${line}\nProvenance: Wiki manifest membership` +
+      `${kindLabel}: ${node.label}\nLocation: ${node.path}${summary}${extra}\nFreshness: ${node.freshness} — ${FRESHNESS_NOTE[node.freshness]}\n${line}\nProvenance: Wiki manifest membership` +
       anchors +
       (rows.length ? `\n\n${rows.join("\n")}` : "")
   }
@@ -397,7 +403,9 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   const FRESHNESS_ORDER: FreshnessState[] = ["fresh", "stale", "unknown"]
   const FRESHNESS_LABEL: Record<FreshnessState, string> = { fresh: "Fresh", stale: "Stale", unknown: "Unknown" }
   const FRESHNESS_DOT: Record<FreshnessState, string> = { fresh: FRESH_DOT, stale: STALE_RING, unknown: UNKNOWN_DOT }
-  const KIND_ORDER: NodeKind[] = ["page", "source"]
+  const KIND_ORDER: NodeKind[] = ["page", "source", "symbol"]
+  const KIND_LABEL: Record<NodeKind, string> = { page: "pages", source: "sources", symbol: "symbols" }
+  const KIND_DOT: Record<NodeKind, string> = { page: PAGE_FILL, source: SOURCE_FILL, symbol: SYMBOL_FILL }
 
   /**
    * Toggle structure follows the graph; pressed state follows the filters.
@@ -431,9 +439,9 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       button.className = "kind"
       const dot = doc.createElement("span")
       dot.className = "dot"
-      dot.style.background = kind === "page" ? PAGE_FILL : SOURCE_FILL
+      dot.style.background = KIND_DOT[kind]
       dot.setAttribute("aria-hidden", "true")
-      button.append(dot, doc.createTextNode(`${kind === "page" ? "pages" : "sources"} (${counts.byKind[kind]})`))
+      button.append(dot, doc.createTextNode(`${KIND_LABEL[kind]} (${counts.byKind[kind]})`))
       button.setAttribute("aria-pressed", String(filters.kinds[kind]))
       button.onclick = () => {
         filters.kinds[kind] = !filters.kinds[kind]
@@ -456,6 +464,83 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     }
   }
 
+  function previewOn(hover: HTMLElement, id: string) {
+    hover.onmouseenter = () => {
+      hovered = id
+      applyEmphasis()
+    }
+    hover.onmouseleave = () => {
+      if (hovered === id) hovered = undefined
+      applyEmphasis()
+    }
+    hover.onfocus = () => {
+      hovered = id
+      applyEmphasis()
+    }
+    hover.onblur = () => {
+      if (hovered === id) hovered = undefined
+      applyEmphasis()
+    }
+  }
+
+  function renderOutline() {
+    const outline = viewCounts(graph, defaultFilters()).outline
+    outlineBody.replaceChildren()
+    if (outline.length === 0) {
+      outlineWrap.style.display = "none"
+      return
+    }
+    outlineWrap.style.display = ""
+    let rows = 0
+    const addSymbol = (parent: HTMLElement, symbol: OutlineSymbol) => {
+      if (rows >= OUTLINE_ROWS) return
+      rows++
+      const item = doc.createElement("li")
+      const button = doc.createElement("button")
+      button.textContent = symbol.detail || symbol.label
+      button.title = symbol.detail || symbol.label
+      if (symbol.id === selected) button.className = "selected"
+      previewOn(button, symbol.id)
+      button.onclick = () => {
+        const target = graph.nodes.find((candidate) => candidate.id === symbol.id)
+        if (target) select(target)
+      }
+      item.append(button)
+      if (symbol.children.length > 0) {
+        const nested = doc.createElement("ul")
+        for (const child of symbol.children) addSymbol(nested, child)
+        if (nested.childElementCount > 0) item.append(nested)
+      }
+      parent.append(item)
+    }
+    const list = doc.createElement("ul")
+    for (const source of outline) {
+      if (rows >= OUTLINE_ROWS) break
+      const item = doc.createElement("li")
+      const button = doc.createElement("button")
+      button.textContent = source.path
+      button.title = source.path
+      if (source.id === selected) button.className = "selected"
+      previewOn(button, source.id)
+      button.onclick = () => {
+        const target = graph.nodes.find((candidate) => candidate.id === source.id)
+        if (target) select(target)
+      }
+      item.append(button)
+      const nested = doc.createElement("ul")
+      for (const symbol of source.symbols) addSymbol(nested, symbol)
+      if (nested.childElementCount > 0) item.append(nested)
+      list.append(item)
+    }
+    outlineBody.append(list)
+    const total = countOutlineSymbols(outline)
+    if (total > rows) {
+      const more = doc.createElement("p")
+      more.textContent = `+${total - rows} more symbols`
+      outlineBody.append(more)
+    }
+  }
+
   function render() {
     refreshVisibility()
     positionElements()
@@ -463,6 +548,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     renderList()
     renderDetail()
     renderCounts()
+    renderOutline()
   }
 
   function buildElements() {
@@ -487,7 +573,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       group.setAttribute("data-id", node.id)
       const circle = doc.createElementNS(svgNS, "circle")
       circle.setAttribute("r", String(node.radius))
-      circle.setAttribute("fill", node.kind === "page" ? PAGE_FILL : SOURCE_FILL)
+      circle.setAttribute("fill", node.kind === "page" ? PAGE_FILL : node.kind === "source" ? SOURCE_FILL : SYMBOL_FILL)
       const label = doc.createElementNS(svgNS, "text")
       label.setAttribute("y", String(node.radius + 14))
       label.textContent = `${node.kind === "page" ? "Page → " : ""}${truncateLabel(info.label)}`

@@ -43,6 +43,43 @@ test("seeds pages and sources into separate lanes", () => {
   }
 })
 
+test("seeds symbols into the center lane between pages and sources", () => {
+  const symbols = projectWikiManifest(
+    {
+      schemaVersion: 1,
+      generator: "ax-wiki",
+      pages: {
+        "guide.md": { title: "Guide", sources: ["src/a.ts"], sourceHashes: {} },
+      },
+    },
+    {
+      snapshot: "symbol-lanes",
+      inventory: new Map([
+        [
+          "src/a.ts",
+          [
+            { name: "Foo", qualified: "Foo", kind: "class" },
+            { name: "bar", qualified: "Foo.bar", kind: "method" },
+          ],
+        ],
+      ]),
+    },
+  )
+  const layout = createForceLayout(symbols, { reducedMotion: true })
+  try {
+    const page = layout.byId.get("page:guide.md")!
+    const source = layout.byId.get("source:src/a.ts")!
+    const syms = layout.nodes.filter((node) => node.kind === "symbol")
+    expect(syms.length).toBe(2)
+    expect(LAYOUT_LANES.page).toBeLessThan(LAYOUT_LANES.symbol)
+    expect(LAYOUT_LANES.symbol).toBeLessThan(LAYOUT_LANES.source)
+    expect(page.x).toBeLessThan(Math.min(...syms.map((node) => node.x)))
+    expect(Math.max(...syms.map((node) => node.x))).toBeLessThan(source.x)
+  } finally {
+    layout.stop()
+  }
+})
+
 test("counts degree from snapshot edges and resolves link endpoints", () => {
   const layout = createForceLayout(graph, { reducedMotion: true })
   try {

@@ -3540,7 +3540,7 @@ export class Wiki extends HeyApiClient {
   /**
    * Get Wiki visualization snapshot
    *
-   * Read the configured Wiki manifest in the current runtime project. Returns a bounded page/source evidence snapshot without reading source files, generation or indexing.
+   * Read the configured Wiki manifest in the current runtime project. Returns a bounded page/source/symbol evidence snapshot, reading bounded source prefixes for symbol provenance and inventory without generation or indexing.
    */
   public visualization<ThrowOnError extends boolean = false>(
     parameters?: {

@@ -4617,17 +4617,24 @@ export type WikiVisualizationGraph = {
   codeRelationships: "unavailable"
   nodes: Array<{
     id: string
-    kind: "page" | "source"
+    kind: "page" | "source" | "symbol"
     label: string
     path: string
     freshness: "fresh" | "stale" | "unknown"
     recordedReferences: number
     observedHash?: string
+    summary: string
+    symbols: Array<{
+      name: string
+      provenance: "verified" | "inferred" | "unavailable"
+    }>
+    detail: string
+    qualified: string
   }>
   edges: Array<{
     from: string
     to: string
-    kind: "references-source"
+    kind: "references-source" | "contains"
     freshness: "fresh" | "stale" | "unknown"
     recordedHash?: string
   }>

@@ -8,9 +8,17 @@ export type SymbolAnchor = {
   name: string
   provenance: SymbolProvenance
 }
+export type WikiGraphNodeKind = "page" | "source" | "symbol"
+export type WikiGraphEdgeKind = "references-source" | "contains"
+/** Caller-supplied symbol inventory entry; validated strictly at projection. */
+export type InventorySymbol = {
+  name: string
+  qualified: string
+  kind: string
+}
 export type WikiGraphNode = {
   id: string
-  kind: "page" | "source"
+  kind: WikiGraphNodeKind
   label: string
   path: string
   freshness: GraphFreshness
@@ -21,11 +29,15 @@ export type WikiGraphNode = {
   summary: string
   /** Page nodes carry anchored symbols with provenance (v2; [] when absent). */
   symbols: SymbolAnchor[]
+  /** Symbol nodes carry "<kind> <qualified>" ("", otherwise). */
+  detail: string
+  /** Symbol nodes carry the qualified name ("", otherwise). */
+  qualified: string
 }
 export type WikiGraphEdge = {
   from: string
   to: string
-  kind: "references-source"
+  kind: WikiGraphEdgeKind
   freshness: GraphFreshness
   recordedHash?: string
 }
@@ -46,6 +58,8 @@ export const GRAPH_LIMITS = {
   symbolsPerNode: 32,
   symbolName: 256,
   summary: 2048,
+  detail: 512,
+  qualified: 1024,
 } as const
 
 function record(value: unknown): Record<string, unknown> {
@@ -89,6 +103,14 @@ function summaryText(value: unknown): string {
   if (value === undefined || value === "") return ""
   return text(value, GRAPH_LIMITS.summary)
 }
+function detailText(value: unknown): string {
+  if (value === undefined || value === "") return ""
+  return text(value, GRAPH_LIMITS.detail)
+}
+function qualifiedText(value: unknown): string {
+  if (value === undefined || value === "") return ""
+  return text(value, GRAPH_LIMITS.qualified)
+}
 function symbolAnchors(value: unknown): SymbolAnchor[] {
   if (value === undefined) return []
   if (!Array.isArray(value) || value.length > GRAPH_LIMITS.symbolsPerNode) throw new Error("Invalid node symbols")
@@ -116,7 +138,8 @@ export function parseWikiGraph(input: unknown): WikiGraph {
   const ids = new Map<string, WikiGraphNode>()
   const nodes = value.nodes.map((raw): WikiGraphNode => {
     const node = record(raw)
-    if (node.kind !== "page" && node.kind !== "source") throw new Error("Unsupported node kind")
+    if (node.kind !== "page" && node.kind !== "source" && node.kind !== "symbol")
+      throw new Error("Unsupported node kind")
     const id = text(node.id, 1100)
     if (ids.has(id)) throw new Error("Duplicate node id")
     const parsed: WikiGraphNode = {
@@ -129,6 +152,8 @@ export function parseWikiGraph(input: unknown): WikiGraph {
       observedHash: hash(node.observedHash),
       summary: summaryText(node.summary),
       symbols: symbolAnchors(node.symbols),
+      detail: detailText(node.detail),
+      qualified: qualifiedText(node.qualified),
     }
     ids.set(id, parsed)
     return parsed
@@ -138,7 +163,13 @@ export function parseWikiGraph(input: unknown): WikiGraph {
     const edge = record(raw)
     const from = text(edge.from, 1100),
       to = text(edge.to, 1100)
-    if (edge.kind !== "references-source" || ids.get(from)?.kind !== "page" || ids.get(to)?.kind !== "source")
+    const kind = edge.kind
+    if (kind !== "references-source" && kind !== "contains") throw new Error("Invalid graph relationship or endpoint")
+    const fromKind = ids.get(from)?.kind
+    const toKind = ids.get(to)?.kind
+    if (kind === "references-source" && (fromKind !== "page" || toKind !== "source"))
+      throw new Error("Invalid graph relationship or endpoint")
+    if (kind === "contains" && (fromKind !== "source" || toKind !== "symbol"))
       throw new Error("Invalid graph relationship or endpoint")
     const pair = JSON.stringify([from, to])
     if (pairs.has(pair)) throw new Error("Duplicate relationship")
@@ -146,13 +177,18 @@ export function parseWikiGraph(input: unknown): WikiGraph {
     return {
       from,
       to,
-      kind: "references-source",
+      kind,
       freshness: freshness(edge.freshness),
       recordedHash: hash(edge.recordedHash),
     }
   })
+  // recordedReferences counts references-source relationships only; contains
+  // edges are inventory-derived and covered by omission accounting instead.
   const incidents = new Map<string, number>()
-  for (const edge of edges) for (const id of [edge.from, edge.to]) incidents.set(id, (incidents.get(id) ?? 0) + 1)
+  for (const edge of edges) {
+    if (edge.kind !== "references-source") continue
+    for (const id of [edge.from, edge.to]) incidents.set(id, (incidents.get(id) ?? 0) + 1)
+  }
   for (const node of nodes) {
     if (node.recordedReferences < (incidents.get(node.id) ?? 0) || node.recordedReferences > GRAPH_LIMITS.references)
       throw new Error("Invalid recorded relationship count")
@@ -177,6 +213,8 @@ export function projectWikiManifest(
     observed?: ReadonlyMap<string, string | null>
     /** Bounded source excerpts keyed by root-relative path, used for symbol provenance. */
     sourceContents?: ReadonlyMap<string, string>
+    /** Caller-supplied symbol inventory keyed by root-relative source path. */
+    inventory?: ReadonlyMap<string, InventorySymbol[]>
   },
 ): WikiGraph {
   const manifest = record(input)
@@ -185,6 +223,7 @@ export function projectWikiManifest(
   if (pages.length > GRAPH_LIMITS.pages) throw new Error("Manifest exceeds page limit")
   const allNodes = new Map<string, WikiGraphNode>()
   const allEdges: WikiGraphEdge[] = []
+  const citedByPage: Array<{ id: string; cited: string[] }> = []
   let references = 0
   for (const [pagePath, raw] of pages) {
     const page = record(raw)
@@ -213,8 +252,11 @@ export function projectWikiManifest(
         name,
         provenance: provenanceOfSymbol(name, supplied),
       })),
+      detail: "",
+      qualified: "",
     }
     allNodes.set(id, node)
+    citedByPage.push({ id, cited })
     const states: GraphFreshness[] = []
     for (const source of cited) {
       const recordedHash = hash(Object.hasOwn(hashes, source) ? hashes[source] : undefined)
@@ -246,6 +288,8 @@ export function projectWikiManifest(
         observedHash: observed ?? undefined,
         summary: "",
         symbols: [],
+        detail: "",
+        qualified: "",
       })
       allEdges.push({ from: id, to: target, kind: "references-source", freshness: state, recordedHash })
       states.push(state)
@@ -257,8 +301,48 @@ export function projectWikiManifest(
         ? "unknown"
         : "fresh"
   }
-  // Interleave each page with its evidence, rather than filling the cap with pages alone.
-  const nodes = [...allNodes.values()].slice(0, GRAPH_LIMITS.nodes)
+  // Order page, source, then that source's symbols so neighborhoods stay
+  // together under the view caps; symbols inherit final source freshness.
+  const ordered: WikiGraphNode[] = []
+  const emitted = new Set<string>()
+  const emit = (node: WikiGraphNode) => {
+    if (emitted.has(node.id)) return
+    emitted.add(node.id)
+    ordered.push(node)
+  }
+  for (const { id, cited } of citedByPage) {
+    emit(allNodes.get(id)!)
+    for (const source of cited) {
+      const target = `source:${source}`
+      const sourceNode = allNodes.get(target)
+      if (!sourceNode) continue
+      emit(sourceNode)
+      const seen = new Set<string>()
+      for (const raw of options.inventory?.get(source) ?? []) {
+        const item = record(raw)
+        const name = text(item.name, GRAPH_LIMITS.symbolName)
+        const qualified = text(item.qualified, GRAPH_LIMITS.qualified)
+        const kind = text(item.kind, 64)
+        if (seen.has(qualified)) continue
+        seen.add(qualified)
+        const symbolId = text(`symbol:${source}#${qualified}`, 1100)
+        emit({
+          id: symbolId,
+          kind: "symbol",
+          label: name,
+          path: source,
+          freshness: sourceNode.freshness,
+          recordedReferences: 0,
+          summary: "",
+          symbols: [],
+          detail: text(`${kind} ${qualified}`, GRAPH_LIMITS.detail),
+          qualified,
+        })
+        allEdges.push({ from: target, to: symbolId, kind: "contains", freshness: sourceNode.freshness })
+      }
+    }
+  }
+  const nodes = ordered.slice(0, GRAPH_LIMITS.nodes)
   const selected = new Set(nodes.map((node) => node.id))
   const edges = allEdges.filter((edge) => selected.has(edge.from) && selected.has(edge.to)).slice(0, GRAPH_LIMITS.edges)
   return parseWikiGraph({
@@ -268,6 +352,6 @@ export function projectWikiManifest(
     codeRelationships: "unavailable",
     nodes,
     edges,
-    omitted: { nodes: allNodes.size - nodes.length, edges: allEdges.length - edges.length },
+    omitted: { nodes: ordered.length - nodes.length, edges: allEdges.length - edges.length },
   })
 }
