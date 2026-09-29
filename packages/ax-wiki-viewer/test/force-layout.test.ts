@@ -71,6 +71,9 @@ test("seeds symbols into the center lane between pages and sources", () => {
     const source = layout.byId.get("source:src/a.ts")!
     const syms = layout.nodes.filter((node) => node.kind === "symbol")
     expect(syms.length).toBe(2)
+    for (const node of layout.nodes) {
+      expect(Number.isFinite(node.x) && Number.isFinite(node.y)).toBe(true)
+    }
     expect(LAYOUT_LANES.page).toBeLessThan(LAYOUT_LANES.symbol)
     expect(LAYOUT_LANES.symbol).toBeLessThan(LAYOUT_LANES.source)
     expect(page.x).toBeLessThan(Math.min(...syms.map((node) => node.x)))

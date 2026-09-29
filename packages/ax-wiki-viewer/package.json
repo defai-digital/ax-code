@@ -30,7 +30,7 @@
     "check:bundle": "node script/bundle.mjs --check",
     "typecheck": "tsc --noEmit",
     "test": "node script/bundle.mjs --check && vitest run",
-    "test:browser": "node script/browser-smoke.mjs",
+    "test:browser": "node --import tsx script/browser-smoke.mjs",
     "test:consumer": "node script/consumer-smoke.mjs"
   },
   "dependencies": {
@@ -43,6 +43,7 @@
     "@typescript/native": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
+    "tsx": "catalog:",
     "esbuild": "catalog:",
     "playwright-core": "catalog:"
   }

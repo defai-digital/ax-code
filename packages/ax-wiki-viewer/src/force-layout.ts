@@ -1,22 +1,19 @@
-import {
-  forceCenter,
-  forceCollide,
-  forceLink,
-  forceManyBody,
-  forceSimulation,
-  forceX,
-  forceY,
-} from "d3-force"
+import { forceCenter, forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY } from "d3-force"
 import type { SimulationLinkDatum } from "d3-force"
+import type { WikiGraphNodeKind } from "@ax-code/ax-wiki/graph"
 
-/** DOM-free two-lane force layout for the bipartite evidence map. Runs headless under Node. */
+/** DOM-free three-lane force layout for the evidence map. Runs headless under Node. */
 export const LAYOUT_WORLD = { width: 900, height: 600 } as const
 export const LAYOUT_LIMITS = { maxTicks: 300, minRadius: 6, maxRadius: 18 } as const
-export const LAYOUT_LANES = { page: LAYOUT_WORLD.width * 0.25, source: LAYOUT_WORLD.width * 0.75 } as const
+export const LAYOUT_LANES: Record<WikiGraphNodeKind, number> = {
+  page: LAYOUT_WORLD.width * 0.25,
+  symbol: LAYOUT_WORLD.width * 0.5,
+  source: LAYOUT_WORLD.width * 0.75,
+}
 
 export type LayoutNode = {
   id: string
-  kind: "page" | "source"
+  kind: WikiGraphNodeKind
   /** Incident edges in this snapshot (visible degree), the only honest size input. */
   degree: number
   radius: number
@@ -46,9 +43,9 @@ export function layoutRadius(degree: number): number {
 }
 
 function seedPositions(nodes: LayoutNode[]): void {
-  const lanes = { page: 0, source: 0 }
+  const lanes: Record<WikiGraphNodeKind, number> = { page: 0, source: 0, symbol: 0 }
   for (const node of nodes) lanes[node.kind]++
-  const cursor = { page: 0, source: 0 }
+  const cursor: Record<WikiGraphNodeKind, number> = { page: 0, source: 0, symbol: 0 }
   for (const node of nodes) {
     const total = lanes[node.kind]
     const index = cursor[node.kind]++
@@ -59,7 +56,7 @@ function seedPositions(nodes: LayoutNode[]): void {
 
 export function createForceLayout(
   input: {
-    nodes: ReadonlyArray<{ id: string; kind: "page" | "source" }>
+    nodes: ReadonlyArray<{ id: string; kind: WikiGraphNodeKind }>
     edges: ReadonlyArray<{ from: string; to: string }>
   },
   options: {
@@ -92,9 +89,20 @@ export function createForceLayout(
   const simulation = forceSimulation(nodes)
     .force("lane", forceX<LayoutNode>((node) => LAYOUT_LANES[node.kind]).strength(0.35))
     .force("gravity", forceY<LayoutNode>(LAYOUT_WORLD.height / 2).strength(0.08))
-    .force("link", forceLink<LayoutNode, LayoutLink>(links).id((node) => node.id).distance(120).strength(0.5))
+    .force(
+      "link",
+      forceLink<LayoutNode, LayoutLink>(links)
+        .id((node) => node.id)
+        .distance(120)
+        .strength(0.5),
+    )
     .force("charge", forceManyBody<LayoutNode>().strength(-180))
-    .force("collide", forceCollide<LayoutNode>().radius((node) => node.radius + 10).iterations(2))
+    .force(
+      "collide",
+      forceCollide<LayoutNode>()
+        .radius((node) => node.radius + 10)
+        .iterations(2),
+    )
     .force("center", forceCenter(LAYOUT_WORLD.width / 2, LAYOUT_WORLD.height / 2))
     .alphaDecay(0.04)
 

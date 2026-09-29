@@ -59,6 +59,7 @@ try {
   await page.route("https://**/*", (route) => route.abort())
   await page.goto(pathToFileURL(output).href)
   await page.getByRole("heading", { name: "AX Wiki evidence map" }).waitFor()
+  assert.equal(await page.locator(".detail").evaluate((el) => getComputedStyle(el).whiteSpace), "pre-wrap")
   assert.equal(await page.locator(".list button").count(), 4)
   assert.equal(await page.locator("svg g.node").count(), 4)
   assert.equal(await page.locator("svg path.edge").count(), 3)
@@ -98,16 +99,17 @@ try {
     ),
     true,
   )
-  await page.getByRole("searchbox").fill("s")
+  // Match only source paths; the hostile page title also contains "s".
+  await page.getByRole("searchbox").fill("src/")
   assert.equal(await page.locator(".list button").count(), 2)
   assert.match(await page.getByRole("status").innerText(), /2 of 4 match/)
   await page.keyboard.press("Enter")
-  assert.match(await page.locator(".Detail").innerText(), /Source: src\/b\.ts/)
+  assert.match(await page.locator(".detail").innerText(), /Source: src\/b\.ts/)
   await page.evaluate(() => document.querySelector("svg").dispatchEvent(new MouseEvent("click", { bubbles: true })))
   assert.equal(await page.locator(".list button").count(), 2)
   await page.getByRole("searchbox").focus()
   await page.keyboard.press("Enter")
-  assert.match(await page.locator(".Detail").innerText(), /Source: src\/a\.ts/)
+  assert.match(await page.locator(".detail").innerText(), /Source: src\/a\.ts/)
   await page.getByRole("searchbox").fill("")
   assert.equal(await page.locator(".list button").count(), 4)
   await page.locator(".list button").first().focus()
@@ -127,10 +129,10 @@ try {
   await page.getByRole("button", { name: "Show all / reset" }).click()
   await page.locator(".list button").filter({ hasText: "page: Architecture" }).focus()
   await page.keyboard.press("Enter")
-  assert.match(await page.locator(".Detail").innerText(), /Cites 1 of 1 source in this snapshot/)
-  assert.match(await page.locator(".Detail").innerText(), /Provenance: Wiki manifest membership/)
-  assert.match(await page.locator(".Detail").innerText(), /Summary: Architecture summary\./)
-  assert.match(await page.locator(".Detail").innerText(), /Widget \(unavailable\)/)
+  assert.match(await page.locator(".detail").innerText(), /Cites 1 of 1 source in this snapshot/)
+  assert.match(await page.locator(".detail").innerText(), /Provenance: Wiki manifest membership/)
+  assert.match(await page.locator(".detail").innerText(), /Summary: Architecture summary\./)
+  assert.match(await page.locator(".detail").innerText(), /Widget \(unavailable\)/)
   assert.equal(await page.evaluate(() => document.activeElement?.textContent), "Evidence")
   assert.equal(await page.locator(".list button").count(), 2)
   await page.keyboard.press("Escape")
@@ -143,15 +145,15 @@ try {
   assert.match(await page.locator(".detail").innerText(), /Page: Architecture/)
   assert.equal(await page.locator(".list button").count(), 1)
   await page.evaluate(() => document.querySelector("svg").dispatchEvent(new MouseEvent("click", { bubbles: true })))
-  assert.match(await page.locator(".Detail").innerText(), /Select a page, source, or symbol/)
+  assert.match(await page.locator(".detail").innerText(), /Select a page, source, or symbol/)
   assert.equal(await page.locator(".list button").count(), 1)
   await page.getByRole("searchbox").fill("")
   assert.equal(await page.locator(".list button").count(), 4)
   assert.equal(await page.locator(".notice").isHidden(), true)
   await page.locator(".list button").nth(2).click()
-  assert.match(await page.locator(".Detail").innerText(), /Summary: Guide summary\./)
-  assert.match(await page.locator(".Detail").innerText(), /Foo \(verified\)/)
-  assert.match(await page.locator(".Detail").innerText(), /Ghost \(inferred\)/)
+  assert.match(await page.locator(".detail").innerText(), /Summary: Guide summary\./)
+  assert.match(await page.locator(".detail").innerText(), /Foo \(verified\)/)
+  assert.match(await page.locator(".detail").innerText(), /Ghost \(inferred\)/)
   await page.evaluate(() => document.querySelector("svg").dispatchEvent(new MouseEvent("click", { bubbles: true })))
   await page.evaluate(() => document.querySelector("svg g.node").dispatchEvent(new Event("mouseenter")))
   assert.equal(
@@ -217,9 +219,9 @@ try {
   await page.evaluate(() =>
     document.querySelectorAll("svg g.node")[0].dispatchEvent(new MouseEvent("click", { bubbles: true })),
   )
-  assert.match(await page.locator(".Detail").innerText(), /Select a page, source, or symbol/)
+  assert.match(await page.locator(".detail").innerText(), /Select a page, source, or symbol/)
   await page.locator("svg g.node circle").first().click()
-  assert.match(await page.locator(".Detail").innerText(), /Page: Architecture/)
+  assert.match(await page.locator(".detail").innerText(), /Page: Architecture/)
   assert.deepEqual(
     await page.evaluate(() =>
       [...document.querySelectorAll("svg path.edge")].map((edge) => edge.getAttribute("stroke")),
@@ -227,7 +229,7 @@ try {
     ["#e0a63c", "#64778b", "#64778b"],
   )
   await page.locator(".list button").filter({ hasText: "source: src/b.ts" }).click()
-  assert.match(await page.locator(".Detail").innerText(), /Source: src\/b\.ts/)
+  assert.match(await page.locator(".detail").innerText(), /Source: src\/b\.ts/)
   assert.deepEqual(
     await page.evaluate(() =>
       [...document.querySelectorAll("svg path.edge")].map((edge) => edge.getAttribute("stroke")),
@@ -270,7 +272,7 @@ try {
   await calm.evaluate(() =>
     document.querySelectorAll("svg g.node")[0].dispatchEvent(new MouseEvent("click", { bubbles: true })),
   )
-  assert.match(await calm.locator(".Detail").innerText(), /Select a page, source, or symbol/)
+  assert.match(await calm.locator(".detail").innerText(), /Select a page, source, or symbol/)
   await calm.close()
   await page.getByRole("button", { name: "Show all / reset" }).click()
   if (process.env.AX_WIKI_VIEWER_SCREENSHOT)
@@ -462,7 +464,7 @@ try {
       legend: [...host.querySelectorAll(".legend button")].map((button) => button.textContent),
     }
     buttons.find((button) => button.textContent === "method Foo.bar")?.click()
-    found.detail = host.querySelector(".Detail")?.textContent
+    found.detail = host.querySelector(".detail")?.textContent
     found.afterSelect = host.querySelectorAll(".list button").length
     handle.dispose()
     host.remove()

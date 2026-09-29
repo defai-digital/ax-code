@@ -165,7 +165,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   const detailHeading = html("h2", aside, "Evidence")
   detailHeading.tabIndex = -1
   const detail = html("p", aside)
-  detail.className = "Detail"
+  detail.className = "detail"
   const navigation = html("div", root)
   navigation.className = "controls"
 
