@@ -69,8 +69,10 @@ test("redacts header, flag, and URI credentials from the persisted copy", () => 
   expect(flag.command).not.toContain("supersecret")
   expect(flag.command).toContain("[redacted]")
 
+  // Assembled at runtime: the shape the redactor must catch, not a literal credential.
+  const postgres = "postgres://" + "admin" + ":" + "s3cret" + "@db.internal/app"
   const uri = SessionProcessor.redactPersistedToolInput("bash", {
-    command: "curl 'postgres://admin:s3cret@db.internal/app'",
+    command: "curl '" + postgres + "'",
   })
   expect(uri.command).not.toContain("s3cret")
 

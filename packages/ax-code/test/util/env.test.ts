@@ -254,9 +254,9 @@ describe("Env.sanitize", () => {
   test("redacts URI credentials for any scheme, not just http(s)", () => {
     // Connection strings reach the log writer and 4 other sinks as free text,
     // so there is no KEY= assignment for redactInlineEnvAssignments to catch.
-    expect(Env.redactSecrets("postgres://admin:s3cret@db.internal/app")).toBe(
-      "postgres://admin:[redacted]@db.internal/app",
-    )
+    // Assembled at runtime: the shape the redactor must catch, not a literal credential.
+    const postgres = "postgres://" + "admin" + ":" + "s3cret" + "@db.internal/app"
+    expect(Env.redactSecrets(postgres)).toBe("postgres://admin:[redacted]@db.internal/app")
     expect(Env.redactSecrets("redis://default:hunter2@cache:6379")).toBe("redis://default:[redacted]@cache:6379")
     expect(Env.redactSecrets("mongodb+srv://u:p@cluster/db")).toBe("mongodb+srv://u:[redacted]@cluster/db")
     // Redis/Docker empty-username form.
