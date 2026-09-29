@@ -1236,6 +1236,10 @@ export namespace ScheduledTask {
           .get()
         return row ? runFromRow(row) : undefined
       })
+      // Only the callback that finalized the run may change its task summary
+      // or retry policy. A duplicate or conflicting terminal callback must not
+      // disable a failed one-shot or overwrite a successful outcome.
+      if (!run) return get(id)
     }
 
     // Guarded summary write: only update the task row if this queue id is still

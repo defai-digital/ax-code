@@ -90,6 +90,40 @@ describe("ScheduledTask one-shot lifecycle", () => {
     })
   })
 
+  test.each(["completed", "failed"] as const)(
+    "a conflicting callback cannot overwrite a %s one-shot outcome",
+    async (firstStatus) => {
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+          const now = Date.now()
+          const task = await ScheduledTask.create({
+            title: "Duplicate outcome",
+            prompt: "Run once.",
+            schedule: { type: "once", runAt: now + 1_000 },
+          })
+          const claimed = await claimOnce(task.id, now + 2_000)
+          const queueID = claimed.queueItem!.id
+          await ScheduledTask.recordQueueOutcome(task.id, firstStatus, new Error("original failure"), queueID)
+          const settled = await ScheduledTask.get(task.id)
+          const runs = await ScheduledTask.listRuns({ taskID: task.id })
+
+          await ScheduledTask.recordQueueOutcome(
+            task.id,
+            firstStatus === "completed" ? "failed" : "completed",
+            new Error("late conflicting outcome"),
+            queueID,
+          )
+
+          expect(await ScheduledTask.get(task.id)).toEqual(settled)
+          expect(await ScheduledTask.listRuns({ taskID: task.id })).toEqual(runs)
+        },
+      })
+    },
+  )
+
   test("a failed one-shot stays active and retries with backoff; success after failures disables it", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

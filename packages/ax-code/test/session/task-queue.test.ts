@@ -20,6 +20,7 @@ import { WorkflowFixtureSpecs, WorkflowRun, parseWorkflowSpecV1 } from "../../sr
 import { tmpdir } from "../fixture/fixture"
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await Instance.disposeAll()
 })
 
