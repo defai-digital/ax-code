@@ -35,6 +35,16 @@ export function isNodeVisible(node: WikiGraphNode, filters: ViewFilters): boolea
   return filters.kinds[node.kind] && filters.freshness[node.freshness] && nodeMatchesQuery(node, filters.query)
 }
 
+export type FocusDirection = "outgoing" | "incoming"
+
+/** Direction of an edge relative to a focused node; null when unrelated (or a self-loop). */
+export function focusDirection(edge: { from: string; to: string }, focusId: string): FocusDirection | null {
+  if (edge.from === focusId && edge.to === focusId) return null
+  if (edge.from === focusId) return "outgoing"
+  if (edge.to === focusId) return "incoming"
+  return null
+}
+
 export type ViewCounts = {
   visibleNodes: number
   visibleEdges: number

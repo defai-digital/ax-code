@@ -3,6 +3,7 @@ import { parseWikiGraph, projectWikiManifest } from "@ax-code/ax-wiki/graph"
 import {
   countsBarText,
   defaultFilters,
+  focusDirection,
   isDefaultFilters,
   isNodeVisible,
   overlayText,
@@ -144,6 +145,13 @@ test("counts bar discloses filtered nodes and stays stable under default filters
   expect(countsBarText(counts, "ok")).toBe("5 of 5 nodes · 4 of 4 edges in view")
   const filtered = viewCounts(graph, { ...defaultFilters(), query: "guide" })
   expect(countsBarText(filtered, "single-node")).toContain("hidden by filters")
+})
+
+test("focus direction reads outgoing, incoming, unrelated, and self-loop edges", () => {
+  expect(focusDirection({ from: "a", to: "b" }, "a")).toBe("outgoing")
+  expect(focusDirection({ from: "a", to: "b" }, "b")).toBe("incoming")
+  expect(focusDirection({ from: "a", to: "b" }, "c")).toBeNull()
+  expect(focusDirection({ from: "a", to: "a" }, "a")).toBeNull()
 })
 
 test("counting never mutates its inputs", () => {

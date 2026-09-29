@@ -178,6 +178,21 @@ try {
   assert.match(await page.locator(".Detail").innerText(), /Select a page or source/)
   await page.locator("svg g.node circle").first().click()
   assert.match(await page.locator(".Detail").innerText(), /Page: Architecture/)
+  assert.deepEqual(
+    await page.evaluate(() =>
+      [...document.querySelectorAll("svg path.edge")].map((edge) => edge.getAttribute("stroke")),
+    ),
+    ["#e0a63c", "#64778b", "#64778b"],
+  )
+  await page.locator(".list button").filter({ hasText: "source: src/b.ts" }).click()
+  assert.match(await page.locator(".Detail").innerText(), /Source: src\/b\.ts/)
+  assert.deepEqual(
+    await page.evaluate(() =>
+      [...document.querySelectorAll("svg path.edge")].map((edge) => edge.getAttribute("stroke")),
+    ),
+    ["#78dacc", "#64778b", "#78dacc"],
+  )
+  await page.getByRole("button", { name: "Show all / reset" }).click()
 
   // Reduced motion positions drags synchronously with no reheating.
   const calm = await browser.newPage({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" })

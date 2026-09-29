@@ -5,6 +5,7 @@ import type { ForceLayout, LayoutNode } from "./force-layout.js"
 import {
   countsBarText,
   defaultFilters,
+  focusDirection,
   isDefaultFilters,
   isNodeVisible,
   overlayText,
@@ -45,7 +46,8 @@ const SELECT_RING = "#78dacc"
 const STALE_RING = "#e0a63c"
 const FRESH_DOT = "#7cc78a"
 const UNKNOWN_DOT = "#64778b"
-const FOCUS_EDGE = "#8fa6bb"
+const FOCUS_OUT = "#e0a63c"
+const FOCUS_IN = "#78dacc"
 const DIMMED_NODE = 0.15
 const DIMMED_EDGE = 0.12
 const REST_EDGE = 0.35
@@ -268,20 +270,27 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     const near = focus?.near
     const focusId = focus?.id
     for (const { path, arrow, edge } of edgeEls) {
+      // Filter-hidden always wins: a focused but filtered-out edge stays dimmed.
       const dimmed =
         visibleById.get(edge.from) !== true ||
         visibleById.get(edge.to) !== true ||
         (near !== undefined && (!near.has(edge.from) || !near.has(edge.to)))
-      const incident = focusId !== undefined && (edge.from === focusId || edge.to === focusId)
+      const direction = focusId === undefined ? null : focusDirection(edge, focusId)
+      const incident = direction !== null
       path.setAttribute(
         "opacity",
         dimmed ? String(DIMMED_EDGE) : incident ? String(FOCUS_EDGE_OPACITY) : String(REST_EDGE),
       )
-      path.setAttribute("stroke", incident && !dimmed ? FOCUS_EDGE : "#64778b")
+      path.setAttribute(
+        "stroke",
+        !dimmed && direction === "outgoing" ? FOCUS_OUT : !dimmed && direction === "incoming" ? FOCUS_IN : "#64778b",
+      )
       arrow.setAttribute(
         "opacity",
         dimmed ? String(DIMMED_EDGE) : incident ? String(FOCUS_EDGE_OPACITY) : String(REST_EDGE),
       )
+      if (!dimmed && incident) arrow.setAttribute("stroke", direction === "outgoing" ? FOCUS_OUT : FOCUS_IN)
+      else arrow.removeAttribute("stroke")
     }
     for (const { group, circle, label, node } of nodeEls) {
       const dimmed = visibleById.get(node.id) !== true || (near !== undefined && !near.has(node.id))
@@ -410,7 +419,12 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       }
       legend.append(button)
     }
-    for (const text of ["size = visible connections", "+N = recorded references not in this snapshot"]) {
+    for (const text of [
+      "size = visible connections",
+      "+N = recorded references not in this snapshot",
+      "amber edge: selected node depends on target",
+      "teal edge: target depends on selected node",
+    ]) {
       const item = doc.createElement("span")
       item.textContent = text
       legend.append(item)
