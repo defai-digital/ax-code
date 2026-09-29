@@ -2,6 +2,7 @@ import { useLanguage } from "@tui/context/language"
 import { createMemo, createSignal, onCleanup, onMount } from "solid-js"
 import { TextAttributes } from "ax-tui"
 import { useDialog } from "@tui/ui/dialog"
+import { DialogConfirm } from "@tui/ui/dialog-confirm"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
@@ -13,11 +14,17 @@ import { Log } from "@/util/log"
 import type { ScheduledTaskInfo, ScheduledTaskRunInfo } from "./dialog-scheduled-task-view-model"
 import {
   SCHEDULED_TASK_EVENTS,
+  cleanupConfirmMessage,
+  cleanupOptions,
+  cleanupResultMessage,
+  cleanupTargets,
+  deleteTaskMessage,
   runDescription,
   runTitle,
   sortTasks,
   taskDescription,
   taskStatusLabel,
+  type CleanupKind,
 } from "./dialog-scheduled-task-view-model"
 
 const log = Log.create({ service: "tui.dialog-scheduled-task" })
@@ -48,15 +55,23 @@ export function DialogScheduledTask() {
   const dialog = useDialog()
   const sdk = useSDK()
   const toast = useToast()
-  const { theme } = useTheme()
 
   const [tasks, setTasks] = createSignal<ScheduledTaskInfo[]>([])
-  const [toDelete, setToDelete] = createSignal<string>()
   const [busy, setBusy] = createSignal<string | null>(null)
 
   // Out-of-order refresh races: several scheduled.task events can arrive in a
   // burst and the slower response must not overwrite newer data.
   let refreshGeneration = 0
+
+  // The delete/cleanup flow replaces this dialog with a modal confirm; every
+  // exit path returns to a fresh task list afterwards.
+  function reopenList() {
+    dialog.replace(() => <DialogScheduledTask />)
+  }
+
+  // The cleanup picker must not reopen the list when the confirm modal takes
+  // over — only when the picker itself is dismissed.
+  let suppressCleanupCloseReopen = false
 
   async function refresh() {
     const current = ++refreshGeneration
@@ -87,11 +102,10 @@ export function DialogScheduledTask() {
 
   const options = createMemo(() => {
     const rows = sortTasks(tasks()).map((task) => ({
-      title: toDelete() === task.id ? `Press ctrl+d again to delete "${task.title}"` : task.title,
+      title: task.title,
       value: task.id,
       description: taskDescription(task),
       footer: <StatusBadge task={task} />,
-      bg: toDelete() === task.id ? theme.error : undefined,
     }))
     if (rows.length > 0) return rows
     return [
@@ -126,11 +140,77 @@ export function DialogScheduledTask() {
     }
   }
 
+  async function confirmDelete(task: ScheduledTaskInfo) {
+    const answer = await DialogConfirm.show(dialog, uiText("ui.deleteTask"), deleteTaskMessage(task))
+    if (answer === true) {
+      await run("delete", task.id, async () => {
+        const result = await sdk.client.scheduledTask.delete({ scheduledTaskID: task.id })
+        if (!result.error) toast.show({ message: `Deleted: ${task.title}`, variant: "info" })
+        return result
+      })
+    }
+    reopenList()
+  }
+
+  async function runBulkCleanup(targets: ScheduledTaskInfo[]) {
+    if (busy() !== null || targets.length === 0) return
+    setBusy("cleanup")
+    let deleted = 0
+    try {
+      for (const task of targets) {
+        const result = await sdk.client.scheduledTask.delete({ scheduledTaskID: task.id })
+        if (result.error) {
+          toast.show({ message: errorMessage(result.error, "Failed to delete scheduled task"), variant: "error" })
+          break
+        }
+        deleted++
+      }
+      if (deleted > 0) toast.show({ message: cleanupResultMessage(deleted), variant: "success" })
+    } catch (error) {
+      log.warn("scheduled task cleanup failed", { error })
+      toast.show({ message: errorMessage(error, "Failed to clean up scheduled tasks"), variant: "error" })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function confirmCleanup(kind: CleanupKind) {
+    suppressCleanupCloseReopen = true
+    const current = tasks()
+    const targets = cleanupTargets(current, kind)
+    const answer = await DialogConfirm.show(
+      dialog,
+      kind === "finished" ? "Clear finished tasks" : "Delete all scheduled tasks",
+      cleanupConfirmMessage(current, kind),
+    )
+    if (answer === true) await runBulkCleanup(targets)
+    suppressCleanupCloseReopen = false
+    reopenList()
+  }
+
+  function openCleanup() {
+    suppressCleanupCloseReopen = false
+    dialog.replace(
+      () => (
+        <DialogSelect
+          title="Clean up scheduled tasks"
+          options={cleanupOptions(tasks())}
+          onSelect={(option) => {
+            if (option.value !== "finished" && option.value !== "all") return
+            void confirmCleanup(option.value)
+          }}
+        />
+      ),
+      () => {
+        if (!suppressCleanupCloseReopen) reopenList()
+      },
+    )
+  }
+
   return (
     <DialogSelect
       title={uiText("ui.scheduledTasks")}
       options={options()}
-      onMove={() => setToDelete(undefined)}
       onSelect={(option) => {
         const task = taskByID(option.value)
         if (!task) return
@@ -175,12 +255,15 @@ export function DialogScheduledTask() {
           onTrigger: (option) => {
             const task = taskByID(option.value)
             if (!task) return
-            if (toDelete() !== task.id) {
-              setToDelete(task.id)
-              return
-            }
-            setToDelete(undefined)
-            void run("delete", task.id, () => sdk.client.scheduledTask.delete({ scheduledTaskID: task.id }))
+            void confirmDelete(task)
+          },
+        },
+        {
+          keybind: Keybind.parse("ctrl+o")[0],
+          title: "clean up",
+          onTrigger: () => {
+            if (tasks().length === 0) return
+            openCleanup()
           },
         },
       ]}

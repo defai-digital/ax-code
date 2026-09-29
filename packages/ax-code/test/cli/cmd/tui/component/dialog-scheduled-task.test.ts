@@ -1,6 +1,11 @@
 import { describe, expect, test } from "vitest"
 import type { ScheduledTaskInfo, ScheduledTaskRunInfo } from "@/cli/tui/component/dialog-scheduled-task-view-model"
 import {
+  cleanupConfirmMessage,
+  cleanupOptions,
+  cleanupResultMessage,
+  cleanupTargets,
+  deleteTaskMessage,
   runDescription,
   runTitle,
   scheduleChrome,
@@ -195,5 +200,51 @@ describe("dialog-scheduled-task view model", () => {
     const disconnected = scheduleStatus({ tasks: live, loadState: "ready", connected: false, now })
     expect(disconnected.kind).toBe("summary")
     if (disconnected.kind === "summary") expect(disconnected.disconnected).toBe(true)
+  })
+
+  test("deleteTaskMessage names the task and its schedule", () => {
+    const message = deleteTaskMessage(task({ title: "Deploy check", schedule: { type: "daily", time: "09:00" } }))
+    expect(message).toContain('"Deploy check"')
+    expect(message).toContain("daily 09:00")
+    expect(message).toContain("cannot be undone")
+  })
+
+  test("cleanupTargets selects finished tasks or everything", () => {
+    const tasks = [
+      task({ id: "sch_a", status: "active" }),
+      task({ id: "sch_p", status: "paused" }),
+      task({ id: "sch_d", status: "disabled" }),
+    ]
+    expect(cleanupTargets(tasks, "finished").map((item) => item.id)).toEqual(["sch_d"])
+    expect(cleanupTargets(tasks, "all")).toHaveLength(3)
+  })
+
+  test("cleanupOptions carries live counts and disables empty kinds", () => {
+    const tasks = [task({ id: "sch_a", status: "active" }), task({ id: "sch_d", status: "disabled" })]
+    const [finished, all] = cleanupOptions(tasks)
+    expect(finished).toMatchObject({ value: "finished", disabled: false })
+    expect(finished?.title).toContain("(1)")
+    expect(all).toMatchObject({ value: "all", disabled: false })
+    expect(all?.title).toContain("(2)")
+    expect(cleanupOptions([task({ status: "active" })])[0]?.disabled).toBe(true)
+    expect(cleanupOptions([])[1]?.disabled).toBe(true)
+  })
+
+  test("cleanupConfirmMessage counts targets and calls out active tasks", () => {
+    const tasks = [
+      task({ id: "sch_a", status: "active" }),
+      task({ id: "sch_b", status: "active" }),
+      task({ id: "sch_d", status: "disabled" }),
+    ]
+    expect(cleanupConfirmMessage(tasks, "finished")).toBe("Permanently delete 1 finished task? This cannot be undone.")
+    const all = cleanupConfirmMessage(tasks, "all")
+    expect(all).toContain("all 3 scheduled tasks")
+    expect(all).toContain("including 2 active tasks")
+    expect(cleanupConfirmMessage([task({ status: "disabled" })], "all")).not.toContain("including")
+  })
+
+  test("cleanupResultMessage pluralizes", () => {
+    expect(cleanupResultMessage(1)).toBe("Deleted 1 scheduled task")
+    expect(cleanupResultMessage(3)).toBe("Deleted 3 scheduled tasks")
   })
 })

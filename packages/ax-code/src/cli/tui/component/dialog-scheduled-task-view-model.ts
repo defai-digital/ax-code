@@ -96,6 +96,59 @@ export function runDescription(run: ScheduledTaskRunInfo): string {
   return parts.join(" · ")
 }
 
+/** Confirmation copy for deleting one task from the /schedule dialog. */
+export function deleteTaskMessage(task: ScheduledTaskInfo): string {
+  return `Permanently delete "${task.title}" (${scheduleSummary(task.schedule)})? This cannot be undone.`
+}
+
+export type CleanupKind = "finished" | "all"
+
+export function cleanupTargets(tasks: readonly ScheduledTaskInfo[], kind: CleanupKind): ScheduledTaskInfo[] {
+  return kind === "finished" ? tasks.filter((task) => task.status === "disabled") : [...tasks]
+}
+
+function pluralize(count: number, singular: string): string {
+  return `${count} ${singular}${count === 1 ? "" : "s"}`
+}
+
+/** Options for the cleanup picker: bulk removal shortcuts with live counts. */
+export function cleanupOptions(tasks: readonly ScheduledTaskInfo[]): {
+  title: string
+  value: CleanupKind
+  description: string
+  disabled?: boolean
+}[] {
+  const finished = cleanupTargets(tasks, "finished").length
+  return [
+    {
+      title: `Clear finished (${finished})`,
+      value: "finished",
+      description: "Delete every task that already ran to completion",
+      disabled: finished === 0,
+    },
+    {
+      title: `Delete all (${tasks.length})`,
+      value: "all",
+      description: "Delete every scheduled task, including active and paused",
+      disabled: tasks.length === 0,
+    },
+  ]
+}
+
+export function cleanupConfirmMessage(tasks: readonly ScheduledTaskInfo[], kind: CleanupKind): string {
+  const targets = cleanupTargets(tasks, kind)
+  if (kind === "finished") {
+    return `Permanently delete ${pluralize(targets.length, "finished task")}? This cannot be undone.`
+  }
+  const active = targets.filter((task) => task.status === "active").length
+  const activeNote = active > 0 ? `, including ${pluralize(active, "active task")}` : ""
+  return `Permanently delete all ${pluralize(targets.length, "scheduled task")}${activeNote}? This cannot be undone.`
+}
+
+export function cleanupResultMessage(count: number): string {
+  return `Deleted ${pluralize(count, "scheduled task")}`
+}
+
 export const SCHEDULED_TASK_EVENTS = [
   "scheduled.task.created",
   "scheduled.task.updated",
