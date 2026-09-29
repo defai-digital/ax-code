@@ -134,8 +134,9 @@ jobs:
       # Install deterministically, then qualify PTY on each native architecture.
       - name: Install deps
         run: pnpm install --frozen-lockfile --ignore-scripts
+      # pnpm 10.33.4's node-gyp 11.5.0 rejects Visual Studio 2026 on windows-11-arm.
       - name: Build Windows PTY native addons
-        run: pnpm --dir packages/ax-code rebuild node-pty-prebuilt-multiarch
+        run: node script/rebuild-node-pty.mjs
       - name: Verify Windows PTY build configuration
         run: node .github/scripts/assert-windows-pty-build.cjs
       - name: Test native PTY input, output, resize, and exit
