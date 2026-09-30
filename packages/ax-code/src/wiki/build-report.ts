@@ -1,5 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import { parseJsonStrict } from "../util/json-value"
 
 /**
  * Per-build report for the native AX Wiki compiler.
@@ -74,7 +75,7 @@ export async function writeWikiBuildReport(root: string, wikiDir: string, report
 export async function readWikiBuildReport(root: string, wikiDir: string): Promise<WikiBuildReport | undefined> {
   try {
     const raw = await fs.readFile(wikiBuildReportPath(root, wikiDir), "utf8")
-    const parsed = JSON.parse(raw) as WikiBuildReport
+    const parsed = parseJsonStrict(raw) as WikiBuildReport
     if (typeof parsed !== "object" || parsed === null) return undefined
     if (parsed.schemaVersion !== WIKI_BUILD_REPORT_SCHEMA_VERSION) return undefined
     if (parsed.outcome !== "completed" && parsed.outcome !== "partial" && parsed.outcome !== "failed") return undefined

@@ -1,5 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import { parseJsonStrict } from "../util/json-value"
 
 /**
  * Durable failure memory for background wiki maintenance (ADR-155 item 5).
@@ -47,7 +48,7 @@ export function wikiFailureCooldownMs(consecutiveFailures: number): number {
 /** Tolerant read: a missing, unreadable, or malformed memory is `undefined`. */
 export async function readWikiFailureMemory(root: string, wikiDir: string): Promise<WikiFailureMemory | undefined> {
   try {
-    const parsed = JSON.parse(await fs.readFile(wikiFailureMemoryPath(root, wikiDir), "utf8")) as WikiFailureMemory
+    const parsed = parseJsonStrict(await fs.readFile(wikiFailureMemoryPath(root, wikiDir), "utf8")) as WikiFailureMemory
     if (typeof parsed !== "object" || parsed === null) return undefined
     if (parsed.schemaVersion !== WIKI_FAILURE_MEMORY_SCHEMA_VERSION) return undefined
     if (typeof parsed.consecutiveFailures !== "number" || typeof parsed.lastFailureAt !== "string") return undefined
