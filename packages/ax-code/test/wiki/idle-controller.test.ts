@@ -85,7 +85,7 @@ describe("default idle Wiki maintenance", () => {
     expect(s.build).not.toHaveBeenCalled()
     s.idle.mockResolvedValue(true)
     s.controller.activity()
-    await vi.advanceTimersByTimeAsync(5000)
+    await vi.advanceTimersByTimeAsync(0)
     expect(s.build).toHaveBeenCalledTimes(1)
     await s.controller.dispose()
   })

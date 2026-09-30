@@ -156,7 +156,10 @@ export function createWikiIdleController(input: {
     activityRevision++
     idleSince = Date.now()
     controller?.abort(new DOMException("Foreground work has priority", "AbortError"))
-    schedule(pollMs)
+    // A foreground transition can arrive after an explicit refresh queued its
+    // immediate check. Preserve that request's prompt once activity invalidates
+    // the check; the check still re-evaluates policy and foreground blockers.
+    schedule(explicit ? 0 : pollMs)
   }
   schedule(idleMs)
   return {
