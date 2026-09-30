@@ -51,9 +51,13 @@ const execFileAsync = promisify(execFile)
 const PAGE_SUMMARY_MAX = 600
 const PAGE_SYMBOLS_MAX = 80
 const PAGE_SYMBOL_NAME_MAX = 256
-// The aux ceiling is 32_000. GLM-class models spend that budget on hidden
-// reasoning and emit no object chunks before the page deadline. 8_192 with
-// low reasoning effort finishes a page inside the deadline.
+// GLM-class gateways spend the whole aux budget on hidden reasoning and emit
+// no object chunks before the page deadline (fc3fa1893). Those models are
+// capped at 8_192 tokens and asked for low reasoning effort, which finishes a
+// page inside the deadline. All other models keep the full aux budget: they
+// emit real content, and capping them truncates the page JSON mid-object
+// (finishReason=length on deepseek-flash), which failed every update and kept
+// the wiki stale forever.
 export const WIKI_PAGE_OUTPUT_TOKEN_MAX = 8_192
 const WIKI_PAGE_TIMEOUT_MS = 180_000
 const WIKI_LOW_EFFORT_EXCLUDED_PROVIDERS = new Set([
@@ -188,7 +192,11 @@ function symbolGloss(nameHint: string, value: unknown): { name: string; summary:
 }
 
 export function wikiPageOutputTokens(model: Provider.Model): number {
-  return Math.min(ProviderTransform.auxMaxOutputTokens(model), WIKI_PAGE_OUTPUT_TOKEN_MAX)
+  const aux = ProviderTransform.auxMaxOutputTokens(model)
+  // Scope the 8192 cap to the GLM pathology it was introduced for: the same
+  // predicate that requests low reasoning effort. Non-GLM models must keep
+  // the full aux budget or their page JSON gets cut off before it closes.
+  return wikiGlmNeedsLowEffort(model) ? Math.min(aux, WIKI_PAGE_OUTPUT_TOKEN_MAX) : aux
 }
 
 /**

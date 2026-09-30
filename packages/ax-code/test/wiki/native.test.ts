@@ -182,7 +182,9 @@ describe("wiki native generator", () => {
     const request = vi.mocked(generateObject).mock.calls[0]?.[0] as { maxOutputTokens?: number }
     expect(request.maxOutputTokens).toEqual(expect.any(Number))
     expect(request.maxOutputTokens).toBeGreaterThan(0)
-    expect(request.maxOutputTokens).toBeLessThanOrEqual(WIKI_PAGE_OUTPUT_TOKEN_MAX)
+    // groq/openai/gpt-oss-20b is non-GLM: it gets its full aux budget
+    // min(65536, 32000, GROQ_OUTPUT_TOKEN_MAX=4096), not the GLM 8192 page cap.
+    expect(request.maxOutputTokens).toBe(4_096)
     expect(generateObject.mock.calls[0][0].messages[0].content).toContain("json object with summary")
   })
 
@@ -554,6 +556,16 @@ describe("wiki page generation budget", () => {
     const small = wikiModel({ id: "glm-5.3-flash" })
     small.limit.output = 1_024
     expect(wikiPageOutputTokens(small)).toBe(1_024)
+  })
+
+  test("keeps the full aux budget for non-GLM models", () => {
+    // Regression: the global 8192 cap truncated deepseek-flash page JSON
+    // mid-object (finishReason=length), failing every wiki update. Only
+    // GLM-class gateways are capped; other models use their aux budget.
+    const deepseek = wikiModel({ id: "deepseek-flash", apiID: "deepseek-flash" })
+    deepseek.limit.output = 16_384
+    expect(wikiPageOutputTokens(deepseek)).toBe(16_384)
+    expect(wikiPageOutputTokens(wikiModel({ id: "gpt-4.1", reasoning: false }))).toBe(32_000)
   })
 
   test("asks a GLM flash gateway for low reasoning effort", () => {
