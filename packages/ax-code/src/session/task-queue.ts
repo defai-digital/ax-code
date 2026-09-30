@@ -5,14 +5,14 @@ import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Instance } from "@/project/instance"
 import { ProjectID } from "@/project/schema"
-import { NotFoundError, and, asc, desc, eq, gt, inArray, notInArray, sql } from "@/storage/db"
-import type { Database } from "@/storage/db"
+import { Database, NotFoundError, and, asc, desc, eq, gt, inArray, notInArray, sql } from "@/storage/db"
 import { Log } from "@/util/log"
 import { JsonNumber } from "@/util/schema"
 import { SessionMetadata } from "./metadata"
 import { MessageID, PartID, ScheduledTaskID, SessionID, TaskQueueID } from "./schema"
 import { TaskQueueTable } from "./session.sql"
 import { SessionShard } from "./shard"
+import { ForegroundOwnership } from "./foreground-ownership"
 
 const log = Log.create({ service: "task-queue" })
 
@@ -1594,7 +1594,7 @@ export namespace TaskQueue {
     failed: Info[]
     requeued: Info[]
     preserved: Info[]
-    /** Rows with a fresh heartbeat: another backend for this project still owns them. Re-check after the window. */
+    /** Rows awaiting another recovery pass because their heartbeat is fresh or foreground ownership is held. */
     live: Info[]
   }
 
@@ -1606,151 +1606,226 @@ export namespace TaskQueue {
     const livenessMs = options?.livenessMs ?? RESTART_RECOVERY_LIVENESS_MS
     const interruptedStatuses = ["running", "blocked_permission", "blocked_question"] as const
     const recoverableStatuses = [...interruptedStatuses, "waiting_for_idle"] as const
-    const changed = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
-      const rows = db
-        .select()
-        .from(TaskQueueTable)
-        .where(
-          and(eq(TaskQueueTable.project_id, Instance.project.id), inArray(TaskQueueTable.status, recoverableStatuses)),
-        )
-        .all()
+    // Resolve the registry before acquiring any session sidecar, even when the
+    // queue lives in a project shard. Keep acquired guards through the commit.
+    Database.use(() => {})
+    const ownership = new Map<string, ForegroundOwnership.Lease | "busy" | "invalid">()
+    let transactionSucceeded = false
+    let changed: RecoverInterruptedResult
+    try {
+      changed = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+        const rows = db
+          .select()
+          .from(TaskQueueTable)
+          .where(
+            and(
+              eq(TaskQueueTable.project_id, Instance.project.id),
+              inArray(TaskQueueTable.status, recoverableStatuses),
+            ),
+          )
+          .all()
 
-      const failed: Info[] = []
-      const requeued: Info[] = []
-      const preserved: Info[] = []
-      const live: Info[] = []
-      for (const row of rows) {
-        // Every InstanceBootstrap runs this sweep, and more than one backend
-        // can serve the same project at once (a TUI backend plus `ax-code run`
-        // launched from inside one of its sessions, a second terminal, the
-        // desktop app). A row whose owner is alive and still heartbeating
-        // belongs to one of those live processes; failing or requeueing it
-        // here would kill a task that is actively running elsewhere.
-        if (isLiveRow(row, now, livenessMs)) {
-          live.push(fromRow(row))
-          continue
-        }
-        const workflowItem = hasWorkflowPayload(row.payload)
-        const liveTaskSubagent = isLiveTaskSubagentPayload(row.payload) && row.kind === "subagent"
-        const scheduledBeforePrompt =
-          row.status === "running" &&
-          row.kind === "automation" &&
-          row.session_id === null &&
-          typeof row.payload["scheduledTaskID"] === "string" &&
-          !row.payload["workflowTemplateID"]
-        // Workflow children blocked on permission/question hold their pending
-        // request only in memory, so a restart leaves them unresolvable. Requeue
-        // them (like running children) rather than preserving a permanent wedge.
-        if (
-          row.status === "waiting_for_idle" ||
-          (workflowItem &&
-            (row.status === "running" || row.status === "blocked_permission" || row.status === "blocked_question")) ||
-          scheduledBeforePrompt ||
-          (liveTaskSubagent &&
-            (row.status === "running" || row.status === "blocked_permission" || row.status === "blocked_question"))
-        ) {
+        const failed: Info[] = []
+        const requeued: Info[] = []
+        const preserved: Info[] = []
+        const live: Info[] = []
+        for (const row of rows) {
+          // Every InstanceBootstrap runs this sweep, and more than one backend
+          // can serve the same project at once (a TUI backend plus `ax-code run`
+          // launched from inside one of its sessions, a second terminal, the
+          // desktop app). A row whose owner is alive and still heartbeating
+          // belongs to one of those live processes; failing or requeueing it
+          // here would kill a task that is actively running elsewhere.
+          if (isLiveRow(row, now, livenessMs)) {
+            live.push(fromRow(row))
+            continue
+          }
+          const workflowItem = hasWorkflowPayload(row.payload)
+          const liveTaskSubagent = isLiveTaskSubagentPayload(row.payload) && row.kind === "subagent"
+          const scheduledBeforePrompt =
+            row.status === "running" &&
+            row.kind === "automation" &&
+            row.session_id === null &&
+            typeof row.payload["scheduledTaskID"] === "string" &&
+            !row.payload["workflowTemplateID"]
+          // Workflow children blocked on permission/question hold their pending
+          // request only in memory, so a restart leaves them unresolvable. Requeue
+          // them (like running children) rather than preserving a permanent wedge.
+          if (
+            row.status === "waiting_for_idle" ||
+            (workflowItem &&
+              (row.status === "running" || row.status === "blocked_permission" || row.status === "blocked_question")) ||
+            scheduledBeforePrompt ||
+            (liveTaskSubagent &&
+              (row.status === "running" || row.status === "blocked_permission" || row.status === "blocked_question"))
+          ) {
+            const updated = db
+              .update(TaskQueueTable)
+              .set({
+                status: "queued",
+                error: null,
+                time_started: null,
+                time_completed: null,
+                time_updated: now,
+              })
+              .where(eq(TaskQueueTable.id, row.id))
+              .returning()
+              .get()
+            if (updated) requeued.push(fromRow(updated))
+            continue
+          }
+          if (workflowItem) {
+            preserved.push(fromRow(row))
+            continue
+          }
+
           const updated = db
             .update(TaskQueueTable)
             .set({
-              status: "queued",
-              error: null,
-              time_started: null,
-              time_completed: null,
+              status: "failed",
+              error: "Task interrupted by backend restart; inspect output and retry when safe.",
+              payload: { ...row.payload, [INTERRUPTION_REASON_KEY]: "backend_restart" satisfies InterruptionReason },
+              time_completed: now,
               time_updated: now,
             })
             .where(eq(TaskQueueTable.id, row.id))
             .returning()
             .get()
+          if (updated) failed.push(fromRow(updated))
+        }
+
+        // Admitted-but-never-applied steers: the row was cancelled on admission
+        // (`steeredInto` set, no `steeredAppliedAt` stamp — see
+        // TaskQueue.markSteeredApplied). When the owning generation died before
+        // the apply landed (e.g. a backend restart between admission and the
+        // drain commit), the follow-up text would be lost with the cancelled
+        // row. Defer fresh rows and verify OS ownership before requeueing stale
+        // session-bound rows; a suspended owner may miss heartbeat deadlines. Rows carrying an owner
+        // heartbeat (`steeredHeartbeatAt`, stamped at admission by
+        // TaskQueue.cancelSteered and refreshed by the live backend at each
+        // step boundary of the target generation — see TaskQueue.steerHeartbeat
+        // — and on an interval until the apply lands — see
+        // TaskQueue.steerHeartbeatTick) are judged on the heartbeat instead of
+        // the admission time, so a generation still driving toward the apply
+        // behind a long-running tool call is not requeued and double-executed
+        // by a second backend booting mid-window. Bounded to the last 24h so
+        // ancient steers do not resurface long after the user moved on, and
+        // clear the steer audit keys — the row returns to the plain queue.
+        const STEER_RECOVERY_WINDOW_MS = 24 * 60 * 60 * 1000
+        const steeredRows = db
+          .select()
+          .from(TaskQueueTable)
+          .where(
+            and(
+              eq(TaskQueueTable.project_id, Instance.project.id),
+              eq(TaskQueueTable.status, "cancelled"),
+              gt(TaskQueueTable.time_updated, now - STEER_RECOVERY_WINDOW_MS),
+            ),
+          )
+          .all()
+        for (const row of steeredRows) {
+          if (typeof row.payload["steeredInto"] !== "string") continue
+          if (row.payload["steeredAppliedAt"] !== undefined) continue
+          const steeredHeartbeatAt = row.payload["steeredHeartbeatAt"]
+          if (typeof steeredHeartbeatAt === "number") {
+            // The admitting backend is alive and stamping at step boundaries;
+            // it can still apply the steer. A fresh heartbeat also requests a
+            // later pass in case that owner died just before this bootstrap.
+            if (now - steeredHeartbeatAt < livenessMs) {
+              live.push(fromRow(row))
+              continue
+            }
+          } else {
+            // Rows written before owner heartbeats existed fall back to the
+            // admission timestamp.
+            const steeredAt = typeof row.payload["steeredAt"] === "number" ? row.payload["steeredAt"] : 0
+            if (now - steeredAt < livenessMs) {
+              live.push(fromRow(row))
+              continue
+            }
+          }
+          // Heartbeat expiry cannot revoke a suspended foreground owner. Probe
+          // the same OS guard used by prompt/shell admission before restoring the
+          // text, and leave the old journal for that admission's transcript repair.
+          if (row.session_id) {
+            let guard = ownership.get(row.session_id)
+            if (!guard) {
+              try {
+                // Try-only acquisition (timeout=0) avoids blocking a foreground
+                // owner that already holds its guard and needs this queue DB.
+                guard = ForegroundOwnership.acquire(Database.Path, row.session_id)
+              } catch (error) {
+                if (ForegroundOwnership.BusyError.isInstance(error)) {
+                  guard = "busy"
+                } else if (ForegroundOwnership.OwnershipError.isInstance(error)) {
+                  guard = "invalid"
+                  log.warn("pending steer restart recovery blocked by foreground ownership", {
+                    taskID: row.id,
+                    sessionID: row.session_id,
+                    error,
+                  })
+                } else {
+                  throw error
+                }
+              }
+              ownership.set(row.session_id, guard)
+            }
+            if (guard === "busy") {
+              live.push(fromRow(row))
+              continue
+            }
+            if (guard === "invalid") {
+              preserved.push(fromRow(row))
+              continue
+            }
+          }
+          const payload = { ...row.payload }
+          delete payload["steeredInto"]
+          delete payload["steeredAt"]
+          delete payload["steeredAppliedAt"]
+          delete payload["steeredHeartbeatAt"]
+          const updated = db
+            .update(TaskQueueTable)
+            .set({
+              status: "queued",
+              error: null,
+              payload,
+              time_started: null,
+              time_completed: null,
+              time_updated: now,
+            })
+            .where(
+              and(
+                eq(TaskQueueTable.id, row.id),
+                eq(TaskQueueTable.status, "cancelled"),
+                sql`json_extract(${TaskQueueTable.payload}, '$.steeredInto') = ${row.payload["steeredInto"]}`,
+                sql`json_type(${TaskQueueTable.payload}, '$.steeredAppliedAt') IS NULL`,
+              ),
+            )
+            .returning()
+            .get()
           if (updated) requeued.push(fromRow(updated))
-          continue
-        }
-        if (workflowItem) {
-          preserved.push(fromRow(row))
-          continue
         }
 
-        const updated = db
-          .update(TaskQueueTable)
-          .set({
-            status: "failed",
-            error: "Task interrupted by backend restart; inspect output and retry when safe.",
-            payload: { ...row.payload, [INTERRUPTION_REASON_KEY]: "backend_restart" satisfies InterruptionReason },
-            time_completed: now,
-            time_updated: now,
-          })
-          .where(eq(TaskQueueTable.id, row.id))
-          .returning()
-          .get()
-        if (updated) failed.push(fromRow(updated))
+        return { failed, requeued, preserved, live }
+      })
+      transactionSucceeded = true
+    } finally {
+      const errors: unknown[] = []
+      for (const lease of ownership.values()) {
+        if (typeof lease === "string") continue
+        try {
+          lease.release(false)
+        } catch (error) {
+          errors.push(error)
+        }
       }
-
-      // Admitted-but-never-applied steers: the row was cancelled on admission
-      // (`steeredInto` set, no `steeredAppliedAt` stamp — see
-      // TaskQueue.markSteeredApplied). When the owning generation died before
-      // the apply landed (e.g. a backend restart between admission and the
-      // drain commit), the follow-up text would be lost with the cancelled
-      // row. Requeue rows whose steer is older than the liveness window: a
-      // still-live peer applies and stamps within it. Rows carrying an owner
-      // heartbeat (`steeredHeartbeatAt`, stamped at admission by
-      // TaskQueue.cancelSteered and refreshed by the live backend at each
-      // step boundary of the target generation — see TaskQueue.steerHeartbeat
-      // — and on an interval until the apply lands — see
-      // TaskQueue.steerHeartbeatTick) are judged on the heartbeat instead of
-      // the admission time, so a generation still driving toward the apply
-      // behind a long-running tool call is not requeued and double-executed
-      // by a second backend booting mid-window. Bounded to the last 24h so
-      // ancient steers do not resurface long after the user moved on, and
-      // clear the steer audit keys — the row returns to the plain queue.
-      const STEER_RECOVERY_WINDOW_MS = 24 * 60 * 60 * 1000
-      const steeredRows = db
-        .select()
-        .from(TaskQueueTable)
-        .where(
-          and(
-            eq(TaskQueueTable.project_id, Instance.project.id),
-            eq(TaskQueueTable.status, "cancelled"),
-            gt(TaskQueueTable.time_updated, now - STEER_RECOVERY_WINDOW_MS),
-          ),
-        )
-        .all()
-      for (const row of steeredRows) {
-        if (typeof row.payload["steeredInto"] !== "string") continue
-        if (row.payload["steeredAppliedAt"] !== undefined) continue
-        const steeredHeartbeatAt = row.payload["steeredHeartbeatAt"]
-        if (typeof steeredHeartbeatAt === "number") {
-          // The admitting backend is alive and stamping at step boundaries;
-          // it will apply the steer. Only a stale heartbeat (owner hung or
-          // dead since) falls through to the requeue below.
-          if (now - steeredHeartbeatAt < livenessMs) continue
-        } else {
-          // Rows written before owner heartbeats existed fall back to the
-          // admission timestamp.
-          const steeredAt = typeof row.payload["steeredAt"] === "number" ? row.payload["steeredAt"] : 0
-          if (now - steeredAt < livenessMs) continue
-        }
-        const payload = { ...row.payload }
-        delete payload["steeredInto"]
-        delete payload["steeredAt"]
-        delete payload["steeredAppliedAt"]
-        delete payload["steeredHeartbeatAt"]
-        const updated = db
-          .update(TaskQueueTable)
-          .set({
-            status: "queued",
-            error: null,
-            payload,
-            time_started: null,
-            time_completed: null,
-            time_updated: now,
-          })
-          .where(eq(TaskQueueTable.id, row.id))
-          .returning()
-          .get()
-        if (updated) requeued.push(fromRow(updated))
+      if (errors.length > 0) {
+        log.error("pending steer recovery guard cleanup failed", { errors })
+        // Preserve a transaction failure while still releasing every guard.
+        if (transactionSucceeded) throw new AggregateError(errors, "Pending steer recovery guard cleanup failed")
       }
-
-      return { failed, requeued, preserved, live }
-    })
+    }
 
     for (const item of [...changed.failed, ...changed.requeued]) {
       publishUpdated(item)

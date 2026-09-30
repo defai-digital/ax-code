@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
+import fs from "node:fs"
+import { ForegroundOwnership } from "../../src/session/foreground-ownership"
 import { Bus } from "../../src/bus"
 import { Permission } from "../../src/permission"
 import { Instance } from "../../src/project/instance"
@@ -744,6 +746,7 @@ describe("TaskQueue", () => {
         // window even though the admission itself is long past it.
         const fresh = await TaskQueue.recoverInterrupted({ now: admittedAt + 1_000 })
         expect(fresh.requeued).toEqual([])
+        expect(fresh.live.map((item) => item.id)).toEqual([lost.id])
         expect((await TaskQueue.get(lost.id)).status).toBe("cancelled")
 
         // A heartbeat gone stale proves the admitting backend died before
@@ -759,6 +762,163 @@ describe("TaskQueue", () => {
         expect(restored.payload["steeredAt"]).toBeUndefined()
         expect(restored.payload["steeredAppliedAt"]).toBeUndefined()
         expect(restored.payload["steeredHeartbeatAt"]).toBeUndefined()
+      },
+    })
+  })
+
+  test("stale steer recovery waits for foreground ownership and retains the prior journal", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const item = await TaskQueue.enqueue({ sessionID: session.id, kind: "followup", title: "Owned correction" })
+        const generation = "8b9b2313-8498-47f2-b9ad-f2fcfc4f6085"
+        await TaskQueue.cancelSteered(item.id, { steeredInto: generation, steeredAt: Date.now() })
+        const before = await TaskQueue.get(item.id)
+        const now = Date.now() + TaskQueue.RESTART_RECOVERY_LIVENESS_MS + 1_000
+        const owner = ForegroundOwnership.acquire(Database.Path, session.id)
+        const journal = owner.begin()
+        const paths = ForegroundOwnership.paths(Database.Path, session.id)
+        try {
+          const held = await TaskQueue.recoverInterrupted({ now })
+          expect(held.requeued).toEqual([])
+          expect(held.live.map((row) => row.id)).toEqual([item.id])
+          expect(await TaskQueue.get(item.id)).toEqual(before)
+          expect(fs.readFileSync(paths.journal, "utf8")).toBe(JSON.stringify(journal))
+        } finally {
+          owner.release(false)
+        }
+        const recovered = await TaskQueue.recoverInterrupted({ now })
+        expect(recovered.requeued.map((row) => row.id)).toEqual([item.id])
+        expect((await TaskQueue.get(item.id)).payload["steeredInto"]).toBeUndefined()
+        expect(fs.readFileSync(paths.journal, "utf8")).toBe(JSON.stringify(journal))
+        expect((await TaskQueue.recoverInterrupted({ now })).requeued).toEqual([])
+      },
+    })
+  })
+
+  test.each(["invalid-json", "foreign-host"])("steer recovery preserves invalid ownership (%s)", async (mode) => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const item = await TaskQueue.enqueue({ sessionID: session.id, kind: "followup", title: "Unsafe correction" })
+        const generation = "8b9b2313-8498-47f2-b9ad-f2fcfc4f6085"
+        await TaskQueue.cancelSteered(item.id, { steeredInto: generation, steeredAt: Date.now() })
+        const before = await TaskQueue.get(item.id)
+        const owner = ForegroundOwnership.acquire(Database.Path, session.id)
+        const journal = owner.begin()
+        owner.release(false)
+        const paths = ForegroundOwnership.paths(Database.Path, session.id)
+        const raw = mode === "invalid-json" ? "invalid-json" : JSON.stringify({ ...journal, host: "foreign-host" })
+        fs.writeFileSync(paths.journal, raw)
+        const now = Date.now() + TaskQueue.RESTART_RECOVERY_LIVENESS_MS + 1_000
+        const recovered = await TaskQueue.recoverInterrupted({ now })
+        expect(recovered.requeued).toEqual([])
+        expect(recovered.preserved.map((row) => row.id)).toEqual([item.id])
+        expect(await TaskQueue.get(item.id)).toEqual(before)
+        expect(fs.readFileSync(paths.journal, "utf8")).toBe(raw)
+      },
+    })
+  })
+
+  test("one recovery pass restores all pending corrections for the same session", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const ids: TaskQueueID[] = []
+        for (const title of ["First correction", "Second correction", "Third correction"]) {
+          const item = await TaskQueue.enqueue({ sessionID: session.id, kind: "followup", title })
+          await TaskQueue.cancelSteered(item.id, {
+            steeredInto: "8b9b2313-8498-47f2-b9ad-f2fcfc4f6085",
+            steeredAt: Date.now(),
+          })
+          ids.push(item.id)
+        }
+        const recovered = await TaskQueue.recoverInterrupted({
+          now: Date.now() + TaskQueue.RESTART_RECOVERY_LIVENESS_MS + 1_000,
+        })
+        expect(recovered.requeued.map((row) => row.id)).toEqual(ids)
+        expect(recovered.live).toEqual([])
+        expect((await TaskQueue.list({ sessionID: session.id, status: "queued" })).map((row) => row.id)).toEqual(ids)
+      },
+    })
+  })
+
+  test("recovery does not restore a steer resolved after its snapshot", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const item = await TaskQueue.enqueue({ sessionID: session.id, kind: "followup", title: "Resolved correction" })
+        const generation = "8b9b2313-8498-47f2-b9ad-f2fcfc4f6085"
+        await TaskQueue.cancelSteered(item.id, { steeredInto: generation, steeredAt: Date.now() })
+        const acquire = ForegroundOwnership.acquire
+        vi.spyOn(ForegroundOwnership, "acquire").mockImplementation((db, id) => {
+          const lease = acquire(db, id)
+          // Fault injection at the guard boundary; the production drain stamps
+          // this marker in the same transaction as its admitted user message.
+          TaskQueue.markSteeredAppliedInTransaction(item.id, generation)
+          return lease
+        })
+        const recovered = await TaskQueue.recoverInterrupted({
+          now: Date.now() + TaskQueue.RESTART_RECOVERY_LIVENESS_MS + 1_000,
+        })
+        expect(recovered.requeued).toEqual([])
+        const after = await TaskQueue.get(item.id)
+        expect(after.status).toBe("cancelled")
+        expect(after.payload["steeredAppliedAt"]).toBeDefined()
+      },
+    })
+  })
+
+  test("recovery releases every guard and preserves the transaction error after cleanup failure", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const sessions = await Promise.all([Session.create({}), Session.create({}), Session.create({})])
+        const ids: TaskQueueID[] = []
+        for (const session of sessions) {
+          const item = await TaskQueue.enqueue({ sessionID: session.id, kind: "followup", title: "Pending correction" })
+          await TaskQueue.cancelSteered(item.id, {
+            steeredInto: "8b9b2313-8498-47f2-b9ad-f2fcfc4f6085",
+            steeredAt: Date.now(),
+          })
+          ids.push(item.id)
+        }
+        const acquire = ForegroundOwnership.acquire
+        const failure = new Error("Injected transaction failure")
+        let count = 0
+        vi.spyOn(ForegroundOwnership, "acquire").mockImplementation((db, id) => {
+          count++
+          if (count === 3) throw failure
+          const lease = acquire(db, id)
+          if (count !== 1) return lease
+          return {
+            ...lease,
+            release(clean) {
+              lease.release(clean)
+              throw new Error("Injected cleanup failure")
+            },
+          }
+        })
+        await expect(
+          TaskQueue.recoverInterrupted({
+            now: Date.now() + TaskQueue.RESTART_RECOVERY_LIVENESS_MS + 1_000,
+          }),
+        ).rejects.toBe(failure)
+        vi.restoreAllMocks()
+        for (const id of ids) expect((await TaskQueue.get(id)).status).toBe("cancelled")
+        for (const session of sessions) {
+          const lease = acquire(Database.Path, session.id)
+          lease.release(false)
+        }
       },
     })
   })
