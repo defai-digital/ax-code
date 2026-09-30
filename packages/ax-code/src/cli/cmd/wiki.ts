@@ -14,10 +14,13 @@ import {
   gitHeadCommit,
   lintWiki,
   planNativeWiki,
+  readWikiBuildReport,
   relatedWikiPages,
   resolveWikiRuntimeConfig,
   runNativeWiki,
+  summarizeWikiBuildReport,
   writeWikiCards,
+  type WikiBuildReport,
   type WikiRuntimeConfig,
   type WikiStatus,
 } from "../../wiki"
@@ -44,9 +47,9 @@ export function wikiStatusExitCode(status: Pick<WikiStatus, "exists" | "healthy"
   return 0
 }
 
-function printStatus(status: WikiStatus, json: boolean) {
+function printStatus(status: WikiStatus, json: boolean, report?: WikiBuildReport) {
   if (json) {
-    console.log(JSON.stringify(status, null, 2))
+    console.log(JSON.stringify(report ? { ...status, lastBuild: report } : status, null, 2))
     return
   }
   UI.println(`${UI.Style.TEXT_INFO_BOLD}AX Wiki${UI.Style.TEXT_NORMAL}`)
@@ -58,6 +61,7 @@ function printStatus(status: WikiStatus, json: boolean) {
   UI.println(`  stale:    ${status.stale ? "yes" : "no"}`)
   UI.println(`  freshness: ${status.freshness}`)
   UI.println(`  healthy:  ${status.healthy ? "yes" : "no"}`)
+  if (report) UI.println(`  ${summarizeWikiBuildReport(report)}`)
   UI.println("")
   UI.println("Recommendations:")
   for (const recommendation of status.recommendations) UI.println(`  - ${recommendation}`)
@@ -90,7 +94,7 @@ export const WikiStatusCommand = cmd({
         repositoryHead: await gitHeadCommit(root),
         config: engineConfig(config),
       })
-      printStatus(status, args.json === true)
+      printStatus(status, args.json === true, await readWikiBuildReport(root, config.dir))
       process.exitCode = wikiStatusExitCode(status)
     })
   },
@@ -116,9 +120,10 @@ export const WikiDoctorCommand = cmd({
         repositoryHead: head,
         config: engineConfig(config),
       })
-      if (args.json) console.log(JSON.stringify({ status, lint }, null, 2))
+      const report = await readWikiBuildReport(root, config.dir)
+      if (args.json) console.log(JSON.stringify({ status, lint, ...(report ? { lastBuild: report } : {}) }, null, 2))
       else {
-        printStatus(status, false)
+        printStatus(status, false, report)
         UI.println("")
         UI.println(
           `Lint: ok=${lint.ok} stale=${lint.stale} pages=${lint.stats.pageCount} symbols=${lint.stats.symbolCount}`,

@@ -43,6 +43,7 @@ import { ProviderTransform } from "../provider/transform"
 import { Session } from "../session"
 import { MessageV2 } from "../session/message-v2"
 import type { SessionID } from "../session/schema"
+import { writeWikiBuildReport, WIKI_BUILD_REPORT_SCHEMA_VERSION, type WikiBuildReportPageOutcome } from "./build-report"
 import { engineConfig, resolveWikiRuntimeConfig } from "./config"
 import { SYMBOL_SUMMARIES_MAX, SYMBOL_SUMMARY_MAX } from "@ax-code/ax-wiki/node"
 
@@ -702,6 +703,17 @@ export async function runNativeWiki(input: {
     const model = await resolveModel(config.model, input.sessionID)
     input.signal?.throwIfAborted()
     const repositoryHead = await gitHeadCommit(input.root)
+    const buildStartedAt = new Date()
+    const buildStartedMs = Date.now()
+    const outcomes = new Map<string, WikiBuildReportPageOutcome>()
+    let pageCount: number | undefined
+    let attempted = 0
+    const passThroughProgress = input.onProgress
+    const onProgress = (progress: WikiBuildProgress) => {
+      if (progress.type === "plan") pageCount = progress.pageCount
+      if (progress.type === "page_start") attempted += 1
+      passThroughProgress?.(progress)
+    }
     const snapshot: EvidenceSnapshot = {
       root: input.root,
       revision: {
@@ -711,6 +723,7 @@ export async function runNativeWiki(input: {
       capturedAt: new Date().toISOString(),
     }
     const generator = async (request: WikiPageGenerationRequest): Promise<WikiPageGenerationResult> => {
+      const pageStartedMs = Date.now()
       const abort = new AbortController()
       const timer = setTimeout(() => abort.abort(), WIKI_PAGE_TIMEOUT_MS)
       const signal = input.signal ? AbortSignal.any([abort.signal, input.signal]) : abort.signal
@@ -736,12 +749,28 @@ export async function runNativeWiki(input: {
             for await (const part of result.fullStream) {
               if (part.type === "error") throw part.error
             }
+            outcomes.set(request.page.path, {
+              path: request.page.path,
+              status: "written",
+              attempts: attempt + 1,
+              durationMs: Date.now() - pageStartedMs,
+            })
             return await result.object
           } catch (error) {
             // Keep a foreground cancel intact. A page deadline must name the
             // page and must not be retried as a schema failure.
             if (input.signal?.aborted) throw error
-            if (abort.signal.aborted) throw new Error(`Wiki page generation timed out: ${request.page.path}`)
+            if (abort.signal.aborted) {
+              outcomes.set(request.page.path, {
+                path: request.page.path,
+                status: "failed",
+                attempts: attempt + 1,
+                failureClass: "unclassified",
+                durationMs: Date.now() - pageStartedMs,
+                message: "page deadline exceeded",
+              })
+              throw new Error(`Wiki page generation timed out: ${request.page.path}`)
+            }
             const failure = wikiPageFailure(error)
             const structured = NoObjectGeneratedError.isInstance(error)
             log.warn("wiki page generation failed", {
@@ -757,7 +786,19 @@ export async function runNativeWiki(input: {
             // identical request after a deterministic failure only burns the
             // page deadline again.
             const next = failure && attempt + 1 < WIKI_PAGE_MAX_ATTEMPTS ? wikiPageRetry(failure) : undefined
-            if (!next) throw error
+            if (!next) {
+              outcomes.set(request.page.path, {
+                path: request.page.path,
+                status: "failed",
+                attempts: attempt + 1,
+                failureClass: failure ?? "unclassified",
+                finishReason: structured ? error.finishReason : undefined,
+                responseCharacters: structured ? (error.text?.length ?? 0) : 0,
+                durationMs: Date.now() - pageStartedMs,
+                message: error instanceof Error ? error.message : String(error),
+              })
+              throw error
+            }
             retry = next
           }
         }
@@ -766,35 +807,72 @@ export async function runNativeWiki(input: {
         clearTimeout(timer)
       }
     }
-    return await buildAxWiki({
-      signal: input.signal,
-      allowSource: input.allowSource,
-      allowWrite: input.allowWrite,
-      root: input.root,
-      wikiDir: config.dir,
-      action: input.action,
-      generator,
-      // The full-pipeline lock is already held above; hand it to the write
-      // phase so buildAxWiki does not deadlock on its default filesystem lock.
-      // Release is idempotent: the write phase releases first, and the outer
-      // finally below is then a no-op.
-      lock: { acquire: async () => lock },
-      evidenceProvider:
-        input.includeGraphEvidence === false
-          ? undefined
-          : { provide: (request) => evidenceProvider(request, snapshot) },
-      config: engineConfig(config),
-      model: model.label,
-      repositoryHead,
-      force: input.force,
-      onProgress: input.onProgress,
-      generatorIdentity: {
-        name: AX_WIKI_GENERATOR,
-        version: Installation.VERSION,
-        promptVersion: WIKI_PROMPT_VERSION,
+    let result: WikiBuildResult | undefined
+    let failure: string | undefined
+    try {
+      result = await buildAxWiki({
+        signal: input.signal,
+        allowSource: input.allowSource,
+        allowWrite: input.allowWrite,
+        root: input.root,
+        wikiDir: config.dir,
+        action: input.action,
+        generator,
+        // The full-pipeline lock is already held above; hand it to the write
+        // phase so buildAxWiki does not deadlock on its default filesystem lock.
+        // Release is idempotent: the write phase releases first, and the outer
+        // finally below is then a no-op.
+        lock: { acquire: async () => lock },
+        evidenceProvider:
+          input.includeGraphEvidence === false
+            ? undefined
+            : { provide: (request) => evidenceProvider(request, snapshot) },
+        config: engineConfig(config),
         model: model.label,
-      },
-    })
+        repositoryHead,
+        force: input.force,
+        onProgress,
+        generatorIdentity: {
+          name: AX_WIKI_GENERATOR,
+          version: Installation.VERSION,
+          promptVersion: WIKI_PROMPT_VERSION,
+          model: model.label,
+        },
+      })
+      return result
+    } catch (error) {
+      failure = error instanceof Error ? error.message : String(error)
+      throw error
+    } finally {
+      // Observability only (ADR-155 item 7). The report must never change the
+      // build outcome, so this is best-effort: a failed write is logged and
+      // ignored, and its absence is tolerated by every reader.
+      try {
+        const failed = [...outcomes.values()].find((outcome) => outcome.status === "failed")
+        const written = [...outcomes.values()].filter((outcome) => outcome.status === "written")
+        await writeWikiBuildReport(input.root, config.dir, {
+          schemaVersion: WIKI_BUILD_REPORT_SCHEMA_VERSION,
+          action: input.action,
+          outcome: failure === undefined ? "completed" : "failed",
+          model: model.label,
+          generator: { version: Installation.VERSION, promptVersion: WIKI_PROMPT_VERSION },
+          repositoryHead,
+          startedAt: buildStartedAt.toISOString(),
+          finishedAt: new Date().toISOString(),
+          durationMs: Date.now() - buildStartedMs,
+          pageCount,
+          written: written.map((outcome) => outcome.path),
+          failed,
+          notAttemptedCount: Math.max(0, (pageCount ?? attempted) - attempted),
+          planHash: result?.manifest?.planHash,
+          error: failure,
+        })
+      } catch (error) {
+        log.warn("wiki build report write failed", {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
   } finally {
     await lock.release()
   }

@@ -43,6 +43,7 @@ import { GraphContext, type GraphContextPack } from "../../src/code-intelligence
 import { CodeNodeID } from "../../src/code-intelligence/id"
 import { Installation } from "../../src/installation"
 import { Instance } from "../../src/project/instance"
+import { readWikiBuildReport, type WikiBuildReport } from "../../src/wiki/build-report"
 import {
   repairWikiPageText,
   resolveWikiModelRef,
@@ -203,6 +204,15 @@ async function runNativeSequence(tmpPath: string, results: Array<{ streamError?:
   })
 }
 
+async function readBuildReport(root: string): Promise<WikiBuildReport | undefined> {
+  // The driver writes into the resolved wiki dir; tests exercise the default.
+  for (const dir of ["ax-wiki", "openwiki"]) {
+    const report = await readWikiBuildReport(root, dir)
+    if (report) return report
+  }
+  return undefined
+}
+
 function noObjectError(finishReason: "length" | "stop"): NoObjectGeneratedError {
   return new NoObjectGeneratedError({
     message: `no object (${finishReason})`,
@@ -272,6 +282,28 @@ describe("wiki native generator", () => {
       "stream disconnected",
     )
     expect(generateObject).toHaveBeenCalledTimes(1)
+  })
+
+  test("records the failing page in a build report without masking the failure", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await expect(
+      runNativeSequence(tmp.path, [{ streamError: noObjectError("length") }, { streamError: noObjectError("length") }]),
+    ).rejects.toThrow(/no object/)
+
+    const report = await readBuildReport(tmp.path)
+    expect(report?.outcome).toBe("failed")
+    expect(report?.failed?.path).toBe(PAGE.path)
+    expect(report?.failed?.failureClass).toBe("length")
+    expect(report?.failed?.attempts).toBe(2)
+  })
+
+  test("records a completed build report for a successful page", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await runNativeSequence(tmp.path, [{}])
+
+    const report = await readBuildReport(tmp.path)
+    expect(report?.outcome).toBe("completed")
+    expect(report?.written).toContain(PAGE.path)
   })
 
   test("sends a bounded output limit on every page generateObject call", async () => {
