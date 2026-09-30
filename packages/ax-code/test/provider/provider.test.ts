@@ -10,6 +10,7 @@ import { ProviderID, ModelID } from "../../src/provider/schema"
 import { Env } from "../../src/env"
 import { Auth } from "../../src/auth"
 import bundledSnapshot from "../../src/provider/models-snapshot.json"
+import { latestAnthropicFamilyModels } from "../../src/provider/anthropic-families"
 import { CUSTOM_LOADERS, type CustomLoader } from "../../src/provider/loaders"
 import { Global } from "../../src/global"
 import { Filesystem } from "../../src/util/filesystem"
@@ -146,16 +147,22 @@ test("Anthropic provider lists the latest model in each Claude family", async ()
     fn: async () => {
       const providers = await Provider.list()
       const anthropic = providers[ProviderID.make("anthropic")]
-      expect(Object.keys(anthropic.models).sort()).toEqual([
-        "claude-fable-5-1",
-        "claude-haiku-4-5",
-        "claude-opus-5-5",
-        "claude-sonnet-5-5",
-      ])
-      expect(anthropic.models[ModelID.make("claude-sonnet-4-5")]).toBeUndefined()
-      expect(anthropic.models[ModelID.make("claude-sonnet-4-5-20250929")]).toBeUndefined()
-      expect(anthropic.models[ModelID.make("claude-sonnet-5")]).toBeUndefined()
-      expect(anthropic.models[ModelID.make("claude-opus-5")]).toBeUndefined()
+      const catalog = (
+        bundledSnapshot as {
+          anthropic?: {
+            models?: Record<string, { id: string; name?: string; family?: string; release_date?: string }>
+          }
+        }
+      ).anthropic?.models
+      expect(catalog).toBeDefined()
+      const expected = latestAnthropicFamilyModels(catalog!)
+        .map((model) => model.id)
+        .sort()
+      expect(expected.length).toBeGreaterThan(0)
+      expect(Object.keys(anthropic.models).sort()).toEqual(expected)
+      for (const id of Object.keys(catalog!)) {
+        if (!expected.includes(id)) expect(anthropic.models[ModelID.make(id)]).toBeUndefined()
+      }
     },
   })
 })

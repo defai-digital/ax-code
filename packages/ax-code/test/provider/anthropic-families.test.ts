@@ -7,6 +7,12 @@ import {
   latestAnthropicFamilyModels,
 } from "../../src/provider/anthropic-families"
 
+function releaseTime(value?: string): number {
+  if (!value) return 0
+  const time = Date.parse(value)
+  return Number.isFinite(time) ? time : 0
+}
+
 describe("anthropic families", () => {
   test("picks the newest non-dated SKU in each Claude family", () => {
     const latest = latestAnthropicFamilyModels({
@@ -62,20 +68,31 @@ describe("anthropic families", () => {
     ])
   })
 
-  test("uses the bundled Anthropic catalog's newest family SKUs", () => {
+  test("keeps the newest release in each bundled Claude family", () => {
     const anthropic = (
       bundledSnapshot as {
         anthropic?: { models?: Record<string, { id: string; name?: string; family?: string; release_date?: string }> }
       }
     ).anthropic?.models
     expect(anthropic).toBeDefined()
-    const latest = latestAnthropicFamilyModels(anthropic!)
-    expect(latest.map((model) => model.id)).toEqual([
-      "claude-opus-5-5",
-      "claude-sonnet-5-5",
-      "claude-haiku-4-5",
-      "claude-fable-5-1",
-    ])
+    const models = anthropic!
+    const latest = latestAnthropicFamilyModels(models)
+    const families = [
+      ...new Set(
+        Object.entries(models)
+          .map(([id, model]) => claudeFamilyId({ id: model.id ?? id, family: model.family }))
+          .filter((family): family is string => family !== undefined),
+      ),
+    ].sort((left, right) => claudeFamilySortKey(left) - claudeFamilySortKey(right))
+    expect(latest.map((model) => claudeFamilyId(model))).toEqual(families)
+    for (const model of latest) {
+      const family = claudeFamilyId(model)
+      const siblings = Object.entries(models).filter(
+        ([id, item]) => claudeFamilyId({ id: item.id ?? id, family: item.family }) === family,
+      )
+      const newest = Math.max(...siblings.map(([, item]) => releaseTime(item.release_date)))
+      expect(releaseTime(model.release_date)).toBe(newest)
+    }
   })
 
   test("sorts Claude families Opus, Sonnet, Haiku, Fable", () => {
