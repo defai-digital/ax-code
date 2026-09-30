@@ -115,7 +115,14 @@ export namespace Agent {
     const allowQuestion = Permission.fromConfig({
       question: "allow",
     })
-    const denySubagentFanout = Permission.fromConfig({ task: "deny", task_parallel: "deny" })
+    const denySubagentFanout = Permission.fromConfig({
+      task: "deny",
+      task_parallel: "deny",
+      schedule: "deny",
+      schedule_task: "deny",
+      manage_scheduled_task: "deny",
+      run_scheduled_task: "deny",
+    })
     const denyAll = Permission.fromConfig({ "*": "deny" })
     const exploreReadOnlyWithWeb = Permission.fromConfig({
       "*": "deny",
@@ -191,6 +198,10 @@ export namespace Agent {
           Permission.fromConfig({
             question: "allow",
             plan_exit: "allow",
+            schedule: "deny",
+            schedule_task: "deny",
+            manage_scheduled_task: "deny",
+            run_scheduled_task: "deny",
             external_directory: {
               [path.join(Global.Path.data, "plans", "*")]: "allow",
             },

@@ -59,6 +59,7 @@ const SAFE_PERMISSIONS: ReadonlySet<string> = new Set([
  *                            silently rewrite the user's plan list.
  *   - `memorywrite`       — persists project/global memory outside the
  *                            current conversation.
+ *   - `schedule`          — persists or starts future autonomous work.
  *   - `webfetch`          — arbitrary URL fetch; potential exfiltration
  *                            channel.
  *   - `websearch`         — external search network egress; queries can
@@ -82,6 +83,7 @@ const RISK_PERMISSIONS: ReadonlySet<string> = new Set([
   "monitor",
   "image_gen",
   "computer",
+  "schedule",
   // Cloud Operations sanctioned mutation path (PRD-2026-09-04). The
   // capability check lives in ops_apply itself (single-use plan-bound
   // approval token); the permission still never auto-approves outside

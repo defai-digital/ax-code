@@ -239,7 +239,8 @@ ax-code run --await-background 300 --timeout 360 --model qwen -- \
 the parent follow-up turns triggered by their results. It is opt-in and capped at 3600 seconds. The final reply and
 JSON `result.text` come from the last completed parent turn. If the children or their follow-up do not settle within
 the wait bound, the run reports an error and exits 1. `--timeout` remains the overall bound. Project scheduled tasks
-run in separate sessions and are not part of this wait.
+run in separate sessions and are not part of this wait. This one-shot command does not claim due project schedules;
+a persistent backend owns their dispatch.
 
 ### Parse the JSON stream
 

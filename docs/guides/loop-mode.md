@@ -131,6 +131,12 @@ and `manage_scheduled_task` tools:
 - "Every weekday at 9am, summarize new CI failures."
 - "List my scheduled tasks." / "Pause the CI summary task."
 
+Agent-created and agent-managed schedule changes request the `schedule`
+permission. A read-only run cannot change or trigger a schedule. For unattended
+headless creation, use the explicit `ax-code schedule` command or configure an
+explicit `schedule` permission grant for the agent; broad wildcard grants do
+not authorize schedule changes.
+
 The same tasks are manageable from the shell without opening the TUI:
 
 ```bash
@@ -155,6 +161,9 @@ running (60s scheduler sweep, atomic claiming — a task fires once even with
 several backends open). Schedule advancement and durable queue insertion share
 one database transaction, so a crash cannot advance an occurrence without
 leaving work to recover.
+One-shot commands such as `ax-code run` and `ax-code stats` do not claim due
+tasks. Start a persistent backend with `ax-code runtime start` to dispatch
+them.
 
 Missed occurrences default to `catchUpPolicy: "run_once"`: after downtime,
 AX Code coalesces any backlog into one run. Use `"skip"` when stale work should

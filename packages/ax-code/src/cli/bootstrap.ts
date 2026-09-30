@@ -1,4 +1,4 @@
-import { InstanceBootstrap, InstanceBootstrapReadonly } from "../project/bootstrap"
+import { InstanceBootstrap, InstanceBootstrapReadonly, InstanceBootstrapTransient } from "../project/bootstrap"
 import { Instance } from "../project/instance"
 
 async function runWithInit<T>(directory: string, init: () => Promise<any>, cb: () => Promise<T>) {
@@ -16,7 +16,13 @@ async function runWithInit<T>(directory: string, init: () => Promise<any>, cb: (
   })
 }
 
+/** One-shot CLI command. It cannot take ownership of unrelated durable work. */
 export async function bootstrap<T>(directory: string, cb: () => Promise<T>) {
+  return runWithInit(directory, InstanceBootstrapTransient, cb)
+}
+
+/** ACP is a persistent backend and must retain scheduled-work ownership. */
+export async function bootstrapOwned<T>(directory: string, cb: () => Promise<T>) {
   return runWithInit(directory, InstanceBootstrap, cb)
 }
 

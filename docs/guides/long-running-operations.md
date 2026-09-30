@@ -178,8 +178,9 @@ their HTTP 202 response. Clients should retain its `id` and poll
 `GET /task-queue/:id` until `completed`, `failed`, or `cancelled`; acceptance
 alone is not completion.
 
-On startup, AX Code resumes scheduled queue items and explicitly marked async
-items that were committed but had not started. Already-started prompt work is
+On startup, a persistent AX Code backend resumes scheduled queue items and
+explicitly marked async items that were committed but had not started.
+One-shot CLI commands do not take ownership of those items. Already-started prompt work is
 failed with a restart explanation so an operator can inspect side effects
 before retrying.
 

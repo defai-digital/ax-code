@@ -6,10 +6,17 @@ import z from "zod"
 // same anchor order test/tool/goal.test.ts establishes via its Session
 // import).
 import "../../src/session"
+import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"
+import { Permission } from "../../src/permission"
 import { Log } from "../../src/util/log"
 import { MessageID } from "../../src/session/schema"
-import { ListScheduledTasksTool, ManageScheduledTaskTool, ScheduleTaskTool } from "../../src/tool/schedule"
+import {
+  ListScheduledTasksTool,
+  ManageScheduledTaskTool,
+  RunScheduledTaskTool,
+  ScheduleTaskTool,
+} from "../../src/tool/schedule"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
@@ -29,10 +36,108 @@ function toolContext(sessionID: string) {
     extra: {},
     metadata() {},
     async ask() {},
-  } as never
+  }
 }
 
 describe("schedule tools", () => {
+  test("default wildcard grants cannot authorize scheduling and restricted agents hide mutation tools", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const build = await Agent.get("build")
+        const plan = await Agent.get("plan")
+        const general = await Agent.get("general")
+        expect(Permission.evaluate("schedule", "create", build.permission).action).toBe("ask")
+        expect(
+          Permission.evaluate("schedule", "create", [
+            ...build.permission,
+            { permission: "schedule", pattern: "create", action: "allow" },
+          ]).action,
+        ).toBe("allow")
+        for (const agent of [plan, general]) {
+          expect(Permission.evaluate("schedule", "create", agent.permission).action).toBe("deny")
+          expect(
+            Permission.disabled(["schedule_task", "manage_scheduled_task", "run_scheduled_task"], agent.permission)
+              .size,
+          ).toBe(3)
+        }
+      },
+    })
+  })
+
+  test("mutations require permission before changing durable tasks", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const asks: Array<{ permission: string; patterns: string[]; metadata: Record<string, unknown> }> = []
+        let allow = false
+        const ctx = {
+          ...toolContext("ses_schedule_permission"),
+          async ask(request: { permission: string; patterns: string[]; metadata: Record<string, unknown> }) {
+            asks.push(request)
+            if (!allow) throw new Error("permission denied")
+          },
+        } as never
+        const create = await ScheduleTaskTool.init()
+        const manage = await ManageScheduledTaskTool.init()
+        const run = await RunScheduledTaskTool.init()
+        const list = await ListScheduledTasksTool.init()
+        const input = {
+          title: "Protected reminder",
+          prompt: "Check status.",
+          schedule: { type: "once" as const, runAt: Date.now() + 60 * 60 * 1000 },
+        }
+
+        await expect(create.execute(input, ctx)).rejects.toThrow("permission denied")
+        expect((await list.execute({}, ctx)).metadata.count).toBe(0)
+        allow = true
+        const created = await create.execute(input, ctx)
+        const id = (created.metadata as { task: { id: string } }).task.id
+        allow = false
+        await expect(manage.execute({ id, action: "pause" }, ctx)).rejects.toThrow("permission denied")
+        await expect(manage.execute({ id, action: "delete" }, ctx)).rejects.toThrow("permission denied")
+        await expect(run.execute({ id }, ctx)).rejects.toThrow("permission denied")
+        expect((await list.execute({}, ctx)).metadata.count).toBe(1)
+        expect(asks.map((request) => request.metadata.action)).toEqual(["create", "create", "pause", "delete", "run"])
+        expect(asks.every((request) => request.permission === "schedule")).toBe(true)
+      },
+    })
+  })
+
+  test("read-only isolation cannot create a future scheduled execution", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        let asked = false
+        const ctx = {
+          ...toolContext("ses_schedule_read_only"),
+          extra: { isolation: { mode: "read-only" } },
+          async ask() {
+            asked = true
+          },
+        } as never
+        const create = await ScheduleTaskTool.init()
+        await expect(
+          create.execute(
+            {
+              title: "Future write",
+              prompt: "Modify source later.",
+              schedule: { type: "once", runAt: Date.now() + 60 * 60 * 1000 },
+            },
+            ctx,
+          ),
+        ).rejects.toThrow(/read-only/)
+        expect(asked).toBe(false)
+        expect((await ListScheduledTasksTool.init()).execute({}, ctx)).resolves.toMatchObject({
+          metadata: { count: 0 },
+        })
+      },
+    })
+  })
+
   test("schedule parameter accepts every schedule shape and rejects garbage", async () => {
     const tool = await ScheduleTaskTool.init()
     const base = { title: "t", prompt: "p" }

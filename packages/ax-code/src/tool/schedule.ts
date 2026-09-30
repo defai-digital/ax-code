@@ -2,6 +2,7 @@ import z from "zod"
 import { ScheduledTask } from "@/session/scheduled-task"
 import { ScheduledTaskID } from "@/session/schema"
 import { parseJsonResult } from "@/util/json-value"
+import { Isolation } from "@/isolation"
 import { Tool } from "./tool"
 
 // Conversational scheduling (PRD-2026-07-25 G1b, Kimi CLI parity): let the
@@ -30,6 +31,24 @@ function taskSummary(task: ScheduledTask.Info) {
 
 function taskOutput(task: ScheduledTask.Info) {
   return JSON.stringify({ id: task.id, title: task.title, nextRunAt: task.nextRunAt, task: taskSummary(task) }, null, 2)
+}
+
+async function authorizeMutation(
+  ctx: Tool.Context,
+  input: { action: "create" | "pause" | "resume" | "delete" | "run"; taskID?: ScheduledTaskID; title?: string },
+) {
+  // A scheduled prompt runs in a fresh session later. Letting a read-only
+  // turn create or reactivate it would turn a temporary isolation choice into
+  // a future writable execution.
+  if (ctx.extra?.isolation?.mode === "read-only") {
+    throw new Isolation.DeniedError("write", `Cannot ${input.action} a scheduled task in read-only isolation.`)
+  }
+  await ctx.ask({
+    permission: "schedule",
+    patterns: [input.action],
+    always: [],
+    metadata: { action: input.action, taskID: input.taskID, title: input.title },
+  })
 }
 
 // InvalidSchedule is a NamedError: its .message is the error name, and the
@@ -136,7 +155,8 @@ export const ScheduleTaskTool = Tool.define("schedule_task", {
       .optional()
       .describe("Executor deadline in milliseconds for each occurrence (1 second to 72 hours)."),
   }),
-  async execute(params) {
+  async execute(params, ctx) {
+    await authorizeMutation(ctx, { action: "create", title: params.title })
     const task = await withReadableScheduleErrors(() =>
       ScheduledTask.create({
         title: params.title,
@@ -181,9 +201,10 @@ export const ManageScheduledTaskTool = Tool.define("manage_scheduled_task", {
     id: z.string().min(1).describe("The scheduled task id."),
     action: z.enum(["pause", "resume", "delete"]),
   }),
-  async execute(params) {
+  async execute(params, ctx) {
     const id = ScheduledTaskID.zod.parse(params.id)
     type ManageMetadata = { deleted?: string; task?: ReturnType<typeof taskSummary> }
+    await authorizeMutation(ctx, { action: params.action, taskID: id })
     if (params.action === "delete") {
       await ScheduledTask.remove(id)
       return {
@@ -231,8 +252,9 @@ export const RunScheduledTaskTool = Tool.define("run_scheduled_task", {
   parameters: z.object({
     id: z.string().min(1).describe("The scheduled task id."),
   }),
-  async execute(params) {
+  async execute(params, ctx) {
     const id = ScheduledTaskID.zod.parse(params.id)
+    await authorizeMutation(ctx, { action: "run", taskID: id })
     const result = await ScheduledTask.runNow(id)
     return {
       title: `Running now: ${result.task.title}`,

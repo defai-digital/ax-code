@@ -1,5 +1,5 @@
 import { Log } from "@/util/log"
-import { bootstrap } from "../bootstrap"
+import { bootstrapOwned } from "../bootstrap"
 import { cmd } from "./cmd"
 import { withNetworkOptions, resolveNetworkOptions } from "../network"
 import { FeatureFlag } from "@/util/feature-flags"
@@ -25,7 +25,7 @@ export const AcpCommand = cmd({
     const { Server } = await import("@/server/server")
     const { createAxCodeClient } = await import("@ax-code/sdk/v2")
     FeatureFlag.set("AX_CODE_CLIENT", "acp")
-    await bootstrap(process.cwd(), async () => {
+    await bootstrapOwned(process.cwd(), async () => {
       const opts = await resolveNetworkOptions(args)
       const server = await Server.listen(opts)
       let stopping = false

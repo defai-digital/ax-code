@@ -8,12 +8,11 @@ type Rule = {
 
 /**
  * Permissions whose allow rules must name the permission and requested pattern
- * exactly. Computer use controls the real desktop, so a broad agent/default
- * rule such as `{ permission: "*", pattern: "*", action: "allow" }` must not
- * silently grant it. An explicit computer-wide config remains possible through
- * `{ permission: "computer", pattern: "*", action: "allow" }`.
+ * exactly. Computer use controls the real desktop and scheduling persists
+ * future agent execution, so a broad agent/default wildcard must not silently
+ * grant either. Explicit permission-specific config remains possible.
  */
-export const EXACT_GRANT_ONLY: ReadonlySet<string> = new Set(["computer"])
+export const EXACT_GRANT_ONLY: ReadonlySet<string> = new Set(["computer", "schedule"])
 
 export function evaluate(permission: string, pattern: string, ...rulesets: Rule[][]): Rule {
   const rules = rulesets.flat()

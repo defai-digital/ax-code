@@ -130,26 +130,27 @@ async function recoverInterruptedTaskQueue() {
   return result
 }
 
-export async function InstanceBootstrap() {
-  Log.Default.info("bootstrapping", { directory: Instance.directory })
-  await runtimeTask({
-    service: "TaskQueue.recoverInterrupted",
-    label: "task queue restart recovery",
-    task: async () => {
-      await recoverInterruptedTaskQueue()
-      // A scheduled occurrence is committed to the durable task queue before
-      // its detached executor is started. If the process exits in that narrow
-      // post-commit window, the row remains queued and must be resumed here;
-      // ordinary manually-queued items intentionally remain user-controlled.
-      const scheduled = await TaskQueue.listRestartableQueued()
-      if (scheduled.length > 0) {
-        const { TaskQueueExecutor } = await import("@/session/task-queue-executor")
-        for (const item of scheduled) {
-          await TaskQueueExecutor.start(item)
+async function initializeInstance(owner: boolean) {
+  Log.Default.info(owner ? "bootstrapping" : "bootstrapping (transient)", { directory: Instance.directory })
+  if (owner)
+    await runtimeTask({
+      service: "TaskQueue.recoverInterrupted",
+      label: "task queue restart recovery",
+      task: async () => {
+        await recoverInterruptedTaskQueue()
+        // A scheduled occurrence is committed to the durable task queue before
+        // its detached executor is started. If the process exits in that narrow
+        // post-commit window, the row remains queued and must be resumed here;
+        // ordinary manually-queued items intentionally remain user-controlled.
+        const scheduled = await TaskQueue.listRestartableQueued()
+        if (scheduled.length > 0) {
+          const { TaskQueueExecutor } = await import("@/session/task-queue-executor")
+          for (const item of scheduled) {
+            await TaskQueueExecutor.start(item)
+          }
         }
-      }
-    },
-  })
+      },
+    })
   background({
     service: "Format.init",
     label: "format init",
@@ -172,14 +173,15 @@ export async function InstanceBootstrap() {
       task: () => DiagnosticCorrelation.init(),
     }),
   ])
-  await runtimeTask({
-    service: "BackgroundSubagentDelivery.recover",
-    label: "background subagent result delivery recovery",
-    task: async () => {
-      const { recoverBackgroundSubagentHandoffs } = await import("@/session/background-subagent-delivery")
-      return recoverBackgroundSubagentHandoffs()
-    },
-  })
+  if (owner)
+    await runtimeTask({
+      service: "BackgroundSubagentDelivery.recover",
+      label: "background subagent result delivery recovery",
+      task: async () => {
+        const { recoverBackgroundSubagentHandoffs } = await import("@/session/background-subagent-delivery")
+        return recoverBackgroundSubagentHandoffs()
+      },
+    })
   // Start provider loading in the background so it's ready by the time
   // the user sends their first prompt. Previously warmup was called
   // inside the prompt loop — after the user already typed — causing a
@@ -246,7 +248,17 @@ export async function InstanceBootstrap() {
       task: () => Session.pruneExpired(ttlDays),
     })
   }
-  ScheduledTask.initScheduler({ keepAlive: true })
+  if (owner) ScheduledTask.initScheduler({ keepAlive: true })
+}
+
+/** Long-lived project backend: recovers committed work and owns the scheduler. */
+export async function InstanceBootstrap() {
+  return initializeInstance(true)
+}
+
+/** One-shot CLI work: prepares session services without claiming unrelated durable work. */
+export async function InstanceBootstrapTransient() {
+  return initializeInstance(false)
 }
 
 /**
