@@ -8,6 +8,7 @@ import { SessionStatus } from "../../src/session/status"
 import { Session } from "../../src/session"
 import { SessionID } from "../../src/session/schema"
 import { WikiAutomatic } from "../../src/wiki/automatic"
+import { readWikiFailureMemory } from "../../src/wiki/failure-memory"
 import { wikiProjectRoot } from "../../src/wiki/root"
 import { tmpdir } from "../fixture/fixture"
 
@@ -200,4 +201,56 @@ test("registration carries the invoking session through to generation", async ()
       expect(state.build.mock.calls[1][0]).toMatchObject({ sessionID: other.id })
     },
   })
+})
+
+test("records a durable failure memory when a maintenance build fails", async () => {
+  await using tmp = await tmpdir({ git: true })
+  vi.spyOn(Agent, "get").mockImplementation(async (name) => ({
+    name,
+    mode: "primary",
+    native: true,
+    options: {},
+    permission: Permission.fromConfig({ "*": "allow" }),
+  }))
+  state.build.mockRejectedValueOnce(new Error("deterministic failure"))
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await WikiAutomatic.refresh("build")
+      await wait()
+      expect(state.build).toHaveBeenCalledTimes(1)
+    },
+  })
+
+  const memory = await readWikiFailureMemory(tmp.path, "ax-wiki")
+  expect(memory?.consecutiveFailures).toBe(1)
+  expect(memory?.error).toContain("deterministic failure")
+  expect(memory?.lastHead).toBeTruthy()
+})
+
+test("an explicit request still runs while a failure cooldown is active", async () => {
+  await using tmp = await tmpdir({ git: true })
+  vi.spyOn(Agent, "get").mockImplementation(async (name) => ({
+    name,
+    mode: "primary",
+    native: true,
+    options: {},
+    permission: Permission.fromConfig({ "*": "allow" }),
+  }))
+  state.build.mockRejectedValueOnce(new Error("deterministic failure"))
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await WikiAutomatic.refresh("build")
+      await wait()
+      expect(state.build).toHaveBeenCalledTimes(1)
+      // The cooldown exists, but a user-requested refresh must still run.
+      state.build.mockResolvedValueOnce(undefined)
+      await WikiAutomatic.refresh("build")
+      await wait()
+      expect(state.build).toHaveBeenCalledTimes(2)
+    },
+  })
+  // A successful build clears the memory again.
+  expect(await readWikiFailureMemory(tmp.path, "ax-wiki")).toBeUndefined()
 })

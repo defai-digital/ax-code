@@ -14,7 +14,14 @@ import { FileWatcher } from "../file/watcher"
 import { getWikiStatus } from "@ax-code/ax-wiki/node"
 import { createWikiIdleController } from "./idle-controller"
 import { resolveWikiRuntimeConfig, engineConfig } from "./config"
-import { runNativeWiki } from "./native"
+import { readWikiBuildReport } from "./build-report"
+import {
+  clearWikiFailureMemory,
+  readWikiFailureMemory,
+  recordWikiFailure,
+  wikiFailureMemorySuppresses,
+} from "./failure-memory"
+import { runNativeWiki, wikiGeneratorKey, gitHeadCommit } from "./native"
 import { wikiProjectRoot } from "./root"
 
 export namespace WikiAutomatic {
@@ -136,7 +143,7 @@ export namespace WikiAutomatic {
         },
         idle: async () =>
           busy.size === 0 && (await Promise.all([...owners.values()].map((item) => item.idle()))).every(Boolean),
-        build: async (signal, progress) => {
+        build: async (signal, progress, options) => {
           const { cfg, allowed } = await context()
           signal.throwIfAborted()
           const status = await getWikiStatus({
@@ -150,20 +157,52 @@ export namespace WikiAutomatic {
           if (status.healthy && status.freshness === "fresh") return
           const selected = owners.values().next().value
           if (!selected) throw new Error("Wiki maintenance has no active owner")
-          await selected.run(() =>
-            runNativeWiki({
+          // Durable failure memory (ADR-155 item 5): an automatic build that
+          // failed deterministically must not be replayed on every quiet
+          // window. An explicit user request always runs. The cooldown is
+          // capped and is cleared by a successful build, a changed head, a
+          // changed generator, or any watched source change.
+          const head = await gitHeadCommit(root)
+          const generatorKey = wikiGeneratorKey(cfg.model)
+          const decision = wikiFailureMemorySuppresses(await readWikiFailureMemory(root, cfg.dir), {
+            now: Date.now(),
+            head,
+            generatorKey,
+          })
+          if (!options.explicit && decision.suppressed) {
+            Log.Default.info("Wiki background maintenance suppressed by failure memory", {
               root,
               dir: cfg.dir,
-              action: status.healthy ? "update" : "generate",
-              signal,
-              lockTimeoutMs: 100,
-              includeGraphEvidence: false,
-              allowSource: (relative) => allowed("read", relative),
-              allowWrite: (relative) => allowed("edit", relative),
-              sessionID: selected.sessionID,
-              onProgress: progress,
-            }),
-          )
+              reason: decision.reason,
+            })
+            return
+          }
+          try {
+            await selected.run(() =>
+              runNativeWiki({
+                root,
+                dir: cfg.dir,
+                action: status.healthy ? "update" : "generate",
+                signal,
+                lockTimeoutMs: 100,
+                includeGraphEvidence: false,
+                allowSource: (relative) => allowed("read", relative),
+                allowWrite: (relative) => allowed("edit", relative),
+                sessionID: selected.sessionID,
+                onProgress: progress,
+              }),
+            )
+          } catch (error) {
+            const report = await readWikiBuildReport(root, cfg.dir)
+            await recordWikiFailure(root, cfg.dir, {
+              head,
+              generatorKey,
+              planHash: report?.planHash,
+              error: error instanceof Error ? error.message.slice(0, 200) : String(error),
+            })
+            throw error
+          }
+          await clearWikiFailureMemory(root, cfg.dir)
         },
       })
       entry = { root, dir: config.dir, owners, busy, controller }
@@ -235,8 +274,16 @@ export namespace WikiAutomatic {
         if (
           typeof file === "string" &&
           !contains(path.join(entry.root, entry.dir), path.resolve(event.directory, file))
-        )
+        ) {
           entry.controller.changed()
+          // A real source change must always be allowed to retry, even while a
+          // durable failure cooldown is active (ADR-155 item 5).
+          void clearWikiFailureMemory(entry.root, entry.dir).catch((error) =>
+            Log.Default.debug("Wiki failure memory clear failed", {
+              message: error instanceof Error ? error.message : String(error),
+            }),
+          )
+        }
       }
     }
   })

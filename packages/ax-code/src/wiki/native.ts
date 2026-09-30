@@ -121,6 +121,16 @@ Rules:
 Return a json object with summary (20-600 characters), body (at least 80 characters of Markdown), symbols (an array of at most 80 exact symbol strings), and symbolSummaries (an array of at most 20 {name, summary} objects for symbols from the symbols array).`
 
 const WIKI_PROMPT_VERSION = "native-page-v3"
+
+/**
+ * Identity of the generator that would produce pages for `model`. Used by the
+ * durable failure memory to detect a generator change and clear stale
+ * suppression (ADR-155 item 5).
+ */
+export function wikiGeneratorKey(model?: string): string {
+  return `${Installation.VERSION}:${WIKI_PROMPT_VERSION}:${model ?? "default"}`
+}
+
 const EVIDENCE_PRODUCER = "ax-code-code-intelligence"
 
 /**
@@ -730,10 +740,10 @@ export async function runNativeWiki(input: {
       try {
         let retry: WikiPageRetry | undefined
         for (let attempt = 0; attempt < WIKI_PAGE_MAX_ATTEMPTS; attempt++) {
-          signal.throwIfAborted()
-          if (retry?.delayMs) await wikiPageRetryDelay(retry.delayMs, signal)
-          const prompt = pagePrompt(request, retry?.tight === true)
           try {
+            signal.throwIfAborted()
+            if (retry?.delayMs) await wikiPageRetryDelay(retry.delayMs, signal)
+            const prompt = pagePrompt(request, retry?.tight === true)
             const result = streamObject({
               model: model.language,
               maxOutputTokens: model.maxOutputTokens,

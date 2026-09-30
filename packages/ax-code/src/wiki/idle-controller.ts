@@ -13,7 +13,11 @@ export function createWikiIdleController(input: {
   idle(): Promise<boolean>
   policy(): Promise<{ enabled: boolean; automatic: boolean; writable: boolean; git: boolean }>
   onError?: (error: unknown) => void
-  build(signal: AbortSignal, progress: (event: WikiBuildProgress) => void): Promise<void>
+  build(
+    signal: AbortSignal,
+    progress: (event: WikiBuildProgress) => void,
+    options: { explicit: boolean },
+  ): Promise<void>
   idleMs?: number
   pollMs?: number
   retryMs?: number
@@ -93,6 +97,7 @@ export function createWikiIdleController(input: {
         return
       }
       dirty = false
+      const runExplicit = explicit
       explicit = false
       controller = new AbortController()
       const signal = controller.signal
@@ -103,12 +108,16 @@ export function createWikiIdleController(input: {
       )
       flight = Promise.resolve()
         .then(() =>
-          input.build(signal, (event) => {
-            signal.throwIfAborted()
-            if (event.type === "plan") publish({ total: event.pageCount })
-            if (event.type === "page_start") publish({ completed: event.index - 1, total: event.total })
-            if (event.type === "page_complete") publish({ completed: event.index, total: event.total })
-          }),
+          input.build(
+            signal,
+            (event) => {
+              signal.throwIfAborted()
+              if (event.type === "plan") publish({ total: event.pageCount })
+              if (event.type === "page_start") publish({ completed: event.index - 1, total: event.total })
+              if (event.type === "page_complete") publish({ completed: event.index, total: event.total })
+            },
+            { explicit: runExplicit },
+          ),
         )
         .then(() => {
           signal.throwIfAborted()
