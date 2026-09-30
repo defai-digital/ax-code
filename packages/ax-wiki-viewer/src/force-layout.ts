@@ -9,7 +9,7 @@ export const LAYOUT_LANES: Record<WikiGraphNodeKind, number> = {
   page: LAYOUT_WORLD.width * 0.25,
   symbol: LAYOUT_WORLD.width * 0.5,
   source: LAYOUT_WORLD.width * 0.75,
-}
+} as const
 
 export type LayoutNode = {
   id: string
