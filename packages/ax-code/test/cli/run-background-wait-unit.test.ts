@@ -56,6 +56,50 @@ test("a stalled child reports an incomplete run at the wait deadline", async () 
   ).rejects.toBeInstanceOf(RunBackgroundWaitError)
 })
 
+test("a blocked queue read cannot outlive the background deadline", async () => {
+  const sdk = {
+    taskQueue: { list: async () => new Promise<never>(() => {}) },
+  }
+  await expect(
+    waitForRunBackground({
+      sdk: sdk as never,
+      sessionID: "ses_run",
+      startedAt: Date.now(),
+      seconds: 1,
+      signal: new AbortController().signal,
+    }),
+  ).rejects.toThrow("Background work did not settle within 1 seconds.")
+})
+
+test("a blocked message read cannot outlive the background deadline", async () => {
+  const created = Date.now()
+  const sdk = {
+    taskQueue: {
+      list: async () => ({
+        data: [
+          {
+            id: "tsk_one",
+            kind: "subagent",
+            status: "completed",
+            payload: { source: "task", parentSessionID: "ses_run", deliveryStatus: "delivered" },
+            time: { created },
+          },
+        ],
+      }),
+    },
+    session: { messages: async () => new Promise<never>(() => {}) },
+  }
+  await expect(
+    waitForRunBackground({
+      sdk: sdk as never,
+      sessionID: "ses_run",
+      startedAt: created,
+      seconds: 1,
+      signal: new AbortController().signal,
+    }),
+  ).rejects.toThrow("Background work did not settle within 1 seconds.")
+})
+
 test("parallel children require a parent answer after the last handoff", async () => {
   const created = Date.now()
   let secondAnswer = false

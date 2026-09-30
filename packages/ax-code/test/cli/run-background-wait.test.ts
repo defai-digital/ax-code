@@ -198,3 +198,136 @@ test("headless background deadline reports incomplete work once", async () => {
     await new Promise<void>((resolve) => server.close(() => resolve()))
   }
 })
+
+test("headless background deadline bounds a blocked task queue HTTP read", async () => {
+  const previousExitCode = process.exitCode
+  const sessionID = "ses_background_blocked_read"
+  let output = ""
+  const stdout = vi.spyOn(process.stdout, "write").mockImplementation(((chunk: unknown) => {
+    output += String(chunk)
+    return true
+  }) as never)
+  const foreground = {
+    info: { id: "msg_blocked", sessionID, role: "assistant", time: { created: 1, completed: 2 } },
+    parts: [{ id: "prt_blocked", messageID: "msg_blocked", sessionID, type: "text", text: "Child started" }],
+  }
+  const server = createServer((request, response) => {
+    if (request.url?.startsWith("/event")) {
+      response.writeHead(200, { "content-type": "text/event-stream" })
+      response.write('data: {"type":"server.connected","properties":{}}\n\n')
+      return
+    }
+    if (request.url?.startsWith("/task-queue")) return
+    response.setHeader("content-type", "application/json")
+    if (request.url === "/session" && request.method === "POST")
+      return void response.end(JSON.stringify({ id: sessionID }))
+    if (request.url === `/session/${sessionID}/message` && request.method === "POST")
+      return void response.end(JSON.stringify(foreground))
+    if (request.url?.startsWith(`/session/${sessionID}/message`) && request.method === "GET")
+      return void response.end(JSON.stringify([foreground]))
+    response.end("[]")
+  })
+  server.listen(0, "127.0.0.1")
+  await once(server, "listening")
+  const address = server.address()
+  if (!address || typeof address === "string") throw new Error("Missing server address")
+  try {
+    const started = Date.now()
+    await RunCommand.handler({
+      message: ["Use a background child"],
+      "--": [],
+      attach: `http://127.0.0.1:${address.port}`,
+      format: "json",
+      "await-background": 1,
+    } as never)
+    expect(Date.now() - started).toBeLessThan(2500)
+    const lines = output
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => parseJsonStrict(line) as { type?: string; status?: string; error?: unknown })
+    expect(lines.filter((line) => line.type === "result")).toHaveLength(1)
+    expect(lines.at(-1)).toMatchObject({ type: "result", status: "error" })
+    expect(
+      lines.some((line) => line.type === "error" && String(JSON.stringify(line.error)).includes("did not settle")),
+    ).toBe(true)
+    expect(process.exitCode).toBe(1)
+  } finally {
+    stdout.mockRestore()
+    process.exitCode = previousExitCode
+    server.closeAllConnections()
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+  }
+})
+
+test.each(["none", "automation"])("headless run does not wait for %s background work", async (kind) => {
+  const previousExitCode = process.exitCode
+  const sessionID = "ses_no_child"
+  let output = ""
+  const stdout = vi.spyOn(process.stdout, "write").mockImplementation(((chunk: unknown) => {
+    output += String(chunk)
+    return true
+  }) as never)
+  const foreground = {
+    info: { id: "msg_no_child", sessionID, role: "assistant", time: { created: 1, completed: 2 } },
+    parts: [{ id: "prt_no_child", messageID: "msg_no_child", sessionID, type: "text", text: "Done" }],
+  }
+  const server = createServer((request, response) => {
+    if (request.url?.startsWith("/event")) {
+      response.writeHead(200, { "content-type": "text/event-stream" })
+      response.write('data: {"type":"server.connected","properties":{}}\n\n')
+      return
+    }
+    response.setHeader("content-type", "application/json")
+    if (request.url === "/session" && request.method === "POST")
+      return void response.end(JSON.stringify({ id: sessionID }))
+    if (request.url === `/session/${sessionID}/message` && request.method === "POST")
+      return void response.end(JSON.stringify(foreground))
+    if (request.url?.startsWith("/task-queue"))
+      return void response.end(
+        JSON.stringify(
+          kind === "automation"
+            ? [
+                {
+                  id: "tsk_automation",
+                  kind: "automation",
+                  status: "running",
+                  payload: { parentSessionID: sessionID },
+                  time: { created: Date.now() },
+                },
+              ]
+            : [],
+        ),
+      )
+    if (request.url?.startsWith(`/session/${sessionID}/message`) && request.method === "GET")
+      return void response.end(JSON.stringify([foreground]))
+    response.end("[]")
+  })
+  server.listen(0, "127.0.0.1")
+  await once(server, "listening")
+  const address = server.address()
+  if (!address || typeof address === "string") throw new Error("Missing server address")
+  try {
+    const started = Date.now()
+    await RunCommand.handler({
+      message: ["Finish without a child"],
+      "--": [],
+      attach: `http://127.0.0.1:${address.port}`,
+      format: "json",
+      "await-background": 2,
+    } as never)
+    expect(Date.now() - started).toBeLessThan(1500)
+    const results = output
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => parseJsonStrict(line) as { type?: string; text?: string })
+      .filter((event) => event.type === "result")
+    expect(results).toHaveLength(1)
+    expect(results[0]?.text).toBe("Done")
+    expect(process.exitCode).toBeUndefined()
+  } finally {
+    stdout.mockRestore()
+    process.exitCode = previousExitCode
+    server.closeAllConnections()
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+  }
+})

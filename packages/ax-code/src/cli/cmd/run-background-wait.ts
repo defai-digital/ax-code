@@ -16,14 +16,40 @@ export async function waitForRunBackground(input: {
   signal: AbortSignal
 }): Promise<string | undefined> {
   const deadline = Date.now() + input.seconds * 1000
+  const deadlineError = () =>
+    new RunBackgroundWaitError(`Background work did not settle within ${input.seconds} seconds.`)
+  async function read<T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) throw deadlineError()
+    const timeout = new AbortController()
+    const signal = AbortSignal.any([input.signal, timeout.signal])
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let onAbort: (() => void) | undefined
+    try {
+      return await Promise.race([
+        operation(signal),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            const error = deadlineError()
+            reject(error)
+            timeout.abort(error)
+          }, remaining)
+          onAbort = () => reject(input.signal.reason ?? new Error("Background wait was cancelled."))
+          input.signal.addEventListener("abort", onAbort, { once: true })
+          if (input.signal.aborted) onAbort()
+        }),
+      ])
+    } finally {
+      if (timer) clearTimeout(timer)
+      if (onAbort) input.signal.removeEventListener("abort", onAbort)
+    }
+  }
   let observed = false
   for (;;) {
     if (input.signal.aborted) return undefined
     const remaining = deadline - Date.now()
-    if (remaining <= 0)
-      throw new RunBackgroundWaitError(`Background work did not settle within ${input.seconds} seconds.`)
-    const signal = AbortSignal.any([input.signal, AbortSignal.timeout(remaining)])
-    const queue = await input.sdk.taskQueue.list(undefined, { throwOnError: true, signal })
+    if (remaining <= 0) throw deadlineError()
+    const queue = await read((signal) => input.sdk.taskQueue.list(undefined, { throwOnError: true, signal }))
     const children = (queue.data ?? []).filter(
       (item) =>
         item.kind === "subagent" &&
@@ -40,7 +66,9 @@ export async function waitForRunBackground(input: {
         item.payload["deliveryStatus"] === "delivered",
     )
     if (allDelivered) {
-      const messages = await input.sdk.session.messages({ sessionID: input.sessionID }, { throwOnError: true, signal })
+      const messages = await read((signal) =>
+        input.sdk.session.messages({ sessionID: input.sessionID }, { throwOnError: true, signal }),
+      )
       const history = messages.data ?? []
       const owned = new Set(children.map((item) => item.id))
       const handoff = (message: (typeof history)[number]) =>
@@ -68,14 +96,12 @@ export async function waitForRunBackground(input: {
         .slice(lastHandoff + 1)
         .findLast((message) => message.info.role === "assistant" && message.info.time.completed !== undefined)
       if (lastHandoff >= 0 && lastAssistant) {
-        const status = await input.sdk.session.status(undefined, { throwOnError: true, signal })
+        const status = await read((signal) => input.sdk.session.status(undefined, { throwOnError: true, signal }))
         if (!status.data?.[input.sessionID] || status.data[input.sessionID]?.type === "idle")
           return lastAssistant.info.id
       }
     }
-    if (Date.now() >= deadline) {
-      throw new RunBackgroundWaitError(`Background work did not settle within ${input.seconds} seconds.`)
-    }
+    if (Date.now() >= deadline) throw deadlineError()
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(done, Math.min(1000, deadline - Date.now()))
       function done() {
