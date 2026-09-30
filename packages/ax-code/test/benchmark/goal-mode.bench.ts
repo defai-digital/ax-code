@@ -91,7 +91,7 @@ const scenarios: Scenario[] = [
           {
             sessionID: id,
             command: "goal",
-            arguments: "Repair parser",
+            arguments: "--assure Repair parser",
             model: "benchmark/benchmark-model",
             agent: "build",
           } as any,
@@ -118,7 +118,7 @@ const scenarios: Scenario[] = [
         captured = input
         return GoalPlanWriter.stubWrite()(input)
       })
-      await (await CreateGoalTool.init()).execute({ objective: "Repair the parser" }, ctx(id))
+      await (await CreateGoalTool.init()).execute({ objective: "Repair the parser", assure: true }, ctx(id))
       const passed = captured?.model?.modelID === model.id && captured?.model?.providerID === model.providerID
       return { passed, detail: passed ? "Selected model reaches planner" : "Planner did not receive selected model" }
     },
