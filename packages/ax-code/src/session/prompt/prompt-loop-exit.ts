@@ -17,7 +17,9 @@ export function resolvePromptLoopAssistantExit(
     sessionID: SessionID
     lastUserID: string
     lastUserCreatedAt?: number
-    lastAssistant?: Pick<MessageV2.Assistant, "id" | "finish"> & { time?: Pick<MessageV2.Assistant["time"], "created"> }
+    lastAssistant?: Pick<MessageV2.Assistant, "id" | "finish" | "error"> & {
+      time?: Pick<MessageV2.Assistant["time"], "created">
+    }
     hasPendingSubtask: boolean
     hasPendingAutonomousWork?: boolean
     /**
@@ -32,6 +34,12 @@ export function resolvePromptLoopAssistantExit(
   },
   deps: PromptLoopAssistantExitDeps = {},
 ): PromptLoopAssistantExitResult {
+  if (
+    input.lastAssistant?.error?.name === "MessageAbortedError" &&
+    input.lastAssistant.error.data.metadata?.reason === "backend_restart"
+  ) {
+    return { action: "continue" }
+  }
   const decision = assistantLoopExitDecision(input)
   if (decision.action !== "continue" && input.hasPendingSteering) {
     ;(deps.info ?? log.info)("extending loop for pending steering", {

@@ -10,7 +10,7 @@ import { WorkspaceTable } from "../control-plane/workspace.sql"
 import { Timestamps } from "../storage/schema.sql"
 
 type PartData = Omit<MessageV2.Part, "id" | "sessionID" | "messageID">
-type InfoData = Omit<MessageV2.Info, "id" | "sessionID">
+type InfoData = Omit<MessageV2.User, "id" | "sessionID"> | Omit<MessageV2.Assistant, "id" | "sessionID">
 export type SessionLastRecapData = { text: string; time: number; scope: "turn" | "conversation" }
 
 export const SessionTable = sqliteTable(

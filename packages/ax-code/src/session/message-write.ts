@@ -1,4 +1,4 @@
-import { type Database, sql } from "../storage/db"
+import { type Database, eq, sql } from "../storage/db"
 import type { MessageV2 } from "./message-v2"
 import { MessageTable, PartTable } from "./session.sql"
 import { NamedError } from "@ax-code/util/error"
@@ -14,8 +14,27 @@ export namespace MessageWrite {
     throw new ScopeError({ message: `Cannot reassign ${kind} ${id} to a different owner` })
   }
 
-  export function message(db: Database.TxOrDb, info: MessageV2.Info, timeUpdated: number) {
-    const { id, sessionID, ...data } = info
+  // Callers must own a transaction: selecting the old stamp and inserting or
+  // updating its row form one indivisible operation. A public payload cannot
+  // assign ownership to a new row or change a historical row's generation.
+  export function message(
+    db: Database.TxOrDb,
+    info: MessageV2.Info,
+    timeUpdated: number,
+    execution?: MessageV2.Assistant["execution"],
+  ): MessageV2.Info {
+    let canonical = info
+    if (info.role === "assistant") {
+      const existing = db
+        .select({ data: MessageTable.data })
+        .from(MessageTable)
+        .where(eq(MessageTable.id, info.id))
+        .get()
+      const original =
+        existing?.data.role === "assistant" && "execution" in existing.data ? existing.data.execution : undefined
+      canonical = { ...info, execution: existing ? original : execution }
+    }
+    const { id, sessionID, ...data } = canonical
     const result = db
       .insert(MessageTable)
       .values({ id, session_id: sessionID, time_created: info.time.created, data })
@@ -26,6 +45,7 @@ export namespace MessageWrite {
       })
       .run()
     assertOwned(result, "message", id)
+    return canonical
   }
 
   function partRow(part: MessageV2.Part, time: number, timeUpdated: number) {

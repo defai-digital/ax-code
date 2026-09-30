@@ -6,7 +6,9 @@ import { MessageV2 } from "./message-v2"
 import { Log } from "../util/log"
 import { SessionRevert } from "./revert"
 import { Session } from "."
+import { SessionExecution } from "./execution"
 import { Agent } from "../agent/agent"
+import { Command } from "../command"
 import { providerModelKey } from "../provider/model-key"
 import { Provider } from "../provider/provider"
 import { ProviderID } from "../provider/schema"
@@ -178,12 +180,18 @@ export namespace SessionPrompt {
 
   export function assertNotBusy(sessionID: SessionID) {
     runState.assertNotBusy(sessionID)
+    SessionExecution.assertAvailable(sessionID)
   }
 
   export const PromptInput = PromptInputSchema
   export type PromptInput = PromptInputType
 
   export const prompt = fn(PromptInput, async (input) => {
+    if (resume(input.sessionID)) return promptOwned(input)
+    return SessionExecution.withRun(input.sessionID, () => promptOwned(input))
+  })
+
+  async function promptOwned(input: PromptInput) {
     const session = await Session.get(input.sessionID)
     assertWorkSessionSendable({ metadata: session.metadata, agent: input.agent })
     // New user prompt = new run. Cross-turn cycle memory must not leak
@@ -246,7 +254,7 @@ export namespace SessionPrompt {
     }
 
     return loop({ sessionID: input.sessionID })
-  })
+  }
 
   export const steeringState = SessionSteering.view
 
@@ -360,6 +368,11 @@ export namespace SessionPrompt {
   export const LoopInput = LoopInputSchema
   export type LoopInput = LoopInputType
   export const loop = fn(LoopInput, async (input) => {
+    if (resume(input.sessionID)) return loopOwned(input)
+    return SessionExecution.withRun(input.sessionID, () => loopOwned(input))
+  })
+
+  async function loopOwned(input: LoopInput): Promise<MessageV2.WithParts> {
     const { sessionID, resume_existing } = input
 
     const resumedAbort = resume_existing ? resume(sessionID) : undefined
@@ -386,6 +399,7 @@ export namespace SessionPrompt {
       // An interrupted loop can finish cleanup after a successor has started.
       // Only the current generation owns queue draining and cancellation.
       if (runState.resume(sessionID) !== abort) return
+      SessionExecution.prepareHandoff(sessionID)
       return finishPromptLoopQueue({
         sessionID,
         reason,
@@ -2468,23 +2482,37 @@ export namespace SessionPrompt {
       shiftQueuedCallback: runState.shiftQueuedCallback,
     })
     return result
-  })
+  }
 
   export const ShellInput = ShellInputSchema
   export type ShellInput = ShellInputType
   export async function shell(input: ShellInput) {
-    return executeShellCommand(input, {
-      start,
-      queuedCallbacks: runState.queuedCallbacks,
-      cancel,
-      resumeLoop: loop,
-    })
+    return SessionExecution.withRun(input.sessionID, () =>
+      executeShellCommand(input, {
+        start,
+        queuedCallbacks: runState.queuedCallbacks,
+        markIdle: runState.markIdle,
+        prepareHandoff: SessionExecution.prepareHandoff,
+        cancel,
+        resumeLoop: loop,
+      }),
+    )
   }
 
   export const CommandInput = CommandInputSchema
   export type CommandInput = CommandInputType
 
   export async function command(input: CommandInput) {
-    return executePromptCommand(input, prompt)
+    // Control commands retain their busy-session behavior. A new execution
+    // must own the session before template shell expansion or workflow setup.
+    if (
+      input.command === Command.Default.GOAL ||
+      input.command === Command.Default.LOOP ||
+      input.command === Command.Default.LIMITS ||
+      resume(input.sessionID)
+    ) {
+      return executePromptCommand(input, prompt)
+    }
+    return SessionExecution.withRun(input.sessionID, () => executePromptCommand(input, prompt))
   }
 }

@@ -8,6 +8,7 @@ export function scanLoopMessages(msgs: MessageV2.WithParts[]) {
   let lastFinished: MessageV2.Assistant | undefined
   let lastFinishedStepTokens: MessageV2.StepFinishPart["tokens"] | undefined
   let tasks: (MessageV2.CompactionPart | MessageV2.SubtaskPart)[] = []
+  let taskBoundaryReached = false
 
   // Walk newest → oldest. Stop once both lastUser and lastFinished are known;
   // tasks only matter between lastFinished and the end, so we collect them
@@ -28,7 +29,14 @@ export function scanLoopMessages(msgs: MessageV2.WithParts[]) {
         (part): part is MessageV2.StepFinishPart => part.type === "step-finish",
       )?.tokens
     }
-    if (!lastFinished) {
+    if (
+      msg.info.role === "assistant" &&
+      msg.info.error?.name === "MessageAbortedError" &&
+      msg.info.error.data.metadata?.reason === "backend_restart"
+    ) {
+      taskBoundaryReached = true
+    }
+    if (!lastFinished && !taskBoundaryReached) {
       const found = msg.parts.filter((part) => part.type === "compaction" || part.type === "subtask")
       if (found.length > 0) tasks.push(...found)
     }

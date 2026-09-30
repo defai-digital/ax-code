@@ -213,7 +213,12 @@ export namespace SessionRevert {
     const unfinished = store
       .use((db) =>
         db
-          .select({ id: MessageTable.id, sessionID: MessageTable.session_id, time: MessageTable.time_created, data: MessageTable.data })
+          .select({
+            id: MessageTable.id,
+            sessionID: MessageTable.session_id,
+            time: MessageTable.time_created,
+            data: MessageTable.data,
+          })
           .from(MessageTable)
           .where(inArray(MessageTable.session_id, sessionIDs))
           .all(),
@@ -221,7 +226,10 @@ export namespace SessionRevert {
       .filter(
         (row) =>
           row.data.role === "assistant" &&
-          !("completed" in row.data.time && typeof row.data.time.completed === "number"),
+          (!("completed" in row.data.time && typeof row.data.time.completed === "number") ||
+            ("error" in row.data &&
+              row.data.error?.name === "MessageAbortedError" &&
+              row.data.error.data.metadata?.reason === "backend_restart")),
       )
       .filter((row) => row.id === boundaryMessageID || after({ time: row.time, id: row.id }, boundary))
     if (unfinished.length === 0) return
@@ -238,7 +246,8 @@ export namespace SessionRevert {
     const open = new Map<MessageID, { snapshot?: string; hasTool: boolean }>()
     const fail = (messageID: MessageID): never => {
       throw new IncompleteCoverageError({
-        message: "Undo coverage is incomplete for an unfinished tool step. Inspect and restore workspace changes manually.",
+        message:
+          "Undo coverage is incomplete for an unfinished tool step. Inspect and restore workspace changes manually.",
         sessionID: relevant.get(messageID)!,
         messageID,
       })
