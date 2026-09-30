@@ -38,6 +38,7 @@ import {
   type WikiPageGenerationRequest,
   type WikiSource,
 } from "@ax-code/ax-wiki/node"
+import { APICallError, NoObjectGeneratedError } from "ai"
 import { GraphContext, type GraphContextPack } from "../../src/code-intelligence/graph-context"
 import { CodeNodeID } from "../../src/code-intelligence/id"
 import { Installation } from "../../src/installation"
@@ -46,6 +47,7 @@ import {
   repairWikiPageText,
   resolveWikiModelRef,
   runNativeWiki,
+  wikiPageBudgetPolicy,
   wikiPageOutputTokens,
   wikiPageProviderOptions,
   WIKI_PAGE_OUTPUT_TOKEN_MAX,
@@ -168,10 +170,108 @@ async function runNative(
   return { evidence }
 }
 
+/**
+ * Drive one page generation through `buildAxWiki` with a queued sequence of
+ * attempt results, so retry policy is observable without a live provider.
+ */
+async function runNativeSequence(tmpPath: string, results: Array<{ streamError?: unknown }>): Promise<void> {
+  const queue = [...results]
+  vi.mocked(generateObject).mockImplementation(async () => ({ ...generatedPage(), ...(queue.shift() ?? {}) }))
+  vi.mocked(buildAxWiki).mockImplementation(async (input) => {
+    const request: WikiPageGenerationRequest = {
+      action: "update",
+      root: tmpPath,
+      wikiDir: "openwiki",
+      page: PAGE,
+      plan: { schemaVersion: 1, pages: [], modules: [], sourceCount: 0 },
+      sources: [{ ...SOURCE, content: "export {}", truncated: false }],
+      sourceInventory: [SOURCE],
+    }
+    await input.generator(request)
+    return wikiResult(tmpPath, request)
+  })
+
+  await Instance.provide({
+    directory: tmpPath,
+    init: async () => {
+      const { Env } = await import("../../src/env")
+      Env.set("GROQ_API_KEY", "test-api-key")
+    },
+    fn: async () => {
+      await runNativeWiki({ root: tmpPath, action: "update", model: "groq/openai/gpt-oss-20b" })
+    },
+  })
+}
+
+function noObjectError(finishReason: "length" | "stop"): NoObjectGeneratedError {
+  return new NoObjectGeneratedError({
+    message: `no object (${finishReason})`,
+    text: '{"summary":"truncated',
+    response: { id: "resp", timestamp: new Date(), modelId: "test" } as never,
+    usage: { inputTokens: 1, outputTokens: 8_192, totalTokens: 8_193 } as never,
+    finishReason,
+  })
+}
+
 describe("wiki native generator", () => {
   test("rejects stream errors instead of publishing a partial wiki page", async () => {
     await using tmp = await tmpdir({ git: true })
     await expect(runNative(tmp.path, false, new Error("stream disconnected"))).rejects.toThrow("stream disconnected")
+  })
+
+  test("retries a length-truncated page with a smaller request instead of an identical one", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await runNativeSequence(tmp.path, [{ streamError: noObjectError("length") }, {}])
+
+    expect(generateObject).toHaveBeenCalledTimes(2)
+    const retry = vi.mocked(generateObject).mock.calls[1]?.[0] as { messages: Array<{ content: string }> }
+    expect(retry.messages[0].content).toContain("cut off by the output token limit")
+    expect(retry.messages[0].content).toContain("at most 5 symbolSummaries")
+  })
+
+  test("gives up after one length retry instead of replaying the same request", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await expect(
+      runNativeSequence(tmp.path, [{ streamError: noObjectError("length") }, { streamError: noObjectError("length") }]),
+    ).rejects.toThrow(/no object/)
+    expect(generateObject).toHaveBeenCalledTimes(2)
+  })
+
+  test("keeps the repair retry for unparseable page output", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await runNativeSequence(tmp.path, [{ streamError: noObjectError("stop") }, {}])
+
+    expect(generateObject).toHaveBeenCalledTimes(2)
+    const retry = vi.mocked(generateObject).mock.calls[1]?.[0] as { messages: Array<{ content: string }> }
+    expect(retry.messages[0].content).toContain("did not produce a valid page object")
+    // The repair retry names the schema limits, because an over-limit field
+    // (summary > 600, a gloss > 300) fails validation with finishReason=stop.
+    expect(retry.messages[0].content).toContain("summary at most 600 characters")
+    expect(retry.messages[0].content).toContain("at most 20 symbolSummaries")
+  })
+
+  test("backs off and retries a retryable provider error with the same request", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const transient = new APICallError({
+      message: "upstream 503",
+      url: "https://defai-01.ax-trust.com/v1/chat/completions",
+      requestBodyValues: {},
+      statusCode: 503,
+      isRetryable: true,
+    })
+    await runNativeSequence(tmp.path, [{ streamError: transient }, {}])
+
+    expect(generateObject).toHaveBeenCalledTimes(2)
+    const retry = vi.mocked(generateObject).mock.calls[1]?.[0] as { messages: Array<{ content: string }> }
+    expect(retry.messages[0].content).not.toContain("did not produce a valid page object")
+  })
+
+  test("does not retry an unclassified stream error", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await expect(runNativeSequence(tmp.path, [{ streamError: new Error("stream disconnected") }])).rejects.toThrow(
+      "stream disconnected",
+    )
+    expect(generateObject).toHaveBeenCalledTimes(1)
   })
 
   test("sends a bounded output limit on every page generateObject call", async () => {
@@ -566,6 +666,24 @@ describe("wiki page generation budget", () => {
     deepseek.limit.output = 16_384
     expect(wikiPageOutputTokens(deepseek)).toBe(16_384)
     expect(wikiPageOutputTokens(wikiModel({ id: "gpt-4.1", reasoning: false }))).toBe(32_000)
+  })
+
+  test("pins the per-class page budget policy", () => {
+    expect(wikiPageBudgetPolicy(wikiModel({ id: "glm-5.3-flash" }))).toEqual({
+      class: "glm-class",
+      maxOutputTokens: WIKI_PAGE_OUTPUT_TOKEN_MAX,
+      capReason: "glm-hidden-reasoning",
+      reasoningEffort: "low",
+    })
+    const deepseek = wikiModel({ id: "deepseek-flash", apiID: "deepseek-flash" })
+    deepseek.limit.output = 16_384
+    expect(wikiPageBudgetPolicy(deepseek)).toEqual({
+      class: "standard",
+      maxOutputTokens: 16_384,
+      capReason: "none",
+    })
+    // A standard model is never capped by the GLM token ceiling.
+    expect(wikiPageBudgetPolicy(wikiModel({ id: "gpt-4.1", reasoning: false })).maxOutputTokens).toBe(32_000)
   })
 
   test("asks a GLM flash gateway for low reasoning effort", () => {

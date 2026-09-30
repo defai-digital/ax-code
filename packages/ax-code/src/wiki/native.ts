@@ -29,7 +29,7 @@ import {
   type WikiPlan,
   type WikiSource,
 } from "@ax-code/ax-wiki/node"
-import { NoObjectGeneratedError, streamObject } from "ai"
+import { APICallError, NoObjectGeneratedError, streamObject } from "ai"
 import z from "zod"
 import { GraphContext } from "../code-intelligence/graph-context"
 import { Installation } from "../installation"
@@ -60,6 +60,18 @@ const PAGE_SYMBOL_NAME_MAX = 256
 // the wiki stale forever.
 export const WIKI_PAGE_OUTPUT_TOKEN_MAX = 8_192
 const WIKI_PAGE_TIMEOUT_MS = 180_000
+const WIKI_PAGE_PREVIOUS_MAX = 24_000
+// One retry per failure class, two attempts total: a page either succeeds on
+// the class-appropriate retry or fails the build with a classified failure.
+const WIKI_PAGE_MAX_ATTEMPTS = 2
+// A length failure means the page JSON ran past the output budget, and that
+// budget cannot grow (the aux limit is the model's real ceiling), so the retry
+// asks for a smaller page instead of replaying a near-deterministic request.
+const WIKI_PAGE_LENGTH_RETRY_BODY_MAX = 1_200
+const WIKI_PAGE_LENGTH_RETRY_GLOSS_MAX = 5
+const WIKI_PAGE_LENGTH_RETRY_PREVIOUS_MAX = 6_000
+const WIKI_PAGE_TRANSIENT_BACKOFF_MS = 500
+const WIKI_PAGE_TRANSIENT_BACKOFF_JITTER_MS = 250
 const WIKI_LOW_EFFORT_EXCLUDED_PROVIDERS = new Set([
   AX_ENGINE_PROVIDER_ID,
   "groq",
@@ -191,12 +203,37 @@ function symbolGloss(nameHint: string, value: unknown): { name: string; summary:
   return { name, summary }
 }
 
-export function wikiPageOutputTokens(model: Provider.Model): number {
+/**
+ * Output policy for one page call, keyed by model capability class. This is
+ * the single place that decides how much a page may emit. The GLM class is
+ * capped because those gateways spend the whole aux budget on hidden
+ * reasoning (fc3fa1893); every other model keeps the full aux budget, because
+ * capping it truncates the page JSON mid-object (deepseek-flash, 2026-09-29).
+ * Keeping this as an explicit table with a `capReason` makes the policy
+ * auditable and regression-testable instead of an inline predicate.
+ */
+export type WikiPageBudgetPolicy = {
+  class: "glm-class" | "standard"
+  maxOutputTokens: number
+  capReason: "glm-hidden-reasoning" | "none"
+  reasoningEffort?: "low"
+}
+
+export function wikiPageBudgetPolicy(model: Provider.Model): WikiPageBudgetPolicy {
   const aux = ProviderTransform.auxMaxOutputTokens(model)
-  // Scope the 8192 cap to the GLM pathology it was introduced for: the same
-  // predicate that requests low reasoning effort. Non-GLM models must keep
-  // the full aux budget or their page JSON gets cut off before it closes.
-  return wikiGlmNeedsLowEffort(model) ? Math.min(aux, WIKI_PAGE_OUTPUT_TOKEN_MAX) : aux
+  if (wikiGlmNeedsLowEffort(model)) {
+    return {
+      class: "glm-class",
+      maxOutputTokens: Math.min(aux, WIKI_PAGE_OUTPUT_TOKEN_MAX),
+      capReason: "glm-hidden-reasoning",
+      reasoningEffort: "low",
+    }
+  }
+  return { class: "standard", maxOutputTokens: aux, capReason: "none" }
+}
+
+export function wikiPageOutputTokens(model: Provider.Model): number {
+  return wikiPageBudgetPolicy(model).maxOutputTokens
 }
 
 /**
@@ -215,8 +252,8 @@ export function wikiPageProviderOptions(model: Provider.Model): Record<string, R
   const reasoningEffort =
     typeof declaredEffort === "string"
       ? declaredEffort
-      : Object.keys(extras).length === 0 && wikiGlmNeedsLowEffort(model)
-        ? "low"
+      : Object.keys(extras).length === 0
+        ? wikiPageBudgetPolicy(model).reasoningEffort
         : undefined
   const options: Record<string, Record<string, any>> = {}
   if (reasoningEffort && model.providerID !== "openaiCompatible") {
@@ -257,6 +294,58 @@ function wikiHostRejectsReasoningEffort(url: string | undefined): boolean {
   }
 }
 
+/**
+ * Failure classes for one page call. `length` output was cut off by the token
+ * budget, `format` produced an unparseable object, `transient` is a retryable
+ * provider/transport error. Anything else is a real failure and never retried.
+ */
+type WikiPageFailure = "length" | "format" | "transient"
+
+type WikiPageRetry = {
+  /** Extra system instruction for the retry; empty means the same request. */
+  feedback: string
+  /** Ask for a smaller page (shorter previous content plus tighter limits). */
+  tight?: boolean
+  /** Wait before retrying, for transient provider errors. */
+  delayMs?: number
+}
+
+const WIKI_PAGE_FORMAT_RETRY_FEEDBACK = `\nThe previous attempt did not produce a valid page object. Return only one complete JSON object, without code fences or surrounding prose, respecting the field limits: summary at most ${PAGE_SUMMARY_MAX} characters, at most ${PAGE_SYMBOLS_MAX} symbols, at most ${SYMBOL_SUMMARIES_MAX} symbolSummaries, each symbol name at most ${PAGE_SYMBOL_NAME_MAX} characters and each symbolSummary.summary at most ${SYMBOL_SUMMARY_MAX} characters. Escape newlines and quotes inside JSON strings and close every string, array, and object.`
+
+function wikiPageFailure(error: unknown): WikiPageFailure | undefined {
+  if (NoObjectGeneratedError.isInstance(error)) return error.finishReason === "length" ? "length" : "format"
+  if (APICallError.isInstance(error) && error.isRetryable) return "transient"
+  return undefined
+}
+
+function wikiPageRetry(failure: WikiPageFailure): WikiPageRetry {
+  if (failure === "length")
+    return {
+      feedback: `\nThe previous attempt was cut off by the output token limit. Return one complete JSON object with a body under ${WIKI_PAGE_LENGTH_RETRY_BODY_MAX} characters, a summary under 400 characters, at most ${WIKI_PAGE_LENGTH_RETRY_GLOSS_MAX} symbolSummaries, and close every string, array, and object.`,
+      tight: true,
+    }
+  if (failure === "transient")
+    return {
+      feedback: "",
+      delayMs: WIKI_PAGE_TRANSIENT_BACKOFF_MS + Math.floor(Math.random() * WIKI_PAGE_TRANSIENT_BACKOFF_JITTER_MS),
+    }
+  return { feedback: WIKI_PAGE_FORMAT_RETRY_FEEDBACK }
+}
+
+async function wikiPageRetryDelay(ms: number, signal: AbortSignal): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, ms)
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer)
+        resolve()
+      },
+      { once: true },
+    )
+  })
+}
+
 function sourceEvidence(request: WikiPageGenerationRequest): string {
   return request.sources
     .map((source) => {
@@ -266,7 +355,7 @@ function sourceEvidence(request: WikiPageGenerationRequest): string {
     .join("\n")
 }
 
-function pagePrompt(request: WikiPageGenerationRequest): string {
+function pagePrompt(request: WikiPageGenerationRequest, tight = false): string {
   const otherPages = request.plan.pages
     .filter((page) => page.path !== request.page.path)
     .map((page) => {
@@ -275,7 +364,7 @@ function pagePrompt(request: WikiPageGenerationRequest): string {
     })
     .join("\n")
   const previous = request.previousContent
-    ? `\nPrevious generated page (use only to preserve useful organization; current evidence wins):\n${request.previousContent.slice(0, 24_000)}\n`
+    ? `\nPrevious generated page (use only to preserve useful organization; current evidence wins):\n${request.previousContent.slice(0, tight ? WIKI_PAGE_LENGTH_RETRY_PREVIOUS_MAX : WIKI_PAGE_PREVIOUS_MAX)}\n`
     : ""
   return `Generate this AX Wiki page:
 
@@ -626,9 +715,11 @@ export async function runNativeWiki(input: {
       const timer = setTimeout(() => abort.abort(), WIKI_PAGE_TIMEOUT_MS)
       const signal = input.signal ? AbortSignal.any([abort.signal, input.signal]) : abort.signal
       try {
-        const prompt = pagePrompt(request)
-        for (let attempt = 0; ; attempt++) {
+        let retry: WikiPageRetry | undefined
+        for (let attempt = 0; attempt < WIKI_PAGE_MAX_ATTEMPTS; attempt++) {
           signal.throwIfAborted()
+          if (retry?.delayMs) await wikiPageRetryDelay(retry.delayMs, signal)
+          const prompt = pagePrompt(request, retry?.tight === true)
           try {
             const result = streamObject({
               model: model.language,
@@ -638,14 +729,7 @@ export async function runNativeWiki(input: {
               abortSignal: signal,
               ...(model.providerOptions ? { providerOptions: model.providerOptions } : {}),
               messages: [
-                {
-                  role: "system",
-                  content:
-                    PAGE_SYSTEM +
-                    (attempt === 0
-                      ? ""
-                      : "\nThe previous attempt did not produce a valid page object. Return only one complete JSON object, without code fences or surrounding prose. Keep the body concise, escape newlines and quotes inside JSON strings, and close every string, array, and object."),
-                },
+                { role: "system", content: PAGE_SYSTEM + (retry?.feedback ?? "") },
                 { role: "user", content: prompt },
               ],
             })
@@ -658,18 +742,26 @@ export async function runNativeWiki(input: {
             // page and must not be retried as a schema failure.
             if (input.signal?.aborted) throw error
             if (abort.signal.aborted) throw new Error(`Wiki page generation timed out: ${request.page.path}`)
-            if (!NoObjectGeneratedError.isInstance(error)) throw error
-            log.warn("wiki page structured output failed", {
+            const failure = wikiPageFailure(error)
+            const structured = NoObjectGeneratedError.isInstance(error)
+            log.warn("wiki page generation failed", {
               page: request.page.path,
               model: model.label,
               attempt: attempt + 1,
-              retry: attempt === 0,
-              finishReason: error.finishReason,
-              responseCharacters: error.text?.length ?? 0,
+              failure: failure ?? "unclassified",
+              retry: failure !== undefined && attempt + 1 < WIKI_PAGE_MAX_ATTEMPTS,
+              finishReason: structured ? error.finishReason : undefined,
+              responseCharacters: structured ? (error.text?.length ?? 0) : 0,
             })
-            if (attempt > 0) throw error
+            // One class-appropriate retry, then fail the build: replaying an
+            // identical request after a deterministic failure only burns the
+            // page deadline again.
+            const next = failure && attempt + 1 < WIKI_PAGE_MAX_ATTEMPTS ? wikiPageRetry(failure) : undefined
+            if (!next) throw error
+            retry = next
           }
         }
+        throw new Error(`Wiki page generation failed: ${request.page.path}`)
       } finally {
         clearTimeout(timer)
       }
