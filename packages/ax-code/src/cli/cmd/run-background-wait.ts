@@ -54,10 +54,16 @@ export async function waitForRunBackground(input: {
         )
       const lastHandoff = history.findLastIndex(handoff)
       const firstHandoff = history.findIndex(handoff)
-      const followups = history
-        .slice(Math.max(firstHandoff, 0) + 1)
-        .filter((message) => message.info.role === "assistant" && message.info.time.completed !== undefined)
-      if (followups.length > 10) throw new RunBackgroundWaitError("Background follow-up turn limit reached (10).")
+      const followupTurns = new Set(
+        history
+          .slice(Math.max(firstHandoff, 0) + 1)
+          .flatMap((message) =>
+            message.info.role === "assistant" && message.info.time.completed !== undefined
+              ? [message.info.parentID]
+              : [],
+          ),
+      )
+      if (followupTurns.size > 10) throw new RunBackgroundWaitError("Background follow-up turn limit reached (10).")
       const lastAssistant = history
         .slice(lastHandoff + 1)
         .findLast((message) => message.info.role === "assistant" && message.info.time.completed !== undefined)
