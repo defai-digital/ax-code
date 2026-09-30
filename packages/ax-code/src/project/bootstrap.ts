@@ -110,11 +110,9 @@ async function recoverInterruptedTaskQueue() {
       await TaskQueueExecutor.start(item)
     }
   }
-  // Rows with a fresh heartbeat are owned by another live backend serving
-  // this project (a `ax-code run` spawned from a TUI session, a second
-  // terminal, the desktop app). They are not interrupted, so leave them
-  // alone — but keep re-checking: if that peer really did die, its rows go
-  // stale within one liveness window and the next pass recovers them.
+  // Fresh heartbeats and held foreground guards defer recovery. Keep
+  // rechecking pending steers too: a peer can die just before bootstrap,
+  // leaving an admitted correction fresh but no longer driven by anyone.
   const state = restartRecoveryState()
   if (state.timer) clearTimeout(state.timer)
   state.timer = undefined
