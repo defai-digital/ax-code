@@ -19,6 +19,26 @@ async function* stream(items: MessageV2.WithParts[]) {
 }
 
 describe("resolvePromptLoopResult", () => {
+  test("a recovered historical interruption cannot become the new run's terminal result", async () => {
+    const old = message("assistant", "msg_old")
+    if (old.info.role === "assistant")
+      old.info.error = {
+        name: "MessageAbortedError",
+        data: { message: "Interrupted", metadata: { reason: "backend_restart" } },
+      }
+    const fresh = message("assistant", "msg_new")
+    const result = await resolvePromptLoopResult(
+      {
+        sessionID: SessionID.descending(),
+        abort: new AbortController().signal,
+        resumeExisting: false,
+        drainJoinerCallbacks: () => [],
+        shiftQueuedCallback: () => undefined,
+      },
+      { prune: async () => {}, stream: (() => stream([old, fresh])) as any },
+    )
+    expect(result).toBe(fresh)
+  })
   test("returns the first non-user message and resolves a queued callback", async () => {
     const sessionID = SessionID.descending()
     const assistant = message("assistant", "msg_assistant")

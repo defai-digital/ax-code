@@ -17,6 +17,7 @@ import { Log } from "../util/log"
 import { uniqueItems } from "../util/string-list"
 import { MessageV2 } from "./message-v2"
 import { MessageWrite } from "./message-write"
+import { SessionExecutionContext } from "./execution-context"
 import { SessionShard } from "./shard"
 import { Instance } from "../project/instance"
 import { SessionPrompt } from "./prompt"
@@ -1113,10 +1114,11 @@ export namespace Session {
   }
 
   export const updateMessage = fn(MessageV2.Info, async (msg) => {
+    const execution = SessionExecutionContext.stamp(msg.sessionID)
     const time_updated = Date.now()
     const store = SessionShard.storeFor(msg.sessionID, { write: true })
-    store.use((db) => {
-      MessageWrite.message(db, msg, time_updated)
+    store.transaction((db) => {
+      msg = MessageWrite.message(db, msg, time_updated, execution)
       store.effect(() =>
         Bus.publishDetached(MessageV2.Event.Updated, {
           info: msg,
@@ -1133,6 +1135,7 @@ export namespace Session {
     }),
     async (input) => {
       // CASCADE delete handles parts automatically
+      SessionExecutionContext.assertWritable()
       const store = SessionShard.storeFor(input.sessionID, { write: true })
       store.use((db) => {
         db.delete(MessageTable)
@@ -1156,6 +1159,7 @@ export namespace Session {
       partID: PartID.zod,
     }),
     async (input) => {
+      SessionExecutionContext.assertWritable()
       const store = SessionShard.storeFor(input.sessionID, { write: true })
       store.use((db) => {
         db.delete(PartTable)
@@ -1182,6 +1186,7 @@ export namespace Session {
   const UpdatePartInput = MessageV2.Part
 
   export const updatePart = fn(UpdatePartInput, async (part) => {
+    SessionExecutionContext.assertWritable()
     const time = Date.now()
     const store = SessionShard.storeFor(part.sessionID, { write: true })
     store.use((db) => {
@@ -1214,6 +1219,7 @@ export namespace Session {
   // lock for an unbounded number of rows — inserts are idempotent via
   // onConflictDoUpdate, so splitting the batch into separate commits is safe.
   export async function updateParts(parts: MessageV2.Part[]) {
+    SessionExecutionContext.assertWritable()
     if (parts.length === 0) return parts
     // Validate the entire array before routing or committing its first chunk.
     validatePartScope(parts, parts[0].sessionID)
@@ -1240,13 +1246,14 @@ export namespace Session {
     parts: MessageV2.Part[],
     admission?: { beforeCommit(): void; afterCommit(): void },
   ) {
+    const execution = SessionExecutionContext.stamp(info.sessionID)
     validatePartScope(parts, info.sessionID, info.id)
     const messageTimeUpdated = Date.now()
     const partTime = Date.now()
     const store = SessionShard.storeFor(info.sessionID, { write: true })
     store.transaction((db) => {
       admission?.beforeCommit()
-      MessageWrite.message(db, info, messageTimeUpdated)
+      info = MessageWrite.message(db, info, messageTimeUpdated, execution)
       MessageWrite.parts(db, parts, partTime, Date.now())
     })
 
@@ -1270,6 +1277,7 @@ export namespace Session {
       offset: z.number().optional(),
     }),
     async (input) => {
+      SessionExecutionContext.assertWritable()
       const store = SessionShard.storeFor(input.sessionID)
       const part = store.use((db) =>
         db

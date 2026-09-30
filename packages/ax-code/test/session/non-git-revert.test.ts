@@ -101,63 +101,74 @@ test.each([
   },
 )
 
-test("undo fails closed when an unfinished tool step has no recorded patch", async () => {
-  await using tmp = await tmpdir({ git: true, config: { snapshot: true } })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const file = path.join(tmp.path, "interrupted.txt")
-      await fs.writeFile(file, "before\n")
-      const session = await Session.create({})
-      const user = await Session.updateMessage({
-        id: MessageID.ascending(),
-        sessionID: session.id,
-        role: "user",
-        agent: "build",
-        model: { providerID: ProviderID.make("test"), modelID: ModelID.make("test-model") },
-        time: { created: Date.now() },
-      })
-      const assistant = await Session.updateMessage({
-        id: MessageID.ascending(),
-        sessionID: session.id,
-        role: "assistant",
-        parentID: user.id,
-        agent: "build",
-        mode: "build",
-        path: { cwd: tmp.path, root: tmp.path },
-        modelID: ModelID.make("test-model"),
-        providerID: ProviderID.make("test"),
-        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-        time: { created: Date.now() },
-      })
-      const snapshot = await Snapshot.track()
-      expect(snapshot).toBeTruthy()
-      await Session.updatePart({
-        id: PartID.ascending(),
-        sessionID: session.id,
-        messageID: assistant.id,
-        type: "step-start",
-        snapshot,
-      })
-      await Session.updatePart({
-        id: PartID.ascending(),
-        sessionID: session.id,
-        messageID: assistant.id,
-        type: "tool",
-        tool: "write",
-        callID: "call_interrupted_write",
-        state: { status: "running", input: { filePath: file }, time: { start: Date.now() } },
-      })
-      await fs.writeFile(file, "after\n")
+test.each([false, true])(
+  "undo fails closed when an interrupted tool step has no recorded patch (recovered=%s)",
+  async (recovered) => {
+    await using tmp = await tmpdir({ git: true, config: { snapshot: true } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const file = path.join(tmp.path, "interrupted.txt")
+        await fs.writeFile(file, "before\n")
+        const session = await Session.create({})
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: session.id,
+          role: "user",
+          agent: "build",
+          model: { providerID: ProviderID.make("test"), modelID: ModelID.make("test-model") },
+          time: { created: Date.now() },
+        })
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: session.id,
+          role: "assistant",
+          parentID: user.id,
+          agent: "build",
+          mode: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          modelID: ModelID.make("test-model"),
+          providerID: ProviderID.make("test"),
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          time: { created: Date.now() },
+        })
+        const snapshot = await Snapshot.track()
+        expect(snapshot).toBeTruthy()
+        await Session.updatePart({
+          id: PartID.ascending(),
+          sessionID: session.id,
+          messageID: assistant.id,
+          type: "step-start",
+          snapshot,
+        })
+        await Session.updatePart({
+          id: PartID.ascending(),
+          sessionID: session.id,
+          messageID: assistant.id,
+          type: "tool",
+          tool: "write",
+          callID: "call_interrupted_write",
+          state: { status: "running", input: { filePath: file }, time: { start: Date.now() } },
+        })
+        await fs.writeFile(file, "after\n")
+        if (recovered && assistant.role === "assistant") {
+          assistant.time.completed = Date.now()
+          assistant.error = {
+            name: "MessageAbortedError",
+            data: { message: "Backend interrupted", metadata: { reason: "backend_restart" } },
+          }
+          await Session.updateMessage(assistant)
+        }
 
-      await expect(SessionRevert.preview({ sessionID: session.id, messageID: user.id })).rejects.toThrow(
-        "Undo coverage is incomplete",
-      )
-      await expect(SessionRevert.revert({ sessionID: session.id, messageID: user.id })).rejects.toThrow(
-        "Undo coverage is incomplete",
-      )
-      expect(await fs.readFile(file, "utf8")).toBe("after\n")
-      expect((await Session.get(session.id)).revert).toBeUndefined()
-    },
-  })
-})
+        await expect(SessionRevert.preview({ sessionID: session.id, messageID: user.id })).rejects.toThrow(
+          "Undo coverage is incomplete",
+        )
+        await expect(SessionRevert.revert({ sessionID: session.id, messageID: user.id })).rejects.toThrow(
+          "Undo coverage is incomplete",
+        )
+        expect(await fs.readFile(file, "utf8")).toBe("after\n")
+        expect((await Session.get(session.id)).revert).toBeUndefined()
+      },
+    })
+  },
+)

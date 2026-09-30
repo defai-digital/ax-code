@@ -12,6 +12,7 @@ import { NamedError } from "@ax-code/util/error"
 import { lazy } from "../util/lazy"
 import { MessageV2 } from "./message-v2"
 import { SessionPrompt } from "./prompt"
+import { SessionExecution } from "./execution"
 import {
   PromptIsolationPolicy,
   type PromptIsolationPolicy as PromptIsolationPolicyType,
@@ -153,7 +154,7 @@ export namespace TaskQueueExecutor {
       // successful edit right before execution starts would be silently
       // discarded in favor of the stale pre-edit text (ADR-106 D5).
       const claimedExecution = queueItemExecution(running)
-      startDetachedQueueTask(async () => {
+      const task = SessionExecution.bindSuccessor(claimedExecution?.sessionID, async () => {
         if (!claimedExecution) {
           await finishIfRunning(running, {
             status: "failed",
@@ -163,6 +164,12 @@ export namespace TaskQueueExecutor {
         }
         await executeClaimedItem(running, claimedExecution)
       })
+      try {
+        startDetachedQueueTask(task)
+      } catch (error) {
+        task.cancel()
+        throw error
+      }
       return running
     })
   }

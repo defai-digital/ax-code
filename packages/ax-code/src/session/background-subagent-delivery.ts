@@ -3,6 +3,7 @@ import { NotFoundError } from "@/storage/db"
 import { Session } from "."
 import { MessageV2 } from "./message-v2"
 import { SessionPrompt } from "./prompt"
+import { SessionExecutionContext } from "./execution-context"
 import { MessageID, PartID, SessionID } from "./schema"
 import { TaskQueue } from "./task-queue"
 import { childVisibleText, formatBackgroundTaskHandoff, isEmptySubagentResultText } from "./background-subagent-handoff"
@@ -236,7 +237,7 @@ function queueModel(model: unknown) {
 }
 
 function wakeParent(parentSessionID: SessionID) {
-  void SessionPrompt.loop({ sessionID: parentSessionID }).catch((error) => {
+  void SessionExecutionContext.detached(() => SessionPrompt.loop({ sessionID: parentSessionID })).catch((error) => {
     log.warn("failed to wake parent after background subagent handoff", {
       sessionID: parentSessionID,
       error,

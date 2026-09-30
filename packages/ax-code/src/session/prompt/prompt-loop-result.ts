@@ -79,6 +79,8 @@ export async function resolvePromptLoopResult(
 
   for await (const item of deps.stream(input.sessionID)) {
     if (item.info.role === "user") continue
+    if (item.info.error?.name === "MessageAbortedError" && item.info.error.data.metadata?.reason === "backend_restart")
+      continue
     if (input.expectedMessageID && item.info.id !== input.expectedMessageID) continue
     // Turn completed: run user-visible Stop hooks (e.g. require-tests-on-stop).
     if (deps.runStopHooks) await fireStopHooks(input.sessionID, deps.runStopHooks)

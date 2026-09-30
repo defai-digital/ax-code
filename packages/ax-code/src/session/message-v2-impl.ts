@@ -440,6 +440,10 @@ export namespace MessageV2 {
 
   export const Assistant = Base.extend({
     role: z.literal("assistant"),
+    execution: z
+      .object({ version: z.literal(1), generation: z.uuid() })
+      .strict()
+      .optional(),
     time: z.object({
       created: z.number(),
       completed: z.number().optional(),

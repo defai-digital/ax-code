@@ -141,6 +141,10 @@ export type AssistantMessage = {
   id: string
   sessionID: string
   role: "assistant"
+  execution?: {
+    version: 1
+    generation: string
+  }
   time: {
     created: number
     completed?: number

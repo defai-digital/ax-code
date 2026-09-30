@@ -3,6 +3,23 @@ import { resolvePromptLoopAssistantExit } from "../../src/session/prompt/prompt-
 import { MessageID, SessionID } from "../../src/session/schema"
 
 describe("prompt loop assistant exit", () => {
+  test("a recovered finish marker does not claim completion for explicit resumption", () => {
+    expect(
+      resolvePromptLoopAssistantExit({
+        sessionID: SessionID.descending(),
+        lastUserID: "msg_1",
+        hasPendingSubtask: false,
+        lastAssistant: {
+          id: MessageID.make("msg_2"),
+          finish: "stop",
+          error: {
+            name: "MessageAbortedError",
+            data: { message: "Interrupted", metadata: { reason: "backend_restart" } },
+          },
+        },
+      }),
+    ).toEqual({ action: "continue" })
+  })
   test("continues when the assistant has not answered the latest user turn", () => {
     const logs: string[] = []
 

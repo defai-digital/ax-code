@@ -21,6 +21,8 @@ const log = Log.create({ service: "session.prompt" })
 type ShellCommandController = {
   start(sessionID: SessionID): AbortSignal | undefined
   queuedCallbacks(sessionID: SessionID): unknown[]
+  markIdle?(sessionID: SessionID): void
+  prepareHandoff?(sessionID: SessionID): void
   cancel(sessionID: SessionID): Promise<unknown>
   resumeLoop(input: { sessionID: SessionID; resume_existing: true }): Promise<MessageV2.WithParts>
 }
@@ -34,13 +36,14 @@ export async function executeShellCommand(
     throw new Session.BusyError(input.sessionID)
   }
 
-  using _ = defer(() => {
+  await using _ = defer(async () => {
+    controller.prepareHandoff?.(input.sessionID)
     // If no queued callbacks, cancel (the default)
     const callbacks = controller.queuedCallbacks(input.sessionID)
     if (callbacks.length === 0) {
       // Detached disposal: an unawaited rejection here would surface as an
       // unhandled rejection after the shell command has already returned.
-      void controller.cancel(input.sessionID).catch((error) => {
+      await controller.cancel(input.sessionID).catch((error) => {
         log.warn("shell command cleanup cancel failed", {
           command: "session.prompt.shell",
           status: "error",
@@ -51,6 +54,7 @@ export async function executeShellCommand(
       })
     } else {
       // Otherwise, trigger the session loop to process queued items
+      controller.markIdle?.(input.sessionID)
       controller.resumeLoop({ sessionID: input.sessionID, resume_existing: true }).catch((error) => {
         log.error("session loop failed to resume after shell command", {
           command: "session.prompt.shell",
@@ -324,8 +328,6 @@ export async function executeShellCommand(
     }
   }
   await pending
-  msg.time.completed = Date.now()
-  await Session.updateMessage(msg)
   if (part.state.status === "running") {
     const error =
       exitSignal === null ? `Process exited with code ${exitCode}` : `Process exited with signal ${exitSignal}`
@@ -354,5 +356,7 @@ export async function executeShellCommand(
           }
     await Session.updatePart(part)
   }
+  msg.time.completed = Date.now()
+  await Session.updateMessage(msg)
   return { info: msg, parts: [part] }
 }
