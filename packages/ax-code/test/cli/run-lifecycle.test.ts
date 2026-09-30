@@ -986,6 +986,7 @@ describe("createRunLifecycle", () => {
     expect(post.calls.earlyResults).toEqual([])
     expect(post.lifecycle.signal.aborted).toBe(true)
     expect(post.lifecycle.exitCode({ failed: false, blocked: false })).toBe(130)
+    post.lifecycle.settle()
     process.exitCode = undefined
   })
 
