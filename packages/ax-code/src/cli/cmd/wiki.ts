@@ -217,6 +217,8 @@ async function runGenerateOrUpdate(
             else if (progress.type === "plan") UI.println(`  planned ${progress.pageCount} pages`)
             else if (progress.type === "page_start")
               UI.println(`  [${progress.index}/${progress.total}] ${progress.path}`)
+            else if (progress.type === "page_failed")
+              UI.println(`  [${progress.index}/${progress.total}] ${progress.path} failed; other pages continue`)
             else if (progress.type === "validate") UI.println(`  validation issues: ${progress.issueCount}`)
           },
     })
