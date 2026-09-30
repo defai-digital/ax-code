@@ -24,7 +24,7 @@ export const AcpCommand = cmd({
     const { ACP } = await import("@/acp/agent")
     const { Server } = await import("@/server/server")
     const { createAxCodeClient } = await import("@ax-code/sdk/v2")
-    FeatureFlag.set("AX_CODE_CLIENT", "acp")
+    FeatureFlag.set("AX_CODE_CLIENT", "acp") // @scan-suppress lifecycle_scan - process flag, not a Map
     await bootstrapOwned(process.cwd(), async () => {
       const opts = await resolveNetworkOptions(args)
       const server = await Server.listen(opts)

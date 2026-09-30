@@ -343,17 +343,17 @@ function wikiPageRetry(failure: WikiPageFailure): WikiPageRetry {
   return { feedback: WIKI_PAGE_FORMAT_RETRY_FEEDBACK }
 }
 
-async function wikiPageRetryDelay(ms: number, signal: AbortSignal): Promise<void> {
-  await new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, ms)
-    signal.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(timer)
-        resolve()
-      },
-      { once: true },
-    )
+function wikiPageRetryDelay(ms: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.resolve()
+  return new Promise<void>((resolve) => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const finish = () => {
+      clearTimeout(timer)
+      signal.removeEventListener("abort", finish)
+      resolve()
+    }
+    timer = setTimeout(finish, ms)
+    signal.addEventListener("abort", finish)
   })
 }
 

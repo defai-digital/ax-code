@@ -15,6 +15,14 @@ import { tmpdir } from "../fixture/fixture"
 const HOUR = 60 * 60_000
 
 describe("wiki failure memory", () => {
+  test("keeps an unsafe wiki directory inside the repository", () => {
+    const root = path.resolve("/tmp/ax-wiki-memory-root")
+    const target = wikiFailureMemoryPath(root, "../outside")
+    const relative = path.relative(root, target)
+    expect(relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)).toBe(false)
+    expect(target).toBe(path.join(root, "ax-wiki", ".failure-memory.json"))
+  })
+
   test("uses a capped cooldown ladder", () => {
     expect(wikiFailureCooldownMs(1)).toBe(5 * 60_000)
     expect(wikiFailureCooldownMs(2)).toBe(15 * 60_000)

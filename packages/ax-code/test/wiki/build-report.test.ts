@@ -39,6 +39,14 @@ describe("wiki build report", () => {
     expect(loaded?.written).toEqual(["quickstart.md"])
   })
 
+  test("keeps an unsafe wiki directory inside the repository", () => {
+    const root = path.resolve("/tmp/ax-wiki-report-root")
+    const target = wikiBuildReportPath(root, "../outside")
+    const relative = path.relative(root, target)
+    expect(relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)).toBe(false)
+    expect(target).toBe(path.join(root, "ax-wiki", ".build-report.json"))
+  })
+
   test("treats a missing report as absent", async () => {
     await using tmp = await tmpdir()
     expect(await readWikiBuildReport(tmp.path, "ax-wiki")).toBeUndefined()

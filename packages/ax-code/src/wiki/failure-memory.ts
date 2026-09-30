@@ -1,5 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import { resolveInside, sanitizeWikiDir } from "@ax-code/ax-wiki"
 import { parseJsonStrict } from "../util/json-value"
 
 /**
@@ -37,7 +38,7 @@ export type WikiFailureKey = {
 }
 
 export function wikiFailureMemoryPath(root: string, wikiDir: string): string {
-  return path.join(root, wikiDir, WIKI_FAILURE_MEMORY_FILE)
+  return resolveInside(root, `${sanitizeWikiDir(wikiDir)}/${WIKI_FAILURE_MEMORY_FILE}`)
 }
 
 export function wikiFailureCooldownMs(consecutiveFailures: number): number {

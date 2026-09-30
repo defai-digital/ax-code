@@ -1,5 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import { resolveInside, sanitizeWikiDir } from "@ax-code/ax-wiki"
 import { parseJsonStrict } from "../util/json-value"
 
 /**
@@ -50,7 +51,7 @@ export type WikiBuildReport = {
 }
 
 export function wikiBuildReportPath(root: string, wikiDir: string): string {
-  return path.join(root, wikiDir, WIKI_BUILD_REPORT_FILE)
+  return resolveInside(root, `${sanitizeWikiDir(wikiDir)}/${WIKI_BUILD_REPORT_FILE}`)
 }
 
 /**
