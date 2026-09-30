@@ -1,5 +1,6 @@
 import path from "path"
 import z from "zod"
+import { NamedError } from "@ax-code/util/error"
 import { SessionID, MessageID, PartID } from "./schema"
 import { Snapshot } from "../snapshot"
 import { MessageV2 } from "./message-v2"
@@ -17,6 +18,11 @@ import { Filesystem } from "../util/filesystem"
 export namespace SessionRevert {
   const log = Log.create({ service: "session.revert" })
   const operations = new Map<string, Promise<void>>()
+
+  export const IncompleteCoverageError = NamedError.create(
+    "SessionRevertIncompleteCoverageError",
+    z.object({ message: z.string(), sessionID: SessionID.zod, messageID: MessageID.zod }),
+  )
 
   async function serialized<T>(run: () => Promise<T>): Promise<T> {
     const resolved = path.resolve(Instance.worktree)
@@ -198,6 +204,71 @@ export namespace SessionRevert {
     return result
   }
 
+  function assertCompleteCoverage(
+    store: SessionShard.Store,
+    sessionIDs: SessionID[],
+    boundary: Position,
+    boundaryMessageID: MessageID,
+  ) {
+    const unfinished = store
+      .use((db) =>
+        db
+          .select({ id: MessageTable.id, sessionID: MessageTable.session_id, time: MessageTable.time_created, data: MessageTable.data })
+          .from(MessageTable)
+          .where(inArray(MessageTable.session_id, sessionIDs))
+          .all(),
+      )
+      .filter(
+        (row) =>
+          row.data.role === "assistant" &&
+          !("completed" in row.data.time && typeof row.data.time.completed === "number"),
+      )
+      .filter((row) => row.id === boundaryMessageID || after({ time: row.time, id: row.id }, boundary))
+    if (unfinished.length === 0) return
+
+    const relevant = new Map(unfinished.map((row) => [row.id, row.sessionID]))
+    const rows = store.use((db) =>
+      db
+        .select()
+        .from(PartTable)
+        .where(inArray(PartTable.session_id, sessionIDs))
+        .orderBy(PartTable.time_created, PartTable.id)
+        .all(),
+    )
+    const open = new Map<MessageID, { snapshot?: string; hasTool: boolean }>()
+    const fail = (messageID: MessageID): never => {
+      throw new IncompleteCoverageError({
+        message: "Undo coverage is incomplete for an unfinished tool step. Inspect and restore workspace changes manually.",
+        sessionID: relevant.get(messageID)!,
+        messageID,
+      })
+    }
+    for (const row of rows) {
+      if (!relevant.has(row.message_id)) continue
+      const parsed = MessageV2.Part.safeParse({
+        ...row.data,
+        id: row.id,
+        messageID: row.message_id,
+        sessionID: row.session_id,
+      })
+      if (!parsed.success) continue
+      const part = parsed.data
+      if (part.type === "step-start") {
+        const previous = open.get(row.message_id)
+        if (previous?.snapshot && previous.hasTool) fail(row.message_id)
+        open.set(row.message_id, { snapshot: part.snapshot, hasTool: false })
+      } else if (part.type === "tool") {
+        const step = open.get(row.message_id)
+        if (step) step.hasTool = true
+      } else if (part.type === "step-finish" || part.type === "patch") {
+        open.delete(row.message_id)
+      }
+    }
+    for (const [messageID, step] of open) {
+      if (step.snapshot && step.hasTool) fail(messageID)
+    }
+  }
+
   function contributions(session: Session.Info, entries: PatchEntry[]) {
     const filesBySession = new Map<SessionID, Set<string>>()
     for (const entry of entries) {
@@ -215,6 +286,12 @@ export namespace SessionRevert {
     const rootBoundary = await resolveRootBoundary(input)
     const store = SessionShard.storeFor(input.sessionID)
     const boundary = boundaryPosition(input, store)
+    assertCompleteCoverage(
+      store,
+      scope.sessions.map((session) => session.id),
+      boundary,
+      input.messageID,
+    )
     const entries = patchEntries(
       store,
       scope.sessions.map((session) => session.id),
