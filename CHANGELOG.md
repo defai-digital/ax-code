@@ -6,6 +6,13 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.21.1] - 2026-09-30
+
+### Fixed
+
+- Count distinct parent follow-up turns while waiting for background tasks, so multiple assistant messages in one tool loop do not hit the ten-turn limit prematurely.
+- Preserve immediate explicit Wiki refreshes when foreground activity invalidates a queued check.
+
 ## [7.21.0] - 2026-09-29
 
 ### Fixed
