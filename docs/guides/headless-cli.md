@@ -228,6 +228,19 @@ the bound, so a stuck agent cannot hold a CI job open indefinitely. The bound co
 armed before the first server call, so even a black-holed `--attach` host or a hung startup terminates on time (in
 that early case the result line carries an empty `sessionID`).
 
+### Wait for background subagents
+
+```bash
+ax-code run --await-background 300 --timeout 360 --model qwen -- \
+  "Delegate the independent checks, then integrate their results"
+```
+
+`--await-background <seconds>` keeps this invocation open for background `task` children created by its session and
+the parent follow-up turns triggered by their results. It is opt-in and capped at 3600 seconds. The final reply and
+JSON `result.text` come from the last completed parent turn. If the children or their follow-up do not settle within
+the wait bound, the run reports an error and exits 1. `--timeout` remains the overall bound. Project scheduled tasks
+run in separate sessions and are not part of this wait.
+
 ### Parse the JSON stream
 
 ```bash

@@ -58,6 +58,7 @@ import {
   type RunUsageTotals,
 } from "./run-output"
 import { createRunLifecycle, RUN_SERVER_ABORT_BOUND_MS } from "./run-lifecycle"
+import { waitForRunBackground } from "./run-background-wait"
 import { printPendingScheduledTaskNotice } from "./run-schedule-notice"
 import { assertLoopbackHttpUrl } from "../../runtime/listen-security"
 import { sameSkuOnConnectedProvider } from "../../provider/model-selectability"
@@ -717,6 +718,10 @@ export const RunCommand = cmd({
           "(newline-delimited JSON event stream — one JSON object per line, not a single JSON document; " +
           "emits error and permission_denied events and ends with a terminal result line)",
       })
+      .option("await-background", {
+        type: "number",
+        describe: "wait up to this many seconds for background task children and their parent follow-up (max 3600)",
+      })
       .option("output-file", {
         alias: ["o"],
         type: "string",
@@ -1111,6 +1116,14 @@ export const RunCommand = cmd({
         if (args.timeout !== undefined && (!Number.isFinite(args.timeout) || args.timeout <= 0)) {
           exitEarly("--timeout must be a positive number of seconds", "usage")
         }
+        if (
+          args["await-background"] !== undefined &&
+          (!Number.isInteger(args["await-background"]) ||
+            args["await-background"] < 1 ||
+            args["await-background"] > 3600)
+        ) {
+          exitEarly("--await-background must be an integer from 1 to 3600 seconds", "usage")
+        }
 
         // Validate --output-schema before submission: an unreadable, unparseable,
         // or non-object schema file is a usage error now, not a wasted generation
@@ -1327,6 +1340,7 @@ export const RunCommand = cmd({
           let error: string | undefined
           let finalMessage: string | undefined
           let finalAssistantMessageID: string | undefined
+          let backgroundFollowupID: string | undefined
           let submittedMessage: Awaited<ReturnType<typeof sdk.session.prompt>>["data"]
           // Blocked-run accounting: auto-rejected permission asks (including
           // read-only sandbox denials that surface as tool errors) vs tool calls
@@ -1831,6 +1845,7 @@ export const RunCommand = cmd({
           // --disallowed-tools (this per-request tools map is deprecated but
           // honored, and is the only mechanism that covers resumed sessions).
           const promptTools: Record<string, false> = { question: false, plan_exit: false, ...disallowedTools }
+          const promptStartedAt = Date.now()
           try {
             if (!skipSubmission) {
               if (args.command) {
@@ -1885,6 +1900,26 @@ export const RunCommand = cmd({
             if (!selfAbort) throw e
           }
 
+          if (args["await-background"] !== undefined && !lifecycle.timedOut() && !lifecycle.cancelled()) {
+            try {
+              const followupID = await waitForRunBackground({
+                sdk,
+                sessionID,
+                // Use the server's clock when attached to another host.
+                startedAt: submittedMessage?.info.time.created ?? promptStartedAt,
+                seconds: args["await-background"],
+                signal: lifecycle.signal,
+              })
+              if (followupID) backgroundFollowupID = followupID
+            } catch (e) {
+              if (!lifecycle.timedOut() && !lifecycle.cancelled()) {
+                error = `Background completion: ${toErrorMessage(e)}`
+                emit("error", { error: { name: "RunBackgroundWaitError", data: { message: error } } })
+                UI.error(error)
+              }
+            }
+          }
+
           // Give final frames on the separate SSE connection a bounded chance to
           // drain. Control commands need not publish idle or streaming text times.
           await new Promise<void>((resolve) => {
@@ -1919,6 +1954,7 @@ export const RunCommand = cmd({
           }
           // Reconcile after stream shutdown, even if it ended before HTTP settled.
           await loop(finalEvents())
+          if (backgroundFollowupID) finalAssistantMessageID = backgroundFollowupID
           const storedFinalMessage = await readFinalAssistantText(sdk, sessionID, finalAssistantMessageID).catch(
             (e) => {
               // F9: an abort here (timeout/signal cut the read) only leaves
