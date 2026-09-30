@@ -226,8 +226,11 @@ async function runGenerateOrUpdate(
     }
     const seconds = ((Date.now() - started) / 1000).toFixed(1)
     UI.println(
-      `AX Wiki ${action} completed in ${seconds}s: ${result.generatedPages.length} generated, ${result.unchangedPages.length} unchanged, ${result.removedPages.length} removed.`,
+      `AX Wiki ${action} completed in ${seconds}s: ${result.generatedPages.length} generated, ${result.unchangedPages.length} unchanged, ${result.removedPages.length} removed${result.failedPages.length ? `, ${result.failedPages.length} failed` : ""}.`,
     )
+    // ADR-156: an update publishes the pages that succeeded; report which pages
+    // still need a later build instead of hiding the partial outcome.
+    for (const page of result.failedPages) UI.println(`  failed: ${page.path} - ${page.error}`)
   })
 }
 

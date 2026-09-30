@@ -75,4 +75,19 @@ describe("wiki build report", () => {
   test("summarizes a completed build with the written count", () => {
     expect(summarizeWikiBuildReport(report())).toContain("1 page(s) written")
   })
+
+  test("accepts and summarizes a partial build", async () => {
+    await using tmp = await tmpdir()
+    const partial = report({
+      outcome: "partial",
+      failed: { path: "modules/ax-code.md", status: "failed", attempts: 2, durationMs: 5, failureClass: "length" },
+    })
+    await writeWikiBuildReport(tmp.path, "ax-wiki", partial)
+    expect((await readWikiBuildReport(tmp.path, "ax-wiki"))?.outcome).toBe("partial")
+
+    const text = summarizeWikiBuildReport(partial)
+    expect(text).toContain("partial")
+    expect(text).toContain("modules/ax-code.md")
+    expect(text).toContain("1 page(s) written")
+  })
 })

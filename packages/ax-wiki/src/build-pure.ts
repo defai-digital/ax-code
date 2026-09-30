@@ -111,6 +111,12 @@ export type WikiBuildPureResult = {
   generatedPages: string[]
   unchangedPages: string[]
   existingPages: Map<string, string>
+  /**
+   * Pages whose generation failed. On the `update` lane the build continues and
+   * publishes the pages that succeeded (ADR-156); the `generate` lane throws
+   * instead and this stays empty.
+   */
+  failedPages: { path: string; error: string }[]
 }
 
 function sourceHashMap(sources: WikiSource[]): Record<string, string> {
@@ -277,6 +283,7 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
     string,
     { content: string; result: WikiPageGenerationResult; sources: WikiSourceEvidence[] }
   >()
+  const failedPages: { path: string; error: string }[] = []
   for (let index = 0; index < targets.length; index++) {
     input.signal?.throwIfAborted()
     const page = targets[index]!
@@ -292,26 +299,38 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
       ? renderEvidenceBundle(typedEvidence)
       : await input.graphContext?.({ page, sources: selected })
     input.signal?.throwIfAborted()
-    const result = await input.generator({
-      action,
-      root: input.root,
-      wikiDir: input.wikiDir,
-      page,
-      plan,
-      sources: evidence,
-      sourceInventory: sources,
-      graphContext,
-      evidence: typedEvidence,
-      instructions: config.instructions,
-      previousContent: existing.get(page.path),
-    })
-    ensureUsefulResult(page, result)
-    const rendered = renderWikiPage({ page, result, sources: evidence })
-    const content = mergeProtectedSections(rendered, existing.get(page.path))
-    generated.set(page.path, { content, result, sources: evidence })
-    input.signal?.throwIfAborted()
-    onProgress?.({ type: "page_complete", path: page.path, index: index + 1, total: targets.length })
+    try {
+      const result = await input.generator({
+        action,
+        root: input.root,
+        wikiDir: input.wikiDir,
+        page,
+        plan,
+        sources: evidence,
+        sourceInventory: sources,
+        graphContext,
+        evidence: typedEvidence,
+        instructions: config.instructions,
+        previousContent: existing.get(page.path),
+      })
+      ensureUsefulResult(page, result)
+      const rendered = renderWikiPage({ page, result, sources: evidence })
+      const content = mergeProtectedSections(rendered, existing.get(page.path))
+      generated.set(page.path, { content, result, sources: evidence })
+      input.signal?.throwIfAborted()
+      onProgress?.({ type: "page_complete", path: page.path, index: index + 1, total: targets.length })
+    } catch (error) {
+      // ADR-156: an update publishes the pages that succeeded and leaves the
+      // failed page at its previous fingerprint, so one pathological page no
+      // longer blocks every other page's freshness. The generate lane stays
+      // whole-build atomic: an initial wiki is never published torn.
+      if (action !== "update") throw error
+      input.signal?.throwIfAborted()
+      failedPages.push({ path: page.path, error: error instanceof Error ? error.message : String(error) })
+      onProgress?.({ type: "page_failed", path: page.path, index: index + 1, total: targets.length })
+    }
   }
+  const failedPaths = new Set(failedPages.map((page) => page.path))
 
   const candidate = new Map<string, string>()
   for (const page of plan.pages) {
@@ -364,7 +383,23 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
     pages: manifestPages,
   }
 
-  const validation = validateWikiCandidate({ plan, pages: candidate, sources, manifest })
+  // ADR-156: a failed page keeps its previous manifest entry, so freshness
+  // still describes the content actually on disk instead of claiming a page is
+  // current while its regenerated content was never written. A failed page with
+  // no previous entry (a brand-new page) stays absent until a later build.
+  for (const failed of failedPages) {
+    const previousPage = previous?.pages[failed.path]
+    if (previousPage && existing.has(failed.path)) manifestPages[failed.path] = previousPage
+    else delete manifestPages[failed.path]
+  }
+
+  const validation = validateWikiCandidate({
+    plan,
+    pages: candidate,
+    sources,
+    manifest,
+    missingAllowed: [...failedPaths],
+  })
   onProgress?.({ type: "validate", issueCount: validation.issues.length })
   if (!validation.ok) {
     const messages = validation.issues
@@ -396,7 +431,10 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
     removedPages,
     conflicts,
     generatedPages: [...generated.keys()],
-    unchangedPages: plan.pages.map((page) => page.path).filter((page) => !generated.has(page)),
+    unchangedPages: plan.pages
+      .map((page) => page.path)
+      .filter((page) => !generated.has(page) && !failedPaths.has(page)),
     existingPages: existing,
+    failedPages,
   }
 }

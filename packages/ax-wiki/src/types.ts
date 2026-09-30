@@ -155,6 +155,7 @@ export type WikiBuildProgress =
   | { type: "plan"; pageCount: number }
   | { type: "page_start"; path: string; index: number; total: number }
   | { type: "page_complete"; path: string; index: number; total: number }
+  | { type: "page_failed"; path: string; index: number; total: number }
   | { type: "validate"; issueCount: number }
   | { type: "write"; path: string }
 
@@ -208,6 +209,11 @@ export type WikiBuildResult = {
   unchangedPages: string[]
   removedPages: string[]
   conflicts: string[]
+  /**
+   * Pages whose generation failed this build. Empty on the `generate` lane,
+   * which stays whole-build atomic (ADR-156).
+   */
+  failedPages: { path: string; error: string }[]
   manifest: WikiManifest
   validation: WikiValidationReport
 }

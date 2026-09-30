@@ -31,19 +31,26 @@ export function validateWikiCandidate(input: {
   manifest?: WikiManifest
   /** Bounded source excerpts, keyed by relative path, used for grounding checks. */
   sourceContents?: ReadonlyMap<string, string>
+  /**
+   * Pages whose generation failed this build and were therefore not written
+   * (ADR-156 partial update). They are reported by the build itself, so the
+   * "planned page is missing" error is suppressed for exactly these paths.
+   */
+  missingAllowed?: readonly string[]
 }): WikiValidationReport {
   const issues: WikiValidationIssue[] = []
   const knownSources = new Set(input.sources.map((source) => source.path))
   const knownPages = new Set(input.pages.keys())
+  const missingAllowed = new Set(input.missingAllowed ?? [])
   let symbolCount = 0
   let protectedSectionCount = 0
 
-  if (!input.pages.has("quickstart.md")) {
+  if (!input.pages.has("quickstart.md") && !missingAllowed.has("quickstart.md")) {
     issues.push({ level: "error", code: "wiki.quickstart_missing", message: "AX Wiki requires quickstart.md" })
   }
 
   for (const planned of input.plan.pages) {
-    if (!input.pages.has(planned.path)) {
+    if (!input.pages.has(planned.path) && !missingAllowed.has(planned.path)) {
       issues.push({
         level: "error",
         code: "wiki.page_missing",

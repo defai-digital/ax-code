@@ -177,8 +177,9 @@ export namespace WikiAutomatic {
             })
             return
           }
+          let built: Awaited<ReturnType<typeof runNativeWiki>> | undefined
           try {
-            await selected.run(() =>
+            built = await selected.run(() =>
               runNativeWiki({
                 root,
                 dir: cfg.dir,
@@ -201,6 +202,18 @@ export namespace WikiAutomatic {
               error: error instanceof Error ? error.message.slice(0, 200) : String(error),
             })
             throw error
+          }
+          // A partial update published the other pages but still failed a page;
+          // remember it so the cooldown covers a deterministically failing page
+          // instead of burning a model call on every quiet window.
+          if (built && built.failedPages.length > 0) {
+            await recordWikiFailure(root, cfg.dir, {
+              head,
+              generatorKey,
+              planHash: built.manifest.planHash,
+              error: `page generation failed: ${built.failedPages.map((page) => page.path).join(", ")}`,
+            })
+            return
           }
           await clearWikiFailureMemory(root, cfg.dir)
         },

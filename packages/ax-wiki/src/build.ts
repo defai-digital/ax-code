@@ -313,6 +313,7 @@ export async function buildAxWiki(input: WikiBuildInput): Promise<WikiBuildResul
       unchangedPages: pure.unchangedPages,
       removedPages: pure.removedPages,
       conflicts: pure.conflicts,
+      failedPages: pure.failedPages,
       manifest: pure.manifest,
       validation: pure.validation,
     }

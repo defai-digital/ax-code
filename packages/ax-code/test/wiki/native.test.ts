@@ -124,6 +124,7 @@ function wikiResult(root: string, request: WikiPageGenerationRequest) {
     unchangedPages: [],
     removedPages: [],
     conflicts: [],
+    failedPages: [],
     manifest: {} as never,
     validation: {} as never,
   }
@@ -175,7 +176,11 @@ async function runNative(
  * Drive one page generation through `buildAxWiki` with a queued sequence of
  * attempt results, so retry policy is observable without a live provider.
  */
-async function runNativeSequence(tmpPath: string, results: Array<{ streamError?: unknown }>): Promise<void> {
+async function runNativeSequence(
+  tmpPath: string,
+  results: Array<{ streamError?: unknown }>,
+  overrides: { failedPages?: { path: string; error: string }[] } = {},
+): Promise<void> {
   const queue = [...results]
   vi.mocked(generateObject).mockImplementation(async () => ({ ...generatedPage(), ...(queue.shift() ?? {}) }))
   vi.mocked(buildAxWiki).mockImplementation(async (input) => {
@@ -189,7 +194,7 @@ async function runNativeSequence(tmpPath: string, results: Array<{ streamError?:
       sourceInventory: [SOURCE],
     }
     await input.generator(request)
-    return wikiResult(tmpPath, request)
+    return { ...wikiResult(tmpPath, request), ...overrides }
   })
 
   await Instance.provide({
@@ -303,6 +308,19 @@ describe("wiki native generator", () => {
 
     const report = await readBuildReport(tmp.path)
     expect(report?.outcome).toBe("completed")
+    expect(report?.written).toContain(PAGE.path)
+  })
+
+  test("records a partial build report when one page failed and others published", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await runNativeSequence(tmp.path, [{}], {
+      failedPages: [{ path: "modules/ax-code.md", error: "page generation failed" }],
+    })
+
+    const report = await readBuildReport(tmp.path)
+    expect(report?.outcome).toBe("partial")
+    expect(report?.failed?.path).toBe("modules/ax-code.md")
+    // The page that succeeded is still recorded as written.
     expect(report?.written).toContain(PAGE.path)
   })
 

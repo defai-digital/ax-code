@@ -526,3 +526,63 @@ describe("evidence fingerprint contents", () => {
     expect(seen.has(fingerprintEvidenceBundle(base))).toBe(false)
   })
 })
+
+describe("partial update (ADR-156)", () => {
+  const identity = (promptVersion: string) => ({ name: "ax-wiki", version: "1.0.0", promptVersion })
+
+  function faultyGenerator(failing: string) {
+    const healthy = generator()
+    return vi.fn(async (request: WikiPageGenerationRequest) => {
+      if (request.page.path === failing) throw new Error("deterministic page failure")
+      return await healthy(request)
+    })
+  }
+
+  test("publishes the pages that succeeded and keeps the failed page's previous fingerprint", async () => {
+    const first = await buildPure({ ...baseInput(), generatorIdentity: identity("p1") })
+    const failing = first.plan.pages.find((page) => page.path !== "quickstart.md")!.path
+    const partial = await buildPure({
+      ...baseInput(),
+      action: "update",
+      previous: first.manifest,
+      readExistingPage: async (pagePath) => first.candidate.get(pagePath),
+      generator: faultyGenerator(failing),
+      generatorIdentity: identity("p2"),
+    })
+
+    expect(partial.failedPages).toEqual([{ path: failing, error: "deterministic page failure" }])
+    expect(partial.generatedPages).not.toContain(failing)
+    expect(partial.unchangedPages).not.toContain(failing)
+    expect(partial.validation.ok).toBe(true)
+    // The failed page keeps the manifest entry that describes the content still on disk.
+    expect(partial.manifest.pages[failing]).toEqual(first.manifest.pages[failing])
+    // The other pages advanced to the new generator identity.
+    const other = first.plan.pages.find((page) => page.path !== failing)!.path
+    expect(partial.manifest.pages[other]!.fingerprint).not.toBe(first.manifest.pages[other]!.fingerprint)
+    // The candidate keeps the failed page's previous content.
+    expect(partial.candidate.get(failing)).toBe(first.candidate.get(failing))
+  })
+
+  test("a failed page with no file on disk stays absent instead of failing validation", async () => {
+    const first = await buildPure({ ...baseInput(), generatorIdentity: identity("p1") })
+    const failing = first.plan.pages[0]!.path
+    const partial = await buildPure({
+      ...baseInput(),
+      action: "update",
+      previous: first.manifest,
+      readExistingPage: async (pagePath) => (pagePath === failing ? undefined : first.candidate.get(pagePath)),
+      generator: faultyGenerator(failing),
+      generatorIdentity: identity("p2"),
+    })
+
+    expect(partial.failedPages.map((page) => page.path)).toEqual([failing])
+    expect(partial.manifest.pages[failing]).toBeUndefined()
+    expect(partial.validation.ok).toBe(true)
+  })
+
+  test("a generate build still fails closed when a page fails", async () => {
+    await expect(
+      buildPure({ ...baseInput(), generator: faultyGenerator("quickstart.md") }),
+    ).rejects.toThrow("deterministic page failure")
+  })
+})

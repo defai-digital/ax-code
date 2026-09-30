@@ -858,12 +858,26 @@ export async function runNativeWiki(input: {
       // build outcome, so this is best-effort: a failed write is logged and
       // ignored, and its absence is tolerated by every reader.
       try {
-        const failed = [...outcomes.values()].find((outcome) => outcome.status === "failed")
+        const recorded = [...outcomes.values()].find((outcome) => outcome.status === "failed")
         const written = [...outcomes.values()].filter((outcome) => outcome.status === "written")
+        // A page can also fail after the generator returns (e.g. an unusable
+        // result rejected by the compiler), so fall back to the build result.
+        const failed =
+          recorded ??
+          (result?.failedPages?.[0]
+            ? {
+                path: result.failedPages[0].path,
+                status: "failed" as const,
+                attempts: 0,
+                durationMs: 0,
+                failureClass: "unclassified" as const,
+                message: result.failedPages[0].error,
+              }
+            : undefined)
         await writeWikiBuildReport(input.root, config.dir, {
           schemaVersion: WIKI_BUILD_REPORT_SCHEMA_VERSION,
           action: input.action,
-          outcome: failure === undefined ? "completed" : "failed",
+          outcome: failure !== undefined ? "failed" : failed !== undefined ? "partial" : "completed",
           model: model.label,
           generator: { version: Installation.VERSION, promptVersion: WIKI_PROMPT_VERSION },
           repositoryHead,

@@ -28,7 +28,11 @@ export type WikiBuildReportPageOutcome = {
 export type WikiBuildReport = {
   schemaVersion: number
   action: "generate" | "update"
-  outcome: "completed" | "failed"
+  /**
+   * `partial` means the update published the pages that succeeded while one or
+   * more pages failed (ADR-156). `failed` means nothing was published.
+   */
+  outcome: "completed" | "partial" | "failed"
   model: string
   generator: { version: string; promptVersion: string }
   repositoryHead?: string
@@ -73,7 +77,7 @@ export async function readWikiBuildReport(root: string, wikiDir: string): Promis
     const parsed = JSON.parse(raw) as WikiBuildReport
     if (typeof parsed !== "object" || parsed === null) return undefined
     if (parsed.schemaVersion !== WIKI_BUILD_REPORT_SCHEMA_VERSION) return undefined
-    if (parsed.outcome !== "completed" && parsed.outcome !== "failed") return undefined
+    if (parsed.outcome !== "completed" && parsed.outcome !== "partial" && parsed.outcome !== "failed") return undefined
     return parsed
   } catch {
     return undefined
@@ -86,6 +90,10 @@ export function summarizeWikiBuildReport(report: WikiBuildReport): string {
     const failed = report.failed ? `${report.failed.path} (${report.failed.failureClass})` : "unknown page"
     const pending = report.notAttemptedCount > 0 ? `, ${report.notAttemptedCount} page(s) not attempted` : ""
     return `last build: failed ${suffix} - ${failed}${pending}`
+  }
+  if (report.outcome === "partial") {
+    const failed = report.failed ? `${report.failed.path} (${report.failed.failureClass})` : "unknown page"
+    return `last build: partial ${suffix} - ${report.written.length} page(s) written, ${failed} failed`
   }
   return `last build: completed ${suffix} - ${report.written.length} page(s) written`
 }
