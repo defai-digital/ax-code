@@ -66,17 +66,20 @@ export const GRAPH_LIMITS = {
   qualified: 1024,
 } as const
 
+/**
+ * Characters no projected graph string may contain: C0/C1 control characters
+ * (including newline and tab) and Unicode bidi marks. Exported as the single
+ * source of truth so the manifest writer can clean recorded model output the
+ * same way this projector rejects it, instead of drifting from it.
+ */
+export const GRAPH_TEXT_FORBIDDEN = /[\x00-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]/
+
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Expected an object")
   return value as Record<string, unknown>
 }
 function text(value: unknown, max = 1024): string {
-  if (
-    typeof value !== "string" ||
-    !value.length ||
-    value.length > max ||
-    /[\x00-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]/.test(value)
-  )
+  if (typeof value !== "string" || !value.length || value.length > max || GRAPH_TEXT_FORBIDDEN.test(value))
     throw new Error("Invalid graph text")
   return value
 }

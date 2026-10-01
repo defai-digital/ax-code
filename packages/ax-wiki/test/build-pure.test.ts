@@ -13,6 +13,7 @@ import {
   type WikiPageGenerationRequest,
   type WikiSource,
 } from "../src"
+import { projectWikiManifest } from "../src/graph.js"
 
 // Fully in-memory fixture: no filesystem, git, or network. Proves the compiler core
 // runs entirely on injected effects (AC2).
@@ -39,6 +40,12 @@ function inMemorySources(): WikiSource[] {
 
 const evidenceReader: WikiEvidenceReader = async ({ sources }) =>
   sources.map((source) => ({ ...source, content: CONTENTS[source.path] ?? "", truncated: false }))
+
+// The graph projector accepts source hashes only as real SHA-256 digests, so a
+// manifest that must project uses 64-hex hashes instead of readable test labels.
+function projectableSources(): WikiSource[] {
+  return inMemorySources().map((source, index) => ({ ...source, hash: index.toString(16).padStart(64, "0") }))
+}
 
 function generator() {
   return vi.fn(async (request: WikiPageGenerationRequest) => ({
@@ -133,6 +140,58 @@ describe("buildPure (in-memory, no filesystem)", () => {
     }
     // The unlisted-name gloss is kept in the manifest but flagged.
     expect(result.validation.issues.some((issue) => issue.code === "wiki.gloss_unlisted_symbol")).toBe(true)
+  })
+
+  test("cleans generator output so the recorded manifest projects in the graph viewer", async () => {
+    const gen = generator()
+    gen.mockImplementation(async (request: WikiPageGenerationRequest) => ({
+      summary: `Grounded guide\nfor ${request.page.title}\twith details.`,
+      body: `## Purpose\n\nThis page explains ${request.page.purpose} The claims are grounded in the selected repository files and should be verified against code before structural changes.\n\n## Change guidance\n\nStart with the cited source files, run the repository tests, and use code intelligence for exact callers and references.`,
+      symbols: ["Foo", "", "  Bar  ", "Foo", "x".repeat(300), "bad\nname"],
+      symbolSummaries: [
+        { name: "Foo", summary: "Has a\nnewline." },
+        { name: "bad\nname", summary: "A newline in the name is dropped." },
+        { name: "Bar", summary: "  A normal gloss.  " },
+      ],
+    }))
+    const result = await buildPure({ ...baseInput(), sources: projectableSources(), generator: gen })
+    expect(result.validation.ok).toBe(true)
+    const pagePath = result.plan.pages[0]!.path
+    const page = result.manifest.pages[pagePath]!
+    // The summary is flattened to single spaces and carries no control characters.
+    expect(page.summary).toBe(`Grounded guide for ${page.title} with details.`)
+    expect(page.summary).not.toMatch(/[\x00-\x1f\x7f-\x9f]/)
+    // Only projectable, deduped names survive, in recorded order.
+    expect(page.symbols).toEqual(["Foo", "Bar"])
+    // The newline-named gloss is dropped; the rest are cleaned.
+    expect(page.symbolSummaries).toEqual([
+      { name: "Foo", summary: "Has a newline." },
+      { name: "Bar", summary: "A normal gloss." },
+    ])
+    // The writer's own output must project without throwing.
+    expect(() => projectWikiManifest(result.manifest, { snapshot: "t" })).not.toThrow()
+  })
+
+  test("records a clean generator result unchanged", async () => {
+    const gen = generator()
+    gen.mockImplementation(async (request: WikiPageGenerationRequest) => ({
+      summary: `Source-backed guide for ${request.page.title}.`,
+      body: `## Purpose\n\nThis page explains ${request.page.purpose} The claims are grounded in the selected repository files and should be verified against code before structural changes.\n\n## Change guidance\n\nStart with the cited source files, run the repository tests, and use code intelligence for exact callers and references.`,
+      symbols: ["Alpha", "Beta", "Gamma"],
+      symbolSummaries: [
+        { name: "Alpha", summary: "First gloss." },
+        { name: "Beta", summary: "Second gloss." },
+      ],
+    }))
+    const result = await buildPure({ ...baseInput(), sources: projectableSources(), generator: gen })
+    const pagePath = result.plan.pages[0]!.path
+    const page = result.manifest.pages[pagePath]!
+    expect(page.symbols).toEqual(["Alpha", "Beta", "Gamma"])
+    expect(page.symbolSummaries).toEqual([
+      { name: "Alpha", summary: "First gloss." },
+      { name: "Beta", summary: "Second gloss." },
+    ])
+    expect(() => projectWikiManifest(result.manifest, { snapshot: "t" })).not.toThrow()
   })
 })
 

@@ -14,6 +14,7 @@
 import { fingerprintEvidenceBundle, renderEvidenceBundle, type EvidenceBundle } from "./contracts.js"
 import { mapWithBoundedConcurrency } from "./discovery-concurrency.js"
 import { parseFrontmatter, renderWikiPage } from "./frontmatter.js"
+import { GRAPH_LIMITS, GRAPH_TEXT_FORBIDDEN } from "./graph.js"
 import { sha256, stableJson } from "./hash.js"
 import type { EvidenceProvider } from "./ports.js"
 import { createWikiPlan, selectPageSources, sourceMatchesPage } from "./plan.js"
@@ -37,9 +38,46 @@ import { AX_WIKI_GENERATOR, SYMBOL_SUMMARIES_MAX, SYMBOL_SUMMARY_MAX } from "./t
 import type { SymbolSummary } from "./types.js"
 import { validateWikiCandidate } from "./validate.js"
 
+/** Forbidden-character runs, as a global matcher whose source comes from graph.ts. */
+const FORBIDDEN_RUN = new RegExp(`${GRAPH_TEXT_FORBIDDEN.source}+`, "g")
+
+/**
+ * Turns free text into text the Wiki graph projector will accept: each run of
+ * characters forbidden by `GRAPH_TEXT_FORBIDDEN` collapses to one space,
+ * repeated spaces collapse, then the result is trimmed and cut to `max`. The
+ * manifest this writer emits must project in `graph.ts`, so model output is
+ * cleaned here instead of being rejected there.
+ */
+function projectableText(value: string, max: number): string {
+  return value.replace(FORBIDDEN_RUN, " ").replace(/ {2,}/g, " ").trim().slice(0, max).trimEnd()
+}
+
+/**
+ * Keeps only recorded symbol names the graph projector will accept: trimmed,
+ * non-empty, within `GRAPH_LIMITS.symbolName`, and free of forbidden
+ * characters. A name is never rewritten — a name carrying a control character
+ * is not an exact symbol, so it is dropped rather than repaired. Recorded order
+ * is preserved and the first occurrence per name wins; there is no count cap.
+ */
+function sanitizeSymbols(symbols: readonly string[] | undefined): string[] {
+  const seen = new Set<string>()
+  const output: string[] = []
+  for (const raw of symbols ?? []) {
+    if (typeof raw !== "string") continue
+    const name = raw.trim()
+    if (!name || name.length > GRAPH_LIMITS.symbolName || GRAPH_TEXT_FORBIDDEN.test(name) || seen.has(name)) continue
+    seen.add(name)
+    output.push(name)
+  }
+  return output
+}
+
 /**
  * Bound recorded glosses: trimmed, first per name wins, capped in count and
- * length. Never invents content; over-cap input is cut, not failed.
+ * length. Names and summaries obey the same projectability rules as the graph
+ * projector in `graph.ts`, and the summary is cleaned before the length cut, so
+ * every manifest this writer emits can be projected. Never invents content;
+ * over-cap or invalid input is cut or dropped, not failed.
  */
 function sanitizeGlosses(glosses: readonly SymbolSummary[] | undefined): SymbolSummary[] {
   const seen = new Set<string>()
@@ -48,10 +86,11 @@ function sanitizeGlosses(glosses: readonly SymbolSummary[] | undefined): SymbolS
     if (output.length >= SYMBOL_SUMMARIES_MAX) break
     if (!gloss || typeof gloss.name !== "string" || typeof gloss.summary !== "string") continue
     const name = gloss.name.trim()
-    const summary = gloss.summary.trim()
-    if (!name || !summary || seen.has(name)) continue
+    if (!name || name.length > GRAPH_LIMITS.symbolName || GRAPH_TEXT_FORBIDDEN.test(name) || seen.has(name)) continue
+    const summary = projectableText(gloss.summary, SYMBOL_SUMMARY_MAX)
+    if (!summary) continue
     seen.add(name)
-    output.push({ name, summary: summary.slice(0, SYMBOL_SUMMARY_MAX).trimEnd() })
+    output.push({ name, summary })
   }
   return output
 }
@@ -359,8 +398,11 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
       selectors: page.selectors,
       sources: pageSources.map((source) => source.path),
       sourceHashes: pageSourceHashes,
-      summary: fresh?.result.summary.trim() ?? meta.summary ?? previous?.pages[page.path]?.summary ?? "",
-      symbols: fresh?.result.symbols ?? meta.symbols,
+      summary: projectableText(
+        fresh?.result.summary.trim() ?? meta.summary ?? previous?.pages[page.path]?.summary ?? "",
+        GRAPH_LIMITS.summary,
+      ),
+      symbols: sanitizeSymbols(fresh?.result.symbols ?? meta.symbols),
       symbolSummaries: sanitizeGlosses(
         fresh?.result.symbolSummaries ?? meta.symbolSummaries ?? previous?.pages[page.path]?.symbolSummaries ?? [],
       ),
