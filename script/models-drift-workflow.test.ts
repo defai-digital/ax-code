@@ -28,14 +28,33 @@ describe("models drift workflow", () => {
     expect(workflow).toMatch(/create-pull-request@[a-f0-9]{40}/)
   })
 
-  test("explicitly dispatches CI for bot-created or updated PRs", () => {
-    expect(workflow).toContain("contents: write")
-    expect(workflow).toContain("pull-requests: write")
-    expect(workflow).toContain("actions: write")
-    expect(workflow).toContain("gh workflow run ax-code-ci.yml --ref automation/models-snapshot")
-    expect(workflow).toContain("gh workflow run repo-structure.yml --ref automation/models-snapshot")
-    expect(workflow).toContain("pull-request-operation == 'created'")
-    expect(workflow).toContain("pull-request-operation == 'updated'")
+  test("uses a repository-scoped App token after validation without granting the job write access", () => {
+    const validation = workflow.indexOf("name: Validate generated snapshot")
+    const token = workflow.indexOf("name: Create snapshot App token")
+    const proposal = workflow.indexOf("name: Create or update snapshot pull request")
+    expect(token).toBeGreaterThan(validation)
+    expect(proposal).toBeGreaterThan(token)
+    expect(workflow).toMatch(/create-github-app-token@[a-f0-9]{40}/)
+    expect(workflow).toContain("client-id: ${{ vars.AX_CODE_MODELS_APP_CLIENT_ID }}")
+    expect(workflow).toContain("private-key: ${{ secrets.AX_CODE_MODELS_APP_PRIVATE_KEY }}")
+    expect(workflow).toContain("repositories: ax-code")
+    expect(workflow).toContain("permission-contents: write")
+    expect(workflow).toContain("permission-pull-requests: write")
+    expect(workflow).toContain("token: ${{ steps.app-token.outputs.token }}")
+    expect(workflow).toContain("contents: read")
+    expect(workflow).not.toMatch(/^\s+(?:contents|pull-requests|actions): write$/m)
+    expect(workflow).toContain("persist-credentials: false")
+    expect(workflow).not.toContain("skip-token-revoke: true")
+    expect(workflow).not.toContain("gh workflow run")
+    expect(workflow).not.toContain("token: ${{ github.token }}")
     expect(workflow).toContain("models-snapshot.patch")
+  })
+
+  test("snapshot PRs match the normal core and repository CI path filters", () => {
+    for (const file of ["ax-code-ci.yml", "repo-structure.yml"]) {
+      const ci = readFileSync(`.github/workflows/${file}`, "utf8")
+      const prPaths = ci.slice(ci.indexOf("  pull_request:"), ci.indexOf("  push:"))
+      expect(prPaths).toMatch(/"packages\/(?:ax-code\/)?\*\*"/)
+    }
   })
 })
