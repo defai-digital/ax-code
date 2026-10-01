@@ -332,6 +332,28 @@ describe("Env.sanitize", () => {
     expect(Env.redactSecrets('Cookie: "a=1" request sent')).toBe('Cookie: "a=[redacted]" request sent')
   })
 
+  test("redacts every shell-quoted cookie header on the same line", () => {
+    const request = "curl -H 'Cookie: sid=first-secret' -H 'Cookie: pref=second-secret' https://example.test"
+    const redacted = "curl -H 'Cookie: sid=[redacted]' -H 'Cookie: pref=[redacted]' https://example.test"
+    expect(Env.redactSecrets(request)).toBe(redacted)
+    expect(Env.redactSecrets(redacted)).toBe(redacted)
+
+    const response = "curl -H 'Set-Cookie: sid=first-secret; Path=/' -H 'Set-Cookie: pref=second-secret; Secure'"
+    expect(Env.redactSecrets(response)).toBe(
+      "curl -H 'Set-Cookie: sid=[redacted]; Path=/' -H 'Set-Cookie: pref=[redacted]; Secure'",
+    )
+  })
+
+  test("redacts malformed quoted cookie names instead of treating them as complete values", () => {
+    const request = 'Cookie: "sid" = first-secret; pref=second-secret'
+    const redacted = 'Cookie: "sid"=[redacted]; pref=[redacted]'
+    expect(Env.redactSecrets(request)).toBe(redacted)
+    expect(Env.redactSecrets(redacted)).toBe(redacted)
+    expect(Env.redactSecrets("curl -H 'Cookie: \"sid\"=first-secret; pref=second-secret'")).toBe(
+      "curl -H 'Cookie: \"sid\"=[redacted]; pref=[redacted]'",
+    )
+  })
+
   test("redactForRecord composes both passes without doubling the placeholder", () => {
     // Order is fixed inside the helper: an assignment to a keyword-named key is
     // redacted once, not re-matched into `[redacted]]`.

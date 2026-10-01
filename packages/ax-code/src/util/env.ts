@@ -290,7 +290,13 @@ export namespace Env {
       // A quoted first pair (`Set-Cookie: "a=1"; sid=x`) can end before the
       // value does: redact the quoted run, keep its quotes, and keep redacting
       // the remaining pairs after it instead of copying them verbatim.
-      const useLocalQuote = localQuote !== undefined && localQuoteEnd! < spanEnd
+      // A quoted name followed by '=' is part of the pair, rather than a
+      // complete quoted header value. Treating it as a value leaves the actual
+      // credential and every later pair outside the redacted span.
+      const useLocalQuote =
+        localQuote !== undefined &&
+        localQuoteEnd! < spanEnd &&
+        !/^[ \t]*=/.test(value.slice(localQuoteEnd! + 1, spanEnd))
 
       const contentStart = useLocalQuote ? valueStart + 1 : valueStart
       let redacted: string
@@ -312,8 +318,12 @@ export namespace Env {
         // part of the record: keep redacting it when it opens with another
         // pair, so a stray quote in prose cannot truncate the redaction.
         const trailing = value.slice(cursor, lineEnd)
-        result += redactPairTail(trailing, setCookie)
-        cursor = lineEnd
+        if (PAIR_TAIL.test(trailing)) {
+          result += redactCookiePairs(trailing, setCookie)
+          cursor = lineEnd
+        }
+        // Leave non-pair tails for the next header match (or final copy), so
+        // another shell-quoted Cookie header on this line is still scanned.
       }
       quoteCursor = cursor
     }
