@@ -60,6 +60,57 @@ try {
   await page.goto(pathToFileURL(output).href)
   await page.getByRole("heading", { name: "AX Wiki evidence map" }).waitFor()
   assert.equal(await page.locator(".detail").evaluate((el) => getComputedStyle(el).whiteSpace), "pre-wrap")
+  assert.equal(await page.locator(".legend .topic").count(), 2)
+  // Wait until the force simulation has settled and the camera has framed the names.
+  let previousLayout = ""
+  let stableFrames = 0
+  const labelStart = Date.now()
+  for (;;) {
+    const layout = await page.evaluate(() =>
+      [...document.querySelectorAll("svg g.node")].map((group) => group.getAttribute("transform")).join("|"),
+    )
+    stableFrames = layout === previousLayout ? stableFrames + 1 : 0
+    previousLayout = layout
+    if (stableFrames >= 3) break
+    if (Date.now() - labelStart > 8000) break
+    await page.waitForTimeout(100)
+  }
+  const pageLabels = await page.evaluate(() => {
+    const svgBox = document.querySelector("svg").getBoundingClientRect()
+    return [...document.querySelectorAll("svg g.node.page")].map((group) => {
+      const text = group.querySelector("text")
+      const box = text.getBoundingClientRect()
+      return {
+        anchor: getComputedStyle(text).textAnchor,
+        fill: text.style.fill,
+        inside:
+          box.width > 8 &&
+          box.left >= svgBox.left - 1 &&
+          box.right <= svgBox.right + 1 &&
+          box.top >= svgBox.top - 1 &&
+          box.bottom <= svgBox.bottom + 1,
+      }
+    })
+  })
+  assert.equal(pageLabels.length, 2)
+  for (const label of pageLabels) {
+    assert.equal(label.anchor, "end")
+    assert.equal(label.inside, true)
+    assert.match(label.fill, /^rgb\(/)
+    assert.notEqual(label.fill, "rgb(237, 246, 255)")
+  }
+  const topicFills = await page.evaluate(() =>
+    Object.fromEntries(
+      [...document.querySelectorAll("svg g.node")].map((group) => [
+        group.getAttribute("data-id"),
+        group.querySelector("circle").getAttribute("fill"),
+      ]),
+    ),
+  )
+  assert.equal(topicFills["page:architecture.md"], "#3db8c4")
+  assert.equal(topicFills["page:guide.md"], "#6aa2e0")
+  assert.equal(topicFills["source:src/a.ts"], "#4d7cb4")
+  assert.equal(topicFills["source:src/b.ts"], "#30455c")
   assert.equal(await page.locator(".list button").count(), 4)
   assert.equal(await page.locator("svg g.node").count(), 4)
   assert.equal(await page.locator("svg path.edge").count(), 3)

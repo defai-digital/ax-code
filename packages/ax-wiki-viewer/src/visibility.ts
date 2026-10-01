@@ -176,6 +176,43 @@ export function viewState(graph: WikiGraph, filters: ViewFilters): ViewState {
   return "ok"
 }
 
+/** A page's palette index, or "shared" when more than one page cites a file. */
+export type CitingTopic = number | "shared"
+
+/**
+ * Topic color follows the citing page, not a detected cluster.
+ * Pages are numbered in id order. A file cited by exactly one page uses that
+ * page's index. A file cited by several pages is shared.
+ */
+export function citingTopics(
+  nodes: readonly { id: string; kind: NodeKind }[],
+  edges: readonly { kind: string; from: string; to: string }[],
+): Map<string, CitingTopic> {
+  const pages = nodes
+    .filter((node) => node.kind === "page")
+    .map((node) => node.id)
+    .sort()
+  const index = new Map(pages.map((id, i) => [id, i]))
+  const citers = new Map<string, Set<string>>()
+  for (const edge of edges) {
+    if (edge.kind !== "references-source") continue
+    const set = citers.get(edge.to) ?? new Set<string>()
+    set.add(edge.from)
+    citers.set(edge.to, set)
+  }
+  const topic = new Map<string, CitingTopic>()
+  for (const [id, i] of index) topic.set(id, i)
+  for (const [sourceId, set] of citers) {
+    if (set.size !== 1) {
+      topic.set(sourceId, "shared")
+      continue
+    }
+    const pageTopic = index.get([...set][0]!)
+    topic.set(sourceId, pageTopic === undefined ? "shared" : pageTopic)
+  }
+  return topic
+}
+
 function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`
 }

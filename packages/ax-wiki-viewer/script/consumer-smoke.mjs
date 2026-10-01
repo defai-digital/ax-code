@@ -77,7 +77,7 @@ await writeFile(new URL('./graph.json',import.meta.url),JSON.stringify(graph));
     if (/^https?:/.test(req.url())) requests.push(req.url())
   })
   await page.goto(pathToFileURL(path.join(directory, "view.html")).href)
-  await page.getByRole("button", { name: "page: External consumer · unknown" }).waitFor()
+  await page.getByRole("button", { name: "page: External consumer" }).waitFor()
   await page.goto("about:blank")
   await page.setContent('<main id="map"></main>')
   await page.addScriptTag({ content: result.outputFiles[0].text })

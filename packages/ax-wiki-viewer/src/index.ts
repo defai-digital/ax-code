@@ -28,8 +28,7 @@ export const viewerCss = `
 .axwv .canvas{position:relative;height:100%;min-height:420px;overflow:hidden;border:1px solid #2c4156;border-radius:10px;background:#0c141d;touch-action:none}
 .axwv svg{width:100%;height:100%;display:block}
 .axwv .node{cursor:grab;touch-action:none}.axwv .node.dragging{cursor:grabbing}
-.axwv svg text{pointer-events:none;font-size:11px;fill:#edf6ff}
-.axwv svg .node:not(.page)>text,.axwv svg .badge text{text-anchor:middle}
+.axwv svg text{pointer-events:none;font-size:11px;text-anchor:middle;fill:#edf6ff}
 .axwv svg .node>text{paint-order:stroke;stroke:#0c141d;stroke-width:4px;stroke-linejoin:round}
 .axwv svg .node.page>text{text-anchor:end;font-size:13px;font-weight:600}
 .axwv .legend .topic{width:10px;height:10px;border-radius:50%;display:inline-block;border:1px solid #8ea0b3}
@@ -64,14 +63,18 @@ export const viewerCss = `
 /** Overview stays a picture. Names appear for the focused neighborhood, or once the camera is close. */
 const LABEL_ZOOM: Record<NodeKind, number> = { page: 1.35, source: 1.7, symbol: 2.4 }
 const PAGE_FILL = "#245d65"
-/** Stable topic colors. Kept away from the selection strokes #e0a63c, #78dacc, and #64778b. */
+/**
+ * Stable topic colors on the dark canvas. Page hubs are the light swatch,
+ * files cited by only that page use the deeper swatch, and citation edges use
+ * the light one. Kept away from the selection strokes #e0a63c, #78dacc, and #64778b.
+ */
 const TOPIC_PALETTE = [
-  { page: "#2a7c86", source: "#1e4e56", edge: "#7ec8ce" },
-  { page: "#3d6fa3", source: "#2a4668", edge: "#8eb4d8" },
-  { page: "#6d5c96", source: "#433858", edge: "#b3a4d4" },
-  { page: "#3e7d58", source: "#2a4a36", edge: "#8fc9a4" },
-  { page: "#8a5a34", source: "#4e3824", edge: "#d2a57a" },
-  { page: "#7a4560", source: "#4a2e3c", edge: "#d4a0b4" },
+  { page: "#3db8c4", source: "#2a8a94", edge: "#8fd8e0" },
+  { page: "#6aa2e0", source: "#4d7cb4", edge: "#b4d2f2" },
+  { page: "#b39adf", source: "#8872b4", edge: "#ddd0f4" },
+  { page: "#6fbf8a", source: "#4c9466", edge: "#b7e4c6" },
+  { page: "#d4896a", source: "#a86b50", edge: "#f0c4ae" },
+  { page: "#d489a8", source: "#a86a86", edge: "#f0c4d4" },
 ] as const
 const SOURCE_FILL = "#30455c"
 const SYMBOL_FILL = "#7d6a45"
@@ -103,9 +106,19 @@ function truncateLabel(label: string, max = 28): string {
   return chars.length > max ? `${chars.slice(0, max - 1).join("")}…` : label
 }
 
+/** Width of a 13px page title, including the halo, so fit can keep the name on screen. */
+function pageLabelWidth(label: string): number {
+  return Math.min(Array.from(label).length, 28) * 9 + 16
+}
+
 /** An isolated instance; invalid updates preserve the previous view. */
 export function mount(element: HTMLElement, input: unknown, options: { injectStyles?: boolean } = {}) {
   let graph = parseWikiGraph(input)
+  let topics = new Map<string, CitingTopic>()
+  const topicColor = (id: string) => {
+    const topic = topics.get(id)
+    return typeof topic === "number" ? TOPIC_PALETTE[topic % TOPIC_PALETTE.length] : undefined
+  }
   let layout: ForceLayout | undefined
   let selected: string | undefined
   let hovered: string | undefined
@@ -136,7 +149,11 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     return el
   }
   html("h1", root, "AX Wiki evidence map")
-  html("p", root, "Teal hubs are wiki pages and cite the blue files. Gold dots are symbols. Scroll to zoom.")
+  html(
+    "p",
+    root,
+    "Each page has its own color. Files only that page cites match it. Shared files stay blue. Scroll to zoom.",
+  )
   const status = html("p", root)
   status.className = "counts"
   status.setAttribute("role", "status")
@@ -256,8 +273,15 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       maxX = -Infinity,
       maxY = -Infinity
     for (const node of layout.nodes) {
-      const pad = node.radius + 28
-      minX = Math.min(minX, node.x - pad)
+      const drawn = node.kind === "page" ? Math.max(node.radius, 14) : node.radius
+      const pad = drawn + 28
+      let left = node.x - pad
+      if (node.kind === "page") {
+        const info = graph.nodes.find((candidate) => candidate.id === node.id)
+        const anchor = node.x - (drawn + 12)
+        left = Math.min(left, anchor - pageLabelWidth(info?.label ?? ""))
+      }
+      minX = Math.min(minX, left)
       minY = Math.min(minY, node.y - pad)
       maxX = Math.max(maxX, node.x + pad)
       maxY = Math.max(maxY, node.y + pad)
@@ -352,7 +376,8 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
         dimmed ? String(DIMMED_EDGE) : incident ? String(FOCUS_EDGE_OPACITY) : String(resting ? restOpacity : REST_EDGE),
       )
       // At rest, color is the relationship. A selection keeps the tested focus colors.
-      const restStroke = edge.kind === "references-source" ? "#8fd0d6" : edge.kind === "uses" ? "#d2b56a" : "#3e5164"
+      const cited = edge.kind === "references-source" ? topicColor(edge.from) : undefined
+      const restStroke = edge.kind === "uses" ? "#d2b56a" : edge.kind === "contains" ? "#3e5164" : (cited?.edge ?? "#8fd0d6")
       path.setAttribute(
         "stroke",
         !dimmed && direction === "outgoing"
@@ -405,7 +430,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       label.setAttribute("display", showLabel ? "" : "none")
       if (node.kind === "page") {
         label.setAttribute("text-anchor", "end")
-        label.setAttribute("x", String(-(Math.max(node.radius, 14) + 8)))
+        label.setAttribute("x", String(-(Math.max(node.radius, 14) + 12)))
         label.setAttribute("y", String(pageLabelY.get(node.id) ?? 4))
       }
     }
@@ -457,7 +482,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     const node = graph.nodes.find((candidate) => candidate.id === selected)
     if (!node) {
       detail.textContent = graph.nodes.length
-        ? "Teal hubs are wiki pages. Blue nodes are the files they cite. Gold dots are symbols in those files.\n\nSelect a page, source, or symbol to inspect its recorded evidence. Selection focuses its one-hop neighborhood."
+        ? "Each wiki page has its own color. Files cited by only that page use the same color. Files cited by several pages stay blue. Gold dots are symbols.\n\nSelect a page, source, or symbol to inspect its recorded evidence. Selection focuses its one-hop neighborhood."
         : "No matching items. Clear search or reset the view."
       return
     }
@@ -551,6 +576,17 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
         render()
       }
       legend.append(button)
+    }
+    for (const page of graph.nodes.filter((node) => node.kind === "page").sort((a, b) => (a.id < b.id ? -1 : 1))) {
+      const color = topicColor(page.id)
+      if (!color) continue
+      const swatch = doc.createElement("span")
+      swatch.className = "topic"
+      swatch.setAttribute("role", "img")
+      swatch.setAttribute("aria-label", page.label)
+      swatch.title = page.label
+      swatch.style.background = color.page
+      legend.append(swatch)
     }
     for (const text of [
       "size = visible connections",
@@ -675,10 +711,15 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       const drawn = node.kind === "page" ? Math.max(node.radius, 14) : node.kind === "symbol" ? Math.max(5, node.radius - 2) : node.radius
       const circle = doc.createElementNS(svgNS, "circle")
       circle.setAttribute("r", String(drawn))
-      circle.setAttribute("fill", node.kind === "page" ? PAGE_FILL : node.kind === "source" ? SOURCE_FILL : SYMBOL_FILL)
+      const color = topicColor(node.id)
+      circle.setAttribute(
+        "fill",
+        node.kind === "symbol" ? SYMBOL_FILL : node.kind === "page" ? (color?.page ?? PAGE_FILL) : (color?.source ?? SOURCE_FILL),
+      )
       const label = doc.createElementNS(svgNS, "text")
       label.setAttribute("y", String(drawn + 14))
       label.textContent = truncateLabel(info.label)
+      if (node.kind === "page") label.style.fill = topicColor(node.id)?.page ?? "#edf6ff"
       const title = doc.createElementNS(svgNS, "title")
       title.textContent = `${info.label} (${node.kind}, ${info.freshness}, ${plural(node.degree, "connection", "connections")} shown)`
       group.append(circle, label, title)
@@ -782,6 +823,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   }
 
   function buildLayout() {
+    topics = citingTopics(graph.nodes, graph.edges)
     layout?.stop()
     hasFitted = false
     layout = createForceLayout(graph, {

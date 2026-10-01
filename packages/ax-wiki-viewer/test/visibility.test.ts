@@ -2,6 +2,7 @@ import { expect, test } from "vitest"
 import { parseWikiGraph, projectWikiManifest } from "@ax-code/ax-wiki/graph"
 import {
   buildOutline,
+  citingTopics,
   countOutlineSymbols,
   countsBarText,
   defaultFilters,
@@ -204,6 +205,16 @@ test("builds the outline nested by qualified prefix", () => {
 test("outline ignores non-contains edges and stays empty without symbols", () => {
   expect(viewCounts(graph, defaultFilters()).outline).toEqual([])
   expect(countOutlineSymbols([])).toBe(0)
+})
+
+test("citing topics follow the single citing page and mark shared files", () => {
+  const topics = citingTopics(graph.nodes, graph.edges)
+  expect(topics.get("page:guide.md")).toBe(0)
+  expect(topics.get("page:other.md")).toBe(1)
+  expect(topics.get("source:src/a.ts")).toBe(0)
+  expect(topics.get("source:src/c.ts")).toBe(1)
+  expect(topics.get("source:src/b.ts")).toBe("shared")
+  expect(citingTopics([], []).size).toBe(0)
 })
 
 test("counting never mutates its inputs", () => {
