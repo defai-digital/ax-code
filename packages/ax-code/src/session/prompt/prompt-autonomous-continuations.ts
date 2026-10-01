@@ -88,6 +88,8 @@ export namespace AutonomousContinuationPrompt {
       `Budget:\n${lines.join("\n")}\n\n` +
       `The runtime has marked the goal as budget_limited, so do not start new substantive work for this goal. ` +
       `Wrap up soon: summarize useful progress, identify remaining work or blockers, and leave the user with a clear next step. ` +
+      `Use only evidence already collected; do not run new checks. ` +
+      `Further work requires a user-authorized replacement goal; this exhausted goal cannot resume. ` +
       `Do not call update_goal unless the goal is actually complete.`
     )
   }
