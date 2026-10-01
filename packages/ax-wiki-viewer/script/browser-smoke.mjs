@@ -229,6 +229,7 @@ try {
     const sx = box.x + box.width / 2,
       sy = box.y + box.height / 2
     const opts = (x, y) => ({ clientX: x, clientY: y, pointerId: 7, bubbles: true, isPrimary: true })
+    group.dispatchEvent(new Event("mouseenter"))
     group.dispatchEvent(new PointerEvent("pointerdown", opts(sx, sy)))
     for (const [dx, dy] of [
       [20, 10],
@@ -266,6 +267,12 @@ try {
     "dragged node never reached the drop point",
   )
   await awaitMoved(1, (transform) => transform !== drag.before[1], 15000, "neighbor never moved after reheat")
+  assert.equal(
+    await page.evaluate(
+      () => [...document.querySelectorAll("svg g.node")].filter((g) => g.getAttribute("opacity") === "0.15").length,
+    ),
+    0,
+  )
   // The click right after a drag is suppressed instead of selecting.
   await page.evaluate(() =>
     document.querySelectorAll("svg g.node")[0].dispatchEvent(new MouseEvent("click", { bubbles: true })),
@@ -320,6 +327,21 @@ try {
   const [, landedX, landedY] = /translate\(([^,]+),([^)]+)\)/.exec(calmDrag.landed).map(Number)
   assert.ok(Math.hypot(landedX - calmDrag.drop[0], landedY - calmDrag.drop[1]) < 1e-6)
   assert.equal(calmDrag.neighbor, calmDrag.before[1])
+  const reverted = await calm.evaluate(() => {
+    const canvas = document.querySelector(".canvas")
+    const group = document.querySelectorAll("svg g.node")[0]
+    const before = group.getAttribute("transform")
+    const box = group.querySelector("circle").getBoundingClientRect()
+    const outside = canvas.getBoundingClientRect()
+    const sx = box.x + box.width / 2,
+      sy = box.y + box.height / 2
+    const opts = (x, y) => ({ clientX: x, clientY: y, pointerId: 8, bubbles: true, isPrimary: true })
+    group.dispatchEvent(new PointerEvent("pointerdown", opts(sx, sy)))
+    group.dispatchEvent(new PointerEvent("pointermove", opts(sx + 30, sy + 16)))
+    group.dispatchEvent(new PointerEvent("pointerup", opts(outside.right + 24, outside.top + 12)))
+    return { before, after: group.getAttribute("transform") }
+  })
+  assert.equal(reverted.after, reverted.before)
   await calm.evaluate(() =>
     document.querySelectorAll("svg g.node")[0].dispatchEvent(new MouseEvent("click", { bubbles: true })),
   )
@@ -340,6 +362,23 @@ try {
   })
   assert.ok(wheeled.zoomed[2] < wheeled.before[2], "wheel up should zoom in")
   assert.ok(Math.abs(wheeled.restored[2] - wheeled.before[2]) < 1e-6, "wheel down should restore the scale")
+  // A real mouse drag must not leave a native selection. That selection is the
+  // slate rectangle that sometimes stays on the map.
+  const dragFrom = await page.evaluate(() => {
+    const box = document.querySelector("svg g.node circle").getBoundingClientRect()
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  })
+  await page.mouse.move(dragFrom.x, dragFrom.y)
+  await page.mouse.down()
+  await page.mouse.move(dragFrom.x + 16, dragFrom.y + 110, { steps: 12 })
+  await page.mouse.up()
+  assert.equal(
+    await page.evaluate(() => {
+      const selected = document.getSelection()
+      return selected === null || selected.isCollapsed
+    }),
+    true,
+  )
   if (process.env.AX_WIKI_VIEWER_SCREENSHOT)
     await page.screenshot({ path: process.env.AX_WIKI_VIEWER_SCREENSHOT, fullPage: true })
   await page.setViewportSize({ width: 390, height: 844 })

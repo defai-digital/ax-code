@@ -25,8 +25,8 @@ export const viewerCss = `
 .axwv .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 0}
 .axwv .layout{order:1;flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,300px);gap:12px;margin-top:8px}
 .axwv > details,.axwv > .notice{order:2}
-.axwv .canvas{position:relative;height:100%;min-height:420px;overflow:hidden;border:1px solid #2c4156;border-radius:10px;background:#0c141d;touch-action:none}
-.axwv svg{width:100%;height:100%;display:block}
+.axwv .canvas{position:relative;height:100%;min-height:420px;overflow:hidden;border:1px solid #2c4156;border-radius:10px;background:#0c141d;touch-action:none;user-select:none;-webkit-user-select:none}
+.axwv svg{width:100%;height:100%;display:block;-webkit-user-drag:none}
 .axwv .node{cursor:grab;touch-action:none}.axwv .node.dragging{cursor:grabbing}
 .axwv svg text{pointer-events:none;font-size:11px;text-anchor:middle;fill:#edf6ff}
 .axwv svg .node>text{paint-order:stroke;stroke:#0c141d;stroke-width:4px;stroke-linejoin:round}
@@ -123,6 +123,10 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   let selected: string | undefined
   let hovered: string | undefined
   let suppressClick = false
+  let dragging = false
+  // A finished drag must not leave the neighborhood dimmed. The browser may
+  // synthesize a mouseenter on whatever is under the cursor as capture ends.
+  let hoverLock = false
   let suppressCanvasClick = false
   let lastVisible: WikiGraphNode[] = []
   let matchIndex = 0
@@ -601,18 +605,40 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     }
   }
 
+  function acceptHover(id: string) {
+    if (dragging || hoverLock) return
+    hovered = id
+    applyEmphasis()
+  }
+
+  let unlockHover: ((event: PointerEvent) => void) | undefined
+  function lockHover() {
+    hoverLock = true
+    hovered = undefined
+    applyEmphasis()
+    if (unlockHover) doc.removeEventListener("pointermove", unlockHover)
+    // The pointerup that ends a drag is often followed by a move in the same
+    // frame. Ignore that move so the drop does not immediately dim the map.
+    const lockedAt = performance.now()
+    unlockHover = () => {
+      if (performance.now() - lockedAt < 80) return
+      hoverLock = false
+      if (unlockHover) doc.removeEventListener("pointermove", unlockHover)
+      unlockHover = undefined
+    }
+    doc.addEventListener("pointermove", unlockHover)
+  }
+
   function previewOn(hover: HTMLElement, id: string) {
     hover.onmouseenter = () => {
-      hovered = id
-      applyEmphasis()
+      acceptHover(id)
     }
     hover.onmouseleave = () => {
       if (hovered === id) hovered = undefined
       applyEmphasis()
     }
     hover.onfocus = () => {
-      hovered = id
-      applyEmphasis()
+      acceptHover(id)
     }
     hover.onblur = () => {
       if (hovered === id) hovered = undefined
@@ -698,8 +724,10 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     for (const edge of graph.edges) {
       const path = doc.createElementNS(svgNS, "path")
       path.setAttribute("class", "edge")
+      path.setAttribute("fill", "none")
       const arrow = doc.createElementNS(svgNS, "path")
       arrow.setAttribute("class", "arrow")
+      arrow.setAttribute("fill", "none")
       edgeLayer.append(path, arrow)
       edgeEls.push({ path, arrow, edge })
     }
@@ -761,59 +789,122 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
         select(info)
       })
       group.addEventListener("mouseenter", () => {
-        hovered = node.id
-        applyEmphasis()
+        acceptHover(node.id)
       })
       group.addEventListener("mouseleave", () => {
         if (hovered === node.id) hovered = undefined
         applyEmphasis()
       })
       group.addEventListener("pointerdown", (event) => {
-        if (disposed || layout === undefined) return
+        if (disposed || layout === undefined || event.button !== 0) return
         // No preventDefault: touch scrolling is already disabled via touch-action,
         // and canceling pointerdown would risk the click-to-select path.
         const pointerId = event.pointerId
         const startX = event.clientX,
           startY = event.clientY
+        const originX = node.x,
+          originY = node.y
         let moved = false
+        let finished = false
         try {
           group.setPointerCapture(pointerId)
         } catch {
-          // Capture may fail for synthetic or edge-case pointers; the drag
-          // still tracks as long as moves reach the group.
+          // Capture may fail for synthetic or edge-case pointers; the document
+          // listeners still receive the release.
         }
         const move = (moveEvent: PointerEvent) => {
           if (moveEvent.pointerId !== pointerId) return
           if (!moved && Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 3) return
-          moved = true
-          group.classList.add("dragging")
           const ctm = svg.getScreenCTM()
           if (!ctm) return
           const world = new DOMPoint(moveEvent.clientX, moveEvent.clientY).matrixTransform(ctm.inverse())
+          if (!Number.isFinite(world.x) || !Number.isFinite(world.y)) return
+          if (!moved) {
+            moved = true
+            dragging = true
+            aside.style.pointerEvents = "none"
+            group.classList.add("dragging")
+            hovered = undefined
+            applyEmphasis()
+            // A native text selection or drag image is the slate bar that
+            // otherwise stays on the map after some drags.
+            moveEvent.preventDefault()
+            doc.getSelection()?.removeAllRanges()
+          }
+          // Pin and paint immediately. A cooled simulation would otherwise
+          // leave the node in place until the release reheats it.
           node.fx = world.x
           node.fy = world.y
-          if (reducedMotion) {
-            // No simulation ticks run under reduced motion, so a drag positions
-            // the node directly; neighbors stay put and no reheating occurs.
-            node.x = world.x
-            node.y = world.y
-          }
+          node.x = world.x
+          node.y = world.y
           positionElements()
         }
-        const up = (upEvent: PointerEvent) => {
-          if (upEvent.pointerId !== pointerId) return
+        const end = (upEvent: PointerEvent) => {
+          if (finished || upEvent.pointerId !== pointerId) return
+          finished = true
           group.removeEventListener("pointermove", move)
-          group.removeEventListener("pointerup", up)
-          group.removeEventListener("pointercancel", up)
-          group.classList.remove("dragging")
-          if (moved) {
-            suppressClick = true
-            if (!reducedMotion && layout !== undefined) layout.reheat(0.3)
+          group.removeEventListener("pointerup", end)
+          group.removeEventListener("pointercancel", end)
+          group.removeEventListener("lostpointercapture", onLostCapture)
+          doc.removeEventListener("pointerup", end)
+          doc.removeEventListener("pointercancel", end)
+          try {
+            group.releasePointerCapture(pointerId)
+          } catch {
+            // Capture was already released, for example after pointercancel.
           }
+          group.classList.remove("dragging")
+          if (dragging) {
+            dragging = false
+            aside.style.pointerEvents = ""
+          }
+          if (disposed || !moved) return
+          suppressClick = true
+          doc.getSelection()?.removeAllRanges()
+          // Hit-testing during pointer capture can return the captured node
+          // instead of what is painted under the cursor. Use the canvas and
+          // the zoom pad rectangles.
+          const rect = canvas.getBoundingClientRect()
+          const hud = navigation.getBoundingClientRect()
+          const overHud =
+            upEvent.clientX >= hud.left &&
+            upEvent.clientX <= hud.right &&
+            upEvent.clientY >= hud.top &&
+            upEvent.clientY <= hud.bottom
+          // pointercancel and lostpointercapture mean the browser took the
+          // gesture (a native selection drag). Put the node back.
+          const inside =
+            upEvent.type === "pointerup" &&
+            upEvent.clientX >= rect.left &&
+            upEvent.clientX <= rect.right &&
+            upEvent.clientY >= rect.top &&
+            upEvent.clientY <= rect.bottom &&
+            !overHud
+          if (!inside) {
+            node.fx = null
+            node.fy = null
+            node.x = originX
+            node.y = originY
+            positionElements()
+          }
+          lockHover()
+          if (inside && !reducedMotion && layout !== undefined) layout.reheat(0.3)
+        }
+        const onLostCapture = () => {
+          // A normal pointerup releases capture and also fires this event.
+          // Wait so a real pointerup can commit the drop first. If none
+          // arrives, the browser took the gesture and the node goes back.
+          queueMicrotask(() => {
+            if (finished) return
+            end(new PointerEvent("pointercancel", { pointerId, clientX: startX, clientY: startY }))
+          })
         }
         group.addEventListener("pointermove", move)
-        group.addEventListener("pointerup", up)
-        group.addEventListener("pointercancel", up)
+        group.addEventListener("pointerup", end)
+        group.addEventListener("pointercancel", end)
+        group.addEventListener("lostpointercapture", onLostCapture)
+        doc.addEventListener("pointerup", end)
+        doc.addEventListener("pointercancel", end)
       })
       nodeLayer.append(group)
       const els = { group, circle, label, node }
@@ -890,6 +981,8 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     applyZoom(factor, event.clientX, event.clientY)
   }
   canvas.addEventListener("wheel", onWheel, { passive: false })
+  canvas.addEventListener("selectstart", (event) => event.preventDefault())
+  canvas.addEventListener("dragstart", (event) => event.preventDefault())
   // Refit until the user pans or zooms, so a resize does not leave the picture letterboxed.
   const resize = new ResizeObserver(() => {
     if (disposed) return
@@ -911,7 +1004,9 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     const move = (moveEvent: PointerEvent) => {
       if (moveEvent.pointerId !== pointerId) return
       if (!moved && Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 3) return
+      if (!moved) doc.getSelection()?.removeAllRanges()
       moved = true
+      moveEvent.preventDefault()
       const ctm = svg.getScreenCTM()
       if (ctm) {
         const from = new DOMPoint(lastX, lastY).matrixTransform(ctm.inverse())
@@ -1015,6 +1110,8 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       disposed = true
       layout?.stop()
       layout = undefined
+      if (unlockHover) doc.removeEventListener("pointermove", unlockHover)
+      unlockHover = undefined
       for (const button of root.querySelectorAll("button")) {
         button.onclick = null
         button.onmouseenter = null
