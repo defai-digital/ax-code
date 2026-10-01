@@ -4,6 +4,7 @@ import path from "node:path"
 import { request } from "node:http"
 import { tmpdir } from "../fixture/fixture"
 import { WikiVisualization } from "../../src/wiki/visualization"
+import { WikiGraphSchema } from "../../src/wiki/visualization-schema"
 
 const manifest = {
   schemaVersion: 1,
@@ -63,6 +64,32 @@ describe("Wiki visualization snapshot", () => {
       { name: "Foo", provenance: "verified" },
       { name: "Ghost", provenance: "inferred" },
     ])
+  })
+  test("serves a manifest at the generator's per-page symbol maximum", async () => {
+    await using tmp = await tmpdir()
+    await mkdir(path.join(tmp.path, "ax-wiki"))
+    // The native generator accepts up to 80 symbols and 20 glosses per page.
+    const symbols = Array.from({ length: 80 }, (_, i) => `symbol${String(i).padStart(2, "0")}`)
+    await writeFile(
+      path.join(tmp.path, "ax-wiki", ".manifest.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        generator: "ax-wiki",
+        pages: {
+          "guide.md": {
+            title: "Guide",
+            summary: "Guide summary.",
+            symbols,
+            symbolSummaries: symbols.slice(60).map((name) => ({ name, summary: `Gloss for ${name}.` })),
+            sources: ["src/a.ts"],
+            sourceHashes: {},
+          },
+        },
+      }),
+    )
+    const graph = await WikiVisualization.snapshot(tmp.path)
+    const page = WikiGraphSchema.parse(graph).nodes.find((n) => n.id === "page:guide.md")!
+    expect(page.symbols.map((anchor) => anchor.name)).toEqual([...symbols.slice(0, 12), ...symbols.slice(60)])
   })
   test("projects inventoried symbols as contained nodes", async () => {
     await using tmp = await tmpdir()

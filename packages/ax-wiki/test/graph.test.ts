@@ -215,11 +215,38 @@ test("enforces symbol and summary caps with clear failures", () => {
       { snapshot: "ok" },
     ).nodes[0].symbols,
   ).toHaveLength(32)
-  expect(() => projectWikiManifest(page(Array(33).fill("s"), "x"), { snapshot: "many" })).toThrow(/node symbol limit/)
+  expect(() => projectWikiManifest(page("s", "x"), { snapshot: "shape" })).toThrow(/page symbols/)
   expect(() => projectWikiManifest(page(["x".repeat(257)], "x"), { snapshot: "long" })).toThrow()
   expect(() => projectWikiManifest(page([], "x".repeat(2049)), { snapshot: "long" })).toThrow()
   expect(() => projectWikiManifest(page(["ok", 7], "x"), { snapshot: "bad" })).toThrow()
   expect(projectWikiManifest(page([], "x".repeat(2048)), { snapshot: "edge" }).nodes[0].summary).toHaveLength(2048)
+})
+
+test("caps page symbols as a view limit instead of rejecting a generator-sized manifest", () => {
+  // The native generator records up to 80 symbols and 20 glosses per page.
+  const symbols = Array.from({ length: 80 }, (_, i) => `s${String(i).padStart(2, "0")}`)
+  const glossed = ["s79", "s40", "s05"]
+  const page = (extra: Record<string, unknown>) => ({
+    schemaVersion: 1,
+    generator: "ax-wiki",
+    pages: { "guide.md": { title: "Guide", summary: "x", sources: ["src/a.ts"], sourceHashes: {}, ...extra } },
+  })
+  const plain = projectWikiManifest(page({ symbols }), { snapshot: "plain" }).nodes[0].symbols
+  expect(plain.map((anchor) => anchor.name)).toEqual(symbols.slice(0, 32))
+  const graph = projectWikiManifest(
+    page({ symbols, symbolSummaries: glossed.map((name) => ({ name, summary: `Gloss for ${name}.` })) }),
+    { snapshot: "glossed" },
+  )
+  const kept = graph.nodes[0].symbols.map((anchor) => anchor.name)
+  // Glossed names survive the cap; the kept set stays in recorded order.
+  expect(kept).toEqual([...symbols.slice(0, 30), "s40", "s79"])
+  expect(parseWikiGraph(graph).nodes[0].symbols).toHaveLength(32)
+  // Names past the cap are still validated, and duplicates never consume a slot.
+  expect(() => projectWikiManifest(page({ symbols: [...symbols, 7] }), { snapshot: "bad" })).toThrow()
+  expect(
+    projectWikiManifest(page({ symbols: [...Array(40).fill("dup"), ...symbols] }), { snapshot: "dup" }).nodes[0]
+      .symbols,
+  ).toHaveLength(32)
 })
 
 test("parses populated nodes and rejects bad provenance, duplicates, and versions", () => {

@@ -253,8 +253,7 @@ export function projectWikiManifest(
     const hashes = record(page.sourceHashes)
     const cited = [...new Set(page.sources.map(graphRelativePath))].sort()
     const reported = page.symbols === undefined ? [] : page.symbols
-    if (!Array.isArray(reported) || reported.length > GRAPH_LIMITS.symbolsPerNode)
-      throw new Error("Manifest exceeds node symbol limit")
+    if (!Array.isArray(reported)) throw new Error("Invalid page symbols")
     const glossRaw = page.symbolSummaries === undefined ? [] : page.symbolSummaries
     if (!Array.isArray(glossRaw) || glossRaw.length > GRAPH_LIMITS.symbolGlosses)
       throw new Error("Manifest exceeds symbol gloss limit")
@@ -262,6 +261,15 @@ export function projectWikiManifest(
       const gloss = record(raw)
       return { name: text(gloss.name, GRAPH_LIMITS.symbolName), summary: summaryText(gloss.summary) }
     })
+    // The generator records more symbols per page than a node may carry, so
+    // the per-node cap is a view cap like nodes and edges, never a reason to
+    // reject the manifest. Every recorded name is still validated; glossed
+    // names are kept first, then the rest in recorded order.
+    const names = [...new Set(reported.map((raw) => text(raw, GRAPH_LIMITS.symbolName)))]
+    const glossed = new Set(glosses.map((gloss) => gloss.name))
+    const kept = new Set(
+      [...new Set([...names.filter((name) => glossed.has(name)), ...names])].slice(0, GRAPH_LIMITS.symbolsPerNode),
+    )
     const excerpts = cited
       .map((source) => options.sourceContents?.get(source))
       .filter((value): value is string => value !== undefined)
@@ -275,10 +283,12 @@ export function projectWikiManifest(
       freshness: "unknown",
       recordedReferences: 0,
       summary: summaryText(page.summary),
-      symbols: [...new Set(reported.map((raw) => text(raw, GRAPH_LIMITS.symbolName)))].map((name) => ({
-        name,
-        provenance: provenanceOfSymbol(name, supplied),
-      })),
+      symbols: names
+        .filter((name) => kept.has(name))
+        .map((name) => ({
+          name,
+          provenance: provenanceOfSymbol(name, supplied),
+        })),
       detail: "",
       qualified: "",
     }
