@@ -23,7 +23,7 @@
 // `./node` subpath, never from `./core`.
 
 import { randomUUID } from "node:crypto"
-import { link, mkdir, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises"
+import { link, mkdir, open, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import type { WikiBuildLock, WikiBuildLockHandle } from "./types.js"
@@ -116,14 +116,27 @@ export function createWikiBuildLock(root: string, wikiDir: string, options: Wiki
   }
 
   const readLock = async (): Promise<{ text: string; mtimeMs: number } | undefined> => {
+    // One descriptor keeps the body and mtime on the same inode. A path stat
+    // and a path read can observe two different files if the lock is replaced
+    // between them.
+    let handle: Awaited<ReturnType<typeof open>>
     try {
-      const [info, text] = await Promise.all([stat(lockPath), readFile(lockPath, "utf8")])
+      handle = await open(lockPath, "r")
+    } catch (error) {
+      if (errorCode(error) === "ENOENT") return undefined
+      throw new Error(`AX Wiki build lock is unreadable: ${lockPath}`, { cause: error })
+    }
+    try {
+      const info = await handle.stat()
+      const text = await handle.readFile("utf8")
       return { text, mtimeMs: info.mtimeMs }
     } catch (error) {
       if (errorCode(error) === "ENOENT") return undefined
       // Permission or I/O errors must surface: reporting them as a held lock
       // would mislead every waiter into a spurious timeout.
       throw new Error(`AX Wiki build lock is unreadable: ${lockPath}`, { cause: error })
+    } finally {
+      await handle.close()
     }
   }
 
