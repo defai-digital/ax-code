@@ -6,6 +6,19 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.21.4] - 2026-10-01
+
+### Fixed
+
+- Redact complete curl cookie arguments, including attached short options, concatenated shell quotes, escaped quotes, and complex expansions, before persisting tool inputs and logs.
+- Keep wiki map drags from selecting text, sticking after cancellation, or clearing an existing node pin on an outside drop.
+- Track the newly dispatched installation smoke workflow instead of accepting an older successful run.
+
+### Changed
+
+- Refresh the upstream model catalog snapshot.
+- Publish SDK 2.5.56.
+
 ## [7.21.3] - 2026-10-01
 
 ### Fixed
