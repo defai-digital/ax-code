@@ -1,37 +1,8 @@
 name: codeql
 
+# Weekly extended scan (security-extended plus security-and-quality).
+# Push and pull request coverage stays on GitHub's default CodeQL workflows.
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/codeql.yml"
-      - ".github/actions/**"
-      - ".github/codeql/**"
-      - ".github/workflows/**"
-      - "crates/**"
-      - "package.json"
-      - "packages/**"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "script/**"
-      - "tools/**"
-      - "turbo.json"
-  push:
-    branches:
-      - dev
-      - main
-    paths:
-      - ".github/workflows/codeql.yml"
-      - ".github/actions/**"
-      - ".github/codeql/**"
-      - ".github/workflows/**"
-      - "crates/**"
-      - "package.json"
-      - "packages/**"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "script/**"
-      - "tools/**"
-      - "turbo.json"
   schedule:
     - cron: "23 8 * * 1"
   workflow_dispatch:

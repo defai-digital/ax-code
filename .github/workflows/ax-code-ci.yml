@@ -56,14 +56,13 @@ permissions:
   pull-requests: read
 
 jobs:
-  evidence-native:
-    name: Native evidence cache (${{ matrix.os }})
-    timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, ubuntu-24.04, ubuntu-24.04-arm, windows-2022, windows-11-arm]
-    runs-on: ${{ matrix.os }}
+  # One Ubuntu job decides. Unchanged pushes must not take five native runners,
+  # especially windows-11-arm, which the runtime lane also needs.
+  evidence-plan:
+    name: Native evidence plan
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.native.outputs.run }}
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-ax-code-toolchain
@@ -102,19 +101,29 @@ jobs:
           if printf '%s\n' "$files" | node --experimental-strip-types script/ci-native-evidence-needed.ts; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
+            echo "Skipping native evidence rebuild; crates and addon inputs are unchanged."
             echo "run=false" >> "$GITHUB_OUTPUT"
           fi
-      - name: Skip unchanged native evidence rebuild
-        if: steps.native.outputs.run != 'true'
-        shell: bash
-        run: echo "Skipping native evidence rebuild; crates and addon inputs are unchanged."
+
+  evidence-native:
+    name: Native evidence cache (${{ matrix.os }})
+    needs: evidence-plan
+    if: needs.evidence-plan.outputs.run == 'true'
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-24.04, ubuntu-24.04-arm, windows-2022, windows-11-arm]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
       - name: Install deps
-        if: steps.native.outputs.run == 'true'
         run: pnpm install --frozen-lockfile --ignore-scripts
       - uses: ./.github/actions/build-evidence-cache
-        if: steps.native.outputs.run == 'true'
       - name: Test native evidence contracts
-        if: steps.native.outputs.run == 'true'
         run: cargo test --manifest-path crates/Cargo.toml -p ax-code-fs --lib
 
   windows-snapshot:

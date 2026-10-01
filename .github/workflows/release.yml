@@ -69,6 +69,9 @@ jobs:
   validate:
     needs: guard
     if: ${{ !inputs.postpublish_only }}
+    permissions:
+      contents: read
+      checks: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -126,7 +129,30 @@ jobs:
       - name: Run AX Code self-scan
         run: pnpm run check:self-scan -- --report .internal/reports/qa/self-scan.md
 
+      # The four ax-code CI shards already cover this SHA on a normal tag.
+      # A missing, cancelled, or failed shard still runs the suite here.
+      - name: Decide whether deterministic tests already passed
+        id: deterministic
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          if ! tsv="$(gh api --paginate "repos/${{ github.repository }}/commits/${sha}/check-runs?per_page=100" --jq '.check_runs[] | [.name, .status, (.conclusion // ""), (.completed_at // .started_at // "")] | @tsv')"; then
+            echo "Could not read check runs for ${sha}; running deterministic tests."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if printf '%s\n' "$tsv" | node --experimental-strip-types script/ci-release-deterministic-skip.ts; then
+            echo "Deterministic shards already passed for ${sha}."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Deterministic shards are missing or not green for ${sha}; running them."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Test
+        if: steps.deterministic.outputs.skip != 'true'
         run: pnpm --dir packages/ax-code run test:ci -- deterministic --rerun-on-fail 1
         env:
           NODE_OPTIONS: --max-old-space-size=6144
@@ -273,8 +299,13 @@ jobs:
       # the bundled Node runtime; a failed release PTY check is fatal.
       - run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Test installer replacement and rollback
-        run: pnpm exec vitest run script/install-unix.test.ts script/install-powershell.test.ts
+      - name: Test Unix installer replacement and rollback
+        if: runner.os != 'Windows'
+        run: pnpm exec vitest run script/install-unix.test.ts
+
+      - name: Test Windows installer replacement and rollback
+        if: runner.os == 'Windows'
+        run: pnpm exec vitest run script/install-powershell.test.ts
 
       - name: Install Linux native build tools
         if: ${{ runner.os == 'Linux' }}

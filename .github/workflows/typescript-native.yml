@@ -2,6 +2,9 @@ name: TypeScript native qualification
 
 on:
   workflow_dispatch:
+  schedule:
+    # Push and pull_request skip windows-11-arm. This weekly run qualifies it.
+    - cron: "47 6 * * 1"
   push:
     branches: [main, dev]
     paths:
@@ -34,24 +37,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Job-level if cannot read matrix. Build the include list here so push and
+  # pull_request never request the scarce windows-11-arm runner.
+  native-matrix:
+    name: TypeScript native matrix
+    runs-on: ubuntu-latest
+    outputs:
+      include: ${{ steps.set.outputs.include }}
+    steps:
+      - id: set
+        shell: bash
+        run: |
+          set -euo pipefail
+          include='[{"os":"macos-latest","distribution":"ax-code-darwin-arm64"},{"os":"ubuntu-24.04","distribution":"ax-code-linux-x64"},{"os":"ubuntu-24.04-arm","distribution":"ax-code-linux-arm64"},{"os":"windows-2022","distribution":"ax-code-windows-x64"}]'
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            include='[{"os":"macos-latest","distribution":"ax-code-darwin-arm64"},{"os":"ubuntu-24.04","distribution":"ax-code-linux-x64"},{"os":"ubuntu-24.04-arm","distribution":"ax-code-linux-arm64"},{"os":"windows-2022","distribution":"ax-code-windows-x64"},{"os":"windows-11-arm","distribution":"ax-code-windows-arm64"}]'
+          fi
+          echo "include=${include}" >> "$GITHUB_OUTPUT"
+
   native:
     name: TypeScript 7 (${{ matrix.os }})
+    needs: native-matrix
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: macos-latest
-            distribution: ax-code-darwin-arm64
-          - os: ubuntu-24.04
-            distribution: ax-code-linux-x64
-          - os: ubuntu-24.04-arm
-            distribution: ax-code-linux-arm64
-          - os: windows-2022
-            distribution: ax-code-windows-x64
-          - os: windows-11-arm
-            distribution: ax-code-windows-arm64
+        include: ${{ fromJSON(needs.native-matrix.outputs.include) }}
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-ax-code-toolchain
