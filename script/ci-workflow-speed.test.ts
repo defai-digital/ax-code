@@ -36,6 +36,7 @@ describe("CI workflow speed policy", () => {
     expect(lane).toBeDefined()
     expect(plan).toContain("Decide native evidence rebuild")
     expect(plan).toContain("steps.native.outputs.run")
+    expect(plan).toContain('cache: ""')
     expect(plan).toContain("script/ci-native-evidence-needed.ts")
     expect(plan).toContain("Skipping native evidence rebuild")
     expect(plan).toContain('event_name="${{ github.event_name }}"')
@@ -90,7 +91,8 @@ describe("CI workflow speed policy", () => {
   test("the shared JS toolchain caches the pnpm store", () => {
     expect(toolchain).toMatch(/pnpm\/action-setup@[a-f0-9]{40} # v6/)
     expect(toolchain).toContain("run_install: false")
-    expect(toolchain).toMatch(/cache:\s*pnpm/)
+    expect(toolchain).toContain("default: pnpm")
+    expect(toolchain).toContain("cache: ${{ inputs.cache }}")
     expect(toolchain).toMatch(/cache-dependency-path:[\s\S]*pnpm-lock\.yaml/)
   })
 

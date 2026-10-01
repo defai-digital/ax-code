@@ -16,6 +16,10 @@ inputs:
     description: Node.js npm registry URL
     required: false
     default: "https://registry.npmjs.org"
+  cache:
+    description: pnpm cache strategy; set empty to disable caching
+    required: false
+    default: pnpm
   checkout:
     description: Whether to run actions/checkout
     required: false
@@ -39,5 +43,5 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
         registry-url: ${{ inputs.registry-url }}
-        cache: pnpm
+        cache: ${{ inputs.cache }}
         cache-dependency-path: pnpm-lock.yaml

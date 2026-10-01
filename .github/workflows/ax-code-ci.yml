@@ -68,6 +68,7 @@ jobs:
       - uses: ./.github/actions/setup-ax-code-toolchain
         with:
           checkout: "false"
+          cache: ""
       - name: Decide native evidence rebuild
         id: native
         shell: bash
