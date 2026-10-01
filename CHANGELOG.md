@@ -6,6 +6,21 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.21.3] - 2026-10-01
+
+### Fixed
+
+- Redact repeated, nested-quote, folded, and flag-form cookie credentials without leaking later values.
+- Detect destructive commands passed through `env -S` and keep saved bash permissions scoped to approved subcommands.
+- Decode concatenated shell quotes and escaped paths before static path checks.
+- Prevent wiki build-lock races and sanitize generated manifest text and symbol collections.
+- Report wiki graph snapshot failures separately from background maintenance failures.
+
+### Changed
+
+- Improve wiki map zooming, resting edges, page labels, and source colors.
+- Publish SDK 2.5.55.
+
 ## [7.21.2] - 2026-10-01
 
 ### Fixed
