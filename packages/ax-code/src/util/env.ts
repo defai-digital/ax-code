@@ -247,6 +247,17 @@ export namespace Env {
       .join("")
   }
 
+  // Content that follows a closed quote on the same line is only continued as
+  // cookie pairs when it opens with a pair shape (`name=`): shell-wrapped
+  // commands routinely continue with prose or a URL that is not part of the
+  // header value and must survive verbatim.
+  const PAIR_TAIL = /^[ \t;,"']*[!#$%&'*+\-.^_`|~0-9A-Za-z]+[ \t]*=/
+
+  function redactPairTail(text: string, setCookie: boolean): string {
+    if (!PAIR_TAIL.test(text)) return text
+    return redactCookiePairs(text, setCookie)
+  }
+
   function redactCookieHeaders(value: string): string {
     const header = /\b(set-cookie|cookie)\b\s*:/gi
     let result = ""
@@ -270,27 +281,39 @@ export namespace Env {
         value[valueStart] === "'" ? "'" : value[valueStart] === '"' ? '"' : undefined
       const localQuoteEnd = localQuote ? closingQuote(value, valueStart + 1, localQuote) : undefined
       const shellQuoteEnd = quoteState ? closingQuote(value, valueStart, quoteState) : undefined
-      const useLocalQuote = localQuote !== undefined && (shellQuoteEnd === undefined || localQuoteEnd! < shellQuoteEnd)
-      let end: number
-      if (useLocalQuote) end = localQuoteEnd!
-      else if (shellQuoteEnd !== undefined) end = shellQuoteEnd
-      else {
-        const lineEnd = value.slice(valueStart).search(/[\r\n]/)
-        end = lineEnd < 0 ? value.length : valueStart + lineEnd
-      }
+      const lineSearch = value.slice(valueStart).search(/[\r\n]/)
+      const lineEnd = lineSearch < 0 ? value.length : valueStart + lineSearch
+      // The value ends at the enclosing shell quote when it closes on this
+      // line, and at the line end otherwise.
+      const shellOnLine = shellQuoteEnd !== undefined && shellQuoteEnd < lineEnd
+      const spanEnd = shellOnLine ? shellQuoteEnd! : lineEnd
+      // A quoted first pair (`Set-Cookie: "a=1"; sid=x`) can end before the
+      // value does: redact the quoted run, keep its quotes, and keep redacting
+      // the remaining pairs after it instead of copying them verbatim.
+      const useLocalQuote = localQuote !== undefined && localQuoteEnd! < spanEnd
 
       const contentStart = useLocalQuote ? valueStart + 1 : valueStart
-      const redacted = redactCookiePairs(value.slice(contentStart, end), setCookie)
+      let redacted: string
+      if (useLocalQuote) {
+        redacted = redactCookiePairs(value.slice(contentStart, localQuoteEnd), setCookie)
+        if (localQuoteEnd! < value.length) redacted += localQuote
+        redacted += redactPairTail(value.slice(localQuoteEnd! + 1, spanEnd), setCookie)
+      } else {
+        redacted = redactCookiePairs(value.slice(contentStart, spanEnd), setCookie)
+      }
       result += value.slice(cursor, contentStart)
       result += redacted
-      cursor = end
-      if (useLocalQuote && end < value.length) {
-        result += localQuote
-        cursor++
-      } else if (!useLocalQuote && quoteState && end < value.length) {
+      cursor = spanEnd
+      if (shellOnLine && quoteState) {
         result += quoteState
         quoteState = undefined
         cursor++
+        // Whatever follows the closed shell quote on the same line is still
+        // part of the record: keep redacting it when it opens with another
+        // pair, so a stray quote in prose cannot truncate the redaction.
+        const trailing = value.slice(cursor, lineEnd)
+        result += redactPairTail(trailing, setCookie)
+        cursor = lineEnd
       }
       quoteCursor = cursor
     }

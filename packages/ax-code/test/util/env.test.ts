@@ -310,6 +310,28 @@ describe("Env.sanitize", () => {
     )
   })
 
+  test("keeps redacting pairs after a quoted run ends early", () => {
+    // A quoted first pair that closes before the header value ends must not
+    // copy the remaining pairs verbatim.
+    expect(Env.redactSecrets("curl -H \"Cookie: 'a=1'; sid=SECRET\" https://example.test")).toBe(
+      "curl -H \"Cookie: 'a=[redacted]'; sid=[redacted]\" https://example.test",
+    )
+    // And the redaction stays idempotent once the tail is a placeholder.
+    const once = Env.redactSecrets('Set-Cookie: "a=1"; sid=SECRET')
+    expect(once).toBe('Set-Cookie: "a=[redacted]"; sid=[redacted]')
+    expect(Env.redactSecrets(once)).toBe(once)
+  })
+
+  test("keeps redacting pairs after a stray quote closes on the same line", () => {
+    // A lone apostrophe in prose must not truncate the redacted span.
+    expect(Env.redactSecrets("it's Cookie: a=1' sid=SECRET")).toBe("it's Cookie: a=[redacted]' sid=[redacted]")
+  })
+
+  test("leaves non-pair tails after a closed quote untouched", () => {
+    // Prose following a closed quote is not a cookie pair and must survive.
+    expect(Env.redactSecrets('Cookie: "a=1" request sent')).toBe('Cookie: "a=[redacted]" request sent')
+  })
+
   test("redactForRecord composes both passes without doubling the placeholder", () => {
     // Order is fixed inside the helper: an assignment to a keyword-named key is
     // redacted once, not re-matched into `[redacted]]`.
