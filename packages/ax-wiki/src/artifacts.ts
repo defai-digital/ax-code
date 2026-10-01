@@ -3,6 +3,8 @@ import { access, open, readdir, stat } from "node:fs/promises"
 import path from "node:path"
 import { discoverSources, readSourceEvidence } from "./discovery.js"
 import { parseFrontmatter } from "./frontmatter.js"
+import { DISCOVERY_READ_CONCURRENCY, mapWithBoundedConcurrency } from "./discovery-concurrency.js"
+import { symbolGrounded } from "./grounding.js"
 import { sha256 } from "./hash.js"
 import { INDEX_CANDIDATES, normalizePath, resolveInside, sanitizeWikiDir } from "./paths.js"
 import { createWikiPlan } from "./plan.js"
@@ -169,6 +171,79 @@ export async function relatedWikiPages(input: {
 }
 
 export type WikiFreshness = "fresh" | "stale" | "unknown"
+
+export type WikiPageFreshness = {
+  freshness: WikiFreshness
+  /** Cited sources that are missing or whose content differs from the recorded hash. */
+  changed: string[]
+}
+
+async function readSourceNoFollow(root: string, relative: string): Promise<Buffer | undefined> {
+  let handle
+  try {
+    handle = await open(resolveInside(root, relative), fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
+  } catch {
+    return undefined
+  }
+  try {
+    const info = await handle.stat()
+    return info.isFile() ? await handle.readFile() : undefined
+  } catch {
+    return undefined
+  } finally {
+    await handle.close().catch(() => {})
+  }
+}
+
+/**
+ * Per-page freshness: a page is stale only when one of ITS cited sources
+ * changed or disappeared. Unlike repo-wide `getWikiStatus`, an unrelated added
+ * or edited file never downgrades pages that did not cite it.
+ */
+export async function getPageFreshness(input: {
+  root: string
+  wikiDir?: string
+  pages?: readonly string[]
+}): Promise<Map<string, WikiPageFreshness>> {
+  const root = path.resolve(input.root)
+  const result = new Map<string, WikiPageFreshness>()
+  const manifest = await loadWikiManifest(root, input.wikiDir).catch(() => undefined)
+  if (!manifest) return result
+  const wanted = input.pages ? new Set(input.pages) : undefined
+  for (const [pagePath, page] of Object.entries(manifest.pages)) {
+    if (wanted && !wanted.has(pagePath)) continue
+    const recorded = Object.entries(page.sourceHashes ?? {})
+    if (recorded.length === 0) {
+      result.set(pagePath, { freshness: "unknown", changed: [] })
+      continue
+    }
+    const current = await mapWithBoundedConcurrency(recorded, DISCOVERY_READ_CONCURRENCY, async ([source]) => {
+      const content = await readSourceNoFollow(root, source)
+      return content ? sha256(content) : undefined
+    })
+    const changed = recorded.filter(([, hash], index) => current[index] !== hash).map(([source]) => source)
+    result.set(pagePath, { freshness: changed.length ? "stale" : "fresh", changed })
+  }
+  return result
+}
+
+/**
+ * Frontmatter symbols that do not occur in any readable cited source. Uses the
+ * same rule as the `wiki.ungrounded_symbol` lint; an empty result also covers
+ * pages whose sources cannot be read, so absence of a flag is not proof.
+ */
+export async function findUngroundedSymbols(input: { root: string; page: WikiPage }): Promise<string[]> {
+  const root = path.resolve(input.root)
+  const contents = (
+    await mapWithBoundedConcurrency(input.page.sources, DISCOVERY_READ_CONCURRENCY, (source) =>
+      readSourceNoFollow(root, source),
+    )
+  )
+    .filter((value): value is Buffer => value !== undefined)
+    .map((value) => value.toString("utf8"))
+  if (contents.length === 0) return []
+  return input.page.symbols.filter((symbol) => symbol.trim() && !symbolGrounded(symbol, contents))
+}
 
 async function sourceConfig(
   root: string,

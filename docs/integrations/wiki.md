@@ -85,6 +85,18 @@ This improves navigation and evidence focus; it does not verify generated prose 
 guarantee that an agent reads the wiki. Follow citations back to current source
 before relying on implementation details.
 
+## How agents use the wiki
+
+Agents reach the wiki in three ways, from cheapest to most specific:
+
+1. **Prompt index.** When a healthy wiki exists, the session prompt carries a short `<repo_wiki>` block: the wiki location, a freshness label, and one line per page (path and a trimmed summary, about 750 tokens for the default 12 pages). The summaries only locate where to read; they are not proof.
+2. **`repo_wiki` tool.** A read-only tool with three operations: `index` (page cards with per-page freshness), `read` (one page plus its cited sources, which cited sources changed, and any frontmatter symbols not found in those sources), and `related` (pages for a symbol, body mention, or source path). It is available in the full and coding tool profiles and uses the `read` permission.
+3. **Generic file tools.** `read`, `glob`, and `grep` on `ax-wiki/` still work.
+
+Prompt freshness is judged per page: a page is fresh while every source it cites still matches the manifest hash. An added or edited file that no page cites leaves the prompt label `fresh` and adds a note that the wiki does not cover it yet. A changed cited source marks the label `stale` and the prompt asks the agent to treat the wiki as navigation only. `ax-code wiki status` and `wiki lint` keep the stricter repo-wide verdict, where any added, removed, or edited eligible file is stale.
+
+The wiki never replaces source: every `read` result lists the files to verify against, and if a page and the code disagree the code wins.
+
 ## Incremental updates and manual content
 
 `wiki update` compares current source hashes with the manifest and maps changes through each page's selectors. A plan change regenerates all planned pages; otherwise unrelated pages remain untouched.

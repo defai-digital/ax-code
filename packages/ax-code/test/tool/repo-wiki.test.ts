@@ -23,20 +23,20 @@ const ctx = {
   ask: async () => {},
 }
 
-function generator() {
+function generator(symbols: string[] = []) {
   return async (_request: WikiPageGenerationRequest) => ({
     summary: "A source-backed page about repository responsibilities and workflows.",
     body: "## Purpose\n\nThis page describes repository responsibilities and how to verify them against the cited source files.\n",
-    symbols: [],
+    symbols,
   })
 }
 
-async function buildFixtureWiki(root: string) {
+async function buildFixtureWiki(root: string, symbols: string[] = []) {
   await mkdir(path.join(root, "packages/core/src"), { recursive: true })
   await writeFile(path.join(root, "README.md"), "# Fixture\n\nA repository used to test AX Wiki.\n")
   await writeFile(path.join(root, "package.json"), JSON.stringify({ name: "fixture", scripts: { test: "vitest" } }))
   await writeFile(path.join(root, "packages/core/src/index.ts"), "export function coreValue() { return 1 }\n")
-  await buildAxWiki({ root, action: "generate", generator: generator() })
+  await buildAxWiki({ root, action: "generate", generator: generator(symbols) })
 }
 
 describe("tool.repo_wiki", () => {
@@ -50,6 +50,7 @@ describe("tool.repo_wiki", () => {
         const result = await tool.execute({ operation: "index" }, ctx)
         expect(result.output).toContain("quickstart.md")
         expect(result.output).toContain("sources:")
+        expect(result.output).toContain("quickstart.md [fresh]")
         expect(result.metadata.pageCount).toBeGreaterThan(0)
       },
     })
@@ -65,7 +66,27 @@ describe("tool.repo_wiki", () => {
         const result = await tool.execute({ operation: "read", page: "quickstart.md" }, ctx)
         expect(result.metadata.found).toBe(true)
         expect(result.output).toContain("sources")
-        expect(result.output).toContain("freshness:")
+        expect(result.output).toContain("page freshness: fresh")
+        expect(result.metadata.pageFreshness).toBe("fresh")
+        expect(result.metadata.ungroundedSymbols).toEqual([])
+      },
+    })
+  })
+
+  test("read flags a changed cited source and unverified symbols for that page only", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await buildFixtureWiki(tmp.path, ["GhostSymbol"])
+    await writeFile(path.join(tmp.path, "README.md"), "# Fixture changed\n")
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await RepoWikiTool.init()
+        const result = await tool.execute({ operation: "read", page: "quickstart.md" }, ctx)
+        expect(result.metadata.pageFreshness).toBe("stale")
+        expect(result.output).toContain("changed sources")
+        expect(result.output).toContain("- README.md")
+        expect(result.metadata.ungroundedSymbols).toEqual(["GhostSymbol"])
+        expect(result.output).toContain("unverified symbols")
       },
     })
   })

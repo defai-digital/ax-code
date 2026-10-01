@@ -7,7 +7,10 @@ import {
   AX_WIKI_PROTECTED_START,
   buildAxWiki,
   emptyEvidenceBundle,
+  findUngroundedSymbols,
+  getPageFreshness,
   lintWiki,
+  loadWikiPages,
   getWikiStatus,
   maybeRenderAxWikiProtocol,
   loadWikiManifest,
@@ -136,6 +139,66 @@ describe("AX Wiki build lifecycle", () => {
     expect(protocol).toContain("stale")
     expect(protocol).toContain("navigation only")
     expect(protocol).not.toContain("Prefer the wiki before")
+  })
+
+  test("protocol carries a bounded card index without per-page freshness", async () => {
+    const root = await fixture()
+    await buildAxWiki({ root, action: "generate", generator: generator() })
+    const protocol = (await maybeRenderAxWikiProtocol(root)) ?? ""
+    expect(protocol).toContain("  - quickstart.md:")
+    expect(protocol).toContain("modules/core.md")
+    expect(protocol).toContain("not proof")
+    expect(protocol).not.toMatch(/- \S+\.md[^\n]*\b(fresh|stale)\b/)
+    expect(protocol.length).toBeLessThan(6000)
+  })
+
+  test("protocol stays fresh when only files no page cites were added, and degrades when a cited source changes", async () => {
+    const root = await fixture()
+    await buildAxWiki({ root, action: "generate", generator: generator() })
+    await writeFile(path.join(root, "unrelated.ts"), "export const unrelated = true\n")
+    expect((await getWikiStatus({ root })).freshness).toBe("stale")
+    const fresh = (await maybeRenderAxWikiProtocol(root)) ?? ""
+    expect(fresh).toContain("Source freshness: fresh")
+    expect(fresh).toContain("Prefer the wiki before")
+    expect(fresh).toContain("cited sources changed")
+    expect(fresh).not.toContain("navigation only")
+
+    await writeFile(path.join(root, "packages/core/src/index.ts"), "export function coreValue() { return 2 }\n")
+    const stale = (await maybeRenderAxWikiProtocol(root)) ?? ""
+    expect(stale).toContain("Source freshness: stale")
+    expect(stale).toContain("navigation only")
+    expect(stale).not.toContain("Prefer the wiki before")
+  })
+
+  test("per-page freshness ignores unrelated added files and flags only pages that cite a changed source", async () => {
+    const root = await fixture()
+    await buildAxWiki({ root, action: "generate", generator: generator() })
+    await writeFile(path.join(root, "unrelated.ts"), "export const unrelated = true\n")
+    expect((await getWikiStatus({ root })).freshness).toBe("stale")
+    const afterAdd = await getPageFreshness({ root })
+    expect([...afterAdd.values()].every((entry) => entry.freshness === "fresh")).toBe(true)
+
+    await writeFile(path.join(root, "packages/core/src/index.ts"), "export function coreValue() { return 2 }\n")
+    const afterEdit = await getPageFreshness({ root })
+    expect(afterEdit.get("modules/core.md")).toEqual({
+      freshness: "stale",
+      changed: ["packages/core/src/index.ts"],
+    })
+    expect(afterEdit.get("modules/web.md")?.freshness).toBe("fresh")
+    expect((await getPageFreshness({ root, pages: ["modules/web.md"] })).size).toBe(1)
+  })
+
+  test("findUngroundedSymbols reports only symbols absent from the cited sources", async () => {
+    const root = await fixture()
+    const withSymbols = vi.fn(async (request: WikiPageGenerationRequest) => ({
+      summary: `Source-backed guide for ${request.page.title} and its repository responsibilities.`,
+      body: `## Purpose\n\nThis page explains ${request.page.purpose} The claims are grounded in the selected repository files and should be verified against code before structural changes.\n\n## Change guidance\n\nStart with the cited source files, run the repository tests, and use code intelligence for exact callers and references.`,
+      symbols: request.page.kind === "module" ? ["coreValue", "GhostSymbol"] : [],
+    }))
+    await buildAxWiki({ root, action: "generate", generator: withSymbols })
+    const pages = await loadWikiPages({ root })
+    const core = pages.find((page) => page.relativePath === "modules/core.md")!
+    expect(await findUngroundedSymbols({ root, page: core })).toEqual(["GhostSymbol"])
   })
 
   test.each(["add", "delete"])("runtime freshness detects a source %s without a commit", async (change) => {
