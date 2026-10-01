@@ -72396,27 +72396,6 @@
         "temperature": false,
         "tool_call": true
       },
-      "stealth/pixel-canary": {
-        "attachment": true,
-        "id": "stealth/pixel-canary",
-        "limit": {
-          "context": 262144,
-          "output": 131072
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "Pixel Canary",
-        "reasoning": true,
-        "release_date": "2026-09-25",
-        "tool_call": false
-      },
       "voyage/rerank-3": {
         "attachment": false,
         "family": "voyage",
@@ -132066,29 +132045,6 @@
         },
         "canonical_model_id": "anthropic/claude-opus-5"
       },
-      "minimax-m2.7": {
-        "id": "minimax-m2.7",
-        "name": "MiniMax-M2.7",
-        "family": "minimax",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-03-18",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 196608,
-          "output": 196608
-        },
-        "canonical_model_id": "minimax/MiniMax-M2.7"
-      },
       "claude-opus4-5": {
         "id": "claude-opus4-5",
         "name": "Claude Opus 4.5 (latest)",
@@ -133052,7 +133008,7 @@
           ]
         },
         "limit": {
-          "context": 262144,
+          "context": 262000,
           "output": 262000
         },
         "canonical_model_id": "google/gemma-4-31b-it"
