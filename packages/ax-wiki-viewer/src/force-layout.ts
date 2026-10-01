@@ -87,16 +87,18 @@ export function createForceLayout(
     .map((edge) => ({ source: edge.from, target: edge.to, from: edge.from, to: edge.to }))
 
   const simulation = forceSimulation(nodes)
-    .force("lane", forceX<LayoutNode>((node) => LAYOUT_LANES[node.kind]).strength(0.35))
+    // Lanes stay stronger than the links so the picture reads left to right:
+    // wiki pages, the symbols they mention, then the files those pages cite.
+    .force("lane", forceX<LayoutNode>((node) => LAYOUT_LANES[node.kind]).strength(1.1))
     .force("gravity", forceY<LayoutNode>(LAYOUT_WORLD.height / 2).strength(0.08))
     .force(
       "link",
       forceLink<LayoutNode, LayoutLink>(links)
         .id((node) => node.id)
-        .distance(120)
-        .strength(0.5),
+        .distance(80)
+        .strength(0.25),
     )
-    .force("charge", forceManyBody<LayoutNode>().strength(-180))
+    .force("charge", forceManyBody<LayoutNode>().strength(-120))
     .force(
       "collide",
       forceCollide<LayoutNode>()

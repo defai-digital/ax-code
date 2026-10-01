@@ -4,6 +4,7 @@ import { fitCamera, wheelZoomFactor, zoomAbout } from "./camera.js"
 import { LAYOUT_WORLD, createForceLayout } from "./force-layout.js"
 import type { ForceLayout, LayoutNode } from "./force-layout.js"
 import {
+  citingTopics,
   countOutlineSymbols,
   countsBarText,
   defaultFilters,
@@ -14,7 +15,7 @@ import {
   viewCounts,
   viewState,
 } from "./visibility.js"
-import type { FreshnessState, NodeKind, OutlineSymbol, ViewFilters } from "./visibility.js"
+import type { CitingTopic, FreshnessState, NodeKind, OutlineSymbol, ViewFilters } from "./visibility.js"
 
 export const viewerCss = `
 .axwv{display:flex;flex-direction:column;height:100%;min-height:100%;font:14px system-ui,sans-serif;color:#dce6f2;background:#101923;padding:12px 16px 16px;box-sizing:border-box}
@@ -27,7 +28,11 @@ export const viewerCss = `
 .axwv .canvas{position:relative;height:100%;min-height:420px;overflow:hidden;border:1px solid #2c4156;border-radius:10px;background:#0c141d;touch-action:none}
 .axwv svg{width:100%;height:100%;display:block}
 .axwv .node{cursor:grab;touch-action:none}.axwv .node.dragging{cursor:grabbing}
-.axwv svg text{pointer-events:none;font-size:11px;fill:#edf6ff;text-anchor:middle}
+.axwv svg text{pointer-events:none;font-size:11px;fill:#edf6ff}
+.axwv svg .node:not(.page)>text,.axwv svg .badge text{text-anchor:middle}
+.axwv svg .node>text{paint-order:stroke;stroke:#0c141d;stroke-width:4px;stroke-linejoin:round}
+.axwv svg .node.page>text{text-anchor:end;font-size:13px;font-weight:600}
+.axwv .legend .topic{width:10px;height:10px;border-radius:50%;display:inline-block;border:1px solid #8ea0b3}
 .axwv .edge{fill:none;stroke:#64778b}.axwv .arrow{fill:none;stroke:#b5c5d7}
 .axwv .badge text{font-size:7.5px;font-weight:700;fill:#dce6f2}
 .axwv .legend{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;margin:6px 0 0;font-size:12px;color:#8ea0b3}
@@ -59,6 +64,15 @@ export const viewerCss = `
 /** Overview stays a picture. Names appear for the focused neighborhood, or once the camera is close. */
 const LABEL_ZOOM: Record<NodeKind, number> = { page: 1.35, source: 1.7, symbol: 2.4 }
 const PAGE_FILL = "#245d65"
+/** Stable topic colors. Kept away from the selection strokes #e0a63c, #78dacc, and #64778b. */
+const TOPIC_PALETTE = [
+  { page: "#2a7c86", source: "#1e4e56", edge: "#7ec8ce" },
+  { page: "#3d6fa3", source: "#2a4668", edge: "#8eb4d8" },
+  { page: "#6d5c96", source: "#433858", edge: "#b3a4d4" },
+  { page: "#3e7d58", source: "#2a4a36", edge: "#8fc9a4" },
+  { page: "#8a5a34", source: "#4e3824", edge: "#d2a57a" },
+  { page: "#7a4560", source: "#4a2e3c", edge: "#d4a0b4" },
+] as const
 const SOURCE_FILL = "#30455c"
 const SYMBOL_FILL = "#7d6a45"
 const PAGE_RING = "#9fb3c8"
@@ -122,7 +136,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     return el
   }
   html("h1", root, "AX Wiki evidence map")
-  html("p", root, "Scroll to zoom, drag the background to pan. Color is the kind of thing.")
+  html("p", root, "Teal hubs are wiki pages and cite the blue files. Gold dots are symbols. Scroll to zoom.")
   const status = html("p", root)
   status.className = "counts"
   status.setAttribute("role", "status")
@@ -284,8 +298,9 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     const cx = (a.x + b.x) / 2 + (-dy / length) * bend
     const cy = (a.y + b.y) / 2 + (dx / length) * bend
     // Shorten the visible line so it meets the bubble rims instead of the centers.
-    const trimA = Math.min(a.radius + 2, length / 2 - 1)
-    const trimB = Math.min(b.radius + 4, length / 2 - 1)
+    const rim = (node: LayoutNode) => (node.kind === "page" ? Math.max(node.radius, 14) : node.radius)
+    const trimA = Math.min(rim(a) + 2, length / 2 - 1)
+    const trimB = Math.min(rim(b) + 4, length / 2 - 1)
     const t0x = a.x + ((cx - a.x) / length) * trimA,
       t0y = a.y + ((cy - a.y) / length) * trimA
     const t1x = b.x + ((cx - b.x) / length) * trimB,
@@ -330,24 +345,52 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
         (near !== undefined && (!near.has(edge.from) || !near.has(edge.to)))
       const direction = focusId === undefined ? null : focusDirection(edge, focusId)
       const incident = direction !== null
+      const resting = focusId === undefined
+      const restOpacity = edge.kind === "references-source" ? 0.75 : edge.kind === "uses" ? 0.45 : 0.14
       path.setAttribute(
         "opacity",
-        dimmed ? String(DIMMED_EDGE) : incident ? String(FOCUS_EDGE_OPACITY) : String(REST_EDGE),
+        dimmed ? String(DIMMED_EDGE) : incident ? String(FOCUS_EDGE_OPACITY) : String(resting ? restOpacity : REST_EDGE),
       )
+      // At rest, color is the relationship. A selection keeps the tested focus colors.
+      const restStroke = edge.kind === "references-source" ? "#8fd0d6" : edge.kind === "uses" ? "#d2b56a" : "#3e5164"
       path.setAttribute(
         "stroke",
-        !dimmed && direction === "outgoing" ? FOCUS_OUT : !dimmed && direction === "incoming" ? FOCUS_IN : "#64778b",
+        !dimmed && direction === "outgoing"
+          ? FOCUS_OUT
+          : !dimmed && direction === "incoming"
+            ? FOCUS_IN
+            : resting
+              ? restStroke
+              : "#64778b",
+      )
+      path.setAttribute(
+        "stroke-width",
+        resting ? (edge.kind === "references-source" ? "1.7" : edge.kind === "uses" ? "1.15" : "0.65") : "1.25",
       )
       arrow.setAttribute(
         "opacity",
-        dimmed ? String(DIMMED_EDGE) : incident ? String(FOCUS_EDGE_OPACITY) : String(REST_EDGE),
+        dimmed ? String(DIMMED_EDGE) : incident ? String(FOCUS_EDGE_OPACITY) : String(resting ? restOpacity : REST_EDGE),
       )
       if (!dimmed && incident) arrow.setAttribute("stroke", direction === "outgoing" ? FOCUS_OUT : FOCUS_IN)
       else arrow.removeAttribute("stroke")
     }
+    const namedPages = graph.nodes.reduce((count, candidate) => count + (candidate.kind === "page" ? 1 : 0), 0)
+    // Page names sit in the empty margin left of each hub. A lower hub drops
+    // its label when two pages are close, so the names do not stack.
+    const pageLabelY = new Map<string, number>()
+    let lastLabelY = -Infinity
+    for (const entry of nodeEls.filter((item) => item.node.kind === "page").sort((a, b) => a.node.y - b.node.y)) {
+      let y = 4
+      if (entry.node.y + y < lastLabelY + 16) y = lastLabelY + 16 - entry.node.y
+      pageLabelY.set(entry.node.id, y)
+      lastLabelY = entry.node.y + y
+    }
     for (const { group, circle, label, node } of nodeEls) {
       const dimmed = visibleById.get(node.id) !== true || (near !== undefined && !near.has(node.id))
-      group.setAttribute("opacity", dimmed ? String(DIMMED_NODE) : "1")
+      const emphasized = near !== undefined && near.has(node.id)
+      // Symbols are detail. They stay faint until the neighborhood or a closer zoom.
+      const quietSymbol = node.kind === "symbol" && !emphasized && zoom < LABEL_ZOOM.symbol
+      group.setAttribute("opacity", dimmed ? String(DIMMED_NODE) : quietSymbol ? "0.38" : "1")
       if (node.id === selected || (selected === undefined && node.id === hovered)) {
         circle.setAttribute("stroke", SELECT_RING)
         circle.setAttribute("stroke-width", "3")
@@ -358,9 +401,13 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
         circle.removeAttribute("stroke")
         circle.removeAttribute("stroke-width")
       }
-      const emphasized = near !== undefined && near.has(node.id)
-      const showLabel = emphasized || zoom >= LABEL_ZOOM[node.kind]
+      const showLabel = emphasized || (node.kind === "page" && namedPages <= 16) || zoom >= LABEL_ZOOM[node.kind]
       label.setAttribute("display", showLabel ? "" : "none")
+      if (node.kind === "page") {
+        label.setAttribute("text-anchor", "end")
+        label.setAttribute("x", String(-(Math.max(node.radius, 14) + 8)))
+        label.setAttribute("y", String(pageLabelY.get(node.id) ?? 4))
+      }
     }
   }
 
@@ -386,7 +433,13 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
 
   function renderList() {
     const near = neighborhood()
-    const visible = graph.nodes.filter((node) => (!near || near.has(node.id)) && isNodeVisible(node, filters))
+    const query = filters.query.trim()
+    const visible = graph.nodes.filter((node) => {
+      if ((near && !near.has(node.id)) || !isNodeVisible(node, filters)) return false
+      // The list follows the picture: pages and files first. Symbols join a search or a selection.
+      if (node.kind === "symbol" && !near && query === "") return false
+      return true
+    })
     lastVisible = visible
     list.replaceChildren()
     for (const node of visible) {
@@ -404,7 +457,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     const node = graph.nodes.find((candidate) => candidate.id === selected)
     if (!node) {
       detail.textContent = graph.nodes.length
-        ? "Select a page, source, or symbol to inspect its recorded evidence. Selection focuses its one-hop neighborhood."
+        ? "Teal hubs are wiki pages. Blue nodes are the files they cite. Gold dots are symbols in those files.\n\nSelect a page, source, or symbol to inspect its recorded evidence. Selection focuses its one-hop neighborhood."
         : "No matching items. Clear search or reset the view."
       return
     }
@@ -617,13 +670,14 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     for (const node of layout.nodes) {
       const info = graph.nodes.find((candidate) => candidate.id === node.id)!
       const group = doc.createElementNS(svgNS, "g")
-      group.setAttribute("class", "node")
+      group.setAttribute("class", node.kind === "page" ? "node page" : "node")
       group.setAttribute("data-id", node.id)
+      const drawn = node.kind === "page" ? Math.max(node.radius, 14) : node.kind === "symbol" ? Math.max(5, node.radius - 2) : node.radius
       const circle = doc.createElementNS(svgNS, "circle")
-      circle.setAttribute("r", String(node.radius))
+      circle.setAttribute("r", String(drawn))
       circle.setAttribute("fill", node.kind === "page" ? PAGE_FILL : node.kind === "source" ? SOURCE_FILL : SYMBOL_FILL)
       const label = doc.createElementNS(svgNS, "text")
-      label.setAttribute("y", String(node.radius + 14))
+      label.setAttribute("y", String(drawn + 14))
       label.textContent = truncateLabel(info.label)
       const title = doc.createElementNS(svgNS, "title")
       title.textContent = `${info.label} (${node.kind}, ${info.freshness}, ${plural(node.degree, "connection", "connections")} shown)`
