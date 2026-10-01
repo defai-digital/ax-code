@@ -8,6 +8,8 @@ import { LLM } from "../../src/session/llm"
 import { SessionPrompt } from "../../src/session/prompt"
 import { tmpdir } from "../fixture/fixture"
 import { Snapshot } from "../../src/snapshot"
+import { Todo } from "../../src/session/todo"
+import { readFile } from "node:fs/promises"
 
 const model: Provider.Model = {
   id: "test-model" as any,
@@ -41,6 +43,8 @@ const model: Provider.Model = {
 let streamSpy: MockInstance | undefined
 let modelSpy: MockInstance | undefined
 let snapshotTrackSpy: MockInstance | undefined
+let usageSpy: MockInstance | undefined
+let goalReadSpy: MockInstance | undefined
 
 // Goal auto-continuation runs inside the autonomous prompt loop. Pin the
 // flag explicitly: config loads with an `autonomous` key sync the env, so
@@ -64,6 +68,10 @@ afterEach(() => {
   streamSpy = undefined
   modelSpy?.mockRestore()
   modelSpy = undefined
+  goalReadSpy?.mockRestore()
+  goalReadSpy = undefined
+  usageSpy?.mockRestore()
+  usageSpy = undefined
   snapshotTrackSpy?.mockRestore()
   snapshotTrackSpy = undefined
 })
@@ -1013,6 +1021,278 @@ describe("SessionGoal", () => {
       },
     })
   })
+
+  test.each(["stop", "length", "other", "tool-calls", "empty", "error"])(
+    "budget exhaustion on tool-calls permits one terminal request even with %s output and pending todos",
+    async (wrapFinish) => {
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({ title: "Budget boundary control" })
+          await SessionGoal.create({
+            sessionID: session.id,
+            objective: "implement the unfinished module",
+            tokenBudget: 10,
+          })
+          await Todo.update({
+            sessionID: session.id,
+            todos: [{ content: "Implement remaining work", status: "pending", priority: "high" }],
+          })
+          modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+          let streams = 0
+          const exposed: string[][] = []
+          streamSpy = vi.spyOn(LLM, "stream").mockImplementation((async (input: LLM.StreamInput) => {
+            const turn = ++streams
+            exposed.push(Object.keys(input.tools))
+            return {
+              fullStream: (async function* () {
+                yield { type: "start" }
+                yield { type: "start-step" }
+                if (turn === 2 && wrapFinish === "error") throw new Error("Budget summary unavailable")
+                if (!(turn === 2 && wrapFinish === "empty")) {
+                  yield { type: "text-start", id: `text_${turn}` }
+                  yield {
+                    type: "text-delta",
+                    id: `text_${turn}`,
+                    text: turn === 1 ? "Inspection finished." : "Budget reached; implementation remains pending.",
+                  }
+                  yield { type: "text-end", id: `text_${turn}` }
+                }
+                yield {
+                  type: "finish-step",
+                  finishReason:
+                    turn === 1 ? "tool-calls" : turn === 2 ? (wrapFinish === "empty" ? "other" : wrapFinish) : "stop",
+                  usage:
+                    turn === 2 && wrapFinish === "empty"
+                      ? { inputTokens: 0, outputTokens: 0, totalTokens: 0 }
+                      : { inputTokens: 8, outputTokens: 4, totalTokens: 12 },
+                }
+                yield { type: "finish" }
+              })(),
+            } as any
+          }) as any)
+          await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            model: { providerID: model.providerID, modelID: model.id },
+            parts: [{ type: "text", text: "start budgeted work" }],
+          })
+          expect(streams).toBe(2)
+          expect(exposed[0]).toContain("write")
+          expect(exposed[1]).not.toContain("write")
+          expect(exposed[1]).not.toContain("bash")
+          expect(exposed[1]).not.toContain("batch")
+          expect(exposed[1]).not.toContain("task")
+          expect(Todo.active(session.id)).toHaveLength(1)
+          expect((await SessionGoal.get(session.id))?.status).toBe("budget_limited")
+          const messages = await Session.messages({ sessionID: session.id })
+          expect(
+            messages.filter((m) =>
+              m.parts.some((p) => p.type === "text" && p.text.includes("has reached its token budget")),
+            ),
+          ).toHaveLength(1)
+          await Session.remove(session.id)
+        },
+      })
+    },
+  )
+
+  test.each(["token", "time", "manual", "already-limited", "read-failure"] as const)(
+    "accepted writes finish before %s enforcement; exhausted historical goals remain inert",
+    async (kind) => {
+      await using tmp = await tmpdir({ git: true, config: { permission: { "*": "allow" } } })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({ title: "In-flight budget boundary" })
+          await SessionGoal.create({
+            sessionID: session.id,
+            objective: "Write accepted evidence",
+            ...(kind === "time" ? { timeBudgetSeconds: 1 } : { tokenBudget: 10 }),
+          })
+          if (kind === "manual") process.env.AX_CODE_AUTONOMOUS = "0"
+          if (kind === "already-limited")
+            await SessionGoal.setStatus({ sessionID: session.id, status: "budget_limited" })
+          if (kind === "time") {
+            const addUsage = SessionGoal.addUsage
+            usageSpy = vi.spyOn(SessionGoal, "addUsage").mockImplementation((input) =>
+              addUsage({
+                ...input,
+                message: {
+                  ...input.message,
+                  time: { ...input.message.time, completed: input.message.time.created + 2000 },
+                },
+              }),
+            )
+          }
+          if (kind === "read-failure") {
+            const addUsage = SessionGoal.addUsage
+            const getGoal = SessionGoal.get
+            let failNextRead = false
+            usageSpy = vi.spyOn(SessionGoal, "addUsage").mockImplementation(async (input) => {
+              const goal = await addUsage(input)
+              if (goal?.status === "budget_limited") failNextRead = true
+              return goal
+            })
+            goalReadSpy = vi.spyOn(SessionGoal, "get").mockImplementation(async (id) => {
+              if (failNextRead) {
+                failNextRead = false
+                throw new Error("Injected identity refresh failure")
+              }
+              return getGoal(id)
+            })
+          }
+          modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+          const filePath = `${tmp.path}/accepted.txt`
+          let streams = 0
+          streamSpy = vi.spyOn(LLM, "stream").mockImplementation((async (input: LLM.StreamInput) => {
+            const turn = ++streams
+            if (turn === 2 && kind !== "already-limited")
+              expect(Object.keys(input.tools).filter((name) => name !== "invalid")).toEqual(["update_goal"])
+            return {
+              fullStream: (async function* () {
+                yield { type: "start" }
+                yield { type: "start-step" }
+                if (turn === 1) {
+                  const args = { filePath, content: "Accepted before exhaustion" }
+                  yield { type: "tool-call", toolCallId: "accepted-write", toolName: "write", input: args }
+                  const output = await input.tools.write.execute!(args, {
+                    toolCallId: "accepted-write",
+                    messages: input.messages,
+                    abortSignal: input.abort,
+                  })
+                  yield { type: "tool-result", toolCallId: "accepted-write", toolName: "write", input: args, output }
+                  if (kind === "already-limited") {
+                    yield { type: "text-start", id: "ordinary-answer" }
+                    yield {
+                      type: "text-delta",
+                      id: "ordinary-answer",
+                      text: "The independently requested evidence was written.",
+                    }
+                    yield { type: "text-end", id: "ordinary-answer" }
+                  }
+                } else {
+                  yield { type: "text-start", id: "summary" }
+                  yield {
+                    type: "text-delta",
+                    id: "summary",
+                    text: "Budget reached; accepted write is durable and other work remains.",
+                  }
+                  yield { type: "text-end", id: "summary" }
+                }
+                yield {
+                  type: "finish-step",
+                  finishReason: kind === "already-limited" || turn > 1 ? "stop" : "tool-calls",
+                  usage: { inputTokens: 8, outputTokens: 4, totalTokens: 12 },
+                }
+                yield { type: "finish" }
+              })(),
+            } as any
+          }) as any)
+          await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            model: { providerID: model.providerID, modelID: model.id },
+            parts: [{ type: "text", text: "Write evidence, then report" }],
+          })
+          expect(await readFile(filePath, "utf8")).toBe("Accepted before exhaustion")
+          if (kind !== "already-limited") expect(streams).toBe(kind === "read-failure" ? 1 : 2)
+          expect((await SessionGoal.get(session.id))?.status).toBe("budget_limited")
+          const messages = await Session.messages({ sessionID: session.id })
+          if (kind === "already-limited") {
+            expect(
+              messages.some((m) =>
+                m.parts.some(
+                  (p) => p.type === "text" && p.synthetic && p.text.includes("has reached its token budget"),
+                ),
+              ),
+            ).toBe(false)
+          }
+          const tools = messages.flatMap((m) => m.parts).filter((p) => p.type === "tool")
+          expect(tools).toHaveLength(1)
+          expect(tools[0]).toMatchObject({ tool: "write", state: { status: "completed" } })
+          await Session.remove(session.id)
+        },
+      })
+    },
+  )
+
+  test.each(["first", "wrap-up", "missing-after-completion"] as const)(
+    "structured budget output is retained at %s without false completion or recovery",
+    async (mode) => {
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({ title: "Structured budget boundary" })
+          await SessionGoal.create({ sessionID: session.id, objective: "Implement remaining work", tokenBudget: 10 })
+          modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+          let streams = 0
+          streamSpy = vi.spyOn(LLM, "stream").mockImplementation((async (input: LLM.StreamInput) => {
+            const turn = ++streams
+            return {
+              fullStream: (async function* () {
+                yield { type: "start" }
+                yield { type: "start-step" }
+                if (mode === "first" || (turn === 2 && mode === "wrap-up")) {
+                  const args = { status: "partial-preserved" }
+                  yield { type: "tool-call", toolCallId: "structured", toolName: "StructuredOutput", input: args }
+                  const output = await input.tools.StructuredOutput.execute!(args, {
+                    toolCallId: "structured",
+                    messages: input.messages,
+                  })
+                  yield {
+                    type: "tool-result",
+                    toolCallId: "structured",
+                    toolName: "StructuredOutput",
+                    input: args,
+                    output,
+                  }
+                } else {
+                  if (turn === 2 && mode === "missing-after-completion")
+                    await SessionGoal.setStatus({ sessionID: session.id, status: "complete" })
+                  yield { type: "text-start", id: `text_${turn}` }
+                  yield { type: "text-delta", id: `text_${turn}`, text: "Partial work remains." }
+                  yield { type: "text-end", id: `text_${turn}` }
+                }
+                yield {
+                  type: "finish-step",
+                  finishReason: turn === 1 ? "tool-calls" : "stop",
+                  usage: { inputTokens: 8, outputTokens: 4, totalTokens: 12 },
+                }
+                yield { type: "finish" }
+              })(),
+            } as any
+          }) as any)
+          const response = await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            model: { providerID: model.providerID, modelID: model.id },
+            format: {
+              type: "json_schema",
+              retryCount: 0,
+              schema: {
+                type: "object",
+                properties: { status: { type: "string" } },
+                required: ["status"],
+                additionalProperties: false,
+              },
+            },
+            parts: [{ type: "text", text: "Implement and return the structured status" }],
+          })
+          expect(streams).toBe(mode === "first" ? 1 : 2)
+          if (mode === "missing-after-completion")
+            expect(response.info).toMatchObject({ error: { name: "StructuredOutputError" } })
+          else {
+            expect(response.info).toMatchObject({ structured: { status: "partial-preserved" } })
+            expect((await SessionGoal.get(session.id))?.status).toBe("budget_limited")
+          }
+          await Session.remove(session.id)
+        },
+      })
+    },
+  )
 
   test("budget-limited goal schedules one wrap-up continuation", async () => {
     await using tmp = await tmpdir({ git: true, config: { session: { max_continuations: 2 } } })

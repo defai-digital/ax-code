@@ -67,6 +67,7 @@ import { resolveTools, shouldBypassAgentCheck } from "./prompt/prompt-tools"
 import { clearPromptProcessorInstructions, createPromptProcessor } from "./prompt/prompt-processor"
 import { textPart } from "./prompt/prompt-message-builders"
 import { addPromptGoalUsage } from "./prompt/prompt-goal-usage"
+import { goalBudgetTools } from "./prompt/prompt-goal-budget-tools"
 import {
   effectiveContinuationCap,
   effectiveTotalStepLimit,
@@ -754,6 +755,10 @@ export namespace SessionPrompt {
         reason = "aborted"
         break
       }
+      if (goalBudgetWrapUp === "sent" && (!goalReadSucceeded || activeGoal?.status !== "budget_limited")) {
+        reason = activeGoal?.status === "complete" ? "completed" : "aborted"
+        break
+      }
       // Re-read the flag every iteration: Super-Long state is already
       // observed live (the routes flip env-backed state mid-run), so
       // autonomous must be too — otherwise a mid-run "Manual" toggle has no
@@ -784,6 +789,21 @@ export namespace SessionPrompt {
         scanLoopMessages(msgs)
 
       if (!lastUser) throw new Error("No user message found in stream. This should never happen.")
+      if (activeGoal?.status === "budget_limited" && goalBudgetWrapUp === "none") {
+        const transition = handlePromptLoopGoalContinuation({
+          sessionID,
+          goal: activeGoal,
+          continuations,
+          budgetWrapUp: "none",
+        })
+        if (transition.action === "continue") {
+          goalBudgetWrapUp = transition.budgetWrapUp
+          await continueAutonomousLoop({ text: transition.text, event: transition.event })
+          continue
+        }
+        reason = "budget_limited"
+        break
+      }
       if (mediaProjectionUserID !== lastUser.id) {
         mediaProjectionUserID = lastUser.id
         mediaProjection = "normal"
@@ -1245,17 +1265,21 @@ export namespace SessionPrompt {
       // omit tool schemas on the provider wire (ADR-051 D3). Preflight must
       // budget the same way — `tools: {}` means "no overrides" (all tools
       // still counted), not "zero tools".
-      const guardedSynthesis = canPreserveLocalSynthesisTools({
-        providerID: model.providerID,
-        forceTextOnly: forceTextOnlyTurn,
-        forceReason: forceTextReason,
-        hasEvidence: axEngineReadOnly.hasEvidence,
-        isLastStep,
-        omitTools: promptPolicy.omitTools,
-        structured: lastUser.format?.type === "json_schema",
-        supportsTools: model.capabilities.toolcall !== false,
-      })
+      const guardedSynthesis =
+        goalBudgetWrapUp !== "sent" &&
+        canPreserveLocalSynthesisTools({
+          providerID: model.providerID,
+          forceTextOnly: forceTextOnlyTurn,
+          forceReason: forceTextReason,
+          hasEvidence: axEngineReadOnly.hasEvidence,
+          isLastStep,
+          omitTools: promptPolicy.omitTools,
+          structured: lastUser.format?.type === "json_schema",
+          supportsTools: model.capabilities.toolcall !== false,
+        })
+      const budgetWrapUpRequest = goalBudgetWrapUp === "sent"
       const omitToolSchemas =
+        budgetWrapUpRequest ||
         promptPolicy.omitTools ||
         model.capabilities.toolcall === false ||
         (((!guardedSynthesis && forceTextOnlyTurn) || isLastStep) && lastUser.format?.type !== "json_schema")
@@ -1358,7 +1382,11 @@ export namespace SessionPrompt {
         forceTextOnlyTurn,
         isLastStep,
       })
-      const toolChoice = guardedSynthesis ? undefined : toolChoiceResolution.toolChoice
+      const toolChoice = budgetWrapUpRequest
+        ? structuredOutput.toolChoice
+        : guardedSynthesis
+          ? undefined
+          : toolChoiceResolution.toolChoice
       lastTurnWasForceTextOnly = toolChoiceResolution.consumedForceTextOnlyTurn
       lastTurnForceTextReason = toolChoiceResolution.consumedForceTextOnlyTurn ? forceTextReason : undefined
       if (toolChoiceResolution.consumedForceTextOnlyTurn) {
@@ -1391,6 +1419,7 @@ export namespace SessionPrompt {
           )
         : {}
       if (needsTools) structuredOutput.attachTool(tools)
+      if (budgetWrapUpRequest) tools = goalBudgetTools(tools)
       if (guardedSynthesis) {
         try {
           tools = guardLocalSynthesisTools(tools)
@@ -1466,11 +1495,6 @@ export namespace SessionPrompt {
         if (textOnlyProfile && activeTurnProfile === textOnlyProfile) {
           activeTurnProfile = undefined
         }
-      }
-
-      if (await structuredOutput.saveCaptured(processor.message)) {
-        reason = "completed"
-        break
       }
 
       const modelFinished = modelTurnFinished(processor.message.finish)
@@ -1557,7 +1581,13 @@ export namespace SessionPrompt {
       // its own recover/stop handling; in supervised mode, stop with an
       // explicit failure instead of letting the next iteration treat the
       // empty turn as a clean assistant exit and mark the session completed.
-      if (!effectivelyAutonomous && emptyModelTurn && !processor.message.error && !abort.aborted) {
+      if (
+        !effectivelyAutonomous &&
+        !budgetWrapUpRequest &&
+        emptyModelTurn &&
+        !processor.message.error &&
+        !abort.aborted
+      ) {
         const message = emptyModelTurnIncompleteMessage(describeStreamErrorCause(processor.streamError))
         log.warn("empty model turn in supervised mode", {
           command: "session.prompt.loop",
@@ -1576,13 +1606,88 @@ export namespace SessionPrompt {
 
       let completionGateAllowedComplete = false
 
+      const updatedGoal = await addPromptGoalUsage({ sessionID, message: processor.message })
+
+      // Usage is committed after accepted tools settle. Budget enforcement
+      // owns the next request before todo/empty/truncation recovery can send
+      // more substantive work. A new invocation seeds "concluded", preserving
+      // unrelated user turns on an already exhausted goal.
+      let boundaryGoalReadSucceeded = true
+      const boundaryGoal =
+        goalBudgetWrapUp !== "concluded"
+          ? await SessionGoal.get(sessionID).catch((error) => {
+              boundaryGoalReadSucceeded = false
+              log.warn("goal boundary read failed", { sessionID, error })
+              return updatedGoal ?? activeGoal
+            })
+          : undefined
+      if (boundaryGoal && boundaryGoal.time.created !== goalBinding.created) {
+        reason = "aborted"
+        break
+      }
+      const structuredOutputCaptured = await structuredOutput.saveCaptured(processor.message)
+      if (budgetWrapUpRequest) {
+        const missingStructuredOutput =
+          !structuredOutputCaptured && modelFinished && !processor.message.error
+            ? await structuredOutput.failIfMissing(processor.message)
+            : false
+        if (missingStructuredOutput || processor.message.error) {
+          reason = "error"
+        } else if (boundaryGoal?.status === "complete") {
+          reason = "completed"
+        } else {
+          if (boundaryGoal?.status === "budget_limited") {
+            handlePromptLoopGoalContinuation({
+              sessionID,
+              goal: boundaryGoal,
+              continuations,
+              budgetWrapUp: "sent",
+            })
+          }
+          reason = boundaryGoal?.status === "budget_limited" ? "budget_limited" : "aborted"
+        }
+        break
+      }
+      if (boundaryGoal?.status === "budget_limited" && goalBudgetWrapUp === "none") {
+        // A terminal structured result already delivered in the exhausting
+        // request must be preserved. It does not complete an unfinished goal
+        // and needs no second projection merely to announce the same limit.
+        if (structuredOutputCaptured) {
+          handlePromptLoopGoalContinuation({ sessionID, goal: boundaryGoal, continuations, budgetWrapUp: "sent" })
+          reason = "budget_limited"
+          break
+        }
+        if (!boundaryGoalReadSucceeded) {
+          // Known exhaustion may stop the run, but a failed identity refresh
+          // cannot admit a new goal-bound request, even an answer-only one.
+          handlePromptLoopGoalContinuation({ sessionID, goal: boundaryGoal, continuations, budgetWrapUp: "sent" })
+          reason = "budget_limited"
+          break
+        }
+        const transition = handlePromptLoopGoalContinuation({
+          sessionID,
+          goal: boundaryGoal,
+          continuations,
+          budgetWrapUp: goalBudgetWrapUp,
+        })
+        if (transition.action === "continue") {
+          goalBudgetWrapUp = transition.budgetWrapUp
+          await continueAutonomousLoop({ text: transition.text, event: transition.event })
+          continue
+        }
+        reason = "budget_limited"
+        break
+      }
+      if (structuredOutputCaptured) {
+        reason = "completed"
+        break
+      }
       if (modelFinished && !processor.message.error) {
         if (await structuredOutput.failIfMissing(processor.message)) {
           reason = "error"
           break
         }
       }
-      const updatedGoal = await addPromptGoalUsage({ sessionID, message: processor.message })
 
       if (
         processor.message.finish === "stop" &&
