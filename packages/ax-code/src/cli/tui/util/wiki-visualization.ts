@@ -153,10 +153,12 @@ export async function wikiPollDelay(signal: AbortSignal, ms = 1500) {
   })
 }
 
+export type WikiSnapshotProblem = "invalid" | "too_large" | "unauthorized" | "unsupported" | "failed"
+
 export type WikiViewerListener = {
   url: string
   close(): Promise<void>
-  update?(status: WikiMaintenanceStatus, graph?: WikiGraph): void
+  update?(status: WikiMaintenanceStatus, graph?: WikiGraph, problem?: WikiSnapshotProblem | null): void
 }
 type Listener = WikiViewerListener
 type Activation = {
@@ -165,6 +167,90 @@ type Activation = {
   isCurrent(): boolean
   monitor?: (listener: Listener, signal: AbortSignal) => Promise<void>
   refresh?: (listener: Listener, signal: AbortSignal) => Promise<void>
+}
+
+/**
+ * Polls maintenance status and refreshes the graph snapshot when the runtime revision changes or a
+ * retryable snapshot problem can have cleared. A snapshot failure is reported as a separate problem so
+ * it never replaces the real maintenance status; only a status request failure publishes the synthetic
+ * failed status. A `graph` clears the problem, `null` clears it, `undefined` keeps the listener's own.
+ */
+export async function monitorWikiViewer(input: {
+  listener: WikiViewerListener
+  signal: AbortSignal
+  isCurrent(): boolean
+  status(signal: AbortSignal): Promise<WikiMaintenanceStatus>
+  snapshot(signal: AbortSignal): Promise<WikiGraph>
+  /** Overlay applied before publishing, e.g. a failed explicit refresh. */
+  visible?(status: WikiMaintenanceStatus): WikiMaintenanceStatus
+  onStatus?(status: WikiMaintenanceStatus): void
+  delay?(signal: AbortSignal, ms?: number): Promise<void>
+  now?(): number
+}): Promise<void> {
+  const delay = input.delay ?? wikiPollDelay
+  const now = input.now ?? Date.now
+  const failed: WikiMaintenanceStatus = { phase: "failed", reason: "failed", completed: 0, total: 0, revision: 0 }
+  let revision = -1
+  let attempted = false
+  let problem: WikiSnapshotProblem | null = null
+  let failures = 0
+  let retryAt = 0
+  while (!input.signal.aborted && input.isCurrent()) {
+    let status: WikiMaintenanceStatus
+    try {
+      status = await input.status(input.signal)
+    } catch {
+      if (input.signal.aborted || !input.isCurrent()) return
+      input.listener.update?.(failed)
+      input.onStatus?.(failed)
+      try {
+        await delay(input.signal)
+      } catch {
+        return
+      }
+      continue
+    }
+    if (input.signal.aborted || !input.isCurrent()) return
+    // "unauthorized" and "unsupported" need a runtime or credential change; only a new revision retries them.
+    const retriable = problem !== null && problem !== "unauthorized" && problem !== "unsupported"
+    // Only a graph fetched in this iteration is published: a listener treats a graph as "no problem",
+    // so resending an earlier one would hide a later snapshot failure.
+    let graph: WikiGraph | undefined
+    if (!attempted || status.revision !== revision || (retriable && now() >= retryAt)) {
+      attempted = true
+      // A new revision is a new Wiki build, so it starts with a fresh retry budget.
+      if (status.revision !== revision) failures = 0
+      revision = status.revision
+      try {
+        graph = await input.snapshot(input.signal)
+        problem = null
+        failures = 0
+      } catch (error) {
+        if (input.signal.aborted || !input.isCurrent()) return
+        const reason = WikiVizError.isInstance(error) ? error.data.reason : undefined
+        if (reason === "missing") {
+          problem = null
+          failures = 0
+        } else {
+          problem =
+            reason === "invalid" || reason === "too_large" || reason === "unauthorized" || reason === "unsupported"
+              ? reason
+              : "failed"
+          failures++
+          retryAt = now() + Math.min(1500 * 2 ** failures, 60_000)
+        }
+      }
+      if (input.signal.aborted || !input.isCurrent()) return
+    }
+    const shown = input.visible?.(status) ?? status
+    input.listener.update?.(shown, graph, problem)
+    input.onStatus?.(shown)
+    try {
+      await delay(input.signal)
+    } catch {
+      return
+    }
+  }
 }
 
 /** One owned bridge across routes; callers supply captured runtime context. */

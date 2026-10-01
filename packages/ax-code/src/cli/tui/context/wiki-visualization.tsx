@@ -11,6 +11,7 @@ import { Clipboard } from "../util/clipboard"
 import {
   createWikiVisualizationManager,
   fetchWikiVisualization,
+  monitorWikiViewer,
   requestWikiMaintenance,
   wikiPollDelay,
   WikiVizError,
@@ -149,59 +150,35 @@ export const { use: useWikiVisualization, provider: WikiVisualizationProvider } 
               setMaintenance(failed)
             }
           },
-          monitor: async (listener, signal) => {
-            let revision = -1
-            let attemptedSnapshot = false
-            while (!signal.aborted && isCurrent()) {
-              try {
-                const status = await requestWikiMaintenance({
+          monitor: (listener, signal) =>
+            monitorWikiViewer({
+              listener,
+              signal,
+              isCurrent,
+              status: (requestSignal) =>
+                requestWikiMaintenance({
                   base,
                   directory: capturedDirectory,
                   fetch: transport,
-                  signal,
-                })
-                if (signal.aborted || !isCurrent()) return
-                let graph: WikiGraph | undefined
-                if (!attemptedSnapshot || status.revision !== revision) {
-                  try {
-                    graph = await fetchWikiVisualization({
-                      base,
-                      directory: capturedDirectory,
-                      fetch: transport,
-                      signal,
-                    })
-                  } catch (error) {
-                    if (!WikiVizError.isInstance(error) || error.data.reason !== "missing") throw error
-                  }
-                  attemptedSnapshot = true
-                  revision = status.revision
-                }
-                if (signal.aborted || !isCurrent()) return
+                  signal: requestSignal,
+                }),
+              snapshot: (requestSignal) =>
+                fetchWikiVisualization({
+                  base,
+                  directory: capturedDirectory,
+                  fetch: transport,
+                  signal: requestSignal,
+                }),
+              visible: (status) => {
                 if (status.phase === "ready" || status.phase === "running") refreshFailures.delete(listener)
-                const visible = refreshFailures.has(listener)
+                return refreshFailures.has(listener)
                   ? { ...status, phase: "failed" as const, reason: "failed" as const }
                   : status
-                listener.update?.(visible, graph)
-                if (sdk.directory === capturedDirectory) setMaintenance(visible)
-              } catch {
-                if (signal.aborted || !isCurrent()) return
-                const failed: WikiMaintenanceStatus = {
-                  phase: "failed",
-                  reason: "failed",
-                  completed: 0,
-                  total: 0,
-                  revision: 0,
-                }
-                listener.update?.(failed)
-                setMaintenance(failed)
-              }
-              try {
-                await wikiPollDelay(signal)
-              } catch {
-                return
-              }
-            }
-          },
+              },
+              onStatus: (status) => {
+                if (sdk.directory === capturedDirectory) setMaintenance(status)
+              },
+            }),
         })
         if (result.opened) return
         dialog.replace(() => (

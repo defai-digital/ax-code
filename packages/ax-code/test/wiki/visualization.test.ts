@@ -269,4 +269,30 @@ describe("live Wiki onboarding page", () => {
     }
     await expect(fetch(listener.url)).rejects.toThrow()
   })
+  test("reports a graph snapshot problem beside the real maintenance status", async () => {
+    await using tmp = await tmpdir()
+    await setup(tmp.path)
+    const listener = await WikiVisualization.serveLive()
+    const ready = { phase: "ready", reason: "complete", completed: 1, total: 1, revision: 1 } as const
+    const state = async () => (await fetch(listener.url + "/state")).json()
+    try {
+      expect(await (await fetch(listener.url)).text()).toContain("The Wiki graph could not be built")
+      listener.update(ready, undefined, "invalid")
+      expect(await state()).toEqual({ ...ready, snapshotError: "invalid" })
+      // A status-only update (explicit refresh) keeps the problem; null clears it.
+      listener.update(ready)
+      expect((await state()).snapshotError).toBe("invalid")
+      listener.update(ready, undefined, null)
+      expect(await state()).toEqual(ready)
+      // A graph supersedes an earlier problem and stays on screen if a later snapshot fails.
+      listener.update(ready, undefined, "too_large")
+      const graph = await WikiVisualization.snapshot(tmp.path)
+      listener.update(ready, graph)
+      expect(await state()).toEqual({ ...ready, snapshot: graph.snapshot })
+      listener.update({ ...ready, revision: 2 }, undefined, "failed")
+      expect(await state()).toEqual({ ...ready, revision: 2, snapshot: graph.snapshot, snapshotError: "failed" })
+    } finally {
+      await listener.close()
+    }
+  })
 })

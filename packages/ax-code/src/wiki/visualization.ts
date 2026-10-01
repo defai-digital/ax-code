@@ -217,9 +217,11 @@ export namespace WikiVisualization {
     }
   }
 
+  const WikiSnapshotProblem = z.enum(["invalid", "too_large", "unauthorized", "unsupported", "failed"])
+
   /** Live shell owns no runtime connection: the TUI supplies detached state. */
   export async function serveLive() {
-    let state: WikiMaintenanceStatus & { snapshot?: string } = {
+    let state: WikiMaintenanceStatus & { snapshot?: string; snapshotError?: z.infer<typeof WikiSnapshotProblem> } = {
       phase: "queued",
       reason: "idle",
       completed: 0,
@@ -228,7 +230,7 @@ export namespace WikiVisualization {
     }
     let graph: ReturnType<typeof renderWikiGraphHtml> | undefined
     // @scan-suppress security_scan - Browser script polling its own page. stateUrl is a same-origin path, not a server request.
-    const script = `let shown="";const stateUrl=location.pathname+"/state";const label=document.getElementById("status");const view=document.getElementById("graph");async function poll(){try{const r=await fetch(stateUrl,{cache:"no-store"});if(!r.ok)throw Error();const s=await r.json();const reasons={idle:"Waiting for project idle",busy:"Waiting for active sessions and queued work",permissions:"Wiki generation is blocked by read/write permissions",disabled:"Automatic Wiki maintenance is disabled",non_git:"Open the graph again to request Wiki generation for this non-Git directory",building:"Generating Wiki",complete:"Wiki ready",failed:"Wiki maintenance failed or is unavailable. Check the runtime connection and configured model, then reopen the graph to retry."};label.textContent=(reasons[s.reason]||"Wiki status unavailable")+(s.phase==="running"&&s.total?" ("+s.completed+"/"+s.total+")":"");if(s.snapshot&&s.snapshot!==shown){shown=s.snapshot;view.src=location.pathname+"/graph?revision="+encodeURIComponent(s.snapshot);view.hidden=false;}setTimeout(poll,1500)}catch{label.textContent="AX Code connection closed or unavailable. Reopen the graph from the TUI."}}poll();`
+    const script = `let shown="";const stateUrl=location.pathname+"/state";const label=document.getElementById("status");const view=document.getElementById("graph");async function poll(){try{const r=await fetch(stateUrl,{cache:"no-store"});if(!r.ok)throw Error();const s=await r.json();const reasons={idle:"Waiting for project idle",busy:"Waiting for active sessions and queued work",permissions:"Wiki generation is blocked by read/write permissions",disabled:"Automatic Wiki maintenance is disabled",non_git:"Open the graph again to request Wiki generation for this non-Git directory",building:"Generating Wiki",complete:"Wiki ready",failed:"Wiki maintenance failed or is unavailable. Check the runtime connection and configured model, then reopen the graph to retry."};const problems={invalid:"The Wiki graph could not be built from the recorded Wiki artifacts. Update AX Code or regenerate the Wiki, then reopen the graph.",too_large:"The Wiki graph exceeds the snapshot size limit.",unauthorized:"The connected runtime denied access to the Wiki graph.",unsupported:"The connected runtime does not support the Wiki graph. Update that runtime.",failed:"The Wiki graph could not be loaded from the connected runtime. Retrying."};const base=(reasons[s.reason]||"Wiki status unavailable")+(s.phase==="running"&&s.total?" ("+s.completed+"/"+s.total+")":"");label.textContent=s.snapshotError?base+(base.endsWith(".")?" ":". ")+(problems[s.snapshotError]||problems.failed):base;if(s.snapshot&&s.snapshot!==shown){shown=s.snapshot;view.src=location.pathname+"/graph?revision="+encodeURIComponent(s.snapshot);view.hidden=false;}setTimeout(poll,1500)}catch{label.textContent="AX Code connection closed or unavailable. Reopen the graph from the TUI."}}poll();`
     const digest = createHash("sha256").update(script).digest("base64")
     const csp = `default-src 'none'; script-src 'sha256-${digest}'; style-src 'unsafe-inline'; connect-src 'self'; frame-src 'self'; base-uri 'none'; form-action 'none'`
     const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="${csp}"><meta name="referrer" content="no-referrer"><title>AX Wiki</title><style>body{margin:0;background:#101827;color:#e5edf7;font:15px system-ui}header{padding:16px}h1{margin:0 0 8px;font-size:20px}iframe{width:100%;height:calc(100vh - 100px);border:0;background:white}p{margin:0}</style></head><body><header><h1>AX Wiki</h1><p id="status" role="status" aria-live="polite">Preparing Wiki. Waiting for project idle.</p></header><iframe id="graph" title="Wiki page and source evidence graph" hidden></iframe><script>${script}</script></body></html>`
@@ -241,13 +243,23 @@ export namespace WikiVisualization {
     )
     return {
       ...listener,
-      update(next: WikiMaintenanceStatus, snapshot?: unknown) {
+      update(next: WikiMaintenanceStatus, snapshot?: unknown, problem?: z.infer<typeof WikiSnapshotProblem> | null) {
         const detached = WikiMaintenanceSchema.parse(next)
         if (snapshot !== undefined) {
           const parsed = parseWikiGraph(snapshot)
           if (state.snapshot !== parsed.snapshot) graph = renderWikiGraphHtml(parsed)
           state = { ...detached, snapshot: parsed.snapshot }
-        } else state = { ...detached, snapshot: state.snapshot }
+        } else
+          state = {
+            ...detached,
+            snapshot: state.snapshot,
+            snapshotError:
+              problem === undefined
+                ? state.snapshotError
+                : problem === null
+                  ? undefined
+                  : WikiSnapshotProblem.catch("failed").parse(problem),
+          }
       },
     }
   }
