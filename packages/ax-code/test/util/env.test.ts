@@ -354,6 +354,48 @@ describe("Env.sanitize", () => {
     )
   })
 
+  test("does not stop at a quote that only looked like the value close", () => {
+    // A nested quoted value inside an enclosing logfmt or shell quote must not
+    // truncate the span: every later pair has to be redacted too.
+    const logfmt = 'level=error msg="auth failed, Cookie: zz="q$w"; sid=SECRET123"'
+    const logfmtRedacted = 'level=error msg="auth failed, Cookie: zz=[redacted]"; sid=[redacted]'
+    expect(Env.redactSecrets(logfmt)).toBe(logfmtRedacted)
+    expect(Env.redactSecrets(logfmtRedacted)).toBe(logfmtRedacted)
+
+    expect(Env.redactSecrets('level=error msg="Cookie: zz = "q$w"; sid=SECRET123"')).toBe(
+      'level=error msg="Cookie: zz=[redacted]"; sid=[redacted]',
+    )
+    // An apostrophe inside a shell-quoted value has the same effect.
+    expect(Env.redactSecrets("curl -H 'Cookie: zz=O'Brien; sid=SECRET123'")).toBe("curl -H 'Cookie: zz=[redacted]'")
+  })
+
+  test("redacts comma-joined repeated and CRLF-folded cookie headers", () => {
+    // Some log sinks join repeated headers with ", ", so a second Set-Cookie
+    // header begins mid-line and must still be split as a new pair.
+    const joined = "Set-Cookie: zz=SECRET123; Path=/, Set-Cookie: yy=SECRET456; Path=/"
+    const joinedRedacted = "Set-Cookie: zz=[redacted]; Path=/, Set-Cookie: yy=[redacted]; Path=/"
+    expect(Env.redactSecrets(joined)).toBe(joinedRedacted)
+    expect(Env.redactSecrets(joinedRedacted)).toBe(joinedRedacted)
+
+    // An obs-fold continuation belongs to the same header and must be redacted.
+    const folded = "Cookie: zz=SECRET123\r\n yy=SECRET456"
+    const foldedRedacted = "Cookie: zz=[redacted]\r\n yy=[redacted]"
+    expect(Env.redactSecrets(folded)).toBe(foldedRedacted)
+    expect(Env.redactSecrets(foldedRedacted)).toBe(foldedRedacted)
+  })
+
+  test("redacts curl cookie flag values but leaves a cookie file argument", () => {
+    expect(Env.redactSecrets("curl -b 'session=zz1' https://x")).toBe("curl -b 'session=[redacted]' https://x")
+    expect(Env.redactSecrets('curl --cookie "a=zz1; b=zz2" https://x')).toBe(
+      'curl --cookie "a=[redacted]; b=[redacted]" https://x',
+    )
+    // A cookie *file* argument is not a pair and must survive.
+    expect(Env.redactSecrets("curl -b cookies.txt https://x")).toBe("curl -b cookies.txt https://x")
+    // Still idempotent once redacted.
+    const once = Env.redactSecrets("curl -b 'session=zz1' https://x")
+    expect(Env.redactSecrets(once)).toBe(once)
+  })
+
   test("redactForRecord composes both passes without doubling the placeholder", () => {
     // Order is fixed inside the helper: an assignment to a keyword-named key is
     // redacted once, not re-matched into `[redacted]]`.

@@ -196,12 +196,36 @@ export namespace Env {
     return value.length
   }
 
+  // End of a header value on one logical line. An obs-fold continuation (a CRLF
+  // followed by whitespace) still belongs to the same header, so keep scanning
+  // past it; otherwise a folded Cookie header's continuation is copied verbatim
+  // and its credential leaks.
+  function headerValueEnd(value: string, from: number): number {
+    let end = from
+    for (;;) {
+      const search = value.slice(end).search(/[\r\n]/)
+      if (search < 0) return value.length
+      const newline = end + search
+      let next = newline
+      while (next < value.length && (value[next] === "\r" || value[next] === "\n")) next++
+      if (value[next] === " " || value[next] === "\t") {
+        end = next
+        continue
+      }
+      return newline
+    }
+  }
+
   function redactCookiePairs(value: string, setCookie: boolean): string {
     const segments: string[] = []
     const separators: string[] = []
     // A comma followed by another pair begins a combined cookie. The comma
     // inside an Expires date is followed by a date, so it remains an attribute.
-    const nextPair = /[ \t]*[!#$%&'*+\-.^_`|~0-9A-Za-z]+[ \t]*=/y
+    // A repeated header name (`Set-Cookie: a=1, Set-Cookie: b=2`) also begins a
+    // new pair: some log sinks join repeated headers with ", ", and without the
+    // optional header the combined segment is misread as one attribute and the
+    // second cookie's value is copied verbatim.
+    const nextPair = /[ \t]*(?:(?:set-cookie|cookie)\b[ \t]*:[ \t]*)?[!#$%&'*+\-.^_`|~0-9A-Za-z]+[ \t]*=/iy
     let quote: "'" | '"' | undefined
     let start = 0
     for (let index = 0; index < value.length; index++) {
@@ -216,6 +240,20 @@ export namespace Env {
       }
       if (char === "'" || char === '"') {
         quote = char
+        continue
+      }
+      // An obs-fold continuation (CRLF followed by whitespace) continues the
+      // same header; treat it like a separator so a folded cookie keeps its
+      // pairs instead of collapsing into one segment that drops them.
+      if (char === "\r" || char === "\n") {
+        let next = index
+        while (next < value.length && (value[next] === "\r" || value[next] === "\n")) next++
+        if (value[next] === " " || value[next] === "\t") {
+          segments.push(value.slice(start, index))
+          separators.push(value.slice(index, next))
+          start = next
+          index = next - 1
+        }
         continue
       }
       nextPair.lastIndex = index + 1
@@ -253,6 +291,13 @@ export namespace Env {
   // header value and must survive verbatim.
   const PAIR_TAIL = /^[ \t;,"']*[!#$%&'*+\-.^_`|~0-9A-Za-z]+[ \t]*=/
 
+  // A `;`/`,`-separated pair later on the line proves a quote the value scanner
+  // stopped at was not the enclosing close but part of a nested quoted value
+  // (`Cookie: messages="a$b"; sid=SECRET` inside `msg="…"`, or an apostrophe in
+  // `O'Brien`). The value then runs to the end of the line, so the remainder
+  // must be redacted as pairs instead of copied verbatim.
+  const PAIR_CONTINUATION = /[;,][ \t]*[!#$%&'*+\-.^_`|~0-9A-Za-z]+[ \t]*=/
+
   function redactPairTail(text: string, setCookie: boolean): string {
     if (!PAIR_TAIL.test(text)) return text
     return redactCookiePairs(text, setCookie)
@@ -280,9 +325,20 @@ export namespace Env {
       const localQuote: "'" | '"' | undefined =
         value[valueStart] === "'" ? "'" : value[valueStart] === '"' ? '"' : undefined
       const localQuoteEnd = localQuote ? closingQuote(value, valueStart + 1, localQuote) : undefined
-      const shellQuoteEnd = quoteState ? closingQuote(value, valueStart, quoteState) : undefined
-      const lineSearch = value.slice(valueStart).search(/[\r\n]/)
-      const lineEnd = lineSearch < 0 ? value.length : valueStart + lineSearch
+      const firstQuoteEnd = quoteState ? closingQuote(value, valueStart, quoteState) : undefined
+      const lineEnd = headerValueEnd(value, valueStart)
+      // A quote followed by more cookie pairs is a nested quoted value (or an
+      // apostrophe in the value), not the enclosing close: the value runs to
+      // the next matching quote when one closes on this line.
+      let shellQuoteEnd = firstQuoteEnd
+      if (
+        firstQuoteEnd !== undefined &&
+        firstQuoteEnd < lineEnd &&
+        PAIR_CONTINUATION.test(value.slice(firstQuoteEnd, lineEnd))
+      ) {
+        const nextQuoteEnd = closingQuote(value, firstQuoteEnd + 1, quoteState!)
+        if (nextQuoteEnd < lineEnd) shellQuoteEnd = nextQuoteEnd
+      }
       // The value ends at the enclosing shell quote when it closes on this
       // line, and at the line end otherwise.
       const shellOnLine = shellQuoteEnd !== undefined && shellQuoteEnd < lineEnd
@@ -328,6 +384,24 @@ export namespace Env {
       quoteCursor = cursor
     }
     return cursor === 0 ? value : result + value.slice(cursor)
+  }
+
+  // curl carries the same cookie pairs in flag form (`-b 'sid=x'`,
+  // `--cookie="a=1; b=2"`) with no `Header:` for `redactCookieHeaders` to match.
+  // Only a value that carries a pair (`=`) is redacted, so a cookie *file*
+  // argument (`-b cookies.txt`) is left untouched.
+  const CURL_COOKIE_FLAG = /(\s)(-b|--cookie)([ \t]*=[ \t]*|[ \t]+)("([^"\r\n]*)"|'([^'\r\n]*)'|([^\s"'\r\n]+))/gi
+
+  function redactCookieFlagValues(value: string): string {
+    return value.replace(
+      CURL_COOKIE_FLAG,
+      (match, space: string, flag: string, sep: string, _whole: string, dq?: string, sq?: string, bare?: string) => {
+        const inner = dq ?? sq ?? bare
+        if (!inner || !inner.includes("=")) return match
+        const quote = dq !== undefined ? '"' : sq !== undefined ? "'" : ""
+        return `${space}${flag}${sep}${quote}${redactCookiePairs(inner, false)}${quote}`
+      },
+    )
   }
 
   function containsUrlCredential(value: string | undefined): boolean {
@@ -385,7 +459,7 @@ export namespace Env {
     // empty (`redis://:password@host` is a documented form). The sibling
     // `URL_USERINFO_VALUE` already accepts every scheme for assignments.
     return (
-      redactCookieHeaders(fieldsRedacted)
+      redactCookieFlagValues(redactCookieHeaders(fieldsRedacted))
         .replace(
           /\b([a-z][a-z0-9+.-]*:\/\/)([^\s/:@]*):([^\s/@]+)@/gi,
           (_match, scheme: string, username: string) => `${scheme}${username}:[redacted]@`,
