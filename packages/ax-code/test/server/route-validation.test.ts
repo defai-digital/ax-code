@@ -20,6 +20,8 @@ import { DefaultQueryNumber, OptionalQueryNumber } from "../../src/server/routes
 import { parsePtyReconnectCursor } from "../../src/server/routes/pty"
 import { File } from "../../src/file"
 import { MCP } from "../../src/mcp"
+import { Config } from "../../src/config/config"
+import { tmpdir } from "../fixture/fixture"
 
 const root = path.join(__dirname, "../..")
 Log.init({ print: false })
@@ -660,9 +662,12 @@ describe("server route validation", () => {
   })
 
   test("question reply route normalizes accepted answers before resolving", async () => {
+    // The route must answer a pending human question; autonomous mode defaults on.
+    await using tmp = await tmpdir({ git: true, config: { autonomous: false } })
     await Instance.provide({
-      directory: root,
+      directory: tmp.path,
       fn: async () => {
+        await Config.get()
         const askPromise = Question.ask({
           sessionID: SessionID.ascending(),
           questions: [
@@ -680,17 +685,20 @@ describe("server route validation", () => {
 
         try {
           let pending = await Question.list()
-          for (let attempt = 0; pending.length === 0 && attempt < 10; attempt++) {
-            await new Promise((resolve) => setTimeout(resolve, 1))
+          for (let attempt = 0; pending.length === 0 && attempt < 100; attempt++) {
+            await new Promise((resolve) => setTimeout(resolve, 5))
             pending = await Question.list()
           }
           expect(pending.length).toBe(1)
 
-          const response = await Server.Default().request(`/question/${pending[0].id}/reply`, {
+          const response = await Server.Default().request(
+            `/question/${pending[0].id}/reply?directory=${encodeURIComponent(tmp.path)}`,
+            {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ answers: [["  Option 1  "]] }),
-          })
+            },
+          )
 
           expect(response.status).toBe(200)
           expect(await response.json()).toBe(true)
@@ -700,7 +708,7 @@ describe("server route validation", () => {
           if (remaining) {
             await Question.reject(remaining.id).catch(() => {})
           }
-          await askPromise.catch(() => {})
+          await Promise.race([askPromise.catch(() => {}), new Promise((resolve) => setTimeout(resolve, 1_000))])
           throw error
         }
       },

@@ -46,6 +46,7 @@ const model: Provider.Model = {
 
 afterEach(async () => {
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
   await Instance.disposeAll()
 })
 
@@ -188,6 +189,7 @@ test("durable follow-up transfers ownership across the queue timer until its pro
 test.skipIf(process.platform === "win32")(
   "shell-to-prompt callback starts a new authorized turn without releasing the guard",
   async () => {
+    vi.stubEnv("SHELL", "/bin/sh")
     await using tmp = await tmpdir({ git: true })
     await fs.writeFile(
       path.join(tmp.path, "shell-handoff.cjs"),
@@ -214,14 +216,25 @@ test.skipIf(process.platform === "win32")(
           model: { providerID: model.providerID, modelID: model.id },
           command: `"${process.execPath}" shell-handoff.cjs`,
         })
-        await vi.waitFor(async () =>
-          expect(
-            await fs.access(path.join(tmp.path, "shell-start")).then(
-              () => true,
-              () => false,
-            ),
-          ).toBe(true),
-        )
+        try {
+          await vi.waitFor(
+            async () =>
+              expect(
+                await fs.access(path.join(tmp.path, "shell-start")).then(
+                  () => true,
+                  () => false,
+                ),
+              ).toBe(true),
+            { timeout: 5000 },
+          )
+        } catch (error) {
+          const tool = (await Session.messages({ sessionID: session.id }))
+            .flatMap((message) => message.parts)
+            .find((part) => part.type === "tool" && part.tool === "bash")
+          throw new Error(`Shell did not create its startup marker. Tool part: ${JSON.stringify(tool)}`, {
+            cause: error,
+          })
+        }
         const prompt = SessionPrompt.prompt({
           sessionID: session.id,
           agent: "build",
