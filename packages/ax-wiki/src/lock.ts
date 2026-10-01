@@ -136,7 +136,10 @@ export function createWikiBuildLock(root: string, wikiDir: string, options: Wiki
       // would mislead every waiter into a spurious timeout.
       throw new Error(`AX Wiki build lock is unreadable: ${lockPath}`, { cause: error })
     } finally {
-      await handle.close()
+      // A failed close on this read-only descriptor must not replace the
+      // observation (or the wrapped error) with a bare close failure: an
+      // exception in a finally block discards the try block's result.
+      await handle.close().catch(() => {})
     }
   }
 
@@ -176,10 +179,17 @@ export function createWikiBuildLock(root: string, wikiDir: string, options: Wiki
       // owner from deleting the current holder's lock.
       try {
         await link(stalePath, lockPath)
-      } catch {
-        // The path is held again — leave it alone.
+        await rm(stalePath, { force: true }).catch(() => {})
+      } catch (error) {
+        if (errorCode(error) === "EEXIST") {
+          // The path is held again — our copy is a redundant duplicate.
+          await rm(stalePath, { force: true }).catch(() => {})
+        }
+        // Any other failure (EMFILE, ENOSPC, EACCES, ...) must not destroy the
+        // copy: the moved body may be a LIVE holder's lock. The orphan
+        // `<lock>.stale-<uuid>` file is never read, so keeping it on disk is
+        // recoverable, while deleting it would silently remove their lock.
       }
-      await rm(stalePath, { force: true }).catch(() => {})
       return false
     }
     return false
@@ -219,12 +229,25 @@ export function createWikiBuildLock(root: string, wikiDir: string, options: Wiki
       for (;;) {
         if (await tryCreate()) {
           let released = false
-          // `utimes` only touches the file: if the lock was stolen, the touch
-          // lands on the new holder's fresh file, where a fresh mtime is the
-          // truth anyway. No ownership check is needed for a touch.
+          // Only touch the lockfile while it still carries our token. If the
+          // lock was stolen after we went stale, a bare touch would keep
+          // refreshing the NEW holder's mtime and make a wedged successor's
+          // lock immortal, so the interval clears itself once the token is
+          // gone. A read failure other than ENOENT just skips this tick.
           const heartbeat = setInterval(() => {
-            const stamp = new Date()
-            utimes(lockPath, stamp, stamp).catch(() => {})
+            void (async () => {
+              try {
+                const text = await readFile(lockPath, "utf8")
+                if (parseBody(text)?.token !== token) {
+                  clearInterval(heartbeat)
+                  return
+                }
+                const stamp = new Date()
+                await utimes(lockPath, stamp, stamp).catch(() => {})
+              } catch (error) {
+                if (errorCode(error) === "ENOENT") clearInterval(heartbeat)
+              }
+            })()
           }, heartbeatMs)
           heartbeat.unref?.()
           return {

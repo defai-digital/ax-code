@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process"
-import { mkdtemp, mkdir, readFile, rm, utimes, writeFile } from "node:fs/promises"
+import { mkdtemp, mkdir, readFile, rm, stat, utimes, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { afterEach, describe, expect, test } from "vitest"
@@ -70,6 +70,27 @@ describe("createWikiBuildLock (gate C7)", () => {
     clock += 1000 // advance past staleMs without releasing
     const second = await lock.acquire()
     await second.release()
+  })
+
+  test("the heartbeat stops touching the lockfile once its token is gone", async () => {
+    const root = await tmp()
+    const lockPath = path.join(root, "ax-wiki/.build-lock")
+    const lock = createWikiBuildLock(root, "ax-wiki", { heartbeatMs: 25 })
+    const handle = await lock.acquire()
+    // Simulate a verified steal: a successor's body now occupies the path.
+    await writeFile(
+      lockPath,
+      JSON.stringify({ pid: process.pid, startedAt: Date.now(), host: "successor-host", token: "successor-token" }),
+    )
+    const before = (await stat(lockPath)).mtimeMs
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    const after = (await stat(lockPath)).mtimeMs
+    // A ghost heartbeat would keep refreshing the successor's mtime and make a
+    // wedged successor's lock immortal; the token check must stop it instead.
+    expect(after - before).toBeLessThan(100)
+    await handle.release()
+    // release() must not delete the successor's lock either.
+    await expect(readFile(lockPath, "utf8")).resolves.toContain("successor-token")
   })
 
   test("times out with a clear error while a fresh lock is held", async () => {
