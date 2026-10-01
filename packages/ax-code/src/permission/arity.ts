@@ -1,19 +1,22 @@
 export namespace BashArity {
   export function prefix(tokens: string[]) {
-    // Flags never count as tokens (see the dictionary rules below): match on
-    // the subcommand tokens only, and slice the original tokens through the
-    // arity-th non-flag token so the result still matches the command text
-    // it was built from (the always pattern is wildcard-matched against the
-    // full command string). Counting flags as subcommands used to widen the
-    // grant to every subcommand behind the same leading flag, e.g. approving
-    // `git --no-pager log` once produced `git --no-pager *`, which then
-    // matched `git --no-pager push --force`.
-    const significant: number[] = []
+    // Subcommands are the non-flag tokens that are not a flag's value. Flags
+    // never count (see the dictionary rules below) and neither do flag values:
+    // a global option such as `--region us-east-1` or `-C /repo` sits between
+    // the command and its subcommand, and counting its value shifted the arity
+    // cut and widened the always grant — approving `aws --region x s3 ls`
+    // produced `aws --region x s3 *`, which then matched `s3 rb`.
+    //
+    // Excluding flag values only ever moves the cut later, so the returned
+    // prefix (and the grant built from it) can only narrow, never widen.
+    const subcommands: number[] = []
     for (let i = 0; i < tokens.length; i++) {
-      if (!tokens[i]!.startsWith("-")) significant.push(i)
+      if (tokens[i]!.startsWith("-")) continue
+      if (i > 0 && tokens[i - 1]!.startsWith("-")) continue
+      subcommands.push(i)
     }
-    for (let len = significant.length; len > 0; len--) {
-      const prefix = significant
+    for (let len = subcommands.length; len > 0; len--) {
+      const prefix = subcommands
         .slice(0, len)
         .map((i) => tokens[i]!)
         .join(" ")
@@ -23,21 +26,12 @@ export namespace BashArity {
       // entry and sliced to a degenerate empty prefix.
       if (!Object.hasOwn(ARITY, prefix)) continue
       const arity = ARITY[prefix]!
-      let cut = Math.min(arity, significant.length)
-      // When the cut token directly follows a flag it is likely that flag's
-      // value rather than the subcommand the arity points at (e.g.
-      // `git -C <dir> <sub>`, `docker -H <host> <sub>`). Extend past it so
-      // the grant binds the subcommand instead of wildcarding past it. For
-      // boolean flags this only narrows the grant (safe direction), and the
-      // full original prefix (flags included) still matches the exact
-      // command text the user approved.
-      while (
-        cut < significant.length &&
-        significant[cut - 1]! > 0 &&
-        tokens[significant[cut - 1]! - 1]!.startsWith("-")
-      )
-        cut++
-      return tokens.slice(0, significant[cut - 1]! + 1)
+      // Bind `arity` subcommand tokens, keeping the original flag positions so
+      // the pattern still matches the exact command text the user approved.
+      // When the command has fewer subcommands than the arity (e.g.
+      // `python -m http.server`, whose module is a flag value), bind the whole
+      // command: narrower grants are the safe direction.
+      return arity <= subcommands.length ? tokens.slice(0, subcommands[arity - 1]! + 1) : tokens.slice()
     }
     if (tokens.length === 0) return []
     return tokens.slice(0, 1)

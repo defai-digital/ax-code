@@ -56,6 +56,12 @@ describe("classifyDestructiveCommand", () => {
     expect(classifyDestructiveCommand(["env", "-u", "TOKEN", "git", "push", "--force"])).toBeTruthy()
     expect(classifyDestructiveCommand(["env", "-S", "rm -rf build"])).toBeTruthy()
     expect(classifyDestructiveCommand(["sudo", "env", "--split-string=git push --force"])).toBeTruthy()
+    // A per-token quoted payload must not be joined into one word: stripping a
+    // single wrapping quote pair fails to strip when the value is a sequence of
+    // quoted tokens, so the real argv stays visible to the classifier.
+    expect(classifyDestructiveCommand(["env", "-S", "'rm' '-rf' '/'"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["env", "-S", '"rm" "-rf" "/"'])).toBeTruthy()
+    expect(classifyDestructiveCommand(["env", "--split-string", "'rm' '-rf' '/'"])).toBeTruthy()
     expect(classifyDestructiveCommand(["xargs", "rm", "-rf"])).toBeTruthy()
     expect(classifyDestructiveCommand(["xargs", "-n", "1", "rm", "-rf"])).toBeTruthy()
     expect(classifyDestructiveCommand(["nohup", "shutdown", "-h", "now"])).toBeTruthy()

@@ -198,10 +198,17 @@ function expandEnvSplitString(parts: string[], start: number): string[] | undefi
 
     if (splitValue !== undefined) {
       const quote = splitValue[0]
-      const unquoted =
-        splitValue.length >= 2 && (quote === '"' || quote === "'") && splitValue.at(-1) === quote
-          ? splitValue.slice(1, -1)
-          : splitValue
+      // Strip only a single wrapping quote pair. A value that is a sequence of
+      // quoted tokens (`'rm' '-rf' '/'`) also starts and ends with the same
+      // quote, but those quotes belong to the tokens: stripping them joins the
+      // tokens into one word (`rm -rf /`) and hides the real command from the
+      // destructive-operation classifier.
+      const wrapped =
+        splitValue.length >= 2 &&
+        (quote === '"' || quote === "'") &&
+        splitValue.at(-1) === quote &&
+        !splitValue.slice(1, -1).includes(quote)
+      const unquoted = wrapped ? splitValue.slice(1, -1) : splitValue
       return [...parts.slice(0, index), ...parseShellArgs(unquoted), ...parts.slice(index + consumed)]
     }
 
