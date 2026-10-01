@@ -23,9 +23,9 @@ test.each(["midnight-dream", "sunset-serenade"] as const)(
     const first = renderBenchPixels(WIDTH, HEIGHT, style, 0)
     const moving = renderBenchPixels(WIDTH, HEIGHT, style, 1000)
     expect(first.length).toBe(WIDTH * HEIGHT * 3)
-    expect(first).not.toEqual(moving)
-    expect(renderBenchPixels(WIDTH, HEIGHT, style, 1000)).toEqual(moving)
-    expect(renderBenchPixels(WIDTH, HEIGHT, style, -100)).toEqual(first)
+    expect(first.equals(moving)).toBe(false)
+    expect(renderBenchPixels(WIDTH, HEIGHT, style, 1000).equals(moving)).toBe(true)
+    expect(renderBenchPixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
     // Sky starts at the shared background; the centered title stays clear of
     // the left edge on the bottom row while sand covers scene row 21.
     expect(pixel(first, 0, 0)).toEqual(night ? [11, 19, 43] : [52, 27, 54])
@@ -122,10 +122,10 @@ test("Bench transmits its own pixels at bounded resolution and cleans up on resi
       Buffer.from([...output.matchAll(/\x1b_G[^;]+;([A-Za-z0-9+/=]*)\x1b\\/g)].map((m) => m[1]).join(""), "base64"),
     )
   player.draw(input)
-  expect(decode(writes[0]!)).toEqual(renderTextScenePixels(740, 500, "midnight-dream", 750))
+  expect(decode(writes[0]!).equals(renderTextScenePixels(740, 500, "midnight-dream", 750))).toBe(true)
   player.draw({ ...input, width: 500, style: "sunset-serenade" })
   expect(writes[1]).toContain("a=d,d=I")
-  expect(decode(writes[2]!)).toEqual(renderTextScenePixels(500, 500, "sunset-serenade", 750))
+  expect(decode(writes[2]!).equals(renderTextScenePixels(500, 500, "sunset-serenade", 750))).toBe(true)
   player.dispose()
   expect(writes[3]).toContain("a=d,d=I")
   player.draw(input)

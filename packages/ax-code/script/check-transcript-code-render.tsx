@@ -49,15 +49,26 @@ function paintedLines(frame: string) {
     .map((line) => line.trimEnd())
 }
 
-async function renderOnce(make: (renderer: any) => any, width: number, height: number) {
+async function renderOnce(
+  make: (renderer: any) => any,
+  width: number,
+  height: number,
+  ready: (frame: string) => boolean,
+) {
   const setup = await createTestRenderer({ width, height })
   try {
     setup.renderer.root.add(make(setup.renderer))
     await setup.renderOnce()
-    await new Promise((resolve) => setTimeout(resolve, 350))
-    setup.renderer.requestRender()
-    await setup.renderOnce()
-    return paintedLines(setup.captureCharFrame())
+    const deadline = Date.now() + 10_000
+    let frame = setup.captureCharFrame()
+    while (!ready(frame) && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      setup.renderer.requestRender()
+      await setup.renderOnce()
+      frame = setup.captureCharFrame()
+    }
+    assert(ready(frame), "rendered text did not settle before the 10-second deadline")
+    return paintedLines(frame)
   } finally {
     setup.renderer.destroy()
   }
@@ -126,16 +137,21 @@ try {
   const syntaxStyle = SyntaxStyle.fromTheme([
     { scope: ["default"], style: { foreground: RGBA.fromInts(220, 220, 220) } },
   ])
+  const parityReady = (frame: string) =>
+    ["Heading one", "Some **bold** text", "first bullet", "second bullet", "const answer = 42"].every((line) =>
+      frame.includes(line),
+    )
   const streamed = await renderOnce(
     (renderer) => new TextRenderable(renderer, { content: stripFenceLines(parityFixture), wrapMode: "word" }),
     60,
     24,
+    parityReady,
   )
   const finished = await renderOnce(
-    (renderer) =>
-      new MarkdownRenderable(renderer, { content: parityFixture, conceal: false, syntaxStyle }),
+    (renderer) => new MarkdownRenderable(renderer, { content: parityFixture, conceal: false, syntaxStyle }),
     60,
     24,
+    parityReady,
   )
   assert.equal(
     finished.join("\n"),

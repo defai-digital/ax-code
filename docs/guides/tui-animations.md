@@ -2,13 +2,13 @@
 
 Status: Current
 Scope: TUI opening and ending animations and rendering fallbacks
-Last reviewed: 2026-09-26
+Last reviewed: 2026-09-30
 Owner: AX Code TUI maintainers
 
 See [Terminal rendering](terminal-rendering.md) for automatic terminal profiles,
 manual overrides, and the difference between pixel graphics and text rendering.
 
-Each TUI launch randomly selects one of nine animation pairs with equal probability (1/9 each):
+Each TUI launch randomly selects one of thirty-five animation pairs with equal probability (1/35 each):
 
 - Digital Code: purple/blue falling code for the opening, reverse code for the ending.
 - Foliage: classic autumn leaves for the opening, golden leaves for the ending.
@@ -19,6 +19,32 @@ Each TUI launch randomly selects one of nine animation pairs with equal probabil
 - Festival: fireworks for the opening, rising lanterns for the ending.
 - Snow: pine snowfall for the opening, winter night for the ending.
 - Volcano: eruption for the opening, calm crater for the ending.
+- Big Ben: daytime for the opening, night for the ending.
+- Taipei 101: daytime for the opening, neon night for the ending.
+- Great Wall: dawn for the opening, dusk for the ending.
+- Torii Gate: daytime for the opening, night for the ending.
+- Taegeuk: spin for the opening, reverse spin for the ending.
+- Sagrada Familia: daytime for the opening, night for the ending.
+- Corcovado: daytime for the opening, golden hour for the ending.
+- Eiffel Tower: daytime for the opening, night for the ending.
+- Brandenburg Gate: night for the opening, dawn for the ending.
+- Onion Domes: snowfall for the opening, clear sky for the ending.
+- Borobudur: mist for the opening, noon for the ending.
+- Balloons: night for the opening, dawn for the ending.
+- Mekong: dawn for the opening, dusk for the ending.
+- Colosseum: daytime for the opening, night for the ending.
+- Space: rocket launch for the opening, starfield drift for the ending.
+- Dungeon: torch-lit descent for the opening, treasure chamber for the ending.
+- Castle: daytime for the opening, night for the ending.
+- Floating Islands: daytime for the opening, dusk for the ending.
+- Jungle: daytime for the opening, night for the ending.
+- Coral Reef: daytime for the opening, night for the ending.
+- Pyramids: daytime for the opening, night for the ending.
+- Aurora: night for the opening, dawn for the ending.
+- Lighthouse: daytime for the opening, night for the ending.
+- Waterfall: daytime for the opening, moonlit night for the ending.
+- Steppe: daytime for the opening, night for the ending.
+- Canyon: daytime for the opening, night for the ending.
 
 Fuji Mountain includes a snow-capped mountain, a reflective lake, cherry blossoms,
 falling petals, and a Shinkansen travelling across the foreground. The 74-column,
@@ -74,9 +100,9 @@ frame is cleared so leaves leave no trails.
 Explicit theme previews do not change this launch's selected pair.
 
 Press `Ctrl+P` (the default command-palette key) and search `Digital Code`,
-`Foliage`, `Bench`, `Fuji Mountain`, or `Mahjong`. All ten opening/ending previews are
+`Foliage`, `Bench`, `Fuji Mountain`, `Mahjong`, and more. All seventy opening/ending previews are
 available independently of the launch selection. Family names remain searchable
-in all thirteen interface languages.
+in all fourteen interface languages.
 
 These previews are also available in the command palette. Opening playback lasts
 2.5 seconds; ending playback lasts 3 seconds. Existing animation preferences and

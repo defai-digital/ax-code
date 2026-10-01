@@ -14,9 +14,9 @@ test.each(["volcano-eruption", "volcano-calm"] as const)("%s paints the shared c
   const first = renderVolcanoPixels(WIDTH, HEIGHT, style, 0)
   const moving = renderVolcanoPixels(WIDTH, HEIGHT, style, 900)
   expect(first.length).toBe(WIDTH * HEIGHT * 3)
-  expect(first).not.toEqual(moving)
-  expect(renderVolcanoPixels(WIDTH, HEIGHT, style, 900)).toEqual(moving)
-  expect(renderVolcanoPixels(WIDTH, HEIGHT, style, -100)).toEqual(first)
+  expect(first.equals(moving)).toBe(false)
+  expect(renderVolcanoPixels(WIDTH, HEIGHT, style, 900).equals(moving)).toBe(true)
+  expect(renderVolcanoPixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
   expect(pixel(first, 0, 0)).toEqual(eruption ? [22, 10, 20] : [10, 14, 36])
   // The cone face never moves.
   const rock: readonly [number, number, number] = eruption ? [42, 22, 32] : [28, 35, 51]
@@ -79,10 +79,10 @@ test("Volcano transmits its own pixels and cleans up on resize", () => {
       Buffer.from([...output.matchAll(/\x1b_G[^;]+;([A-Za-z0-9+/=]*)\x1b\\/g)].map((m) => m[1]).join(""), "base64"),
     )
   player.draw(input)
-  expect(decode(writes[0]!)).toEqual(renderTextScenePixels(760, 480, "volcano-eruption", 750))
+  expect(decode(writes[0]!).equals(renderTextScenePixels(760, 480, "volcano-eruption", 750))).toBe(true)
   player.draw({ ...input, width: 600, style: "volcano-calm" })
   expect(writes[1]).toContain("a=d,d=I")
-  expect(decode(writes[2]!)).toEqual(renderTextScenePixels(600, 480, "volcano-calm", 750))
+  expect(decode(writes[2]!).equals(renderTextScenePixels(600, 480, "volcano-calm", 750))).toBe(true)
   player.dispose()
   expect(writes[3]).toContain("a=d,d=I")
   player.draw(input)

@@ -716,7 +716,59 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
                       ? uiText("animation.snowfall")
                       : input.animationPair?.opening === "volcano-eruption"
                         ? uiText("animation.volcanoEruption")
-                        : uiText("animation.classicFoliage"),
+                        : input.animationPair?.opening === "bigben-day"
+                          ? uiText("animation.bigbenDay")
+                          : input.animationPair?.opening === "taipei101-day"
+                            ? uiText("animation.taipei101Day")
+                            : input.animationPair?.opening === "greatwall-dawn"
+                              ? uiText("animation.greatWallDawn")
+                              : input.animationPair?.opening === "torii-day"
+                                ? uiText("animation.toriiDay")
+                                : input.animationPair?.opening === "taegeuk"
+                                  ? uiText("animation.taegeukSpin")
+                                  : input.animationPair?.opening === "sagrada-day"
+                                    ? uiText("animation.sagradaDay")
+                                    : input.animationPair?.opening === "corcovado-day"
+                                      ? uiText("animation.corcovadoDay")
+                                      : input.animationPair?.opening === "eiffel-day"
+                                        ? uiText("animation.eiffelDay")
+                                        : input.animationPair?.opening === "brandenburg-night"
+                                          ? uiText("animation.brandenburgNight")
+                                          : input.animationPair?.opening === "domes-snow"
+                                            ? uiText("animation.domesSnow")
+                                            : input.animationPair?.opening === "borobudur-mist"
+                                              ? uiText("animation.borobudurMist")
+                                              : input.animationPair?.opening === "balloons-night"
+                                                ? uiText("animation.balloonsNight")
+                                                : input.animationPair?.opening === "mekong-dawn"
+                                                  ? uiText("animation.mekongDawn")
+                                                  : input.animationPair?.opening === "colosseum-day"
+                                                    ? uiText("animation.colosseumDay")
+                                                    : input.animationPair?.opening === "space-launch"
+                                                      ? uiText("animation.spaceLaunch")
+                                                      : input.animationPair?.opening === "dungeon-descent"
+                                                        ? uiText("animation.dungeonDescent")
+                                                        : input.animationPair?.opening === "castle-day"
+                                                          ? uiText("animation.castleDay")
+                                                          : input.animationPair?.opening === "islands-day"
+                                                            ? uiText("animation.islandsDay")
+                                                            : input.animationPair?.opening === "jungle-day"
+                                                              ? uiText("animation.jungleDay")
+                                                              : input.animationPair?.opening === "reef-day"
+                                                                ? uiText("animation.reefDay")
+                                                                : input.animationPair?.opening === "pyramids-day"
+                                                                  ? uiText("animation.pyramidsDay")
+                                                                  : input.animationPair?.opening === "aurora-night"
+                                                                    ? uiText("animation.auroraNight")
+                                                                    : input.animationPair?.opening === "lighthouse-day"
+                                                                      ? uiText("animation.lighthouseDay")
+                                                                      : input.animationPair?.opening === "falls-day"
+                                                                        ? uiText("animation.fallsDay")
+                                                                        : input.animationPair?.opening === "steppe-day"
+                                                                          ? uiText("animation.steppeDay")
+                                                                          : input.animationPair?.opening === "canyon-day"
+                                                                            ? uiText("animation.canyonDay")
+                                                                            : uiText("animation.classicFoliage"),
       slash: { name: "ov", aliases: ["op"], hidden: true },
       value: "app.digital_code.play",
       category: t("category.system"),
@@ -744,7 +796,59 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
                       ? uiText("animation.winterNight")
                       : input.animationPair?.ending === "volcano-calm"
                         ? uiText("animation.volcanoCalm")
-                        : uiText("animation.goldenFoliage"),
+                        : input.animationPair?.ending === "bigben-night"
+                          ? uiText("animation.bigbenNight")
+                          : input.animationPair?.ending === "taipei101-neon"
+                            ? uiText("animation.taipei101Neon")
+                            : input.animationPair?.ending === "greatwall-dusk"
+                              ? uiText("animation.greatWallDusk")
+                              : input.animationPair?.ending === "torii-night"
+                                ? uiText("animation.toriiNight")
+                                : input.animationPair?.ending === "taegeuk"
+                                  ? uiText("animation.taegeukReverse")
+                                  : input.animationPair?.ending === "sagrada-night"
+                                    ? uiText("animation.sagradaNight")
+                                    : input.animationPair?.ending === "corcovado-gold"
+                                      ? uiText("animation.corcovadoGold")
+                                      : input.animationPair?.ending === "eiffel-night"
+                                        ? uiText("animation.eiffelNight")
+                                        : input.animationPair?.ending === "brandenburg-dawn"
+                                          ? uiText("animation.brandenburgDawn")
+                                          : input.animationPair?.ending === "domes-clear"
+                                            ? uiText("animation.domesClear")
+                                            : input.animationPair?.ending === "borobudur-noon"
+                                              ? uiText("animation.borobudurNoon")
+                                              : input.animationPair?.ending === "balloons-dawn"
+                                                ? uiText("animation.balloonsDawn")
+                                                : input.animationPair?.ending === "mekong-dusk"
+                                                  ? uiText("animation.mekongDusk")
+                                                  : input.animationPair?.ending === "colosseum-night"
+                                                    ? uiText("animation.colosseumNight")
+                                                    : input.animationPair?.ending === "space-drift"
+                                                      ? uiText("animation.spaceDrift")
+                                                      : input.animationPair?.ending === "dungeon-treasure"
+                                                        ? uiText("animation.dungeonTreasure")
+                                                        : input.animationPair?.ending === "castle-night"
+                                                          ? uiText("animation.castleNight")
+                                                          : input.animationPair?.ending === "islands-dusk"
+                                                            ? uiText("animation.islandsDusk")
+                                                            : input.animationPair?.ending === "jungle-night"
+                                                              ? uiText("animation.jungleNight")
+                                                              : input.animationPair?.ending === "reef-night"
+                                                                ? uiText("animation.reefNight")
+                                                                : input.animationPair?.ending === "pyramids-night"
+                                                                  ? uiText("animation.pyramidsNight")
+                                                                  : input.animationPair?.ending === "aurora-dawn"
+                                                                    ? uiText("animation.auroraDawn")
+                                                                    : input.animationPair?.ending === "lighthouse-night"
+                                                                      ? uiText("animation.lighthouseNight")
+                                                                      : input.animationPair?.ending === "falls-moon"
+                                                                        ? uiText("animation.fallsMoon")
+                                                                        : input.animationPair?.ending === "steppe-night"
+                                                                          ? uiText("animation.steppeNight")
+                                                                          : input.animationPair?.ending === "canyon-night"
+                                                                            ? uiText("animation.canyonNight")
+                                                                            : uiText("animation.goldenFoliage"),
       slash: { name: "ev", hidden: true },
       value: "app.digital_code.play_reverse",
       category: t("category.system"),

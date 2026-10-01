@@ -20,9 +20,9 @@ test.each(["mahjong-match", "mahjong-ending"] as const)(
     const first = renderMahjongPixels(WIDTH, HEIGHT, style, 0)
     const moving = renderMahjongPixels(WIDTH, HEIGHT, style, 1200)
     expect(first.length).toBe(WIDTH * HEIGHT * 3)
-    expect(first).not.toEqual(moving)
-    expect(first).toEqual(renderMahjongPixels(WIDTH, HEIGHT, style, 4800))
-    expect(renderMahjongPixels(WIDTH, HEIGHT, style, -100)).toEqual(first)
+    expect(first.equals(moving)).toBe(false)
+    expect(first.equals(renderMahjongPixels(WIDTH, HEIGHT, style, 4800))).toBe(true)
+    expect(renderMahjongPixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
     // Felt gradient endpoints match the shared palette.
     expect(pixel(first, 0, 0)).toEqual([4, 47, 34])
     expect(pixel(first, 0, HEIGHT - 1)).toEqual([2, 26, 18])
@@ -50,8 +50,8 @@ test("match discards land on the shared layout while concealed backs stay fixed"
 test("ending keeps a static ledger with a shared blink phase", () => {
   const first = renderMahjongPixels(WIDTH, HEIGHT, "mahjong-ending", 0)
   const blink = renderMahjongPixels(WIDTH, HEIGHT, "mahjong-ending", 400)
-  expect(first).not.toEqual(blink)
-  expect(first).toEqual(renderMahjongPixels(WIDTH, HEIGHT, "mahjong-ending", 800))
+  expect(first.equals(blink)).toBe(false)
+  expect(first.equals(renderMahjongPixels(WIDTH, HEIGHT, "mahjong-ending", 800))).toBe(true)
   // The marker flips with the blink phase; the ledger itself never moves.
   expect(pixel(first, 385, 430)).not.toEqual([251, 191, 36])
   expect(pixel(blink, 385, 430)).toEqual([251, 191, 36])

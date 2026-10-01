@@ -14,9 +14,9 @@ test.each(["snowfall", "winter-night"] as const)("%s paints the shared forest an
   const first = renderSnowPixels(WIDTH, HEIGHT, style, 0)
   const moving = renderSnowPixels(WIDTH, HEIGHT, style, 1500)
   expect(first.length).toBe(WIDTH * HEIGHT * 3)
-  expect(first).not.toEqual(moving)
-  expect(first).toEqual(renderSnowPixels(WIDTH, HEIGHT, style, 3000))
-  expect(renderSnowPixels(WIDTH, HEIGHT, style, -100)).toEqual(first)
+  expect(first.equals(moving)).toBe(false)
+  expect(first.equals(renderSnowPixels(WIDTH, HEIGHT, style, 3000))).toBe(true)
+  expect(renderSnowPixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
   expect(pixel(first, 0, 0)).toEqual(day ? [125, 148, 184] : [12, 22, 46])
   // The orb stays fixed above the snowfall.
   const orb: readonly [number, number, number] = day ? [245, 233, 200] : [232, 238, 248]
@@ -87,10 +87,10 @@ test("Snow transmits its own pixels and cleans up on resize", () => {
       Buffer.from([...output.matchAll(/\x1b_G[^;]+;([A-Za-z0-9+/=]*)\x1b\\/g)].map((m) => m[1]).join(""), "base64"),
     )
   player.draw(input)
-  expect(decode(writes[0]!)).toEqual(renderTextScenePixels(740, 400, "snowfall", 750))
+  expect(decode(writes[0]!).equals(renderTextScenePixels(740, 400, "snowfall", 750))).toBe(true)
   player.draw({ ...input, width: 600, style: "winter-night" })
   expect(writes[1]).toContain("a=d,d=I")
-  expect(decode(writes[2]!)).toEqual(renderTextScenePixels(600, 400, "winter-night", 750))
+  expect(decode(writes[2]!).equals(renderTextScenePixels(600, 400, "winter-night", 750))).toBe(true)
   player.dispose()
   expect(writes[3]).toContain("a=d,d=I")
   player.draw(input)
