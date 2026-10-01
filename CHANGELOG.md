@@ -13,6 +13,7 @@ changes belong to AX Coder.
 - Redact complete curl cookie arguments, including attached short options, concatenated shell quotes, escaped quotes, and complex expansions, before persisting tool inputs and logs.
 - Keep wiki map drags from selecting text, sticking after cancellation, or clearing an existing node pin on an outside drop.
 - Track the newly dispatched installation smoke workflow instead of accepting an older successful run.
+- Propose validated model catalog updates through one reviewable pull request instead of failing scheduled CI on ordinary upstream data changes.
 
 ### Changed
 

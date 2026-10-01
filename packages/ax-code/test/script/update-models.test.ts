@@ -546,6 +546,25 @@ describe("update-models script", () => {
     expect(stderr).toContain("Failed to fetch models")
   })
 
+  test.each([null, [], {}, { provider: { models: [] } }, { provider: { models: { broken: {} } } }])(
+    "rejects a malformed upstream catalog without replacing the snapshot: %j",
+    async (payload) => {
+      await using tmp = await tmpdir()
+      const { fixturePath, snapshotPath } = await createModelsFixture(tmp.path)
+      const before = await readFile(snapshotPath, "utf8")
+      await writeFile(fixturePath, JSON.stringify(payload))
+      for (const args of [[], ["--check"]]) {
+        const result = runUpdateModels(
+          { ...process.env, AX_CODE_MODELS_FIXTURE_PATH: fixturePath, AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath },
+          args,
+        )
+        expect(result.status).toBe(2)
+        expect(result.stderr.toString()).toContain("Invalid model catalog")
+        expect(await readFile(snapshotPath, "utf8")).toBe(before)
+      }
+    },
+  )
+
   test("strips unused model metadata fields while preserving schema-declared fields", async () => {
     await using tmp = await tmpdir()
     const fixturePath = path.join(tmp.path, "models-fixture.json")

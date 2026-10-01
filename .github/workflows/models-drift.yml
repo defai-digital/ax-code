@@ -7,18 +7,24 @@ on:
 
 concurrency:
   group: models-drift
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
   check:
-    name: Check models snapshot drift
+    name: Propose models snapshot updates
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: main
 
       - name: Setup Ax-code JS toolchain
         uses: ./.github/actions/setup-ax-code-toolchain
@@ -28,5 +34,57 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Check models snapshot
-        run: pnpm --dir packages/ax-code exec tsx script/update-models.ts --check
+      # Fetch once. The feed can change between generation and a second live
+      # comparison, so validate the generated candidate with offline tests.
+      - name: Generate snapshot update
+        run: pnpm --dir packages/ax-code exec tsx script/update-models.ts
+
+      - name: Validate generated snapshot
+        run: |
+          pnpm --dir packages/sdk/js exec tsc
+          pnpm --dir packages/ax-code run typecheck
+          AX_TEST_FILES=test/script/models-snapshot.test.ts,test/script/update-models.test.ts,test/provider/model-support.test.ts,test/provider/models.test.ts,test/cli/models-json.test.ts pnpm --dir packages/ax-code exec vitest run --retry 0
+          pnpm run check:no-cost
+
+      - name: Save reviewable snapshot patch
+        run: |
+          mkdir -p "$RUNNER_TEMP/models-update"
+          git diff --binary -- packages/ax-code/src/provider/models-snapshot.json > "$RUNNER_TEMP/models-update/models-snapshot.patch"
+          git diff --stat -- packages/ax-code/src/provider/models-snapshot.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload snapshot patch
+        uses: actions/upload-artifact@v7
+        with:
+          name: models-snapshot-update
+          path: ${{ runner.temp }}/models-update/models-snapshot.patch
+          retention-days: 14
+
+      - name: Create or update snapshot pull request
+        id: proposal
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ github.token }}
+          branch: automation/models-snapshot
+          base: main
+          add-paths: packages/ax-code/src/provider/models-snapshot.json
+          commit-message: "chore(models): refresh upstream model snapshot"
+          title: "chore(models): refresh upstream model snapshot"
+          body: |
+            Refresh the snapshot from a single models.dev response using the repository generator.
+
+            Upstream data changes are routine maintenance. Download, generation, typecheck, model-contract, and no-cost failures still fail the workflow. Local provider normalization and model filtering remain enforced by the generator and tests.
+
+            The workflow dispatches the normal core and repository CI checks for this branch. Review the catalog diff before merging; no automatic merge is configured.
+
+      # GITHUB_TOKEN-created PRs do not trigger push/pull_request CI. Explicit
+      # workflow_dispatch is supported with that token and validates the head.
+      - name: Dispatch pull request CI
+        if: steps.proposal.outputs.pull-request-operation == 'created' || steps.proposal.outputs.pull-request-operation == 'updated'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_URL: ${{ steps.proposal.outputs.pull-request-url }}
+        run: |
+          gh workflow run ax-code-ci.yml --ref automation/models-snapshot
+          gh workflow run repo-structure.yml --ref automation/models-snapshot
+          printf 'Snapshot update awaits review: %s\n' "$PR_URL" >> "$GITHUB_STEP_SUMMARY"

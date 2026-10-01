@@ -13,6 +13,7 @@
 import path from "path"
 import { fileURLToPath } from "url"
 import { readJson, writeText } from "./fs-compat"
+import z from "zod"
 import { cloneJsonValue, formatModelsSnapshot, modelsSnapshotChanged, RETIRED_PROVIDER_IDS } from "./models-snapshot"
 import { isHiddenDeepseekLegacySku } from "../src/provider/deepseek-catalog"
 import {
@@ -29,24 +30,33 @@ const modelsFixturePath = process.env.AX_CODE_MODELS_FIXTURE_PATH
 // committed snapshot and exits non-zero on drift, without writing anything.
 const checkMode = process.argv.includes("--check")
 
-async function loadFetchedModels(): Promise<Record<string, any>> {
-  if (modelsFixturePath) {
-    console.log(`Fetching models from ${modelsFixturePath} ...`)
-    return readJson(modelsFixturePath)
-  }
+const upstreamCatalog = z.record(
+  z.string(),
+  z.object({ models: z.record(z.string(), z.object({ id: z.string().min(1) }).passthrough()) }).passthrough(),
+)
 
-  console.log(`Fetching models from ${modelsUrl}/api.json ...`)
-  return fetch(`${modelsUrl}/api.json`, { signal: AbortSignal.timeout(10_000) })
-    .then((r) => {
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      return r.json()
-    })
-    .catch((err) => {
-      console.error(`Failed to fetch models: ${err.message}`)
-      // A failed update must never report success: callers would otherwise
-      // continue with a stale snapshot while believing regeneration finished.
-      process.exit(2)
-    })
+async function loadFetchedModels(): Promise<Record<string, any>> {
+  try {
+    let data: unknown
+    if (modelsFixturePath) {
+      console.log(`Fetching models from ${modelsFixturePath} ...`)
+      data = await readJson(modelsFixturePath)
+    } else {
+      console.log(`Fetching models from ${modelsUrl}/api.json ...`)
+      const response = await fetch(`${modelsUrl}/api.json`, { signal: AbortSignal.timeout(10_000) })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      data = await response.json()
+    }
+    const result = upstreamCatalog.safeParse(data)
+    if (!result.success || Object.keys(result.data).length === 0) {
+      throw new Error("Invalid model catalog: expected non-empty provider records with model maps and model IDs")
+    }
+    return result.data
+  } catch (err) {
+    console.error(`Failed to fetch models: ${err instanceof Error ? err.message : String(err)}`)
+    // Never replace the snapshot or propose a PR after a download/schema error.
+    process.exit(2)
+  }
 }
 
 const fetched = await loadFetchedModels()
@@ -61,12 +71,7 @@ for (const id of RETIRED_PROVIDER_IDS) {
 }
 
 // Preserve local-only provider entries that models.dev doesn't include
-const cliImageProviderIDs = [
-  "claude-code",
-  "codex-cli",
-  "grok-build-cli",
-  "muse-cli",
-] as const
+const cliImageProviderIDs = ["claude-code", "codex-cli", "grok-build-cli", "muse-cli"] as const
 const localProviderIDs = ["ax-studio", ...cliImageProviderIDs, "ollama"]
 for (const id of localProviderIDs) {
   if (existing[id] && !fetched[id]) fetched[id] = cloneJsonValue(existing[id])
