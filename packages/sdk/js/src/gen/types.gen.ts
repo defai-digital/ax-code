@@ -1065,6 +1065,9 @@ export type Event =
   | EventTaskQueueDeleted
   | EventPermissionAsked
   | EventPermissionReplied
+  | EventMcpToolsChanged
+  | EventMcpBrowserOpenFailed
+  | EventCommandExecuted
   | EventTodoUpdated
   | EventSessionStatus
   | EventSessionIdle
@@ -1073,11 +1076,8 @@ export type Event =
   | EventQuestionRejected
   | EventSessionCompacted
   | EventFileEdited
-  | EventMcpToolsChanged
-  | EventMcpBrowserOpenFailed
   | EventDebugEngineCorrelatedDiagnostics
   | EventVcsBranchUpdated
-  | EventCommandExecuted
   | EventWorkflowRunCreated
   | EventWorkflowRunUpdated
   | EventWorkflowRunStarted
