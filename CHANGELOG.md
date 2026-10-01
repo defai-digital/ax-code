@@ -6,6 +6,19 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.21.2] - 2026-10-01
+
+### Fixed
+
+- Redact every Cookie and combined Set-Cookie credential value in persisted tool inputs, logs, and evidence, including quoted and malformed values.
+- Recover interrupted foreground sessions and pending steering safely after backend restarts.
+- Enforce goal budgets after accepted tool requests settle, allowing only the terminal wrap-up request.
+- Update Hono to a patched security release.
+
+### Changed
+
+- Publish SDK 2.5.54 with the refreshed session event contract.
+
 ## [7.21.1] - 2026-09-30
 
 ### Fixed
