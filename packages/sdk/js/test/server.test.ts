@@ -207,8 +207,10 @@ async function createFakeAxCode() {
     bin,
     [
       "#!/bin/sh",
-      'printf "%s\\n" "$$" > "$AX_CODE_FAKE_PID_FILE"',
+      // The PID is the fixture's readiness receipt. Install the handler first
+      // so an immediate abort cannot kill the shell before it records SIGTERM.
       'trap \'printf "terminated" > "$AX_CODE_FAKE_TERM_FILE"; exit 0\' TERM INT',
+      'printf "%s\\n" "$$" > "$AX_CODE_FAKE_PID_FILE"',
       "while true; do sleep 1; done",
       "",
     ].join("\n"),
@@ -240,10 +242,10 @@ async function createReadyFakeAxCode() {
     bin,
     [
       "#!/bin/sh",
+      'trap \'printf "terminated" > "$AX_CODE_FAKE_TERM_FILE"; exit 0\' TERM INT',
       'printf "%s\\n" "$$" > "$AX_CODE_FAKE_PID_FILE"',
       'printf "%s:%s\\n" "$AX_CODE_SERVER_USERNAME" "$AX_CODE_SERVER_PASSWORD" > "$AX_CODE_FAKE_AUTH_FILE"',
       'printf "%s\\n" "$*" > "$AX_CODE_FAKE_ARGS_FILE"',
-      'trap \'printf "terminated" > "$AX_CODE_FAKE_TERM_FILE"; exit 0\' TERM INT',
       'printf "ax-code server listening on http://127.0.0.1:4096\\n"',
       "while true; do sleep 1; done",
       "",
