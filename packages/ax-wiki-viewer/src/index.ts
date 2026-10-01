@@ -797,6 +797,10 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       })
       group.addEventListener("pointerdown", (event) => {
         if (disposed || layout === undefined || event.button !== 0) return
+        // A touch drag does not produce a click, so a flag set on pointerup would
+        // swallow the next tap. The click from a mouse drag arrives before the
+        // next pointerdown, and still sees the flag.
+        suppressClick = false
         // No preventDefault: touch scrolling is already disabled via touch-action,
         // and canceling pointerdown would risk the click-to-select path.
         const pointerId = event.pointerId
@@ -804,6 +808,8 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
           startY = event.clientY
         const originX = node.x,
           originY = node.y
+        const originFx = node.fx ?? null,
+          originFy = node.fy ?? null
         let moved = false
         let finished = false
         try {
@@ -846,6 +852,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
           group.removeEventListener("pointerup", end)
           group.removeEventListener("pointercancel", end)
           group.removeEventListener("lostpointercapture", onLostCapture)
+          doc.removeEventListener("pointermove", move)
           doc.removeEventListener("pointerup", end)
           doc.removeEventListener("pointercancel", end)
           try {
@@ -859,8 +866,15 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
             aside.style.pointerEvents = ""
           }
           if (disposed || !moved) return
-          suppressClick = true
           doc.getSelection()?.removeAllRanges()
+          // A click is delivered to this node only when pointerup targets it.
+          // pointercancel and a release on another element do not, so they must
+          // not swallow the next real click.
+          const clickFollows =
+            upEvent.type === "pointerup" &&
+            upEvent.target instanceof Element &&
+            (upEvent.target === group || group.contains(upEvent.target))
+          if (clickFollows) suppressClick = true
           // Hit-testing during pointer capture can return the captured node
           // instead of what is painted under the cursor. Use the canvas and
           // the zoom pad rectangles.
@@ -881,8 +895,8 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
             upEvent.clientY <= rect.bottom &&
             !overHud
           if (!inside) {
-            node.fx = null
-            node.fy = null
+            node.fx = originFx
+            node.fy = originFy
             node.x = originX
             node.y = originY
             positionElements()
@@ -903,6 +917,8 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
         group.addEventListener("pointerup", end)
         group.addEventListener("pointercancel", end)
         group.addEventListener("lostpointercapture", onLostCapture)
+        // Capture can fail. Moves that leave the circle still need a listener.
+        doc.addEventListener("pointermove", move)
         doc.addEventListener("pointerup", end)
         doc.addEventListener("pointercancel", end)
       })

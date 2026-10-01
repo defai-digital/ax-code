@@ -346,6 +346,57 @@ try {
     document.querySelectorAll("svg g.node")[0].dispatchEvent(new MouseEvent("click", { bubbles: true })),
   )
   assert.match(await calm.locator(".detail").innerText(), /Select a page, source, or symbol/)
+  // pointercancel does not deliver a click, so the next click must still select.
+  await calm.evaluate(() => {
+    const group = document.querySelectorAll("svg g.node")[0]
+    const box = group.querySelector("circle").getBoundingClientRect()
+    const sx = box.x + box.width / 2,
+      sy = box.y + box.height / 2
+    const opts = (x, y) => ({ clientX: x, clientY: y, pointerId: 9, bubbles: true, isPrimary: true })
+    group.dispatchEvent(new PointerEvent("pointerdown", opts(sx, sy)))
+    group.dispatchEvent(new PointerEvent("pointermove", opts(sx + 24, sy + 16)))
+    group.dispatchEvent(new PointerEvent("pointercancel", opts(sx + 24, sy + 16)))
+    group.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+  })
+  assert.match(await calm.locator(".detail").innerText(), /Page: Architecture/)
+  await calm.evaluate(() => document.querySelector("svg").dispatchEvent(new MouseEvent("click", { bubbles: true })))
+  assert.match(await calm.locator(".detail").innerText(), /Select a page, source, or symbol/)
+  // A touch drag targets the node on pointerup but does not emit a click.
+  // The next tap must still select.
+  await calm.evaluate(() => {
+    const group = document.querySelectorAll("svg g.node")[0]
+    const box = group.querySelector("circle").getBoundingClientRect()
+    const sx = box.x + box.width / 2,
+      sy = box.y + box.height / 2
+    const touch = (type, x, y) =>
+      new PointerEvent(type, { clientX: x, clientY: y, pointerId: 15, pointerType: "touch", bubbles: true, isPrimary: true })
+    group.dispatchEvent(touch("pointerdown", sx, sy))
+    group.dispatchEvent(touch("pointermove", sx + 28, sy + 18))
+    group.dispatchEvent(touch("pointerup", sx + 28, sy + 18))
+    group.dispatchEvent(touch("pointerdown", sx, sy))
+    group.dispatchEvent(touch("pointerup", sx, sy))
+    group.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+  })
+  assert.match(await calm.locator(".detail").innerText(), /Page: Architecture/)
+  const tracked = await calm.evaluate(() => {
+    const group = document.querySelectorAll("svg g.node")[0]
+    const before = group.getAttribute("transform")
+    const box = group.querySelector("circle").getBoundingClientRect()
+    const sx = box.x + box.width / 2,
+      sy = box.y + box.height / 2
+    const opts = (x, y) => ({ clientX: x, clientY: y, pointerId: 31, bubbles: true, isPrimary: true })
+    group.dispatchEvent(new PointerEvent("pointerdown", opts(sx, sy)))
+    document.querySelector("svg").dispatchEvent(new PointerEvent("pointermove", opts(sx + 48, sy + 22)))
+    document.dispatchEvent(new PointerEvent("pointerup", opts(sx + 48, sy + 22)))
+    return { before, after: group.getAttribute("transform") }
+  })
+  assert.notEqual(tracked.after, tracked.before)
+  assert.equal(
+    await calm.evaluate(
+      () => [...document.querySelectorAll("svg g.node")].filter((g) => g.getAttribute("opacity") === "0.15").length,
+    ),
+    2,
+  )
   await calm.close()
   await page.getByRole("button", { name: "Show all / reset" }).click()
   // Wheel zooms toward the pointer: one notch in shrinks the viewBox, one notch out restores it.
@@ -378,6 +429,42 @@ try {
       return selected === null || selected.isCollapsed
     }),
     true,
+  )
+  // An outside release restores a pinned node and keeps that pin, so the next
+  // reheat does not pull it away.
+  const restoredPin = await page.evaluate(() => {
+    const nodes = () => [...document.querySelectorAll("svg g.node")]
+    const center = (group) => {
+      const box = group.querySelector("circle").getBoundingClientRect()
+      return [box.x + box.width / 2, box.y + box.height / 2]
+    }
+    const gesture = (group, pointerId, up) => {
+      const [sx, sy] = center(group)
+      const opts = (x, y) => ({ clientX: x, clientY: y, pointerId, bubbles: true, isPrimary: true })
+      group.dispatchEvent(new PointerEvent("pointerdown", opts(sx, sy)))
+      group.dispatchEvent(new PointerEvent("pointermove", opts(sx + 30, sy + 18)))
+      group.dispatchEvent(new PointerEvent("pointerup", opts(up[0], up[1])))
+    }
+    const [sx, sy] = center(nodes()[0])
+    gesture(nodes()[0], 21, [sx + 64, sy + 28])
+    const canvas = document.querySelector(".canvas").getBoundingClientRect()
+    gesture(nodes()[0], 22, [canvas.right + 28, canvas.top + 16])
+    const restored = nodes()[0].getAttribute("transform")
+    const beforeNeighbor = nodes()[1].getAttribute("transform")
+    const [nx, ny] = center(nodes()[1])
+    gesture(nodes()[1], 23, [nx + 22, ny + 14])
+    return { restored, beforeNeighbor }
+  })
+  await awaitMoved(1, (transform) => transform !== restoredPin.beforeNeighbor, 15000, "reheat never moved the other node")
+  assert.equal(
+    await page.evaluate(() => document.querySelectorAll("svg g.node")[0].getAttribute("transform")),
+    restoredPin.restored,
+  )
+  assert.equal(
+    await page.evaluate(
+      () => [...document.querySelectorAll("svg g.node")].filter((g) => g.getAttribute("opacity") === "0.15").length,
+    ),
+    0,
   )
   if (process.env.AX_WIKI_VIEWER_SCREENSHOT)
     await page.screenshot({ path: process.env.AX_WIKI_VIEWER_SCREENSHOT, fullPage: true })
