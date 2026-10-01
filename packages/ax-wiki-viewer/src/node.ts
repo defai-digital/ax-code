@@ -14,6 +14,6 @@ export function renderWikiGraphHtml(input: unknown): { html: string; csp: string
   const csp = `default-src 'none'; script-src 'sha256-${digest}'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'`
   return {
     csp,
-    html: `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="${csp}"><meta name="referrer" content="no-referrer"><title>AX Wiki evidence map</title></head><body><main id="wiki-viewer"></main><script>${script}</script></body></html>`,
+    html: `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="${csp}"><meta name="referrer" content="no-referrer"><title>AX Wiki evidence map</title><style>html,body{margin:0;height:100%;background:#101923}main{height:100%}</style></head><body><main id="wiki-viewer"></main><script>${script}</script></body></html>`,
   }
 }

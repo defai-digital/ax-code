@@ -275,6 +275,20 @@ try {
   assert.match(await calm.locator(".detail").innerText(), /Select a page, source, or symbol/)
   await calm.close()
   await page.getByRole("button", { name: "Show all / reset" }).click()
+  // Wheel zooms toward the pointer: one notch in shrinks the viewBox, one notch out restores it.
+  const wheeled = await page.evaluate(() => {
+    const svg = document.querySelector("svg")
+    const before = svg.getAttribute("viewBox").split(" ").map(Number)
+    const box = svg.getBoundingClientRect()
+    const at = { clientX: box.x + box.width / 2, clientY: box.y + box.height / 2, bubbles: true, cancelable: true }
+    svg.dispatchEvent(new WheelEvent("wheel", { ...at, deltaY: -120 }))
+    const zoomed = svg.getAttribute("viewBox").split(" ").map(Number)
+    svg.dispatchEvent(new WheelEvent("wheel", { ...at, deltaY: 120 }))
+    const restored = svg.getAttribute("viewBox").split(" ").map(Number)
+    return { before, zoomed, restored }
+  })
+  assert.ok(wheeled.zoomed[2] < wheeled.before[2], "wheel up should zoom in")
+  assert.ok(Math.abs(wheeled.restored[2] - wheeled.before[2]) < 1e-6, "wheel down should restore the scale")
   if (process.env.AX_WIKI_VIEWER_SCREENSHOT)
     await page.screenshot({ path: process.env.AX_WIKI_VIEWER_SCREENSHOT, fullPage: true })
   await page.setViewportSize({ width: 390, height: 844 })

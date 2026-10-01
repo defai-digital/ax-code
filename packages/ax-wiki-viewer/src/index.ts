@@ -1,5 +1,6 @@
 import { parseWikiGraph } from "@ax-code/ax-wiki/graph"
 import type { WikiGraphEdge, WikiGraphNode } from "@ax-code/ax-wiki/graph"
+import { fitCamera, wheelZoomFactor, zoomAbout } from "./camera.js"
 import { LAYOUT_WORLD, createForceLayout } from "./force-layout.js"
 import type { ForceLayout, LayoutNode } from "./force-layout.js"
 import {
@@ -16,35 +17,47 @@ import {
 import type { FreshnessState, NodeKind, OutlineSymbol, ViewFilters } from "./visibility.js"
 
 export const viewerCss = `
-.axwv{font:14px system-ui,sans-serif;color:#dce6f2;background:#101923;padding:20px;border-radius:12px;box-sizing:border-box}
-.axwv *{box-sizing:border-box}.axwv h1{font-size:24px;margin:0 0 8px}.axwv p{line-height:1.5;overflow-wrap:anywhere}
-.axwv button,.axwv input,.axwv select{font:inherit;color:inherit;background:#1c2c3c;border:1px solid #64778b;border-radius:6px;padding:8px}
+.axwv{display:flex;flex-direction:column;height:100%;min-height:100%;font:14px system-ui,sans-serif;color:#dce6f2;background:#101923;padding:12px 16px 16px;box-sizing:border-box}
+.axwv *{box-sizing:border-box}.axwv h1{font-size:18px;margin:0;letter-spacing:-.01em}.axwv p{line-height:1.45;overflow-wrap:anywhere;margin:4px 0}
+.axwv button,.axwv input,.axwv select{font:inherit;color:inherit;background:#1c2c3c;border:1px solid #3d5166;border-radius:6px;padding:6px 8px}
 .axwv button{cursor:pointer}.axwv button:hover{background:#30455c}.axwv :focus-visible{outline:3px solid #78dacc;outline-offset:2px}
-.axwv .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}.axwv .layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(260px,1fr);gap:16px}
-.axwv .canvas{position:relative;height:520px;overflow:hidden;border:1px solid #64778b;border-radius:8px}.axwv svg{width:100%;height:100%}
-.axwv .node{cursor:grab;touch-action:none}.axwv .node.dragging{cursor:grabbing}.axwv svg text{pointer-events:none;font-size:10px;fill:#edf6ff;text-anchor:middle}
+.axwv .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 0}
+.axwv .layout{order:1;flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,300px);gap:12px;margin-top:8px}
+.axwv > details,.axwv > .notice{order:2}
+.axwv .canvas{position:relative;height:100%;min-height:420px;overflow:hidden;border:1px solid #2c4156;border-radius:10px;background:#0c141d;touch-action:none}
+.axwv svg{width:100%;height:100%;display:block}
+.axwv .node{cursor:grab;touch-action:none}.axwv .node.dragging{cursor:grabbing}
+.axwv svg text{pointer-events:none;font-size:11px;fill:#edf6ff;text-anchor:middle}
 .axwv .edge{fill:none;stroke:#64778b}.axwv .arrow{fill:none;stroke:#b5c5d7}
 .axwv .badge text{font-size:7.5px;font-weight:700;fill:#dce6f2}
-.axwv .legend{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;margin:8px 0 0;font-size:12px;color:#b5c5d7}
-.axwv .list{max-height:260px;overflow:auto;padding:0;list-style:none}.axwv .list button{width:100%;text-align:left;margin:3px 0;overflow-wrap:anywhere}
-.axwv .detail{white-space:pre-wrap;overflow-wrap:anywhere}.axwv .muted{color:#b5c5d7}.axwv .selected{border-color:#78dacc}
-.axwv .chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}
+.axwv .legend{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;margin:6px 0 0;font-size:12px;color:#8ea0b3}
+.axwv .side{min-height:0;overflow:auto;padding-right:2px}
+.axwv .side h2{font-size:13px;margin:0 0 6px;letter-spacing:.04em;text-transform:uppercase;color:#8ea0b3}
+.axwv .list{max-height:none;overflow:visible;padding:0;margin:0 0 12px;list-style:none}
+.axwv .list button{width:100%;text-align:left;margin:0 0 2px;padding:5px 8px;background:transparent;border-color:transparent;overflow-wrap:anywhere}
+.axwv .list button:hover{background:#243246;border-color:#3d5166}
+.axwv .detail{white-space:pre-wrap;overflow-wrap:anywhere;margin:0;font-size:13px}
+.axwv .muted{color:#b5c5d7}.axwv .selected{border-color:#78dacc;background:#1a3144}
+.axwv .chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 0}
 .axwv .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
-.axwv .chip[aria-pressed="false"],.axwv .kind[aria-pressed="false"]{opacity:.6;text-decoration:line-through}
-.axwv .counts{font-variant-numeric:tabular-nums}
-.axwv .notice{border:1px solid #64778b;border-radius:8px;padding:8px 12px;color:#b5c5d7}
-.axwv .overlay{position:absolute;inset:0;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;text-align:center;background:rgba(16,25,35,.94);padding:24px}
+.axwv .chip[aria-pressed="false"],.axwv .kind[aria-pressed="false"]{opacity:.45;text-decoration:line-through}
+.axwv .counts{font-variant-numeric:tabular-nums;color:#8ea0b3;font-size:12px}
+.axwv .notice{border:1px solid #3d5166;border-radius:8px;padding:8px 12px;color:#b5c5d7}
+.axwv .overlay{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;text-align:center;background:rgba(12,20,29,.94);padding:24px}
 .axwv .overlay p{margin:0;max-width:52ch}
-.axwv details{margin:12px 0}
+.axwv .hud{position:absolute;right:10px;bottom:10px;z-index:2;display:grid;grid-template-columns:auto auto;gap:4px;margin:0}
+.axwv .hud button{padding:6px 8px;background:rgba(16,25,35,.9)}
+.axwv details{margin:8px 0 0}
+.axwv details summary{cursor:pointer;color:#b5c5d7}
 .axwv .outline ul{list-style:none;margin:2px 0;padding-left:18px}
 .axwv .outline>ul{padding-left:0}
 .axwv .outline button{background:none;border-color:transparent;padding:4px 8px;text-align:left;overflow-wrap:anywhere}
 .axwv .outline button:hover{background:#30455c;border-color:#64778b}
-@media(max-width:760px){.axwv .layout{grid-template-columns:1fr}.axwv .canvas{height:360px}}
+@media(max-width:760px){.axwv .layout{grid-template-columns:1fr}.axwv .canvas{height:420px;min-height:420px}.axwv .hud{right:8px;bottom:8px}.axwv .legend .note{display:none}}
 `
 
-const MIN_ZOOM = 0.25
-const MAX_ZOOM = 8
+/** Overview stays a picture. Names appear for the focused neighborhood, or once the camera is close. */
+const LABEL_ZOOM: Record<NodeKind, number> = { page: 1.35, source: 1.7, symbol: 2.4 }
 const PAGE_FILL = "#245d65"
 const SOURCE_FILL = "#30455c"
 const SYMBOL_FILL = "#7d6a45"
@@ -83,6 +96,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   let selected: string | undefined
   let hovered: string | undefined
   let suppressClick = false
+  let suppressCanvasClick = false
   let lastVisible: WikiGraphNode[] = []
   let matchIndex = 0
   let filters: ViewFilters = defaultFilters(),
@@ -108,11 +122,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     return el
   }
   html("h1", root, "AX Wiki evidence map")
-  html(
-    "p",
-    root,
-    "Wiki page → referenced source. Recorded membership, not a code dependency or call graph. Node size is how many of those listings are in this snapshot.",
-  )
+  html("p", root, "Scroll to zoom, drag the background to pan. Color is the kind of thing.")
   const status = html("p", root)
   status.className = "counts"
   status.setAttribute("role", "status")
@@ -149,7 +159,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   svg.setAttribute("role", "img")
   svg.setAttribute(
     "aria-label",
-    "Page to source references and source to source imports; use the adjacent list for keyboard navigation. When focused, plus and minus zoom, arrow keys pan. Drag nodes to rearrange; activating empty canvas clears the selection.",
+    "Page to source references and source to source imports. Scroll the wheel to zoom toward the pointer, drag empty canvas to pan, or focus and use plus, minus, and arrow keys. Drag nodes to rearrange; activating empty canvas clears the selection.",
   )
   svg.tabIndex = 0
   canvas.append(svg)
@@ -159,6 +169,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   const overlayMessage = html("p", overlay)
   const overlayReset = html("button", overlay, "Reset filters")
   const aside = html("div", layoutRoot)
+  aside.className = "side"
   html("h2", aside, "Explore")
   const list = html("ul", aside)
   list.className = "list"
@@ -166,8 +177,8 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   detailHeading.tabIndex = -1
   const detail = html("p", aside)
   detail.className = "detail"
-  const navigation = html("div", root)
-  navigation.className = "controls"
+  const navigation = html("div", canvas)
+  navigation.className = "hud"
 
   const svgNS = "http://www.w3.org/2000/svg"
   const edgeLayer = doc.createElementNS(svgNS, "g")
@@ -206,8 +217,17 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     visibleById = new Map(graph.nodes.map((node) => [node.id, isNodeVisible(node, filters)]))
   }
 
+  function canvasAspect(): number {
+    const rect = canvas.getBoundingClientRect()
+    if (rect.width < 2 || rect.height < 2) return LAYOUT_WORLD.width / LAYOUT_WORLD.height
+    return rect.width / rect.height
+  }
+
   function viewBox() {
-    svg.setAttribute("viewBox", `${offsetX} ${offsetY} ${LAYOUT_WORLD.width / zoom} ${LAYOUT_WORLD.height / zoom}`)
+    const aspect = canvasAspect()
+    const viewW = LAYOUT_WORLD.width / zoom
+    const viewH = viewW / aspect
+    svg.setAttribute("viewBox", `${offsetX} ${offsetY} ${viewW} ${viewH}`)
   }
 
   function fitView() {
@@ -222,18 +242,38 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       maxX = -Infinity,
       maxY = -Infinity
     for (const node of layout.nodes) {
-      const pad = node.radius + 24
+      const pad = node.radius + 28
       minX = Math.min(minX, node.x - pad)
       minY = Math.min(minY, node.y - pad)
       maxX = Math.max(maxX, node.x + pad)
       maxY = Math.max(maxY, node.y + pad)
     }
-    zoom = Math.min(1, LAYOUT_WORLD.width / (maxX - minX), LAYOUT_WORLD.height / (maxY - minY))
-    zoom = Math.max(MIN_ZOOM, zoom)
-    offsetX = (minX + maxX) / 2 - LAYOUT_WORLD.width / zoom / 2
-    offsetY = (minY + maxY) / 2 - LAYOUT_WORLD.height / zoom / 2
+    const fitted = fitCamera({ minX, minY, maxX, maxY }, canvasAspect(), LAYOUT_WORLD.width)
+    zoom = fitted.zoom
+    offsetX = fitted.offsetX
+    offsetY = fitted.offsetY
     cameraTouched = false
     viewBox()
+  }
+
+  /** Scale about a screen point. Falls back to the view center when the SVG has no screen transform yet. */
+  function applyZoom(factor: number, clientX: number, clientY: number) {
+    const ctm = svg.getScreenCTM()
+    const anchor = ctm
+      ? new DOMPoint(clientX, clientY).matrixTransform(ctm.inverse())
+      : { x: offsetX + LAYOUT_WORLD.width / zoom / 2, y: offsetY + LAYOUT_WORLD.height / zoom / 2 }
+    const next = zoomAbout({ zoom, offsetX, offsetY }, factor, anchor)
+    zoom = next.zoom
+    offsetX = next.offsetX
+    offsetY = next.offsetY
+    cameraTouched = true
+    viewBox()
+    applyEmphasis()
+  }
+
+  function zoomBy(factor: number) {
+    const rect = canvas.getBoundingClientRect()
+    applyZoom(factor, rect.left + rect.width / 2, rect.top + rect.height / 2)
   }
 
   function edgeCurve(a: LayoutNode, b: LayoutNode): { d: string; head: string } {
@@ -319,7 +359,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
         circle.removeAttribute("stroke-width")
       }
       const emphasized = near !== undefined && near.has(node.id)
-      const showLabel = emphasized || (node.kind === "page" ? zoom >= 0.7 : zoom >= 2)
+      const showLabel = emphasized || zoom >= LABEL_ZOOM[node.kind]
       label.setAttribute("display", showLabel ? "" : "none")
     }
   }
@@ -351,9 +391,9 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     list.replaceChildren()
     for (const node of visible) {
       const item = html("li", list)
-      const button = html("button", item, `${node.kind}: ${node.label} · ${node.freshness}`)
+      const button = html("button", item, `${node.kind}: ${node.label}`)
       const degree = layout?.byId.get(node.id)?.degree ?? 0
-      button.title = `${plural(degree, "connection", "connections")} shown of ${plural(node.recordedReferences, "recorded reference", "recorded references")}`
+      button.title = `${node.freshness} · ${plural(degree, "connection", "connections")} shown of ${plural(node.recordedReferences, "recorded reference", "recorded references")}`
       if (node.id === selected) button.className = "selected"
       button.onclick = () => select(node)
       previewOn(button, node.id)
@@ -466,6 +506,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       "teal edge: target depends on selected node",
     ]) {
       const item = doc.createElement("span")
+      item.className = "note"
       item.textContent = text
       legend.append(item)
     }
@@ -583,7 +624,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       circle.setAttribute("fill", node.kind === "page" ? PAGE_FILL : node.kind === "source" ? SOURCE_FILL : SYMBOL_FILL)
       const label = doc.createElementNS(svgNS, "text")
       label.setAttribute("y", String(node.radius + 14))
-      label.textContent = `${node.kind === "page" ? "Page → " : ""}${truncateLabel(info.label)}`
+      label.textContent = truncateLabel(info.label)
       const title = doc.createElementNS(svgNS, "title")
       title.textContent = `${info.label} (${node.kind}, ${info.freshness}, ${plural(node.degree, "connection", "connections")} shown)`
       group.append(circle, label, title)
@@ -712,68 +753,98 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     detailHeading.focus()
   }
 
-  for (const [label, action] of [
-    [
-      "Zoom in",
-      () => {
-        zoom = Math.min(MAX_ZOOM, zoom * 1.5)
-      },
-    ],
-    [
-      "Zoom out",
-      () => {
-        zoom = Math.max(MIN_ZOOM, zoom / 1.5)
-      },
-    ],
-    [
-      "Pan left",
-      () => {
-        offsetX -= 100 / zoom
-      },
-    ],
-    [
-      "Pan right",
-      () => {
-        offsetX += 100 / zoom
-      },
-    ],
-    [
-      "Pan up",
-      () => {
-        offsetY -= 100 / zoom
-      },
-    ],
-    [
-      "Pan down",
-      () => {
-        offsetY += 100 / zoom
-      },
-    ],
-  ] as const) {
-    const button = html("button", navigation, label)
-    button.onclick = () => {
-      action()
-      cameraTouched = true
-      viewBox()
-      applyEmphasis()
-    }
-  }
-  svg.onkeydown = (event) => {
-    const step = 100 / zoom
-    if (event.key === "+" || event.key === "=") zoom = Math.min(MAX_ZOOM, zoom * 1.5)
-    else if (event.key === "-") zoom = Math.max(MIN_ZOOM, zoom / 1.5)
-    else if (event.key === "ArrowLeft") offsetX -= step
-    else if (event.key === "ArrowRight") offsetX += step
-    else if (event.key === "ArrowUp") offsetY -= step
-    else if (event.key === "ArrowDown") offsetY += step
-    else return
-    event.preventDefault()
+  function pan(dx: number, dy: number) {
+    offsetX += dx
+    offsetY += dy
     cameraTouched = true
     viewBox()
     applyEmphasis()
   }
+  for (const [label, action] of [
+    ["Zoom in", () => zoomBy(1.5)],
+    ["Zoom out", () => zoomBy(1 / 1.5)],
+    ["Pan left", () => pan(-100 / zoom, 0)],
+    ["Pan right", () => pan(100 / zoom, 0)],
+    ["Pan up", () => pan(0, -100 / zoom)],
+    ["Pan down", () => pan(0, 100 / zoom)],
+  ] as const) {
+    const button = html("button", navigation, label)
+    button.onclick = () => action()
+  }
+  svg.onkeydown = (event) => {
+    const step = 100 / zoom
+    if (event.key === "+" || event.key === "=") zoomBy(1.5)
+    else if (event.key === "-") zoomBy(1 / 1.5)
+    else if (event.key === "ArrowLeft") pan(-step, 0)
+    else if (event.key === "ArrowRight") pan(step, 0)
+    else if (event.key === "ArrowUp") pan(0, -step)
+    else if (event.key === "ArrowDown") pan(0, step)
+    else return
+    event.preventDefault()
+  }
+
+  // Wheel zooms toward the pointer, the same curve as d3-zoom. Buttons and keys zoom toward the canvas center.
+  const onWheel = (event: WheelEvent) => {
+    if (disposed) return
+    const target = event.target
+    if (target instanceof Element && target.closest(".hud")) return
+    event.preventDefault()
+    const factor = wheelZoomFactor(event.deltaY, event.deltaMode, event.ctrlKey)
+    if (factor === 1) return
+    applyZoom(factor, event.clientX, event.clientY)
+  }
+  canvas.addEventListener("wheel", onWheel, { passive: false })
+  // Refit until the user pans or zooms, so a resize does not leave the picture letterboxed.
+  const resize = new ResizeObserver(() => {
+    if (disposed) return
+    if (!cameraTouched) fitView()
+    else viewBox()
+  })
+  resize.observe(canvas)
+
+  svg.addEventListener("pointerdown", (event) => {
+    if (disposed || event.button !== 0) return
+    const target = event.target
+    if (target instanceof Element && target.closest(".node")) return
+    const pointerId = event.pointerId
+    const startX = event.clientX
+    const startY = event.clientY
+    let lastX = startX
+    let lastY = startY
+    let moved = false
+    const move = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== pointerId) return
+      if (!moved && Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 3) return
+      moved = true
+      const ctm = svg.getScreenCTM()
+      if (ctm) {
+        const from = new DOMPoint(lastX, lastY).matrixTransform(ctm.inverse())
+        const to = new DOMPoint(moveEvent.clientX, moveEvent.clientY).matrixTransform(ctm.inverse())
+        offsetX += from.x - to.x
+        offsetY += from.y - to.y
+        cameraTouched = true
+        viewBox()
+      }
+      lastX = moveEvent.clientX
+      lastY = moveEvent.clientY
+    }
+    const up = (upEvent: PointerEvent) => {
+      if (upEvent.pointerId !== pointerId) return
+      svg.removeEventListener("pointermove", move)
+      svg.removeEventListener("pointerup", up)
+      svg.removeEventListener("pointercancel", up)
+      if (moved) suppressCanvasClick = true
+    }
+    svg.addEventListener("pointermove", move)
+    svg.addEventListener("pointerup", up)
+    svg.addEventListener("pointercancel", up)
+  })
 
   svg.addEventListener("click", (event) => {
+    if (suppressCanvasClick) {
+      suppressCanvasClick = false
+      return
+    }
     if (event.target === svg && selected !== undefined) {
       selected = undefined
       render()
@@ -859,6 +930,8 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       root.replaceChildren()
       root.onkeydown = null
       svg.onkeydown = null
+      canvas.removeEventListener("wheel", onWheel)
+      resize.disconnect()
       search.oninput = null
       search.onkeydown = null
       reset.onclick = null
