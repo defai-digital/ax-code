@@ -90,20 +90,20 @@ export function expandLeadingTilde(value: string, home = os.homedir()): string |
   return value
 }
 
-// Matches any shell metacharacter that makes an argument non-literal: variable
-// references ($f, ${f}), command/arithmetic substitution ($(...)), globs
-// (* ? [ ]), and brace expansion ({a,b}). Such args must NOT be treated as
-// static paths — the literal text (e.g. "$f" inside a `for f ...; do cat $f`
-// loop) would resolve to a bogus path and the preflight would report a false
-// "Path does not exist", blocking a valid command.
-const SHELL_EXPANSION_OR_GLOB = /[$*?[\]{}]/
-
+/**
+ * The literal path a shell word denotes, or undefined when the word is not a
+ * static literal (variable/glob/substitution, or a leading `~`). The word is
+ * fully decoded — concatenated and partial quotes, backslash escapes — because
+ * stripping a single wrapping quote pair misses `"/tmp/"x`, whose literal path
+ * is `/tmp/x`: the bare strip left the quotes in and the existence preflight
+ * (and `cd` base tracking) then used a bogus path. decodeShellLiteral also
+ * rejects unquoted metacharacters, so `a;b` is not treated as a static path.
+ */
 export function isStaticPathArg(value: string) {
-  const stripped = stripShellQuotes(value)
-  if (!stripped || hasDynamicShellExpansion(stripped)) return undefined
-  // Skip anything the shell expands or globs, and leading ~ home expansion.
-  if (SHELL_EXPANSION_OR_GLOB.test(stripped) || stripped.startsWith("~")) return undefined
-  return stripped
+  const decoded = decodeShellLiteral(value)
+  if (!decoded) return undefined
+  if (hasDynamicShellExpansion(decoded) || decoded.startsWith("~")) return undefined
+  return decoded
 }
 
 function positionalArgs(args: string[]) {

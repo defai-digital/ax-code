@@ -103,6 +103,19 @@ describe("tool.bash helpers", () => {
     expect(isStaticPathArg("$(pwd)/file.txt")).toBeUndefined()
   })
 
+  test("decodes partial and escaped quotes before the static-path check", () => {
+    // `"/tmp/"x` denotes the literal path /tmp/x; stripping only a fully
+    // wrapping quote pair left the quote characters in the word and the
+    // existence preflight checked a bogus path.
+    expect(isStaticPathArg('"/tmp/"x')).toBe("/tmp/x")
+    expect(isStaticPathArg('"/tmp/foo""/bar"')).toBe("/tmp/foo/bar")
+    // An escaped space is a literal path character, not a separator.
+    expect(isStaticPathArg("a\\ b")).toBe("a b")
+    // Unquoted metacharacters make the word a command, not a static path.
+    expect(isStaticPathArg("a;b")).toBeUndefined()
+    expect(isStaticPathArg("a<b")).toBeUndefined()
+  })
+
   test("does not treat shell variable references or globs as static paths", () => {
     // A bare variable reference (e.g. `cat $f` inside a `for f ...` loop) must not
     // be statically path-checked — it would resolve to a literal "$f" and trigger
