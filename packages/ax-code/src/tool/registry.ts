@@ -16,6 +16,7 @@ import { ContextStatusTool } from "./context_status"
 import { ReadRecipeTool } from "./read_recipe"
 import { ContextRecoverTool } from "./context_recover"
 import { ReadTool } from "./read"
+import { RepoWikiTool } from "./repo_wiki"
 import { TaskTool } from "./task"
 import { TaskParallelTool } from "./task_parallel"
 import { WaitForTool } from "./waitfor"
@@ -289,6 +290,7 @@ export namespace ToolRegistry {
       ReadTool,
       GlobTool,
       GrepTool,
+      RepoWikiTool,
       EditTool,
       WriteTool,
       NotebookEditTool,

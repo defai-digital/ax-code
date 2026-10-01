@@ -1,0 +1,10 @@
+Browse the repository's AX Wiki: a small, source-backed Markdown knowledge base under `ax-wiki/` that describes architecture, module responsibilities, workflows, and design intent.
+
+Use this tool to choose WHERE to read next. The wiki is a navigation map, not proof: every page records the exact source files it was compiled from, and those source files are the authority. Before you rely on any page claim (especially before editing), read the sources it lists. If a page and the code disagree, trust the code.
+
+Operations:
+- `index`: list every wiki page as a compact card (path, title, summary, symbols, sources). Start here, then drill in.
+- `read`: return one page body plus its freshness and the source files it cites. Requires `page` (repo-relative, e.g. `quickstart.md` or `modules/ax-code/src/tool.md`).
+- `related`: find pages that mention a symbol or path, by exact frontmatter symbol first and body mention second. Requires `symbol`.
+
+Prefer this over wide `grep`/`glob` for "where is X" or conceptual questions; then read the listed source files to confirm. Do not load the whole wiki at once. If no wiki exists, the tool says so — run `ax-code wiki generate`.

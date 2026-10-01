@@ -23,6 +23,7 @@ export function renderAxWikiProtocol(input: {
     freshness === "fresh"
       ? "  Prefer the wiki before wide repository searches for conceptual questions."
       : "  Use this wiki for navigation only; verify current original source before relying on any implementation claim. Run: ax-code wiki update.",
+    "  Use the repo_wiki tool to list pages, read one page with its cited sources, or find pages for a symbol.",
     "  Use code_intelligence or LSP for precise symbols, callers, callees, references, and refactor impact.",
     "  If wiki content conflicts with code, trust code and suggest: ax-code wiki update.",
     "  Do not load the entire wiki; start at quickstart and drill into relevant pages.",

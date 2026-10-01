@@ -24,6 +24,7 @@ export namespace ToolProfile {
     "read",
     "glob",
     "grep",
+    "repo_wiki",
     "edit",
     "write",
     "apply_patch",
