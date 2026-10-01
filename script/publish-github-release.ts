@@ -314,7 +314,17 @@ export function workflowRunListArgs(workflow: string, repo: string, query: Workf
 }
 
 export function selectWorkflowRunID(runIDs: readonly string[], excluded: ReadonlySet<string> = new Set()) {
-  return runIDs.find((runID) => runID.length > 0 && !excluded.has(runID))
+  // A paginated listing can reveal an older run absent from the first snapshot.
+  // Run IDs increase over time, so exclusion alone cannot establish freshness.
+  const minimum = [...excluded].reduce((max, id) => (/^\d+$/.test(id) && BigInt(id) > max ? BigInt(id) : max), 0n)
+  return runIDs.find((runID) => /^\d+$/.test(runID) && BigInt(runID) > minimum && !excluded.has(runID))
+}
+
+export function workflowDispatchRunID(output: string, repo: string) {
+  for (const line of output.split(/\r?\n/)) {
+    const match = /^https:\/\/github\.com\/([^/]+\/[^/]+)\/actions\/runs\/(\d+)$/.exec(line.trim())
+    if (match && match[1].toLowerCase() === repo.toLowerCase()) return match[2]
+  }
 }
 
 function workflowRunIDs(workflow: string, query: WorkflowRunQuery, options: PublishGithubReleaseOptions) {
@@ -456,18 +466,17 @@ function verifyDownloadedReleaseAssets(options: PublishGithubReleaseOptions, ass
   }
 }
 
-function dispatchInstallSmoke(options: PublishGithubReleaseOptions) {
+export function dispatchInstallSmoke(options: PublishGithubReleaseOptions) {
   if (options.skipInstallSmoke) {
     console.log("Skipping install matrix smoke")
     return
   }
   const channel = options.installChannel ?? defaultInstallChannel(options.version)
-  // Workflow dispatch does not return a run ID. Snapshot all existing manual
-  // runs first, then wait for a new ID so an older successful smoke cannot be
-  // mistaken for the dispatch that follows.
+  // Prefer the dispatch receipt. Older gh versions may omit it, so retain a
+  // snapshot and require a newer run ID when discovering the run via listing.
   const query: WorkflowRunQuery = { event: "workflow_dispatch" }
   const previousRunIDs = new Set(workflowRunIDs("install-matrix-smoke.yml", query, options))
-  run(
+  const dispatchOutput = run(
     "gh",
     [
       "workflow",
@@ -480,8 +489,13 @@ function dispatchInstallSmoke(options: PublishGithubReleaseOptions) {
       "-f",
       `channel=${channel}`,
     ],
-    { dryRun: options.dryRun },
+    { capture: true, dryRun: options.dryRun },
   )
+  const dispatchedRunID = workflowDispatchRunID(dispatchOutput, options.repo)
+  if (dispatchedRunID) {
+    run("gh", ["run", "watch", dispatchedRunID, "--repo", options.repo, "--exit-status"], { dryRun: options.dryRun })
+    return
+  }
   watchWorkflow(
     "install-matrix-smoke.yml",
     { ...query, excludeRunIDs: previousRunIDs },

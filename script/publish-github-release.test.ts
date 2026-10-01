@@ -8,6 +8,7 @@ import {
   verifyInstallerDigest,
   defaultInstallChannel,
   defaultTag,
+  dispatchInstallSmoke,
   downloadReleaseAssets,
   expectedReleaseArchives,
   expectedReleaseInstallerAssets,
@@ -22,6 +23,7 @@ import {
   selectWorkflowRunID,
   trackedInternalPrivacyIssue,
   workflowRunListArgs,
+  workflowDispatchRunID,
   watchReleaseWorkflow,
 } from "./publish-github-release"
 
@@ -294,6 +296,48 @@ describe("publish-github-release helpers", () => {
     const previous = new Set(["100", "99"])
     expect(selectWorkflowRunID(["100", "99"], previous)).toBeUndefined()
     expect(selectWorkflowRunID(["101", "100", "99"], previous)).toBe("101")
+    expect(selectWorkflowRunID(["98", "100"], previous)).toBeUndefined()
+    expect(selectWorkflowRunID(["98", "101"], previous)).toBe("101")
+  })
+
+  test("accepts dispatch receipts only from the requested repository", () => {
+    expect(workflowDispatchRunID("https://github.com/owner/repo/actions/runs/101\n", "owner/repo")).toBe("101")
+    expect(workflowDispatchRunID("https://github.com/other/repo/actions/runs/101", "owner/repo")).toBeUndefined()
+    expect(workflowDispatchRunID("https://github.com/owner/repo/actions/runs/101/extra", "owner/repo")).toBeUndefined()
+    expect(workflowDispatchRunID("", "owner/repo")).toBeUndefined()
+  })
+
+  test("watches the actual dispatch even when a later listing could return an old success", () => {
+    const spawn = vi.spyOn(childProcess, "spawnSync").mockImplementation((_command, args) => {
+      const output = args?.[0] === "workflow" ? "https://github.com/owner/repo/actions/runs/101" : "100\n99"
+      return { status: 0, stdout: output, stderr: "", pid: 1, signal: null, output: [] }
+    })
+    try {
+      const options = parsePublishGithubReleaseArgs(
+        ["--version", "5.10.1", "--repo", "owner/repo"],
+        {},
+        "/repo",
+        "/home/ax",
+      )
+      dispatchInstallSmoke(options)
+      expect(spawn.mock.calls.map((call) => call[1])).toEqual([
+        workflowRunListArgs("install-matrix-smoke.yml", "owner/repo", { event: "workflow_dispatch" }),
+        [
+          "workflow",
+          "run",
+          "install-matrix-smoke.yml",
+          "--repo",
+          "owner/repo",
+          "-f",
+          "version=5.10.1",
+          "-f",
+          "channel=all",
+        ],
+        ["run", "watch", "101", "--repo", "owner/repo", "--exit-status"],
+      ])
+    } finally {
+      spawn.mockRestore()
+    }
   })
 
   test("describes the publish plan", () => {
