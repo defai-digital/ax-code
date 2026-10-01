@@ -386,22 +386,30 @@ export namespace Env {
     return cursor === 0 ? value : result + value.slice(cursor)
   }
 
-  // curl carries the same cookie pairs in flag form (`-b 'sid=x'`,
-  // `--cookie="a=1; b=2"`) with no `Header:` for `redactCookieHeaders` to match.
-  // Only a value that carries a pair (`=`) is redacted, so a cookie *file*
-  // argument (`-b cookies.txt`) is left untouched.
-  const CURL_COOKIE_FLAG = /(\s)(-b|--cookie)([ \t]*=[ \t]*|[ \t]+)("([^"\r\n]*)"|'([^'\r\n]*)'|([^\s"'\r\n]+))/gi
+  // Short options accept an attached argument. Scan one complete shell word
+  // rather than a quote-delimited regex so concatenated quotes and escaped
+  // quotes cannot leave a cookie credential's suffix in the persisted copy.
+  // Arguments without '=' are cookie filenames and remain unchanged.
+  const CURL_COOKIE_FLAG = /(^|[\s;|&(])(?:--cookie(?:[ \t]*=[ \t]*|[ \t]+)|-b[ \t]*)/gi
 
   function redactCookieFlagValues(value: string): string {
-    return value.replace(
-      CURL_COOKIE_FLAG,
-      (match, space: string, flag: string, sep: string, _whole: string, dq?: string, sq?: string, bare?: string) => {
-        const inner = dq ?? sq ?? bare
-        if (!inner || !inner.includes("=")) return match
-        const quote = dq !== undefined ? '"' : sq !== undefined ? "'" : ""
-        return `${space}${flag}${sep}${quote}${redactCookiePairs(inner, false)}${quote}`
-      },
-    )
+    const parts: string[] = []
+    let copied = 0
+    let scanned = 0
+    for (const match of value.matchAll(CURL_COOKIE_FLAG)) {
+      if (match.index < scanned) continue
+      const start = match.index + match[0].length
+      const word = inlineEnvWord(value, start, true)
+      scanned = word.end
+      if (!word.literal.includes("=") && !value.slice(start, word.end).includes("=")) continue
+      const first = value[start]
+      const quote =
+        (first === '"' || first === "'") && closingQuote(value, start + 1, first) === word.end - 1 ? first : ""
+      const redacted = word.literal ? redactCookiePairs(word.literal, false) : "[redacted]"
+      parts.push(value.slice(copied, start), quote, redacted, quote)
+      copied = word.end
+    }
+    return parts.length === 0 ? value : parts.join("") + value.slice(copied)
   }
 
   function containsUrlCredential(value: string | undefined): boolean {

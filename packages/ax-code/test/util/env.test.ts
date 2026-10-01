@@ -396,6 +396,51 @@ describe("Env.sanitize", () => {
     expect(Env.redactSecrets(once)).toBe(once)
   })
 
+  test.each([
+    ["curl -bsid=fixture-secret https://example.test", "curl -bsid=[redacted] https://example.test"],
+    ['curl -b"sid=fixture-secret" https://example.test', 'curl -b"sid=[redacted]" https://example.test'],
+    [
+      'curl --cookie sid=fixture-one"fixture-two" https://example.test',
+      "curl --cookie sid=[redacted] https://example.test",
+    ],
+    ["curl -b 'sid='fixture-secret https://example.test", "curl -b sid=[redacted] https://example.test"],
+    [
+      'curl --cookie "sid=fixture-one\\\"fixture-two; pref=fixture-three" https://example.test',
+      'curl --cookie "sid=[redacted]" https://example.test',
+    ],
+    [
+      'curl --cookie "sid=fixture-one\\;fixture-two; pref=fixture-three" https://example.test',
+      'curl --cookie "sid=[redacted];[redacted]; pref=[redacted]" https://example.test',
+    ],
+    ["true;curl -bsid=fixture-secret&&echo done", "true;curl -bsid=[redacted]&&echo done"],
+  ])("redacts the entire literal curl cookie word: %s", (input, expected) => {
+    expect(Env.redactSecrets(input)).toBe(expected)
+    expect(Env.redactForRecord(input)).toBe(expected)
+    expect(Env.redactSecrets(expected)).toBe(expected)
+  })
+
+  test("preserves shell-quoted cookie filenames and unrelated long flags", () => {
+    for (const input of [
+      'curl -b"cookie file.txt" https://example.test',
+      "curl --cookie cookie\\ file.txt https://example.test",
+      "curl --cookie-jar 'output=jar.txt' https://example.test",
+    ]) {
+      expect(Env.redactSecrets(input)).toBe(input)
+    }
+  })
+
+  test("conservatively redacts complex or unfinished curl cookie arguments", () => {
+    for (const input of [
+      "curl -b sid=$(printf fixture-secret) https://example.test",
+      'curl --cookie "sid=${MISSING:-fixture-secret value}" https://example.test',
+      'curl --cookie "sid=fixture-secret https://example.test',
+    ]) {
+      const redacted = Env.redactSecrets(input)
+      expect(redacted).not.toContain("fixture-secret")
+      expect(Env.redactSecrets(redacted)).toBe(redacted)
+    }
+  })
+
   test("redactForRecord composes both passes without doubling the placeholder", () => {
     // Order is fixed inside the helper: an assignment to a keyword-named key is
     // redacted once, not re-matched into `[redacted]]`.

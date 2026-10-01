@@ -10,6 +10,15 @@ test("redacts cmd-aliased bash input and canonicalizes to command", () => {
   expect(redacted).not.toHaveProperty("cmd")
 })
 
+test("redacts attached and concatenated curl cookie arguments in the persisted copy", () => {
+  const command = 'curl -bsid=fixture-one --cookie pref=fixture-two"fixture-three" https://example.test'
+  const result = SessionProcessor.redactPersistedToolInput("bash", { command })
+  expect(result.command).toBe("curl -bsid=[redacted] --cookie pref=[redacted] https://example.test")
+  expect(SessionProcessor.redactPersistedToolInput("bash", result)).toEqual(result)
+  expect(command).toContain("fixture-one")
+  expect(command).toContain("fixture-three")
+})
+
 test("prefers command over cmd when both are present", () => {
   const redacted = SessionProcessor.redactPersistedToolInput("bash", {
     command: "echo canonical",
