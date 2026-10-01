@@ -152,6 +152,151 @@ export namespace Env {
     "gi",
   )
 
+  const COOKIE_ATTRIBUTES = new Set([
+    "comment",
+    "domain",
+    "expires",
+    "httponly",
+    "max-age",
+    "partitioned",
+    "path",
+    "priority",
+    "samesite",
+    "secure",
+    "version",
+  ])
+
+  function advanceQuoteState(value: string, start: number, end: number, initial?: "'" | '"'): "'" | '"' | undefined {
+    let quote = initial
+    for (let index = start; index < end; index++) {
+      const char = value[index]
+      if (quote) {
+        if (char === "\\") {
+          index++
+          continue
+        }
+        if (char === quote) quote = undefined
+        continue
+      }
+      if (char === "'" || char === '"') quote = char
+      else if (char === "\\") index++
+    }
+    return quote
+  }
+
+  function closingQuote(value: string, start: number, quote: "'" | '"'): number {
+    for (let index = start; index < value.length; index++) {
+      const char = value[index]
+      if (char === "\\") {
+        index++
+        continue
+      }
+      if (char === quote) return index
+    }
+    return value.length
+  }
+
+  function redactCookiePairs(value: string, setCookie: boolean): string {
+    const segments: string[] = []
+    const separators: string[] = []
+    // A comma followed by another pair begins a combined cookie. The comma
+    // inside an Expires date is followed by a date, so it remains an attribute.
+    const nextPair = /[ \t]*[!#$%&'*+\-.^_`|~0-9A-Za-z]+[ \t]*=/y
+    let quote: "'" | '"' | undefined
+    let start = 0
+    for (let index = 0; index < value.length; index++) {
+      const char = value[index]
+      if (quote) {
+        if (char === "\\") {
+          index++
+          continue
+        }
+        if (char === quote) quote = undefined
+        continue
+      }
+      if (char === "'" || char === '"') {
+        quote = char
+        continue
+      }
+      nextPair.lastIndex = index + 1
+      if (char === ";" || (char === "," && nextPair.test(value))) {
+        segments.push(value.slice(start, index))
+        separators.push(char)
+        start = index + 1
+      }
+    }
+    segments.push(value.slice(start))
+
+    return segments
+      .map((segment, index) => {
+        const leading = segment.match(/^\s*/)?.[0] ?? ""
+        const trailing = segment.match(/\s*$/)?.[0] ?? ""
+        const body = segment.slice(leading.length, segment.length - trailing.length)
+        const firstPair = index === 0 || separators[index - 1] === ","
+        const equals = body.indexOf("=")
+        if (equals < 0) {
+          if (!body || (setCookie && !firstPair && COOKIE_ATTRIBUTES.has(body.toLowerCase()))) return segment
+          return leading + "[redacted]" + trailing
+        }
+        const name = body.slice(0, equals).trim()
+        if (!name) return leading + "[redacted]" + trailing
+        if (setCookie && !firstPair && COOKIE_ATTRIBUTES.has(name.toLowerCase())) return segment
+        return leading + name + "=[redacted]" + trailing
+      })
+      .map((segment, index) => (index === 0 ? segment : separators[index - 1] + segment))
+      .join("")
+  }
+
+  function redactCookieHeaders(value: string): string {
+    const header = /\b(set-cookie|cookie)\b\s*:/gi
+    let result = ""
+    let cursor = 0
+    let quoteCursor = 0
+    let quoteState: "'" | '"' | undefined
+    for (const match of value.matchAll(header)) {
+      const index = match.index
+      if (index === undefined || index < cursor) continue
+      quoteState = advanceQuoteState(value, quoteCursor, index, quoteState)
+      const afterColon = index + match[0].length
+      let valueStart = afterColon
+      while (valueStart < value.length && (value[valueStart] === " " || value[valueStart] === "\t")) valueStart++
+      if (valueStart >= value.length || value[valueStart] === "\r" || value[valueStart] === "\n") {
+        quoteCursor = afterColon
+        continue
+      }
+
+      const setCookie = match[1]?.toLowerCase() === "set-cookie"
+      const localQuote: "'" | '"' | undefined =
+        value[valueStart] === "'" ? "'" : value[valueStart] === '"' ? '"' : undefined
+      const localQuoteEnd = localQuote ? closingQuote(value, valueStart + 1, localQuote) : undefined
+      const shellQuoteEnd = quoteState ? closingQuote(value, valueStart, quoteState) : undefined
+      const useLocalQuote = localQuote !== undefined && (shellQuoteEnd === undefined || localQuoteEnd! < shellQuoteEnd)
+      let end: number
+      if (useLocalQuote) end = localQuoteEnd!
+      else if (shellQuoteEnd !== undefined) end = shellQuoteEnd
+      else {
+        const lineEnd = value.slice(valueStart).search(/[\r\n]/)
+        end = lineEnd < 0 ? value.length : valueStart + lineEnd
+      }
+
+      const contentStart = useLocalQuote ? valueStart + 1 : valueStart
+      const redacted = redactCookiePairs(value.slice(contentStart, end), setCookie)
+      result += value.slice(cursor, contentStart)
+      result += redacted
+      cursor = end
+      if (useLocalQuote && end < value.length) {
+        result += localQuote
+        cursor++
+      } else if (!useLocalQuote && quoteState && end < value.length) {
+        result += quoteState
+        quoteState = undefined
+        cursor++
+      }
+      quoteCursor = cursor
+    }
+    return cursor === 0 ? value : result + value.slice(cursor)
+  }
+
   function containsUrlCredential(value: string | undefined): boolean {
     if (!value || !value.includes("://")) return false
     try {
@@ -180,11 +325,10 @@ export namespace Env {
         `${quote}${key}${quote}:${valueQuote}[redacted]${valueQuote}`,
     )
     const fieldsRedacted = jsonRedacted.replace(
-      // `basic` alongside `bearer`, and `cookie` alongside `authorization`:
-      // `Authorization: Basic <base64>` left the encoded credential behind, and
-      // a `Cookie:` header was not matched at all even though the structured
-      // sink (`Env.isCredentialKeyName`) and MCP trust already treat `cookie` as
-      // a credential name. `\bcookie\b` also covers `Set-Cookie`.
+      // Basic alongside bearer: Authorization: Basic <base64> left the encoded
+      // credential behind. Cookie headers use the dedicated pair parser below
+      // so every pair is redacted while Set-Cookie attributes remain available
+      // for diagnostics. cookie=... fields still use this pass.
       //
       // The value alternation consumes an existing `[redacted]` placeholder as
       // one unit before falling back to a bare word. Without it a second pass
@@ -198,7 +342,7 @@ export namespace Env {
       // Quoted values are consumed with their quotes: a bare run stops at the
       // first space, so `--password="hunter2 extra"` used to leave ` extra"`
       // behind — the tail of a quoted credential stayed in the record.
-      /\b(token|secret|password|passwd|credential|authorization|cookie|api[_-]?key)\b\s*(?:=|:)\s*(?:(?:bearer|basic)\s+)?(?:"(?:[^"\\\r\n]|\\.)*"|'(?:[^'\\\r\n]|\\.)*'|\[redacted\][^\s,;}\]]*|[^\s,;}\]]+)/gi,
+      /\b(token|secret|password|passwd|credential|authorization|cookie(?!\s*:)|api[_-]?key)\b\s*(?:=|:)\s*(?:(?:bearer|basic)\s+)?(?:"(?:[^"\\\r\n]|\\.)*"|'(?:[^'\\\r\n]|\\.)*'|\[redacted\][^\s,;}\]]*|[^\s,;}\]]+)/gi,
       (_match, key: string) => `${key}=[redacted]`,
     )
     // Any RFC 3986 scheme, not just http(s): connection strings such as
@@ -207,20 +351,22 @@ export namespace Env {
     // assignment for `redactInlineEnvAssignments` to catch. The username may be
     // empty (`redis://:password@host` is a documented form). The sibling
     // `URL_USERINFO_VALUE` already accepts every scheme for assignments.
-    return fieldsRedacted
-      .replace(
-        /\b([a-z][a-z0-9+.-]*:\/\/)([^\s/:@]*):([^\s/@]+)@/gi,
-        (_match, scheme: string, username: string) => `${scheme}${username}:[redacted]@`,
-      )
-      .replace(CREDENTIAL_QUERY_VALUE, "$1[redacted]")
-      .replace(PRIVATE_KEY_BLOCK, "[redacted private key]")
-      // A truncated key dump (`head -c`, a size-capped tool output, a record cut
-      // mid-write) has no END marker, so the paired pattern above never matches
-      // and the base64 body survived. Everything after an unpaired header is key
-      // material, so redact the remainder. Idempotent: the placeholder carries
-      // no BEGIN marker.
-      .replace(UNPAIRED_PRIVATE_KEY_BLOCK, "[redacted private key]")
-      .replace(SECRET_VALUE, "[redacted secret]")
+    return (
+      redactCookieHeaders(fieldsRedacted)
+        .replace(
+          /\b([a-z][a-z0-9+.-]*:\/\/)([^\s/:@]*):([^\s/@]+)@/gi,
+          (_match, scheme: string, username: string) => `${scheme}${username}:[redacted]@`,
+        )
+        .replace(CREDENTIAL_QUERY_VALUE, "$1[redacted]")
+        .replace(PRIVATE_KEY_BLOCK, "[redacted private key]")
+        // A truncated key dump (`head -c`, a size-capped tool output, a record cut
+        // mid-write) has no END marker, so the paired pattern above never matches
+        // and the base64 body survived. Everything after an unpaired header is key
+        // material, so redact the remainder. Idempotent: the placeholder carries
+        // no BEGIN marker.
+        .replace(UNPAIRED_PRIVATE_KEY_BLOCK, "[redacted private key]")
+        .replace(SECRET_VALUE, "[redacted secret]")
+    )
   }
 
   /**

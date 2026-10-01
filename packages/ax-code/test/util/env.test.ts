@@ -269,16 +269,45 @@ describe("Env.sanitize", () => {
   test("redacts Authorization Basic credentials and leaves look-alikes intact", () => {
     // The field pattern used to stop after the space, leaving the base64 body.
     expect(Env.redactSecrets("Authorization: Basic dXNlcjpwYXNzd29yZA==")).toBe("Authorization=[redacted]")
-    // The structured sink already treats `cookie` as a credential name; the
-    // header spelling must be caught here too (`\bcookie\b` covers Set-Cookie).
-    expect(Env.redactSecrets("Cookie: session=abc123")).toBe("Cookie=[redacted]")
-    expect(Env.redactSecrets("Set-Cookie: sid=xyz; Path=/")).toBe("Set-Cookie=[redacted]; Path=/")
+    // Cookie pair values are hidden while Set-Cookie attributes remain useful.
+    expect(Env.redactSecrets("Cookie: session=abc123")).toBe("Cookie: session=[redacted]")
+    expect(Env.redactSecrets("Set-Cookie: sid=xyz; Path=/")).toBe("Set-Cookie: sid=[redacted]; Path=/")
     // A missing password, a non-URI scheme, an scp-style remote, and a bare
     // username must not be treated as embedded credentials.
     expect(Env.redactSecrets("https://example.com:443/path")).toBe("https://example.com:443/path")
     expect(Env.redactSecrets("mailto:user@example.com")).toBe("mailto:user@example.com")
     expect(Env.redactSecrets("git@github.com:org/repo.git")).toBe("git@github.com:org/repo.git")
     expect(Env.redactSecrets("ssh://git@host/repo")).toBe("ssh://git@host/repo")
+  })
+
+  test("redacts every cookie pair while preserving Set-Cookie attributes", () => {
+    const request = "curl -H 'Cookie: sid=abc123; pref=xyz789' https://example.test"
+    expect(Env.redactSecrets(request)).toBe("curl -H 'Cookie: sid=[redacted]; pref=[redacted]' https://example.test")
+
+    const quoted = 'Cookie: "sid=abc123; pref=xyz789"'
+    expect(Env.redactSecrets(quoted)).toBe('Cookie: "sid=[redacted]; pref=[redacted]"')
+
+    const shellQuotedValue = "curl -H 'Cookie: \"sid=abc123; pref=xyz789\"'"
+    expect(Env.redactSecrets(shellQuotedValue)).toBe("curl -H 'Cookie: \"sid=[redacted]; pref=[redacted]\"'")
+
+    const response =
+      "Set-Cookie: sid=abc123; Path=/; Domain=example.test; Expires=Wed, 21 Oct 2030 07:28:00 GMT; Max-Age=3600; Secure; HttpOnly; SameSite=Lax"
+    const redacted =
+      "Set-Cookie: sid=[redacted]; Path=/; Domain=example.test; Expires=Wed, 21 Oct 2030 07:28:00 GMT; Max-Age=3600; Secure; HttpOnly; SameSite=Lax"
+    expect(Env.redactSecrets(response)).toBe(redacted)
+    expect(Env.redactSecrets(redacted)).toBe(redacted)
+  })
+
+  test("redacts combined Set-Cookie headers and malformed cookie values", () => {
+    const combined = "Set-Cookie: sid=abc123; Path=/, pref=xyz789; Expires=Wed, 21 Oct 2030 07:28:00 GMT; Secure"
+    const redacted =
+      "Set-Cookie: sid=[redacted]; Path=/, pref=[redacted]; Expires=Wed, 21 Oct 2030 07:28:00 GMT; Secure"
+    expect(Env.redactSecrets(combined)).toBe(redacted)
+    expect(Env.redactSecrets(redacted)).toBe(redacted)
+    expect(Env.redactSecrets("Cookie: raw-secret; sid=abc123")).toBe("Cookie: [redacted]; sid=[redacted]")
+    expect(Env.redactSecrets("Set-Cookie: raw-secret; Secure; HttpOnly")).toBe(
+      "Set-Cookie: [redacted]; Secure; HttpOnly",
+    )
   })
 
   test("redactForRecord composes both passes without doubling the placeholder", () => {
