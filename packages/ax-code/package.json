@@ -92,6 +92,7 @@
     "@ai-sdk/openai-compatible": "2.0.38",
     "@ai-sdk/provider": "3.0.8",
     "@ai-sdk/provider-utils": "catalog:",
+    "@ax-code/ax-agent-runtime": "workspace:*",
     "@ax-code/ax-code-intel": "workspace:*",
     "@ax-code/ax-code-reason": "workspace:*",
     "@ax-code/ax-wiki": "workspace:*",
