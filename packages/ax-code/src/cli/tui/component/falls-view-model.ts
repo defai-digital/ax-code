@@ -8,8 +8,16 @@ export function isFallsStyle(style: string | undefined): style is FallsStyle {
 /** Reference composition size shared by both renderers. */
 export const FALLS_COLUMNS = 76
 export const FALLS_ROWS = 24
-export const FALLS_CLIFF_LEFT = { x0: 8, x1: 24, top: 6, base: 16 } as const
-export const FALLS_CLIFF_RIGHT = { x0: 51, x1: 67, top: 6, base: 16 } as const
+/** Gorge walls run to the frame edges and step up away from the falls. */
+export const FALLS_CLIFF_LEFT = { x0: 0, x1: 31, top: 3, base: 16 } as const
+export const FALLS_CLIFF_RIGHT = { x0: 44, x1: 75, top: 3, base: 16 } as const
+/** Continuous cliff crest row for a scene column: low at the lip, rising outward. */
+export function fallsCliffTopF(x: number): number {
+  const d = x < 32 ? 31 - x : x - 44
+  const rise = Math.min(1, Math.max(0, d) / 24)
+  const wobble = Math.sin(x * 0.83 + 1.3) * 0.45 + Math.sin(x * 0.37) * 0.35
+  return 6.6 - rise * 3.2 + wobble
+}
 export const FALLS_FALLS = { x0: 32, x1: 43, top: 6, base: 16 } as const
 export const FALLS_POOL_TOP = 17
 export const FALLS_GROUND_TOP = 20
@@ -142,8 +150,10 @@ export function fallsRows(width: number, height: number, style: FallsStyle, elap
   }
   // Cliffs flanking the falls.
   for (const cliff of [FALLS_CLIFF_LEFT, FALLS_CLIFF_RIGHT]) {
-    for (let y = cliff.top; y <= cliff.base; y++) {
-      paint(cliff.x0, y, "#".repeat(cliff.x1 - cliff.x0 + 1), colors.cliff, colors.cliffBg)
+    for (let x = cliff.x0; x <= cliff.x1; x++) {
+      for (let y = Math.max(cliff.top, Math.round(fallsCliffTopF(x))); y <= cliff.base; y++) {
+        paint(x, y, "#", colors.cliff, colors.cliffBg)
+      }
     }
   }
   // Falling water cycling through flow glyphs.

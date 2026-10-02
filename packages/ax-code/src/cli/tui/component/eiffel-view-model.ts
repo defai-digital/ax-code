@@ -95,9 +95,10 @@ export function eiffelSkyRgb(style: EiffelStyle, t: number): readonly [number, n
   ]
 }
 
-/** Lattice half-width at scene row `y`, widening toward the base. */
+/** Lattice half-width at scene row `y`: a slim spire flaring into the legs. */
 export function eiffelHalf(y: number): number {
-  return 1 + ((y - EIFFEL_TOP) / (EIFFEL_BASE - EIFFEL_TOP)) * 10
+  const u = Math.max(0, Math.min(1, (y - EIFFEL_TOP) / (EIFFEL_BASE - EIFFEL_TOP)))
+  return 1 + Math.pow(u, 1.55) * 10
 }
 
 /** Sparkle `i` flashes on a shared 1200ms round. */

@@ -15,10 +15,14 @@ test.each(["eiffel-day", "eiffel-night"] as const)("%s paints deterministically 
   expect(moving.equals(renderEiffelPixels(WIDTH, HEIGHT, style, 900))).toBe(true)
   expect(renderEiffelPixels(WIDTH, HEIGHT, style, 900).equals(moving)).toBe(true)
   expect(renderEiffelPixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
-  // A rooftop chimney behind the legs never moves.
-  const roof: readonly [number, number, number] = day ? [138, 122, 104] : [44, 42, 52]
-  expect(pixel(first, 45, 350)).toEqual(roof)
-  expect(pixel(moving, 45, 350)).toEqual(roof)
+  // The Haussmann skyline behind the lawn never moves.
+  expect(pixel(moving, 45, 350)).toEqual(pixel(first, 45, 350))
+  // The iron lattice is darker than the sky around it by day, and floodlit warmer than the sky at night.
+  const lum = (p: number[]) => p[0]! + p[1]! + p[2]!
+  const sky = pixel(first, 300, 100)
+  const iron = pixel(first, 380, 280)
+  if (day) expect(lum(iron)).toBeLessThan(lum(sky))
+  else expect(iron[0]!).toBeGreaterThan(iron[2]!)
   // The scene dispatcher routes to this renderer.
   expect(renderTextScenePixels(WIDTH, HEIGHT, style, 700).equals(renderEiffelPixels(WIDTH, HEIGHT, style, 700))).toBe(
     true,

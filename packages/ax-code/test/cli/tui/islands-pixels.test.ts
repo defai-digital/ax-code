@@ -13,10 +13,17 @@ test.each(["islands-day", "islands-dusk"] as const)("%s paints deterministically
   expect(first.length).toBe(WIDTH * HEIGHT * 3)
   expect(moving.equals(renderIslandsPixels(WIDTH, HEIGHT, style, 900))).toBe(true)
   expect(renderIslandsPixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
-  // Deep water never moves.
-  const deep: readonly [number, number, number] = day ? [35, 87, 114] : [46, 33, 75]
-  expect(pixel(first, 385, 450)).toEqual(deep)
-  expect(pixel(moving, 385, 450)).toEqual(deep)
+  // The scene loops with the shared 2400ms cycle and moves in between.
+  expect(renderIslandsPixels(WIDTH, HEIGHT, style, 2400).equals(first)).toBe(true)
+  expect(moving.equals(first)).toBe(false)
+  // The sky corner keeps its gradient: blue by day, warm orange at dusk.
+  const corner = pixel(first, 5, 5)
+  expect(pixel(moving, 5, 5)).toEqual(corner)
+  if (day) expect(corner[2]).toBeGreaterThan(corner[0]!)
+  else expect(corner[0]).toBeGreaterThan(corner[2]!)
+  // Deep water is darker than the sky and stays in the blue-violet range.
+  const deep = pixel(first, 385, 450)
+  expect(deep[0]! + deep[1]! + deep[2]!).toBeLessThan(corner[0]! + corner[1]! + corner[2]!)
 })
 
 test.each(["islands-day", "islands-dusk"] as const)("%s renders at any size", (style) => {

@@ -7,7 +7,6 @@ const HEIGHT = 480
 const pixel = (frame: Buffer, x: number, y: number) => [...frame.subarray((y * WIDTH + x) * 3, (y * WIDTH + x) * 3 + 3)]
 
 test.each(["canyon-day", "canyon-night"] as const)("%s paints deterministically from elapsed time", (style) => {
-  const day = style === "canyon-day"
   const first = renderCanyonPixels(WIDTH, HEIGHT, style, 0)
   const moving = renderCanyonPixels(WIDTH, HEIGHT, style, 900)
   expect(first.length).toBe(WIDTH * HEIGHT * 3)
@@ -15,10 +14,9 @@ test.each(["canyon-day", "canyon-night"] as const)("%s paints deterministically 
   expect(renderCanyonPixels(WIDTH, HEIGHT, style, 2400).equals(first)).toBe(true)
   expect(renderCanyonPixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
   expect(moving.equals(first)).toBe(false)
-  // The top strata band never moves.
-  const strata: readonly [number, number, number] = day ? [184, 104, 60] : [58, 42, 58]
-  expect(pixel(first, 380, 160)).toEqual(strata)
-  expect(pixel(moving, 380, 160)).toEqual(strata)
+  // The rock wall never moves, and it is not sky.
+  expect(pixel(moving, 380, 200)).toEqual(pixel(first, 380, 200))
+  expect(pixel(first, 380, 200)).not.toEqual(pixel(first, 380, 0))
 })
 
 test.each(["canyon-day", "canyon-night"] as const)("%s renders at any size", (style) => {

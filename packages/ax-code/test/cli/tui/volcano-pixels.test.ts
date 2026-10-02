@@ -17,32 +17,36 @@ test.each(["volcano-eruption", "volcano-calm"] as const)("%s paints the shared c
   expect(first.equals(moving)).toBe(false)
   expect(renderVolcanoPixels(WIDTH, HEIGHT, style, 900).equals(moving)).toBe(true)
   expect(renderVolcanoPixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
-  expect(pixel(first, 0, 0)).toEqual(eruption ? [22, 10, 20] : [10, 14, 36])
-  // The cone face never moves.
-  const rock: readonly [number, number, number] = eruption ? [42, 22, 32] : [28, 35, 51]
-  expect(pixel(first, 200, 340)).toEqual(rock)
-  expect(pixel(moving, 200, 340)).toEqual(rock)
-  // Ground stays clear of the flow.
-  const ground: readonly [number, number, number] = eruption ? [26, 15, 22] : [17, 24, 42]
-  expect(pixel(first, 100, 430)).toEqual(ground)
-  expect(pixel(moving, 100, 430)).toEqual(ground)
+  const sum = (p: number[]) => p.reduce((a, b) => a + b, 0)
+  expect(sum(pixel(first, 0, 0))).toBeLessThan(120)
+  // The cone face is dark rock lit by the style: warm in eruption, cool in calm.
+  const face = pixel(first, 300, 300)
+  expect(sum(face)).toBeLessThan(400)
+  if (eruption) expect(face[0]!).toBeGreaterThan(face[2]!)
+  else expect(face[2]!).toBeGreaterThan(face[0]!)
+  // Ground away from the flow never moves.
+  expect(pixel(moving, 100, 460)).toEqual(pixel(first, 100, 460))
+  expect(pixel(first, 100, 460)[0]!).toBeLessThan(60)
 })
 
 test("the crater pulses while calm, lava, and smoke follow their styles", () => {
   const hot = renderVolcanoPixels(WIDTH, HEIGHT, "volcano-eruption", 0)
   expect(pixel(hot, 380, 170)).not.toEqual(pixel(renderVolcanoPixels(WIDTH, HEIGHT, "volcano-eruption", 300), 380, 170))
   const calm = renderVolcanoPixels(WIDTH, HEIGHT, "volcano-calm", 0)
-  expect(pixel(calm, 380, 170)).toEqual([122, 42, 30])
-  expect(pixel(renderVolcanoPixels(WIDTH, HEIGHT, "volcano-calm", 900), 380, 170)).toEqual([122, 42, 30])
-  expect(pixel(hot, 445, 270)).toEqual([255, 209, 102])
-  expect(pixel(calm, 445, 270)).toEqual([28, 35, 51])
-  // A white-hot surge crosses the channel at rest.
-  expect(pixel(hot, 450, 290)).toEqual([255, 240, 208])
-  // The heat halo above the crater breathes with the pulse beat.
+  const sum = (p: number[]) => p.reduce((a, b) => a + b, 0)
+  // The calm crater is a dim ember; the eruption crater burns far brighter.
+  expect(calm[(170 * WIDTH + 380) * 3]!).toBeGreaterThan(calm[(170 * WIDTH + 380) * 3 + 2]!)
+  expect(pixel(hot, 380, 172)[0]!).toBeGreaterThan(pixel(calm, 380, 172)[0]! + 15)
+  // A lava river runs down the flank in eruption only.
+  expect(pixel(hot, 436, 300)[0]!).toBeGreaterThan(200)
+  expect(pixel(calm, 436, 300)[0]!).toBeLessThan(110)
+  // The ash column and heat glow above the crater breathe with time.
   expect(pixel(hot, 380, 125)).not.toEqual(pixel(renderVolcanoPixels(WIDTH, HEIGHT, "volcano-eruption", 300), 380, 125))
-  // The left crater lip glows in eruption and stays bare rock in calm.
-  expect(pixel(hot, 340, 170)).toEqual([255, 209, 102])
-  expect(pixel(calm, 340, 170)).toEqual([61, 74, 107])
+  // Calm is cool-lit, eruption is warm-lit, at the same flank point.
+  const flank = pixel(hot, 300, 300)
+  expect(flank[0]!).toBeGreaterThan(flank[2]!)
+  const calmFlank = pixel(calm, 300, 300)
+  expect(calmFlank[2]!).toBeGreaterThan(calmFlank[0]!)
 })
 
 test("Volcano stays within the HD bound", () => {

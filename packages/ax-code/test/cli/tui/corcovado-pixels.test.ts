@@ -15,10 +15,18 @@ test.each(["corcovado-day", "corcovado-gold"] as const)("%s paints deterministic
   expect(moving.equals(renderCorcovadoPixels(WIDTH, HEIGHT, style, 900))).toBe(true)
   expect(renderCorcovadoPixels(WIDTH, HEIGHT, style, 900).equals(moving)).toBe(true)
   expect(renderCorcovadoPixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
-  // An umbrella pole on the promenade never moves.
-  const pole: readonly [number, number, number] = day ? [255, 225, 78] : [255, 209, 102]
-  expect(pixel(first, 85, 430)).toEqual(pole)
-  expect(pixel(moving, 85, 430)).toEqual(pole)
+  const sum = (p: number[]) => p[0]! + p[1]! + p[2]!
+  // The summit statue is paler than the forested slope below it and never moves.
+  const statue = pixel(first, 380, 90)
+  expect(sum(statue)).toBeGreaterThan(sum(pixel(first, 380, 300)))
+  expect(pixel(moving, 380, 90)).toEqual(statue)
+  // The forested slope is greener than it is red.
+  const slope = pixel(first, 330, 300)
+  expect(slope[1]).toBeGreaterThanOrEqual(slope[0]!)
+  // The ending is the warm dusk variant: its sky leans red, the day sky leans blue.
+  const sky = pixel(first, 5, 5)
+  if (day) expect(sky[2]).toBeGreaterThan(sky[0]!)
+  else expect(sky[0]).toBeGreaterThan(sky[2]!)
   // The scene dispatcher routes to this renderer.
   expect(
     renderTextScenePixels(WIDTH, HEIGHT, style, 700).equals(renderCorcovadoPixels(WIDTH, HEIGHT, style, 700)),

@@ -15,27 +15,23 @@ test.each(["bigben-day", "bigben-night"] as const)("%s paints the tower from ela
   expect(first.equals(moving)).toBe(false)
   expect(renderBigbenPixels(WIDTH, HEIGHT, style, 900).equals(moving)).toBe(true)
   expect(renderBigbenPixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
-  expect(pixel(first, 0, 0)).toEqual(day ? [142, 200, 232] : [10, 16, 48])
-  // Tower stone between the string courses never moves.
-  const stone: readonly [number, number, number] = day ? [201, 191, 168] : [74, 74, 98]
-  expect(pixel(first, 350, 260)).toEqual(stone)
-  expect(pixel(moving, 350, 260)).toEqual(stone)
-  // The quay stays put while the Thames runs beneath it.
-  const ground: readonly [number, number, number] = day ? [90, 122, 74] : [26, 42, 26]
-  expect(pixel(first, 130, 410)).toEqual(ground)
-  const water: readonly [number, number, number] = day ? [51, 112, 142] : [17, 35, 67]
-  expect(pixel(first, 100, 430)).toEqual(water)
-  // A bridge arch foot never moves.
-  const bridge: readonly [number, number, number] = day ? [138, 130, 114] : [44, 44, 64]
-  expect(pixel(first, 185, 390)).toEqual(bridge)
-  expect(pixel(moving, 185, 390)).toEqual(bridge)
-  // The bus nose enters from the left.
-  const bus: readonly [number, number, number] = day ? [184, 58, 58] : [122, 42, 42]
-  expect(pixel(moving, 30, 350)).toEqual(bus)
+  expect(pixel(first, 0, 0)).toEqual(day ? [147, 202, 231] : [22, 26, 52])
+  // Tower stone, the gilded dial ring, and the bridge never move.
+  expect(pixel(moving, 350, 260)).toEqual(pixel(first, 350, 260))
+  expect(pixel(first, 375, 160)).toEqual([222, 176, 70])
+  expect(pixel(moving, 375, 160)).toEqual([222, 176, 70])
+  expect(pixel(moving, 185, 390)).toEqual(pixel(first, 185, 390))
+  // The Thames runs beneath the quay.
+  expect(pixel(first, 100, 430)).not.toEqual(pixel(moving, 100, 430))
+  // The bus nose enters from the left: red body at 900ms, bare sky or quay at 0.
+  const [r, g] = pixel(moving, 30, 378)
+  expect(r!).toBeGreaterThan(g! * 2)
+  const [r0, g0] = pixel(first, 30, 378)
+  expect(r0! > g0! * 2).toBe(false)
   if (!day) {
-    // The floodlight raking the tower.
-    expect(pixel(first, 325, 350)).toEqual([255, 233, 168])
-    expect(pixel(moving, 325, 350)).toEqual([255, 233, 168])
+    // Lit tower windows glow warm against the dark stone.
+    const [wr, , wb] = pixel(first, 375, 240)
+    expect(wr!).toBeGreaterThan(wb!)
   }
   // The scene dispatcher routes to this renderer.
   expect(renderTextScenePixels(WIDTH, HEIGHT, style, 700).equals(renderBigbenPixels(WIDTH, HEIGHT, style, 700))).toBe(

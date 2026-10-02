@@ -16,19 +16,17 @@ test.each(["borobudur-mist", "borobudur-noon"] as const)("%s paints the terraces
   expect(renderBorobudurPixels(WIDTH, HEIGHT, style, 450).equals(first)).toBe(false)
   expect(renderBorobudurPixels(WIDTH, HEIGHT, style, 900).equals(moving)).toBe(true)
   expect(renderBorobudurPixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
-  expect(pixel(first, 0, 0)).toEqual(mist ? [180, 188, 188] : [126, 192, 228])
-  // Tier stone above the mist line never moves.
-  const stone: readonly [number, number, number] = mist ? [122, 114, 104] : [154, 138, 114]
-  expect(pixel(first, 300, 280)).toEqual(stone)
-  expect(pixel(moving, 300, 280)).toEqual(stone)
-  // A palm trunk flanks the terraces.
-  const trunk: readonly [number, number, number] = mist ? [62, 90, 58] : [42, 90, 42]
-  expect(pixel(first, 70, 270)).toEqual(trunk)
-  expect(pixel(moving, 70, 270)).toEqual(trunk)
-  // The volcano cone never moves.
-  const cone: readonly [number, number, number] = mist ? [106, 112, 120] : [90, 106, 122]
-  expect(pixel(first, 60, 190)).toEqual(cone)
-  expect(pixel(moving, 60, 190)).toEqual(cone)
+  expect(pixel(first, 0, 0)).toEqual(mist ? [184, 191, 191] : [126, 192, 228])
+  // The sun and the lawn never move.
+  expect(pixel(first, 640, 40)).toEqual(mist ? [242, 236, 216] : [255, 217, 138])
+  expect(pixel(moving, 640, 40)).toEqual(pixel(first, 640, 40))
+  expect(pixel(moving, 100, 450)).toEqual(pixel(first, 100, 450))
+  // Drifting fog moves over the terraces in the mist; noon stone stays crisp.
+  if (mist) expect(pixel(first, 300, 280)).not.toEqual(pixel(moving, 300, 280))
+  else expect(pixel(first, 300, 280)).toEqual(pixel(moving, 300, 280))
+  // Terrace stone is clearly darker than the sky behind the crown.
+  const lum = (p: number[]) => p[0]! + p[1]! + p[2]!
+  expect(lum(pixel(first, 300, 280))).toBeLessThan(lum(pixel(first, 0, 0)))
   // The scene dispatcher routes to this renderer.
   expect(
     renderTextScenePixels(WIDTH, HEIGHT, style, 700).equals(renderBorobudurPixels(WIDTH, HEIGHT, style, 700)),

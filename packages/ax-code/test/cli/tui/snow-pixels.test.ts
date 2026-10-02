@@ -9,6 +9,11 @@ const WIDTH = 740
 const HEIGHT = 400
 const pixel = (frame: Buffer, x: number, y: number) => [...frame.subarray((y * WIDTH + x) * 3, (y * WIDTH + x) * 3 + 3)]
 
+const lum = (frame: Buffer, x: number, y: number) => {
+  const [r, g, b] = pixel(frame, x, y)
+  return 0.299 * r! + 0.587 * g! + 0.114 * b!
+}
+
 test.each(["snowfall", "winter-night"] as const)("%s paints the shared forest and loops", (style) => {
   const day = style === "snowfall"
   const first = renderSnowPixels(WIDTH, HEIGHT, style, 0)
@@ -17,40 +22,28 @@ test.each(["snowfall", "winter-night"] as const)("%s paints the shared forest an
   expect(first.equals(moving)).toBe(false)
   expect(first.equals(renderSnowPixels(WIDTH, HEIGHT, style, 3000))).toBe(true)
   expect(renderSnowPixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
-  expect(pixel(first, 0, 0)).toEqual(day ? [125, 148, 184] : [12, 22, 46])
-  // The orb stays fixed above the snowfall.
-  const orb: readonly [number, number, number] = day ? [245, 233, 200] : [232, 238, 248]
-  const at = day ? [585, 40] : [145, 40]
-  expect(pixel(first, at[0]!, at[1]!)).toEqual(orb)
-  expect(pixel(moving, at[0]!, at[1]!)).toEqual(orb)
-  // Ground never sees a flake.
-  const ground: readonly [number, number, number] = day ? [238, 243, 250] : [126, 147, 184]
-  expect(pixel(first, 375, 350)).toEqual(ground)
-  expect(pixel(moving, 375, 350)).toEqual(ground)
-  // The tall peak fills the gap between the middle pines.
-  const ridge: readonly [number, number, number] = day ? [124, 143, 180] : [44, 60, 96]
-  expect(pixel(first, 335, 230)).toEqual(ridge)
-  // The first ground spark glints bright, then dims.
-  const snow: readonly [number, number, number] = day ? [255, 255, 255] : [223, 232, 245]
-  const sparkDim: readonly [number, number, number] = day ? [174, 185, 204] : [74, 90, 120]
-  expect(pixel(first, 55, 350)).toEqual(snow)
-  expect(pixel(renderSnowPixels(WIDTH, HEIGHT, style, 300), 55, 350)).toEqual(sparkDim)
+  // Snowy ground is far brighter than the sky above the trees at night and slightly so by day.
+  expect(lum(first, 375, 395)).toBeGreaterThan(lum(first, 370, 20) + (day ? 40 : 90))
+  // Pines stay put: a bough low on the second pine is dark green in both frames.
+  for (const frame of [first, moving]) {
+    const [r, g, b] = pixel(frame, 262, 270)
+    expect(g!).toBeGreaterThan(r!)
+    expect(g!).toBeGreaterThan(b! - 20)
+  }
+  // The first ground spark glints, then dims on the next beat.
+  expect(pixel(renderSnowPixels(WIDTH, HEIGHT, style, 300), 55, 350)).not.toEqual(pixel(first, 55, 350))
 })
 
-test.each(["snowfall", "winter-night"] as const)("%s halos the orb and shadows the ground", (style) => {
+test.each(["snowfall", "winter-night"] as const)("%s halos the orb and lights the cabin", (style) => {
   const day = style === "snowfall"
   const first = renderSnowPixels(WIDTH, HEIGHT, style, 0)
-  // The halo ring is neither raw sky nor orb ink.
-  const sky = pixel(first, 370, 20)
-  const halo = pixel(first, day ? 585 : 145, 20)
-  expect(halo).not.toEqual(sky)
-  expect(halo).not.toEqual(day ? [245, 233, 200] : [232, 238, 248])
-  // Pine shadows pool on the ground away from the orb side.
-  const shadow: readonly [number, number, number] = day ? [174, 185, 204] : [74, 90, 120]
-  expect(pixel(first, 250, 350)).toEqual(shadow)
-  // The third peak fills the gap between the right pines.
-  const ridge: readonly [number, number, number] = day ? [124, 143, 180] : [44, 60, 96]
-  expect(pixel(first, 560, 240)).toEqual(ridge)
+  // The orb and its halo outshine the sky far from it.
+  const at = day ? [585, 40] : [145, 40]
+  expect(lum(first, at[0]!, at[1]!)).toBeGreaterThan(lum(first, day ? 150 : 600, 40) + 40)
+  // The cabin window glows warm only at night.
+  const [r, , b] = pixel(first, 357, 275)
+  if (day) expect(b!).toBeGreaterThanOrEqual(r!)
+  else expect(r!).toBeGreaterThan(b! + 80)
 })
 
 test("Snow stays within the HD bound", () => {

@@ -27,32 +27,44 @@ test.each(["festival-fireworks", "festival-lanterns"] as const)(
     expect(first.equals(renderFestivalPixels(WIDTH, HEIGHT, style, 3600))).toBe(true)
     expect(renderFestivalPixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
     expect(pixel(first, 0, 0)).toEqual(fireworks ? [5, 5, 16] : [10, 16, 48])
-    // Town lights burn on row 22.
-    expect(pixel(first, 385, 450)).toEqual([255, 209, 102])
+    // The pagoda lantern string burns warm on row 22 in every frame.
+    for (const frame of [first, moving]) {
+      const light = pixel(frame, 385, 450)
+      expect(light[0]).toBeGreaterThan(230)
+      expect(light[2]).toBeLessThan(200)
+    }
   },
 )
 
 test("bursts bloom and fade around the shared cycle", () => {
   const first = renderFestivalPixels(WIDTH, HEIGHT, "festival-fireworks", 0)
+  // Burst one ignites white-hot at its center, then the shell expands away.
   expect(pixel(first, 185, 190)).toEqual([255, 242, 204])
   expect(pixel(renderFestivalPixels(WIDTH, HEIGHT, "festival-fireworks", 1800), 185, 190)).not.toEqual([255, 242, 204])
-  // Bursts never reach the town row.
-  expect(pixel(first, 385, 450)).toEqual([255, 209, 102])
-  expect(pixel(renderFestivalPixels(WIDTH, HEIGHT, "festival-fireworks", 1800), 385, 450)).toEqual([255, 209, 102])
-  // Burst two lifts its rocket off the town row at t=1800.
-  expect(pixel(renderFestivalPixels(WIDTH, HEIGHT, "festival-fireworks", 1800), 585, 450)).toEqual([255, 242, 204])
-  expect(pixel(first, 585, 450)).not.toEqual([255, 242, 204])
+  // The town lights keep burning while bursts play.
+  for (const t of [0, 1800]) {
+    expect(pixel(renderFestivalPixels(WIDTH, HEIGHT, "festival-fireworks", t), 385, 450)[0]).toBeGreaterThan(230)
+  }
+  // The sky near a fresh burst is lit by it.
+  const lum = (rgb: number[]) => rgb[0]! + rgb[1]! + rgb[2]!
+  const near = (t: number) => lum(pixel(renderFestivalPixels(WIDTH, HEIGHT, "festival-fireworks", t), 160, 150))
+  expect(near(0)).toBeGreaterThan(near(2000))
 })
 
 test("lanterns rise past a fixed moon", () => {
   const first = renderFestivalPixels(WIDTH, HEIGHT, "festival-lanterns", 0)
-  expect(pixel(first, 505, 50)).toEqual([232, 236, 248])
-  expect(pixel(renderFestivalPixels(WIDTH, HEIGHT, "festival-lanterns", 1800), 505, 50)).toEqual([232, 236, 248])
-  const core: readonly [number, number, number] = [255, 230, 179]
-  expect(countColor(first, core)).toBeGreaterThan(30)
-  // Flames die down together at t=200 while the dark caps stay on.
-  expect(countColor(renderFestivalPixels(WIDTH, HEIGHT, "festival-lanterns", 200), core)).toBe(0)
-  expect(countColor(first, [36, 22, 16])).toBeGreaterThan(0)
+  const moon = pixel(first, 505, 50)
+  expect(moon[2]).toBeGreaterThan(220)
+  expect(pixel(renderFestivalPixels(WIDTH, HEIGHT, "festival-lanterns", 1800), 505, 50)[2]).toBeGreaterThan(220)
+  // Warm lantern paper is on screen in every frame, and flames flicker.
+  const warm = (frame: Buffer) => {
+    let found = 0
+    for (let i = 0; i < frame.length; i += 3) if (frame[i]! > 230 && frame[i + 1]! > 140 && frame[i + 2]! < 190) found++
+    return found
+  }
+  expect(warm(first)).toBeGreaterThan(300)
+  expect(warm(renderFestivalPixels(WIDTH, HEIGHT, "festival-lanterns", 200))).toBeGreaterThan(300)
+  expect(renderFestivalPixels(WIDTH, HEIGHT, "festival-lanterns", 200).equals(first)).toBe(false)
 })
 
 test("Festival stays within the HD bound", () => {

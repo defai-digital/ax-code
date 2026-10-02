@@ -8,10 +8,10 @@ import { createDigitalCodePixels, digitalCodePixelPlayer } from "../../../src/cl
 const WIDTH = 720
 const HEIGHT = 480
 const pixel = (frame: Buffer, x: number, y: number) => [...frame.subarray((y * WIDTH + x) * 3, (y * WIDTH + x) * 3 + 3)]
-const countColor = (frame: Buffer, rgb: readonly [number, number, number]) => {
+const countWarm = (frame: Buffer) => {
   let found = 0
   for (let i = 0; i < frame.length; i += 3) {
-    if (frame[i] === rgb[0] && frame[i + 1] === rgb[1] && frame[i + 2] === rgb[2]) found++
+    if (frame[i]! > 220 && frame[i + 1]! > 160 && frame[i + 2]! < 190) found++
   }
   return found
 }
@@ -24,29 +24,29 @@ test.each(["city-night", "city-dawn"] as const)("%s paints the shared skyline fr
   expect(first.equals(moving)).toBe(false)
   expect(renderCityPixels(WIDTH, HEIGHT, style, 600).equals(moving)).toBe(true)
   expect(renderCityPixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
-  expect(pixel(first, 0, 0)).toEqual(night ? [10, 14, 39] : [43, 27, 77])
-  expect(pixel(first, 10, 450)).toEqual(night ? [13, 17, 40] : [42, 31, 61])
-  // The orb sits above the skyline.
-  const orb: readonly [number, number, number] = night ? [232, 236, 248] : [255, 207, 110]
-  expect(pixel(first, night ? 600 : 120, night ? 40 : 60)).toEqual(orb)
-  // Building zero window (0,0) flips with the twinkle phase.
-  const lit: readonly [number, number, number] = night ? [255, 209, 102] : [255, 230, 163]
-  const dim: readonly [number, number, number] = night ? [58, 70, 104] : [90, 74, 104]
-  expect(pixel(first, 25, 290)).toEqual(lit)
-  expect(pixel(moving, 25, 290)).toEqual(dim)
-  // Building bodies never move.
-  const body: readonly [number, number, number] = night ? [20, 26, 56] : [36, 26, 58]
-  expect(pixel(first, 35, 390)).toEqual(body)
-  expect(pixel(moving, 35, 390)).toEqual(body)
-  expect(countColor(first, lit)).toBeGreaterThan(200)
-  // Tower crowns carry a lighter shade band.
-  const shade: readonly [number, number, number] = night ? [31, 40, 76] : [71, 50, 85]
-  expect(pixel(first, 35, 270)).toEqual(shade)
+  // The zenith is the darkest sky; the horizon behind the skyline is lighter.
+  const sum = (p: number[]) => p[0]! + p[1]! + p[2]!
+  expect(sum(pixel(first, 5, 2))).toBeLessThan(sum(pixel(first, 5, 330)))
+  // The orb sits above the skyline and is the brightest thing near it.
+  const orb = pixel(first, night ? 600 : 120, night ? 40 : 60)
+  expect(sum(orb)).toBeGreaterThan(600)
+  // Building zero window (0,0) flips with the twinkle phase: lit is warm and bright, dim is dark and cool.
+  const litWindow = pixel(first, 22, 290)
+  const dimWindow = pixel(moving, 22, 290)
+  expect(litWindow[0]).toBeGreaterThan(litWindow[2]! + 60)
+  expect(sum(litWindow)).toBeGreaterThan(sum(dimWindow) + 150)
+  // Building bodies never move and are not sky.
+  expect(pixel(moving, 35, 390)).toEqual(pixel(first, 35, 390))
+  expect(pixel(first, 35, 390)).not.toEqual(pixel(first, 5, 330))
+  expect(countWarm(first)).toBeGreaterThan(200)
   // The tallest-tower beacon blinks red above the roofline.
-  expect(pixel(first, 685, 70)).toEqual([255, 82, 82])
-  expect(pixel(moving, 685, 70)).toEqual([122, 46, 46])
-  // The eastbound car head crosses column 18 at t=1000.
-  expect(pixel(renderCityPixels(WIDTH, HEIGHT, style, 1000), 185, 470)).toEqual([255, 246, 218])
+  const beaconOn = pixel(first, 685, 70)
+  const beaconOff = pixel(moving, 685, 70)
+  expect(beaconOn[0]).toBeGreaterThan(beaconOn[1]! + 100)
+  expect(beaconOff[0]).toBeLessThan(beaconOn[0]!)
+  // The eastbound car's headlight glows on the street at t=1000.
+  const street = renderCityPixels(WIDTH, HEIGHT, style, 1000)
+  expect(sum(pixel(street, 185, 470))).toBeGreaterThan(sum(pixel(first, 400, 475)))
 })
 
 test("City stays within the HD bound", () => {

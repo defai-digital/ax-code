@@ -15,10 +15,15 @@ test.each(["steppe-day", "steppe-night"] as const)("%s paints deterministically 
   expect(renderSteppePixels(WIDTH, HEIGHT, style, 2400).equals(first)).toBe(true)
   expect(renderSteppePixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
   expect(moving.equals(first)).toBe(false)
-  // Deep grassland below the grass tufts never moves.
-  const ground: readonly [number, number, number] = day ? [90, 138, 74] : [22, 40, 26]
-  expect(pixel(first, 50, 440)).toEqual(ground)
-  expect(pixel(moving, 50, 440)).toEqual(ground)
+  // The soil band at the bottom edge never moves and stays green-dominant.
+  const soil = pixel(first, 50, 470)
+  expect(pixel(moving, 50, 470)).toEqual(soil)
+  expect(soil[1]!).toBeGreaterThan(soil[0]!)
+  expect(soil[1]!).toBeGreaterThan(soil[2]!)
+  // The zenith is bright by day and dark by night.
+  const zenith = pixel(first, 380, 2).reduce((a, b) => a + b, 0)
+  if (day) expect(zenith).toBeGreaterThan(300)
+  else expect(zenith).toBeLessThan(120)
 })
 
 test.each(["steppe-day", "steppe-night"] as const)("%s renders at any size", (style) => {

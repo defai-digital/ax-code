@@ -15,10 +15,13 @@ test.each(["falls-day", "falls-moon"] as const)("%s paints deterministically fro
   expect(renderFallsPixels(WIDTH, HEIGHT, style, 2400).equals(first)).toBe(true)
   expect(renderFallsPixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
   expect(moving.equals(first)).toBe(false)
-  // The left cliff face never moves.
-  const cliff: readonly [number, number, number] = day ? [106, 106, 114] : [58, 58, 72]
-  expect(pixel(first, 160, 220)).toEqual(cliff)
-  expect(pixel(moving, 160, 220)).toEqual(cliff)
+  // The left gorge wall never moves, and the lit wall is brighter by day than by night.
+  expect(pixel(moving, 160, 220)).toEqual(pixel(first, 160, 220))
+  const lum = (p: number[]) => p[0]! + p[1]! + p[2]!
+  expect(lum(pixel(first, 160, 220))).toBeGreaterThan(day ? 150 : 60)
+  expect(lum(pixel(first, 160, 220))).toBeLessThan(day ? 400 : 200)
+  // The cascade is brighter than the shaded wall beside it.
+  expect(lum(pixel(first, 380, 220))).toBeGreaterThan(lum(pixel(first, 160, 220)))
 })
 
 test.each(["falls-day", "falls-moon"] as const)("%s renders at any size", (style) => {

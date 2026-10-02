@@ -15,10 +15,16 @@ test.each(["greatwall-dawn", "greatwall-dusk"] as const)("%s paints deterministi
   expect(moving.equals(renderGreatwallPixels(WIDTH, HEIGHT, style, 900))).toBe(true)
   expect(renderGreatwallPixels(WIDTH, HEIGHT, style, 900).equals(moving)).toBe(true)
   expect(renderGreatwallPixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
-  // The distant beacon tower never moves.
-  const far: readonly [number, number, number] = dawn ? [122, 148, 168] : [138, 90, 106]
-  expect(pixel(first, 600, 130)).toEqual(far)
-  expect(pixel(moving, 600, 130)).toEqual(far)
+  // The brick rampart and the hillside never move.
+  expect(pixel(moving, 50, 300)).toEqual(pixel(first, 50, 300))
+  expect(pixel(moving, 600, 440)).toEqual(pixel(first, 600, 440))
+  // Brick is warm (red over blue); dawn light lifts it above the dusk rampart.
+  const brick = pixel(first, 50, 300)
+  expect(brick[0]!).toBeGreaterThan(brick[2]!)
+  // Dusk skies are warmer than dawn skies at the same spot.
+  const sky = pixel(first, 380, 40)
+  if (!dawn) expect(sky[0]!).toBeGreaterThan(sky[2]!)
+  else expect(sky[2]!).toBeGreaterThanOrEqual(sky[0]! - 40)
   // The scene dispatcher routes to this renderer.
   expect(
     renderTextScenePixels(WIDTH, HEIGHT, style, 700).equals(renderGreatwallPixels(WIDTH, HEIGHT, style, 700)),

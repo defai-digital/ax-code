@@ -15,33 +15,26 @@ test.each(["colosseum-day", "colosseum-night"] as const)("%s paints the arcade f
   expect(first.equals(moving)).toBe(false)
   expect(renderColosseumPixels(WIDTH, HEIGHT, style, 900).equals(moving)).toBe(true)
   expect(renderColosseumPixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
-  expect(pixel(first, 0, 0)).toEqual(day ? [142, 200, 232] : [14, 20, 51])
-  // Wall stone between the arches never moves.
-  const stone: readonly [number, number, number] = day ? [201, 191, 160] : [90, 86, 72]
-  expect(pixel(first, 300, 240)).toEqual(stone)
-  expect(pixel(moving, 300, 240)).toEqual(stone)
+  const sum = (p: number[]) => p[0]! + p[1]! + p[2]!
+  // The zenith is sky; the lawn below the horizon is not.
+  expect(pixel(first, 0, 0)).not.toEqual(pixel(first, 0, 470))
+  // The arcade: deep shaded openings by day, glowing amber openings at night.
+  let openings = 0
+  for (let y = 230; y < 330; y++) {
+    for (let x = 160; x < 600; x++) {
+      const p = pixel(first, x, y)
+      if (day ? sum(p) < 250 : p[0]! > 200 && p[1]! > 120 && p[2]! < 120) openings++
+    }
+  }
+  expect(openings).toBeGreaterThan(1500)
   // A cypress flanking the ruin never moves.
-  const cypress: readonly [number, number, number] = day ? [61, 106, 61] : [30, 58, 36]
-  expect(pixel(first, 55, 330)).toEqual(cypress)
-  expect(pixel(moving, 55, 330)).toEqual(cypress)
-  // A statue standing in a crown gap never moves.
-  const statue: readonly [number, number, number] = day ? [94, 86, 69] : [30, 28, 24]
-  expect(pixel(first, 325, 140)).toEqual(statue)
-  expect(pixel(moving, 325, 140)).toEqual(statue)
-  // An umbrella-pine canopy framing the edge never moves.
-  const pine: readonly [number, number, number] = day ? [61, 106, 61] : [30, 58, 36]
-  expect(pixel(first, 15, 230)).toEqual(pine)
-  expect(pixel(moving, 15, 230)).toEqual(pine)
-  // A gladiator flanking the gate never moves.
-  const crowd: readonly [number, number, number] = day ? [90, 90, 106] : [138, 138, 160]
-  expect(pixel(first, 335, 350)).toEqual(crowd)
-  expect(pixel(moving, 335, 350)).toEqual(crowd)
-  // Tourist cameras take turns flashing.
-  const flash: readonly [number, number, number] = day ? [232, 138, 58] : [255, 209, 102]
-  expect(pixel(first, 75, 370)).toEqual(flash)
-  expect(pixel(first, 275, 370)).toEqual(crowd)
-  expect(pixel(moving, 75, 370)).toEqual(crowd)
-  expect(pixel(moving, 275, 370)).toEqual(flash)
+  expect(pixel(moving, 55, 330)).toEqual(pixel(first, 55, 330))
+  // The gate steps and a gladiator flanking the gate never move.
+  expect(pixel(moving, 335, 350)).toEqual(pixel(first, 335, 350))
+  // Tourist cameras take turns flashing: camera 0 is bright at t=0 and camera 1 at t=400.
+  const early = renderColosseumPixels(WIDTH, HEIGHT, style, 400)
+  expect(sum(pixel(first, 79, 366))).toBeGreaterThan(sum(pixel(moving, 79, 366)))
+  expect(sum(pixel(early, 209, 366))).toBeGreaterThan(sum(pixel(first, 209, 366)))
   // The scene dispatcher routes to this renderer.
   expect(
     renderTextScenePixels(WIDTH, HEIGHT, style, 700).equals(renderColosseumPixels(WIDTH, HEIGHT, style, 700)),

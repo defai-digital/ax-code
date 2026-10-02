@@ -17,15 +17,24 @@ test.each(["balloons-night", "balloons-dawn"] as const)("%s paints the ascent fr
   expect(renderBalloonsPixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
   expect(pixel(first, 0, 0)).toEqual(night ? [14, 20, 51] : [184, 122, 106])
   // Valley ground never moves.
-  const ground: readonly [number, number, number] = night ? [28, 30, 46] : [90, 74, 58]
+  const ground: readonly [number, number, number] = night ? [26, 26, 37] : [75, 62, 48]
   expect(pixel(first, 100, 430)).toEqual(ground)
   expect(pixel(moving, 100, 430)).toEqual(ground)
   // The moonrise above the lanes never moves.
   const moon: readonly [number, number, number] = night ? [232, 228, 245] : [255, 248, 232]
   expect(pixel(first, 665, 70)).toEqual(moon)
   expect(pixel(moving, 665, 70)).toEqual(moon)
+  // The balloons light up their envelopes and move: the sky above the lanes changes.
+  let changed = 0
+  for (let y = 0; y < 380; y += 3) {
+    for (let x = 0; x < WIDTH; x += 3) {
+      const i = (y * WIDTH + x) * 3
+      if (first[i] !== moving[i] || first[i + 1] !== moving[i + 1] || first[i + 2] !== moving[i + 2]) changed++
+    }
+  }
+  expect(changed).toBeGreaterThan(500)
   // A valley cottage never moves.
-  const cottage: readonly [number, number, number] = night ? [255, 209, 102] : [138, 106, 82]
+  const cottage: readonly [number, number, number] = night ? [221, 180, 98] : [138, 106, 82]
   expect(pixel(first, 305, 370)).toEqual(cottage)
   expect(pixel(moving, 305, 370)).toEqual(cottage)
   // The scene dispatcher routes to this renderer.

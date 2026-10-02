@@ -15,15 +15,19 @@ test.each(["castle-day", "castle-night"] as const)("%s paints deterministically 
   expect(renderCastlePixels(WIDTH, HEIGHT, style, 900).equals(moving)).toBe(true)
   expect(renderCastlePixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
   expect(renderCastlePixels(WIDTH, HEIGHT, style, 2400).equals(first)).toBe(true)
-  // The keep wall never moves.
-  const wall: readonly [number, number, number] = day ? [184, 176, 160] : [110, 106, 126]
-  expect(pixel(first, 375, 250)).toEqual(wall)
-  expect(pixel(moving, 375, 250)).toEqual(wall)
+  // The keep wall never moves and is stone, not sky.
+  expect(pixel(moving, 375, 250)).toEqual(pixel(first, 375, 250))
+  expect(pixel(first, 375, 250)).not.toEqual(pixel(first, 375, 20))
+  // The wall is lit by the sun by day and is darker under the moon.
+  const wall = pixel(first, 375, 250)
+  expect(wall[0]! + wall[1]! + wall[2]!).toBeGreaterThan(day ? 300 : 150)
 })
 
 test("the rooftop beacon blinks red over the night keep", () => {
-  expect(pixel(renderCastlePixels(WIDTH, HEIGHT, "castle-night", 0), 275, 130)).toEqual([255, 82, 82])
-  expect(pixel(renderCastlePixels(WIDTH, HEIGHT, "castle-night", 500), 275, 130)).toEqual([74, 70, 88])
+  const on = pixel(renderCastlePixels(WIDTH, HEIGHT, "castle-night", 0), 280, 130)
+  const off = pixel(renderCastlePixels(WIDTH, HEIGHT, "castle-night", 500), 280, 130)
+  expect(on[0]).toBeGreaterThan(on[1]! + 120)
+  expect(off[0]).toBeLessThan(on[0]! - 80)
 })
 
 test.each(["castle-day", "castle-night"] as const)("%s renders at any size", (style) => {

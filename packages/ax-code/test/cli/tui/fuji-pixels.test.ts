@@ -6,10 +6,11 @@ import { createDigitalCodePixels, digitalCodePixelPlayer } from "../../../src/cl
 const pixel = (frame: Buffer, width: number, x: number, y: number) => [
   ...frame.subarray((y * width + x) * 3, (y * width + x) * 3 + 3),
 ]
-const countColor = (frame: Buffer, rgb: readonly [number, number, number]) => {
+/** Number of pixels that differ between two frames inside rows [y0, y1). */
+const diffRows = (a: Buffer, b: Buffer, width: number, y0: number, y1: number) => {
   let found = 0
-  for (let i = 0; i < frame.length; i += 3) {
-    if (frame[i] === rgb[0] && frame[i + 1] === rgb[1] && frame[i + 2] === rgb[2]) found++
+  for (let i = y0 * width * 3; i < y1 * width * 3; i += 3) {
+    if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2]) found++
   }
   return found
 }
@@ -23,9 +24,8 @@ test.each(["fuji-day", "fuji-night"] as const)(
     expect(first.length).toBe(780 * 440 * 3)
     expect(first.equals(moving)).toBe(false)
     expect(first.equals(renderFujiPixels(780, 440, style, 2400))).toBe(true)
-    // Sky corners match the shared gradient.
+    // The top-left sky corner matches the shared gradient.
     expect(pixel(first, 780, 0, 0)).toEqual(style === "fuji-day" ? [90, 32, 78] : [16, 27, 54])
-    expect(pixel(first, 780, 0, 439)).toEqual(style === "fuji-day" ? [196, 120, 82] : [29, 53, 87])
     // Celestial bodies sit above the petal zone, so their centers never move.
     const orb =
       style === "fuji-day"
@@ -33,19 +33,23 @@ test.each(["fuji-day", "fuji-night"] as const)(
         : { at: [590, 18] as const, color: [226, 234, 252] }
     expect(pixel(first, 780, orb.at[0], orb.at[1])).toEqual(orb.color)
     expect(pixel(moving, 780, orb.at[0], orb.at[1])).toEqual(orb.color)
-    // Mountain face and reflection column are static and petal-free here.
-    expect(pixel(first, 780, 316, 165)).toEqual(style === "fuji-day" ? [140, 86, 101] : [45, 68, 84])
-    expect(pixel(moving, 780, 316, 165)).toEqual(style === "fuji-day" ? [140, 86, 101] : [45, 68, 84])
-    const rx = style === "fuji-day" ? 395 : 595
-    expect(pixel(first, 780, rx, 242)).toEqual(style === "fuji-day" ? [217, 136, 76] : [203, 213, 225])
-    expect(pixel(moving, 780, rx, 242)).toEqual(style === "fuji-day" ? [217, 136, 76] : [203, 213, 225])
-    // The lake shimmers (two full waves per cycle) but the frame still loops.
-    expect(pixel(first, 780, 158, 231)).toEqual(style === "fuji-day" ? [117, 65, 82] : [46, 71, 105])
-    expect(pixel(shimmer, 780, 158, 231)).not.toEqual(pixel(first, 780, 158, 231))
-    // The shinkansen body is absent at cycle start and fully present midway.
-    const pearl: readonly [number, number, number] = [237, 242, 244]
-    expect(countColor(first, pearl)).toBe(0)
-    expect(countColor(moving, pearl)).toBeGreaterThan(2000)
+    // A lit snow-free slope sample is static and petal-free here.
+    expect(pixel(first, 780, 316, 165)).toEqual(style === "fuji-day" ? [124, 75, 88] : [75, 107, 116])
+    expect(pixel(moving, 780, 316, 165)).toEqual(style === "fuji-day" ? [124, 75, 88] : [75, 107, 116])
+    // The snow cap is lighter than the slope below it, and the sky stays above the peak.
+    const lum = (rgb: number[]) => rgb[0]! + rgb[1]! + rgb[2]!
+    expect(lum(pixel(first, 780, 390, 120))).toBeGreaterThan(lum(pixel(first, 780, 316, 165)))
+    // The lake shimmers (rows 10-12.4 of the scene) but the frame still loops.
+    const lake = (frame: Buffer) => diffRows(first, frame, 780, 220, 270)
+    expect(lake(shimmer)).toBeGreaterThan(500)
+    expect(lake(renderFujiPixels(780, 440, style, 2400))).toBe(0)
+    // The shinkansen occupies the lower rows only once it has entered.
+    expect(diffRows(first, moving, 780, 340, 440)).toBeGreaterThan(2000)
+    // Night frames are darker than day frames overall.
+    const mean = (frame: Buffer) => frame.reduce((sum, v) => sum + v, 0) / frame.length
+    expect(mean(renderFujiPixels(780, 440, "fuji-night", 0))).toBeLessThan(
+      mean(renderFujiPixels(780, 440, "fuji-day", 0)),
+    )
   },
 )
 

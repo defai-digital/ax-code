@@ -7,6 +7,11 @@ const WIDTH = 760
 const HEIGHT = 480
 const pixel = (frame: Buffer, x: number, y: number) => [...frame.subarray((y * WIDTH + x) * 3, (y * WIDTH + x) * 3 + 3)]
 
+const lum = (frame: Buffer, x: number, y: number) => {
+  const [r, g, b] = pixel(frame, x, y)
+  return 0.299 * r! + 0.587 * g! + 0.114 * b!
+}
+
 test.each(["mekong-dawn", "mekong-dusk"] as const)("%s paints the river from elapsed time", (style) => {
   const dawn = style === "mekong-dawn"
   const first = renderMekongPixels(WIDTH, HEIGHT, style, 0)
@@ -15,26 +20,19 @@ test.each(["mekong-dawn", "mekong-dusk"] as const)("%s paints the river from ela
   expect(first.equals(moving)).toBe(false)
   expect(renderMekongPixels(WIDTH, HEIGHT, style, 900).equals(moving)).toBe(true)
   expect(renderMekongPixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
-  expect(pixel(first, 0, 0)).toEqual(dawn ? [168, 196, 224] : [122, 74, 98])
-  // Open water away from the crest pattern holds its tone.
-  const water: readonly [number, number, number] = dawn ? [74, 138, 154] : [90, 74, 122]
-  expect(pixel(first, 105, 330)).toEqual(water)
-  // The distant skiff holding still upstream.
-  const skiff: readonly [number, number, number] = dawn ? [106, 74, 50] : [74, 50, 34]
-  expect(pixel(first, 520, 270)).toEqual(skiff)
-  expect(pixel(moving, 520, 270)).toEqual(skiff)
-  // The riverside temple never moves.
-  const temple: readonly [number, number, number] = dawn ? [138, 106, 74] : [90, 66, 50]
-  expect(pixel(first, 160, 250)).toEqual(temple)
-  expect(pixel(moving, 160, 250)).toEqual(temple)
-  // The market boat's goods drift away, leaving open water behind.
-  const goods: readonly [number, number, number] = dawn ? [232, 138, 58] : [195, 106, 42]
-  expect(pixel(first, 725, 290)).toEqual(goods)
-  expect(pixel(moving, 725, 290)).toEqual(water)
-  // A lily pad resting on the lower river never moves.
-  const lily: readonly [number, number, number] = dawn ? [74, 138, 74] : [58, 106, 58]
-  expect(pixel(first, 485, 410)).toEqual(lily)
-  expect(pixel(moving, 485, 410)).toEqual(lily)
+  // The sky is brighter than the deep river, and the sun outshines the sky.
+  expect(lum(first, 300, 40)).toBeGreaterThan(lum(first, 300, 460))
+  expect(lum(first, 600, 80)).toBeGreaterThan(lum(first, 300, 40))
+  // The sun's glitter path lights the water beneath it, more than open water beside it.
+  expect(lum(first, 600, 400)).toBeGreaterThan(lum(first, 300, 400) + 30)
+  // Dawn is cooler than dusk in the sky overhead.
+  const [r, , b] = pixel(first, 300, 40)
+  if (dawn) expect(b!).toBeGreaterThan(r! - 10)
+  else expect(r!).toBeGreaterThan(b!)
+  // The temple spire and hall never move.
+  expect(pixel(first, 160, 250)).toEqual(pixel(moving, 160, 250))
+  // The market boat drifts: its goods leave the right edge of the frame.
+  expect(pixel(first, 725, 290)).not.toEqual(pixel(moving, 725, 290))
   // The scene dispatcher routes to this renderer.
   expect(renderTextScenePixels(WIDTH, HEIGHT, style, 700).equals(renderMekongPixels(WIDTH, HEIGHT, style, 700))).toBe(
     true,

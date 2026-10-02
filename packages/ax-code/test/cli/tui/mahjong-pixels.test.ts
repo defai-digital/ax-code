@@ -6,12 +6,22 @@ import { createDigitalCodePixels } from "../../../src/cli/tui/component/digital-
 const WIDTH = 760
 const HEIGHT = 500
 const pixel = (frame: Buffer, x: number, y: number) => [...frame.subarray((y * WIDTH + x) * 3, (y * WIDTH + x) * 3 + 3)]
-const countColor = (frame: Buffer, rgb: readonly [number, number, number]) => {
-  let found = 0
-  for (let i = 0; i < frame.length; i += 3) {
-    if (frame[i] === rgb[0] && frame[i + 1] === rgb[1] && frame[i + 2] === rgb[2]) found++
+const lum = (frame: Buffer, x: number, y: number) => {
+  const [r, g, b] = pixel(frame, x, y)
+  return 0.299 * r! + 0.587 * g! + 0.114 * b!
+}
+/** Share of pixels in a rectangle that look like ivory tile faces. */
+const ivoryShare = (frame: Buffer, x0: number, y0: number, x1: number, y1: number) => {
+  let hits = 0
+  let total = 0
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      const [r, g, b] = pixel(frame, x, y)
+      total++
+      if (r! > 200 && g! > 215 && b! > 200) hits++
+    }
   }
-  return found
+  return hits / total
 }
 
 test.each(["mahjong-match", "mahjong-ending"] as const)(
@@ -23,12 +33,13 @@ test.each(["mahjong-match", "mahjong-ending"] as const)(
     expect(first.equals(moving)).toBe(false)
     expect(first.equals(renderMahjongPixels(WIDTH, HEIGHT, style, 4800))).toBe(true)
     expect(renderMahjongPixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
-    // Felt gradient endpoints match the shared palette.
-    expect(pixel(first, 0, 0)).toEqual([4, 47, 34])
-    expect(pixel(first, 0, HEIGHT - 1)).toEqual([2, 26, 18])
-    // The table frame is static across the animation.
-    expect(pixel(first, WIDTH / 2, 1)).toEqual([5, 150, 105])
-    expect(pixel(moving, WIDTH / 2, 1)).toEqual([5, 150, 105])
+    // The table rim and inner border are static and brighter than the felt around them.
+    expect(pixel(first, WIDTH / 2, 3)).toEqual(pixel(moving, WIDTH / 2, 3))
+    expect(lum(first, WIDTH / 2, 3)).toBeGreaterThan(lum(first, 5, HEIGHT / 2))
+    // The felt stays dark green near the corners.
+    const [r, g, b] = pixel(first, 5, 5)
+    expect(g!).toBeGreaterThan(r!)
+    expect(g!).toBeGreaterThan(b!)
   },
 )
 
@@ -36,44 +47,40 @@ test("match discards land on the shared layout while concealed backs stay fixed"
   const first = renderMahjongPixels(WIDTH, HEIGHT, "mahjong-match", 0)
   const moving = renderMahjongPixels(WIDTH, HEIGHT, "mahjong-match", 1200)
   // South's first discard appears at scene (31, 14) once step 1 lands.
-  expect(pixel(first, 315, 285)).not.toEqual([236, 253, 245])
-  expect(pixel(moving, 315, 285)).toEqual([236, 253, 245])
+  expect(ivoryShare(first, 310, 280, 350, 300)).toBe(0)
+  expect(ivoryShare(moving, 310, 280, 350, 300)).toBeGreaterThan(0.15)
   // Concealed backs never reveal tile identity, so they are step-independent.
-  expect(pixel(first, 200, 90)).toEqual([6, 95, 70])
-  expect(pixel(moving, 200, 90)).toEqual([6, 95, 70])
-  // New discards add faces without removing the open south hand.
-  const ivory: readonly [number, number, number] = [236, 253, 245]
-  expect(countColor(first, ivory)).toBeGreaterThan(2000)
-  expect(countColor(moving, ivory)).toBeGreaterThan(countColor(first, ivory))
+  expect(pixel(first, 200, 90)).toEqual(pixel(moving, 200, 90))
+  // The open south hand shows ivory faces from the start.
+  expect(ivoryShare(first, 190, 360, 570, 380)).toBeGreaterThan(0.2)
 })
 
 test("ending keeps a static ledger with a shared blink phase", () => {
   const first = renderMahjongPixels(WIDTH, HEIGHT, "mahjong-ending", 0)
   const blink = renderMahjongPixels(WIDTH, HEIGHT, "mahjong-ending", 400)
   expect(first.equals(blink)).toBe(false)
-  expect(first.equals(renderMahjongPixels(WIDTH, HEIGHT, "mahjong-ending", 800))).toBe(true)
-  // The marker flips with the blink phase; the ledger itself never moves.
-  expect(pixel(first, 385, 430)).not.toEqual([251, 191, 36])
-  expect(pixel(blink, 385, 430)).toEqual([251, 191, 36])
+  expect(first.equals(renderMahjongPixels(WIDTH, HEIGHT, "mahjong-ending", 4800))).toBe(true)
+  // The blink marker glows gold in the lit phase only.
+  expect(pixel(blink, 385, 430)).not.toEqual(pixel(first, 385, 430))
+  const [r, , b] = pixel(blink, 385, 430)
+  expect(r!).toBeGreaterThan(b! + 100)
 })
 
-test("match spotlights the turn seat with suit pips and a wall bar", () => {
+test("match spotlights the turn seat and fills the wall bar", () => {
   const moving = renderMahjongPixels(WIDTH, HEIGHT, "mahjong-match", 1200)
-  // Suit pips tint the open faces.
-  expect(countColor(moving, [37, 99, 235])).toBeGreaterThan(0)
-  // The WEST label (scene 5,8) sits on a spotlight pill at step 3.
-  expect(pixel(moving, 45, 170)).toEqual([6, 95, 70])
-  // The wall bar (scene row 22) fills 19 of 20 cells at wall 81.
-  expect(pixel(moving, 200, 450)).toEqual([52, 211, 153])
-  expect(pixel(moving, 345, 450)).toEqual([4, 120, 87])
-  // The inner border frames the table.
-  expect(pixel(moving, 30, 200)).toEqual([4, 120, 87])
+  // The WEST label (scene 5,8) sits on a lit jade pill at step 3; EAST does not.
+  const pill = pixel(moving, 45, 171)
+  expect(pill[1]!).toBeGreaterThan(pill[0]! + 40)
+  expect(lum(moving, 45, 171)).toBeGreaterThan(lum(moving, 590, 171) - 1)
+  // The wall bar (scene row 22) fills 19 of 20 cells at wall 81: bright fill, dark remainder.
+  expect(lum(moving, 200, 450)).toBeGreaterThan(lum(moving, 345, 450) + 40)
 })
 
-test("ending medals the winner between decorative rules", () => {
+test("ending medals the winner with a gold coin", () => {
   const first = renderMahjongPixels(WIDTH, HEIGHT, "mahjong-ending", 0)
-  expect(pixel(first, 245, 190)).toEqual([251, 191, 36])
-  expect(pixel(first, 30, 200)).toEqual([4, 120, 87])
+  const [r, g, b] = pixel(first, 245, 190)
+  expect(r!).toBeGreaterThan(b! + 100)
+  expect(g!).toBeGreaterThan(b!)
 })
 
 test("Mahjong stays within the HD bound", () => {

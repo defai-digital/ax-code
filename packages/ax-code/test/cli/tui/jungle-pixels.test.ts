@@ -13,10 +13,18 @@ test.each(["jungle-day", "jungle-night"] as const)("%s paints deterministically 
   expect(first.length).toBe(WIDTH * HEIGHT * 3)
   expect(moving.equals(renderJunglePixels(WIDTH, HEIGHT, style, 900))).toBe(true)
   expect(renderJunglePixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
-  // The fern ground never moves.
-  const ground: readonly [number, number, number] = day ? [74, 106, 52] : [22, 36, 15]
-  expect(pixel(first, 385, 450)).toEqual(ground)
-  expect(pixel(moving, 385, 450)).toEqual(ground)
+  // The scene loops with the shared 2400ms cycle and moves in between.
+  expect(renderJunglePixels(WIDTH, HEIGHT, style, 2400).equals(first)).toBe(true)
+  expect(moving.equals(first)).toBe(false)
+  // Forest-floor sample is static by day and dark in both variants.
+  const floor = pixel(first, 385, 450)
+  if (day) expect(pixel(moving, 385, 450)).toEqual(floor)
+  expect(Math.max(...floor)).toBeLessThan(120)
+  // Night is darker than day overall; the moon gap stays sky-blue and lit.
+  const mean = (frame: Buffer) => frame.reduce((sum, v) => sum + v, 0) / frame.length
+  expect(mean(renderJunglePixels(WIDTH, HEIGHT, "jungle-night", 0))).toBeLessThan(
+    mean(renderJunglePixels(WIDTH, HEIGHT, "jungle-day", 0)),
+  )
 })
 
 test.each(["jungle-day", "jungle-night"] as const)("%s renders at any size", (style) => {

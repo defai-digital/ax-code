@@ -15,10 +15,14 @@ test.each(["torii-day", "torii-night"] as const)("%s paints deterministically fr
   expect(moving.equals(renderToriiPixels(WIDTH, HEIGHT, style, 900))).toBe(true)
   expect(renderToriiPixels(WIDTH, HEIGHT, style, 900).equals(moving)).toBe(true)
   expect(renderToriiPixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
-  // The shrine wall through the gate never moves.
-  const shrine: readonly [number, number, number] = day ? [195, 61, 30] : [138, 42, 24]
-  expect(pixel(first, 350, 250)).toEqual(shrine)
-  expect(pixel(moving, 350, 250)).toEqual(shrine)
+  // The shrine wall through the gate never moves and reads as vermilion.
+  const shrine = pixel(first, 345, 250)
+  expect(pixel(moving, 345, 250)).toEqual(shrine)
+  expect(shrine[0]!).toBeGreaterThan(shrine[2]! * 1.5)
+  // The gate pillars are shaded cylinders, not flat strokes, and the scene moves.
+  expect(pixel(first, 276, 300)).not.toEqual(pixel(first, 291, 300))
+  expect(first.equals(moving)).toBe(false)
+  void day
   // The scene dispatcher routes to this renderer.
   expect(renderTextScenePixels(WIDTH, HEIGHT, style, 700).equals(renderToriiPixels(WIDTH, HEIGHT, style, 700))).toBe(
     true,

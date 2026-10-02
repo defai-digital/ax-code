@@ -19,6 +19,9 @@ test.each(["sagrada-day", "sagrada-night"] as const)("%s paints deterministicall
   const bloom: readonly [number, number, number] = day ? [195, 106, 138] : [232, 154, 184]
   expect(pixel(first, 45, 450)).toEqual(bloom)
   expect(pixel(moving, 45, 450)).toEqual(bloom)
+  // Towers are shaded cylinders: the lit edge differs from the shaded edge.
+  expect(pixel(first, 238, 250)).not.toEqual(pixel(first, 262, 250))
+  expect(first.equals(moving)).toBe(false)
   // The scene dispatcher routes to this renderer.
   expect(renderTextScenePixels(WIDTH, HEIGHT, style, 700).equals(renderSagradaPixels(WIDTH, HEIGHT, style, 700))).toBe(
     true,

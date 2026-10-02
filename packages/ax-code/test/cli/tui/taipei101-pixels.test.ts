@@ -19,6 +19,10 @@ test.each(["taipei101-day", "taipei101-neon"] as const)("%s paints deterministic
   const track: readonly [number, number, number] = day ? [61, 90, 115] : [255, 90, 208]
   expect(pixel(first, 100, 270)).toEqual(track)
   expect(pixel(moving, 100, 270)).toEqual(track)
+  // The tower is shaded glass, not a flat fill: the lit and shaded edges differ.
+  expect(pixel(first, 372, 330)).not.toEqual(pixel(first, 398, 330))
+  // The window chase animates the tower.
+  expect(first.equals(moving)).toBe(false)
   // The scene dispatcher routes to this renderer.
   expect(
     renderTextScenePixels(WIDTH, HEIGHT, style, 700).equals(renderTaipei101Pixels(WIDTH, HEIGHT, style, 700)),

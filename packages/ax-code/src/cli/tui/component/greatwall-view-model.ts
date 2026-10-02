@@ -83,10 +83,15 @@ export function greatwallSkyRgb(style: GreatwallStyle, t: number): readonly [num
 
 /** Wall-top row at scene column `x`, following the ridge peaks. */
 export function greatwallRidgeY(x: number): number {
+  return Math.round(greatwallRidgeF(x))
+}
+
+/** Continuous wall-top row, so the HD wall slopes smoothly along the ridge. */
+export function greatwallRidgeF(x: number): number {
   const segment = Math.max(0, Math.min(GREATWALL_RIDGE.length - 2, Math.floor(x / 15)))
   const from = GREATWALL_RIDGE[segment]!
   const to = GREATWALL_RIDGE[segment + 1]!
-  return Math.round(from + ((to - from) * (x - segment * 15)) / 15)
+  return from + ((to - from) * (x - segment * 15)) / 15
 }
 
 /** Clouds drifting over the ridge on a 12000ms round. */

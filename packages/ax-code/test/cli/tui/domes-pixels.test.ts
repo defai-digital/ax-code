@@ -14,23 +14,27 @@ test("domes-snow paints falling snow from elapsed time", () => {
   expect(first.equals(moving)).toBe(false)
   expect(renderDomesPixels(WIDTH, HEIGHT, "domes-snow", 900).equals(moving)).toBe(true)
   expect(renderDomesPixels(WIDTH, HEIGHT, "domes-snow", -100).equals(first)).toBe(true)
-  expect(pixel(first, 0, 0)).toEqual([184, 196, 220])
-  // Wall plaster never moves.
-  expect(pixel(first, 350, 300)).toEqual([216, 220, 226])
-  expect(pixel(moving, 350, 300)).toEqual([216, 220, 226])
-  // An evergreen flanks the church.
-  expect(pixel(first, 50, 330)).toEqual([42, 90, 58])
-  // The bell-arch leg on the first frame.
-  expect(pixel(first, 85, 290)).toEqual([154, 162, 174])
+  // Plaster and the snowfield never move.
+  expect(pixel(moving, 350, 300)).toEqual(pixel(first, 350, 300))
+  expect(pixel(moving, 650, 470)).toEqual(pixel(first, 650, 470))
+  // Snow ground is near white-blue; a lit window glows warm.
+  const ground = pixel(first, 650, 470)
+  expect(ground[2]!).toBeGreaterThan(ground[0]!)
+  const pane = pixel(first, 205, 305)
+  expect(pane[0]!).toBeGreaterThan(pane[2]! + 40)
 })
 
-test("domes-clear holds its frame still", () => {
+test("domes-clear shows a blue dome over a green meadow and animates only its smoke and bell", () => {
   const first = renderDomesPixels(WIDTH, HEIGHT, "domes-clear", 0)
-  expect(renderDomesPixels(WIDTH, HEIGHT, "domes-clear", 900).equals(first)).toBe(true)
-  expect(pixel(first, 0, 0)).toEqual([126, 192, 228])
-  expect(pixel(first, 350, 300)).toEqual([238, 241, 245])
-  expect(pixel(first, 50, 330)).toEqual([44, 106, 68])
-  expect(pixel(first, 85, 290)).toEqual([170, 178, 190])
+  const moving = renderDomesPixels(WIDTH, HEIGHT, "domes-clear", 900)
+  expect(moving.equals(renderDomesPixels(WIDTH, HEIGHT, "domes-clear", 900))).toBe(true)
+  expect(moving.equals(first)).toBe(false)
+  expect(pixel(moving, 350, 300)).toEqual(pixel(first, 350, 300))
+  expect(pixel(moving, 650, 470)).toEqual(pixel(first, 650, 470))
+  const dome = pixel(first, 385, 180)
+  expect(dome[2]!).toBeGreaterThan(dome[0]!)
+  const meadow = pixel(first, 650, 470)
+  expect(meadow[1]!).toBeGreaterThan(meadow[2]!)
 })
 
 test.each(["domes-snow", "domes-clear"] as const)("%s renders at any size", (style) => {

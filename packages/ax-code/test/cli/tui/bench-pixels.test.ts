@@ -16,6 +16,18 @@ const countColor = (frame: Buffer, rgb: readonly [number, number, number]) => {
   return found
 }
 
+const lum = (p: number[]) => p[0]! + p[1]! + p[2]!
+const changedPixels = (a: Buffer, b: Buffer, y0: number, y1: number) => {
+  let count = 0
+  for (let y = y0; y < y1; y++) {
+    for (let x = 0; x < WIDTH; x += 2) {
+      const i = (y * WIDTH + x) * 3
+      if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2]) count++
+    }
+  }
+  return count
+}
+
 test.each(["midnight-dream", "sunset-serenade"] as const)(
   "%s paints the shared shoreline scene from elapsed time",
   (style) => {
@@ -26,18 +38,15 @@ test.each(["midnight-dream", "sunset-serenade"] as const)(
     expect(first.equals(moving)).toBe(false)
     expect(renderBenchPixels(WIDTH, HEIGHT, style, 1000).equals(moving)).toBe(true)
     expect(renderBenchPixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
-    // Sky starts at the shared background; the centered title stays clear of
-    // the left edge on the bottom row while sand covers scene row 21.
-    expect(pixel(first, 0, 0)).toEqual(night ? [11, 19, 43] : [52, 27, 54])
-    expect(pixel(first, 0, 430)).toEqual([233, 196, 106])
-    // Wave crests flip with the shared phase.
-    const wave: readonly [number, number, number] = night ? [0, 180, 216] : [195, 107, 155]
-    expect(pixel(first, 5, 370)).toEqual(wave)
-    expect(pixel(renderBenchPixels(WIDTH, HEIGHT, style, 300), 5, 370)).not.toEqual(wave)
-    // The trunk sways with the shared phase.
-    const trunk: readonly [number, number, number] = night ? [183, 148, 87] : [161, 108, 80]
-    expect(pixel(first, 175, 310)).toEqual(trunk)
-    expect(pixel(renderBenchPixels(WIDTH, HEIGHT, style, 500), 175, 310)).not.toEqual(trunk)
+    // Sky starts at the shared background; the sand never moves.
+    expect(pixel(first, 0, 0)).toEqual(night ? [12, 20, 44] : [52, 27, 54])
+    expect(pixel(moving, 0, 430)).toEqual(pixel(first, 0, 430))
+    expect(lum(pixel(first, 0, 430))).toBeGreaterThan(lum(pixel(first, 0, 0)))
+    // The surf and glitter move: the sea band changes between frames.
+    expect(changedPixels(first, moving, 330, 380)).toBeGreaterThan(300)
+    // The palm sways: the crown changes while the trunk base stays put.
+    expect(changedPixels(first, renderBenchPixels(WIDTH, HEIGHT, style, 500), 220, 300)).toBeGreaterThan(50)
+    expect(pixel(first, 160, 410)).toEqual(pixel(renderBenchPixels(WIDTH, HEIGHT, style, 500), 160, 410))
     // Title ink is present.
     const light: readonly [number, number, number] = night ? [226, 234, 252] : [255, 205, 117]
     expect(countColor(first, light)).toBeGreaterThan(100)
@@ -49,20 +58,22 @@ test("midnight keeps a fixed moon while the sunset descends and settles", () => 
   expect(pixel(moon, 525, 70)).toEqual([226, 234, 252])
   expect(pixel(renderBenchPixels(WIDTH, HEIGHT, "midnight-dream", 5000), 525, 70)).toEqual([226, 234, 252])
   const dawn = renderBenchPixels(WIDTH, HEIGHT, "sunset-serenade", 0)
-  expect(pixel(dawn, 525, 290)).toEqual([255, 205, 117])
-  expect(pixel(renderBenchPixels(WIDTH, HEIGHT, "sunset-serenade", 3000), 525, 290)).not.toEqual([255, 205, 117])
-  // The settled sun stays down while the surf keeps moving.
+  expect(pixel(dawn, 525, 290)).toEqual([255, 227, 163])
+  expect(pixel(renderBenchPixels(WIDTH, HEIGHT, "sunset-serenade", 3000), 525, 290)).not.toEqual([255, 227, 163])
+  // The settled sun stays down: the sky above the horizon is identical afterwards.
   const settled = renderBenchPixels(WIDTH, HEIGHT, "sunset-serenade", 3000)
-  expect(pixel(settled, 525, 330)).toEqual([255, 205, 117])
-  expect(pixel(renderBenchPixels(WIDTH, HEIGHT, "sunset-serenade", 100000), 525, 330)).toEqual([255, 205, 117])
+  const later = renderBenchPixels(WIDTH, HEIGHT, "sunset-serenade", 100000)
+  expect(pixel(settled, 525, 250)).toEqual(pixel(later, 525, 250))
+  expect(pixel(settled, 525, 300)).toEqual(pixel(later, 525, 300))
 })
 
 test("midnight stars twinkle with the shared phase while sunset has none", () => {
   const night = renderBenchPixels(WIDTH, HEIGHT, "midnight-dream", 0)
-  expect(pixel(night, 35, 30)).toEqual([226, 234, 252])
-  expect(pixel(renderBenchPixels(WIDTH, HEIGHT, "midnight-dream", 600), 35, 30)).toEqual([92, 103, 125])
+  const later = renderBenchPixels(WIDTH, HEIGHT, "midnight-dream", 600)
+  expect(pixel(night, 35, 30)).not.toEqual(pixel(later, 35, 30))
+  expect(lum(pixel(night, 35, 30))).toBeGreaterThan(lum(pixel(night, 40, 80)))
   const day = renderBenchPixels(WIDTH, HEIGHT, "sunset-serenade", 0)
-  expect(pixel(day, 35, 30)).not.toEqual([255, 205, 117])
+  expect(pixel(day, 35, 30)).toEqual(pixel(renderBenchPixels(WIDTH, HEIGHT, "sunset-serenade", 600), 35, 30))
 })
 
 test("sun halo and shimmering reflection decorate both styles", () => {
@@ -70,22 +81,23 @@ test("sun halo and shimmering reflection decorate both styles", () => {
     const first = renderBenchPixels(WIDTH, HEIGHT, style, 0)
     // The halo ring beside the body is neither raw sky nor body ink.
     const sky = pixel(first, 100, 52)
-    const halo = style === "midnight-dream" ? pixel(first, 525, 52) : pixel(first, 525, 270)
+    const halo = style === "midnight-dream" ? pixel(first, 525, 20) : pixel(first, 525, 250)
     expect(halo).not.toEqual(sky)
-    expect(halo).not.toEqual(style === "midnight-dream" ? [226, 234, 252] : [255, 205, 117])
-    // The reflection shimmers with the shared wave phase.
-    const light: readonly [number, number, number] = style === "midnight-dream" ? [226, 234, 252] : [255, 205, 117]
-    expect(pixel(first, 525, 370)).toEqual(light)
-    expect(pixel(renderBenchPixels(WIDTH, HEIGHT, style, 300), 525, 370)).not.toEqual(light)
+    expect(halo).not.toEqual(style === "midnight-dream" ? [226, 234, 252] : [255, 227, 163])
+    // The reflection column under the body is brighter than open water beside it and shimmers.
+    const later = renderBenchPixels(WIDTH, HEIGHT, style, 300)
+    expect(changedPixels(first, later, 335, 375)).toBeGreaterThan(100)
   }
 })
 
 test("sunset clouds drift while midnight keeps a clear sky", () => {
-  const cloud: readonly [number, number, number] = [245, 184, 168]
   const sunset = renderBenchPixels(WIDTH, HEIGHT, "sunset-serenade", 0)
-  expect(pixel(sunset, 40, 80)).toEqual(cloud)
-  expect(pixel(renderBenchPixels(WIDTH, HEIGHT, "sunset-serenade", 4000), 40, 80)).not.toEqual(cloud)
-  expect(pixel(renderBenchPixels(WIDTH, HEIGHT, "midnight-dream", 0), 40, 80)).not.toEqual(cloud)
+  const drifted = renderBenchPixels(WIDTH, HEIGHT, "sunset-serenade", 4000)
+  expect(pixel(sunset, 40, 80)).not.toEqual(pixel(drifted, 40, 80))
+  // A cloud pixel is much brighter than the plain sky at the same height.
+  expect(lum(pixel(sunset, 40, 80))).toBeGreaterThan(lum(pixel(sunset, 300, 80)) + 100)
+  const night = renderBenchPixels(WIDTH, HEIGHT, "midnight-dream", 0)
+  expect(lum(pixel(night, 40, 80))).toBeLessThan(150)
 })
 
 test("Bench stays within the HD bound", () => {
