@@ -4,6 +4,7 @@ import {
   closeSync,
   constants,
   existsSync,
+  fstatSync,
   fsyncSync,
   lstatSync,
   mkdirSync,
@@ -66,13 +67,25 @@ export namespace ForegroundOwnership {
   }
 
   function readJournal(file: string, sessionID: string, expectedHost = hostname()): Journal | undefined {
-    if (!existsSync(file)) return
-    const stat = lstatSync(file)
-    if (!stat.isFile() || stat.size > 16_384) throw new Error("Invalid foreground generation journal file")
-    const journal = Journal.parse(parseJsonStrict(readFileSync(file, "utf8")))
-    if (journal.sessionID !== sessionID) throw new Error("Foreground generation journal session mismatch")
-    if (journal.host !== expectedHost) throw new Error("Foreground generation journal belongs to another host")
-    return journal
+    let fd: number
+    try {
+      fd = openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0))
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return
+      throw error
+    }
+    try {
+      // Size and bytes come from the same descriptor, so a path swap between
+      // the two cannot smuggle a foreign or oversized journal past the check.
+      const stat = fstatSync(fd)
+      if (!stat.isFile() || stat.size > 16_384) throw new Error("Invalid foreground generation journal file")
+      const journal = Journal.parse(parseJsonStrict(readFileSync(fd, "utf8")))
+      if (journal.sessionID !== sessionID) throw new Error("Foreground generation journal session mismatch")
+      if (journal.host !== expectedHost) throw new Error("Foreground generation journal belongs to another host")
+      return journal
+    } finally {
+      closeSync(fd)
+    }
   }
 
   export function acquire(databasePath: string, sessionID: string): Lease {

@@ -69,6 +69,41 @@ test.each([
   expect(fs.readFileSync(file.journal, "utf8")).toBe(raw)
 })
 
+test("an oversized journal fails closed on its descriptor size without consuming its bytes", async () => {
+  await using tmp = await tmpdir()
+  const db = path.join(tmp.path, "registry.db")
+  const file = ForegroundOwnership.paths(db, "one")
+  const raw = JSON.stringify({
+    version: 1,
+    generation: randomUUID(),
+    host: hostname(),
+    sessionID: "one",
+    padding: "x".repeat(16_384),
+  })
+  fs.mkdirSync(file.directory)
+  fs.writeFileSync(file.journal, raw)
+  expect(() => ForegroundOwnership.acquire(db, "one")).toThrow(ForegroundOwnership.OwnershipError)
+  expect(fs.readFileSync(file.journal, "utf8")).toBe(raw)
+})
+
+test.skipIf(process.platform === "win32")(
+  "a symlinked journal path fails closed instead of being followed",
+  async () => {
+    await using tmp = await tmpdir()
+    const db = path.join(tmp.path, "registry.db")
+    const file = ForegroundOwnership.paths(db, "one")
+    const target = path.join(tmp.path, "outside.json")
+    fs.mkdirSync(file.directory)
+    fs.writeFileSync(
+      target,
+      JSON.stringify({ version: 1, generation: randomUUID(), host: hostname(), sessionID: "one" }),
+    )
+    fs.symlinkSync(target, file.journal)
+    expect(() => ForegroundOwnership.acquire(db, "one")).toThrow(ForegroundOwnership.OwnershipError)
+    expect(fs.readFileSync(target, "utf8")).toContain('"sessionID":"one"')
+  },
+)
+
 test("external session identifiers cannot escape hashed ownership paths", async () => {
   await using tmp = await tmpdir()
   const db = path.join(tmp.path, "registry.db")
