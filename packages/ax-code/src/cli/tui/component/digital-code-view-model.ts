@@ -42,13 +42,13 @@ export const STARTUP_LOGO_TICK_MS = 30
 // native renderable. Each column then jitters inside its own lane, so the drops
 // stop lining up on a visible grid without moving that bound.
 // Opening streaks leave broad black gaps; the ending doubles lane density.
-export const DIGITAL_CODE_COLUMN_SPACING = 4
-export const DIGITAL_CODE_ENDING_COLUMN_SPACING = 2
+export const DIGITAL_CODE_COLUMN_SPACING = 2
+export const DIGITAL_CODE_ENDING_COLUMN_SPACING = 1
 export const DIGITAL_CODE_LEVELS = 6
 export const DIGITAL_CODE_MIN_TRAIL = 22
 export const DIGITAL_CODE_MAX_TRAIL = 46
-export const DIGITAL_CODE_MIN_SPEED = 0.5
-export const DIGITAL_CODE_MAX_SPEED = 1.5
+export const DIGITAL_CODE_MIN_SPEED = 0.7
+export const DIGITAL_CODE_MAX_SPEED = 2
 export const DIGITAL_CODE_TAIL_MUTATION_CHANCE = 0.35
 // Most streaks use full-ink ASCII glyphs and bold to read as a continuous,
 // heavy meteor inside fixed terminal cells. Keep a few lighter streaks for depth.
@@ -105,14 +105,14 @@ export type DigitalCodeDirection = "down" | "up"
 
 export type DigitalCodeLayer = "far" | "mid" | "near"
 
-/** Deterministic depth layer for a lane: roughly 40% far, 40% mid, 20% near. */
+/** Deterministic depth layer for a lane: roughly 50% far, 30% mid, 20% near. */
 export function digitalCodeLayer(x: number): DigitalCodeLayer {
   let h = Math.imul(Math.floor(x) + 0x9e37, 0x45d9f3b)
   h ^= h >>> 15
   h = Math.imul(h, 0x2c1b3c6d)
   h ^= h >>> 12
   const v = (h >>> 0) % 10
-  return v < 4 ? "far" : v < 8 ? "mid" : "near"
+  return v < 5 ? "far" : v < 8 ? "mid" : "near"
 }
 
 export const DIGITAL_CODE_LAYER_SPEED: Record<DigitalCodeLayer, number> = { far: 0.7, mid: 1, near: 1.35 }

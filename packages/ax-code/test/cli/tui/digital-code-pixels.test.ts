@@ -201,7 +201,8 @@ describe("Digital Code text/pixel agreement", () => {
               )
                 ink = true
             }
-          if (inRange && direction === "down") expect(ink, `missing lead ink for column ${column.x}`).toBe(true)
+          if (inRange && direction === "down" && py >= 0 && py + 15 < Math.floor(12 * 6 * 0.86))
+            expect(ink, `missing lead ink for column ${column.x}`).toBe(true)
         }
         // No change from the empty field except near a column: glow reaches at
         // most 24px sideways, so the field far from every lane stays untouched.
@@ -253,6 +254,37 @@ describe("Digital Code intensity layers", () => {
     const rgb = renderDigitalCodePixels({ width: 320, height: 180, rain: { ...frameAt(0).rain, columns: [] } })
     const at = (x: number, y: number) => rgb[(y * 320 + x) * 3 + 2]!
     expect(at(160, 90)).toBeGreaterThan(at(2, 3))
+  })
+
+  test("lightning briefly lights the whole sheet of rain, deterministically", () => {
+    const base = frameAt(40).rain
+    const sum = (tick: number) =>
+      renderDigitalCodePixels({ width: 320, height: 180, rain: base, tick }).reduce((a, v) => a + v, 0)
+    expect(sum(70)).toBeGreaterThan(sum(76) * 1.1)
+    expect(sum(70)).toBe(sum(70))
+  })
+
+  test("falling rain stops at the ground and leaves a wet reflection below it", () => {
+    const rain = createDigitalCode({ width: 45, height: 30, random: seeded(4) })
+    for (const column of rain.columns) column.head = 20
+    const rgb = renderDigitalCodePixels({ width: 320, height: 180, rain, tick: 30 })
+    const empty = renderDigitalCodePixels({ width: 320, height: 180, rain: { ...rain, columns: [] }, tick: 30 })
+    const ground = Math.floor(180 * 0.86)
+    let reflected = 0
+    for (let y = ground + 2; y < 180; y++)
+      for (let x = 0; x < 320; x++) {
+        const i = (y * 320 + x) * 3
+        if (rgb[i + 2]! > empty[i + 2]! + 3) reflected++
+      }
+    expect(reflected).toBeGreaterThan(50)
+  })
+
+  test("the ending renders thicker mist than the opening", () => {
+    const rain = createDigitalCode({ width: 45, height: 30, random: seeded(4) })
+    const at = (direction: "down" | "up") =>
+      renderDigitalCodePixels({ width: 320, height: 180, rain: { ...rain, columns: [], direction }, tick: 5 })
+    const mist = (rgb: Buffer) => rgb[(150 * 320 + 160) * 3 + 2]!
+    expect(mist(at("up"))).toBeGreaterThan(mist(at("down")))
   })
 
   test.each([
