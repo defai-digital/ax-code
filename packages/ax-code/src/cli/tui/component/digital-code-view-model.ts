@@ -42,18 +42,18 @@ export const STARTUP_LOGO_TICK_MS = 30
 // native renderable. Each column then jitters inside its own lane, so the drops
 // stop lining up on a visible grid without moving that bound.
 // Opening streaks leave broad black gaps; the ending doubles lane density.
-export const DIGITAL_CODE_COLUMN_SPACING = 6
-export const DIGITAL_CODE_ENDING_COLUMN_SPACING = 3
+export const DIGITAL_CODE_COLUMN_SPACING = 4
+export const DIGITAL_CODE_ENDING_COLUMN_SPACING = 2
 export const DIGITAL_CODE_LEVELS = 6
-export const DIGITAL_CODE_MIN_TRAIL = 16
-export const DIGITAL_CODE_MAX_TRAIL = 36
-export const DIGITAL_CODE_MIN_SPEED = 0.35
-export const DIGITAL_CODE_MAX_SPEED = 1.1
+export const DIGITAL_CODE_MIN_TRAIL = 22
+export const DIGITAL_CODE_MAX_TRAIL = 46
+export const DIGITAL_CODE_MIN_SPEED = 0.5
+export const DIGITAL_CODE_MAX_SPEED = 1.5
 export const DIGITAL_CODE_TAIL_MUTATION_CHANCE = 0.35
 // Most streaks use full-ink ASCII glyphs and bold to read as a continuous,
 // heavy meteor inside fixed terminal cells. Keep a few lighter streaks for depth.
 export const DIGITAL_CODE_HEAVY_COLUMN_CHANCE = 0.85
-export const DIGITAL_CODE_RESPAWN_GAP = 20
+export const DIGITAL_CODE_RESPAWN_GAP = 12
 /** HD cell footprint shared by the rain grid sizing and the pixel painter.
  * Cells are 7px wide (5px bitmap plus glow); rows advance 6px so the 7px
  * glyphs overlap slightly, independently of terminal font and line spacing. */
@@ -103,6 +103,20 @@ export type DigitalCodeRandom = () => number
  */
 export type DigitalCodeDirection = "down" | "up"
 
+export type DigitalCodeLayer = "far" | "mid" | "near"
+
+/** Deterministic depth layer for a lane: roughly 40% far, 40% mid, 20% near. */
+export function digitalCodeLayer(x: number): DigitalCodeLayer {
+  let h = Math.imul(Math.floor(x) + 0x9e37, 0x45d9f3b)
+  h ^= h >>> 15
+  h = Math.imul(h, 0x2c1b3c6d)
+  h ^= h >>> 12
+  const v = (h >>> 0) % 10
+  return v < 4 ? "far" : v < 8 ? "mid" : "near"
+}
+
+export const DIGITAL_CODE_LAYER_SPEED: Record<DigitalCodeLayer, number> = { far: 0.7, mid: 1, near: 1.35 }
+
 export interface DigitalCodeColumn {
   /** Column x position in cells. */
   x: number
@@ -119,6 +133,8 @@ export interface DigitalCodeColumn {
   /** Main color stays stable; individual glyphs may have a rare accent. */
   hue: DigitalCodeHue
   hues: DigitalCodeHue[]
+  /** Depth layer, stable per lane: far drops are small and dim, near ones big and bright. */
+  layer?: DigitalCodeLayer
 }
 
 export interface DigitalCodeState {
@@ -169,13 +185,15 @@ function makeColumn(random: DigitalCodeRandom, x: number, head: number): Digital
   const heavy = random() < DIGITAL_CODE_HEAVY_COLUMN_CHANCE
   const pool = glyphPool(heavy)
   const hue = random() < 0.9 ? "purple" : "blue"
+  const layer = digitalCodeLayer(x)
   return {
     x,
     head,
     heavy,
     hue,
     hues: Array.from({ length }, () => glyphHue(random, hue)),
-    speed: between(random, DIGITAL_CODE_MIN_SPEED, DIGITAL_CODE_MAX_SPEED),
+    layer,
+    speed: between(random, DIGITAL_CODE_MIN_SPEED, DIGITAL_CODE_MAX_SPEED) * DIGITAL_CODE_LAYER_SPEED[layer],
     length,
     chars: Array.from({ length }, () => glyph(random, pool)),
   }

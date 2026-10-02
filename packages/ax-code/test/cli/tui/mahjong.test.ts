@@ -11,6 +11,15 @@ import {
   mahjongRankedLine,
   mahjongSeatLabel,
   mahjongWallFill,
+  mahjongTileFace,
+  mahjongTileCode,
+  mahjongSuitColor,
+  mahjongWinFlip,
+  mahjongWinFaceUp,
+  mahjongDealerMarker,
+  mahjongPondSlot,
+  MAHJONG_WIN_HAND,
+  MAHJONG_TILE_COUNT,
 } from "../../../src/cli/tui/component/mahjong-view-model"
 import { renderTextScenePixels } from "../../../src/cli/tui/component/text-scene-pixels"
 import { digitalCodePixelPlayer } from "../../../src/cli/tui/component/digital-code-pixels"
@@ -25,6 +34,13 @@ test("match advances seats and discards with bounded repeatable state", () => {
     expect(match.discards.flat()).toHaveLength(step)
     expect(match.turn).toBe(["SOUTH", "EAST", "NORTH", "WEST"][step % 4])
     expect(match.hands.every((hand) => hand.length === 13)).toBe(true)
+    // Exposed hands are kept sorted and every tile is a real face.
+    for (const hand of match.hands) {
+      expect([...hand].sort((a, b) => a - b)).toEqual(hand)
+      expect(hand.every((tile) => tile >= 0 && tile < MAHJONG_TILE_COUNT)).toBe(true)
+    }
+    expect(match.draw).toBeGreaterThanOrEqual(0)
+    expect(match.draw).toBeLessThan(MAHJONG_TILE_COUNT)
   }
   expect(mahjongStep(-10)).toBe(0)
   expect(mahjongStep(4800)).toBe(0)
@@ -48,21 +64,54 @@ test.each(["mahjong-match", "mahjong-ending"] as const)("%s has a safe text fall
 test("open tiles wear suit colors and the active seat takes the spotlight", () => {
   const rows = mahjongRows(76, 25, "mahjong-match", 1200)
   expect(rows.flat().some((run) => run.color === "#2563eb")).toBe(true)
-  expect(mahjongSeatLabel("WEST")).toEqual({ x: 5, y: 8, text: "WEST" })
+  expect(mahjongSeatLabel("WEST")).toEqual({ x: 5, y: 6, text: "WEST" })
   const line = (row: number) => rows[row]!.map((run) => run.text).join("")
-  expect(line(8).slice(5, 9)).toBe("WEST")
-  expect(rows[8]!.some((run) => run.background === "#065f46")).toBe(true)
-  expect(line(11)).toContain("-- MATCH VIEW --")
+  expect(line(6).slice(5, 9)).toBe("WEST")
+  expect(rows[6]!.some((run) => run.background === "#065f46")).toBe(true)
+  expect(line(10)).toContain("-- MATCH VIEW --")
+  expect(line(13)).toContain("DICE 3 5")
+  expect(line(17)).toContain("YOU (SOUTH) [E]")
+})
+
+test("the tile set covers circles, bamboo, characters, winds, and dragons", () => {
+  expect(MAHJONG_TILE_COUNT).toBe(34)
+  expect(mahjongTileFace(0)).toEqual({ family: "circles", count: 1 })
+  expect(mahjongTileFace(8)).toEqual({ family: "circles", count: 9 })
+  expect(mahjongTileFace(9)).toEqual({ family: "bamboo", count: 1 })
+  expect(mahjongTileFace(26)).toEqual({ family: "characters", count: 9 })
+  expect(mahjongTileFace(27)).toEqual({ family: "wind", count: 0 })
+  expect(mahjongTileFace(33)).toEqual({ family: "dragon", count: 2 })
+  expect(mahjongTileFace(34)).toEqual(mahjongTileFace(0))
+  expect(mahjongTileCode(0)).toBe("1C")
+  expect(mahjongTileCode(12)).toBe("4B")
+  expect(mahjongTileCode(25)).toBe("8M")
+  expect(mahjongTileCode(31)).toBe("RD")
+  expect(new Set([0, 9, 18, 27].map((tile) => mahjongSuitColor(tile))).size).toBe(4)
+  expect(mahjongDealerMarker()).toEqual({ x: 44, y: 17, text: "[E]" })
+  expect(mahjongPondSlot(0, 2)).toEqual({ x: 37, y: 15 })
+})
+
+test("the winning hand is complete and flips face up tile by tile", () => {
+  // Three runs, a wind triplet, and a dragon pair: fourteen tiles.
+  expect(MAHJONG_WIN_HAND.map(mahjongTileCode).join(" ")).toBe("1C 2C 3C 4B 5B 6B 7M 8M 9M EW EW EW RD RD")
+  expect(mahjongWinFlip(0, 0)).toBe(0)
+  expect(mahjongWinFlip(190, 0)).toBeCloseTo(0.5)
+  expect(mahjongWinFlip(100000, 0)).toBe(1)
+  expect(mahjongWinFlip(4800, 5)).toBe(0)
+  const counts = [0, 400, 800, 1200, 1600, 2400].map(mahjongWinFaceUp)
+  expect(counts).toEqual([...counts].sort((a, b) => a - b))
+  expect(counts[0]).toBe(0)
+  expect(counts.at(-1)).toBe(14)
 })
 
 test("latest discard marker and wall bar track the match timeline", () => {
   expect(mahjongLatestMarker(0)).toBeNull()
-  expect(mahjongLatestMarker(1200)).toEqual({ x: 31, y: 7 })
+  expect(mahjongLatestMarker(1200)).toEqual({ x: 31, y: 8 })
   expect(mahjongWallFill(84)).toBe(20)
   expect(mahjongWallFill(0)).toBe(0)
   const rows = mahjongRows(76, 25, "mahjong-match", 1200)
   const line = (row: number) => rows[row]!.map((run) => run.text).join("")
-  expect(line(7).slice(31, 33)).toBe("**")
+  expect(line(8).slice(31, 33)).toBe("**")
   expect(line(22)).toContain("WALL: 81")
   expect(line(22)).toContain("[" + "#".repeat(19) + "-]")
 })
@@ -73,9 +122,23 @@ test("ending ranks seats with medals between decorative rules", () => {
   expect(mahjongRankedLine(0)).toBe("[1] SOUTH    32000 PTS")
   const rows = mahjongRows(76, 25, "mahjong-ending", 400)
   const line = (row: number) => rows[row]!.map((run) => run.text).join("")
-  expect(line(9)).toContain("[1] SOUTH    32000 PTS")
-  expect(line(5)).toContain("- - - - - -")
-  expect(line(17)).toContain("- - - - - -")
+  expect(line(12)).toContain("[1] SOUTH    32000 PTS")
+  expect(line(9)).toContain("- - - - - -")
+  expect(line(19)).toContain("- - - - - -")
+})
+
+test("ending text reveals the winning hand as tiles flip", () => {
+  const line = (ms: number) =>
+    mahjongRows(76, 25, "mahjong-ending", ms)[5]!
+      .map((run) => run.text)
+      .join("")
+  expect(line(0)).toContain("## ## ##")
+  expect(line(0)).not.toContain("1C")
+  expect(line(3000)).toContain("1C 2C 3C 4B 5B 6B 7M 8M 9M EW EW EW")
+  expect(line(3000).slice(56, 58)).toBe("RD")
+  // The winning tile is highlighted in gold once it turns.
+  const rows = mahjongRows(76, 25, "mahjong-ending", 3000)
+  expect(rows[5]!.some((run) => run.color === "#fbbf24" && run.text.includes("RD"))).toBe(true)
 })
 
 test.each(["mahjong-match", "mahjong-ending"] as const)("%s frames an inner border", (style) => {

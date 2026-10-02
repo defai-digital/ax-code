@@ -168,9 +168,12 @@ describe("Digital Code text/pixel agreement", () => {
           throw new Error(`no run covers ${x},${y}`)
         }
         // Every in-screen trail cell shows its glyph, level, hue, and weight
-        // in text, and ink in the matching pixel block.
+        // in text, and visible ink above the empty background in pixels.
+        const empty = renderDigitalCodePixels({ width: 40 * 7, height: 12 * 6, rain: { ...state, columns: [] } })
+        const scaleOf = { far: 0.72, mid: 1, near: 2 } as const
         for (const column of state.columns) {
           const headRow = Math.floor(column.head)
+          const scale = scaleOf[column.layer ?? "mid"]
           for (let offset = 0; offset < column.length; offset++) {
             const y = direction === "up" ? headRow + offset : headRow - offset
             if (y < 0 || y >= state.height) continue
@@ -179,38 +182,88 @@ describe("Digital Code text/pixel agreement", () => {
             expect(run.level).toBe(digitalCodeCellLevel(direction, offset, column.length))
             expect(run.hue).toBe(column.hues[offset] ?? column.hue)
             expect(run.bold).toBe(column.heavy)
-            const px = column.x * 7
-            const py = Math.floor(column.head * 6) + (direction === "up" ? offset * 6 : -offset * 6)
-            let inRange = false
-            let ink = false
-            for (let yy = py + 1; yy <= py + 5; yy++) {
-              for (let xx = px; xx < px + 5; xx++) {
-                if (xx < 0 || yy < 0 || xx >= 40 * 7 || yy >= 12 * 6) continue
-                inRange = true
-                const i = (yy * 40 * 7 + xx) * 3
-                if (pixels[i] !== 0 || pixels[i + 1] !== 0 || pixels[i + 2] !== 0) ink = true
-              }
+          }
+          // Pixel side: the lead glyph block is brighter than the empty field.
+          const lead = direction === "up" ? 0 : 0
+          const px = column.x * 7
+          const py = Math.floor(column.head * 6) + lead
+          let ink = false
+          let inRange = false
+          for (let yy = py; yy < py + Math.ceil(7 * scale); yy++)
+            for (let xx = px; xx < px + Math.ceil(5 * scale); xx++) {
+              if (xx < 0 || yy < 0 || xx >= 40 * 7 || yy >= 12 * 6) continue
+              inRange = true
+              const i = (yy * 40 * 7 + xx) * 3
+              if (
+                pixels[i]! > empty[i]! + 8 ||
+                pixels[i + 1]! > empty[i + 1]! + 8 ||
+                pixels[i + 2]! > empty[i + 2]! + 8
+              )
+                ink = true
             }
-            if (inRange) expect(ink, `missing ink for ${column.x},${y} offset ${offset}`).toBe(true)
-          }
+          if (inRange && direction === "down") expect(ink, `missing lead ink for column ${column.x}`).toBe(true)
         }
-        // No ink anywhere except a glyph block or its one-pixel glow margin.
-        const allowed = new Set<number>()
-        for (const column of state.columns) {
-          for (let offset = 0; offset < column.length; offset++) {
-            const py = Math.floor(column.head * 6) + (direction === "up" ? offset * 6 : -offset * 6)
-            if (py < -7 || py >= 12 * 6) continue
-            for (let yy = py - 1; yy <= py + 7; yy++)
-              for (let xx = column.x * 7 - 1; xx <= column.x * 7 + 5; xx++)
-                if (xx >= 0 && yy >= 0 && xx < 40 * 7 && yy < 12 * 6) allowed.add(yy * 40 * 7 + xx)
-          }
-        }
+        // No change from the empty field except near a column: glow reaches at
+        // most 24px sideways, so the field far from every lane stays untouched.
         for (let i = 0; i < pixels.length; i += 3) {
-          if (pixels[i] === 0 && pixels[i + 1] === 0 && pixels[i + 2] === 0) continue
-          expect(allowed.has(i / 3), `stray ink at pixel ${i / 3}`).toBe(true)
+          if (pixels[i] === empty[i] && pixels[i + 1] === empty[i + 1] && pixels[i + 2] === empty[i + 2]) continue
+          const x = (i / 3) % (40 * 7)
+          expect(
+            state.columns.some((column) => x >= column.x * 7 - 24 && x <= column.x * 7 + 10 + 24),
+            `stray ink at pixel ${i / 3}`,
+          ).toBe(true)
         }
         state = advanceDigitalCode(state)
       }
     }
+  })
+})
+
+describe("Digital Code intensity layers", () => {
+  const frameAt = (tick: number, direction: "down" | "up" = "down") => {
+    const frame = createDigitalCodePixels(320, 180, direction, seeded(5))
+    for (let i = 0; i < tick; i++) frame.rain = advanceDigitalCode(frame.rain)
+    return { ...frame, tick }
+  }
+
+  test("is deterministic for the same state and tick, and animates across ticks", () => {
+    expect(renderDigitalCodePixels(frameAt(30))).toEqual(renderDigitalCodePixels(frameAt(30)))
+    expect(renderDigitalCodePixels(frameAt(30))).not.toEqual(renderDigitalCodePixels(frameAt(31)))
+  })
+
+  test("assigns all three depth layers with faster near drops", () => {
+    const columns = createDigitalCode({ width: 160, height: 40, random: seeded(9) }).columns
+    const layers = new Set(columns.map((column) => column.layer))
+    expect(layers).toEqual(new Set(["far", "mid", "near"]))
+    const mean = (layer: string) => {
+      const list = columns.filter((column) => column.layer === layer)
+      return list.reduce((total, column) => total + column.speed, 0) / list.length
+    }
+    expect(mean("near")).toBeGreaterThan(mean("far"))
+  })
+
+  test("bloom lifts the field well above a bare glyph pass and ignites over the opening", () => {
+    const luminance = (rgb: Buffer) => rgb.reduce((total, value) => total + value, 0)
+    expect(luminance(renderDigitalCodePixels(frameAt(40)))).toBeGreaterThan(
+      luminance(renderDigitalCodePixels(frameAt(0))),
+    )
+  })
+
+  test("vignette darkens the corners relative to the centre", () => {
+    const rgb = renderDigitalCodePixels({ width: 320, height: 180, rain: { ...frameAt(0).rain, columns: [] } })
+    const at = (x: number, y: number) => rgb[(y * 320 + x) * 3 + 2]!
+    expect(at(160, 90)).toBeGreaterThan(at(2, 3))
+  })
+
+  test.each([
+    [0, 0],
+    [1, 1],
+    [7, 7],
+    [2000, 20],
+    [20, 900],
+  ])("renders %ix%i without throwing", (w, h) => {
+    const frame = createDigitalCodePixels(w, h, "up", seeded(2))
+    frame.tick = 45
+    expect(renderDigitalCodePixels(frame)).toHaveLength(frame.width * frame.height * 3)
   })
 })

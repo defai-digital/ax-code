@@ -72,6 +72,7 @@ export function createDigitalCodePixels(
   return {
     width: w,
     height: h,
+    tick: 0,
     rain: createDigitalCode({
       width: Math.floor(w / DIGITAL_CODE_PIXEL_CELL_WIDTH),
       height: Math.ceil(h / DIGITAL_CODE_PIXEL_CELL_HEIGHT),
@@ -87,42 +88,197 @@ function paletteColor(hue: DigitalCodeHue, level: number): readonly [number, num
   return ramp[Math.min(DIGITAL_CODE_LEVELS, Math.max(0, level))] ?? ramp[DIGITAL_CODE_LEVELS]!
 }
 
-export function renderDigitalCodePixels(frame: DigitalCodePixels): Buffer {
-  const { width, height, rain } = frame
-  const pixels = Buffer.alloc(width * height * 3)
-  const paint = (x: number, y: number, strength: number, color: readonly [number, number, number]) => {
-    if (x < 0 || y < 0 || x >= width || y >= height) return
-    const index = (y * width + x) * 3
-    for (let c = 0; c < 3; c++) pixels[index + c] = Math.min(255, pixels[index + c]! + color[c]! * strength)
+// Per-size static layers (background, vignette, scanlines), built once and reused.
+interface StaticLayers {
+  base: Buffer
+  mask: Uint8Array
+}
+const staticCache = new Map<string, StaticLayers>()
+
+function staticLayers(width: number, height: number): StaticLayers {
+  const key = `${width}x${height}`
+  const hit = staticCache.get(key)
+  if (hit) return hit
+  const base = Buffer.alloc(width * height * 3)
+  const mask = new Uint8Array(width * height)
+  const cx = width / 2
+  const cy = height / 2
+  for (let y = 0; y < height; y++) {
+    const scan = y % 3 === 2 ? 0.78 : 1
+    for (let x = 0; x < width; x++) {
+      const nx = (x - cx) / cx
+      const ny = (y - cy) / cy
+      const r2 = nx * nx * 0.8 + ny * ny * 0.9
+      // Central violet core fading to near-black navy at the edges.
+      const core = Math.max(0, 1 - r2) ** 2
+      const i = (y * width + x) * 3
+      base[i] = 3 + core * 26
+      base[i + 1] = 2 + core * 8
+      base[i + 2] = 9 + core * 44
+      mask[y * width + x] = Math.round(255 * scan * Math.max(0.18, 1 - r2 * 0.42))
+    }
   }
-  for (const column of rain.columns) {
+  if (staticCache.size > 4) staticCache.clear()
+  const layers = { base, mask }
+  staticCache.set(key, layers)
+  return layers
+}
+
+function hash(n: number): number {
+  let h = Math.imul(n | 0, 0x45d9f3b) ^ 0x1b873593
+  h ^= h >>> 15
+  h = Math.imul(h, 0x2c1b3c6d)
+  h ^= h >>> 13
+  return (h >>> 0) / 4294967296
+}
+
+// Glyph footprint and brightness per depth layer: far drops are small and dim,
+// near drops are large, bright and carry most of the bloom.
+const LAYER_STYLE = {
+  far: { scale: 0.72, gain: 0.5, bloom: 0.5 },
+  mid: { scale: 1, gain: 0.85, bloom: 1 },
+  near: { scale: 2, gain: 1.15, bloom: 1.6 },
+} as const
+
+const BLOOM_DIV = 4
+
+export function renderDigitalCodePixels(frame: Omit<DigitalCodePixels, "tick"> & { tick?: number }): Buffer {
+  const { width, height, rain } = frame
+  const tick = Math.max(0, Math.floor(frame.tick ?? 0))
+  const up = rain.direction === "up"
+  const layers = staticLayers(width, height)
+  const pixels = Buffer.from(layers.base)
+  const gw = Math.ceil(width / BLOOM_DIV)
+  const gh = Math.ceil(height / BLOOM_DIV)
+  const glow = new Float32Array(gw * gh * 3)
+  // Opening ignition: the whole field fades up over the first second.
+  const ignite = Math.min(1, 0.35 + tick / 18)
+
+  const splat = (cx: number, cy: number, color: readonly [number, number, number], weight: number) => {
+    const gx = Math.floor(cx / BLOOM_DIV)
+    const gy = Math.floor(cy / BLOOM_DIV)
+    if (gx < 0 || gy < 0 || gx >= gw || gy >= gh) return
+    const i = (gy * gw + gx) * 3
+    glow[i] += color[0] * weight
+    glow[i + 1] += color[1] * weight
+    glow[i + 2] += color[2] * weight
+  }
+
+  for (let ci = 0; ci < rain.columns.length; ci++) {
+    const column = rain.columns[ci]!
+    const style = LAYER_STYLE[column.layer ?? "mid"]
+    const gh7 = Math.max(1, Math.ceil(7 * style.scale))
+    const gw5 = Math.max(1, Math.ceil(5 * style.scale))
+    const advance = DIGITAL_CODE_PIXEL_CELL_HEIGHT * style.scale
+    const x = column.x * DIGITAL_CODE_PIXEL_CELL_WIDTH
+    const headY = Math.floor(column.head * DIGITAL_CODE_PIXEL_CELL_HEIGHT)
     for (let offset = column.length - 1; offset >= 0; offset--) {
-      const x = column.x * DIGITAL_CODE_PIXEL_CELL_WIDTH
-      const y =
-        Math.floor(column.head * DIGITAL_CODE_PIXEL_CELL_HEIGHT) +
-        (rain.direction === "up" ? offset * DIGITAL_CODE_PIXEL_CELL_HEIGHT : -offset * DIGITAL_CODE_PIXEL_CELL_HEIGHT)
-      if (y < -7 || y >= height) continue
+      const y = Math.floor(headY + (up ? offset * advance : -offset * advance))
+      if (y < -gh7 || y >= height) continue
       const level = digitalCodeCellLevel(rain.direction, offset, column.length)
+      const lead = level >= DIGITAL_CODE_LEVELS
       const hue = column.hues[offset] ?? column.hue
-      const color = paletteColor(hue, level)
+      const ramp = paletteColor(hue, level)
+      // Shimmer: a deterministic per-cell flicker that changes every other tick.
+      const flick = 0.82 + 0.18 * hash(ci * 977 + offset * 31 + (tick >> 1))
+      const t = level / DIGITAL_CODE_LEVELS
+      let gain = style.gain * flick * ignite * (0.55 + 0.9 * t * t)
+      // Hot lead glyph: white-hot core, strongest bloom.
+      const color: readonly [number, number, number] = lead
+        ? [Math.min(255, ramp[0] * 0.5 + 150), Math.min(255, ramp[1] * 0.5 + 150), Math.min(255, ramp[2] * 0.5 + 150)]
+        : ramp
+      if (lead) gain *= 1.35
       const cell = column.chars[offset]
       // A missing or empty cell must not reach charCodeAt: "" yields NaN, and
       // NaN % length would index GLYPHS out of range and crash the frame.
       const glyph = GLYPHS[(cell ? cell.charCodeAt(0) : 0) % GLYPHS.length]!
-      for (let gy = 0; gy < 7; gy++) {
-        for (let gx = 0; gx < 5; gx++) {
-          if (!(glyph[gy]! & (1 << (4 - gx)))) continue
-          paint(x + gx, y + gy, 1, color)
-          for (const [dx, dy] of [
-            [-1, 0],
-            [1, 0],
-            [0, -1],
-            [0, 1],
-          ]) {
-            paint(x + gx + dx!, y + gy + dy!, 0.12, color)
-          }
+      let lit = 0
+      for (let py = 0; py < gh7; py++) {
+        const yy = y + py
+        if (yy < 0 || yy >= height) continue
+        const row = glyph[Math.min(6, Math.floor(py / style.scale))]!
+        for (let px = 0; px < gw5; px++) {
+          const xx = x + px
+          if (xx >= width) break
+          if (!(row & (1 << (4 - Math.min(4, Math.floor(px / style.scale)))))) continue
+          lit++
+          const i = (yy * width + xx) * 3
+          pixels[i] = Math.min(255, pixels[i]! + color[0] * gain)
+          pixels[i + 1] = Math.min(255, pixels[i + 1]! + color[1] * gain)
+          pixels[i + 2] = Math.min(255, pixels[i + 2]! + color[2] * gain)
         }
       }
+      if (lit > 0)
+        splat(
+          x + gw5 / 2,
+          y + gh7 / 2,
+          paletteColor(hue, DIGITAL_CODE_LEVELS - 1),
+          gain * style.bloom * (lead ? 1.1 : 0.4) * Math.sqrt(lit / 12),
+        )
+    }
+  }
+
+  // Bloom: two box-blur passes (horizontal, vertical) over the quarter-resolution glow buffer.
+  const tmp = new Float32Array(glow.length)
+  const R = 2
+  for (let pass = 0; pass < 2; pass++) {
+    const src = pass === 0 ? glow : tmp
+    const dst = pass === 0 ? tmp : glow
+    dst.fill(0)
+    for (let gy = 0; gy < gh; gy++)
+      for (let gx = 0; gx < gw; gx++) {
+        const di = (gy * gw + gx) * 3
+        for (let k = -R; k <= R; k++) {
+          const sx = pass === 0 ? gx + k : gx
+          const sy = pass === 0 ? gy : gy + k
+          if (sx < 0 || sy < 0 || sx >= gw || sy >= gh) continue
+          const si = (sy * gw + sx) * 3
+          dst[di] += src[si]!
+          dst[di + 1] += src[si + 1]!
+          dst[di + 2] += src[si + 2]!
+        }
+        const norm = 1.15 / (2 * R + 1)
+        dst[di] *= norm
+        dst[di + 1] *= norm
+        dst[di + 2] *= norm
+      }
+  }
+
+  // Slow shockwave: a bright sweep line crosses the field every ~3s, down for
+  // the opening and up for the ending.
+  const period = 60
+  const phase = (tick % period) / period
+  const sweepY = (up ? 1 - phase : phase) * (height + 80) - 40
+  // Glitch burst: every ~2s, three ticks of a displaced, colour-split band.
+  const burst = Math.floor(tick / 40)
+  const bursting = tick % 40 < 3 && hash(burst + 11) < 0.7 && tick >= 20
+  const bandH = 10 + Math.floor(hash(burst * 3 + 1) * 40)
+  const bandY = Math.floor(hash(burst * 5 + 2) * Math.max(1, height - bandH))
+  const shift = (hash(burst * 7 + 3) < 0.5 ? -1 : 1) * (6 + Math.floor(hash(burst * 11 + 4) * 28))
+
+  const mask = layers.mask
+  for (let y = 0; y < height; y++) {
+    const gy = Math.min(gh - 1, y >> 2)
+    const sweep = Math.max(0, 1 - Math.abs(y - sweepY) / 18)
+    const sweepAdd = sweep * sweep * sweep * 22 * ignite
+    if (bursting && y >= bandY && y < bandY + bandH) {
+      const rowStart = y * width * 3
+      const copy = Buffer.from(pixels.subarray(rowStart, rowStart + width * 3))
+      for (let x = 0; x < width; x++) {
+        const o = rowStart + x * 3
+        const r = Math.min(width - 1, Math.max(0, x - shift))
+        const b = Math.min(width - 1, Math.max(0, x + shift))
+        pixels[o] = copy[r * 3]!
+        pixels[o + 2] = copy[b * 3 + 2]!
+      }
+    }
+    for (let x = 0; x < width; x++) {
+      const gi = (gy * gw + Math.min(gw - 1, x >> 2)) * 3
+      const i = (y * width + x) * 3
+      const m = mask[y * width + x]! / 255
+      pixels[i] = Math.min(255, (pixels[i]! + glow[gi]! * 0.9 + sweepAdd * 0.7) * m)
+      pixels[i + 1] = Math.min(255, (pixels[i + 1]! + glow[gi + 1]! * 0.9 + sweepAdd * 0.4) * m)
+      pixels[i + 2] = Math.min(255, (pixels[i + 2]! + glow[gi + 2]! * 0.9 + sweepAdd) * m)
     }
   }
   return pixels
@@ -160,6 +316,7 @@ export function kittyDigitalCodeFrame(
 export function digitalCodePixelPlayer(write: (data: string) => void) {
   const id = randomInt(1, 0x7fffffff)
   let frame: DigitalCodePixels | undefined
+  let tick = 0
   const started = performance.now()
   let size = ""
   let closed = false
@@ -180,10 +337,13 @@ export function digitalCodePixelPlayer(write: (data: string) => void) {
         if (frame) clear()
         frame = createDigitalCodePixels(input.width, input.height, input.direction, undefined, input.style)
         size = next
+        tick = 0
       } else if (!isTextSceneStyle(input.style) && !isFoliageVariant(input.style)) {
         // Scene and foliage styles never render the rain; don't pay per-frame
         // column copies for state nobody reads. Style switches rebuild anyway.
         frame.rain = advanceDigitalCode(frame.rain)
+        tick++
+        frame.tick = tick
       }
       const now = performance.now()
       write(

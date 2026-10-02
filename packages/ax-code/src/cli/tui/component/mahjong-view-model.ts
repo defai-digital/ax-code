@@ -51,45 +51,98 @@ export const MAHJONG_INNER = { left: 3, top: 2, right: 72, bottom: 23 } as const
 export const MAHJONG_WALL_BAR_X = 14
 export const MAHJONG_WALL_BAR_LEN = 20
 
-/** Scene-space rows and tile-run origins for the match labels. */
+/**
+ * Scene-space rows and tile-run origins. Tiles sit on a three-cell pitch so a
+ * 28px-wide pixel tile and a two-character text tile share the same slots.
+ * Opponent hands read as concealed backs; side hands run top to bottom.
+ */
 export const MAHJONG_MATCH_LAYOUT = {
   titleRow: 1,
   northLabelRow: 3,
   northHandRow: 4,
   northHandX: 19,
-  northDiscardsRow: 6,
+  northDiscardsRow: 7,
   discardsX: 31,
-  sideLabelRow: 8,
+  sideLabelRow: 6,
   westX: 5,
-  eastX: 58,
-  sideHandRow: 10,
+  eastX: 66,
+  sideHandRow: 8,
+  westPondX: 10,
+  eastPondX: 55,
   sideDiscardsRow: 12,
-  viewRow: 11,
-  southDiscardsRow: 14,
-  southLabelRow: 16,
+  viewRow: 10,
+  diceRow: 13,
+  southDiscardsRow: 15,
+  southLabelRow: 17,
   southHandRow: 18,
   southHandX: 19,
-  actionRow: 20,
+  actionRow: 21,
   statusRow: 22,
   turnX: 53,
 } as const
 
-/** Scene-space rows for the ending ledger. */
+/** Center plate bounds (cells) shared by the pixel scene and the wall ring. */
+export const MAHJONG_PLATE = { left: 26, top: 9.9, right: 50, bottom: 14.1 } as const
+
+/** Scene-space rows for the ending: win reveal, then the ledger. */
 export const MAHJONG_ENDING_LAYOUT = {
   titleRow: 3,
-  ledgerTitleRow: 6,
-  firstScoreRow: 9,
+  handRow: 5,
+  handX: 16,
+  ledgerTitleRow: 10,
+  firstScoreRow: 12,
   scoreRowGap: 2,
-  thanksRow: 19,
-  blinkRow: 21,
+  thanksRow: 20,
+  blinkRow: 22,
 } as const
 
 const MAHJONG_SEATS = ["SOUTH", "EAST", "NORTH", "WEST"] as const
 export const MAHJONG_SCORES = [32000, 23000, 21000, 24000] as const
-const SUITS = ["1C", "2C", "3C", "4C", "5C", "6C", "1B", "2B", "3B", "4B", "RD", "GD", "WD"]
+/** Dealer seat (index into the seat order) and the opening roll. */
+export const MAHJONG_DEALER = 0
+export const MAHJONG_DICE = [3, 5] as const
+
+/** The thirty-four tile faces: nine circles, nine bamboo, nine characters, four winds, three dragons. */
+const TILE_CODES: readonly string[] = [
+  ...Array.from({ length: 9 }, (_, i) => `${i + 1}C`),
+  ...Array.from({ length: 9 }, (_, i) => `${i + 1}B`),
+  ...Array.from({ length: 9 }, (_, i) => `${i + 1}M`),
+  "EW",
+  "SW",
+  "WW",
+  "NW",
+  "RD",
+  "GD",
+  "WD",
+]
+export const MAHJONG_TILE_COUNT = TILE_CODES.length
+
+/** The winning hand shown in the ending: three runs, a wind triplet, and a dragon pair. */
+export const MAHJONG_WIN_HAND: readonly number[] = [0, 1, 2, 12, 13, 14, 24, 25, 26, 27, 27, 27, 31, 31]
+const MAHJONG_WIN_CYCLE_MS = 4800
+const MAHJONG_WIN_STAGGER_MS = 130
+const MAHJONG_WIN_FLIP_MS = 380
+/** The celebration burst begins once the last tile has flipped. */
+export const MAHJONG_WIN_BURST_MS = 2100
 
 export function mahjongStep(elapsedMs: number): number {
   return Math.floor(Math.max(0, elapsedMs) / MAHJONG_STEP_MS) % MAHJONG_STEPS
+}
+
+/** Progress through the current 400ms step, in [0, 1). */
+export function mahjongStepProgress(elapsedMs: number): number {
+  return (Math.max(0, elapsedMs) % MAHJONG_STEP_MS) / MAHJONG_STEP_MS
+}
+
+/** Flip progress of winning-hand tile `index` in [0, 1]; 0.5 is edge-on. */
+export function mahjongWinFlip(elapsedMs: number, index: number): number {
+  const t = Math.max(0, elapsedMs) % MAHJONG_WIN_CYCLE_MS
+  return Math.max(0, Math.min(1, (t - index * MAHJONG_WIN_STAGGER_MS) / MAHJONG_WIN_FLIP_MS))
+}
+
+/** Number of winning-hand tiles that already show their faces. */
+export function mahjongWinFaceUp(elapsedMs: number): number {
+  return MAHJONG_WIN_HAND.filter((_, i) => mahjongWinFlip(elapsedMs, i) >= 0.5).length
 }
 
 /** Ending twinkle phase. Both renderers flip the marker together. */
@@ -130,17 +183,29 @@ export function mahjongSeatLabel(seat: string): { x: number; y: number; text: st
   return { x: mahjongCenterX("YOU (SOUTH)"), y: layout.southLabelRow, text: "YOU (SOUTH)" }
 }
 
+/** Dealer wind chip, drawn beside the dealer's seat label. */
+export function mahjongDealerMarker(): { x: number; y: number; text: string } {
+  const label = mahjongSeatLabel("SOUTH")
+  return { x: label.x + label.text.length + 1, y: label.y, text: "[E]" }
+}
+
+/** Origin of discard slot `index` for a seat (0 south, 1 east, 2 north, 3 west). */
+export function mahjongPondSlot(seat: number, index: number): { x: number; y: number } {
+  const layout = MAHJONG_MATCH_LAYOUT
+  if (seat === 2) return { x: layout.discardsX + index * 3, y: layout.northDiscardsRow }
+  if (seat === 0) return { x: layout.discardsX + index * 3, y: layout.southDiscardsRow }
+  if (seat === 3) return { x: layout.westPondX + index * 3, y: layout.sideDiscardsRow }
+  return { x: layout.eastPondX + index * 3, y: layout.sideDiscardsRow }
+}
+
 /** Marker cell under the latest discard, or null before the first turn. */
 export function mahjongLatestMarker(elapsedMs: number): { x: number; y: number } | null {
   const step = mahjongStep(elapsedMs)
   if (step === 0) return null
   const seat = (step - 1) % MAHJONG_SEATS.length
   const index = mahjongMatch(elapsedMs).discards[seat]!.length - 1
-  const layout = MAHJONG_MATCH_LAYOUT
-  if (seat === 2) return { x: layout.discardsX + index * 3, y: layout.northDiscardsRow + 1 }
-  if (seat === 0) return { x: layout.discardsX + index * 3, y: layout.southDiscardsRow + 1 }
-  if (seat === 3) return { x: layout.westX + index * 3, y: layout.sideDiscardsRow + 1 }
-  return { x: layout.eastX + index * 3, y: layout.sideDiscardsRow + 1 }
+  const slot = mahjongPondSlot(seat, index)
+  return { x: slot.x, y: slot.y + 1 }
 }
 
 /** Filled cells of the wall progress bar for a remaining wall count. */
@@ -148,23 +213,42 @@ export function mahjongWallFill(wall: number): number {
   return Math.round((Math.max(0, wall) / 84) * MAHJONG_WALL_BAR_LEN)
 }
 
-type MahjongTileFace = { family: "circles" | "bamboo" | "honor"; count: number }
-/** Tile index 0-5 are circles, 6-9 bamboo bars, 10-12 honor plates. */
+export type MahjongTileFace = {
+  family: "circles" | "bamboo" | "characters" | "wind" | "dragon"
+  /** Rank 1-9 for suits; zero-based wind (E S W N) or dragon (red green white) index for honors. */
+  count: number
+}
 export function mahjongTileFace(tile: number): MahjongTileFace {
-  if (tile <= 5) return { family: "circles", count: tile + 1 }
-  if (tile <= 9) return { family: "bamboo", count: tile - 5 }
-  return { family: "honor", count: 0 }
+  const t = ((Math.floor(tile) % TILE_CODES.length) + TILE_CODES.length) % TILE_CODES.length
+  if (t < 9) return { family: "circles", count: t + 1 }
+  if (t < 18) return { family: "bamboo", count: t - 8 }
+  if (t < 27) return { family: "characters", count: t - 17 }
+  if (t < 31) return { family: "wind", count: t - 27 }
+  return { family: "dragon", count: t - 31 }
+}
+
+export function mahjongTileCode(tile: number): string {
+  return TILE_CODES[((Math.floor(tile) % TILE_CODES.length) + TILE_CODES.length) % TILE_CODES.length]!
 }
 
 export function mahjongSuitColor(tile: number): string {
-  return MAHJONG_COLORS.suits[tile % MAHJONG_COLORS.suits.length]!
+  const family = mahjongTileFace(tile).family
+  const suits = MAHJONG_COLORS.suits
+  if (family === "circles") return suits[0]
+  if (family === "bamboo") return suits[1]
+  if (family === "characters") return suits[2]
+  return suits[3]
 }
 
 // A decorative, deterministic match timeline, not a playable game. Deriving
 // frames from time avoids timers, resize resets, or accumulating game state.
+// Exposed hands are sorted the way a player keeps them; `draw` is the tile the
+// seat on turn is holding.
 export function mahjongMatch(elapsedMs: number) {
   const step = mahjongStep(elapsedMs)
-  const hands = MAHJONG_SEATS.map((_, seat) => Array.from({ length: 13 }, (_, i) => (i * 3 + seat * 2) % SUITS.length))
+  const hands = MAHJONG_SEATS.map((_, seat) =>
+    Array.from({ length: 13 }, (_, i) => (i * 3 + seat * 2) % TILE_CODES.length),
+  )
   const discards: number[][] = MAHJONG_SEATS.map(() => [])
   let action = "MATCH COMMENCING"
   for (let turn = 0; turn < step; turn++) {
@@ -172,10 +256,19 @@ export function mahjongMatch(elapsedMs: number) {
       index = (turn * 5) % 13
     const tile = hands[seat]![index]!
     discards[seat]!.push(tile)
-    hands[seat]![index] = (tile + 4) % SUITS.length
-    action = `${MAHJONG_SEATS[seat]} DISCARDS ${SUITS[tile]}`
+    hands[seat]![index] = (tile + 4) % TILE_CODES.length
+    action = `${MAHJONG_SEATS[seat]} DISCARDS ${TILE_CODES[tile]}`
   }
-  return { hands, discards, wall: 84 - step, turn: MAHJONG_SEATS[step % 4]!, action }
+  const turnSeat = step % 4
+  const draw = (hands[turnSeat]![(step * 5) % 13]! + 11) % TILE_CODES.length
+  return {
+    hands: hands.map((hand) => [...hand].sort((a, b) => a - b)),
+    discards,
+    wall: 84 - step,
+    turn: MAHJONG_SEATS[turnSeat]!,
+    action,
+    draw,
+  }
 }
 
 export function mahjongRows(columns: number, rows: number, style: MahjongStyle, elapsedMs: number): FujiRun[][] {
@@ -196,9 +289,10 @@ export function mahjongRows(columns: number, rows: number, style: MahjongStyle, 
     }
   }
   const center = (y: number, text: string, color?: string) => paint(mahjongCenterX(text), y, text, color)
-  const tiles = (x: number, y: number, hand: number[], hidden = false) =>
+  const tiles = (x: number, y: number, hand: readonly number[], hidden = false, vertical = false) =>
     hand.forEach((tile, i) => {
-      paint(x + i * 3, y, hidden ? "##" : SUITS[tile]!, hidden ? colors.good : mahjongSuitColor(tile))
+      const at = vertical ? { x, y: y + i } : { x: x + i * 3, y }
+      paint(at.x, at.y, hidden ? "##" : mahjongTileCode(tile), hidden ? colors.good : mahjongSuitColor(tile))
     })
   const table = MAHJONG_TABLE
   for (let y = 1; y < table.bottom; y++) {
@@ -217,13 +311,24 @@ export function mahjongRows(columns: number, rows: number, style: MahjongStyle, 
   if (style === "mahjong-ending") {
     const ending = MAHJONG_ENDING_LAYOUT
     center(ending.titleRow, "HAND COMPLETED", colors.accent)
+    MAHJONG_WIN_HAND.forEach((tile, i) => {
+      const x = ending.handX + i * 3 + (i === MAHJONG_WIN_HAND.length - 1 ? 1 : 0)
+      const up = mahjongWinFlip(elapsedMs, i) >= 0.5
+      const last = i === MAHJONG_WIN_HAND.length - 1
+      paint(
+        x,
+        ending.handRow,
+        up ? mahjongTileCode(tile) : "##",
+        up ? (last ? colors.accent : mahjongSuitColor(tile)) : colors.good,
+      )
+    })
     center(ending.ledgerTitleRow, "FINAL POINT LEDGER", colors.info)
     center(ending.ledgerTitleRow - 1, "- - - - - -", colors.frame)
     for (let i = 0; i < MAHJONG_SEATS.length; i++) {
       const rank = mahjongRank(i)
       center(ending.firstScoreRow + i * ending.scoreRowGap, mahjongRankedLine(i), mahjongRankColor(rank))
     }
-    center(ending.thanksRow - 2, "- - - - - -", colors.frame)
+    center(ending.thanksRow - 1, "- - - - - -", colors.frame)
     center(ending.thanksRow, "THANK YOU FOR PLAYING", colors.good)
     center(ending.blinkRow, mahjongEndingBlink(elapsedMs) ? "*   *   *" : "  *   *  ", colors.accent)
   } else {
@@ -240,14 +345,23 @@ export function mahjongRows(columns: number, rows: number, style: MahjongStyle, 
     tiles(layout.discardsX, layout.northDiscardsRow, match.discards[2]!)
     seat("WEST")
     seat("EAST")
-    tiles(layout.westX, layout.sideHandRow, match.hands[3]!.slice(0, 4), true)
-    tiles(layout.eastX, layout.sideHandRow, match.hands[1]!.slice(0, 4), true)
-    tiles(layout.westX, layout.sideDiscardsRow, match.discards[3]!)
-    tiles(layout.eastX, layout.sideDiscardsRow, match.discards[1]!)
+    tiles(layout.westX, layout.sideHandRow, match.hands[3]!, true, true)
+    tiles(layout.eastX, layout.sideHandRow, match.hands[1]!, true, true)
+    tiles(layout.westPondX, layout.sideDiscardsRow, match.discards[3]!)
+    tiles(layout.eastPondX, layout.sideDiscardsRow, match.discards[1]!)
     center(layout.viewRow, "-- MATCH VIEW --", colors.info)
+    center(layout.diceRow, `DICE ${MAHJONG_DICE[0]} ${MAHJONG_DICE[1]}`, colors.accent)
     tiles(layout.discardsX, layout.southDiscardsRow, match.discards[0]!)
     seat("SOUTH")
+    const dealer = mahjongDealerMarker()
+    paint(dealer.x, dealer.y, dealer.text, colors.accent)
     tiles(layout.southHandX, layout.southHandRow, match.hands[0]!)
+    // The seat on turn holds a drawn tile one gap past its hand.
+    const holder = MAHJONG_SEATS.indexOf(match.turn as (typeof MAHJONG_SEATS)[number])
+    if (holder === 0) tiles(layout.southHandX + 40, layout.southHandRow, [match.draw])
+    else if (holder === 2) tiles(layout.northHandX + 40, layout.northHandRow, [match.draw], true)
+    else if (holder === 3) tiles(layout.westX, layout.sideHandRow + 13, [match.draw], true, true)
+    else tiles(layout.eastX, layout.sideHandRow + 13, [match.draw], true, true)
     const marker = mahjongLatestMarker(elapsedMs)
     if (marker) paint(marker.x, marker.y, "**", colors.accent)
     center(layout.actionRow, match.action, colors.info)
