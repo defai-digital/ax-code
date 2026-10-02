@@ -1,8 +1,8 @@
 import type { FujiRun } from "./fuji-view-model"
 
 /**
- * Single-style family: the ending replays the same spin reversed, like the
- * digital-code pair. Both AnimationPair slots hold "taegeuk".
+ * Single-style family: both AnimationPair slots hold "taegeuk". The emblem
+ * spins once and settles into the official flag orientation.
  */
 export type TaegeukStyle = "taegeuk"
 export function isTaegeukStyle(style: string | undefined): style is TaegeukStyle {
@@ -12,30 +12,46 @@ export function isTaegeukStyle(style: string | undefined): style is TaegeukStyle
 /** Reference composition size shared by both renderers. */
 export const TAEGEUK_COLUMNS = 76
 export const TAEGEUK_ROWS = 24
-export const TAEGEUK_CENTER = { x: 38, y: 11 } as const
-export const TAEGEUK_RADIUS = 7
-export const TAEGEUK_DOT_ORBIT = 3.5
-export const TAEGEUK_TICKS = 12
-export const TAEGEUK_BORDER = { x0: 4, x1: 71, y0: 1, y1: 18 } as const
+/** Flag field in scene cells. Cells are twice as tall as wide, so 54x18 is the official 3:2. */
+export const TAEGEUK_FIELD = { x0: 11, x1: 65, y0: 1, y1: 19 } as const
+export const TAEGEUK_CENTER = { x: 38, y: 10 } as const
+/**
+ * Official construction sheet in flag units: a 144x96 field with the origin
+ * at its center and y pointing down. The disc diameter is half the height.
+ */
+export const TAEGEUK_FLAG = { width: 144, height: 96, radius: 24 } as const
+/** The emblem axis and the trigrams follow the field diagonals. */
+export const TAEGEUK_TILT = Math.atan2(2, 3)
+/**
+ * Trigram bars, innermost first; true marks a broken bar. Geon sits at the
+ * upper hoist, gam at the upper fly, ri at the lower hoist, gon at the lower fly.
+ */
+export const TAEGEUK_TRIGRAMS = {
+  geon: [false, false, false],
+  gam: [true, false, true],
+  ri: [false, true, false],
+  gon: [true, true, true],
+} as const
 export const TAEGEUK_GROUND_TOP = 20
-/** Four rotation frames on a 1200ms round. */
+/** Four twinkle frames on a 1200ms round. */
 export const TAEGEUK_FRAME_MS = 300
+/** One eased turn of the emblem before it rests in the official orientation. */
+export const TAEGEUK_SPIN_MS = 1500
 export const TAEGEUK_CONFETTI_COUNT = 12
 export const TAEGEUK_SPARK_COUNT = 4
-export const TAEGEUK_SPARK_ORBIT = TAEGEUK_RADIUS + 2
 /** Floodlight pylon masts outside the flag field. */
 export const TAEGEUK_PYLONS = [1, 74] as const
 
-/** Palette shared by the text and pixel renderers. */
+/** Palette shared by the text and pixel renderers. Flag colors are the official ones. */
 export const TAEGEUK_COLORS = {
   taegeuk: {
     sky: "#8ba0c8",
-    skyBottom: "#e8ecf5",
-    red: "#c33d4e",
-    blue: "#2a4a9a",
-    ring: "#2c2c3a",
-    ray: "#b8c0d4",
-    trigram: "#2c2c3a",
+    skyBottom: "#cfdcf2",
+    field: "#ffffff",
+    red: "#cd2e3a",
+    blue: "#0047a0",
+    trigram: "#000000",
+    mast: "#2c2c3a",
     ground: "#3d4a5a",
     crowd: "#a8b0c8",
     flood: "#fff3b0",
@@ -43,8 +59,9 @@ export const TAEGEUK_COLORS = {
   },
 } as const satisfies Record<TaegeukStyle, Record<string, string>>
 
+/** Sky behind the flag, dark enough for the white field to read. */
 export function taegeukBackground(_style: TaegeukStyle) {
-  return "#f2f4fa"
+  return "#a8c0e6"
 }
 
 /** Sample the vertical sky gradient. `t` is 0 at the top of the frame. */
@@ -59,19 +76,66 @@ export function taegeukSkyRgb(style: TaegeukStyle, t: number): readonly [number,
   ]
 }
 
-/** Rotation frame 0..3 advancing every 300ms. */
+/** Twinkle frame 0..3 advancing every 300ms. */
 export function taegeukFrame(elapsedMs: number): number {
   return Math.floor(Math.max(0, elapsedMs) / TAEGEUK_FRAME_MS) % 4
 }
 
-/** Red half indicator for a cell angle at rotation frame `frame`. */
-export function taegeukRed(angle: number, frame: number): boolean {
-  const rotated = angle - (frame * Math.PI) / 2
-  return Math.sin(rotated) >= 0
+/** Emblem rotation on top of the official tilt: one eased clockwise turn that settles at zero. */
+export function taegeukSpin(elapsedMs: number): number {
+  if (elapsedMs >= TAEGEUK_SPIN_MS) return 0
+  const t = Math.max(0, elapsedMs / TAEGEUK_SPIN_MS)
+  return 2 * Math.PI * (t * t * (3 - 2 * t) - 1)
+}
+
+/**
+ * Emblem sampler in flag units. Red sits on top with its head toward the
+ * hoist and blue below with its head toward the fly; no eyes, no outline.
+ * Returns undefined outside the disc.
+ */
+export function taegeukEmblem(spin: number): (x: number, y: number) => "red" | "blue" | undefined {
+  const cos = Math.cos(TAEGEUK_TILT + spin)
+  const sin = Math.sin(TAEGEUK_TILT + spin)
+  const radius = TAEGEUK_FLAG.radius
+  const head = radius / 2
+  return (x, y) => {
+    if (x * x + y * y > radius * radius) return undefined
+    const along = x * cos + y * sin
+    const across = y * cos - x * sin
+    if ((along + head) * (along + head) + across * across <= head * head) return "red"
+    if ((along - head) * (along - head) + across * across <= head * head) return "blue"
+    return across < 0 ? "red" : "blue"
+  }
+}
+
+const TILT_COS = Math.cos(TAEGEUK_TILT)
+const TILT_SIN = Math.sin(TAEGEUK_TILT)
+/** Trigram pairs per diagonal: axis sine, then the hoist-side and fly-side bars. */
+const TAEGEUK_DIAGONALS = [
+  [TILT_SIN, TAEGEUK_TRIGRAMS.geon, TAEGEUK_TRIGRAMS.gon],
+  [-TILT_SIN, TAEGEUK_TRIGRAMS.ri, TAEGEUK_TRIGRAMS.gam],
+] as const
+
+/**
+ * Whether a flag-unit point lies on a trigram bar. Bars are 24 long and 4
+ * thick, centered 38, 44, and 50 units out along a diagonal; broken bars
+ * leave a 2-unit gap in the middle.
+ */
+export function taegeukBar(x: number, y: number): boolean {
+  for (const [sin, hoist, fly] of TAEGEUK_DIAGONALS) {
+    const along = x * TILT_COS + y * sin
+    const across = y * TILT_COS - x * sin
+    const reach = Math.abs(along) - 36
+    if (reach < 0 || reach > 16 || Math.abs(across) > 12) continue
+    const index = Math.min(2, Math.floor(reach / 6))
+    if (reach - index * 6 > 4) continue
+    if (!(along < 0 ? hoist : fly)[index] || Math.abs(across) >= 1) return true
+  }
+  return false
 }
 
 export type TaegeukConfetti = { x: number; y: number; red: boolean }
-/** Red/blue confetti tumbling over the emblem. */
+/** Red/blue confetti tumbling behind the flag. */
 export function taegeukConfetti(elapsedMs: number): TaegeukConfetti[] {
   const step = Math.floor(Math.max(0, elapsedMs) / 120)
   return Array.from({ length: TAEGEUK_CONFETTI_COUNT }, (_, i) => ({
@@ -82,16 +146,21 @@ export function taegeukConfetti(elapsedMs: number): TaegeukConfetti[] {
 }
 
 export type TaegeukSpark = { x: number; y: number }
-/** Golden sparks orbiting the disc with the rotation frame. */
+/** Sky sites beside the flag; every other one lights per twinkle frame. */
+const TAEGEUK_SPARK_SITES: readonly TaegeukSpark[] = [
+  { x: 6, y: 3 },
+  { x: 4, y: 6 },
+  { x: 69, y: 6 },
+  { x: 71, y: 3 },
+  { x: 8, y: 9 },
+  { x: 5, y: 12 },
+  { x: 67, y: 12 },
+  { x: 70, y: 9 },
+]
+/** Golden sparks twinkling in the sky beside the flag, never on the field. */
 export function taegeukSparks(elapsedMs: number): TaegeukSpark[] {
   const frame = taegeukFrame(elapsedMs)
-  return Array.from({ length: TAEGEUK_SPARK_COUNT }, (_, k) => {
-    const angle = (frame * Math.PI) / 2 + (k * Math.PI) / 2
-    return {
-      x: Math.round(TAEGEUK_CENTER.x + Math.cos(angle) * TAEGEUK_SPARK_ORBIT),
-      y: Math.round(TAEGEUK_CENTER.y + Math.sin(angle) * TAEGEUK_SPARK_ORBIT),
-    }
-  })
+  return TAEGEUK_SPARK_SITES.filter((_, k) => (k + frame) % 2 === 0)
 }
 
 /** Crowd wave phase 0..3 advancing every 300ms. */
@@ -99,23 +168,10 @@ export function taegeukWave(elapsedMs: number): number {
   return Math.floor(Math.max(0, elapsedMs) / 300) % 4
 }
 
-export type TaegeukDot = { x: number; y: number; red: boolean }
-/** Counter-colored eyes orbiting inside the halves at rotation frame `frame`. */
-export function taegeukDots(elapsedMs: number): TaegeukDot[] {
-  const frame = taegeukFrame(elapsedMs)
-  return [0, 1].map((k) => {
-    const angle = (frame * Math.PI) / 2 + Math.PI / 2 + k * Math.PI
-    const x = Math.round(TAEGEUK_CENTER.x + Math.cos(angle) * TAEGEUK_DOT_ORBIT)
-    const y = Math.round(TAEGEUK_CENTER.y + Math.sin(angle) * TAEGEUK_DOT_ORBIT)
-    return { x, y, red: !taegeukRed(angle, frame) }
-  })
-}
-
 export function taegeukRows(columns: number, rows: number, style: TaegeukStyle, elapsedMs: number): FujiRun[][] {
   const width = Math.max(0, Math.floor(columns)),
     height = Math.max(0, Math.floor(rows))
   const colors = TAEGEUK_COLORS[style]
-  const frame = taegeukFrame(elapsedMs)
   const grid: FujiRun[][] = Array.from({ length: height }, () =>
     Array.from({ length: width }, () => ({ text: " ", color: colors.sky })),
   )
@@ -131,69 +187,47 @@ export function taegeukRows(columns: number, rows: number, style: TaegeukStyle, 
       grid[row]![column] = { text: text[i]!, color, background }
     }
   }
-  // Flag-field border framing the emblem.
-  const border = TAEGEUK_BORDER
-  paint(border.x0, border.y0, "+" + "-".repeat(border.x1 - border.x0 - 1) + "+", colors.ring)
-  paint(border.x0, border.y1, "+" + "-".repeat(border.x1 - border.x0 - 1) + "+", colors.ring)
-  for (let y = border.y0 + 1; y < border.y1; y++) {
-    paint(border.x0, y, "|", colors.ring)
-    paint(border.x1, y, "|", colors.ring)
+  // Confetti and sparks stay behind the flag so the field is never marked.
+  for (const bit of taegeukConfetti(elapsedMs)) {
+    paint(bit.x, bit.y, "*", bit.red ? colors.red : colors.blue)
   }
-  // Static ray ticks ringing the disc.
-  for (let k = 0; k < TAEGEUK_TICKS; k++) {
-    const angle = (2 * Math.PI * k) / TAEGEUK_TICKS
-    paint(
-      Math.round(TAEGEUK_CENTER.x + Math.cos(angle) * (TAEGEUK_RADIUS + 1.5)),
-      Math.round(TAEGEUK_CENTER.y + Math.sin(angle) * (TAEGEUK_RADIUS + 1.5)),
-      ".",
-      colors.ray,
-    )
-  }
-  // Rotating red/blue halves inside a ring.
-  for (let y = TAEGEUK_CENTER.y - TAEGEUK_RADIUS; y <= TAEGEUK_CENTER.y + TAEGEUK_RADIUS; y++) {
-    for (let x = TAEGEUK_CENTER.x - TAEGEUK_RADIUS; x <= TAEGEUK_CENTER.x + TAEGEUK_RADIUS; x++) {
-      const dx = x - TAEGEUK_CENTER.x
-      const dy = y - TAEGEUK_CENTER.y
-      const dist = Math.hypot(dx, dy)
-      if (dist > TAEGEUK_RADIUS) continue
-      if (dist > TAEGEUK_RADIUS - 0.8) {
-        paint(x, y, "o", colors.ring)
-        continue
-      }
-      const red = taegeukRed(Math.atan2(dy, dx), frame)
-      paint(x, y, red ? "@" : "%", red ? colors.red : colors.blue)
-    }
-  }
-  for (const dot of taegeukDots(elapsedMs)) {
-    paint(dot.x, dot.y, "o", dot.red ? colors.red : colors.blue)
-  }
-  // Golden sparks orbiting the disc.
   for (const spark of taegeukSparks(elapsedMs)) {
     paint(spark.x, spark.y, "*", colors.spark)
   }
-  // Four trigram corners in ASCII strokes.
-  paint(24, 3, "===", colors.trigram)
-  paint(24, 4, "===", colors.trigram)
-  paint(24, 5, "===", colors.trigram)
-  paint(49, 3, "= =", colors.trigram)
-  paint(49, 4, "= =", colors.trigram)
-  paint(49, 5, "= =", colors.trigram)
-  paint(24, 16, "===", colors.trigram)
-  paint(24, 17, "= =", colors.trigram)
-  paint(24, 18, "===", colors.trigram)
-  paint(49, 16, "= =", colors.trigram)
-  paint(49, 17, "===", colors.trigram)
-  paint(49, 18, "= =", colors.trigram)
+  // White 3:2 field with the emblem sampled at each cell center. Glyphs
+  // share the cell background, so the halves read as solid color.
+  const field = TAEGEUK_FIELD
+  const emblem = taegeukEmblem(taegeukSpin(elapsedMs))
+  const perColumn = TAEGEUK_FLAG.width / (field.x1 - field.x0)
+  const perRow = TAEGEUK_FLAG.height / (field.y1 - field.y0)
+  for (let y = field.y0; y < field.y1; y++) {
+    for (let x = field.x0; x < field.x1; x++) {
+      const side = emblem((x + 0.5 - TAEGEUK_CENTER.x) * perColumn, (y + 0.5 - TAEGEUK_CENTER.y) * perRow)
+      if (side === "red") paint(x, y, "@", colors.red, colors.red)
+      else if (side === "blue") paint(x, y, "%", colors.blue, colors.blue)
+      else paint(x, y, " ", colors.field, colors.field)
+    }
+  }
+  // Trigrams as three leaning strokes; a broken bar skips the middle row.
+  // Every pattern is symmetric, so the stroke order does not matter.
+  const trigram = (x: number, y: number, stroke: "/" | "\\", bars: readonly boolean[]) => {
+    for (let row = 0; row < 5; row++) {
+      bars.forEach((broken, k) => {
+        if (row === 2 && broken) return
+        paint(x + 2 * k + (stroke === "/" ? 4 - row : row), y + row, stroke, colors.trigram, colors.field)
+      })
+    }
+  }
+  trigram(20, 3, "/", TAEGEUK_TRIGRAMS.geon)
+  trigram(47, 3, "\\", TAEGEUK_TRIGRAMS.gam)
+  trigram(20, 12, "\\", TAEGEUK_TRIGRAMS.ri)
+  trigram(47, 12, "/", TAEGEUK_TRIGRAMS.gon)
   // Floodlight pylons outside the flag field.
   for (const pylon of TAEGEUK_PYLONS) {
     paint(pylon, 14, "o", colors.flood)
     for (let y = 15; y <= 19; y++) {
-      paint(pylon, y, "|", colors.ring)
+      paint(pylon, y, "|", colors.mast)
     }
-  }
-  // Confetti tumbling over the emblem.
-  for (const bit of taegeukConfetti(elapsedMs)) {
-    paint(bit.x, bit.y, "*", bit.red ? colors.red : colors.blue)
   }
   for (let y = TAEGEUK_GROUND_TOP; y < TAEGEUK_ROWS; y++) {
     paint(0, y, " ".repeat(TAEGEUK_COLUMNS), colors.ground, colors.ground)

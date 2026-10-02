@@ -34,3 +34,35 @@ test.each(["taegeuk"] as const)("%s renders at any size", (style) => {
     expect(renderTaegeukPixels(width!, height!, style, 700)).toHaveLength(width! * height! * 3)
   }
 })
+
+test("the settled flag matches the official construction sheet", () => {
+  // The 54x18-cell field maps to 540x360 pixels centered on (380, 200): 3.75 pixels per flag unit.
+  const flagPixel = (frame: Buffer, x: number, y: number) =>
+    pixel(frame, Math.floor(380 + x * 3.75), Math.floor(200 + y * 3.75))
+  const white = [255, 255, 255]
+  const red = [205, 46, 58]
+  const blue = [0, 71, 160]
+  const black = [0, 0, 0]
+  for (const elapsed of [0, 3000, 60_000]) {
+    const frame = renderTaegeukPixels(WIDTH, HEIGHT, "taegeuk", elapsed)
+    // White 3:2 field with the sky outside it.
+    expect(flagPixel(frame, -71, -47)).toEqual(white)
+    expect(flagPixel(frame, 71, 47)).toEqual(white)
+    expect(flagPixel(frame, -73, 0)).not.toEqual(white)
+    // Red over blue, heads interlocked, no outline ring.
+    expect(flagPixel(frame, 0, -20)).toEqual(red)
+    expect(flagPixel(frame, 0, 20)).toEqual(blue)
+    expect(flagPixel(frame, -12, 1)).toEqual(red)
+    expect(flagPixel(frame, 12, -1)).toEqual(blue)
+    expect(flagPixel(frame, 0, -23)).toEqual(red)
+    expect(flagPixel(frame, 0, -25)).toEqual(white)
+    // Middle bars: geon and gam solid, ri and gon broken.
+    expect(flagPixel(frame, -36.6, -24.4)).toEqual(black)
+    expect(flagPixel(frame, 36.6, -24.4)).toEqual(black)
+    expect(flagPixel(frame, -36.6, 24.4)).toEqual(white)
+    expect(flagPixel(frame, 36.6, 24.4)).toEqual(white)
+  }
+  // Confetti crosses behind the flag without marking the field.
+  const confettiCell = renderTaegeukPixels(WIDTH, HEIGHT, "taegeuk", 0)
+  expect(pixel(confettiCell, 345, 230)).toEqual(blue)
+})
