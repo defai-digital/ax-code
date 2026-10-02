@@ -45,15 +45,15 @@ export const STARTUP_LOGO_TICK_MS = 30
 export const DIGITAL_CODE_COLUMN_SPACING = 2
 export const DIGITAL_CODE_ENDING_COLUMN_SPACING = 1
 export const DIGITAL_CODE_LEVELS = 6
-export const DIGITAL_CODE_MIN_TRAIL = 22
-export const DIGITAL_CODE_MAX_TRAIL = 46
+export const DIGITAL_CODE_MIN_TRAIL = 28
+export const DIGITAL_CODE_MAX_TRAIL = 60
 export const DIGITAL_CODE_MIN_SPEED = 0.7
 export const DIGITAL_CODE_MAX_SPEED = 2
 export const DIGITAL_CODE_TAIL_MUTATION_CHANCE = 0.35
 // Most streaks use full-ink ASCII glyphs and bold to read as a continuous,
 // heavy meteor inside fixed terminal cells. Keep a few lighter streaks for depth.
 export const DIGITAL_CODE_HEAVY_COLUMN_CHANCE = 0.85
-export const DIGITAL_CODE_RESPAWN_GAP = 12
+export const DIGITAL_CODE_RESPAWN_GAP = 8
 /** HD cell footprint shared by the rain grid sizing and the pixel painter.
  * Cells are 7px wide (5px bitmap plus glow); rows advance 6px so the 7px
  * glyphs overlap slightly, independently of terminal font and line spacing. */

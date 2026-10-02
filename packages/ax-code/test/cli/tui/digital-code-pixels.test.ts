@@ -62,35 +62,29 @@ describe("Digital Code pixel transport", () => {
     expect(output.endsWith("\x1b8")).toBe(true)
   })
 
-  test("paints Digital Code purple and blue ramps instead of a single magenta", () => {
-    const frame = createDigitalCodePixels(320, 180, "down", () => 0)
-    frame.rain.columns[0]!.head = 8
-    frame.rain.columns[0]!.hue = "purple"
-    frame.rain.columns[0]!.hues = frame.rain.columns[0]!.hues.map(() => "purple")
-    if (frame.rain.columns[1]) {
-      frame.rain.columns[1].head = 8
-      frame.rain.columns[1].hue = "blue"
-      frame.rain.columns[1].hues = frame.rain.columns[1].hues.map(() => "blue")
+  test("paints classic Matrix green when falling and gold when rising", () => {
+    const dominant = (direction: "down" | "up") => {
+      const frame = createDigitalCodePixels(320, 180, direction, () => 0)
+      frame.rain.columns[0]!.head = 12
+      frame.tick = 40
+      const rgb = renderDigitalCodePixels(frame)
+      let r = 0
+      let g = 0
+      let b = 0
+      for (let i = 0; i < rgb.length; i += 3) {
+        r += rgb[i]!
+        g += rgb[i + 1]!
+        b += rgb[i + 2]!
+      }
+      return { r, g, b }
     }
-    const rgb = renderDigitalCodePixels(frame)
-    const near = (pixel: readonly [number, number, number], ramp: readonly (readonly [number, number, number])[]) =>
-      ramp.some(
-        ([r, g, b]) =>
-          (r > 0 || g > 0 || b > 0) &&
-          Math.abs(pixel[0] - r) <= 48 &&
-          Math.abs(pixel[1] - g) <= 48 &&
-          Math.abs(pixel[2] - b) <= 48,
-      )
-    let sawPurple = false
-    let sawBlue = false
-    for (let i = 0; i < rgb.length; i += 3) {
-      const pixel = [rgb[i]!, rgb[i + 1]!, rgb[i + 2]!] as const
-      if (pixel[0] === 0 && pixel[1] === 0 && pixel[2] === 0) continue
-      if (near(pixel, DIGITAL_CODE_LEVEL_RGB.purple)) sawPurple = true
-      if (near(pixel, DIGITAL_CODE_LEVEL_RGB.blue)) sawBlue = true
-    }
-    expect(sawPurple).toBe(true)
-    expect(sawBlue).toBe(true)
+    const green = dominant("down")
+    expect(green.g).toBeGreaterThan(green.r * 1.4)
+    expect(green.g).toBeGreaterThan(green.b * 1.2)
+    const gold = dominant("up")
+    expect(gold.r).toBeGreaterThan(gold.b * 1.5)
+    expect(gold.g).toBeGreaterThan(gold.b * 1.5)
+    expect(gold.r).toBeGreaterThan(gold.g)
   })
 
   test("deletes only its own image on resize and dispose; never draws after disposal", () => {
@@ -201,11 +195,11 @@ describe("Digital Code text/pixel agreement", () => {
               )
                 ink = true
             }
-          if (inRange && direction === "down" && py >= 0 && py + 15 < Math.floor(12 * 6 * 0.86))
+          if (inRange && direction === "down" && py >= 0 && py + 15 < 12 * 6)
             expect(ink, `missing lead ink for column ${column.x}`).toBe(true)
         }
-        // No change from the empty field except near a column: glow reaches at
-        // most 24px sideways, so the field far from every lane stays untouched.
+        // The field is pure black except near a column: glow reaches at most
+        // 24px sideways, so the field far from every lane stays untouched.
         for (let i = 0; i < pixels.length; i += 3) {
           if (pixels[i] === empty[i] && pixels[i + 1] === empty[i + 1] && pixels[i + 2] === empty[i + 2]) continue
           const x = (i / 3) % (40 * 7)
@@ -250,41 +244,55 @@ describe("Digital Code intensity layers", () => {
     )
   })
 
-  test("vignette darkens the corners relative to the centre", () => {
-    const rgb = renderDigitalCodePixels({ width: 320, height: 180, rain: { ...frameAt(0).rain, columns: [] } })
-    const at = (x: number, y: number) => rgb[(y * 320 + x) * 3 + 2]!
-    expect(at(160, 90)).toBeGreaterThan(at(2, 3))
-  })
-
-  test("lightning briefly lights the whole sheet of rain, deterministically", () => {
-    const base = frameAt(40).rain
-    const sum = (tick: number) =>
-      renderDigitalCodePixels({ width: 320, height: 180, rain: base, tick }).reduce((a, v) => a + v, 0)
-    expect(sum(70)).toBeGreaterThan(sum(76) * 1.1)
-    expect(sum(70)).toBe(sum(70))
-  })
-
-  test("falling rain stops at the ground and leaves a wet reflection below it", () => {
-    const rain = createDigitalCode({ width: 45, height: 30, random: seeded(4) })
-    for (const column of rain.columns) column.head = 20
-    const rgb = renderDigitalCodePixels({ width: 320, height: 180, rain, tick: 30 })
-    const empty = renderDigitalCodePixels({ width: 320, height: 180, rain: { ...rain, columns: [] }, tick: 30 })
-    const ground = Math.floor(180 * 0.86)
-    let reflected = 0
-    for (let y = ground + 2; y < 180; y++)
-      for (let x = 0; x < 320; x++) {
-        const i = (y * 320 + x) * 3
-        if (rgb[i + 2]! > empty[i + 2]! + 3) reflected++
+  test("columns are perfectly vertical: ink never leaves the lane band", () => {
+    for (const direction of ["down", "up"] as const) {
+      const rain = createDigitalCode({ width: 45, height: 30, direction, random: seeded(8) })
+      const rgb = renderDigitalCodePixels({
+        width: 320,
+        height: 180,
+        rain: { ...rain, columns: [rain.columns[10]!] },
+        tick: 25,
+      })
+      const column = rain.columns[10]!
+      const x0 = column.x * 7
+      for (let i = 0; i < rgb.length; i += 3) {
+        if (rgb[i] === 0 && rgb[i + 1] === 0 && rgb[i + 2] === 0) continue
+        const x = (i / 3) % 320
+        expect(x >= x0 - 24 && x <= x0 + 10 + 24, `ink at x=${x}`).toBe(true)
       }
-    expect(reflected).toBeGreaterThan(50)
+      // Sharp ink (not just glow) sits strictly inside the glyph width.
+      let sharpMin = 999
+      let sharpMax = -1
+      for (let i = 0; i < rgb.length; i += 3) {
+        if (Math.max(rgb[i]!, rgb[i + 1]!, rgb[i + 2]!) < 140) continue
+        const x = (i / 3) % 320
+        sharpMin = Math.min(sharpMin, x)
+        sharpMax = Math.max(sharpMax, x)
+      }
+      if (sharpMax >= 0) {
+        expect(sharpMin).toBeGreaterThanOrEqual(x0)
+        expect(sharpMax).toBeLessThanOrEqual(x0 + 10)
+      }
+    }
   })
 
-  test("the ending renders thicker mist than the opening", () => {
-    const rain = createDigitalCode({ width: 45, height: 30, random: seeded(4) })
-    const at = (direction: "down" | "up") =>
-      renderDigitalCodePixels({ width: 320, height: 180, rain: { ...rain, columns: [], direction }, tick: 5 })
-    const mist = (rgb: Buffer) => rgb[(150 * 320 + 160) * 3 + 2]!
-    expect(mist(at("up"))).toBeGreaterThan(mist(at("down")))
+  test("glyphs flicker and mutate over time while the column stays put", () => {
+    const rain = createDigitalCode({ width: 45, height: 30, random: seeded(8) })
+    rain.columns = [{ ...rain.columns[10]!, head: 14 }]
+    const frames = Array.from({ length: 12 }, (_, tick) =>
+      renderDigitalCodePixels({ width: 320, height: 180, rain, tick: 20 + tick }),
+    )
+    expect(new Set(frames.map((frame) => frame.toString("base64"))).size).toBeGreaterThan(6)
+  })
+
+  test("the background is pure black away from the rain", () => {
+    const rgb = renderDigitalCodePixels({
+      width: 320,
+      height: 180,
+      rain: { ...frameAt(0).rain, columns: [] },
+      tick: 50,
+    })
+    expect(rgb.every((value) => value === 0)).toBe(true)
   })
 
   test.each([
