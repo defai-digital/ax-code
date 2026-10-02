@@ -23,7 +23,7 @@ Each TUI launch randomly selects one of thirty-five animation pairs with equal p
 - Taipei 101: daytime for the opening, neon night for the ending.
 - Great Wall: dawn for the opening, dusk for the ending.
 - Torii Gate: daytime for the opening, night for the ending.
-- Taegeuk: spin for the opening, reverse spin for the ending.
+- Taegeuk: the South Korean flag for both the opening and the ending; the emblem turns once and settles into its official orientation.
 - Sagrada Familia: daytime for the opening, night for the ending.
 - Corcovado: daytime for the opening, golden hour for the ending.
 - Eiffel Tower: daytime for the opening, night for the ending.
