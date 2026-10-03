@@ -485,7 +485,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                       </text>
                     </box>
                     <text
-                      fg={theme.primary}
+                      fg={theme.markdownLink}
                       onMouseDown={(e: any) => {
                         e.stopPropagation()
                       }}
@@ -494,7 +494,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                         command.trigger("session.dre.web")
                       }}
                     >
-                      {uiText("ui.dashboard")}
+                      <u>{uiText("ui.dashboard")}</u>
                     </text>
                   </box>
 
@@ -1072,6 +1072,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                 )}
               </Show>
               <ChromeAction
+                link
                 onMouseUp={() => {
                   if (!wikiVisualization.opening()) command.trigger("session.wiki.viz")
                 }}

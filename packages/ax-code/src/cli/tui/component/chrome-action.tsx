@@ -3,7 +3,7 @@ import { createSignal, type JSX } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 
 /** Muted chrome control that brightens on hover. Clicks stay on the wrapper box. */
-export function ChromeAction(props: { onMouseUp: () => void; children: JSX.Element }) {
+export function ChromeAction(props: { onMouseUp: () => void; children: JSX.Element; link?: boolean }) {
   const { theme } = useTheme()
   const [hover, setHover] = createSignal(false)
   return (
@@ -14,8 +14,12 @@ export function ChromeAction(props: { onMouseUp: () => void; children: JSX.Eleme
       onMouseOut={() => setHover(false)}
       onMouseUp={props.onMouseUp}
     >
-      <text flexShrink={0} fg={hover() ? theme.text : theme.textMuted} selectable={false}>
-        {props.children}
+      <text
+        flexShrink={0}
+        fg={props.link ? theme.markdownLink : hover() ? theme.text : theme.textMuted}
+        selectable={false}
+      >
+        {props.link ? <u>{props.children}</u> : props.children}
       </text>
     </box>
   )
