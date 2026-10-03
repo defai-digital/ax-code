@@ -94,7 +94,7 @@ export function DigitalCode(props: {
   let splash: ReturnType<typeof sixelSplashPlayer> | undefined
   let splashFailed = false
   let tickCount = 0
-  let splashViewport: { width: number; height: number } | undefined
+  let splashViewport: { width: number; height: number; pixelWidth: number; pixelHeight: number } | undefined
   let finished = false
   const writePixels = (data: string) => {
     // Frame failures must reach the caller so it can switch to text. Only
@@ -156,16 +156,28 @@ export function DigitalCode(props: {
     () => {
       if (finished) return
       const size = dimensions()
-      if (splash && splashViewport && (size.width !== splashViewport.width || size.height !== splashViewport.height)) {
-        // Layout repaint erases Sixel cells. Drop the one-shot raster and let
-        // resized ASCII animate for the rest of this overlay.
+      const now = performance.now()
+      const resolution = renderer.resolution
+      // Sixel-only terminals (Windows Terminal) get one static splash frame.
+      // Without renderer pixel dimensions, estimate 8x16 cells like foliage.
+      const pixelWidth = resolution && resolution.width > 0 ? resolution.width : size.width * 8
+      const pixelHeight = resolution && resolution.height > 0 ? resolution.height : size.height * 16
+      if (
+        splash &&
+        splashViewport &&
+        (size.width !== splashViewport.width ||
+          size.height !== splashViewport.height ||
+          pixelWidth !== splashViewport.pixelWidth ||
+          pixelHeight !== splashViewport.pixelHeight)
+      ) {
+        // Layout repaint erases Sixel cells, and a pixel-density change strands
+        // the one-shot raster at a stale scale. Drop it and let resized ASCII
+        // animate for the rest of this overlay.
         clearSplash()
         splashFailed = true
       }
       state = tickDigitalCode(state, size)
       tickCount++
-      const now = performance.now()
-      const resolution = renderer.resolution
       const supported =
         !pixelsFailed &&
         resolution &&
@@ -196,10 +208,6 @@ export function DigitalCode(props: {
           clearPixels()
         }
       } else clearPixels()
-      // Sixel-only terminals (Windows Terminal) get one static splash frame.
-      // Without renderer pixel dimensions, estimate 8x16 cells like foliage.
-      const pixelWidth = resolution && resolution.width > 0 ? resolution.width : size.width * 8
-      const pixelHeight = resolution && resolution.height > 0 ? resolution.height : size.height * 16
       const splashSupported =
         !splashFailed &&
         tickCount >= SIXEL_SPLASH_MIN_TICKS &&
@@ -215,7 +223,7 @@ export function DigitalCode(props: {
       if (splashSupported) {
         try {
           splash ??= sixelSplashPlayer(writeSplash)
-          splashViewport = { width: size.width, height: size.height }
+          splashViewport = { width: size.width, height: size.height, pixelWidth, pixelHeight }
           splash.draw({
             width: pixelWidth,
             height: pixelHeight,
