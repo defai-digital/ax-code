@@ -44,14 +44,14 @@
     "cross-spawn": "^7.0.6",
     "drizzle-orm": "catalog:",
     "fast-glob": "catalog:",
-    "minimatch": "10.2.3",
+    "minimatch": "10.2.6",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@types/cross-spawn": "6.0.6",
     "@types/node": "catalog:",
+    "@typescript/native": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:",
-    "@typescript/native": "catalog:"
+    "vitest": "catalog:"
   }
 }

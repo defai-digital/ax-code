@@ -46,16 +46,16 @@
   },
   "dependencies": {
     "@ax-code/util": "workspace:*",
+    "@typescript/native": "catalog:",
     "cross-spawn": "^7.0.6",
     "diff": "catalog:",
     "fast-glob": "catalog:",
     "mime-types": "3.0.2",
-    "minimatch": "10.2.3",
+    "minimatch": "10.2.6",
     "vscode-jsonrpc": "8.2.1",
     "vscode-languageserver-types": "3.17.5",
     "which": "6.0.1",
-    "zod": "catalog:",
-    "@typescript/native": "catalog:"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/cross-spawn": "6.0.6",
