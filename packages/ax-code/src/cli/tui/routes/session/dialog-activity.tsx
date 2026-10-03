@@ -9,6 +9,7 @@ import { EventQuery } from "@/replay/query"
 import { useDialog } from "../../ui/dialog"
 import { statusLabel } from "./activity"
 import {
+  allGroupsOpen,
   buildEntries,
   buildRows,
   defaultExpanded,
@@ -71,7 +72,7 @@ export function DialogActivity(props: {
   const rows = createMemo(() =>
     buildRows({ entries: entries(), mode: mode(), filter: filter(), query: query(), expanded: expanded() }),
   )
-  const allOpen = createMemo(() => groupKeys(entries()).every((key) => expanded().has(key)))
+  const allOpen = createMemo(() => allGroupsOpen(rows()))
 
   const snapshot = (): ActivityViewState => ({
     mode: mode(),

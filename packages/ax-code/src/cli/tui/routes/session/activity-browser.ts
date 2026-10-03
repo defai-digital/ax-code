@@ -306,6 +306,16 @@ export function buildRows(input: {
   })
 }
 
+/**
+ * Whether every group row currently rendered is open. Derived from buildRows
+ * output rather than the raw entry list so a search or filter (which forces
+ * matching groups open) is reflected instead of reporting a hidden state.
+ */
+export function allGroupsOpen(rows: readonly ViewRow[]): boolean {
+  const groups = rows.filter((row) => row.type === "group")
+  return groups.length > 0 && groups.every((row) => row.open)
+}
+
 export function groupBadge(row: Extract<ViewRow, { type: "group" }>) {
   return [`${row.count}`, row.errors > 0 ? `${row.errors} ERR` : "", row.approvals > 0 ? `${row.approvals} ask` : ""]
     .filter(Boolean)

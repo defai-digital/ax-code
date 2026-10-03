@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import type { Part } from "@ax-code/sdk/v2"
 import {
+  allGroupsOpen,
   buildEntries,
   buildRows,
   defaultExpanded,
@@ -417,5 +418,31 @@ describe("activity browser: detail", () => {
     expect(formatStamp(T0)).toBe("2026-10-02 21:38:00 UTC")
     expect(formatStamp(undefined)).toBe("unknown")
     expect(formatStamp(Number.NaN)).toBe("unknown")
+  })
+})
+
+describe("activity browser: allGroupsOpen", () => {
+  test("is false while a rendered group is collapsed and true once every group is open", () => {
+    const list = entries()
+    const collapsed = buildRows({ entries: list, mode: "tree", filter: "all", query: "", expanded: new Set() })
+    expect(allGroupsOpen(collapsed)).toBe(false)
+    const open = buildRows({
+      entries: list,
+      mode: "tree",
+      filter: "all",
+      query: "",
+      expanded: new Set(groupKeys(list)),
+    })
+    expect(allGroupsOpen(open)).toBe(true)
+  })
+
+  test("reflects the force-opened groups a search or filter renders", () => {
+    const rows = buildRows({ entries: entries(), mode: "tree", filter: "errors", query: "", expanded: new Set() })
+    expect(rows.some((row) => row.type === "group")).toBe(true)
+    expect(allGroupsOpen(rows)).toBe(true)
+  })
+
+  test("is false when nothing renders", () => {
+    expect(allGroupsOpen([])).toBe(false)
   })
 })
