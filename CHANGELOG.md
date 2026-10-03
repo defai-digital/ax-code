@@ -6,6 +6,23 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.22.0] - 2026-10-03
+
+### Fixed
+
+- Redact credentials before clipping activity titles and errors, and cover activity descriptions, detail overviews, related records, and clipboard copies.
+- Enforce both line and character limits on activity detail output and place omission markers between the retained head and tail.
+- Align DRE waterfall bars and axis ticks to the same time scale.
+- Find the bundled node-gyp in Homebrew Node installations when rebuilding the terminal backend.
+
+### Changed
+
+- Add an activity history browser with grouped views, filters, full entry details, and conversation navigation.
+- Lead DRE dashboards with an evidence chain, workspace ledger, and execution waterfall.
+- Expand the offline Wiki viewer with Arc and Treemap views, an Explore tree, view explanations, and an opt-in idle tour.
+- Improve opening and ending scene rendering and South Korean flag geometry.
+- Refresh the upstream model catalog and publish SDK 2.5.57.
+
 ## [7.21.4] - 2026-10-01
 
 ### Fixed
