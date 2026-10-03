@@ -27,7 +27,25 @@ diagram (nodes on one line, citations above and imports below), and a nested
 treemap (pages contain files, files contain symbols). The radial, arc and treemap
 views derive a hierarchy from each file's first citing page and never invent
 branch lengths or distances. The Explore panel is a collapsible tree over the same
-hierarchy. Each view states the question it answers. An opt-in Auto-tour (off by default,
+hierarchy. Each view states the question it answers.
+
+The pictures below are AX Code's own wiki in this viewer. Lines are page-to-source
+citations, not calls. Arc and treemap are not shown.
+
+![Radial view of AX Code's wiki.](../../docs/images/wiki/radial.png)
+
+**Radial.** What surrounds each page? Cited files sit on the outer ring.
+
+![Force layout of AX Code's wiki.](../../docs/images/wiki/force.png)
+
+**Force.** Who cites what? Files gather next to the page that cites them.
+
+![Ax Code Intel page selected in the wiki viewer.](../../docs/images/wiki/page-focus.png)
+
+**One page, opened.** Selecting a page lights its cited files. This selection
+shows 39 of 80 recorded references for `modules/ax-code-intel.md`.
+
+An opt-in Auto-tour (off by default,
 disabled under reduced motion) can cycle the views while the page is idle; any
 activity restarts the idle clock, and it can be started from `mount` with
 `{ tour: { enabled: true, intervalMs } }` (default 3 minutes). New views are one

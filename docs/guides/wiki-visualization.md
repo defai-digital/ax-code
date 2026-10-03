@@ -4,7 +4,7 @@ Status: Active
 
 Scope: current-state
 
-Last reviewed: 2026-09-26
+Last reviewed: 2026-10-02
 
 Owner: ax-code runtime
 
@@ -18,6 +18,32 @@ The command prints a local browser link and stays in the foreground. Click the
 link to explore the recorded relationships between Wiki pages and their source
 files. Use `--open` to launch the system browser automatically. Press Ctrl+C to
 stop the local viewer.
+
+## What you see
+
+The lines are recorded citations, not function calls. These three pictures are
+AX Code's own wiki. The same snapshot has four switchable layouts; arc and
+treemap are the other two and are not shown here.
+
+![Radial view. Three wiki pages sit inside a ring of the files they cite.](../images/wiki/radial.png)
+
+**Radial.** What surrounds each page? Architecture Overview, Development
+Workflows, and the Ax Code Intel module sit inside a ring of cited files.
+Cross-links bundle through the center. The ring is derived from each file's
+first citing page. It does not encode distance or branch length.
+
+![Force layout. Files cluster beside the page that cites them.](../images/wiki/force.png)
+
+**Force.** Who cites what? Pages, files, and symbols are placed by their
+connections, so cited files gather next to the page that records them.
+
+![Ax Code Intel selected. Cited files are lit, and 39 of 80 references are shown.](../images/wiki/page-focus.png)
+
+**One page, opened.** Selecting Ax Code Intel (`modules/ax-code-intel.md`)
+lights the files that page cites, including its CLI, server, and handler
+sources. The detail panel reports freshness as unknown, because the snapshot
+does not re-read current source, and shows 39 of 80 recorded references. At
+most 200 nodes and 500 relationships are drawn. Omitted counts stay visible.
 
 ```sh
 ax-code wiki viz --open

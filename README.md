@@ -244,6 +244,24 @@ The output format above is verbatim from these commands; the session IDs and tas
 
 **Keep repository knowledge durable.** `ax-code wiki` compiles a source-backed wiki: deterministic page planning, source-hash change detection, protected manual sections, atomic writes, and lint checks including dead links. Page prose is model-generated from cited source; the planning, validation, and incremental-update framework around it is deterministic.
 
+## The wiki map
+
+`ax-code wiki viz` draws that wiki as a map of pages and the files they cite. The lines are citations, not function calls. These three pictures are AX Code's own wiki: Architecture Overview, Development Workflows, and the Ax Code Intel module.
+
+![Radial view of AX Code's wiki. Three pages sit inside a ring of the files they cite.](docs/images/wiki/radial.png)
+
+**Radial.** What surrounds each page? The pages sit inside a ring of cited files, and cross-links bundle through the center.
+
+![Force layout of the same wiki. Files cluster beside the page that cites them.](docs/images/wiki/force.png)
+
+**Force.** Who cites what? The same evidence, placed by its connections, so files gather next to the page that cites them.
+
+![The Ax Code Intel module selected. Its cited files are lit, and the panel says 39 of 80 references are shown.](docs/images/wiki/page-focus.png)
+
+**One page, opened.** Selecting Ax Code Intel (`modules/ax-code-intel.md`) lights the files that page cites. Freshness reads unknown, because this snapshot does not re-read source. The panel shows 39 of 80 recorded references; the view is bounded, and omitted counts stay on screen.
+
+Open it with `ax-code wiki viz`, or from **Wiki graph** in the session sidebar. Arc, treemap, search, and offline export are in [Wiki evidence visualization](docs/guides/wiki-visualization.md).
+
 ## Hardware requirements
 
 Choose hardware for the repository tools as well as AX Code. These are capacity-planning guidelines, not certified performance limits; the 8 GB baseline has not been validated by a physical-machine load test.
@@ -475,7 +493,7 @@ Everyday use:
 - [Documentation Hub](docs/README.md) — guides, architecture, providers, and reference
 - [Sandbox Mode](docs/guides/sandbox.md) · [Autonomous Mode](docs/guides/autonomous.md) · [MCP Integrations](docs/integrations/mcp.md)
 - [Semantic Layer](docs/architecture/semantic-layer.md) — provenance and replay boundaries for graph and LSP answers
-- [AX Wiki](docs/integrations/wiki.md) · [Stability](docs/architecture/stability.md)
+- [AX Wiki](docs/integrations/wiki.md) · [Wiki map](docs/guides/wiki-visualization.md) · [Stability](docs/architecture/stability.md)
 
 ## Long-Agent Context Pack
 

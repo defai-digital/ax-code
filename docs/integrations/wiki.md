@@ -7,6 +7,8 @@ Owner: AX Code runtime
 
 AX Wiki is AX Code's native repository-wiki compiler. It turns tracked source, configuration, tests, workflows, and existing documentation into a small source-backed Markdown knowledge base under `ax-wiki/`. It uses the same provider configuration and model routing as AX Code; there is no separate executable or credential store.
 
+`ax-code wiki viz` draws the compiled pages and the files they cite. Screenshots of that map are in [Wiki evidence visualization](../guides/wiki-visualization.md).
+
 ## Where it fits
 
 | Need                                                            | Source                                        |
