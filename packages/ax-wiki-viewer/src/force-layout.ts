@@ -37,8 +37,20 @@ export type RadialMeta = {
   treeParent: ReadonlyMap<string, string>
 }
 
+export type Bounds = { minX: number; minY: number; maxX: number; maxY: number }
+
+/** Arc diagram: nodes on one baseline, edges drawn as arcs above (citations) or below (imports). */
+export type ArcMeta = { baselineY: number }
+
+/** Nested treemap: every node is a rectangle centered on its x/y. */
+export type TreemapMeta = { rects: ReadonlyMap<string, { w: number; h: number; depth: number }> }
+
 export type ForceLayout = {
   radial?: RadialMeta
+  arc?: ArcMeta
+  treemap?: TreemapMeta
+  /** Fixed framing for static layouts whose extent is not just the node positions. */
+  bounds?: Bounds
   nodes: LayoutNode[]
   links: LayoutLink[]
   byId: ReadonlyMap<string, LayoutNode>

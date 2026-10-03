@@ -33,7 +33,7 @@ test("fitCamera zooms a small cluster up to fill the canvas aspect", () => {
   expect(fitted.offsetX + shownW).toBeGreaterThanOrEqual(500)
   expect(fitted.offsetY + shownH).toBeGreaterThanOrEqual(350)
 
-  const wide = fitCamera({ minX: 0, minY: 0, maxX: 4000, maxY: 100 }, 2, 900)
+  const wide = fitCamera({ minX: 0, minY: 0, maxX: 40000, maxY: 100 }, 2, 900)
   expect(wide.zoom).toBe(MIN_ZOOM)
 })
 

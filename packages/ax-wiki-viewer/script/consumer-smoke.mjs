@@ -85,7 +85,7 @@ await writeFile(new URL('./graph.json',import.meta.url),JSON.stringify(graph));
   await page.evaluate((graph) => {
     globalThis.handle = globalThis.mountWiki(document.getElementById("map"), graph)
   }, graph)
-  assert.equal(await page.locator(".list button").count(), 2)
+  assert.equal(await page.locator(".list .node-label").count(), 2)
   await page.evaluate(() => globalThis.handle.dispose())
   assert.equal(await page.locator(".axwv").count(), 0)
   assert.deepEqual(errors, [])

@@ -1,6 +1,7 @@
-import { LAYOUT_WORLD, layoutRadius } from "./force-layout.js"
-import type { ForceLayout, LayoutLink, LayoutNode } from "./force-layout.js"
-import type { WikiGraphNodeKind } from "@ax-code/ax-wiki/graph"
+import { LAYOUT_WORLD } from "./force-layout.js"
+import type { ForceLayout, LayoutNode } from "./force-layout.js"
+import { deriveHierarchy } from "./hierarchy.js"
+import type { HierarchyGroup, HierarchyInput } from "./hierarchy.js"
 
 /**
  * DOM-free radial cluster layout. The evidence graph is not a tree, so a hierarchy is
@@ -13,65 +14,17 @@ const GAP = (3 * Math.PI) / 180
 const MIN_ARC = 16
 const MIN_RING = 340
 
-type Group = { head?: string; sources: string[]; loose: string[] }
-
-export function createRadialLayout(input: {
-  nodes: ReadonlyArray<{ id: string; kind: WikiGraphNodeKind }>
-  edges: ReadonlyArray<{ from: string; to: string; kind: string }>
-}): ForceLayout {
+export function createRadialLayout(input: HierarchyInput): ForceLayout {
   const cx = LAYOUT_WORLD.width / 2
   const cy = LAYOUT_WORLD.height / 2
-  const degree = new Map<string, number>()
-  for (const edge of input.edges) {
-    if (edge.from === edge.to) continue
-    degree.set(edge.from, (degree.get(edge.from) ?? 0) + 1)
-    degree.set(edge.to, (degree.get(edge.to) ?? 0) + 1)
-  }
-  const nodes: LayoutNode[] = input.nodes.map((node) => ({
-    id: node.id,
-    kind: node.kind,
-    degree: degree.get(node.id) ?? 0,
-    radius: layoutRadius(degree.get(node.id) ?? 0),
-    x: cx,
-    y: cy,
-  }))
-  const byId = new Map(nodes.map((node) => [node.id, node]))
-  const ids = (kind: WikiGraphNodeKind) =>
-    nodes
-      .filter((node) => node.kind === kind)
-      .map((node) => node.id)
-      .sort()
-
-  // Primary parents: edges sorted so the first citing page (by id) wins, deterministically.
-  const treeParent = new Map<string, string>()
-  const ordered = [...input.edges].sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : a.to < b.to ? -1 : 1))
-  for (const edge of ordered) {
-    const from = byId.get(edge.from)
-    const to = byId.get(edge.to)
-    if (!from || !to || treeParent.has(edge.to)) continue
-    if (edge.kind === "references-source" && from.kind === "page" && to.kind === "source")
-      treeParent.set(edge.to, edge.from)
-    else if (edge.kind === "contains" && from.kind === "source" && to.kind === "symbol")
-      treeParent.set(edge.to, edge.from)
-  }
-  const children = new Map<string, string[]>()
-  for (const [child, parent] of treeParent) children.set(parent, [...(children.get(parent) ?? []), child].sort())
-
-  const groups: Group[] = ids("page").map((id) => ({ head: id, sources: children.get(id) ?? [], loose: [] }))
-  const orphanSources = ids("source").filter((id) => !treeParent.has(id))
-  const orphanSymbols = ids("symbol").filter((id) => !treeParent.has(id))
-  if (orphanSources.length > 0 || orphanSymbols.length > 0)
-    groups.push({ sources: orphanSources, loose: orphanSymbols })
+  const { nodes, byId, links, treeParent, children, groups } = deriveHierarchy(input, { x: cx, y: cy })
 
   const slots = (id: string) => Math.max(1, children.get(id)?.length ?? 0)
-  const groupLeaves = (group: Group) =>
+  const groupLeaves = (group: HierarchyGroup) =>
     Math.max(1, group.sources.reduce((sum, id) => sum + slots(id), 0) + group.loose.length)
   const total = groups.reduce((sum, group) => sum + groupLeaves(group), 0)
 
   const angles = new Map<string, number>()
-  const links: LayoutLink[] = input.edges
-    .filter((edge) => edge.from !== edge.to && byId.has(edge.from) && byId.has(edge.to))
-    .map((edge) => ({ source: edge.from, target: edge.to, from: edge.from, to: edge.to }))
   const layout: ForceLayout = {
     nodes,
     links,

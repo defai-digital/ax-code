@@ -3,6 +3,9 @@ import type { WikiGraphEdge, WikiGraphNode } from "@ax-code/ax-wiki/graph"
 import { fitCamera, wheelZoomFactor, zoomAbout } from "./camera.js"
 import { LAYOUT_WORLD, createForceLayout } from "./force-layout.js"
 import { createRadialLayout } from "./radial-layout.js"
+import { ARC_MAX_HEIGHT, createArcLayout } from "./arc-layout.js"
+import { createTreemapLayout } from "./treemap-layout.js"
+import { deriveHierarchy } from "./hierarchy.js"
 import type { ForceLayout, LayoutNode } from "./force-layout.js"
 import {
   citingTopics,
@@ -86,7 +89,17 @@ export const viewerCss = `
 .axwv .key summary{font-size:12px}
 .axwv .key .note{margin:0!important;padding:0!important;border:0!important;opacity:1}
 .axwv .controls .chips{margin:0 0 0 auto}
-.axwv .list button::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;background:#64778b}
+.axwv .list ul{list-style:none;margin:0;padding:0 0 0 14px;border-left:1px solid var(--line);margin-left:9px}
+.axwv .list .row{display:flex;align-items:center;gap:2px}
+.axwv .list .row .node-label{flex:1;min-width:0;margin:0}
+.axwv .list .twisty,.axwv .list .spacer{flex:none;width:20px;height:24px;padding:0;margin:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text)}
+.axwv .list .twisty::before{content:none}
+.axwv .list .twisty .caret{display:inline-block;font-size:13px;line-height:1;transition:transform .12s}
+.axwv .list [aria-expanded="true"]>.row .caret{transform:rotate(90deg)}
+.axwv .list .meta{flex:none;font-size:11px;color:var(--muted);padding-right:6px;font-variant-numeric:tabular-nums}
+.axwv .tree-tools{display:flex;gap:6px;margin:-2px 0 8px}
+.axwv .tree-tools button{padding:2px 9px;font-size:11px;border-radius:999px;background:transparent;color:var(--muted)}
+.axwv .list .node-label::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;background:#64778b}
 .axwv .list button[data-kind=page]::before{background:#3db8c4}
 .axwv .list button[data-kind=source]::before{background:#4d7cb4}
 .axwv .list button[data-kind=symbol]::before{background:#b8974f}
@@ -133,10 +146,16 @@ const FOCUS_EDGE_OPACITY = 0.95
 const VIEWS = [
   { id: "force", label: "Force", hint: "Force-directed lanes: pages, symbols, files" },
   { id: "radial", label: "Radial", hint: "Radial cluster: every file and symbol leaf on the outer ring" },
+  { id: "arc", label: "Arc", hint: "Arc diagram: nodes on one line, citations above and imports below" },
+  { id: "treemap", label: "Treemap", hint: "Nested treemap: pages contain files, files contain symbols" },
 ] as const
 type ViewId = (typeof VIEWS)[number]["id"]
 /** Radial rings are non-overlapping by construction, so names can appear earlier than on the force map. */
 const RADIAL_LABEL_ZOOM: Record<NodeKind, number> = { page: 0, source: 0.85, symbol: 1.4 }
+const TREEMAP_LABEL_ZOOM: Record<NodeKind, number> = { page: 0, source: 0.5, symbol: 1.1 }
+/** Fixed layouts keep their own positions; there is nothing to drag or reheat. */
+const isStatic = (candidate: ForceLayout | undefined) =>
+  candidate !== undefined && (candidate.radial !== undefined || candidate.arc !== undefined || candidate.treemap !== undefined)
 
 const FRESHNESS_NOTE = {
   fresh: "observed bytes match the recorded hash.",
@@ -168,6 +187,9 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   }
   let layout: ForceLayout | undefined
   let view: ViewId = "force"
+  /** Explore tree: ids of expanded rows, and whether the next render should scroll the selection into view. */
+  const expanded = new Set<string>()
+  let scrollSelected = false
   let selected: string | undefined
   let hovered: string | undefined
   let suppressClick = false
@@ -266,6 +288,10 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   const aside = html("div", layoutRoot)
   aside.className = "side"
   html("h2", aside, "Explore")
+  const treeTools = html("div", aside)
+  treeTools.className = "tree-tools"
+  const expandAllButton = html("button", treeTools, "Expand all")
+  const collapseAllButton = html("button", treeTools, "Collapse all")
   const list = html("ul", aside)
   list.className = "list"
   const detailHeading = html("h2", aside, "Evidence")
@@ -287,7 +313,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   const nodeLayer = doc.createElementNS(svgNS, "g")
   svg.append(edgeLayer, nodeLayer)
   type EdgeEls = { path: SVGPathElement; arrow: SVGPathElement; edge: WikiGraphEdge }
-  type NodeEls = { group: SVGGElement; circle: SVGCircleElement; label: SVGTextElement; node: LayoutNode }
+  type NodeEls = { group: SVGGElement; circle: SVGElement; label: SVGTextElement; node: LayoutNode }
   let edgeEls: EdgeEls[] = []
   let nodeEls: NodeEls[] = []
   const nodeElsById = new Map<string, NodeEls>()
@@ -337,6 +363,15 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     if (!layout || layout.nodes.length === 0) {
       zoom = 1
       offsetX = offsetY = 0
+      viewBox()
+      return
+    }
+    if (layout.bounds) {
+      const fixed = fitCamera(layout.bounds, canvasAspect(), LAYOUT_WORLD.width)
+      zoom = fixed.zoom
+      offsetX = fixed.offsetX
+      offsetY = fixed.offsetY
+      cameraTouched = false
       viewBox()
       return
     }
@@ -450,13 +485,39 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     }
   }
 
+  /** Arc diagram edge: a half-ellipse above the baseline (citations) or below it (imports). */
+  function arcEdgeCurve(a: LayoutNode, b: LayoutNode, edge: WikiGraphEdge): { d: string; head: string } {
+    const dir = edge.kind === "uses" ? 1 : -1
+    const rim = (node: LayoutNode) => (node.kind === "page" ? Math.max(node.radius, 14) : node.radius)
+    const x1 = a.x,
+      y1 = a.y + dir * (rim(a) + 2)
+    const x2 = b.x,
+      y2 = b.y + dir * (rim(b) + 4)
+    const rx = Math.abs(x2 - x1) / 2
+    if (rx < 0.5) return { d: `M${x1},${y1} L${x2},${y2}`, head: "" }
+    const ry = Math.min(ARC_MAX_HEIGHT, Math.abs(x2 - x1) * 0.5)
+    const sweep = (x2 > x1) === (dir === -1) ? 1 : 0
+    // The ellipse meets the baseline vertically, so the arrow points straight at the node.
+    const uy = -dir
+    const size = 9,
+      wing = 4.5
+    return {
+      d: `M${x1},${y1} A${rx},${ry} 0 0 ${sweep} ${x2},${y2}`,
+      head: `M${x2 - uy * wing},${y2 - uy * size} L${x2},${y2} L${x2 + uy * wing},${y2 - uy * size}`,
+    }
+  }
+
   function positionElements() {
     if (!layout) return
     const { byId } = layout
     for (const { path, arrow, edge } of edgeEls) {
       const a = byId.get(edge.from)!,
         b = byId.get(edge.to)!
-      const { d, head } = layout.radial ? radialEdgeCurve(a, b, edge) : edgeCurve(a, b)
+      const { d, head } = layout.radial
+        ? radialEdgeCurve(a, b, edge)
+        : layout.arc
+          ? arcEdgeCurve(a, b, edge)
+          : edgeCurve(a, b)
       path.setAttribute("d", d)
       arrow.setAttribute("d", head)
     }
@@ -512,6 +573,10 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       )
       if (!dimmed && incident) arrow.setAttribute("stroke", direction === "outgoing" ? FOCUS_OUT : FOCUS_IN)
       else arrow.removeAttribute("stroke")
+      // A treemap is about containment, so cross links appear only for the focused cell.
+      const hideLine = layout.treemap !== undefined && !(incident && !dimmed)
+      path.setAttribute("display", hideLine ? "none" : "")
+      arrow.setAttribute("display", hideLine ? "none" : "")
     }
     const namedPages = graph.nodes.reduce((count, candidate) => count + (candidate.kind === "page" ? 1 : 0), 0)
     // Page names sit in the empty margin left of each hub. A lower hub drops
@@ -542,24 +607,38 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
         circle.removeAttribute("stroke-width")
       }
       const radial = layout.radial
-      const showLabel = radial
-        ? emphasized || zoom >= RADIAL_LABEL_ZOOM[node.kind]
-        : emphasized || (node.kind === "page" && namedPages <= 16) || zoom >= LABEL_ZOOM[node.kind]
+      const showLabel =
+        label.textContent === ""
+          ? false
+          : layout.treemap
+            ? emphasized || zoom >= TREEMAP_LABEL_ZOOM[node.kind]
+            : radial || layout.arc
+              ? emphasized || zoom >= RADIAL_LABEL_ZOOM[node.kind]
+              : emphasized || (node.kind === "page" && namedPages <= 16) || zoom >= LABEL_ZOOM[node.kind]
       label.setAttribute("display", showLabel ? "" : "none")
-      if (radial) {
+      if (layout.treemap) {
+        // Fixed inside each rectangle when the cell was built.
+      } else if (layout.arc) {
+        // Names hang below the baseline, reading downward, clear of the arcs above.
+        const reach = (node.kind === "page" ? Math.max(node.radius, 14) : node.radius) + 8
+        label.style.textAnchor = "start"
+        label.setAttribute("x", String(reach))
+        label.setAttribute("y", "4")
+        label.setAttribute("transform", "rotate(90)")
+      } else if (radial) {
         // Rotate with the ring and flip on the left half so text is never upside down.
         const angle = radial.angles.get(node.id) ?? 0
         const degrees = (angle * 180) / Math.PI
         const left = Math.cos(angle) < 0
         const reach = (node.kind === "page" ? Math.max(node.radius, 14) : node.radius) + 8
-        label.setAttribute("text-anchor", left ? "end" : "start")
+        label.style.textAnchor = left ? "end" : "start"
         label.setAttribute("x", String(left ? -reach : reach))
         label.setAttribute("y", "4")
         // Pages are few and sit near the center: keep their names horizontal so they cannot stack along a spoke.
         if (node.kind === "page") label.removeAttribute("transform")
         else label.setAttribute("transform", `rotate(${left ? degrees + 180 : degrees})`)
       } else if (node.kind === "page") {
-        label.setAttribute("text-anchor", "end")
+        label.style.textAnchor = "end"
         label.setAttribute("x", String(-(Math.max(node.radius, 14) + 12)))
         label.setAttribute("y", String(pageLabelY.get(node.id) ?? 4))
       }
@@ -594,9 +673,20 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   type Box = { x0: number; y0: number; x1: number; y1: number }
   /** World-space footprint of a label. Text size is in world units, so this does not depend on zoom. */
   function labelBox(node: LayoutNode, label: SVGTextElement, pageDy: number): Box {
-    const size = node.kind === "page" ? 22 : 11
+    const treemapBox = layout?.treemap?.rects.get(node.id)
+    const size = node.kind === "page" ? (treemapBox ? 15 : 22) : 11
     const width = Array.from(label.textContent ?? "").length * size * 0.58
     const half = size * 0.6
+    if (treemapBox) {
+      const baseline = node.kind === "page" ? 19 : node.kind === "source" ? 12 : 11
+      const x0 = node.x - treemapBox.w / 2 + 5
+      const top = node.y - treemapBox.h / 2 + baseline
+      return { x0, x1: x0 + width, y0: top - size, y1: top + 3 }
+    }
+    if (layout?.arc) {
+      const reach = (node.kind === "page" ? Math.max(node.radius, 14) : node.radius) + 8
+      return { x0: node.x - half, x1: node.x + half, y0: node.y + reach, y1: node.y + reach + width }
+    }
     const radial = layout?.radial
     if (radial) {
       const angle = radial.angles.get(node.id) ?? 0
@@ -650,28 +740,157 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     }
   }
 
+  /** Page -> source -> symbol parents, rebuilt only when the graph changes. */
+  let treeIndex: { graph: typeof graph; parent: Map<string, string>; kids: Map<string, string[]>; cited: Map<string, number> } | undefined
+  function tree() {
+    if (treeIndex?.graph !== graph) {
+      const { treeParent, children } = deriveHierarchy(graph, { x: 0, y: 0 })
+      const cited = new Map<string, number>()
+      for (const edge of graph.edges) if (edge.kind === "references-source") cited.set(edge.to, (cited.get(edge.to) ?? 0) + 1)
+      treeIndex = { graph, parent: treeParent, kids: children, cited }
+    }
+    return treeIndex
+  }
+
+  function seedTree() {
+    expanded.clear()
+    for (const node of graph.nodes) if (node.kind === "page") expanded.add(node.id)
+  }
+
+  /** Expand every ancestor so a selection made elsewhere (canvas, search) is visible in the tree. */
+  function revealInTree(id: string) {
+    const { parent } = tree()
+    for (let up = parent.get(id); up !== undefined; up = parent.get(up)) expanded.add(up)
+    scrollSelected = true
+  }
+
+  function listNodeLabel(node: WikiGraphNode): HTMLButtonElement {
+    const button = doc.createElement("button")
+    button.className = node.id === selected ? "node-label selected" : "node-label"
+    button.textContent = `${node.kind}: ${node.label}`
+    const degree = layout?.byId.get(node.id)?.degree ?? 0
+    button.title = `${node.freshness} · ${plural(degree, "connection", "connections")} shown of ${plural(node.recordedReferences, "recorded reference", "recorded references")}`
+    button.dataset.kind = node.kind
+    button.dataset.id = node.id
+    button.tabIndex = -1
+    button.onclick = () => select(node)
+    previewOn(button, node.id)
+    return button
+  }
+
   function renderList() {
     const near = neighborhood()
     const query = filters.query.trim()
     const visible = graph.nodes.filter((node) => {
       if ((near && !near.has(node.id)) || !isNodeVisible(node, filters)) return false
-      // The list follows the picture: pages and files first. Symbols join a search or a selection.
+      // The flat result list follows the picture: pages and files first. Symbols join a search or a selection.
       if (node.kind === "symbol" && !near && query === "") return false
       return true
     })
     lastVisible = visible
     list.replaceChildren()
-    for (const node of visible) {
-      const item = html("li", list)
-      const button = html("button", item, `${node.kind}: ${node.label}`)
-      const degree = layout?.byId.get(node.id)?.degree ?? 0
-      button.title = `${node.freshness} · ${plural(degree, "connection", "connections")} shown of ${plural(node.recordedReferences, "recorded reference", "recorded references")}`
-      button.dataset.kind = node.kind
-      if (node.id === selected) button.className = "selected"
-      button.onclick = () => select(node)
-      previewOn(button, node.id)
+    treeTools.style.display = query === "" ? "" : "none"
+    if (query !== "") {
+      // Searching shows matches as a flat result list; the tree returns when the query clears.
+      list.setAttribute("role", "list")
+      list.removeAttribute("aria-label")
+      for (const node of visible) html("li", list).append(listNodeLabel(node))
+      return
     }
+    list.setAttribute("role", "tree")
+    list.setAttribute("aria-label", "Explore pages, sources and symbols")
+    const { parent, kids, cited } = tree()
+    const shown = new Map(graph.nodes.filter((node) => isNodeVisible(node, filters)).map((node) => [node.id, node]))
+    const visibleKids = (id: string) => (kids.get(id) ?? []).filter((kid) => shown.has(kid))
+    const draw = (container: HTMLElement, node: WikiGraphNode, level: number) => {
+      const children = visibleKids(node.id)
+      const item = html("li", container)
+      item.setAttribute("role", "treeitem")
+      item.setAttribute("aria-level", String(level))
+      item.setAttribute("aria-selected", String(node.id === selected))
+      const row = html("div", item)
+      row.className = "row"
+      if (children.length > 0) {
+        const open = expanded.has(node.id)
+        item.setAttribute("aria-expanded", String(open))
+        const twisty = html("button", row)
+        twisty.className = "twisty"
+        twisty.tabIndex = -1
+        twisty.setAttribute("aria-label", `${open ? "Collapse" : "Expand"} ${node.label}`)
+        const caret = html("span", twisty, "▸")
+        caret.className = "caret"
+        caret.setAttribute("aria-hidden", "true")
+        twisty.onclick = () => toggleRow(node.id)
+      } else html("span", row).className = "spacer"
+      row.append(listNodeLabel(node))
+      const note: string[] = []
+      if (children.length > 0) note.push(String(children.length))
+      const extra = node.kind === "source" ? (cited.get(node.id) ?? 0) - 1 : 0
+      if (extra > 0) note.push(`+${extra} ${extra === 1 ? "page" : "pages"}`)
+      if (note.length > 0) html("span", row, note.join(" · ")).className = "meta"
+      if (children.length > 0 && expanded.has(node.id)) {
+        const group = html("ul", item)
+        group.setAttribute("role", "group")
+        for (const kid of children) draw(group, shown.get(kid)!, level + 1)
+      }
+    }
+    // A node whose parent is filtered out is promoted to the top so it never disappears with its parent.
+    for (const node of shown.values()) {
+      const up = parent.get(node.id)
+      if (up === undefined || !shown.has(up)) draw(list, node, 1)
+    }
+    const labels = [...list.querySelectorAll<HTMLButtonElement>(".node-label")]
+    const active = labels.find((label) => label.dataset.id === selected) ?? labels[0]
+    if (active) active.tabIndex = 0
+    if (scrollSelected && selected !== undefined) active?.scrollIntoView?.({ block: "nearest" })
+    scrollSelected = false
   }
+
+  function toggleRow(id: string) {
+    if (expanded.has(id)) expanded.delete(id)
+    else expanded.add(id)
+    renderList()
+    list.querySelector<HTMLButtonElement>(`.node-label[data-id="${CSS.escape(id)}"]`)?.focus()
+  }
+
+  expandAllButton.onclick = () => {
+    for (const id of tree().kids.keys()) expanded.add(id)
+    renderList()
+  }
+  collapseAllButton.onclick = () => {
+    expanded.clear()
+    renderList()
+  }
+  list.addEventListener("focusin", (event) => {
+    const target = event.target
+    if (!(target instanceof HTMLElement) || !target.classList.contains("node-label")) return
+    for (const label of list.querySelectorAll<HTMLElement>(".node-label")) label.tabIndex = label === target ? 0 : -1
+  })
+  // WAI-ARIA tree keys: arrows move and expand, Home/End jump; Enter selects through the button itself.
+  list.addEventListener("keydown", (event) => {
+    const target = event.target
+    if (!(target instanceof HTMLElement) || !target.classList.contains("node-label") || list.getAttribute("role") !== "tree")
+      return
+    const labels = [...list.querySelectorAll<HTMLElement>(".node-label")]
+    const index = labels.indexOf(target)
+    const id = target.dataset.id ?? ""
+    const item = target.closest("li")
+    const hasKids = item?.hasAttribute("aria-expanded") === true
+    let next: HTMLElement | undefined
+    if (event.key === "ArrowDown") next = labels[index + 1]
+    else if (event.key === "ArrowUp") next = labels[index - 1]
+    else if (event.key === "Home") next = labels[0]
+    else if (event.key === "End") next = labels[labels.length - 1]
+    else if (event.key === "ArrowRight") {
+      if (hasKids && !expanded.has(id)) return void (event.preventDefault(), toggleRow(id))
+      if (hasKids) next = labels[index + 1]
+    } else if (event.key === "ArrowLeft") {
+      if (hasKids && expanded.has(id)) return void (event.preventDefault(), toggleRow(id))
+      next = item?.parentElement?.closest("li")?.querySelector<HTMLElement>(":scope > .row .node-label") ?? undefined
+    } else return
+    event.preventDefault()
+    next?.focus()
+  })
 
   function renderDetail() {
     const node = graph.nodes.find((candidate) => candidate.id === selected)
@@ -972,8 +1191,16 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       group.setAttribute("class", node.kind === "page" ? "node page" : "node")
       group.setAttribute("data-id", node.id)
       const drawn = node.kind === "page" ? Math.max(node.radius, 14) : node.kind === "symbol" ? Math.max(5, node.radius - 2) : node.radius
-      const circle = doc.createElementNS(svgNS, "circle")
-      circle.setAttribute("r", String(drawn))
+      const treemapBox = layout.treemap?.rects.get(node.id)
+      const circle = doc.createElementNS(svgNS, treemapBox ? "rect" : "circle")
+      if (treemapBox) {
+        circle.setAttribute("x", String(-treemapBox.w / 2))
+        circle.setAttribute("y", String(-treemapBox.h / 2))
+        circle.setAttribute("width", String(treemapBox.w))
+        circle.setAttribute("height", String(treemapBox.h))
+        circle.setAttribute("rx", "3")
+        circle.setAttribute("fill-opacity", treemapBox.depth === 0 ? "0.2" : treemapBox.depth === 1 ? "0.5" : "0.92")
+      } else circle.setAttribute("r", String(drawn))
       const color = topicColor(node.id)
       circle.setAttribute(
         "fill",
@@ -983,13 +1210,31 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       label.setAttribute("y", String(drawn + 14))
       label.textContent = truncateLabel(info.label)
       if (node.kind === "page") label.style.fill = topicColor(node.id)?.page ?? "#edf6ff"
+      if (treemapBox) {
+        // Name sits in the cell's header band, cut to what fits.
+        const fontSize = node.kind === "page" ? 15 : 11
+        const room = Math.floor((treemapBox.w - 10) / (fontSize * 0.58))
+        const text = Array.from(info.label)
+        label.textContent =
+          room < 3 ? "" : text.length > room ? `…${text.slice(text.length - (room - 1)).join("")}` : info.label
+        label.style.textAnchor = "start"
+        label.setAttribute("x", String(-treemapBox.w / 2 + 5))
+        label.setAttribute("y", String(-treemapBox.h / 2 + (node.kind === "page" ? 19 : node.kind === "source" ? 12 : 11)))
+        if (node.kind === "page") label.style.fontSize = "15px"
+      }
       const title = doc.createElementNS(svgNS, "title")
       title.textContent = `${info.label} (${node.kind}, ${info.freshness}, ${plural(node.degree, "connection", "connections")} shown)`
       group.append(circle, label, title)
       if (info.freshness === "stale") {
-        const ring = doc.createElementNS(svgNS, "circle")
+        const ring = doc.createElementNS(svgNS, treemapBox ? "rect" : "circle")
         ring.setAttribute("class", "ring")
-        ring.setAttribute("r", String(node.radius + 3.5))
+        if (treemapBox) {
+          ring.setAttribute("x", String(-treemapBox.w / 2))
+          ring.setAttribute("y", String(-treemapBox.h / 2))
+          ring.setAttribute("width", String(treemapBox.w))
+          ring.setAttribute("height", String(treemapBox.h))
+          ring.setAttribute("rx", "3")
+        } else ring.setAttribute("r", String(node.radius + 3.5))
         ring.setAttribute("fill", "none")
         ring.setAttribute("stroke", STALE_RING)
         ring.setAttribute("stroke-width", "2")
@@ -997,7 +1242,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
         group.insertBefore(ring, label)
       }
       const omitted = info.recordedReferences - node.degree
-      if (omitted > 0) {
+      if (omitted > 0 && !treemapBox) {
         const badge = doc.createElementNS(svgNS, "g")
         badge.setAttribute("class", "badge")
         const pill = doc.createElementNS(svgNS, "circle")
@@ -1038,7 +1283,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       })
       group.addEventListener("pointerdown", (event) => {
         // Radial rings are fixed by construction, so there is nothing to rearrange.
-        if (disposed || layout === undefined || layout.radial !== undefined || event.button !== 0) return
+        if (disposed || layout === undefined || isStatic(layout) || event.button !== 0) return
         // A touch drag does not produce a click, so a flag set on pointerup would
         // swallow the next tap. The click from a mouse drag arrives before the
         // next pointerdown, and still sees the flag.
@@ -1178,7 +1423,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     cancelTween()
     hasFitted = false
     if (view !== "force") {
-      layout = createRadialLayout(graph)
+      layout = view === "radial" ? createRadialLayout(graph) : view === "arc" ? createArcLayout(graph) : createTreemapLayout(graph)
       hasFitted = true
       buildElements()
       positionElements()
@@ -1237,7 +1482,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     cameraTouched = false
     buildLayout()
     fitView()
-    if (layout?.radial) tweenFrom(before)
+    if (isStatic(layout)) tweenFrom(before)
     else if (!reducedMotion) {
       // The force layout is still moving, so it cannot be tweened; fade it in instead.
       svg.classList.remove("swap")
@@ -1251,6 +1496,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     // Selection only changes emphasis, never positions, so a still-running
     // simulation simply settles beneath it instead of reflowing.
     selected = node.id
+    revealInTree(node.id)
     render()
     detailHeading.focus()
   }
@@ -1398,6 +1644,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     filters = defaultFilters()
     matchIndex = 0
     search.value = ""
+    seedTree()
     if (layout)
       for (const node of layout.nodes) {
         node.fx = null
@@ -1420,6 +1667,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     }
   }
   element.append(root)
+  seedTree()
   buildLayout()
   buildToggles()
   fitView()
@@ -1434,6 +1682,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
         filters = defaultFilters()
         search.value = ""
         graph = next
+        seedTree()
         buildLayout()
         buildToggles()
         fitView()

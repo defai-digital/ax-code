@@ -90,6 +90,23 @@ try {
   assert.equal(await page.locator(".tip img, .tip script").count(), 0)
   await page.mouse.move(2, 2)
   await page.locator(".tip").waitFor({ state: "hidden" })
+  // Explore tree: collapsible, keyboard friendly, and restored to its seed state afterwards.
+  assert.equal(await page.locator('.list[role="tree"] [role="treeitem"]').count(), 4)
+  const rowsOpen = await page.locator(".list .node-label").count()
+  await page.getByRole("button", { name: "Collapse all" }).click()
+  assert.equal(await page.locator(".list .node-label").count(), 2)
+  assert.equal(await page.locator('.list [role="treeitem"][aria-expanded="false"]').count() > 0, true)
+  await page.getByRole("button", { name: "Expand all" }).click()
+  assert.equal(await page.locator(".list .node-label").count(), rowsOpen)
+  const firstPage = page.locator(".list .node-label[data-kind=page]").first()
+  await firstPage.focus()
+  await page.keyboard.press("ArrowLeft")
+  assert.ok((await page.locator(".list .node-label").count()) < rowsOpen)
+  await page.keyboard.press("ArrowRight")
+  assert.equal(await page.locator(".list .node-label").count(), rowsOpen)
+  await page.keyboard.press("ArrowDown")
+  assert.notEqual(await page.evaluate(() => document.activeElement?.dataset.kind), "page")
+  await page.mouse.move(2, 2)
   // View switcher: radial views keep every node, put every cluster leaf on one ring, and return to force.
   const nodeCount = await page.locator("svg g.node").count()
   await page.getByRole("button", { name: "Radial" }).click()
@@ -114,6 +131,26 @@ try {
       [...document.querySelectorAll("svg g.node:not(.page)")].map((group) => group.getAttribute("transform")).join("|"),
     ),
     settled,
+  )
+  // Arc: every node on one baseline. Treemap: every node is a rectangle and cross links stay hidden until focus.
+  await page.getByRole("button", { name: "Arc", exact: true }).click()
+  await page.waitForTimeout(700)
+  assert.equal(await page.locator("svg g.node").count(), nodeCount)
+  assert.equal(
+    await page.evaluate(
+      () =>
+        new Set([...document.querySelectorAll("svg g.node")].map((group) => group.getAttribute("transform").split(",")[1])).size,
+    ),
+    1,
+  )
+  await page.getByRole("button", { name: "Treemap", exact: true }).click()
+  await page.waitForTimeout(700)
+  assert.equal(await page.locator("svg g.node").count(), nodeCount)
+  assert.equal(await page.locator("svg g.node rect").count() >= nodeCount, true)
+  assert.equal(await page.locator("svg g.node circle").count(), 0)
+  assert.equal(
+    await page.evaluate(() => [...document.querySelectorAll("svg path.edge")].every((edge) => edge.getAttribute("display") === "none")),
+    true,
   )
   await page.getByRole("button", { name: "Force" }).click()
   assert.equal(await page.getByRole("button", { name: "Force" }).getAttribute("aria-pressed"), "true")
@@ -156,13 +193,13 @@ try {
   assert.equal(topicFills["page:guide.md"], "#6aa2e0")
   assert.equal(topicFills["source:src/a.ts"], "#4d7cb4")
   assert.equal(topicFills["source:src/b.ts"], "#30455c")
-  assert.equal(await page.locator(".list button").count(), 4)
+  assert.equal(await page.locator(".list .node-label").count(), 4)
   assert.equal(await page.locator("svg g.node").count(), 4)
   assert.equal(await page.locator("svg path.edge").count(), 3)
   assert.equal(await page.locator("img").count(), 0)
   assert.equal(await page.evaluate(() => window.attacked), undefined)
   await page.getByRole("searchbox").fill("Architecture")
-  assert.equal(await page.locator(".list button").count(), 1)
+  assert.equal(await page.locator(".list .node-label").count(), 1)
   assert.equal(await page.locator("svg g.node").count(), 4)
   await page.getByRole("searchbox").fill("")
   assert.match(await page.getByRole("status").innerText(), /4 of 4 nodes · 3 of 3 edges in view/)
@@ -170,7 +207,7 @@ try {
   assert.equal(await page.locator(".notice").isHidden(), true)
   assert.equal(await page.locator(".outline").isHidden(), true)
   await page.getByRole("button", { name: "pages (2)" }).click()
-  assert.equal(await page.locator(".list button").count(), 2)
+  assert.equal(await page.locator(".list .node-label").count(), 2)
   assert.equal(await page.locator("svg g.node").count(), 4)
   assert.equal(await page.getByRole("button", { name: "pages (2)" }).getAttribute("aria-pressed"), "false")
   assert.match(await page.getByRole("status").innerText(), /2 of 4 nodes · 0 of 3 edges in view/)
@@ -178,15 +215,15 @@ try {
   assert.match(await page.locator(".notice").innerText(), /no edges in view/)
   await page.getByRole("button", { name: "pages (2)" }).click()
   assert.equal(await page.getByRole("button", { name: "pages (2)" }).getAttribute("aria-pressed"), "true")
-  assert.equal(await page.locator(".list button").count(), 4)
+  assert.equal(await page.locator(".list .node-label").count(), 4)
   await page.getByRole("button", { name: "Unknown (4)" }).click()
-  assert.equal(await page.locator(".list button").count(), 0)
+  assert.equal(await page.locator(".list .node-label").count(), 0)
   assert.equal(await page.locator(".overlay").isHidden(), false)
   assert.match(await page.locator(".overlay").innerText(), /No nodes match the current filters/)
   assert.match(await page.getByRole("status").innerText(), /0 of 4 nodes · 0 of 3 edges in view/)
   await page.getByRole("button", { name: "Reset filters" }).click()
   assert.equal(await page.locator(".overlay").isHidden(), true)
-  assert.equal(await page.locator(".list button").count(), 4)
+  assert.equal(await page.locator(".list .node-label").count(), 4)
   assert.equal(
     await page.evaluate(() =>
       [...document.querySelectorAll(".axwv *")].every((el) =>
@@ -197,18 +234,18 @@ try {
   )
   // Match only source paths; the hostile page title also contains "s".
   await page.getByRole("searchbox").fill("src/")
-  assert.equal(await page.locator(".list button").count(), 2)
+  assert.equal(await page.locator(".list .node-label").count(), 2)
   assert.match(await page.getByRole("status").innerText(), /2 of 4 match/)
   await page.keyboard.press("Enter")
   assert.match(await page.locator(".detail").innerText(), /Source: src\/b\.ts/)
   await page.evaluate(() => document.querySelector("svg").dispatchEvent(new MouseEvent("click", { bubbles: true })))
-  assert.equal(await page.locator(".list button").count(), 2)
+  assert.equal(await page.locator(".list .node-label").count(), 2)
   await page.getByRole("searchbox").focus()
   await page.keyboard.press("Enter")
   assert.match(await page.locator(".detail").innerText(), /Source: src\/a\.ts/)
   await page.getByRole("searchbox").fill("")
-  assert.equal(await page.locator(".list button").count(), 4)
-  await page.locator(".list button").first().focus()
+  assert.equal(await page.locator(".list .node-label").count(), 4)
+  await page.locator(".list .node-label").first().focus()
   assert.equal(
     await page.evaluate(
       () => [...document.querySelectorAll("svg g.node")].filter((g) => g.getAttribute("opacity") === "0.15").length,
@@ -223,14 +260,15 @@ try {
     0,
   )
   await page.getByRole("button", { name: "Show all / reset" }).click()
-  await page.locator(".list button").filter({ hasText: "page: Architecture" }).focus()
+  await page.locator(".list .node-label").filter({ hasText: "page: Architecture" }).focus()
   await page.keyboard.press("Enter")
   assert.match(await page.locator(".detail").innerText(), /Cites 1 of 1 source in this snapshot/)
   assert.match(await page.locator(".detail").innerText(), /Provenance: Wiki manifest membership/)
   assert.match(await page.locator(".detail").innerText(), /Summary: Architecture summary\./)
   assert.match(await page.locator(".detail").innerText(), /Widget \(unavailable\)/)
   assert.equal(await page.evaluate(() => document.activeElement?.textContent), "Evidence")
-  assert.equal(await page.locator(".list button").count(), 2)
+  // The Explore tree stays stable on selection instead of shrinking to the neighborhood.
+  assert.equal(await page.locator(".list .node-label").count(), 4)
   await page.keyboard.press("Escape")
   assert.equal(await page.evaluate(() => document.activeElement?.tagName), "INPUT")
   await page.locator(".legend details.key summary").click()
@@ -240,14 +278,14 @@ try {
   assert.match(await page.locator(".notice").innerText(), /single node/)
   await page.keyboard.press("Enter")
   assert.match(await page.locator(".detail").innerText(), /Page: Architecture/)
-  assert.equal(await page.locator(".list button").count(), 1)
+  assert.equal(await page.locator(".list .node-label").count(), 1)
   await page.evaluate(() => document.querySelector("svg").dispatchEvent(new MouseEvent("click", { bubbles: true })))
   assert.match(await page.locator(".detail").innerText(), /Select a page, source, or symbol/)
-  assert.equal(await page.locator(".list button").count(), 1)
+  assert.equal(await page.locator(".list .node-label").count(), 1)
   await page.getByRole("searchbox").fill("")
-  assert.equal(await page.locator(".list button").count(), 4)
+  assert.equal(await page.locator(".list .node-label").count(), 4)
   assert.equal(await page.locator(".notice").isHidden(), true)
-  await page.locator(".list button").nth(2).click()
+  await page.locator(".list .node-label").nth(2).click()
   assert.match(await page.locator(".detail").innerText(), /Summary: Guide summary\./)
   assert.match(await page.locator(".detail").innerText(), /Foo \(verified\)/)
   assert.match(await page.locator(".detail").innerText(), /Ghost \(inferred\)/)
@@ -332,7 +370,7 @@ try {
     ),
     ["#e0a63c", "#64778b", "#64778b"],
   )
-  await page.locator(".list button").filter({ hasText: "source: src/b.ts" }).click()
+  await page.locator(".list .node-label").filter({ hasText: "source: src/b.ts" }).click()
   assert.match(await page.locator(".detail").innerText(), /Source: src\/b\.ts/)
   assert.deepEqual(
     await page.evaluate(() =>
@@ -540,7 +578,7 @@ try {
     } catch {
       rejected = true
     }
-    const preserved = document.querySelectorAll("#one .list button").length === graph.nodes.length
+    const preserved = document.querySelectorAll("#one .list .node-label").length === graph.nodes.length
     first.update({ ...graph, snapshot: "new", nodes: [], edges: [] })
     const empty = document.querySelector("#one .detail").textContent.includes("No matching")
     first.dispose()
@@ -551,7 +589,7 @@ try {
     } catch {
       disposed = true
     }
-    const isolated = document.querySelectorAll("#two .list button").length === graph.nodes.length
+    const isolated = document.querySelectorAll("#two .list .node-label").length === graph.nodes.length
     second.dispose()
     return { rejected, preserved, empty, disposed, isolated, cleaned: document.querySelectorAll(".axwv").length === 0 }
   }, graph)
@@ -702,7 +740,7 @@ try {
     }
     buttons.find((button) => button.textContent === "method Foo.bar")?.click()
     found.detail = host.querySelector(".detail")?.textContent
-    found.afterSelect = host.querySelectorAll(".list button").length
+    found.afterSelect = host.querySelectorAll(".list .node-label").length
     handle.dispose()
     host.remove()
     return found
@@ -715,7 +753,8 @@ try {
   assert.match(outline.detail, /Symbol: bar/)
   assert.match(outline.detail, /Detail: method Foo\.bar/)
   assert.match(outline.detail, /Contained by 1 source/)
-  assert.equal(outline.afterSelect, 2)
+  // Selecting a symbol reveals it in the Explore tree: page, source, class and method are all shown.
+  assert.equal(outline.afterSelect, 4)
   console.log(
     JSON.stringify({
       browser: browser.version(),
