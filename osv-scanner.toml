@@ -1,0 +1,4 @@
+[[IgnoredVulns]]
+id = "GHSA-vfj7-8cjw-p6xm"
+ignoreUntil = 2026-11-02
+reason = "braces 3.0.3 is patched by patches/braces@3.0.3.patch with hard depth guards in parsing, compile, expand and stringify. CI runs script/check-braces-depth-guard.mjs against the installed dependency before scanning. No upstream patched version exists; reassess before expiry."

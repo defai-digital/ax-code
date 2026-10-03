@@ -181,6 +181,9 @@ patchedDependencies:
   brace-expansion@5.0.12:
     hash: 9ac2cd41e8bdeea81cebc36d1ee1eeee7dc6adbc39a53fcbb995df32cdcb9ac1
     path: patches/brace-expansion@5.0.12.patch
+  braces@3.0.3:
+    hash: 87afa25e1ba44491a055b6e0593b9eae6781ad5167d58fdfbd14159e0a203cf9
+    path: patches/braces@3.0.3.patch
   gray-matter@4.0.3:
     hash: 3754dca03e5459f3f551402ecbeee1cd9588f9fde966158da964ae31a723dee7
     path: patches/gray-matter@4.0.3.patch
@@ -9564,7 +9567,7 @@ snapshots:
     dependencies:
       balanced-match: 4.0.4
 
-  braces@3.0.3:
+  braces@3.0.3(patch_hash=87afa25e1ba44491a055b6e0593b9eae6781ad5167d58fdfbd14159e0a203cf9):
     dependencies:
       fill-range: 7.1.1
 
@@ -10958,7 +10961,7 @@ snapshots:
 
   micromatch@4.0.8:
     dependencies:
-      braces: 3.0.3
+      braces: 3.0.3(patch_hash=87afa25e1ba44491a055b6e0593b9eae6781ad5167d58fdfbd14159e0a203cf9)
       picomatch: 2.3.2
 
   mime-db@1.52.0: {}

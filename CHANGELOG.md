@@ -14,6 +14,7 @@ changes belong to AX Coder.
 - Enforce both line and character limits on activity detail output and place omission markers between the retained head and tail.
 - Align DRE waterfall bars and axis ticks to the same time scale.
 - Find the bundled node-gyp in Homebrew Node installations when rebuilding the terminal backend.
+- Bound brace-pattern and AST nesting in the installed braces dependency to prevent stack exhaustion (GHSA-vfj7-8cjw-p6xm).
 
 ### Changed
 
