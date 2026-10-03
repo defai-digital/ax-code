@@ -37,9 +37,9 @@ fn bench_sqlite_bulk_insert() {
                     format!("func_{i}"),
                     format!("mod::func_{i}"),
                     format!("/src/file{}.ts", batch % 50),
-                    i * 10,
+                    (i * 10) as i64,
                     0,
-                    i * 10 + 9,
+                    (i * 10 + 9) as i64,
                     80,
                 ])
                 .unwrap();
@@ -171,7 +171,7 @@ fn populate_db(conn: &mut Connection, count: usize) {
         format!("cnd_{i}"), "proj1", "function",
         format!("func_{}", i % 100), format!("mod::func_{i}"),
         format!("/src/file{}.ts", i % 50),
-        i * 2, 0, i * 2 + 1, 80,
+        (i * 2) as i64, 0, (i * 2 + 1) as i64, 80,
       ],
     ).unwrap();
     }

@@ -18,7 +18,7 @@ edition = "2024"
 # named MIT-derived portions (OpenCode, OpenChamber, vendored OpenTUI) stay
 # MIT under their own LICENSE files — these crates are not among them.
 license = "Apache-2.0"
-rust-version = "1.85"
+rust-version = "1.88"
 version = "0.1.0"
 
 [workspace.dependencies]
@@ -30,7 +30,7 @@ serde_json = "1"
 thiserror = "2"
 
 # Phase 1: indexing core
-rusqlite = { version = "0.34", features = ["bundled", "column_decltype"] }
+rusqlite = { version = "0.40", features = ["bundled", "column_decltype"] }
 sha2 = "0.10"
 rand = "0.9"
 
