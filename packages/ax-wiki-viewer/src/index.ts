@@ -18,46 +18,66 @@ import {
 import type { CitingTopic, FreshnessState, NodeKind, OutlineSymbol, ViewFilters } from "./visibility.js"
 
 export const viewerCss = `
-.axwv{display:flex;flex-direction:column;height:100%;min-height:100%;font:14px system-ui,sans-serif;color:#dce6f2;background:#101923;padding:12px 16px 16px;box-sizing:border-box}
-.axwv *{box-sizing:border-box}.axwv h1{font-size:18px;margin:0;letter-spacing:-.01em}.axwv p{line-height:1.45;overflow-wrap:anywhere;margin:4px 0}
-.axwv button,.axwv input,.axwv select{font:inherit;color:inherit;background:#1c2c3c;border:1px solid #3d5166;border-radius:6px;padding:6px 8px}
-.axwv button{cursor:pointer}.axwv button:hover{background:#30455c}.axwv :focus-visible{outline:3px solid #78dacc;outline-offset:2px}
-.axwv .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 0}
-.axwv .layout{order:1;flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,300px);gap:12px;margin-top:8px}
-.axwv > details,.axwv > .notice{order:2}
-.axwv .canvas{position:relative;height:100%;min-height:420px;overflow:hidden;border:1px solid #2c4156;border-radius:10px;background:#0c141d;touch-action:none;user-select:none;-webkit-user-select:none}
+.axwv{--bg:#0d1520;--surface:#142130;--surface-2:#1b2c3f;--canvas:#0a111a;--line:#27394d;--line-2:#3a5068;--text:#e3ecf6;--muted:#93a6ba;--accent:#78dacc;--amber:#e0a63c;display:flex;flex-direction:column;height:100%;min-height:100%;font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--text);background:var(--bg);padding:14px 20px 16px;box-sizing:border-box;-webkit-font-smoothing:antialiased}
+.axwv *{box-sizing:border-box}
+.axwv h1{font-size:17px;font-weight:650;margin:0;letter-spacing:-.01em;order:0}
+.axwv p{overflow-wrap:anywhere;margin:2px 0}
+.axwv>h1+p{order:0;color:var(--muted);font-size:13px;margin:2px 0 0}
+.axwv button,.axwv input,.axwv select{font:inherit;font-size:13px;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 11px;transition:background .12s,border-color .12s,color .12s}
+.axwv button{cursor:pointer}
+.axwv button:hover{background:var(--surface-2);border-color:var(--line-2)}
+.axwv button:active{transform:translateY(.5px)}
+.axwv input{min-width:240px;padding-left:10px}
+.axwv input::placeholder{color:#6d8197}
+.axwv :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.axwv .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0 0;order:1;color:var(--muted);font-size:13px}
+.axwv .controls label{display:flex;align-items:center;gap:8px}
+.axwv .chips,.axwv .legend{order:1}
+.axwv .chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:10px 0 0}
+.axwv .chips button,.axwv .legend button{border-radius:999px;padding:3px 11px;font-size:12px;background:transparent}
+.axwv .chips button:hover,.axwv .legend button:hover{background:var(--surface)}
+.axwv .chip[aria-pressed="false"],.axwv .kind[aria-pressed="false"]{opacity:.5;text-decoration:line-through}
+.axwv .legend{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin:6px 0 0;font-size:12px;color:var(--muted)}
+.axwv .legend .topic{width:11px;height:11px;border-radius:50%;display:inline-block;margin:0 1px;box-shadow:0 0 0 2px var(--bg)}
+.axwv .legend .note{margin-left:8px;opacity:.85}
+.axwv .legend .note:first-of-type{margin-left:12px;padding-left:12px;border-left:1px solid var(--line)}
+.axwv .counts{font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px;margin-top:8px}
+.axwv .counts{order:0}
+.axwv>details{order:3;margin:8px 0 0;color:var(--muted);font-size:13px}
+.axwv>details:first-of-type{order:0}
+.axwv details summary{cursor:pointer;color:var(--muted);padding:2px 0;user-select:none}
+.axwv details summary:hover{color:var(--text)}
+.axwv .layout{order:2;flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,320px);gap:14px;margin-top:12px}
+.axwv>.notice{order:3}
+.axwv .canvas{position:relative;height:100%;min-height:420px;overflow:hidden;border:1px solid var(--line);border-radius:14px;background:radial-gradient(ellipse at 50% 40%,#10202f 0%,var(--canvas) 70%);touch-action:none;user-select:none;-webkit-user-select:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.03)}
 .axwv svg{width:100%;height:100%;display:block;-webkit-user-drag:none}
 .axwv .node{cursor:grab;touch-action:none}.axwv .node.dragging{cursor:grabbing}
-.axwv svg text{pointer-events:none;font-size:11px;text-anchor:middle;fill:#edf6ff}
-.axwv svg .node>text{paint-order:stroke;stroke:#0c141d;stroke-width:4px;stroke-linejoin:round}
-.axwv svg .node.page>text{text-anchor:end;font-size:13px;font-weight:600}
-.axwv .legend .topic{width:10px;height:10px;border-radius:50%;display:inline-block;border:1px solid #8ea0b3}
+.axwv svg text{pointer-events:none;font-size:11px;text-anchor:middle;fill:#edf6ff;font-family:inherit}
+.axwv svg .node>text{paint-order:stroke;stroke:var(--canvas);stroke-width:4px;stroke-linejoin:round}
+.axwv svg .node.page>text{text-anchor:end;font-size:22px;font-weight:650;letter-spacing:.01em}
 .axwv .edge{fill:none;stroke:#64778b}.axwv .arrow{fill:none;stroke:#b5c5d7}
 .axwv .badge text{font-size:7.5px;font-weight:700;fill:#dce6f2}
-.axwv .legend{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;margin:6px 0 0;font-size:12px;color:#8ea0b3}
-.axwv .side{min-height:0;overflow:auto;padding-right:2px}
-.axwv .side h2{font-size:13px;margin:0 0 6px;letter-spacing:.04em;text-transform:uppercase;color:#8ea0b3}
-.axwv .list{max-height:none;overflow:visible;padding:0;margin:0 0 12px;list-style:none}
-.axwv .list button{width:100%;text-align:left;margin:0 0 2px;padding:5px 8px;background:transparent;border-color:transparent;overflow-wrap:anywhere}
-.axwv .list button:hover{background:#243246;border-color:#3d5166}
-.axwv .detail{white-space:pre-wrap;overflow-wrap:anywhere;margin:0;font-size:13px}
-.axwv .muted{color:#b5c5d7}.axwv .selected{border-color:#78dacc;background:#1a3144}
-.axwv .chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 0}
+.axwv .side{min-height:0;overflow:auto;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--surface);scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
+.axwv .side h2{font-size:11px;font-weight:650;margin:0 0 8px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.axwv .list{max-height:none;overflow:visible;padding:0;margin:0 0 16px;list-style:none}
+.axwv .list button{width:100%;text-align:left;margin:0 0 1px;padding:5px 8px;background:transparent;border-color:transparent;border-radius:6px;overflow-wrap:anywhere;font-size:13px;color:#c9d6e4}
+.axwv .list button:hover{background:var(--surface-2);border-color:transparent;color:var(--text)}
+.axwv .detail{white-space:pre-wrap;overflow-wrap:anywhere;margin:0;font-size:13px;color:#c9d6e4;line-height:1.55}
+.axwv .muted{color:#b5c5d7}
+.axwv .list button.selected,.axwv .outline button.selected{border-color:var(--accent);background:#173342;color:var(--text)}
 .axwv .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
-.axwv .chip[aria-pressed="false"],.axwv .kind[aria-pressed="false"]{opacity:.45;text-decoration:line-through}
-.axwv .counts{font-variant-numeric:tabular-nums;color:#8ea0b3;font-size:12px}
-.axwv .notice{border:1px solid #3d5166;border-radius:8px;padding:8px 12px;color:#b5c5d7}
-.axwv .overlay{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;text-align:center;background:rgba(12,20,29,.94);padding:24px}
-.axwv .overlay p{margin:0;max-width:52ch}
-.axwv .hud{position:absolute;right:10px;bottom:10px;z-index:2;display:grid;grid-template-columns:auto auto;gap:4px;margin:0}
-.axwv .hud button{padding:6px 8px;background:rgba(16,25,35,.9)}
-.axwv details{margin:8px 0 0}
-.axwv details summary{cursor:pointer;color:#b5c5d7}
+.axwv .notice{border:1px solid var(--line-2);border-radius:10px;padding:8px 12px;color:#b5c5d7;background:var(--surface)}
+.axwv .overlay{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;text-align:center;background:rgba(10,17,26,.94);padding:24px}
+.axwv .overlay p{margin:0;max-width:52ch;color:var(--muted)}
+.axwv .hud{position:absolute;right:12px;bottom:12px;z-index:2;display:grid;grid-template-columns:repeat(3,32px);gap:4px;margin:0;padding:6px;border:1px solid var(--line);border-radius:12px;background:rgba(13,21,32,.82);backdrop-filter:blur(6px)}
+.axwv .hud button{padding:0;height:32px;width:32px;line-height:1;font-size:16px;background:transparent;border-color:transparent;border-radius:8px;display:flex;align-items:center;justify-content:center}
+.axwv .hud button:hover{background:var(--surface-2)}
 .axwv .outline ul{list-style:none;margin:2px 0;padding-left:18px}
 .axwv .outline>ul{padding-left:0}
-.axwv .outline button{background:none;border-color:transparent;padding:4px 8px;text-align:left;overflow-wrap:anywhere}
-.axwv .outline button:hover{background:#30455c;border-color:#64778b}
-@media(max-width:760px){.axwv .layout{grid-template-columns:1fr}.axwv .canvas{height:420px;min-height:420px}.axwv .hud{right:8px;bottom:8px}.axwv .legend .note{display:none}}
+.axwv .outline button{background:none;border-color:transparent;padding:3px 8px;text-align:left;overflow-wrap:anywhere;font-size:13px}
+.axwv .outline button:hover{background:var(--surface-2)}
+@media(max-width:760px){.axwv{padding:12px}.axwv .layout{grid-template-columns:1fr}.axwv .canvas{height:420px;min-height:420px}.axwv .legend .note{display:none}.axwv input{min-width:0;width:100%}}
+@media(prefers-reduced-motion:reduce){.axwv *{transition:none!important}}
 `
 
 /** Overview stays a picture. Names appear for the focused neighborhood, or once the camera is close. */
@@ -106,9 +126,9 @@ function truncateLabel(label: string, max = 28): string {
   return chars.length > max ? `${chars.slice(0, max - 1).join("")}…` : label
 }
 
-/** Width of a 13px page title, including the halo, so fit can keep the name on screen. */
+/** Width of a 22px page title, including the halo, so fit can keep the name on screen. */
 function pageLabelWidth(label: string): number {
-  return Math.min(Array.from(label).length, 28) * 9 + 16
+  return Math.min(Array.from(label).length, 28) * 15 + 24
 }
 
 /** An isolated instance; invalid updates preserve the previous view. */
@@ -963,15 +983,17 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     viewBox()
     applyEmphasis()
   }
-  for (const [label, action] of [
-    ["Zoom in", () => zoomBy(1.5)],
-    ["Zoom out", () => zoomBy(1 / 1.5)],
-    ["Pan left", () => pan(-100 / zoom, 0)],
-    ["Pan right", () => pan(100 / zoom, 0)],
-    ["Pan up", () => pan(0, -100 / zoom)],
-    ["Pan down", () => pan(0, 100 / zoom)],
+  for (const [label, glyph, action] of [
+    ["Pan up", "↑", () => pan(0, -100 / zoom)],
+    ["Zoom in", "+", () => zoomBy(1.5)],
+    ["Zoom out", "−", () => zoomBy(1 / 1.5)],
+    ["Pan left", "←", () => pan(-100 / zoom, 0)],
+    ["Pan down", "↓", () => pan(0, 100 / zoom)],
+    ["Pan right", "→", () => pan(100 / zoom, 0)],
   ] as const) {
-    const button = html("button", navigation, label)
+    const button = html("button", navigation, glyph)
+    button.setAttribute("aria-label", label)
+    button.title = label
     button.onclick = () => action()
   }
   svg.onkeydown = (event) => {
