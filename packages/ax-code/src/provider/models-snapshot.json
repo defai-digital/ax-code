@@ -14366,28 +14366,6 @@
         "tool_call": true,
         "canonical_model_id": "anthropic/claude-opus-5-5"
       },
-      "kitani/clover-1-150b": {
-        "attachment": true,
-        "id": "kitani/clover-1-150b",
-        "limit": {
-          "context": 200000,
-          "input": 200000,
-          "output": 100000
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "Clover 1 150B Preview",
-        "reasoning": true,
-        "release_date": "2026-09-24",
-        "tool_call": true
-      },
       "openai/gpt-6-luna": {
         "attachment": true,
         "family": "gpt-luna",
@@ -29579,6 +29557,157 @@
           ]
         },
         "name": "GPT-6.1 Sol (OpenAI)",
+        "reasoning": true,
+        "release_date": "2026-09-29",
+        "temperature": false,
+        "tool_call": true
+      },
+      "aws-bedrock/claude-opus-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-opus-5-5",
+        "family": "claude-opus",
+        "id": "aws-bedrock/claude-opus-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Opus 5.5 (AWS Bedrock)",
+        "reasoning": true,
+        "release_date": "2026-09-22",
+        "temperature": false,
+        "tool_call": true
+      },
+      "aws-bedrock/claude-sonnet-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-sonnet-5-5",
+        "family": "claude-sonnet",
+        "id": "aws-bedrock/claude-sonnet-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Sonnet 5.5 (AWS Bedrock)",
+        "reasoning": true,
+        "release_date": "2026-09-28",
+        "temperature": false,
+        "tool_call": true
+      },
+      "azure-anthropic/claude-fable-5-1": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-1",
+        "family": "claude-fable",
+        "id": "azure-anthropic/claude-fable-5-1",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.1 (Azure Anthropic)",
+        "reasoning": true,
+        "release_date": "2026-09-01",
+        "temperature": false,
+        "tool_call": true
+      },
+      "azure-anthropic/claude-opus-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-opus-5-5",
+        "family": "claude-opus",
+        "id": "azure-anthropic/claude-opus-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Opus 5.5 (Azure Anthropic)",
+        "reasoning": true,
+        "release_date": "2026-09-22",
+        "temperature": false,
+        "tool_call": true
+      },
+      "azure-anthropic/claude-sonnet-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-sonnet-5-5",
+        "family": "claude-sonnet",
+        "id": "azure-anthropic/claude-sonnet-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Sonnet 5.5 (Azure Anthropic)",
+        "reasoning": true,
+        "release_date": "2026-09-28",
+        "temperature": false,
+        "tool_call": true
+      },
+      "azure/gpt-6.1-sol": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-6.1-sol",
+        "family": "gpt-sol",
+        "id": "azure/gpt-6.1-sol",
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-6.1 Sol (Azure)",
         "reasoning": true,
         "release_date": "2026-09-29",
         "temperature": false,
@@ -59306,6 +59435,31 @@
         "release_date": "2026-09-28",
         "temperature": false,
         "tool_call": true
+      },
+      "openai/gpt-6.1-sol": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-6.1-sol",
+        "family": "gpt-sol",
+        "id": "openai/gpt-6.1-sol",
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-6.1 Sol",
+        "reasoning": true,
+        "release_date": "2026-09-29",
+        "temperature": false,
+        "tool_call": true
       }
     }
   },
@@ -88926,7 +89080,7 @@
         "family": "glm",
         "id": "glm-5.3",
         "limit": {
-          "context": 256000,
+          "context": 1000000,
           "output": 131072
         },
         "modalities": {
@@ -88950,7 +89104,7 @@
         "family": "glm",
         "id": "glm-latest",
         "limit": {
-          "context": 256000,
+          "context": 1000000,
           "output": 131072
         },
         "modalities": {
@@ -88974,7 +89128,7 @@
         "family": "glm-flash",
         "id": "glm-5.3-flash",
         "limit": {
-          "context": 256000,
+          "context": 1000000,
           "output": 131072
         },
         "modalities": {
@@ -88999,7 +89153,7 @@
         "family": "glm-flash",
         "id": "glm-flash-latest",
         "limit": {
-          "context": 256000,
+          "context": 1000000,
           "output": 131072
         },
         "modalities": {
@@ -92359,8 +92513,8 @@
           ]
         },
         "limit": {
-          "context": 262144,
-          "output": 235929
+          "context": 131072,
+          "output": 32768
         },
         "canonical_model_id": "alibaba/qwen3-next-80b-a3b-thinking"
       },
@@ -93182,8 +93336,8 @@
           ]
         },
         "limit": {
-          "context": 262144,
-          "output": 235929
+          "context": 128000,
+          "output": 32000
         }
       },
       "qwen/qwen3.6-flash": {
@@ -93826,7 +93980,7 @@
       },
       "poolside/laguna-xs-2.1": {
         "id": "poolside/laguna-xs-2.1",
-        "name": "Poolside: Laguna XS 2.1",
+        "name": "Poolside: Laguna XS 2.1 (retires Oct 31)",
         "family": "laguna",
         "attachment": false,
         "reasoning": true,
@@ -93892,7 +94046,7 @@
       },
       "poolside/laguna-s-2.1": {
         "id": "poolside/laguna-s-2.1",
-        "name": "Poolside: Laguna S 2.1",
+        "name": "Poolside: Laguna S 2.1 (retires Oct 31)",
         "family": "laguna-s",
         "attachment": false,
         "reasoning": true,
@@ -94707,7 +94861,7 @@
         },
         "limit": {
           "context": 262144,
-          "output": 32768
+          "output": 131072
         },
         "canonical_model_id": "nvidia/nemotron-3.5-lightning"
       },
@@ -96269,8 +96423,8 @@
           ]
         },
         "limit": {
-          "context": 131072,
-          "output": 65536
+          "context": 163840,
+          "output": 147456
         }
       },
       "deepseek/deepseek-v4-pro": {
@@ -96499,7 +96653,7 @@
         },
         "limit": {
           "context": 262144,
-          "output": 235929
+          "output": 32768
         }
       },
       "inclusionai/ling-3.0-flash-sante:free": {
@@ -98416,7 +98570,7 @@
         },
         "limit": {
           "context": 1048576,
-          "output": 943718
+          "output": 131072
         }
       },
       "~z-ai/glm-latest": {
@@ -100211,6 +100365,28 @@
         "name": "Pareto 26.10 Preview",
         "reasoning": false,
         "release_date": "2026-10-01",
+        "temperature": true,
+        "tool_call": true
+      },
+      "inclusionai/ling-3.1-flash": {
+        "attachment": false,
+        "family": "ling",
+        "id": "inclusionai/ling-3.1-flash",
+        "limit": {
+          "context": 262144,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "inclusionAI: Ling 3.1 Flash (new)",
+        "reasoning": true,
+        "release_date": "2026-10-02",
         "temperature": true,
         "tool_call": true
       }
@@ -104985,6 +105161,81 @@
         "release_date": "2026-09-29",
         "temperature": false,
         "tool_call": true
+      },
+      "in.anthropic.claude-haiku-4-5-20251001-v1:0": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-4-5-20251001",
+        "family": "claude-haiku",
+        "id": "in.anthropic.claude-haiku-4-5-20251001-v1:0",
+        "limit": {
+          "context": 200000,
+          "output": 64000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 4.5 (India)",
+        "reasoning": true,
+        "release_date": "2025-10-15",
+        "temperature": true,
+        "tool_call": true
+      },
+      "in.anthropic.claude-opus-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-opus-5",
+        "family": "claude-opus",
+        "id": "in.anthropic.claude-opus-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Opus 5 (India)",
+        "reasoning": true,
+        "release_date": "2026-07-24",
+        "temperature": false,
+        "tool_call": true
+      },
+      "in.anthropic.claude-sonnet-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-sonnet-5",
+        "family": "claude-sonnet",
+        "id": "in.anthropic.claude-sonnet-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Sonnet 5 (India)",
+        "reasoning": true,
+        "release_date": "2026-06-30",
+        "temperature": false,
+        "tool_call": true
       }
     }
   },
@@ -107167,8 +107418,8 @@
           ]
         },
         "limit": {
-          "context": 131072,
-          "output": 32768
+          "context": 128000,
+          "output": 32000
         },
         "canonical_model_id": "openai/gpt-oss-20b"
       },
@@ -107527,8 +107778,8 @@
           ]
         },
         "limit": {
-          "context": 131072,
-          "output": 32768
+          "context": 128000,
+          "output": 32000
         },
         "canonical_model_id": "openai/gpt-oss-120b"
       },
@@ -108565,6 +108816,51 @@
         "reasoning": true,
         "release_date": "2026-09-29",
         "temperature": false,
+        "tool_call": true
+      },
+      "nvidia/nemotron-3-nano-30b-a3b": {
+        "attachment": false,
+        "canonical_model_id": "nvidia/nemotron-3-nano-30b-a3b",
+        "family": "nemotron",
+        "id": "nvidia/nemotron-3-nano-30b-a3b",
+        "limit": {
+          "context": 256000,
+          "output": 32000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Nemotron 3 Nano 30B A3B",
+        "reasoning": true,
+        "release_date": "2025-12-15",
+        "temperature": true,
+        "tool_call": false
+      },
+      "qwen/qwen3.8-flash": {
+        "attachment": false,
+        "canonical_model_id": "alibaba/qwen3.8-flash",
+        "family": "qwen",
+        "id": "qwen/qwen3.8-flash",
+        "limit": {
+          "context": 977000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen3.8 Flash",
+        "reasoning": true,
+        "release_date": "2026-08-26",
         "tool_call": true
       }
     }
@@ -112771,6 +113067,29 @@
         "name": "Fledge Alpha Free",
         "reasoning": true,
         "release_date": "2026-10-01",
+        "temperature": true,
+        "tool_call": true
+      },
+      "ling-3.1-flash-free": {
+        "attachment": false,
+        "canonical_model_id": "inclusionai/ling-3.1-flash",
+        "family": "ling",
+        "id": "ling-3.1-flash-free",
+        "limit": {
+          "context": 262144,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Ling 3.1 Flash Free",
+        "reasoning": true,
+        "release_date": "2026-09-29",
         "temperature": true,
         "tool_call": true
       }
@@ -125872,51 +126191,6 @@
         },
         "canonical_model_id": "cohere/c4ai-aya-expanse-32b"
       },
-      "c4ai-aya-expanse-8b": {
-        "id": "c4ai-aya-expanse-8b",
-        "name": "Aya Expanse 8B",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": true,
-        "release_date": "2024-10-24",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 8000,
-          "output": 4000
-        },
-        "canonical_model_id": "cohere/c4ai-aya-expanse-8b"
-      },
-      "c4ai-aya-vision-8b": {
-        "id": "c4ai-aya-vision-8b",
-        "name": "Aya Vision 8B",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": true,
-        "release_date": "2025-03-04",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 16000,
-          "output": 4000
-        },
-        "canonical_model_id": "cohere/c4ai-aya-vision-8b"
-      },
       "command-r7b-12-2024": {
         "id": "command-r7b-12-2024",
         "name": "Command R7B",
@@ -127918,6 +128192,32 @@
         "temperature": true,
         "tool_call": true,
         "canonical_model_id": "deepseek/deepseek-v4.1-flash"
+      },
+      "hf:zai-org/GLM-5.3": {
+        "attachment": false,
+        "canonical_model_id": "zhipuai/glm-5.3",
+        "family": "glm",
+        "id": "hf:zai-org/GLM-5.3",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 524288,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM-5.3",
+        "reasoning": true,
+        "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -133932,7 +134232,7 @@
         "id": "deepseek-v4.1-flash",
         "limit": {
           "context": 1048576,
-          "output": 393216
+          "output": 1048576
         },
         "modalities": {
           "input": [
@@ -139206,29 +139506,6 @@
         },
         "canonical_model_id": "deepseek/deepseek-v4-flash-0731"
       },
-      "flexai/Step-3.7-Flash": {
-        "id": "flexai/Step-3.7-Flash",
-        "name": "Step 3.7 Flash (FlexAI)",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-05-29",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 262144,
-          "output": 256000
-        },
-        "canonical_model_id": "stepfun/step-3.7-flash"
-      },
       "flexai/gpt-oss-20b": {
         "id": "flexai/gpt-oss-20b",
         "name": "GPT OSS 20B (FlexAI)",
@@ -139251,30 +139528,6 @@
           "output": 32768
         },
         "canonical_model_id": "openai/gpt-oss-20b"
-      },
-      "flexai/Muse-Glimmer-30B": {
-        "id": "flexai/Muse-Glimmer-30B",
-        "name": "Muse Glimmer 30B (FlexAI)",
-        "family": "muse",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-08-10",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 131072,
-          "output": 131072
-        },
-        "canonical_model_id": "meta/muse-glimmer-30b"
       },
       "flexai/gpt-oss-120b": {
         "id": "flexai/gpt-oss-120b",
@@ -142972,6 +143225,74 @@
         "release_date": "2026-08-28",
         "temperature": true,
         "tool_call": false
+      },
+      "flexai/DeepSeek-V4.1-Flash": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash",
+        "family": "deepseek-flash",
+        "id": "flexai/DeepSeek-V4.1-Flash",
+        "limit": {
+          "context": 1048576,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash (FlexAI)",
+        "reasoning": true,
+        "release_date": "2026-09-10",
+        "temperature": true,
+        "tool_call": true
+      },
+      "greenference/gpt-oss-20b": {
+        "attachment": false,
+        "canonical_model_id": "openai/gpt-oss-20b",
+        "family": "gpt-oss",
+        "id": "greenference/gpt-oss-20b",
+        "limit": {
+          "context": 131072,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT OSS 20B (Greenference)",
+        "reasoning": true,
+        "release_date": "2025-08-05",
+        "temperature": true,
+        "tool_call": false
+      },
+      "tencent/step-5-preview": {
+        "attachment": false,
+        "canonical_model_id": "stepfun/step-5-preview",
+        "id": "tencent/step-5-preview",
+        "limit": {
+          "context": 1000000,
+          "input": 1000000,
+          "output": 1000000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Step 5 Preview (Tencent)",
+        "reasoning": true,
+        "release_date": "2026-09-16",
+        "tool_call": false
       }
     }
   },
@@ -145603,6 +145924,183 @@
       }
     },
     "name": "Pareto Inference",
+    "npm": "@ai-sdk/openai-compatible"
+  },
+  "engy": {
+    "api": "https://api.engy.ai/v1",
+    "doc": "https://engy.ai/pricing",
+    "env": [
+      "ENGY_API_KEY"
+    ],
+    "id": "engy",
+    "models": {
+      "deepseek-v4-flash-0731": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4-flash-0731",
+        "family": "deepseek-flash",
+        "id": "deepseek-v4-flash-0731",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1048576,
+          "input": 920576,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4 Flash 0731",
+        "reasoning": true,
+        "release_date": "2026-07-31",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek-v4.1-flash": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash",
+        "family": "deepseek-flash",
+        "id": "deepseek-v4.1-flash",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 327680,
+          "input": 262144,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash",
+        "reasoning": true,
+        "release_date": "2026-09-10",
+        "temperature": true,
+        "tool_call": true
+      },
+      "glm-5.3": {
+        "attachment": false,
+        "canonical_model_id": "zhipuai/glm-5.3",
+        "family": "glm",
+        "id": "glm-5.3",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 327680,
+          "input": 294912,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM-5.3",
+        "reasoning": true,
+        "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": true
+      },
+      "glm-5.3-flash": {
+        "attachment": true,
+        "canonical_model_id": "zhipuai/glm-5.3-flash",
+        "family": "glm-flash",
+        "id": "glm-5.3-flash",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 262144,
+          "input": 229376,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM-5.3-Flash",
+        "reasoning": true,
+        "release_date": "2026-08-26",
+        "temperature": true,
+        "tool_call": true
+      },
+      "qwen3.6-35b-a3b": {
+        "attachment": false,
+        "canonical_model_id": "alibaba/qwen3.6-35b-a3b",
+        "family": "qwen",
+        "id": "qwen3.6-35b-a3b",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 208192,
+          "input": 200000,
+          "output": 8192
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen3.6 35B-A3B",
+        "reasoning": true,
+        "release_date": "2026-04-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "qwen3.8-27b": {
+        "attachment": true,
+        "canonical_model_id": "alibaba/qwen3.8-27b",
+        "family": "qwen",
+        "id": "qwen3.8-27b",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1001536,
+          "input": 936000,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen3.8 27B",
+        "reasoning": true,
+        "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": true
+      }
+    },
+    "name": "engy",
     "npm": "@ai-sdk/openai-compatible"
   }
 }
