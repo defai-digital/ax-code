@@ -38443,7 +38443,7 @@
                 "type": "boolean"
               },
               "dir": {
-                "description": "AX Wiki directory relative to project root. Default: ax-wiki.",
+                "description": "AX Wiki directory relative to project root. Default: .ax-wiki.",
                 "type": "string"
               },
               "model": {

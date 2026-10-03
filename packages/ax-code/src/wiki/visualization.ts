@@ -7,7 +7,7 @@ import { open, realpath, unlink } from "node:fs/promises"
 import path from "node:path"
 import { createHash, randomBytes } from "node:crypto"
 import { createServer } from "node:http"
-import { assertWikiDirectorySafe, readGroundingExcerpts } from "@ax-code/ax-wiki/node"
+import { AX_WIKI_DIR_DEFAULT, assertWikiDirectorySafe, readGroundingExcerpts } from "@ax-code/ax-wiki/node"
 import { graphRelativePath, projectWikiManifest, parseWikiGraph } from "@ax-code/ax-wiki/graph"
 import type { InventorySymbol } from "@ax-code/ax-wiki/graph"
 import { WikiInventory } from "./inventory"
@@ -40,7 +40,7 @@ export namespace WikiVisualization {
     return [...cited]
   }
 
-  export async function snapshot(root: string, wikiDir = "ax-wiki") {
+  export async function snapshot(root: string, wikiDir = AX_WIKI_DIR_DEFAULT) {
     graphRelativePath(wikiDir)
     const canonicalRoot = await realpath(root)
     await assertWikiDirectorySafe(canonicalRoot, wikiDir)

@@ -5,6 +5,7 @@
  * Supports depth levels: basic, standard, full, security
  */
 
+import { AX_WIKI_DIR_DEFAULT } from "@ax-code/ax-wiki"
 import type { ProjectInfo, DepthLevel, ComplexityLevel } from "./analyzer"
 import { isNonEmptyRecord } from "../util/record"
 
@@ -114,7 +115,7 @@ Keep this file **thin**. Do not dump full architecture into AGENTS.md.
 | Need | Prefer |
 |------|--------|
 | Build / test / safety / style rules | This file (\`AGENTS.md\`) |
-| Architecture, module intent, design narrative | \`ax-wiki/\` — start at \`ax-wiki/quickstart.md\` |
+| Architecture, module intent, design narrative | \`${AX_WIKI_DIR_DEFAULT}/\` — start at \`${AX_WIKI_DIR_DEFAULT}/quickstart.md\` |
 | Precise symbols, callers, callees, references | \`code_intelligence\` / \`lsp\` (\`ax-code index\`) |
 | Personal prefs / past decisions | Project memory (\`.ax-code/memory.json\`) |
 

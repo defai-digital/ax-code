@@ -2,10 +2,10 @@
 
 Status: Active  
 Scope: current-state  
-Last reviewed: 2026-09-27
+Last reviewed: 2026-10-03
 Owner: AX Code runtime
 
-AX Wiki is AX Code's native repository-wiki compiler. It turns tracked source, configuration, tests, workflows, and existing documentation into a small source-backed Markdown knowledge base under `ax-wiki/`. It uses the same provider configuration and model routing as AX Code; there is no separate executable or credential store.
+AX Wiki is AX Code's native repository-wiki compiler. It turns tracked source, configuration, tests, workflows, and existing documentation into a small source-backed Markdown knowledge base under `.ax-wiki/`. It uses the same provider configuration and model routing as AX Code; there is no separate executable or credential store.
 
 `ax-code wiki viz` draws the compiled pages and the files they cite. Screenshots of that map are in [Wiki evidence visualization](../guides/wiki-visualization.md).
 
@@ -13,7 +13,7 @@ AX Wiki is AX Code's native repository-wiki compiler. It turns tracked source, c
 
 | Need                                                            | Source                                        |
 | --------------------------------------------------------------- | --------------------------------------------- |
-| Architecture, module responsibilities, workflows, design intent | `ax-wiki/`, starting at `quickstart.md`       |
+| Architecture, module responsibilities, workflows, design intent | `.ax-wiki/`, starting at `quickstart.md`      |
 | Exact symbols, callers, callees, references, refactor impact    | `ax-code index`, `code_intelligence`, and LSP |
 | Repository rules, commands, and safety constraints              | `AGENTS.md`                                   |
 | Personal preferences and durable decisions                      | `.ax-code/memory.json`                        |
@@ -48,9 +48,23 @@ ax-code wiki doctor
 
 Generation options include `--model provider/model`, `--dir <relative>`, `--quiet`, `--skip-agents`, and `--force`. `--force` is intentionally required to replace generated content manually edited outside protected sections.
 
+## Repository directory
+
+From v7.22.2, the default output directory is `.ax-wiki/`. The hidden prefix
+identifies repository knowledge maintained by AX Code. It does not make files
+Git-ignored: choose whether to commit this knowledge or add `/.ax-wiki/` to your
+repository's `.gitignore`.
+
+Use `wiki.dir` in `ax-code.json` or `--dir docs/knowledge` to choose another
+relative directory; the CLI flag takes precedence. All generation, status,
+agent pointers, background maintenance and visualization use that selection.
+The compiler does not automatically detect, move or merge an older `ax-wiki/`
+directory. Package and generator names, `ax-wiki.config.json` and
+`ax-wiki.instructions.md` are unchanged.
+
 ## Generated contract
 
-AX Wiki writes Markdown pages and `ax-wiki/.manifest.json`. Each page has frontmatter containing:
+AX Wiki writes Markdown pages and `.ax-wiki/.manifest.json`. Each page has frontmatter containing:
 
 - `generated_by: ax-wiki`
 - a concise `summary`
@@ -93,7 +107,7 @@ Agents reach the wiki in three ways, from cheapest to most specific:
 
 1. **Prompt index.** When a healthy wiki exists, the session prompt carries a short `<repo_wiki>` block: the wiki location, a freshness label, and one line per page (path and a trimmed summary, about 750 tokens for the default 12 pages). The summaries only locate where to read; they are not proof.
 2. **`repo_wiki` tool.** A read-only tool with three operations: `index` (page cards with per-page freshness), `read` (one page plus its cited sources, which cited sources changed, and any frontmatter symbols not found in those sources), and `related` (pages for a symbol, body mention, or source path). It is available in the full and coding tool profiles and uses the `read` permission.
-3. **Generic file tools.** `read`, `glob`, and `grep` on `ax-wiki/` still work.
+3. **Generic file tools.** `read`, `glob`, and `grep` on `.ax-wiki/` still work.
 
 Prompt freshness is judged per page: a page is fresh while every source it cites still matches the manifest hash. An added or edited file that no page cites leaves the prompt label `fresh` and adds a note that the wiki does not cover it yet. A changed cited source marks the label `stale` and the prompt asks the agent to treat the wiki as navigation only. `ax-code wiki status` and `wiki lint` keep the stricter repo-wide verdict, where any added, removed, or edited eligible file is stale.
 
@@ -124,7 +138,7 @@ Configure the integration in project `ax-code.json`:
   "wiki": {
     "enabled": true,
     "auto": true,
-    "dir": "ax-wiki",
+    "dir": ".ax-wiki",
     "model": "openai/gpt-5-mini",
     "autoInjectAgents": true,
     "touchClaudeMd": true,

@@ -320,3 +320,13 @@ describe("readFilePrefix", () => {
     expect(await readFilePrefix(root, "a.ts", 0)).toBeUndefined()
   })
 })
+
+test("hidden output is excluded while an ordinary ax-wiki source tree remains discoverable", async () => {
+  const root = await fixture()
+  await mkdir(path.join(root, ".ax-wiki"))
+  await mkdir(path.join(root, "ax-wiki"))
+  await writeFile(path.join(root, ".ax-wiki", "quickstart.md"), "# Generated Wiki\n")
+  await writeFile(path.join(root, "ax-wiki", "source.ts"), "export const wikiSource = true\n")
+  const sources = await discoverSources({ root, wikiDir: ".ax-wiki" })
+  expect(sources.map((source) => source.path)).toEqual(["ax-wiki/source.ts"])
+})

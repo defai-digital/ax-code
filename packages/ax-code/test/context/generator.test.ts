@@ -57,7 +57,7 @@ describe("context generator", () => {
   test("includes knowledge routing for AX Wiki vs index", () => {
     const content = generate(baseInfo, { depth: "standard" })
     expect(content).toContain("## Knowledge routing")
-    expect(content).toContain("ax-wiki/")
+    expect(content).toContain("`.ax-wiki/quickstart.md`")
     expect(content).toContain("code_intelligence")
     expect(content).toContain("ax-code wiki")
   })

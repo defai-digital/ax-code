@@ -46,8 +46,8 @@ test("runtime snapshot is scoped, configured, read-only and excludes source byte
 test("missing, invalid and oversized artifacts give bounded errors without private paths", async () => {
   await using tmp = await tmpdir({ git: true })
   expect(await (await request(tmp.path)).json()).toMatchObject({ code: "missing" })
-  await mkdir(path.join(tmp.path, "ax-wiki"))
-  const file = path.join(tmp.path, "ax-wiki", ".manifest.json")
+  await mkdir(path.join(tmp.path, ".ax-wiki"))
+  const file = path.join(tmp.path, ".ax-wiki", ".manifest.json")
   for (const [text, code] of [
     ["{broken", "invalid"],
     ["x".repeat(4 * 1024 * 1024 + 1), "too_large"],

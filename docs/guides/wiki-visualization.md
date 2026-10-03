@@ -47,7 +47,7 @@ most 200 nodes and 500 relationships are drawn. Omitted counts stay visible.
 
 ```sh
 ax-code wiki viz --open
-ax-code wiki viz --directory /path/to/project --dir ax-wiki
+ax-code wiki viz --directory /path/to/project --dir .ax-wiki
 ax-code wiki viz --export ./wiki-evidence.html
 ```
 

@@ -6,6 +6,8 @@ import {
   AX_WIKI_PROTECTED_END,
   AX_WIKI_PROTECTED_START,
   buildAxWiki,
+  buildWikiCards,
+  ensureAgentsWikiPointers,
   emptyEvidenceBundle,
   findUngroundedSymbols,
   getPageFreshness,
@@ -57,6 +59,12 @@ describe("AX Wiki build lifecycle", () => {
     })
     expect(first.generatedPages).toHaveLength(5)
     expect(first.validation.ok).toBe(true)
+    expect(first.wikiDir).toBe(".ax-wiki")
+    await expect(readFile(path.join(root, "ax-wiki/.manifest.json"), "utf8")).rejects.toThrow()
+    expect(Object.keys(first.manifest.sources).some((file) => file.startsWith(".ax-wiki/"))).toBe(false)
+    expect(await getWikiStatus({ root })).toMatchObject({ wikiDir: ".ax-wiki", healthy: true })
+    expect(await buildWikiCards({ root })).toMatchObject({ wikiDir: ".ax-wiki" })
+    expect(await maybeRenderAxWikiProtocol(root)).toContain(".ax-wiki/quickstart.md")
     expect(await loadWikiManifest(root)).toBeDefined()
 
     const unchanged = await buildAxWiki({ root, action: "update", generator: generate })
@@ -65,13 +73,31 @@ describe("AX Wiki build lifecycle", () => {
     await writeFile(path.join(root, "packages/core/src/index.ts"), "export function coreValue() { return 2 }\n")
     const updated = await buildAxWiki({ root, action: "update", generator: generate })
     expect(updated.generatedPages).toEqual(["modules/core.md"])
+    await ensureAgentsWikiPointers(root, { touchClaudeMd: false })
+    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toContain("`.ax-wiki/quickstart.md`")
+  })
+
+  test("an explicit output directory overrides the hidden default throughout the lifecycle", async () => {
+    const root = await fixture()
+    const wikiDir = "docs/knowledge"
+    const first = await buildAxWiki({ root, wikiDir, action: "generate", generator: generator() })
+    expect(first.wikiDir).toBe(wikiDir)
+    expect(await loadWikiManifest(root, wikiDir)).toBeDefined()
+    expect(await loadWikiManifest(root)).toBeUndefined()
+    expect(await getWikiStatus({ root, wikiDir })).toMatchObject({ wikiDir, healthy: true })
+    expect(await getWikiStatus({ root })).toMatchObject({ wikiDir: ".ax-wiki", exists: false })
+    expect(await buildWikiCards({ root, wikiDir })).toMatchObject({ wikiDir })
+    expect(await maybeRenderAxWikiProtocol(root, { wikiDir })).toContain("docs/knowledge/quickstart.md")
+    await ensureAgentsWikiPointers(root, { wikiDir, touchClaudeMd: false })
+    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toContain("`docs/knowledge/quickstart.md`")
+    await expect(readFile(path.join(root, ".ax-wiki/.manifest.json"), "utf8")).rejects.toThrow()
   })
 
   test("preserves maintainer-owned sections and rejects unmanaged edits", async () => {
     const root = await fixture()
     const generate = generator()
     await buildAxWiki({ root, action: "generate", generator: generate })
-    const page = path.join(root, "ax-wiki/modules/core.md")
+    const page = path.join(root, ".ax-wiki/modules/core.md")
     const original = await readFile(page, "utf8")
     const protectedNotes = `${AX_WIKI_PROTECTED_START} maintainer-notes -->\nKeep this operational warning.\n${AX_WIKI_PROTECTED_END}`
     await writeFile(page, original.replace("\n## Sources", `\n\n${protectedNotes}\n\n## Sources`))
@@ -113,7 +139,7 @@ describe("AX Wiki build lifecycle", () => {
       symbols: [],
     })
     await expect(buildAxWiki({ root, action: "generate", generator: invalid })).rejects.toThrow("wiki.link_broken")
-    await expect(readFile(path.join(root, "ax-wiki/.manifest.json"), "utf8")).rejects.toThrow()
+    await expect(readFile(path.join(root, ".ax-wiki/.manifest.json"), "utf8")).rejects.toThrow()
   })
 
   test("lint detects source staleness independently of git HEAD", async () => {
@@ -268,7 +294,7 @@ describe("AX Wiki build lifecycle", () => {
     const outside = `${root}-outside-wiki`
     roots.push(outside)
     await mkdir(outside)
-    await symlink(outside, path.join(root, "ax-wiki"))
+    await symlink(outside, path.join(root, ".ax-wiki"))
     await expect(buildAxWiki({ root, action: "generate", generator: generator() })).rejects.toThrow(
       "symlinked output paths",
     )
@@ -311,7 +337,7 @@ describe("AX Wiki build lifecycle", () => {
   test("rejects a corrupt manifest instead of silently rebuilding over manual edits", async () => {
     const root = await fixture()
     await buildAxWiki({ root, action: "generate", generator: generator() })
-    await writeFile(path.join(root, "ax-wiki/.manifest.json"), "{corrupt-json")
+    await writeFile(path.join(root, ".ax-wiki/.manifest.json"), "{corrupt-json")
     await expect(buildAxWiki({ root, action: "update", generator: generator() })).rejects.toThrow(
       "manifest is not valid JSON",
     )
@@ -392,7 +418,7 @@ describe("background compilation boundaries", () => {
     const root = await fixture()
     const make = generator()
     await buildAxWiki({ root, action: "generate", generator: make })
-    const page = path.join(root, "ax-wiki", "quickstart.md")
+    const page = path.join(root, ".ax-wiki", "quickstart.md")
     const before = await readFile(page, "utf8")
     await writeFile(path.join(root, "packages/core/src/index.ts"), "export function coreValue() { return 2 }\n")
     let changed = false
@@ -432,9 +458,9 @@ describe("AX Wiki build input validation and default lock", () => {
 
   test("rejects a manifest with a structurally invalid shape", async () => {
     const root = await fixture()
-    await mkdir(path.join(root, "ax-wiki"), { recursive: true })
+    await mkdir(path.join(root, ".ax-wiki"), { recursive: true })
     await writeFile(
-      path.join(root, "ax-wiki/.manifest.json"),
+      path.join(root, ".ax-wiki/.manifest.json"),
       JSON.stringify({ schemaVersion: 1, generator: "ax-wiki", planHash: "x", sources: [], pages: {} }),
     )
     await expect(buildAxWiki({ root, action: "update", generator: generator() })).rejects.toThrow("invalid shape")
@@ -444,6 +470,6 @@ describe("AX Wiki build input validation and default lock", () => {
     const root = await fixture()
     await buildAxWiki({ root, action: "generate", generator: generator() })
     // The default lock is released after the write phase: no lockfile remains.
-    await expect(readFile(path.join(root, "ax-wiki/.build-lock"), "utf8")).rejects.toThrow()
+    await expect(readFile(path.join(root, ".ax-wiki/.build-lock"), "utf8")).rejects.toThrow()
   })
 })

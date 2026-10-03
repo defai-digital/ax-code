@@ -60,7 +60,11 @@ test("explicit requests share worktree root, join running builds and honor reado
       await WikiAutomatic.refresh("build")
       await begun
       expect(state.build).toHaveBeenCalledTimes(1)
-      expect(state.build.mock.calls[0][0]).toMatchObject({ root: tmp.path, includeGraphEvidence: false })
+      expect(state.build.mock.calls[0][0]).toMatchObject({
+        root: tmp.path,
+        dir: ".ax-wiki",
+        includeGraphEvidence: false,
+      })
       await WikiAutomatic.refresh("build")
       expect(state.build).toHaveBeenCalledTimes(1)
       expect(state.build.mock.calls[0][0].signal.aborted).toBe(false)
@@ -212,7 +216,7 @@ test("records a durable failure memory when a maintenance build fails", async ()
       await waitForBuildCalls(1)
       await vi.waitFor(
         async () => {
-          expect(await readWikiFailureMemory(tmp.path, "ax-wiki")).toMatchObject({
+          expect(await readWikiFailureMemory(tmp.path, ".ax-wiki")).toMatchObject({
             consecutiveFailures: 1,
             error: expect.stringContaining("deterministic failure"),
           })
@@ -222,7 +226,7 @@ test("records a durable failure memory when a maintenance build fails", async ()
     },
   })
 
-  const memory = await readWikiFailureMemory(tmp.path, "ax-wiki")
+  const memory = await readWikiFailureMemory(tmp.path, ".ax-wiki")
   expect(memory?.consecutiveFailures).toBe(1)
   expect(memory?.error).toContain("deterministic failure")
   expect(memory?.lastHead).toBeTruthy()
@@ -243,7 +247,7 @@ test("an explicit request still runs while a failure cooldown is active", async 
     fn: async () => {
       await WikiAutomatic.refresh("build")
       await waitForBuildCalls(1)
-      await vi.waitFor(async () => expect(await readWikiFailureMemory(tmp.path, "ax-wiki")).toBeTruthy(), {
+      await vi.waitFor(async () => expect(await readWikiFailureMemory(tmp.path, ".ax-wiki")).toBeTruthy(), {
         timeout: 15_000,
         interval: 25,
       })
@@ -251,12 +255,12 @@ test("an explicit request still runs while a failure cooldown is active", async 
       state.build.mockResolvedValueOnce(undefined)
       await WikiAutomatic.refresh("build")
       await waitForBuildCalls(2)
-      await vi.waitFor(async () => expect(await readWikiFailureMemory(tmp.path, "ax-wiki")).toBeUndefined(), {
+      await vi.waitFor(async () => expect(await readWikiFailureMemory(tmp.path, ".ax-wiki")).toBeUndefined(), {
         timeout: 15_000,
         interval: 25,
       })
     },
   })
   // A successful build clears the memory again.
-  expect(await readWikiFailureMemory(tmp.path, "ax-wiki")).toBeUndefined()
+  expect(await readWikiFailureMemory(tmp.path, ".ax-wiki")).toBeUndefined()
 })

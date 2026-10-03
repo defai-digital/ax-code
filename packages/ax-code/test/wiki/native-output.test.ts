@@ -87,7 +87,7 @@ test("accepts a complete fenced JSON page without another model call", async () 
   const result = await run(tmp.path, model)
   expect(result.generatedPages).toEqual(["quickstart.md"])
   expect(model.doStreamCalls).toHaveLength(1)
-  expect(await readFile(path.join(tmp.path, "ax-wiki/quickstart.md"), "utf8")).toContain(page.body.split("\n\n")[1])
+  expect(await readFile(path.join(tmp.path, ".ax-wiki/quickstart.md"), "utf8")).toContain(page.body.split("\n\n")[1])
 })
 
 test.each(["", '{"summary":"unfinished', "plain prose", JSON.stringify({ ...page, body: "too short" })])(
@@ -113,8 +113,8 @@ test("stops after two malformed responses without publishing partial artifacts",
   const model = new MockLanguageModelV3({ doStream: async () => response('{"body":"truncated', "length") })
   await expect(run(tmp.path, model)).rejects.toBeInstanceOf(NoObjectGeneratedError)
   expect(model.doStreamCalls).toHaveLength(2)
-  await expect(access(path.join(tmp.path, "ax-wiki/.manifest.json"))).rejects.toThrow()
-  await expect(access(path.join(tmp.path, "ax-wiki/quickstart.md"))).rejects.toThrow()
+  await expect(access(path.join(tmp.path, ".ax-wiki/.manifest.json"))).rejects.toThrow()
+  await expect(access(path.join(tmp.path, ".ax-wiki/quickstart.md"))).rejects.toThrow()
 })
 
 test("does not retry a stream transport failure", async () => {

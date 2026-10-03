@@ -20,7 +20,7 @@ describe("wiki failure memory", () => {
     const target = wikiFailureMemoryPath(root, "../outside")
     const relative = path.relative(root, target)
     expect(relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)).toBe(false)
-    expect(target).toBe(path.join(root, "ax-wiki", ".failure-memory.json"))
+    expect(target).toBe(path.join(root, ".ax-wiki", ".failure-memory.json"))
   })
 
   test("uses a capped cooldown ladder", () => {

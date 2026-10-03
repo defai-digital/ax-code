@@ -1,6 +1,6 @@
 import path from "node:path"
 
-export const AX_WIKI_DIR_DEFAULT = "ax-wiki"
+export const AX_WIKI_DIR_DEFAULT = ".ax-wiki"
 export const AX_WIKI_MANIFEST = ".manifest.json"
 export const AX_WIKI_CONFIG = "ax-wiki.config.json"
 export const AX_WIKI_INSTRUCTIONS = "ax-wiki.instructions.md"

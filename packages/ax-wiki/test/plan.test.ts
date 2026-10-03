@@ -20,7 +20,7 @@ describe("AX Wiki planning and paths", () => {
   })
 
   test("rejects unsafe wiki directories and supports recursive globs", () => {
-    expect(sanitizeWikiDir("../../outside")).toBe("ax-wiki")
+    expect(sanitizeWikiDir("../../outside")).toBe(".ax-wiki")
     expect(sanitizeWikiDir("docs/wiki")).toBe("docs/wiki")
     expect(globToRegExp("packages/**/src/*.ts").test("packages/core/src/api.ts")).toBe(true)
     expect(globToRegExp("packages/**/src/*.ts").test("packages/core/test/api.ts")).toBe(false)

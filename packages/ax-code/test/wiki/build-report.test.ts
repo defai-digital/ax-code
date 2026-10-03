@@ -44,7 +44,7 @@ describe("wiki build report", () => {
     const target = wikiBuildReportPath(root, "../outside")
     const relative = path.relative(root, target)
     expect(relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)).toBe(false)
-    expect(target).toBe(path.join(root, "ax-wiki", ".build-report.json"))
+    expect(target).toBe(path.join(root, ".ax-wiki", ".build-report.json"))
   })
 
   test("treats a missing report as absent", async () => {

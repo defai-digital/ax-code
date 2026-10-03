@@ -39,5 +39,5 @@ jobs:
           branch: chore/ax-wiki-update
           delete-branch: true
           add-paths: |
-            ax-wiki/**
+            .ax-wiki/**
             AGENTS.md

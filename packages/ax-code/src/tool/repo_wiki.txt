@@ -1,4 +1,4 @@
-Browse the repository's AX Wiki: a small, source-backed Markdown knowledge base under `ax-wiki/` that describes architecture, module responsibilities, workflows, and design intent.
+Browse the repository's AX Wiki: a small, source-backed Markdown knowledge base under `.ax-wiki/` by default (or the configured `wiki.dir`) that describes architecture, module responsibilities, workflows, and design intent.
 
 Use this tool to choose WHERE to read next. The wiki is a navigation map, not proof: every page records the exact source files it was compiled from, and those source files are the authority. Before you rely on any page claim (especially before editing), read the sources it lists. If a page and the code disagree, trust the code.
 

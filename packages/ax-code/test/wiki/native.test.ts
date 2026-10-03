@@ -211,7 +211,7 @@ async function runNativeSequence(
 
 async function readBuildReport(root: string): Promise<WikiBuildReport | undefined> {
   // The driver writes into the resolved wiki dir; tests exercise the default.
-  for (const dir of ["ax-wiki", "openwiki"]) {
+  for (const dir of [".ax-wiki", "openwiki"]) {
     const report = await readWikiBuildReport(root, dir)
     if (report) return report
   }

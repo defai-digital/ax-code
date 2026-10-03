@@ -1,3 +1,4 @@
+import { AX_WIKI_DIR_DEFAULT } from "@ax-code/ax-wiki"
 import { wikiProjectRoot } from "../../wiki/root"
 import type { Argv } from "yargs"
 import path from "node:path"
@@ -69,7 +70,7 @@ function printStatus(status: WikiStatus, json: boolean, report?: WikiBuildReport
 
 const dirOption = {
   type: "string" as const,
-  describe: "AX Wiki directory relative to project root (default: ax-wiki)",
+  describe: `AX Wiki directory relative to project root (default: ${AX_WIKI_DIR_DEFAULT})`,
 }
 
 const modelOption = {

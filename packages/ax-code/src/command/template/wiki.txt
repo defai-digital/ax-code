@@ -18,7 +18,7 @@ Parse $ARGUMENTS as an optional subcommand (case-insensitive):
 | ensure / ensure-agents | Run `ax-code wiki ensure-agents` |
 | generate / init | Run `ax-code wiki generate` |
 | update / refresh | Run `ax-code wiki update` |
-| otherwise | Read `ax-wiki/quickstart.md` or `.ax-code/wiki-cards.md`, drill into relevant pages, then answer |
+| otherwise | Read `.ax-wiki/quickstart.md` (or the configured `wiki.dir`) or `.ax-code/wiki-cards.md`, drill into relevant pages, then answer |
 
 Rules:
 

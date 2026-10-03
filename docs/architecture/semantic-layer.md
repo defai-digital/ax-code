@@ -98,12 +98,12 @@ This is the right surface when repeatability and lower latency matter more than 
 
 ## Related: AX Wiki
 
-A third, **optional** knowledge surface is the native semantic repo wiki under `ax-wiki/`, compiled by `ax-code wiki`. It is **not** part of the structural graph/LSP envelope contract above.
+A third, **optional** knowledge surface is the native semantic repo wiki under `.ax-wiki/`, compiled by `ax-code wiki`. It is **not** part of the structural graph/LSP envelope contract above.
 
 | Surface                     | Role                                            |
 | --------------------------- | ----------------------------------------------- |
 | `lsp` / `code_intelligence` | Structural precision (this document)            |
-| `ax-wiki/`                  | Source-backed architecture narrative for agents |
+| `.ax-wiki/`                 | Source-backed architecture narrative for agents |
 
 See [AX Wiki](../integrations/wiki.md) for CLI, routing, and non-goals. Wiki synthesis must not be treated as a substitute for callers/callees/refs.
 

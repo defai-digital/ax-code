@@ -949,7 +949,7 @@ export type Config = {
      */
     enabled?: boolean
     /**
-     * AX Wiki directory relative to project root. Default: ax-wiki.
+     * AX Wiki directory relative to project root. Default: .ax-wiki.
      */
     dir?: string
     /**

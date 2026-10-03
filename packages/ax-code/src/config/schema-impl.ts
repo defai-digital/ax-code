@@ -1328,7 +1328,7 @@ export const Info = z
           .describe(
             "When true (default), inject <repo_wiki> system protocol if the wiki directory exists. Set false to suppress.",
           ),
-        dir: z.string().optional().describe("AX Wiki directory relative to project root. Default: ax-wiki."),
+        dir: z.string().optional().describe("AX Wiki directory relative to project root. Default: .ax-wiki."),
         model: z
           .string()
           .optional()

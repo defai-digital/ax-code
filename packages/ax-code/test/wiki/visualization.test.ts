@@ -14,35 +14,35 @@ const manifest = {
   },
 }
 async function setup(root: string) {
-  await mkdir(path.join(root, "ax-wiki"))
-  await writeFile(path.join(root, "ax-wiki", ".manifest.json"), JSON.stringify(manifest))
+  await mkdir(path.join(root, ".ax-wiki"))
+  await writeFile(path.join(root, ".ax-wiki", ".manifest.json"), JSON.stringify(manifest))
 }
 
 describe("Wiki visualization snapshot", () => {
   test("is read-only, source-independent and gives content-bound identity", async () => {
     await using tmp = await tmpdir()
     await setup(tmp.path)
-    const before = await readFile(path.join(tmp.path, "ax-wiki", ".manifest.json"), "utf8")
+    const before = await readFile(path.join(tmp.path, ".ax-wiki", ".manifest.json"), "utf8")
     const graph = await WikiVisualization.snapshot(tmp.path)
     expect(graph.snapshot).toMatch(/^sha256:[a-f0-9]{64}$/)
     expect(graph.nodes.every((n) => n.freshness === "unknown")).toBe(true)
     expect(await WikiVisualization.snapshot(tmp.path)).toEqual(graph)
     await writeFile(
-      path.join(tmp.path, "ax-wiki", ".manifest.json"),
+      path.join(tmp.path, ".ax-wiki", ".manifest.json"),
       JSON.stringify({ pages: manifest.pages, generator: "ax-wiki", schemaVersion: 1 }),
     )
     expect((await WikiVisualization.snapshot(tmp.path)).snapshot).toBe(graph.snapshot)
     expect(JSON.stringify(graph)).not.toContain(tmp.path)
-    await writeFile(path.join(tmp.path, "ax-wiki", ".manifest.json"), before.replace('"Guide"', '"Changed"'))
+    await writeFile(path.join(tmp.path, ".ax-wiki", ".manifest.json"), before.replace('"Guide"', '"Changed"'))
     expect((await WikiVisualization.snapshot(tmp.path)).snapshot).not.toBe(graph.snapshot)
   })
   test("projects recorded summaries and symbol provenance from source excerpts", async () => {
     await using tmp = await tmpdir()
-    await mkdir(path.join(tmp.path, "ax-wiki"))
+    await mkdir(path.join(tmp.path, ".ax-wiki"))
     await mkdir(path.join(tmp.path, "src"))
     await writeFile(path.join(tmp.path, "src", "a.ts"), "export class Foo {}\n")
     await writeFile(
-      path.join(tmp.path, "ax-wiki", ".manifest.json"),
+      path.join(tmp.path, ".ax-wiki", ".manifest.json"),
       JSON.stringify({
         schemaVersion: 1,
         generator: "ax-wiki",
@@ -67,11 +67,11 @@ describe("Wiki visualization snapshot", () => {
   })
   test("serves a manifest at the generator's per-page symbol maximum", async () => {
     await using tmp = await tmpdir()
-    await mkdir(path.join(tmp.path, "ax-wiki"))
+    await mkdir(path.join(tmp.path, ".ax-wiki"))
     // The native generator accepts up to 80 symbols and 20 glosses per page.
     const symbols = Array.from({ length: 80 }, (_, i) => `symbol${String(i).padStart(2, "0")}`)
     await writeFile(
-      path.join(tmp.path, "ax-wiki", ".manifest.json"),
+      path.join(tmp.path, ".ax-wiki", ".manifest.json"),
       JSON.stringify({
         schemaVersion: 1,
         generator: "ax-wiki",
@@ -93,11 +93,11 @@ describe("Wiki visualization snapshot", () => {
   })
   test("projects inventoried symbols as contained nodes", async () => {
     await using tmp = await tmpdir()
-    await mkdir(path.join(tmp.path, "ax-wiki"))
+    await mkdir(path.join(tmp.path, ".ax-wiki"))
     await mkdir(path.join(tmp.path, "src"))
     await writeFile(path.join(tmp.path, "src", "a.ts"), "export class Foo {\n  bar() {\n    return 1\n  }\n}\n")
     await writeFile(
-      path.join(tmp.path, "ax-wiki", ".manifest.json"),
+      path.join(tmp.path, ".ax-wiki", ".manifest.json"),
       JSON.stringify({
         schemaVersion: 1,
         generator: "ax-wiki",
@@ -121,7 +121,7 @@ describe("Wiki visualization snapshot", () => {
   })
   test("projects resolved imports as uses edges between cited sources", async () => {
     await using tmp = await tmpdir()
-    await mkdir(path.join(tmp.path, "ax-wiki"))
+    await mkdir(path.join(tmp.path, ".ax-wiki"))
     await mkdir(path.join(tmp.path, "src"))
     await writeFile(
       path.join(tmp.path, "src", "a.ts"),
@@ -129,7 +129,7 @@ describe("Wiki visualization snapshot", () => {
     )
     await writeFile(path.join(tmp.path, "src", "b.ts"), "export const b = 1\n")
     await writeFile(
-      path.join(tmp.path, "ax-wiki", ".manifest.json"),
+      path.join(tmp.path, ".ax-wiki", ".manifest.json"),
       JSON.stringify({
         schemaVersion: 1,
         generator: "ax-wiki",
@@ -145,11 +145,11 @@ describe("Wiki visualization snapshot", () => {
   })
   test("projects recorded symbol glosses onto inventoried symbol nodes", async () => {
     await using tmp = await tmpdir()
-    await mkdir(path.join(tmp.path, "ax-wiki"))
+    await mkdir(path.join(tmp.path, ".ax-wiki"))
     await mkdir(path.join(tmp.path, "src"))
     await writeFile(path.join(tmp.path, "src", "a.ts"), "export class Foo {\n  bar() {\n    return 1\n  }\n}\n")
     await writeFile(
-      path.join(tmp.path, "ax-wiki", ".manifest.json"),
+      path.join(tmp.path, ".ax-wiki", ".manifest.json"),
       JSON.stringify({
         schemaVersion: 1,
         generator: "ax-wiki",
@@ -171,7 +171,7 @@ describe("Wiki visualization snapshot", () => {
     await using tmp = await tmpdir()
     await expect(WikiVisualization.snapshot(tmp.path)).rejects.toThrow(/No Wiki/)
     await setup(tmp.path)
-    const file = path.join(tmp.path, "ax-wiki", ".manifest.json")
+    const file = path.join(tmp.path, ".ax-wiki", ".manifest.json")
     await writeFile(file, "{")
     await expect(WikiVisualization.snapshot(tmp.path)).rejects.toThrow()
     await writeFile(file, " ".repeat(4 * 1024 * 1024 + 1))
@@ -180,7 +180,7 @@ describe("Wiki visualization snapshot", () => {
     await mkdir(path.join(tmp.path, "linked"))
     await symlink(file, path.join(tmp.path, "linked", ".manifest.json"))
     await expect(WikiVisualization.snapshot(tmp.path, "linked")).rejects.toThrow(/symlink/)
-    await symlink(path.join(tmp.path, "ax-wiki"), path.join(tmp.path, "alias"), "dir")
+    await symlink(path.join(tmp.path, ".ax-wiki"), path.join(tmp.path, "alias"), "dir")
     await expect(WikiVisualization.snapshot(tmp.path, "alias")).rejects.toThrow(/symlink/)
   })
   test("exports exclusively without replacing existing files or symlinks", async () => {

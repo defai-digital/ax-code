@@ -12,14 +12,14 @@ import {
 
 describe("AX Wiki path containment", () => {
   test("sanitizeWikiDir falls back for unsafe or empty input", () => {
-    expect(sanitizeWikiDir(undefined)).toBe("ax-wiki")
-    expect(sanitizeWikiDir("")).toBe("ax-wiki")
-    expect(sanitizeWikiDir("   ")).toBe("ax-wiki")
-    expect(sanitizeWikiDir("/etc/passwd")).toBe("ax-wiki")
-    expect(sanitizeWikiDir("C:/wiki")).toBe("ax-wiki")
-    expect(sanitizeWikiDir("../outside")).toBe("ax-wiki")
-    expect(sanitizeWikiDir("a/../b")).toBe("ax-wiki")
-    expect(sanitizeWikiDir(".")).toBe("ax-wiki")
+    expect(sanitizeWikiDir(undefined)).toBe(".ax-wiki")
+    expect(sanitizeWikiDir("")).toBe(".ax-wiki")
+    expect(sanitizeWikiDir("   ")).toBe(".ax-wiki")
+    expect(sanitizeWikiDir("/etc/passwd")).toBe(".ax-wiki")
+    expect(sanitizeWikiDir("C:/wiki")).toBe(".ax-wiki")
+    expect(sanitizeWikiDir("../outside")).toBe(".ax-wiki")
+    expect(sanitizeWikiDir("a/../b")).toBe(".ax-wiki")
+    expect(sanitizeWikiDir(".")).toBe(".ax-wiki")
     expect(sanitizeWikiDir("/abs", "custom")).toBe("custom")
   })
 
