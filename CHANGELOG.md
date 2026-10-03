@@ -6,6 +6,21 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.22.2] - 2026-10-03
+
+### Changed
+
+- Default repository Wiki output to `.ax-wiki/` from v7.22.2, with consistent generation, background maintenance, status, visualization and agent pointers. Explicit `wiki.dir` and `--dir` remain authoritative.
+- Publish SDK 2.5.59 with the updated Wiki configuration description.
+- Update native SQLite/RocksDB bindings and runtime/development dependency pins; retain the bounded brace-expansion guard in the vendored dependency.
+
+### Fixed
+
+- Bound chart tick generation for extreme numeric domains and invalid target counts, and honor empty label budgets.
+- Release the one-shot Sixel splash on terminal resize and resume ASCII rendering immediately.
+- Redact complete structured credential values, extensible Authorization headers and Digest parameters, prefixed/compound key names, URL userinfo and decoded query/fragment credentials while preserving public fields and command boundaries.
+- Keep malformed private-key and URI scans bounded; strip additional credential environment aliases and detect hyphenated provider keys, GitHub PATs and private-key headers in the staged secret scan.
+
 ## [7.22.1] - 2026-10-03
 
 ### Fixed
