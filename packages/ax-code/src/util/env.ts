@@ -13,8 +13,8 @@ export namespace Env {
   const WEBHOOK_NAME = /WEBHOOK/i
   const CREDENTIAL_URL_NAME = /(?:DATABASE|REDIS|AMQP|MONGODB|POSTGRES|MYSQL|ELASTIC|BROKER)_?(?:URL|URI)/i
   // Paths to files that themselves hold credentials.
-  const CREDENTIAL_FILE_NAMES = new Set(["KUBECONFIG"])
-  const CREDENTIAL_HELPER_NAMES = new Set(["SSH_AUTH_SOCK", "GIT_ASKPASS", "SUDO_ASKPASS"])
+  const CREDENTIAL_FILE_NAMES = new Set(["KUBECONFIG", "PGPASSFILE"])
+  const CREDENTIAL_HELPER_NAMES = new Set(["SSH_AUTH_SOCK", "GIT_ASKPASS", "SUDO_ASKPASS", "SSH_ASKPASS"])
   // Variables that rewrite process startup/load behavior. Never forward these
   // to untrusted child processes (MCP servers, shells, formatters, etc.).
   const PROCESS_INJECTION_NAMES = new Set([
@@ -109,18 +109,32 @@ export namespace Env {
   }
 
   export function isSensitiveName(name: string): boolean {
-    return SECRET_PATTERN.test(name)
+    // MySQL uses PWD for its password alias; plain PWD is a public directory.
+    return SECRET_PATTERN.test(name) || name.toUpperCase() === "MYSQL_PWD"
   }
 
   /**
-   * Whole-word credential key names, normalized. Stricter than a substring
-   * match on purpose: `keyboard`, `tokenCount` and `monkey` are not credentials,
+   * Credential key names, normalized. A credential term must end the entire
+   * field name: `keyboard`, `tokenCount` and `monkey` are not credentials,
    * and over-redacting makes records useless while looking safe. `auth`,
    * `bearer` and `cookie` are here because a header dump names them exactly that
    * way, and the `token`/`key`-suffixed spellings are what OAuth clients emit.
+   * ASCII prefixes (DB_PASSWORD, my_private_key, secretAccessKey) retain the
+   * credential meaning; public suffixes such as token_count remain public.
+   * The short PAT abbreviation needs a separator so compat stays public.
    */
-  const CREDENTIAL_KEY_NAME =
-    /^(?:token|secret|password|passwd|credential|credentials|authorization|auth|bearer|cookie|pat|webhook|api[_-]?key|x[_-]?api[_-]?key|private[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret)$/i
+  const CREDENTIAL_KEY_NAMES =
+    "(?:[a-z0-9_.-]*(?:token|secret|password|passwd|credential|credentials|authorization|auth|bearer|cookie|webhook|(?:secret|auth|token)[_.-]?key|api[_.-]?key|x[_.-]?api[_.-]?key|private[_.-]?key|access[_.-]?key|access[_.-]?token|refresh[_.-]?token|id[_.-]?token|client[_.-]?secret)|(?:[a-z0-9_.-]*[_.-])?pat)"
+  const CREDENTIAL_KEY_NAME = new RegExp(`^(?:${CREDENTIAL_KEY_NAMES})$`, "i")
+  const QUOTED_CREDENTIAL_FIELD = new RegExp(String.raw`(["'])(${CREDENTIAL_KEY_NAMES})\1\s*:\s*`, "gi")
+  const INLINE_CREDENTIAL_PREFIX = String.raw`(?<![a-z0-9_.-])(?!(?:(?:set-)?cookie|(?:proxy-)?authorization)\s*:)(${CREDENTIAL_KEY_NAMES})(?![a-z0-9_.-])\s*(?:=|:)\s*(?:(?:bearer|basic)\s+)?`
+  const INLINE_QUOTED_VALUE = String.raw`"(?:[^"\\\r\n]|\\.)*"|'(?:[^'\\\r\n]|\\.)*'`
+  // URL parameters stop at &, while an ordinary bare credential can contain
+  // ampersands. Match query prefixes first so public sibling parameters survive.
+  const INLINE_CREDENTIAL_VALUE = new RegExp(
+    String.raw`(?:([?&#])${INLINE_CREDENTIAL_PREFIX}(?:${INLINE_QUOTED_VALUE}|\[redacted\][^\s,;}\]&#]*|[^\s,;}\]&#]*)|${INLINE_CREDENTIAL_PREFIX}(?:${INLINE_QUOTED_VALUE}|\[redacted\][^\s,;}\]]*|[^\s,;}\]]+))`,
+    "gi",
+  )
 
   /**
    * True when a structured key names a credential, so the whole value behind it
@@ -136,21 +150,47 @@ export namespace Env {
     return PROCESS_INJECTION_NAMES.has(name)
   }
 
-  // Presigned URLs and webhook-style links often carry credentials in the
-  // query string rather than as userinfo. Treat common credential parameter
-  // names as sensitive so an innocently named variable cannot forward them.
-  // One name list feeds both the env filter below and the record redactor, so
-  // the two layers of the same boundary cannot drift apart.
-  const CREDENTIAL_QUERY_NAMES = "signature|credential|token|secret|password|passwd|api[_-]?key|access[_-]?key"
-  const CREDENTIAL_URL_QUERY = new RegExp(`(?:${CREDENTIAL_QUERY_NAMES})=`, "i")
-  // The value behind such a parameter, up to the next `&`, fragment or
-  // delimiter. The optional name prefix keeps vendor spellings working
-  // (`X-Amz-Signature`, `my-access-key`) because the name list is matched
-  // without word boundaries, exactly like the detector above.
-  const CREDENTIAL_QUERY_VALUE = new RegExp(
-    `([?&][A-Za-z0-9_.-]{0,32}?(?:${CREDENTIAL_QUERY_NAMES})=)[^&#\\s"'<>]*`,
-    "gi",
-  )
+  // URL signatures are bearer credentials (unlike public signature fields).
+  // All other query credentials share the complete field-name policy above.
+  const CREDENTIAL_URL_SIGNATURE = /^[a-z0-9_.-]*signature$/i
+  // Scan raw parameter names as well as values so percent-encoded names use
+  // the same decoded credential policy as URLSearchParams in the env filter.
+  const CREDENTIAL_QUERY_PREFIX = /([?&#])([^?&#\s"'<>]*?)=/g
+
+  function isCredentialQueryName(name: string): boolean {
+    return CREDENTIAL_URL_SIGNATURE.test(name) || isCredentialKeyName(name)
+  }
+
+  function decodedQueryName(name: string): string {
+    try {
+      return decodeURIComponent(name.replace(/\+/g, " "))
+    } catch {
+      // Malformed escapes retain their literal credential-name checks.
+      return name
+    }
+  }
+
+  function containsCredentialQuery(value: string): boolean {
+    for (const match of value.matchAll(CREDENTIAL_QUERY_PREFIX)) {
+      if (isCredentialQueryName(decodedQueryName(match[2]!))) return true
+    }
+    return false
+  }
+
+  function redactCredentialQueries(value: string): string {
+    const parts: string[] = []
+    let copied = 0
+    for (const match of value.matchAll(CREDENTIAL_QUERY_PREFIX)) {
+      if (match.index < copied) continue
+      if (!isCredentialQueryName(decodedQueryName(match[2]!))) continue
+      const start = match.index + match[0].length
+      let end = start
+      while (end < value.length && !/[&#\s"'<>]/.test(value[end]!)) end++
+      parts.push(value.slice(copied, start), "[redacted]")
+      copied = end
+    }
+    return parts.length === 0 ? value : parts.join("") + value.slice(copied)
+  }
 
   const COOKIE_ATTRIBUTES = new Set([
     "comment",
@@ -214,6 +254,54 @@ export namespace Env {
       }
       return newline
     }
+  }
+
+  // HTTP authentication schemes are extensible, and Digest uses multiple
+  // quoted parameters. Hide the whole logical header rather than one word.
+  // Enclosing record/shell quotes delimit it; parameter quotes do not.
+  function redactAuthorizationHeaders(value: string): string {
+    const header = /(?<![a-z0-9_.-])((?:proxy-)?authorization)\b[ \t]*:[ \t]*/gi
+    const parts: string[] = []
+    let cursor = 0
+    let quoteCursor = 0
+    let quoteState: "'" | '"' | undefined
+    let lineEnd = 0
+    for (const match of value.matchAll(header)) {
+      if (match.index < cursor) continue
+      quoteState = advanceQuoteState(value, quoteCursor, match.index, quoteState)
+      const start = match.index + match[0].length
+      // Reuse a logical line boundary across multiple shell-quoted headers,
+      // so repeated headers cannot rescan the same long suffix quadratically.
+      if (start >= lineEnd) lineEnd = headerValueEnd(value, start)
+      let end = lineEnd
+      if (quoteState) {
+        let previous = ""
+        for (let index = start; index < lineEnd; index++) {
+          const char = value[index]!
+          if (char === "\\") {
+            index++
+            continue
+          }
+          // An HTTP auth-param quoted value belongs to the credential even
+          // when its quotes match the enclosing log/shell quote, or contain
+          // an apostrophe. Skip the complete parameter before seeking a close.
+          if (char === '"' && previous === "=") {
+            index = Math.min(closingQuote(value, index + 1, '"'), lineEnd)
+            previous = '"'
+            continue
+          }
+          if (char === quoteState) {
+            end = index
+            break
+          }
+          if (char !== " " && char !== "\t") previous = char
+        }
+      }
+      parts.push(value.slice(cursor, match.index), `${match[1]}: [redacted]`)
+      cursor = end
+      quoteCursor = end
+    }
+    return parts.length === 0 ? value : parts.join("") + value.slice(cursor)
   }
 
   function redactCookiePairs(value: string, setCookie: boolean): string {
@@ -414,13 +502,66 @@ export namespace Env {
 
   function containsUrlCredential(value: string | undefined): boolean {
     if (!value || !value.includes("://")) return false
+    // Nested schemes (for example JDBC) hide userinfo in URL.pathname.
+    if (URL_USERINFO_VALUE.test(value)) return true
     try {
       const parsed = new URL(value)
       if (parsed.username.length > 0 || parsed.password.length > 0) return true
-      return CREDENTIAL_URL_QUERY.test(parsed.search)
+      if (containsCredentialQuery(parsed.search) || containsCredentialQuery(parsed.hash)) return true
+      for (const params of [parsed.searchParams, new URLSearchParams(parsed.hash.slice(1))]) {
+        for (const [name] of params) if (isCredentialQueryName(name)) return true
+      }
+      return false
     } catch {
       return false
     }
+  }
+
+  // Scan complete JSON-style values without parsing untrusted records or
+  // recursing. A missing quote/bracket consumes the remainder conservatively.
+  function credentialValueEnd(value: string, start: number): number {
+    const first = value[start]
+    const closers: string[] = []
+    let quote: string | undefined
+    if (first === '"' || first === "'") quote = first
+    else if (first === "{" || first === "[") closers.push(first === "{" ? "}" : "]")
+    else {
+      let end = start
+      while (end < value.length && !/[,}\]\r\n]/.test(value[end]!)) end++
+      return end
+    }
+    for (let i = start + 1; i < value.length; i++) {
+      const char = value[i]!
+      if (quote) {
+        if (char === "\\") i++
+        else if (char === quote) {
+          quote = undefined
+          if (closers.length === 0) return i + 1
+        }
+      } else if (char === '"' || char === "'") quote = char
+      else if (char === "{" || char === "[") {
+        if (closers.length >= 128) return value.length
+        closers.push(char === "{" ? "}" : "]")
+      } else if (char === "}" || char === "]") {
+        if (char !== closers.pop()) return value.length
+        if (closers.length === 0) return i + 1
+      }
+    }
+    return value.length
+  }
+
+  function redactQuotedCredentialFields(value: string): string {
+    const parts: string[] = []
+    let copied = 0
+    for (const match of value.matchAll(QUOTED_CREDENTIAL_FIELD)) {
+      if (match.index < copied) continue
+      const start = match.index + match[0].length
+      const end = credentialValueEnd(value, start)
+      const quote = value[start] === "'" ? "'" : '"'
+      parts.push(value.slice(copied, match.index), `${match[1]}${match[2]}${match[1]}:${quote}[redacted]${quote}`)
+      copied = end
+    }
+    return parts.length === 0 ? value : parts.join("") + value.slice(copied)
   }
 
   /**
@@ -430,15 +571,7 @@ export namespace Env {
    * durable record, so a secret is hidden in the same way wherever it lands.
    */
   export function redactSecrets(value: string): string {
-    const jsonRedacted = value.replace(
-      // The value class excludes a bare backslash and consumes escape pairs as
-      // a unit: `[^"'\r\n]*` treated the quote of an escaped `\"` as the
-      // closing delimiter, so `{"password":"one\"two"}` became
-      // `{"password":"[redacted]"two"}` — a leaked tail and malformed JSON.
-      /(["'])(token|secret|password|passwd|credential|authorization|cookie|api[_-]?key)\1\s*:\s*(["'])(?:\\.|[^"'\r\n\\])*\3/gi,
-      (_match, quote: string, key: string, valueQuote: string) =>
-        `${quote}${key}${quote}:${valueQuote}[redacted]${valueQuote}`,
-    )
+    const jsonRedacted = redactQuotedCredentialFields(value)
     const fieldsRedacted = jsonRedacted.replace(
       // Basic alongside bearer: Authorization: Basic <base64> left the encoded
       // credential behind. Cookie headers use the dedicated pair parser below
@@ -457,8 +590,9 @@ export namespace Env {
       // Quoted values are consumed with their quotes: a bare run stops at the
       // first space, so `--password="hunter2 extra"` used to leave ` extra"`
       // behind — the tail of a quoted credential stayed in the record.
-      /\b(token|secret|password|passwd|credential|authorization|cookie(?!\s*:)|api[_-]?key)\b\s*(?:=|:)\s*(?:(?:bearer|basic)\s+)?(?:"(?:[^"\\\r\n]|\\.)*"|'(?:[^'\\\r\n]|\\.)*'|\[redacted\][^\s,;}\]]*|[^\s,;}\]]+)/gi,
-      (_match, key: string) => `${key}=[redacted]`,
+      INLINE_CREDENTIAL_VALUE,
+      (_match, query: string | undefined, queryKey: string | undefined, key: string | undefined) =>
+        `${query ?? ""}${queryKey ?? key}=[redacted]`,
     )
     // Any RFC 3986 scheme, not just http(s): connection strings such as
     // `postgres://`, `redis://`, `mongodb+srv://`, and `amqp://` carry
@@ -466,22 +600,17 @@ export namespace Env {
     // assignment for `redactInlineEnvAssignments` to catch. The username may be
     // empty (`redis://:password@host` is a documented form). The sibling
     // `URL_USERINFO_VALUE` already accepts every scheme for assignments.
-    return (
-      redactCookieFlagValues(redactCookieHeaders(fieldsRedacted))
-        .replace(
-          /\b([a-z][a-z0-9+.-]*:\/\/)([^\s/:@]*):([^\s/@]+)@/gi,
-          (_match, scheme: string, username: string) => `${scheme}${username}:[redacted]@`,
-        )
-        .replace(CREDENTIAL_QUERY_VALUE, "$1[redacted]")
-        .replace(PRIVATE_KEY_BLOCK, "[redacted private key]")
-        // A truncated key dump (`head -c`, a size-capped tool output, a record cut
-        // mid-write) has no END marker, so the paired pattern above never matches
-        // and the base64 body survived. Everything after an unpaired header is key
-        // material, so redact the remainder. Idempotent: the placeholder carries
-        // no BEGIN marker.
-        .replace(UNPAIRED_PRIVATE_KEY_BLOCK, "[redacted private key]")
-        .replace(SECRET_VALUE, "[redacted secret]")
-    )
+    // Require the start of a scheme token, so a long hyphenated public word
+    // cannot trigger another suffix scan at every word boundary.
+    const textRedacted = redactCookieFlagValues(redactCookieHeaders(redactAuthorizationHeaders(fieldsRedacted)))
+      .replace(
+        /(?<![a-z0-9+.-])([a-z][a-z0-9+.-]*:\/\/)([^\s/:@]*):([^\s/@]+)@/gi,
+        (_match, scheme: string, username: string) => `${scheme}${username}:[redacted]@`,
+      )
+      .replace(/(?<![a-z0-9+.-])([a-z][a-z0-9+.-]*:\/\/)([^\s/:@?#]+)@/gi, (match, scheme: string) =>
+        /^(?:ssh|git\+ssh):\/\/$/i.test(scheme) ? match : `${scheme}[redacted]@`,
+      )
+    return redactPrivateKeys(redactCredentialQueries(textRedacted)).replace(SECRET_VALUE, "[redacted secret]")
   }
 
   /**
@@ -492,10 +621,29 @@ export namespace Env {
    * redacted here rather than in the log sink so every durable record (persisted
    * tool input, session evidence, goal check output) loses them too.
    */
-  const PRIVATE_KEY_BLOCK = /-----BEGIN[^-]*PRIVATE KEY-----[\s\S]*?-----END[^-]*PRIVATE KEY-----/g
-  const UNPAIRED_PRIVATE_KEY_BLOCK = /-----BEGIN[^-]*PRIVATE KEY-----[\s\S]*/g
+  const PRIVATE_KEY_BEGIN = /-----BEGIN[^-]*PRIVATE KEY-----/g
+  const PRIVATE_KEY_END = /-----END[^-]*PRIVATE KEY-----/g
+
+  function redactPrivateKeys(value: string): string {
+    const parts: string[] = []
+    let copied = 0
+    for (const match of value.matchAll(PRIVATE_KEY_BEGIN)) {
+      // A fused footer/header can share its dashes and straddle the
+      // consumed boundary. Skip only headers hidden in their entirety.
+      if (match.index + match[0].length <= copied) continue
+      PRIVATE_KEY_END.lastIndex = match.index + match[0].length
+      const end = PRIVATE_KEY_END.exec(value)
+      parts.push(value.slice(copied, match.index), "[redacted private key]")
+      // No END marker: hide the remainder once, rather than retrying a paired
+      // regex at every later BEGIN marker and rescanning the same suffix.
+      if (!end) return parts.join("")
+      copied = end.index + end[0].length
+    }
+    return parts.length === 0 ? value : parts.join("") + value.slice(copied)
+  }
+
   const SECRET_VALUE =
-    /(?:sk-[a-zA-Z0-9]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{20,}|xoxb-[0-9]{10,}-[a-zA-Z0-9]{24,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})/g
+    /(?:sk-[a-zA-Z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{20,}|xoxb-[0-9]{10,}-[a-zA-Z0-9]{24,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})/g
 
   /**
    * Full redaction for a string that will be persisted, shown, or recorded:
@@ -517,7 +665,7 @@ export namespace Env {
   // Any assigned value carrying credentials as URL userinfo
   // (scheme://user:pass@…) is redacted even when the variable name looks
   // innocuous (e.g. FOO=postgres://u:pw@host/db).
-  const URL_USERINFO_VALUE = /^[a-z][a-z0-9+.-]*:\/\/[^/\s]*@/
+  const URL_USERINFO_VALUE = /(?<![a-z0-9+.-])[a-z][a-z0-9+.-]*:\/\/[^/\s?#]*@/i
 
   // Read one literal shell word, including concatenated quoted segments and
   // escaped separators. This does not evaluate shell expansions. Unclosed

@@ -94,6 +94,7 @@ export function DigitalCode(props: {
   let splash: ReturnType<typeof sixelSplashPlayer> | undefined
   let splashFailed = false
   let tickCount = 0
+  let splashViewport: { width: number; height: number } | undefined
   let finished = false
   const writePixels = (data: string) => {
     // Frame failures must reach the caller so it can switch to text. Only
@@ -155,6 +156,12 @@ export function DigitalCode(props: {
     () => {
       if (finished) return
       const size = dimensions()
+      if (splash && splashViewport && (size.width !== splashViewport.width || size.height !== splashViewport.height)) {
+        // Layout repaint erases Sixel cells. Drop the one-shot raster and let
+        // resized ASCII animate for the rest of this overlay.
+        clearSplash()
+        splashFailed = true
+      }
       state = tickDigitalCode(state, size)
       tickCount++
       const now = performance.now()
@@ -208,6 +215,7 @@ export function DigitalCode(props: {
       if (splashSupported) {
         try {
           splash ??= sixelSplashPlayer(writeSplash)
+          splashViewport = { width: size.width, height: size.height }
           splash.draw({
             width: pixelWidth,
             height: pixelHeight,

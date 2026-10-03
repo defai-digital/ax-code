@@ -1,3 +1,5 @@
+import { spawnSync } from "node:child_process"
+import { fileURLToPath } from "node:url"
 import { describe, expect, test } from "vitest"
 import { Env } from "../../src/util/env"
 
@@ -246,7 +248,7 @@ describe("Env.sanitize", () => {
   })
 
   test("redacts authorization headers, JSON secrets, and URL credentials", () => {
-    expect(Env.redactSecrets("Authorization: Bearer abc123")).toBe("Authorization=[redacted]")
+    expect(Env.redactSecrets("Authorization: Bearer abc123")).toBe("Authorization: [redacted]")
     expect(Env.redactSecrets('{"token":"abc123","safe":"yes"}')).toBe('{"token":"[redacted]","safe":"yes"}')
     expect(Env.redactSecrets("https://alice:secret@example.com/path")).toBe("https://alice:[redacted]@example.com/path")
   })
@@ -268,7 +270,7 @@ describe("Env.sanitize", () => {
 
   test("redacts Authorization Basic credentials and leaves look-alikes intact", () => {
     // The field pattern used to stop after the space, leaving the base64 body.
-    expect(Env.redactSecrets("Authorization: Basic dXNlcjpwYXNzd29yZA==")).toBe("Authorization=[redacted]")
+    expect(Env.redactSecrets("Authorization: Basic dXNlcjpwYXNzd29yZA==")).toBe("Authorization: [redacted]")
     // Cookie pair values are hidden while Set-Cookie attributes remain useful.
     expect(Env.redactSecrets("Cookie: session=abc123")).toBe("Cookie: session=[redacted]")
     expect(Env.redactSecrets("Set-Cookie: sid=xyz; Path=/")).toBe("Set-Cookie: sid=[redacted]; Path=/")
@@ -448,7 +450,7 @@ describe("Env.sanitize", () => {
     expect(Env.redactForRecord("TOKEN=abc123")).toBe("TOKEN=[redacted]")
     // Header, flag, and URI credentials are covered by the same call.
     expect(Env.redactForRecord('curl -H "Authorization: Bearer sk-x" https://api')).toContain(
-      "Authorization=[redacted]",
+      "Authorization: [redacted]",
     )
     expect(Env.redactForRecord("mysql --password=supersecret -e 'select 1'")).toContain("password=[redacted]")
     expect(Env.redactForRecord("curl 'redis://:hunter2@cache:6379'")).not.toContain("hunter2")
@@ -596,4 +598,340 @@ describe("Env.sanitize", () => {
       else process.env.MINIMAX_API_KEY = originalMiniMax
     }
   })
+})
+
+describe("record credential coverage", () => {
+  test.each(["sk-proj-", "sk-ant-api03-"])("redacts complete hyphenated provider keys: %s", (prefix) => {
+    const value = prefix + "A".repeat(24) + "-" + "B".repeat(24) + "_" + "C".repeat(24)
+    expect(Env.redactForRecord(`Provider rejected ${value}. Retry later.`)).toBe(
+      "Provider rejected [redacted secret]. Retry later.",
+    )
+  })
+  test.each([
+    "access_token",
+    "refresh_token",
+    "id_token",
+    "client_secret",
+    "auth",
+    "bearer",
+    "credentials",
+    "private_key",
+    "x-api-key",
+    "pat",
+    "webhook",
+  ])("redacts structured credential spelling %s in record strings", (key) => {
+    expect(Env.isCredentialKeyName(key)).toBe(true)
+    expect(Env.redactForRecord(JSON.stringify({ [key]: "opaque-value", tokenCount: 12 }))).not.toContain("opaque-value")
+    expect(Env.redactForRecord(`${key}: opaque-value`)).not.toContain("opaque-value")
+    expect(Env.redactForRecord('{"tokenCount":12,"keyboard":"safe"}')).toBe('{"tokenCount":12,"keyboard":"safe"}')
+  })
+  test("quoted secrets can contain the opposite quote", () => {
+    expect(Env.redactForRecord(JSON.stringify({ password: "one'two" }))).toBe('{"password":"[redacted]"}')
+  })
+})
+
+test.each([
+  { credentials: { user: "alice", pass: "opaque-value" }, keep: true },
+  { password: ["opaque-value", { nested: "another-value" }], keep: true },
+  { password: 123456, keep: true },
+  { auth: [{ nested: { text: 'brackets } ] and "quotes"' } }], keep: true },
+])("redacts complete non-string JSON credential values %#", (record) => {
+  const result = Env.redactForRecord(JSON.stringify(record))
+  const key = Object.keys(record)[0]!
+  expect(result).toBe(JSON.stringify({ [key]: "[redacted]", keep: true }))
+  expect(Env.redactForRecord(result)).toBe(result)
+})
+
+test("redacts a truncated quoted JSON credential through the end of the record", () => {
+  expect(Env.redactForRecord('{"password":"opaque-value')).not.toContain("opaque-value")
+})
+
+test.each(["https://opaque-value@example.com/path", "redis://opaque-value@localhost:6379/0"])(
+  "redacts username-only URI credentials %s",
+  (url) => {
+    const result = Env.redactForRecord(url)
+    expect(result).not.toContain("opaque-value")
+    expect(result).toContain("[redacted]@")
+    expect(Env.redactForRecord(result)).toBe(result)
+  },
+)
+
+test("URL fragment credentials are excluded from child env and redacted in records", () => {
+  const url = "https://example.com/callback#access_token=opaque-value&state=public"
+  expect(Env.sanitize({ CALLBACK: url }).CALLBACK).toBeUndefined()
+  const result = Env.redactForRecord(url)
+  expect(result).not.toContain("opaque-value")
+  expect(result).toContain("state=public")
+  expect(Env.sanitize({ CALLBACK: "https://example.com/#section=public" }).CALLBACK).toBe(
+    "https://example.com/#section=public",
+  )
+})
+
+test("many orphan private-key markers finish in bounded time", () => {
+  const source = fileURLToPath(new URL("../../src/util/env.ts", import.meta.url))
+  const result = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      "tsx",
+      "--input-type=module",
+      "-e",
+      `
+    import { Env } from ${JSON.stringify(source)};
+    const header = "-----" + "BEGIN PRIVATE KEY" + "-----";
+    const text = (header + "\\n" + "A".repeat(32) + "\\n").repeat(64000);
+    console.log(Env.redactForRecord(text));
+  `,
+    ],
+    { encoding: "utf8", timeout: 3000, maxBuffer: 20000 },
+  )
+  expect(result.error).toBeUndefined()
+  expect(result.status).toBe(0)
+  expect(result.stdout.trim()).toBe("[redacted private key]")
+})
+
+test.each(["MYSQL_PWD", "PGPASSFILE", "SSH_ASKPASS"])("strips credential environment alias %s", (name) => {
+  expect(Env.sanitize({ [name]: "opaque-credential", PWD: "/workspace", PATH: "/bin" })).toEqual({
+    PWD: "/workspace",
+    PATH: "/bin",
+  })
+})
+
+test("redacts fused private-key blocks that share their separator dashes", () => {
+  const header = "-----" + "BEGIN PRIVATE KEY" + "-----"
+  const footer = "-----END PRIVATE KEY-----"
+  const input = `public\n${header}\nFIRST_BODY\n${footer}${header.slice(5)}\nSECOND_BODY\n${footer}\npublic tail`
+  const result = Env.redactForRecord(input)
+  expect(result).not.toContain("FIRST_BODY")
+  expect(result).not.toContain("SECOND_BODY")
+  expect(result).toContain("public tail")
+})
+
+test.each(["jdbc:postgresql://app:opaque@db.test/prod", "jdbc:mysql://app:opaque@db.test/prod"])(
+  "strips nested URI userinfo: %s",
+  (url) => {
+    expect(Env.sanitize({ APP_DSN: url }).APP_DSN).toBeUndefined()
+    expect(Env.redactInlineEnvAssignments(`APP_DSN=${url} run`)).toBe("APP_DSN=[redacted] run")
+  },
+)
+
+test.each(["password=first&second", "client_secret: first&second"])(
+  "redacts complete bare credentials containing ampersands: %s",
+  (input) => {
+    const result = Env.redactSecrets(input)
+    expect(result).not.toContain("first")
+    expect(result).not.toContain("second")
+  },
+)
+
+test("preserves public query siblings while redacting multiple credential parameters", () => {
+  expect(Env.redactSecrets("https://example.test/?vendor-password=first&auth=second&format=raw")).toBe(
+    "https://example.test/?vendor-password=[redacted]&auth=[redacted]&format=raw",
+  )
+})
+
+test("preserves public query siblings after empty credential parameters", () => {
+  expect(Env.redactSecrets("https://example.test/?password=&auth=&format=raw")).toBe(
+    "https://example.test/?password=[redacted]&auth=[redacted]&format=raw",
+  )
+})
+
+test.each([
+  "my_cookie: opaque-value",
+  "db_password: opaque-value",
+  '{"db_password":"opaque-value"}',
+  '{"my_private_key":["opaque-value"]}',
+])("redacts credential keys with separator prefixes: %s", (input) => {
+  expect(Env.redactForRecord(input)).not.toContain("opaque-value")
+})
+
+test("shares prefixed credential names with structured redaction without matching public suffixes", () => {
+  for (const name of ["DB_PASSWORD", "my_private_key", "bearer_token", "db.password"]) {
+    expect(Env.isCredentialKeyName(name)).toBe(true)
+  }
+  for (const name of ["keyboard", "monkey", "tokenCount", "db_password_length", "my_token_count"]) {
+    expect(Env.isCredentialKeyName(name)).toBe(false)
+  }
+})
+
+test("long public scheme-like words finish redaction in bounded time", () => {
+  const moduleURL = new URL("../../src/util/env.ts", import.meta.url).href
+  const result = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      "tsx",
+      "--input-type=module",
+      "-e",
+      `
+    import { Env } from ${JSON.stringify(moduleURL)};
+    const value = "a-".repeat(64000) + "public=value";
+    if (Env.redactForRecord(value) !== value) throw new Error("public value changed");
+    if (Env.redactInlineEnvAssignments("REF=" + value + " run") !== "REF=" + value + " run") throw new Error("public assignment changed");
+    const separators = "?".repeat(64000) + "public=value";
+    if (Env.redactForRecord(separators) !== separators) throw new Error("public separators changed");
+    console.log("preserved");
+  `,
+    ],
+    { cwd: fileURLToPath(new URL("../../../../", import.meta.url)), encoding: "utf8", timeout: 3000 },
+  )
+  expect(result.error).toBeUndefined()
+  expect(result.status).toBe(0)
+  expect(result.stdout.trim()).toBe("preserved")
+})
+
+test("preserves the public fragment after a query credential", () => {
+  expect(Env.redactSecrets("https://example.test/?token=opaque#section")).toBe(
+    "https://example.test/?token=[redacted]#section",
+  )
+})
+
+test("redacts hash characters inside an ordinary bare credential value", () => {
+  expect(Env.redactSecrets("token=first#second")).toBe("token=[redacted]")
+})
+
+test.each(["api.key", "private.key", "x.api.key"])("redacts dot-separated compound credential names: %s", (name) => {
+  expect(Env.isCredentialKeyName(name)).toBe(true)
+  expect(Env.redactForRecord(`${name}=opaque-value`)).toBe(`${name}=[redacted]`)
+  expect(Env.redactForRecord(JSON.stringify({ [name]: "opaque-value", public: "keep" }))).toBe(
+    JSON.stringify({ [name]: "[redacted]", public: "keep" }),
+  )
+})
+
+test.each([
+  "auth",
+  "bearer",
+  "private.key",
+  "api.key",
+  "client_secret",
+  "refresh_token",
+  "%74oken",
+  "api%2Ekey",
+  "access.key",
+  "access%2Ekey",
+])("shares decoded credential query names across env and record boundaries: %s", (name) => {
+  for (const separator of ["?", "#"]) {
+    const url = `https://example.test/${separator}${name}=opaque-value&format=raw`
+    expect(Env.sanitize({ CALLBACK: url })).toEqual({})
+    expect(Env.redactForRecord(url)).toBe(`https://example.test/${separator}${name}=[redacted]&format=raw`)
+  }
+})
+
+test("redacts nested raw query credentials inside a public parameter value", () => {
+  const url = "https://example.test/?redirect=https://inner.test/?token=opaque&format=raw"
+  expect(Env.redactForRecord(url)).toBe(
+    "https://example.test/?redirect=https://inner.test/?token=[redacted]&format=raw",
+  )
+  expect(Env.sanitize({ CALLBACK: url })).toEqual({})
+})
+
+test.each(["access_key", "access.key", "secret_access_key"])(
+  "redacts access-key fields consistently with URL credentials: %s",
+  (name) => {
+    expect(Env.isCredentialKeyName(name)).toBe(true)
+    expect(Env.redactForRecord(JSON.stringify({ [name]: "opaque-value", public: "keep" }))).toBe(
+      JSON.stringify({ [name]: "[redacted]", public: "keep" }),
+    )
+  },
+)
+
+test.each(["mytoken", "secretAccessKey", "myApiKey"])(
+  "shares camelCase and undelimited credential names across boundaries: %s",
+  (name) => {
+    expect(Env.isCredentialKeyName(name)).toBe(true)
+    expect(Env.redactForRecord(JSON.stringify({ [name]: "opaque-value", public: "keep" }))).toBe(
+      JSON.stringify({ [name]: "[redacted]", public: "keep" }),
+    )
+    const url = `https://example.test/?${name}=opaque-value&format=raw`
+    expect(Env.sanitize({ CALLBACK: url })).toEqual({})
+    expect(Env.redactForRecord(url)).toBe(`https://example.test/?${name}=[redacted]&format=raw`)
+  },
+)
+
+test("keeps compatibility fields public while redacting delimited personal access tokens", () => {
+  expect(Env.isCredentialKeyName("compat")).toBe(false)
+  expect(Env.isCredentialKeyName("my_pat")).toBe(true)
+  expect(Env.redactForRecord('{"compat":"legacy","my_pat":"opaque-value"}')).toBe(
+    '{"compat":"legacy","my_pat":"[redacted]"}',
+  )
+  const url = "https://example.test/?compat=legacy"
+  expect(Env.redactForRecord(url)).toBe(url)
+  expect(Env.sanitize({ CALLBACK: url })).toEqual({ CALLBACK: url })
+})
+
+test.each(["secretKey", "SECRET_KEY", "my_secret_key", "AUTH_KEY", "authKey", "token.key"])(
+  "hides credential key suffix %s across structured records and URL parameters",
+  (key) => {
+    expect(Env.isCredentialKeyName(key)).toBe(true)
+    expect(Env.redactForRecord(JSON.stringify({ [key]: "opaque-value", public: "keep" }))).toBe(
+      JSON.stringify({ [key]: "[redacted]", public: "keep" }),
+    )
+    const url = `https://example.test/?${key}=opaque-value&public=keep`
+    expect(Env.redactForRecord(url)).toBe(`https://example.test/?${key}=[redacted]&public=keep`)
+    expect(Env.sanitize({ CALLBACK: url })).toEqual({})
+  },
+)
+
+test.each([
+  "Token opaque-value",
+  "ApiKey opaque-value",
+  'Digest username="alice", nonce="opaque-value", response="opaque-proof"',
+])("hides the complete Authorization header with credentials %s", (credentials) => {
+  expect(Env.redactForRecord(`Authorization: ${credentials}\r\nAccept: application/json`)).toBe(
+    "Authorization: [redacted]\r\nAccept: application/json",
+  )
+  expect(Env.redactForRecord(`curl -H 'Authorization: ${credentials}' https://example.test`)).toBe(
+    "curl -H 'Authorization: [redacted]' https://example.test",
+  )
+  const redacted = Env.redactForRecord(`curl -H 'Authorization: ${credentials}' https://example.test`)
+  expect(Env.redactForRecord(redacted)).toBe(redacted)
+})
+
+test("hides folded and proxy authentication headers while preserving enclosing record boundaries", () => {
+  expect(Env.redactForRecord("Proxy-Authorization: Token opaque-value\r\n continued-secret\r\nAccept: json")).toBe(
+    "Proxy-Authorization: [redacted]\r\nAccept: json",
+  )
+  expect(Env.redactForRecord('level=error msg="Authorization: Token opaque-value" public=keep')).toBe(
+    'level=error msg="Authorization: [redacted]" public=keep',
+  )
+})
+
+test("many quoted authentication headers finish within a bounded process lifetime", () => {
+  const moduleURL = new URL("../../src/util/env.ts", import.meta.url).href
+  const result = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      "tsx",
+      "--input-type=module",
+      "-e",
+      `
+      import { Env } from ${JSON.stringify(moduleURL)};
+      const value = "curl " + "-H 'Authorization: Token opaque-value' ".repeat(16000) + "https://example.test";
+      const redacted = Env.redactForRecord(value);
+      if (redacted.includes("opaque-value")) throw new Error("credential survived");
+      if (!redacted.endsWith("https://example.test")) throw new Error("public URL changed");
+      if (Env.redactForRecord(redacted) !== redacted) throw new Error("redaction was not idempotent");
+      console.log("preserved");
+    `,
+    ],
+    { cwd: fileURLToPath(new URL("../../../../", import.meta.url)), encoding: "utf8", timeout: 3000 },
+  )
+  expect(result.error).toBeUndefined()
+  expect(result.status).toBe(0)
+  expect(result.stdout.trim()).toBe("preserved")
+})
+
+test.each([
+  'curl -H "Authorization: Digest username="alice", nonce="opaque-value", response="opaque-proof"" https://example.test',
+  'level=error msg="Authorization: Digest username="alice", nonce="opaque-value", response="opaque-proof"" public=keep',
+  `curl -H 'Authorization: Digest username="O'Brien", nonce="opaque-value"' https://example.test`,
+])("redacts nested authentication parameter quotes without exposing later parameters: %s", (value) => {
+  const redacted = Env.redactForRecord(value)
+  expect(redacted).not.toContain("opaque-value")
+  expect(redacted).not.toContain("opaque-proof")
+  expect(redacted).not.toContain("alice")
+  expect(redacted).not.toContain("O'Brien")
+  expect(redacted).toContain(value.endsWith("public=keep") ? "public=keep" : "https://example.test")
+  expect(Env.redactForRecord(redacted)).toBe(redacted)
 })

@@ -2,7 +2,7 @@
 
 # Secret scanning — abort commit if staged files contain API keys or tokens.
 # Patterns cover common AI provider keys, AWS, GCP, and generic token formats.
-SECRET_VALUE_PATTERNS='(sk-[a-zA-Z0-9]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|ghp_[a-zA-Z0-9]{36}|xoxb-[0-9]{10,}-[a-zA-Z0-9]{24,}|-----BEGIN (RSA |EC |DSA )?PRIVATE KEY-----)'
+SECRET_VALUE_PATTERNS='(sk-[a-zA-Z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{20,}|xoxb-[0-9]{10,}-[a-zA-Z0-9]{24,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)'
 SECRET_ASSIGNMENT_PATTERNS='(ANTHROPIC_API_KEY|OPENAI_API_KEY|GOOGLE_API_KEY)[[:space:]]*[=:][[:space:]]*["'\'']?[a-zA-Z0-9_/+=.-]{20,}'
 if git diff --cached --diff-filter=d -U0 |
   grep -E '^\+' |

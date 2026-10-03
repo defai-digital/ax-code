@@ -8,6 +8,8 @@ vi.mock("solid-js", async () => {
 })
 const mocks = vi.hoisted(() => ({
   write: vi.fn(),
+  rows: vi.fn(),
+  dimensions: { width: 10, height: 5 },
   tick: undefined as undefined | (() => void),
   renderer: undefined as unknown as {
     keyInput: InternalKeyHandler
@@ -24,7 +26,7 @@ vi.mock("ax-tui", async (original) => ({
 }))
 vi.mock("ax-tui/solid", () => ({
   useRenderer: () => mocks.renderer,
-  useTerminalDimensions: () => () => ({ width: 10, height: 5 }),
+  useTerminalDimensions: () => () => mocks.dimensions,
   useKeyboard: (handler: (event: KeyEvent) => void) => {
     mocks.renderer.keyInput.on("keypress", handler)
     onCleanup(() => mocks.renderer.keyInput.off("keypress", handler))
@@ -37,11 +39,23 @@ vi.mock("@tui/util/timer", () => ({
   },
   scheduleTuiTimeout: () => () => {},
 }))
+vi.mock("../../../src/cli/tui/component/digital-code-view-model", async (original) => {
+  const model = await original<typeof import("../../../src/cli/tui/component/digital-code-view-model")>()
+  return {
+    ...model,
+    digitalCodeRows: (...args: Parameters<typeof model.digitalCodeRows>) => {
+      mocks.rows()
+      return model.digitalCodeRows(...args)
+    },
+  }
+})
 import { DigitalCode } from "../../../src/cli/tui/component/digital-code"
 
 let dispose: () => void
 beforeEach(() => {
   mocks.write.mockClear()
+  mocks.rows.mockClear()
+  mocks.dimensions = { width: 10, height: 5 }
   mocks.renderer = {
     keyInput: new InternalKeyHandler(),
     hasSelection: false,
@@ -55,6 +69,7 @@ beforeEach(() => {
 afterEach(() => {
   dispose?.()
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
 })
 async function mount(
   captureInput = true,
@@ -349,6 +364,50 @@ test("a queued animation tick cannot recreate an image after unmount", async () 
     const count = mocks.write.mock.calls.length
     mocks.tick!()
     expect(mocks.write).toHaveBeenCalledTimes(count)
+  } finally {
+    if (descriptor) Object.defineProperty(process.stdout, "isTTY", descriptor)
+    else Reflect.deleteProperty(process.stdout, "isTTY")
+  }
+})
+
+test("resizing a Sixel overlay clears the old raster and resumes ASCII updates", async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(process.stdout, "isTTY")
+  Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: true })
+  vi.stubEnv("WT_SESSION", "test-session")
+  vi.stubEnv("TERM_PROGRAM", "")
+  for (const name of [
+    "TMUX",
+    "TMUX_PANE",
+    "STY",
+    "ZELLIJ",
+    "SSH_CONNECTION",
+    "SSH_CLIENT",
+    "SSH_TTY",
+    "MOSH_CONNECTION",
+  ])
+    vi.stubEnv(name, "")
+  vi.stubEnv("TERM", "xterm-256color")
+  try {
+    mocks.dimensions = { width: 40, height: 12 }
+    Object.assign(mocks.renderer, {
+      resolution: { width: 320, height: 180 },
+      screenMode: "alternate-screen",
+      capabilities: { kitty_graphics: false, sixel: true, remote: false, multiplexer: "none" },
+      rendererPtr: 1,
+      isDestroyed: false,
+    })
+    await mount()
+    mocks.tick!()
+    mocks.tick!()
+    expect(mocks.write).toHaveBeenCalledTimes(1)
+    const beforeResize = mocks.rows.mock.calls.length
+    mocks.dimensions = { width: 80, height: 24 }
+    mocks.tick!()
+    expect(mocks.write).toHaveBeenCalledTimes(2)
+    expect(mocks.rows.mock.calls.length).toBe(beforeResize + 1)
+    mocks.tick!()
+    expect(mocks.write).toHaveBeenCalledTimes(2)
+    expect(mocks.rows.mock.calls.length).toBe(beforeResize + 2)
   } finally {
     if (descriptor) Object.defineProperty(process.stdout, "isTTY", descriptor)
     else Reflect.deleteProperty(process.stdout, "isTTY")

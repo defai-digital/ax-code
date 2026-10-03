@@ -7,14 +7,20 @@
 /** "Nice" tick values from 0 up to and including a value >= max (1/2/5 steps, like d3-scale). */
 export function niceTicks(max: number, target = 5): number[] {
   const safe = Number.isFinite(max) && max > 0 ? max : 1
-  const rough = safe / Math.max(1, target)
-  const magnitude = 10 ** Math.floor(Math.log10(rough))
+  const count = Number.isFinite(target) ? Math.max(1, Math.min(100, Math.floor(target))) : 5
+  const rough = safe / count
+  const magnitude = Math.max(Number.MIN_VALUE, 10 ** Math.floor(Math.log10(rough)))
   const residual = rough / magnitude
   const step = (residual >= 5 ? 10 : residual >= 2 ? 5 : residual >= 1 ? 2 : 1) * magnitude
+  if (!Number.isFinite(step) || step <= 0) return [0, safe]
   const ticks: number[] = []
-  for (let tick = 0; tick < safe + step; tick += step) {
-    ticks.push(Number(tick.toFixed(10)))
-    if (tick >= safe) break
+  // Count indices instead of repeatedly adding a possibly underflowed step.
+  // Significant-digit rounding preserves sub-millisecond and subnormal domains.
+  const last = Math.min(100, Math.ceil(safe / step))
+  for (let i = 0; i <= last; i++) {
+    const raw = i * step
+    const tick = Number.isFinite(raw) ? Number(raw.toPrecision(15)) : safe
+    ticks.push(i === last ? Math.max(tick, safe) : tick)
   }
   return ticks
 }
@@ -35,8 +41,10 @@ export function formatDuration(ms: number): string {
   return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m`
 }
 
-/** Keep a label inside a column: the tail is usually the useful part of a tool or path. */
+/** Keep a label inside a column, retaining its leading text and an ellipsis. */
 export function clip(text: string, max: number): string {
+  const limit = Math.max(0, Math.floor(max))
+  if (Number.isNaN(limit) || limit === 0) return ""
   const chars = Array.from(text)
-  return chars.length > max ? `${chars.slice(0, max - 1).join("")}…` : text
+  return chars.length > limit ? `${chars.slice(0, limit - 1).join("")}…` : text
 }
