@@ -54,6 +54,14 @@ describe("Visual Studio 2026 node-gyp selection", () => {
     )
   })
 
+  test("finds node-gyp in Homebrew's libexec npm layout", () => {
+    const root = tempDir()
+    const execPath = join(root, "bin", "node")
+    const gyp = join(root, "libexec", "lib", "node_modules", "npm", "node_modules", "node-gyp", "bin", "node-gyp.js")
+    writePackage(gyp, "12.4.0")
+    expect(selectNodeGyp({ execPath, env: {} })).toBe(gyp)
+  })
+
   test("finds the node-gyp shipped with this Node", () => {
     const selected = selectNodeGyp()
     expect(selected).toBeTruthy()

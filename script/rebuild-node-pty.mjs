@@ -29,6 +29,8 @@ export function bundledNodeGypCandidates(execPath) {
   return [
     join(binDir, "node_modules", "npm", "node_modules", "node-gyp", "bin", "node-gyp.js"),
     join(binDir, "..", "lib", "node_modules", "npm", "node_modules", "node-gyp", "bin", "node-gyp.js"),
+    // Homebrew keeps npm under libexec rather than the standard Unix lib directory.
+    join(binDir, "..", "libexec", "lib", "node_modules", "npm", "node_modules", "node-gyp", "bin", "node-gyp.js"),
   ]
 }
 
