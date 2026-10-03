@@ -27,7 +27,7 @@ describe("quality.dre-graph-rollback", () => {
 
     expect(html).toContain(`<div class="rb-bars-list">`)
     expect(html).toContain(`<span class="rb-idx">1</span>`)
-    expect(html).toContain(`width:100%;background:var(--warn)`)
+    expect(html).toContain(`width:100%;background:var(--accent)`)
     expect(html).toContain(`<span class="rb-dur">1s</span>`)
     expect(html).toContain(`read ×2, edit&lt;script&gt;`)
     expect(html).toContain(`width:25%;background:var(--accent)`)

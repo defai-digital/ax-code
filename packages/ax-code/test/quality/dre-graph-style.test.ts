@@ -7,7 +7,7 @@ describe("quality.dre-graph-style", () => {
 
     expect(css).toContain(`:root, [data-theme="dark"]`)
     expect(css).toContain(`[data-theme="light"]`)
-    expect(css).toContain(`--accent: #3b82f6`)
+    expect(css).toContain(`--accent: #58a6ff`)
     expect(css).toContain(`.summary-grid`)
     expect(css).toContain(`.verdict-grid`)
     expect(css).toContain(`.gviz-summary-bar`)

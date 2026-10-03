@@ -62,8 +62,7 @@ export function stepSummary(nodes: string[]) {
       .slice(0, 6)
       .map(([name, count]) => {
         const pct = Math.min(100, (count / max) * 100)
-        const color = count > 10 ? "var(--warn)" : "var(--accent)"
-        return `<div class="step-bar-row"><span class="step-bar-label">${esc(name)}</span><div class="step-bar-track"><div class="step-bar-fill" style="width:${pct.toFixed(0)}%;background:${color}"></div></div><span class="step-bar-count">${count}</span></div>`
+        return `<div class="step-bar-row"><span class="step-bar-label">${esc(name)}</span><div class="step-bar-track"><div class="step-bar-fill" style="width:${pct.toFixed(0)}%;background:var(--accent)"></div></div><span class="step-bar-count">${count}</span></div>`
       })
       .join(""),
     sorted.length > 6 ? `<span class="muted" style="font-size:11px">+${sorted.length - 6} more tools</span>` : "",
@@ -77,13 +76,14 @@ export function gauge(input: { score: number; max: number; level: string }) {
   const circ = 2 * Math.PI * r
   const offset = circ * 0.75 * (1 - pct)
   const color =
-    { critical: "#dc2626", high: "#ef4444", medium: "#eab308", low: "#22c55e" }[tone(input.level)] ?? "#22c55e"
+    { critical: "var(--critical)", high: "var(--high)", medium: "var(--warn)", low: "var(--low)" }[tone(input.level)] ??
+    "var(--low)"
   return [
     `<svg class="gauge" viewBox="0 0 100 100" width="128" height="128">`,
-    `<circle cx="50" cy="50" r="${r}" fill="none" stroke="rgba(39,39,42,0.8)" stroke-width="5" stroke-dasharray="${circ * 0.75} ${circ * 0.25}" stroke-dashoffset="0" transform="rotate(135 50 50)" stroke-linecap="round"/>`,
-    `<circle cx="50" cy="50" r="${r}" fill="none" stroke="${color}" stroke-width="5" stroke-dasharray="${circ * 0.75} ${circ}" stroke-dashoffset="${offset}" transform="rotate(135 50 50)" stroke-linecap="round" style="filter: drop-shadow(0 0 8px ${color}30)"/>`,
+    `<circle cx="50" cy="50" r="${r}" fill="none" stroke="var(--line-subtle)" stroke-width="5" stroke-dasharray="${circ * 0.75} ${circ * 0.25}" stroke-dashoffset="0" transform="rotate(135 50 50)" stroke-linecap="round"/>`,
+    `<circle cx="50" cy="50" r="${r}" fill="none" stroke="${color}" stroke-width="5" stroke-dasharray="${circ * 0.75} ${circ}" stroke-dashoffset="${offset}" transform="rotate(135 50 50)" stroke-linecap="round" style="filter: drop-shadow(0 0 8px color-mix(in srgb, ${color} 25%, transparent))"/>`,
     `<text x="50" y="44" text-anchor="middle" fill="${color}" font-size="24" font-weight="700">${input.score}</text>`,
-    `<text x="50" y="58" text-anchor="middle" fill="#a1a1aa" font-size="9">/ ${input.max}</text>`,
+    `<text x="50" y="58" text-anchor="middle" fill="var(--muted)" font-size="9">/ ${input.max}</text>`,
     `<text x="50" y="76" text-anchor="middle" fill="${color}" font-size="7.5" font-weight="700" letter-spacing="0.12em">${esc(input.level.toUpperCase())}</text>`,
     `</svg>`,
   ].join("")
@@ -110,7 +110,7 @@ export function barChart(input: {
           `<div class="bar-row">`,
           `<span class="bar-label">${esc(item.label)}</span>`,
           `<div class="bar-track"><div class="bar-fill" style="width:${pct.toFixed(1)}%;background:${color}"></div></div>`,
-          `<span class="bar-value" style="color:${color}">${esc(format(item.value))}${input.unit ? esc(input.unit) : ""}</span>`,
+          `<span class="bar-value">${esc(format(item.value))}${input.unit ? esc(input.unit) : ""}</span>`,
           item.detail ? `<span class="bar-detail">${esc(item.detail)}</span>` : "",
           `</div>`,
         ].join("")

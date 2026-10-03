@@ -12,7 +12,6 @@ export function renderDreGraphRollbackBars(points: SessionRollback.Point[], empt
       .map((point, index) => {
         const duration = point.duration ?? 0
         const durationPct = Math.max(3, (duration / maxDuration) * 100)
-        const barColor = duration > maxDuration * 0.6 ? "var(--warn)" : "var(--accent)"
         const toolSummary = summarizeRollbackToolKinds(point.kinds)
 
         return [
@@ -20,7 +19,7 @@ export function renderDreGraphRollbackBars(points: SessionRollback.Point[], empt
           `<span class="rb-idx">${index + 1}</span>`,
           `<div class="rb-content">`,
           `<div class="rb-bar-line">`,
-          `<div class="rb-bar-track"><div class="rb-bar-fill" style="width:${durationPct.toFixed(0)}%;background:${barColor}"></div></div>`,
+          `<div class="rb-bar-track"><div class="rb-bar-fill" style="width:${durationPct.toFixed(0)}%;background:var(--accent)"></div></div>`,
           `<span class="rb-dur">${time(duration)}</span>`,
           `</div>`,
           toolSummary ? `<span class="rb-tools-text">${esc(toolSummary)}</span>` : "",

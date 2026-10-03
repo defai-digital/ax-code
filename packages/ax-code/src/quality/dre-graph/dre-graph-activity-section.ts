@@ -28,7 +28,7 @@ export function activitySection(
           const label = allSameIndex ? `Turn ${seq + 1}` : step.index
           const pct = Math.max(4, (dur / maxDur) * 100)
           const hasErrors = step.errors.length > 0
-          const barColor = hasErrors ? "var(--high)" : dur === maxDur ? "var(--warn)" : "var(--accent)"
+          const barColor = hasErrors ? "var(--high)" : "var(--accent)"
           const agentLabel = step.routes.length ? step.routes[step.routes.length - 1] : ""
           const toolTiming = [...step.tools].filter((t) => t.durationMs > 0).sort((a, b) => b.durationMs - a.durationMs)
           const slowestMs = toolTiming[0]?.durationMs ?? 1
@@ -40,8 +40,7 @@ export function activitySection(
                   .slice(0, 8)
                   .map((t) => {
                     const tpct = Math.max(3, (t.durationMs / slowestMs) * 100)
-                    const tcolor =
-                      t.status === "ERR" ? "var(--high)" : t.durationMs > 5000 ? "var(--warn)" : "var(--low)"
+                    const tcolor = t.status === "ERR" ? "var(--high)" : "var(--accent)"
                     const ms = t.durationMs >= 1000 ? `${(t.durationMs / 1000).toFixed(1)}s` : `${t.durationMs}ms`
                     const argLabel = t.args
                       ? ` ${t.args.split("/").pop()?.split("\\").pop() ?? t.args}`.slice(0, 28)
@@ -126,7 +125,8 @@ export function activitySection(
                 : isRouted
                   ? `routed · ${conf != null ? (conf * 100).toFixed(0) + "% conf" : ""}`
                   : "active"
-            return `<div class="agent-item"><span class="agent-dot"></span><span class="agent-name">${esc(agentDisplay(a))}</span><span class="agent-tag">${esc(role)}</span></div>`
+            const isPrimary = i === 0 && !isRouted
+            return `<div class="agent-item"><span class="agent-dot${isPrimary ? " primary" : ""}"></span><span class="agent-name">${esc(agentDisplay(a))}</span><span class="agent-tag">${esc(role)}</span></div>`
           })
           .join(""),
         `</div>`,
@@ -136,14 +136,12 @@ export function activitySection(
     ? (() => {
         const counts = new Map<string, number>()
         for (const t of detail.tools) counts.set(t, (counts.get(t) ?? 0) + 1)
-        const median = [...counts.values()].sort((a, b) => a - b)[Math.floor(counts.size / 2)] ?? 1
         return barChart({
           items: [...counts.entries()]
             .sort((a, b) => b[1] - a[1])
             .slice(0, 10)
             .map(([label, value]) => ({ label, value })),
           unit: "×",
-          colorFn: (v) => (v > median * 4 ? "var(--warn)" : v > median * 2 ? "var(--accent)" : "var(--low)"),
         })
       })()
     : `<p class="empty">No tool data.</p>`

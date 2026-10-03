@@ -1,5 +1,13 @@
 import { describe, expect, test } from "vitest"
-import { barChart, chip, dailyChart, flow, gauge, stat, stepSummary } from "../../src/quality/dre-graph/dre-graph-widgets"
+import {
+  barChart,
+  chip,
+  dailyChart,
+  flow,
+  gauge,
+  stat,
+  stepSummary,
+} from "../../src/quality/dre-graph/dre-graph-widgets"
 
 describe("quality.dre-graph-widgets", () => {
   test("escapes chip and stat text", () => {
@@ -36,7 +44,7 @@ describe("quality.dre-graph-widgets", () => {
   test("renders risk gauge with tone color", () => {
     const html = gauge({ score: 50, max: 100, level: "HIGH" })
     expect(html).toContain(`class="gauge"`)
-    expect(html).toContain(`stroke="#ef4444"`)
+    expect(html).toContain(`stroke="var(--high)"`)
     expect(html).toContain(`>50</text>`)
     expect(html).toContain(`>HIGH</text>`)
   })
