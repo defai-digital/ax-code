@@ -63,6 +63,7 @@ const old = [
 const keep = [
   ".ax-code",
   ".ax-grok",
+  ".ax-wiki",
   ".claude",
   ".cursor",
   ".gemini",
