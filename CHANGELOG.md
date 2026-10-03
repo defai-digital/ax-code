@@ -6,6 +6,20 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.22.1] - 2026-10-03
+
+### Fixed
+
+- Render large execution waterfalls without overflowing the JavaScript argument limit and treat unusable durations as untimed.
+- Reject invalid or oversized Sixel raster geometry, handle non-finite terminal resolutions, and stop encoding when the 256 KiB payload budget is reached.
+- Bound temporary Sixel palette maps explicitly.
+
+### Changed
+
+- Add a static Sixel startup/exit splash and optional Nerd Font guidance for Windows Terminal.
+- Keep sidebar popup links consistently blue and underlined across ChromeAction surfaces.
+- Publish SDK 2.5.58.
+
 ## [7.22.0] - 2026-10-03
 
 ### Fixed
