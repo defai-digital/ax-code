@@ -277,6 +277,15 @@ describe("dre graph quality readiness", () => {
           expect(html).not.toContain(`id="validation"`)
           expect(html).not.toContain(`id="branches"`)
           expect(html).not.toContain(`href="#verdict"`)
+          // The evidence chain leads, and a trivial session still gets a complete, honest story.
+          expect(html).toContain(`id="evidence"`)
+          expect(html).toContain(`Evidence chain`)
+          expect(html.indexOf(`id="evidence"`)).toBeLessThan(html.indexOf(`id="usage"`))
+          expect(html).toContain(`ax-code replay ${sid}`)
+          // Every in-page link must land on a rendered section, including the chain's own stages.
+          const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]))
+          const dead = [...html.matchAll(/href="#([^"]+)"/g)].map((match) => match[1]).filter((id) => !ids.has(id))
+          expect(dead).toEqual([])
         } finally {
           await Session.remove(sid)
         }

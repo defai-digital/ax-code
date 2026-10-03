@@ -15,6 +15,8 @@ import { changesSection } from "../../quality/dre-graph/dre-graph-changes-sectio
 import { index as indexPage } from "../../quality/dre-graph/dre-graph-index-page"
 import { style } from "../../quality/dre-graph/dre-graph-style"
 import { summary } from "../../quality/dre-graph/dre-graph-summary-section"
+import { buildEvidenceChain, evidenceSection } from "../../quality/dre-graph/dre-graph-evidence"
+import { traceSection } from "../../quality/dre-graph/dre-graph-waterfall"
 import { usageSection } from "../../quality/dre-graph/dre-graph-usage-section"
 import { indexFingerprint, sessionFingerprint } from "../../quality/dre-graph/dre-graph-fingerprint"
 import { riskSection } from "../../quality/dre-graph/dre-graph-risk-section"
@@ -153,11 +155,32 @@ function page(input: {
   const showValidation = input.risk.assessment.signals.validationCommands.length > 0
   const showBranches = (input.rank?.items.length ?? 0) > 1
 
+  const showChanges = Boolean(input.dre.detail?.semantic)
+  const anchors = new Set([
+    "evidence",
+    "timeline",
+    "summary",
+    "activity",
+    "usage",
+    ...(showChanges ? ["changes"] : []),
+    ...(showTrust ? ["verdict", "risk"] : []),
+    ...(showValidation ? ["validation"] : []),
+    ...(showBranches ? ["branches"] : []),
+  ])
+  const chain = buildEvidenceChain({
+    session: input.session,
+    graph: input.graph,
+    dre: input.dre,
+    risk: input.risk,
+    rollback: input.rollback,
+    anchors,
+  })
+
   const nav: string[] = [
-    `<a class="nav-link" href="#usage">Usage</a>`,
+    `<a class="nav-link" href="#evidence">Evidence</a>`,
+    `<a class="nav-link" href="#timeline">Trace</a>`,
     `<a class="nav-link" href="#summary">Summary</a>`,
-    `<a class="nav-link" href="#changes">Changes</a>`,
-    `<a class="nav-link" href="#timeline">Timeline</a>`,
+    ...(showChanges ? [`<a class="nav-link" href="#changes">Changes</a>`] : []),
     `<a class="nav-link" href="#activity">Activity</a>`,
     ...(showTrust
       ? [`<a class="nav-link" href="#verdict">Verdict</a>`, `<a class="nav-link" href="#risk">Risk</a>`]
@@ -205,25 +228,23 @@ function page(input: {
     `</div>`,
     `</div>`,
     `</header>`,
-    // ── 1. Usage: "what did this session use?" — every session has this data ──
-    usageSection({ usage: input.usage, duration: input.dre.detail?.duration }),
-    // ── 2. Summary: "what happened?" ──
-    summary({ dre: input.dre, graph: input.graph }),
-    // ── 3. Changes: "what files changed and how risky?" ──
-    changesSection({ dre: input.dre }),
-    // ── 4. Timeline: full execution Gantt rendered by the /graph route ──
-    `<section class="band" id="timeline">`,
-    `<div class="wrap">`,
-    `<div class="panel" style="margin-bottom:16px">`,
-    `<h3>Timeline</h3>`,
-    `<details><summary class="muted" style="cursor:pointer;font-size:13px">Execution timeline (Gantt)</summary>`,
-    `<img src="${esc(ganttSrc)}" alt="Session execution timeline" style="width:100%;margin-top:10px" loading="lazy" />`,
-    `</details>`,
-    `</div>`,
-    `</div>`,
-    `</section>`,
+    // ── 1. Evidence chain: asked → did → changed → verified → decided → reversible ──
+    evidenceSection({
+      sessionID: input.session.id,
+      directory: input.session.directory,
+      chain,
+      readiness: input.risk.assessment.readiness,
+    }),
+    // ── 2. Trace: every model and tool call on a time axis, failures marked ──
+    traceSection({ graph: input.graph.graph, ganttHref: ganttSrc }),
+    // ── 3. Summary: decision and plan ──
+    summary({ dre: input.dre, graph: input.graph, stats: false }),
+    // ── 4. Changes: only when a semantic diff exists; otherwise the chain already says why not ──
+    showChanges ? changesSection({ dre: input.dre }) : "",
     // ── 5. Activity: "what did the agent actually work on?" ──
     activitySection(input.graph, input.dre, input.rollback),
+    // ── 6. Resources: tokens and models, useful context but not the headline ──
+    usageSection({ usage: input.usage, duration: input.dre.detail?.duration }),
     // ── 5. Trust sections: only when there is something to say ──
     showTrust ? verdictSection({ dre: input.dre, risk: input.risk }) : "",
     showTrust ? riskSection(input.risk, input.dre) : "",

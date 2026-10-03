@@ -4,7 +4,8 @@ import { SessionUsage } from "../../session/usage"
 import { live, themeScript, themeToggle } from "./dre-graph-assets"
 import { compact, esc, num, readiness, readinessTone, stamp, tone } from "./dre-graph-format"
 import { style } from "./dre-graph-style"
-import { barChart, chip, dailyChart, stat } from "./dre-graph-widgets"
+import { barChart, dailyChart, stat } from "./dre-graph-widgets"
+import { ledgerSection } from "./dre-graph-ledger"
 
 export type SessionSummaryRow = { session: Session.Info; risk: Risk.Assessment }
 
@@ -158,6 +159,13 @@ export function index(input: { rows: SessionSummaryRow[]; usage: SessionUsage.In
     `</header>`,
     `<section class="band">`,
     `<div class="wrap">`,
+    // The ledger leads: what changed, what is verified, what needs a person.
+    input.rows.length
+      ? ledgerSection({ rows: input.rows, perSession: input.usage.perSession, link })
+      : `<div class="panel"><h3>Sessions</h3><p class="empty">No sessions recorded. Run ax-code to create your first session.</p></div>`,
+    // Volume is context, not the headline, so it folds away.
+    `<details class="panel usage-fold">`,
+    `<summary><span class="ledger-title">Usage — last ${input.usage.days ?? DASHBOARD_WINDOW_DAYS} days</span><span class="ledger-hint">${num(input.usage.sessions)} sessions · ${compact(input.usage.totalTokens)} tokens${input.usage.cacheShare === undefined ? "" : ` · ${Math.round(input.usage.cacheShare * 100)}% cache`}</span></summary>`,
     usagePanel(input.usage),
     activityPanel(input.usage),
     breakdownPanel({
@@ -171,31 +179,7 @@ export function index(input: { rows: SessionSummaryRow[]; usage: SessionUsage.In
       empty: "No tool calls recorded in this window.",
     }),
     health(input.rows),
-    `<div class="panel">`,
-    `<h3>Sessions</h3>`,
-    input.rows.length
-      ? `<div class="session-list">${input.rows
-          .map(({ session: item, risk }) =>
-            [
-              `<div class="session-card">`,
-              `<div class="session-head">`,
-              `<strong>${esc(item.title)}</strong>`,
-              link(`/dre-graph/session/${item.id}`, "View →"),
-              `</div>`,
-              `<div class="tag-row">`,
-              chip({ label: stamp(item.time.updated) }),
-              chip({ label: item.parentID ? "fork" : "root" }),
-              chip({ label: `${compact(input.usage.perSession[item.id] ?? 0)} tokens` }),
-              chip({ label: `${risk.level.toLowerCase()} risk`, kind: tone(risk.level) }),
-              chip({ label: readiness(risk.readiness), kind: readinessTone(risk.readiness) }),
-              `</div>`,
-              `<span class="muted" style="font-size:12px">${esc(item.id)}</span>`,
-              `</div>`,
-            ].join(""),
-          )
-          .join("")}</div>`
-      : `<p class="empty">No sessions recorded. Run ax-code to create your first session.</p>`,
-    `</div>`,
+    `</details>`,
     `</div>`,
     `</section>`,
     live({ directory: dir }),

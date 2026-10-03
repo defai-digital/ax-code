@@ -3,7 +3,7 @@ import { SessionGraph } from "../../session/graph"
 import { esc, num, time, tone } from "./dre-graph-format"
 import { chip, stat } from "./dre-graph-widgets"
 
-export function summary(input: { dre: SessionDre.Snapshot; graph: SessionGraph.Snapshot }) {
+export function summary(input: { dre: SessionDre.Snapshot; graph: SessionGraph.Snapshot; stats?: boolean }) {
   const detail = input.dre.detail
   const meta = input.graph.graph.metadata
 
@@ -14,13 +14,26 @@ export function summary(input: { dre: SessionDre.Snapshot; graph: SessionGraph.S
       ? [
           `<div class="summary-decision">${esc(detail.decision)}</div>`,
           `<div class="summary-plan">${esc(detail.plan)}</div>`,
-          `<div class="summary-stats">`,
-          stat({ label: "Steps", value: num(meta.steps), icon: "⬡" }),
-          stat({ label: "Tools", value: num(meta.tools.length), icon: "⚙" }),
-          stat({ label: "Duration", value: time(detail.duration), icon: "⏱" }),
-          stat({ label: "Errors", value: num(meta.errors), kind: meta.errors > 0 ? "high" : "neutral", icon: "✗" }),
-          `</div>`,
-          `<p class="muted" style="font-size:12px;margin-top:12px">${num(detail.tokens.input)} in · ${num(detail.tokens.output)} out tokens</p>`,
+          ...(input.stats === false
+            ? []
+            : [
+                `<div class="summary-stats">`,
+                stat({ label: "Steps", value: num(meta.steps), icon: "⬡" }),
+                stat({ label: "Tools", value: num(meta.tools.length), icon: "⚙" }),
+                stat({ label: "Duration", value: time(detail.duration), icon: "⏱" }),
+                stat({
+                  label: "Errors",
+                  value: num(meta.errors),
+                  kind: meta.errors > 0 ? "high" : "neutral",
+                  icon: "✗",
+                }),
+                `</div>`,
+              ]),
+          ...(input.stats === false
+            ? []
+            : [
+                `<p class="muted" style="font-size:12px;margin-top:12px">${num(detail.tokens.input)} in · ${num(detail.tokens.output)} out tokens</p>`,
+              ]),
         ].join("")
       : `<div class="summary-decision">No DRE analysis available yet. Send a message to generate session data.</div>`,
     detail?.semantic

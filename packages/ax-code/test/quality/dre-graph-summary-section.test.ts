@@ -43,6 +43,15 @@ describe("quality.dre-graph-summary-section", () => {
     expect(html).not.toContain(`class="gauge"`)
   })
 
+  test("can omit the stat cards when the evidence chain already carries them", () => {
+    const html = summary({ dre: dre(), graph: graph(), stats: false })
+    expect(html).not.toContain("summary-stats")
+    const detailed = summary({ dre: dre({ decision: "Accept" }), graph: graph(), stats: false })
+    expect(detailed).toContain("Accept")
+    expect(detailed).not.toContain("summary-stats")
+    expect(detailed).not.toContain("out tokens")
+  })
+
   test("renders detail stats and a compact token line", () => {
     const html = summary({
       dre: dre({ decision: `Accept <now>`, plan: `Run & merge`, duration: 125_000 }),

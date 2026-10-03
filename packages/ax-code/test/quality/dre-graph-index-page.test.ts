@@ -100,6 +100,36 @@ describe("quality.dre-graph-index-page", () => {
     )
   })
 
+  test("leads with the evidence ledger and folds usage away", () => {
+    const html = index({
+      search: "?directory=/tmp/a",
+      usage: usage(),
+      rows: [
+        {
+          session: session({ id: "s-changed", title: "Edit auth", directory: "/tmp/a" }),
+          risk: {
+            level: "LOW",
+            score: 10,
+            readiness: "needs_validation",
+            signals: { filesChanged: 2, linesChanged: 30, validationState: "not_run" },
+          } as unknown as Risk.Assessment,
+        },
+        {
+          session: session({ id: "s-chat", title: "Question", directory: "/tmp/a" }),
+          risk: risk({ level: "LOW", score: 1, readiness: "ready", validationState: "not_run" }),
+        },
+      ],
+    })
+
+    expect(html).toContain("Evidence ledger")
+    expect(html).toContain("0 of 1 session that changed files were verified.")
+    expect(html).toContain("Changed, not verified")
+    expect(html).toContain("No file changes")
+    expect(html.indexOf("Evidence ledger")).toBeLessThan(html.indexOf("Usage — last 30 days"))
+    expect(html).toMatch(/<details class="panel usage-fold">/)
+    expect(html).not.toMatch(/<details class="panel usage-fold" open/)
+  })
+
   test("renders empty state and falls back to query directory for live refresh", () => {
     const html = index({
       search: "?directory=/tmp/empty",
