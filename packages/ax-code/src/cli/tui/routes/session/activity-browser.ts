@@ -101,7 +101,12 @@ function attentionOf(kind: EntryKind, status: string, event?: Record<string, unk
  */
 export function buildEntries(parts: Part[], rows: Row[], agents?: AgentInfo[]): Entry[] {
   const partById = new Map<string, Part>()
-  for (const part of parts) if (part.type === "tool") partById.set(part.id, part)
+  for (const part of parts) {
+    if (part.type !== "tool") continue
+    // Call-scoped index: at most one entry per input, dropped when this call returns.
+    if (partById.size >= parts.length) break
+    partById.set(part.id, part)
+  }
   const eventById = new Map<string, Record<string, unknown>>()
   const extra: Entry[] = []
   rows.forEach((row, index) => {
@@ -109,9 +114,14 @@ export function buildEntries(parts: Part[], rows: Row[], agents?: AgentInfo[]): 
     const type = typeof event?.type === "string" ? event.type : ""
     if (type === "agent.route") {
       const mode = event.routeMode ?? "switch"
-      eventById.set(`route:${row.time_created}:${mode === "complexity" ? "complexity" : String(event.toAgent)}`, event)
+      if (eventById.size < rows.length) {
+        eventById.set(
+          `route:${row.time_created}:${mode === "complexity" ? "complexity" : String(event.toAgent)}`,
+          event,
+        )
+      }
     } else if (AgentControlReplayQuery.isAgentControlEvent(event)) {
-      eventById.set(`agent-control:${row.time_created}:${index}`, event)
+      if (eventById.size < rows.length) eventById.set(`agent-control:${row.time_created}:${index}`, event)
     } else if (type === "permission.ask" || type === "permission.reply") {
       const reply = type === "permission.reply" ? String(event.reply ?? "") : ""
       const status = type === "permission.ask" ? "ask" : reply === "reject" ? "rejected" : "approved"

@@ -135,7 +135,10 @@ export function activitySection(
   const toolUsageHtml = detail?.tools.length
     ? (() => {
         const counts = new Map<string, number>()
-        for (const t of detail.tools) counts.set(t, (counts.get(t) ?? 0) + 1)
+        for (const t of detail.tools) {
+          // One count per tool name in this render, never more entries than tools.
+          if (counts.size < detail.tools.length) counts.set(t, (counts.get(t) ?? 0) + 1)
+        }
         return barChart({
           items: [...counts.entries()]
             .sort((a, b) => b[1] - a[1])

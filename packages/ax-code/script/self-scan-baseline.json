@@ -1574,14 +1574,6 @@
           "summary": "event_listener:no_cleanup"
         },
         {
-          "fingerprint": "0e3ece6ad6761d44f670eefaadc3a9fe4f759be3b642dde9e5828c78ef430bbd",
-          "file": "src/quality/dre-graph/dre-graph-activity-section.ts",
-          "line": 138,
-          "severity": "medium",
-          "kind": "map_growth:unbounded_growth",
-          "summary": "map_growth:unbounded_growth"
-        },
-        {
           "fingerprint": "94eff865cb081514efb1b9ae25f7a22fefdd06591da677dcbbd44111920d07c8",
           "file": "src/quality/dre-graph/dre-graph-activity.ts",
           "line": 40,
