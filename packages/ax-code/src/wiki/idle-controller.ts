@@ -113,8 +113,10 @@ export function createWikiIdleController(input: {
             (event) => {
               signal.throwIfAborted()
               if (event.type === "plan") publish({ total: event.pageCount })
-              if (event.type === "page_start") publish({ completed: event.index - 1, total: event.total })
-              if (event.type === "page_complete") publish({ completed: event.index, total: event.total })
+              if (event.type === "page_start")
+                publish({ completed: event.completed ?? event.index - 1, total: event.total })
+              if (event.type === "page_complete" || event.type === "page_failed")
+                publish({ completed: event.completed ?? event.index, total: event.total })
             },
             { explicit: runExplicit },
           ),

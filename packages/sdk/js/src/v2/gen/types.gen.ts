@@ -977,6 +977,10 @@ export type Config = {
      */
     maxPages?: number
     /**
+     * Maximum simultaneous Wiki page calls. Default: 2 for cloud models, 1 for local and CLI models.
+     */
+    generationConcurrency?: number
+    /**
      * Maximum evidence files selected per page.
      */
     maxSourcesPerPage?: number

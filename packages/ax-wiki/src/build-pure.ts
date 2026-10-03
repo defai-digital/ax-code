@@ -28,7 +28,9 @@ import type {
   WikiManifest,
   WikiManifestPage,
   WikiPageGenerationResult,
+  WikiPageGenerationRequest,
   WikiPageGenerator,
+  WikiPageResultCache,
   WikiPlan,
   WikiPlanPage,
   WikiSource,
@@ -36,7 +38,7 @@ import type {
 } from "./types.js"
 import { AX_WIKI_GENERATOR, SYMBOL_SUMMARIES_MAX, SYMBOL_SUMMARY_MAX } from "./types.js"
 import type { SymbolSummary } from "./types.js"
-import { validateWikiCandidate } from "./validate.js"
+import { validateWikiCandidate, validateWikiPageLinks } from "./validate.js"
 
 /** Forbidden-character runs, as a global matcher whose source comes from graph.ts. */
 const FORBIDDEN_RUN = new RegExp(`${GRAPH_TEXT_FORBIDDEN.source}+`, "g")
@@ -119,6 +121,7 @@ export type WikiBuildPureInput = {
   config: AxWikiConfig
   previous?: WikiManifest
   generator: WikiPageGenerator
+  pageResultCache?: WikiPageResultCache
   evidenceReader: WikiEvidenceReader
   readExistingPage: (pagePath: string) => Promise<string | undefined>
   graphContext?: WikiGraphContextProvider
@@ -150,6 +153,8 @@ export type WikiBuildPureResult = {
   generatedPages: string[]
   unchangedPages: string[]
   existingPages: Map<string, string>
+  /** Staged keys to discard only after successful publication. */
+  cacheKeys: Map<string, string>
   /**
    * Pages whose generation failed. On the `update` lane the build continues and
    * publishes the pages that succeeded (ADR-156); the `generate` lane throws
@@ -178,9 +183,10 @@ function pageFingerprint(input: {
   semanticRevision?: string
   evidenceFingerprint?: string
 }): string {
+  const { generationConcurrency: _executionPolicy, ...contentConfig } = input.config
   return sha256(
     stableJson({
-      config: input.config,
+      config: contentConfig,
       sourceHashes: input.sourceHashes,
       generatorIdentity: input.generatorIdentity ?? null,
       model: input.model ?? null,
@@ -323,51 +329,106 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
     { content: string; result: WikiPageGenerationResult; sources: WikiSourceEvidence[] }
   >()
   const failedPages: { path: string; error: string }[] = []
-  for (let index = 0; index < targets.length; index++) {
-    input.signal?.throwIfAborted()
-    const page = targets[index]!
-    onProgress?.({ type: "page_start", path: page.path, index: index + 1, total: targets.length })
-    const cached = pageCache.get(page.path)
-    const selected = cached?.selected ?? selectPageSources(sources, page, config.maxSourcesPerPage ?? 80)
-    const evidence = await input.evidenceReader({
-      sources: selected,
-      maxTotalBytes: config.maxPageSourceBytes ?? 160_000,
-    })
-    const typedEvidence = cached?.bundle
-    const graphContext = typedEvidence
-      ? renderEvidenceBundle(typedEvidence)
-      : await input.graphContext?.({ page, sources: selected })
-    input.signal?.throwIfAborted()
-    try {
-      const result = await input.generator({
-        action,
-        root: input.root,
-        wikiDir: input.wikiDir,
-        page,
-        plan,
-        sources: evidence,
-        sourceInventory: sources,
-        graphContext,
-        evidence: typedEvidence,
-        instructions: config.instructions,
-        previousContent: existing.get(page.path),
-      })
-      ensureUsefulResult(page, result)
-      const rendered = renderWikiPage({ page, result, sources: evidence })
-      const content = mergeProtectedSections(rendered, existing.get(page.path))
-      generated.set(page.path, { content, result, sources: evidence })
+  const cacheKeys = new Map<string, string>()
+  const knownPages = new Set(plan.pages.map((page) => page.path))
+  let completed = 0
+  const results = await mapWithBoundedConcurrency(
+    targets,
+    Math.min(config.generationConcurrency ?? 1, 2),
+    async (page, index) => {
       input.signal?.throwIfAborted()
-      onProgress?.({ type: "page_complete", path: page.path, index: index + 1, total: targets.length })
-    } catch (error) {
-      // ADR-156: an update publishes the pages that succeeded and leaves the
-      // failed page at its previous fingerprint, so one pathological page no
-      // longer blocks every other page's freshness. The generate lane stays
-      // whole-build atomic: an initial wiki is never published torn.
-      if (action !== "update") throw error
-      input.signal?.throwIfAborted()
-      failedPages.push({ path: page.path, error: error instanceof Error ? error.message : String(error) })
-      onProgress?.({ type: "page_failed", path: page.path, index: index + 1, total: targets.length })
-    }
+      onProgress?.({ type: "page_start", path: page.path, index: index + 1, total: targets.length, completed })
+      try {
+        const cached = pageCache.get(page.path)!
+        const evidence = await input.evidenceReader({
+          sources: cached.selected,
+          maxTotalBytes: config.maxPageSourceBytes ?? 160_000,
+        })
+        const typedEvidence = cached.bundle
+        const graphContext = typedEvidence
+          ? renderEvidenceBundle(typedEvidence)
+          : await input.graphContext?.({ page, sources: cached.selected })
+        input.signal?.throwIfAborted()
+        const request: WikiPageGenerationRequest = {
+          action,
+          root: input.root,
+          wikiDir: input.wikiDir,
+          page,
+          plan,
+          sources: evidence,
+          sourceInventory: sources,
+          graphContext,
+          evidence: typedEvidence,
+          instructions: config.instructions,
+          previousContent: existing.get(page.path),
+        }
+        const key = sha256(
+          stableJson({
+            action,
+            page,
+            planHash,
+            inventory: currentSourceHashes,
+            fingerprint: prospectiveFingerprints.get(page.path),
+            evidence: evidence.map(({ path, content, truncated }) => ({ path, content, truncated })),
+            graphContext: typedEvidence ? fingerprintEvidenceBundle(typedEvidence) : graphContext,
+            previousContent: request.previousContent ?? null,
+          }),
+        )
+        let result = force ? undefined : await input.pageResultCache?.read(page.path, key)
+        if (result) {
+          // Never let a corrupt or stale cache entry bypass page validation.
+          try {
+            ensureUsefulResult(page, result)
+            if (validateWikiPageLinks(page.path, result.body, knownPages).length) result = undefined
+          } catch {
+            result = undefined
+          }
+        }
+        const cacheHit = result !== undefined
+        result ??= await input.generator(request)
+        input.signal?.throwIfAborted()
+        ensureUsefulResult(page, result)
+        const issues = validateWikiPageLinks(page.path, result.body, knownPages)
+        if (issues.length) throw new Error(issues.map((issue) => `${issue.code}: ${issue.message}`).join("\n"))
+        const rendered = renderWikiPage({ page, result, sources: evidence })
+        const content = mergeProtectedSections(rendered, existing.get(page.path))
+        if (input.pageResultCache) {
+          if (!cacheHit) await input.pageResultCache.write(page.path, key, result)
+          cacheKeys.set(page.path, key)
+          if (cacheHit) onProgress?.({ type: "page_cached", path: page.path })
+        }
+        input.signal?.throwIfAborted()
+        onProgress?.({
+          type: "page_complete",
+          path: page.path,
+          index: index + 1,
+          total: targets.length,
+          completed: ++completed,
+        })
+        return { page, item: { content, result, sources: evidence } }
+      } catch (error) {
+        // ADR-156: an update publishes the pages that succeeded and leaves the
+        // failed page at its previous fingerprint, so one pathological page no
+        // longer blocks every other page's freshness. The generate lane stays
+        // whole-build atomic: an initial wiki is never published torn.
+        input.signal?.throwIfAborted()
+        const failure = { path: page.path, error: error instanceof Error ? error.message : String(error) }
+        onProgress?.({
+          type: "page_failed",
+          path: page.path,
+          index: index + 1,
+          total: targets.length,
+          completed: ++completed,
+          error: failure.error,
+        })
+        if (action !== "update") throw error
+        return { page, failure }
+      }
+    },
+  )
+  for (const { page, item, failure } of results) {
+    if (item) generated.set(page.path, item)
+    if (failure) failedPages.push(failure)
   }
   const failedPaths = new Set(failedPages.map((page) => page.path))
 
@@ -477,6 +538,7 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
       .map((page) => page.path)
       .filter((page) => !generated.has(page) && !failedPaths.has(page)),
     existingPages: existing,
+    cacheKeys,
     failedPages,
   }
 }

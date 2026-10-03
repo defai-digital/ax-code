@@ -3,6 +3,8 @@ import path from "node:path"
 import { promisify } from "node:util"
 import {
   createWikiBuildLock,
+  createWikiPageResultCache,
+  validateWikiPageLinks,
   assertWikiDirectorySafe,
   AX_WIKI_EVIDENCE_SCHEMA_VERSION,
   AX_WIKI_GENERATOR,
@@ -31,6 +33,8 @@ import {
 } from "@ax-code/ax-wiki/node"
 import { APICallError, NoObjectGeneratedError, streamObject } from "ai"
 import z from "zod"
+import { NamedError } from "@ax-code/util/error"
+import { CLI_PLAN_PROVIDER_IDS, LOCAL_RUNTIME_PROVIDER_IDS } from "../mode/provider-category"
 import { GraphContext } from "../code-intelligence/graph-context"
 import { Installation } from "../installation"
 import { Instance } from "../project/instance"
@@ -310,7 +314,22 @@ function wikiHostRejectsReasoningEffort(url: string | undefined): boolean {
  * budget, `format` produced an unparseable object, `transient` is a retryable
  * provider/transport error. Anything else is a real failure and never retried.
  */
-type WikiPageFailure = "length" | "format" | "transient"
+type WikiPageFailure = "length" | "format" | "transient" | "validation"
+
+const WikiPageValidationError = NamedError.create("WikiPageValidationError", z.object({ message: z.string() }))
+
+/** Cloud pages may overlap; local engines and CLI processes remain conservative. */
+export function wikiPageGenerationConcurrency(providerID: string, configured?: number): number {
+  if (configured !== undefined) return configured === 2 ? 2 : 1
+  if (
+    LOCAL_RUNTIME_PROVIDER_IDS.some((id) => id === providerID) ||
+    isDedicatedPrivateGpuProviderID(providerID) ||
+    CLI_PLAN_PROVIDER_IDS.some((id) => id === providerID) ||
+    providerID.endsWith("-cli")
+  )
+    return 1
+  return 2
+}
 
 type WikiPageRetry = {
   /** Extra system instruction for the retry; empty means the same request. */
@@ -324,12 +343,18 @@ type WikiPageRetry = {
 const WIKI_PAGE_FORMAT_RETRY_FEEDBACK = `\nThe previous attempt did not produce a valid page object. Return only one complete JSON object, without code fences or surrounding prose, respecting the field limits: summary at most ${PAGE_SUMMARY_MAX} characters, at most ${PAGE_SYMBOLS_MAX} symbols, at most ${SYMBOL_SUMMARIES_MAX} symbolSummaries, each symbol name at most ${PAGE_SYMBOL_NAME_MAX} characters and each symbolSummary.summary at most ${SYMBOL_SUMMARY_MAX} characters. Escape newlines and quotes inside JSON strings and close every string, array, and object.`
 
 function wikiPageFailure(error: unknown): WikiPageFailure | undefined {
+  if (WikiPageValidationError.isInstance(error)) return "validation"
   if (NoObjectGeneratedError.isInstance(error)) return error.finishReason === "length" ? "length" : "format"
   if (APICallError.isInstance(error) && error.isRetryable) return "transient"
   return undefined
 }
 
 function wikiPageRetry(failure: WikiPageFailure): WikiPageRetry {
+  if (failure === "validation")
+    return {
+      feedback:
+        "\nThe previous page contained invalid relative Wiki links. Use only the exact relative paths listed under Other planned pages available for links. Do not invent page names. Remove links you cannot resolve. Return the complete corrected JSON object.",
+    }
   if (failure === "length")
     return {
       feedback: `\nThe previous attempt was cut off by the output token limit. Return one complete JSON object with a body under ${WIKI_PAGE_LENGTH_RETRY_BODY_MAX} characters, a summary under 400 characters, at most ${WIKI_PAGE_LENGTH_RETRY_GLOSS_MAX} symbolSummaries, and close every string, array, and object.`,
@@ -711,6 +736,7 @@ export async function runNativeWiki(input: {
   try {
     input.signal?.throwIfAborted()
     const model = await resolveModel(config.model, input.sessionID)
+    const diskConfig = await loadAxWikiConfig(input.root, input.allowSource)
     input.signal?.throwIfAborted()
     const repositoryHead = await gitHeadCommit(input.root)
     const buildStartedAt = new Date()
@@ -722,6 +748,26 @@ export async function runNativeWiki(input: {
     const onProgress = (progress: WikiBuildProgress) => {
       if (progress.type === "plan") pageCount = progress.pageCount
       if (progress.type === "page_start") attempted += 1
+      if (progress.type === "page_cached")
+        outcomes.set(progress.path, {
+          path: progress.path,
+          status: "cached",
+          attempts: 0,
+          durationMs: 0,
+        })
+      if (progress.type === "page_failed") {
+        const outcome = outcomes.get(progress.path)
+        if (outcome?.status !== "failed")
+          outcomes.set(progress.path, {
+            ...outcome,
+            path: progress.path,
+            status: "failed",
+            attempts: outcome?.attempts ?? 0,
+            durationMs: outcome?.durationMs ?? 0,
+            failureClass: outcome ? "validation" : "unclassified",
+            message: progress.error ?? "Compiler rejected generated page",
+          })
+      }
       passThroughProgress?.(progress)
     }
     const snapshot: EvidenceSnapshot = {
@@ -732,11 +778,27 @@ export async function runNativeWiki(input: {
       },
       capturedAt: new Date().toISOString(),
     }
+    const staged = createWikiPageResultCache({
+      root: input.root,
+      wikiDir: config.dir,
+      allowRead: input.allowSource,
+      allowWrite: input.allowWrite,
+      onError: (error) => log.warn("wiki page cache unavailable", { error: NamedError.message(error) }),
+    })
     const generator = async (request: WikiPageGenerationRequest): Promise<WikiPageGenerationResult> => {
       const pageStartedMs = Date.now()
       const abort = new AbortController()
       const timer = setTimeout(() => abort.abort(), WIKI_PAGE_TIMEOUT_MS)
       const signal = input.signal ? AbortSignal.any([abort.signal, input.signal]) : abort.signal
+      const sourceBytes = request.sources.reduce((bytes, source) => bytes + Buffer.byteLength(source.content), 0)
+      let promptBytes = 0
+      let timeToFirstChunkMs: number | undefined
+      let inputTokens: number | undefined
+      let outputTokens: number | undefined
+      const recordUsage = (usage: { inputTokens?: number; outputTokens?: number } | undefined) => {
+        if (usage?.inputTokens !== undefined) inputTokens = (inputTokens ?? 0) + usage.inputTokens
+        if (usage?.outputTokens !== undefined) outputTokens = (outputTokens ?? 0) + usage.outputTokens
+      }
       try {
         let retry: WikiPageRetry | undefined
         for (let attempt = 0; attempt < WIKI_PAGE_MAX_ATTEMPTS; attempt++) {
@@ -744,7 +806,11 @@ export async function runNativeWiki(input: {
             signal.throwIfAborted()
             if (retry?.delayMs) await wikiPageRetryDelay(retry.delayMs, signal)
             const prompt = pagePrompt(request, retry?.tight === true)
+            promptBytes = Buffer.byteLength(prompt) + Buffer.byteLength(PAGE_SYSTEM + (retry?.feedback ?? ""))
             const result = streamObject({
+              // Native owns the two-attempt budget; SDK retries would hide
+              // requests and wrap exhausted errors outside our classifier.
+              maxRetries: 0,
               model: model.language,
               maxOutputTokens: model.maxOutputTokens,
               schema: PAGE_SCHEMA,
@@ -758,26 +824,61 @@ export async function runNativeWiki(input: {
             })
             for await (const part of result.fullStream) {
               if (part.type === "error") throw part.error
+              if (timeToFirstChunkMs === undefined && part.type === "text-delta")
+                timeToFirstChunkMs = Date.now() - pageStartedMs
             }
+            const object = await result.object
+            recordUsage(await result.usage)
+            const issues = validateWikiPageLinks(
+              request.page.path,
+              object.body,
+              new Set([request.page.path, ...request.plan.pages.map((page) => page.path)]),
+            )
+            if (issues.length)
+              throw new WikiPageValidationError({ message: issues.map((issue) => issue.message).join("\n") })
             outcomes.set(request.page.path, {
               path: request.page.path,
-              status: "written",
+              status: "generated",
               attempts: attempt + 1,
               durationMs: Date.now() - pageStartedMs,
+              sourceBytes,
+              promptBytes,
+              timeToFirstChunkMs,
+              inputTokens,
+              outputTokens,
             })
-            return await result.object
+            return object
           } catch (error) {
+            if (NoObjectGeneratedError.isInstance(error)) recordUsage(error.usage)
             // Keep a foreground cancel intact. A page deadline must name the
             // page and must not be retried as a schema failure.
-            if (input.signal?.aborted) throw error
+            if (input.signal?.aborted) {
+              outcomes.set(request.page.path, {
+                path: request.page.path,
+                status: "failed",
+                attempts: attempt + 1,
+                failureClass: "cancelled",
+                durationMs: Date.now() - pageStartedMs,
+                sourceBytes,
+                promptBytes,
+                inputTokens,
+                outputTokens,
+                message: "Build cancelled",
+              })
+              throw error
+            }
             if (abort.signal.aborted) {
               outcomes.set(request.page.path, {
                 path: request.page.path,
                 status: "failed",
                 attempts: attempt + 1,
-                failureClass: "unclassified",
+                failureClass: "timeout",
                 durationMs: Date.now() - pageStartedMs,
                 message: "page deadline exceeded",
+                sourceBytes,
+                promptBytes,
+                inputTokens,
+                outputTokens,
               })
               throw new Error(`Wiki page generation timed out: ${request.page.path}`)
             }
@@ -806,6 +907,10 @@ export async function runNativeWiki(input: {
                 responseCharacters: structured ? (error.text?.length ?? 0) : 0,
                 durationMs: Date.now() - pageStartedMs,
                 message: error instanceof Error ? error.message : String(error),
+                sourceBytes,
+                promptBytes,
+                inputTokens,
+                outputTokens,
               })
               throw error
             }
@@ -828,6 +933,14 @@ export async function runNativeWiki(input: {
         wikiDir: config.dir,
         action: input.action,
         generator,
+        pageResultCache: {
+          ...staged,
+          read: async (page, key) => {
+            const result = await staged.read(page, key)
+            const parsed = PAGE_SCHEMA.safeParse(result)
+            return parsed.success ? parsed.data : undefined
+          },
+        },
         // The full-pipeline lock is already held above; hand it to the write
         // phase so buildAxWiki does not deadlock on its default filesystem lock.
         // Release is idempotent: the write phase releases first, and the outer
@@ -837,7 +950,13 @@ export async function runNativeWiki(input: {
           input.includeGraphEvidence === false
             ? undefined
             : { provide: (request) => evidenceProvider(request, snapshot) },
-        config: engineConfig(config),
+        config: {
+          ...engineConfig(config),
+          generationConcurrency: wikiPageGenerationConcurrency(
+            model.reference.providerID,
+            config.generationConcurrency ?? diskConfig.generationConcurrency,
+          ),
+        },
         model: model.label,
         repositoryHead,
         force: input.force,
@@ -858,8 +977,20 @@ export async function runNativeWiki(input: {
       // build outcome, so this is best-effort: a failed write is logged and
       // ignored, and its absence is tolerated by every reader.
       try {
+        for (const failed of result?.failedPages ?? []) {
+          if (outcomes.get(failed.path)?.status === "failed") continue
+          outcomes.set(failed.path, {
+            path: failed.path,
+            status: "failed",
+            attempts: 0,
+            durationMs: 0,
+            failureClass: "unclassified",
+            message: failed.error,
+          })
+        }
         const recorded = [...outcomes.values()].find((outcome) => outcome.status === "failed")
-        const written = [...outcomes.values()].filter((outcome) => outcome.status === "written")
+        const generated = [...outcomes.values()].filter((outcome) => outcome.status === "generated")
+        const cached = [...outcomes.values()].filter((outcome) => outcome.status === "cached")
         // A page can also fail after the generator returns (e.g. an unusable
         // result rejected by the compiler), so fall back to the build result.
         const failed =
@@ -874,23 +1005,30 @@ export async function runNativeWiki(input: {
                 message: result.failedPages[0].error,
               }
             : undefined)
-        await writeWikiBuildReport(input.root, config.dir, {
-          schemaVersion: WIKI_BUILD_REPORT_SCHEMA_VERSION,
-          action: input.action,
-          outcome: failure !== undefined ? "failed" : failed !== undefined ? "partial" : "completed",
-          model: model.label,
-          generator: { version: Installation.VERSION, promptVersion: WIKI_PROMPT_VERSION },
-          repositoryHead,
-          startedAt: buildStartedAt.toISOString(),
-          finishedAt: new Date().toISOString(),
-          durationMs: Date.now() - buildStartedMs,
-          pageCount,
-          written: written.map((outcome) => outcome.path),
-          failed,
-          notAttemptedCount: Math.max(0, (pageCount ?? attempted) - attempted),
-          planHash: result?.manifest?.planHash,
-          error: failure,
-        })
+        if (input.allowWrite?.(`${config.dir}/.build-report.json`) !== false)
+          await writeWikiBuildReport(input.root, config.dir, {
+            schemaVersion: WIKI_BUILD_REPORT_SCHEMA_VERSION,
+            action: input.action,
+            outcome: failure !== undefined ? "failed" : failed !== undefined ? "partial" : "completed",
+            model: model.label,
+            generator: { version: Installation.VERSION, promptVersion: WIKI_PROMPT_VERSION },
+            repositoryHead,
+            startedAt: buildStartedAt.toISOString(),
+            finishedAt: new Date().toISOString(),
+            durationMs: Date.now() - buildStartedMs,
+            pageCount,
+            written: result?.generatedPages ?? [],
+            generated: generated.map((outcome) => outcome.path),
+            cached: cached.map((outcome) => outcome.path),
+            pages: [...outcomes.values()].map((outcome) => ({
+              ...outcome,
+              published: result?.generatedPages.includes(outcome.path) ?? false,
+            })),
+            failed,
+            notAttemptedCount: Math.max(0, (pageCount ?? attempted) - attempted),
+            planHash: result?.manifest?.planHash,
+            error: failure,
+          })
       } catch (error) {
         log.warn("wiki build report write failed", {
           error: error instanceof Error ? error.message : String(error),

@@ -1344,6 +1344,13 @@ export const Info = z
         include: z.array(z.string()).optional().describe("Optional source glob allowlist for AX Wiki discovery."),
         exclude: z.array(z.string()).optional().describe("Additional source globs excluded from AX Wiki discovery."),
         maxPages: z.number().int().min(3).max(40).optional().describe("Maximum generated page count. Default: 12."),
+        generationConcurrency: z
+          .number()
+          .int()
+          .min(1)
+          .max(2)
+          .optional()
+          .describe("Maximum simultaneous Wiki page calls. Default: 2 for cloud models, 1 for local and CLI models."),
         maxSourcesPerPage: z
           .number()
           .int()

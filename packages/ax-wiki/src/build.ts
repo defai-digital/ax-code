@@ -41,6 +41,12 @@ function assertAxWikiConfigShape(value: unknown, file: string): asserts value is
       throw invalid(`${key} must be a positive number`)
     }
   }
+  if (
+    value.generationConcurrency !== undefined &&
+    value.generationConcurrency !== 1 &&
+    value.generationConcurrency !== 2
+  )
+    throw invalid("generationConcurrency must be 1 or 2")
   if (value.instructions !== undefined && typeof value.instructions !== "string") {
     throw invalid("instructions must be a string")
   }
@@ -73,7 +79,7 @@ async function readJson<T>(file: string): Promise<T | undefined> {
   }
 }
 
-async function readCompilerConfig(file: string, limit = 128_000): Promise<string> {
+export async function readCompilerConfig(file: string, limit = 128_000): Promise<string> {
   // O_NOFOLLOW refuses a symlink without a separate lstat/open race.
   let handle
   try {
@@ -221,6 +227,7 @@ export async function buildAxWiki(input: WikiBuildInput): Promise<WikiBuildResul
     config,
     previous,
     generator: input.generator,
+    pageResultCache: input.pageResultCache,
     evidenceReader: ({ sources: selected, maxTotalBytes }) =>
       readSourceEvidence({ root, sources: selected, maxTotalBytes }),
     readExistingPage,
@@ -303,6 +310,10 @@ export async function buildAxWiki(input: WikiBuildInput): Promise<WikiBuildResul
       }
       throw error
     }
+
+    // Staging is no longer needed once the manifest commit succeeded. Cleanup is
+    // best-effort in the cache implementation and never changes publication.
+    for (const [page, key] of pure.cacheKeys) await input.pageResultCache?.remove(page, key).catch(() => {})
 
     return {
       action: input.action,

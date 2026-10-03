@@ -134,3 +134,31 @@ describe("default idle Wiki maintenance", () => {
     await s.controller.dispose()
   })
 })
+
+test("concurrent page indices do not overstate or move progress backwards", async () => {
+  let finish!: () => void
+  const done = new Promise<void>((resolve) => {
+    finish = resolve
+  })
+  const s = setup({
+    build: async (_signal, progress) => {
+      progress({ type: "plan", pageCount: 3 })
+      progress({ type: "page_start", path: "quickstart.md", index: 1, total: 3, completed: 0 })
+      progress({ type: "page_start", path: "architecture.md", index: 2, total: 3, completed: 0 })
+      expect(s.controller.status().completed).toBe(0)
+      progress({ type: "page_complete", path: "architecture.md", index: 2, total: 3, completed: 1 })
+      expect(s.controller.status().completed).toBe(1)
+      progress({ type: "page_start", path: "development.md", index: 3, total: 3, completed: 1 })
+      expect(s.controller.status().completed).toBe(1)
+      progress({ type: "page_failed", path: "development.md", index: 3, total: 3, completed: 2 })
+      progress({ type: "page_complete", path: "quickstart.md", index: 1, total: 3, completed: 3 })
+      expect(s.controller.status().completed).toBe(3)
+      await done
+    },
+  })
+  await vi.advanceTimersByTimeAsync(30_000)
+  expect(s.controller.status().completed).toBe(3)
+  finish()
+  await vi.advanceTimersByTimeAsync(0)
+  await s.controller.dispose()
+})

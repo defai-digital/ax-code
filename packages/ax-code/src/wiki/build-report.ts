@@ -14,17 +14,31 @@ import { parseJsonStrict } from "../util/json-value"
 export const WIKI_BUILD_REPORT_SCHEMA_VERSION = 1
 export const WIKI_BUILD_REPORT_FILE = ".build-report.json"
 
-export type WikiPageFailureClass = "length" | "format" | "transient" | "unclassified"
+export type WikiPageFailureClass =
+  | "length"
+  | "format"
+  | "transient"
+  | "validation"
+  | "timeout"
+  | "cancelled"
+  | "unclassified"
 
 export type WikiBuildReportPageOutcome = {
   path: string
-  status: "written" | "failed"
+  /** `written` is retained for old schema-v1 reports. New reports use generated/cached. */
+  status: "written" | "generated" | "cached" | "failed"
   attempts: number
   durationMs: number
   failureClass?: WikiPageFailureClass
   finishReason?: string
   responseCharacters?: number
   message?: string
+  published?: boolean
+  sourceBytes?: number
+  promptBytes?: number
+  inputTokens?: number
+  outputTokens?: number
+  timeToFirstChunkMs?: number
 }
 
 export type WikiBuildReport = {
@@ -43,6 +57,9 @@ export type WikiBuildReport = {
   durationMs: number
   pageCount?: number
   written: string[]
+  generated?: string[]
+  cached?: string[]
+  pages?: WikiBuildReportPageOutcome[]
   /** The first page that failed this build, when the outcome is `failed`. */
   failed?: WikiBuildReportPageOutcome
   notAttemptedCount: number

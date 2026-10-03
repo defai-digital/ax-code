@@ -51,6 +51,7 @@ import {
   wikiPageBudgetPolicy,
   wikiPageOutputTokens,
   wikiPageProviderOptions,
+  wikiPageGenerationConcurrency,
   WIKI_PAGE_OUTPUT_TOKEN_MAX,
 } from "../../src/wiki/native"
 import { parseJsonStrict } from "../../src/util/json-value"
@@ -179,7 +180,7 @@ async function runNative(
 async function runNativeSequence(
   tmpPath: string,
   results: Array<{ streamError?: unknown }>,
-  overrides: { failedPages?: { path: string; error: string }[] } = {},
+  overrides: { failedPages?: { path: string; error: string }[]; errorAfterGeneration?: string } = {},
 ): Promise<void> {
   const queue = [...results]
   vi.mocked(generateObject).mockImplementation(async () => ({ ...generatedPage(), ...(queue.shift() ?? {}) }))
@@ -194,6 +195,7 @@ async function runNativeSequence(
       sourceInventory: [SOURCE],
     }
     await input.generator(request)
+    if (overrides.errorAfterGeneration) throw new Error(overrides.errorAfterGeneration)
     return { ...wikiResult(tmpPath, request), ...overrides }
   })
 
@@ -819,4 +821,60 @@ describe("wiki model resolution", () => {
     expect(await resolveWikiModelRef({ sessionID: ID })).toEqual(FALLBACK)
     expect(await resolveWikiModelRef({})).toEqual(FALLBACK)
   })
+})
+
+describe("Wiki concurrency policy", () => {
+  test.each([
+    "ax-engine",
+    "muse-cli",
+    "grok-cli",
+    "local-llm",
+    "ollama",
+    "lmstudio",
+    "mtplx",
+    "omlx",
+    "ax-studio",
+    "custom-private-gpu",
+  ])("keeps %s serial by default", (provider) => {
+    expect(wikiPageGenerationConcurrency(provider)).toBe(1)
+  })
+  test("cloud defaults two and explicit limits override either policy", () => {
+    expect(wikiPageGenerationConcurrency("openai")).toBe(2)
+    expect(wikiPageGenerationConcurrency("openai", 1)).toBe(1)
+    expect(wikiPageGenerationConcurrency("ax-engine", 2)).toBe(2)
+  })
+})
+
+test("records generated successes without claiming publication after final validation fails", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await expect(
+    runNativeSequence(tmp.path, [{}], { errorAfterGeneration: "Final validation rejected candidate" }),
+  ).rejects.toThrow("Final validation rejected candidate")
+  const report = await readBuildReport(tmp.path)
+  expect(report?.outcome).toBe("failed")
+  expect(report?.written).toEqual([])
+  expect(report?.generated).toEqual([PAGE.path])
+  expect(report?.pages?.[0]).toMatchObject({ status: "generated", published: false, attempts: 1 })
+})
+
+test("passes maxRetries zero so the native loop owns transport retries", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await runNative(tmp.path)
+  expect(generateObject.mock.calls[0][0].maxRetries).toBe(0)
+})
+
+test("retains every failed compiler page in a partial-build report", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await runNativeSequence(tmp.path, [{}], {
+    failedPages: [
+      { path: "one.md", error: "evidence read failed" },
+      { path: "two.md", error: "render failed" },
+    ],
+  })
+  const report = await readBuildReport(tmp.path)
+  expect(report?.pages?.filter((item) => item.status === "failed").map((item) => item.path)).toEqual([
+    "one.md",
+    "two.md",
+  ])
+  expect(report?.pages?.find((item) => item.path === "one.md")?.message).toBe("evidence read failed")
 })

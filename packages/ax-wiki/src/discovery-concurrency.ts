@@ -3,8 +3,8 @@ export const DISCOVERY_READ_CONCURRENCY = 8
 
 /**
  * Run an async mapper with bounded concurrency while preserving input order.
- * The first mapper failure rejects the whole run and workers stop picking up
- * new items (in-flight items settle normally, so no rejection goes unobserved).
+ * The first mapper failure stops new work. Drain in-flight items before rejecting,
+ * so callers can safely release locks or dispose providers after this settles.
  * This module is intentionally absent from the package export map.
  */
 export async function mapWithBoundedConcurrency<T, R>(
@@ -17,6 +17,8 @@ export async function mapWithBoundedConcurrency<T, R>(
   const results = new Array<R>(items.length)
   let next = 0
   let failed = false
+  let failure: unknown
+  let failureIndex = Infinity
   await Promise.all(
     Array.from({ length: limit }, async () => {
       while (!failed) {
@@ -25,11 +27,15 @@ export async function mapWithBoundedConcurrency<T, R>(
         try {
           results[index] = await mapper(items[index]!, index)
         } catch (error) {
+          if (index < failureIndex) {
+            failureIndex = index
+            failure = error
+          }
           failed = true
-          throw error
         }
       }
     }),
   )
+  if (failed) throw failure
   return results
 }

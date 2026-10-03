@@ -30,3 +30,19 @@ describe("mapWithBoundedConcurrency", () => {
     expect(started).not.toContain(6)
   })
 })
+
+test("reports the earliest input failure after draining multiple failing workers", async () => {
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const pending = mapWithBoundedConcurrency([0, 1], 2, async (index) => {
+    if (index === 0) {
+      await gate
+      throw new Error("first input failed")
+    }
+    release()
+    throw new Error("second input failed")
+  })
+  await expect(pending).rejects.toThrow("first input failed")
+})

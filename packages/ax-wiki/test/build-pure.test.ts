@@ -11,6 +11,7 @@ import {
   type Provenance,
   type WikiEvidenceReader,
   type WikiPageGenerationRequest,
+  type WikiPageGenerationResult,
   type WikiSource,
 } from "../src"
 import { projectWikiManifest } from "../src/graph.js"
@@ -640,8 +641,220 @@ describe("partial update (ADR-156)", () => {
   })
 
   test("a generate build still fails closed when a page fails", async () => {
+    await expect(buildPure({ ...baseInput(), generator: faultyGenerator("quickstart.md") })).rejects.toThrow(
+      "deterministic page failure",
+    )
+  })
+})
+
+function stagedCache() {
+  const entries = new Map<string, WikiPageGenerationResult>()
+  return {
+    entries,
+    read: vi.fn(async (page: string, key: string) => entries.get(`${page}:${key}`)),
+    write: vi.fn(async (page: string, key: string, result: WikiPageGenerationResult) => {
+      entries.set(`${page}:${key}`, result)
+    }),
+    remove: vi.fn(async (page: string, key: string) => {
+      entries.delete(`${page}:${key}`)
+    }),
+  }
+}
+
+function gate() {
+  let release!: () => void
+  const wait = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  return { release, wait }
+}
+
+describe("resumable bounded generation", () => {
+  test("runs at most two pages concurrently and assembles results in plan order", async () => {
+    const starts = Array.from({ length: 5 }, gate)
+    const finishes = Array.from({ length: 5 }, gate)
+    let active = 0
+    let peak = 0
+    let calls = 0
+    const progress: number[] = []
+    const make = generator()
+    const input = baseInput()
+    const pending = buildPure({
+      ...input,
+      config: { generationConcurrency: 2 },
+      generator: async (request) => {
+        const index = calls++
+        peak = Math.max(peak, ++active)
+        starts[index]!.release()
+        await finishes[index]!.wait
+        active--
+        return make(request)
+      },
+      onProgress: (event) => {
+        if (event.type === "page_complete") progress.push(event.completed!)
+      },
+    })
+    await Promise.all([starts[0]!.wait, starts[1]!.wait])
+    expect(calls).toBe(2)
+    finishes[1]!.release()
+    await starts[2]!.wait
+    finishes[2]!.release()
+    await starts[3]!.wait
+    finishes[3]!.release()
+    await starts[4]!.wait
+    finishes[4]!.release()
+    finishes[0]!.release()
+    const result = await pending
+    expect(peak).toBe(2)
+    expect(result.generatedPages).toEqual(result.plan.pages.map((page) => page.path))
+    expect([...result.generated.keys()]).toEqual(result.generatedPages)
+    expect(progress).toEqual([1, 2, 3, 4, 5])
+  })
+
+  test("drains an in-flight page before rejecting and starts no new page after failure", async () => {
+    const second = gate()
+    const started = gate()
+    const failed = gate()
+    let calls = 0
+    let settled = false
+    const make = generator()
+    const pending = buildPure({
+      ...baseInput(),
+      config: { generationConcurrency: 2 },
+      generator: async (request) => {
+        if (calls++ === 0) {
+          await started.wait
+          failed.release()
+          throw new Error("first page failed")
+        }
+        started.release()
+        await second.wait
+        return make(request)
+      },
+    }).catch((error) => {
+      settled = true
+      throw error
+    })
+    const assertion = expect(pending).rejects.toThrow("first page failed")
+    await failed.wait
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    expect(calls).toBe(2)
+    second.release()
+    await assertion
+    expect(calls).toBe(2)
+  })
+
+  test("detects broken links before generating remaining pages", async () => {
+    const make = generator()
+    make.mockImplementation(async (request) => ({
+      summary: "A sufficiently long repository summary.",
+      body: `This page explains ${request.page.purpose} and gives source-backed guidance. [Missing](missing.md)`,
+      symbols: [],
+    }))
+    await expect(buildPure({ ...baseInput(), generator: make })).rejects.toThrow("wiki.link_broken")
+    expect(make).toHaveBeenCalledTimes(1)
+  })
+
+  test("allows links to planned sibling pages that have not generated yet", async () => {
+    const make = generator()
+    make.mockImplementation(async (request) => ({
+      summary: "A sufficiently long repository summary.",
+      body:
+        `This page explains ${request.page.purpose} and gives source-backed guidance. ` +
+        (request.page.path === "quickstart.md" ? "[Architecture](architecture/overview.md)" : ""),
+      symbols: [],
+    }))
+    expect((await buildPure({ ...baseInput(), generator: make })).validation.ok).toBe(true)
+  })
+
+  test("resumes completed results after cancellation without publishing a torn initial build", async () => {
+    const cache = stagedCache()
+    const abort = new AbortController()
+    const input = baseInput()
     await expect(
-      buildPure({ ...baseInput(), generator: faultyGenerator("quickstart.md") }),
-    ).rejects.toThrow("deterministic page failure")
+      buildPure({
+        ...input,
+        signal: abort.signal,
+        pageResultCache: cache,
+        onProgress: (event) => {
+          if (event.type === "page_complete") abort.abort()
+        },
+      }),
+    ).rejects.toThrow()
+    expect(input.generator).toHaveBeenCalledTimes(1)
+    expect(cache.entries.size).toBe(1)
+    const resumed = generator()
+    const result = await buildPure({ ...baseInput(), pageResultCache: cache, generator: resumed })
+    expect(resumed).toHaveBeenCalledTimes(4)
+    expect(result.validation.ok).toBe(true)
+    expect(result.generatedPages).toHaveLength(5)
+  })
+
+  test.each(["source", "instructions", "identity", "previous", "plan", "evidence"])(
+    "does not reuse staged results after %s changes",
+    async (change) => {
+      const cache = stagedCache()
+      const input = baseInput()
+      const identity = { name: "fixture", version: "1", promptVersion: "1" }
+      await buildPure({ ...input, generatorIdentity: identity, pageResultCache: cache })
+      const make = generator()
+      const modified: Parameters<typeof buildPure>[0] = {
+        ...baseInput(),
+        generator: make,
+        generatorIdentity: identity,
+        pageResultCache: cache,
+      }
+      if (change === "source")
+        modified.sources = modified.sources.map((source) => ({ ...source, hash: source.hash + "changed" }))
+      if (change === "instructions") modified.config = { instructions: "Updated maintainer guidance" }
+      if (change === "identity") modified.generatorIdentity = { ...identity, promptVersion: "2" }
+      if (change === "previous") modified.readExistingPage = async () => "Previous page content"
+      if (change === "plan") modified.config = { maxPages: 3 }
+      if (change === "evidence")
+        modified.evidenceReader = async ({ sources }) =>
+          sources.map((source) => ({ ...source, content: "Different source excerpt", truncated: true }))
+      const result = await buildPure(modified)
+      expect(make).toHaveBeenCalledTimes(result.generatedPages.length)
+    },
+  )
+
+  test("changing concurrency does not invalidate existing page content", async () => {
+    const first = await buildPure({ ...baseInput(), config: { generationConcurrency: 1 } })
+    const make = generator()
+    const second = await buildPure({
+      ...baseInput(),
+      action: "update",
+      config: { generationConcurrency: 2 },
+      generator: make,
+      previous: first.manifest,
+      readExistingPage: async (page) => first.candidate.get(page),
+    })
+    expect(make).not.toHaveBeenCalled()
+    expect(second.generatedPages).toEqual([])
+  })
+
+  test("a broken-link page fails alone on update and preserves its previous fingerprint", async () => {
+    const first = await buildPure(baseInput())
+    const make = generator()
+    make.mockImplementation(async (request) => ({
+      summary: "A sufficiently long repository summary.",
+      body:
+        `This page explains ${request.page.purpose} and gives source-backed guidance. ` +
+        (request.page.path === "quickstart.md" ? "[Missing](missing.md)" : ""),
+      symbols: [],
+    }))
+    const result = await buildPure({
+      ...baseInput(),
+      action: "update",
+      config: { instructions: "new", generationConcurrency: 2 },
+      generator: make,
+      previous: first.manifest,
+      readExistingPage: async (page) => first.candidate.get(page),
+    })
+    expect(result.failedPages).toHaveLength(1)
+    expect(result.failedPages[0]!.path).toBe("quickstart.md")
+    expect(result.generatedPages).toHaveLength(4)
+    expect(result.manifest.pages["quickstart.md"]).toEqual(first.manifest.pages["quickstart.md"])
   })
 })

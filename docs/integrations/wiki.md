@@ -143,6 +143,7 @@ Configure the integration in project `ax-code.json`:
     "autoInjectAgents": true,
     "touchClaudeMd": true,
     "maxPages": 12,
+    "generationConcurrency": 2,
     "maxSourcesPerPage": 80,
     "exclude": ["fixtures/**"]
   }
@@ -150,6 +151,14 @@ Configure the integration in project `ax-code.json`:
 ```
 
 `include`, `exclude`, `maxSourceBytes`, and `maxPageSourceBytes` control evidence discovery and budgets. `instructions` adds project-specific compiler guidance. For a fully curated plan, configure `pages` entries with `path`, `title`, `purpose`, and `selectors`; an explicit plan must include `quickstart.md`.
+
+`generationConcurrency` accepts `1` or `2`. Native cloud generation defaults to two simultaneous page calls; local engines and CLI providers default to one. Set it to `1` when a provider queues or throttles overlapping requests. Scheduling does not invalidate existing page content. The reusable package stays serial unless this setting is supplied.
+
+Each model page gets at most two classified attempts sharing a 180-second deadline. Relative Wiki links are checked against the page plan before the page is accepted; a broken-link response may use the remaining attempt to repair that page. Final validation and manual-content guards still run before publication.
+
+Interrupted builds retain validated results in `.ax-wiki/.page-cache/` (or the configured Wiki directory). A later build reuses matching results only after checking current source evidence, plan, generator, model and previous content. Initial generation remains unpublished until the complete candidate passes validation. Successful publication removes consumed staging entries; subsequent explicit `wiki generate` still regenerates all pages. Cache entries are bounded and permission-gated; corrupt or inaccessible entries are ignored.
+
+`.build-report.json` distinguishes model-generated and cached pages from `written` pages, which were actually published. Its optional `pages` array records each page's attempts, duration, prompt/source byte sizes and exact token usage when supplied by the provider. Failed or cancelled builds report no published pages.
 
 You can also place compiler guidance in `ax-wiki.instructions.md` and core engine configuration in `ax-wiki.config.json`. Explicit AX Code runtime settings override the core config where both are supplied.
 

@@ -51,6 +51,7 @@ export async function resolveWikiRuntimeConfig(
 
 export function engineConfig(config: WikiRuntimeConfig): AxWikiConfig {
   return {
+    generationConcurrency: config.generationConcurrency,
     include: config.include,
     exclude: config.exclude,
     pages: config.pages,

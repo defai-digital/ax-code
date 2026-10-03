@@ -218,8 +218,11 @@ async function runGenerateOrUpdate(
             else if (progress.type === "plan") UI.println(`  planned ${progress.pageCount} pages`)
             else if (progress.type === "page_start")
               UI.println(`  [${progress.index}/${progress.total}] ${progress.path}`)
+            else if (progress.type === "page_cached") UI.println(`  reused completed page: ${progress.path}`)
             else if (progress.type === "page_failed")
-              UI.println(`  [${progress.index}/${progress.total}] ${progress.path} failed; other pages continue`)
+              UI.println(
+                `  [${progress.index}/${progress.total}] ${progress.path} failed; ${action === "update" ? "other pages continue" : "generation stopped"}`,
+              )
             else if (progress.type === "validate") UI.println(`  validation issues: ${progress.issueCount}`)
           },
     })

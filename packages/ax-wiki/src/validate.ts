@@ -24,6 +24,29 @@ function markdownLinkTargets(content: string): string[] {
   return targets
 }
 
+/** Validate relative links against all planned paths before sibling pages exist. */
+export function validateWikiPageLinks(
+  pagePath: string,
+  content: string,
+  knownPages: ReadonlySet<string>,
+): WikiValidationIssue[] {
+  const issues: WikiValidationIssue[] = []
+  for (const href of markdownLinkTargets(content)) {
+    const target = href.split("#")[0]!
+    if (!target || /^(https?:|mailto:|#)/.test(target) || target.startsWith("/")) continue
+    const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(pagePath), target))
+    if (target.endsWith(".md") && !knownPages.has(resolved)) {
+      issues.push({
+        level: "error",
+        code: "wiki.link_broken",
+        page: pagePath,
+        message: `${pagePath} links to missing page: ${target}`,
+      })
+    }
+  }
+  return issues
+}
+
 export function validateWikiCandidate(input: {
   plan: WikiPlan
   pages: Map<string, string>
@@ -159,19 +182,7 @@ export function validateWikiCandidate(input: {
         }
       }
     }
-    for (const href of markdownLinkTargets(content)) {
-      const target = href.split("#")[0]!
-      if (!target || /^(https?:|mailto:|#)/.test(target) || target.startsWith("/")) continue
-      const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(pagePath), target))
-      if (target.endsWith(".md") && !knownPages.has(resolved)) {
-        issues.push({
-          level: "error",
-          code: "wiki.link_broken",
-          page: pagePath,
-          message: `${pagePath} links to missing page: ${target}`,
-        })
-      }
-    }
+    issues.push(...validateWikiPageLinks(pagePath, content, knownPages))
   }
 
   if (input.manifest) {

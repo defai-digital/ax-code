@@ -77,6 +77,13 @@ export const SYMBOL_SUMMARY_MAX = 300
 
 export type WikiPageGenerator = (request: WikiPageGenerationRequest) => Promise<WikiPageGenerationResult>
 
+/** Staged results only: cache hits still pass rendering, conflict checks and validation. */
+export type WikiPageResultCache = {
+  read(page: string, key: string): Promise<WikiPageGenerationResult | undefined>
+  write(page: string, key: string, result: WikiPageGenerationResult): Promise<void>
+  remove(page: string, key: string): Promise<void>
+}
+
 export type WikiGraphContextProvider = (input: {
   page: WikiPlanPage
   sources: WikiSource[]
@@ -90,6 +97,8 @@ export type WikiPageConfig = {
 }
 
 export type AxWikiConfig = {
+  /** Execution policy, excluded from content fingerprints. Default: 1. */
+  generationConcurrency?: number
   include?: string[]
   exclude?: string[]
   pages?: WikiPageConfig[]
@@ -153,9 +162,10 @@ export type WikiValidationReport = {
 export type WikiBuildProgress =
   | { type: "discover"; sourceCount: number }
   | { type: "plan"; pageCount: number }
-  | { type: "page_start"; path: string; index: number; total: number }
-  | { type: "page_complete"; path: string; index: number; total: number }
-  | { type: "page_failed"; path: string; index: number; total: number }
+  | { type: "page_start"; path: string; index: number; total: number; completed?: number }
+  | { type: "page_complete"; path: string; index: number; total: number; completed?: number }
+  | { type: "page_failed"; path: string; index: number; total: number; completed?: number; error?: string }
+  | { type: "page_cached"; path: string }
   | { type: "validate"; issueCount: number }
   | { type: "write"; path: string }
 
@@ -178,6 +188,7 @@ export type WikiBuildInput = {
   wikiDir?: string
   action: WikiAction
   generator: WikiPageGenerator
+  pageResultCache?: WikiPageResultCache
   graphContext?: WikiGraphContextProvider
   /**
    * Typed semantic evidence for each planned page. When set, this is the

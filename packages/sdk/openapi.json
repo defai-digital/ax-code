@@ -38478,6 +38478,12 @@
                 "minimum": 3,
                 "maximum": 40
               },
+              "generationConcurrency": {
+                "description": "Maximum simultaneous Wiki page calls. Default: 2 for cloud models, 1 for local and CLI models.",
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 2
+              },
               "maxSourcesPerPage": {
                 "description": "Maximum evidence files selected per page.",
                 "type": "integer",
