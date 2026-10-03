@@ -1,5 +1,6 @@
 import type { Part } from "@ax-code/sdk/v2"
 import type { ReplayEvent } from "@/replay/event"
+import { Env } from "@/util/env"
 import { agentControlActivityItems } from "./agent-control-activity"
 import { routeEvent, type AgentInfo } from "./route"
 
@@ -108,11 +109,12 @@ export function activityLabel(part: Part): string {
   if (part.type !== "tool") return ""
   const state = part.state as { status: string; title?: string; error?: string }
   if (state.title) {
-    return state.title.length > 33 ? state.title.slice(0, 30) + "..." : state.title
+    const title = Env.redactForRecord(state.title)
+    return title.length > 33 ? title.slice(0, 30) + "..." : title
   }
   if (state.status === "pending") return `${part.tool} (pending)`
   if (state.status === "error" && state.error) {
-    const label = `${part.tool}: ${state.error.replace(/\n/g, " ")}`
+    const label = Env.redactForRecord(`${part.tool}: ${state.error}`).replace(/\n/g, " ")
     return label.length > 33 ? label.slice(0, 30) + "..." : label
   }
   return part.tool

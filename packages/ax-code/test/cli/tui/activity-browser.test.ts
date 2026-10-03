@@ -294,6 +294,46 @@ describe("activity browser: detail", () => {
     expect(redact("plain text")).toBe("plain text")
   })
 
+  test("redacts labels before clipping and covers titles, overview and related records", () => {
+    const secret = ["ghp", "_", "abcdefghijklmnopqrstuvwxyz", "0123456789"].join("")
+    const title = `Inspect ${secret}`
+    const part = tool("private", "bash", {
+      status: "completed",
+      title,
+      input: { command: "date" },
+      output: "ok",
+      metadata: {},
+      time: { start: T0 + 1, end: T0 + 2 },
+    })
+    const list = buildEntries(
+      [part],
+      [
+        row(T0, { type: "permission.ask", permission: "bash", tool: "bash", patterns: [`password=${secret}`] }),
+        row(T0 + 3, { type: "error", errorType: "ProviderError", message: `credential=${secret}` }),
+      ],
+    )
+    const displayed = list.map(({ label, description }) => ({ label, description }))
+    expect(JSON.stringify(displayed)).not.toContain(secret.slice(0, 20))
+    const entry = list.find((item) => item.id === "private")!
+    const detail = detailFor(entry, list)
+    expect(JSON.stringify(detail)).not.toContain(secret.slice(0, 20))
+    expect(detail.title).toContain("[redacted")
+    expect(detail.copyText).toContain("Title: Inspect [redacted secret]")
+    expect(detail.copyText).toContain("Related")
+    // Rendering a redacted view must preserve the original tool state.
+    expect((part as Extract<Part, { type: "tool" }>).state).toMatchObject({ title })
+  })
+
+  test("redacts error labels before their credential values are truncated", () => {
+    const secret = ["ghp", "_", "abcdefghijklmnopqrstuvwxyz", "0123456789"].join("")
+    const entry = buildEntries(
+      [tool("private-error", "bash", { status: "error", input: {}, error: `Failed ${secret}` })],
+      [],
+    )[0]!
+    expect(entry.label).toContain("[redacted")
+    expect(JSON.stringify(detailFor(entry))).not.toContain(secret.slice(0, 20))
+  })
+
   test("long output is cut for display with an exact omission note, but copy keeps everything", () => {
     const output = Array.from({ length: 200 }, (_, i) => `line ${i}`).join("\n")
     const part = tool("p8", "bash", {
@@ -320,6 +360,34 @@ describe("activity browser: detail", () => {
     const cut = truncateBlock(giant)
     expect(cut.omitted?.chars).toBeGreaterThan(10_000)
     expect(cut.lines.join("").length).toBeLessThan(9000)
+  })
+
+  test("many giant lines obey both display caps and place the omission between head and tail", () => {
+    const output = Array.from({ length: 100 }, (_, i) => `line ${i} ${"x".repeat(2000)}`).join("\n")
+    const cut = truncateBlock(output)
+    expect(cut.lines.length).toBeLessThanOrEqual(60)
+    expect(cut.lines.join("\n").length).toBeLessThanOrEqual(8000)
+    expect(cut.omitted!.chars).toBe(output.length - cut.lines.join("\n").length + 1)
+    const entry = buildEntries(
+      [
+        tool("large", "bash", {
+          status: "completed",
+          input: {},
+          output,
+          metadata: {},
+          time: { start: T0, end: T0 + 1 },
+        }),
+      ],
+      [],
+    )[0]!
+    const detail = detailFor(entry)
+    const shown = detail.sections.find((section) => section.heading === "Output")!.lines
+    const omission = shown.findIndex((line) => line.includes("omitted"))
+    expect(omission).toBeGreaterThan(0)
+    expect(omission).toBeLessThan(shown.length - 1)
+    expect(shown[0]).toMatch(/^line 0 /)
+    expect(shown.at(-1)).toBe(output.slice(-800))
+    expect(detail.copyText).toContain(output)
   })
 
   test("a safety decision shows the recorded fields and links to the call it likely governed", () => {

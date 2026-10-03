@@ -178,7 +178,13 @@ export function buildEntries(parts: Part[], rows: Row[], agents?: AgentInfo[]): 
     }
   })
   // Stable merge: newest first, ties keep production order.
-  return [...base, ...extra].toSorted((a, b) => (b.time ?? 0) - (a.time ?? 0))
+  return [...base, ...extra]
+    .map((entry) => ({
+      ...entry,
+      label: redact(entry.label),
+      description: entry.description === undefined ? undefined : redact(entry.description),
+    }))
+    .toSorted((a, b) => (b.time ?? 0) - (a.time ?? 0))
 }
 
 export function nextFilter(filter: ActivityFilter): ActivityFilter {
@@ -328,26 +334,30 @@ export function redact(text: string): string {
 }
 
 /** Keep the first and last lines of a long block and say exactly how much was left out. */
-export function truncateBlock(text: string): { lines: string[]; omitted?: { lines: number; chars: number } } {
+export function truncateBlock(text: string): {
+  lines: string[]
+  omitted?: { lines: number; chars: number; after: number }
+} {
   const lines = text.split("\n")
   const tooMany = lines.length > HEAD_LINES + TAIL_LINES
   const tooBig = text.length > MAX_CHARS
   if (!tooMany && !tooBig) return { lines }
-  if (tooMany) {
-    const head = lines.slice(0, HEAD_LINES)
-    const tail = lines.slice(lines.length - TAIL_LINES)
-    const omittedText = lines.slice(HEAD_LINES, lines.length - TAIL_LINES).join("\n")
-    return {
-      lines: [...head, ...tail],
-      omitted: { lines: lines.length - HEAD_LINES - TAIL_LINES, chars: omittedText.length },
-    }
+  // Enforce both caps: keeping sixty giant lines still overwhelms the renderer.
+  let head = lines.slice(0, HEAD_LINES).join("\n")
+  let tail = lines.slice(-TAIL_LINES).join("\n")
+  if (head.length + tail.length + 1 > MAX_CHARS) {
+    head = head.slice(0, MAX_CHARS - 1000)
+    tail = tail.slice(-800)
   }
-  // A few very long lines: clip by characters instead.
-  const head = text.slice(0, MAX_CHARS - 1000)
-  const tail = text.slice(text.length - 800)
+  const headLines = head.split("\n")
+  const tailLines = tail.split("\n")
   return {
-    lines: [...head.split("\n"), ...tail.split("\n")],
-    omitted: { lines: 0, chars: text.length - head.length - tail.length },
+    lines: [...headLines, ...tailLines],
+    omitted: {
+      lines: Math.max(0, lines.length - headLines.length - tailLines.length),
+      chars: text.length - head.length - tail.length,
+      after: headLines.length,
+    },
   }
 }
 
@@ -424,7 +434,7 @@ function block(heading: string, text: string, sections: DetailSection[], full: D
       cut.omitted.lines > 0
         ? `… ${cut.omitted.lines} lines (${cut.omitted.chars.toLocaleString()} chars) omitted. Copy keeps the full redacted text.`
         : `… ${cut.omitted.chars.toLocaleString()} chars omitted. Copy keeps the full redacted text.`
-    shown.splice(HEAD_LINES, 0, note)
+    shown.splice(cut.omitted.after, 0, note)
   }
   sections.push({ heading, lines: shown })
   full.push({ heading, lines: clean.split("\n") })
@@ -464,8 +474,7 @@ export function detailFor(entry: Entry, entries: readonly Entry[] = []): Detail 
     field(overview, "Call ID", entry.part.callID)
     field(overview, "Message ID", entry.part.messageID)
     if (typeof state.title === "string") field(overview, "Title", state.title)
-    sections.push({ heading: "Overview", lines: overview })
-    full.push({ heading: "Overview", lines: overview })
+    block("Overview", overview.join("\n"), sections, full)
     if (Object.keys(asRecord(state.input)).length > 0) block("Input", stringify(state.input), sections, full)
     if (typeof state.output === "string" && state.output.length > 0) block("Output", state.output, sections, full)
     if (typeof state.error === "string" && state.error.length > 0) block("Error", state.error, sections, full)
@@ -474,8 +483,7 @@ export function detailFor(entry: Entry, entries: readonly Entry[] = []): Detail 
   } else {
     field(overview, "Time", formatStamp(entry.time))
     field(overview, "Message ID", entry.messageID)
-    sections.push({ heading: "Overview", lines: overview })
-    full.push({ heading: "Overview", lines: overview })
+    block("Overview", overview.join("\n"), sections, full)
     const raw = entry.event ? eventFields(entry.event) : {}
     if (entry.description) block("Detail", entry.description, sections, full)
     if (Object.keys(raw).length > 0) block("Recorded fields", stringify(raw), sections, full)
@@ -492,12 +500,11 @@ export function detailFor(entry: Entry, entries: readonly Entry[] = []): Detail 
     ),
   ]
   if (related.length > 0) {
-    sections.push({ heading: "Related", lines: related })
-    full.push({ heading: "Related", lines: related })
+    block("Related", related.join("\n"), sections, full)
   }
 
   const copyText = full.map((section) => `## ${section.heading}\n${section.lines.join("\n")}`).join("\n\n")
-  return { title: `${entry.icon} ${entry.label}`, sections, copyText, messageID: entry.messageID }
+  return { title: redact(`${entry.icon} ${entry.label}`), sections, copyText, messageID: entry.messageID }
 }
 
 /** Recorded event fields without bookkeeping noise. */

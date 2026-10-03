@@ -106,11 +106,10 @@ const ROW_H = 22
 const TOP = 26
 
 export function waterfallSvg(chart: Waterfall): string {
-  const x = linear(chart.total, PLOT_W)
   const ticks = niceTicks(chart.total, 5)
   const height = TOP + chart.rows.length * ROW_H + 8
   const axisMax = ticks[ticks.length - 1] || chart.total
-  const scale = linear(axisMax, PLOT_W)
+  const x = linear(axisMax, PLOT_W)
   return [
     `<svg class="waterfall" viewBox="0 0 ${LABEL_W + PLOT_W + 20} ${height}" role="img" aria-label="${esc(
       `Execution waterfall: ${chart.rows.length} calls over ${formatDuration(chart.total)}`,
@@ -118,8 +117,8 @@ export function waterfallSvg(chart: Waterfall): string {
     ticks
       .map(
         (tick) =>
-          `<g class="wf-tick"><line x1="${LABEL_W + scale(tick)}" x2="${LABEL_W + scale(tick)}" y1="${TOP - 6}" y2="${height - 6}" />` +
-          `<text x="${LABEL_W + scale(tick)}" y="${TOP - 10}" text-anchor="middle">${esc(formatDuration(tick))}</text></g>`,
+          `<g class="wf-tick"><line x1="${LABEL_W + x(tick)}" x2="${LABEL_W + x(tick)}" y1="${TOP - 6}" y2="${height - 6}" />` +
+          `<text x="${LABEL_W + x(tick)}" y="${TOP - 10}" text-anchor="middle">${esc(formatDuration(tick))}</text></g>`,
       )
       .join(""),
     chart.rows

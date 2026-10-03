@@ -19,6 +19,23 @@ function graph(nodes: Partial<N>[]): ExecutionGraph.Graph {
 }
 
 describe("quality.dre-graph-waterfall", () => {
+  test("bar positions use the same time scale as the axis ticks", () => {
+    const html = waterfallSvg(
+      buildWaterfall(
+        graph([
+          { timestamp: 0, duration: 1000 },
+          { timestamp: 4000, duration: 2500 },
+        ]),
+      ),
+    )
+    const tick = [
+      ...html.matchAll(/<g class="wf-tick"><line x1="([\d.]+)"[^>]*\/><text[^>]*>([^<]+)<\/text><\/g>/g),
+    ].find((match) => match[2] === "4.0s")
+    const bars = [...html.matchAll(/<rect class="wf-bar" x="([\d.]+)"[^>]*width="([\d.]+)"/g)]
+    expect(tick).toBeDefined()
+    expect(Number(bars[1]![1])).toBe(Number(tick![1]))
+    expect(Number(bars[1]![2])).toBe((2500 / 8000) * 780)
+  })
   test("builds time-ordered rows relative to the first event and finds the slowest tool", () => {
     const chart = buildWaterfall(
       graph([
