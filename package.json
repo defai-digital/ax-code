@@ -142,7 +142,7 @@
       "dompurify@<3.4.13": "3.4.13",
       "builder-util-runtime@<9.7.0": "9.7.0",
       "nanoid@>=3.0.0 <3.3.18": "3.3.18",
-      "braces@<=3.0.3": "file:vendor/braces"
+      "braces@<=3.0.3": "file:tools/braces"
     },
     "peerDependencyRules": {},
     "patchedDependencies": {

@@ -1,4 +1,9 @@
 [[IgnoredVulns]]
 id = "GHSA-vfj7-8cjw-p6xm"
 ignoreUntil = 2026-11-02
-reason = "braces 3.0.3 is patched by patches/braces@3.0.3.patch with hard depth guards in parsing, compile, expand and stringify. CI runs script/check-braces-depth-guard.mjs against the installed dependency before scanning. No upstream patched version exists; reassess before expiry."
+reason = "tools/braces is braces 3.0.3 plus a nesting-depth limit of 128 in parse, compile, expand, and stringify. pnpm overrides every braces <= 3.0.3 to that directory, so the lockfile has no registry 3.0.3. No upstream release exists. CI runs script/check-braces-depth-guard.mjs before this scan. Reassess before expiry."
+
+[[IgnoredVulns]]
+id = "GHSA-grv7-fg5c-xmjg"
+ignoreUntil = 2026-11-02
+reason = "The same tools/braces tree is upstream 3.0.3, which already caps pattern length for GHSA-grv7-fg5c-xmjg, plus the depth guard. osv-scanner reads the lockfile key file:tools/braces as the version, so it cannot see semver 3.0.4 and reports the fixed-in-3.0.3 advisory. Reassess when upstream publishes a release."
