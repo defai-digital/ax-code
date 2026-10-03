@@ -93,7 +93,6 @@ export function renderFallsPixels(width: number, height: number, style: FallsSty
   }
 
   hd.sky((t) => fallsSkyRgb(style, t))
-  const skyEnd = Math.min(h, Math.ceil(poolY))
   if (night) {
     const moon = hdMix(mist, foam, 0.35)
     hd.stars(FALLS_STARS, mist, (index) => (Math.floor(elapsed / 400) + index) % 3 === 0)

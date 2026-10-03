@@ -8,13 +8,6 @@ import { createDigitalCodePixels, digitalCodePixelPlayer } from "../../../src/cl
 const WIDTH = 760
 const HEIGHT = 500
 const pixel = (frame: Buffer, x: number, y: number) => [...frame.subarray((y * WIDTH + x) * 3, (y * WIDTH + x) * 3 + 3)]
-const countColor = (frame: Buffer, rgb: readonly [number, number, number]) => {
-  let found = 0
-  for (let i = 0; i < frame.length; i += 3) {
-    if (frame[i] === rgb[0] && frame[i + 1] === rgb[1] && frame[i + 2] === rgb[2]) found++
-  }
-  return found
-}
 
 test.each(["festival-fireworks", "festival-lanterns"] as const)(
   "%s paints the shared sky and loops with the cycle",

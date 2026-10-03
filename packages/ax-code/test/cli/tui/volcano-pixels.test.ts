@@ -33,7 +33,6 @@ test("the crater pulses while calm, lava, and smoke follow their styles", () => 
   const hot = renderVolcanoPixels(WIDTH, HEIGHT, "volcano-eruption", 0)
   expect(pixel(hot, 380, 170)).not.toEqual(pixel(renderVolcanoPixels(WIDTH, HEIGHT, "volcano-eruption", 300), 380, 170))
   const calm = renderVolcanoPixels(WIDTH, HEIGHT, "volcano-calm", 0)
-  const sum = (p: number[]) => p.reduce((a, b) => a + b, 0)
   // The calm crater is a dim ember; the eruption crater burns far brighter.
   expect(calm[(170 * WIDTH + 380) * 3]!).toBeGreaterThan(calm[(170 * WIDTH + 380) * 3 + 2]!)
   expect(pixel(hot, 380, 172)[0]!).toBeGreaterThan(pixel(calm, 380, 172)[0]! + 15)

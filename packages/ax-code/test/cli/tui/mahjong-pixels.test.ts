@@ -50,7 +50,7 @@ test("match discards land in the pond and the south hand shows large ivory faces
   expect(ivoryShare(first, 312, 304, 332, 322)).toBe(0)
   expect(ivoryShare(landed, 312, 304, 332, 322)).toBeGreaterThan(0.3)
   // Concealed north tiles are jade backs capped with an ivory edge, never faces.
-  const [r, g, b] = pixel(landed, 235, 100)
+  const [r, g] = pixel(landed, 235, 100)
   expect(g!).toBeGreaterThan(r! + 30)
   expect(ivoryShare(landed, 192, 100, 586, 118)).toBe(0)
   // The south hand is a row of tall ivory tiles, each at least 1.5 cells tall.

@@ -3,7 +3,6 @@ import { inflateSync } from "node:zlib"
 import {
   advanceDigitalCode,
   createDigitalCode,
-  DIGITAL_CODE_LEVEL_RGB,
   digitalCodeCellLevel,
   digitalCodeRows,
 } from "../../../src/cli/tui/component/digital-code-view-model"

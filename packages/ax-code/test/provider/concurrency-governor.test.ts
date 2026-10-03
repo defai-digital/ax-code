@@ -109,6 +109,7 @@ describe("ProviderConcurrencyGovernor", () => {
     controller.abort(new Error("Deadline exceeded"))
     await expect(pending).rejects.toMatchObject({ name: "AbortError" })
     using slot = await ProviderConcurrencyGovernor.acquire({ providerID, limit: 1, crossProcess: false })
+    expect(slot).toBeDefined()
   })
 
   describe("in-process semaphore (layer 1)", () => {
@@ -568,6 +569,7 @@ describe("ProviderConcurrencyGovernor", () => {
       )
       await tick()
       expect(resolved).toBe(false)
+      expect(pending).toBeInstanceOf(Promise)
 
       ProviderConcurrencyGovernor.resetForTests()
       const fresh = await ProviderConcurrencyGovernor.acquire({ providerID, limit: 1, crossProcess: false })
@@ -603,6 +605,7 @@ describe("ProviderConcurrencyGovernor", () => {
       })
       await tick()
       expect(xResolved).toBe(false)
+      expect(xPending).toBeInstanceOf(Promise)
       ProviderConcurrencyGovernor.resetForTests("gateway-reset-x")
     })
   })

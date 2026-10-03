@@ -26,7 +26,6 @@ import {
   completeStartupRain,
   createDigitalCode,
   createStartupLogoGlyphs,
-  easeOutLogoDrop,
   initialStartupRainPhase,
   digitalCodeCellLevel,
   digitalCodeRows,

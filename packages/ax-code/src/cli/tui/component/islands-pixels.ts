@@ -17,10 +17,6 @@ import {
 } from "./islands-view-model"
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
-const smooth = (a: number, b: number, v: number) => {
-  const t = clamp01((v - a) / (b - a || 1))
-  return t * t * (3 - 2 * t)
-}
 const hash = (n: number) => {
   const s = Math.sin(n * 127.1 + 311.7) * 43758.5453
   return s - Math.floor(s)

@@ -3,7 +3,6 @@ import { createMemo, createSignal, onMount } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { useTheme } from "@tui/context/theme"
 import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
-import { useKeybind } from "@tui/context/keybind"
 import { Keybind } from "@/util/keybind"
 import { Locale } from "@/util/locale"
 import { EventQuery } from "@/replay/query"
@@ -42,7 +41,6 @@ export function DialogActivity(props: {
   const sync = useSync()
   const dialog = useDialog()
   const { theme } = useTheme()
-  const keybind = useKeybind()
 
   onMount(() => {
     dialog.setSize("large")

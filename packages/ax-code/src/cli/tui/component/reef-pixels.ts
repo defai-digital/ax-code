@@ -43,7 +43,6 @@ export function renderReefPixels(width: number, height: number, style: ReefStyle
   const u = Math.min(hd.cw, hd.ch / 2)
   const water = hdHex(c.water)
   const coral = hdHex(c.coral)
-  const coralDark = hdHex(c.coralDark)
   const polyp = hdHex(c.polyp)
   const bubble = hdHex(c.bubble)
   const ray = hdHex(c.ray)

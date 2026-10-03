@@ -1,4 +1,4 @@
-import { blendPx, clamp01, fillPoly, glow, hash2, vrect } from "./atmos-paint"
+import { blendPx, clamp01, glow, hash2, vrect } from "./atmos-paint"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
 import {
   TAIPEI101_CAR_ROW,

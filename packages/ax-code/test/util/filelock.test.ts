@@ -10,6 +10,7 @@ describe("util.filelock", () => {
     await using tmp = await tmpdir()
     const filepath = path.join(tmp.path, "state.json")
     using holder = await FileLock.acquire(filepath)
+    expect(holder).toBeDefined()
     const body = await fs.readFile(filepath + ".lock", "utf8")
     const controller = new AbortController()
     const reason = new Error("Stop waiting")

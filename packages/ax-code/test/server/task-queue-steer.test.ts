@@ -439,7 +439,6 @@ test("a row paused between the steerable check and the hold still steers", async
 
 test("a row paused between the steerable check and the hold stays paused when admission rejects it", async () => {
   await using tmp = await tmpdir({ git: true })
-  const app = Server.Default()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {

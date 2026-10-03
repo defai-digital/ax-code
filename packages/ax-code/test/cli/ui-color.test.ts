@@ -7,7 +7,7 @@ const originalIsTTY = Object.getOwnPropertyDescriptor(process.stderr, "isTTY")
 
 function captureStderr(): () => string {
   let out = ""
-  const spy = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+  vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
     out += typeof chunk === "string" ? chunk : Buffer.from(chunk as Uint8Array).toString()
     return true
   })
