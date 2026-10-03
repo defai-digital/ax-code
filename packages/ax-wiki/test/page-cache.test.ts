@@ -173,3 +173,30 @@ test("rejects a structurally valid cache result whose stored contents changed", 
   await writeFile(file, JSON.stringify(entry))
   expect(await cache.read(page, key)).toBeUndefined()
 })
+
+test("throwing permission callbacks are cache misses, never publication failures", async () => {
+  const root = await fixture()
+  const errors = vi.fn()
+  const cache = createWikiPageResultCache({
+    root,
+    allowRead: () => {
+      throw new Error("permission backend unavailable")
+    },
+    allowWrite: () => {
+      throw new Error("permission backend unavailable")
+    },
+    onError: errors,
+  })
+  expect(await cache.read(page, key)).toBeUndefined()
+  await cache.write(page, key, result)
+  await cache.remove(page, key)
+  expect(errors).toHaveBeenCalled()
+})
+
+test("a remove issued alongside a write is ordered after it", async () => {
+  const root = await fixture()
+  const cache = createWikiPageResultCache({ root })
+  const pending = cache.write(page, key, result)
+  await Promise.all([pending, cache.remove(page, key)])
+  expect(await cache.read(page, key)).toBeUndefined()
+})

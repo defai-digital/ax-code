@@ -18,7 +18,12 @@ import { GRAPH_LIMITS, GRAPH_TEXT_FORBIDDEN } from "./graph.js"
 import { sha256, stableJson } from "./hash.js"
 import type { EvidenceProvider } from "./ports.js"
 import { createWikiPlan, selectPageSources, sourceMatchesPage } from "./plan.js"
-import { extractProtectedSections, managedContentHash, mergeProtectedSections } from "./protected.js"
+import {
+  extractProtectedSections,
+  managedContentHash,
+  mergeProtectedSections,
+  protectedSectionsBalanced,
+} from "./protected.js"
 import type {
   AxWikiConfig,
   GeneratorIdentity,
@@ -378,13 +383,26 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
           }),
         )
         let result = force ? undefined : await input.pageResultCache?.read(page.path, key)
+        let staged: string | undefined
         if (result) {
-          // Never let a corrupt or stale cache entry bypass page validation.
+          // Never let a corrupt or stale cache entry bypass page validation:
+          // a staged result must survive the same render, merge, and marker
+          // checks a fresh result faces at candidate validation, otherwise the
+          // hit would keep failing the build with no chance to regenerate.
           try {
             ensureUsefulResult(page, result)
-            if (validateWikiPageLinks(page.path, result.body, knownPages).length) result = undefined
+            if (validateWikiPageLinks(page.path, result.body, knownPages).length) throw new Error("stale links")
+            const merged = mergeProtectedSections(
+              renderWikiPage({ page, result, sources: evidence }),
+              existing.get(page.path),
+            )
+            const markers = extractProtectedSections(merged).map((section) => section.id)
+            if (!protectedSectionsBalanced(merged) || new Set(markers).size !== markers.length)
+              throw new Error("stale markers")
+            staged = merged
           } catch {
             result = undefined
+            staged = undefined
           }
         }
         const cacheHit = result !== undefined
@@ -393,8 +411,8 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
         ensureUsefulResult(page, result)
         const issues = validateWikiPageLinks(page.path, result.body, knownPages)
         if (issues.length) throw new Error(issues.map((issue) => `${issue.code}: ${issue.message}`).join("\n"))
-        const rendered = renderWikiPage({ page, result, sources: evidence })
-        const content = mergeProtectedSections(rendered, existing.get(page.path))
+        const content =
+          staged ?? mergeProtectedSections(renderWikiPage({ page, result, sources: evidence }), existing.get(page.path))
         if (input.pageResultCache) {
           if (!cacheHit) await input.pageResultCache.write(page.path, key, result)
           cacheKeys.set(page.path, key)

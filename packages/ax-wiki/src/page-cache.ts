@@ -49,8 +49,10 @@ export function createWikiPageResultCache(input: {
   }
   const read = async (page: string, key: string): Promise<WikiPageGenerationResult | undefined> => {
     const relative = slot(page)
-    if (input.allowRead?.(relative) === false) return undefined
     try {
+      // Permission callbacks are host code: a throw is a cache miss, never a
+      // publication failure, so every gate sits inside the try.
+      if (input.allowRead?.(relative) === false) return undefined
       await safe()
       const value: unknown = JSON.parse(await readCompilerConfig(resolveInside(input.root, relative), MAX_BYTES))
       if (!value || typeof value !== "object") return undefined
@@ -70,8 +72,8 @@ export function createWikiPageResultCache(input: {
     write(page, key, result) {
       const pending = writes.then(async () => {
         const relative = slot(page)
-        if (input.allowWrite?.(relative) === false || input.allowRead?.(directory) === false) return
         try {
+          if (input.allowWrite?.(relative) === false || input.allowRead?.(directory) === false) return
           const content =
             JSON.stringify({ schemaVersion: 1, page, key, resultHash: sha256(stableJson(result)), result }) + "\n"
           if (Buffer.byteLength(content) > MAX_BYTES || !validResult(result)) return
@@ -89,18 +91,24 @@ export function createWikiPageResultCache(input: {
       writes = pending.catch(() => {})
       return pending
     },
-    async remove(page, key) {
-      const relative = slot(page)
-      if (input.allowWrite?.(relative) === false) return
-      try {
-        // The caller's full-pipeline lock excludes concurrent replacement;
-        // the key check also preserves entries from a different generation.
-        if (!(await read(page, key))) return
-        await safe()
-        await rm(resolveInside(input.root, relative), { force: true })
-      } catch (error) {
-        report(error)
-      }
+    remove(page, key) {
+      // Chain onto the write queue so a pending write cannot resurrect an entry
+      // after remove deletes it, and remove cannot delete a freshly staged one.
+      const pending = writes.then(async () => {
+        const relative = slot(page)
+        try {
+          if (input.allowWrite?.(relative) === false) return
+          // The caller's full-pipeline lock excludes concurrent replacement;
+          // the key check also preserves entries from a different generation.
+          if (!(await read(page, key))) return
+          await safe()
+          await rm(resolveInside(input.root, relative), { force: true })
+        } catch (error) {
+          report(error)
+        }
+      })
+      writes = pending.catch(() => {})
+      return pending
     },
   }
 }

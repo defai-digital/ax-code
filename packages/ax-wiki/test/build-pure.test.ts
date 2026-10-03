@@ -829,6 +829,24 @@ describe("resumable bounded generation", () => {
     expect(result.generatedPages).toHaveLength(5)
   })
 
+  test("a staged result that fails protected-marker validation is regenerated, not reused", async () => {
+    const cache = stagedCache()
+    const poisoned = generator()
+    poisoned.mockImplementation(async (request) => ({
+      summary: "A sufficiently long repository summary.",
+      body: `This page explains ${request.page.purpose} and gives source-backed guidance for maintainers. <!-- AX-WIKI:PROTECTED:START broken -->`,
+      symbols: [],
+    }))
+    await expect(buildPure({ ...baseInput(), generator: poisoned, pageResultCache: cache })).rejects.toThrow(
+      "wiki.protected_unbalanced",
+    )
+    expect(cache.entries.size).toBeGreaterThan(0)
+    const resumed = generator()
+    const result = await buildPure({ ...baseInput(), generator: resumed, pageResultCache: cache })
+    expect(result.validation.ok).toBe(true)
+    expect(resumed).toHaveBeenCalledTimes(result.generatedPages.length)
+  })
+
   test.each(["source", "instructions", "identity", "previous", "plan", "evidence"])(
     "does not reuse staged results after %s changes",
     async (change) => {
