@@ -40,7 +40,7 @@ export function buildWaterfall(graph: ExecutionGraph.Graph): Waterfall {
       (node.type === "tool_call" || node.type === "llm" || node.type === "error") && Number.isFinite(node.timestamp),
   )
   if (timed.length === 0) return { rows: [], total: 0, hidden: 0, failures: 0 }
-  const origin = Math.min(...timed.map((node) => node.timestamp))
+  const origin = timed.reduce((earliest, node) => Math.min(earliest, node.timestamp), Infinity)
   const all: WaterfallRow[] = timed
     .map((node) => ({
       id: node.id,
@@ -49,12 +49,12 @@ export function buildWaterfall(graph: ExecutionGraph.Graph): Waterfall {
       status: node.type === "error" ? ("error" as const) : (node.status ?? "ok"),
       start: Math.max(0, node.timestamp - origin),
       wallStart: Math.max(0, node.timestamp - origin),
-      duration: Math.max(0, node.duration ?? 0),
+      duration: Number.isFinite(node.duration) ? Math.max(0, node.duration!) : 0,
       step: node.stepIndex,
       tokens: node.tokens,
     }))
     .sort((a, b) => a.start - b.start)
-  const wall = Math.max(1, ...all.map((row) => row.start + row.duration))
+  const wall = all.reduce((latest, row) => Math.max(latest, row.start + row.duration), 1)
   let total = wall
   let compressed: Waterfall["compressed"]
   // Scheduled or waiting runs can span hours with minutes of work; on a wall-clock axis every
@@ -76,7 +76,7 @@ export function buildWaterfall(graph: ExecutionGraph.Graph): Waterfall {
       covered = Math.max(covered, row.start + row.duration)
       row.start -= removed
     }
-    total = Math.max(1, ...all.map((row) => row.start + row.duration))
+    total = all.reduce((latest, row) => Math.max(latest, row.start + row.duration), 1)
     compressed = { wall, active }
   }
   let kept = all

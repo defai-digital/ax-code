@@ -19,6 +19,21 @@ function graph(nodes: Partial<N>[]): ExecutionGraph.Graph {
 }
 
 describe("quality.dre-graph-waterfall", () => {
+  test("large recorded runs remain bounded without spreading every timestamp into a call", () => {
+    const chart = buildWaterfall(graph(Array.from({ length: 150_000 }, (_, i) => ({ timestamp: i, duration: 1 }))))
+    expect(chart.rows).toHaveLength(40)
+    expect(chart.hidden).toBe(149_960)
+    expect(chart.total).toBe(150_000)
+    expect(waterfallSvg(chart)).not.toContain("NaN")
+  })
+
+  test("unusable durations do not poison the entire timeline", () => {
+    const chart = buildWaterfall(graph([{ duration: Number.NaN }, { duration: Infinity }, { duration: -5 }]))
+    expect(chart.rows.map((row) => row.duration)).toEqual([0, 0, 0])
+    expect(Number.isFinite(chart.total)).toBe(true)
+    expect(waterfallSvg(chart)).not.toContain("NaN")
+  })
+
   test("bar positions use the same time scale as the axis ticks", () => {
     const html = waterfallSvg(
       buildWaterfall(

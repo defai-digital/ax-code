@@ -50,8 +50,8 @@ export type SixelSplashSize = {
 
 /** Fit a pixel resolution into the splash budget, preserving aspect. */
 export function sixelSplashSize(resolutionWidth: number, resolutionHeight: number): SixelSplashSize {
-  const sourceWidth = Math.max(1, Math.floor(resolutionWidth))
-  const sourceHeight = Math.max(1, Math.floor(resolutionHeight))
+  const sourceWidth = Number.isFinite(resolutionWidth) ? Math.max(1, Math.floor(resolutionWidth)) : 1
+  const sourceHeight = Number.isFinite(resolutionHeight) ? Math.max(1, Math.floor(resolutionHeight)) : 1
   const scale = Math.min(1, SIXEL_SPLASH_MAX_WIDTH / sourceWidth, SIXEL_SPLASH_MAX_HEIGHT / sourceHeight)
   return {
     width: Math.max(1, Math.floor(sourceWidth * scale)),
@@ -72,6 +72,17 @@ function parseSplashHex(value: string): readonly [number, number, number] {
   return [0, 2, 4].map((offset) => parseInt(hex.slice(offset, offset + 2), 16)) as [number, number, number]
 }
 
+function validSplashGeometry(width: number, height: number): boolean {
+  return (
+    Number.isSafeInteger(width) &&
+    Number.isSafeInteger(height) &&
+    width > 0 &&
+    width <= SIXEL_SPLASH_MAX_WIDTH &&
+    height > 0 &&
+    height <= SIXEL_SPLASH_MAX_HEIGHT
+  )
+}
+
 /** Pad raster height up to a multiple of 6 (one Sixel band) with `background`. */
 export function padSplashToBand(
   data: Buffer,
@@ -79,7 +90,7 @@ export function padSplashToBand(
   height: number,
   background: string,
 ): SixelSplashRaster | null {
-  if (width <= 0 || height <= 0 || data.length !== width * height * 3) return null
+  if (!validSplashGeometry(width, height) || data.length !== width * height * 3) return null
   const paddedHeight = Math.ceil(height / 6) * 6
   if (paddedHeight === height) return { data, width, height }
   const [r, g, b] = parseSplashHex(background)
@@ -218,17 +229,22 @@ function medianCutSplashPalette(entries: SplashColorEntry[]): {
  * falls back to ASCII). Height must already be a multiple of 6.
  */
 export function encodeSixelSplash(data: Buffer, width: number, height: number): string | null {
-  if (width <= 0 || height <= 0 || height % 6 !== 0 || data.length !== width * height * 3) return null
+  if (!validSplashGeometry(width, height) || height % 6 !== 0 || data.length !== width * height * 3) return null
   const { entries, keyOf } = collectSplashEntries(data)
   let palette: [number, number, number][]
   const registerOf = new Map<number, number>()
   if (entries.length <= SIXEL_REGISTERS) {
     palette = entries.map((entry) => [entry.r, entry.g, entry.b])
-    entries.forEach((entry, register) => registerOf.set(entry.key, register + 1))
+    entries.forEach((entry, register) => {
+      if (registerOf.size < entries.length) registerOf.set(entry.key, register + 1)
+    })
   } else {
     const cut = medianCutSplashPalette(entries)
     palette = cut.palette
-    for (const [key, box] of cut.boxOf) registerOf.set(key, box + 1)
+    for (const [key, box] of cut.boxOf) {
+      if (registerOf.size >= entries.length) break
+      registerOf.set(key, box + 1)
+    }
   }
   // Per-pixel registers, resolved once: the band loop below is hot.
   const pixelRegister = new Uint16Array(keyOf.length)
@@ -236,6 +252,15 @@ export function encodeSixelSplash(data: Buffer, width: number, height: number): 
 
   const parts: string[] = [`\x1bP0;1;0q"1;1;${width};${height}`]
   palette.forEach(([r, g, b], register) => parts.push(`#${register + 1};2;${r};${g};${b}`))
+  let outputBytes = parts.reduce((total, part) => total + part.length, 0)
+  // All protocol chunks are ASCII. Stop while encoding, before a noisy raster
+  // accumulates megabytes of intermediate strings beyond the output budget.
+  const append = (part: string): boolean => {
+    outputBytes += part.length
+    if (outputBytes > SIXEL_SPLASH_MAX_BYTES) return false
+    parts.push(part)
+    return true
+  }
   const bands = height / 6
   for (let band = 0; band < bands; band++) {
     const base = band * 6 * width
@@ -246,7 +271,10 @@ export function encodeSixelSplash(data: Buffer, width: number, height: number): 
     // linear in pixels instead of quadratic in palette size. The column byte
     // is 0x3F plus the sixel mask (bit 0 is the top row), applied at emit.
     const columns = new Map<number, Uint8Array>()
-    for (const register of ordered) columns.set(register, new Uint8Array(width))
+    for (const register of ordered) {
+      if (columns.size >= SIXEL_REGISTERS) return null
+      columns.set(register, new Uint8Array(width))
+    }
     for (let x = 0; x < width; x++) {
       for (let row = 0; row < 6; row++) {
         const register = pixelRegister[base + row * width + x]!
@@ -254,31 +282,29 @@ export function encodeSixelSplash(data: Buffer, width: number, height: number): 
       }
     }
     for (const register of ordered) {
-      parts.push(`#${register}`)
+      if (!append(`#${register}`)) return null
       const bytes = columns.get(register)!
       let runByte = -1
       let runLength = 0
       const flush = () => {
-        if (runLength <= 0) return
+        if (runLength <= 0) return true
         const char = String.fromCharCode(runByte)
-        if (runLength >= SIXEL_RLE_MIN_RUN) parts.push(`!${runLength}${char}`)
-        else for (let rest = 0; rest < runLength; rest++) parts.push(char)
+        return append(runLength >= SIXEL_RLE_MIN_RUN ? `!${runLength}${char}` : char.repeat(runLength))
       }
       for (let x = 0; x < width; x++) {
         const byte = 0x3f + bytes[x]!
         if (byte === runByte && runLength < SIXEL_RLE_MAX_RUN) runLength++
         else {
-          flush()
+          if (!flush()) return null
           runByte = byte
           runLength = 1
         }
       }
-      flush()
-      parts.push("$")
+      if (!flush() || !append("$")) return null
     }
-    if (band < bands - 1) parts.push("-")
+    if (band < bands - 1 && !append("-")) return null
   }
-  parts.push("\x1b\\")
+  if (!append("\x1b\\")) return null
   const output = parts.join("")
   return output.length > SIXEL_SPLASH_MAX_BYTES ? null : output
 }

@@ -172,3 +172,17 @@ describe("Sixel splash player", () => {
     expect(fallback).toHaveLength(2)
   })
 })
+
+describe("Sixel raster admission", () => {
+  test("rejects fractional and over-budget geometry before encoding", () => {
+    expect(encodeSixelSplash(Buffer.alloc(9), 0.5, 6)).toBeNull()
+    expect(encodeSixelSplash(Buffer.alloc(641 * 6 * 3), 641, 6)).toBeNull()
+    expect(encodeSixelSplash(Buffer.alloc(6 * 366 * 3), 6, 366)).toBeNull()
+    expect(padSplashToBand(Buffer.alloc(9), 0.5, 6, "#000000")).toBeNull()
+  })
+
+  test("non-finite resolutions fit to safe geometry", () => {
+    expect(sixelSplashSize(Number.NaN, 72)).toEqual({ width: 1, height: 72 })
+    expect(sixelSplashSize(96, Infinity)).toEqual({ width: 96, height: 1 })
+  })
+})
