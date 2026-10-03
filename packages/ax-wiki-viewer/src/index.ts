@@ -2,6 +2,7 @@ import { parseWikiGraph } from "@ax-code/ax-wiki/graph"
 import type { WikiGraphEdge, WikiGraphNode } from "@ax-code/ax-wiki/graph"
 import { fitCamera, wheelZoomFactor, zoomAbout } from "./camera.js"
 import { LAYOUT_WORLD, createForceLayout } from "./force-layout.js"
+import { createRadialLayout } from "./radial-layout.js"
 import type { ForceLayout, LayoutNode } from "./force-layout.js"
 import {
   citingTopics,
@@ -39,8 +40,6 @@ export const viewerCss = `
 .axwv .chip[aria-pressed="false"],.axwv .kind[aria-pressed="false"]{opacity:.5;text-decoration:line-through}
 .axwv .legend{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin:6px 0 0;font-size:12px;color:var(--muted)}
 .axwv .legend .topic{width:11px;height:11px;border-radius:50%;display:inline-block;margin:0 1px;box-shadow:0 0 0 2px var(--bg)}
-.axwv .legend .note{margin-left:8px;opacity:.85}
-.axwv .legend .note:first-of-type{margin-left:12px;padding-left:12px;border-left:1px solid var(--line)}
 .axwv .counts{font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px;margin-top:8px}
 .axwv .counts{order:0}
 .axwv>details{order:3;margin:8px 0 0;color:var(--muted);font-size:13px}
@@ -69,15 +68,31 @@ export const viewerCss = `
 .axwv .notice{border:1px solid var(--line-2);border-radius:10px;padding:8px 12px;color:#b5c5d7;background:var(--surface)}
 .axwv .overlay{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;text-align:center;background:rgba(10,17,26,.94);padding:24px}
 .axwv .overlay p{margin:0;max-width:52ch;color:var(--muted)}
-.axwv .hud{position:absolute;right:12px;bottom:12px;z-index:2;display:grid;grid-template-columns:repeat(3,32px);gap:4px;margin:0;padding:6px;border:1px solid var(--line);border-radius:12px;background:rgba(13,21,32,.82);backdrop-filter:blur(6px)}
+.axwv .hud{position:absolute;right:12px;bottom:12px;z-index:2;display:grid;grid-template-columns:repeat(3,32px);gap:4px;align-items:center;margin:0;padding:6px;border:1px solid var(--line);border-radius:12px;background:rgba(13,21,32,.82);backdrop-filter:blur(6px)}
 .axwv .hud button{padding:0;height:32px;width:32px;line-height:1;font-size:16px;background:transparent;border-color:transparent;border-radius:8px;display:flex;align-items:center;justify-content:center}
 .axwv .hud button:hover{background:var(--surface-2)}
+.axwv .views{display:inline-flex;margin-left:6px;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.axwv .views button{border:0;border-radius:0;background:transparent;padding:6px 12px;color:var(--muted)}
+.axwv .views button+button{border-left:1px solid var(--line)}
+.axwv .views button[aria-pressed="true"]{background:#173342;color:var(--text);box-shadow:inset 0 -2px 0 var(--accent)}
+.axwv svg.swap{animation:axwswap .28s ease-out}
+@keyframes axwswap{from{opacity:0}to{opacity:1}}
+.axwv .zoom-readout{grid-column:span 2;text-align:center;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.axwv .key{display:inline-block;margin:0 0 0 10px;padding-left:12px;border-left:1px solid var(--line);font-size:12px}
+.axwv .key[open]{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center}
+.axwv .key summary{font-size:12px}
+.axwv .key .note{margin:0!important;padding:0!important;border:0!important;opacity:1}
+.axwv .controls .chips{margin:0 0 0 auto}
+.axwv .list button::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;background:#64778b}
+.axwv .list button[data-kind=page]::before{background:#3db8c4}
+.axwv .list button[data-kind=source]::before{background:#4d7cb4}
+.axwv .list button[data-kind=symbol]::before{background:#b8974f}
 .axwv .outline ul{list-style:none;margin:2px 0;padding-left:18px}
 .axwv .outline>ul{padding-left:0}
 .axwv .outline button{background:none;border-color:transparent;padding:3px 8px;text-align:left;overflow-wrap:anywhere;font-size:13px}
 .axwv .outline button:hover{background:var(--surface-2)}
-@media(max-width:760px){.axwv{padding:12px}.axwv .layout{grid-template-columns:1fr}.axwv .canvas{height:420px;min-height:420px}.axwv .legend .note{display:none}.axwv input{min-width:0;width:100%}}
-@media(prefers-reduced-motion:reduce){.axwv *{transition:none!important}}
+@media(max-width:760px){.axwv{padding:12px}.axwv .layout{grid-template-columns:1fr}.axwv .canvas{height:420px;min-height:420px}.axwv .key{display:none}.axwv input{min-width:0;width:100%}}
+@media(prefers-reduced-motion:reduce){.axwv *{transition:none!important;animation:none!important}}
 `
 
 /** Overview stays a picture. Names appear for the focused neighborhood, or once the camera is close. */
@@ -111,6 +126,16 @@ const DIMMED_EDGE = 0.12
 const REST_EDGE = 0.35
 const FOCUS_EDGE_OPACITY = 0.95
 
+/** Layout registry. Adding a view is one entry here plus a layout factory in buildLayout. */
+const VIEWS = [
+  { id: "force", label: "Force", hint: "Force-directed lanes: pages, symbols, files" },
+  { id: "radial-tree", label: "Radial tree", hint: "Pages, files and symbols on fixed rings" },
+  { id: "radial-cluster", label: "Radial cluster", hint: "Every leaf on the outer ring" },
+] as const
+type ViewId = (typeof VIEWS)[number]["id"]
+/** Radial rings are non-overlapping by construction, so names can appear earlier than on the force map. */
+const RADIAL_LABEL_ZOOM: Record<NodeKind, number> = { page: 0, source: 0.85, symbol: 1.4 }
+
 const FRESHNESS_NOTE = {
   fresh: "observed bytes match the recorded hash.",
   stale: "observed bytes differ from the recorded hash.",
@@ -140,6 +165,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     return typeof topic === "number" ? TOPIC_PALETTE[topic % TOPIC_PALETTE.length] : undefined
   }
   let layout: ForceLayout | undefined
+  let view: ViewId = "force"
   let selected: string | undefined
   let hovered: string | undefined
   let suppressClick = false
@@ -192,7 +218,19 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   search.type = "search"
   search.placeholder = "Page or source path"
   const reset = html("button", controls, "Show all / reset")
-  const chips = html("div", root)
+  const viewSwitch = html("div", controls)
+  viewSwitch.className = "views"
+  viewSwitch.setAttribute("role", "group")
+  viewSwitch.setAttribute("aria-label", "Map view")
+  const viewButtons = new Map<ViewId, HTMLButtonElement>()
+  for (const entry of VIEWS) {
+    const button = html("button", viewSwitch, entry.label)
+    button.title = entry.hint
+    button.setAttribute("aria-pressed", String(entry.id === view))
+    button.onclick = () => setView(entry.id)
+    viewButtons.set(entry.id, button)
+  }
+  const chips = html("div", controls)
   chips.className = "chips"
   chips.setAttribute("role", "group")
   chips.setAttribute("aria-label", "Filter by freshness")
@@ -234,6 +272,9 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   detail.className = "detail"
   const navigation = html("div", canvas)
   navigation.className = "hud"
+  const zoomReadout = doc.createElement("span")
+  zoomReadout.className = "zoom-readout"
+  zoomReadout.setAttribute("aria-hidden", "true")
 
   const svgNS = "http://www.w3.org/2000/svg"
   const edgeLayer = doc.createElementNS(svgNS, "g")
@@ -283,6 +324,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     const viewW = LAYOUT_WORLD.width / zoom
     const viewH = viewW / aspect
     svg.setAttribute("viewBox", `${offsetX} ${offsetY} ${viewW} ${viewH}`)
+    zoomReadout.textContent = `${Math.round(zoom * 100)}%`
   }
 
   function fitView() {
@@ -300,7 +342,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       const drawn = node.kind === "page" ? Math.max(node.radius, 14) : node.radius
       const pad = drawn + 28
       let left = node.x - pad
-      if (node.kind === "page") {
+      if (node.kind === "page" && !layout.radial) {
         const info = graph.nodes.find((candidate) => candidate.id === node.id)
         const anchor = node.x - (drawn + 12)
         left = Math.min(left, anchor - pageLabelWidth(info?.label ?? ""))
@@ -367,13 +409,48 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     return { d: `M${t0x},${t0y} Q${cx},${cy} ${t1x},${t1y}`, head: `M${p1x},${p1y} L${t1x},${t1y} L${p2x},${p2y}` }
   }
 
+  /**
+   * Hierarchical edge bundling, simplified: tree edges stay straight along the
+   * hierarchy; cross links bow toward the center in proportion to how far apart
+   * their endpoints sit on the ring (beta 0.75 for citations, 0.3 for imports).
+   */
+  function radialEdgeCurve(a: LayoutNode, b: LayoutNode, edge: WikiGraphEdge): { d: string; head: string } {
+    const meta = layout!.radial!
+    const isTree = meta.treeParent.get(edge.to) === edge.from
+    const beta = isTree ? 0 : edge.kind === "uses" ? 0.3 : 0.75
+    const turn = Math.abs((((meta.angles.get(a.id)! - meta.angles.get(b.id)!) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI)
+    const k = beta * Math.min(1, turn / (Math.PI / 2))
+    const lerp = (n: LayoutNode) => ({ x: n.x + (meta.cx - n.x) * k, y: n.y + (meta.cy - n.y) * k })
+    const c0 = lerp(a),
+      c1 = lerp(b)
+    const rim = (node: LayoutNode) => (node.kind === "page" ? Math.max(node.radius, 14) : node.radius)
+    const away = (from: LayoutNode, toward: { x: number; y: number }, trim: number) => {
+      const dx = toward.x - from.x,
+        dy = toward.y - from.y
+      const length = Math.hypot(dx, dy) || 1
+      return { x: from.x + (dx / length) * trim, y: from.y + (dy / length) * trim, ux: dx / length, uy: dy / length }
+    }
+    const start = away(a, c0.x === a.x && c0.y === a.y ? b : c0, rim(a) + 2)
+    const end = away(b, c1.x === b.x && c1.y === b.y ? a : c1, rim(b) + 4)
+    const size = 9,
+      wing = 4.5
+    const p1x = end.x - end.ux * size + -end.uy * wing,
+      p1y = end.y - end.uy * size + end.ux * wing
+    const p2x = end.x - end.ux * size - -end.uy * wing,
+      p2y = end.y - end.uy * size - end.ux * wing
+    return {
+      d: `M${start.x},${start.y} C${c0.x},${c0.y} ${c1.x},${c1.y} ${end.x},${end.y}`,
+      head: `M${p1x},${p1y} L${end.x},${end.y} L${p2x},${p2y}`,
+    }
+  }
+
   function positionElements() {
     if (!layout) return
     const { byId } = layout
     for (const { path, arrow, edge } of edgeEls) {
       const a = byId.get(edge.from)!,
         b = byId.get(edge.to)!
-      const { d, head } = edgeCurve(a, b)
+      const { d, head } = layout.radial ? radialEdgeCurve(a, b, edge) : edgeCurve(a, b)
       path.setAttribute("d", d)
       arrow.setAttribute("d", head)
     }
@@ -394,7 +471,14 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       const direction = focusId === undefined ? null : focusDirection(edge, focusId)
       const incident = direction !== null
       const resting = focusId === undefined
-      const restOpacity = edge.kind === "references-source" ? 0.75 : edge.kind === "uses" ? 0.45 : 0.14
+      const crossLink = layout.radial !== undefined && layout.radial.treeParent.get(edge.to) !== edge.from
+      const restOpacity = crossLink
+        ? 0.2
+        : edge.kind === "references-source"
+          ? 0.75
+          : edge.kind === "uses"
+            ? 0.45
+            : 0.14
       path.setAttribute(
         "opacity",
         dimmed ? String(DIMMED_EDGE) : incident ? String(FOCUS_EDGE_OPACITY) : String(resting ? restOpacity : REST_EDGE),
@@ -450,9 +534,24 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
         circle.removeAttribute("stroke")
         circle.removeAttribute("stroke-width")
       }
-      const showLabel = emphasized || (node.kind === "page" && namedPages <= 16) || zoom >= LABEL_ZOOM[node.kind]
+      const radial = layout.radial
+      const showLabel = radial
+        ? emphasized || zoom >= RADIAL_LABEL_ZOOM[node.kind]
+        : emphasized || (node.kind === "page" && namedPages <= 16) || zoom >= LABEL_ZOOM[node.kind]
       label.setAttribute("display", showLabel ? "" : "none")
-      if (node.kind === "page") {
+      if (radial) {
+        // Rotate with the ring and flip on the left half so text is never upside down.
+        const angle = radial.angles.get(node.id) ?? 0
+        const degrees = (angle * 180) / Math.PI
+        const left = Math.cos(angle) < 0
+        const reach = (node.kind === "page" ? Math.max(node.radius, 14) : node.radius) + 8
+        label.setAttribute("text-anchor", left ? "end" : "start")
+        label.setAttribute("x", String(left ? -reach : reach))
+        label.setAttribute("y", "4")
+        // Pages are few and sit near the center: keep their names horizontal so they cannot stack along a spoke.
+        if (node.kind === "page") label.removeAttribute("transform")
+        else label.setAttribute("transform", `rotate(${left ? degrees + 180 : degrees})`)
+      } else if (node.kind === "page") {
         label.setAttribute("text-anchor", "end")
         label.setAttribute("x", String(-(Math.max(node.radius, 14) + 12)))
         label.setAttribute("y", String(pageLabelY.get(node.id) ?? 4))
@@ -496,6 +595,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       const button = html("button", item, `${node.kind}: ${node.label}`)
       const degree = layout?.byId.get(node.id)?.degree ?? 0
       button.title = `${node.freshness} · ${plural(degree, "connection", "connections")} shown of ${plural(node.recordedReferences, "recorded reference", "recorded references")}`
+      button.dataset.kind = node.kind
       if (node.id === selected) button.className = "selected"
       button.onclick = () => select(node)
       previewOn(button, node.id)
@@ -612,6 +712,10 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       swatch.style.background = color.page
       legend.append(swatch)
     }
+    const key = doc.createElement("details")
+    key.className = "key"
+    key.append(doc.createElement("summary"))
+    key.firstElementChild!.textContent = "How to read"
     for (const text of [
       "size = visible connections",
       "+N = recorded references not in this snapshot",
@@ -621,8 +725,9 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       const item = doc.createElement("span")
       item.className = "note"
       item.textContent = text
-      legend.append(item)
+      key.append(item)
     }
+    legend.append(key)
   }
 
   function acceptHover(id: string) {
@@ -816,7 +921,8 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
         applyEmphasis()
       })
       group.addEventListener("pointerdown", (event) => {
-        if (disposed || layout === undefined || event.button !== 0) return
+        // Radial rings are fixed by construction, so there is nothing to rearrange.
+        if (disposed || layout === undefined || layout.radial !== undefined || event.button !== 0) return
         // A touch drag does not produce a click, so a flag set on pointerup would
         // swallow the next tap. The click from a mouse drag arrives before the
         // next pointerdown, and still sees the flag.
@@ -953,6 +1059,13 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     topics = citingTopics(graph.nodes, graph.edges)
     layout?.stop()
     hasFitted = false
+    if (view !== "force") {
+      layout = createRadialLayout(graph, view === "radial-tree" ? "tree" : "cluster")
+      hasFitted = true
+      buildElements()
+      positionElements()
+      return
+    }
     layout = createForceLayout(graph, {
       reducedMotion,
       onTick: positionElements,
@@ -966,6 +1079,23 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     })
     if (reducedMotion) positionElements()
     buildElements()
+  }
+
+  function setView(next: ViewId) {
+    if (disposed || next === view) return
+    view = next
+    for (const [id, button] of viewButtons) button.setAttribute("aria-pressed", String(id === view))
+    hovered = undefined
+    cameraTouched = false
+    buildLayout()
+    fitView()
+    // Positions differ completely between views, so a short fade reads better than a tween.
+    if (!reducedMotion) {
+      svg.classList.remove("swap")
+      void svg.getBoundingClientRect()
+      svg.classList.add("swap")
+    }
+    render()
   }
 
   function select(node: WikiGraphNode) {
@@ -990,17 +1120,29 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     ["Pan left", "←", () => pan(-100 / zoom, 0)],
     ["Pan down", "↓", () => pan(0, 100 / zoom)],
     ["Pan right", "→", () => pan(100 / zoom, 0)],
+    [
+      "Fit to view",
+      "⤢",
+      () => {
+        fitView()
+        applyEmphasis()
+      },
+    ],
   ] as const) {
     const button = html("button", navigation, glyph)
     button.setAttribute("aria-label", label)
     button.title = label
     button.onclick = () => action()
   }
+  navigation.append(zoomReadout)
   svg.onkeydown = (event) => {
     const step = 100 / zoom
     if (event.key === "+" || event.key === "=") zoomBy(1.5)
     else if (event.key === "-") zoomBy(1 / 1.5)
-    else if (event.key === "ArrowLeft") pan(-step, 0)
+    else if (event.key === "0") {
+      fitView()
+      applyEmphasis()
+    } else if (event.key === "ArrowLeft") pan(-step, 0)
     else if (event.key === "ArrowRight") pan(step, 0)
     else if (event.key === "ArrowUp") pan(0, -step)
     else if (event.key === "ArrowDown") pan(0, step)
@@ -1067,6 +1209,14 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     svg.addEventListener("pointermove", move)
     svg.addEventListener("pointerup", up)
     svg.addEventListener("pointercancel", up)
+  })
+
+  svg.addEventListener("dblclick", (event) => {
+    if (disposed) return
+    const target = event.target
+    if (target instanceof Element && target.closest(".node")) return
+    event.preventDefault()
+    applyZoom(event.shiftKey ? 0.5 : 2, event.clientX, event.clientY)
   })
 
   svg.addEventListener("click", (event) => {

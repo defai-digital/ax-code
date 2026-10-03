@@ -27,7 +27,19 @@ export type LayoutNode = {
 
 export type LayoutLink = SimulationLinkDatum<LayoutNode> & { from: string; to: string }
 
+/** Present only on radial layouts; the force layout leaves it undefined. */
+export type RadialMeta = {
+  variant: "tree" | "cluster"
+  cx: number
+  cy: number
+  /** Angle in radians from the +x axis, clockwise on screen, for every node. */
+  angles: ReadonlyMap<string, number>
+  /** child id -> primary parent id. Every other edge is a cross link. */
+  treeParent: ReadonlyMap<string, string>
+}
+
 export type ForceLayout = {
+  radial?: RadialMeta
   nodes: LayoutNode[]
   links: LayoutLink[]
   byId: ReadonlyMap<string, LayoutNode>

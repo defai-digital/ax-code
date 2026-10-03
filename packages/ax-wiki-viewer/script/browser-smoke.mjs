@@ -75,6 +75,33 @@ try {
     if (Date.now() - labelStart > 8000) break
     await page.waitForTimeout(100)
   }
+  // Camera affordances: zoom readout, double-click zoom, and a one-click return to the framed view.
+  const fitted = await page.locator(".zoom-readout").textContent()
+  assert.match(fitted ?? "", /^\d+%$/)
+  await page.locator("svg").dblclick({ position: { x: 20, y: 20 } })
+  assert.notEqual(await page.locator(".zoom-readout").textContent(), fitted)
+  await page.getByRole("button", { name: "Fit to view" }).click()
+  assert.equal(await page.locator(".zoom-readout").textContent(), fitted)
+  // View switcher: radial views keep every node, put every cluster leaf on one ring, and return to force.
+  const nodeCount = await page.locator("svg g.node").count()
+  await page.getByRole("button", { name: "Radial cluster" }).click()
+  assert.equal(await page.getByRole("button", { name: "Radial cluster" }).getAttribute("aria-pressed"), "true")
+  assert.equal(await page.locator("svg g.node").count(), nodeCount)
+  const ring = await page.evaluate(() => {
+    const points = [...document.querySelectorAll("svg g.node:not(.page)")].map((group) => {
+      const [x, y] = /translate\(([-\d.e]+),([-\d.e]+)\)/.exec(group.getAttribute("transform")).slice(1).map(Number)
+      return Math.hypot(x - 450, y - 300)
+    })
+    return { max: Math.max(...points), min: Math.min(...points) }
+  })
+  assert.ok(ring.max > 0 && ring.min > 0)
+  await page.getByRole("button", { name: "Radial tree" }).click()
+  assert.equal(await page.locator("svg g.node").count(), nodeCount)
+  await page.getByRole("button", { name: "Force" }).click()
+  assert.equal(await page.getByRole("button", { name: "Force" }).getAttribute("aria-pressed"), "true")
+  assert.equal(await page.locator("svg g.node").count(), nodeCount)
+  // Wait for the force layout to settle again before the label checks.
+  await page.waitForTimeout(1500)
   const pageLabels = await page.evaluate(() => {
     const svgBox = document.querySelector("svg").getBoundingClientRect()
     return [...document.querySelectorAll("svg g.node.page")].map((group) => {
@@ -188,6 +215,7 @@ try {
   assert.equal(await page.locator(".list button").count(), 2)
   await page.keyboard.press("Escape")
   assert.equal(await page.evaluate(() => document.activeElement?.tagName), "INPUT")
+  await page.locator(".legend details.key summary").click()
   assert.match(await page.locator(".legend").innerText(), /size = visible connections/)
   await page.getByRole("searchbox").fill("Arch")
   assert.equal(await page.locator(".notice").isHidden(), false)

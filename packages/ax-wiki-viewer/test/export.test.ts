@@ -72,7 +72,7 @@ test("browser entry bundles without Node, polyfills, or AX Code runtime", async 
       .every(
         (file) =>
           /ax-wiki\/src\/(?:graph|grounding)\.ts$/.test(file) ||
-          /ax-wiki-viewer\/src\/(?:index|force-layout|visibility|camera)\.ts$/.test(file) ||
+          /ax-wiki-viewer\/src\/(?:index|force-layout|radial-layout|visibility|camera)\.ts$/.test(file) ||
           /[/\\]node_modules[/\\]d3-(?:force|dispatch|quadtree|timer)[/\\]/.test(file),
       ),
   ).toBe(true)
