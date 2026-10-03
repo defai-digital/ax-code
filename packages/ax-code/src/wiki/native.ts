@@ -805,6 +805,7 @@ export async function runNativeWiki(input: {
           try {
             signal.throwIfAborted()
             if (retry?.delayMs) await wikiPageRetryDelay(retry.delayMs, signal)
+            signal.throwIfAborted()
             const prompt = pagePrompt(request, retry?.tight === true)
             promptBytes = Buffer.byteLength(prompt) + Buffer.byteLength(PAGE_SYSTEM + (retry?.feedback ?? ""))
             const result = streamObject({

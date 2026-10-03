@@ -71,6 +71,44 @@ function baseInput() {
 }
 
 describe("buildPure (in-memory, no filesystem)", () => {
+  test("retries a failed existing page after a source inventory changes the plan", async () => {
+    const first = await buildPure(baseInput())
+    const sources = [
+      ...inMemorySources(),
+      {
+        path: "packages/new/src/index.ts",
+        hash: "new-module",
+        bytes: 40,
+        category: "code" as const,
+        language: "typescript",
+      },
+    ]
+    const make = generator()
+    const partial = await buildPure({
+      ...baseInput(),
+      action: "update",
+      sources,
+      previous: first.manifest,
+      readExistingPage: async (page) => first.candidate.get(page),
+      generator: async (request) => {
+        if (request.page.path === "modules/core.md") throw new Error("temporary failure")
+        return make(request)
+      },
+    })
+    expect(partial.failedPages.map((page) => page.path)).toEqual(["modules/core.md"])
+    const retry = generator()
+    const recovered = await buildPure({
+      ...baseInput(),
+      action: "update",
+      sources,
+      previous: partial.manifest,
+      readExistingPage: async (page) => partial.candidate.get(page),
+      generator: retry,
+    })
+    expect(recovered.generatedPages).toEqual(["modules/core.md"])
+    expect(retry).toHaveBeenCalledTimes(1)
+  })
+
   test("runs a full build purely on injected providers", async () => {
     const result = await buildPure({
       root: "/virtual/root",

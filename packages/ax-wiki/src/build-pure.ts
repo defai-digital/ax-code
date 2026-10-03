@@ -176,6 +176,7 @@ function changedSources(previous: WikiManifest | undefined, current: Record<stri
 }
 
 function pageFingerprint(input: {
+  planHash: string
   config: AxWikiConfig
   sourceHashes: Record<string, string>
   generatorIdentity?: GeneratorIdentity
@@ -187,6 +188,7 @@ function pageFingerprint(input: {
   return sha256(
     stableJson({
       config: contentConfig,
+      planHash: input.planHash,
       sourceHashes: input.sourceHashes,
       generatorIdentity: input.generatorIdentity ?? null,
       model: input.model ?? null,
@@ -276,6 +278,7 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
     prospectiveFingerprints.set(
       page.path,
       pageFingerprint({
+        planHash,
         config,
         sourceHashes: Object.fromEntries(cached.selected.map((source) => [source.path, source.hash])),
         generatorIdentity: input.generatorIdentity,

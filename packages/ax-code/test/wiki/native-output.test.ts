@@ -153,6 +153,36 @@ test("does not start a repair retry after cancellation", async () => {
   expect(model.doStreamCalls).toHaveLength(1)
 })
 
+test("does not start a transport retry when cancelled during backoff", async () => {
+  await using tmp = await fixture()
+  const abort = new AbortController()
+  const original = globalThis.setTimeout
+  let attempted = false
+  const delay = vi.spyOn(globalThis, "setTimeout").mockImplementation((handler, ms, ...args) => {
+    if (attempted && ms !== undefined && ms >= 500 && ms < 750) original(() => abort.abort(), 0)
+    return original(handler, ms, ...args)
+  })
+  const model = new MockLanguageModelV3({
+    doStream: async () => {
+      attempted = true
+      throw new APICallError({
+        message: "temporary 503",
+        url: "https://example.invalid",
+        requestBodyValues: {},
+        statusCode: 503,
+        isRetryable: true,
+      })
+    },
+  })
+  try {
+    await expect(run(tmp.path, model, abort.signal)).rejects.toThrow()
+    expect(abort.signal.aborted).toBe(true)
+    expect(model.doStreamCalls).toHaveLength(1)
+  } finally {
+    delay.mockRestore()
+  }
+})
+
 test("repairs a broken relative Wiki link inside the existing two-attempt budget", async () => {
   await using tmp = await fixture()
   let calls = 0
