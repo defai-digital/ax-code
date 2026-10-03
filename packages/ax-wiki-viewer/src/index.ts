@@ -74,6 +74,16 @@ export const viewerCss = `
 .axwv .hud{position:absolute;right:12px;bottom:12px;z-index:2;display:grid;grid-template-columns:repeat(3,32px);gap:4px;align-items:center;margin:0;padding:6px;border:1px solid var(--line);border-radius:12px;background:rgba(13,21,32,.82);backdrop-filter:blur(6px)}
 .axwv .hud button{padding:0;height:32px;width:32px;line-height:1;font-size:16px;background:transparent;border-color:transparent;border-radius:8px;display:flex;align-items:center;justify-content:center}
 .axwv .hud button:hover{background:var(--surface-2)}
+.axwv .view-caption{order:1;margin:6px 0 0;font-size:12px;color:var(--muted)}
+.axwv .sr-only{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.axwv .views button{display:inline-flex;align-items:center;gap:6px}
+.axwv .view-icon{width:14px;height:14px;display:inline-block;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round;flex:none;opacity:.85}
+.axwv .view-icon circle{fill:currentColor;stroke:none}
+.axwv .tour{display:inline-flex;align-items:center;gap:8px;margin-left:6px;font-size:12px;color:var(--muted)}
+.axwv .tour button{padding:4px 10px;font-size:12px;background:transparent}
+.axwv .tour button[aria-pressed="true"]{border-color:var(--accent);color:var(--text)}
+.axwv .tour button:disabled{opacity:.45;cursor:not-allowed}
+.axwv .tour-status{font-variant-numeric:tabular-nums;white-space:nowrap}
 .axwv .views{display:inline-flex;margin-left:6px;border:1px solid var(--line);border-radius:9px;overflow:hidden}
 .axwv .views button{border:0;border-radius:0;background:transparent;padding:6px 12px;color:var(--muted)}
 .axwv .views button+button{border-left:1px solid var(--line)}
@@ -144,11 +154,38 @@ const FOCUS_EDGE_OPACITY = 0.95
 
 /** Layout registry. Adding a view is one entry here plus a layout factory in buildLayout. */
 const VIEWS = [
-  { id: "force", label: "Force", hint: "Force-directed lanes: pages, symbols, files" },
-  { id: "radial", label: "Radial", hint: "Radial cluster: every file and symbol leaf on the outer ring" },
-  { id: "arc", label: "Arc", hint: "Arc diagram: nodes on one line, citations above and imports below" },
-  { id: "treemap", label: "Treemap", hint: "Nested treemap: pages contain files, files contain symbols" },
+  {
+    id: "force",
+    label: "Force",
+    question: "Who cites what? Pages, files and symbols placed by their connections.",
+    hint: "Force-directed lanes: pages, symbols, files",
+  },
+  {
+    id: "radial",
+    label: "Radial",
+    question: "What surrounds each page? Files fan out on a ring and cross links bundle through the center.",
+    hint: "Radial cluster: every file and symbol leaf on the outer ring",
+  },
+  {
+    id: "arc",
+    label: "Arc",
+    question: "How do files depend on each other? Citations arc above the line, imports below.",
+    hint: "Arc diagram: nodes on one line, citations above and imports below",
+  },
+  {
+    id: "treemap",
+    label: "Treemap",
+    question: "Where is the evidence concentrated? Bigger cells have more connections.",
+    hint: "Nested treemap: pages contain files, files contain symbols",
+  },
 ] as const
+/** 14x14 stroke glyphs, one per view, so the four choices are recognizable at a glance. */
+const VIEW_ICONS: Record<string, string[]> = {
+  force: ["M3 7 L11 3.5", "M3 7 L11 10.5", "o 3 7 1.6", "o 11 3.5 1.6", "o 11 10.5 1.6"],
+  radial: ["o 7 7 4.8", "o 7 2.2 1", "o 11.8 7 1", "o 7 11.8 1", "o 2.2 7 1"],
+  arc: ["M2 10.5 A5 5 0 0 1 12 10.5", "o 2 10.5 1.2", "o 12 10.5 1.2", "o 7 10.5 1.2"],
+  treemap: ["r 1.5 1.5 6 11", "r 8.5 1.5 4 5", "r 8.5 8 4 4.5"],
+}
 type ViewId = (typeof VIEWS)[number]["id"]
 /** Radial rings are non-overlapping by construction, so names can appear earlier than on the force map. */
 const RADIAL_LABEL_ZOOM: Record<NodeKind, number> = { page: 0, source: 0.85, symbol: 1.4 }
@@ -178,7 +215,11 @@ function pageLabelWidth(label: string): number {
 }
 
 /** An isolated instance; invalid updates preserve the previous view. */
-export function mount(element: HTMLElement, input: unknown, options: { injectStyles?: boolean } = {}) {
+export function mount(
+  element: HTMLElement,
+  input: unknown,
+  options: { injectStyles?: boolean; tour?: { enabled?: boolean; intervalMs?: number } } = {},
+) {
   let graph = parseWikiGraph(input)
   let topics = new Map<string, CitingTopic>()
   const topicColor = (id: string) => {
@@ -249,15 +290,59 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   const viewButtons = new Map<ViewId, HTMLButtonElement>()
   for (const entry of VIEWS) {
     const button = html("button", viewSwitch, entry.label)
-    button.title = entry.hint
+    button.title = `${entry.label}: ${entry.question}`
+    button.prepend(viewIcon(entry.id))
     button.setAttribute("aria-pressed", String(entry.id === view))
     button.onclick = () => setView(entry.id)
     viewButtons.set(entry.id, button)
   }
+  function viewIcon(id: string): SVGSVGElement {
+    const icon = doc.createElementNS("http://www.w3.org/2000/svg", "svg")
+    icon.setAttribute("viewBox", "0 0 14 14")
+    icon.setAttribute("width", "14")
+    icon.setAttribute("height", "14")
+    icon.setAttribute("aria-hidden", "true")
+    icon.setAttribute("class", "view-icon")
+    for (const shape of VIEW_ICONS[id] ?? []) {
+      // "o cx cy r" is a circle, "r x y w h" a rectangle, anything else a path.
+      const parts = shape.split(" ")
+      const kind = parts[0] === "o" ? "circle" : parts[0] === "r" ? "rect" : "path"
+      const node = doc.createElementNS("http://www.w3.org/2000/svg", kind)
+      if (kind === "circle") {
+        node.setAttribute("cx", parts[1])
+        node.setAttribute("cy", parts[2])
+        node.setAttribute("r", parts[3])
+      } else if (kind === "rect") {
+        node.setAttribute("x", parts[1])
+        node.setAttribute("y", parts[2])
+        node.setAttribute("width", parts[3])
+        node.setAttribute("height", parts[4])
+        node.setAttribute("rx", "1")
+      } else node.setAttribute("d", shape)
+      icon.append(node)
+    }
+    return icon
+  }
+  const tourBox = html("div", controls)
+  tourBox.className = "tour"
+  const tourToggle = html("button", tourBox, "Auto-tour")
+  tourToggle.setAttribute("aria-pressed", "false")
+  tourToggle.title = "Cycle through the views while you are idle. Any activity resets the timer."
+  const tourStatus = html("span", tourBox)
+  tourStatus.className = "tour-status"
+  tourStatus.setAttribute("aria-hidden", "true")
+  const tourPause = html("button", tourBox, "Pause")
+  tourStatus.style.display = tourPause.style.display = "none"
   const chips = html("div", controls)
   chips.className = "chips"
   chips.setAttribute("role", "group")
   chips.setAttribute("aria-label", "Filter by freshness")
+  const viewCaption = html("p", root)
+  viewCaption.className = "view-caption"
+  const liveRegion = html("div", root)
+  liveRegion.className = "sr-only"
+  liveRegion.setAttribute("aria-live", "polite")
+  liveRegion.setAttribute("aria-atomic", "true")
   const legend = html("div", root)
   legend.className = "legend"
   legend.setAttribute("aria-label", "Map legend")
@@ -1475,9 +1560,10 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     if (disposed || next === view) return
     cancelTween()
     hideTip()
+    markActivity()
     const before = new Map((layout?.nodes ?? []).map((node) => [node.id, { x: node.x, y: node.y }]))
     view = next
-    for (const [id, button] of viewButtons) button.setAttribute("aria-pressed", String(id === view))
+    renderViewMeta()
     hovered = undefined
     cameraTouched = false
     buildLayout()
@@ -1492,10 +1578,99 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     render()
   }
 
+  function renderViewMeta() {
+    for (const [id, button] of viewButtons) button.setAttribute("aria-pressed", String(id === view))
+    const entry = VIEWS.find((candidate) => candidate.id === view)!
+    viewCaption.textContent = `${entry.label}: ${entry.question}`
+  }
+
+  /**
+   * Opt-in auto-tour for demos and ambient screens. Analysts keep their view: the tour
+   * is off by default, disabled under reduced motion, and any activity (pointer, key,
+   * wheel, typing, selection, a manual switch, a hidden tab) restarts the idle clock.
+   */
+  const win = doc.defaultView
+  const tourInterval = Math.max(500, options.tour?.intervalMs ?? 180_000)
+  const clock = () => win?.performance.now() ?? Date.now()
+  let tourOn = false
+  let tourPaused = false
+  let tourTimer = 0
+  let lastActivity = clock()
+  let lastPointer = { x: Number.NaN, y: Number.NaN }
+  function markActivity() {
+    lastActivity = clock()
+  }
+  function nextView() {
+    const index = VIEWS.findIndex((candidate) => candidate.id === view)
+    return VIEWS[(index + 1) % VIEWS.length]
+  }
+  function formatCountdown(ms: number) {
+    const total = Math.max(0, Math.ceil(ms / 1000))
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`
+  }
+  function renderTour() {
+    tourToggle.setAttribute("aria-pressed", String(tourOn))
+    tourStatus.style.display = tourPause.style.display = tourOn ? "" : "none"
+    if (!tourOn) return
+    tourStatus.textContent = tourPaused
+      ? "Tour paused"
+      : `Next: ${nextView().label} · ${formatCountdown(tourInterval - (clock() - lastActivity))}`
+    tourPause.textContent = tourPaused ? "Resume" : "Pause"
+  }
+  function tourTick() {
+    if (!tourOn || disposed) return
+    const typing = doc.activeElement instanceof HTMLInputElement || doc.activeElement instanceof HTMLSelectElement
+    // Hold the countdown at full while the user could be mid-task.
+    if (tourPaused || doc.hidden || dragging || typing) markActivity()
+    else if (clock() - lastActivity >= tourInterval) {
+      const next = nextView()
+      setView(next.id)
+      liveRegion.textContent = `Switched to ${next.label} view`
+    }
+    renderTour()
+  }
+  function setTour(on: boolean) {
+    if (disposed || (on && reducedMotion)) return
+    tourOn = on
+    tourPaused = false
+    markActivity()
+    if (tourTimer) win?.clearInterval(tourTimer)
+    tourTimer = on && win ? win.setInterval(tourTick, Math.min(1000, tourInterval / 2)) : 0
+    renderTour()
+  }
+  tourToggle.onclick = () => setTour(!tourOn)
+  tourPause.onclick = () => {
+    tourPaused = !tourPaused
+    markActivity()
+    renderTour()
+  }
+  if (reducedMotion) {
+    tourToggle.disabled = true
+    tourToggle.title = "Auto-tour is off because reduced motion is requested."
+  }
+  for (const type of ["pointerdown", "keydown", "wheel", "touchstart", "input"] as const)
+    root.addEventListener(type, markActivity, { passive: true })
+  root.addEventListener(
+    "pointermove",
+    (event) => {
+      // Ignore sensor jitter; only real movement counts as activity.
+      if (Math.hypot(event.clientX - lastPointer.x, event.clientY - lastPointer.y) > 5 || Number.isNaN(lastPointer.x)) {
+        lastPointer = { x: event.clientX, y: event.clientY }
+        markActivity()
+      }
+    },
+    { passive: true },
+  )
+  const onVisibility = () => {
+    if (!doc.hidden) markActivity()
+  }
+  doc.addEventListener("visibilitychange", onVisibility)
+
   function select(node: WikiGraphNode) {
     // Selection only changes emphasis, never positions, so a still-running
     // simulation simply settles beneath it instead of reflowing.
     selected = node.id
+    markActivity()
     revealInTree(node.id)
     render()
     detailHeading.focus()
@@ -1671,7 +1846,9 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   buildLayout()
   buildToggles()
   fitView()
+  renderViewMeta()
   render()
+  if (options.tour?.enabled) setTour(true)
   return {
     update(input: unknown) {
       if (disposed) throw new Error("Viewer is disposed")
@@ -1695,6 +1872,9 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     dispose() {
       if (disposed) return
       disposed = true
+      if (tourTimer) win?.clearInterval(tourTimer)
+      tourTimer = 0
+      doc.removeEventListener("visibilitychange", onVisibility)
       cancelTween()
       layout?.stop()
       layout = undefined

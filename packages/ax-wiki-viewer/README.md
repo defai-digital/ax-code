@@ -27,7 +27,11 @@ diagram (nodes on one line, citations above and imports below), and a nested
 treemap (pages contain files, files contain symbols). The radial, arc and treemap
 views derive a hierarchy from each file's first citing page and never invent
 branch lengths or distances. The Explore panel is a collapsible tree over the same
-hierarchy. New views are one entry in the view registry plus a layout factory.
+hierarchy. Each view states the question it answers. An opt-in Auto-tour (off by default,
+disabled under reduced motion) can cycle the views while the page is idle; any
+activity restarts the idle clock, and it can be started from `mount` with
+`{ tour: { enabled: true, intervalMs } }` (default 3 minutes). New views are one
+entry in the view registry plus a layout factory.
 
 Build: `pnpm build`. Check generated assets: `pnpm check:bundle`.
 Run unit tests: `pnpm test`. Run browser tests after building: `pnpm test:browser`.

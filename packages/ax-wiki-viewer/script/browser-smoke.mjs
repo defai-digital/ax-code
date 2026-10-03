@@ -78,7 +78,7 @@ try {
   // Camera affordances: zoom readout, double-click zoom, and a one-click return to the framed view.
   const fitted = await page.locator(".zoom-readout").textContent()
   assert.match(fitted ?? "", /^\d+%$/)
-  await page.locator("svg").dblclick({ position: { x: 20, y: 20 } })
+  await page.locator("svg[role=img]").dblclick({ position: { x: 20, y: 20 } })
   assert.notEqual(await page.locator(".zoom-readout").textContent(), fitted)
   await page.getByRole("button", { name: "Fit to view" }).click()
   assert.equal(await page.locator(".zoom-readout").textContent(), fitted)
@@ -107,6 +107,11 @@ try {
   await page.keyboard.press("ArrowDown")
   assert.notEqual(await page.evaluate(() => document.activeElement?.dataset.kind), "page")
   await page.mouse.move(2, 2)
+  // Each view explains the question it answers, and the opt-in tour starts off.
+  assert.equal(await page.locator(".views button svg.view-icon").count(), 4)
+  assert.match(await page.locator(".view-caption").innerText(), /^Force: Who cites what\?/)
+  assert.equal(await page.getByRole("button", { name: "Auto-tour" }).getAttribute("aria-pressed"), "false")
+  assert.equal(await page.locator(".tour-status").isHidden(), true)
   // View switcher: radial views keep every node, put every cluster leaf on one ring, and return to force.
   const nodeCount = await page.locator("svg g.node").count()
   await page.getByRole("button", { name: "Radial" }).click()
@@ -134,6 +139,7 @@ try {
   )
   // Arc: every node on one baseline. Treemap: every node is a rectangle and cross links stay hidden until focus.
   await page.getByRole("button", { name: "Arc", exact: true }).click()
+  assert.match(await page.locator(".view-caption").innerText(), /^Arc: How do files depend/)
   await page.waitForTimeout(700)
   assert.equal(await page.locator("svg g.node").count(), nodeCount)
   assert.equal(
@@ -158,7 +164,7 @@ try {
   // Wait for the force layout to settle again before the label checks.
   await page.waitForTimeout(1500)
   const pageLabels = await page.evaluate(() => {
-    const svgBox = document.querySelector("svg").getBoundingClientRect()
+    const svgBox = document.querySelector("svg[role=img]").getBoundingClientRect()
     return [...document.querySelectorAll("svg g.node.page")].map((group) => {
       const text = group.querySelector("text")
       const box = text.getBoundingClientRect()
@@ -238,7 +244,7 @@ try {
   assert.match(await page.getByRole("status").innerText(), /2 of 4 match/)
   await page.keyboard.press("Enter")
   assert.match(await page.locator(".detail").innerText(), /Source: src\/b\.ts/)
-  await page.evaluate(() => document.querySelector("svg").dispatchEvent(new MouseEvent("click", { bubbles: true })))
+  await page.evaluate(() => document.querySelector("svg[role=img]").dispatchEvent(new MouseEvent("click", { bubbles: true })))
   assert.equal(await page.locator(".list .node-label").count(), 2)
   await page.getByRole("searchbox").focus()
   await page.keyboard.press("Enter")
@@ -279,7 +285,7 @@ try {
   await page.keyboard.press("Enter")
   assert.match(await page.locator(".detail").innerText(), /Page: Architecture/)
   assert.equal(await page.locator(".list .node-label").count(), 1)
-  await page.evaluate(() => document.querySelector("svg").dispatchEvent(new MouseEvent("click", { bubbles: true })))
+  await page.evaluate(() => document.querySelector("svg[role=img]").dispatchEvent(new MouseEvent("click", { bubbles: true })))
   assert.match(await page.locator(".detail").innerText(), /Select a page, source, or symbol/)
   assert.equal(await page.locator(".list .node-label").count(), 1)
   await page.getByRole("searchbox").fill("")
@@ -289,7 +295,7 @@ try {
   assert.match(await page.locator(".detail").innerText(), /Summary: Guide summary\./)
   assert.match(await page.locator(".detail").innerText(), /Foo \(verified\)/)
   assert.match(await page.locator(".detail").innerText(), /Ghost \(inferred\)/)
-  await page.evaluate(() => document.querySelector("svg").dispatchEvent(new MouseEvent("click", { bubbles: true })))
+  await page.evaluate(() => document.querySelector("svg[role=img]").dispatchEvent(new MouseEvent("click", { bubbles: true })))
   await page.evaluate(() => document.querySelector("svg g.node").dispatchEvent(new Event("mouseenter")))
   assert.equal(
     await page.evaluate(
@@ -323,7 +329,7 @@ try {
     ])
       group.dispatchEvent(new PointerEvent("pointermove", opts(sx + dx, sy + dy)))
     group.dispatchEvent(new PointerEvent("pointerup", opts(sx + 80, sy + 40)))
-    const drop = new DOMPoint(sx + 80, sy + 40).matrixTransform(document.querySelector("svg").getScreenCTM().inverse())
+    const drop = new DOMPoint(sx + 80, sy + 40).matrixTransform(document.querySelector("svg[role=img]").getScreenCTM().inverse())
     return {
       before: [...document.querySelectorAll("svg g.node")].map((g) => g.getAttribute("transform")),
       drop: [drop.x, drop.y],
@@ -400,7 +406,7 @@ try {
     ])
       group.dispatchEvent(new PointerEvent("pointermove", opts(sx + dx, sy + dy)))
     group.dispatchEvent(new PointerEvent("pointerup", opts(sx + 80, sy + 40)))
-    const drop = new DOMPoint(sx + 80, sy + 40).matrixTransform(document.querySelector("svg").getScreenCTM().inverse())
+    const drop = new DOMPoint(sx + 80, sy + 40).matrixTransform(document.querySelector("svg[role=img]").getScreenCTM().inverse())
     return {
       before,
       drop: [drop.x, drop.y],
@@ -443,7 +449,7 @@ try {
     group.dispatchEvent(new MouseEvent("click", { bubbles: true }))
   })
   assert.match(await calm.locator(".detail").innerText(), /Page: Architecture/)
-  await calm.evaluate(() => document.querySelector("svg").dispatchEvent(new MouseEvent("click", { bubbles: true })))
+  await calm.evaluate(() => document.querySelector("svg[role=img]").dispatchEvent(new MouseEvent("click", { bubbles: true })))
   assert.match(await calm.locator(".detail").innerText(), /Select a page, source, or symbol/)
   // A touch drag targets the node on pointerup but does not emit a click.
   // The next tap must still select.
@@ -470,7 +476,7 @@ try {
       sy = box.y + box.height / 2
     const opts = (x, y) => ({ clientX: x, clientY: y, pointerId: 31, bubbles: true, isPrimary: true })
     group.dispatchEvent(new PointerEvent("pointerdown", opts(sx, sy)))
-    document.querySelector("svg").dispatchEvent(new PointerEvent("pointermove", opts(sx + 48, sy + 22)))
+    document.querySelector("svg[role=img]").dispatchEvent(new PointerEvent("pointermove", opts(sx + 48, sy + 22)))
     document.dispatchEvent(new PointerEvent("pointerup", opts(sx + 48, sy + 22)))
     return { before, after: group.getAttribute("transform") }
   })
@@ -485,7 +491,7 @@ try {
   await page.getByRole("button", { name: "Show all / reset" }).click()
   // Wheel zooms toward the pointer: one notch in shrinks the viewBox, one notch out restores it.
   const wheeled = await page.evaluate(() => {
-    const svg = document.querySelector("svg")
+    const svg = document.querySelector("svg[role=img]")
     const before = svg.getAttribute("viewBox").split(" ").map(Number)
     const box = svg.getBoundingClientRect()
     const at = { clientX: box.x + box.width / 2, clientY: box.y + box.height / 2, bubbles: true, cancelable: true }
@@ -593,6 +599,50 @@ try {
     second.dispose()
     return { rejected, preserved, empty, disposed, isolated, cleaned: document.querySelectorAll(".axwv").length === 0 }
   }, graph)
+  // Auto-tour: opt-in, counts down to the next view, pauses on activity, and announces once.
+  const tourPage = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+  await tourPage.setContent('<main id="t"></main>')
+  await tourPage.addScriptTag({ content: bundle.outputFiles[0].text })
+  await tourPage.evaluate((graph) => {
+    globalThis.tour = WikiViewer.mount(document.getElementById("t"), graph, { tour: { enabled: true, intervalMs: 2000 } })
+  }, graph)
+  assert.equal(await tourPage.getByRole("button", { name: "Auto-tour" }).getAttribute("aria-pressed"), "true")
+  assert.match(await tourPage.locator(".tour-status").innerText(), /^Next: Radial · 0:0[12]$/)
+  // Activity keeps resetting the idle clock, so the view must not change while the user is active.
+  for (let i = 0; i < 6; i++) {
+    await tourPage.mouse.move(100 + i * 40, 120 + i * 25)
+    await tourPage.waitForTimeout(500)
+  }
+  assert.equal(await tourPage.getByRole("button", { name: "Force" }).getAttribute("aria-pressed"), "true")
+  // Pausing holds the view even when idle.
+  await tourPage.getByRole("button", { name: "Pause" }).click()
+  await tourPage.waitForTimeout(2600)
+  assert.equal(await tourPage.getByRole("button", { name: "Force" }).getAttribute("aria-pressed"), "true")
+  assert.equal(await tourPage.locator(".tour-status").innerText(), "Tour paused")
+  // Resuming and staying idle advances to the next view and announces it once, politely.
+  await tourPage.getByRole("button", { name: "Resume" }).click()
+  await tourPage.mouse.move(1, 1)
+  await tourPage.waitForFunction(() => document.querySelector(".views button[aria-pressed=true]")?.textContent === "Radial", null, {
+    timeout: 6000,
+  })
+  assert.equal(await tourPage.locator(".sr-only").innerText(), "Switched to Radial view")
+  assert.match(await tourPage.locator(".view-caption").innerText(), /^Radial:/)
+  assert.equal(await tourPage.locator(".tour-status").getAttribute("aria-hidden"), "true")
+  // Turning it off stops the countdown entirely.
+  await tourPage.getByRole("button", { name: "Auto-tour" }).click()
+  assert.equal(await tourPage.locator(".tour-status").isHidden(), true)
+  await tourPage.evaluate(() => globalThis.tour.dispose())
+  await tourPage.close()
+  // Reduced motion: the tour cannot be enabled, even by option.
+  const calmTour = await browser.newPage({ reducedMotion: "reduce" })
+  await calmTour.setContent('<main id="c"></main>')
+  await calmTour.addScriptTag({ content: bundle.outputFiles[0].text })
+  await calmTour.evaluate((graph) => {
+    WikiViewer.mount(document.getElementById("c"), graph, { tour: { enabled: true, intervalMs: 1000 } })
+  }, graph)
+  assert.equal(await calmTour.getByRole("button", { name: "Auto-tour" }).isDisabled(), true)
+  assert.equal(await calmTour.getByRole("button", { name: "Auto-tour" }).getAttribute("aria-pressed"), "false")
+  await calmTour.close()
   assert.deepEqual(result, {
     rejected: true,
     preserved: true,
