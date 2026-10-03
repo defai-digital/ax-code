@@ -27,30 +27,22 @@ const radius = (layout: ReturnType<typeof createRadialLayout>, id: string) => {
 }
 
 test("derives a deterministic hierarchy with the first citing page as primary parent", () => {
-  const layout = createRadialLayout({ nodes, edges }, "tree")
+  const layout = createRadialLayout({ nodes, edges })
   const parent = layout.radial!.treeParent
   expect(parent.get("s:2")).toBe("p:a")
   expect(parent.get("s:3")).toBe("p:b")
   expect(parent.get("y:1")).toBe("s:1")
   expect(parent.has("s:orphan")).toBe(false)
   expect(
-    createRadialLayout({ nodes: [...nodes].reverse(), edges: [...edges].reverse() }, "tree").byId.get("s:2"),
+    createRadialLayout({ nodes: [...nodes].reverse(), edges: [...edges].reverse() }).byId.get("s:2"),
   ).toMatchObject({
     x: layout.byId.get("s:2")!.x,
     y: layout.byId.get("s:2")!.y,
   })
 })
 
-test("tree variant keeps one ring per kind", () => {
-  const layout = createRadialLayout({ nodes, edges }, "tree")
-  expect(radius(layout, "p:a")).toBeCloseTo(radius(layout, "p:b"))
-  expect(radius(layout, "s:1")).toBeCloseTo(radius(layout, "s:3"))
-  expect(radius(layout, "p:a")).toBeLessThan(radius(layout, "s:1"))
-  expect(radius(layout, "s:1")).toBeLessThan(radius(layout, "y:1"))
-})
-
-test("cluster variant puts every leaf on the outer ring", () => {
-  const layout = createRadialLayout({ nodes, edges }, "cluster")
+test("puts every leaf on the outer ring", () => {
+  const layout = createRadialLayout({ nodes, edges })
   const outer = radius(layout, "y:1")
   for (const id of ["y:2", "y:loose", "s:2", "s:3", "s:orphan"]) expect(radius(layout, id)).toBeCloseTo(outer)
   // A source that owns symbols is internal, so it stays inside.
@@ -58,7 +50,7 @@ test("cluster variant puts every leaf on the outer ring", () => {
 })
 
 test("a parent sits at the mean angle of its children and wedges do not overlap", () => {
-  const layout = createRadialLayout({ nodes, edges }, "cluster")
+  const layout = createRadialLayout({ nodes, edges })
   const angle = (id: string) => layout.radial!.angles.get(id)!
   expect(angle("s:1")).toBeCloseTo((angle("y:1") + angle("y:2")) / 2)
   expect(angle("p:a")).not.toBeCloseTo(angle("p:b"))
@@ -66,13 +58,10 @@ test("a parent sits at the mean angle of its children and wedges do not overlap"
 
 test("bubbles never overlap on a dense ring", () => {
   const many = Array.from({ length: 150 }, (_, i) => ({ id: `s:${i}`, kind: "source" as const }))
-  const dense = createRadialLayout(
-    {
-      nodes: [{ id: "p", kind: "page" }, ...many],
-      edges: many.map((n) => ({ from: "p", to: n.id, kind: "references-source" })),
-    },
-    "tree",
-  )
+  const dense = createRadialLayout({
+    nodes: [{ id: "p", kind: "page" }, ...many],
+    edges: many.map((n) => ({ from: "p", to: n.id, kind: "references-source" })),
+  })
   const list = dense.nodes.filter((n) => n.kind === "source")
   for (let i = 0; i < list.length; i++)
     for (let j = i + 1; j < list.length; j++)
@@ -80,7 +69,7 @@ test("bubbles never overlap on a dense ring", () => {
 })
 
 test("handles empty and orphan-only graphs", () => {
-  expect(createRadialLayout({ nodes: [], edges: [] }, "cluster").nodes).toEqual([])
-  const only = createRadialLayout({ nodes: [{ id: "s", kind: "source" }], edges: [] }, "tree")
+  expect(createRadialLayout({ nodes: [], edges: [] }).nodes).toEqual([])
+  const only = createRadialLayout({ nodes: [{ id: "s", kind: "source" }], edges: [] })
   expect(Number.isFinite(only.nodes[0].x) && Number.isFinite(only.nodes[0].y)).toBe(true)
 })

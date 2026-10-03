@@ -21,11 +21,11 @@ from `@ax-code/ax-wiki-viewer/node`. The function returns HTML and its hash-base
 The browser root does not import the Node entrypoint. Data is field-allowlisted;
 relative paths and page titles can still be sensitive.
 
-The map offers three switchable views: a force-directed lane layout, a radial
-tree (fixed rings per node kind), and a radial cluster (every leaf on the outer
-ring). Radial views derive a hierarchy from each file's first citing page and
-bundle the remaining cross links toward the center; they never invent branch
-lengths. New views are one entry in the view registry plus a layout factory.
+The map offers two switchable views: a force-directed lane layout and a radial
+cluster (every file and symbol leaf on the outer ring). The radial view derives
+a hierarchy from each file's first citing page and bundles the remaining cross
+links toward the center; it never invents branch lengths. New views are one
+entry in the view registry plus a layout factory.
 
 Build: `pnpm build`. Check generated assets: `pnpm check:bundle`.
 Run unit tests: `pnpm test`. Run browser tests after building: `pnpm test:browser`.

@@ -3,13 +3,11 @@ import type { ForceLayout, LayoutLink, LayoutNode } from "./force-layout.js"
 import type { WikiGraphNodeKind } from "@ax-code/ax-wiki/graph"
 
 /**
- * DOM-free radial layouts. The evidence graph is not a tree, so a hierarchy is
+ * DOM-free radial cluster layout. The evidence graph is not a tree, so a hierarchy is
  * derived (page -> source -> symbol) from each node's first citing page or
  * container; every other edge stays a cross link. Branch lengths are never
- * invented: radius encodes the node kind (tree) or leafhood (cluster), not distance.
+ * invented: radius encodes leafhood (leaves on the outer ring), not distance.
  */
-export type RadialVariant = "tree" | "cluster"
-
 const GAP = (3 * Math.PI) / 180
 /** Minimum arc length a leaf slot may have, in world units, so bubbles never touch. */
 const MIN_ARC = 16
@@ -17,13 +15,10 @@ const MIN_RING = 340
 
 type Group = { head?: string; sources: string[]; loose: string[] }
 
-export function createRadialLayout(
-  input: {
-    nodes: ReadonlyArray<{ id: string; kind: WikiGraphNodeKind }>
-    edges: ReadonlyArray<{ from: string; to: string; kind: string }>
-  },
-  variant: RadialVariant,
-): ForceLayout {
+export function createRadialLayout(input: {
+  nodes: ReadonlyArray<{ id: string; kind: WikiGraphNodeKind }>
+  edges: ReadonlyArray<{ from: string; to: string; kind: string }>
+}): ForceLayout {
   const cx = LAYOUT_WORLD.width / 2
   const cy = LAYOUT_WORLD.height / 2
   const degree = new Map<string, number>()
@@ -83,19 +78,17 @@ export function createRadialLayout(
     byId,
     stop: () => {},
     reheat: () => {},
-    radial: { variant, cx, cy, angles, treeParent },
+    radial: { cx, cy, angles, treeParent },
   }
   if (total === 0) return layout
 
   const gaps = groups.length > 1 ? groups.length : 0
   const unit = (2 * Math.PI - gaps * GAP) / total
-  // In the tree variant a leafless source sits on the middle ring, so size the circle for that ring.
-  const innermostLeafRing = variant === "tree" ? 0.68 : 1
-  const R = Math.max(MIN_RING, (MIN_ARC * total) / (2 * Math.PI * innermostLeafRing))
+  const R = Math.max(MIN_RING, (MIN_ARC * total) / (2 * Math.PI))
   const ringOf = (node: LayoutNode): number => {
     if (node.kind === "page") return 0.34 * R
     if (node.kind === "symbol") return R
-    return variant === "cluster" && (children.get(node.id)?.length ?? 0) === 0 ? R : 0.68 * R
+    return (children.get(node.id)?.length ?? 0) === 0 ? R : 0.68 * R
   }
   const place = (id: string, angle: number) => {
     const node = byId.get(id)!

@@ -132,8 +132,7 @@ const FOCUS_EDGE_OPACITY = 0.95
 /** Layout registry. Adding a view is one entry here plus a layout factory in buildLayout. */
 const VIEWS = [
   { id: "force", label: "Force", hint: "Force-directed lanes: pages, symbols, files" },
-  { id: "radial-tree", label: "Radial tree", hint: "Pages, files and symbols on fixed rings" },
-  { id: "radial-cluster", label: "Radial cluster", hint: "Every leaf on the outer ring" },
+  { id: "radial", label: "Radial", hint: "Radial cluster: every file and symbol leaf on the outer ring" },
 ] as const
 type ViewId = (typeof VIEWS)[number]["id"]
 /** Radial rings are non-overlapping by construction, so names can appear earlier than on the force map. */
@@ -1179,7 +1178,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     cancelTween()
     hasFitted = false
     if (view !== "force") {
-      layout = createRadialLayout(graph, view === "radial-tree" ? "tree" : "cluster")
+      layout = createRadialLayout(graph)
       hasFitted = true
       buildElements()
       positionElements()

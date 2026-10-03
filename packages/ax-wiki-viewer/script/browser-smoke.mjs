@@ -92,8 +92,8 @@ try {
   await page.locator(".tip").waitFor({ state: "hidden" })
   // View switcher: radial views keep every node, put every cluster leaf on one ring, and return to force.
   const nodeCount = await page.locator("svg g.node").count()
-  await page.getByRole("button", { name: "Radial cluster" }).click()
-  assert.equal(await page.getByRole("button", { name: "Radial cluster" }).getAttribute("aria-pressed"), "true")
+  await page.getByRole("button", { name: "Radial" }).click()
+  assert.equal(await page.getByRole("button", { name: "Radial" }).getAttribute("aria-pressed"), "true")
   assert.equal(await page.locator("svg g.node").count(), nodeCount)
   const ring = await page.evaluate(() => {
     const points = [...document.querySelectorAll("svg g.node:not(.page)")].map((group) => {
@@ -115,8 +115,6 @@ try {
     ),
     settled,
   )
-  await page.getByRole("button", { name: "Radial tree" }).click()
-  assert.equal(await page.locator("svg g.node").count(), nodeCount)
   await page.getByRole("button", { name: "Force" }).click()
   assert.equal(await page.getByRole("button", { name: "Force" }).getAttribute("aria-pressed"), "true")
   assert.equal(await page.locator("svg g.node").count(), nodeCount)
