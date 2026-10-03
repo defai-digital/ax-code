@@ -941,7 +941,19 @@ export function Session() {
       t: uiText,
       conceal,
       currentModel: () => local.model.current(),
-      dialogReplaceActivity: (dialog) => dialog.replace(() => <DialogActivity sessionID={route.sessionID} />),
+      dialogReplaceActivity: (dialog) =>
+        dialog.replace(() => (
+          <DialogActivity
+            sessionID={route.sessionID}
+            onJump={(messageID) => {
+              const child = messageTarget(
+                renderableChildren<ScrollChild>(scroll, { name: "session-activity-message-children" }),
+                messageID,
+              )
+              if (child) scroll.scrollBy(child.y - scroll.y - 1)
+            }}
+          />
+        )),
       dialogReplaceCapability: (dialog) => dialog.replace(() => <DialogCapabilityCatalog />),
       dialogReplaceDre: (dialog) => dialog.replace(() => <DialogDre sessionID={route.sessionID} />),
       dialogReplaceDreGraph: (dialog) => dialog.replace(() => <DialogDreGraph sessionID={route.sessionID} />),
