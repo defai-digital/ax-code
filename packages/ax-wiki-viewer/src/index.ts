@@ -77,6 +77,9 @@ export const viewerCss = `
 .axwv .views button[aria-pressed="true"]{background:#173342;color:var(--text);box-shadow:inset 0 -2px 0 var(--accent)}
 .axwv svg.swap{animation:axwswap .28s ease-out}
 @keyframes axwswap{from{opacity:0}to{opacity:1}}
+.axwv .tip{position:absolute;z-index:4;pointer-events:none;flex-direction:column;gap:2px;max-width:320px;padding:8px 10px;border:1px solid var(--line-2);border-radius:10px;background:rgba(13,21,32,.96);box-shadow:0 8px 24px rgba(0,0,0,.45);font-size:12px;color:var(--muted)}
+.axwv .tip strong{color:var(--text);font-size:13px;overflow-wrap:anywhere}
+.axwv .tip code{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;color:#b5c5d7;overflow-wrap:anywhere}
 .axwv .zoom-readout{grid-column:span 2;text-align:center;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
 .axwv .key{display:inline-block;margin:0 0 0 10px;padding-left:12px;border-left:1px solid var(--line);font-size:12px}
 .axwv .key[open]{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center}
@@ -270,6 +273,10 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   detailHeading.tabIndex = -1
   const detail = html("p", aside)
   detail.className = "detail"
+  const tip = html("div", canvas)
+  tip.className = "tip"
+  tip.setAttribute("aria-hidden", "true")
+  tip.style.display = "none"
   const navigation = html("div", canvas)
   navigation.className = "hud"
   const zoomReadout = doc.createElement("span")
@@ -518,6 +525,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       pageLabelY.set(entry.node.id, y)
       lastLabelY = entry.node.y + y
     }
+    const candidates: { label: SVGTextElement; box: Box; priority: number }[] = []
     for (const { group, circle, label, node } of nodeEls) {
       const dimmed = visibleById.get(node.id) !== true || (near !== undefined && !near.has(node.id))
       const emphasized = near !== undefined && near.has(node.id)
@@ -556,7 +564,71 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
         label.setAttribute("x", String(-(Math.max(node.radius, 14) + 12)))
         label.setAttribute("y", String(pageLabelY.get(node.id) ?? 4))
       }
+      if (showLabel && !dimmed) {
+        const priority =
+          node.id === selected || node.id === hovered
+            ? 4
+            : emphasized
+              ? 3
+              : node.kind === "page"
+                ? 2
+                : node.kind === "source"
+                  ? 1
+                  : 0
+        candidates.push({ label, box: labelBox(node, label, pageLabelY.get(node.id) ?? 4), priority })
+      }
     }
+    // Greedy declutter: the most important names claim space first; a name that would
+    // overlap an accepted one is hidden until zoom or focus makes room.
+    candidates.sort((a, b) => b.priority - a.priority)
+    const taken: Box[] = []
+    for (const candidate of candidates) {
+      const clash = taken.some(
+        (box) =>
+          candidate.box.x0 < box.x1 && candidate.box.x1 > box.x0 && candidate.box.y0 < box.y1 && candidate.box.y1 > box.y0,
+      )
+      if (clash) candidate.label.setAttribute("display", "none")
+      else taken.push(candidate.box)
+    }
+  }
+
+  type Box = { x0: number; y0: number; x1: number; y1: number }
+  /** World-space footprint of a label. Text size is in world units, so this does not depend on zoom. */
+  function labelBox(node: LayoutNode, label: SVGTextElement, pageDy: number): Box {
+    const size = node.kind === "page" ? 22 : 11
+    const width = Array.from(label.textContent ?? "").length * size * 0.58
+    const half = size * 0.6
+    const radial = layout?.radial
+    if (radial) {
+      const angle = radial.angles.get(node.id) ?? 0
+      const ux = Math.cos(angle),
+        uy = Math.sin(angle)
+      const reach = (node.kind === "page" ? Math.max(node.radius, 14) : node.radius) + 8
+      if (node.kind === "page") {
+        const left = ux < 0
+        const x = node.x + (left ? -reach : reach)
+        return { x0: left ? x - width : x, x1: left ? x : x + width, y0: node.y - half, y1: node.y + half }
+      }
+      const sx = node.x + ux * reach,
+        sy = node.y + uy * reach
+      const ex = sx + ux * width,
+        ey = sy + uy * width
+      const padX = Math.abs(uy) * half,
+        padY = Math.abs(ux) * half
+      return {
+        x0: Math.min(sx, ex) - padX,
+        x1: Math.max(sx, ex) + padX,
+        y0: Math.min(sy, ey) - padY,
+        y1: Math.max(sy, ey) + padY,
+      }
+    }
+    if (node.kind === "page") {
+      const x = node.x - (Math.max(node.radius, 14) + 12)
+      return { x0: x - width, x1: x, y0: node.y + pageDy - half * 1.4, y1: node.y + pageDy + half * 0.5 }
+    }
+    const drawn = node.kind === "symbol" ? Math.max(5, node.radius - 2) : node.radius
+    const y = node.y + drawn + 14
+    return { x0: node.x - width / 2, x1: node.x + width / 2, y0: y - half * 1.3, y1: y + half * 0.4 }
   }
 
   function renderCounts() {
@@ -728,6 +800,45 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
       key.append(item)
     }
     legend.append(key)
+  }
+
+  /** Plain-text tooltip built from textContent only, so hostile labels stay inert. */
+  function showTip(info: WikiGraphNode, degree: number, event: MouseEvent) {
+    if (dragging) return
+    tip.replaceChildren()
+    const title = doc.createElement("strong")
+    title.textContent = info.label
+    const meta = doc.createElement("span")
+    meta.textContent = `${info.kind} · ${info.freshness}`
+    const stats = doc.createElement("span")
+    stats.textContent = `${plural(degree, "connection", "connections")} shown of ${plural(info.recordedReferences, "recorded reference", "recorded references")}`
+    tip.append(title, meta, stats)
+    const extra = info.kind === "symbol" ? info.detail : info.path
+    if (extra && extra !== info.label) {
+      const path = doc.createElement("code")
+      path.textContent = truncateLabel(extra, 72)
+      tip.append(path)
+    }
+    tip.style.display = "flex"
+    moveTip(event)
+  }
+
+  function moveTip(event: MouseEvent) {
+    if (tip.style.display === "none") return
+    const rect = canvas.getBoundingClientRect()
+    const width = tip.offsetWidth,
+      height = tip.offsetHeight
+    let left = event.clientX - rect.left + 14
+    let top = event.clientY - rect.top + 16
+    // Flip to the other side of the pointer instead of clipping at the canvas edge.
+    if (left + width > rect.width - 8) left = event.clientX - rect.left - width - 14
+    if (top + height > rect.height - 8) top = event.clientY - rect.top - height - 16
+    tip.style.left = `${Math.max(8, left)}px`
+    tip.style.top = `${Math.max(8, top)}px`
+  }
+
+  function hideTip() {
+    tip.style.display = "none"
   }
 
   function acceptHover(id: string) {
@@ -913,10 +1024,16 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
         }
         select(info)
       })
-      group.addEventListener("mouseenter", () => {
+      group.addEventListener("mouseenter", (event) => {
         acceptHover(node.id)
+        showTip(info, node.degree, event)
+        // The custom tooltip replaces the native one; the title stays for assistive tech.
+        title.textContent = ""
       })
+      group.addEventListener("mousemove", moveTip)
       group.addEventListener("mouseleave", () => {
+        hideTip()
+        title.textContent = `${info.label} (${node.kind}, ${info.freshness}, ${plural(node.degree, "connection", "connections")} shown)`
         if (hovered === node.id) hovered = undefined
         applyEmphasis()
       })
@@ -956,6 +1073,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
             dragging = true
             aside.style.pointerEvents = "none"
             group.classList.add("dragging")
+            hideTip()
             hovered = undefined
             applyEmphasis()
             // A native text selection or drag image is the slate bar that
@@ -1058,6 +1176,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
   function buildLayout() {
     topics = citingTopics(graph.nodes, graph.edges)
     layout?.stop()
+    cancelTween()
     hasFitted = false
     if (view !== "force") {
       layout = createRadialLayout(graph, view === "radial-tree" ? "tree" : "cluster")
@@ -1081,16 +1200,47 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     buildElements()
   }
 
+  let tweenFrame = 0
+  function cancelTween() {
+    if (tweenFrame) doc.defaultView?.cancelAnimationFrame(tweenFrame)
+    tweenFrame = 0
+  }
+
+  /** Glide nodes from their previous positions to the (static) radial targets. */
+  function tweenFrom(before: Map<string, { x: number; y: number }>) {
+    const win = doc.defaultView
+    if (!layout || !win || reducedMotion) return
+    const nodes = layout.nodes
+    const targets = nodes.map((node) => ({ node, from: before.get(node.id), x: node.x, y: node.y }))
+    const started = win.performance.now()
+    const duration = 420
+    const frame = (now: number) => {
+      const t = Math.min(1, (now - started) / duration)
+      const eased = 1 - (1 - t) ** 3
+      for (const { node, from, x, y } of targets) {
+        node.x = from ? from.x + (x - from.x) * eased : x
+        node.y = from ? from.y + (y - from.y) * eased : y
+      }
+      positionElements()
+      tweenFrame = t < 1 ? win.requestAnimationFrame(frame) : 0
+    }
+    tweenFrame = win.requestAnimationFrame(frame)
+  }
+
   function setView(next: ViewId) {
     if (disposed || next === view) return
+    cancelTween()
+    hideTip()
+    const before = new Map((layout?.nodes ?? []).map((node) => [node.id, { x: node.x, y: node.y }]))
     view = next
     for (const [id, button] of viewButtons) button.setAttribute("aria-pressed", String(id === view))
     hovered = undefined
     cameraTouched = false
     buildLayout()
     fitView()
-    // Positions differ completely between views, so a short fade reads better than a tween.
-    if (!reducedMotion) {
+    if (layout?.radial) tweenFrom(before)
+    else if (!reducedMotion) {
+      // The force layout is still moving, so it cannot be tweened; fade it in instead.
       svg.classList.remove("swap")
       void svg.getBoundingClientRect()
       svg.classList.add("swap")
@@ -1156,6 +1306,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     const target = event.target
     if (target instanceof Element && target.closest(".hud")) return
     event.preventDefault()
+    hideTip()
     const factor = wheelZoomFactor(event.deltaY, event.deltaMode, event.ctrlKey)
     if (factor === 1) return
     applyZoom(factor, event.clientX, event.clientY)
@@ -1296,6 +1447,7 @@ export function mount(element: HTMLElement, input: unknown, options: { injectSty
     dispose() {
       if (disposed) return
       disposed = true
+      cancelTween()
       layout?.stop()
       layout = undefined
       if (unlockHover) doc.removeEventListener("pointermove", unlockHover)

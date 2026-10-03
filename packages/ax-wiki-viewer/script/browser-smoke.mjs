@@ -82,6 +82,14 @@ try {
   assert.notEqual(await page.locator(".zoom-readout").textContent(), fitted)
   await page.getByRole("button", { name: "Fit to view" }).click()
   assert.equal(await page.locator(".zoom-readout").textContent(), fitted)
+  // Custom tooltip: plain text only, follows hover, hides on leave; the native title is suppressed while shown.
+  const hoverBox = await page.locator("svg g.node:not(.page) circle").first().boundingBox()
+  await page.mouse.move(hoverBox.x + hoverBox.width / 2, hoverBox.y + hoverBox.height / 2)
+  await page.locator(".tip").waitFor({ state: "visible" })
+  assert.match(await page.locator(".tip").innerText(), /connection/)
+  assert.equal(await page.locator(".tip img, .tip script").count(), 0)
+  await page.mouse.move(2, 2)
+  await page.locator(".tip").waitFor({ state: "hidden" })
   // View switcher: radial views keep every node, put every cluster leaf on one ring, and return to force.
   const nodeCount = await page.locator("svg g.node").count()
   await page.getByRole("button", { name: "Radial cluster" }).click()
@@ -95,6 +103,18 @@ try {
     return { max: Math.max(...points), min: Math.min(...points) }
   })
   assert.ok(ring.max > 0 && ring.min > 0)
+  // Nodes glide to the radial targets; after the tween every non-page node sits at its final ring position.
+  await page.waitForTimeout(700)
+  const settled = await page.evaluate(() =>
+    [...document.querySelectorAll("svg g.node:not(.page)")].map((group) => group.getAttribute("transform")).join("|"),
+  )
+  await page.waitForTimeout(300)
+  assert.equal(
+    await page.evaluate(() =>
+      [...document.querySelectorAll("svg g.node:not(.page)")].map((group) => group.getAttribute("transform")).join("|"),
+    ),
+    settled,
+  )
   await page.getByRole("button", { name: "Radial tree" }).click()
   assert.equal(await page.locator("svg g.node").count(), nodeCount)
   await page.getByRole("button", { name: "Force" }).click()
