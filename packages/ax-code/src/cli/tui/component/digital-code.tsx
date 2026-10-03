@@ -6,6 +6,9 @@ import { useKeyboard, useRenderer, useTerminalDimensions } from "ax-tui/solid"
 import { scheduleTuiInterval, scheduleTuiTimeout } from "@tui/util/timer"
 import { captureTuiInput } from "@tui/util/capture-input"
 import { digitalCodePixelPlayer, supportsDigitalCodePixels } from "./digital-code-pixels"
+import { SIXEL_SPLASH_MIN_TICKS, sixelSplashPlayer, supportsSixelSplash } from "./sixel-splash"
+import { Flag } from "@/flag/flag"
+import { isWindowsTerminal } from "@/util/terminal-program"
 import { DIGITAL_CODE_LEVEL_COLORS } from "./digital-code-palette"
 import {
   DIGITAL_CODE_DURATION_MS,
@@ -88,6 +91,9 @@ export function DigitalCode(props: {
   )
   let pixels: ReturnType<typeof digitalCodePixelPlayer> | undefined
   let pixelsFailed = false
+  let splash: ReturnType<typeof sixelSplashPlayer> | undefined
+  let splashFailed = false
+  let tickCount = 0
   let finished = false
   const writePixels = (data: string) => {
     // Frame failures must reach the caller so it can switch to text. Only
@@ -122,9 +128,26 @@ export function DigitalCode(props: {
       pixelsFailed = true
     }
   }
+  const writeSplash = (data: string) => {
+    // Sixel shares the kitty frame queue but never the raw-stdout fallback:
+    // a post-destroy DCS write would land on the main-screen scrollback.
+    if (renderer.isDestroyed) throw new Error("Animation renderer has been destroyed")
+    resolveRenderLib().writeOut(renderer.rendererPtr, data)
+  }
+  const clearSplash = () => {
+    const active = splash
+    splash = undefined
+    try {
+      active?.dispose()
+    } catch {
+      // A failed terminal output must not prevent overlay or exit teardown.
+      splashFailed = true
+    }
+  }
   onCleanup(() => {
     finished = true
     clearPixels()
+    clearSplash()
   })
 
   let stopTimeout = () => {}
@@ -133,6 +156,7 @@ export function DigitalCode(props: {
       if (finished) return
       const size = dimensions()
       state = tickDigitalCode(state, size)
+      tickCount++
       const now = performance.now()
       const resolution = renderer.resolution
       const supported =
@@ -157,12 +181,48 @@ export function DigitalCode(props: {
             style: props.style,
             elapsedMs: now - started,
           })
+          // A capability flip could strand a splash drawn on an earlier tick.
+          clearSplash()
           return
         } catch {
           pixelsFailed = true
           clearPixels()
         }
       } else clearPixels()
+      // Sixel-only terminals (Windows Terminal) get one static splash frame.
+      // Without renderer pixel dimensions, estimate 8x16 cells like foliage.
+      const pixelWidth = resolution && resolution.width > 0 ? resolution.width : size.width * 8
+      const pixelHeight = resolution && resolution.height > 0 ? resolution.height : size.height * 16
+      const splashSupported =
+        !splashFailed &&
+        tickCount >= SIXEL_SPLASH_MIN_TICKS &&
+        supportsSixelSplash({
+          tty: process.stdout.isTTY === true,
+          screenMode: renderer.screenMode,
+          columns: size.width,
+          rows: size.height,
+          capabilities: renderer.capabilities,
+          windowsTerminal: isWindowsTerminal(),
+          env: Flag.AX_CODE_SIXEL_SPLASH_ENV,
+        })
+      if (splashSupported) {
+        try {
+          splash ??= sixelSplashPlayer(writeSplash)
+          splash.draw({
+            width: pixelWidth,
+            height: pixelHeight,
+            direction: props.direction ?? "down",
+            style: props.style,
+            background: scene ? textSceneBackground(scene) : "#000000",
+          })
+          // A capability flip could strand a kitty image drawn on an earlier tick.
+          clearPixels()
+          return
+        } catch {
+          splashFailed = true
+          clearSplash()
+        }
+      } else clearSplash()
       if (scene) setLeafRows(textSceneRows(size.width, size.height, scene, now - started))
       else if (foliageVariant)
         setLeafRows(
@@ -181,6 +241,8 @@ export function DigitalCode(props: {
     // Delete the Kitty image before chrome returns. Waiting for unmount
     // races renderer.destroy() and leaves a Ghostty remnant.
     clearPixels()
+    // Repaint the splash region with the overlay background for the same reason.
+    clearSplash()
     props.onDone(reason)
   }
 

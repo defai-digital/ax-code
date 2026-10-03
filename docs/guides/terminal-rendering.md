@@ -2,7 +2,7 @@
 
 Status: Current
 Scope: TUI terminal profile selection, overrides, and visual capability boundaries
-Last reviewed: 2026-09-17
+Last reviewed: 2026-10-03
 Owner: AX Code TUI maintainers
 
 AX Code chooses a terminal profile from the environment when it starts. The
@@ -113,3 +113,18 @@ Digital Code and Foliage pixel frames are bounded to 1280x720; Fuji Mountain,
 Bench, and Mahjong are bounded to 1920x1080. These animation frames update on a
 20 FPS schedule, separately from the renderer's 60 FPS target.
 See [TUI opening and ending animations](tui-animations.md) for previews.
+
+Windows Terminal sessions with confirmed Sixel support (and without Kitty
+graphics) show one static Sixel splash frame, bounded to 640x360 and 256 KiB,
+instead of the text fallback. `AX_CODE_SIXEL_SPLASH=0` disables it; `=1` allows
+any Sixel terminal to show it (test path). Teardown repaints the splash region
+with the overlay background because Sixel has no image-id deletion.
+
+## Windows Terminal font
+
+AX Code cannot change the terminal font. File-type icons (Nerd Font
+private-use glyphs) render in Windows Terminal only with a patched font
+installed. The recommended font is **Cascadia Code NF**: install it, then set
+it as the profile font under Settings > Profiles > Appearance > Font face. A
+one-time in-app hint points Windows Terminal users at this setup; it never
+shows when icons already render or when `AX_CODE_NERD_FONT=0` opts out.

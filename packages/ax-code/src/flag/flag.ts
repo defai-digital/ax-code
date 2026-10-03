@@ -194,6 +194,16 @@ export namespace Flag {
     return value
   })()
 
+  // Static Sixel splash for the TUI opening/ending overlay. Tri-state:
+  //   AX_CODE_SIXEL_SPLASH=1/true  → allow any Sixel terminal (test path)
+  //   AX_CODE_SIXEL_SPLASH=0/false → force OFF
+  //   unset                        → Windows Terminal host gate + renderer flag
+  // Resolved at runtime in src/cli/tui/component/sixel-splash.ts.
+  export const AX_CODE_SIXEL_SPLASH_ENV = (() => {
+    const value = Env.parseBoolean(process.env["AX_CODE_SIXEL_SPLASH"])
+    return value
+  })()
+
   // Experimental
   export const AX_CODE_EXPERIMENTAL = truthy("AX_CODE_EXPERIMENTAL")
   export declare const AX_CODE_EXPERIMENTAL_FILEWATCHER: boolean

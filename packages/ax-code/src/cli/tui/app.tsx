@@ -55,6 +55,8 @@ import { Session as SessionApi } from "@/session"
 import { TuiEvent } from "./event"
 import { NotificationEvent } from "@/notification/events"
 import { KVProvider, useKV } from "./context/kv"
+import { isWindowsTerminal } from "@/util/terminal-program"
+import { NERD_FONT_KV_KEY, resolveNerdFontEnabled } from "./ui/glyphs"
 import { Provider } from "@/provider/provider"
 import { ArgsProvider, useArgs, type Args } from "./context/args"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
@@ -528,6 +530,31 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
 
   onMount(() => {
     recordTuiStartupOnce("tui.startup.appMounted", { route: route.data.type })
+  })
+
+  // One-time Windows Terminal font guidance: WT renders Nerd Font private-use
+  // glyphs only with a patched font installed. Shown once ever (persisted),
+  // never when glyphs already render, and never when the user forced glyphs
+  // off via AX_CODE_NERD_FONT=0. An in-app hint beats docs-only, and the app
+  // must not rewrite terminal settings it does not own.
+  let wtFontHintShown = false
+  createEffect(() => {
+    if (wtFontHintShown || !kv.ready) return
+    wtFontHintShown = true
+    if (!isWindowsTerminal()) return
+    if (Flag.AX_CODE_NERD_FONT_ENV === false) return
+    const enabled = resolveNerdFontEnabled({
+      env: Flag.AX_CODE_NERD_FONT_ENV,
+      kv: kv.get(NERD_FONT_KV_KEY),
+      detected: false,
+    })
+    if (enabled || kv.get("wt_nerd_font_hint_seen", false)) return
+    kv.set("wt_nerd_font_hint_seen", true)
+    toast.show({
+      variant: "info",
+      message: `For file icons in Windows Terminal, install "Cascadia Code NF" and set it as your profile font (Settings > Profiles > Appearance).`,
+      duration: 8000,
+    })
   })
 
   // Startup flourish: cover the main chrome from the first paint, then play
