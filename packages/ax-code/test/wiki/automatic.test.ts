@@ -232,6 +232,36 @@ test("records a durable failure memory when a maintenance build fails", async ()
   expect(memory?.lastHead).toBeTruthy()
 })
 
+test("a preempted maintenance build is not recorded as a durable failure", async () => {
+  await using tmp = await tmpdir({ git: true })
+  vi.spyOn(Agent, "get").mockImplementation(async (name) => ({
+    name,
+    mode: "primary",
+    native: true,
+    options: {},
+    permission: Permission.fromConfig({ "*": "allow" }),
+  }))
+  state.build.mockImplementationOnce(async ({ signal }: { signal: AbortSignal }) => {
+    await new Promise<void>((resolve) => {
+      if (signal.aborted) return resolve()
+      signal.addEventListener("abort", () => resolve(), { once: true })
+    })
+    throw (signal.reason ?? new Error("aborted")) as Error
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await WikiAutomatic.refresh("build")
+      await waitForBuildCalls(1)
+      // Foreground activity preempts the in-flight build.
+      const session = await Session.create({})
+      await SessionStatus.set(session.id, { type: "busy" })
+      await waitForStatus({ phase: "queued", reason: "busy" })
+      expect(await readWikiFailureMemory(tmp.path, ".ax-wiki")).toBeUndefined()
+    },
+  })
+})
+
 test("an explicit request still runs while a failure cooldown is active", async () => {
   await using tmp = await tmpdir({ git: true })
   vi.spyOn(Agent, "get").mockImplementation(async (name) => ({

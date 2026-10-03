@@ -258,6 +258,22 @@ test("a successful page following one transient SDK request failure recovers", a
   expect(model.doStreamCalls).toHaveLength(2)
 })
 
+test("a cancelled build keeps the previously committed build report", async () => {
+  await using tmp = await fixture()
+  const good = new MockLanguageModelV3({ doStream: async () => response(valid) })
+  await run(tmp.path, good)
+  const committed = await readFile(path.join(tmp.path, ".ax-wiki/.build-report.json"), "utf8")
+  const abort = new AbortController()
+  const model = new MockLanguageModelV3({
+    doStream: async () => {
+      abort.abort()
+      return response(valid)
+    },
+  })
+  await expect(run(tmp.path, model, abort.signal)).rejects.toThrow()
+  expect(await readFile(path.join(tmp.path, ".ax-wiki/.build-report.json"), "utf8")).toBe(committed)
+})
+
 test("resumes the reported ten-of-twelve-page cancellation case without repeating completed model calls", async () => {
   await using tmp = await tmpdir({
     git: true,
@@ -285,7 +301,8 @@ test("resumes the reported ten-of-twelve-page cancellation case without repeatin
   ).rejects.toThrow()
   expect(model.doStreamCalls).toHaveLength(10)
   await expect(access(path.join(tmp.path, ".ax-wiki/.manifest.json"))).rejects.toThrow()
-  expect((await readWikiBuildReport(tmp.path, ".ax-wiki"))?.written).toEqual([])
+  // A cancelled build never overwrote a report: nothing completed, so none exists.
+  expect(await readWikiBuildReport(tmp.path, ".ax-wiki")).toBeUndefined()
   const resumed = await run(tmp.path, model)
   expect(model.doStreamCalls).toHaveLength(12)
   expect(resumed.generatedPages).toHaveLength(12)

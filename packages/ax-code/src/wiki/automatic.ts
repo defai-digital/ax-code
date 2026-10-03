@@ -194,13 +194,18 @@ export namespace WikiAutomatic {
               }),
             )
           } catch (error) {
-            const report = await readWikiBuildReport(root, cfg.dir)
-            await recordWikiFailure(root, cfg.dir, {
-              head,
-              generatorKey,
-              planHash: report?.planHash,
-              error: error instanceof Error ? error.message.slice(0, 200) : String(error),
-            })
+            // A preempted build (foreground activity, disposal, or the run
+            // deadline aborted the signal) is not a deterministic failure: it
+            // must never climb the durable cooldown ladder.
+            if (!signal.aborted) {
+              const report = await readWikiBuildReport(root, cfg.dir)
+              await recordWikiFailure(root, cfg.dir, {
+                head,
+                generatorKey,
+                planHash: report?.planHash,
+                error: error instanceof Error ? error.message.slice(0, 200) : String(error),
+              })
+            }
             throw error
           }
           // A partial update published the other pages but still failed a page;

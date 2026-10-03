@@ -976,65 +976,68 @@ export async function runNativeWiki(input: {
     } finally {
       // Observability only (ADR-155 item 7). The report must never change the
       // build outcome, so this is best-effort: a failed write is logged and
-      // ignored, and its absence is tolerated by every reader.
-      try {
-        for (const failed of result?.failedPages ?? []) {
-          if (outcomes.get(failed.path)?.status === "failed") continue
-          outcomes.set(failed.path, {
-            path: failed.path,
-            status: "failed",
-            attempts: 0,
-            durationMs: 0,
-            failureClass: "unclassified",
-            message: failed.error,
+      // ignored, and its absence is tolerated by every reader. A cancelled
+      // build is not a result: keep the previously committed report instead of
+      // overwriting it with a "failed" record for a preemption.
+      if (!input.signal?.aborted)
+        try {
+          for (const failed of result?.failedPages ?? []) {
+            if (outcomes.get(failed.path)?.status === "failed") continue
+            outcomes.set(failed.path, {
+              path: failed.path,
+              status: "failed",
+              attempts: 0,
+              durationMs: 0,
+              failureClass: "unclassified",
+              message: failed.error,
+            })
+          }
+          const recorded = [...outcomes.values()].find((outcome) => outcome.status === "failed")
+          const generated = [...outcomes.values()].filter((outcome) => outcome.status === "generated")
+          const cached = [...outcomes.values()].filter((outcome) => outcome.status === "cached")
+          // A page can also fail after the generator returns (e.g. an unusable
+          // result rejected by the compiler), so fall back to the build result.
+          const failed =
+            recorded ??
+            (result?.failedPages?.[0]
+              ? {
+                  path: result.failedPages[0].path,
+                  status: "failed" as const,
+                  attempts: 0,
+                  durationMs: 0,
+                  failureClass: "unclassified" as const,
+                  message: result.failedPages[0].error,
+                }
+              : undefined)
+          if (input.allowWrite?.(`${config.dir}/.build-report.json`) !== false)
+            await writeWikiBuildReport(input.root, config.dir, {
+              schemaVersion: WIKI_BUILD_REPORT_SCHEMA_VERSION,
+              action: input.action,
+              outcome: failure !== undefined ? "failed" : failed !== undefined ? "partial" : "completed",
+              model: model.label,
+              generator: { version: Installation.VERSION, promptVersion: WIKI_PROMPT_VERSION },
+              repositoryHead,
+              startedAt: buildStartedAt.toISOString(),
+              finishedAt: new Date().toISOString(),
+              durationMs: Date.now() - buildStartedMs,
+              pageCount,
+              written: result?.generatedPages ?? [],
+              generated: generated.map((outcome) => outcome.path),
+              cached: cached.map((outcome) => outcome.path),
+              pages: [...outcomes.values()].map((outcome) => ({
+                ...outcome,
+                published: result?.generatedPages.includes(outcome.path) ?? false,
+              })),
+              failed,
+              notAttemptedCount: Math.max(0, (pageCount ?? attempted) - attempted),
+              planHash: result?.manifest?.planHash,
+              error: failure,
+            })
+        } catch (error) {
+          log.warn("wiki build report write failed", {
+            error: error instanceof Error ? error.message : String(error),
           })
         }
-        const recorded = [...outcomes.values()].find((outcome) => outcome.status === "failed")
-        const generated = [...outcomes.values()].filter((outcome) => outcome.status === "generated")
-        const cached = [...outcomes.values()].filter((outcome) => outcome.status === "cached")
-        // A page can also fail after the generator returns (e.g. an unusable
-        // result rejected by the compiler), so fall back to the build result.
-        const failed =
-          recorded ??
-          (result?.failedPages?.[0]
-            ? {
-                path: result.failedPages[0].path,
-                status: "failed" as const,
-                attempts: 0,
-                durationMs: 0,
-                failureClass: "unclassified" as const,
-                message: result.failedPages[0].error,
-              }
-            : undefined)
-        if (input.allowWrite?.(`${config.dir}/.build-report.json`) !== false)
-          await writeWikiBuildReport(input.root, config.dir, {
-            schemaVersion: WIKI_BUILD_REPORT_SCHEMA_VERSION,
-            action: input.action,
-            outcome: failure !== undefined ? "failed" : failed !== undefined ? "partial" : "completed",
-            model: model.label,
-            generator: { version: Installation.VERSION, promptVersion: WIKI_PROMPT_VERSION },
-            repositoryHead,
-            startedAt: buildStartedAt.toISOString(),
-            finishedAt: new Date().toISOString(),
-            durationMs: Date.now() - buildStartedMs,
-            pageCount,
-            written: result?.generatedPages ?? [],
-            generated: generated.map((outcome) => outcome.path),
-            cached: cached.map((outcome) => outcome.path),
-            pages: [...outcomes.values()].map((outcome) => ({
-              ...outcome,
-              published: result?.generatedPages.includes(outcome.path) ?? false,
-            })),
-            failed,
-            notAttemptedCount: Math.max(0, (pageCount ?? attempted) - attempted),
-            planHash: result?.manifest?.planHash,
-            error: failure,
-          })
-      } catch (error) {
-        log.warn("wiki build report write failed", {
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
     }
   } finally {
     await lock.release()
