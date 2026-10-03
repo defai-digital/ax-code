@@ -6,6 +6,19 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.22.3] - 2026-10-03
+
+### Changed
+
+- Resume interrupted Wiki builds from validated staged page results, with bounded generation concurrency, page deadlines and per-page build outcomes.
+- Publish SDK 2.5.60 with the Wiki generation concurrency configuration.
+
+### Fixed
+
+- Retry failed existing Wiki pages after a changed page plan, keeping their fingerprints stale until generation succeeds.
+- Honor cancellation during Wiki retry backoff before sending another model request.
+- Accept the default `.ax-wiki/` output directory in repository structure checks.
+
 ## [7.22.2] - 2026-10-03
 
 ### Changed
