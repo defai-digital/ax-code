@@ -38,6 +38,11 @@ on:
         default: false
         type: boolean
 
+# Superseded pushes and pull requests can stop; manual evidence runs stay independent.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
 permissions:
   contents: read
 
@@ -111,6 +116,7 @@ jobs:
         if: always() && github.event_name == 'workflow_dispatch' && inputs.defender_scan
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 30
           name: defender-${{ matrix.label }}
           path: ${{ runner.temp }}/ax-code-defender-evidence/
           if-no-files-found: warn

@@ -100,6 +100,7 @@ permissions:
 jobs:
   perf:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     env:
       AX_CODE_DISABLE_SHARE: "true"
       PERF_LIMIT: ${{ inputs.limit }}
@@ -323,6 +324,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 14
           name: ax-code-perf-report
           path: .internal/reports/performance/perf-index.json
           if-no-files-found: ignore
@@ -332,6 +334,7 @@ jobs:
         if: always() && steps.paths.outputs.summary_out != ''
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 14
           name: ax-code-perf-summary
           path: ${{ steps.paths.outputs.summary_out }}
           if-no-files-found: ignore
@@ -341,6 +344,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 14
           name: ax-code-perf-markdown
           path: .internal/reports/performance/perf-index-report.md
           if-no-files-found: ignore
@@ -350,6 +354,7 @@ jobs:
         if: always() && inputs.promote_baseline && steps.paths.outputs.baseline_out != ''
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 14
           name: ax-code-perf-baseline
           path: ${{ steps.paths.outputs.baseline_out }}
           if-no-files-found: ignore
@@ -359,6 +364,7 @@ jobs:
         if: always() && inputs.promote_baseline && steps.paths.outputs.baseline_summary_out != ''
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 14
           name: ax-code-perf-baseline-summary
           path: ${{ steps.paths.outputs.baseline_summary_out }}
           if-no-files-found: ignore

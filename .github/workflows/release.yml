@@ -38,6 +38,7 @@ jobs:
     # Runs for tag pushes and every workflow_dispatch mode, including
     # postpublish_only resumes, which skip validate and build entirely.
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Validate release tag format
         env:
@@ -73,6 +74,7 @@ jobs:
       contents: read
       checks: read
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
         with:
@@ -180,6 +182,7 @@ jobs:
     needs: [guard, validate]
     if: ${{ !inputs.postpublish_only }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
@@ -266,6 +269,7 @@ jobs:
             smoke-bin: dist/ax-code-linux-arm64/bin/ax-code
             smoke-runtime: node-bundled
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
     env:
       AX_CODE_DISABLE_AUTOUPDATE: "1"
       AX_CODE_DISABLE_AUTO_INDEX: "1"
@@ -471,6 +475,7 @@ jobs:
         if: always() && runner.os == 'Windows'
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 30
           name: signatures-${{ matrix.targets }}
           path: ${{ runner.temp }}/windows-signatures.json
           if-no-files-found: warn
@@ -554,6 +559,7 @@ jobs:
     # runtime from AX_CODE_MINISIGN_PASSWORD, then removed before the job ends.
     # See sign-release-assets.ts → minisignPasswordFromKeychain.
     runs-on: macos-latest
+    timeout-minutes: 45
     permissions:
       contents: write
     steps:
@@ -782,6 +788,7 @@ jobs:
       !contains(inputs.tag || github.ref_name, '-') &&
       (needs.publish.result == 'success' || inputs.postpublish_only)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -808,6 +815,7 @@ jobs:
       !contains(inputs.tag || github.ref_name, '-') &&
       (needs.publish.result == 'success' || inputs.postpublish_only)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:

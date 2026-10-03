@@ -55,6 +55,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
 
@@ -85,6 +86,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 14
           name: ax-code-self-scan
           path: .internal/reports/qa/self-scan.md
           if-no-files-found: ignore

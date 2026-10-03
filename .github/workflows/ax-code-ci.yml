@@ -61,6 +61,7 @@ jobs:
   evidence-plan:
     name: Native evidence plan
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       run: ${{ steps.native.outputs.run }}
     steps:
@@ -134,6 +135,7 @@ jobs:
       matrix:
         os: [windows-2022, windows-11-arm]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - name: Setup Ax-code JS toolchain
@@ -297,6 +299,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 14
           name: ax-code-deterministic-report-${{ matrix.shard }}
           path: |
             .internal/reports/testing/junit/*.xml
@@ -325,6 +328,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 14
           name: ax-code-runtime-contract-report
           path: .internal/reports/testing/runtime-contract/*.xml
           if-no-files-found: error
@@ -332,6 +336,7 @@ jobs:
   live:
     if: github.event_name == 'workflow_dispatch' && inputs.live
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       AX_CODE_DISABLE_SHARE: "true"
     steps:
@@ -360,6 +365,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 14
           name: ax-code-live-report
           path: .internal/reports/testing/junit/*.xml
           if-no-files-found: ignore

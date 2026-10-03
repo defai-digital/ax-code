@@ -60,6 +60,7 @@ jobs:
   macos:
     name: macos-latest / bash installer
     runs-on: macos-latest
+    timeout-minutes: 20
     # inputs.version/channel are passed via env (not inlined into run:
     # scripts below) so their values are treated as opaque shell data, not
     # re-parsed as shell syntax — inlining a workflow_dispatch/workflow_call
@@ -164,6 +165,7 @@ jobs:
   homebrew:
     name: macos-latest / homebrew
     runs-on: macos-latest
+    timeout-minutes: 45
     # See the macos job above for why these are routed through env instead
     # of inlined ${{ }} substitution into run: scripts.
     env:
@@ -295,6 +297,7 @@ jobs:
           - os: windows-11-arm
             label: windows-arm64
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     # See the macos job above for why these are routed through env instead
     # of inlined ${{ }} substitution into run: scripts.
     env:
@@ -437,6 +440,7 @@ jobs:
           - os: ubuntu-24.04-arm
             label: linux-arm64
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     # See the macos job above for why these are routed through env instead
     # of inlined ${{ }} substitution into run: scripts.
     env:
