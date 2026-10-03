@@ -235,7 +235,7 @@
       ]
     },
     "lifecycle_scan": {
-      "count": 192,
+      "count": 215,
       "findings": [
         {
           "fingerprint": "a7c13622ba7e0d28b7440aa5beab525b97481bf7e13bbae3815fdbbbd7e01e47",
@@ -822,25 +822,97 @@
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "a54a4845d54496ecacd7c5b5197dfa76e492c7ce1975ba45bc46287d2ea16f68",
-          "file": "src/cli/tui/component/canyon-pixels.ts",
+          "fingerprint": "cf98cf181c84105cf20e87ee19624adb1c6ffae08067b9d82bafacb1ccf10e75",
+          "file": "src/cli/tui/component/atmos-paint.ts",
           "line": 63,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "3ee915df4d10a13a56f860b858c28b1c1831a619a7636b618d4555bae3122367",
-          "file": "src/cli/tui/component/castle-pixels.ts",
-          "line": 86,
+          "fingerprint": "c17ed0779237dc66ea414b84fd6bccf056a94957f8f7d166e18a93ef7b3c8356",
+          "file": "src/cli/tui/component/aurora-pixels.ts",
+          "line": 167,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "20155f5f54d8cbe0243435fb98066611a612dd230ba13bb5b1454002ee17b291",
+          "fingerprint": "9b2ac8f1d47f701317b7746f67871415f3d8651a284d494bd88917153a73bc26",
+          "file": "src/cli/tui/component/balloons-pixels.ts",
+          "line": 126,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "0ca75cae24a6f6fa368fdc0c2277dc23a7ccfca60d72dd05d9bd615943ec231d",
+          "file": "src/cli/tui/component/bench-pixels.ts",
+          "line": 116,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "0f23503f24005253b0d1c1d4c230ac07839b4436d156af46f8543928f4f2af8a",
+          "file": "src/cli/tui/component/bigben-pixels.ts",
+          "line": 148,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "64152cb312a2ab05d6edd705e13ddec3a26a06f3a10e6fd7b143c3226a4231ec",
+          "file": "src/cli/tui/component/borobudur-pixels.ts",
+          "line": 107,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "2d3485006921287f33112c432d2225d0eec9ab2d5741387fdd5477163806479b",
+          "file": "src/cli/tui/component/brandenburg-pixels.ts",
+          "line": 141,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "b8d6c8745acd4b20b40339d574bbced269c50e956ddf9d89f4669cf60282e407",
+          "file": "src/cli/tui/component/canyon-pixels.ts",
+          "line": 185,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "187c9a0709790ba59677747e1fb0782d98a81fc94b09b02d474d14059d99bdf1",
+          "file": "src/cli/tui/component/castle-pixels.ts",
+          "line": 234,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "6bfdb073342e76e932eb2d296b0680b76bf59b06c4039436f8df86966e69ed5a",
+          "file": "src/cli/tui/component/city-pixels.ts",
+          "line": 161,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "c1057dd8cd4ca33f4c3c09ad77a0a41f512665a0a3259b7d99d0ce15ace900c1",
+          "file": "src/cli/tui/component/colosseum-pixels.ts",
+          "line": 157,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "3d67ddbd8bc373d277b1f39f3536f9bb35bf438e38e84344ff1cbb8ffbfc81d1",
           "file": "src/cli/tui/component/corcovado-pixels.ts",
-          "line": 105,
+          "line": 160,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -918,25 +990,73 @@
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "17719e550fc4f869d511051a19e7bc022838e35b0b8dbf87e36ff5e16d352b14",
-          "file": "src/cli/tui/component/dungeon-pixels.ts",
-          "line": 61,
+          "fingerprint": "a28bcb3cf6e870e81d9623773eb28344f8d781dc5849027421e2be23ebaea7d1",
+          "file": "src/cli/tui/component/eiffel-pixels.ts",
+          "line": 96,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "0c7c78bd830779a8c64dfceb5740cde4ecfe2bc56bd6fdeb0285f5d5e7084da6",
-          "file": "src/cli/tui/component/greatwall-pixels.ts",
-          "line": 86,
+          "fingerprint": "c0e62212f0f94bfb8136b5cce321c9210737b32b0efc626156f95d529d0d2934",
+          "file": "src/cli/tui/component/falls-pixels.ts",
+          "line": 347,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "cf8558d72441dd7b70ac587739b539883a2ec2c4520c51556131ef96faa53e7c",
+          "fingerprint": "50f4bb9305b831fbd7b402b25f6c09f97e02947dd219bc02abcfa953b4053d6e",
+          "file": "src/cli/tui/component/festival-pixels.ts",
+          "line": 116,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "edb7a46bb1dc1e4ef663744c6126937ca190357e58561f3148b6b4e33bd5461f",
+          "file": "src/cli/tui/component/fuji-pixels.ts",
+          "line": 119,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "70d0b68c29313f6fec7c878040298847c15d77203cd072724298211af6b6d8bd",
+          "file": "src/cli/tui/component/islands-pixels.ts",
+          "line": 122,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "0ad1738a81b19c3caaf935529ec3aebc2d3231d082a066d85f150e49d9a4bcc2",
+          "file": "src/cli/tui/component/jungle-pixels.ts",
+          "line": 116,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "d6c1bb30607ee2eaf343eec2bfc71d58fea0919477a6c1f8429399b83c28f355",
           "file": "src/cli/tui/component/lighthouse-pixels.ts",
-          "line": 91,
+          "line": 134,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "6c1dace550e0f054b606a62e95dc884586cc3cf0e332b427dc03244d5e7f0cff",
+          "file": "src/cli/tui/component/mahjong-pixels.ts",
+          "line": 404,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "6647f28165cfb4deef4d51c90e9b38f49d9e67d7fc3e53a1239beb4f977101c8",
+          "file": "src/cli/tui/component/mekong-pixels.ts",
+          "line": 89,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -958,25 +1078,89 @@
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "08e4780a6e34ae4a8338e0e3d5562d63b3ddd0cbabe4988aa0450c4adc8f55b9",
+          "fingerprint": "7487e89892f22fc72c8e1676b3002bf3588bb7cbb36d440d2878b114fd8f9f2d",
           "file": "src/cli/tui/component/pyramids-pixels.ts",
-          "line": 84,
+          "line": 170,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "8e98450ba09df034589a7883e1df75b542c7445d445ca5f6b48d5f29ae1fbef2",
+          "fingerprint": "5670e171852db071020a989ab8dd6b26d52d3ca7c3d96641585a2c808874892c",
+          "file": "src/cli/tui/component/reef-pixels.ts",
+          "line": 128,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "3cc5a192dfcf234559e5488c0f7767e5aba496506acb6d4f660e994686e7fb12",
+          "file": "src/cli/tui/component/sagrada-pixels.ts",
+          "line": 179,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "03e38e2faa4214e4264817d61f02007e01c08f5d4ae77f242aaae39d2f04ef11",
+          "file": "src/cli/tui/component/scene-art-kit.ts",
+          "line": 109,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "410bc0b4837e476f3b1b8edc7cad962bf08c095540290613aaff95a062a2fdaa",
+          "file": "src/cli/tui/component/snow-pixels.ts",
+          "line": 148,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "b5e472fcb9e7679d11024945fa32a6c54212132d606d565eee23cada25234adc",
           "file": "src/cli/tui/component/space-pixels.ts",
-          "line": 73,
+          "line": 96,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "2169150af0b0acedb7bde99fdbf54375ef59a0c4674d2a2bf218dc75e5e0486e",
+          "fingerprint": "7976d527c35a1fd28e5b5ec8017382bf7f31f484cd93cd4ac0a8d0242f66a8dc",
+          "file": "src/cli/tui/component/steppe-pixels.ts",
+          "line": 34,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "f20174e4d4fc4d3fe86a0d6812eccc01561574104fb492f4c0a15eeee06d69dc",
           "file": "src/cli/tui/component/taegeuk-pixels.ts",
-          "line": 71,
+          "line": 64,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "fbc71f6f4b13056a31bceef54f8793a578a21dbcd89ecddbc50a256ad3f33920",
+          "file": "src/cli/tui/component/taipei101-pixels.ts",
+          "line": 101,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "4a3fd413a005717d87e0f86a72c38e2bc40b982194661d6f23f0121bd07e9cc6",
+          "file": "src/cli/tui/component/torii-pixels.ts",
+          "line": 131,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "431198840a8e319c9f02f78ddda01908d2c20f33a7f9d3301dc3175e245f019f",
+          "file": "src/cli/tui/component/volcano-pixels.ts",
+          "line": 93,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -4637,7 +4821,7 @@
         {
           "fingerprint": "6f2541ef869e5145d7b99780d530bf5a4d117cc3ed7f8eca71df8f16ee317a53",
           "file": "src/session/foreground-ownership.ts",
-          "line": 47,
+          "line": 48,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -4645,7 +4829,7 @@
         {
           "fingerprint": "ac76f005487895a7bbd442845856190efb94b4090bd09e2adcccca3eb8c0b17d",
           "file": "src/session/foreground-ownership.ts",
-          "line": 50,
+          "line": 51,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -4653,7 +4837,7 @@
         {
           "fingerprint": "1d2acb2f8bccd7c53dafb48641684107b379b22ad5ff826da6de53792de36972",
           "file": "src/session/foreground-ownership.ts",
-          "line": 53,
+          "line": 54,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
