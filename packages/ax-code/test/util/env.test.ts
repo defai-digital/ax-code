@@ -219,18 +219,26 @@ describe("Env.sanitize", () => {
     const sanitized = Env.sanitize({
       PATH: "/usr/bin",
       LD_PRELOAD: "/tmp/evil.so",
+      LD_AUDIT: "/tmp/evil-audit.so",
       DYLD_INSERT_LIBRARIES: "/tmp/evil.dylib",
       NODE_OPTIONS: "--require ./shim.js",
       PYTHONPATH: "/tmp/evil",
+      PYTHONHOME: "/tmp/evil-home",
+      PERL5LIB: "/tmp/evil-perl",
+      RUBYLIB: "/tmp/evil-ruby",
       SAFE: "ok",
     })
 
     expect(sanitized.PATH).toBe("/usr/bin")
     expect(sanitized.SAFE).toBe("ok")
     expect(sanitized.LD_PRELOAD).toBeUndefined()
+    expect(sanitized.LD_AUDIT).toBeUndefined()
     expect(sanitized.DYLD_INSERT_LIBRARIES).toBeUndefined()
     expect(sanitized.NODE_OPTIONS).toBeUndefined()
     expect(sanitized.PYTHONPATH).toBeUndefined()
+    expect(sanitized.PYTHONHOME).toBeUndefined()
+    expect(sanitized.PERL5LIB).toBeUndefined()
+    expect(sanitized.RUBYLIB).toBeUndefined()
   })
 
   test("stripProcessInjection removes load-time hijacks but keeps secrets", () => {
@@ -607,6 +615,13 @@ describe("record credential coverage", () => {
       "Provider rejected [redacted secret]. Retry later.",
     )
   })
+  test("does not corrupt identifiers that merely embed a credential prefix", () => {
+    // sk- without a left token boundary must not match mid-word.
+    const identifier = "task-" + "0123456789abcdefghij" + " rest"
+    expect(Env.redactForRecord(`job ${identifier}`)).toBe(`job ${identifier}`)
+    const real = "sk-" + "live" + "abcdefghijklmnopqrstuvwxyz"
+    expect(Env.redactForRecord(`key ${real} end`)).toBe("key [redacted secret] end")
+  })
   test.each([
     "access_token",
     "refresh_token",
@@ -690,12 +705,15 @@ test("many orphan private-key markers finish in bounded time", () => {
   expect(result.stdout.trim()).toBe("[redacted private key]")
 })
 
-test.each(["MYSQL_PWD", "PGPASSFILE", "SSH_ASKPASS"])("strips credential environment alias %s", (name) => {
-  expect(Env.sanitize({ [name]: "opaque-credential", PWD: "/workspace", PATH: "/bin" })).toEqual({
-    PWD: "/workspace",
-    PATH: "/bin",
-  })
-})
+test.each(["MYSQL_PWD", "MARIADB_PWD", "PGPASSFILE", "SSH_ASKPASS"])(
+  "strips credential environment alias %s",
+  (name) => {
+    expect(Env.sanitize({ [name]: "opaque-credential", PWD: "/workspace", PATH: "/bin" })).toEqual({
+      PWD: "/workspace",
+      PATH: "/bin",
+    })
+  },
+)
 
 test("redacts fused private-key blocks that share their separator dashes", () => {
   const header = "-----" + "BEGIN PRIVATE KEY" + "-----"
@@ -712,6 +730,27 @@ test.each(["postgresql", "mysql"])("strips nested URI userinfo: %s", (scheme) =>
   const url = "jdbc:" + scheme + "://" + "app" + ":" + "opaque" + "@db.test/prod"
   expect(Env.sanitize({ APP_DSN: url }).APP_DSN).toBeUndefined()
   expect(Env.redactInlineEnvAssignments(`APP_DSN=${url} run`)).toBe("APP_DSN=[redacted] run")
+})
+
+test("excludes semicolon-delimited connection-string credentials from child env", () => {
+  // Assembled at runtime so the fixtures are not literal credentials.
+  const ado = "Server=db.test;User Id=sa;" + "Pwd" + "=" + "opaque-value" + ";Database=app"
+  const jdbc = "jdbc:mysql://db.test/prod;" + "password" + "=" + "opaque-value"
+  expect(Env.sanitize({ CONN: ado }).CONN).toBeUndefined()
+  expect(Env.sanitize({ APP_DSN: jdbc }).APP_DSN).toBeUndefined()
+  // Semicolon-separated public values (Windows paths, plain PWD) survive.
+  expect(Env.sanitize({ PWD: "/workspace", Path: "C:\\tools;C:\\bin" })).toEqual({
+    PWD: "/workspace",
+    Path: "C:\\tools;C:\\bin",
+  })
+})
+
+test("redacts semicolon-delimited Pwd fields in records without touching public PWD", () => {
+  const record = "connecting " + "Server=db.test;User Id=sa;" + "Pwd" + "=" + "opaque-value" + ";Database=app"
+  const result = Env.redactForRecord(record)
+  expect(result).not.toContain("opaque-value")
+  expect(result).toContain("Database=app")
+  expect(Env.redactForRecord("PWD=/workspace ls")).toBe("PWD=/workspace ls")
 })
 
 test.each(["password=first&second", "client_secret: first&second"])(

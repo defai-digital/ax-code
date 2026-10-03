@@ -19,6 +19,7 @@ export namespace Env {
   // to untrusted child processes (MCP servers, shells, formatters, etc.).
   const PROCESS_INJECTION_NAMES = new Set([
     "LD_PRELOAD",
+    "LD_AUDIT",
     "LD_LIBRARY_PATH",
     "DYLD_INSERT_LIBRARIES",
     "DYLD_LIBRARY_PATH",
@@ -27,10 +28,13 @@ export namespace Env {
     "NODE_EXTRA_CA_CERTS",
     "ELECTRON_RUN_AS_NODE",
     "PYTHONPATH",
+    "PYTHONHOME",
     "PYTHONSTARTUP",
     "RUBYOPT",
+    "RUBYLIB",
     "BASH_ENV",
     "PERL5OPT",
+    "PERL5LIB",
     "JAVA_TOOL_OPTIONS",
     "JAVA_OPTIONS",
     "CLASSPATH",
@@ -82,6 +86,7 @@ export namespace Env {
         PAT_NAME.test(k) ||
         WEBHOOK_NAME.test(k) ||
         CREDENTIAL_URL_NAME.test(k) ||
+        (v !== undefined && CONNECTION_FIELD.test(v)) ||
         containsUrlCredential(v)
       ) {
         continue
@@ -109,9 +114,11 @@ export namespace Env {
   }
 
   export function isSensitiveName(name: string): boolean {
-    // MySQL uses PWD for its password alias; plain PWD is a public directory.
-    return SECRET_PATTERN.test(name) || name.toUpperCase() === "MYSQL_PWD"
+    // MySQL and MariaDB use PWD for their password alias; plain PWD is a public
+    // directory, so only the exact client aliases count.
+    return SECRET_PATTERN.test(name) || PWD_PASSWORD_ALIASES.has(name.toUpperCase())
   }
+  const PWD_PASSWORD_ALIASES = new Set(["MYSQL_PWD", "MARIADB_PWD"])
 
   /**
    * Credential key names, normalized. A credential term must end the entire
@@ -126,6 +133,12 @@ export namespace Env {
   const CREDENTIAL_KEY_NAMES =
     "(?:[a-z0-9_.-]*(?:token|secret|password|passwd|credential|credentials|authorization|auth|bearer|cookie|webhook|(?:secret|auth|token)[_.-]?key|api[_.-]?key|x[_.-]?api[_.-]?key|private[_.-]?key|access[_.-]?key|access[_.-]?token|refresh[_.-]?token|id[_.-]?token|client[_.-]?secret)|(?:[a-z0-9_.-]*[_.-])?pat)"
   const CREDENTIAL_KEY_NAME = new RegExp(`^(?:${CREDENTIAL_KEY_NAMES})$`, "i")
+  // Semicolon-delimited connection-string fields (ADO.NET `;Pwd=`, JDBC
+  // properties like `;password=`) never parse as URL userinfo or query
+  // parameters, so the env value scan needs its own shape. Bare `pwd` is safe
+  // here: the field must follow a `;` inside a value, which a public `PWD=`
+  // shell assignment never does.
+  const CONNECTION_FIELD = new RegExp(`;\\s*(?:${CREDENTIAL_KEY_NAMES}|pwd)\\s*=`, "i")
   const QUOTED_CREDENTIAL_FIELD = new RegExp(String.raw`(["'])(${CREDENTIAL_KEY_NAMES})\1\s*:\s*`, "gi")
   const INLINE_CREDENTIAL_PREFIX = String.raw`(?<![a-z0-9_.-])(?!(?:(?:set-)?cookie|(?:proxy-)?authorization)\s*:)(${CREDENTIAL_KEY_NAMES})(?![a-z0-9_.-])\s*(?:=|:)\s*(?:(?:bearer|basic)\s+)?`
   const INLINE_QUOTED_VALUE = String.raw`"(?:[^"\\\r\n]|\\.)*"|'(?:[^'\\\r\n]|\\.)*'`
@@ -397,6 +410,9 @@ export namespace Env {
     let cursor = 0
     let quoteCursor = 0
     let quoteState: "'" | '"' | undefined
+    // Reuse a logical line boundary across headers sharing one line, so
+    // comma-joined repeated headers cannot rescan the same suffix per match.
+    let lineEnd = 0
     for (const match of value.matchAll(header)) {
       const index = match.index
       if (index === undefined || index < cursor) continue
@@ -414,7 +430,7 @@ export namespace Env {
         value[valueStart] === "'" ? "'" : value[valueStart] === '"' ? '"' : undefined
       const localQuoteEnd = localQuote ? closingQuote(value, valueStart + 1, localQuote) : undefined
       const firstQuoteEnd = quoteState ? closingQuote(value, valueStart, quoteState) : undefined
-      const lineEnd = headerValueEnd(value, valueStart)
+      if (valueStart >= lineEnd) lineEnd = headerValueEnd(value, valueStart)
       // A quote followed by more cookie pairs is a nested quoted value (or an
       // apostrophe in the value), not the enclosing close: the value runs to
       // the next matching quote when one closes on this line.
@@ -610,6 +626,10 @@ export namespace Env {
       .replace(/(?<![a-z0-9+.-])([a-z][a-z0-9+.-]*:\/\/)([^\s/:@?#]+)@/gi, (match, scheme: string) =>
         /^(?:ssh|git\+ssh):\/\/$/i.test(scheme) ? match : `${scheme}[redacted]@`,
       )
+      // ADO.NET-style `;Pwd=` connection-string fields carry passwords, but the
+      // bare PWD alias is a public shell variable, so only the
+      // semicolon-delimited form redacts.
+      .replace(/(;\s*pwd\s*=)[^\s;]*/gi, "$1[redacted]")
     return redactPrivateKeys(redactCredentialQueries(textRedacted)).replace(SECRET_VALUE, "[redacted secret]")
   }
 
@@ -642,8 +662,12 @@ export namespace Env {
     return parts.length === 0 ? value : parts.join("") + value.slice(copied)
   }
 
+  // A credential value must start at a token boundary: without the left
+  // lookbehind, an identifier such as a task id with a twenty-character
+  // alphanumeric suffix matches the `sk-` alternative mid-word and legitimate
+  // records get corrupted.
   const SECRET_VALUE =
-    /(?:sk-[a-zA-Z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{20,}|xoxb-[0-9]{10,}-[a-zA-Z0-9]{24,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})/g
+    /(?<![A-Za-z0-9_-])(?:sk-[a-zA-Z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{20,}|xoxb-[0-9]{10,}-[a-zA-Z0-9]{24,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})/g
 
   /**
    * Full redaction for a string that will be persisted, shown, or recorded:
