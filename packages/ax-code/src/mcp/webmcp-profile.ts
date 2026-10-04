@@ -1,5 +1,6 @@
 import z from "zod"
 import path from "node:path"
+import os from "node:os"
 import { createHash } from "node:crypto"
 import { execFileSync } from "node:child_process"
 import { parseJsonPayload } from "@/util/json-value"
@@ -56,6 +57,12 @@ export namespace WebMcpProfile {
       allowedOrigins: Origins.optional().describe(
         "Managed narrowing list. When set, only these exact origins stay usable; it must intersect the profile's configured origins.",
       ),
+      allowPersistentProfile: z
+        .boolean()
+        .optional()
+        .describe(
+          "Managed opt-in for a persistent AX-owned browser profile. Default off; never the user's main profile.",
+        ),
     })
     .strict()
     .meta({ ref: "WebMcpRequirementConfig" })
@@ -67,6 +74,12 @@ export namespace WebMcpProfile {
         "Exact permitted origins; no wildcards, credentials, paths, queries or fragments",
       ),
       headless: z.boolean().optional().describe("Use an isolated headless Chrome instead of a visible window"),
+      persistentProfile: z
+        .boolean()
+        .optional()
+        .describe(
+          "Use a persistent AX-owned browser profile so authenticated WebMCP tools work. Requires the managed allowPersistentProfile requirement and forces a visible window.",
+        ),
       executablePath: z
         .string()
         .max(4096)
@@ -87,12 +100,22 @@ export namespace WebMcpProfile {
     webmcp?: Configuration
   }
 
+  function profileDirectory(profile: Configuration): string {
+    const key = createHash("sha256").update(profile.allowedOrigins.join("\n")).digest("hex").slice(0, 16)
+    return path.join(os.homedir(), ".ax-code", "webmcp-profiles", key)
+  }
+
   function command(profile: Configuration): string[] {
     return [
       "npx",
       "-y",
       PACKAGE,
-      "--isolated",
+      // A persistent profile holds real cookies, so it is always a dedicated
+      // AX-owned directory with a visible window — never the user's main
+      // profile and never headless.
+      ...(profile.persistentProfile
+        ? [`--user-data-dir=${profileDirectory(profile)}`]
+        : ["--isolated", ...(profile.headless ? ["--headless"] : [])]),
       "--no-usage-statistics",
       "--no-performance-crux",
       "--no-category-emulation",
@@ -101,7 +124,6 @@ export namespace WebMcpProfile {
       "--category-experimental-webmcp",
       "--experimental-structured-content",
       "--chrome-arg=--enable-features=WebMCP",
-      ...(profile.headless ? ["--headless"] : []),
       ...(profile.executablePath ? [`--executable-path=${profile.executablePath}`] : []),
       ...profile.allowedOrigins.map((origin) => {
         const url = new URL(origin)
@@ -139,23 +161,29 @@ export namespace WebMcpProfile {
 
   export type PolicyDecision =
     | { ok: true; profile: Configuration }
-    | { ok: false; reason: "managed_policy" | "managed_origins" }
+    | { ok: false; reason: "managed_policy" | "managed_origins" | "persistent_profile" }
 
-  export function blockedMessage(reason: "managed_policy" | "managed_origins"): string {
+  export function blockedMessage(reason: "managed_policy" | "managed_origins" | "persistent_profile"): string {
     return reason === "managed_policy"
       ? "WebMCP bridge is disabled by managed policy"
-      : "WebMCP managed policy excludes every origin configured for this bridge"
+      : reason === "persistent_profile"
+        ? "WebMCP persistent profile is not allowed by managed policy"
+        : "WebMCP managed policy excludes every origin configured for this bridge"
   }
 
   /**
    * Evaluate a managed requirement against a launch-validated profile. A deny or
    * a narrowing that admits no origin fails closed with a reason the caller can
    * surface as a distinct blocked state; a partial narrowing only makes the
-   * call-time origin check stricter than the browser allowlist.
+   * call-time origin check stricter than the browser allowlist. A persistent
+   * profile requires the managed `allowPersistentProfile` opt-in.
    */
   export function evaluate(requirement: Requirement | undefined, profile: Configuration): PolicyDecision {
+    if (requirement && requirement.allow === false) return { ok: false, reason: "managed_policy" }
+    if (profile.persistentProfile === true && requirement?.allowPersistentProfile !== true) {
+      return { ok: false, reason: "persistent_profile" }
+    }
     if (!requirement) return { ok: true, profile }
-    if (requirement.allow === false) return { ok: false, reason: "managed_policy" }
     const allowed = requirement.allowedOrigins
     if (!allowed) return { ok: true, profile }
     const admitted = profile.allowedOrigins.filter((origin) => allowed.includes(origin))

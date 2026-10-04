@@ -44502,7 +44502,8 @@
             "type": "string",
             "enum": [
               "managed_policy",
-              "managed_origins"
+              "managed_origins",
+              "persistent_profile"
             ]
           },
           "error": {
@@ -51231,6 +51232,10 @@
             "description": "Use an isolated headless Chrome instead of a visible window",
             "type": "boolean"
           },
+          "persistentProfile": {
+            "description": "Use a persistent AX-owned browser profile so authenticated WebMCP tools work. Requires the managed allowPersistentProfile requirement and forces a visible window.",
+            "type": "boolean"
+          },
           "executablePath": {
             "description": "Optional explicit Chrome 150+ executable; never attaches to an existing browser session",
             "type": "string",
@@ -51259,6 +51264,10 @@
               "type": "string",
               "maxLength": 240
             }
+          },
+          "allowPersistentProfile": {
+            "description": "Managed opt-in for a persistent AX-owned browser profile. Default off; never the user's main profile.",
+            "type": "boolean"
           }
         },
         "additionalProperties": false

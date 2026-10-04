@@ -272,7 +272,7 @@ export namespace MCP {
       z
         .object({
           status: z.literal("blocked"),
-          reason: z.enum(["managed_policy", "managed_origins"]),
+          reason: z.enum(["managed_policy", "managed_origins", "persistent_profile"]),
           error: z.string(),
         })
         .meta({

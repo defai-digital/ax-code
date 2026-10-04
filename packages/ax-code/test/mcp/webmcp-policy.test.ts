@@ -129,4 +129,22 @@ describe("WebMCP managed requirement", () => {
     })
     expect(WebMcpProfile.verifyBinding(current, 5, "search", [descriptor])).toMatchObject({ ok: false })
   })
+
+  test("a persistent profile requires the managed opt-in", () => {
+    const persistent = WebMcpProfile.config({ allowedOrigins: ["https://example.test"], persistentProfile: true }, true)
+    expect(WebMcpProfile.evaluate(undefined, persistent.webmcp)).toEqual({ ok: false, reason: "persistent_profile" })
+    expect(WebMcpProfile.evaluate({ allowPersistentProfile: true }, persistent.webmcp)).toMatchObject({ ok: true })
+    expect(WebMcpProfile.evaluate({ allow: false }, persistent.webmcp)).toEqual({ ok: false, reason: "managed_policy" })
+  })
+
+  test("a persistent profile uses a dedicated user-data-dir with a visible window", () => {
+    const config = WebMcpProfile.config(
+      { allowedOrigins: ["https://example.test"], persistentProfile: true, headless: true },
+      true,
+    )
+    expect(config.command.some((arg) => arg.startsWith("--user-data-dir="))).toBe(true)
+    expect(config.command).not.toContain("--isolated")
+    expect(config.command).not.toContain("--headless")
+    expect(WebMcpProfile.validateLaunch(config)).toEqual(config.webmcp)
+  })
 })

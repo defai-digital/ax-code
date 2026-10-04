@@ -19,13 +19,23 @@ export const McpWebMcpCommand = cmd({
         describe: "Explicitly enable startup in the printed config",
       })
       .option("headless", { type: "boolean", default: false, describe: "Use an isolated headless Chrome" })
+      .option("persistent-profile", {
+        type: "boolean",
+        default: false,
+        describe: "Use a persistent AX-owned browser profile (requires the managed allowPersistentProfile requirement)",
+      })
       .option("executable-path", { type: "string", describe: "Absolute path to an explicit Chrome 150+ executable" }),
   async handler(args) {
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(args.name)) {
       throw new Error("MCP server name must contain 1-64 ASCII letters, digits, underscores or hyphens")
     }
     const config = WebMcpProfile.config(
-      { allowedOrigins: args.origin, headless: args.headless, executablePath: args.executablePath },
+      {
+        allowedOrigins: args.origin,
+        headless: args.headless,
+        executablePath: args.executablePath,
+        persistentProfile: args.persistentProfile,
+      },
       args.enable,
     )
     process.stdout.write(JSON.stringify({ mcp: { [args.name]: config } }, null, 2) + "\n")

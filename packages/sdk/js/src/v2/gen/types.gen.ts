@@ -2775,7 +2775,7 @@ export type McpStatus =
 /** AX Code API schema `McpStatusBlocked` (auto-generated from the OpenAPI contract). */
 export type McpStatusBlocked = {
   status: "blocked"
-  reason: "managed_policy" | "managed_origins"
+  reason: "managed_policy" | "managed_origins" | "persistent_profile"
   error: string
 }
 
@@ -4612,6 +4612,10 @@ export type WebMcpProfileConfig = {
    */
   headless?: boolean
   /**
+   * Use a persistent AX-owned browser profile so authenticated WebMCP tools work. Requires the managed allowPersistentProfile requirement and forces a visible window.
+   */
+  persistentProfile?: boolean
+  /**
    * Optional explicit Chrome 150+ executable; never attaches to an existing browser session
    */
   executablePath?: string
@@ -4629,6 +4633,10 @@ export type WebMcpRequirementConfig = {
    * Managed narrowing list. When set, only these exact origins stay usable; it must intersect the profile's configured origins.
    */
   allowedOrigins?: Array<string>
+  /**
+   * Managed opt-in for a persistent AX-owned browser profile. Default off; never the user's main profile.
+   */
+  allowPersistentProfile?: boolean
 }
 
 /** AX Code API schema `WikiMaintenanceStatus` (auto-generated from the OpenAPI contract). */
