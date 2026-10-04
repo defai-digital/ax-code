@@ -131,18 +131,35 @@ test("dynamic clients retain admission policy across discovery, notifications an
 })
 
 test("bridge failures propagate without retries", async () => {
-  bridge.names = ["execute_webmcp_tool"]
-  bridge.call.mockRejectedValue(new Error("completion uncertain"))
+  bridge.names = ["list_webmcp_tools", "execute_webmcp_tool"]
+  const descriptor = { name: "fixture", description: "d", inputSchema: { type: "object" } }
+  bridge.call.mockImplementation(async (request: { name: string }) => {
+    if (request.name === "list_webmcp_tools") {
+      return { content: [], structuredContent: { webmcpTools: [descriptor] } }
+    }
+    if (request.name === "list_pages") {
+      return { content: [{ type: "text", text: "## Pages\n1: App (https://example.test/)" }] }
+    }
+    throw new Error("completion uncertain")
+  })
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
       await MCP.add("bridge", profile())
-      const tool = (await MCP.tools()).bridge_execute_webmcp_tool
+      const tools = await MCP.tools()
+      await tools.bridge_list_webmcp_tools.execute!({ pageId: 1 }, { toolCallId: "call_list", messages: [] })
+      const executed = () =>
+        bridge.call.mock.calls.filter(([request]) => (request as { name: string }).name === "execute_webmcp_tool")
+          .length
+      expect(executed()).toBe(0)
       await expect(
-        tool.execute!({ pageId: 1, toolName: "fixture" }, { toolCallId: "call_fail", messages: [] }),
+        tools.bridge_execute_webmcp_tool.execute!(
+          { pageId: 1, toolName: "fixture", input: "{}" },
+          { toolCallId: "call_fail", messages: [] },
+        ),
       ).rejects.toThrow("completion uncertain")
-      expect(bridge.call).toHaveBeenCalledOnce()
+      expect(executed()).toBe(1)
     },
   })
 })

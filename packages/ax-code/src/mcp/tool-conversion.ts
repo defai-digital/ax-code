@@ -6,10 +6,50 @@ import { toErrorMessage } from "../util/error-message"
 import { createHash } from "node:crypto"
 import z from "zod"
 import { WebMcpProfile } from "./webmcp-profile"
+import { isRecord } from "@/util/record"
 
 const log = Log.create({ service: "mcp" })
 const MAX_TOOL_DESCRIPTION = 4_000
 const MAX_TOOL_SCHEMA_BYTES = 64 * 1024
+
+function webmcpText(result: unknown): string {
+  const content = isRecord(result) && Array.isArray(result.content) ? result.content : []
+  return content
+    .flatMap((item) => (isRecord(item) && item.type === "text" && typeof item.text === "string" ? [item.text] : []))
+    .join("\n")
+}
+
+/**
+ * Dispatch-time binding for execute_webmcp_tool. Runs after approval and before
+ * the call: it re-lists the page's tools and pages so a page that changed its
+ * tool definition, or navigated off the allowed origin, fails closed instead of
+ * executing a different tool than the one approved. This narrows, but does not
+ * eliminate, the TOCTOU window ADR-076 records.
+ */
+async function webmcpPreflight(
+  client: Client,
+  policy: WebMcpProfile.Policy,
+  call: Record<string, unknown>,
+  timeout: number | undefined,
+) {
+  if (policy.toolName !== "execute_webmcp_tool") return
+  const pageId = call.pageId as number
+  const toolName = call.toolName as string
+  const [listing, pages] = await Promise.all([
+    client.callTool({ name: "list_webmcp_tools", arguments: { pageId } }, CallToolResultSchema, { timeout }),
+    client.callTool({ name: "list_pages", arguments: {} }, CallToolResultSchema, { timeout }),
+  ])
+  const descriptors = WebMcpProfile.parseToolListing(listing)
+  if (!descriptors) throw new Error("WebMCP re-listing returned no tool descriptors; refusing to execute")
+  const decision = WebMcpProfile.verifyBinding(
+    policy.profile,
+    pageId,
+    toolName,
+    descriptors,
+    WebMcpProfile.parsePages(webmcpText(pages)).get(pageId),
+  )
+  if (!decision.ok) throw new Error(decision.error)
+}
 
 export type ConvertedMcpTool = Tool & { webmcp?: WebMcpProfile.Policy }
 
@@ -113,6 +153,7 @@ export async function convertMcpTool(
     inputSchema: jsonSchema(schema),
     execute: async (args: unknown, opts: ToolCallOptions) => {
       const input = webmcp ? WebMcpProfile.validateCall(webmcp.profile, webmcp.toolName, args) : args
+      if (webmcp) await webmcpPreflight(client, webmcp, (input ?? {}) as Record<string, unknown>, timeout)
       try {
         const result = await client.callTool(
           {
@@ -126,7 +167,20 @@ export async function convertMcpTool(
             timeout,
           },
         )
-        if (webmcp) WebMcpProfile.validateResult(webmcp.toolName, result)
+        if (webmcp) {
+          WebMcpProfile.validateResult(webmcp.toolName, result)
+          if (webmcp.toolName === "list_webmcp_tools") {
+            const descriptors = WebMcpProfile.parseToolListing(result)
+            if (descriptors) {
+              const recorded = WebMcpProfile.recordListing(
+                WebMcpProfile.stateFor(webmcp.profile),
+                (input as { pageId: number }).pageId,
+                descriptors,
+              )
+              if (!recorded.ok) throw new Error(recorded.error)
+            }
+          }
+        }
         return result
       } catch (e) {
         log.error("MCP tool call failed", { tool: mcpTool.name, error: toErrorMessage(e) })

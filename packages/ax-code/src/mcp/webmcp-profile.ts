@@ -1,5 +1,6 @@
 import z from "zod"
 import path from "node:path"
+import { createHash } from "node:crypto"
 import { parseJsonPayload } from "@/util/json-value"
 import { isRecord } from "@/util/record"
 
@@ -232,6 +233,7 @@ export namespace WebMcpProfile {
     profile: Configuration,
     tool: string,
     call: Record<string, unknown>,
+    annotations?: ToolDescriptor["annotations"],
   ): Record<string, unknown> {
     return {
       server,
@@ -241,6 +243,15 @@ export namespace WebMcpProfile {
       ...(typeof call.toolName === "string" ? { toolName: call.toolName } : {}),
       ...(typeof call.url === "string" ? { origin: new URL(call.url).origin } : {}),
       ...(typeof call.input === "string" ? { inputBytes: Buffer.byteLength(call.input, "utf8") } : {}),
+      ...(annotations
+        ? {
+            annotations: {
+              readOnly: annotations.readOnly === true,
+              untrustedContent: annotations.untrustedContent === true,
+              consequential: annotations.consequential === true,
+            },
+          }
+        : {}),
       experimental: true,
       warning: "Page tool definitions and results are untrusted. Approval does not guarantee the tool's effects.",
     }
@@ -266,5 +277,166 @@ export namespace WebMcpProfile {
     ) {
       throw new Error("WebMCP navigation did not confirm completion; do not retry automatically")
     }
+  }
+
+  export const MAX_TOOLS = 50
+  export const MAX_DESCRIPTOR_BYTES = 64 * 1024
+  export const MAX_REGISTRATION_CHANGES = 10
+  const PAGE_LINE = /^(\d+):\s+(.*)$/
+  const PAGE_URL = /(https?:\/\/[^\s)\]]+)/
+
+  export type ToolDescriptor = {
+    name: string
+    description?: string
+    inputSchema?: unknown
+    annotations?: { readOnly?: boolean; untrustedContent?: boolean; consequential?: boolean }
+  }
+
+  type PageState = {
+    tools: Map<string, string>
+    annotations: Map<string, ToolDescriptor["annotations"]>
+    changes: number
+    disabled: boolean
+  }
+  export type ListingState = { pages: Map<number, PageState> }
+  export type ListingResult = { ok: true } | { ok: false; error: string }
+
+  // The live profile object is recreated per connection (validateLaunch parses
+  // fresh each time) and frozen, so keying listing state by it yields
+  // per-connection state without threading a store through the MCP layer.
+  const listingStates = new WeakMap<Configuration, ListingState>()
+
+  export function stateFor(profile: Configuration): ListingState {
+    let state = listingStates.get(profile)
+    if (!state) {
+      state = { pages: new Map() }
+      listingStates.set(profile, state)
+    }
+    return state
+  }
+
+  /** Parse the structured tool descriptors chrome-devtools-mcp returns. */
+  export function parseToolListing(result: unknown): ToolDescriptor[] | undefined {
+    const record = isRecord(result) ? result : {}
+    const structured = isRecord(record.structuredContent) ? record.structuredContent : undefined
+    if (!structured || !Array.isArray(structured.webmcpTools)) return undefined
+    const descriptors: ToolDescriptor[] = []
+    for (const raw of structured.webmcpTools) {
+      if (!isRecord(raw) || typeof raw.name !== "string" || raw.name.length === 0) return undefined
+      descriptors.push({
+        name: raw.name,
+        description: typeof raw.description === "string" ? raw.description : undefined,
+        inputSchema: raw.inputSchema,
+        annotations: isRecord(raw.annotations)
+          ? {
+              readOnly: raw.annotations.readOnly === true,
+              untrustedContent: raw.annotations.untrustedContent === true,
+              consequential: raw.annotations.consequential === true,
+            }
+          : undefined,
+      })
+    }
+    return descriptors
+  }
+
+  /** Parse `list_pages` text into pageId -> URL (non-http pages keep raw text). */
+  export function parsePages(text: string): Map<number, string> {
+    const pages = new Map<number, string>()
+    for (const line of text.split("\n")) {
+      const match = PAGE_LINE.exec(line)
+      if (!match) continue
+      pages.set(Number(match[1]), PAGE_URL.exec(match[2])?.[1] ?? match[2].trim())
+    }
+    return pages
+  }
+
+  function descriptorHash(descriptor: ToolDescriptor): string {
+    return createHash("sha256")
+      .update(JSON.stringify([descriptor.name, descriptor.description ?? "", descriptor.inputSchema ?? null]))
+      .digest("hex")
+  }
+
+  function descriptorBytes(descriptors: ToolDescriptor[]): number {
+    return Buffer.byteLength(JSON.stringify(descriptors), "utf8")
+  }
+
+  function sameTools(a: Map<string, string>, b: Map<string, string>): boolean {
+    if (a.size !== b.size) return false
+    for (const [name, hash] of a) if (b.get(name) !== hash) return false
+    return true
+  }
+
+  /**
+   * Record a page's tool listing, enforcing the descriptor caps. Excessive tool
+   * count or descriptor bytes fail closed; repeated definition churn past the
+   * limit disables the page (it protects against approval-fatigue attacks).
+   */
+  export function recordListing(state: ListingState, pageId: number, descriptors: ToolDescriptor[]): ListingResult {
+    if (descriptors.length > MAX_TOOLS) {
+      return { ok: false, error: `WebMCP page registers too many tools (${descriptors.length} > ${MAX_TOOLS})` }
+    }
+    if (descriptorBytes(descriptors) > MAX_DESCRIPTOR_BYTES) {
+      return { ok: false, error: "WebMCP tool descriptors exceed the descriptor size limit" }
+    }
+    const tools = new Map<string, string>()
+    const annotations = new Map<string, ToolDescriptor["annotations"]>()
+    for (const descriptor of descriptors) {
+      tools.set(descriptor.name, descriptorHash(descriptor))
+      annotations.set(descriptor.name, descriptor.annotations)
+    }
+    const existing = state.pages.get(pageId)
+    const changes = existing && !sameTools(existing.tools, tools) ? existing.changes + 1 : (existing?.changes ?? 0)
+    if (changes > MAX_REGISTRATION_CHANGES) {
+      state.pages.set(pageId, { tools, annotations, changes, disabled: true })
+      return { ok: false, error: "WebMCP tool definitions changed too many times on this page" }
+    }
+    state.pages.set(pageId, { tools, annotations, changes, disabled: false })
+    return { ok: true }
+  }
+
+  /** Approval-time annotations for a tool, when the model already listed it. */
+  export function annotationsFor(
+    profile: Configuration,
+    pageId: number,
+    toolName: string,
+  ): ToolDescriptor["annotations"] | undefined {
+    const page = listingStates.get(profile)?.pages.get(pageId)
+    if (!page || page.disabled) return undefined
+    return page.annotations.get(toolName)
+  }
+
+  /**
+   * Verify a fresh listing still matches what the model saw. `pageUrl` is the
+   * page's current URL from a fresh `list_pages`; a missing page or an origin
+   * that left the allowlist fails closed.
+   */
+  export function verifyBinding(
+    profile: Configuration,
+    pageId: number,
+    toolName: string,
+    descriptors: ToolDescriptor[],
+    pageUrl?: string,
+  ): ListingResult {
+    const page = listingStates.get(profile)?.pages.get(pageId)
+    if (!page) return { ok: false, error: "WebMCP execute requires list_webmcp_tools to be called first" }
+    if (page.disabled) return { ok: false, error: "WebMCP tool definitions are disabled for this page" }
+    if (pageUrl === undefined) return { ok: false, error: "WebMCP page could not be located before execution" }
+    let origin: string
+    try {
+      origin = new URL(pageUrl).origin
+    } catch {
+      return { ok: false, error: "WebMCP page URL could not be verified" }
+    }
+    if (!profile.allowedOrigins.includes(origin)) {
+      return { ok: false, error: "WebMCP page origin is no longer allowed" }
+    }
+    const stored = page.tools.get(toolName)
+    if (stored === undefined) return { ok: false, error: `WebMCP tool ${toolName} was not in the listed tools` }
+    const fresh = descriptors.find((descriptor) => descriptor.name === toolName)
+    if (!fresh) return { ok: false, error: `WebMCP tool ${toolName} is no longer registered` }
+    if (descriptorHash(fresh) !== stored) {
+      return { ok: false, error: `WebMCP tool ${toolName} definition changed since it was listed` }
+    }
+    return { ok: true }
   }
 }

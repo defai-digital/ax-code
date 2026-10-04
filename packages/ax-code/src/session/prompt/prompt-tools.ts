@@ -799,6 +799,11 @@ export async function resolveTools(input: ResolveToolsInput) {
                 policy.profile,
                 policy.toolName,
                 call as Record<string, unknown>,
+                WebMcpProfile.annotationsFor(
+                  policy.profile,
+                  (call as { pageId?: number }).pageId ?? -1,
+                  (call as { toolName?: string }).toolName ?? policy.toolName,
+                ),
               )
             : undefined
           const permissionPattern = McpPermissionPattern.derive(key, webmcp ?? call, { worktree: Instance.worktree })

@@ -64,4 +64,69 @@ describe("WebMCP managed requirement", () => {
     expect(effective.allowedOrigins).toEqual(["https://example.test"])
     expect(WebMcpProfile.validateLaunch(config)).toEqual(validated)
   })
+
+  test("parses the bridge's structured listing and page text", () => {
+    const pages = WebMcpProfile.parsePages("## Pages\n1: about:blank\n2: Home (https://example.test/) [selected]")
+    expect(pages.get(1)).toBe("about:blank")
+    expect(pages.get(2)).toBe("https://example.test/")
+
+    const listing = WebMcpProfile.parseToolListing({
+      structuredContent: {
+        webmcpTools: [
+          {
+            name: "a",
+            description: "d",
+            inputSchema: { type: "object" },
+            annotations: { readOnly: true, consequential: true },
+          },
+        ],
+      },
+    })
+    expect(listing).toHaveLength(1)
+    expect(listing?.[0]?.annotations).toEqual({ readOnly: true, untrustedContent: false, consequential: true })
+    expect(WebMcpProfile.parseToolListing({})).toBeUndefined()
+  })
+
+  test("descriptor caps fail closed", () => {
+    const state = WebMcpProfile.stateFor(profile())
+    const many = Array.from({ length: WebMcpProfile.MAX_TOOLS + 1 }, (_, i) => ({ name: `t${i}` }))
+    expect(WebMcpProfile.recordListing(state, 1, many)).toMatchObject({ ok: false })
+    expect(
+      WebMcpProfile.recordListing(state, 2, [
+        { name: "a", description: "x".repeat(WebMcpProfile.MAX_DESCRIPTOR_BYTES) },
+      ]),
+    ).toMatchObject({ ok: false })
+  })
+
+  test("definition churn past the cap disables the page", () => {
+    const current = profile()
+    const state = WebMcpProfile.stateFor(current)
+    for (let i = 0; i <= WebMcpProfile.MAX_REGISTRATION_CHANGES; i++) {
+      WebMcpProfile.recordListing(state, 1, [{ name: "a", description: `v${i}` }])
+    }
+    expect(WebMcpProfile.verifyBinding(current, 1, "a", [], "https://example.test/")).toMatchObject({ ok: false })
+  })
+
+  test("verifyBinding matches the listed descriptor and rejects drift", () => {
+    const current = profile()
+    const state = WebMcpProfile.stateFor(current)
+    const descriptor = { name: "search", description: "d", inputSchema: { type: "object" } }
+    expect(WebMcpProfile.recordListing(state, 5, [descriptor])).toEqual({ ok: true })
+    expect(WebMcpProfile.verifyBinding(current, 5, "search", [descriptor], "https://example.test/page")).toEqual({
+      ok: true,
+    })
+    expect(
+      WebMcpProfile.verifyBinding(
+        current,
+        5,
+        "search",
+        [{ ...descriptor, description: "changed" }],
+        "https://example.test/page",
+      ),
+    ).toMatchObject({ ok: false })
+    expect(WebMcpProfile.verifyBinding(current, 5, "search", [descriptor], "https://evil.test/page")).toMatchObject({
+      ok: false,
+    })
+    expect(WebMcpProfile.verifyBinding(current, 5, "search", [descriptor])).toMatchObject({ ok: false })
+  })
 })
