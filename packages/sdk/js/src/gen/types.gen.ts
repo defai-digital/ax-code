@@ -575,6 +575,7 @@ export type Config = {
         pacing_grace_minutes?: number
       }
   isolation?: IsolationConfig
+  webmcp?: WebMcpRequirementConfig
   /**
    * @deprecated Use 'permission' field instead
    */
@@ -4606,6 +4607,20 @@ export type WebMcpProfileConfig = {
    * Optional explicit Chrome 150+ executable; never attaches to an existing browser session
    */
   executablePath?: string
+}
+
+/**
+ * Enterprise WebMCP requirement for the experimental chrome-devtools bridge. Managed config only — ignored from project, user, remote and inline config so a repository cannot set or loosen it. allow: false blocks the bridge; allowedOrigins narrows the exact origins admitted. A managed allow never enables the bridge and never bypasses the per-call interactive webmcp approval.
+ */
+export type WebMcpRequirementConfig = {
+  /**
+   * Managed allow/deny for the experimental WebMCP bridge. false blocks the bridge entirely.
+   */
+  allow?: boolean
+  /**
+   * Managed narrowing list. When set, only these exact origins stay usable; it must intersect the profile's configured origins.
+   */
+  allowedOrigins?: Array<string>
 }
 
 /** AX Code API schema `WikiMaintenanceStatus` (auto-generated from the OpenAPI contract). */

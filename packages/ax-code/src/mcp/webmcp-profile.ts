@@ -31,14 +31,39 @@ export namespace WebMcpProfile {
     }
   }
 
+  const Origins = z
+    .array(z.string().max(240).refine(exactOrigin, "Use an exact HTTPS origin or HTTP loopback origin"))
+    .min(1)
+    .max(8)
+    .refine((origins) => new Set(origins).size === origins.length, "Origins must be unique")
+
+  /**
+   * Managed-only enterprise requirement for the experimental bridge. It is read
+   * exclusively from the managed config directory: no project, user, remote or
+   * inline source may set or loosen it. `allow: false` blocks the bridge
+   * outright; `allowedOrigins`, when present, narrows the exact origins admitted
+   * for call-time navigation checks. A requirement can only restrict — it never
+   * enables the bridge and never removes the per-call interactive approval.
+   */
+  export const Requirement = z
+    .object({
+      allow: z
+        .boolean()
+        .optional()
+        .describe("Managed allow/deny for the experimental WebMCP bridge. false blocks the bridge entirely."),
+      allowedOrigins: Origins.optional().describe(
+        "Managed narrowing list. When set, only these exact origins stay usable; it must intersect the profile's configured origins.",
+      ),
+    })
+    .strict()
+    .meta({ ref: "WebMcpRequirementConfig" })
+  export type Requirement = z.infer<typeof Requirement>
+
   export const Configuration = z
     .object({
-      allowedOrigins: z
-        .array(z.string().max(240).refine(exactOrigin, "Use an exact HTTPS origin or HTTP loopback origin"))
-        .min(1)
-        .max(8)
-        .refine((origins) => new Set(origins).size === origins.length, "Origins must be unique")
-        .describe("Exact permitted origins; no wildcards, credentials, paths, queries or fragments"),
+      allowedOrigins: Origins.describe(
+        "Exact permitted origins; no wildcards, credentials, paths, queries or fragments",
+      ),
       headless: z.boolean().optional().describe("Use an isolated headless Chrome instead of a visible window"),
       executablePath: z
         .string()
@@ -108,6 +133,28 @@ export namespace WebMcpProfile {
     }
     Object.freeze(profile.allowedOrigins)
     return Object.freeze(profile)
+  }
+
+  /**
+   * Apply a managed requirement to a launch-validated profile. A managed deny
+   * fails the connection; a managed origin list narrows the origins used for
+   * call-time navigation checks. The launch argv is validated against the
+   * unreduced profile before this runs, so narrowing only makes the app-level
+   * origin check stricter than the browser allowlist.
+   */
+  export function applyRequirement(requirement: Requirement | undefined, profile: Configuration): Configuration {
+    if (!requirement) return profile
+    if (requirement.allow === false) throw new Error("WebMCP bridge is disabled by managed policy")
+    const allowed = requirement.allowedOrigins
+    if (!allowed) return profile
+    const admitted = profile.allowedOrigins.filter((origin) => allowed.includes(origin))
+    if (admitted.length === 0) {
+      throw new Error("WebMCP managed policy excludes every origin configured for this bridge")
+    }
+    if (admitted.length === profile.allowedOrigins.length) return profile
+    const narrowed = Configuration.parse({ ...profile, allowedOrigins: admitted })
+    Object.freeze(narrowed.allowedOrigins)
+    return Object.freeze(narrowed)
   }
 
   export function allows(name: string): boolean {

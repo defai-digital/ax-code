@@ -2061,6 +2061,38 @@ test("managed settings override project settings", async () => {
   })
 })
 
+test("the webmcp requirement is honored from managed config only", async () => {
+  await using project = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+        webmcp: { allow: false, allowedOrigins: ["https://project.test"] },
+      })
+    },
+  })
+
+  // A project source may not set or loosen the managed requirement.
+  await Instance.provide({
+    directory: project.path,
+    fn: async () => {
+      expect((await Config.get()).webmcp).toBeUndefined()
+    },
+  })
+
+  await writeManagedSettings({
+    $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+    webmcp: { allow: false, allowedOrigins: ["https://managed.test"] },
+  })
+
+  await using managed = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: managed.path,
+    fn: async () => {
+      expect((await Config.get()).webmcp).toEqual({ allow: false, allowedOrigins: ["https://managed.test"] })
+    },
+  })
+})
+
 test("missing managed settings file is not an error", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

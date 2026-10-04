@@ -397,9 +397,21 @@ export namespace Config {
       }
     }
 
+    // The WebMCP requirement is managed-only: a project, user, remote or
+    // inline source must not be able to set or loosen it. Strip it from every
+    // non-managed source before merging so only the managed directory (loaded
+    // last, highest precedence) can carry it.
+    function withoutWebmcpRequirement(config: Info): Info {
+      if (config.webmcp === undefined) return config
+      const copy = { ...config }
+      delete copy.webmcp
+      return copy
+    }
+
     function mergeFromSource(source: McpSource, config: Info) {
       recordMcpSources(config, source)
-      result = mergeConfigConcatArrays(result, migrateDeprecatedModeIntoAgent(config))
+      const scoped = source.kind === "managed" ? config : withoutWebmcpRequirement(config)
+      result = mergeConfigConcatArrays(result, migrateDeprecatedModeIntoAgent(scoped))
     }
 
     // Config loading order (low -> high precedence): https://github.com/defai-digital/ax-code#config-precedence-order

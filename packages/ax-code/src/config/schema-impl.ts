@@ -927,6 +927,12 @@ export const Info = z
           "thinking, and prompt caching — e.g. Qwen 3.7 Max/Plus; off otherwise)",
       ),
     isolation: Isolation.optional().describe("Execution isolation configuration"),
+    webmcp: WebMcpProfile.Requirement.optional().describe(
+      "Enterprise WebMCP requirement for the experimental chrome-devtools bridge. Managed config only — " +
+        "ignored from project, user, remote and inline config so a repository cannot set or loosen it. " +
+        "allow: false blocks the bridge; allowedOrigins narrows the exact origins admitted. A managed allow " +
+        "never enables the bridge and never bypasses the per-call interactive webmcp approval.",
+    ),
     tools: z.record(z.string(), z.boolean()).optional().describe("@deprecated Use 'permission' field instead"),
     session: z
       .object({

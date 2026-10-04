@@ -683,7 +683,12 @@ export namespace MCP {
       }
     }
 
-    const webmcp = WebMcpProfile.validateLaunch(mcp)
+    const validated = WebMcpProfile.validateLaunch(mcp)
+    // The managed WebMCP requirement can deny the bridge or narrow its origins;
+    // it never enables the bridge and never removes the per-call interactive
+    // approval. It is read from the managed-only merged config (see
+    // config-impl mergeFromSource).
+    const webmcp = validated ? WebMcpProfile.applyRequirement((await Config.get()).webmcp, validated) : undefined
     log.info("found", { key, type: mcp.type })
     let mcpClient: MCPClient | undefined
     let status: Status | undefined = undefined
