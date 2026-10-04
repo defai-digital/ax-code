@@ -605,6 +605,24 @@ export namespace MCP {
     return McpTrust.decision(name, mcp, entry?.source ?? Config.trustedMcpSource("unknown"))
   }
 
+  // A webmcp-profiled entry is exempt from the config-source trust gate on an
+  // explicit connect: the connect call (chip click, `mcp connect`) is itself
+  // the user gesture, and WebMcpProfile.validateLaunch pins the exact reviewed
+  // argv before any process spawns, so a hostile project config cannot smuggle
+  // an arbitrary command through a webmcp entry — only the pinned bridge with
+  // schema-validated flags can launch, and every bridge call still requires
+  // interactive approval. The startup bulk connect keeps the gate: a cloned
+  // repo must not launch a browser without any gesture.
+  function webmcpTrustExempt(mcp: Config.Mcp): boolean {
+    if (mcp.type !== "local" || mcp.webmcp === undefined) return false
+    try {
+      WebMcpProfile.validateLaunch(mcp)
+      return true
+    } catch {
+      return false
+    }
+  }
+
   // Generic helper for prompts-resources: fetch the array, log on
   // failure, key each item by `clientName:itemName`. Used by both
   // prompts() and resources() — the only thing that varies per call
@@ -1129,7 +1147,7 @@ export namespace MCP {
     }
 
     const trust = await trustDecision(name, mcp)
-    if (!trust.trusted) {
+    if (!trust.trusted && !webmcpTrustExempt(mcp)) {
       s.status[name] = needsTrustStatus(trust)
       if (s.clients[name]) {
         await closeIfPossible(s.clients[name], name, "trust revoked")

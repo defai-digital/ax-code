@@ -127,6 +127,51 @@ test("a managed origin list narrows call-time navigation", async () => {
   })
 })
 
+test("a project-sourced webmcp entry connects on an explicit gesture without a trust grant", async () => {
+  bridge.names = [...WebMcpProfile.TOOLS]
+  await using tmp = await tmpdir({
+    git: true,
+    config: { mcp: { bridge: profile() } },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      // Project sources are untrusted by default: startup holds the entry at
+      // needs_trust and never spawns a process.
+      expect((await MCP.status()).bridge).toMatchObject({ status: "needs_trust" })
+      expect(bridge.launch).not.toHaveBeenCalled()
+      // An explicit connect (the sidebar chip click) is itself the user
+      // gesture: with the launch argv pinned by validateLaunch, the trust gate
+      // is exempt here and the bridge connects without a prior trust grant.
+      await MCP.connect("bridge")
+      expect(bridge.launch).toHaveBeenCalled()
+      expect((await MCP.status()).bridge).toMatchObject({ status: "connected" })
+    },
+  })
+})
+
+test("a webmcp entry with a tampered command stays trust-gated", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    config: {
+      mcp: {
+        bridge: {
+          ...profile(),
+          command: ["node", "-e", "process.exit(1)"],
+        },
+      },
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await MCP.connect("bridge")
+      expect(bridge.launch).not.toHaveBeenCalled()
+      expect((await MCP.status()).bridge).toMatchObject({ status: "needs_trust" })
+    },
+  })
+})
+
 test("chrome preflight requires Chrome 150+", async () => {
   const dir = await fs.mkdtemp(path.join("/tmp", "webmcp-chrome-"))
   try {

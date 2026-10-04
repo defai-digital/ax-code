@@ -1328,7 +1328,7 @@
         {
           "fingerprint": "21c7815124b253eae3d9f6fb081fd940d852cdddc29d817ede941d5d8497bc60",
           "file": "src/config/config-impl.ts",
-          "line": 451,
+          "line": 472,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1336,7 +1336,7 @@
         {
           "fingerprint": "cde1eefbcd3c7f0ac1de1dce7012e2fe5881be34add077da2fa8cf312a95e613",
           "file": "src/config/config-impl.ts",
-          "line": 707,
+          "line": 728,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1440,7 +1440,7 @@
         {
           "fingerprint": "beaf502ea19ee215d0e8b1bd0929e0da07da9f4bc46cd1fe1ca4faeaca0d94e4",
           "file": "src/mcp/tool-conversion.ts",
-          "line": 82,
+          "line": 95,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1448,7 +1448,7 @@
         {
           "fingerprint": "77a2cfd9744fa4c7654abdc1667c12c1334fd6937679a9a701d4faf01d161966",
           "file": "src/mcp/tool-conversion.ts",
-          "line": 91,
+          "line": 104,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1952,7 +1952,7 @@
       ]
     },
     "security_scan": {
-      "count": 494,
+      "count": 496,
       "findings": [
         {
           "fingerprint": "437e1d0157fc1965a429fe7f0e9474576f6c0db625ea27bb6ce1b57af9e2cd9f",
@@ -3237,7 +3237,7 @@
         {
           "fingerprint": "162c10aafd9c15df64dbf3bd90a8ba4a609e65dabbdffd56a5e53872b8c9f442",
           "file": "src/config/config-impl.ts",
-          "line": 610,
+          "line": 631,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3245,7 +3245,7 @@
         {
           "fingerprint": "818f97c3deff930813b2c54181f2896ef6107803be76b5191419a50d21e7f227",
           "file": "src/config/config-impl.ts",
-          "line": 611,
+          "line": 632,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3253,7 +3253,7 @@
         {
           "fingerprint": "2cbd7d301fe6e7228655a5d53aeadfed6ea20e354e512414424bb76b5b73bb8e",
           "file": "src/config/config-impl.ts",
-          "line": 751,
+          "line": 772,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3261,7 +3261,7 @@
         {
           "fingerprint": "22ed1f7fae6cc14578fdf57d4844fef77d8b7949c025257f925718898d3948c7",
           "file": "src/config/config-impl.ts",
-          "line": 843,
+          "line": 864,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3269,7 +3269,7 @@
         {
           "fingerprint": "1281cfb99a57935f397607aaf68de54870b383df0e519e1e8d69f4037c1c3c85",
           "file": "src/config/config-impl.ts",
-          "line": 844,
+          "line": 865,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3277,7 +3277,7 @@
         {
           "fingerprint": "3e69ef8c56ffe35fef6982a733c936c8764a5b011f649ddca5d32e7726289971",
           "file": "src/config/config-impl.ts",
-          "line": 882,
+          "line": 903,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3285,7 +3285,7 @@
         {
           "fingerprint": "4a62bd7bde6b15f11809a2495e00bb2918dcf72a6c1b151a9f12b2187a11b432",
           "file": "src/config/config-impl.ts",
-          "line": 968,
+          "line": 989,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3293,7 +3293,7 @@
         {
           "fingerprint": "2855da3d6788013561d047c12b49723fa3458f9ebc8225436b00eb6c9c20e78a",
           "file": "src/config/config-impl.ts",
-          "line": 970,
+          "line": 991,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3301,7 +3301,7 @@
         {
           "fingerprint": "b82743c41d1efc7addc2db76333938437018cad952a501eb736abe387be3a829",
           "file": "src/config/config-impl.ts",
-          "line": 973,
+          "line": 994,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3309,7 +3309,7 @@
         {
           "fingerprint": "55d7f1742dbacbd3b229a16a1b9b8cef2250bae6b2f652e705379a742d3e183d",
           "file": "src/config/config-impl.ts",
-          "line": 1152,
+          "line": 1173,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3317,7 +3317,7 @@
         {
           "fingerprint": "d9ff346cef0eb73ad679353d02c11f311a3e0a4538a77be6890ea872396d3210",
           "file": "src/config/config-impl.ts",
-          "line": 1313,
+          "line": 1334,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3325,7 +3325,7 @@
         {
           "fingerprint": "92c7f8cb667f12d8e1a9319e04b4d6ad2ca5781e59523f4472abefc407c7d3dd",
           "file": "src/config/config-impl.ts",
-          "line": 1314,
+          "line": 1335,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3333,7 +3333,7 @@
         {
           "fingerprint": "b9ee0dd0d18ad05a5469a5ec92fa5fa39e43211eee3aeff98d1b5638e31fc611",
           "file": "src/config/config-impl.ts",
-          "line": 1315,
+          "line": 1336,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3341,7 +3341,7 @@
         {
           "fingerprint": "7f59e64e7aebfd3e96d069101dc780473379419c77f114afbb932e519ccd5f2e",
           "file": "src/config/config-impl.ts",
-          "line": 1318,
+          "line": 1339,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3349,7 +3349,7 @@
         {
           "fingerprint": "647e1ac1bef1baf7f56544c6974202b783a49d267a9362cf5266fc4ff9f624cd",
           "file": "src/config/config-impl.ts",
-          "line": 1330,
+          "line": 1351,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3357,7 +3357,7 @@
         {
           "fingerprint": "3730c4f0cc28b123bd27151f001228aea8fbe7385db3c3498cd6a89412971e8b",
           "file": "src/config/config-impl.ts",
-          "line": 1605,
+          "line": 1626,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3365,7 +3365,7 @@
         {
           "fingerprint": "e9f4e4681f9aa3843a0bc4ead96a7ee2e22c6dc3a230534942838fa5bdd9d0e1",
           "file": "src/config/config-impl.ts",
-          "line": 1626,
+          "line": 1647,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -4133,7 +4133,7 @@
         {
           "fingerprint": "e8be0812465c83e5a3809fd76e307004d8af2aa512735b22313eda502454e2c1",
           "file": "src/mcp/impl.ts",
-          "line": 710,
+          "line": 744,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -4149,7 +4149,7 @@
         {
           "fingerprint": "4d24394b9043929cfad5e4830620f97fd3fdee7c920db1fbe9b85b81eb73ba1d",
           "file": "src/mcp/webmcp-profile.ts",
-          "line": 115,
+          "line": 117,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -4157,7 +4157,23 @@
         {
           "fingerprint": "185b25696478992166f092dc5f40ecc9f5abddeff2f61722ea5ae8bd4b6a9852",
           "file": "src/mcp/webmcp-profile.ts",
-          "line": 124,
+          "line": 128,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "9459a1fac1c35c001b3d4e74cc9ec0391bebb51730fb068db4f71ef1afb53ab8",
+          "file": "src/mcp/webmcp-profile.ts",
+          "line": 192,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "e6f6eb32d91a36a14dc7d1a91e061deacb39863ebd1a47eaf28074b7a966f0f0",
+          "file": "src/mcp/webmcp-profile.ts",
+          "line": 220,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -4285,7 +4301,7 @@
         {
           "fingerprint": "17bdbbe91ebdb778415b1d217b696070f4ca47236959d1847d5cb7c4900c3e65",
           "file": "src/permission/index.ts",
-          "line": 860,
+          "line": 870,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5909,7 +5925,7 @@
       ]
     },
     "hardcode_scan": {
-      "count": 76,
+      "count": 77,
       "findings": [
         {
           "fingerprint": "a6bd914a7535ff247af90bb657c68be41d273fa7f12420175006d8274a4b83d3",
@@ -5920,9 +5936,9 @@
           "summary": "inline_secret_shape"
         },
         {
-          "fingerprint": "a817a069ddc1a8e76d59326e69e567e10fed31b0de70a0f65a65a12d6356fa93",
+          "fingerprint": "0cc60002f1ad71f4ca924a98e6f5c7afe33ffe261256682b776d9fc64164c452",
           "file": "src/mcp/webmcp-profile.ts",
-          "line": 121,
+          "line": 123,
           "severity": "high",
           "kind": "inline_secret_shape",
           "summary": "inline_secret_shape"
@@ -5930,7 +5946,7 @@
         {
           "fingerprint": "d8414493baab11c7df4bbaa1ed836a1d6549a0906c539b80a3324632c4a9c89d",
           "file": "src/mcp/webmcp-profile.ts",
-          "line": 175,
+          "line": 248,
           "severity": "high",
           "kind": "inline_secret_shape",
           "summary": "inline_secret_shape"
@@ -6054,6 +6070,14 @@
           "severity": "medium",
           "kind": "inline_path",
           "summary": "inline_path"
+        },
+        {
+          "fingerprint": "9f55825b3776c802f5a9db3603af1eb3a201fc2b62148981aa1b40596afa5d5d",
+          "file": "src/mcp/impl.ts",
+          "line": 727,
+          "severity": "medium",
+          "kind": "inline_url",
+          "summary": "inline_url"
         },
         {
           "fingerprint": "6d6c03cf4be41afdefdc541d3e4d309579eb9d0e24a3c90d7dfe837b80d294dd",
