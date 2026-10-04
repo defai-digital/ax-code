@@ -656,6 +656,16 @@ export namespace Permission {
     const existing = pending.get(input.requestID)
     if (!existing) return false
 
+    // Backend enforcement of the interactive-only invariant: a hostile or
+    // buggy client (HTTP/SDK/ACP) must not record or persist an `always`
+    // grant for requests like webmcp that may never have one. WebMCP callers
+    // already pass `always: []`, so today this only hardens the recorded
+    // reply, but any non-empty future grant is downgraded here too.
+    const reply =
+      input.reply === "always" && isInteractiveOnly(existing.info.permission, existing.info.metadata)
+        ? "once"
+        : input.reply
+
     const publishReply = (entry: PendingEntry, reply: z.infer<typeof ReplyInput>["reply"]) => {
       Bus.publishDetached(Event.Replied, {
         sessionID: entry.info.sessionID,
@@ -672,7 +682,7 @@ export namespace Permission {
       }
     }
 
-    if (input.reply === "reject") {
+    if (reply === "reject") {
       // Serialize with the always-reply queue: without this, a concurrent
       // "Always" could persist rules in the middle of a session-wide reject
       // sweep, leaving both effects interleaved nondeterministically.
@@ -687,17 +697,17 @@ export namespace Permission {
           if (id === input.requestID) rejectedTarget = true
           clearIdleOnceTimer(entry)
           pending.delete(id)
-          publishReply(entry, input.reply)
+          publishReply(entry, reply)
           entry.deferred.reject(input.message ? new CorrectedError({ feedback: input.message }) : new RejectedError())
         }
         return rejectedTarget
       })
     }
 
-    if (input.reply === "once") {
+    if (reply === "once") {
       clearIdleOnceTimer(existing)
       pending.delete(input.requestID)
-      publishReply(existing, input.reply)
+      publishReply(existing, reply)
       existing.deferred.resolve(undefined)
       return true
     }
@@ -741,7 +751,7 @@ export namespace Permission {
         existing.deferred.reject(error)
         throw error
       }
-      publishReply(existing, input.reply)
+      publishReply(existing, reply)
       existing.deferred.resolve(undefined)
 
       for (const [id, item] of pending.entries()) {

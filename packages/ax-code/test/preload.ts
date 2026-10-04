@@ -52,9 +52,14 @@ const testHome = path.join(dir, "home")
 await fs.mkdir(testHome, { recursive: true })
 process.env["AX_CODE_TEST_HOME"] = testHome
 
-// Set test managed config directory to isolate tests from system managed settings
+// Set test managed config directory to isolate tests from system managed settings.
+// The env var is only a locator for fixtures; production honors the
+// in-process seam instead, so the CLI invoker cannot redirect it (see
+// Config.__setTestManagedConfigDir).
 const testManagedConfigDir = path.join(dir, "managed")
 process.env["AX_CODE_TEST_MANAGED_CONFIG_DIR"] = testManagedConfigDir
+const { Config: PreloadConfig } = await import("../src/config/config")
+PreloadConfig.__setTestManagedConfigDir(testManagedConfigDir)
 process.env["AX_CODE_DISABLE_DEFAULT_PLUGINS"] = "true"
 
 // Force deterministic code-intelligence behavior in tests.

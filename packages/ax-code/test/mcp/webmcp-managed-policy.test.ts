@@ -102,7 +102,10 @@ test("a project source cannot set the managed requirement", async () => {
 test("a managed origin list narrows call-time navigation", async () => {
   await writeManaged({ webmcp: { allow: true, allowedOrigins: ["https://example.test"] } })
   bridge.names = [...WebMcpProfile.TOOLS]
-  bridge.call.mockResolvedValue({ content: [{ type: "text", text: "ok" }] })
+  bridge.call.mockResolvedValue({
+    content: [{ type: "text", text: "ok" }],
+    structuredContent: { pages: [{ id: 1, url: "https://example.test/", title: "App", selected: true }] },
+  })
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
     directory: tmp.path,
@@ -132,9 +135,16 @@ test("chrome preflight requires Chrome 150+", async () => {
     await fs.writeFile(good, "#!/bin/sh\necho 'Google Chrome 154.0.8037.98'\n", { mode: 0o755 })
     await fs.writeFile(old, "#!/bin/sh\necho 'Google Chrome 149.0.1.1'\n", { mode: 0o755 })
     expect(WebMcpProfile.chromeMajor("Google Chrome 154.0.8037.98")).toBe(154)
-    expect(WebMcpProfile.verifyChromeVersion(good)).toEqual({ ok: true })
-    expect(WebMcpProfile.verifyChromeVersion(old)).toMatchObject({ ok: false })
-    expect(WebMcpProfile.verifyChromeVersion(path.join(dir, "missing"))).toMatchObject({ ok: false })
+    expect(WebMcpProfile.chromeMajor("Chromium 150.0.0.0")).toBe(150)
+    expect(WebMcpProfile.chromeMajor("Google Chrome for Testing 150.0.0.0")).toBe(150)
+    expect(WebMcpProfile.chromeMajor("Mozilla Firefox 154.0.1")).toBeUndefined()
+    expect(WebMcpProfile.chromeMajor("prefix 150.0 rest")).toBeUndefined()
+    expect(WebMcpProfile.chromeMajor("no version here")).toBeUndefined()
+    expect(WebMcpProfile.chromeMajor("oops Google Chrome 154.0.8037.98")).toBeUndefined()
+    expect(WebMcpProfile.chromeMajor("Google Chrome 99999999999999999999999.0")).toBeUndefined()
+    expect(await WebMcpProfile.verifyChromeVersion(good)).toEqual({ ok: true })
+    expect(await WebMcpProfile.verifyChromeVersion(old)).toMatchObject({ ok: false })
+    expect(await WebMcpProfile.verifyChromeVersion(path.join(dir, "missing"))).toMatchObject({ ok: false })
   } finally {
     await fs.rm(dir, { recursive: true, force: true })
   }

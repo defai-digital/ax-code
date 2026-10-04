@@ -326,12 +326,23 @@ export namespace Config {
     }
   }
 
-  export function managedConfigDir() {
-    return Flag.AX_CODE_TEST_MANAGED_CONFIG_DIR || systemManagedConfigDir()
+  // Test-only seam: unit tests point the managed directory at fixtures. This
+  // is plain module state, deliberately not an env override: anyone who can
+  // set process env — including the managed user the policy constrains —
+  // could otherwise self-grant managed-only opt-ins, or neutralize an admin
+  // deny by pointing the override at an empty directory. Production never
+  // calls the setter, so only in-process test code can redirect the directory.
+  let testManagedConfigDir: string | undefined
+  export function __setTestManagedConfigDir(dir: string | undefined) {
+    testManagedConfigDir = dir
   }
 
-  // Lazy — not cached at import time so tests that set
-  // AX_CODE_TEST_MANAGED_CONFIG_DIR after import take effect.
+  export function managedConfigDir() {
+    return testManagedConfigDir ?? systemManagedConfigDir()
+  }
+
+  // Lazy — not cached at import time so tests that set the seam after import
+  // take effect.
   function getManagedDir() {
     return managedConfigDir()
   }
@@ -401,8 +412,18 @@ export namespace Config {
     // inline source must not be able to set or loosen it. Strip it from every
     // non-managed source before merging so only the managed directory (loaded
     // last, highest precedence) can carry it.
-    function withoutWebmcpRequirement(config: Info): Info {
+    function withoutWebmcpRequirement(source: McpSource, config: Info): Info {
       if (config.webmcp === undefined) return config
+      // A non-managed author may believe they tightened the bridge (for
+      // example `{"webmcp": {"allow": false}}` in a project file). Say so
+      // loudly instead of silently ignoring the requirement.
+      log.warn("webmcp requirement is managed-only; ignoring requirement from non-managed source", {
+        command: "config.load",
+        status: "ignored",
+        kind: source.kind,
+        path: source.path,
+        url: source.url,
+      })
       const copy = { ...config }
       delete copy.webmcp
       return copy
@@ -410,7 +431,7 @@ export namespace Config {
 
     function mergeFromSource(source: McpSource, config: Info) {
       recordMcpSources(config, source)
-      const scoped = source.kind === "managed" ? config : withoutWebmcpRequirement(config)
+      const scoped = source.kind === "managed" ? config : withoutWebmcpRequirement(source, config)
       result = mergeConfigConcatArrays(result, migrateDeprecatedModeIntoAgent(scoped))
     }
 

@@ -126,7 +126,6 @@ export namespace Flag {
   export declare const AX_CODE_DEBUG_INCLUDE_CONTENT: boolean | undefined
   export declare const AX_CODE_PRINT_LOGS: boolean
   export declare const AX_CODE_TEST_HOME: string | undefined
-  export declare const AX_CODE_TEST_MANAGED_CONFIG_DIR: string | undefined
   export const AX_CODE_FAKE_VCS = process.env["AX_CODE_FAKE_VCS"]
   export declare const AX_CODE_CLIENT: string
   export declare const AX_CODE_INTERNAL_BASE_URL: string | undefined
@@ -377,9 +376,6 @@ defineBooleanFlag("AX_CODE_PRINT_LOGS")
 
 // Keep evaluation lazy so test-only overrides set during runtime remain effective.
 defineStringFlag("AX_CODE_TEST_HOME")
-
-// Keep evaluation lazy so tests and bootstrap paths can override this at runtime.
-defineStringFlag("AX_CODE_TEST_MANAGED_CONFIG_DIR")
 
 defineStringFlag("AX_CODE_INTERNAL_BASE_URL")
 

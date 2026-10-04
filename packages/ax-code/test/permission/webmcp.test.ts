@@ -55,6 +55,42 @@ test.each([false, true])(
   },
 )
 
+test("an always reply to an interactive-only request downgrades to once", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const askOnce = () => {
+        const controller = new AbortController()
+        const pending = Permission.ask(
+          { ...request([]), always: ["bridge_*"] },
+          { signal: controller.signal },
+        )
+        pending.catch(() => {})
+        return { controller, pending }
+      }
+      const first = askOnce()
+      try {
+        await vi.waitFor(async () => expect(await Permission.list()).toHaveLength(1))
+        const [approval] = await Permission.list()
+        await Permission.reply({ requestID: approval.id, reply: "always" })
+        await first.pending
+      } finally {
+        first.controller.abort()
+      }
+      expect(await Permission.list()).toHaveLength(0)
+      // No durable grant was recorded: the next identical ask pends again.
+      const second = askOnce()
+      try {
+        await vi.waitFor(async () => expect(await Permission.list()).toHaveLength(1))
+        expect(await Permission.list()).toHaveLength(1)
+      } finally {
+        second.controller.abort()
+      }
+    },
+  })
+})
+
 test("WebMCP preserves explicit denies and cancellation", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({

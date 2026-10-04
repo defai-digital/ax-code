@@ -956,7 +956,7 @@ export const messages = {
   "mode.selected": "Work mode: {mode}",
   "mode.skipped": "{detail} \u2014 skipped {items}",
   "mode.manual": "Manual",
-  "mode.longRun": "Auto (Long-Run)",
+  "mode.longRun": "Auto(LR)",
   "mode.sandbox": "Sandbox",
   "ui.cached": "cached",
   "navigation.find": "Find session\u2026",

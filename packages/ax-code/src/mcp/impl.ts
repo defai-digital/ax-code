@@ -690,21 +690,37 @@ export namespace MCP {
    * Install the pinned bridge into an AX-owned cache and verify the tarball
    * integrity recorded in the generated lockfile. Reached only for an
    * explicitly vendored profile; any failure is terminal (no npx fallback).
+   * The install is synchronous, so concurrent connects cannot interleave
+   * inside it; every launch re-verifies, so a planted cache never passes.
    */
   function ensureVendoredBridge(): { ok: true } | { ok: false; error: string } {
     const bin = WebMcpProfile.vendoredBin()
-    if (existsSync(bin)) return { ok: true }
     const dir = WebMcpProfile.vendoredDir()
-    try {
-      execFileSync(
-        "npm",
-        ["install", "--prefix", dir, "--ignore-scripts", "--no-audit", "--no-fund", WebMcpProfile.VENDORED_PACKAGE],
-        { encoding: "utf8", timeout: 300_000, stdio: "pipe" },
-      )
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      return { ok: false, error: `WebMCP vendored install failed: ${message}` }
+    if (!existsSync(bin)) {
+      try {
+        execFileSync(
+          "npm",
+          [
+            "install",
+            "--prefix",
+            dir,
+            // Pin the registry and the working directory: a repository
+            // .npmrc must not redirect the pinned tarball elsewhere.
+            "--registry=https://registry.npmjs.org",
+            "--ignore-scripts",
+            "--no-audit",
+            "--no-fund",
+            WebMcpProfile.VENDORED_PACKAGE,
+          ],
+          { encoding: "utf8", timeout: 300_000, stdio: "pipe", cwd: Global.Path.home },
+        )
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        return { ok: false, error: `WebMCP vendored install failed: ${message}` }
+      }
     }
+    // Always verify, even when the binary is already cached: the cache path
+    // is predictable, so a planted file or symlink must never skip the check.
     let lock: string
     try {
       lock = readFileSync(path.join(dir, "package-lock.json"), "utf8")
@@ -713,6 +729,10 @@ export namespace MCP {
     }
     const integrity = WebMcpProfile.verifyLockfileIntegrity(lock)
     if (!integrity.ok) return integrity
+    // The lockfile is a public claim anyone can plant alongside a modified
+    // binary, so every launch also re-hashes the extracted package bytes.
+    const bytes = WebMcpProfile.verifyVendoredPackage(dir)
+    if (!bytes.ok) return bytes
     if (!existsSync(bin)) return { ok: false, error: "WebMCP vendored install produced no executable" }
     return { ok: true }
   }
@@ -749,7 +769,7 @@ export namespace MCP {
       webmcp = decision.profile
     }
     if (webmcp?.executablePath) {
-      const chrome = WebMcpProfile.verifyChromeVersion(webmcp.executablePath)
+      const chrome = await WebMcpProfile.verifyChromeVersion(webmcp.executablePath)
       if (!chrome.ok) {
         log.error("webmcp chrome preflight failed", { key, error: chrome.error })
         return { mcpClient: undefined, status: { status: "failed" as const, error: chrome.error } }

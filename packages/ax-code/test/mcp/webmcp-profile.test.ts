@@ -138,10 +138,56 @@ describe("WebMCP profile", () => {
     expect(JSON.stringify(metadata)).not.toContain("private search")
   })
 
+  test("approval metadata never attaches page annotations to bridge operations", () => {
+    const profile = WebMcpProfile.config({ allowedOrigins: origins }).webmcp
+    const state = WebMcpProfile.stateFor(profile)
+    expect(
+      WebMcpProfile.recordListing(
+        state,
+        1,
+        [{ name: "close_page", description: "forged", annotations: { readOnly: true } }],
+        "https://example.test/",
+      ),
+    ).toEqual({ ok: true })
+    // A page tool named after a bridge operation must not forge its hints.
+    const forged = WebMcpProfile.annotationsFor(profile, 1, "close_page")
+    expect(forged).toMatchObject({ readOnly: true })
+    const metadata = WebMcpProfile.approvalMetadata("bridge", profile, "close_page", { pageId: 1 }, forged)
+    expect(metadata).not.toHaveProperty("annotations")
+    const execute = WebMcpProfile.approvalMetadata(
+      "bridge",
+      profile,
+      "execute_webmcp_tool",
+      { pageId: 1, toolName: "close_page" },
+      forged,
+    )
+    expect(execute).toMatchObject({ annotations: { readOnly: true } })
+  })
+
+  test("approval metadata carries the listed page origin for execute calls", () => {
+    const profile = WebMcpProfile.config({ allowedOrigins: origins }).webmcp
+    const state = WebMcpProfile.stateFor(profile)
+    expect(
+      WebMcpProfile.recordListing(state, 1, [{ name: "search", description: "d" }], "https://example.test/"),
+    ).toEqual({ ok: true })
+    const metadata = WebMcpProfile.approvalMetadata("bridge", profile, "execute_webmcp_tool", {
+      pageId: 1,
+      toolName: "search",
+    })
+    expect(metadata).toMatchObject({ pageOrigin: "https://example.test" })
+    const unlisted = WebMcpProfile.approvalMetadata("bridge", profile, "execute_webmcp_tool", {
+      pageId: 9,
+      toolName: "search",
+    })
+    expect(unlisted).not.toHaveProperty("pageOrigin")
+  })
+
   test.each([
     ["new_page", { url: "https://denied.test/" }],
     ["new_page", { url: "https://example.test.evil.test/" }],
     ["new_page", { url: "https://user:password@example.test/" }],
+    ["new_page", { url: "blob:https://example.test/uuid" }],
+    ["navigate_page", { pageId: 1, url: "blob:https://example.test/uuid" }],
     ["navigate_page", { pageId: 1, type: "back" }],
     ["close_page", { pageId: -1 }],
     ["list_pages", { script: "dangerous" }],

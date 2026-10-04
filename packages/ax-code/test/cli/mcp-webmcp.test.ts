@@ -40,6 +40,15 @@ test("WebMCP CLI prints disabled config without connecting or writing user confi
   }
 })
 
+test("WebMCP CLI rejects the headless persistent-profile combination", async () => {
+  await expect(
+    yargs()
+      .exitProcess(false)
+      .command(McpWebMcpCommand)
+      .parseAsync(["webmcp", "--origin", "https://example.test", "--headless", "--persistent-profile"]),
+  ).rejects.toThrow("never headless")
+})
+
 test("WebMCP CLI preserves explicit browser selection and enablement", async () => {
   const output = vi.spyOn(process.stdout, "write").mockReturnValue(true)
   try {

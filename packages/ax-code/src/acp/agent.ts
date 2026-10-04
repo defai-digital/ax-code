@@ -33,6 +33,7 @@ import { FileTime } from "../file/time"
 import { Hash } from "../util/hash"
 import { Lock } from "../util/lock"
 import { ACPSessionManager } from "./session"
+import { canPersistPermission } from "../permission/interaction"
 import type { ACPConfig, ACPSessionState } from "./types"
 import { providerModelKey } from "../provider/model-key"
 import { ModelID, ProviderID } from "../provider/schema"
@@ -702,7 +703,13 @@ export namespace ACP {
             kind: toToolKind(permission.permission),
             locations: toLocations(permission.permission, permission.metadata),
           },
-          options: this.permissionOptions,
+          // Interactive-only requests (webmcp, destructive bash, …) may never
+          // carry a durable grant: hide Always so the client cannot offer it.
+          // The permission backend downgrades a forged `always` reply to
+          // `once` as well, so this is presentation, not the enforcement.
+          options: canPersistPermission(permission)
+            ? this.permissionOptions
+            : this.permissionOptions.filter((option) => option.optionId !== "always"),
         })
         .catch(async (error) => {
           log.error("failed to request permission from ACP", {

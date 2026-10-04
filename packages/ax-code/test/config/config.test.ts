@@ -2093,6 +2093,31 @@ test("the webmcp requirement is honored from managed config only", async () => {
   })
 })
 
+test("the managed directory ignores process env without the in-process seam", async () => {
+  await writeManagedSettings({
+    $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+    webmcp: { allow: false },
+  })
+  // Simulate production: the fixture env var is set but the seam is not, so
+  // the managed directory must neither redirect nor inject a managed-only
+  // requirement. Only in-process test code can redirect via the seam.
+  expect(Config.managedConfigDir()).toBe(managedConfigDir)
+  Config.__setTestManagedConfigDir(undefined)
+  try {
+    expect(Config.managedConfigDir()).not.toBe(managedConfigDir)
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        expect((await Config.get()).webmcp).toBeUndefined()
+      },
+    })
+  } finally {
+    Config.__setTestManagedConfigDir(managedConfigDir)
+  }
+  expect(Config.managedConfigDir()).toBe(managedConfigDir)
+})
+
 test("missing managed settings file is not an error", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

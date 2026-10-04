@@ -34,6 +34,11 @@ export const McpWebMcpCommand = cmd({
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(args.name)) {
       throw new Error("MCP server name must contain 1-64 ASCII letters, digits, underscores or hyphens")
     }
+    // A persistent profile always forces a visible window; refuse to generate
+    // a config that claims headless instead of emitting a contradictory one.
+    if (args.persistentProfile && args.headless) {
+      throw new Error("Use either --headless or --persistent-profile, not both: a persistent profile is never headless")
+    }
     const config = WebMcpProfile.config(
       {
         allowedOrigins: args.origin,

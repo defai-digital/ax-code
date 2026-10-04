@@ -2,7 +2,9 @@ import z from "zod"
 import path from "node:path"
 import os from "node:os"
 import { createHash } from "node:crypto"
-import { execFileSync } from "node:child_process"
+import { execFile } from "node:child_process"
+import { promisify } from "node:util"
+import { readdirSync, readFileSync } from "node:fs"
 import { parseJsonPayload } from "@/util/json-value"
 import { isRecord } from "@/util/record"
 
@@ -119,6 +121,8 @@ export namespace WebMcpProfile {
   // Pinned integrity of chrome-devtools-mcp@1.8.0, the exact reviewed package.
   export const VENDORED_INTEGRITY =
     "sha512-Wrm9z0/5WbVs778apjWgYRkpe9bvYQWjK2zVRwqoPAtz1IHQ5+GvotM07UGXJcfrA0rj6Gt1Pnn5+w/Tf1nU4w=="
+  export const VENDORED_VERSION = "1.8.0"
+  export const VENDORED_REGISTRY_HOST = "registry.npmjs.org"
 
   export function vendoredDir(): string {
     return path.join(os.homedir(), ".ax-code", "vendor", `chrome-devtools-mcp-${PACKAGE.split("@")[1]}`)
@@ -149,6 +153,77 @@ export namespace WebMcpProfile {
     if (entry?.integrity !== VENDORED_INTEGRITY) {
       return { ok: false, error: "WebMCP vendored install integrity does not match the reviewed pin" }
     }
+    // The integrity pin alone does not bind the version or the registry it
+    // was resolved from; a lockfile that points elsewhere fails closed.
+    if (entry.version !== VENDORED_VERSION) {
+      return { ok: false, error: "WebMCP vendored install version does not match the reviewed pin" }
+    }
+    let resolved: URL | undefined
+    try {
+      resolved = typeof entry.resolved === "string" ? new URL(entry.resolved) : undefined
+    } catch {
+      resolved = undefined
+    }
+    if (resolved?.protocol !== "https:" || resolved.hostname !== VENDORED_REGISTRY_HOST) {
+      return { ok: false, error: "WebMCP vendored install was not resolved from the pinned registry" }
+    }
+    return { ok: true }
+  }
+
+  // Rollup over every reviewed byte of chrome-devtools-mcp@1.8.0: the sha512
+  // of the sorted `path:file-sha512` lines of the integrity-pinned tarball,
+  // verified byte-identical against a real registry install.
+  export const VENDORED_PACKAGE_HASH =
+    "333e001fef885b4c77fe9aaecdcc8efc1bf904c6b8d7445ae8afbce529fd6440d4e83cd09c969674f015e4a66191b56829d6cabffb5763e7521b2ac11b7b91ab"
+
+  /**
+   * Verify the installed package bytes against the reviewed rollup. The
+   * lockfile pins are public claims — anyone can write a matching lockfile —
+   * so every launch re-hashes the extracted files. Dotfiles are skipped (OS
+   * droppings, never required); anything else unexpected, missing, unreadable
+   * or symlinked fails closed. Hoisted dependency siblings are outside this
+   * check: they are fetched over the pinned https registry at install time
+   * and are not re-verified here.
+   */
+  export function verifyVendoredPackage(
+    prefixDir: string,
+    expected = VENDORED_PACKAGE_HASH,
+  ): { ok: true } | { ok: false; error: string } {
+    const root = path.join(prefixDir, "node_modules", "chrome-devtools-mcp")
+    const failed = { ok: false as const, error: "WebMCP vendored install failed byte verification" }
+    const files: string[] = []
+    const walk = (dir: string): boolean => {
+      let entries
+      try {
+        entries = readdirSync(dir, { withFileTypes: true })
+      } catch {
+        return false
+      }
+      for (const entry of entries) {
+        if (entry.name.startsWith(".")) continue
+        const full = path.join(dir, entry.name)
+        if (entry.isSymbolicLink() || (!entry.isDirectory() && !entry.isFile())) return false
+        if (entry.isDirectory()) {
+          if (!walk(full)) return false
+        } else {
+          files.push(path.relative(root, full).split(path.sep).join("/"))
+        }
+      }
+      return true
+    }
+    if (!walk(root)) return failed
+    files.sort()
+    const rollup = createHash("sha512")
+    for (const rel of files) {
+      let bytes: Buffer
+      try {
+        bytes = readFileSync(path.join(root, rel))
+      } catch {
+        return failed
+      }
+      rollup.update(`${rel}:${createHash("sha512").update(bytes).digest("hex")}\n`)
+    }
+    if (rollup.digest("hex") !== expected) return failed
     return { ok: true }
   }
 
@@ -297,6 +372,11 @@ export namespace WebMcpProfile {
       } catch {
         throw new Error("WebMCP navigation requires a valid allowed URL")
       }
+      // blob: and other non-web schemes inherit or fake a web origin, so an
+      // origin match alone would admit non-page targets.
+      if (target.protocol !== "https:" && !(target.protocol === "http:" && loopback.has(target.hostname))) {
+        throw new Error("WebMCP navigation requires an https: URL or an http: loopback URL")
+      }
       if (target.username || target.password || !profile.allowedOrigins.includes(target.origin)) {
         throw new Error("WebMCP navigation origin is not allowed")
       }
@@ -318,15 +398,27 @@ export namespace WebMcpProfile {
     call: Record<string, unknown>,
     annotations?: ToolDescriptor["annotations"],
   ): Record<string, unknown> {
+    // A page id alone tells the approver nothing about where the page tool
+    // runs. Show the origin recorded when the page was listed; the
+    // execute-time binding re-verifies it before running.
+    const listedOrigin =
+      typeof call.toolName === "string" && typeof call.pageId === "number"
+        ? listedOriginFor(profile, call.pageId)
+        : undefined
     return {
       server,
       tool,
       allowedOrigins: [...profile.allowedOrigins],
       ...(typeof call.pageId === "number" ? { pageId: call.pageId } : {}),
       ...(typeof call.toolName === "string" ? { toolName: call.toolName } : {}),
+      ...(listedOrigin ? { pageOrigin: listedOrigin } : {}),
       ...(typeof call.url === "string" ? { origin: new URL(call.url).origin } : {}),
       ...(typeof call.input === "string" ? { inputBytes: Buffer.byteLength(call.input, "utf8") } : {}),
-      ...(annotations
+      // Page annotations describe a page tool, so they only belong on an
+      // execute call that names one. Attaching them to bridge operations
+      // would let a page tool named e.g. `close_page` forge the approval
+      // hints for the real bridge operation.
+      ...(annotations && typeof call.toolName === "string"
         ? {
             annotations: {
               readOnly: annotations.readOnly === true,
@@ -362,11 +454,91 @@ export namespace WebMcpProfile {
     }
   }
 
+  function pageOrigin(pageUrl: string | undefined): string | undefined {
+    if (!pageUrl) return undefined
+    try {
+      const url = new URL(pageUrl)
+      if (url.protocol !== "http:" && url.protocol !== "https:") return undefined
+      return url.origin
+    } catch {
+      return undefined
+    }
+  }
+
+  /**
+   * Parse the bridge's structured page list into pageId -> URL. The
+   * structured URL comes from the browser target (`page.url()`), not the
+   * page-controlled title, so origin checks must use this — never the text
+   * rendering. Returns undefined when the bridge returned no page list.
+   */
+  export function parseStructuredPages(result: unknown): Map<number, string> | undefined {
+    const record = isRecord(result) ? result : {}
+    const structured = isRecord(record.structuredContent) ? record.structuredContent : undefined
+    if (!structured || !Array.isArray(structured.pages)) return undefined
+    const pages = new Map<number, string>()
+    for (const entry of structured.pages) {
+      if (!isRecord(entry) || typeof entry.url !== "string") continue
+      const id: unknown = entry.id
+      if (typeof id !== "number" || !Number.isSafeInteger(id) || id < 0 || pages.has(id)) continue
+      pages.set(id, entry.url)
+    }
+    return pages
+  }
+
+  /** URL of the bridge-selected page, if the result carries a structured page list. */
+  export function structuredSelectedPageUrl(result: unknown): string | undefined {
+    const record = isRecord(result) ? result : {}
+    const structured = isRecord(record.structuredContent) ? record.structuredContent : undefined
+    if (!structured || !Array.isArray(structured.pages)) return undefined
+    for (const entry of structured.pages) {
+      if (isRecord(entry) && entry.selected === true && typeof entry.url === "string") return entry.url
+    }
+    return undefined
+  }
+
+  /**
+   * Verify a navigation landed on an allowed origin. The bridge reports the
+   * requested URL in its success message, so a redirect (or a page-side
+   * navigation) would otherwise pass as the approved destination. The pinned
+   * bridge always returns the authoritative structured page list on these
+   * calls; its absence fails closed.
+   */
+  export function validateLanding(
+    profile: Configuration,
+    toolName: string,
+    call: Record<string, unknown>,
+    result: unknown,
+  ): void {
+    if (toolName !== "new_page" && toolName !== "navigate_page") return
+    // The bridge always selects the page it just created.
+    const url =
+      toolName === "new_page"
+        ? structuredSelectedPageUrl(result)
+        : parseStructuredPages(result)?.get(call.pageId as number)
+    const origin = pageOrigin(url)
+    if (!origin) {
+      throw new Error("WebMCP navigation landing could not be verified; do not retry automatically")
+    }
+    // The approval was for the requested origin, not for any allowed origin:
+    // a redirect to another allowed origin still lands away from it.
+    let requested: string | undefined
+    if (typeof call.url === "string") {
+      try {
+        requested = new URL(call.url).origin
+      } catch {
+        requested = undefined
+      }
+    }
+    if (!requested || origin !== requested || !profile.allowedOrigins.includes(origin)) {
+      throw new Error("WebMCP navigation did not land on an allowed origin; do not retry automatically")
+    }
+  }
+
   export const MAX_TOOLS = 50
   export const MAX_DESCRIPTOR_BYTES = 64 * 1024
   export const MAX_REGISTRATION_CHANGES = 10
   const PAGE_LINE = /^(\d+):\s+(.*)$/
-  const PAGE_URL = /(https?:\/\/[^\s)\]]+)/
+  const PAGE_URL = /\((https?:\/\/[^)\s]+)\)/g
 
   export type ToolDescriptor = {
     name: string
@@ -380,6 +552,7 @@ export namespace WebMcpProfile {
     annotations: Map<string, ToolDescriptor["annotations"]>
     changes: number
     disabled: boolean
+    origin: string | undefined
   }
   export type ListingState = { pages: Map<number, PageState> }
   export type ListingResult = { ok: true } | { ok: false; error: string }
@@ -428,19 +601,64 @@ export namespace WebMcpProfile {
     for (const line of text.split("\n")) {
       const match = PAGE_LINE.exec(line)
       if (!match) continue
-      pages.set(Number(match[1]), PAGE_URL.exec(match[2])?.[1] ?? match[2].trim())
+      const pageId = Number(match[1])
+      // Bridge-assigned ids are small non-negative integers. Skip rows whose
+      // id is not one instead of silently rounding or colliding, and keep the
+      // first row when an id repeats.
+      if (!Number.isSafeInteger(pageId) || pageId < 0 || pages.has(pageId)) continue
+      // The bridge prints `ID: title (url) [flags]` and the title is page
+      // controlled: it may itself contain URLs or parentheses. The bridge
+      // appends the real address last, so read the last parenthesized URL —
+      // never the first URL on the line, which a title can forge.
+      let url: string | undefined
+      for (const candidate of match[2].matchAll(PAGE_URL)) url = candidate[1]
+      pages.set(pageId, url ?? match[2].trim())
     }
     return pages
   }
 
   function descriptorHash(descriptor: ToolDescriptor): string {
+    // Annotations ride along: the approval screen shows the listed
+    // readOnly/consequential hints, so a flip must break the binding even
+    // when the name, description and schema hash the same.
     return createHash("sha256")
-      .update(JSON.stringify([descriptor.name, descriptor.description ?? "", descriptor.inputSchema ?? null]))
+      .update(
+        JSON.stringify([
+          descriptor.name,
+          descriptor.description ?? "",
+          descriptor.inputSchema ?? null,
+          descriptor.annotations ?? null,
+        ]),
+      )
       .digest("hex")
   }
 
   function descriptorBytes(descriptors: ToolDescriptor[]): number {
     return Buffer.byteLength(JSON.stringify(descriptors), "utf8")
+  }
+
+  function duplicateToolName(descriptors: ToolDescriptor[]): string | undefined {
+    const seen = new Set<string>()
+    for (const descriptor of descriptors) {
+      if (seen.has(descriptor.name)) return descriptor.name
+      seen.add(descriptor.name)
+    }
+    return undefined
+  }
+
+  /**
+   * Shared listing caps for the model's listing and the execute-time
+   * re-listing. Both are listings; a page that exceeds the caps in either
+   * path is not in an approvable state.
+   */
+  function checkListingCaps(descriptors: ToolDescriptor[]): string | undefined {
+    if (descriptors.length > MAX_TOOLS) {
+      return `WebMCP page registers too many tools (${descriptors.length} > ${MAX_TOOLS})`
+    }
+    if (descriptorBytes(descriptors) > MAX_DESCRIPTOR_BYTES) {
+      return "WebMCP tool descriptors exceed the descriptor size limit"
+    }
+    return undefined
   }
 
   function sameTools(a: Map<string, string>, b: Map<string, string>): boolean {
@@ -454,12 +672,46 @@ export namespace WebMcpProfile {
    * count or descriptor bytes fail closed; repeated definition churn past the
    * limit disables the page (it protects against approval-fatigue attacks).
    */
-  export function recordListing(state: ListingState, pageId: number, descriptors: ToolDescriptor[]): ListingResult {
-    if (descriptors.length > MAX_TOOLS) {
-      return { ok: false, error: `WebMCP page registers too many tools (${descriptors.length} > ${MAX_TOOLS})` }
+  /**
+   * Clear a page's executable baseline while keeping its churn accounting. A
+   * failed listing must not leave stale tools or origins behind for a later
+   * execute to bind against — but it also must not reset the definition
+   * churn count or revive a disabled page.
+   */
+  function clearBaseline(state: ListingState, pageId: number): void {
+    const existing = state.pages.get(pageId)
+    if (!existing) return
+    state.pages.set(pageId, {
+      tools: new Map(),
+      annotations: new Map(),
+      changes: existing.changes,
+      disabled: existing.disabled,
+      origin: undefined,
+    })
+  }
+
+  export function invalidateListing(profile: Configuration, pageId: number): void {
+    clearBaseline(stateFor(profile), pageId)
+  }
+
+  export function recordListing(
+    state: ListingState,
+    pageId: number,
+    descriptors: ToolDescriptor[],
+    pageUrl?: string | undefined,
+  ): ListingResult {
+    const duplicate = duplicateToolName(descriptors)
+    const error = duplicate
+      ? `WebMCP page registers a duplicate tool name (${duplicate})`
+      : checkListingCaps(descriptors)
+    if (error) {
+      clearBaseline(state, pageId)
+      return { ok: false, error }
     }
-    if (descriptorBytes(descriptors) > MAX_DESCRIPTOR_BYTES) {
-      return { ok: false, error: "WebMCP tool descriptors exceed the descriptor size limit" }
+    const origin = pageOrigin(pageUrl)
+    if (!origin) {
+      clearBaseline(state, pageId)
+      return { ok: false, error: "WebMCP page could not be located when its tools were listed" }
     }
     const tools = new Map<string, string>()
     const annotations = new Map<string, ToolDescriptor["annotations"]>()
@@ -468,12 +720,14 @@ export namespace WebMcpProfile {
       annotations.set(descriptor.name, descriptor.annotations)
     }
     const existing = state.pages.get(pageId)
-    const changes = existing && !sameTools(existing.tools, tools) ? existing.changes + 1 : (existing?.changes ?? 0)
+    // A navigation counts as a page change just like a definition change.
+    const same = existing && sameTools(existing.tools, tools) && existing.origin === origin
+    const changes = existing && !same ? existing.changes + 1 : (existing?.changes ?? 0)
     if (changes > MAX_REGISTRATION_CHANGES) {
-      state.pages.set(pageId, { tools, annotations, changes, disabled: true })
+      state.pages.set(pageId, { tools, annotations, changes, disabled: true, origin })
       return { ok: false, error: "WebMCP tool definitions changed too many times on this page" }
     }
-    state.pages.set(pageId, { tools, annotations, changes, disabled: false })
+    state.pages.set(pageId, { tools, annotations, changes, disabled: false, origin })
     return { ok: true }
   }
 
@@ -488,10 +742,74 @@ export namespace WebMcpProfile {
     return page.annotations.get(toolName)
   }
 
+  /** Listing-time origin for a page, when the model already listed it. */
+  export function listedOriginFor(profile: Configuration, pageId: number): string | undefined {
+    const page = listingStates.get(profile)?.pages.get(pageId)
+    if (!page || page.disabled) return undefined
+    return page.origin
+  }
+
+  /**
+   * Immutable approval-time binding for one `execute_webmcp_tool` call. The
+   * listing baseline is connection-wide mutable state shared across sessions,
+   * so the origin and descriptor hash the approver saw are captured when the
+   * approval is requested and the dispatch-time preflight verifies the fresh
+   * listing against this snapshot instead of the live baseline. A baseline
+   * rewrite between approval and dispatch then fails closed instead of
+   * executing a definition the user never approved.
+   */
+  export type ApprovalSnapshot = { pageId: number; toolName: string; origin: string; hash: string }
+
+  /** Capture the current baseline for a tool, if the page has a usable listing. */
+  export function captureApproval(
+    profile: Configuration,
+    pageId: number,
+    toolName: string,
+  ): ApprovalSnapshot | undefined {
+    const page = listingStates.get(profile)?.pages.get(pageId)
+    if (!page || page.disabled || page.origin === undefined) return undefined
+    const hash = page.tools.get(toolName)
+    if (hash === undefined) return undefined
+    return { pageId, toolName, origin: page.origin, hash }
+  }
+
+  const approvals = new WeakMap<object, ApprovalSnapshot>()
+
+  /** Bind a snapshot to the validated call object that carries it to dispatch. */
+  export function bindApproval(call: object, snapshot: ApprovalSnapshot): void {
+    approvals.set(call, snapshot)
+  }
+
+  /** Snapshot bound to a dispatch-time call object, if the approval captured one. */
+  export function approvalFor(args: unknown): ApprovalSnapshot | undefined {
+    if (typeof args !== "object" || args === null) return undefined
+    return approvals.get(args)
+  }
+
+  const denied = new WeakSet<object>()
+
+  /**
+   * Mark a call object whose approval found no listing. Dispatch still asks
+   * first (an unlisted execute surfaces its warning-laden approval dialog),
+   * but the marked call can never fall back to a baseline another session
+   * writes while approval is pending: it fails instead of executing a
+   * definition the approver never saw.
+   */
+  export function denyApproval(call: object): void {
+    denied.add(call)
+  }
+
+  /** Whether the approval for a dispatch-time call object found no listing. */
+  export function approvalDenied(args: unknown): boolean {
+    return typeof args === "object" && args !== null && denied.has(args)
+  }
+
   /**
    * Verify a fresh listing still matches what the model saw. `pageUrl` is the
    * page's current URL from a fresh `list_pages`; a missing page or an origin
-   * that left the allowlist fails closed.
+   * that left the allowlist fails closed. When `expected` carries the
+   * approval-time snapshot, the fresh listing is compared against it instead
+   * of the live baseline, so a post-approval baseline rewrite fails closed.
    */
   export function verifyBinding(
     profile: Configuration,
@@ -499,16 +817,52 @@ export namespace WebMcpProfile {
     toolName: string,
     descriptors: ToolDescriptor[],
     pageUrl?: string,
+    expected?: ApprovalSnapshot,
   ): ListingResult {
     const page = listingStates.get(profile)?.pages.get(pageId)
-    if (!page) return { ok: false, error: "WebMCP execute requires list_webmcp_tools to be called first" }
-    if (page.disabled) return { ok: false, error: "WebMCP tool definitions are disabled for this page" }
-    if (pageUrl === undefined) return { ok: false, error: "WebMCP page could not be located before execution" }
-    let origin: string
-    try {
-      origin = new URL(pageUrl).origin
-    } catch {
-      return { ok: false, error: "WebMCP page URL could not be verified" }
+    if (page?.disabled) return { ok: false, error: "WebMCP tool definitions are disabled for this page" }
+    // A cleared baseline (failed listing) is equivalent to never having
+    // listed for live-bound execution: the churn accounting stays on the
+    // retained entry, but nothing may execute against it. A snapshot-bound
+    // call still verifies the fresh listing against its approval below.
+    const cleared = !page || page.origin === undefined
+    if (cleared && !expected) {
+      return { ok: false, error: "WebMCP execute requires list_webmcp_tools to be called first" }
+    }
+    // The re-listing is a listing too: an over-cap or ambiguous fresh
+    // listing is not an approvable page state even when the one approved
+    // tool still hashes the same.
+    const duplicate = duplicateToolName(descriptors)
+    if (duplicate) return { ok: false, error: `WebMCP re-listing registers a duplicate tool name (${duplicate})` }
+    const capped = checkListingCaps(descriptors)
+    if (capped) return { ok: false, error: capped }
+    const origin = pageOrigin(pageUrl)
+    if (!origin) return { ok: false, error: "WebMCP page could not be located before execution" }
+    if (expected) {
+      if (expected.pageId !== pageId || expected.toolName !== toolName) {
+        return { ok: false, error: "WebMCP approval does not match this call; refusing to execute" }
+      }
+      if (origin !== expected.origin) {
+        return { ok: false, error: "WebMCP page origin changed since approval; list its tools again before executing" }
+      }
+      if (!profile.allowedOrigins.includes(origin)) {
+        return { ok: false, error: "WebMCP page origin is no longer allowed" }
+      }
+      const fresh = descriptors.find((descriptor) => descriptor.name === toolName)
+      if (!fresh) return { ok: false, error: `WebMCP tool ${toolName} is no longer registered` }
+      if (descriptorHash(fresh) !== expected.hash) {
+        return { ok: false, error: `WebMCP tool ${toolName} definition changed since approval` }
+      }
+      return { ok: true }
+    }
+    if (cleared || !page) {
+      return { ok: false, error: "WebMCP execute requires list_webmcp_tools to be called first" }
+    }
+    // The execute-time origin must equal the listing-time origin: an
+    // allowlist match alone would let two same-allowlist origins swap under
+    // a mirrored tool definition.
+    if (origin !== page.origin) {
+      return { ok: false, error: "WebMCP page origin changed since its tools were listed" }
     }
     if (!profile.allowedOrigins.includes(origin)) {
       return { ok: false, error: "WebMCP page origin is no longer allowed" }
@@ -525,21 +879,37 @@ export namespace WebMcpProfile {
 
   export const MIN_CHROME_MAJOR = 150
 
+  const CHROME_VERSION = /^(?:Google Chrome(?: for Testing)?|Chromium)\s+(\d+)\./
+
   /** Parse the major version from `chrome --version` output. */
   export function chromeMajor(version: string): number | undefined {
-    const match = /(\d+)\./.exec(version.trim())
-    return match ? Number(match[1]) : undefined
+    // Any `digits-dot` prefix is not a Chrome version: another product's
+    // output (or an unparseable number) must not pass the version floor.
+    const match = CHROME_VERSION.exec(version.trim())
+    if (!match) return undefined
+    const major = Number(match[1])
+    return Number.isSafeInteger(major) ? major : undefined
   }
+
+  const execFileAsync = promisify(execFile)
 
   /**
    * Fail-closed preflight for an explicit Chrome executable. The pinned bridge
    * needs Chrome 150+ for the WebMCP surface; a stale or non-Chrome binary must
-   * be rejected before a browser is launched.
+   * be rejected before a browser is launched. Best-effort by nature: the binary
+   * could still be swapped between this check and the bridge launch, so this
+   * only rejects stale or non-Chrome binaries, it does not authenticate them.
    */
-  export function verifyChromeVersion(executablePath: string): { ok: true } | { ok: false; error: string } {
+  export async function verifyChromeVersion(
+    executablePath: string,
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
     let output: string
     try {
-      output = execFileSync(executablePath, ["--version"], { encoding: "utf8", timeout: 10_000 })
+      // Async so a hung executable cannot stall the event loop for the timeout.
+      ;({ stdout: output } = await execFileAsync(executablePath, ["--version"], {
+        encoding: "utf8",
+        timeout: 10_000,
+      }))
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       return { ok: false, error: `Could not run the configured Chrome executable: ${message}` }

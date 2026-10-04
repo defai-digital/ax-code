@@ -42,15 +42,20 @@ describe("session.prompt-tools", () => {
   })
 
   test("collects MCP tool text with binary placeholders instead of raw model-facing blobs", () => {
+    const pngMagic = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
     const result = collectMcpToolContent([
       { type: "text", text: "visible text" },
-      { type: "image", mimeType: "image/png", data: "abc123" },
+      {
+        type: "image",
+        mimeType: "image/png",
+        data: Buffer.concat([pngMagic, Buffer.from("fake-png-bytes")]).toString("base64"),
+      },
       {
         type: "resource",
         resource: {
           uri: "secret://large",
           mimeType: "application/octet-stream",
-          blob: "rawblob",
+          blob: Buffer.from("fake-resource-bytes").toString("base64"),
         },
       },
     ])
@@ -68,7 +73,8 @@ describe("session.prompt-tools", () => {
   })
 
   test("image content block produces a valid data URL FilePart for TUI screenshot rendering", () => {
-    const b64 = Buffer.from("fake-png-bytes").toString("base64")
+    const pngMagic = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    const b64 = Buffer.concat([pngMagic, Buffer.from("fake-png-bytes")]).toString("base64")
     const result = collectMcpToolContent([{ type: "image", mimeType: "image/png", data: b64 }])
 
     expect(result.textParts).toEqual(["[Image content: image/png]"])
@@ -101,7 +107,8 @@ describe("session.prompt-tools", () => {
 
   test("browser_screenshot image block (no explicit mimeType) defaults to image/png", () => {
     // @playwright/mcp browser_screenshot returns type:"image" without mimeType
-    const b64 = Buffer.from("screenshot-bytes").toString("base64")
+    const pngMagic = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    const b64 = Buffer.concat([pngMagic, Buffer.from("screenshot-bytes")]).toString("base64")
     const result = collectMcpToolContent([{ type: "image", data: b64 } as any])
 
     expect(result.attachments).toHaveLength(1)

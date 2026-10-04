@@ -102,7 +102,17 @@ export async function runHeadlessSession<
           maxSessionMessages: input.maxSessionMessages,
         })
         executeHeadlessProjectionEffects(result.effects, {
+          // Default auto-reply delivery through the session runtime: without
+          // these, an autonomous ask emits an effect no one handles while the
+          // projection already skipped the pending state, stalling the backend
+          // on an invisible ask. Explicit handlers still win; per-key ?? keeps
+          // an explicit undefined from wiping the default back to a stall.
+          // The spread stays first so probe/bootstrap handlers pass through.
           ...input.effects,
+          replyPermission:
+            input.effects?.replyPermission ?? ((payload) => runtime.send({ type: "permission.reply", body: payload })),
+          replyQuestion:
+            input.effects?.replyQuestion ?? ((payload) => runtime.send({ type: "question.reply", body: payload })),
           onWarn: input.effects?.onWarn ?? (() => {}),
         })
         await input.onEvent?.({ rawEvent, event, state, result })

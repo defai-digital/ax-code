@@ -72,7 +72,7 @@ export function runModeLabel(mode: RunMode, t: Translate = english): string {
     case "auto":
       return t("ui.auto")
     case "super-long":
-      // During deprecation, show as "Auto (Long-Run)" to clarify semantics
+      // During deprecation, show as "Auto(LR)" to clarify semantics
       return t("mode.longRun")
   }
 }

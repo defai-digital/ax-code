@@ -81,7 +81,10 @@ test("launch validation fails before spawning a modified bridge", async () => {
 
 test("dynamic clients retain admission policy across discovery, notifications and reconnects", async () => {
   bridge.names = [...WebMcpProfile.TOOLS, "evaluate_script", "click"]
-  bridge.call.mockResolvedValue({ content: [{ type: "text", text: "ok" }] })
+  bridge.call.mockResolvedValue({
+    content: [{ type: "text", text: "ok" }],
+    structuredContent: { pages: [{ id: 1, url: "https://example.test/", title: "App", selected: true }] },
+  })
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
     directory: tmp.path,
@@ -130,6 +133,184 @@ test("dynamic clients retain admission policy across discovery, notifications an
   })
 })
 
+test("a failed dispatch-time listing invalidates the stored baseline", async () => {
+  bridge.names = ["list_webmcp_tools", "execute_webmcp_tool"]
+  const descriptor = { name: "fixture", description: "d", inputSchema: { type: "object" } }
+  const pages = {
+    content: [{ type: "text", text: "## Pages\n1: App (https://example.test/)" }],
+    structuredContent: { pages: [{ id: 1, url: "https://example.test/", title: "App", selected: true }] },
+  }
+  let listWorks = true
+  bridge.call.mockImplementation(async (request: { name: string }) => {
+    if (request.name === "list_webmcp_tools") {
+      if (!listWorks) throw new Error("bridge exploded")
+      return { content: [], structuredContent: { webmcpTools: [descriptor] } }
+    }
+    if (request.name === "list_pages") return pages
+    throw new Error("must not dispatch")
+  })
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await MCP.add("bridge", profile())
+      const tools = await MCP.tools()
+      await tools.bridge_list_webmcp_tools.execute!({ pageId: 1 }, { toolCallId: "call_list", messages: [] })
+      listWorks = false
+      await expect(
+        tools.bridge_list_webmcp_tools.execute!({ pageId: 1 }, { toolCallId: "call_relist", messages: [] }),
+      ).rejects.toThrow("bridge exploded")
+      // The fresh re-listing recovers, but the cleared baseline refuses the execute.
+      listWorks = true
+      await expect(
+        tools.bridge_execute_webmcp_tool.execute!(
+          { pageId: 1, toolName: "fixture", input: "{}" },
+          { toolCallId: "call_exec", messages: [] },
+        ),
+      ).rejects.toThrow("called first")
+      expect(
+        bridge.call.mock.calls.filter(([request]) => (request as { name: string }).name === "execute_webmcp_tool"),
+      ).toHaveLength(0)
+    },
+  })
+})
+
+test("an approval requested without a listing cannot dispatch against a later baseline", async () => {
+  bridge.names = ["list_webmcp_tools", "execute_webmcp_tool"]
+  const descriptor = { name: "fixture", description: "d", inputSchema: { type: "object" } }
+  bridge.call.mockImplementation(async (request: { name: string }) => {
+    if (request.name === "list_webmcp_tools") {
+      return { content: [], structuredContent: { webmcpTools: [descriptor] } }
+    }
+    if (request.name === "list_pages") {
+      return {
+        content: [{ type: "text", text: "## Pages\n1: App (https://example.test/)" }],
+        structuredContent: { pages: [{ id: 1, url: "https://example.test/", title: "App", selected: true }] },
+      }
+    }
+    throw new Error("must not dispatch")
+  })
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await MCP.add("bridge", profile())
+      const tools = await MCP.tools()
+      // Another session lists after this call's approval found nothing.
+      const denied = { pageId: 1, toolName: "fixture", input: "{}" }
+      WebMcpProfile.denyApproval(denied)
+      await tools.bridge_list_webmcp_tools.execute!({ pageId: 1 }, { toolCallId: "call_list", messages: [] })
+      await expect(
+        tools.bridge_execute_webmcp_tool.execute!(denied, { toolCallId: "call_exec", messages: [] }),
+      ).rejects.toThrow("called first")
+      expect(
+        bridge.call.mock.calls.filter(([request]) => (request as { name: string }).name === "execute_webmcp_tool"),
+      ).toHaveLength(0)
+      // An unmarked dispatch against the same baseline still binds live.
+      await expect(
+        tools.bridge_execute_webmcp_tool.execute!(
+          { pageId: 1, toolName: "fixture", input: "{}" },
+          { toolCallId: "call_exec2", messages: [] },
+        ),
+      ).rejects.toThrow("must not dispatch")
+    },
+  })
+})
+
+test("preflight rejects error results even with plausible snapshot data", async () => {
+  bridge.names = ["list_webmcp_tools", "execute_webmcp_tool"]
+  const descriptor = { name: "fixture", description: "d", inputSchema: { type: "object" } }
+  const goodPages = {
+    content: [{ type: "text", text: "## Pages\n1: App (https://example.test/)" }],
+    structuredContent: { pages: [{ id: 1, url: "https://example.test/", title: "App", selected: true }] },
+  }
+  let pagesResult: unknown = goodPages
+  let listingResult: unknown = { content: [], structuredContent: { webmcpTools: [descriptor] } }
+  bridge.call.mockImplementation(async (request: { name: string }) => {
+    if (request.name === "list_webmcp_tools") return listingResult
+    if (request.name === "list_pages") return pagesResult
+    throw new Error("must not dispatch")
+  })
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await MCP.add("bridge", profile())
+      const tools = await MCP.tools()
+      await tools.bridge_list_webmcp_tools.execute!({ pageId: 1 }, { toolCallId: "call_list", messages: [] })
+      const execute = () =>
+        tools.bridge_execute_webmcp_tool.execute!(
+          { pageId: 1, toolName: "fixture", input: "{}" },
+          { toolCallId: "call_exec", messages: [] },
+        )
+      pagesResult = { ...goodPages, isError: true }
+      await expect(execute()).rejects.toThrow("bridge operation failed")
+      pagesResult = goodPages
+      listingResult = {
+        content: [],
+        structuredContent: { webmcpTools: [descriptor], errorMessage: "stale snapshot" },
+      }
+      await expect(execute()).rejects.toThrow("bridge operation failed")
+      expect(
+        bridge.call.mock.calls.filter(([request]) => (request as { name: string }).name === "execute_webmcp_tool"),
+      ).toHaveLength(0)
+    },
+  })
+})
+
+test("dispatch propagates cancellation and caps the total webmcp budget", async () => {
+  bridge.names = ["list_webmcp_tools", "execute_webmcp_tool"]
+  const descriptor = { name: "fixture", description: "d", inputSchema: { type: "object" } }
+  bridge.call.mockImplementation(async (request: { name: string }) => {
+    if (request.name === "list_webmcp_tools") {
+      return { content: [], structuredContent: { webmcpTools: [descriptor] } }
+    }
+    if (request.name === "list_pages") {
+      return {
+        content: [{ type: "text", text: "## Pages\n1: App (https://example.test/)" }],
+        structuredContent: { pages: [{ id: 1, url: "https://example.test/", title: "App", selected: true }] },
+      }
+    }
+    return {
+      content: [{ type: "text", text: "ok" }],
+      structuredContent: { message: JSON.stringify({ status: "Completed" }) },
+    }
+  })
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await MCP.add("bridge", profile())
+      const tools = await MCP.tools()
+      await tools.bridge_list_webmcp_tools.execute!({ pageId: 1 }, { toolCallId: "call_list", messages: [] })
+      const controller = new AbortController()
+      await tools.bridge_execute_webmcp_tool.execute!(
+        { pageId: 1, toolName: "fixture", input: "{}" },
+        { toolCallId: "call_exec", messages: [], abortSignal: controller.signal },
+      )
+      const calls = bridge.call.mock.calls.slice(3)
+      expect(calls.map(([request]) => (request as { name: string }).name)).toEqual([
+        "list_pages",
+        "list_webmcp_tools",
+        "list_pages",
+        "execute_webmcp_tool",
+      ])
+      const main = calls[3][2] as { timeout?: unknown; maxTotalTimeout?: unknown }
+      expect(main.timeout).toEqual(expect.any(Number))
+      // One shared deadline: every later call sees no more budget than the one before.
+      let previous = Number.POSITIVE_INFINITY
+      for (const [, , options] of calls) {
+        const typed = options as { signal?: unknown; timeout?: unknown }
+        expect(typed.signal).toBe(controller.signal)
+        expect(typed.timeout).toEqual(expect.any(Number))
+        expect(typed.timeout as number).toBeLessThanOrEqual(previous)
+        previous = typed.timeout as number
+      }
+      expect(main.maxTotalTimeout).toBe(main.timeout)
+    },
+  })
+})
+
 test("bridge failures propagate without retries", async () => {
   bridge.names = ["list_webmcp_tools", "execute_webmcp_tool"]
   const descriptor = { name: "fixture", description: "d", inputSchema: { type: "object" } }
@@ -138,7 +319,10 @@ test("bridge failures propagate without retries", async () => {
       return { content: [], structuredContent: { webmcpTools: [descriptor] } }
     }
     if (request.name === "list_pages") {
-      return { content: [{ type: "text", text: "## Pages\n1: App (https://example.test/)" }] }
+      return {
+        content: [{ type: "text", text: "## Pages\n1: App (https://example.test/)" }],
+        structuredContent: { pages: [{ id: 1, url: "https://example.test/", title: "App", selected: true }] },
+      }
     }
     throw new Error("completion uncertain")
   })
