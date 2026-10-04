@@ -2775,7 +2775,7 @@ export type McpStatus =
 /** AX Code API schema `McpStatusBlocked` (auto-generated from the OpenAPI contract). */
 export type McpStatusBlocked = {
   status: "blocked"
-  reason: "managed_policy" | "managed_origins" | "persistent_profile"
+  reason: "managed_policy" | "managed_origins" | "persistent_profile" | "vendored"
   error: string
 }
 
@@ -4616,6 +4616,10 @@ export type WebMcpProfileConfig = {
    */
   persistentProfile?: boolean
   /**
+   * Launch a vendored, integrity-pinned bridge install instead of npx. Requires the managed allowVendored requirement.
+   */
+  vendored?: boolean
+  /**
    * Optional explicit Chrome 150+ executable; never attaches to an existing browser session
    */
   executablePath?: string
@@ -4637,6 +4641,10 @@ export type WebMcpRequirementConfig = {
    * Managed opt-in for a persistent AX-owned browser profile. Default off; never the user's main profile.
    */
   allowPersistentProfile?: boolean
+  /**
+   * Managed opt-in for a vendored, integrity-pinned bridge install instead of npx. Default off.
+   */
+  allowVendored?: boolean
 }
 
 /** AX Code API schema `WikiMaintenanceStatus` (auto-generated from the OpenAPI contract). */

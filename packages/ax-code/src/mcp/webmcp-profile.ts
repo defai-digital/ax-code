@@ -63,6 +63,10 @@ export namespace WebMcpProfile {
         .describe(
           "Managed opt-in for a persistent AX-owned browser profile. Default off; never the user's main profile.",
         ),
+      allowVendored: z
+        .boolean()
+        .optional()
+        .describe("Managed opt-in for a vendored, integrity-pinned bridge install instead of npx. Default off."),
     })
     .strict()
     .meta({ ref: "WebMcpRequirementConfig" })
@@ -79,6 +83,12 @@ export namespace WebMcpProfile {
         .optional()
         .describe(
           "Use a persistent AX-owned browser profile so authenticated WebMCP tools work. Requires the managed allowPersistentProfile requirement and forces a visible window.",
+        ),
+      vendored: z
+        .boolean()
+        .optional()
+        .describe(
+          "Launch a vendored, integrity-pinned bridge install instead of npx. Requires the managed allowVendored requirement.",
         ),
       executablePath: z
         .string()
@@ -105,11 +115,48 @@ export namespace WebMcpProfile {
     return path.join(os.homedir(), ".ax-code", "webmcp-profiles", key)
   }
 
+  export const VENDORED_PACKAGE = PACKAGE
+  // Pinned integrity of chrome-devtools-mcp@1.8.0, the exact reviewed package.
+  export const VENDORED_INTEGRITY =
+    "sha512-Wrm9z0/5WbVs778apjWgYRkpe9bvYQWjK2zVRwqoPAtz1IHQ5+GvotM07UGXJcfrA0rj6Gt1Pnn5+w/Tf1nU4w=="
+
+  export function vendoredDir(): string {
+    return path.join(os.homedir(), ".ax-code", "vendor", `chrome-devtools-mcp-${PACKAGE.split("@")[1]}`)
+  }
+
+  export function vendoredBin(): string {
+    return path.join(
+      vendoredDir(),
+      "node_modules",
+      "chrome-devtools-mcp",
+      "build",
+      "src",
+      "bin",
+      "chrome-devtools-mcp.js",
+    )
+  }
+
+  /** Verify the installed package's lockfile integrity against the reviewed pin. */
+  export function verifyLockfileIntegrity(lockfile: string): { ok: true } | { ok: false; error: string } {
+    const parsed = parseJsonPayload(lockfile)
+    if (!isRecord(parsed)) {
+      return { ok: false, error: "WebMCP vendored lockfile is not valid JSON" }
+    }
+    const packages = isRecord(parsed) && isRecord(parsed.packages) ? parsed.packages : {}
+    const entry = isRecord(packages["node_modules/chrome-devtools-mcp"])
+      ? (packages["node_modules/chrome-devtools-mcp"] as Record<string, unknown>)
+      : undefined
+    if (entry?.integrity !== VENDORED_INTEGRITY) {
+      return { ok: false, error: "WebMCP vendored install integrity does not match the reviewed pin" }
+    }
+    return { ok: true }
+  }
+
   function command(profile: Configuration): string[] {
     return [
-      "npx",
-      "-y",
-      PACKAGE,
+      // A vendored profile launches the integrity-pinned local install; the
+      // default npx form resolves the same pinned version from the registry.
+      ...(profile.vendored ? ["node", vendoredBin()] : ["npx", "-y", PACKAGE]),
       // A persistent profile holds real cookies, so it is always a dedicated
       // AX-owned directory with a visible window — never the user's main
       // profile and never headless.
@@ -161,14 +208,18 @@ export namespace WebMcpProfile {
 
   export type PolicyDecision =
     | { ok: true; profile: Configuration }
-    | { ok: false; reason: "managed_policy" | "managed_origins" | "persistent_profile" }
+    | { ok: false; reason: "managed_policy" | "managed_origins" | "persistent_profile" | "vendored" }
 
-  export function blockedMessage(reason: "managed_policy" | "managed_origins" | "persistent_profile"): string {
+  export function blockedMessage(
+    reason: "managed_policy" | "managed_origins" | "persistent_profile" | "vendored",
+  ): string {
     return reason === "managed_policy"
       ? "WebMCP bridge is disabled by managed policy"
       : reason === "persistent_profile"
         ? "WebMCP persistent profile is not allowed by managed policy"
-        : "WebMCP managed policy excludes every origin configured for this bridge"
+        : reason === "vendored"
+          ? "WebMCP vendored install is not allowed by managed policy"
+          : "WebMCP managed policy excludes every origin configured for this bridge"
   }
 
   /**
@@ -182,6 +233,9 @@ export namespace WebMcpProfile {
     if (requirement && requirement.allow === false) return { ok: false, reason: "managed_policy" }
     if (profile.persistentProfile === true && requirement?.allowPersistentProfile !== true) {
       return { ok: false, reason: "persistent_profile" }
+    }
+    if (profile.vendored === true && requirement?.allowVendored !== true) {
+      return { ok: false, reason: "vendored" }
     }
     if (!requirement) return { ok: true, profile }
     const allowed = requirement.allowedOrigins

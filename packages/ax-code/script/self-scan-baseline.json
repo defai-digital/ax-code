@@ -1952,7 +1952,7 @@
       ]
     },
     "security_scan": {
-      "count": 492,
+      "count": 494,
       "findings": [
         {
           "fingerprint": "437e1d0157fc1965a429fe7f0e9474576f6c0db625ea27bb6ce1b57af9e2cd9f",
@@ -4131,6 +4131,14 @@
           "summary": "path_traversal"
         },
         {
+          "fingerprint": "e8be0812465c83e5a3809fd76e307004d8af2aa512735b22313eda502454e2c1",
+          "file": "src/mcp/impl.ts",
+          "line": 710,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
           "fingerprint": "00cda8e2ce8245025eb32a1b92c2db81757393be19e7ea3434c708eab65ab1f4",
           "file": "src/mcp/trust.ts",
           "line": 14,
@@ -4141,7 +4149,15 @@
         {
           "fingerprint": "4d24394b9043929cfad5e4830620f97fd3fdee7c920db1fbe9b85b81eb73ba1d",
           "file": "src/mcp/webmcp-profile.ts",
-          "line": 105,
+          "line": 115,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "185b25696478992166f092dc5f40ecc9f5abddeff2f61722ea5ae8bd4b6a9852",
+          "file": "src/mcp/webmcp-profile.ts",
+          "line": 124,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5893,7 +5909,7 @@
       ]
     },
     "hardcode_scan": {
-      "count": 75,
+      "count": 76,
       "findings": [
         {
           "fingerprint": "a6bd914a7535ff247af90bb657c68be41d273fa7f12420175006d8274a4b83d3",
@@ -5904,9 +5920,17 @@
           "summary": "inline_secret_shape"
         },
         {
+          "fingerprint": "a817a069ddc1a8e76d59326e69e567e10fed31b0de70a0f65a65a12d6356fa93",
+          "file": "src/mcp/webmcp-profile.ts",
+          "line": 121,
+          "severity": "high",
+          "kind": "inline_secret_shape",
+          "summary": "inline_secret_shape"
+        },
+        {
           "fingerprint": "d8414493baab11c7df4bbaa1ed836a1d6549a0906c539b80a3324632c4a9c89d",
           "file": "src/mcp/webmcp-profile.ts",
-          "line": 126,
+          "line": 175,
           "severity": "high",
           "kind": "inline_secret_shape",
           "summary": "inline_secret_shape"

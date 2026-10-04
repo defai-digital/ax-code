@@ -24,7 +24,12 @@ export const McpWebMcpCommand = cmd({
         default: false,
         describe: "Use a persistent AX-owned browser profile (requires the managed allowPersistentProfile requirement)",
       })
-      .option("executable-path", { type: "string", describe: "Absolute path to an explicit Chrome 150+ executable" }),
+      .option("executable-path", { type: "string", describe: "Absolute path to an explicit Chrome 150+ executable" })
+      .option("vendored", {
+        type: "boolean",
+        default: false,
+        describe: "Launch a vendored, integrity-pinned bridge install (requires the managed allowVendored requirement)",
+      }),
   async handler(args) {
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(args.name)) {
       throw new Error("MCP server name must contain 1-64 ASCII letters, digits, underscores or hyphens")
@@ -35,6 +40,7 @@ export const McpWebMcpCommand = cmd({
         headless: args.headless,
         executablePath: args.executablePath,
         persistentProfile: args.persistentProfile,
+        vendored: args.vendored,
       },
       args.enable,
     )

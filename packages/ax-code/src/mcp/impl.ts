@@ -1,4 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
+import { execFileSync } from "node:child_process"
+import { existsSync, readFileSync } from "node:fs"
+import path from "node:path"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
@@ -272,7 +275,7 @@ export namespace MCP {
       z
         .object({
           status: z.literal("blocked"),
-          reason: z.enum(["managed_policy", "managed_origins", "persistent_profile"]),
+          reason: z.enum(["managed_policy", "managed_origins", "persistent_profile", "vendored"]),
           error: z.string(),
         })
         .meta({
@@ -683,6 +686,37 @@ export namespace MCP {
     })
   }
 
+  /**
+   * Install the pinned bridge into an AX-owned cache and verify the tarball
+   * integrity recorded in the generated lockfile. Reached only for an
+   * explicitly vendored profile; any failure is terminal (no npx fallback).
+   */
+  function ensureVendoredBridge(): { ok: true } | { ok: false; error: string } {
+    const bin = WebMcpProfile.vendoredBin()
+    if (existsSync(bin)) return { ok: true }
+    const dir = WebMcpProfile.vendoredDir()
+    try {
+      execFileSync(
+        "npm",
+        ["install", "--prefix", dir, "--ignore-scripts", "--no-audit", "--no-fund", WebMcpProfile.VENDORED_PACKAGE],
+        { encoding: "utf8", timeout: 300_000, stdio: "pipe" },
+      )
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return { ok: false, error: `WebMCP vendored install failed: ${message}` }
+    }
+    let lock: string
+    try {
+      lock = readFileSync(path.join(dir, "package-lock.json"), "utf8")
+    } catch {
+      return { ok: false, error: "WebMCP vendored install produced no lockfile" }
+    }
+    const integrity = WebMcpProfile.verifyLockfileIntegrity(lock)
+    if (!integrity.ok) return integrity
+    if (!existsSync(bin)) return { ok: false, error: "WebMCP vendored install produced no executable" }
+    return { ok: true }
+  }
+
   async function create(key: string, mcp: Config.Mcp, owner: McpState) {
     if (WebMcpProfile.disabled(mcp)) {
       log.info("mcp server disabled", { key })
@@ -719,6 +753,13 @@ export namespace MCP {
       if (!chrome.ok) {
         log.error("webmcp chrome preflight failed", { key, error: chrome.error })
         return { mcpClient: undefined, status: { status: "failed" as const, error: chrome.error } }
+      }
+    }
+    if (webmcp?.vendored) {
+      const vendored = ensureVendoredBridge()
+      if (!vendored.ok) {
+        log.error("webmcp vendored bridge unavailable", { key, error: vendored.error })
+        return { mcpClient: undefined, status: { status: "failed" as const, error: vendored.error } }
       }
     }
     log.info("found", { key, type: mcp.type })

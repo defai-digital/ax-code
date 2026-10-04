@@ -44503,7 +44503,8 @@
             "enum": [
               "managed_policy",
               "managed_origins",
-              "persistent_profile"
+              "persistent_profile",
+              "vendored"
             ]
           },
           "error": {
@@ -51236,6 +51237,10 @@
             "description": "Use a persistent AX-owned browser profile so authenticated WebMCP tools work. Requires the managed allowPersistentProfile requirement and forces a visible window.",
             "type": "boolean"
           },
+          "vendored": {
+            "description": "Launch a vendored, integrity-pinned bridge install instead of npx. Requires the managed allowVendored requirement.",
+            "type": "boolean"
+          },
           "executablePath": {
             "description": "Optional explicit Chrome 150+ executable; never attaches to an existing browser session",
             "type": "string",
@@ -51267,6 +51272,10 @@
           },
           "allowPersistentProfile": {
             "description": "Managed opt-in for a persistent AX-owned browser profile. Default off; never the user's main profile.",
+            "type": "boolean"
+          },
+          "allowVendored": {
+            "description": "Managed opt-in for a vendored, integrity-pinned bridge install instead of npx. Default off.",
             "type": "boolean"
           }
         },

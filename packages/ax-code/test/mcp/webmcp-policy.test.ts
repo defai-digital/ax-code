@@ -147,4 +147,41 @@ describe("WebMCP managed requirement", () => {
     expect(config.command).not.toContain("--headless")
     expect(WebMcpProfile.validateLaunch(config)).toEqual(config.webmcp)
   })
+
+  test("schema admits the vendored opt-ins", () => {
+    expect(Config.Info.safeParse({ webmcp: { allowVendored: true } }).success).toBe(true)
+    expect(Config.Info.safeParse({ webmcp: { allowVendored: "yes" } }).success).toBe(false)
+    const config = WebMcpProfile.config({ allowedOrigins: ["https://example.test"], vendored: true }, true)
+    expect(config.webmcp?.vendored).toBe(true)
+  })
+
+  test("a vendored install requires the managed opt-in", () => {
+    const vendored = WebMcpProfile.config({ allowedOrigins: ["https://example.test"], vendored: true }, true)
+    expect(WebMcpProfile.evaluate(undefined, vendored.webmcp)).toEqual({ ok: false, reason: "vendored" })
+    expect(WebMcpProfile.evaluate({}, vendored.webmcp)).toEqual({ ok: false, reason: "vendored" })
+    expect(WebMcpProfile.evaluate({ allowVendored: true }, vendored.webmcp)).toMatchObject({ ok: true })
+    expect(WebMcpProfile.evaluate({ allow: false, allowVendored: true }, vendored.webmcp)).toEqual({
+      ok: false,
+      reason: "managed_policy",
+    })
+  })
+
+  test("a vendored profile launches the pinned local install instead of npx", () => {
+    const config = WebMcpProfile.config({ allowedOrigins: ["https://example.test"], vendored: true }, true)
+    expect(config.command.slice(0, 2)).toEqual(["node", WebMcpProfile.vendoredBin()])
+    expect(config.command).not.toContain("npx")
+    expect(config.command).not.toContain(WebMcpProfile.PACKAGE)
+    expect(WebMcpProfile.validateLaunch(config)).toEqual(config.webmcp)
+    const plain = WebMcpProfile.config({ allowedOrigins: ["https://example.test"] }, true)
+    expect(plain.command.slice(0, 3)).toEqual(["npx", "-y", WebMcpProfile.PACKAGE])
+  })
+
+  test("verifyLockfileIntegrity enforces the reviewed pin", () => {
+    const lock = (integrity: unknown) =>
+      JSON.stringify({ packages: { "node_modules/chrome-devtools-mcp": { integrity } } })
+    expect(WebMcpProfile.verifyLockfileIntegrity(lock(WebMcpProfile.VENDORED_INTEGRITY))).toEqual({ ok: true })
+    expect(WebMcpProfile.verifyLockfileIntegrity(lock("sha512-forged"))).toMatchObject({ ok: false })
+    expect(WebMcpProfile.verifyLockfileIntegrity(JSON.stringify({ packages: {} }))).toMatchObject({ ok: false })
+    expect(WebMcpProfile.verifyLockfileIntegrity("not json")).toMatchObject({ ok: false })
+  })
 })
