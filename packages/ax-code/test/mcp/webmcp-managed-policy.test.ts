@@ -61,20 +61,23 @@ test("managed deny blocks a trusted startup entry before spawning", async () => 
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      expect((await MCP.status()).bridge).toMatchObject({ status: "failed" })
+      expect((await MCP.status()).bridge).toMatchObject({ status: "blocked", reason: "managed_policy" })
       expect(bridge.launch).not.toHaveBeenCalled()
       expect((await MCP.clients()).bridge).toBeUndefined()
     },
   })
 })
 
-test("managed deny rejects a dynamic connection", async () => {
+test("managed deny reports a blocked status for a dynamic connection", async () => {
   await writeManaged({ webmcp: { allow: false } })
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      await expect(MCP.add("bridge", profile())).rejects.toThrow("disabled by managed policy")
+      expect((await MCP.add("bridge", profile())).status.bridge).toMatchObject({
+        status: "blocked",
+        reason: "managed_policy",
+      })
       expect(bridge.launch).not.toHaveBeenCalled()
     },
   })

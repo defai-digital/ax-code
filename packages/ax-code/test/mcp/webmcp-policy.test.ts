@@ -26,6 +26,18 @@ describe("WebMCP managed requirement", () => {
     expect(() => WebMcpProfile.applyRequirement({ allow: false }, profile())).toThrow("disabled by managed policy")
   })
 
+  test("evaluate reports denial reasons without throwing", () => {
+    const current = profile()
+    expect(WebMcpProfile.evaluate(undefined, current)).toEqual({ ok: true, profile: current })
+    expect(WebMcpProfile.evaluate({ allow: false }, current)).toEqual({ ok: false, reason: "managed_policy" })
+    expect(WebMcpProfile.evaluate({ allowedOrigins: ["https://unlisted.test"] }, current)).toEqual({
+      ok: false,
+      reason: "managed_origins",
+    })
+    const decision = WebMcpProfile.evaluate({ allow: true, allowedOrigins: ["https://other.test"] }, current)
+    expect(decision.ok && decision.profile.allowedOrigins).toEqual(["https://other.test"])
+  })
+
   test("a managed origin list narrows to the intersection", () => {
     const narrowed = WebMcpProfile.applyRequirement(
       { allow: true, allowedOrigins: ["https://example.test", "https://unlisted.test"] },

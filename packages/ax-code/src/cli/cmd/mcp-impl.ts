@@ -114,6 +114,10 @@ export function resolveMcpStatus(status: MCP.Status | undefined): {
       return { status: "needs client registration", enabled: true, error: status.error }
     case "failed":
       return { status: "failed", enabled: true, error: status.error }
+    case "blocked":
+      // A managed-policy denial is terminal: `enabled: false` keeps the text
+      // and JSON views from implying the server can simply be switched on.
+      return { status: "blocked", enabled: false, error: status.error }
   }
 }
 

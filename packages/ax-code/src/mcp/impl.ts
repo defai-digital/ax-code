@@ -269,6 +269,15 @@ export namespace MCP {
         .meta({
           ref: "MCPStatusNeedsTrust",
         }),
+      z
+        .object({
+          status: z.literal("blocked"),
+          reason: z.enum(["managed_policy", "managed_origins"]),
+          error: z.string(),
+        })
+        .meta({
+          ref: "MCPStatusBlocked",
+        }),
     ])
     .meta({
       ref: "MCPStatus",
@@ -686,9 +695,25 @@ export namespace MCP {
     const validated = WebMcpProfile.validateLaunch(mcp)
     // The managed WebMCP requirement can deny the bridge or narrow its origins;
     // it never enables the bridge and never removes the per-call interactive
-    // approval. It is read from the managed-only merged config (see
-    // config-impl mergeFromSource).
-    const webmcp = validated ? WebMcpProfile.applyRequirement((await Config.get()).webmcp, validated) : undefined
+    // approval. A denial surfaces as a distinct `blocked` status so the UI can
+    // show a locked state instead of an actionable failure. Read from the
+    // managed-only merged config (see config-impl mergeFromSource).
+    let webmcp: WebMcpProfile.Configuration | undefined
+    if (validated) {
+      const decision = WebMcpProfile.evaluate((await Config.get()).webmcp, validated)
+      if (!decision.ok) {
+        log.warn("webmcp bridge blocked by managed policy", { key, reason: decision.reason })
+        return {
+          mcpClient: undefined,
+          status: {
+            status: "blocked" as const,
+            reason: decision.reason,
+            error: WebMcpProfile.blockedMessage(decision.reason),
+          },
+        }
+      }
+      webmcp = decision.profile
+    }
     log.info("found", { key, type: mcp.type })
     let mcpClient: MCPClient | undefined
     let status: Status | undefined = undefined
@@ -1089,6 +1114,11 @@ export namespace MCP {
     // synchronously. Commit the replacement status last so that stale close
     // handling cannot downgrade a successful reconnect.
     s.status[name] = result.status
+    log.info("mcp connect", {
+      name,
+      webmcp: mcp.type === "local" && mcp.webmcp !== undefined,
+      status: result.status.status,
+    })
   }
 
   export async function disconnect(name: string) {

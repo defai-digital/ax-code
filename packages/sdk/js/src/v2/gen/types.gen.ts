@@ -2770,6 +2770,14 @@ export type McpStatus =
   | McpStatusNeedsAuth
   | McpStatusNeedsClientRegistration
   | McpStatusNeedsTrust
+  | McpStatusBlocked
+
+/** AX Code API schema `McpStatusBlocked` (auto-generated from the OpenAPI contract). */
+export type McpStatusBlocked = {
+  status: "blocked"
+  reason: "managed_policy" | "managed_origins"
+  error: string
+}
 
 /** AX Code API schema `McpStatusConnected` (auto-generated from the OpenAPI contract). */
 export type McpStatusConnected = {

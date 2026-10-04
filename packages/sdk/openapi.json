@@ -44485,7 +44485,34 @@
           },
           {
             "$ref": "#/components/schemas/MCPStatusNeedsTrust"
+          },
+          {
+            "$ref": "#/components/schemas/MCPStatusBlocked"
           }
+        ]
+      },
+      "MCPStatusBlocked": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "blocked"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "managed_policy",
+              "managed_origins"
+            ]
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "reason",
+          "error"
         ]
       },
       "MCPStatusConnected": {

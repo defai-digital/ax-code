@@ -10,6 +10,7 @@ import { Installation } from "@/installation"
 import { useDirectory } from "../../context/directory"
 import { useKV } from "../../context/kv"
 import { ModeChips } from "../../component/mode-chips"
+import { WebMcpChip } from "../../component/webmcp-chip"
 import { GoalChip } from "../../component/goal-chip"
 import { TodoItem } from "../../component/todo-item"
 import { ChromeAction, ChromeWidthAction } from "../../component/chrome-action"
@@ -1099,6 +1100,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
               />
             </box>
             <ModeChips />
+            <WebMcpChip />
             <GoalChip sessionID={props.sessionID} />
             <text fg={theme.textMuted}>
               <span style={{ fg: theme.success }}>•</span> <b>AX</b>

@@ -135,26 +135,44 @@ export namespace WebMcpProfile {
     return Object.freeze(profile)
   }
 
+  export type PolicyDecision =
+    | { ok: true; profile: Configuration }
+    | { ok: false; reason: "managed_policy" | "managed_origins" }
+
+  export function blockedMessage(reason: "managed_policy" | "managed_origins"): string {
+    return reason === "managed_policy"
+      ? "WebMCP bridge is disabled by managed policy"
+      : "WebMCP managed policy excludes every origin configured for this bridge"
+  }
+
   /**
-   * Apply a managed requirement to a launch-validated profile. A managed deny
-   * fails the connection; a managed origin list narrows the origins used for
-   * call-time navigation checks. The launch argv is validated against the
-   * unreduced profile before this runs, so narrowing only makes the app-level
-   * origin check stricter than the browser allowlist.
+   * Evaluate a managed requirement against a launch-validated profile. A deny or
+   * a narrowing that admits no origin fails closed with a reason the caller can
+   * surface as a distinct blocked state; a partial narrowing only makes the
+   * call-time origin check stricter than the browser allowlist.
    */
-  export function applyRequirement(requirement: Requirement | undefined, profile: Configuration): Configuration {
-    if (!requirement) return profile
-    if (requirement.allow === false) throw new Error("WebMCP bridge is disabled by managed policy")
+  export function evaluate(requirement: Requirement | undefined, profile: Configuration): PolicyDecision {
+    if (!requirement) return { ok: true, profile }
+    if (requirement.allow === false) return { ok: false, reason: "managed_policy" }
     const allowed = requirement.allowedOrigins
-    if (!allowed) return profile
+    if (!allowed) return { ok: true, profile }
     const admitted = profile.allowedOrigins.filter((origin) => allowed.includes(origin))
-    if (admitted.length === 0) {
-      throw new Error("WebMCP managed policy excludes every origin configured for this bridge")
-    }
-    if (admitted.length === profile.allowedOrigins.length) return profile
+    if (admitted.length === 0) return { ok: false, reason: "managed_origins" }
+    if (admitted.length === profile.allowedOrigins.length) return { ok: true, profile }
     const narrowed = Configuration.parse({ ...profile, allowedOrigins: admitted })
     Object.freeze(narrowed.allowedOrigins)
-    return Object.freeze(narrowed)
+    return { ok: true, profile: Object.freeze(narrowed) }
+  }
+
+  /**
+   * Apply a managed requirement, throwing on a managed denial. Kept for callers
+   * that treat a denial as an error; MCP.create uses `evaluate` instead so the
+   * same denial surfaces as a distinct blocked status.
+   */
+  export function applyRequirement(requirement: Requirement | undefined, profile: Configuration): Configuration {
+    const decision = evaluate(requirement, profile)
+    if (!decision.ok) throw new Error(blockedMessage(decision.reason))
+    return decision.profile
   }
 
   export function allows(name: string): boolean {
