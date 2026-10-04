@@ -131,6 +131,40 @@ describe("AX Wiki build lifecycle", () => {
     expect(merged).not.toContain("stale")
   })
 
+  test("refuses to collapse duplicate protected IDs into an echoed placeholder", () => {
+    const section = (body: string) =>
+      `${AX_WIKI_PROTECTED_START} maintainer-notes -->\n${body}\n${AX_WIKI_PROTECTED_END}`
+    const existing = `# Page\n\n${section("First warning")}\n\n${section("Second warning")}\n`
+    const generated = `# Page\n\n${section("Generated placeholder")}\n`
+    expect(() => mergeProtectedSections(generated, existing)).toThrow("duplicate protected section IDs")
+  })
+
+  test("leaves pages and the manifest intact when forced generation encounters duplicate protected IDs", async () => {
+    const root = await fixture()
+    await buildAxWiki({ root, action: "generate", generator: generator() })
+    const pagePath = path.join(root, ".ax-wiki/quickstart.md")
+    const manifestPath = path.join(root, ".ax-wiki/.manifest.json")
+    const manifest = await readFile(manifestPath, "utf8")
+    const section = (body: string) =>
+      `${AX_WIKI_PROTECTED_START} maintainer-notes -->\n${body}\n${AX_WIKI_PROTECTED_END}`
+    const content = (await readFile(pagePath, "utf8")) + `\n${section("First warning")}\n${section("Second warning")}\n`
+    await writeFile(pagePath, content)
+    const make = generator()
+    await expect(
+      buildAxWiki({
+        root,
+        action: "generate",
+        force: true,
+        generator: async (request) => {
+          const result = await make(request)
+          return { ...result, body: result.body + `\n${section("Generated placeholder")}\n` }
+        },
+      }),
+    ).rejects.toThrow("duplicate protected section IDs")
+    expect(await readFile(pagePath, "utf8")).toBe(content)
+    expect(await readFile(manifestPath, "utf8")).toBe(manifest)
+  })
+
   test("validates the complete candidate before writing", async () => {
     const root = await fixture()
     const invalid: WikiPageGenerator = async (request) => ({

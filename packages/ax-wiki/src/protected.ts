@@ -51,6 +51,12 @@ export function mergeProtectedSections(generated: string, existing?: string): st
   if (!existing) return generated
   const preserved = extractProtectedSections(existing)
   if (preserved.length === 0) return generated
+  const ids = preserved.map((section) => section.id)
+  if (new Set(ids).size !== ids.length) {
+    // Replacing an echoed placeholder repeatedly would collapse distinct
+    // maintainer notes into one section before candidate validation sees them.
+    throw new Error("AX Wiki cannot merge duplicate protected section IDs")
+  }
   let output = generated
   const missing: ProtectedSection[] = []
   for (const section of preserved) {
