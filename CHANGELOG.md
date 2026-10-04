@@ -6,6 +6,21 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.22.4] - 2026-10-04
+
+### Changed
+
+- Publish SDK 2.5.61 and bound CI job runtimes and artifact retention.
+
+### Fixed
+
+- Filter mixed-case process startup overrides and credential helper/file variables before forwarding child environments.
+- Reject duplicate protected Wiki section IDs before merging echoed placeholders, preserving maintainer notes and existing published files.
+- Harden Wiki staged-result validation and permission callbacks; serialize staged-result removal with pending writes.
+- Keep preempted Wiki builds out of durable failure memory.
+- Derive activity group expansion state from rendered rows and invalidate the Sixel splash when pixel resolution changes.
+- Close credential redaction gaps for process loader overrides, password aliases, connection strings and repeated joined headers.
+
 ## [7.22.3] - 2026-10-03
 
 ### Changed
