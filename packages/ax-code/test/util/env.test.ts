@@ -241,6 +241,16 @@ describe("Env.sanitize", () => {
     expect(sanitized.RUBYLIB).toBeUndefined()
   })
 
+  test.each(["node_options", "Node_Options", "pythonpath", "RubyOpt"])(
+    "blocks mixed-case process injection variables: %s",
+    (name) => {
+      const env = { [name]: "startup-override", PATH: "/bin" }
+      expect(Env.sanitize(env)).toEqual({ PATH: "/bin" })
+      expect(Env.stripProcessInjection(env)).toEqual({ PATH: "/bin" })
+      expect(Env.isProcessInjectionName(name)).toBe(true)
+    },
+  )
+
   test("stripProcessInjection removes load-time hijacks but keeps secrets", () => {
     const stripped = Env.stripProcessInjection({
       MCP_API_KEY: "secret-from-config",
@@ -254,6 +264,13 @@ describe("Env.sanitize", () => {
     expect(stripped.LD_PRELOAD).toBeUndefined()
     expect(stripped.NODE_OPTIONS).toBeUndefined()
   })
+
+  test.each(["Git_AskPass", "ssh_auth_sock", "PgPassFile", "KubeConfig"])(
+    "does not forward mixed-case credential helpers or files: %s",
+    (name) => {
+      expect(Env.sanitize({ [name]: "/private/credential", PATH: "/bin" })).toEqual({ PATH: "/bin" })
+    },
+  )
 
   test("redacts authorization headers, JSON secrets, and URL credentials", () => {
     expect(Env.redactSecrets("Authorization: Bearer abc123")).toBe("Authorization: [redacted]")

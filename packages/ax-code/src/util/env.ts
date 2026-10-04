@@ -78,10 +78,11 @@ export namespace Env {
         out[k] = v
         continue
       }
+      const normalized = k.toUpperCase()
       if (
-        PROCESS_INJECTION_NAMES.has(k) ||
-        CREDENTIAL_HELPER_NAMES.has(k) ||
-        CREDENTIAL_FILE_NAMES.has(k) ||
+        PROCESS_INJECTION_NAMES.has(normalized) ||
+        CREDENTIAL_HELPER_NAMES.has(normalized) ||
+        CREDENTIAL_FILE_NAMES.has(normalized) ||
         isSensitiveName(k) ||
         PAT_NAME.test(k) ||
         WEBHOOK_NAME.test(k) ||
@@ -107,7 +108,7 @@ export namespace Env {
     if (!env) return {}
     const out: Record<string, string | undefined> = {}
     for (const [k, v] of Object.entries(env)) {
-      if (PROCESS_INJECTION_NAMES.has(k)) continue
+      if (isProcessInjectionName(k)) continue
       out[k] = v
     }
     return out
@@ -160,7 +161,9 @@ export namespace Env {
   }
 
   export function isProcessInjectionName(name: string): boolean {
-    return PROCESS_INJECTION_NAMES.has(name)
+    // Windows environment names are case-insensitive; hosts and MCP config
+    // maps can retain mixed casing before they reach the child process.
+    return PROCESS_INJECTION_NAMES.has(name.toUpperCase())
   }
 
   // URL signatures are bearer credentials (unlike public signature fields).
