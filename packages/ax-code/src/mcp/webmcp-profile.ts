@@ -1,6 +1,7 @@
 import z from "zod"
 import path from "node:path"
 import { createHash } from "node:crypto"
+import { execFileSync } from "node:child_process"
 import { parseJsonPayload } from "@/util/json-value"
 import { isRecord } from "@/util/record"
 
@@ -436,6 +437,37 @@ export namespace WebMcpProfile {
     if (!fresh) return { ok: false, error: `WebMCP tool ${toolName} is no longer registered` }
     if (descriptorHash(fresh) !== stored) {
       return { ok: false, error: `WebMCP tool ${toolName} definition changed since it was listed` }
+    }
+    return { ok: true }
+  }
+
+  export const MIN_CHROME_MAJOR = 150
+
+  /** Parse the major version from `chrome --version` output. */
+  export function chromeMajor(version: string): number | undefined {
+    const match = /(\d+)\./.exec(version.trim())
+    return match ? Number(match[1]) : undefined
+  }
+
+  /**
+   * Fail-closed preflight for an explicit Chrome executable. The pinned bridge
+   * needs Chrome 150+ for the WebMCP surface; a stale or non-Chrome binary must
+   * be rejected before a browser is launched.
+   */
+  export function verifyChromeVersion(executablePath: string): { ok: true } | { ok: false; error: string } {
+    let output: string
+    try {
+      output = execFileSync(executablePath, ["--version"], { encoding: "utf8", timeout: 10_000 })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return { ok: false, error: `Could not run the configured Chrome executable: ${message}` }
+    }
+    const major = chromeMajor(output)
+    if (major === undefined) {
+      return { ok: false, error: "Could not read the Chrome version from the configured executable" }
+    }
+    if (major < MIN_CHROME_MAJOR) {
+      return { ok: false, error: `WebMCP requires Chrome ${MIN_CHROME_MAJOR}+ (configured executable is ${major})` }
     }
     return { ok: true }
   }

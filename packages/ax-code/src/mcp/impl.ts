@@ -714,6 +714,13 @@ export namespace MCP {
       }
       webmcp = decision.profile
     }
+    if (webmcp?.executablePath) {
+      const chrome = WebMcpProfile.verifyChromeVersion(webmcp.executablePath)
+      if (!chrome.ok) {
+        log.error("webmcp chrome preflight failed", { key, error: chrome.error })
+        return { mcpClient: undefined, status: { status: "failed" as const, error: chrome.error } }
+      }
+    }
     log.info("found", { key, type: mcp.type })
     let mcpClient: MCPClient | undefined
     let status: Status | undefined = undefined
@@ -908,6 +915,10 @@ export namespace MCP {
           ...Env.sanitize(process.env),
           ...(cmd === "ax-code" ? { BUN_BE_BUN: "1" } : {}),
           ...Env.stripProcessInjection(mcp.environment),
+          // A webmcp bridge resolves the pinned package through npx; suppress
+          // dependency lifecycle scripts so a registry-side postinstall cannot
+          // run during the install, and mute audit/funding chatter.
+          ...(webmcp ? { npm_config_ignore_scripts: "true", npm_config_audit: "false", npm_config_fund: "false" } : {}),
         },
       })
       const onStderr = (chunk: Buffer) => {
