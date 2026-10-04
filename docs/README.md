@@ -19,6 +19,9 @@ pages are the ones linked here.
 
 ## Choose by task
 
+For opt-in shared terminal navigation through an external MCP client, see
+[Share a live TUI through MCP](guides/tui-mcp.md).
+
 For standalone questions about selected files through AX Trust caching, see
 [Fixed-context questions](guides/fixed-context-questions.md).
 

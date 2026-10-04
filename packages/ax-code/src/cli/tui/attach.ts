@@ -1,3 +1,4 @@
+import { assertTuiMcpPlatform } from "@/tuimcp/endpoint"
 import { cmd } from "../cmd/cmd"
 import { UI } from "@/cli/ui"
 import { win32DisableProcessedInput, win32InstallCtrlCGuard } from "./win32"
@@ -23,6 +24,11 @@ export const AttachCommand = cmd({
         type: "string",
         description: "directory to run in",
       })
+      .option("tui-mcp", {
+        type: "boolean",
+        default: false,
+        describe: "Share this live TUI through experimental local MCP navigation tools (POSIX only)",
+      })
       .option("continue", {
         alias: ["c"],
         describe: "continue the last session",
@@ -42,6 +48,7 @@ export const AttachCommand = cmd({
         describe: "basic auth password (defaults to AX_CODE_SERVER_PASSWORD)",
       }),
   handler: async (args) => {
+    if (args.tuiMcp) assertTuiMcpPlatform()
     assertLoopbackHttpUrl(args.url, "attach URL")
     const unguard = win32InstallCtrlCGuard()
     const restoreInputMode = win32DisableProcessedInput()
@@ -76,6 +83,7 @@ export const AttachCommand = cmd({
         url: args.url,
         config,
         args: {
+          tuiMcp: args.tuiMcp,
           continue: args.continue,
           sessionID: args.session,
           fork: args.fork,

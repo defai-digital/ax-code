@@ -19,6 +19,7 @@ import { Permission } from "../../permission"
 import { parseJsonPayload } from "../../util/json-value"
 import { toErrorMessage } from "../../util/error-message"
 import { parseShellArgs } from "../../util/shell-args"
+import { McpTuiCommand } from "./mcp-tui"
 import { McpWebMcpCommand } from "./mcp-webmcp"
 import { EOL } from "os"
 
@@ -197,6 +198,7 @@ export const McpCommand = cmd({
       .command(McpUntrustCommand)
       .command(McpDebugCommand)
       .command(McpWebMcpCommand)
+      .command(McpTuiCommand)
       .demandCommand(),
   async handler() {},
 })

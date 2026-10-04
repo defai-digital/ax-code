@@ -1,3 +1,4 @@
+import { TuiMcp } from "./component/tui-mcp"
 import open from "open"
 import { WikiVisualization } from "@/wiki/visualization"
 import { createWikiVisualizationManager } from "@tui/util/wiki-visualization"
@@ -392,6 +393,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       variant: "warning",
     })
   })
+  const [tuiMcpActive, setTuiMcpActive] = createSignal(false)
   const promptRef = usePromptRef()
   const wikiDraftActive = createMemo(() => !!promptRef.current?.current.input.trim())
   createEffect(() => {
@@ -736,7 +738,13 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   })
   const contentDimensions = createMemo(() => ({
     width: navigation().contentWidth,
-    height: Math.max(0, dimensions().height - (navigation().railWidth ? 0 : 1) - (args.persistentRuntime ? 1 : 0)),
+    height: Math.max(
+      0,
+      dimensions().height -
+        (navigation().railWidth ? 0 : 1) -
+        (args.persistentRuntime ? 1 : 0) -
+        (tuiMcpActive() ? 1 : 0),
+    ),
   }))
 
   const sessionWorking = () => {
@@ -1483,6 +1491,12 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       onMouseUp={Flag.AX_CODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT ? undefined : () => Selection.copy(renderer, toast)}
       onMouseScroll={() => contextMenu.close()}
     >
+      <Show when={args.tuiMcp}>
+        <TuiMcp
+          blocked={exiting || digitalCodePlaying() || reverseRainPlaying() || startupRainPhase() !== "app"}
+          onActive={setTuiMcpActive}
+        />
+      </Show>
       <Show when={args.persistentRuntime}>
         {(runtime) => (
           <box
