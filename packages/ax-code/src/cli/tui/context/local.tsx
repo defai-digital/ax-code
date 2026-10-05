@@ -1,4 +1,5 @@
-import { createStore } from "solid-js/store"
+import { createStore, reconcile } from "solid-js/store"
+import { toggleMcpServer } from "./mcp-toggle"
 import { batch, createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { useTheme } from "@tui/context/theme"
@@ -591,14 +592,18 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         return status?.status === "connected"
       },
       async toggle(name: string) {
-        const status = sync.data.mcp[name]
-        if (status?.status === "connected") {
-          // Disable: disconnect the MCP
-          await sdk.client.mcp.disconnect({ name })
-        } else {
-          // Enable/Retry: connect the MCP (handles disabled, failed, and other states)
-          await sdk.client.mcp.connect({ name })
-        }
+        // Disconnect when connected; otherwise connect (handles disabled,
+        // failed, and other states). Refresh afterwards: neither call emits an
+        // event the TUI listens to.
+        await toggleMcpServer({
+          connected: sync.data.mcp[name]?.status === "connected",
+          connect: () => sdk.client.mcp.connect({ name }),
+          disconnect: () => sdk.client.mcp.disconnect({ name }),
+          refresh: async () => {
+            const result = await sdk.client.mcp.status()
+            if (result.data) sync.set("mcp", reconcile(result.data as typeof sync.data.mcp))
+          },
+        })
       },
     }
 
