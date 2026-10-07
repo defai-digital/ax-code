@@ -371,6 +371,18 @@ test("exact catalog fallbacks keep first-party IDs and ignore prefixes", () => {
         } as any,
       },
     },
+    xiaomi: {
+      models: {
+        "mimo-v2.6-pro": {
+          id: "mimo-v2.6-pro",
+          name: "MiMo-V2.6-Pro",
+          family: "mimo",
+          reasoning: true,
+          interleaved: { field: "reasoning_content" },
+          limit: { context: 1_048_576, output: 131_072 },
+        } as any,
+      },
+    },
     openrouter: {
       models: {
         "glm-5.3": {
@@ -385,6 +397,92 @@ test("exact catalog fallbacks keep first-party IDs and ignore prefixes", () => {
   expect(fallbacks["glm-5.3"]).toMatchObject({ name: "GLM-5.3", family: "glm", reasoning: true })
   expect(fallbacks["deepseek-flash"]).toMatchObject({ family: "deepseek-flash" })
   expect(fallbacks["my-glm-5.3"]).toBeUndefined()
+  // A gateway that serves the vendor's own row under the vendor's namespace is
+  // the same SKU, so the namespaced spelling resolves to the same row.
+  expect(fallbacks["xiaomi/mimo-v2.6-pro"]).toBe(fallbacks["mimo-v2.6-pro"])
+  expect(fallbacks["xiaomi/mimo-v2.6-pro"]).toMatchObject({ family: "mimo", reasoning: true })
+  // Another vendor's namespace must not inherit the row.
+  expect(fallbacks["openrouter/mimo-v2.6-pro"]).toBeUndefined()
+  expect(fallbacks["nano-gpt/mimo-v2.6-pro"]).toBeUndefined()
+})
+
+test("fills a namespaced Xiaomi card from the vendor catalog", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+  await using api = await endpoint((_req, res) => {
+    res.end(
+      JSON.stringify({
+        data: [
+          // The AX Trust card as served today: the gateway's own registry has
+          // no MiMo v2.6 row, so the card states nothing beyond its id.
+          { id: "xiaomi/mimo-v2.6-pro" },
+        ],
+      }),
+    )
+  })
+  const id = "ax-trust-xiaomi-fallback"
+  await using tmp = await tmpdir({ config: config(id, api.url) })
+  await Auth.set(id, { type: "api", key: "test-token" })
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Provider.ready()
+        const model = await Provider.getModel(ProviderID.make(id), ModelID.make("xiaomi/mimo-v2.6-pro"))
+        expect(model.family).toBe("mimo")
+        expect(model.limit).toEqual({ context: 1_048_576, output: 131_072 })
+        expect(model.capabilities).toMatchObject({
+          reasoning: true,
+          toolcall: true,
+          interleaved: { field: "reasoning_content" },
+        })
+        // Reasoning is what publishes the effort ladder; without it the
+        // reasoning policy cannot express a depth for this model.
+        expect(model.variants).toMatchObject({
+          low: { reasoningEffort: "low" },
+          medium: { reasoningEffort: "medium" },
+          high: { reasoningEffort: "high" },
+        })
+      },
+    })
+  } finally {
+    await Auth.remove(id)
+  }
+})
+
+test("keeps the gateway's own declarations over the namespaced Xiaomi catalog row", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+  await using api = await endpoint((_req, res) => {
+    res.end(
+      JSON.stringify({
+        data: [
+          {
+            id: "xiaomi/mimo-v2.6-pro",
+            name: "Restricted MiMo",
+            capabilities: { reasoning: false, toolcall: false, attachment: false },
+            limit: { context: 32000, output: 2000 },
+          },
+        ],
+      }),
+    )
+  })
+  const id = "ax-trust-xiaomi-declared"
+  await using tmp = await tmpdir({ config: config(id, api.url) })
+  await Auth.set(id, { type: "api", key: "test-token" })
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Provider.ready()
+        const model = await Provider.getModel(ProviderID.make(id), ModelID.make("xiaomi/mimo-v2.6-pro"))
+        expect(model.name).toBe("Restricted MiMo")
+        expect(model.limit).toEqual({ context: 32000, output: 2000 })
+        expect(model.capabilities).toMatchObject({ reasoning: false, toolcall: false })
+        expect(model.variants).toEqual({})
+      },
+    })
+  } finally {
+    await Auth.remove(id)
+  }
 })
 
 // A fallback catalog id that names no provider silently disables the fallback
