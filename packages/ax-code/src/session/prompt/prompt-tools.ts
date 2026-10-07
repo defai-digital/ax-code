@@ -1423,34 +1423,40 @@ export async function resolveTools(input: ResolveToolsInput) {
         },
         execute: async () => {
           const policy = item.webmcp
+          // ADR-168: a navigation to a well-formed but unallowlisted origin is
+          // caught here (call time) or after dispatch (a redirect target the
+          // bridge blocked). Both paths offer the same session-only grant; the
+          // tool objects of this step hold the pre-relaunch client, so the
+          // model retries on the next step.
+          const grantOrigin = async (grantPolicy: WebMcpProfile.Policy, error: unknown): Promise<never> => {
+            if (!(error instanceof WebMcpProfile.OriginNotGrantedError)) throw error
+            // A managed or schema refusal fails here without a prompt.
+            const allowed = await MCP.checkWebMcpOriginGrant(grantPolicy.server, error.origin)
+            if (!allowed.ok) throw new Error(allowed.error)
+            await ctx.ask({
+              permission: "webmcp",
+              patterns: [key],
+              always: [],
+              metadata: {
+                originGrant: true,
+                server: grantPolicy.server,
+                origin: error.origin,
+                allowedOrigins: [...grantPolicy.profile.allowedOrigins],
+                experimental: true,
+              },
+            })
+            const granted = await MCP.grantWebMcpOrigin(grantPolicy.server, error.origin)
+            if (!granted.ok) throw new Error(granted.error)
+            throw new Error(
+              `WebMCP origin ${error.origin} was allowed for this session and the browser bridge was restarted; open pages were closed. Retry the call.`,
+            )
+          }
           let call: Record<string, unknown> | unknown = args
           if (policy) {
             try {
               call = WebMcpProfile.validateCall(policy.profile, policy.toolName, args)
             } catch (error) {
-              if (!(error instanceof WebMcpProfile.OriginNotGrantedError)) throw error
-              // ADR-168: offer a session-only grant. A managed or schema refusal
-              // fails here without a prompt. The tool objects of this step hold
-              // the pre-relaunch client, so the model retries on the next step.
-              const allowed = await MCP.checkWebMcpOriginGrant(policy.server, error.origin)
-              if (!allowed.ok) throw new Error(allowed.error)
-              await ctx.ask({
-                permission: "webmcp",
-                patterns: [key],
-                always: [],
-                metadata: {
-                  originGrant: true,
-                  server: policy.server,
-                  origin: error.origin,
-                  allowedOrigins: [...policy.profile.allowedOrigins],
-                  experimental: true,
-                },
-              })
-              const granted = await MCP.grantWebMcpOrigin(policy.server, error.origin)
-              if (!granted.ok) throw new Error(granted.error)
-              throw new Error(
-                `WebMCP origin ${error.origin} was allowed for this session and the browser bridge was restarted; open pages were closed. Retry the call.`,
-              )
+              await grantOrigin(policy, error)
             }
           }
           // Capture the approval-time origin/descriptor binding before the
@@ -1507,7 +1513,14 @@ export async function resolveTools(input: ResolveToolsInput) {
               metadata: webmcp,
             })
           }
-          return execute(call, opts)
+          try {
+            return await execute(call, opts)
+          } catch (error) {
+            // A redirect target the bridge blocked surfaces only after
+            // dispatch; offer the same grant the call-time path would.
+            if (policy) await grantOrigin(policy, error)
+            throw error
+          }
         },
       })
 

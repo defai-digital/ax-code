@@ -6,6 +6,7 @@ import { toErrorMessage } from "../util/error-message"
 import { createHash } from "node:crypto"
 import z from "zod"
 import { WebMcpProfile } from "./webmcp-profile"
+import { redirectOriginOutsideAllowlist } from "./webmcp-redirect"
 
 const log = Log.create({ service: "mcp" })
 const MAX_TOOL_DESCRIPTION = 4_000
@@ -25,6 +26,35 @@ async function webmcpPageUrl(
   // a plausible-looking page list alongside the error.
   WebMcpProfile.validateResult("list_pages", pages)
   return WebMcpProfile.parseStructuredPages(pages)?.get(pageId)
+}
+
+/**
+ * When a WebMCP navigation fails while its requested origin IS allowed, the
+ * bridge may have blocked a redirect to a different origin. The pinned bridge
+ * reports that as a generic net error (`net::ERR_INTERNET_DISCONNECTED at
+ * <requested>`) that does not name the target — the target otherwise appears
+ * only in the untrusted page title, which must never decide an origin. Probe
+ * the requested URL's redirect chain (which requests only already-allowed
+ * origins) and return the first origin outside the allowlist, so the caller
+ * can raise a grantable error instead of an opaque failure. Fail closed.
+ */
+async function webmcpRedirectOrigin(
+  policy: WebMcpProfile.Policy,
+  call: Record<string, unknown>,
+  timeout: number | undefined,
+  signal: AbortSignal | undefined,
+): Promise<string | undefined> {
+  if (policy.toolName !== "new_page" && policy.toolName !== "navigate_page") return undefined
+  const requested = typeof call.url === "string" ? call.url : undefined
+  if (!requested) return undefined
+  const requestedOrigin = WebMcpProfile.grantableOrigin(requested)
+  if (!requestedOrigin || !policy.profile.allowedOrigins.includes(requestedOrigin)) return undefined
+  return redirectOriginOutsideAllowlist(
+    requested,
+    policy.profile.allowedOrigins,
+    globalThis.fetch as unknown as Parameters<typeof redirectOriginOutsideAllowlist>[2],
+    { timeoutMs: Math.min(timeout ?? 4_000, 4_000), signal },
+  ).catch(() => undefined)
 }
 
 /**
@@ -228,13 +258,28 @@ export async function convertMcpTool(
           },
         )
         if (webmcp) {
-          WebMcpProfile.validateResult(webmcp.toolName, result)
-          WebMcpProfile.validateLanding(
-            webmcp.profile,
-            webmcp.toolName,
-            (input ?? {}) as Record<string, unknown>,
-            result,
-          )
+          try {
+            WebMcpProfile.validateResult(webmcp.toolName, result)
+            WebMcpProfile.validateLanding(
+              webmcp.profile,
+              webmcp.toolName,
+              (input ?? {}) as Record<string, unknown>,
+              result,
+            )
+          } catch (error) {
+            // The bridge blocked a redirect the allowlist does not cover. Probe
+            // the requested URL (allowed origins only) and, when it names a
+            // grantable origin, raise a grantable error so the ADR-168 prompt
+            // can offer to allow it instead of an opaque failure.
+            const redirect = await webmcpRedirectOrigin(
+              webmcp,
+              (input ?? {}) as Record<string, unknown>,
+              timeout,
+              opts.abortSignal,
+            )
+            if (redirect) throw new WebMcpProfile.OriginNotGrantedError(redirect)
+            throw error
+          }
           if (listingPageId !== undefined) {
             const after = await webmcpPageUrl(client, listingPageId, budget(), opts.abortSignal)
             if (!listedBefore || !after) throw new Error("WebMCP page could not be located when its tools were listed")

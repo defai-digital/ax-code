@@ -104,3 +104,44 @@ describe("WebMCP session origin grants (ADR-168)", () => {
     expect(lines.join("\n")).toContain("session only")
   })
 })
+
+describe("WebMCP grantable origin + landing membership (ADR-168)", () => {
+  test("grantableOrigin accepts only HTTPS or loopback HTTP without credentials", () => {
+    expect(WebMcpProfile.grantableOrigin("https://news.test/a")).toBe("https://news.test")
+    expect(WebMcpProfile.grantableOrigin("http://localhost:4321/")).toBe("http://localhost:4321")
+    expect(WebMcpProfile.grantableOrigin("http://[::1]:4321/")).toBe("http://[::1]:4321")
+    for (const value of [
+      "http://news.test/",
+      "blob:https://news.test/x",
+      "https://user:pw@news.test/",
+      "ftp://x.test/",
+      "not a url",
+    ]) {
+      expect(WebMcpProfile.grantableOrigin(value)).toBeUndefined()
+    }
+  })
+
+  test("validateLanding accepts a landing on any allowed origin but rejects outside the allowlist", () => {
+    const profile = WebMcpProfile.config({ allowedOrigins: ["https://a.test", "https://b.test"] }, true).webmcp
+    const landing = (url: string, title = "") => ({
+      structuredContent: { pages: [{ id: 1, url, title, selected: true }] },
+    })
+    // A redirect from a.test to b.test is permitted once both are granted.
+    expect(() =>
+      WebMcpProfile.validateLanding(profile, "new_page", { url: "https://a.test/x" }, landing("https://b.test/")),
+    ).not.toThrow()
+    // A landing outside the allowlist still fails closed.
+    expect(() =>
+      WebMcpProfile.validateLanding(profile, "new_page", { url: "https://a.test/x" }, landing("https://c.test/")),
+    ).toThrow()
+    // The untrusted page title must never decide the origin.
+    expect(() =>
+      WebMcpProfile.validateLanding(
+        profile,
+        "new_page",
+        { url: "https://a.test/x" },
+        landing("chrome-error://chromewebdata/", "b.test"),
+      ),
+    ).toThrow()
+  })
+})
