@@ -1423,7 +1423,36 @@ export async function resolveTools(input: ResolveToolsInput) {
         },
         execute: async () => {
           const policy = item.webmcp
-          const call = policy ? WebMcpProfile.validateCall(policy.profile, policy.toolName, args) : args
+          let call: Record<string, unknown> | unknown = args
+          if (policy) {
+            try {
+              call = WebMcpProfile.validateCall(policy.profile, policy.toolName, args)
+            } catch (error) {
+              if (!(error instanceof WebMcpProfile.OriginNotGrantedError)) throw error
+              // ADR-168: offer a session-only grant. A managed or schema refusal
+              // fails here without a prompt. The tool objects of this step hold
+              // the pre-relaunch client, so the model retries on the next step.
+              const allowed = await MCP.checkWebMcpOriginGrant(policy.server, error.origin)
+              if (!allowed.ok) throw new Error(allowed.error)
+              await ctx.ask({
+                permission: "webmcp",
+                patterns: [key],
+                always: [],
+                metadata: {
+                  originGrant: true,
+                  server: policy.server,
+                  origin: error.origin,
+                  allowedOrigins: [...policy.profile.allowedOrigins],
+                  experimental: true,
+                },
+              })
+              const granted = await MCP.grantWebMcpOrigin(policy.server, error.origin)
+              if (!granted.ok) throw new Error(granted.error)
+              throw new Error(
+                `WebMCP origin ${error.origin} was allowed for this session and the browser bridge was restarted; open pages were closed. Retry the call.`,
+              )
+            }
+          }
           // Capture the approval-time origin/descriptor binding before the
           // approval is requested, so the dispatch-time preflight verifies
           // the fresh listing against what the approver saw even if another

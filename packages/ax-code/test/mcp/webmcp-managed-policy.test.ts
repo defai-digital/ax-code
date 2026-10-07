@@ -194,3 +194,25 @@ test("chrome preflight requires Chrome 150+", async () => {
     await fs.rm(dir, { recursive: true, force: true })
   }
 })
+
+test("a session origin grant is refused under a managed ceiling without relaunching (ADR-168)", async () => {
+  bridge.names = [...WebMcpProfile.TOOLS]
+  bridge.call.mockResolvedValue({ content: [{ type: "text", text: "ok" }], structuredContent: { pages: [] } })
+  await writeManaged({
+    webmcp: { allowedOrigins: ["https://example.test", "https://allowed.test"] },
+    mcp: { bridge: profile() },
+  })
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await MCP.connect("bridge")
+      const launches = bridge.launch.mock.calls.length
+      expect(await MCP.grantWebMcpOrigin("bridge", "https://news.test")).toMatchObject({ ok: false })
+      expect(await MCP.checkWebMcpOriginGrant("bridge", "https://news.test")).toMatchObject({ ok: false })
+      expect(bridge.launch.mock.calls.length).toBe(launches)
+      // An origin the managed list admits can still be granted.
+      expect(await MCP.checkWebMcpOriginGrant("bridge", "https://allowed.test")).toEqual({ ok: true })
+    },
+  })
+})

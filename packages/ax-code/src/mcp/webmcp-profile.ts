@@ -227,7 +227,7 @@ export namespace WebMcpProfile {
     return { ok: true }
   }
 
-  function command(profile: Configuration): string[] {
+  export function command(profile: Configuration): string[] {
     return [
       // A vendored profile launches the integrity-pinned local install; the
       // default npx form resolves the same pinned version from the registry.
@@ -334,6 +334,55 @@ export namespace WebMcpProfile {
     return decision.profile
   }
 
+  /**
+   * A well-formed HTTPS (or loopback HTTP) origin that is outside the effective
+   * allowlist. The message matches the historical hard error; callers that can
+   * prompt (ADR-168) catch this type, everyone else sees an ordinary failure.
+   */
+  export class OriginNotGrantedError extends Error {
+    constructor(readonly origin: string) {
+      super("WebMCP navigation origin is not allowed")
+      this.name = "OriginNotGrantedError"
+    }
+  }
+
+  /** Configured profile plus session-granted origins; frozen like a launch-validated profile. */
+  export function withGrants(profile: Configuration, granted: readonly string[]): Configuration {
+    const extra = granted.filter((origin) => !profile.allowedOrigins.includes(origin))
+    if (extra.length === 0) return profile
+    const effective = Configuration.parse({ ...profile, allowedOrigins: [...profile.allowedOrigins, ...extra] })
+    Object.freeze(effective.allowedOrigins)
+    return Object.freeze(effective)
+  }
+
+  export type GrantDecision = { ok: true } | { ok: false; error: string }
+
+  /**
+   * Decide whether a session origin grant may even be offered. The managed
+   * requirement is a ceiling: a grant is refused, without a prompt, when managed
+   * policy denies the bridge or does not list the origin. The 8-origin schema
+   * cap applies to configured plus granted origins together.
+   */
+  export function checkGrant(
+    requirement: Requirement | undefined,
+    profile: Configuration,
+    granted: readonly string[],
+    origin: string,
+  ): GrantDecision {
+    if (!exactOrigin(origin))
+      return { ok: false, error: "WebMCP origin must be an exact HTTPS or loopback HTTP origin" }
+    if (requirement?.allow === false) return { ok: false, error: blockedMessage("managed_policy") }
+    if (requirement?.allowedOrigins && !requirement.allowedOrigins.includes(origin)) {
+      return { ok: false, error: "WebMCP managed policy does not allow this origin" }
+    }
+    const current = withGrants(profile, granted)
+    if (current.allowedOrigins.includes(origin)) return { ok: true }
+    if (current.allowedOrigins.length >= 8) {
+      return { ok: false, error: "WebMCP already has the maximum of 8 allowed origins" }
+    }
+    return { ok: true }
+  }
+
   export function allows(name: string): boolean {
     return tools.has(name)
   }
@@ -377,9 +426,11 @@ export namespace WebMcpProfile {
       if (target.protocol !== "https:" && !(target.protocol === "http:" && loopback.has(target.hostname))) {
         throw new Error("WebMCP navigation requires an https: URL or an http: loopback URL")
       }
-      if (target.username || target.password || !profile.allowedOrigins.includes(target.origin)) {
-        throw new Error("WebMCP navigation origin is not allowed")
-      }
+      if (target.username || target.password) throw new Error("WebMCP navigation origin is not allowed")
+      // A well-formed origin that is merely absent from the effective list is
+      // grantable by an interactive, session-scoped approval (ADR-168). Every
+      // other rejection above stays a plain, non-grantable error.
+      if (!profile.allowedOrigins.includes(target.origin)) throw new OriginNotGrantedError(target.origin)
     }
     if (typeof call.input === "string") {
       if (Buffer.byteLength(call.input, "utf8") > MAX_INPUT_BYTES || !isRecord(parseJsonPayload(call.input))) {

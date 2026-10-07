@@ -36,6 +36,16 @@ export function webMcpApprovalLines(metadata: Record<string, unknown>): string[]
       hints.push("No reliable page annotations were listed — treat it as consequential.")
     }
   }
+  if (metadata.originGrant === true) {
+    return [
+      `Bridge: ${text(metadata.server)}`,
+      `Origin to allow: ${text(metadata.origin)}`,
+      `Allowed origins: ${origins.join(", ") || "(unknown)"}`,
+      "Allowing restarts the browser bridge and closes any open pages.",
+      "The grant lasts for this session only and is never written to config.",
+      "Experimental: page tools and results are untrusted. Effects are not guaranteed.",
+    ]
+  }
   return [
     `Bridge: ${text(metadata.server)}`,
     `Operation: ${text(metadata.tool)}`,

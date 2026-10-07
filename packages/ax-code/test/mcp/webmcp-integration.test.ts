@@ -347,3 +347,36 @@ test("bridge failures propagate without retries", async () => {
     },
   })
 })
+
+test("a session origin grant relaunches the bridge with regenerated argv and ends on disconnect (ADR-168)", async () => {
+  bridge.names = [...WebMcpProfile.TOOLS]
+  bridge.call.mockResolvedValue({ content: [{ type: "text", text: "ok" }], structuredContent: { pages: [] } })
+  await using tmp = await tmpdir({ git: true, config: { mcp: { bridge: profile() } } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await MCP.connect("bridge")
+      expect(bridge.launch).toHaveBeenCalledTimes(1)
+      expect(await MCP.checkWebMcpOriginGrant("bridge", "https://news.test")).toEqual({ ok: true })
+      expect(await MCP.checkWebMcpOriginGrant("missing", "https://news.test")).toMatchObject({ ok: false })
+
+      expect(await MCP.grantWebMcpOrigin("bridge", "https://news.test")).toEqual({ ok: true })
+      expect(bridge.launch).toHaveBeenCalledTimes(2)
+      const relaunch = bridge.launch.mock.calls[1]![0] as { args: string[] }
+      expect(relaunch.args).toContain("--allowed-url-pattern=https://news.test/*")
+      expect(bridge.launch.mock.calls[0]![0].args).not.toContain("--allowed-url-pattern=https://news.test/*")
+      const tools = await MCP.tools()
+      expect(tools.bridge_new_page.webmcp?.profile.allowedOrigins).toEqual([
+        "https://example.test",
+        "https://news.test",
+      ])
+      // The configured entry is untouched: grants are never written back.
+      expect((await MCP.checkWebMcpOriginGrant("bridge", "https://example.test")).ok).toBe(true)
+
+      await MCP.disconnect("bridge")
+      await MCP.connect("bridge")
+      const after = await MCP.tools()
+      expect(after.bridge_new_page.webmcp?.profile.allowedOrigins).toEqual(["https://example.test"])
+    },
+  })
+})

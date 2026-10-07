@@ -517,7 +517,10 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
     if (permission === "webmcp") {
       return {
         icon: "↗",
-        title: uiText("ui.experimentalWebmcpBridgeCall"),
+        title:
+          props.request.metadata?.originGrant === true
+            ? "Allow WebMCP origin"
+            : uiText("ui.experimentalWebmcpBridgeCall"),
         body: (
           <box paddingLeft={1} flexDirection="column">
             <For each={webMcpApprovalLines(props.request.metadata ?? {})}>

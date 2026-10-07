@@ -412,6 +412,8 @@ export namespace MCP {
     }
     connectQueue: KeyedSerialQueue
     ready: Promise<void>
+    /** Session-only WebMCP origin grants per server (ADR-168). Never persisted. */
+    webmcpGrants: Record<string, string[]>
   }
 
   const rawState = Instance.state(
@@ -425,6 +427,7 @@ export namespace MCP {
         tools: { generation: 0 },
         connectQueue: new KeyedSerialQueue(),
         ready: Promise.resolve(),
+        webmcpGrants: {},
       }
 
       next.ready = (async () => {
@@ -764,7 +767,14 @@ export namespace MCP {
       }
     }
 
-    const validated = WebMcpProfile.validateLaunch(mcp)
+    const configured = WebMcpProfile.validateLaunch(mcp)
+    // Session grants (ADR-168) extend the reviewed profile; the pinned argv was
+    // validated against the configured profile above, then regenerated from the
+    // effective one so Chrome's --allowed-url-pattern list matches.
+    const grants = owner.webmcpGrants[key] ?? []
+    const validated = configured ? WebMcpProfile.withGrants(configured, grants) : undefined
+    const launchCommand =
+      validated && validated !== configured ? WebMcpProfile.command(validated) : mcp.type === "local" ? mcp.command : []
     // The managed WebMCP requirement can deny the bridge or narrow its origins;
     // it never enables the bridge and never removes the per-call interactive
     // approval. A denial surfaces as a distinct `blocked` status so the UI can
@@ -972,7 +982,7 @@ export namespace MCP {
     }
 
     if (mcp.type === "local") {
-      const [cmd, ...args] = mcp.command
+      const [cmd, ...args] = launchCommand
       // The bridge's npx resolution must not consume a repository's .npmrc
       // or a workspace-local package that shadows the reviewed package name.
       const cwd = webmcp ? Global.Path.home : Instance.directory
@@ -1214,6 +1224,8 @@ export namespace MCP {
   export async function disconnect(name: string) {
     return withConnectLock(name, "MCP disconnect failed", async (s) => {
       invalidateTools(s)
+      // Toggling a bridge off ends its session-scoped origin grants.
+      delete s.webmcpGrants[name]
       const client = s.clients[name]
       if (client) {
         await closeIfPossible(client, name, "disconnecting")
@@ -1222,6 +1234,50 @@ export namespace MCP {
       await closePendingOAuthTransport(name)
       s.status[name] = { status: "disabled" }
     })
+  }
+
+  async function webMcpEntry(name: string) {
+    const cfg = await Config.get()
+    const entry = cfg.mcp?.[name]
+    if (!entry || !isConfigured(entry) || entry.type !== "local" || entry.webmcp === undefined) return undefined
+    return { cfg, entry, profile: WebMcpProfile.validateLaunch(entry)! }
+  }
+
+  /**
+   * Whether a session origin grant may be offered for a WebMCP bridge. Refused
+   * origins (managed ceiling, schema cap, non-grantable shape) must not prompt.
+   */
+  export async function checkWebMcpOriginGrant(name: string, origin: string): Promise<WebMcpProfile.GrantDecision> {
+    const found = await webMcpEntry(name)
+    if (!found) return { ok: false, error: `WebMCP bridge not found: ${name}` }
+    const s = await state()
+    return WebMcpProfile.checkGrant(found.cfg.webmcp, found.profile, s.webmcpGrants[name] ?? [], origin)
+  }
+
+  /**
+   * Record a human-approved, session-only origin grant and relaunch the bridge so
+   * Chrome's URL allowlist matches. Open pages are closed by the relaunch.
+   * ADR-168: the managed requirement is re-checked here and stays the ceiling.
+   */
+  export async function grantWebMcpOrigin(name: string, origin: string): Promise<WebMcpProfile.GrantDecision> {
+    const decision = await checkWebMcpOriginGrant(name, origin)
+    if (!decision.ok) return decision
+    await withConnectLock(name, "MCP webmcp origin grant failed", async (s) => {
+      invalidateTools(s)
+      const granted = s.webmcpGrants[name] ?? []
+      if (!granted.includes(origin)) s.webmcpGrants[name] = [...granted, origin]
+      const client = s.clients[name]
+      if (client) {
+        await closeIfPossible(client, name, "webmcp origin grant relaunch")
+        delete s.clients[name]
+      }
+      s.status[name] = { status: "disabled" }
+    })
+    await connect(name)
+    const status = (await state()).status[name]
+    return status?.status === "connected"
+      ? { ok: true }
+      : { ok: false, error: "WebMCP bridge did not reconnect after the origin grant" }
   }
 
   export async function trust(name: string): Promise<Record<string, Status>> {
