@@ -9,14 +9,39 @@
     "name": "Subconscious",
     "doc": "https://docs.subconscious.dev",
     "models": {
-      "subconscious/tim-qwen3.6-27b": {
-        "id": "subconscious/tim-qwen3.6-27b",
-        "name": "TIM-Qwen3.6 27B",
-        "attachment": false,
+      "subconscious/deepseek-v4.1-flash-marathon": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash",
+        "family": "deepseek-flash",
+        "id": "subconscious/deepseek-v4.1-flash-marathon",
+        "limit": {
+          "context": 5000000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash Marathon",
         "reasoning": true,
-        "tool_call": true,
+        "release_date": "2026-09-10",
         "temperature": true,
-        "release_date": "2026-05-11",
+        "tool_call": true
+      },
+      "subconscious/glm-5.3-marathon": {
+        "attachment": false,
+        "canonical_model_id": "zhipuai/glm-5.3",
+        "family": "glm",
+        "id": "subconscious/glm-5.3-marathon",
+        "limit": {
+          "context": 5000000,
+          "output": 131072
+        },
         "modalities": {
           "input": [
             "text"
@@ -25,11 +50,11 @@
             "text"
           ]
         },
-        "limit": {
-          "context": 8192,
-          "input": 8192,
-          "output": 5000
-        }
+        "name": "GLM-5.3 Marathon",
+        "reasoning": true,
+        "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -14515,30 +14540,6 @@
         "tool_call": true,
         "canonical_model_id": "alibaba/qwen3.8-max-prime"
       },
-      "stealth/space-bunny-alpha": {
-        "attachment": true,
-        "family": "alpha",
-        "id": "stealth/space-bunny-alpha",
-        "limit": {
-          "context": 1000000,
-          "input": 1000000,
-          "output": 524288
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "Space Bunny Alpha",
-        "reasoning": true,
-        "release_date": "2026-09-23",
-        "tool_call": true
-      },
       "stepfun/step-5-preview": {
         "attachment": true,
         "id": "stepfun/step-5-preview",
@@ -14994,6 +14995,237 @@
         "name": "Pareto 26.10 Preview",
         "reasoning": false,
         "release_date": "2026-10-01",
+        "tool_call": true
+      },
+      "mistralai/mistral-large-4": {
+        "attachment": true,
+        "canonical_model_id": "mistral/mistral-large-4",
+        "family": "mistral-large",
+        "id": "mistralai/mistral-large-4",
+        "limit": {
+          "context": 524288,
+          "input": 524288,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Mistral Large 4",
+        "reasoning": true,
+        "release_date": "2026-10-06",
+        "temperature": true,
+        "tool_call": true
+      },
+      "qwen/qwen3.8-27b-antislop": {
+        "attachment": true,
+        "family": "qwen",
+        "id": "qwen/qwen3.8-27b-antislop",
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen 3.8 27B Antislop",
+        "reasoning": true,
+        "release_date": "2026-10-05",
+        "tool_call": true
+      },
+      "qwen/qwen3.8-27b-darkidol": {
+        "attachment": true,
+        "family": "qwen",
+        "id": "qwen/qwen3.8-27b-darkidol",
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen 3.8 27B DarkIdol",
+        "reasoning": true,
+        "release_date": "2026-10-05",
+        "tool_call": true
+      },
+      "qwen/qwen3.8-27b-fimi": {
+        "attachment": true,
+        "family": "qwen",
+        "id": "qwen/qwen3.8-27b-fimi",
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen 3.8 27B Fimi",
+        "reasoning": true,
+        "release_date": "2026-10-05",
+        "tool_call": true
+      },
+      "qwen/qwen3.8-27b-kiwen": {
+        "attachment": true,
+        "family": "qwen",
+        "id": "qwen/qwen3.8-27b-kiwen",
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen 3.8 27B Kiwen",
+        "reasoning": true,
+        "release_date": "2026-10-05",
+        "tool_call": true
+      },
+      "qwen/qwen3.8-27b-novelist": {
+        "attachment": true,
+        "family": "qwen",
+        "id": "qwen/qwen3.8-27b-novelist",
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen 3.8 27B Novelist",
+        "reasoning": true,
+        "release_date": "2026-10-05",
+        "tool_call": true
+      },
+      "qwen/qwen3.8-27b-swift": {
+        "attachment": true,
+        "family": "qwen",
+        "id": "qwen/qwen3.8-27b-swift",
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen 3.8 27B Swift",
+        "reasoning": true,
+        "release_date": "2026-10-05",
+        "tool_call": true
+      },
+      "qwen/qwen3.8-27b-synthia": {
+        "attachment": false,
+        "family": "qwen",
+        "id": "qwen/qwen3.8-27b-synthia",
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen 3.8 27B Synthia",
+        "reasoning": false,
+        "release_date": "2026-10-05",
+        "tool_call": false
+      },
+      "z-ai/glm-5.3-flash-apex": {
+        "attachment": true,
+        "family": "glm",
+        "id": "z-ai/glm-5.3-flash-apex",
+        "limit": {
+          "context": 1048576,
+          "input": 1048576,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Apex Flash 1",
+        "reasoning": true,
+        "release_date": "2026-10-05",
+        "tool_call": true
+      },
+      "z-ai/glm-5.3-flash-apex-abliterated": {
+        "attachment": true,
+        "family": "glm",
+        "id": "z-ai/glm-5.3-flash-apex-abliterated",
+        "limit": {
+          "context": 1048576,
+          "input": 1048576,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Apex Flash 1 Abliterated",
+        "reasoning": true,
+        "release_date": "2026-10-05",
         "tool_call": true
       }
     }
@@ -16181,7 +16413,7 @@
         },
         "limit": {
           "context": 1048576,
-          "output": 1048576
+          "output": 131072
         },
         "canonical_model_id": "zhipuai/glm-5.3-flash"
       },
@@ -29712,6 +29944,147 @@
         "release_date": "2026-09-29",
         "temperature": false,
         "tool_call": true
+      },
+      "entrim/deepseek-v4.1-flash": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash",
+        "family": "deepseek-flash",
+        "id": "entrim/deepseek-v4.1-flash",
+        "limit": {
+          "context": 1048576,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash (entrim)",
+        "reasoning": true,
+        "release_date": "2026-09-10",
+        "temperature": true,
+        "tool_call": true
+      },
+      "luminal/deepseek-v4.1-flash": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash",
+        "family": "deepseek-flash",
+        "id": "luminal/deepseek-v4.1-flash",
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash (luminal)",
+        "reasoning": true,
+        "release_date": "2026-09-10",
+        "temperature": true,
+        "tool_call": true
+      },
+      "mistral/mistral-large-4": {
+        "attachment": true,
+        "canonical_model_id": "mistral/mistral-large-4",
+        "family": "mistral-large",
+        "id": "mistral/mistral-large-4",
+        "limit": {
+          "context": 1000000,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Mistral Large 4 (Mistral AI)",
+        "reasoning": false,
+        "release_date": "2026-10-06",
+        "temperature": true,
+        "tool_call": true
+      },
+      "novita/ling-3.1-flash": {
+        "attachment": false,
+        "canonical_model_id": "inclusionai/ling-3.1-flash",
+        "family": "ling",
+        "id": "novita/ling-3.1-flash",
+        "limit": {
+          "context": 262144,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Ling 3.1 Flash (NovitaAI)",
+        "reasoning": true,
+        "release_date": "2026-09-29",
+        "tool_call": true
+      },
+      "sciforium/deepseek-v4.1-flash": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash",
+        "family": "deepseek-flash",
+        "id": "sciforium/deepseek-v4.1-flash",
+        "limit": {
+          "context": 1048576,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash (sciforium)",
+        "reasoning": true,
+        "release_date": "2026-09-10",
+        "temperature": true,
+        "tool_call": true
+      },
+      "scx-ai-gp/glm-5.3-fast": {
+        "attachment": false,
+        "canonical_model_id": "zhipuai/glm-5.3",
+        "family": "glm",
+        "id": "scx-ai-gp/glm-5.3-fast",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM 5.3 Fast (SCX.ai)",
+        "reasoning": false,
+        "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": false
       }
     }
   },
@@ -39511,7 +39884,7 @@
         "limit": {
           "context": 196608,
           "input": 120000,
-          "output": 30000
+          "output": 131072
         },
         "status": "beta"
       },
@@ -39537,7 +39910,7 @@
         "limit": {
           "context": 128000,
           "input": 120000,
-          "output": 16000
+          "output": 65536
         }
       },
       "agent-max": {
@@ -39642,7 +40015,7 @@
         "limit": {
           "context": 128000,
           "input": 120000,
-          "output": 16000
+          "output": 65536
         },
         "status": "beta"
       },
@@ -39668,7 +40041,7 @@
         "limit": {
           "context": 196608,
           "input": 120000,
-          "output": 30000
+          "output": 131072
         },
         "status": "beta"
       },
@@ -39694,7 +40067,7 @@
         "limit": {
           "context": 196608,
           "input": 120000,
-          "output": 30000
+          "output": 131072
         }
       },
       "agent-standard": {
@@ -39719,9 +40092,161 @@
         "limit": {
           "context": 128000,
           "input": 120000,
-          "output": 16000
+          "output": 65536
         },
         "status": "beta"
+      },
+      "bytedance-pro-latest": {
+        "attachment": false,
+        "id": "bytedance-pro-latest",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 262144,
+          "input": 256000,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "ByteDance Pro Latest",
+        "reasoning": true,
+        "release_date": "2026-07-06",
+        "temperature": false,
+        "tool_call": true
+      },
+      "claude-opus-latest": {
+        "attachment": true,
+        "id": "claude-opus-latest",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 922000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Opus Latest",
+        "reasoning": true,
+        "release_date": "2026-07-06",
+        "temperature": false,
+        "tool_call": true
+      },
+      "deepseek-pro-latest": {
+        "attachment": false,
+        "id": "deepseek-pro-latest",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 922000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek Pro Latest",
+        "reasoning": true,
+        "release_date": "2026-07-06",
+        "temperature": false,
+        "tool_call": true
+      },
+      "glm-latest": {
+        "attachment": false,
+        "id": "glm-latest",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 922000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM Latest",
+        "reasoning": true,
+        "release_date": "2026-07-06",
+        "temperature": false,
+        "tool_call": true
+      },
+      "gpt-sol-latest": {
+        "attachment": true,
+        "id": "gpt-sol-latest",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 922000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT Sol Latest",
+        "reasoning": true,
+        "release_date": "2026-07-06",
+        "temperature": false,
+        "tool_call": true
+      },
+      "minimax-latest": {
+        "attachment": false,
+        "id": "minimax-latest",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 922000,
+          "output": 512000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "MiniMax Latest",
+        "reasoning": true,
+        "release_date": "2026-07-06",
+        "temperature": false,
+        "tool_call": true
       }
     }
   },
@@ -52033,6 +52558,55 @@
         "temperature": true,
         "tool_call": true,
         "canonical_model_id": "deepseek/deepseek-v4.1-flash"
+      },
+      "deepseek-v4.1-flash-fast": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash",
+        "family": "deepseek-flash",
+        "id": "deepseek-v4.1-flash-fast",
+        "interleaved": true,
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash",
+        "reasoning": true,
+        "release_date": "2026-09-10",
+        "temperature": true,
+        "tool_call": true
+      },
+      "glm-5.3-fast": {
+        "attachment": false,
+        "canonical_model_id": "zhipuai/glm-5.3",
+        "family": "glm",
+        "id": "glm-5.3-fast",
+        "interleaved": true,
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM-5.3",
+        "reasoning": true,
+        "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -55738,6 +56312,54 @@
         "name": "MiMo-V2.6-Pro",
         "reasoning": true,
         "release_date": "2026-09-22",
+        "temperature": true,
+        "tool_call": true
+      },
+      "mistral-large-4": {
+        "attachment": true,
+        "canonical_model_id": "mistral/mistral-large-4",
+        "family": "mistral-large",
+        "id": "mistral-large-4",
+        "limit": {
+          "context": 1000000,
+          "output": 1000000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Mistral Large 4",
+        "reasoning": false,
+        "release_date": "2026-10-06",
+        "temperature": true,
+        "tool_call": true
+      },
+      "mistral-large-4@eu": {
+        "attachment": true,
+        "canonical_model_id": "mistral/mistral-large-4",
+        "family": "mistral-large",
+        "id": "mistral-large-4@eu",
+        "limit": {
+          "context": 1000000,
+          "output": 1000000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Mistral Large 4 (EU)",
+        "reasoning": false,
+        "release_date": "2026-10-06",
         "temperature": true,
         "tool_call": true
       }
@@ -59703,29 +60325,6 @@
         },
         "canonical_model_id": "alibaba/qwen3.8-27b"
       },
-      "deepseek-v4-flash-0731-284b": {
-        "id": "deepseek-v4-flash-0731-284b",
-        "name": "DeepSeek V4 Flash 0731",
-        "family": "deepseek-flash",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-07-31",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 1048576,
-          "output": 81920
-        },
-        "canonical_model_id": "deepseek/deepseek-v4-flash-0731"
-      },
       "mistral4-119b": {
         "id": "mistral4-119b",
         "name": "Mistral Small 4",
@@ -59819,6 +60418,30 @@
         "temperature": true,
         "tool_call": true,
         "canonical_model_id": "zhipuai/glm-5.3"
+      },
+      "deepseek-v4.1-flash-552b": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash",
+        "family": "deepseek-flash",
+        "id": "deepseek-v4.1-flash-552b",
+        "limit": {
+          "context": 1048576,
+          "output": 81920
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash",
+        "reasoning": true,
+        "release_date": "2026-09-10",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -65897,7 +66520,7 @@
         "attachment": true,
         "reasoning": false,
         "tool_call": false,
-        "release_date": "2026-07-30",
+        "release_date": "2026-07-31",
         "modalities": {
           "input": [
             "text",
@@ -65910,7 +66533,8 @@
         "limit": {
           "context": 0,
           "output": 0
-        }
+        },
+        "canonical_model_id": "minimax/MiniMax-H3"
       },
       "minimax/minimax-m2.1": {
         "id": "minimax/minimax-m2.1",
@@ -69108,27 +69732,6 @@
           "output": 32000
         }
       },
-      "inclusionai/ling-3.0-flash-sante-free": {
-        "id": "inclusionai/ling-3.0-flash-sante-free",
-        "name": "Ling 3.0 Flash Sante (Free)",
-        "family": "ling",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "release_date": "2026-09-04",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 256000,
-          "output": 32000
-        }
-      },
       "openai/gpt-5-fast": {
         "id": "openai/gpt-5-fast",
         "name": "GPT-5 (Fast)",
@@ -71469,21 +72072,22 @@
         "id": "mistral/ministral-8b",
         "name": "Ministral 8B (latest)",
         "family": "ministral",
-        "attachment": false,
+        "attachment": true,
         "reasoning": false,
         "tool_call": true,
         "temperature": true,
         "release_date": "2024-10-01",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
           ]
         },
         "limit": {
-          "context": 128000,
+          "context": 262144,
           "output": 128000
         }
       },
@@ -71491,21 +72095,22 @@
         "id": "mistral/ministral-3b",
         "name": "Ministral 3B (latest)",
         "family": "ministral",
-        "attachment": false,
+        "attachment": true,
         "reasoning": false,
         "tool_call": true,
         "temperature": true,
         "release_date": "2024-10-01",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
           ]
         },
         "limit": {
-          "context": 128000,
+          "context": 131072,
           "output": 128000
         }
       },
@@ -72652,27 +73257,6 @@
         "release_date": "2026-09-30",
         "tool_call": false
       },
-      "microsoft/mai-transcribe-1.5": {
-        "attachment": false,
-        "family": "mai",
-        "id": "microsoft/mai-transcribe-1.5",
-        "limit": {
-          "context": 0,
-          "output": 0
-        },
-        "modalities": {
-          "input": [
-            "audio"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "MAI-Transcribe-1.5",
-        "reasoning": false,
-        "release_date": "2026-06-01",
-        "tool_call": false
-      },
       "microsoft/mai-transcribe-2": {
         "attachment": false,
         "family": "mai",
@@ -72797,6 +73381,133 @@
         "name": "MAI-Voice-2.1-Flash",
         "reasoning": false,
         "release_date": "2026-10-01",
+        "tool_call": false
+      },
+      "bfl/flux-3-image": {
+        "attachment": false,
+        "family": "flux",
+        "id": "bfl/flux-3-image",
+        "limit": {
+          "context": 0,
+          "output": 0
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "image"
+          ]
+        },
+        "name": "FLUX 3 Image",
+        "reasoning": false,
+        "release_date": "2026-10-05",
+        "tool_call": false
+      },
+      "deepseek/deepseek-v4.1-flash-fast": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash",
+        "family": "deepseek-flash",
+        "id": "deepseek/deepseek-v4.1-flash-fast",
+        "limit": {
+          "context": 1048576,
+          "output": 1000000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash Fast",
+        "reasoning": true,
+        "release_date": "2026-09-10",
+        "temperature": true,
+        "tool_call": true
+      },
+      "mistral/mistral-large-4": {
+        "attachment": true,
+        "family": "mistral-large",
+        "id": "mistral/mistral-large-4",
+        "limit": {
+          "context": 524288,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Mistral Large 4",
+        "reasoning": true,
+        "release_date": "2026-10-06",
+        "tool_call": true
+      },
+      "topaz/proteus": {
+        "attachment": false,
+        "id": "topaz/proteus",
+        "limit": {
+          "context": 0,
+          "output": 0
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "video"
+          ]
+        },
+        "name": "Proteus",
+        "reasoning": false,
+        "release_date": "2026-10-06",
+        "tool_call": false
+      },
+      "topaz/starlight-precise-2.6": {
+        "attachment": false,
+        "id": "topaz/starlight-precise-2.6",
+        "limit": {
+          "context": 0,
+          "output": 0
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "video"
+          ]
+        },
+        "name": "Starlight Precise 2.6",
+        "reasoning": false,
+        "release_date": "2026-10-06",
+        "tool_call": false
+      },
+      "topaz/wonder-3.5": {
+        "attachment": false,
+        "id": "topaz/wonder-3.5",
+        "limit": {
+          "context": 0,
+          "output": 0
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "image"
+          ]
+        },
+        "name": "Wonder 3.5",
+        "reasoning": false,
+        "release_date": "2026-10-06",
         "tool_call": false
       }
     }
@@ -73104,29 +73815,6 @@
         },
         "canonical_model_id": "deepseek/deepseek-v4-pro-0813"
       },
-      "deepseek-ai/DeepSeek-V4-Pro": {
-        "id": "deepseek-ai/DeepSeek-V4-Pro",
-        "name": "DeepSeek V4 Pro",
-        "family": "deepseek",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-04-24",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 1048576,
-          "output": 1048576
-        },
-        "canonical_model_id": "deepseek/deepseek-v4-pro"
-      },
       "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B": {
         "id": "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B",
         "name": "Nemotron 3 Ultra",
@@ -73172,28 +73860,6 @@
           "output": 262144
         },
         "canonical_model_id": "nvidia/nemotron-3.5-lightning"
-      },
-      "OpenPipe/Qwen3-14B-Instruct": {
-        "id": "OpenPipe/Qwen3-14B-Instruct",
-        "name": "Qwen3 14B Instruct",
-        "family": "qwen",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-04-29",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 32768,
-          "output": 32768
-        }
       },
       "google/gemma-4-31B-it": {
         "id": "google/gemma-4-31B-it",
@@ -73243,29 +73909,6 @@
         },
         "canonical_model_id": "zhipuai/glm-5.3-flash"
       },
-      "Qwen/Qwen3-30B-A3B-Instruct-2507": {
-        "id": "Qwen/Qwen3-30B-A3B-Instruct-2507",
-        "name": "Qwen3 30B A3B Instruct 2507",
-        "family": "qwen",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-07-29",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 262144,
-          "output": 262144
-        },
-        "canonical_model_id": "alibaba/qwen3-30b-a3b"
-      },
       "Qwen/Qwen3.8-27B": {
         "id": "Qwen/Qwen3.8-27B",
         "name": "Qwen3.8 27B",
@@ -73290,54 +73933,6 @@
         },
         "canonical_model_id": "alibaba/qwen3.8-27b"
       },
-      "Qwen/Qwen3.5-35B-A3B": {
-        "id": "Qwen/Qwen3.5-35B-A3B",
-        "name": "Qwen3.5-35B-A3B",
-        "family": "qwen3.5",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-02-24",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 262144,
-          "output": 262144
-        },
-        "canonical_model_id": "alibaba/qwen3.5-35b-a3b"
-      },
-      "Qwen/Qwen3.6-27B": {
-        "id": "Qwen/Qwen3.6-27B",
-        "name": "Qwen3.6 27B",
-        "family": "qwen3.6",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-04-22",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 262144,
-          "output": 262144
-        },
-        "canonical_model_id": "alibaba/qwen3.6-27b"
-      },
       "Qwen/Qwen3.6-35B-A3B": {
         "id": "Qwen/Qwen3.6-35B-A3B",
         "name": "Qwen3.6 35B A3B",
@@ -73361,28 +73956,6 @@
           "output": 262144
         },
         "canonical_model_id": "alibaba/qwen3.6-35b-a3b"
-      },
-      "ibm-granite/granite-4.1-8b": {
-        "id": "ibm-granite/granite-4.1-8b",
-        "name": "Granite 4.1 8B",
-        "family": "granite",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-04-29",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 131072,
-          "output": 131072
-        }
       },
       "ibm-granite/granite-4.2-8b": {
         "id": "ibm-granite/granite-4.2-8b",
@@ -73452,29 +74025,6 @@
           "output": 131072
         },
         "canonical_model_id": "meta/llama-3.1-8b-instruct"
-      },
-      "meta-llama/Llama-3.1-70B-Instruct": {
-        "id": "meta-llama/Llama-3.1-70B-Instruct",
-        "name": "Llama 3.1 70B",
-        "family": "llama",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2024-07-23",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 131072,
-          "output": 131072
-        },
-        "canonical_model_id": "meta/llama-3.1-70b-instruct"
       },
       "meta-llama/Llama-3.3-70B-Instruct": {
         "id": "meta-llama/Llama-3.3-70B-Instruct",
@@ -73568,27 +74118,6 @@
           "output": 262144
         },
         "canonical_model_id": "moonshotai/kimi-k2.7-code"
-      },
-      "JetBrains/Mellum2-12B-A2.5B-Instruct": {
-        "id": "JetBrains/Mellum2-12B-A2.5B-Instruct",
-        "name": "Mellum2 12B A2.5B",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-06-01",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 131072,
-          "output": 131072
-        }
       },
       "deepseek-ai/DeepSeek-V4.1-Flash": {
         "attachment": true,
@@ -81045,6 +81574,75 @@
         "name": "Seed 2.0 Pro (260328)",
         "reasoning": true,
         "release_date": "2026-03-28",
+        "temperature": true,
+        "tool_call": true
+      },
+      "glm-5.3-fast": {
+        "attachment": false,
+        "canonical_model_id": "zhipuai/glm-5.3",
+        "family": "glm",
+        "id": "glm-5.3-fast",
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM-5.3",
+        "reasoning": true,
+        "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": true
+      },
+      "ling-3.1-flash": {
+        "attachment": false,
+        "canonical_model_id": "inclusionai/ling-3.1-flash",
+        "family": "ling",
+        "id": "ling-3.1-flash",
+        "limit": {
+          "context": 262144,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Ling 3.1 Flash",
+        "reasoning": true,
+        "release_date": "2026-09-29",
+        "tool_call": true
+      },
+      "mistral-large-4": {
+        "attachment": true,
+        "canonical_model_id": "mistral/mistral-large-4",
+        "family": "mistral-large",
+        "id": "mistral-large-4",
+        "limit": {
+          "context": 1000000,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Mistral Large 4",
+        "reasoning": true,
+        "release_date": "2026-10-06",
         "temperature": true,
         "tool_call": true
       }
@@ -89683,6 +90281,32 @@
         "release_date": "2026-09-10",
         "temperature": true,
         "tool_call": true
+      },
+      "umans-glm-5.3": {
+        "attachment": false,
+        "canonical_model_id": "zhipuai/glm-5.3",
+        "family": "glm",
+        "id": "umans-glm-5.3",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1048576,
+          "output": 131071
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM 5.3",
+        "reasoning": true,
+        "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -90783,6 +91407,32 @@
         "name": "DeepSeek V4.1 Flash",
         "reasoning": true,
         "release_date": "2026-09-10",
+        "temperature": true,
+        "tool_call": true
+      },
+      "umans-glm-5.3": {
+        "attachment": false,
+        "canonical_model_id": "zhipuai/glm-5.3",
+        "family": "glm",
+        "id": "umans-glm-5.3",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1048576,
+          "output": 131071
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM 5.3",
+        "reasoning": true,
+        "release_date": "2026-08-14",
         "temperature": true,
         "tool_call": true
       }
@@ -92936,7 +93586,7 @@
         },
         "limit": {
           "context": 262144,
-          "output": 235929
+          "output": 16384
         }
       },
       "qwen/qwen3.5-flash-02-23": {
@@ -92984,7 +93634,7 @@
         },
         "limit": {
           "context": 262144,
-          "output": 235929
+          "output": 81920
         },
         "canonical_model_id": "alibaba/qwen3.5-397b-a17b"
       },
@@ -93032,7 +93682,7 @@
         },
         "limit": {
           "context": 262144,
-          "output": 81920
+          "output": 65536
         },
         "canonical_model_id": "alibaba/qwen3.6-27b"
       },
@@ -94066,28 +94716,6 @@
           "output": 131072
         }
       },
-      "kwaipilot/kat-coder-pro-v2.5": {
-        "id": "kwaipilot/kat-coder-pro-v2.5",
-        "name": "Kwaipilot: KAT-Coder-Pro V2.5",
-        "family": "kat-coder",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-07-10",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 262144,
-          "output": 235929
-        }
-      },
       "stepfun/step-3.7-flash": {
         "id": "stepfun/step-3.7-flash",
         "name": "Step 3.7 Flash",
@@ -94861,7 +95489,7 @@
         },
         "limit": {
           "context": 262144,
-          "output": 131072
+          "output": 32768
         },
         "canonical_model_id": "nvidia/nemotron-3.5-lightning"
       },
@@ -95688,7 +96316,7 @@
         },
         "limit": {
           "context": 524288,
-          "output": 262144
+          "output": 471859
         },
         "canonical_model_id": "thinkingmachines/inkling"
       },
@@ -95785,7 +96413,7 @@
         },
         "limit": {
           "context": 131072,
-          "output": 117964
+          "output": 16384
         },
         "canonical_model_id": "meta/muse-glimmer-30b"
       },
@@ -99046,7 +99674,7 @@
         },
         "limit": {
           "context": 1048576,
-          "output": 131072
+          "output": 943718
         },
         "canonical_model_id": "zhipuai/glm-5.3"
       },
@@ -99652,31 +100280,6 @@
         "temperature": true,
         "tool_call": true
       },
-      "qwen/qwen3.8-27b:free": {
-        "attachment": true,
-        "family": "qwen",
-        "id": "qwen/qwen3.8-27b:free",
-        "limit": {
-          "context": 262144,
-          "output": 235929
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "Qwen: Qwen3.8 27B (free)",
-        "reasoning": true,
-        "release_date": "2026-08-14",
-        "temperature": true,
-        "tool_call": true,
-        "canonical_model_id": "alibaba/qwen3.8-27b"
-      },
       "unbiased/pareto": {
         "attachment": true,
         "id": "unbiased/pareto",
@@ -100058,30 +100661,6 @@
         "tool_call": true,
         "canonical_model_id": "alibaba/qwen3.8-omni-flash"
       },
-      "stealth/space-bunny-alpha": {
-        "attachment": true,
-        "family": "alpha",
-        "id": "stealth/space-bunny-alpha",
-        "limit": {
-          "context": 1000000,
-          "output": 524288
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "Space Bunny Alpha (retires Oct 5)",
-        "reasoning": true,
-        "release_date": "2026-09-23",
-        "temperature": true,
-        "tool_call": true
-      },
       "upstage/solar-mini4": {
         "attachment": false,
         "family": "solar",
@@ -100325,27 +100904,6 @@
         "temperature": false,
         "tool_call": true
       },
-      "apodex/apodex-1.1-mini:free": {
-        "attachment": false,
-        "id": "apodex/apodex-1.1-mini:free",
-        "limit": {
-          "context": 262144,
-          "output": 235929
-        },
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "Apodex: Apodex 1.1 Mini (free)",
-        "reasoning": true,
-        "release_date": "2026-10-01",
-        "temperature": true,
-        "tool_call": true
-      },
       "unbiased/pareto-26.10-preview": {
         "attachment": true,
         "id": "unbiased/pareto-26.10-preview",
@@ -100387,6 +100945,29 @@
         "name": "inclusionAI: Ling 3.1 Flash (new)",
         "reasoning": true,
         "release_date": "2026-10-02",
+        "temperature": true,
+        "tool_call": true
+      },
+      "mistralai/mistral-large-4-0": {
+        "attachment": true,
+        "family": "mistral-large",
+        "id": "mistralai/mistral-large-4-0",
+        "limit": {
+          "context": 524288,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Mistral: Mistral Large 4",
+        "reasoning": true,
+        "release_date": "2026-10-06",
         "temperature": true,
         "tool_call": true
       }
@@ -105236,6 +105817,104 @@
         "release_date": "2026-06-30",
         "temperature": false,
         "tool_call": true
+      },
+      "eu.anthropic.claude-sonnet-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-sonnet-5-5",
+        "family": "claude-sonnet",
+        "id": "eu.anthropic.claude-sonnet-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Sonnet 5.5 (EU)",
+        "reasoning": true,
+        "release_date": "2026-09-28",
+        "temperature": false,
+        "tool_call": true
+      },
+      "global.zai.glm-5.3": {
+        "attachment": false,
+        "canonical_model_id": "zhipuai/glm-5.3",
+        "family": "glm",
+        "id": "global.zai.glm-5.3",
+        "interleaved": true,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM-5.3 (Global)",
+        "reasoning": true,
+        "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": true
+      },
+      "us.anthropic.claude-sonnet-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-sonnet-5-5",
+        "family": "claude-sonnet",
+        "id": "us.anthropic.claude-sonnet-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Sonnet 5.5 (US)",
+        "reasoning": true,
+        "release_date": "2026-09-28",
+        "temperature": false,
+        "tool_call": true
+      },
+      "us.zai.glm-5.3": {
+        "attachment": false,
+        "canonical_model_id": "zhipuai/glm-5.3",
+        "family": "glm",
+        "id": "us.zai.glm-5.3",
+        "interleaved": true,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM-5.3 (US)",
+        "reasoning": true,
+        "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -105600,22 +106279,23 @@
         "id": "qwen/qwen3.6-27b",
         "name": "Qwen3.6 27B",
         "family": "qwen",
-        "attachment": false,
+        "attachment": true,
         "reasoning": true,
         "tool_call": true,
         "temperature": true,
         "release_date": "2026-04-22",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
           ]
         },
         "limit": {
-          "context": 131072,
-          "output": 32768
+          "context": 256000,
+          "output": 64000
         },
         "canonical_model_id": "alibaba/qwen3.6-27b"
       },
@@ -110678,53 +111358,29 @@
     "name": "Blue Claw",
     "doc": "https://blueclaw.network",
     "models": {
-      "Qwen3.6-27B": {
-        "id": "Qwen3.6-27B",
-        "name": "Qwen3.6 27B",
-        "family": "qwen",
+      "Qwen3.8-27B": {
         "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-04-22",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 196608,
-          "output": 65536
-        },
-        "status": "beta",
-        "canonical_model_id": "alibaba/qwen3.6-27b"
-      },
-      "Qwen/Qwen3.6-35B-A3B-FP8": {
-        "id": "Qwen/Qwen3.6-35B-A3B-FP8",
-        "name": "Qwen3.6 35B A3B FP8",
+        "canonical_model_id": "alibaba/qwen3.8-27b",
         "family": "qwen",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-04-17",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
+        "id": "Qwen3.8-27B",
         "limit": {
           "context": 131072,
-          "output": 65536
+          "output": 32768
         },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen3.8 27B",
+        "reasoning": true,
+        "release_date": "2026-08-14",
         "status": "beta",
-        "canonical_model_id": "alibaba/qwen3.6-35b-a3b"
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -113090,6 +113746,52 @@
         "name": "Ling 3.1 Flash Free",
         "reasoning": true,
         "release_date": "2026-09-29",
+        "temperature": true,
+        "tool_call": true
+      },
+      "exo-free": {
+        "attachment": true,
+        "id": "exo-free",
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Exo Free",
+        "reasoning": true,
+        "release_date": "2026-10-06",
+        "temperature": false,
+        "tool_call": true
+      },
+      "mistral-large-4": {
+        "attachment": true,
+        "canonical_model_id": "mistral/mistral-large-4",
+        "family": "mistral-large",
+        "id": "mistral-large-4",
+        "limit": {
+          "context": 524288,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Mistral Large 4",
+        "reasoning": true,
+        "release_date": "2026-10-06",
         "temperature": true,
         "tool_call": true
       }
@@ -119375,6 +120077,31 @@
         "temperature": true,
         "tool_call": true,
         "canonical_model_id": "xai/grok-4.6"
+      },
+      "claude-opus-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-opus-5-5",
+        "family": "claude-opus",
+        "id": "claude-opus-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Opus 5.5",
+        "reasoning": true,
+        "release_date": "2026-09-22",
+        "temperature": false,
+        "tool_call": true
       }
     }
   },
@@ -121528,7 +122255,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -121556,7 +122284,8 @@
           "input": [
             "text",
             "image",
-            "video"
+            "video",
+            "pdf"
           ],
           "output": [
             "text"
@@ -127610,7 +128339,7 @@
           ]
         },
         "limit": {
-          "context": 32000,
+          "context": 32768,
           "output": 32000
         }
       },
@@ -127618,21 +128347,22 @@
         "id": "ministral-8b-latest",
         "name": "Ministral 8B (latest)",
         "family": "ministral",
-        "attachment": false,
+        "attachment": true,
         "reasoning": false,
         "tool_call": true,
         "temperature": true,
         "release_date": "2024-10-01",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
           ]
         },
         "limit": {
-          "context": 128000,
+          "context": 262144,
           "output": 128000
         }
       },
@@ -127699,7 +128429,7 @@
           ]
         },
         "limit": {
-          "context": 256000,
+          "context": 262144,
           "output": 256000
         }
       },
@@ -127835,7 +128565,7 @@
           ]
         },
         "limit": {
-          "context": 1000000,
+          "context": 1048576,
           "output": 131072
         },
         "status": "beta",
@@ -127860,7 +128590,7 @@
           ]
         },
         "limit": {
-          "context": 256000,
+          "context": 262144,
           "output": 256000
         }
       },
@@ -127913,21 +128643,22 @@
         "id": "ministral-3b-latest",
         "name": "Ministral 3B (latest)",
         "family": "ministral",
-        "attachment": false,
+        "attachment": true,
         "reasoning": false,
         "tool_call": true,
         "temperature": true,
         "release_date": "2024-10-01",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
           ]
         },
         "limit": {
-          "context": 128000,
+          "context": 131072,
           "output": 128000
         }
       },
@@ -127982,7 +128713,7 @@
         "family": "glm",
         "id": "zai-glm-5-3",
         "limit": {
-          "context": 1000000,
+          "context": 1048576,
           "output": 131072
         },
         "modalities": {
@@ -127999,6 +128730,31 @@
         "temperature": true,
         "tool_call": true,
         "canonical_model_id": "zhipuai/glm-5.3"
+      },
+      "mistral-large-4": {
+        "attachment": true,
+        "canonical_model_id": "mistral/mistral-large-4",
+        "family": "mistral-large",
+        "id": "mistral-large-4",
+        "limit": {
+          "context": 524288,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Mistral Large 4",
+        "reasoning": true,
+        "release_date": "2026-10-06",
+        "status": "beta",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -132520,8 +133276,8 @@
           ]
         },
         "limit": {
-          "context": 262144,
-          "output": 262144
+          "context": 262000,
+          "output": 262000
         },
         "canonical_model_id": "alibaba/qwen3.5-9b"
       },
@@ -133201,28 +133957,6 @@
         "family": "gemma",
         "canonical_model_id": "google/gemma-3-27b-it"
       },
-      "deepseek-r1-0528": {
-        "id": "deepseek-r1-0528",
-        "name": "DeepSeek R1 0528",
-        "family": "deepseek-thinking",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-05-28",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 164000,
-          "output": 164000
-        }
-      },
       "deepseek-v3.2": {
         "id": "deepseek-v3.2",
         "name": "DeepSeek V3.2",
@@ -133242,7 +133976,7 @@
         },
         "limit": {
           "context": 163840,
-          "output": 163840
+          "output": 65536
         },
         "canonical_model_id": "deepseek/deepseek-v3.2"
       },
@@ -133387,29 +134121,6 @@
           "output": 32768
         },
         "canonical_model_id": "openai/gpt-4.1"
-      },
-      "qwen3.5-122b-a10b": {
-        "id": "qwen3.5-122b-a10b",
-        "name": "Qwen3.5 122B-A10B",
-        "family": "qwen",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-02-23",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 262144,
-          "output": 262144
-        },
-        "canonical_model_id": "alibaba/qwen3.5-122b-a10b"
       },
       "claude-opus4-8": {
         "id": "claude-opus4-8",
@@ -133642,32 +134353,6 @@
         },
         "canonical_model_id": "anthropic/claude-haiku-4-5"
       },
-      "glm-5": {
-        "id": "glm-5",
-        "name": "GLM-5",
-        "family": "glm",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "temperature": true,
-        "release_date": "2026-02-12",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 202752,
-          "output": 202752
-        },
-        "canonical_model_id": "zhipuai/glm-5"
-      },
       "qwen3guard-gen-8b": {
         "id": "qwen3guard-gen-8b",
         "name": "qwen3guard-gen-8b",
@@ -133824,8 +134509,8 @@
           ]
         },
         "limit": {
-          "context": 1048576,
-          "output": 1048576
+          "context": 1000000,
+          "output": 384000
         },
         "canonical_model_id": "deepseek/deepseek-v4-pro"
       },
@@ -136629,7 +137314,10 @@
           "context": 1000000,
           "output": 131072
         },
-        "canonical_model_id": "alibaba/qwen3.8-max"
+        "canonical_model_id": "alibaba/qwen3.8-max",
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
+        }
       },
       "qwen3.7-plus": {
         "id": "qwen3.7-plus",
@@ -136653,6 +137341,9 @@
         "limit": {
           "context": 1000000,
           "output": 65536
+        },
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
         }
       },
       "deepseek-v4-pro": {
@@ -136897,7 +137588,8 @@
         "name": "Space Bunny Free",
         "reasoning": true,
         "release_date": "2026-09-23",
-        "tool_call": true
+        "tool_call": true,
+        "status": "deprecated"
       },
       "longcat-2.5-preview-free": {
         "attachment": true,
@@ -136924,6 +137616,32 @@
         "reasoning": true,
         "release_date": "2026-09-25",
         "temperature": true,
+        "tool_call": true
+      },
+      "space-bunny": {
+        "attachment": true,
+        "id": "space-bunny",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1048576,
+          "input": 524288,
+          "output": 524288
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Space Bunny",
+        "reasoning": true,
+        "release_date": "2026-09-23",
         "tool_call": true
       }
     }
@@ -143227,7 +143945,7 @@
         "tool_call": false
       },
       "flexai/DeepSeek-V4.1-Flash": {
-        "attachment": false,
+        "attachment": true,
         "canonical_model_id": "deepseek/deepseek-v4.1-flash",
         "family": "deepseek-flash",
         "id": "flexai/DeepSeek-V4.1-Flash",
@@ -143237,7 +143955,8 @@
         },
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
@@ -143293,6 +144012,52 @@
         "reasoning": true,
         "release_date": "2026-09-16",
         "tool_call": false
+      },
+      "flexai/Step-3.7-Flash": {
+        "attachment": true,
+        "canonical_model_id": "stepfun/step-3.7-flash",
+        "id": "flexai/Step-3.7-Flash",
+        "limit": {
+          "context": 262144,
+          "output": 256000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Step 3.7 Flash (FlexAI)",
+        "reasoning": true,
+        "release_date": "2026-05-29",
+        "temperature": true,
+        "tool_call": true
+      },
+      "greenference/deepseek-v4.1-flash": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash",
+        "family": "deepseek-flash",
+        "id": "greenference/deepseek-v4.1-flash",
+        "limit": {
+          "context": 1048576,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash (Greenference)",
+        "reasoning": true,
+        "release_date": "2026-09-10",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
