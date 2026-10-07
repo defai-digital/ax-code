@@ -5,7 +5,13 @@ import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { tmpdir } from "../fixture/fixture"
 
-const TEST_PROVIDER_IDS = ["company-gateway", "loopback-gateway"]
+const TEST_PROVIDER_IDS = [
+  "company-gateway",
+  "loopback-gateway",
+  "ax-trust-upsert",
+  "ax-trust-legacy-upsert",
+  "plain-upsert",
+]
 
 afterEach(async () => {
   for (const providerID of TEST_PROVIDER_IDS) {
@@ -284,6 +290,81 @@ describe("managed custom API provider model refresh", () => {
       expect(seen.filter((call) => call.url === "http://127.0.0.1:18080/v1/models")).toEqual([
         { url: "http://127.0.0.1:18080/v1/models", authorization: "Bearer test-token" },
       ])
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  test("an AX Trust upsert fills sparse first-party cards; a plain custom-api upsert does not", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const query = `directory=${encodeURIComponent(tmp.path)}`
+    const app = Server.Default()
+    const baseURL = "http://127.0.0.1:18084/v1"
+    const modelsByID = (view: unknown) => {
+      type Row = { id: string; name: string; contextWindow: number; outputLimit: number; reasoning: boolean }
+      const models = (view as { models?: Row[] }).models ?? []
+      return Object.fromEntries(models.map((model) => [model.id, model]))
+    }
+
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      if (String(input) !== `${baseURL}/models`) return new Response("not found", { status: 404 })
+      return new Response(
+        JSON.stringify({
+          data: [
+            // The AX Trust card as served today: the gateway's own registry
+            // has no MiMo v2.6 row, so the card states nothing beyond its id.
+            { id: "xiaomi/mimo-v2.6-pro" },
+          ],
+        }),
+        { status: 200 },
+      )
+    }) as typeof fetch
+    try {
+      const trusted = await app.request(`/provider/custom/ax-trust-upsert?${query}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(providerBody({ management: "ax-trust", baseURL, models: undefined })),
+      })
+      expect(trusted.status).toBe(200)
+      // The same first-party fallback table as the background refresh: without
+      // it this persist path stored the sparse card (reasoning=false, default
+      // 128k window) even though the runtime refresh filled it.
+      expect(modelsByID(await trusted.json())["xiaomi/mimo-v2.6-pro"]).toMatchObject({
+        name: "MiMo-V2.6-Pro",
+        contextWindow: 1_048_576,
+        outputLimit: 131_072,
+        reasoning: true,
+      })
+
+      const plain = await app.request(`/provider/custom/plain-upsert?${query}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(providerBody({ baseURL, models: undefined })),
+      })
+      expect(plain.status).toBe(200)
+      // An arbitrary gateway must not inherit a vendor's catalog row.
+      expect(modelsByID(await plain.json())["xiaomi/mimo-v2.6-pro"]).toMatchObject({
+        name: "xiaomi/mimo-v2.6-pro",
+        contextWindow: 128_000,
+        outputLimit: 16_384,
+        reasoning: false,
+      })
+
+      // A legacy `ax-trust*` id without the management flag takes the same
+      // path, mirroring the runtime discovery gate.
+      const legacy = await app.request(`/provider/custom/ax-trust-legacy-upsert?${query}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(providerBody({ baseURL, models: undefined })),
+      })
+      expect(legacy.status).toBe(200)
+      expect(modelsByID(await legacy.json())["xiaomi/mimo-v2.6-pro"]).toMatchObject({
+        name: "MiMo-V2.6-Pro",
+        contextWindow: 1_048_576,
+        outputLimit: 131_072,
+        reasoning: true,
+      })
     } finally {
       globalThis.fetch = originalFetch
     }

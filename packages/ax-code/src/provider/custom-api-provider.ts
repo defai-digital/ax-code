@@ -3,6 +3,8 @@ import { NamedError } from "@ax-code/util/error"
 import { Auth } from "@/auth"
 import { Config } from "@/config/config"
 import { ModelsDev } from "@/provider/models"
+import { exactCatalogFallbackModels } from "@/provider/ax-trust-catalog"
+import { isAxTrustProviderID } from "@/mode/provider-category"
 import { findRegisteredModelCapabilities } from "@/provider/model-capabilities"
 import { isRetiredProviderID } from "@/provider/retired-providers"
 import { isLocalHostname } from "@/util/local-host"
@@ -561,7 +563,7 @@ export namespace CustomApiProvider {
     const previousProvider = globalConfig.provider?.[providerID]
     await assertAvailableProviderID(providerID, previousProvider)
     const previousAuth = await Auth.get(providerID)
-    const models = await resolveModels(input, previousProvider, previousAuth)
+    const models = await resolveModels(providerID, input, previousProvider, previousAuth)
     const credentialChanged = input.apiKey !== undefined
     if (credentialChanged) await Auth.set(providerID, { type: "api", key: input.apiKey! })
     const nextProvider = providerConfig({
@@ -579,6 +581,7 @@ export namespace CustomApiProvider {
   }
 
   async function resolveModels(
+    providerID: string,
     input: Upsert,
     previousProvider: Config.Provider | undefined,
     previousAuth: Auth.Info | undefined,
@@ -606,7 +609,18 @@ export namespace CustomApiProvider {
     }
     const apiKey = input.apiKey ?? (previousAuth?.type === "api" ? previousAuth.key : undefined)
     if (!apiKey) throw new Error({ message: "API token is required to discover models from the endpoint" })
-    return discoverModels({ baseURL: input.baseURL, apiKey })
+    // AX Trust serves sparse first-party cards (id only); discovery here must
+    // use the same first-party fallback table as the background refresh
+    // (discoverAxTrustModels), or a connect/refresh through this route
+    // persists the sparse card again — `xiaomi/mimo-v2.6-pro` came back with
+    // reasoning=false and the default 128k window. The gate mirrors the
+    // runtime discovery gate (management flag or a legacy `ax-trust*` id).
+    // Plain custom-api gateways get no fallback: an arbitrary endpoint must
+    // not inherit a vendor row.
+    const management = input.management ?? previousProvider?.management
+    const axTrust = management === "ax-trust" || isAxTrustProviderID(providerID)
+    const fallbackModels = axTrust ? exactCatalogFallbackModels(await ModelsDev.get()) : undefined
+    return discoverModels({ baseURL: input.baseURL, apiKey, fallbackModels })
   }
 
   export async function remove(rawProviderID: string): Promise<boolean> {

@@ -2,61 +2,12 @@ import { CustomApiProvider } from "./custom-api-provider"
 import type { ProviderInfo, ProviderModel } from "./model-info"
 import { ModelID } from "./schema"
 import { ModelsDev } from "./models"
+import { exactCatalogFallbackModels } from "./ax-trust-catalog"
 
-// First-party vendor catalogs whose exact model IDs AX Trust resells. Sparse
-// gateway cards inherit family / interleaved / reasoning from these tables
-// only. Do not scan reseller catalogs: those cards disagree on windows and
-// interleaved. Do not match family or prefix: a gateway alias may target a
-// different model (`my-glm-5.3` is not `glm-5.3`). A gateway that resells a
-// vendor's own row under that vendor's namespace (`xiaomi/mimo-v2.6-pro`) is
-// the same SKU, not an alias, and resolves through the namespace entry built
-// below.
-//
-// Order is precedence: each vendor's own origin rows are consulted before the
-// same vendor's plan routes, so another vendor's SKU hosted in a plan catalog
-// can never outrank the origin vendor.
-//
-// Every id must name a provider the bundled snapshot actually carries with at
-// least one model row. `moonshotai`, `moonshot` and `alibaba` were dropped
-// because no provider carries those names, which silently disabled the
-// fallback for every model they were meant to cover — `qwen/qwen3.8-27b`
-// shipped with attachment=false for exactly that reason. The existence of
-// every entry is pinned by test/provider/ax-trust-discovery.test.ts.
-export const FIRST_PARTY_CATALOG_IDS = [
-  "deepseek",
-  "zhipuai",
-  "zai",
-  "minimax",
-  "kimi-cloud-plan",
-  "alibaba-token-plan",
-  "alibaba-token-plan-cn",
-  "xiaomi",
-  "xiaomi-token-plan-cn",
-  "xiaomi-token-plan-sgp",
-  "xiaomi-token-plan-ams",
-] as const
-
-export function exactCatalogFallbackModels(
-  catalog: Record<string, { models?: Record<string, ModelsDev.Model> }>,
-): Record<string, ModelsDev.Model> {
-  const out: Record<string, ModelsDev.Model> = {}
-  for (const providerID of FIRST_PARTY_CATALOG_IDS) {
-    const models = catalog[providerID]?.models
-    if (!models) continue
-    for (const [id, model] of Object.entries(models)) {
-      // The vendor's own namespace is a second spelling of the same row, and
-      // gateways use it: the catalog's `mimo-v2.6-pro` is served as
-      // `xiaomi/mimo-v2.6-pro`. Only the row's own vendor prefix qualifies —
-      // another vendor's namespace may name a different model, so it must not
-      // inherit these capabilities.
-      for (const key of [id, `${providerID}/${id}`]) {
-        if (out[key]) continue
-        out[key] = model
-      }
-    }
-  }
-  return out
-}
+// The fallback table and its first-party catalog list live in
+// ./ax-trust-catalog so the editor's connect/refresh path
+// (CustomApiProvider.upsert) can share them without an import cycle.
+export { exactCatalogFallbackModels, FIRST_PARTY_CATALOG_IDS } from "./ax-trust-catalog"
 
 function previousAxTrustModel(provider: ProviderInfo, remoteId: string) {
   const direct = provider.models[remoteId]

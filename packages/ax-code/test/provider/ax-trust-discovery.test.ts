@@ -383,6 +383,16 @@ test("exact catalog fallbacks keep first-party IDs and ignore prefixes", () => {
         } as any,
       },
     },
+    "alibaba-token-plan": {
+      models: {
+        "qwen3.8-flash": {
+          id: "qwen3.8-flash",
+          name: "Qwen3.8 Flash",
+          family: "qwen",
+          reasoning: true,
+        } as any,
+      },
+    },
     openrouter: {
       models: {
         "glm-5.3": {
@@ -401,8 +411,16 @@ test("exact catalog fallbacks keep first-party IDs and ignore prefixes", () => {
   // the same SKU, so the namespaced spelling resolves to the same row.
   expect(fallbacks["xiaomi/mimo-v2.6-pro"]).toBe(fallbacks["mimo-v2.6-pro"])
   expect(fallbacks["xiaomi/mimo-v2.6-pro"]).toMatchObject({ family: "mimo", reasoning: true })
+  // The row's own brand prefix is also the vendor's namespace: AX Trust serves
+  // Alibaba's `qwen3.8-flash` as `qwen/qwen3.8-flash`, never under the
+  // `alibaba-token-plan` catalog id (which is registered too, but unused).
+  expect(fallbacks["qwen/qwen3.8-flash"]).toBe(fallbacks["qwen3.8-flash"])
+  expect(fallbacks["alibaba-token-plan/qwen3.8-flash"]).toBe(fallbacks["qwen3.8-flash"])
+  // A family that restates the model id is not a namespace.
+  expect(fallbacks["deepseek-flash/deepseek-flash"]).toBeUndefined()
   // Another vendor's namespace must not inherit the row.
   expect(fallbacks["openrouter/mimo-v2.6-pro"]).toBeUndefined()
+  expect(fallbacks["openrouter/qwen3.8-flash"]).toBeUndefined()
   expect(fallbacks["nano-gpt/mimo-v2.6-pro"]).toBeUndefined()
 })
 
@@ -437,6 +455,46 @@ test("fills a namespaced Xiaomi card from the vendor catalog", async () => {
         })
         // Reasoning is what publishes the effort ladder; without it the
         // reasoning policy cannot express a depth for this model.
+        expect(model.variants).toMatchObject({
+          low: { reasoningEffort: "low" },
+          medium: { reasoningEffort: "medium" },
+          high: { reasoningEffort: "high" },
+        })
+      },
+    })
+  } finally {
+    await Auth.remove(id)
+  }
+})
+
+test("fills a namespaced Qwen card from the vendor catalog", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+  await using api = await endpoint((_req, res) => {
+    res.end(
+      JSON.stringify({
+        data: [
+          // AX Trust serves Alibaba's own row under the qwen brand namespace;
+          // the catalog id (`alibaba-token-plan`) is never the served prefix.
+          { id: "qwen/qwen3.8-flash" },
+        ],
+      }),
+    )
+  })
+  const id = "ax-trust-qwen-fallback"
+  await using tmp = await tmpdir({ config: config(id, api.url) })
+  await Auth.set(id, { type: "api", key: "test-token" })
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Provider.ready()
+        const model = await Provider.getModel(ProviderID.make(id), ModelID.make("qwen/qwen3.8-flash"))
+        expect(model.family).toBe("qwen")
+        expect(model.release_date).toBe("2026-08-26")
+        expect(model.limit).toEqual({ context: 1_000_000, output: 131_072 })
+        expect(model.capabilities).toMatchObject({ reasoning: true, toolcall: true, input: { image: true } })
+        // The snapshot row declares no interleaved field, so none is claimed.
+        expect(model.capabilities.interleaved).toBe(false)
         expect(model.variants).toMatchObject({
           low: { reasoningEffort: "low" },
           medium: { reasoningEffort: "medium" },
