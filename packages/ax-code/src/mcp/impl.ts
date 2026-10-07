@@ -1260,24 +1260,38 @@ export namespace MCP {
    * ADR-168: the managed requirement is re-checked here and stays the ceiling.
    */
   export async function grantWebMcpOrigin(name: string, origin: string): Promise<WebMcpProfile.GrantDecision> {
-    const decision = await checkWebMcpOriginGrant(name, origin)
-    if (!decision.ok) return decision
-    await withConnectLock(name, "MCP webmcp origin grant failed", async (s) => {
+    const offered = await checkWebMcpOriginGrant(name, origin)
+    if (!offered.ok) return offered
+    return withConnectLock(name, "MCP webmcp origin grant failed", async (s): Promise<WebMcpProfile.GrantDecision> => {
+      // The pre-prompt check ran outside this lock; re-validate against live
+      // state so concurrent approvals cannot exceed the origin cap, and a
+      // bridge disconnected while its approval was open is not relaunched.
+      const found = await webMcpEntry(name)
+      if (!found) return { ok: false, error: `WebMCP bridge not found: ${name}` }
+      const recheck = WebMcpProfile.checkGrant(found.cfg.webmcp, found.profile, s.webmcpGrants[name] ?? [], origin)
+      if (!recheck.ok) return recheck
+      const client = s.clients[name]
+      if (!client) return { ok: false, error: "WebMCP bridge is no longer connected" }
       invalidateTools(s)
       const granted = s.webmcpGrants[name] ?? []
-      if (!granted.includes(origin)) s.webmcpGrants[name] = [...granted, origin]
-      const client = s.clients[name]
-      if (client) {
-        await closeIfPossible(client, name, "webmcp origin grant relaunch")
-        delete s.clients[name]
-      }
+      const added = !granted.includes(origin)
+      if (added) s.webmcpGrants[name] = [...granted, origin]
+      await closeIfPossible(client, name, "webmcp origin grant relaunch")
+      delete s.clients[name]
       s.status[name] = { status: "disabled" }
+      await connectImpl(name, s).catch((error) => {
+        log.warn("webmcp origin grant reconnect failed", { name, error: toErrorMessage(error) })
+      })
+      const status = (await state()).status[name]
+      if (status?.status === "connected" && s.clients[name]) return { ok: true }
+      // The caller reports failure, so roll the grant back: the origin must
+      // not silently apply on a later connect.
+      if (added) {
+        const current = s.webmcpGrants[name]
+        if (current) s.webmcpGrants[name] = current.filter((item) => item !== origin)
+      }
+      return { ok: false, error: "WebMCP bridge did not reconnect after the origin grant" }
     })
-    await connect(name)
-    const status = (await state()).status[name]
-    return status?.status === "connected"
-      ? { ok: true }
-      : { ok: false, error: "WebMCP bridge did not reconnect after the origin grant" }
   }
 
   export async function trust(name: string): Promise<Record<string, Status>> {

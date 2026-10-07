@@ -380,3 +380,75 @@ test("a session origin grant relaunches the bridge with regenerated argv and end
     },
   })
 })
+
+test("concurrent origin grants cannot exceed the 8-origin cap (ADR-168)", async () => {
+  bridge.names = [...WebMcpProfile.TOOLS]
+  bridge.call.mockResolvedValue({ content: [{ type: "text", text: "ok" }], structuredContent: { pages: [] } })
+  const seven = () =>
+    WebMcpProfile.config(
+      { allowedOrigins: ["https://example.test", ...Array.from({ length: 6 }, (_, i) => `https://c${i}.test`)] },
+      true,
+    )
+  await using tmp = await tmpdir({ git: true, config: { mcp: { bridge: seven() } } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await MCP.connect("bridge")
+      // Both approvals pass the pre-prompt check at 7 origins; the in-lock
+      // re-check must let exactly one through.
+      const outcomes = await Promise.all([
+        MCP.grantWebMcpOrigin("bridge", "https://a.test"),
+        MCP.grantWebMcpOrigin("bridge", "https://b.test"),
+      ])
+      expect(outcomes.filter((decision) => decision.ok)).toHaveLength(1)
+      expect(outcomes.find((decision) => !decision.ok)).toMatchObject({
+        ok: false,
+        error: "WebMCP already has the maximum of 8 allowed origins",
+      })
+      const tools = await MCP.tools()
+      expect(tools.bridge_new_page.webmcp?.profile.allowedOrigins).toHaveLength(8)
+    },
+  })
+})
+
+test("a grant is refused when the bridge was disconnected while its approval was open (ADR-168)", async () => {
+  bridge.names = [...WebMcpProfile.TOOLS]
+  bridge.call.mockResolvedValue({ content: [{ type: "text", text: "ok" }], structuredContent: { pages: [] } })
+  await using tmp = await tmpdir({ git: true, config: { mcp: { bridge: profile() } } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await MCP.connect("bridge")
+      expect(bridge.launch).toHaveBeenCalledTimes(1)
+      expect(await MCP.checkWebMcpOriginGrant("bridge", "https://news.test")).toEqual({ ok: true })
+      // The user toggles the bridge off while the approval prompt is open.
+      await MCP.disconnect("bridge")
+      expect(await MCP.grantWebMcpOrigin("bridge", "https://news.test")).toMatchObject({ ok: false })
+      // The stale approval neither relaunches the bridge nor leaves a grant.
+      expect(bridge.launch).toHaveBeenCalledTimes(1)
+      await MCP.connect("bridge")
+      const tools = await MCP.tools()
+      expect(tools.bridge_new_page.webmcp?.profile.allowedOrigins).toEqual(["https://example.test"])
+    },
+  })
+})
+
+test("a failed relaunch rolls the origin grant back (ADR-168)", async () => {
+  bridge.names = [...WebMcpProfile.TOOLS]
+  bridge.call.mockResolvedValue({ content: [{ type: "text", text: "ok" }], structuredContent: { pages: [] } })
+  await using tmp = await tmpdir({ git: true, config: { mcp: { bridge: profile() } } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await MCP.connect("bridge")
+      bridge.launch.mockImplementationOnce(() => {
+        throw new Error("spawn failed")
+      })
+      expect(await MCP.grantWebMcpOrigin("bridge", "https://news.test")).toMatchObject({ ok: false })
+      // The reported failure must not silently apply the origin later.
+      await MCP.connect("bridge")
+      const tools = await MCP.tools()
+      expect(tools.bridge_new_page.webmcp?.profile.allowedOrigins).toEqual(["https://example.test"])
+    },
+  })
+})

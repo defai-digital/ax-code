@@ -75,6 +75,17 @@ describe("WebMCP session origin grants (ADR-168)", () => {
     expect(WebMcpProfile.checkGrant(undefined, profile, granted, "https://g0.test")).toEqual({ ok: true })
   })
 
+  test("an over-cap union reports a decision instead of throwing", () => {
+    const profile = base()
+    const granted = Array.from({ length: 8 }, (_, i) => `https://g${i}.test`)
+    expect(WebMcpProfile.checkGrant(undefined, profile, granted, "https://new.test")).toMatchObject({
+      ok: false,
+      error: expect.stringContaining("maximum of 8"),
+    })
+    expect(WebMcpProfile.checkGrant(undefined, profile, granted, "https://g0.test")).toEqual({ ok: true })
+    expect(() => WebMcpProfile.withGrants(profile, granted)).toThrow("maximum of 8")
+  })
+
   test("a grant under a managed narrowing is not widened by evaluate", () => {
     const effective = WebMcpProfile.withGrants(base(), ["https://news.test"])
     const decision = WebMcpProfile.evaluate({ allowedOrigins: ["https://example.test"] }, effective)

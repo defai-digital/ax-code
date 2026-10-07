@@ -350,7 +350,14 @@ export namespace WebMcpProfile {
   export function withGrants(profile: Configuration, granted: readonly string[]): Configuration {
     const extra = granted.filter((origin) => !profile.allowedOrigins.includes(origin))
     if (extra.length === 0) return profile
-    const effective = Configuration.parse({ ...profile, allowedOrigins: [...profile.allowedOrigins, ...extra] })
+    const allowedOrigins = [...profile.allowedOrigins, ...extra]
+    if (allowedOrigins.length > 8) {
+      // checkGrant caps grants at apply time; a mid-session config edit can
+      // still push the union past the schema cap. Fail with a readable error
+      // instead of a raw ZodError from Configuration.parse.
+      throw new Error("WebMCP configured and granted origins exceed the maximum of 8")
+    }
+    const effective = Configuration.parse({ ...profile, allowedOrigins })
     Object.freeze(effective.allowedOrigins)
     return Object.freeze(effective)
   }
@@ -375,12 +382,32 @@ export namespace WebMcpProfile {
     if (requirement?.allowedOrigins && !requirement.allowedOrigins.includes(origin)) {
       return { ok: false, error: "WebMCP managed policy does not allow this origin" }
     }
-    const current = withGrants(profile, granted)
-    if (current.allowedOrigins.includes(origin)) return { ok: true }
-    if (current.allowedOrigins.length >= 8) {
+    // Merge by set so an over-cap union (a config edit while grants exist)
+    // reports a decision instead of throwing from withGrants' schema parse.
+    const current = new Set([...profile.allowedOrigins, ...granted])
+    if (current.has(origin)) return { ok: true }
+    if (current.size >= 8) {
       return { ok: false, error: "WebMCP already has the maximum of 8 allowed origins" }
     }
     return { ok: true }
+  }
+
+  /**
+   * The exact origin of a URL that could ever be granted: HTTPS, or HTTP on
+   * loopback, with no credentials. Anything else (other schemes, `blob:`,
+   * credentials, malformed) returns undefined. Mirrors the shape rule in
+   * `checkGrant`, so a caller that must offer a grant never offers a
+   * non-grantable target. Used by the redirect probe to classify hops.
+   */
+  export function grantableOrigin(value: string): string | undefined {
+    try {
+      const url = new URL(value)
+      if (url.username || url.password) return undefined
+      if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback.has(url.hostname))) return undefined
+      return url.origin
+    } catch {
+      return undefined
+    }
   }
 
   export function allows(name: string): boolean {
@@ -570,17 +597,13 @@ export namespace WebMcpProfile {
     if (!origin) {
       throw new Error("WebMCP navigation landing could not be verified; do not retry automatically")
     }
-    // The approval was for the requested origin, not for any allowed origin:
-    // a redirect to another allowed origin still lands away from it.
-    let requested: string | undefined
-    if (typeof call.url === "string") {
-      try {
-        requested = new URL(call.url).origin
-      } catch {
-        requested = undefined
-      }
-    }
-    if (!requested || origin !== requested || !profile.allowedOrigins.includes(origin)) {
+    // The landing origin must be one the user has allowed. A redirect between
+    // two allowed origins is permitted: the redirect target was separately
+    // granted through the same per-origin approval, so it is authorized. A
+    // landing on an origin outside the effective allowlist is rejected here;
+    // the dispatch probe (tool-conversion.ts) offers the grant prompt for a
+    // redirect target the bridge blocked, so the retry can land on it.
+    if (!profile.allowedOrigins.includes(origin)) {
       throw new Error("WebMCP navigation did not land on an allowed origin; do not retry automatically")
     }
   }
