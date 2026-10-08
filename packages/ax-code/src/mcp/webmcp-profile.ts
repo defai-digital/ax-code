@@ -400,11 +400,19 @@ export namespace WebMcpProfile {
     return server.enabled === false || (server.webmcp !== undefined && server.enabled !== true)
   }
 
+  /**
+   * Validate a configured webmcp entry and return its frozen profile. The
+   * stored command is never executed (ADR-173): the launch argv is always
+   * regenerated from the effective profile at connect time, so version drift
+   * self-heals and a hand-edited command cannot smuggle arguments — it is
+   * discarded by construction. Semantics stay exactly f(profile): the schema
+   * and the managed gates validate the profile, not the command.
+   */
   export function validateLaunch(server: Server): Configuration | undefined {
     if (!server.webmcp) return undefined
     const profile = Configuration.parse(server.webmcp)
-    if (server.type !== "local" || JSON.stringify(server.command) !== JSON.stringify(command(profile))) {
-      throw new Error("WebMCP requires the exact reviewed launch command. Regenerate it with ax-code mcp webmcp.")
+    if (server.type !== "local") {
+      throw new Error("WebMCP requires a local launch command")
     }
     if (server.environment && Object.keys(server.environment).length > 0) {
       throw new Error("WebMCP profiles do not accept environment overrides.")

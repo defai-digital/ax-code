@@ -79,14 +79,29 @@ describe("WebMCP profile", () => {
     }
   })
 
-  test("rejects modified launch commands and environment overlays", () => {
+  test("modified or drifted launch commands are discarded; environment overlays stay rejected (ADR-173)", () => {
     const config = WebMcpProfile.config({ allowedOrigins: origins }, true)
-    expect(() => WebMcpProfile.validateLaunch({ ...config, command: [...config.command, "--auto-connect"] })).toThrow()
-    expect(() => WebMcpProfile.validateLaunch({ ...config, command: ["node", "unreviewed.js"] })).toThrow()
+    // Tampered commands never execute: validateLaunch returns the profile and
+    // the launch argv is regenerated from it.
+    const tampered = WebMcpProfile.validateLaunch({ ...config, command: [...config.command, "--auto-connect"] })!
+    expect(WebMcpProfile.command(tampered)).not.toContain("--auto-connect")
+    const replaced = WebMcpProfile.validateLaunch({ ...config, command: ["node", "unreviewed.js"] })!
+    expect(WebMcpProfile.command(replaced)).toEqual(WebMcpProfile.command(config.webmcp))
+    // Version drift self-heals: an argv from before a flag change validates
+    // and regenerates instead of bricking the entry.
+    const drifted = WebMcpProfile.validateLaunch({
+      ...config,
+      command: [...config.command, "--no-category-network"],
+    })!
+    expect(WebMcpProfile.command(drifted)).toEqual(WebMcpProfile.command(config.webmcp))
+    // A changed profile is simply the new profile: semantics are f(profile).
+    const changed = WebMcpProfile.validateLaunch({
+      ...config,
+      webmcp: { allowedOrigins: ["https://changed.test"] },
+    })!
+    expect(WebMcpProfile.command(changed)).toContain("--allowed-url-pattern=https://changed.test/*")
     expect(() => WebMcpProfile.validateLaunch({ ...config, environment: { PROXY: "https://proxy.test" } })).toThrow()
-    expect(() =>
-      WebMcpProfile.validateLaunch({ ...config, webmcp: { allowedOrigins: ["https://changed.test"] } }),
-    ).toThrow()
+    expect(() => WebMcpProfile.validateLaunch({ ...config, type: "remote" })).toThrow()
   })
 
   test("origin and launch posture changes invalidate MCP trust", () => {

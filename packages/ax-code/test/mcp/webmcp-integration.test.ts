@@ -65,16 +65,20 @@ test("profile entries remain disabled without explicit enablement, including sta
   })
 })
 
-test("launch validation fails before spawning a modified bridge", async () => {
+test("a modified bridge command is discarded and the launch regenerates from the profile (ADR-173)", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      await expect(MCP.add("bridge", { ...profile(), command: ["unreviewed-server"] })).rejects.toThrow(
-        "exact reviewed launch command",
+      // A dynamic add resolves from an unknown (trusted-by-default) source and
+      // connects immediately; the tampered command never executes.
+      await MCP.add("bridge", { ...profile(), command: ["unreviewed-server"] })
+      expect(bridge.launch).toHaveBeenCalledTimes(1)
+      const options = bridge.launch.mock.calls[0]![0] as { command?: string; args?: string[] }
+      expect(options.command).not.toBe("unreviewed-server")
+      expect([...(options.command ? [options.command] : []), ...(options.args ?? [])]).toContain(
+        "chrome-devtools-mcp@1.8.0",
       )
-      expect(bridge.launch).not.toHaveBeenCalled()
-      expect((await MCP.clients()).bridge).toBeUndefined()
     },
   })
 })

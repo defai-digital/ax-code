@@ -1816,7 +1816,13 @@ export namespace Config {
       if (err.code === "ENOENT") return "{}"
       throw new JsonError({ path: filepath }, { cause: err })
     })
-    const updated = patchJsonc(before, { mcp: { [name]: { ...entry, enabled } } })
+    // ADR-173: normalize webmcp-profiled entries to the regenerated form so a
+    // drifted or hand-edited stored command does not survive the toggle.
+    const normalized =
+      "webmcp" in entry && entry.webmcp !== undefined && entry.type === "local"
+        ? WebMcpProfile.config(entry.webmcp, enabled)
+        : { ...entry, enabled }
+    const updated = patchJsonc(before, { mcp: { [name]: normalized } })
     // Validate before writing: a malformed result must never replace the file.
     parseConfig(updated, filepath)
     await Filesystem.write(filepath, updated)

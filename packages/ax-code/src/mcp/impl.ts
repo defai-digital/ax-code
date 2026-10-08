@@ -614,17 +614,18 @@ export namespace MCP {
 
   // A webmcp-profiled entry is exempt from the config-source trust gate on an
   // explicit connect: the connect call (chip click, `mcp connect`) is itself
-  // the user gesture, and WebMcpProfile.validateLaunch pins the exact reviewed
-  // argv before any process spawns, so a hostile project config cannot smuggle
-  // an arbitrary command through a webmcp entry — only the pinned bridge with
-  // schema-validated flags can launch, and every bridge call still requires
-  // interactive approval. The startup bulk connect keeps the gate: a cloned
-  // repo must not launch a browser without any gesture.
+  // the user gesture. The exemption requires the entry to carry the current
+  // reviewed argv for its validated profile (ADR-173): the launch argv is
+  // regenerated from the profile, so a hostile command is discarded rather
+  // than executed, but a drifted, optioned (executablePath), or hand-edited
+  // entry goes through the normal trust gate instead of inheriting the
+  // gesture. The startup bulk connect keeps the gate: a cloned repo must not
+  // launch a browser without any gesture.
   function webmcpTrustExempt(mcp: Config.Mcp): boolean {
     if (mcp.type !== "local" || mcp.webmcp === undefined) return false
     try {
-      WebMcpProfile.validateLaunch(mcp)
-      return true
+      const profile = WebMcpProfile.validateLaunch(mcp)
+      return profile !== undefined && JSON.stringify(mcp.command) === JSON.stringify(WebMcpProfile.command(profile))
     } catch {
       return false
     }
@@ -804,20 +805,16 @@ export namespace MCP {
       }
       webmcp = decision.profile
     }
-    // Launch with the effective profile's argv whenever grants or a managed
-    // narrowing changed it (ADR-168, ADR-170): Chrome's --allowed-url-pattern
-    // list must match the origins the app layer enforces, including a managed
-    // list that narrows the unrestricted default profile. An untouched profile
-    // keeps the reviewed configured argv byte-for-byte. The persistent profile
-    // directory stays keyed to the configured profile, so a grant or narrowing
-    // never swaps the login state out from under the user.
+    // ADR-173: the stored command of a webmcp-profiled entry is never
+    // executed. The launch argv is always regenerated from the effective
+    // profile — Chrome's --allowed-url-pattern list matches the origins the
+    // app layer enforces (ADR-168, ADR-170), version drift self-heals, and a
+    // hand-edited command cannot smuggle arguments. The persistent profile
+    // directory stays keyed to the configured profile, so a grant or
+    // narrowing never swaps the login state out from under the user.
     const effective = webmcp ?? validated
     const launchCommand =
-      effective && effective !== configured
-        ? WebMcpProfile.command(effective, configured)
-        : mcp.type === "local"
-          ? mcp.command
-          : []
+      effective && configured ? WebMcpProfile.command(effective, configured) : mcp.type === "local" ? mcp.command : []
     if (webmcp?.executablePath) {
       const chrome = await WebMcpProfile.verifyChromeVersion(webmcp.executablePath)
       if (!chrome.ok) {
