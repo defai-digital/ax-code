@@ -837,7 +837,7 @@ export namespace WebMcpProfile {
 
   function redactUrlText(text: string): string {
     return text
-      .replace(/:\/\/[^\s/@]+@/g, "://")
+      .replace(/:\/\/[^\s/]*@/g, "://")
       .replace(/(https?:\/\/[^\s#]+)#[^\s]*/g, "$1")
       .replace(SECRET_QUERY_KEY, "$1[redacted]")
   }
@@ -891,6 +891,19 @@ export namespace WebMcpProfile {
       if (structured && Array.isArray(structured.messages) && structured.messages.length > CONSOLE_TAIL) {
         structured.messages = structured.messages.slice(-CONSOLE_TAIL)
       }
+      // The tail bounds the message count, not their size: one oversized line
+      // would otherwise pass through whole.
+      let tailBytes = 0
+      for (const part of contents) {
+        if (isRecord(part) && part.type === "text" && typeof part.text === "string") {
+          tailBytes += Buffer.byteLength(part.text, "utf8")
+        }
+      }
+      if (tailBytes > MAX_READ_TEXT_BYTES) {
+        throw new Error(
+          `WebMCP console output exceeded the ${MAX_READ_TEXT_BYTES / 1024} KiB read budget; narrow the request and retry`,
+        )
+      }
     }
     contents.unshift({ type: "text", text: `[Untrusted web content from ${origin}]` })
     result.content = contents
@@ -910,6 +923,41 @@ export namespace WebMcpProfile {
     } catch {
       return undefined
     }
+  }
+
+  /**
+   * Explain why a page URL cannot be bound to an origin. The generic "could
+   * not be located" wording hid the two cases a model can act on: the tab
+   * crashed into a browser error page, or it left the list entirely.
+   */
+  export function unlocatedPageMessage(pageUrl: string | undefined, action: string): string {
+    if (!pageUrl) {
+      return `WebMCP page ${action}: it is not in the bridge page list (it may have closed or crashed). Call list_pages and use a current pageId, or open the page again.`
+    }
+    if (/^chrome-error:/i.test(pageUrl)) {
+      return `WebMCP page ${action}: the tab is showing a browser error page (chrome-error), so the site failed to load or crashed. Navigate again or try a different URL; do not retry the same call.`
+    }
+    return `WebMCP page ${action}: the tab is on a non-web address, so it has no origin to bind to. Navigate it to an http(s) page first.`
+  }
+
+  /**
+   * A blocking JavaScript dialog (alert/confirm/prompt) freezes the page for
+   * every bridge call, and handle_dialog is not an admitted tool. Surface that
+   * as a plain note so the model stops retrying list/execute against it.
+   */
+  export function annotateBlockingDialog(result: unknown): void {
+    if (!isRecord(result) || !Array.isArray(result.content)) return
+    const texts = result.content.flatMap((item) =>
+      isRecord(item) && item.type === "text" && typeof item.text === "string" ? [item.text] : [],
+    )
+    if (!texts.some((text) => /^#+\s*Open dialog\b/m.test(text))) return
+    result.content = [
+      ...result.content,
+      {
+        type: "text",
+        text: "[AX Code] The page is blocked by a JavaScript dialog. handle_dialog is not available through this bridge, so the page cannot be listed, read or driven until the dialog closes. Report this blocker to the user, or navigate to a different URL; do not retry list_webmcp_tools or execute_webmcp_tool against this page.",
+      },
+    ]
   }
 
   /**
@@ -1164,7 +1212,7 @@ export namespace WebMcpProfile {
     const origin = pageOrigin(pageUrl)
     if (!origin) {
       clearBaseline(state, pageId)
-      return { ok: false, error: "WebMCP page could not be located when its tools were listed" }
+      return { ok: false, error: unlocatedPageMessage(pageUrl, "could not be located when its tools were listed") }
     }
     const tools = new Map<string, string>()
     const annotations = new Map<string, ToolDescriptor["annotations"]>()
@@ -1290,7 +1338,7 @@ export namespace WebMcpProfile {
     const capped = checkListingCaps(descriptors)
     if (capped) return { ok: false, error: capped }
     const origin = pageOrigin(pageUrl)
-    if (!origin) return { ok: false, error: "WebMCP page could not be located before execution" }
+    if (!origin) return { ok: false, error: unlocatedPageMessage(pageUrl, "could not be located before execution") }
     if (expected) {
       if (expected.pageId !== pageId || expected.toolName !== toolName) {
         return { ok: false, error: "WebMCP approval does not match this call; refusing to execute" }

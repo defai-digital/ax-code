@@ -7,9 +7,12 @@ export function webMcpApprovalLines(metadata: Record<string, unknown>): string[]
           // characters (bidi overrides, zero-width marks) so a crafted
           // approval label cannot reorder or hide the surrounding summary.
           .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029\p{Cf}]/gu, "")
-          .slice(0, 240)
+          .replace(/^(.{240})[\s\S]+$/u, "$1…(truncated)")
       : "(unknown)"
   const origins = Array.isArray(metadata.allowedOrigins) ? metadata.allowedOrigins.slice(0, 8).map(text) : []
+  if (Array.isArray(metadata.allowedOrigins) && metadata.allowedOrigins.length > 8) {
+    origins.push(`(+${metadata.allowedOrigins.length - 8} more)`)
+  }
   const annotations =
     typeof metadata.annotations === "object" && metadata.annotations !== null
       ? (metadata.annotations as Record<string, unknown>)

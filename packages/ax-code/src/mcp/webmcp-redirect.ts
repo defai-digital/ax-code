@@ -7,6 +7,10 @@ export type ProbeFetch = (
 ) => Promise<{ status: number; headers: { get(name: string): string | null } }>
 
 export const MAX_REDIRECT_HOPS = 5
+// 304 and 300/305/306 may carry a Location header without being a redirect.
+const REDIRECT_STATUSES: ReadonlySet<number> = new Set([301, 302, 303, 307, 308])
+// setTimeout fires immediately for delays above 2^31 - 1.
+const MAX_TIMER_MS = 2 ** 31 - 1
 export const REDIRECT_PROBE_TIMEOUT_MS = 4_000
 
 export type RedirectProbeOptions = { timeoutMs?: number; signal?: AbortSignal }
@@ -41,7 +45,7 @@ export async function redirectOriginOutsideAllowlist(
   const startOrigin = WebMcpProfile.grantableOrigin(requestedUrl)
   if (!startOrigin || !allowed.has(startOrigin)) return undefined
   if (options.signal?.aborted) return undefined
-  const timeoutMs = options.timeoutMs ?? REDIRECT_PROBE_TIMEOUT_MS
+  const timeoutMs = Math.min(options.timeoutMs ?? REDIRECT_PROBE_TIMEOUT_MS, MAX_TIMER_MS)
   if (timeoutMs <= 0) return undefined
   const deadline = Date.now() + timeoutMs
   const controller = new AbortController()
@@ -59,7 +63,7 @@ export async function redirectOriginOutsideAllowlist(
         return undefined
       }
       if (controller.signal.aborted || Date.now() >= deadline) return undefined
-      if (response.status < 300 || response.status >= 400) return undefined
+      if (!REDIRECT_STATUSES.has(response.status)) return undefined
       const location = response.headers.get("location")
       if (!location) return undefined
       let next: URL

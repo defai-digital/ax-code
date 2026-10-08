@@ -87,7 +87,8 @@ async function webmcpPreflight(
   })
   WebMcpProfile.validateResult("list_webmcp_tools", listing)
   const after = await webmcpPageUrl(client, pageId, budget(), signal)
-  if (!before || !after) throw new Error("WebMCP page could not be located before execution")
+  if (!before || !after)
+    throw new Error(WebMcpProfile.unlocatedPageMessage(before ?? after, "could not be located before execution"))
   if (before !== after) throw new Error("WebMCP page navigated during the execute-time re-listing")
   const descriptors = WebMcpProfile.parseToolListing(listing)
   if (!descriptors) throw new Error("WebMCP re-listing returned no tool descriptors; refusing to execute")
@@ -232,7 +233,11 @@ export async function convertMcpTool(
         const before =
           typeof pageId === "number" ? await webmcpPageUrl(client, pageId, budget(), opts.abortSignal) : undefined
         const origin = WebMcpProfile.pageOriginOf(before)
-        if (!origin) throw new Error("WebMCP page could not be located before reading; do not retry automatically")
+        if (!origin)
+          throw new Error(
+            WebMcpProfile.unlocatedPageMessage(before, "could not be located before reading") +
+              " Do not retry automatically.",
+          )
         if (!(webmcp.readGrants?.() ?? NO_READ_GRANTS).has(origin)) throw new WebMcpProfile.ReadNotGrantedError(origin)
         readOrigin = origin
       }
@@ -311,7 +316,13 @@ export async function convertMcpTool(
           }
           if (listingPageId !== undefined) {
             const after = await webmcpPageUrl(client, listingPageId, budget(), opts.abortSignal)
-            if (!listedBefore || !after) throw new Error("WebMCP page could not be located when its tools were listed")
+            if (!listedBefore || !after)
+              throw new Error(
+                WebMcpProfile.unlocatedPageMessage(
+                  after ?? listedBefore,
+                  "could not be located when its tools were listed",
+                ),
+              )
             if (listedBefore !== after) throw new Error("WebMCP page navigated while its tools were listed")
             // An unparseable listing fails the call: there is no binding to
             // store, and the previous baseline must not silently stand in.
@@ -327,6 +338,7 @@ export async function convertMcpTool(
             if (!recorded.ok) throw new Error(recorded.error)
           }
         }
+        if (webmcp) WebMcpProfile.annotateBlockingDialog(result)
         return result
       } catch (e) {
         // A successful listing returns immediately after it is recorded, so

@@ -17,6 +17,18 @@ function fakeFetch(replies: Record<string, Reply>, calls: string[] = []): ProbeF
 const allowed = ["https://a.test"]
 
 describe("WebMCP redirect probe (ADR-168)", () => {
+  test("ignores a Location header on a non-redirect status", async () => {
+    const fetchImpl = fakeFetch({ "https://a.test/start": { status: 304, location: "https://b.test/x" } })
+    expect(await redirectOriginOutsideAllowlist("https://a.test/start", allowed, fetchImpl)).toBeUndefined()
+  })
+
+  test("clamps an oversized timeout instead of aborting immediately", async () => {
+    const fetchImpl = fakeFetch({ "https://a.test/start": { status: 307, location: "https://b.test/x" } })
+    expect(
+      await redirectOriginOutsideAllowlist("https://a.test/start", allowed, fetchImpl, { timeoutMs: 2 ** 40 }),
+    ).toBe("https://b.test")
+  })
+
   test("returns the first redirect origin outside the allowlist", async () => {
     const fetchImpl = fakeFetch({ "https://a.test/start": { status: 301, location: "https://b.test/x" } })
     expect(await redirectOriginOutsideAllowlist("https://a.test/start", allowed, fetchImpl)).toBe("https://b.test")

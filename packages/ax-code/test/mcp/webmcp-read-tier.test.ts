@@ -376,6 +376,16 @@ describe("WebMCP read grants and bounded output (ADR-171)", () => {
     )
   })
 
+  test("boundReadResult strips userinfo that contains an at sign and bounds oversized console output", () => {
+    const network = { content: [{ type: "text", text: "GET https://user:p@ss@example.test/a 200" }] }
+    WebMcpProfile.boundReadResult("list_network_requests", network, "https://example.test")
+    expect(JSON.stringify(network)).not.toContain("ss@")
+    const console = { content: [{ type: "text", text: "x".repeat(64 * 1024) }] }
+    expect(() => WebMcpProfile.boundReadResult("list_console_messages", console, "https://example.test")).toThrow(
+      "read budget",
+    )
+  })
+
   test("boundReadResult labels output with its origin", () => {
     const result = { content: [{ type: "text", text: "page text" }] }
     WebMcpProfile.boundReadResult("take_snapshot", result, "https://example.test")

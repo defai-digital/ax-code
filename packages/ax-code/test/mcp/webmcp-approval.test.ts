@@ -82,3 +82,11 @@ test("approval handles missing metadata and strips terminal controls", () => {
   expect(spoofed).toContain("Bridge: abcd")
   expect(/[\u202a-\u202e\u2066-\u2069\u200b-\u200f\u2028\u2029]/.test(spoofed)).toBe(false)
 })
+
+test("approval counts origins beyond the display cap and marks truncated labels", () => {
+  const origins = Array.from({ length: 10 }, (_, index) => `https://o${index}.test`)
+  const lines = webMcpApprovalLines({ server: "bridge", tool: "navigate_page", allowedOrigins: origins }).join("\n")
+  expect(lines).toContain("(+2 more)")
+  const long = webMcpApprovalLines({ server: "b".repeat(300), tool: "list_pages" }).join("\n")
+  expect(long).toContain("…(truncated)")
+})

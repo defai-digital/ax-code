@@ -314,6 +314,30 @@ describe("WebMCP managed requirement", () => {
     ).toMatchObject({ ok: false, error: expect.stringContaining("changed since it was listed") })
   })
 
+  test("an unlocatable page names the browser error page or the missing tab", () => {
+    expect(WebMcpProfile.unlocatedPageMessage("chrome-error://chromewebdata/", "could not be located")).toContain(
+      "browser error page",
+    )
+    expect(WebMcpProfile.unlocatedPageMessage(undefined, "could not be located")).toContain(
+      "not in the bridge page list",
+    )
+    expect(WebMcpProfile.unlocatedPageMessage("about:blank", "could not be located")).toContain("non-web address")
+  })
+
+  test("a blocking dialog in a bridge result is flagged for the model", () => {
+    const result = {
+      content: [
+        { type: "text", text: "Navigated.\n# Open dialog\nconfirm: Allow ads?\nCall handle_dialog to handle it." },
+      ],
+    }
+    WebMcpProfile.annotateBlockingDialog(result)
+    expect(result.content).toHaveLength(2)
+    expect(result.content[1].text).toContain("blocked by a JavaScript dialog")
+    const clean = { content: [{ type: "text", text: "## Pages\n1: about:blank" }] }
+    WebMcpProfile.annotateBlockingDialog(clean)
+    expect(clean.content).toHaveLength(1)
+  })
+
   test("a listing without a locatable page fails and clears the baseline", () => {
     const current = profile()
     const state = WebMcpProfile.stateFor(current)
