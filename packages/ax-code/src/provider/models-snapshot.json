@@ -3605,28 +3605,6 @@
           "output": 32768
         }
       },
-      "doubao-seed-1-6-250615": {
-        "id": "doubao-seed-1-6-250615",
-        "name": "Doubao Seed 1.6",
-        "family": "seed",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "release_date": "2024-01-01",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 256000,
-          "input": 256000,
-          "output": 16384
-        }
-      },
       "Gemma-4-26B-A4B-MeroMero": {
         "id": "Gemma-4-26B-A4B-MeroMero",
         "name": "Gemma 4 26B A4B MeroMero",
@@ -3921,28 +3899,6 @@
           "output": 65536
         },
         "canonical_model_id": "deepseek/deepseek-reasoner"
-      },
-      "doubao-seed-1-6-flash-250615": {
-        "id": "doubao-seed-1-6-flash-250615",
-        "name": "Doubao Seed 1.6 Flash",
-        "family": "seed",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "release_date": "2024-01-01",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 256000,
-          "input": 256000,
-          "output": 16384
-        }
       },
       "doubao-1.5-pro-256k": {
         "id": "doubao-1.5-pro-256k",
@@ -5091,29 +5047,6 @@
           "output": 60000
         }
       },
-      "ernie-x1.1-preview": {
-        "id": "ernie-x1.1-preview",
-        "name": "ERNIE X1.1",
-        "family": "ernie",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": false,
-        "release_date": "2025-09-10",
-        "modalities": {
-          "input": [
-            "text",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 64000,
-          "input": 64000,
-          "output": 8192
-        }
-      },
       "gemma-4-31b-it-isometry": {
         "id": "gemma-4-31b-it-isometry",
         "name": "Isometry",
@@ -5295,8 +5228,8 @@
           ]
         },
         "limit": {
-          "context": 256000,
-          "input": 256000,
+          "context": 262144,
+          "input": 262144,
           "output": 65536
         },
         "canonical_model_id": "alibaba/qwen3.5-9b"
@@ -5461,8 +5394,8 @@
           ]
         },
         "limit": {
-          "context": 258048,
-          "input": 258048,
+          "context": 262144,
+          "input": 262144,
           "output": 65536
         },
         "canonical_model_id": "alibaba/qwen3.5-397b-a17b"
@@ -5532,8 +5465,8 @@
           ]
         },
         "limit": {
-          "context": 524288,
-          "input": 524288,
+          "context": 1010000,
+          "input": 1010000,
           "output": 32768
         }
       },
@@ -5626,8 +5559,8 @@
           ]
         },
         "limit": {
-          "context": 524288,
-          "input": 524288,
+          "context": 1010000,
+          "input": 1010000,
           "output": 32768
         }
       },
@@ -6355,7 +6288,7 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "release_date": "2025-08-01",
+        "release_date": "2025-07-30",
         "modalities": {
           "input": [
             "text"
@@ -6368,7 +6301,9 @@
           "context": 256000,
           "input": 256000,
           "output": 32768
-        }
+        },
+        "canonical_model_id": "mistral/codestral-2508",
+        "temperature": true
       },
       "mistralai/devstral-2-123b-instruct-2512": {
         "id": "mistralai/devstral-2-123b-instruct-2512",
@@ -7671,9 +7606,9 @@
           ]
         },
         "limit": {
-          "context": 200000,
-          "input": 200000,
-          "output": 64000
+          "context": 1000000,
+          "input": 1000000,
+          "output": 128000
         }
       },
       "anthropic/claude-sonnet-4.6:thinking": {
@@ -9346,8 +9281,8 @@
           ]
         },
         "limit": {
-          "context": 1000000,
-          "input": 1000000,
+          "context": 1048576,
+          "input": 1048576,
           "output": 131072
         },
         "canonical_model_id": "deepseek/deepseek-v4-flash-0731"
@@ -9392,8 +9327,8 @@
           ]
         },
         "limit": {
-          "context": 1000000,
-          "input": 1000000,
+          "context": 1048576,
+          "input": 1048576,
           "output": 131072
         },
         "canonical_model_id": "deepseek/deepseek-v4-flash-0731"
@@ -10496,8 +10431,8 @@
           ]
         },
         "limit": {
-          "context": 128000,
-          "input": 128000,
+          "context": 131072,
+          "input": 131072,
           "output": 16384
         },
         "canonical_model_id": "openai/gpt-oss-20b"
@@ -13299,8 +13234,8 @@
         "family": "qwen",
         "id": "qwen/qwen3.5-122b-a10b",
         "limit": {
-          "context": 131072,
-          "input": 131072,
+          "context": 262144,
+          "input": 262144,
           "output": 32768
         },
         "modalities": {
@@ -13323,8 +13258,8 @@
         "family": "qwen",
         "id": "qwen/qwen3.5-122b-a10b:thinking",
         "limit": {
-          "context": 131072,
-          "input": 131072,
+          "context": 262144,
+          "input": 262144,
           "output": 32768
         },
         "modalities": {
@@ -13451,8 +13386,8 @@
         "family": "qwen",
         "id": "qwen/qwen3.5-397b-a17b:thinking",
         "limit": {
-          "context": 258048,
-          "input": 258048,
+          "context": 262144,
+          "input": 262144,
           "output": 65536
         },
         "modalities": {
@@ -13605,8 +13540,8 @@
         "family": "qwen",
         "id": "qwen/qwen3.6-27b",
         "limit": {
-          "context": 260096,
-          "input": 260096,
+          "context": 262144,
+          "input": 262144,
           "output": 65536
         },
         "modalities": {
@@ -13631,8 +13566,8 @@
         "family": "qwen",
         "id": "qwen/qwen3.6-27b:thinking",
         "limit": {
-          "context": 260096,
-          "input": 260096,
+          "context": 262144,
+          "input": 262144,
           "output": 65536
         },
         "modalities": {
@@ -13937,8 +13872,8 @@
         "family": "qwen",
         "id": "qwen/qwen3.8-27b",
         "limit": {
-          "context": 262144,
-          "input": 262144,
+          "context": 1001536,
+          "input": 1001536,
           "output": 32768
         },
         "modalities": {
@@ -13963,8 +13898,8 @@
         "family": "qwen",
         "id": "qwen/qwen3.8-27b:thinking",
         "limit": {
-          "context": 262144,
-          "input": 262144,
+          "context": 1001536,
+          "input": 1001536,
           "output": 32768
         },
         "modalities": {
@@ -15226,6 +15161,80 @@
         "name": "Apex Flash 1 Abliterated",
         "reasoning": true,
         "release_date": "2026-10-05",
+        "tool_call": true
+      },
+      "anthropic/claude-haiku-5.5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "anthropic/claude-haiku-5.5",
+        "limit": {
+          "context": 1000000,
+          "input": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5",
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
+        "tool_call": true
+      },
+      "deepseek/deepseek-v4-flash-0423": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4-flash-0423",
+        "family": "deepseek-flash",
+        "id": "deepseek/deepseek-v4-flash-0423",
+        "limit": {
+          "context": 1048576,
+          "input": 1048576,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4 Flash 0423",
+        "reasoning": true,
+        "release_date": "2026-04-23",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek/deepseek-v4-flash-0423:thinking": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4-flash-0423",
+        "family": "deepseek-flash",
+        "id": "deepseek/deepseek-v4-flash-0423:thinking",
+        "limit": {
+          "context": 1048576,
+          "input": 1048576,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4 Flash 0423 (Thinking)",
+        "reasoning": true,
+        "release_date": "2026-04-23",
+        "temperature": true,
         "tool_call": true
       }
     }
@@ -18195,6 +18204,34 @@
         "release_date": "2026-09-29",
         "temperature": false,
         "tool_call": true
+      },
+      "claude-haiku-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "claude-haiku-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5",
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
+        },
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
+        "tool_call": true
       }
     }
   },
@@ -20110,6 +20147,30 @@
         "temperature": true,
         "tool_call": true,
         "canonical_model_id": "deepseek/deepseek-v4.1-flash"
+      },
+      "mistral-large-4": {
+        "attachment": true,
+        "canonical_model_id": "mistral/mistral-large-4",
+        "family": "mistral-large",
+        "id": "mistral-large-4",
+        "limit": {
+          "context": 1048576,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Mistral Large 4",
+        "reasoning": true,
+        "release_date": "2026-10-06",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -25988,30 +26049,6 @@
           "output": 32768
         }
       },
-      "deepinfra/hy3": {
-        "id": "deepinfra/hy3",
-        "name": "Hy3 (DeepInfra)",
-        "family": "Hy",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-07-06",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 262144,
-          "input": 192000,
-          "output": 131072
-        },
-        "canonical_model_id": "tencent/hy3"
-      },
       "deepinfra/deepseek-v3.2": {
         "id": "deepinfra/deepseek-v3.2",
         "name": "DeepSeek V3.2 (DeepInfra)",
@@ -30085,6 +30122,82 @@
         "release_date": "2026-08-14",
         "temperature": true,
         "tool_call": false
+      },
+      "anthropic/claude-haiku-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "anthropic/claude-haiku-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5 (Anthropic)",
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
+        "tool_call": true
+      },
+      "aws-bedrock/claude-haiku-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "aws-bedrock/claude-haiku-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5 (AWS Bedrock)",
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
+        "tool_call": true
+      },
+      "entrim/glm-5.3-flash": {
+        "attachment": true,
+        "canonical_model_id": "zhipuai/glm-5.3-flash",
+        "family": "glm-flash",
+        "id": "entrim/glm-5.3-flash",
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM-5.3 Flash (entrim)",
+        "reasoning": true,
+        "release_date": "2026-08-26",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -41018,6 +41131,34 @@
         },
         "reasoning": true,
         "release_date": "2026-09-28",
+        "temperature": false,
+        "tool_call": true
+      },
+      "claude-haiku-5-5@default": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "claude-haiku-5-5@default",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5",
+        "provider": {
+          "npm": "@ai-sdk/google-vertex/anthropic"
+        },
+        "reasoning": true,
+        "release_date": "2026-10-07",
         "temperature": false,
         "tool_call": true
       }
@@ -52508,32 +52649,6 @@
         },
         "canonical_model_id": "zhipuai/glm-5.3"
       },
-      "glm-5.3-flash-fp4": {
-        "attachment": true,
-        "family": "glm-flash",
-        "id": "glm-5.3-flash-fp4",
-        "interleaved": true,
-        "limit": {
-          "context": 1048576,
-          "output": 131072
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "GLM 5.3 Flash FP4",
-        "reasoning": true,
-        "release_date": "2026-08-26",
-        "temperature": true,
-        "tool_call": true,
-        "canonical_model_id": "zhipuai/glm-5.3-flash"
-      },
       "deepseek-v4.1-flash-fast-fp4": {
         "attachment": true,
         "family": "deepseek-flash",
@@ -53427,7 +53542,8 @@
         "limit": {
           "context": 262144,
           "output": 32768
-        }
+        },
+        "family": "leanstral"
       },
       "deepseek-v4-pro-0813@eu": {
         "id": "deepseek-v4-pro-0813@eu",
@@ -54701,7 +54817,8 @@
         "limit": {
           "context": 262144,
           "output": 32768
-        }
+        },
+        "family": "leanstral"
       },
       "glm-5.3-flash@eu": {
         "id": "glm-5.3-flash@eu",
@@ -56321,8 +56438,8 @@
         "family": "mistral-large",
         "id": "mistral-large-4",
         "limit": {
-          "context": 1000000,
-          "output": 1000000
+          "context": 524288,
+          "output": 524288
         },
         "modalities": {
           "input": [
@@ -56334,7 +56451,7 @@
           ]
         },
         "name": "Mistral Large 4",
-        "reasoning": false,
+        "reasoning": true,
         "release_date": "2026-10-06",
         "temperature": true,
         "tool_call": true
@@ -56345,8 +56462,8 @@
         "family": "mistral-large",
         "id": "mistral-large-4@eu",
         "limit": {
-          "context": 1000000,
-          "output": 1000000
+          "context": 524288,
+          "output": 524288
         },
         "modalities": {
           "input": [
@@ -56358,9 +56475,59 @@
           ]
         },
         "name": "Mistral Large 4 (EU)",
-        "reasoning": false,
+        "reasoning": true,
         "release_date": "2026-10-06",
         "temperature": true,
+        "tool_call": true
+      },
+      "claude-haiku-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "claude-haiku-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5",
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
+        "tool_call": true
+      },
+      "claude-haiku-5-5@eu": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "claude-haiku-5-5@eu",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5 (EU)",
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
         "tool_call": true
       }
     }
@@ -64868,11 +65035,8 @@
           ]
         },
         "limit": {
-          "context": 1000000,
+          "context": 200000,
           "output": 64000
-        },
-        "headers": {
-          "anthropic-beta": "context-1m-2025-08-07"
         }
       },
       "claude-opus-4-7": {
@@ -64998,11 +65162,8 @@
           ]
         },
         "limit": {
-          "context": 1000000,
+          "context": 200000,
           "output": 64000
-        },
-        "headers": {
-          "anthropic-beta": "context-1m-2025-08-07"
         },
         "canonical_model_id": "anthropic/claude-sonnet-4-5"
       },
@@ -65165,6 +65326,34 @@
         "name": "Claude Sonnet 5.5",
         "reasoning": true,
         "release_date": "2026-09-28",
+        "temperature": false,
+        "tool_call": true
+      },
+      "claude-haiku-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "headers": {
+          "anthropic-beta": "context-1m-2025-08-07"
+        },
+        "id": "claude-haiku-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5",
+        "reasoning": true,
+        "release_date": "2026-10-07",
         "temperature": false,
         "tool_call": true
       }
@@ -66397,29 +66586,6 @@
           "output": 256000
         },
         "canonical_model_id": "stepfun/step-3.7-flash"
-      },
-      "stepfun/step-3.5-flash": {
-        "id": "stepfun/step-3.5-flash",
-        "name": "StepFun 3.5 Flash",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-01-29",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 262114,
-          "output": 262114
-        },
-        "canonical_model_id": "stepfun/step-3.5-flash"
       },
       "interfaze/interfaze-beta": {
         "id": "interfaze/interfaze-beta",
@@ -68221,7 +68387,7 @@
           ]
         },
         "limit": {
-          "context": 1000000,
+          "context": 200000,
           "output": 64000
         }
       },
@@ -69477,28 +69643,6 @@
           "output": 8000
         },
         "canonical_model_id": "deepseek/deepseek-v3.2"
-      },
-      "deepseek/deepseek-v3.1-terminus": {
-        "id": "deepseek/deepseek-v3.1-terminus",
-        "name": "DeepSeek V3.1 Terminus",
-        "family": "deepseek",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-09-22",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 131072,
-          "output": 32768
-        }
       },
       "deepseek/deepseek-v4-pro": {
         "id": "deepseek/deepseek-v4-pro",
@@ -73404,30 +73548,6 @@
         "release_date": "2026-10-05",
         "tool_call": false
       },
-      "deepseek/deepseek-v4.1-flash-fast": {
-        "attachment": true,
-        "canonical_model_id": "deepseek/deepseek-v4.1-flash",
-        "family": "deepseek-flash",
-        "id": "deepseek/deepseek-v4.1-flash-fast",
-        "limit": {
-          "context": 1048576,
-          "output": 1000000
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "DeepSeek V4.1 Flash Fast",
-        "reasoning": true,
-        "release_date": "2026-09-10",
-        "temperature": true,
-        "tool_call": true
-      },
       "mistral/mistral-large-4": {
         "attachment": true,
         "family": "mistral-large",
@@ -73509,6 +73629,51 @@
         "reasoning": false,
         "release_date": "2026-10-06",
         "tool_call": false
+      },
+      "anthropic/claude-haiku-5.5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "anthropic/claude-haiku-5.5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5",
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
+        "tool_call": true
+      },
+      "stealth/glyph-cluster": {
+        "attachment": false,
+        "id": "stealth/glyph-cluster",
+        "limit": {
+          "context": 256000,
+          "output": 256000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Glyph Cluster",
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "tool_call": true
       }
     }
   },
@@ -77067,6 +77232,30 @@
         "name": "Abliterated Large V2",
         "reasoning": true,
         "release_date": "2026-10-01",
+        "tool_call": true
+      },
+      "claude-haiku-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "claude-haiku-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5",
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
         "tool_call": true
       }
     }
@@ -81645,6 +81834,31 @@
         "release_date": "2026-10-06",
         "temperature": true,
         "tool_call": true
+      },
+      "claude-haiku-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "claude-haiku-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5",
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
+        "tool_call": true
       }
     }
   },
@@ -83953,6 +84167,63 @@
         "temperature": false,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
+      },
+      "anthropic/claude-sonnet-5.5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-sonnet-5-5",
+        "family": "claude-sonnet",
+        "id": "anthropic/claude-sonnet-5.5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Sonnet 5.5",
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
+        },
+        "reasoning": true,
+        "release_date": "2026-09-28",
+        "temperature": false,
+        "tool_call": true
+      },
+      "openai/gpt-6.1-sol": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-6.1-sol",
+        "family": "gpt-sol",
+        "id": "openai/gpt-6.1-sol",
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-6.1 Sol",
+        "provider": {
+          "npm": "@ai-sdk/openai"
+        },
+        "reasoning": true,
+        "release_date": "2026-09-29",
+        "temperature": false,
+        "tool_call": true
       }
     }
   },
@@ -84704,6 +84975,31 @@
         "name": "GPT-6.1 Sol",
         "reasoning": true,
         "release_date": "2026-09-29",
+        "temperature": false,
+        "tool_call": true
+      },
+      "claude-haiku-5.5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "claude-haiku-5.5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5",
+        "reasoning": true,
+        "release_date": "2026-10-07",
         "temperature": false,
         "tool_call": true
       }
@@ -93233,8 +93529,8 @@
           ]
         },
         "limit": {
-          "context": 262144,
-          "output": 235929
+          "context": 131072,
+          "output": 32768
         },
         "canonical_model_id": "alibaba/qwen3-next-80b-a3b-instruct"
       },
@@ -93329,7 +93625,7 @@
         },
         "limit": {
           "context": 262144,
-          "output": 65536
+          "output": 81920
         },
         "canonical_model_id": "alibaba/qwen3.5-27b"
       },
@@ -93870,7 +94166,7 @@
           ]
         },
         "limit": {
-          "context": 1000000,
+          "context": 1048576,
           "output": 131072
         },
         "canonical_model_id": "alibaba/qwen3.8-2.4t-a95b"
@@ -94432,7 +94728,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": true,
+        "temperature": false,
         "release_date": "2026-04-21",
         "modalities": {
           "input": [
@@ -94456,7 +94752,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": true,
+        "temperature": false,
         "release_date": "2026-04-27",
         "modalities": {
           "input": [
@@ -94469,8 +94765,8 @@
           ]
         },
         "limit": {
-          "context": 200000,
-          "output": 64000
+          "context": 1000000,
+          "output": 128000
         }
       },
       "~anthropic/claude-sonnet-latest": {
@@ -94480,7 +94776,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": true,
+        "temperature": false,
         "release_date": "2026-04-27",
         "modalities": {
           "input": [
@@ -94834,13 +95130,13 @@
       },
       "mistralai/codestral-2508": {
         "id": "mistralai/codestral-2508",
-        "name": "Mistral: Codestral 2508",
+        "name": "Codestral 25.08",
         "family": "codestral",
         "attachment": true,
         "reasoning": false,
         "tool_call": true,
         "temperature": true,
-        "release_date": "2025-08-01",
+        "release_date": "2025-07-30",
         "modalities": {
           "input": [
             "text",
@@ -94853,7 +95149,8 @@
         "limit": {
           "context": 256000,
           "output": 204800
-        }
+        },
+        "canonical_model_id": "mistral/codestral-2508"
       },
       "mistralai/mistral-medium-3-5": {
         "id": "mistralai/mistral-medium-3-5",
@@ -95489,7 +95786,7 @@
         },
         "limit": {
           "context": 262144,
-          "output": 32768
+          "output": 131072
         },
         "canonical_model_id": "nvidia/nemotron-3.5-lightning"
       },
@@ -95538,7 +95835,7 @@
         },
         "limit": {
           "context": 262144,
-          "output": 235929
+          "output": 16384
         },
         "canonical_model_id": "nvidia/nemotron-3-super-120b-a12b"
       },
@@ -95665,7 +95962,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": true,
+        "temperature": false,
         "release_date": "2026-05-28",
         "modalities": {
           "input": [
@@ -95715,7 +96012,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": true,
+        "temperature": false,
         "release_date": "2026-07-24",
         "modalities": {
           "input": [
@@ -97006,8 +97303,8 @@
           ]
         },
         "limit": {
-          "context": 131072,
-          "output": 65536
+          "context": 163840,
+          "output": 147456
         },
         "canonical_model_id": "deepseek/deepseek-v3.2"
       },
@@ -99198,7 +99495,7 @@
         },
         "limit": {
           "context": 1048576,
-          "output": 131072
+          "output": 943718
         }
       },
       "~z-ai/glm-latest": {
@@ -100412,7 +100709,7 @@
         "name": "Claude Opus 5.5",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": true,
+        "temperature": false,
         "tool_call": true,
         "canonical_model_id": "anthropic/claude-opus-5-5"
       },
@@ -100805,7 +101102,7 @@
         "name": "Claude Sonnet 5.5",
         "reasoning": true,
         "release_date": "2026-09-28",
-        "temperature": true,
+        "temperature": false,
         "tool_call": true
       },
       "nex-agi/nex-n2.5-mini": {
@@ -100969,6 +101266,31 @@
         "reasoning": true,
         "release_date": "2026-10-06",
         "temperature": true,
+        "tool_call": true
+      },
+      "anthropic/claude-haiku-5.5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "anthropic/claude-haiku-5.5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5",
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
         "tool_call": true
       }
     }
@@ -105915,6 +106237,156 @@
         "release_date": "2026-08-14",
         "temperature": true,
         "tool_call": true
+      },
+      "anthropic.claude-haiku-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "anthropic.claude-haiku-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5",
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
+        "tool_call": true
+      },
+      "au.anthropic.claude-haiku-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "au.anthropic.claude-haiku-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5 (AU)",
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
+        "tool_call": true
+      },
+      "eu.anthropic.claude-haiku-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "eu.anthropic.claude-haiku-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5 (EU)",
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
+        "tool_call": true
+      },
+      "global.anthropic.claude-haiku-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "global.anthropic.claude-haiku-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5 (Global)",
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
+        "tool_call": true
+      },
+      "jp.anthropic.claude-haiku-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "jp.anthropic.claude-haiku-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5 (JP)",
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
+        "tool_call": true
+      },
+      "us.anthropic.claude-haiku-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "us.anthropic.claude-haiku-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5 (US)",
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
+        "tool_call": true
       }
     }
   },
@@ -109542,6 +110014,29 @@
         "reasoning": true,
         "release_date": "2026-08-26",
         "tool_call": true
+      },
+      "anthropic/claude-haiku-5-5": {
+        "attachment": false,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "anthropic/claude-haiku-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5",
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
+        "tool_call": false
       }
     }
   },
@@ -113793,6 +114288,34 @@
         "reasoning": true,
         "release_date": "2026-10-06",
         "temperature": true,
+        "tool_call": true
+      },
+      "claude-haiku-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "claude-haiku-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5",
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
+        },
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
         "tool_call": true
       }
     }
@@ -127912,7 +128435,7 @@
           ]
         },
         "limit": {
-          "context": 524288,
+          "context": 1048576,
           "output": 16384
         },
         "canonical_model_id": "zhipuai/glm-5.3-flash"
@@ -127976,7 +128499,8 @@
         "limit": {
           "context": 128000,
           "output": 128000
-        }
+        },
+        "status": "deprecated"
       },
       "devstral-small-2507": {
         "id": "devstral-small-2507",
@@ -128022,7 +128546,8 @@
         "limit": {
           "context": 128000,
           "output": 16384
-        }
+        },
+        "status": "deprecated"
       },
       "devstral-2512": {
         "id": "devstral-2512",
@@ -128120,23 +128645,25 @@
         "id": "magistral-medium-latest",
         "name": "Magistral Medium (latest)",
         "family": "magistral-medium",
-        "attachment": false,
+        "attachment": true,
         "reasoning": true,
         "tool_call": true,
         "temperature": true,
         "release_date": "2025-03-17",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
           ]
         },
         "limit": {
-          "context": 128000,
+          "context": 262144,
           "output": 16384
-        }
+        },
+        "status": "deprecated"
       },
       "open-mixtral-8x22b": {
         "id": "open-mixtral-8x22b",
@@ -128158,7 +128685,8 @@
         "limit": {
           "context": 64000,
           "output": 64000
-        }
+        },
+        "status": "deprecated"
       },
       "open-mixtral-8x7b": {
         "id": "open-mixtral-8x7b",
@@ -128180,7 +128708,8 @@
         "limit": {
           "context": 32000,
           "output": 32000
-        }
+        },
+        "status": "deprecated"
       },
       "open-mistral-7b": {
         "id": "open-mistral-7b",
@@ -128202,7 +128731,8 @@
         "limit": {
           "context": 8000,
           "output": 8000
-        }
+        },
+        "status": "deprecated"
       },
       "mistral-medium-latest": {
         "id": "mistral-medium-latest",
@@ -128386,7 +128916,8 @@
         "limit": {
           "context": 128000,
           "output": 128000
-        }
+        },
+        "status": "deprecated"
       },
       "voxtral-mini-tts-latest": {
         "id": "voxtral-mini-tts-latest",
@@ -128522,7 +129053,8 @@
           "context": 131072,
           "output": 16384
         },
-        "canonical_model_id": "mistral/mistral-large-2411"
+        "canonical_model_id": "mistral/mistral-large-2411",
+        "status": "deprecated"
       },
       "devstral-latest": {
         "id": "devstral-latest",
@@ -128568,7 +129100,7 @@
           "context": 1048576,
           "output": 131072
         },
-        "status": "beta",
+        "status": "deprecated",
         "canonical_model_id": "zhipuai/glm-5.2"
       },
       "mistral-small-2603": {
@@ -128615,7 +129147,8 @@
         "limit": {
           "context": 131072,
           "output": 131072
-        }
+        },
+        "status": "deprecated"
       },
       "codestral-latest": {
         "id": "codestral-latest",
@@ -128683,7 +129216,8 @@
         "limit": {
           "context": 262144,
           "output": 262144
-        }
+        },
+        "status": "deprecated"
       },
       "pixtral-large-latest": {
         "id": "pixtral-large-latest",
@@ -128706,7 +129240,8 @@
         "limit": {
           "context": 128000,
           "output": 128000
-        }
+        },
+        "status": "deprecated"
       },
       "zai-glm-5-3": {
         "attachment": false,
@@ -128753,6 +129288,148 @@
         "reasoning": true,
         "release_date": "2026-10-06",
         "status": "beta",
+        "temperature": true,
+        "tool_call": true
+      },
+      "codestral-2508": {
+        "attachment": false,
+        "canonical_model_id": "mistral/codestral-2508",
+        "family": "codestral",
+        "id": "codestral-2508",
+        "limit": {
+          "context": 256000,
+          "output": 8192
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Codestral 25.08",
+        "reasoning": false,
+        "release_date": "2025-07-30",
+        "temperature": true,
+        "tool_call": true
+      },
+      "labs-leanstral-1-5-1": {
+        "attachment": true,
+        "family": "leanstral",
+        "id": "labs-leanstral-1-5-1",
+        "limit": {
+          "context": 262144,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Leanstral 1.5",
+        "reasoning": true,
+        "release_date": "2026-06-30",
+        "status": "deprecated",
+        "temperature": true,
+        "tool_call": true
+      },
+      "ministral-14b-2512": {
+        "attachment": true,
+        "canonical_model_id": "mistral/ministral-3-14b-instruct-2512",
+        "family": "ministral",
+        "id": "ministral-14b-2512",
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Ministral 3 14B",
+        "reasoning": false,
+        "release_date": "2025-12-02",
+        "temperature": true,
+        "tool_call": true
+      },
+      "ministral-3b-2512": {
+        "attachment": true,
+        "canonical_model_id": "mistral/ministral-3-3b-instruct-2512",
+        "family": "ministral",
+        "id": "ministral-3b-2512",
+        "limit": {
+          "context": 131072,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Ministral 3 3B",
+        "reasoning": false,
+        "release_date": "2025-12-02",
+        "temperature": true,
+        "tool_call": true
+      },
+      "ministral-8b-2512": {
+        "attachment": true,
+        "canonical_model_id": "mistral/ministral-3-8b-instruct-2512",
+        "family": "ministral",
+        "id": "ministral-8b-2512",
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Ministral 3 8B",
+        "reasoning": false,
+        "release_date": "2025-12-02",
+        "temperature": true,
+        "tool_call": true
+      },
+      "voxtral-small-2507": {
+        "attachment": true,
+        "family": "voxtral",
+        "id": "voxtral-small-2507",
+        "limit": {
+          "context": 32768,
+          "output": 32000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Voxtral Small",
+        "reasoning": false,
+        "release_date": "2025-07-15",
         "temperature": true,
         "tool_call": true
       }
@@ -133065,8 +133742,8 @@
       },
       "codestral-2508": {
         "id": "codestral-2508",
-        "name": "Codestral 2508",
-        "family": "mistral",
+        "name": "Codestral 25.08",
+        "family": "codestral",
         "attachment": false,
         "reasoning": false,
         "tool_call": true,
@@ -133083,7 +133760,8 @@
         "limit": {
           "context": 256000,
           "output": 256000
-        }
+        },
+        "canonical_model_id": "mistral/codestral-2508"
       },
       "llama-3.1-8b-instruct": {
         "id": "llama-3.1-8b-instruct",
@@ -135037,6 +135715,55 @@
         "release_date": "2026-09-29",
         "temperature": false,
         "tool_call": true
+      },
+      "claude-sonnet-5.5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-sonnet-5-5",
+        "family": "claude-sonnet",
+        "id": "claude-sonnet-5.5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Sonnet 5.5",
+        "reasoning": true,
+        "release_date": "2026-09-28",
+        "temperature": false,
+        "tool_call": true
+      },
+      "mistral-large-4-0": {
+        "attachment": true,
+        "canonical_model_id": "mistral/mistral-large-4",
+        "family": "mistral-large",
+        "id": "mistral-large-4-0",
+        "limit": {
+          "context": 1000000,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Mistral Large 4",
+        "reasoning": true,
+        "release_date": "2026-10-06",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -136312,6 +137039,31 @@
         "name": "Claude Sonnet 5.5",
         "reasoning": true,
         "release_date": "2026-09-28",
+        "temperature": false,
+        "tool_call": true
+      },
+      "claude-haiku-5-5@default": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "claude-haiku-5-5@default",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5",
+        "reasoning": true,
+        "release_date": "2026-10-07",
         "temperature": false,
         "tool_call": true
       }
@@ -137642,6 +138394,34 @@
         "name": "Space Bunny",
         "reasoning": true,
         "release_date": "2026-09-23",
+        "tool_call": true
+      },
+      "claude-haiku-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "claude-haiku-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5",
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
+        },
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
         "tool_call": true
       }
     }
@@ -144056,6 +144836,55 @@
         "name": "DeepSeek V4.1 Flash (Greenference)",
         "reasoning": true,
         "release_date": "2026-09-10",
+        "temperature": true,
+        "tool_call": true
+      },
+      "anthropic/claude-haiku-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "anthropic/claude-haiku-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5",
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
+        "tool_call": true
+      },
+      "mistral/codestral-2508": {
+        "attachment": true,
+        "canonical_model_id": "mistral/codestral-2508",
+        "family": "codestral",
+        "id": "mistral/codestral-2508",
+        "limit": {
+          "context": 256000,
+          "output": 8192
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Codestral 25.08",
+        "reasoning": false,
+        "release_date": "2025-07-30",
         "temperature": true,
         "tool_call": true
       }
