@@ -768,19 +768,25 @@ export namespace MCP {
     }
 
     const configured = WebMcpProfile.validateLaunch(mcp)
-    // Session grants (ADR-168) extend the reviewed profile; the pinned argv was
+    // Session grants (ADR-168) extend a narrowing list; the pinned argv was
     // validated against the configured profile above, then regenerated from the
     // effective one so Chrome's --allowed-url-pattern list matches.
     const grants = owner.webmcpGrants[key] ?? []
-    const validated = configured ? WebMcpProfile.withGrants(configured, grants) : undefined
     // The managed WebMCP requirement can deny the bridge or narrow its origins;
     // it never enables the bridge and never removes the per-call interactive
     // approval. A denial surfaces as a distinct `blocked` status so the UI can
     // show a locked state instead of an actionable failure. Read from the
     // managed-only merged config (see config-impl mergeFromSource).
+    const requirement = (await Config.get()).webmcp
+    // ADR-170: grants extend a configured narrowing list only (ADR-168), so an
+    // unrestricted profile ignores grants entirely — a stale grant (a config
+    // edit that dropped the list mid-session) must not restrict it, not even
+    // below a managed narrowing list.
+    const validated =
+      configured && WebMcpProfile.restricted(configured) ? WebMcpProfile.withGrants(configured, grants) : configured
     let webmcp: WebMcpProfile.Configuration | undefined
     if (validated) {
-      const decision = WebMcpProfile.evaluate((await Config.get()).webmcp, validated)
+      const decision = WebMcpProfile.evaluate(requirement, validated)
       if (!decision.ok) {
         log.warn("webmcp bridge blocked by managed policy", { key, reason: decision.reason })
         return {
@@ -798,10 +804,16 @@ export namespace MCP {
     // narrowing changed it (ADR-168, ADR-170): Chrome's --allowed-url-pattern
     // list must match the origins the app layer enforces, including a managed
     // list that narrows the unrestricted default profile. An untouched profile
-    // keeps the reviewed configured argv byte-for-byte.
+    // keeps the reviewed configured argv byte-for-byte. The persistent profile
+    // directory stays keyed to the configured profile, so a grant or narrowing
+    // never swaps the login state out from under the user.
     const effective = webmcp ?? validated
     const launchCommand =
-      effective && effective !== configured ? WebMcpProfile.command(effective) : mcp.type === "local" ? mcp.command : []
+      effective && effective !== configured
+        ? WebMcpProfile.command(effective, configured)
+        : mcp.type === "local"
+          ? mcp.command
+          : []
     if (webmcp?.executablePath) {
       const chrome = await WebMcpProfile.verifyChromeVersion(webmcp.executablePath)
       if (!chrome.ok) {

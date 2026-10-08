@@ -29,6 +29,34 @@ export namespace WebMcpProfile {
    */
   export const READ_TOOLS = ["take_snapshot", "take_screenshot", "list_console_messages"] as const
   /**
+   * Console message types the pinned chrome-devtools-mcp@1.8.0 bridge accepts
+   * (FILTERABLE_MESSAGE_TYPES in its console tool). The local schema must
+   * accept exactly this enum: a value the bridge rejects would surface only at
+   * dispatch, after approval.
+   */
+  const CONSOLE_MESSAGE_TYPES = z.enum([
+    "log",
+    "debug",
+    "info",
+    "error",
+    "warn",
+    "dir",
+    "dirxml",
+    "table",
+    "trace",
+    "clear",
+    "startGroup",
+    "startGroupCollapsed",
+    "endGroup",
+    "assert",
+    "profile",
+    "profileEnd",
+    "count",
+    "timeEnd",
+    "verbose",
+    "issue",
+  ])
+  /**
    * Appended to every bridge tool description so the agent knows the boundary
    * before it spends approvals on an ordinary site (ADR-169, tier T0). Used
    * verbatim when the read tier is off.
@@ -283,16 +311,19 @@ export namespace WebMcpProfile {
     return { ok: true }
   }
 
-  export function command(profile: Configuration): string[] {
+  export function command(profile: Configuration, identity?: Configuration): string[] {
     return [
       // A vendored profile launches the integrity-pinned local install; the
       // default npx form resolves the same pinned version from the registry.
       ...(profile.vendored ? ["node", vendoredBin()] : ["npx", "-y", PACKAGE]),
       // A persistent profile holds real cookies, so it is always a dedicated
       // AX-owned directory with a visible window — never the user's main
-      // profile and never headless.
+      // profile and never headless. The directory key follows the configured
+      // profile (identity), not the effective one: session grants and managed
+      // narrowing change the launch argv but must not swap the login state out
+      // from under the user.
       ...(profile.persistentProfile
-        ? [`--user-data-dir=${profileDirectory(profile)}`]
+        ? [`--user-data-dir=${profileDirectory(identity ?? profile)}`]
         : ["--isolated", ...(profile.headless ? ["--headless"] : [])]),
       "--no-usage-statistics",
       "--no-performance-crux",
@@ -479,6 +510,13 @@ export namespace WebMcpProfile {
     if (!exactOrigin(origin))
       return { ok: false, error: "WebMCP origin must be an exact HTTPS or loopback HTTP origin" }
     if (requirement?.allow === false) return { ok: false, error: blockedMessage("managed_policy") }
+    // Grants extend a configured narrowing list (ADR-168). An unrestricted
+    // profile (ADR-170) has none — including one narrowed by a managed list,
+    // whose effective allowlist is already exactly that list — so a grant has
+    // nothing to extend and a stale grant must not restrict the profile.
+    if (!restricted(profile)) {
+      return { ok: false, error: "WebMCP navigation is unrestricted for this bridge; no origin grant applies" }
+    }
     if (requirement?.allowedOrigins && !requirement.allowedOrigins.includes(origin)) {
       return { ok: false, error: "WebMCP managed policy does not allow this origin" }
     }
@@ -537,7 +575,14 @@ export namespace WebMcpProfile {
       .strict(),
     // T1 read tools. Strict schemas: no extra keys, and no `filePath` anywhere,
     // because the upstream take_screenshot/take_snapshot would otherwise write
-    // the page content to disk.
+    // the page content to disk. `fullPage` is excluded for the same reason:
+    // the pinned upstream auto-saves any screenshot of 2 MB or more to a temp
+    // file even without filePath, and a full-page capture of a long page is
+    // the common way past that threshold. A viewport capture can still cross
+    // it on large displays, so slice B must intercept "Saved screenshot to"
+    // responses instead of relying on this schema alone. `uid` and `fullPage`
+    // are also mutually exclusive upstream, so dropping fullPage removes that
+    // rejected combination too.
     take_snapshot: z.object({ pageId, verbose: z.boolean().optional() }).strict(),
     take_screenshot: z
       .object({
@@ -545,7 +590,6 @@ export namespace WebMcpProfile {
         format: z.enum(["png", "jpeg", "webp"]).optional(),
         quality: z.number().int().min(0).max(100).optional(),
         uid: z.string().max(128).optional(),
-        fullPage: z.boolean().optional(),
       })
       .strict(),
     list_console_messages: z
@@ -553,7 +597,9 @@ export namespace WebMcpProfile {
         pageId,
         pageSize: z.number().int().min(1).max(50).optional(),
         pageIdx: z.number().int().min(0).optional(),
-        types: z.array(z.string().max(32)).max(8).optional(),
+        // Mirrors the pinned upstream's FILTERABLE_MESSAGE_TYPES enum; the
+        // advertised schema must not accept strings the bridge then rejects.
+        types: z.array(CONSOLE_MESSAGE_TYPES).max(8).optional(),
       })
       .strict(),
   }
@@ -674,6 +720,11 @@ export namespace WebMcpProfile {
     try {
       const url = new URL(pageUrl)
       if (url.protocol !== "http:" && url.protocol !== "https:") return undefined
+      // A credentialed landing URL (a redirect target or a page-side
+      // navigation) must fail closed: `origin` drops userinfo, so checking
+      // membership alone would silently admit what validateCall rejects at
+      // request time.
+      if (url.username || url.password) return undefined
       return url.origin
     } catch {
       return undefined

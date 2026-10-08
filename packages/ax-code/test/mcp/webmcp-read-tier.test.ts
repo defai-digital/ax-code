@@ -117,7 +117,7 @@ describe("WebMCP T1 read tier profile", () => {
     }
   })
 
-  test("take_screenshot bounds format, quality and uid", () => {
+  test("take_screenshot bounds format, quality and uid and refuses fullPage", () => {
     const profile = readProfile()
     expect(
       WebMcpProfile.validateCall(profile, "take_screenshot", {
@@ -125,9 +125,15 @@ describe("WebMCP T1 read tier profile", () => {
         format: "webp",
         quality: 80,
         uid: "node-1",
-        fullPage: true,
       }),
-    ).toMatchObject({ format: "webp", quality: 80, uid: "node-1", fullPage: true })
+    ).toMatchObject({ format: "webp", quality: 80, uid: "node-1" })
+    // fullPage is excluded: the pinned upstream auto-saves any screenshot of
+    // 2 MB or more to a temp file even without filePath (page content would
+    // land on disk), and it rejects the uid+fullPage combination outright.
+    expect(() => WebMcpProfile.validateCall(profile, "take_screenshot", { pageId: 1, fullPage: true })).toThrow()
+    expect(() =>
+      WebMcpProfile.validateCall(profile, "take_screenshot", { pageId: 1, uid: "node-1", fullPage: true }),
+    ).toThrow()
     expect(() => WebMcpProfile.validateCall(profile, "take_screenshot", { pageId: 1, format: "gif" })).toThrow()
     expect(() => WebMcpProfile.validateCall(profile, "take_screenshot", { pageId: 1, quality: 101 })).toThrow()
     expect(() => WebMcpProfile.validateCall(profile, "take_screenshot", { pageId: 1, quality: -1 })).toThrow()
@@ -153,6 +159,14 @@ describe("WebMCP T1 read tier profile", () => {
         types: Array.from({ length: 9 }, (_, i) => `t${i}`),
       }),
     ).toThrow()
+    // types mirrors the pinned upstream FILTERABLE_MESSAGE_TYPES enum: a
+    // well-formed but unsupported name is rejected before approval, not at
+    // dispatch.
+    expect(() => WebMcpProfile.validateCall(profile, "list_console_messages", { pageId: 1, types: ["nope"] })).toThrow()
+    expect(WebMcpProfile.validateCall(profile, "list_console_messages", { pageId: 1, types: ["issue"] })).toEqual({
+      pageId: 1,
+      types: ["issue"],
+    })
     expect(() =>
       WebMcpProfile.validateCall(profile, "list_console_messages", { pageId: 1, types: ["x".repeat(33)] }),
     ).toThrow()

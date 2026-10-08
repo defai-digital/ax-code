@@ -300,9 +300,60 @@ describe("WebMCP unrestricted profile (ADR-170)", () => {
     expect(WebMcpProfile.evaluate({ allow: false }, profile)).toEqual({ ok: false, reason: "managed_policy" })
   })
 
-  test("session grants still union onto an empty configured list within the cap", () => {
+  test("session grants do not apply to an unrestricted profile, with or without a managed list", () => {
     const profile = WebMcpProfile.config({ allowedOrigins: [] }).webmcp
     expect(WebMcpProfile.withGrants(profile, ["https://a.test"]).allowedOrigins).toEqual(["https://a.test"])
-    expect(WebMcpProfile.checkGrant(undefined, profile, [], "https://a.test")).toEqual({ ok: true })
+    // Grants extend a configured narrowing list only (ADR-168): an
+    // unrestricted profile has none, so a grant has nothing to extend and a
+    // stale or stray grant must not turn it restricted.
+    expect(WebMcpProfile.checkGrant(undefined, profile, [], "https://a.test")).toMatchObject({ ok: false })
+    // Nor does a managed origin list make grants meaningful: under ADR-170 §3
+    // the effective allowlist is already exactly the managed list.
+    expect(
+      WebMcpProfile.checkGrant({ allowedOrigins: ["https://corp.test"] }, profile, [], "https://corp.test"),
+    ).toMatchObject({ ok: false })
+    // And managed narrowing of an unrestricted profile yields the full managed
+    // list — a leftover grant must not narrow below it.
+    const narrowed = WebMcpProfile.evaluate({ allowedOrigins: ["https://a.test", "https://b.test"] }, profile)
+    expect(narrowed.ok && narrowed.profile.allowedOrigins).toEqual(["https://a.test", "https://b.test"])
+  })
+
+  test("a credentialed landing URL fails closed for restricted and unrestricted profiles", () => {
+    // A landed URL carries credentials only through a redirect or a page-side
+    // navigation; `origin` drops userinfo, so membership checks alone would
+    // silently admit what validateCall rejects at request time.
+    for (const allowedOrigins of [["https://evil.test"], []] as const) {
+      const profile = WebMcpProfile.config({ allowedOrigins: [...allowedOrigins] }).webmcp
+      const landed = {
+        structuredContent: {
+          pages: [{ id: 1, url: "https://user:secret@evil.test/", selected: true }],
+        },
+      }
+      expect(() => WebMcpProfile.validateLanding(profile, "new_page", {}, landed)).toThrow()
+    }
+  })
+
+  test("a credentialed page URL cannot become an executable tool baseline", () => {
+    const profile = WebMcpProfile.config({ allowedOrigins: [] }).webmcp
+    const state = WebMcpProfile.stateFor(profile)
+    expect(
+      WebMcpProfile.recordListing(state, 7, [{ name: "search", description: "d" }], "https://user:secret@x.test/"),
+    ).toMatchObject({ ok: false })
+  })
+
+  test("a persistent profile directory follows the configured origins, not the effective list", () => {
+    const configured = WebMcpProfile.config({ allowedOrigins: ["https://a.test"], persistentProfile: true }).webmcp
+    const base = WebMcpProfile.command(configured)
+    const granted = WebMcpProfile.withGrants(configured, ["https://b.test"])
+    const regenerated = WebMcpProfile.command(granted, configured)
+    const dirOf = (argv: string[]) => argv.find((arg) => arg.startsWith("--user-data-dir="))
+    // A grant relaunch keeps the same login-bearing directory…
+    expect(dirOf(regenerated)).toBeDefined()
+    expect(dirOf(regenerated)).toBe(dirOf(base))
+    // …while still enforcing the widened allowlist at the browser layer.
+    expect(regenerated).toContain("--allowed-url-pattern=https://b.test/*")
+    // Pin the pre-fix behavior as impossible: keying the directory by the
+    // effective list would have moved it.
+    expect(dirOf(WebMcpProfile.command(granted))).not.toBe(dirOf(base))
   })
 })
