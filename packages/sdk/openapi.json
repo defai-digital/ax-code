@@ -51241,6 +51241,10 @@
             "description": "Launch a vendored, integrity-pinned bridge install instead of npx. Requires the managed allowVendored requirement.",
             "type": "boolean"
           },
+          "read": {
+            "description": "Enable the T1 read tier: page snapshot, screenshot and console tools for granted origins. Default off. A managed allowRead: false forces it off.",
+            "type": "boolean"
+          },
           "executablePath": {
             "description": "Optional explicit Chrome 150+ executable; never attaches to an existing browser session",
             "type": "string",
@@ -51276,6 +51280,10 @@
           },
           "allowVendored": {
             "description": "Managed opt-in for a vendored, integrity-pinned bridge install instead of npx. Default off.",
+            "type": "boolean"
+          },
+          "allowRead": {
+            "description": "Managed gate for the T1 read tier. Default off. false forces the read tools off even when the profile sets read: true; it can only restrict, never enable.",
             "type": "boolean"
           }
         },

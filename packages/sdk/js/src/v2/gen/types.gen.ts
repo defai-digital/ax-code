@@ -4620,6 +4620,10 @@ export type WebMcpProfileConfig = {
    */
   vendored?: boolean
   /**
+   * Enable the T1 read tier: page snapshot, screenshot and console tools for granted origins. Default off. A managed allowRead: false forces it off.
+   */
+  read?: boolean
+  /**
    * Optional explicit Chrome 150+ executable; never attaches to an existing browser session
    */
   executablePath?: string
@@ -4645,6 +4649,10 @@ export type WebMcpRequirementConfig = {
    * Managed opt-in for a vendored, integrity-pinned bridge install instead of npx. Default off.
    */
   allowVendored?: boolean
+  /**
+   * Managed gate for the T1 read tier. Default off. false forces the read tools off even when the profile sets read: true; it can only restrict, never enable.
+   */
+  allowRead?: boolean
 }
 
 /** AX Code API schema `WikiMaintenanceStatus` (auto-generated from the OpenAPI contract). */

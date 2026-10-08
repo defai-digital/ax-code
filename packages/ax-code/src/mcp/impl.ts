@@ -1438,7 +1438,13 @@ export namespace MCP {
       const listedTools = toolsResults.flatMap(({ clientName, client, toolsResult }) => {
         if (!toolsResult || "_failed" in toolsResult) return []
         return toolsResult.tools
-          .filter((mcpTool) => !webMcpProfiles.has(client) || WebMcpProfile.allows(mcpTool.name))
+          .filter((mcpTool) => {
+            // A webmcp bridge admits only the reviewed tools for its effective
+            // profile (T0 always, T1 read tools only when read is on). A
+            // non-webmcp client admits everything.
+            if (!webMcpProfiles.has(client)) return true
+            return WebMcpProfile.allows(mcpTool.name, webMcpProfiles.get(client))
+          })
           .map((mcpTool) => ({ clientName, client, mcpTool }))
       })
       const permissionKeys = resolveMcpToolPermissionKeys(
@@ -1535,7 +1541,10 @@ export namespace MCP {
         })
         if (!listed) return []
         return listed.tools
-          .filter((t) => !webMcpProfiles.has(client) || WebMcpProfile.allows(t.name))
+          .filter((t) => {
+            if (!webMcpProfiles.has(client)) return true
+            return WebMcpProfile.allows(t.name, webMcpProfiles.get(client))
+          })
           .map((t) => ({
             server,
             name: t.name,

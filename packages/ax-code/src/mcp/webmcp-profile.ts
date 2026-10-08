@@ -21,14 +21,37 @@ export namespace WebMcpProfile {
     "execute_webmcp_tool",
   ] as const
   /**
+   * The T1 read tier (ADR-169). These three upstream tool names are admitted
+   * only when the effective profile has `read: true`; every other upstream
+   * tool (evaluate_script, click, fill, upload_file, list_network_requests,
+   * get_network_request, get_console_message, wait_for, handle_dialog,
+   * select_page, resize_page, stay) remains rejected at every tier.
+   */
+  export const READ_TOOLS = ["take_snapshot", "take_screenshot", "list_console_messages"] as const
+  /**
    * Appended to every bridge tool description so the agent knows the boundary
-   * before it spends approvals on an ordinary site (ADR-169, tier T0).
+   * before it spends approvals on an ordinary site (ADR-169, tier T0). Used
+   * verbatim when the read tier is off.
    */
   export const LIMITS_NOTE =
     "Limits: this bridge only lists and runs tools that a page registers itself through WebMCP. " +
     "It cannot read page text or the DOM, take screenshots, click, type, or run scripts. " +
     "If list_webmcp_tools reports none, use another tool such as webfetch to read the site."
+  /**
+   * T1 read-tier boundary note. Reading is limited to the three read tools from
+   * the allowed origins; interaction stays impossible, so this never claims the
+   * T0 sentence that reading is unavailable.
+   */
+  export const READ_LIMITS_NOTE =
+    "Limits: read access is limited to three tools — page snapshot, screenshot and console messages — for the allowed origins. " +
+    "Interaction is still impossible: it cannot click, type, run scripts, upload files, or read network bodies. " +
+    "Page-registered WebMCP tools remain the only operations it can run."
+  /** The T0 note when the read tier is off, the read-tier note when it is on. */
+  export function limitsNote(profile: Configuration): string {
+    return profile.read === true ? READ_LIMITS_NOTE : LIMITS_NOTE
+  }
   const tools = new Set<string>(TOOLS)
+  const readTools = new Set<string>(READ_TOOLS)
   const loopback = new Set(["localhost", "127.0.0.1", "[::1]"])
 
   function exactOrigin(value: string): boolean {
@@ -77,6 +100,12 @@ export namespace WebMcpProfile {
         .boolean()
         .optional()
         .describe("Managed opt-in for a vendored, integrity-pinned bridge install instead of npx. Default off."),
+      allowRead: z
+        .boolean()
+        .optional()
+        .describe(
+          "Managed gate for the T1 read tier. Default off. false forces the read tools off even when the profile sets read: true; it can only restrict, never enable.",
+        ),
     })
     .strict()
     .meta({ ref: "WebMcpRequirementConfig" })
@@ -99,6 +128,12 @@ export namespace WebMcpProfile {
         .optional()
         .describe(
           "Launch a vendored, integrity-pinned bridge install instead of npx. Requires the managed allowVendored requirement.",
+        ),
+      read: z
+        .boolean()
+        .optional()
+        .describe(
+          "Enable the T1 read tier: page snapshot, screenshot and console tools for granted origins. Default off. A managed allowRead: false forces it off.",
         ),
       executablePath: z
         .string()
@@ -306,11 +341,26 @@ export namespace WebMcpProfile {
   }
 
   /**
+   * Managed read gate. `allowRead: false` forces the T1 read tier off even
+   * when the profile opted in; the profile can never re-enable it. Returns the
+   * same frozen profile object when read is already off, so an absent or false
+   * `read` stays byte-for-byte unchanged.
+   */
+  function withoutRead(profile: Configuration): Configuration {
+    if (profile.read !== true) return profile
+    const { read: _read, ...rest } = profile
+    const effective = Configuration.parse(rest)
+    Object.freeze(effective.allowedOrigins)
+    return Object.freeze(effective)
+  }
+
+  /**
    * Evaluate a managed requirement against a launch-validated profile. A deny or
    * a narrowing that admits no origin fails closed with a reason the caller can
    * surface as a distinct blocked state; a partial narrowing only makes the
    * call-time origin check stricter than the browser allowlist. A persistent
-   * profile requires the managed `allowPersistentProfile` opt-in.
+   * profile requires the managed `allowPersistentProfile` opt-in. A managed
+   * `allowRead: false` forces the read tier off without blocking the bridge.
    */
   export function evaluate(requirement: Requirement | undefined, profile: Configuration): PolicyDecision {
     if (requirement && requirement.allow === false) return { ok: false, reason: "managed_policy" }
@@ -320,13 +370,14 @@ export namespace WebMcpProfile {
     if (profile.vendored === true && requirement?.allowVendored !== true) {
       return { ok: false, reason: "vendored" }
     }
-    if (!requirement) return { ok: true, profile }
+    const gated = requirement?.allowRead === false ? withoutRead(profile) : profile
+    if (!requirement) return { ok: true, profile: gated }
     const allowed = requirement.allowedOrigins
-    if (!allowed) return { ok: true, profile }
-    const admitted = profile.allowedOrigins.filter((origin) => allowed.includes(origin))
+    if (!allowed) return { ok: true, profile: gated }
+    const admitted = gated.allowedOrigins.filter((origin) => allowed.includes(origin))
     if (admitted.length === 0) return { ok: false, reason: "managed_origins" }
-    if (admitted.length === profile.allowedOrigins.length) return { ok: true, profile }
-    const narrowed = Configuration.parse({ ...profile, allowedOrigins: admitted })
+    if (admitted.length === gated.allowedOrigins.length) return { ok: true, profile: gated }
+    const narrowed = Configuration.parse({ ...gated, allowedOrigins: admitted })
     Object.freeze(narrowed.allowedOrigins)
     return { ok: true, profile: Object.freeze(narrowed) }
   }
@@ -438,8 +489,14 @@ export namespace WebMcpProfile {
     }
   }
 
-  export function allows(name: string): boolean {
-    return tools.has(name)
+  /**
+   * Whether the bridge admits a tool. The six T0 tools are always admitted.
+   * The three T1 read tools are admitted only when the effective profile opted
+   * into the read tier (`read: true`); every other upstream tool is rejected.
+   */
+  export function allows(name: string, profile?: Configuration): boolean {
+    if (tools.has(name)) return true
+    return profile?.read === true && readTools.has(name)
   }
 
   const pageId = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)
@@ -457,15 +514,36 @@ export namespace WebMcpProfile {
         input: z.string().max(MAX_INPUT_BYTES).optional(),
       })
       .strict(),
+    // T1 read tools. Strict schemas: no extra keys, and no `filePath` anywhere,
+    // because the upstream take_screenshot/take_snapshot would otherwise write
+    // the page content to disk.
+    take_snapshot: z.object({ pageId, verbose: z.boolean().optional() }).strict(),
+    take_screenshot: z
+      .object({
+        pageId,
+        format: z.enum(["png", "jpeg", "webp"]).optional(),
+        quality: z.number().int().min(0).max(100).optional(),
+        uid: z.string().max(128).optional(),
+        fullPage: z.boolean().optional(),
+      })
+      .strict(),
+    list_console_messages: z
+      .object({
+        pageId,
+        pageSize: z.number().int().min(1).max(50).optional(),
+        pageIdx: z.number().int().min(0).optional(),
+        types: z.array(z.string().max(32)).max(8).optional(),
+      })
+      .strict(),
   }
 
-  export function callSchema(name: string) {
-    if (!allows(name)) throw new Error("Tool is not admitted by the WebMCP bridge profile")
+  export function callSchema(name: string, profile?: Configuration) {
+    if (!allows(name, profile)) throw new Error("Tool is not admitted by the WebMCP bridge profile")
     return schemas[name as keyof typeof schemas]
   }
 
   export function validateCall(profile: Configuration, name: string, args: unknown): Record<string, unknown> {
-    const parsed = callSchema(name).safeParse(args)
+    const parsed = callSchema(name, profile).safeParse(args)
     // Do not include the page-provided input in validation errors or logs.
     if (!parsed.success) throw new Error(`Invalid arguments for WebMCP bridge tool ${name}`)
     const call: Record<string, unknown> = parsed.data
@@ -506,9 +584,13 @@ export namespace WebMcpProfile {
   ): Record<string, unknown> {
     // A page id alone tells the approver nothing about where the page tool
     // runs. Show the origin recorded when the page was listed; the
-    // execute-time binding re-verifies it before running.
+    // execute-time binding re-verifies it before running. A T1 read tool names
+    // its page through the required pageId instead of a `toolName`. Only label
+    // the tier when the effective profile has it enabled, so a read-off profile
+    // never emits a read label.
+    const isRead = readTools.has(tool) && profile.read === true
     const listedOrigin =
-      typeof call.toolName === "string" && typeof call.pageId === "number"
+      typeof call.pageId === "number" && (isRead || typeof call.toolName === "string")
         ? listedOriginFor(profile, call.pageId)
         : undefined
     return {
@@ -520,6 +602,9 @@ export namespace WebMcpProfile {
       ...(listedOrigin ? { pageOrigin: listedOrigin } : {}),
       ...(typeof call.url === "string" ? { origin: new URL(call.url).origin } : {}),
       ...(typeof call.input === "string" ? { inputBytes: Buffer.byteLength(call.input, "utf8") } : {}),
+      // Marks a T1 read call so the approval screen can label it as reading
+      // page content from the listed origin.
+      ...(isRead ? { readTier: true } : {}),
       // Page annotations describe a page tool, so they only belong on an
       // execute call that names one. Attaching them to bridge operations
       // would let a page tool named e.g. `close_page` forge the approval

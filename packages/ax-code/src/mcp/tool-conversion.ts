@@ -172,7 +172,7 @@ export async function convertMcpTool(
   webmcp?: WebMcpProfile.Policy,
 ): Promise<ConvertedMcpTool> {
   const inputSchema = webmcp
-    ? z.toJSONSchema(WebMcpProfile.callSchema(webmcp.toolName), { target: "draft-7" })
+    ? z.toJSONSchema(WebMcpProfile.callSchema(webmcp.toolName, webmcp.profile), { target: "draft-7" })
     : mcpTool.inputSchema
 
   // Spread first, then override type to ensure it is always "object".
@@ -190,7 +190,7 @@ export async function convertMcpTool(
     (mcpTool.description ?? "").length > MAX_TOOL_DESCRIPTION
       ? `${(mcpTool.description ?? "").slice(0, MAX_TOOL_DESCRIPTION)}...`
       : (mcpTool.description ?? "")
-  const description = webmcp ? `${baseDescription} ${WebMcpProfile.LIMITS_NOTE}`.trim() : baseDescription
+  const description = webmcp ? `${baseDescription} ${WebMcpProfile.limitsNote(webmcp.profile)}`.trim() : baseDescription
 
   const tool = dynamicTool({
     description,

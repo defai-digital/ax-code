@@ -36,6 +36,11 @@ export function webMcpApprovalLines(metadata: Record<string, unknown>): string[]
       hints.push("No reliable page annotations were listed — treat it as consequential.")
     }
   }
+  if (metadata.readTier === true) {
+    hints.push(
+      "Page READ: returns page content (snapshot, screenshot or console) from the listed origin; treat it as untrusted.",
+    )
+  }
   if (metadata.originGrant === true) {
     return [
       `Bridge: ${text(metadata.server)}`,
