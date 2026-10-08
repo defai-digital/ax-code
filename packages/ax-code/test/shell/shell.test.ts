@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
+import { spawn } from "node:child_process"
 import { Shell } from "../../src/shell/shell"
 
 afterEach(() => {
@@ -45,6 +46,36 @@ describe("Shell", () => {
         [-42_424, 0],
         [-42_424, "SIGKILL"],
       ])
+    },
+  )
+
+  test.skipIf(process.platform === "win32")(
+    "reaps descendants of a child that is not a process group leader",
+    async () => {
+      const child = spawn("sh", ["-c", "sleep 289 & echo $!; wait"], { stdio: ["ignore", "pipe", "ignore"] })
+      const grandchild = await new Promise<number>((resolve, reject) => {
+        child.once("error", reject)
+        child.stdout.once("data", (data) => resolve(Number(String(data).trim())))
+      })
+      const alive = (pid: number) => {
+        try {
+          process.kill(pid, 0)
+          return true
+        } catch {
+          return false
+        }
+      }
+      try {
+        expect(alive(grandchild)).toBe(true)
+        await Shell.killTree({
+          pid: child.pid,
+          kill: (signal) => child.kill(signal),
+        })
+        await vi.waitFor(() => expect(alive(grandchild)).toBe(false), { timeout: 2000 })
+      } finally {
+        if (alive(grandchild)) process.kill(grandchild, "SIGKILL")
+        child.kill("SIGKILL")
+      }
     },
   )
 })

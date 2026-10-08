@@ -3,13 +3,50 @@ import { lazy } from "@/util/lazy"
 import { Filesystem } from "@/util/filesystem"
 import { which } from "@/util/which"
 import path from "path"
-import { spawn } from "child_process"
+import { execFile, spawn } from "child_process"
 import { setTimeout as sleep } from "node:timers/promises"
 
 const SIGKILL_TIMEOUT_MS = 200
 type KillableProcess = {
   pid?: number
   kill: (signal?: NodeJS.Signals | number) => boolean | void
+}
+
+/**
+ * Pids of every descendant of `root`, deepest first, from one `ps` snapshot.
+ * Empty when `ps` is unavailable; callers fall back to the direct child.
+ */
+function descendantPids(root: number): Promise<number[]> {
+  return new Promise((resolve) => {
+    execFile("ps", ["-A", "-o", "pid=,ppid="], { maxBuffer: 4 * 1024 * 1024 }, (error, stdout) => {
+      if (error) return resolve([])
+      const children = new Map<number, number[]>()
+      for (const line of stdout.split("\n")) {
+        const [pid, ppid] = line.trim().split(/\s+/).map(Number)
+        if (!Number.isInteger(pid) || !Number.isInteger(ppid)) continue
+        children.set(ppid, [...(children.get(ppid) ?? []), pid])
+      }
+      const order: number[] = []
+      const walk = (parent: number, seen: Set<number>) => {
+        for (const child of children.get(parent) ?? []) {
+          if (seen.has(child)) continue
+          seen.add(child)
+          walk(child, seen)
+          order.push(child)
+        }
+      }
+      walk(root, new Set([root]))
+      resolve(order)
+    })
+  })
+}
+
+function signalPid(pid: number, signal: NodeJS.Signals | number) {
+  try {
+    process.kill(pid, signal)
+  } catch {
+    // Already gone, or not ours to signal.
+  }
 }
 
 export namespace Shell {
@@ -55,10 +92,17 @@ export namespace Shell {
       return
     }
 
-    if (opts?.exited?.()) return
+    // Not a group leader (for example an MCP stdio child). Signaling only the
+    // direct pid would orphan its descendants, such as a browser launched by an
+    // npx-run bridge, so snapshot them first and reap them with the child.
+    const descendants = await descendantPids(pid)
+    for (const child of descendants) signalPid(child, signal)
+
+    if (opts?.exited?.() && descendants.length === 0) return
     try {
-      proc.kill(signal)
+      if (!opts?.exited?.()) proc.kill(signal)
       await sleep(SIGKILL_TIMEOUT_MS)
+      for (const child of descendants) signalPid(child, "SIGKILL")
       if (!opts?.exited?.()) {
         proc.kill("SIGKILL")
       }
