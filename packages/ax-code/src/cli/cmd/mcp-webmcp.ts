@@ -9,8 +9,8 @@ export const McpWebMcpCommand = cmd({
       .option("origin", {
         type: "string",
         array: true,
-        demandOption: true,
-        describe: "Exact allowed HTTPS origins (HTTP is restricted to loopback development sites)",
+        describe:
+          "Narrow navigation to these exact HTTPS origins (HTTP is restricted to loopback development sites). Omit for unrestricted navigation (the product default, ADR-170)",
       })
       .option("name", { type: "string", default: "webmcp", describe: "MCP server name in the printed config" })
       .option("enable", {
@@ -41,7 +41,7 @@ export const McpWebMcpCommand = cmd({
     }
     const config = WebMcpProfile.config(
       {
-        allowedOrigins: args.origin,
+        allowedOrigins: args.origin ?? [],
         headless: args.headless,
         executablePath: args.executablePath,
         persistentProfile: args.persistentProfile,

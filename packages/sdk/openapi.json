@@ -51220,14 +51220,13 @@
         "type": "object",
         "properties": {
           "allowedOrigins": {
-            "minItems": 1,
             "maxItems": 8,
             "type": "array",
             "items": {
               "type": "string",
               "maxLength": 240
             },
-            "description": "Exact permitted origins; no wildcards, credentials, paths, queries or fragments"
+            "description": "Exact permitted origins; no wildcards, credentials, paths, queries or fragments. Empty (the product default) navigates any http(s) origin; a non-empty list narrows navigation to exactly those origins."
           },
           "headless": {
             "description": "Use an isolated headless Chrome instead of a visible window",
@@ -51265,7 +51264,7 @@
             "type": "boolean"
           },
           "allowedOrigins": {
-            "description": "Managed narrowing list. When set, only these exact origins stay usable; it must intersect the profile's configured origins.",
+            "description": "Managed narrowing list. When set, only these exact origins stay usable: an unrestricted profile narrows to this list; a configured profile is intersected with it and an empty intersection fails closed.",
             "minItems": 1,
             "maxItems": 8,
             "type": "array",

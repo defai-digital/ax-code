@@ -42,7 +42,6 @@ describe("WebMCP profile", () => {
 
   test.each(
     [
-      [],
       ["*"],
       ["https://*.example.test"],
       ["https://exa+ple.test"],
@@ -236,5 +235,74 @@ describe("WebMCP profile", () => {
         structuredContent: { message: "Successfully navigated to https://example.test/" },
       }),
     ).not.toThrow()
+  })
+})
+
+describe("WebMCP unrestricted profile (ADR-170)", () => {
+  test("accepts an empty origin list and generates a pattern-free launch command", () => {
+    const config = WebMcpProfile.config({ allowedOrigins: [] })
+    expect(config.enabled).toBe(false)
+    expect(config.command.some((arg) => arg.startsWith("--allowed-url-pattern="))).toBe(false)
+    expect(WebMcpProfile.restricted(config.webmcp)).toBe(false)
+    expect(WebMcpProfile.restricted({ allowedOrigins: origins })).toBe(true)
+    expect(WebMcpProfile.validateLaunch(config)).toEqual(config.webmcp)
+    expect(Config.McpLocal.safeParse(config).success).toBe(true)
+  })
+
+  test("validateCall navigates any https origin without a grant, keeping input validation", () => {
+    const profile = WebMcpProfile.config({ allowedOrigins: [] }).webmcp
+    expect(WebMcpProfile.validateCall(profile, "new_page", { url: "https://anywhere.test/" })).toMatchObject({
+      url: "https://anywhere.test/",
+    })
+    expect(
+      WebMcpProfile.validateCall(profile, "navigate_page", { pageId: 1, url: "http://127.0.0.1:3000/app" }),
+    ).toMatchObject({ pageId: 1 })
+    // Scheme and credential validation is input validation, not origin policy.
+    expect(() => WebMcpProfile.validateCall(profile, "new_page", { url: "http://example.test/" })).toThrow()
+    expect(() =>
+      WebMcpProfile.validateCall(profile, "new_page", { url: "https://user:password@example.test/" }),
+    ).toThrow()
+    expect(() => WebMcpProfile.validateCall(profile, "new_page", { url: "blob:https://example.test/uuid" })).toThrow()
+    expect(() => WebMcpProfile.validateCall(profile, "new_page", { url: "not a url" })).toThrow()
+  })
+
+  test("validateLanding accepts any http landing origin when unrestricted", () => {
+    const profile = WebMcpProfile.config({ allowedOrigins: [] }).webmcp
+    const landed = { structuredContent: { pages: [{ id: 1, url: "https://surprise.test/", selected: true }] } }
+    expect(() => WebMcpProfile.validateLanding(profile, "new_page", {}, landed)).not.toThrow()
+    // The authoritative page list is still required: an absent one fails closed.
+    expect(() => WebMcpProfile.validateLanding(profile, "new_page", {}, { content: [] })).toThrow()
+  })
+
+  test("verifyBinding keeps the origin binding but skips the allowlist when unrestricted", () => {
+    const profile = WebMcpProfile.config({ allowedOrigins: [] }).webmcp
+    const state = WebMcpProfile.stateFor(profile)
+    const descriptors = [{ name: "search", description: "d" }]
+    expect(WebMcpProfile.recordListing(state, 7, descriptors, "https://anything.test/")).toEqual({ ok: true })
+    expect(WebMcpProfile.verifyBinding(profile, 7, "search", descriptors, "https://anything.test/")).toEqual({
+      ok: true,
+    })
+    // The listing-time origin binding still applies: a navigation to another
+    // origin is not the listed page, allowlist or not.
+    expect(WebMcpProfile.verifyBinding(profile, 7, "search", descriptors, "https://other.test/")).toMatchObject({
+      ok: false,
+    })
+  })
+
+  test("managed origins narrow an unrestricted profile outright; managed deny still blocks", () => {
+    const profile = WebMcpProfile.config({ allowedOrigins: [] }).webmcp
+    const narrowed = WebMcpProfile.evaluate({ allowedOrigins: ["https://corp.test"] }, profile)
+    expect(narrowed.ok).toBe(true)
+    if (narrowed.ok) {
+      expect(narrowed.profile.allowedOrigins).toEqual(["https://corp.test"])
+      expect(WebMcpProfile.restricted(narrowed.profile)).toBe(true)
+    }
+    expect(WebMcpProfile.evaluate({ allow: false }, profile)).toEqual({ ok: false, reason: "managed_policy" })
+  })
+
+  test("session grants still union onto an empty configured list within the cap", () => {
+    const profile = WebMcpProfile.config({ allowedOrigins: [] }).webmcp
+    expect(WebMcpProfile.withGrants(profile, ["https://a.test"]).allowedOrigins).toEqual(["https://a.test"])
+    expect(WebMcpProfile.checkGrant(undefined, profile, [], "https://a.test")).toEqual({ ok: true })
   })
 })

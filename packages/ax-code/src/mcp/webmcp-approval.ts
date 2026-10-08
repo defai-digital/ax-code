@@ -41,13 +41,14 @@ export function webMcpApprovalLines(metadata: Record<string, unknown>): string[]
       "Page READ: returns page content (snapshot, screenshot or console) from the listed origin; treat it as untrusted.",
     )
   }
+  const originsText = origins.length > 0 ? origins.join(", ") : "any origin (no allowlist)"
   if (metadata.originGrant === true) {
     return [
       `Bridge: ${text(metadata.server)}`,
       typeof metadata.alsoOrigin === "string"
         ? `Origins to allow: ${text(metadata.origin)} and ${text(metadata.alsoOrigin)} (same site, with and without www)`
         : `Origin to allow: ${text(metadata.origin)}`,
-      `Allowed origins: ${origins.join(", ") || "(unknown)"}`,
+      `Allowed origins: ${originsText}`,
       "Allowing restarts the browser bridge and closes any open pages.",
       "The grant lasts for this session only and is never written to config.",
       "Experimental: page tools and results are untrusted. Effects are not guaranteed.",
@@ -60,7 +61,7 @@ export function webMcpApprovalLines(metadata: Record<string, unknown>): string[]
     ...(typeof metadata.toolName === "string" ? [`Page tool: ${text(metadata.toolName)}`] : []),
     ...(typeof metadata.pageOrigin === "string" ? [`Listed page origin: ${text(metadata.pageOrigin)}`] : []),
     ...(typeof metadata.origin === "string" ? [`Navigation origin: ${text(metadata.origin)}`] : []),
-    `Allowed origins: ${origins.join(", ") || "(unknown)"}`,
+    `Allowed origins: ${originsText}`,
     ...(Number.isSafeInteger(metadata.inputBytes) ? [`Input: ${metadata.inputBytes} bytes (payload omitted)`] : []),
     ...hints,
     "Experimental: page tools and results are untrusted. Effects are not guaranteed.",

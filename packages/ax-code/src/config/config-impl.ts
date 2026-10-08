@@ -48,6 +48,7 @@ import { FeatureFlag } from "../util/feature-flags"
 import { ScopedFlag } from "../flag/scoped"
 import { parseJsonResult } from "../util/json-value"
 import { FileCommand } from "../command/file-command"
+import { WebMcpProfile } from "@/mcp/webmcp-profile"
 // Single source of truth for the public config schema URL. Written into
 // every user's ax-code.json on first load, into legacy-TOML migrations,
 // and into remote wellknown configs that omit `$schema`. See issue #17.
@@ -837,6 +838,19 @@ export namespace Config {
       // Also record per directory so runtime readers on a multi-directory
       // server don't inherit another project's env reconciliation.
       ScopedFlag.recordCurrent("AX_CODE_AUTONOMOUS", result.autonomous !== false)
+    }
+
+    // ADR-170: ship the WebMCP bridge pre-registered but disabled, so the
+    // sidebar chip can enable it with one gesture — no config generation or
+    // file edit first. Injected only when no configured entry carries a webmcp
+    // profile and the product name is free. The injected entry has no recorded
+    // source (mcpEntries resolves it as trusted "unknown") and is
+    // enabled: false, so the startup bulk connect never launches it; the
+    // config-source trust gate still governs every configured entry.
+    const configured: unknown[] = Object.values(result.mcp ?? {})
+    const hasWebmcpProfile = configured.some((entry) => isRecord(entry) && isRecord(entry.webmcp))
+    if (!hasWebmcpProfile && result.mcp?.webmcp === undefined) {
+      result.mcp = { ...result.mcp, webmcp: WebMcpProfile.config({ allowedOrigins: [] }, false) }
     }
 
     return {
@@ -1743,6 +1757,32 @@ export namespace Config {
     await refreshAfterGlobalUpdate(isProviderEnablementUpdate(config))
 
     return next
+  }
+
+  /**
+   * ADR-170: persist the WebMCP chip toggle to the user-level (global) config
+   * so the choice survives restarts. Unlike updateGlobal this neither
+   * invalidates nor disposes instances: the runtime connection state already
+   * reflects the toggle, and disposing mid-gesture would tear down the
+   * connection the user just asked for. The persisted value applies from the
+   * next process start.
+   */
+  export async function persistWebMcpToggle(name: string, entry: NonNullable<Info["mcp"]>[string], enabled: boolean) {
+    const filepath = globalConfigFile()
+    using _inProcess = await Lock.write(filepath)
+    using _crossProcess = await FileLock.acquire(filepath)
+    const before = await Filesystem.readText(filepath).catch((err: NodeJS.ErrnoException) => {
+      if (err.code === "ENOENT") return "{}"
+      throw new JsonError({ path: filepath }, { cause: err })
+    })
+    const updated = patchJsonc(before, { mcp: { [name]: { ...entry, enabled } } })
+    // Validate before writing: a malformed result must never replace the file.
+    parseConfig(updated, filepath)
+    await Filesystem.write(filepath, updated)
+    // The runtime connection state already reflects the toggle, so live
+    // instances are not disposed; just drop the memoized global config so the
+    // next load (another instance or the next process start) sees the choice.
+    global.reset()
   }
 
   /** Replace one global provider without retaining stale nested model entries. */

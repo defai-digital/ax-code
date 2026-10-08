@@ -773,8 +773,6 @@ export namespace MCP {
     // effective one so Chrome's --allowed-url-pattern list matches.
     const grants = owner.webmcpGrants[key] ?? []
     const validated = configured ? WebMcpProfile.withGrants(configured, grants) : undefined
-    const launchCommand =
-      validated && validated !== configured ? WebMcpProfile.command(validated) : mcp.type === "local" ? mcp.command : []
     // The managed WebMCP requirement can deny the bridge or narrow its origins;
     // it never enables the bridge and never removes the per-call interactive
     // approval. A denial surfaces as a distinct `blocked` status so the UI can
@@ -796,6 +794,14 @@ export namespace MCP {
       }
       webmcp = decision.profile
     }
+    // Launch with the effective profile's argv whenever grants or a managed
+    // narrowing changed it (ADR-168, ADR-170): Chrome's --allowed-url-pattern
+    // list must match the origins the app layer enforces, including a managed
+    // list that narrows the unrestricted default profile. An untouched profile
+    // keeps the reviewed configured argv byte-for-byte.
+    const effective = webmcp ?? validated
+    const launchCommand =
+      effective && effective !== configured ? WebMcpProfile.command(effective) : mcp.type === "local" ? mcp.command : []
     if (webmcp?.executablePath) {
       const chrome = await WebMcpProfile.verifyChromeVersion(webmcp.executablePath)
       if (!chrome.ok) {
@@ -1214,6 +1220,20 @@ export namespace MCP {
     // synchronously. Commit the replacement status last so that stale close
     // handling cannot downgrade a successful reconnect.
     s.status[name] = result.status
+    // ADR-170: the chip gesture persists to user-level config so the choice
+    // survives restarts. Scoped to webmcp-profiled entries owned by the user —
+    // the injected product default has no recorded source and resolves to
+    // "unknown"; project, custom, managed and other configured entries keep an
+    // ephemeral toggle and are never copied into the global file. A persistence
+    // failure must not fail the connection the user just asked for.
+    if (result.status.status === "connected" && mcp.type === "local" && mcp.webmcp !== undefined) {
+      const source = (await Config.mcpEntry(name))?.source
+      if (source?.kind === "unknown" || source?.kind === "global") {
+        await Config.persistWebMcpToggle(name, mcp, true).catch((error) =>
+          log.warn("webmcp toggle persistence failed", { name, error: toErrorMessage(error) }),
+        )
+      }
+    }
     log.info("mcp connect", {
       name,
       webmcp: mcp.type === "local" && mcp.webmcp !== undefined,
@@ -1233,6 +1253,22 @@ export namespace MCP {
       }
       await closePendingOAuthTransport(name)
       s.status[name] = { status: "disabled" }
+      // ADR-170: mirror the chip's off toggle into user-level config; same
+      // user-owned scoping as the connect path. A persistence failure must not
+      // fail the disconnect.
+      const entry = await Config.mcpEntry(name)
+      const toggled = entry?.config
+      if (
+        toggled &&
+        isConfigured(toggled) &&
+        toggled.type === "local" &&
+        toggled.webmcp !== undefined &&
+        (entry?.source.kind === "unknown" || entry?.source.kind === "global")
+      ) {
+        await Config.persistWebMcpToggle(name, toggled, false).catch((error) =>
+          log.warn("webmcp toggle persistence failed", { name, error: toErrorMessage(error) }),
+        )
+      }
     })
   }
 

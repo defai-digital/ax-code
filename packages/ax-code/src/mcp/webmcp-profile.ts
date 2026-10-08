@@ -67,11 +67,24 @@ export namespace WebMcpProfile {
     }
   }
 
-  const Origins = z
-    .array(z.string().max(240).refine(exactOrigin, "Use an exact HTTPS origin or HTTP loopback origin"))
-    .min(1)
-    .max(8)
-    .refine((origins) => new Set(origins).size === origins.length, "Origins must be unique")
+  const Origin = z.string().max(240).refine(exactOrigin, "Use an exact HTTPS origin or HTTP loopback origin")
+  const uniqueOrigins = (origins: string[]) => new Set(origins).size === origins.length
+  const Origins = z.array(Origin).min(1).max(8).refine(uniqueOrigins, "Origins must be unique")
+  /**
+   * ADR-170: a profile origin list may be empty. Empty means navigation is
+   * unrestricted (the product default); a non-empty list is a narrowing list
+   * that restores exact-origin enforcement at launch and at call time.
+   */
+  const ProfileOrigins = z.array(Origin).max(8).refine(uniqueOrigins, "Origins must be unique")
+
+  /**
+   * ADR-170: a profile with a narrowing origin list enforces exact origins at
+   * launch and at call time; an empty list navigates any http(s) origin and
+   * the grant machinery stays dormant (no grant prompts, no relaunches).
+   */
+  export function restricted(profile: { allowedOrigins: readonly string[] }): boolean {
+    return profile.allowedOrigins.length > 0
+  }
 
   /**
    * Managed-only enterprise requirement for the experimental bridge. It is read
@@ -88,7 +101,7 @@ export namespace WebMcpProfile {
         .optional()
         .describe("Managed allow/deny for the experimental WebMCP bridge. false blocks the bridge entirely."),
       allowedOrigins: Origins.optional().describe(
-        "Managed narrowing list. When set, only these exact origins stay usable; it must intersect the profile's configured origins.",
+        "Managed narrowing list. When set, only these exact origins stay usable: an unrestricted profile narrows to this list; a configured profile is intersected with it and an empty intersection fails closed.",
       ),
       allowPersistentProfile: z
         .boolean()
@@ -113,8 +126,8 @@ export namespace WebMcpProfile {
 
   export const Configuration = z
     .object({
-      allowedOrigins: Origins.describe(
-        "Exact permitted origins; no wildcards, credentials, paths, queries or fragments",
+      allowedOrigins: ProfileOrigins.describe(
+        "Exact permitted origins; no wildcards, credentials, paths, queries or fragments. Empty (the product default) navigates any http(s) origin; a non-empty list narrows navigation to exactly those origins.",
       ),
       headless: z.boolean().optional().describe("Use an isolated headless Chrome instead of a visible window"),
       persistentProfile: z
@@ -374,6 +387,14 @@ export namespace WebMcpProfile {
     if (!requirement) return { ok: true, profile: gated }
     const allowed = requirement.allowedOrigins
     if (!allowed) return { ok: true, profile: gated }
+    // ADR-170: an unrestricted profile (no configured origins) narrows to the
+    // managed list outright; the intersection rule below applies only when the
+    // profile itself carries a narrowing list.
+    if (gated.allowedOrigins.length === 0) {
+      const narrowed = Configuration.parse({ ...gated, allowedOrigins: allowed })
+      Object.freeze(narrowed.allowedOrigins)
+      return { ok: true, profile: Object.freeze(narrowed) }
+    }
     const admitted = gated.allowedOrigins.filter((origin) => allowed.includes(origin))
     if (admitted.length === 0) return { ok: false, reason: "managed_origins" }
     if (admitted.length === gated.allowedOrigins.length) return { ok: true, profile: gated }
@@ -560,10 +581,13 @@ export namespace WebMcpProfile {
         throw new Error("WebMCP navigation requires an https: URL or an http: loopback URL")
       }
       if (target.username || target.password) throw new Error("WebMCP navigation origin is not allowed")
-      // A well-formed origin that is merely absent from the effective list is
-      // grantable by an interactive, session-scoped approval (ADR-168). Every
+      // A well-formed origin that is merely absent from a narrowing list is
+      // grantable by an interactive, session-scoped approval (ADR-168). An
+      // unrestricted profile (no narrowing list, ADR-170) never prompts. Every
       // other rejection above stays a plain, non-grantable error.
-      if (!profile.allowedOrigins.includes(target.origin)) throw new OriginNotGrantedError(target.origin)
+      if (restricted(profile) && !profile.allowedOrigins.includes(target.origin)) {
+        throw new OriginNotGrantedError(target.origin)
+      }
     }
     if (typeof call.input === "string") {
       if (Buffer.byteLength(call.input, "utf8") > MAX_INPUT_BYTES || !isRecord(parseJsonPayload(call.input))) {
@@ -715,8 +739,9 @@ export namespace WebMcpProfile {
     // granted through the same per-origin approval, so it is authorized. A
     // landing on an origin outside the effective allowlist is rejected here;
     // the dispatch probe (tool-conversion.ts) offers the grant prompt for a
-    // redirect target the bridge blocked, so the retry can land on it.
-    if (!profile.allowedOrigins.includes(origin)) {
+    // redirect target the bridge blocked, so the retry can land on it. An
+    // unrestricted profile (ADR-170) accepts any http(s) landing.
+    if (restricted(profile) && !profile.allowedOrigins.includes(origin)) {
       throw new Error("WebMCP navigation did not land on an allowed origin; do not retry automatically")
     }
   }
@@ -1032,7 +1057,7 @@ export namespace WebMcpProfile {
       if (origin !== expected.origin) {
         return { ok: false, error: "WebMCP page origin changed since approval; list its tools again before executing" }
       }
-      if (!profile.allowedOrigins.includes(origin)) {
+      if (restricted(profile) && !profile.allowedOrigins.includes(origin)) {
         return { ok: false, error: "WebMCP page origin is no longer allowed" }
       }
       const fresh = descriptors.find((descriptor) => descriptor.name === toolName)
@@ -1051,7 +1076,7 @@ export namespace WebMcpProfile {
     if (origin !== page.origin) {
       return { ok: false, error: "WebMCP page origin changed since its tools were listed" }
     }
-    if (!profile.allowedOrigins.includes(origin)) {
+    if (restricted(profile) && !profile.allowedOrigins.includes(origin)) {
       return { ok: false, error: "WebMCP page origin is no longer allowed" }
     }
     const stored = page.tools.get(toolName)

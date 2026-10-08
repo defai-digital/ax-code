@@ -4604,7 +4604,7 @@ export type VcsInfo = {
  */
 export type WebMcpProfileConfig = {
   /**
-   * Exact permitted origins; no wildcards, credentials, paths, queries or fragments
+   * Exact permitted origins; no wildcards, credentials, paths, queries or fragments. Empty (the product default) navigates any http(s) origin; a non-empty list narrows navigation to exactly those origins.
    */
   allowedOrigins: Array<string>
   /**
@@ -4638,7 +4638,7 @@ export type WebMcpRequirementConfig = {
    */
   allow?: boolean
   /**
-   * Managed narrowing list. When set, only these exact origins stay usable; it must intersect the profile's configured origins.
+   * Managed narrowing list. When set, only these exact origins stay usable: an unrestricted profile narrows to this list; a configured profile is intersected with it and an empty intersection fails closed.
    */
   allowedOrigins?: Array<string>
   /**

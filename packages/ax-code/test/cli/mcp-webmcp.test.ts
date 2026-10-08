@@ -6,20 +6,19 @@ import { Config } from "../../src/config/config"
 import { parseJsonPayload } from "../../src/util/json-value"
 import path from "node:path"
 
-test("WebMCP CLI reports a missing origin instead of exiting silently", async () => {
-  const messages: string[] = []
-  await yargs()
-    .exitProcess(false)
-    .fail((msg, err) => {
-      if (msg) messages.push(msg)
-      if (err) messages.push(err.message)
-    })
-    .command(McpCommand)
-    .parseAsync(["mcp", "webmcp"])
-    .catch((err) => {
-      messages.push(err instanceof Error ? err.message : String(err))
-    })
-  expect(messages.join("\n")).toMatch(/Missing required argument: origin/i)
+test("WebMCP CLI without --origin prints an unrestricted disabled config (ADR-170)", async () => {
+  const output = vi.spyOn(process.stdout, "write").mockReturnValue(true)
+  try {
+    await yargs().exitProcess(false).command(McpCommand).parseAsync(["mcp", "webmcp"])
+    const parsed = Config.Info.parse(parseJsonPayload(output.mock.calls.map(([text]) => text).join("")))
+    const entry = parsed.mcp?.webmcp
+    expect(entry).toMatchObject({ type: "local", enabled: false, webmcp: { allowedOrigins: [] } })
+    if (entry && "type" in entry && entry.type === "local") {
+      expect(entry.command.some((arg) => arg.startsWith("--allowed-url-pattern="))).toBe(false)
+    }
+  } finally {
+    output.mockRestore()
+  }
 })
 
 test("WebMCP CLI prints disabled config without connecting or writing user configuration", async () => {
