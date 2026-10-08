@@ -600,7 +600,8 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
   // Mode chips (work mode / run mode / sandbox) live in the session sidebar
   // and, on Home, at the front of this footer's right-side hint row via
   // `props.footerRight` (right-aligned, just before the ctrl+c hint) — no
-  // toggle width is reserved for them here.
+  // toggle width is reserved for them here. Home also passes the WebMCP
+  // bridge chip through the same prop, after the mode chips.
   // ctrl+c is overloaded: it clears a non-empty draft and exits when the
   // input is empty — the footer hint mirrors whichever action currently applies.
   const footerClearHint = createMemo(() => {

@@ -6,9 +6,12 @@ import { ModeToggle } from "./mode-chips"
 import { webMcpChipModel } from "./webmcp-chip-model"
 
 /**
- * Sidebar footer chip for the experimental WebMCP bridge. It appears only when
+ * Toggle chip for the experimental WebMCP bridge, rendered in the session
+ * sidebar footer and, on Home, in the prompt footer's right-side hint row
+ * (after ModeChips, via the Prompt `footerRight` prop). It appears only when
  * a webmcp-profiled MCP server is configured, is off by default, and toggles
- * the runtime connections (ephemeral — it never writes the config). A
+ * the runtime connections; for user-configured webmcp entries the toggle also
+ * persists the enabled state to the user config (ADR-170). A
  * managed-policy denial renders as a locked, non-interactive state so it is
  * never mistaken for an off switch the user can flip; failed and trust-gated
  * bridges render as a warning with the failure reason. Mixed states keep
