@@ -6,6 +6,23 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.23.0] - 2026-10-08
+
+### Changed
+
+- Publish SDK 2.5.62 with managed WebMCP policy and the default-off read-tier configuration contract. Read-tool dispatch remains unavailable until origin preflight and output handling are qualified.
+- Add session-scoped WebMCP origin grants, including reviewed apex/www pairs, and managed opt-ins for a persistent AX-owned browser profile and an integrity-verified vendored bridge.
+
+### Fixed
+
+- Keep WebMCP redirect recovery within the original dispatch deadline and discard responses received after cancellation or timeout.
+- Escalate surviving descendant processes even when signaling their direct parent throws.
+- Bound process snapshots by time and record count, reject invalid PIDs, and traverse deep process trees without recursion.
+- Reject unqualified WebMCP read calls before they reach the bridge.
+- Raise seroval and source-map-js security floors and patch sprintf-js numeric precision bounds, with installed-consumer checks before the vulnerability scan.
+- Bind WebMCP execution to the approved origin and tool definition, cap untrusted descriptors and results, and reject unsupported Chrome versions.
+- Fill AX Trust model cards from first-party catalog metadata in both background discovery and the provider editor.
+
 ## [7.22.4] - 2026-10-04
 
 ### Changed
