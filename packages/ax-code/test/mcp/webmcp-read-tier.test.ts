@@ -272,12 +272,12 @@ describe("WebMCP read tier admission over MCP", () => {
         await expect(
           tools.bridge_take_screenshot.execute!({ pageId: 1, filePath: "/tmp/x.png" }, options),
         ).rejects.toThrow()
-        await tools.bridge_take_snapshot.execute!({ pageId: 1 }, options)
-        expect(bridge.call).toHaveBeenCalledWith(
-          { name: "take_snapshot", arguments: { pageId: 1 } },
-          expect.anything(),
-          expect.anything(),
-        )
+        for (const name of WebMcpProfile.READ_TOOLS) {
+          await expect(tools[`bridge_${name}`].execute!({ pageId: 1 }, options)).rejects.toThrow(
+            "read tier is not available",
+          )
+        }
+        expect(bridge.call).not.toHaveBeenCalled()
       },
     })
   })

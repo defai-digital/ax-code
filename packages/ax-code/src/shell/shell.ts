@@ -101,8 +101,12 @@ export namespace Shell {
     if (opts?.exited?.() && descendants.length === 0) return
     try {
       if (!opts?.exited?.()) proc.kill(signal)
-      await sleep(SIGKILL_TIMEOUT_MS)
-      for (const child of descendants) signalPid(child, "SIGKILL")
+    } catch {
+      // A direct-child failure must not skip escalation for its descendants.
+    }
+    await sleep(SIGKILL_TIMEOUT_MS)
+    for (const child of descendants) signalPid(child, "SIGKILL")
+    try {
       if (!opts?.exited?.()) {
         proc.kill("SIGKILL")
       }

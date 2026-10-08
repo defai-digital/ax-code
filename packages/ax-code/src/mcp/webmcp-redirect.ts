@@ -41,19 +41,24 @@ export async function redirectOriginOutsideAllowlist(
   const startOrigin = WebMcpProfile.grantableOrigin(requestedUrl)
   if (!startOrigin || !allowed.has(startOrigin)) return undefined
   if (options.signal?.aborted) return undefined
+  const timeoutMs = options.timeoutMs ?? REDIRECT_PROBE_TIMEOUT_MS
+  if (timeoutMs <= 0) return undefined
+  const deadline = Date.now() + timeoutMs
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? REDIRECT_PROBE_TIMEOUT_MS)
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   const onAbort = () => controller.abort()
   options.signal?.addEventListener("abort", onAbort, { once: true })
   try {
     let current = requestedUrl
     for (let hop = 0; hop < MAX_REDIRECT_HOPS; hop++) {
+      if (controller.signal.aborted || Date.now() >= deadline) return undefined
       let response: Awaited<ReturnType<ProbeFetch>>
       try {
         response = await fetchImpl(current, { method: "HEAD", redirect: "manual", signal: controller.signal })
       } catch {
         return undefined
       }
+      if (controller.signal.aborted || Date.now() >= deadline) return undefined
       if (response.status < 300 || response.status >= 400) return undefined
       const location = response.headers.get("location")
       if (!location) return undefined

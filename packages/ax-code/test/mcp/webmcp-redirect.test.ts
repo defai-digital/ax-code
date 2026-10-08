@@ -97,4 +97,23 @@ describe("WebMCP redirect probe (ADR-168)", () => {
       chain[`https://a.test/${i}`] = { status: 301, location: `https://a.test/${i + 1}` }
     expect(await redirectOriginOutsideAllowlist("https://a.test/0", allowed, fakeFetch(chain))).toBeUndefined()
   })
+
+  test("discards a redirect response that arrives after cancellation", async () => {
+    const controller = new AbortController()
+    const fetchImpl: ProbeFetch = async () => {
+      controller.abort()
+      return { status: 301, headers: { get: () => "https://b.test/" } }
+    }
+    expect(
+      await redirectOriginOutsideAllowlist("https://a.test/x", allowed, fetchImpl, { signal: controller.signal }),
+    ).toBeUndefined()
+  })
+
+  test("an exhausted probe budget never sends a request", async () => {
+    const calls: string[] = []
+    expect(
+      await redirectOriginOutsideAllowlist("https://a.test/x", allowed, fakeFetch({}, calls), { timeoutMs: 0 }),
+    ).toBeUndefined()
+    expect(calls).toEqual([])
+  })
 })

@@ -50,6 +50,40 @@ describe("Shell", () => {
   )
 
   test.skipIf(process.platform === "win32")(
+    "still escalates descendants when signaling the direct child throws",
+    async () => {
+      const child = spawn("sh", ["-c", "trap '' TERM; sleep 289 & echo $!; wait"], {
+        stdio: ["ignore", "pipe", "ignore"],
+      })
+      const grandchild = await new Promise<number>((resolve, reject) => {
+        child.once("error", reject)
+        child.stdout.once("data", (data) => resolve(Number(String(data).trim())))
+      })
+      const alive = () => {
+        try {
+          process.kill(grandchild, 0)
+          return true
+        } catch {
+          return false
+        }
+      }
+      try {
+        expect(alive()).toBe(true)
+        await Shell.killTree({
+          pid: child.pid,
+          kill: () => {
+            throw new Error("Direct child signal failed")
+          },
+        })
+        await vi.waitFor(() => expect(alive()).toBe(false), { timeout: 2000 })
+      } finally {
+        if (alive()) process.kill(grandchild, "SIGKILL")
+        child.kill("SIGKILL")
+      }
+    },
+  )
+
+  test.skipIf(process.platform === "win32")(
     "reaps descendants of a child that is not a process group leader",
     async () => {
       const child = spawn("sh", ["-c", "sleep 289 & echo $!; wait"], { stdio: ["ignore", "pipe", "ignore"] })

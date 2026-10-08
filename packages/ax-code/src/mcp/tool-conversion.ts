@@ -197,6 +197,13 @@ export async function convertMcpTool(
     inputSchema: jsonSchema(schema),
     execute: async (args: unknown, opts: ToolCallOptions) => {
       const input = webmcp ? WebMcpProfile.validateCall(webmcp.profile, webmcp.toolName, args) : args
+      // ADR-169 slice A defines policy and schemas only. Keep dispatch closed
+      // until the origin preflight and bounded output handling are qualified.
+      if (webmcp && WebMcpProfile.READ_TOOLS.some((name) => name === webmcp.toolName)) {
+        throw new Error(
+          "WebMCP read tier is not available until origin preflight and output qualification are complete",
+        )
+      }
       // The approval-time snapshot rides on the validated call object the
       // permission wrapper approved; direct dispatches without an approval
       // fall back to the live baseline check. A call the approval marked as
@@ -272,12 +279,15 @@ export async function convertMcpTool(
             // the requested URL (allowed origins only) and, when it names a
             // grantable origin, raise a grantable error so the ADR-168 prompt
             // can offer to allow it instead of an opaque failure.
+            opts.abortSignal?.throwIfAborted()
             const redirect = await webmcpRedirectOrigin(
               webmcp,
               (input ?? {}) as Record<string, unknown>,
-              timeout,
+              budget(),
               opts.abortSignal,
             )
+            opts.abortSignal?.throwIfAborted()
+            budget()
             if (redirect) throw new WebMcpProfile.OriginNotGrantedError(redirect)
             throw error
           }
