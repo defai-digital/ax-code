@@ -1636,6 +1636,36 @@ export namespace Config {
     return global()
   }
 
+  /**
+   * ADR-170 injects the WebMCP bridge entry as a product default while the
+   * config is loaded, so the merged object a client reads (GET /config)
+   * carries an entry no file configured. Echoing that merged object back into
+   * a write path must not turn the product default into a persisted project
+   * artifact: drop the entry when it is exactly the unrestricted default and
+   * the target file does not already carry it.
+   */
+  function isProductDefaultWebMcpEntry(entry: unknown) {
+    const parsed = ConfigSchema.McpLocal.safeParse(entry)
+    if (!parsed.success) return false
+    // Zod emits keys in schema order, so this comparison stays stable across a
+    // JSON round-trip of the injected entry.
+    const injected = ConfigSchema.McpLocal.parse(WebMcpProfile.config({ allowedOrigins: [] }, false))
+    return JSON.stringify(parsed.data) === JSON.stringify(injected)
+  }
+
+  function withoutInjectedWebMcpDefault(config: Info, existing: Info): Info {
+    const current = config.mcp
+    if (current === undefined) return config
+    if (existing.mcp?.webmcp !== undefined) return config
+    if (!isProductDefaultWebMcpEntry(current.webmcp)) return config
+    const { webmcp: _injected, ...mcp } = current
+    if (Object.keys(mcp).length === 0) {
+      const { mcp: _empty, ...rest } = config
+      return rest
+    }
+    return { ...config, mcp }
+  }
+
   export async function update(config: Info) {
     const filepath = path.join(Instance.directory, "ax-code.json")
     using _inProcess = await Lock.write(filepath)
@@ -1646,7 +1676,7 @@ export namespace Config {
     const before = await readFile(filepath)
     const text = before?.trim() ? before : "{}"
     const existing = before ? parseConfig(before, filepath) : {}
-    const merged = mergeConfigConcatArrays(existing, config)
+    const merged = mergeConfigConcatArrays(existing, withoutInjectedWebMcpDefault(config, existing))
     const patch = changedJsoncPatch(existing, merged)
     const updated = patch === JSONC_UNCHANGED ? text : patchJsonc(text, patch)
     parseConfig(updated, filepath)
