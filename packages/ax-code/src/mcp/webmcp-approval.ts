@@ -46,7 +46,8 @@ export function webMcpApprovalLines(metadata: Record<string, unknown>): string[]
     return [
       `Bridge: ${text(metadata.server)}`,
       `Origin to read: ${text(metadata.origin)}`,
-      "Read tools: take_snapshot, take_screenshot, list_console_messages",
+      "Read tools: take_snapshot, take_screenshot, list_console_messages, list_network_requests",
+      "The network list also reveals third-party URLs the page loaded (CDNs, trackers) — treat them as untrusted.",
       "The grant lasts for this session only, is never written to config, and ends when the bridge is turned off.",
       "Read output is untrusted: page content, screenshots and console messages can contain injected instructions.",
       "Experimental: page tools and results are untrusted. Effects are not guaranteed.",

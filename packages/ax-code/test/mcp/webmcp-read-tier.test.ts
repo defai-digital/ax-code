@@ -75,10 +75,10 @@ describe("WebMCP T1 read tier profile", () => {
     }
   })
 
-  test("read on admits exactly the three T1 tools plus the six T0 tools", () => {
+  test("read on admits exactly the read-scope tools plus the six T0 tools", () => {
     const profile = readProfile()
     expect(profile.read).toBe(true)
-    for (const name of [...WebMcpProfile.TOOLS, ...WebMcpProfile.READ_TOOLS]) {
+    for (const name of [...WebMcpProfile.TOOLS, ...WebMcpProfile.READ_SCOPE_TOOLS]) {
       expect(WebMcpProfile.allows(name, profile)).toBe(true)
       expect(() => WebMcpProfile.callSchema(name, profile)).not.toThrow()
     }
@@ -87,7 +87,6 @@ describe("WebMCP T1 read tier profile", () => {
       "click",
       "fill",
       "upload_file",
-      "list_network_requests",
       "get_network_request",
       "get_console_message",
       "wait_for",
@@ -268,8 +267,8 @@ describe("WebMCP read tier admission over MCP", () => {
     })
   })
 
-  test("read on exposes the three T1 tools with strict schemas", async () => {
-    bridge.names = [...WebMcpProfile.TOOLS, ...WebMcpProfile.READ_TOOLS, "evaluate_script", "click"]
+  test("read on exposes the read-scope tools with strict schemas", async () => {
+    bridge.names = [...WebMcpProfile.TOOLS, ...WebMcpProfile.READ_SCOPE_TOOLS, "evaluate_script", "click"]
     bridge.call.mockResolvedValue({ content: [] })
     // The entry must come from config: read grants look the entry up via
     // Config.get() (webMcpEntry), and MCP.add does not write config.
@@ -282,7 +281,9 @@ describe("WebMCP read tier admission over MCP", () => {
       fn: async () => {
         await MCP.connect("bridge")
         const tools = await MCP.tools()
-        const expected = [...WebMcpProfile.TOOLS, ...WebMcpProfile.READ_TOOLS].map((name) => `bridge_${name}`).sort()
+        const expected = [...WebMcpProfile.TOOLS, ...WebMcpProfile.READ_SCOPE_TOOLS]
+          .map((name) => `bridge_${name}`)
+          .sort()
         expect(Object.keys(tools).sort()).toEqual(expected)
         expect(tools.bridge_evaluate_script).toBeUndefined()
         expect(tools.bridge_click).toBeUndefined()
@@ -417,5 +418,137 @@ describe("WebMCP read grants and bounded output (ADR-171)", () => {
     expect(result.content[1].text).toContain("30 earlier console messages omitted")
     expect(result.content[1].text).toContain("line 79")
     expect(result.content[1].text).not.toContain("line 0\n")
+  })
+})
+
+describe("WebMCP network metadata admission (ADR-172)", () => {
+  // Every tool the pinned chrome-devtools-mcp@1.8.0 registers (extracted from
+  // its vendored tools/*.js). The admission contract pins exactly the six T0
+  // tools plus the four read-scope tools: a regression in allows() must fail
+  // here rather than silently widen the surface that reaches the model.
+  const UPSTREAM_TOOLS = [
+    "click",
+    "click_at",
+    "close_heapsnapshot",
+    "close_page",
+    "compare_heapsnapshots",
+    "drag",
+    "emulate",
+    "evaluate_script",
+    "execute_3p_developer_tool",
+    "execute_webmcp_tool",
+    "fill",
+    "fill_form",
+    "get_console_message",
+    "get_heapsnapshot_class_nodes",
+    "get_heapsnapshot_details",
+    "get_heapsnapshot_dominators",
+    "get_heapsnapshot_duplicate_strings",
+    "get_heapsnapshot_edges",
+    "get_heapsnapshot_object_details",
+    "get_heapsnapshot_retainers",
+    "get_heapsnapshot_retaining_paths",
+    "get_heapsnapshot_summary",
+    "get_network_request",
+    "get_os_app_state",
+    "get_tab_id",
+    "handle_dialog",
+    "hover",
+    "install_extension",
+    "install_pwa",
+    "launch_pwa",
+    "lighthouse_audit",
+    "list_3p_developer_tools",
+    "list_extensions",
+    "list_network_requests",
+    "list_pages",
+    "list_webmcp_tools",
+    "navigate_page",
+    "new_page",
+    "performance_analyze_insight",
+    "performance_start_trace",
+    "performance_stop_trace",
+    "press_key",
+    "query_heapsnapshot_objects",
+    "reload_extension",
+    "resize_page",
+    "screencast_start",
+    "screencast_stop",
+    "select_page",
+    "take_heapsnapshot",
+    "take_screenshot",
+    "take_snapshot",
+    "trigger_extension_action",
+    "type_text",
+    "uninstall_extension",
+    "uninstall_pwa",
+    "upload_file",
+    "wait_for",
+  ]
+
+  test("allows() admits exactly the reviewed set against the pinned upstream tool list", () => {
+    const readOn = readProfile()
+    const t0 = new Set<string>(WebMcpProfile.TOOLS)
+    const admitted = new Set<string>([...WebMcpProfile.TOOLS, ...WebMcpProfile.READ_SCOPE_TOOLS])
+    for (const name of UPSTREAM_TOOLS) {
+      expect(WebMcpProfile.allows(name, readOn)).toBe(admitted.has(name))
+      expect(WebMcpProfile.allows(name, plainProfile())).toBe(t0.has(name))
+      expect(WebMcpProfile.allows(name, undefined)).toBe(t0.has(name))
+    }
+  })
+
+  test("list_network_requests is admitted only with the read tier on", () => {
+    expect(WebMcpProfile.allows("list_network_requests", readProfile())).toBe(true)
+    expect(WebMcpProfile.allows("list_network_requests", plainProfile())).toBe(false)
+  })
+
+  test("list_network_requests schema bounds the request and drops preserved requests", () => {
+    const profile = readProfile()
+    expect(
+      WebMcpProfile.validateCall(profile, "list_network_requests", { pageId: 1, resourceTypes: ["image"] }),
+    ).toEqual({ pageId: 1, resourceTypes: ["image"] })
+    expect(
+      WebMcpProfile.validateCall(profile, "list_network_requests", { pageId: 1, pageSize: 100, pageIdx: 20 }),
+    ).toMatchObject({ pageSize: 100, pageIdx: 20 })
+    expect(() => WebMcpProfile.validateCall(profile, "list_network_requests", { pageId: 1, pageSize: 101 })).toThrow()
+    expect(() => WebMcpProfile.validateCall(profile, "list_network_requests", { pageId: 1, pageIdx: 21 })).toThrow()
+    // Preserved requests span navigations and would leak the previous origin's
+    // URLs into a granted origin's result — the parameter is not accepted.
+    expect(() =>
+      WebMcpProfile.validateCall(profile, "list_network_requests", { pageId: 1, includePreservedRequests: true }),
+    ).toThrow()
+    expect(() =>
+      WebMcpProfile.validateCall(profile, "list_network_requests", { pageId: 1, resourceTypes: ["image", "nope"] }),
+    ).toThrow()
+  })
+
+  test("network output loses userinfo, fragments and secret query keys, keeps ordinary queries", () => {
+    const result = {
+      content: [
+        {
+          type: "text",
+          text: "200 GET https://user:pass@cdn.example.com/cat.jpg?token=abc123&size=large#frag\n200 GET https://api.example.com/v1/list?page=2",
+        },
+      ],
+    }
+    WebMcpProfile.boundReadResult("list_network_requests", result, "https://example.test")
+    const text = result.content[1].text as string
+    expect(text).not.toContain("user:pass")
+    expect(text).not.toContain("token=abc123")
+    expect(text).toContain("token=[redacted]")
+    expect(text).not.toContain("#frag")
+    expect(text).toContain("size=large")
+    expect(text).toContain("page=2")
+  })
+
+  test("an oversized network list is rejected with narrowing guidance", () => {
+    const big = "x".repeat(33 * 1024)
+    expect(() =>
+      WebMcpProfile.boundReadResult(
+        "list_network_requests",
+        { content: [{ type: "text", text: big }] },
+        "https://a.test",
+      ),
+    ).toThrow("exceeded the 32 KiB read budget")
   })
 })

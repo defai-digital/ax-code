@@ -198,10 +198,10 @@ export async function convertMcpTool(
     inputSchema: jsonSchema(schema),
     execute: async (args: unknown, opts: ToolCallOptions) => {
       const input = webmcp ? WebMcpProfile.validateCall(webmcp.profile, webmcp.toolName, args) : args
-      // ADR-171: read-tier calls dispatch behind a per-origin session read
-      // grant, with the page origin resolved through the bridge before the
-      // call and re-verified after it.
-      const readTier = webmcp !== undefined && WebMcpProfile.READ_TOOLS.some((name) => name === webmcp.toolName)
+      // ADR-171/172: read-scope calls dispatch behind a per-origin session
+      // read grant, with the page origin resolved through the bridge before
+      // the call and re-verified after it.
+      const readTier = webmcp !== undefined && WebMcpProfile.READ_SCOPE_TOOLS.some((name) => name === webmcp.toolName)
       // The approval-time snapshot rides on the validated call object the
       // permission wrapper approved; direct dispatches without an approval
       // fall back to the live baseline check. A call the approval marked as

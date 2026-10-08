@@ -1531,10 +1531,12 @@ export async function resolveTools(input: ResolveToolsInput) {
                   : undefined,
               )
             : undefined
-          // ADR-171: read-tier calls are approved by the per-origin session
-          // read grant (the dispatch raises ReadNotGrantedError for a missing
-          // grant and the prompt happens then), so they skip the per-call asks.
-          const readTierTool = policy !== undefined && WebMcpProfile.READ_TOOLS.some((name) => name === policy.toolName)
+          // ADR-171/172: read-scope calls are approved by the per-origin
+          // session read grant (the dispatch raises ReadNotGrantedError for a
+          // missing grant and the prompt happens then), so they skip the
+          // per-call asks.
+          const readTierTool =
+            policy !== undefined && WebMcpProfile.READ_SCOPE_TOOLS.some((name) => name === policy.toolName)
           const permissionPattern = McpPermissionPattern.derive(key, webmcp ?? call, { worktree: Instance.worktree })
           if (!readTierTool) {
             await ctx.ask({

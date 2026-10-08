@@ -29,6 +29,37 @@ export namespace WebMcpProfile {
    */
   export const READ_TOOLS = ["take_snapshot", "take_screenshot", "list_console_messages"] as const
   /**
+   * Every tool the per-origin read grant admits (ADR-171, ADR-172): the three
+   * content readers plus read-only network metadata. The grant prompt names
+   * this set; the per-call origin preflight covers all of it.
+   */
+  export const READ_SCOPE_TOOLS = [...READ_TOOLS, "list_network_requests"] as const
+  /**
+   * Resource types the pinned chrome-devtools-mcp@1.8.0 bridge accepts
+   * (FILTERABLE_RESOURCE_TYPES in its network tool). The local schema must
+   * accept exactly this enum.
+   */
+  const NETWORK_RESOURCE_TYPES = z.enum([
+    "document",
+    "stylesheet",
+    "image",
+    "media",
+    "font",
+    "script",
+    "texttrack",
+    "xhr",
+    "fetch",
+    "prefetch",
+    "eventsource",
+    "websocket",
+    "manifest",
+    "signedexchange",
+    "ping",
+    "cspviolationreport",
+    "preflight",
+    "fedcm",
+  ])
+  /**
    * Console message types the pinned chrome-devtools-mcp@1.8.0 bridge accepts
    * (FILTERABLE_MESSAGE_TYPES in its console tool). The local schema must
    * accept exactly this enum: a value the bridge rejects would surface only at
@@ -71,7 +102,7 @@ export namespace WebMcpProfile {
    * T0 sentence that reading is unavailable.
    */
   export const READ_LIMITS_NOTE =
-    "Limits: read access is limited to three tools — page snapshot, screenshot and console messages — for the allowed origins. " +
+    "Limits: read access is limited to four tools — page snapshot, screenshot, console messages, and request metadata (method/url/status/type) — for the allowed origins. " +
     "Interaction is still impossible: it cannot click, type, run scripts, upload files, or read network bodies. " +
     "Page-registered WebMCP tools remain the only operations it can run."
   /** The T0 note when the read tier is off, the read-tier note when it is on. */
@@ -80,6 +111,7 @@ export namespace WebMcpProfile {
   }
   const tools = new Set<string>(TOOLS)
   const readTools = new Set<string>(READ_TOOLS)
+  const readScopeTools = new Set<string>(READ_SCOPE_TOOLS)
   const loopback = new Set(["localhost", "127.0.0.1", "[::1]"])
 
   function exactOrigin(value: string): boolean {
@@ -337,9 +369,12 @@ export namespace WebMcpProfile {
         : ["--isolated", ...(profile.headless ? ["--headless"] : [])]),
       "--no-usage-statistics",
       "--no-performance-crux",
+      // ADR-172: only the network category flag comes off (list_network_requests
+      // joins the read tier). Emulation and performance categories stay
+      // blocked at the argv layer as defense in depth — the pinned package
+      // has no per-tool exclusion flag, and allows() is the product gate.
       "--no-category-emulation",
       "--no-category-performance",
-      "--no-category-network",
       "--category-experimental-webmcp",
       "--experimental-structured-content",
       "--chrome-arg=--enable-features=WebMCP",
@@ -603,12 +638,14 @@ export namespace WebMcpProfile {
 
   /**
    * Whether the bridge admits a tool. The six T0 tools are always admitted.
-   * The three T1 read tools are admitted only when the effective profile opted
-   * into the read tier (`read: true`); every other upstream tool is rejected.
+   * The read-scope tools (ADR-171/172) are admitted only when the effective
+   * profile opted into the read tier (`read: true`); every other upstream
+   * tool is rejected. This is the product admission gate; the argv keeps the
+   * emulation and performance categories off as defense in depth.
    */
   export function allows(name: string, profile?: Configuration): boolean {
     if (tools.has(name)) return true
-    return profile?.read === true && readTools.has(name)
+    return profile?.read === true && readScopeTools.has(name)
   }
 
   const pageId = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)
@@ -653,6 +690,17 @@ export namespace WebMcpProfile {
         // Mirrors the pinned upstream's FILTERABLE_MESSAGE_TYPES enum; the
         // advertised schema must not accept strings the bridge then rejects.
         types: z.array(CONSOLE_MESSAGE_TYPES).max(8).optional(),
+      })
+      .strict(),
+    // ADR-172: read-only network metadata (method/url/status/type). No
+    // includePreservedRequests — the preserved set spans navigations and
+    // would leak the previous origin's URLs into a granted origin's result.
+    list_network_requests: z
+      .object({
+        pageId,
+        pageSize: z.number().int().min(1).max(100).optional(),
+        pageIdx: z.number().int().min(0).max(20).optional(),
+        resourceTypes: z.array(NETWORK_RESOURCE_TYPES).max(18).optional(),
       })
       .strict(),
   }
@@ -772,17 +820,34 @@ export namespace WebMcpProfile {
   const CONSOLE_TAIL = 50
 
   /**
-   * Bound and label a read-tier result (ADR-171). Page-derived output is
-   * untrusted: the origin is labeled on the content, snapshot text over the
-   * 32 KiB budget is rejected with narrowing guidance (reject over truncate),
-   * console output keeps only the last 50 messages, and the upstream
-   * "Saved screenshot to <path>" auto-save response (screenshots of 2 MiB or
-   * more are written to a temp file even without filePath) fails closed — the
-   * path must never enter the log or the model context.
+   * Secret-like query keys redacted from network/console URLs; ordinary query
+   * strings stay (signed CDN URLs must remain downloadable). Userinfo and
+   * fragments never leave the bridge (ADR-172).
+   */
+  const SECRET_QUERY_KEY =
+    /([?&](?:token|access_token|auth|sig|signature|session|secret|password|passwd|api_key|apikey|credential|key)=)[^&\s]*/gi
+
+  function redactUrlText(text: string): string {
+    return text
+      .replace(/:\/\/[^\s/@]+@/g, "://")
+      .replace(/(https?:\/\/[^\s#]+)#[^\s]*/g, "$1")
+      .replace(SECRET_QUERY_KEY, "$1[redacted]")
+  }
+
+  /**
+   * Bound and label a read-tier result (ADR-171, extended by ADR-172).
+   * Page-derived output is untrusted: the origin is labeled on the content,
+   * snapshot text and the network list over the 32 KiB budget are rejected
+   * with narrowing guidance (reject over truncate), console output keeps only
+   * the last 50 messages, network/console URLs lose userinfo, fragments and
+   * secret-like query keys, and the upstream "Saved screenshot to <path>"
+   * auto-save response fails closed — the path must never enter the log or
+   * the model context.
    */
   export function boundReadResult(name: string, result: unknown, origin: string): void {
     if (!isRecord(result)) return
     const contents = Array.isArray(result.content) ? result.content : []
+    const redactUrls = name === "list_network_requests" || name === "list_console_messages"
     let textBytes = 0
     for (const part of contents) {
       if (!isRecord(part) || part.type !== "text" || typeof part.text !== "string") continue
@@ -791,11 +856,16 @@ export namespace WebMcpProfile {
           "WebMCP screenshot exceeded the inline budget and the bridge wrote it to a temporary file; do not read the file. Narrow the target (use uid) or lower the jpeg quality and retry.",
         )
       }
-      textBytes += Buffer.byteLength(part.text, "utf8")
+      let text = part.text
+      if (redactUrls) {
+        text = redactUrlText(text)
+        part.text = text
+      }
+      textBytes += Buffer.byteLength(text, "utf8")
     }
-    if (name === "take_snapshot" && textBytes > MAX_READ_TEXT_BYTES) {
+    if ((name === "take_snapshot" || name === "list_network_requests") && textBytes > MAX_READ_TEXT_BYTES) {
       throw new Error(
-        `WebMCP snapshot exceeded the ${MAX_READ_TEXT_BYTES / 1024} KiB read budget; narrow the target (for example with uid) and retry`,
+        `WebMCP ${name === "take_snapshot" ? "snapshot" : "network list"} exceeded the ${MAX_READ_TEXT_BYTES / 1024} KiB read budget; narrow the request and retry`,
       )
     }
     if (name === "list_console_messages") {
