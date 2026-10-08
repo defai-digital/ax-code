@@ -1,4 +1,9 @@
 [[IgnoredVulns]]
+id = "GHSA-hp3w-g68c-fv3c"
+ignoreUntil = 2026-11-07
+reason = "The pnpm patch for sprintf-js 1.1.3 clamps numeric e/f/g precision to ECMAScript's legal limits (0-100, or 1-100 for g), preserving explicit zero precision. Both installed tedious consumers are checked by script/check-sprintf-precision-guard.mjs before this scan. No patched upstream release exists; reassess before expiry."
+
+[[IgnoredVulns]]
 id = "GHSA-vfj7-8cjw-p6xm"
 ignoreUntil = 2026-11-02
 reason = "tools/braces is braces 3.0.3 plus a nesting-depth limit of 128 in parse, compile, expand, and stringify. pnpm overrides every braces <= 3.0.3 to that directory, so the lockfile has no registry 3.0.3. No upstream release exists. CI runs script/check-braces-depth-guard.mjs before this scan. Reassess before expiry."

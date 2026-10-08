@@ -1,0 +1,17 @@
+diff --git a/src/sprintf.js b/src/sprintf.js
+index 65d6324645ef1d0133614a71497751009dc5c912..28de079e987750174fa0cc0c0edfef261fe347ee 100644
+--- a/src/sprintf.js
++++ b/src/sprintf.js
+@@ -38,6 +38,12 @@
+             }
+             else if (typeof parse_tree[i] === 'object') {
+                 ph = parse_tree[i] // convenience purposes only
++                // Bound numeric precision before it reaches ECMAScript's
++                // formatting methods (GHSA-hp3w-g68c-fv3c). Keep it a string
++                // so explicit zero precision remains distinguishable from none.
++                if (ph.precision !== undefined && /^[efg]$/.test(ph.type)) {
++                    ph.precision = String(Math.max(ph.type === 'g' ? 1 : 0, Math.min(100, Number(ph.precision))))
++                }
+                 if (ph.keys) { // keyword argument
+                     arg = argv[cursor]
+                     for (k = 0; k < ph.keys.length; k++) {

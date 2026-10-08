@@ -193,8 +193,10 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
-      - name: Verify installed braces security patch
-        run: node script/check-braces-depth-guard.mjs
+      - name: Verify installed dependency security patches
+        run: |
+          node script/check-braces-depth-guard.mjs
+          node script/check-sprintf-precision-guard.mjs
 
       - name: Security scan
         uses: google/osv-scanner-action/osv-scanner-action@a345acffa64b0eaede81a3d9aae6141214d9c8fc # v2.6.0
