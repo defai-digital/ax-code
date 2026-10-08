@@ -343,6 +343,17 @@ export function stripFenceLines(text: string): string {
   return changed ? kept.join("\n") : text
 }
 
+/**
+ * Whether the finished render drops fence-only rows, in which case the
+ * streamed plain text must drop them too so the finalize swap changes no row.
+ * The markdown renderable consumes fences structurally; the code renderable
+ * hides them while conceal is on (see stripFenceLines). Plain text and
+ * unconcealed code paint the raw source and keep them.
+ */
+export function finishedDropsFenceRows(mode: StreamingTextRenderMode, conceal: boolean): boolean {
+  return mode === "markdown" || (mode === "code" && conceal)
+}
+
 export type TranscriptFoldView = {
   /** The reply is long enough that folding is offered. */
   foldable: boolean

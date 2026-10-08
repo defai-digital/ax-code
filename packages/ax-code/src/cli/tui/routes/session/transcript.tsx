@@ -29,6 +29,7 @@ import {
   assistantToolSummary,
   codeDisplayView,
   compactDelegatedLabel,
+  finishedDropsFenceRows,
   streamingTextRenderMode,
   stripFenceLines,
   transcriptDisplayText,
@@ -575,18 +576,17 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
   const renderMode = createMemo(() =>
     streamingTextRenderMode({ final: isFinal(), experimentalMarkdown: Flag.AX_CODE_EXPERIMENTAL_MARKDOWN }),
   )
-  // The finished markdown render consumes fence rows structurally, so the
-  // streamed source drops them too and the finalize swap changes no row. The
-  // plain `code` fallback keeps them (see the conceal note below), so it strips
-  // nothing. Concealment is off for the finished render (below) so marker and
-  // link syntax survives exactly as streamed: with `conceal` on the renderer
-  // also hides heading/emphasis/code-span markers, and every marker change can
-  // re-wrap a line (measured: 8 rows raw vs 5 concealed for one paragraph plus
-  // a fence). Assistant prose therefore keeps its markdown source, which is what
-  // Kimi Code shows, and the finalize swap becomes a pure styling change.
+  // The finished markdown render consumes fence rows structurally and the code
+  // fallback hides them while conceal is on, so the streamed source drops
+  // fence rows in exactly those cases (finishedDropsFenceRows) and the
+  // finalize swap changes no row. Concealment follows the session toggle
+  // (`messages_toggle_conceal`, default on): with it on the renderer hides
+  // heading/emphasis/code-span markers, which can re-wrap a line at the
+  // finalize swap; turning it off keeps the markdown source exactly as
+  // streamed.
   const trimmed = createMemo(() => {
     const text = transcriptDisplayText(paintedText())
-    return (renderMode() === "markdown" ? stripFenceLines(text) : text).trim()
+    return (finishedDropsFenceRows(renderMode(), ctx.conceal()) ? stripFenceLines(text) : text).trim()
   })
   const lines = createMemo(() => trimmed().split("\n"))
   const finalAtMount = untrack(() => isFinal())
@@ -650,7 +650,7 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
               syntaxStyle={syntax()}
               streaming={false}
               content={visibleText()}
-              conceal={false}
+              conceal={ctx.conceal()}
               fg={theme.markdownText}
               bg={isLiveAutonomous() ? autonomousBg() : theme.background}
             />
@@ -660,7 +660,7 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
               display={codeDisplayView({ filePath: "message.md", content: visibleText() })}
               streaming={false}
               syntaxStyle={syntax()}
-              conceal={false}
+              conceal={ctx.conceal()}
               fg={theme.text}
             />
           </Match>
