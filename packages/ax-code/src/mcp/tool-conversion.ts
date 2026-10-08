@@ -235,9 +235,6 @@ export async function convertMcpTool(
           expected,
         )
       }
-      // Set only once a fresh listing has been committed: any earlier failure
-      // must invalidate the page baseline instead of leaving it standing.
-      let committed = false
       const listingPageId = webmcp?.toolName === "list_webmcp_tools" ? (input as { pageId: number }).pageId : undefined
       try {
         // Snapshot the listing-time page before the tools call so the
@@ -307,12 +304,13 @@ export async function convertMcpTool(
               after,
             )
             if (!recorded.ok) throw new Error(recorded.error)
-            committed = true
           }
         }
         return result
       } catch (e) {
-        if (webmcp && listingPageId !== undefined && !committed) {
+        // A successful listing returns immediately after it is recorded, so
+        // every failure here must invalidate the previous page baseline.
+        if (webmcp && listingPageId !== undefined) {
           WebMcpProfile.invalidateListing(webmcp.profile, listingPageId)
         }
         log.error("MCP tool call failed", { tool: mcpTool.name, error: toErrorMessage(e) })
