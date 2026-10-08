@@ -381,6 +381,23 @@ test("a session origin grant relaunches the bridge with regenerated argv and end
   })
 })
 
+test("an apex and www pair is granted with one relaunch (ADR-168)", async () => {
+  bridge.names = [...WebMcpProfile.TOOLS]
+  bridge.call.mockResolvedValue({ content: [{ type: "text", text: "ok" }], structuredContent: { pages: [] } })
+  await using tmp = await tmpdir({ git: true, config: { mcp: { bridge: profile() } } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await MCP.connect("bridge")
+      expect(await MCP.grantWebMcpOrigin("bridge", "https://news.test", "https://www.news.test")).toEqual({ ok: true })
+      expect(bridge.launch).toHaveBeenCalledTimes(2)
+      const relaunch = bridge.launch.mock.calls[1]![0] as { args: string[] }
+      expect(relaunch.args).toContain("--allowed-url-pattern=https://news.test/*")
+      expect(relaunch.args).toContain("--allowed-url-pattern=https://www.news.test/*")
+    },
+  })
+})
+
 test("concurrent origin grants cannot exceed the 8-origin cap (ADR-168)", async () => {
   bridge.names = [...WebMcpProfile.TOOLS]
   bridge.call.mockResolvedValue({ content: [{ type: "text", text: "ok" }], structuredContent: { pages: [] } })

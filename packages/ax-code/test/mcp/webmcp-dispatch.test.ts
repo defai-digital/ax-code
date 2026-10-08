@@ -84,3 +84,14 @@ test("a healthy dispatch keeps one shared deadline across preflight and main cal
   expect(timeouts.slice(0, 3)).toEqual([...timeouts.slice(0, 3)].sort((a, b) => (b as number) - (a as number)))
   expect(timeouts.slice(3)).toEqual([...timeouts.slice(3)].sort((a, b) => (b as number) - (a as number)))
 })
+
+test("bridge tool descriptions state the T0 limits", async () => {
+  const tool = await convertMcpTool(
+    { name: "list_pages", description: "List pages.", inputSchema: { type: "object" } } as never,
+    { callTool: vi.fn() } as never,
+    50,
+    { server: "bridge", toolName: "list_pages", profile: profile() },
+  )
+  expect(tool.description).toContain("List pages.")
+  expect(tool.description).toContain(WebMcpProfile.LIMITS_NOTE)
+})

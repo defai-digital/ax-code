@@ -39,7 +39,9 @@ export function webMcpApprovalLines(metadata: Record<string, unknown>): string[]
   if (metadata.originGrant === true) {
     return [
       `Bridge: ${text(metadata.server)}`,
-      `Origin to allow: ${text(metadata.origin)}`,
+      typeof metadata.alsoOrigin === "string"
+        ? `Origins to allow: ${text(metadata.origin)} and ${text(metadata.alsoOrigin)} (same site, with and without www)`
+        : `Origin to allow: ${text(metadata.origin)}`,
       `Allowed origins: ${origins.join(", ") || "(unknown)"}`,
       "Allowing restarts the browser bridge and closes any open pages.",
       "The grant lasts for this session only and is never written to config.",

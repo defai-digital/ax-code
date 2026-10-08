@@ -20,6 +20,14 @@ export namespace WebMcpProfile {
     "list_webmcp_tools",
     "execute_webmcp_tool",
   ] as const
+  /**
+   * Appended to every bridge tool description so the agent knows the boundary
+   * before it spends approvals on an ordinary site (ADR-169, tier T0).
+   */
+  export const LIMITS_NOTE =
+    "Limits: this bridge only lists and runs tools that a page registers itself through WebMCP. " +
+    "It cannot read page text or the DOM, take screenshots, click, type, or run scripts. " +
+    "If list_webmcp_tools reports none, use another tool such as webfetch to read the site."
   const tools = new Set<string>(TOOLS)
   const loopback = new Set(["localhost", "127.0.0.1", "[::1]"])
 
@@ -360,6 +368,26 @@ export namespace WebMcpProfile {
     const effective = Configuration.parse({ ...profile, allowedOrigins })
     Object.freeze(effective.allowedOrigins)
     return Object.freeze(effective)
+  }
+
+  /**
+   * The apex/`www` twin of an HTTPS origin (`https://a.test` <-> `https://www.a.test`),
+   * so one prompt can cover a site that redirects between them. Only a default-port
+   * HTTPS hostname with a registrable-looking name qualifies; IPs, loopback, other
+   * ports, and single-label hosts have no twin. Exact origin only, no wildcard.
+   */
+  export function counterpartOrigin(origin: string): string | undefined {
+    try {
+      const url = new URL(origin)
+      if (url.protocol !== "https:" || url.port || url.origin !== origin) return undefined
+      const host = url.hostname
+      if (host.includes(":") || /^[\d.]+$/.test(host)) return undefined
+      const bare = host.startsWith("www.") ? host.slice(4) : host
+      if (!bare.includes(".")) return undefined
+      return `https://${host.startsWith("www.") ? bare : `www.${host}`}`
+    } catch {
+      return undefined
+    }
   }
 
   export type GrantDecision = { ok: true } | { ok: false; error: string }

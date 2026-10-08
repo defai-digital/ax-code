@@ -5,6 +5,32 @@ import { WebMcpProfile } from "../../src/mcp/webmcp-profile"
 const base = () => WebMcpProfile.config({ allowedOrigins: ["https://example.test"] }, true).webmcp
 
 describe("WebMCP session origin grants (ADR-168)", () => {
+  test("counterpartOrigin pairs apex and www only for default-port HTTPS names", () => {
+    expect(WebMcpProfile.counterpartOrigin("https://news.test")).toBe("https://www.news.test")
+    expect(WebMcpProfile.counterpartOrigin("https://www.news.test")).toBe("https://news.test")
+    for (const origin of [
+      "https://news.test:8443",
+      "http://news.test",
+      "https://localhost",
+      "https://127.0.0.1",
+      "https://[::1]",
+      "http://localhost:4321",
+    ]) {
+      expect(WebMcpProfile.counterpartOrigin(origin)).toBeUndefined()
+    }
+  })
+
+  test("the approval lines name both origins of a pair", () => {
+    const lines = webMcpApprovalLines({
+      originGrant: true,
+      server: "bridge",
+      origin: "https://news.test",
+      alsoOrigin: "https://www.news.test",
+      allowedOrigins: ["https://example.test"],
+    })
+    expect(lines.join("\n")).toContain("https://news.test and https://www.news.test")
+  })
+
   test("an unknown HTTPS or loopback origin raises a grantable error", () => {
     const profile = base()
     for (const url of ["https://news.test/a", "http://localhost:4321/"]) {

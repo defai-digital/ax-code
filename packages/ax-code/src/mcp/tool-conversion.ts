@@ -186,10 +186,11 @@ export async function convertMcpTool(
   if (schemaBytes > MAX_TOOL_SCHEMA_BYTES) {
     throw new Error(`MCP tool schema too large: ${mcpTool.name}`)
   }
-  const description =
+  const baseDescription =
     (mcpTool.description ?? "").length > MAX_TOOL_DESCRIPTION
       ? `${(mcpTool.description ?? "").slice(0, MAX_TOOL_DESCRIPTION)}...`
       : (mcpTool.description ?? "")
+  const description = webmcp ? `${baseDescription} ${WebMcpProfile.LIMITS_NOTE}`.trim() : baseDescription
 
   const tool = dynamicTool({
     description,

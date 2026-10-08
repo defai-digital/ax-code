@@ -1433,6 +1433,16 @@ export async function resolveTools(input: ResolveToolsInput) {
             // A managed or schema refusal fails here without a prompt.
             const allowed = await MCP.checkWebMcpOriginGrant(grantPolicy.server, error.origin)
             if (!allowed.ok) throw new Error(allowed.error)
+            // ADR-168 amendment: offer the apex/www twin in the same prompt so a
+            // site that redirects between them needs one restart, not two. The
+            // twin must pass the same ceiling and cap, or the prompt stays single.
+            const twin = WebMcpProfile.counterpartOrigin(error.origin)
+            const alsoOrigin =
+              twin && !grantPolicy.profile.allowedOrigins.includes(twin)
+                ? (await MCP.checkWebMcpOriginGrants(grantPolicy.server, [error.origin, twin])).ok
+                  ? twin
+                  : undefined
+                : undefined
             await ctx.ask({
               permission: "webmcp",
               patterns: [key],
@@ -1441,14 +1451,15 @@ export async function resolveTools(input: ResolveToolsInput) {
                 originGrant: true,
                 server: grantPolicy.server,
                 origin: error.origin,
+                ...(alsoOrigin ? { alsoOrigin } : {}),
                 allowedOrigins: [...grantPolicy.profile.allowedOrigins],
                 experimental: true,
               },
             })
-            const granted = await MCP.grantWebMcpOrigin(grantPolicy.server, error.origin)
+            const granted = await MCP.grantWebMcpOrigin(grantPolicy.server, error.origin, alsoOrigin)
             if (!granted.ok) throw new Error(granted.error)
             throw new Error(
-              `WebMCP origin ${error.origin} was allowed for this session and the browser bridge was restarted; open pages were closed. Retry the call.`,
+              `WebMCP origin ${alsoOrigin ? `${error.origin} and ${alsoOrigin}` : error.origin} was allowed for this session and the browser bridge was restarted; open pages were closed. Retry the call.`,
             )
           }
           let call: Record<string, unknown> | unknown = args

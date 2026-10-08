@@ -1254,13 +1254,43 @@ export namespace MCP {
     return WebMcpProfile.checkGrant(found.cfg.webmcp, found.profile, s.webmcpGrants[name] ?? [], origin)
   }
 
+  /** Every origin must pass the ceiling and cap, counting earlier ones in the set. */
+  function checkGrantSet(
+    requirement: Parameters<typeof WebMcpProfile.checkGrant>[0],
+    profile: WebMcpProfile.Configuration,
+    granted: readonly string[],
+    origins: readonly string[],
+  ): WebMcpProfile.GrantDecision {
+    const accumulated = [...granted]
+    for (const origin of origins) {
+      const decision = WebMcpProfile.checkGrant(requirement, profile, accumulated, origin)
+      if (!decision.ok) return decision
+      accumulated.push(origin)
+    }
+    return { ok: true }
+  }
+
+  export async function checkWebMcpOriginGrants(
+    name: string,
+    origins: readonly string[],
+  ): Promise<WebMcpProfile.GrantDecision> {
+    const found = await webMcpEntry(name)
+    if (!found) return { ok: false, error: `WebMCP bridge not found: ${name}` }
+    const s = await state()
+    return checkGrantSet(found.cfg.webmcp, found.profile, s.webmcpGrants[name] ?? [], origins)
+  }
+
   /**
    * Record a human-approved, session-only origin grant and relaunch the bridge so
    * Chrome's URL allowlist matches. Open pages are closed by the relaunch.
    * ADR-168: the managed requirement is re-checked here and stays the ceiling.
    */
-  export async function grantWebMcpOrigin(name: string, origin: string): Promise<WebMcpProfile.GrantDecision> {
-    const offered = await checkWebMcpOriginGrant(name, origin)
+  export async function grantWebMcpOrigin(
+    name: string,
+    origin: string,
+    alsoOrigin?: string,
+  ): Promise<WebMcpProfile.GrantDecision> {
+    const offered = await checkWebMcpOriginGrants(name, alsoOrigin ? [origin, alsoOrigin] : [origin])
     if (!offered.ok) return offered
     return withConnectLock(name, "MCP webmcp origin grant failed", async (s): Promise<WebMcpProfile.GrantDecision> => {
       // The pre-prompt check ran outside this lock; re-validate against live
@@ -1268,14 +1298,15 @@ export namespace MCP {
       // bridge disconnected while its approval was open is not relaunched.
       const found = await webMcpEntry(name)
       if (!found) return { ok: false, error: `WebMCP bridge not found: ${name}` }
-      const recheck = WebMcpProfile.checkGrant(found.cfg.webmcp, found.profile, s.webmcpGrants[name] ?? [], origin)
+      const wanted = alsoOrigin ? [origin, alsoOrigin] : [origin]
+      const recheck = checkGrantSet(found.cfg.webmcp, found.profile, s.webmcpGrants[name] ?? [], wanted)
       if (!recheck.ok) return recheck
       const client = s.clients[name]
       if (!client) return { ok: false, error: "WebMCP bridge is no longer connected" }
       invalidateTools(s)
       const granted = s.webmcpGrants[name] ?? []
-      const added = !granted.includes(origin)
-      if (added) s.webmcpGrants[name] = [...granted, origin]
+      const added = wanted.filter((item) => !granted.includes(item))
+      if (added.length > 0) s.webmcpGrants[name] = [...granted, ...added]
       await closeIfPossible(client, name, "webmcp origin grant relaunch")
       delete s.clients[name]
       s.status[name] = { status: "disabled" }
@@ -1286,9 +1317,9 @@ export namespace MCP {
       if (status?.status === "connected" && s.clients[name]) return { ok: true }
       // The caller reports failure, so roll the grant back: the origin must
       // not silently apply on a later connect.
-      if (added) {
+      if (added.length > 0) {
         const current = s.webmcpGrants[name]
-        if (current) s.webmcpGrants[name] = current.filter((item) => item !== origin)
+        if (current) s.webmcpGrants[name] = current.filter((item) => !added.includes(item))
       }
       return { ok: false, error: "WebMCP bridge did not reconnect after the origin grant" }
     })
