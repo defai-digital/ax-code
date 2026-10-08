@@ -186,7 +186,17 @@ export namespace WebMcpProfile {
     .strict()
     .meta({ ref: "WebMcpProfileConfig" })
   export type Configuration = z.infer<typeof Configuration>
-  export type Policy = { server: string; toolName: string; profile: Configuration }
+  export type Policy = {
+    server: string
+    toolName: string
+    profile: Configuration
+    /**
+     * Live read-grant set for this bridge connection (ADR-171), supplied at
+     * tool conversion so dispatch checks current state rather than a stale
+     * snapshot. Absent means no grants.
+     */
+    readGrants?: () => ReadonlySet<string>
+  }
 
   type Server = {
     type: string
@@ -457,6 +467,20 @@ export namespace WebMcpProfile {
     }
   }
 
+  /**
+   * A read-tier call against an origin with no session read grant (ADR-171).
+   * The dispatch throws it before the bridge is ever called; the caller that
+   * can prompt catches it, records the grant, and asks the model to retry.
+   * Unlike an origin grant, a read grant is app-layer only and never relaunches
+   * the browser.
+   */
+  export class ReadNotGrantedError extends Error {
+    constructor(readonly origin: string) {
+      super("WebMCP read access to this origin is not granted")
+      this.name = "ReadNotGrantedError"
+    }
+  }
+
   /** Configured profile plus session-granted origins; frozen like a launch-validated profile. */
   export function withGrants(profile: Configuration, granted: readonly string[]): Configuration {
     const extra = granted.filter((origin) => !profile.allowedOrigins.includes(origin))
@@ -527,6 +551,35 @@ export namespace WebMcpProfile {
     if (current.size >= 8) {
       return { ok: false, error: "WebMCP already has the maximum of 8 allowed origins" }
     }
+    return { ok: true }
+  }
+
+  /**
+   * Decide whether a session read grant may be offered for an origin (ADR-171).
+   * The managed requirement is re-evaluated as the ceiling, the effective
+   * profile must have the read tier on, and a narrowing list bounds the origin.
+   * An unrestricted profile may grant any well-formed origin: the prompt is the
+   * control. Grants are per origin, capped, and refused without prompting on a
+   * policy failure.
+   */
+  export function checkReadGrant(
+    requirement: Requirement | undefined,
+    profile: Configuration,
+    granted: ReadonlySet<string>,
+    origin: string,
+  ): GrantDecision {
+    if (!exactOrigin(origin))
+      return { ok: false, error: "WebMCP origin must be an exact HTTPS or loopback HTTP origin" }
+    const decision = evaluate(requirement, profile)
+    if (!decision.ok) return { ok: false, error: blockedMessage(decision.reason) }
+    if (decision.profile.read !== true) {
+      return { ok: false, error: "WebMCP read tier is not enabled for this bridge" }
+    }
+    if (restricted(decision.profile) && !decision.profile.allowedOrigins.includes(origin)) {
+      return { ok: false, error: "WebMCP origin is outside this bridge's narrowing list" }
+    }
+    if (granted.has(origin)) return { ok: true }
+    if (granted.size >= 8) return { ok: false, error: "WebMCP already has the maximum of 8 read grants" }
     return { ok: true }
   }
 
@@ -715,6 +768,56 @@ export namespace WebMcpProfile {
     }
   }
 
+  const MAX_READ_TEXT_BYTES = 32 * 1024
+  const CONSOLE_TAIL = 50
+
+  /**
+   * Bound and label a read-tier result (ADR-171). Page-derived output is
+   * untrusted: the origin is labeled on the content, snapshot text over the
+   * 32 KiB budget is rejected with narrowing guidance (reject over truncate),
+   * console output keeps only the last 50 messages, and the upstream
+   * "Saved screenshot to <path>" auto-save response (screenshots of 2 MiB or
+   * more are written to a temp file even without filePath) fails closed — the
+   * path must never enter the log or the model context.
+   */
+  export function boundReadResult(name: string, result: unknown, origin: string): void {
+    if (!isRecord(result)) return
+    const contents = Array.isArray(result.content) ? result.content : []
+    let textBytes = 0
+    for (const part of contents) {
+      if (!isRecord(part) || part.type !== "text" || typeof part.text !== "string") continue
+      if (part.text.startsWith("Saved screenshot to ")) {
+        throw new Error(
+          "WebMCP screenshot exceeded the inline budget and the bridge wrote it to a temporary file; do not read the file. Narrow the target (use uid) or lower the jpeg quality and retry.",
+        )
+      }
+      textBytes += Buffer.byteLength(part.text, "utf8")
+    }
+    if (name === "take_snapshot" && textBytes > MAX_READ_TEXT_BYTES) {
+      throw new Error(
+        `WebMCP snapshot exceeded the ${MAX_READ_TEXT_BYTES / 1024} KiB read budget; narrow the target (for example with uid) and retry`,
+      )
+    }
+    if (name === "list_console_messages") {
+      for (const part of contents) {
+        if (!isRecord(part) || part.type !== "text" || typeof part.text !== "string") continue
+        const lines = part.text.split("\n")
+        if (lines.length > CONSOLE_TAIL) {
+          part.text = [
+            `... ${lines.length - CONSOLE_TAIL} earlier console messages omitted`,
+            ...lines.slice(-CONSOLE_TAIL),
+          ].join("\n")
+        }
+      }
+      const structured = isRecord(result.structuredContent) ? result.structuredContent : undefined
+      if (structured && Array.isArray(structured.messages) && structured.messages.length > CONSOLE_TAIL) {
+        structured.messages = structured.messages.slice(-CONSOLE_TAIL)
+      }
+    }
+    contents.unshift({ type: "text", text: `[Untrusted web content from ${origin}]` })
+    result.content = contents
+  }
+
   function pageOrigin(pageUrl: string | undefined): string | undefined {
     if (!pageUrl) return undefined
     try {
@@ -729,6 +832,15 @@ export namespace WebMcpProfile {
     } catch {
       return undefined
     }
+  }
+
+  /**
+   * Origin of a page URL for read-tier preflight (ADR-171). Fail-closed: any
+   * non-page, credentialed or unparseable URL yields undefined, and the caller
+   * must not proceed.
+   */
+  export function pageOriginOf(pageUrl: string | undefined): string | undefined {
+    return pageOrigin(pageUrl)
   }
 
   /**

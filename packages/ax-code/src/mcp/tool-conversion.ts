@@ -11,6 +11,7 @@ import { redirectOriginOutsideAllowlist } from "./webmcp-redirect"
 const log = Log.create({ service: "mcp" })
 const MAX_TOOL_DESCRIPTION = 4_000
 const MAX_TOOL_SCHEMA_BYTES = 64 * 1024
+const NO_READ_GRANTS: ReadonlySet<string> = new Set()
 
 async function webmcpPageUrl(
   client: Client,
@@ -197,13 +198,10 @@ export async function convertMcpTool(
     inputSchema: jsonSchema(schema),
     execute: async (args: unknown, opts: ToolCallOptions) => {
       const input = webmcp ? WebMcpProfile.validateCall(webmcp.profile, webmcp.toolName, args) : args
-      // ADR-169 slice A defines policy and schemas only. Keep dispatch closed
-      // until the origin preflight and bounded output handling are qualified.
-      if (webmcp && WebMcpProfile.READ_TOOLS.some((name) => name === webmcp.toolName)) {
-        throw new Error(
-          "WebMCP read tier is not available until origin preflight and output qualification are complete",
-        )
-      }
+      // ADR-171: read-tier calls dispatch behind a per-origin session read
+      // grant, with the page origin resolved through the bridge before the
+      // call and re-verified after it.
+      const readTier = webmcp !== undefined && WebMcpProfile.READ_TOOLS.some((name) => name === webmcp.toolName)
       // The approval-time snapshot rides on the validated call object the
       // permission wrapper approved; direct dispatches without an approval
       // fall back to the live baseline check. A call the approval marked as
@@ -224,6 +222,19 @@ export async function convertMcpTool(
         const remaining = deadline - Date.now()
         if (remaining <= 0) throw new Error("WebMCP dispatch exceeded its timeout; do not retry automatically")
         return remaining
+      }
+      // ADR-171 preflight: the read grant is checked against the page's origin
+      // resolved through the bridge (never the page-controlled title), before
+      // the bridge is asked for any page content.
+      let readOrigin: string | undefined
+      if (readTier && webmcp) {
+        const pageId = (input as Record<string, unknown>).pageId
+        const before =
+          typeof pageId === "number" ? await webmcpPageUrl(client, pageId, budget(), opts.abortSignal) : undefined
+        const origin = WebMcpProfile.pageOriginOf(before)
+        if (!origin) throw new Error("WebMCP page could not be located before reading; do not retry automatically")
+        if (!(webmcp.readGrants?.() ?? NO_READ_GRANTS).has(origin)) throw new WebMcpProfile.ReadNotGrantedError(origin)
+        readOrigin = origin
       }
       if (webmcp) {
         await webmcpPreflight(
@@ -287,6 +298,16 @@ export async function convertMcpTool(
             budget()
             if (redirect) throw new WebMcpProfile.OriginNotGrantedError(redirect)
             throw error
+          }
+          if (readTier && webmcp && readOrigin) {
+            // Re-resolve the page after the call: a page that navigated to
+            // another origin mid-read discards its output (ADR-171).
+            const pageId = (input as Record<string, unknown>).pageId as number
+            const after = await webmcpPageUrl(client, pageId, budget(), opts.abortSignal)
+            if (WebMcpProfile.pageOriginOf(after) !== readOrigin) {
+              throw new Error("WebMCP page navigated during the read; the read output is discarded")
+            }
+            WebMcpProfile.boundReadResult(webmcp.toolName, result, readOrigin)
           }
           if (listingPageId !== undefined) {
             const after = await webmcpPageUrl(client, listingPageId, budget(), opts.abortSignal)

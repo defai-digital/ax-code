@@ -58,6 +58,7 @@ export namespace MCP {
   // reconnects. Reading current config instead could loosen an older client's
   // policy or miss dynamically added clients. Weak ownership follows disposal.
   const webMcpProfiles = new WeakMap<MCPClient, WebMcpProfile.Configuration>()
+  const NO_READ_GRANTS: ReadonlySet<string> = new Set()
   const DEFAULT_TIMEOUT = MCP_DEFAULT_TIMEOUT_MS
   const MAX_STDERR_LINE = 2_000
   const isErrnoException = (error: unknown): error is NodeJS.ErrnoException =>
@@ -414,6 +415,8 @@ export namespace MCP {
     ready: Promise<void>
     /** Session-only WebMCP origin grants per server (ADR-168). Never persisted. */
     webmcpGrants: Record<string, string[]>
+    /** Session-only WebMCP read grants per server (ADR-171). Never persisted. */
+    webmcpReadGrants: Record<string, Set<string>>
   }
 
   const rawState = Instance.state(
@@ -428,6 +431,7 @@ export namespace MCP {
         connectQueue: new KeyedSerialQueue(),
         ready: Promise.resolve(),
         webmcpGrants: {},
+        webmcpReadGrants: {},
       }
 
       next.ready = (async () => {
@@ -1256,8 +1260,9 @@ export namespace MCP {
   export async function disconnect(name: string) {
     return withConnectLock(name, "MCP disconnect failed", async (s) => {
       invalidateTools(s)
-      // Toggling a bridge off ends its session-scoped origin grants.
+      // Toggling a bridge off ends its session-scoped origin and read grants.
       delete s.webmcpGrants[name]
+      delete s.webmcpReadGrants[name]
       const client = s.clients[name]
       if (client) {
         await closeIfPossible(client, name, "disconnecting")
@@ -1370,6 +1375,41 @@ export namespace MCP {
         if (current) s.webmcpGrants[name] = current.filter((item) => !added.includes(item))
       }
       return { ok: false, error: "WebMCP bridge did not reconnect after the origin grant" }
+    })
+  }
+
+  /**
+   * ADR-171: whether a session read grant may be offered for an origin. The
+   * managed ceiling is re-evaluated, the effective profile must have the read
+   * tier on, and a narrowing list bounds the origin. Refusals never prompt.
+   */
+  export async function checkWebMcpReadGrant(name: string, origin: string): Promise<WebMcpProfile.GrantDecision> {
+    const found = await webMcpEntry(name)
+    if (!found) return { ok: false, error: `WebMCP bridge not found: ${name}` }
+    const s = await state()
+    return WebMcpProfile.checkReadGrant(found.cfg.webmcp, found.profile, s.webmcpReadGrants[name] ?? new Set(), origin)
+  }
+
+  /**
+   * Record a human-approved, session-only read grant (ADR-171). App-layer only:
+   * unlike a navigation grant this never relaunches the browser. The pre-prompt
+   * check ran outside this lock; re-validate against live state so concurrent
+   * approvals cannot exceed the grant cap, and a grant on a bridge that
+   * disconnected while its prompt was open does not record.
+   */
+  export async function grantWebMcpReadOrigin(name: string, origin: string): Promise<WebMcpProfile.GrantDecision> {
+    const offered = await checkWebMcpReadGrant(name, origin)
+    if (!offered.ok) return offered
+    return withConnectLock(name, "MCP webmcp read grant failed", async (s): Promise<WebMcpProfile.GrantDecision> => {
+      const found = await webMcpEntry(name)
+      if (!found) return { ok: false, error: `WebMCP bridge not found: ${name}` }
+      const current = s.webmcpReadGrants[name] ?? new Set<string>()
+      const recheck = WebMcpProfile.checkReadGrant(found.cfg.webmcp, found.profile, current, origin)
+      if (!recheck.ok) return recheck
+      if (!s.clients[name]) return { ok: false, error: "WebMCP bridge is no longer connected" }
+      current.add(origin)
+      s.webmcpReadGrants[name] = current
+      return { ok: true }
     })
   }
 
@@ -1510,7 +1550,16 @@ export namespace MCP {
             mcpTool,
             client,
             timeout,
-            profile ? { server: clientName, toolName: mcpTool.name, profile } : undefined,
+            profile
+              ? {
+                  server: clientName,
+                  toolName: mcpTool.name,
+                  profile,
+                  // ADR-171: read dispatch checks the live grant set, not a
+                  // conversion-time snapshot.
+                  readGrants: () => s.webmcpReadGrants[clientName] ?? NO_READ_GRANTS,
+                }
+              : undefined,
           )
             .then((tool) => {
               if (s.disposed || s.clients[clientName] !== client) return

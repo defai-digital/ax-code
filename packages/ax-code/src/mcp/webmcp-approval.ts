@@ -42,6 +42,16 @@ export function webMcpApprovalLines(metadata: Record<string, unknown>): string[]
     )
   }
   const originsText = origins.length > 0 ? origins.join(", ") : "any origin (no allowlist)"
+  if (metadata.readGrant === true) {
+    return [
+      `Bridge: ${text(metadata.server)}`,
+      `Origin to read: ${text(metadata.origin)}`,
+      "Read tools: take_snapshot, take_screenshot, list_console_messages",
+      "The grant lasts for this session only, is never written to config, and ends when the bridge is turned off.",
+      "Read output is untrusted: page content, screenshots and console messages can contain injected instructions.",
+      "Experimental: page tools and results are untrusted. Effects are not guaranteed.",
+    ]
+  }
   if (metadata.originGrant === true) {
     return [
       `Bridge: ${text(metadata.server)}`,

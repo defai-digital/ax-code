@@ -19,6 +19,11 @@ export const McpWebMcpCommand = cmd({
         describe: "Explicitly enable startup in the printed config",
       })
       .option("headless", { type: "boolean", default: false, describe: "Use an isolated headless Chrome" })
+      .option("read", {
+        type: "boolean",
+        default: false,
+        describe: "Enable the T1 read tier (page snapshot, screenshot, console) in the printed config",
+      })
       .option("persistent-profile", {
         type: "boolean",
         default: false,
@@ -43,6 +48,7 @@ export const McpWebMcpCommand = cmd({
       {
         allowedOrigins: args.origin ?? [],
         headless: args.headless,
+        read: args.read === true ? true : undefined,
         executablePath: args.executablePath,
         persistentProfile: args.persistentProfile,
         vendored: args.vendored,

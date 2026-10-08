@@ -271,11 +271,16 @@ describe("WebMCP read tier admission over MCP", () => {
   test("read on exposes the three T1 tools with strict schemas", async () => {
     bridge.names = [...WebMcpProfile.TOOLS, ...WebMcpProfile.READ_TOOLS, "evaluate_script", "click"]
     bridge.call.mockResolvedValue({ content: [] })
-    await using tmp = await tmpdir({ git: true, config: { username: "test" } })
+    // The entry must come from config: read grants look the entry up via
+    // Config.get() (webMcpEntry), and MCP.add does not write config.
+    await using tmp = await tmpdir({
+      git: true,
+      config: { username: "test", mcp: { bridge: profileWithRead() } },
+    })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        await MCP.add("bridge", profileWithRead())
+        await MCP.connect("bridge")
         const tools = await MCP.tools()
         const expected = [...WebMcpProfile.TOOLS, ...WebMcpProfile.READ_TOOLS].map((name) => `bridge_${name}`).sort()
         expect(Object.keys(tools).sort()).toEqual(expected)
@@ -286,12 +291,31 @@ describe("WebMCP read tier admission over MCP", () => {
         await expect(
           tools.bridge_take_screenshot.execute!({ pageId: 1, filePath: "/tmp/x.png" }, options),
         ).rejects.toThrow()
-        for (const name of WebMcpProfile.READ_TOOLS) {
-          await expect(tools[`bridge_${name}`].execute!({ pageId: 1 }, options)).rejects.toThrow(
-            "read tier is not available",
-          )
+        // The bridge lists page 1 on the configured origin.
+        bridge.call.mockImplementation((call: unknown) =>
+          (call as { name?: string }).name === "list_pages"
+            ? {
+                content: [],
+                structuredContent: { pages: [{ id: 1, url: "https://example.test/", title: "App", selected: true }] },
+              }
+            : { content: [{ type: "text", text: "snapshot text" }] },
+        )
+        // No read grant yet: dispatch fails closed before the bridge is asked
+        // for any page content (ADR-171).
+        await expect(tools.bridge_take_snapshot.execute!({ pageId: 1 }, options)).rejects.toThrow(
+          "read access to this origin is not granted",
+        )
+        expect(
+          bridge.call.mock.calls.filter((call) => (call[0] as { name?: string }).name === "take_snapshot"),
+        ).toHaveLength(0)
+        // Grant the origin: the read dispatches and the output is labeled
+        // untrusted with its origin.
+        const granted = await MCP.grantWebMcpReadOrigin("bridge", "https://example.test")
+        expect(granted.ok).toBe(true)
+        const result = (await tools.bridge_take_snapshot.execute!({ pageId: 1 }, options)) as {
+          content?: { type?: string; text?: string }[]
         }
-        expect(bridge.call).not.toHaveBeenCalled()
+        expect(result.content?.[0]?.text).toBe("[Untrusted web content from https://example.test]")
       },
     })
   })
@@ -326,5 +350,72 @@ describe("WebMCP read tier admission over MCP", () => {
         expect(tools.bridge_take_snapshot).toBeDefined()
       },
     })
+  })
+})
+
+describe("WebMCP read grants and bounded output (ADR-171)", () => {
+  test("checkReadGrant refuses a read-off profile and origins outside a narrowing list", () => {
+    const readOn = readProfile()
+    expect(WebMcpProfile.checkReadGrant(undefined, plainProfile(), new Set(), "https://example.test")).toMatchObject({
+      ok: false,
+    })
+    expect(WebMcpProfile.checkReadGrant(undefined, readOn, new Set(), "https://other.test")).toMatchObject({
+      ok: false,
+    })
+    expect(WebMcpProfile.checkReadGrant(undefined, readOn, new Set(), "https://example.test")).toEqual({ ok: true })
+    // An unrestricted profile may grant any well-formed origin: the prompt is
+    // the control. The cap still applies.
+    const open = WebMcpProfile.config({ allowedOrigins: [], read: true }).webmcp
+    expect(WebMcpProfile.checkReadGrant(undefined, open, new Set(), "https://anything.test")).toEqual({ ok: true })
+    const full = new Set(Array.from({ length: 8 }, (_, i) => `https://s${i}.test`))
+    expect(WebMcpProfile.checkReadGrant(undefined, open, full, "https://ninth.test")).toMatchObject({ ok: false })
+    // The managed ceiling still binds: deny blocks, narrowing restricts.
+    expect(WebMcpProfile.checkReadGrant({ allowRead: false }, readOn, new Set(), "https://example.test")).toMatchObject(
+      { ok: false },
+    )
+  })
+
+  test("boundReadResult labels output with its origin", () => {
+    const result = { content: [{ type: "text", text: "page text" }] }
+    WebMcpProfile.boundReadResult("take_snapshot", result, "https://example.test")
+    expect(result.content[0]).toEqual({ type: "text", text: "[Untrusted web content from https://example.test]" })
+    expect(result.content[1]).toEqual({ type: "text", text: "page text" })
+  })
+
+  test("boundReadResult rejects an oversize snapshot with narrowing guidance, not truncation", () => {
+    const big = "x".repeat(33 * 1024)
+    expect(() =>
+      WebMcpProfile.boundReadResult("take_snapshot", { content: [{ type: "text", text: big }] }, "https://a.test"),
+    ).toThrow("exceeded the 32 KiB read budget")
+  })
+
+  test("boundReadResult fails closed on the upstream auto-saved screenshot response", () => {
+    const result = {
+      content: [{ type: "text", text: "Saved screenshot to /tmp/secret-user-123/screenshot.png" }],
+    }
+    expect(() => WebMcpProfile.boundReadResult("take_screenshot", result, "https://a.test")).toThrow(
+      "wrote it to a temporary file",
+    )
+    // The thrown message must never carry the on-disk path.
+    try {
+      WebMcpProfile.boundReadResult("take_screenshot", result, "https://a.test")
+    } catch (error) {
+      expect(String(error)).not.toContain("/tmp/")
+      expect(String(error)).not.toContain("secret-user")
+    }
+  })
+
+  test("boundReadResult keeps only the last 50 console messages", () => {
+    const lines = Array.from({ length: 80 }, (_, i) => `line ${i}`)
+    const result = {
+      content: [{ type: "text", text: lines.join("\n") }],
+      structuredContent: { messages: lines },
+    }
+    WebMcpProfile.boundReadResult("list_console_messages", result, "https://a.test")
+    expect(result.structuredContent.messages).toHaveLength(50)
+    expect(result.structuredContent.messages[0]).toBe("line 30")
+    expect(result.content[1].text).toContain("30 earlier console messages omitted")
+    expect(result.content[1].text).toContain("line 79")
+    expect(result.content[1].text).not.toContain("line 0\n")
   })
 })

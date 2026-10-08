@@ -1462,6 +1462,31 @@ export async function resolveTools(input: ResolveToolsInput) {
               `WebMCP origin ${alsoOrigin ? `${error.origin} and ${alsoOrigin}` : error.origin} was allowed for this session and the browser bridge was restarted; open pages were closed. Retry the call.`,
             )
           }
+          // ADR-171: a read-tier call against an origin with no session read
+          // grant throws before the bridge is called. The prompt names the
+          // origin and the three read tools; the grant is in-memory and ends
+          // when the bridge is turned off. Unlike an origin grant there is no
+          // relaunch, so the retry is immediate.
+          const grantRead = async (readPolicy: WebMcpProfile.Policy, error: unknown): Promise<never> => {
+            if (!(error instanceof WebMcpProfile.ReadNotGrantedError)) throw error
+            // A managed or disabled refusal fails here without a prompt.
+            const allowed = await MCP.checkWebMcpReadGrant(readPolicy.server, error.origin)
+            if (!allowed.ok) throw new Error(allowed.error)
+            await ctx.ask({
+              permission: "webmcp",
+              patterns: [key],
+              always: [],
+              metadata: {
+                readGrant: true,
+                server: readPolicy.server,
+                origin: error.origin,
+                experimental: true,
+              },
+            })
+            const granted = await MCP.grantWebMcpReadOrigin(readPolicy.server, error.origin)
+            if (!granted.ok) throw new Error(granted.error)
+            throw new Error(`WebMCP read access to ${error.origin} was allowed for this session. Retry the call.`)
+          }
           let call: Record<string, unknown> | unknown = args
           if (policy) {
             try {
@@ -1506,17 +1531,23 @@ export async function resolveTools(input: ResolveToolsInput) {
                   : undefined,
               )
             : undefined
+          // ADR-171: read-tier calls are approved by the per-origin session
+          // read grant (the dispatch raises ReadNotGrantedError for a missing
+          // grant and the prompt happens then), so they skip the per-call asks.
+          const readTierTool = policy !== undefined && WebMcpProfile.READ_TOOLS.some((name) => name === policy.toolName)
           const permissionPattern = McpPermissionPattern.derive(key, webmcp ?? call, { worktree: Instance.worktree })
-          await ctx.ask({
-            permission: key,
-            metadata: {
-              mcp: true,
-              ...permissionPattern.metadata,
-            },
-            patterns: permissionPattern.patterns,
-            always: permissionPattern.always,
-          })
-          if (webmcp) {
+          if (!readTierTool) {
+            await ctx.ask({
+              permission: key,
+              metadata: {
+                mcp: true,
+                ...permissionPattern.metadata,
+              },
+              patterns: permissionPattern.patterns,
+              always: permissionPattern.always,
+            })
+          }
+          if (webmcp && !readTierTool) {
             await ctx.ask({
               permission: "webmcp",
               patterns: [key],
@@ -1529,7 +1560,10 @@ export async function resolveTools(input: ResolveToolsInput) {
           } catch (error) {
             // A redirect target the bridge blocked surfaces only after
             // dispatch; offer the same grant the call-time path would.
-            if (policy) await grantOrigin(policy, error)
+            if (policy) {
+              if (error instanceof WebMcpProfile.ReadNotGrantedError) await grantRead(policy, error)
+              else await grantOrigin(policy, error)
+            }
             throw error
           }
         },

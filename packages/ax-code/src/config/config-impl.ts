@@ -846,11 +846,13 @@ export namespace Config {
     // profile and the product name is free. The injected entry has no recorded
     // source (mcpEntries resolves it as trusted "unknown") and is
     // enabled: false, so the startup bulk connect never launches it; the
-    // config-source trust gate still governs every configured entry.
+    // config-source trust gate still governs every configured entry. ADR-171:
+    // the default profile enables the read tier — the chip gesture enables the
+    // bridge, and each origin's first read still prompts.
     const configured: unknown[] = Object.values(result.mcp ?? {})
     const hasWebmcpProfile = configured.some((entry) => isRecord(entry) && isRecord(entry.webmcp))
     if (!hasWebmcpProfile && result.mcp?.webmcp === undefined) {
-      result.mcp = { ...result.mcp, webmcp: WebMcpProfile.config({ allowedOrigins: [] }, false) }
+      result.mcp = { ...result.mcp, webmcp: productDefaultWebMcpEntry() }
     }
 
     return {
@@ -1637,6 +1639,15 @@ export namespace Config {
   }
 
   /**
+   * The injected product default (ADR-170, read tier per ADR-171). One
+   * definition shared by the injection and by the write-path filter, so the
+   * two can never drift apart.
+   */
+  function productDefaultWebMcpEntry() {
+    return WebMcpProfile.config({ allowedOrigins: [], read: true }, false)
+  }
+
+  /**
    * ADR-170 injects the WebMCP bridge entry as a product default while the
    * config is loaded, so the merged object a client reads (GET /config)
    * carries an entry no file configured. Echoing that merged object back into
@@ -1649,7 +1660,7 @@ export namespace Config {
     if (!parsed.success) return false
     // Zod emits keys in schema order, so this comparison stays stable across a
     // JSON round-trip of the injected entry.
-    const injected = ConfigSchema.McpLocal.parse(WebMcpProfile.config({ allowedOrigins: [] }, false))
+    const injected = ConfigSchema.McpLocal.parse(productDefaultWebMcpEntry())
     return JSON.stringify(parsed.data) === JSON.stringify(injected)
   }
 
