@@ -7,6 +7,8 @@ import { execFile, spawn } from "child_process"
 import { setTimeout as sleep } from "node:timers/promises"
 
 const SIGKILL_TIMEOUT_MS = 200
+const PROCESS_SNAPSHOT_TIMEOUT_MS = 1_000
+const MAX_PROCESS_RECORDS = 16_384
 type KillableProcess = {
   pid?: number
   kill: (signal?: NodeJS.Signals | number) => boolean | void
@@ -16,28 +18,45 @@ type KillableProcess = {
  * Pids of every descendant of `root`, deepest first, from one `ps` snapshot.
  * Empty when `ps` is unavailable; callers fall back to the direct child.
  */
+export function descendantsFromSnapshot(root: number, snapshot: string): number[] {
+  const records = snapshot.trim().split("\n")
+  if (records.length > MAX_PROCESS_RECORDS) return []
+  const children = new Map<number, number[]>()
+  for (const line of records) {
+    const fields = line.trim().split(/\s+/)
+    if (fields.length !== 2) continue
+    const [pid, ppid] = fields.map(Number)
+    if (!Number.isSafeInteger(pid) || pid <= 0 || !Number.isSafeInteger(ppid) || ppid < 0) continue
+    if (children.size >= MAX_PROCESS_RECORDS) return []
+    const siblings = children.get(ppid) ?? []
+    siblings.push(pid)
+    children.set(ppid, siblings)
+  }
+  const order: number[] = []
+  const seen = new Set([root])
+  const pending = [root]
+  while (pending.length > 0) {
+    const parent = pending.pop()!
+    for (const child of children.get(parent) ?? []) {
+      if (seen.has(child)) continue
+      seen.add(child)
+      order.push(child)
+      pending.push(child)
+    }
+  }
+  // Every descendant is signaled before its ancestor, without recursion.
+  return order.reverse()
+}
+
 function descendantPids(root: number): Promise<number[]> {
   return new Promise((resolve) => {
-    execFile("ps", ["-A", "-o", "pid=,ppid="], { maxBuffer: 4 * 1024 * 1024 }, (error, stdout) => {
-      if (error) return resolve([])
-      const children = new Map<number, number[]>()
-      for (const line of stdout.split("\n")) {
-        const [pid, ppid] = line.trim().split(/\s+/).map(Number)
-        if (!Number.isInteger(pid) || !Number.isInteger(ppid)) continue
-        children.set(ppid, [...(children.get(ppid) ?? []), pid])
-      }
-      const order: number[] = []
-      const walk = (parent: number, seen: Set<number>) => {
-        for (const child of children.get(parent) ?? []) {
-          if (seen.has(child)) continue
-          seen.add(child)
-          walk(child, seen)
-          order.push(child)
-        }
-      }
-      walk(root, new Set([root]))
-      resolve(order)
-    })
+    // @scan-suppress lifecycle_scan -- execFile owns callback cleanup and enforces the SIGKILL timeout.
+    execFile(
+      "ps",
+      ["-A", "-o", "pid=,ppid="],
+      { maxBuffer: 4 * 1024 * 1024, timeout: PROCESS_SNAPSHOT_TIMEOUT_MS, killSignal: "SIGKILL" },
+      (error, stdout) => resolve(error ? [] : descendantsFromSnapshot(root, stdout)),
+    )
   })
 }
 
