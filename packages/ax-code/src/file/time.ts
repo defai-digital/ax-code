@@ -24,8 +24,13 @@ export namespace FileTime {
     locks: new Map<string, Promise<void>>(),
   }))
 
-  function stamp(file: string): Stamp {
-    const stat = fs.statSync(file, { bigint: true, throwIfNoEntry: false })
+  async function stamp(file: string): Promise<Stamp> {
+    // Matches statSync(file, { throwIfNoEntry: false }), which suppresses
+    // ENOENT and ENOTDIR — the promise typings omit the option.
+    const stat = await fs.promises.stat(file, { bigint: true }).catch((err: NodeJS.ErrnoException) => {
+      if (err?.code === "ENOENT" || err?.code === "ENOTDIR") return undefined
+      throw err
+    })
     const size =
       stat?.size === undefined
         ? undefined
@@ -54,7 +59,7 @@ export namespace FileTime {
   export async function read(sessionID: SessionID, file: string, observed?: Omit<Stamp, "read">) {
     const reads = state().reads
     log.info("read", { sessionID, file })
-    session(reads, sessionID).set(file, observed ? { ...observed, read: new Date() } : stamp(file))
+    session(reads, sessionID).set(file, observed ? { ...observed, read: new Date() } : await stamp(file))
   }
 
   export async function get(sessionID: SessionID, file: string) {
@@ -67,7 +72,7 @@ export namespace FileTime {
     const time = state().reads.get(sessionID)?.get(filepath)
     if (!time) throw new Error(`You must read file ${filepath} before overwriting it. Use the Read tool first`)
 
-    const next = stamp(filepath)
+    const next = await stamp(filepath)
     const changed = next.mtime !== time.mtime || next.ctime !== time.ctime || next.size !== time.size
     if (!changed) return
 

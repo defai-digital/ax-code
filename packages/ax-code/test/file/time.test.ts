@@ -161,9 +161,9 @@ describe("file/time", () => {
       await using tmp = await tmpdir()
       const filepath = path.join(tmp.path, "huge.bin")
       const statSpy = vi
-        .spyOn(nodeFs, "statSync")
-        .mockReturnValueOnce({ mtimeMs: 1000n, ctimeMs: 1000n, size: 9_007_199_254_740_992n } as any)
-        .mockReturnValueOnce({ mtimeMs: 1000n, ctimeMs: 1000n, size: 9_007_199_254_740_993n } as any)
+        .spyOn(nodeFs.promises, "stat")
+        .mockResolvedValueOnce({ mtimeMs: 1000n, ctimeMs: 1000n, size: 9_007_199_254_740_992n } as any)
+        .mockResolvedValueOnce({ mtimeMs: 1000n, ctimeMs: 1000n, size: 9_007_199_254_740_993n } as any)
 
       try {
         await Instance.provide({
@@ -182,7 +182,7 @@ describe("file/time", () => {
       await using tmp = await tmpdir()
       const filepath = path.join(tmp.path, "boundary.txt")
       const milliseconds = 1_700_000_000_123n
-      const statSpy = vi.spyOn(nodeFs, "statSync").mockReturnValue({
+      const statSpy = vi.spyOn(nodeFs.promises, "stat").mockResolvedValue({
         mtimeMs: milliseconds,
         ctimeMs: milliseconds,
         mtime: new Date(Number(milliseconds) + 1),
@@ -199,7 +199,7 @@ describe("file/time", () => {
               size: 3,
             })
             await expect(FileTime.assert(sessionID, filepath)).resolves.toBeUndefined()
-            expect(statSpy).toHaveBeenCalledWith(filepath, { bigint: true, throwIfNoEntry: false })
+            expect(statSpy).toHaveBeenCalledWith(filepath, { bigint: true })
           },
         })
       } finally {
