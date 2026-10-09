@@ -37,6 +37,10 @@ function targetLine(label: string, target: unknown): string {
   }
   const parts = [`uid ${text(target.uid)}`, text(target.role), `"${text(target.name)}"`]
   if (target.focused === true) parts.push("(focused)")
+  if (target.required === true) parts.push("(required)")
+  if (target.checked === true) parts.push("(checked)")
+  else if (typeof target.checked === "string") parts.push(`(checked=${text(target.checked)})`)
+  if (target.disabled === true) parts.push("(disabled)")
   return `${label}: ${parts.join(" ")}${target.sensitive === true ? " — SENSITIVE FIELD" : ""}`
 }
 

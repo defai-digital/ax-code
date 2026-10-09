@@ -51,11 +51,17 @@ function attentionError(rawError: unknown, status: unknown): string | undefined 
 export function webMcpChipModel(
   configMcp: unknown,
   statuses: Record<string, WebMcpChipStatus> | undefined,
+  /** The managed `webmcp` requirement from the merged config, if any (ADR-166). */
+  requirement?: unknown,
 ): WebMcpChipModel {
   const servers: string[] = []
   // ADR-174: an acting bridge is distinguishable from a read-only one at a
-  // glance. The marker follows the configured profile; a managed
-  // allowInteract: false surfaces as the bridge's blocked/attention state.
+  // glance. The marker follows the effective tier: a managed
+  // allowInteract: false (or allow: false) leaves the bridge connectable
+  // with the tier silently off, so the configured flag alone would
+  // advertise an acting bridge that cannot act.
+  const managed = isRecord(requirement) ? requirement : undefined
+  const interactAllowed = managed?.allow !== false && managed?.allowInteract !== false
   let interact = false
   if (isRecord(configMcp)) {
     for (const [name, entry] of Object.entries(configMcp)) {
@@ -63,7 +69,7 @@ export function webMcpChipModel(
       const profile = (entry as { webmcp?: unknown }).webmcp
       if (!isRecord(profile)) continue
       servers.push(name)
-      if (profile.interact === true) interact = true
+      if (profile.interact === true && interactAllowed) interact = true
     }
   }
   const connected = servers.filter((name) => statuses?.[name]?.status === "connected")
@@ -89,7 +95,7 @@ export function webMcpChipModel(
   const view: WebMcpChipModel["view"] =
     connected.length > 0 ? "toggle" : attentions.length > 0 ? "warning" : actionable ? "toggle" : "lock"
   const markers = `${blocked.length > 0 ? " 🔒" : ""}${attentions.length > 0 ? " ⚠" : ""}`
-  const base = `${servers.length > 1 ? `WebMCP (${connected.length}/${servers.length})` : "WebMCP"}${interact ? " ·act" : ""}`
+  const base = `${servers.length > 1 ? `WebMCP (${connected.length}/${servers.length})` : "WebMCP"}${interact ? " [act]" : ""}`
   const label = view === "toggle" ? `${base}${markers}` : base
   // The lock is the only dead-end view, so it always names the denied
   // servers and the first policy reason instead of a bare padlock.

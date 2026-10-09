@@ -212,6 +212,9 @@ describe("WebMCP T2 admission and schemas", () => {
       `ya29.${"a".repeat(30)}`,
       `age-secret-key-1${"a".repeat(30)}`,
       ["-----BEGIN RSA PRIVATE", " KEY-----\nabc"].join(""),
+      // Embedded after a separator: still a credential (unanchored search).
+      "my_sk_live_abcdefghijklmnop1234",
+      "token=rk-abcdefghijklmnopqrstu",
     ]
     for (const value of secrets) {
       expect(WebMcpProfile.credentialLike(value)).toBe(true)
@@ -522,7 +525,7 @@ describe("WebMCP T2 approval metadata and prompt lines", () => {
     const fill = WebMcpProfile.approvalMetadata("bridge", profile, "fill", { pageId: 1, uid: "1_5", value: "Jane Doe" })
     expect(fill).toMatchObject({ interactAction: true, pageOrigin: ORIGIN, value: "Jane Doe" })
     const fillLines = webMcpApprovalLines(fill)
-    expect(fillLines).toContain('Target: uid 1_5 textbox "Full name"')
+    expect(fillLines).toContain('Target: uid 1_5 textbox "Full name" (required)')
     expect(fillLines).toContain("Value: Jane Doe")
     const long = "a".repeat(150)
     const longLines = webMcpApprovalLines(
@@ -554,7 +557,7 @@ describe("WebMCP T2 approval metadata and prompt lines", () => {
     })
     const formLines = webMcpApprovalLines(form)
     expect(formLines).toContain("Fields: 2")
-    expect(formLines.join("\n")).toContain('1. Target: uid 1_5 textbox "Full name"')
+    expect(formLines.join("\n")).toContain('1. Target: uid 1_5 textbox "Full name" (required)')
     expect(formLines.join("\n")).toContain("Value: Jane")
     expect(formLines.join("\n")).toContain("SENSITIVE FIELD")
     expect(formLines.join("\n")).toContain("(masked, 8 characters)")

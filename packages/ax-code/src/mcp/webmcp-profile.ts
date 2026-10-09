@@ -113,7 +113,10 @@ export namespace WebMcpProfile {
    * (`pk_`) are deliberately absent; a JWT shape is labeled, not refused.
    */
   export const CREDENTIAL_VALUE: readonly RegExp[] = [
-    /\b(?:sk|rk)[-_](?:live|test|proj)?[-_]?[A-Za-z0-9_-]{16,}/,
+    // Not a word boundary: `my_sk_live_…` must still match (underscore is a
+    // word character); only an alphanumeric prefix such as `task_live_…` is
+    // treated as a different token.
+    /(?<![A-Za-z0-9])(?:sk|rk)[-_](?:live|test|proj)?[-_]?[A-Za-z0-9_-]{16,}/,
     /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/,
     /\bgh[pousr]_[A-Za-z0-9]{20,}/,
     /\bgithub_pat_[A-Za-z0-9_]{20,}/,
@@ -777,6 +780,29 @@ export namespace WebMcpProfile {
       this.waitMs += ms
       return true
     }
+
+    /** Return a reservation that never waited (the call stopped at a grant prompt). */
+    refundWait(ms: number): void {
+      this.waitMs = Math.max(0, this.waitMs - ms)
+    }
+  }
+
+  const interactDecisions = new WeakMap<object, boolean>()
+
+  /**
+   * Bind the ask-time decision (per action or grant-covered) to the validated
+   * call object, so the dispatch spends or skips the budget on exactly the
+   * decision the asks were based on, even if the snapshot map changes in
+   * between (ADR-174 rule 2; review finding).
+   */
+  export function bindInteractDecision(call: object, perAction: boolean): void {
+    interactDecisions.set(call, perAction)
+  }
+
+  /** The bound ask-time decision for a dispatch-time call object, if any. */
+  export function interactDecisionFor(args: unknown): boolean | undefined {
+    if (typeof args !== "object" || args === null) return undefined
+    return interactDecisions.get(args)
   }
 
   /** Configured profile plus session-granted origins; frozen like a launch-validated profile. */
@@ -1392,17 +1418,24 @@ export namespace WebMcpProfile {
     role?: string
     name?: string
     focused?: boolean
+    required?: boolean
+    checked?: boolean | string
+    disabled?: boolean
     sensitive?: boolean
     unlisted?: boolean
   }
 
   function targetMetadata(node: SnapshotNode | undefined, uidValue: string): TargetMetadata {
     if (!node) return { uid: uidValue, unlisted: true }
+    const checked = node.attributes.checked
     return {
       uid: node.uid,
       role: node.role,
       name: node.name,
       ...(node.focused ? { focused: true } : {}),
+      ...(node.attributes.required === true ? { required: true } : {}),
+      ...(checked === true || typeof checked === "string" ? { checked } : {}),
+      ...(node.attributes.disabled === true ? { disabled: true } : {}),
       ...(sensitiveTarget(node) ? { sensitive: true } : {}),
     }
   }

@@ -27,6 +27,8 @@ function webmcpInteractPreflight(
   call: Record<string, unknown>,
   pageUrl: string | undefined,
   origin: string,
+  /** The ask-time decision bound to the raw call object, when the session layer made one. */
+  boundPerAction: boolean | undefined,
 ) {
   const grants = policy.interactGrants?.() ?? NO_INTERACT_GRANTS
   if (!grants.has(origin)) throw new WebMcpProfile.InteractNotGrantedError(origin)
@@ -57,7 +59,10 @@ function webmcpInteractPreflight(
   }
   // A per-action call was confirmed by the user; only grant-covered actions
   // spend the budget, and an exhausted budget renews through the same prompt.
-  if (!WebMcpProfile.perActionCall(policy.profile, policy.toolName, call)) {
+  // The decision is the one the asks were based on (bound by the session
+  // layer); a direct dispatch without a bound decision evaluates it here.
+  const perAction = boundPerAction ?? WebMcpProfile.perActionCall(policy.profile, policy.toolName, call)
+  if (!perAction) {
     if (!policy.consumeInteractBudget?.(origin)) throw new WebMcpProfile.InteractNotGrantedError(origin, true)
   }
 }
@@ -306,7 +311,13 @@ export async function convertMcpTool(
             WebMcpProfile.unlocatedPageMessage(before, "could not be located before acting") +
               " Do not retry automatically.",
           )
-        webmcpInteractPreflight(webmcp, input as Record<string, unknown>, before, origin)
+        webmcpInteractPreflight(
+          webmcp,
+          input as Record<string, unknown>,
+          before,
+          origin,
+          WebMcpProfile.interactDecisionFor(args),
+        )
         interactOrigin = origin
         interactUrl = before
       }

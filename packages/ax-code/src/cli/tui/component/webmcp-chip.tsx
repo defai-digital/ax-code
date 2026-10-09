@@ -23,7 +23,13 @@ export function WebMcpChip() {
   const local = useLocal()
   const { theme } = useTheme()
 
-  const model = createMemo(() => webMcpChipModel(sync.data.config?.mcp, sync.data.mcp))
+  const model = createMemo(() =>
+    webMcpChipModel(
+      sync.data.config?.mcp,
+      sync.data.mcp,
+      (sync.data.config as { webmcp?: unknown } | undefined)?.webmcp,
+    ),
+  )
 
   const toggle = () => {
     const current = model()

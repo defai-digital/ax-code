@@ -118,10 +118,18 @@ describe("webMcpChipModel", () => {
 
 describe("webMcpChipModel interact marker (ADR-174)", () => {
   test("an acting bridge carries a marker; a read-only one does not", () => {
-    expect(webMcpChipModel({ bridge: { webmcp: { interact: true } } }, {}).label).toBe("WebMCP ·act")
+    expect(webMcpChipModel({ bridge: { webmcp: { interact: true } } }, {}).label).toBe("WebMCP [act]")
     expect(webMcpChipModel({ bridge: { webmcp: { read: true } } }, {}).label).toBe("WebMCP")
     const connected = webMcpChipModel({ bridge: { webmcp: { interact: true } } }, { bridge: { status: "connected" } })
     expect(connected.view).toBe("toggle")
-    expect(connected.label).toBe("WebMCP ·act")
+    expect(connected.label).toBe("WebMCP [act]")
+  })
+
+  test("the marker follows the effective tier: a managed allowInteract: false drops it", () => {
+    const config = { bridge: { webmcp: { interact: true } } }
+    expect(webMcpChipModel(config, {}, { allowInteract: false }).label).toBe("WebMCP")
+    expect(webMcpChipModel(config, {}, { allow: false }).label).toBe("WebMCP")
+    expect(webMcpChipModel(config, {}, { allowRead: false }).label).toBe("WebMCP [act]")
+    expect(webMcpChipModel(config, {}, {}).label).toBe("WebMCP [act]")
   })
 })

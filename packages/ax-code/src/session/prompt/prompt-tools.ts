@@ -1614,6 +1614,9 @@ export async function resolveTools(input: ResolveToolsInput) {
           const interactTool = policy !== undefined && WebMcpProfile.isInteractTool(policy.toolName)
           const breaker = interactTool ? webmcpTurnBreaker(ctx.sessionID, input.processor.message.id) : undefined
           if (breaker?.tripped) throw new Error(breaker.tripped)
+          // A wait reservation is refunded when the call stops at a grant
+          // prompt before any waiting happened.
+          let reservedWait = 0
           if (interactTool && policy && webmcp) {
             // A target nobody listed can never be approved meaningfully and
             // would fail closed at dispatch anyway; fail it here without
@@ -1636,12 +1639,34 @@ export async function resolveTools(input: ResolveToolsInput) {
                   `WebMCP wait_for budget for this turn (${WebMcpProfile.MAX_WAIT_PER_TURN_MS / 1000} s cumulative) is exhausted; do not retry automatically`,
                 )
               }
+              reservedWait = waitMs
             }
           }
           const grantCovered =
             interactTool &&
             policy !== undefined &&
             !WebMcpProfile.perActionCall(policy.profile, policy.toolName, call as Record<string, unknown>)
+          if (interactTool && policy) {
+            // Bind the ask-time decision to the call so dispatch spends the
+            // budget on exactly this decision, whatever the snapshot map
+            // looks like after the bridge round-trips.
+            WebMcpProfile.bindInteractDecision(call as object, !grantCovered)
+            // A per-action tool on an origin with no interact grant would
+            // pass both asks and then stop at the grant prompt; ask for the
+            // grant first so the user confirms the action once, not twice.
+            // The snapshot origin is the page origin at snapshot time; the
+            // dispatch re-checks the live page.
+            if (!grantCovered) {
+              const pageId = (call as { pageId?: unknown }).pageId
+              const origin =
+                typeof pageId === "number"
+                  ? WebMcpProfile.pageOriginOf(WebMcpProfile.snapshotUrlFor(policy.profile, pageId))
+                  : undefined
+              if (origin && !(policy.interactGrants?.() ?? new Map<string, number>()).has(origin)) {
+                await grantInteract(policy, new WebMcpProfile.InteractNotGrantedError(origin), breaker)
+              }
+            }
+          }
           const skipPerCall = readTierTool || grantCovered
           const permissionPattern = McpPermissionPattern.derive(key, webmcp ?? call, { worktree: Instance.worktree })
           try {
@@ -1682,6 +1707,14 @@ export async function resolveTools(input: ResolveToolsInput) {
             // A redirect target the bridge blocked surfaces only after
             // dispatch; offer the same grant the call-time path would.
             if (policy) {
+              if (
+                breaker &&
+                reservedWait > 0 &&
+                (error instanceof WebMcpProfile.ReadNotGrantedError ||
+                  error instanceof WebMcpProfile.InteractNotGrantedError)
+              ) {
+                breaker.refundWait(reservedWait)
+              }
               if (error instanceof WebMcpProfile.ReadNotGrantedError) await grantRead(policy, error)
               else if (error instanceof WebMcpProfile.InteractNotGrantedError)
                 await grantInteract(policy, error, breaker)
