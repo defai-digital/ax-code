@@ -66,7 +66,7 @@ export function WebMcpChip() {
                 active={model().connected.length > 0}
                 activeFg={theme.text}
                 inactiveFg={theme.textMuted}
-                background={theme.primary}
+                background={theme.error}
                 onMouseUp={toggle}
               />
             }
