@@ -29,7 +29,7 @@ import { ScopedFlag } from "@/flag/scoped"
 import { Permission } from "@/permission"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { Env } from "@/util/env"
-import { withTimeout } from "@/util/timeout"
+import { sleep as timeoutSleep, withTimeout } from "@/util/timeout"
 import { Recorder } from "@/replay/recorder"
 import { AgentControl } from "@/control-plane/agent-control"
 import { AgentControlEvents } from "@/control-plane/agent-control-events"
@@ -1246,24 +1246,8 @@ export namespace LLM {
     return Env.parseBoolean(process.env.AX_CODE_SUPER_LONG_DURABLE_PACING) === false
   }
 
-  async function sleep(ms: number, signal: AbortSignal): Promise<void> {
-    if (signal.aborted) throw new DOMException("Aborted", "AbortError")
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        signal.removeEventListener("abort", abortHandler)
-        resolve()
-      }, ms)
-      const abortHandler = () => {
-        clearTimeout(timeout)
-        reject(new DOMException("Aborted", "AbortError"))
-      }
-      if (signal.aborted) {
-        clearTimeout(timeout)
-        reject(new DOMException("Aborted", "AbortError"))
-        return
-      }
-      signal.addEventListener("abort", abortHandler, { once: true })
-    })
+  function sleep(ms: number, signal: AbortSignal): Promise<void> {
+    return timeoutSleep(ms, { signal })
   }
 
   // Cache Permission.disabled() across concurrent sessions. A small LRU

@@ -30,6 +30,14 @@ const log = Log.create({ service: "filelock" })
 const DEFAULT_STALE_MS = 60 * 1000 // 60 seconds
 const POLL_INTERVAL_MS = 50
 
+// Grace window for a lockfile with no readable body. The body write lands
+// within microseconds of the atomic O_EXCL creation, so a file still empty
+// after this long is a corpse, not a mid-write holder — steal it even when
+// the caller's stale window for well-formed locks is much longer (the index
+// lock uses 8h; waiting that out for an empty file would stall indexing for
+// hours after a crash).
+const EMPTY_LOCK_GRACE_MS = 60 * 1000
+
 export namespace FileLock {
   async function writeLockFile(target: string): Promise<void> {
     const body: ProcessLockBody = createProcessLockBody()
@@ -70,7 +78,7 @@ export namespace FileLock {
       // freshly created file lets two processes believe they hold the same
       // lock at once, so only steal once the file's mtime proves it was
       // abandoned (the body write lands within microseconds of creation, so
-      // any file still empty after the stale window is not mid-write).
+      // a short grace — not the caller's full stale window — is enough).
       // A missing file (deleted between our EEXIST and this read) means the
       // lock is already free — report it stealable so the caller retries.
       const mtimeMs = await fs
@@ -80,7 +88,7 @@ export namespace FileLock {
           if (err?.code === "ENOENT") return undefined
           throw err
         })
-      if (mtimeMs !== undefined && Date.now() - mtimeMs <= staleMs) return false
+      if (mtimeMs !== undefined && Date.now() - mtimeMs <= Math.min(staleMs, EMPTY_LOCK_GRACE_MS)) return false
       await removeLockFile(target)
       return true
     }
@@ -111,13 +119,54 @@ export namespace FileLock {
     return false
   }
 
+  // One non-blocking acquisition attempt: create, then steal a stale or
+  // abandoned lock once and retry the create. Returns undefined while another
+  // process holds it.
+  async function attempt(target: string, staleMs: number, signal?: AbortSignal): Promise<Disposable | undefined> {
+    signal?.throwIfAborted()
+    const created = await writeLockFile(target)
+      .then(() => true)
+      .catch((err: NodeJS.ErrnoException) => {
+        if (err?.code === "EEXIST") return false
+        throw err
+      })
+    if (created) return acquired(target, signal)
+
+    signal?.throwIfAborted()
+    const stolen = await maybeSteal(target, staleMs)
+    if (!stolen) return undefined
+    const retry = await writeLockFile(target)
+      .then(() => true)
+      .catch((err: NodeJS.ErrnoException) => {
+        if (err?.code === "EEXIST") return false
+        throw err
+      })
+    return retry ? acquired(target, signal) : undefined
+  }
+
+  /**
+   * Non-blocking acquisition attempt. Returns a Disposable when the lock was
+   * taken (including after stealing a stale or abandoned one), or undefined
+   * while another process holds it.
+   */
+  export async function tryAcquire(
+    filepath: string,
+    opts?: { staleMs?: number; signal?: AbortSignal },
+  ): Promise<Disposable | undefined> {
+    opts?.signal?.throwIfAborted()
+    const target = filepath + ".lock"
+    await fs.mkdir(path.dirname(target), { recursive: true })
+    return attempt(target, opts?.staleMs ?? DEFAULT_STALE_MS, opts?.signal)
+  }
+
   /**
    * Acquire a cross-process file lock. Blocks until the lock is free
    * or the timeout expires. Returns a Disposable that releases the lock.
+   * `onWait` fires once when the caller first has to wait for a holder.
    */
   export async function acquire(
     filepath: string,
-    opts?: { timeoutMs?: number; staleMs?: number; signal?: AbortSignal },
+    opts?: { timeoutMs?: number; staleMs?: number; signal?: AbortSignal; onWait?: () => void },
   ): Promise<Disposable> {
     opts?.signal?.throwIfAborted()
     const target = filepath + ".lock"
@@ -127,28 +176,14 @@ export namespace FileLock {
 
     await fs.mkdir(path.dirname(target), { recursive: true })
 
+    let waited = false
     while (true) {
-      opts?.signal?.throwIfAborted()
-      const created = await writeLockFile(target)
-        .then(() => true)
-        .catch((err: NodeJS.ErrnoException) => {
-          if (err?.code === "EEXIST") return false
-          throw err
-        })
-      if (created) return acquired(target, opts?.signal)
-
-      opts?.signal?.throwIfAborted()
-      const stolen = await maybeSteal(target, staleMs)
-      if (stolen) {
-        const retry = await writeLockFile(target)
-          .then(() => true)
-          .catch((err: NodeJS.ErrnoException) => {
-            if (err?.code === "EEXIST") return false
-            throw err
-          })
-        if (retry) return acquired(target, opts?.signal)
+      const lock = await attempt(target, staleMs, opts?.signal)
+      if (lock) return lock
+      if (!waited) {
+        opts?.onWait?.()
+        waited = true
       }
-
       if (Date.now() >= deadline) {
         throw new Error(`timed out waiting for file lock: ${target}`)
       }

@@ -1,10 +1,10 @@
-import { createHash } from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
 import z from "zod"
 import { Global } from "../global"
 import { Instance } from "../project/instance"
 import { NativeAddon } from "../native/addon"
+import { Hash } from "../util/hash"
 import { Log } from "../util/log"
 import { parseJsonResult } from "../util/json-value"
 import { evidenceCacheMode } from "./mode"
@@ -40,7 +40,7 @@ type State = {
 
 export namespace EvidenceCache {
   export function digest(value: string | Uint8Array): string {
-    return createHash("sha256").update(value).digest("hex")
+    return Hash.fast(typeof value === "string" ? value : Buffer.from(value))
   }
 
   export function key(...identity: (string | number)[]): string {

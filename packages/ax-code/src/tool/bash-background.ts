@@ -1,6 +1,7 @@
 import type { ChildProcess } from "child_process"
 import { StringDecoder } from "string_decoder"
 import { BackgroundOutputSpool } from "./background-output-spool"
+import { safeUtf8PrefixLength } from "./bash-helpers"
 import { Log } from "../util/log"
 import { Shell } from "@/shell/shell"
 import { Bus } from "@/bus"
@@ -120,8 +121,7 @@ export namespace BackgroundShell {
   function preview(text: string, limit: number) {
     // Slice before encoding so an arbitrarily long command does not create a retained/temporary duplicate.
     const bytes = Buffer.from(text.slice(0, limit))
-    let end = Math.min(bytes.length, limit)
-    while (end < bytes.length && end > 0 && (bytes[end] & 0xc0) === 0x80) end--
+    const end = safeUtf8PrefixLength(bytes, limit)
     return { text: bytes.toString("utf8", 0, end), truncated: text.length > limit || end < bytes.length }
   }
 

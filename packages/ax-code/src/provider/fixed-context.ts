@@ -1,10 +1,10 @@
-import { createHash } from "node:crypto"
 import { constants } from "node:fs"
 import fs from "node:fs/promises"
 import path from "node:path"
 import type { LanguageModelV3 } from "@ai-sdk/provider"
 import { NamedError } from "@ax-code/util/error"
 import z from "zod"
+import { Hash } from "@/util/hash"
 import { abortAfterAny } from "@/util/abort"
 
 export const FixedContextError = NamedError.create("FixedContextError", z.object({ message: z.string() }))
@@ -21,9 +21,6 @@ function fail(message: string): never {
 }
 function throwIfCancelled(signal?: AbortSignal) {
   if (signal?.aborted) fail("The fixed-context question was cancelled or timed out.")
-}
-function hash(value: string) {
-  return createHash("sha256").update(value).digest("hex")
 }
 function inside(root: string, target: string) {
   const relative = path.relative(root, target)
@@ -112,7 +109,7 @@ export async function readFixedContextFiles(input: {
     }
   }
   result.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
-  return { namespace: hash(root), files: result }
+  return { namespace: Hash.fast(root), files: result }
 }
 
 export function buildFixedContextRequest(input: {
@@ -146,7 +143,11 @@ export function buildFixedContextRequest(input: {
   }
   if (Buffer.byteLength(JSON.stringify(body)) > MAX_REQUEST_BYTES)
     fail("Encoded context exceeds the 128 KiB gateway request limit; select smaller files.")
-  return { body, system, contextDigest: hash(JSON.stringify({ model: input.model, maxTokens, system })) }
+  return {
+    body,
+    system,
+    contextDigest: Hash.fast(JSON.stringify({ model: input.model, maxTokens, system })),
+  }
 }
 
 export async function generateFixedContext(

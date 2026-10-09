@@ -16,6 +16,7 @@ import { readFileSync, readdirSync, existsSync } from "fs"
 import { Installation } from "../installation"
 import { Flag } from "../flag/flag"
 import { iife } from "@/util/iife"
+import { sleep as sleepDefault } from "@/util/timeout"
 import { init } from "#db"
 import { NativeStore } from "@/code-intelligence/native-store"
 import { DurableStoragePolicy } from "./policy"
@@ -443,7 +444,7 @@ export namespace Database {
     const baseMs = options.baseMs ?? DEFAULT_BUSY_RETRY_BASE_MS
     const maxMs = options.maxMs ?? DEFAULT_BUSY_RETRY_MAX_MS
     const random = options.random ?? Math.random
-    const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
+    const sleep = options.sleep ?? sleepDefault
     let lastError: unknown
     for (let attempt = 0; attempt < attempts; attempt++) {
       try {

@@ -11,6 +11,7 @@ import { Glob } from "../util/glob"
 import { Ssrf } from "../util/ssrf"
 import type { MessageV2 } from "./message-v2"
 import { parseContentLengthHeader } from "@/util/http-header"
+import { BodyTooLargeError, readBoundedBody } from "@/util/http-body"
 
 const log = Log.create({ service: "instruction" })
 
@@ -245,29 +246,14 @@ export namespace InstructionPrompt {
             log.warn("instruction URL response too large", { url, contentLength })
             return ""
           }
-          const reader = res.body?.getReader()
-          if (!reader) return res.text()
-          const chunks: Uint8Array[] = []
-          let total = 0
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-            total += value.byteLength
-            if (total > INSTRUCTION_MAX_BYTES) {
-              await reader.cancel()
-              log.warn("instruction URL response exceeded size limit", { url, limit: INSTRUCTION_MAX_BYTES })
-              return ""
-            }
-            chunks.push(value)
+          if (!res.body) return res.text()
+          try {
+            return new TextDecoder().decode(await readBoundedBody(res, INSTRUCTION_MAX_BYTES))
+          } catch (err) {
+            if (!(err instanceof BodyTooLargeError)) throw err
+            log.warn("instruction URL response exceeded size limit", { url, limit: INSTRUCTION_MAX_BYTES })
+            return ""
           }
-          return new TextDecoder().decode(
-            chunks.reduce((acc, c) => {
-              const merged = new Uint8Array(acc.byteLength + c.byteLength)
-              merged.set(acc)
-              merged.set(c, acc.byteLength)
-              return merged
-            }, new Uint8Array()),
-          )
         })
         .catch((err) => {
           log.warn("instruction URL fetch failed", { url, err })

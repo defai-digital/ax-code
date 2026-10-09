@@ -1,3 +1,5 @@
+import { isAbortError } from "@/util/abort"
+
 export type SubmitStage = "creating-session" | "dispatching"
 
 const SUBMIT_ABORT_NAME = "PromptSubmitAbortedError"
@@ -28,5 +30,5 @@ export function createSubmitAbortError(message = SUBMIT_ABORT_MESSAGE) {
 
 export function isSubmitAbortError(error: unknown) {
   if (!(error instanceof Error)) return false
-  return error.name === SUBMIT_ABORT_NAME || error.name === "AbortError" || error.message === SUBMIT_ABORT_MESSAGE
+  return error.name === SUBMIT_ABORT_NAME || isAbortError(error) || error.message === SUBMIT_ABORT_MESSAGE
 }

@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto"
 import { asSchema } from "ai"
 import { withTimeout } from "@/util/timeout"
+import { Hash } from "@/util/hash"
 
 type ModelVisibleTool = {
   description?: string
@@ -43,7 +43,7 @@ function canonicalize(value: unknown, stack = new WeakSet<object>()): Canonical 
 }
 
 function sha256(value: string | Uint8Array) {
-  return createHash("sha256").update(value).digest("hex")
+  return Hash.fast(typeof value === "string" ? value : Buffer.from(value))
 }
 
 export namespace RequestProvenance {

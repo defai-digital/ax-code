@@ -5,6 +5,7 @@ import z from "zod"
 import { Global } from "../global"
 import { mapWithConcurrency, OutboundLimits } from "../util/concurrency"
 import { Filesystem } from "../util/filesystem"
+import { BodyTooLargeError, readBoundedBody } from "../util/http-body"
 import { parseJsonStrict } from "../util/json-value"
 import { Log } from "../util/log"
 import { Ssrf } from "../util/ssrf"
@@ -111,28 +112,13 @@ export namespace Discovery {
         await res.body?.cancel().catch(() => {})
         throw asDiscoveryError(`skill-discovery: ${url} exceeds ${MAX_SKILL_FILE_BYTES} bytes`)
       }
-      if (!res.body) return new ArrayBuffer(0)
-      const reader = res.body.getReader()
-      const buffer = new Uint8Array(MAX_SKILL_FILE_BYTES)
-      let size = 0
-      let complete = false
-      try {
-        for (;;) {
-          const { done, value } = await reader.read()
-          if (done) {
-            complete = true
-            return buffer.slice(0, size).buffer
-          }
-          if (size + value.byteLength > buffer.length) {
-            throw asDiscoveryError(`skill-discovery: ${url} exceeds ${MAX_SKILL_FILE_BYTES} bytes`)
-          }
-          buffer.set(value, size)
-          size += value.byteLength
+      if (!res.body) return new Uint8Array(0)
+      return readBoundedBody(res, MAX_SKILL_FILE_BYTES).catch((err) => {
+        if (err instanceof BodyTooLargeError) {
+          throw asDiscoveryError(`skill-discovery: ${url} exceeds ${MAX_SKILL_FILE_BYTES} bytes`)
         }
-      } finally {
-        if (!complete) await reader.cancel().catch((err) => log.warn("failed to cancel skill response", { url, err }))
-        reader.releaseLock()
-      }
+        throw err
+      })
     } catch (err) {
       if (err instanceof DiscoveryError) throw err
       throw asDiscoveryError(`skill-discovery: fetch failed for ${url}`, err)

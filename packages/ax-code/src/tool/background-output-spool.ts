@@ -1,6 +1,7 @@
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
+import { safeUtf8SuffixLength } from "./bash-helpers"
 
 /** Transient, process-owned output. Synchronous bounded I/O avoids queued writes and close/read races. */
 export class BackgroundOutputSpool {
@@ -100,8 +101,7 @@ export class BackgroundOutputSpool {
           position = (position + count) % BackgroundOutputSpool.capacity
         }
         // The oldest edge of a rolling ring can land inside a UTF-8 character.
-        let start = 0
-        while (start < bytes.length && (bytes[start] & 0xc0) === 0x80) start++
+        const start = bytes.length - safeUtf8SuffixLength(bytes, bytes.length)
         output = bytes.toString("utf8", start)
       }
     } catch {

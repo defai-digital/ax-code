@@ -1,5 +1,6 @@
 import { NamedError } from "@ax-code/util/error"
 import { MessageV2 } from "./message-v2"
+import { SessionRetry } from "./retry"
 
 /**
  * Transient-error taxonomy for the compaction model fallback (C9), modeled on
@@ -53,26 +54,6 @@ export namespace CompactionFallback {
 
   const OVERLOAD_PATTERNS = ["overloaded", "too many requests", "rate limit"]
 
-  // Permanent billing/quota exhaustion — mirrors NON_RETRYABLE_PATTERNS in
-  // session/retry.ts. The AI SDK blanket-marks all 429s isRetryable, but a
-  // quota-429 is not transient and switching models does not refill the
-  // account, so these never retry down the ladder.
-  const PERMANENT_PATTERNS = [
-    "allocated quota exceeded",
-    "insufficient balance",
-    "increase your quota limit",
-    "no resource package",
-    "quota exceeded",
-    "quota has been exhausted",
-    "token-limit",
-    "insufficient quota",
-    "insufficient_quota",
-    "billing",
-    "payment required",
-    "account suspended",
-    "subscription",
-  ]
-
   function matches(text: string | undefined, patterns: string[]) {
     if (!text) return false
     const lower = text.toLowerCase()
@@ -103,10 +84,15 @@ export namespace CompactionFallback {
       const statusCode = error.data?.statusCode
       const message = error.data?.message
       const responseBody = error.data?.responseBody
+      // Permanent billing/quota exhaustion — the shared list session/retry.ts
+      // refuses to retry. The AI SDK blanket-marks all 429s isRetryable, but a
+      // quota-429 is not transient and switching models does not refill the
+      // account, so these never retry down the ladder.
+      const permanentPatterns = SessionRetry.NON_RETRYABLE_PATTERNS
       if (
         (statusCode === undefined || statusCode === 400) &&
-        !matches(message, PERMANENT_PATTERNS) &&
-        !matches(responseBody, PERMANENT_PATTERNS) &&
+        !matches(message, permanentPatterns) &&
+        !matches(responseBody, permanentPatterns) &&
         (unsupportedCodexModel(message) || unsupportedCodexModel(responseBody))
       ) {
         return { class: "model_unsupported", retryable: true }
@@ -116,8 +102,8 @@ export namespace CompactionFallback {
       // wastes the single ladder attempt on an error no model switch fixes.
       if (
         error.data?.isRetryable === false ||
-        matches(message, PERMANENT_PATTERNS) ||
-        matches(responseBody, PERMANENT_PATTERNS)
+        matches(message, permanentPatterns) ||
+        matches(responseBody, permanentPatterns)
       ) {
         if (statusCode !== undefined && statusCode >= 400) {
           return { class: "invalid_request", retryable: false }

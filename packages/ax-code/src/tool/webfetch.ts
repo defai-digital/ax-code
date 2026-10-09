@@ -10,6 +10,7 @@ import {
 } from "@/constants/network"
 import { Isolation } from "@/isolation"
 import { parseContentLengthHeader } from "@/util/http-header"
+import { BodyTooLargeError, readBoundedBody } from "@/util/http-body"
 import { ToolNumber } from "./schema"
 import { originPermissionPatterns } from "@/util/url-permission"
 
@@ -76,7 +77,6 @@ export const WebFetchTool = Tool.define("webfetch", {
     }
 
     let response: Response | undefined
-    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
     let bodyConsumed = false
 
     try {
@@ -159,30 +159,12 @@ export const WebFetchTool = Tool.define("webfetch", {
       // was buffered via response.arrayBuffer() before the size check,
       // meaning a malicious server could send gigabytes before we
       // noticed.
-      reader = response.body?.getReader()
-      if (!reader) throw new Error("Response has no body")
-      const chunks: Uint8Array[] = []
-      let totalBytes = 0
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        totalBytes += value.byteLength
-        if (totalBytes > MAX_RESPONSE_SIZE) {
-          await reader.cancel().catch(() => {})
-          throw new Error("Response too large (exceeds 5MB limit)")
-        }
-        chunks.push(value)
-      }
-      reader.releaseLock()
-      reader = undefined
+      if (!response.body) throw new Error("Response has no body")
+      const body = await readBoundedBody(response, MAX_RESPONSE_SIZE).catch((error) => {
+        if (error instanceof BodyTooLargeError) throw new Error("Response too large (exceeds 5MB limit)")
+        throw error
+      })
       bodyConsumed = true
-      const assembled = new Uint8Array(totalBytes)
-      let byteOffset = 0
-      for (const chunk of chunks) {
-        assembled.set(chunk, byteOffset)
-        byteOffset += chunk.byteLength
-      }
-      const arrayBuffer = assembled.buffer
 
       const contentType = response.headers.get("content-type") || ""
       const mime = contentType.split(";")[0]?.trim().toLowerCase() || ""
@@ -193,7 +175,7 @@ export const WebFetchTool = Tool.define("webfetch", {
       const isImage = mime.startsWith("image/") && mime !== "image/svg+xml" && mime !== "image/vnd.fastbidsheet"
 
       if (isImage) {
-        const base64Content = Buffer.from(arrayBuffer).toString("base64")
+        const base64Content = Buffer.from(body).toString("base64")
         return {
           title,
           output: "Image fetched successfully",
@@ -210,9 +192,9 @@ export const WebFetchTool = Tool.define("webfetch", {
 
       const content = (() => {
         try {
-          return new TextDecoder(charset || "utf-8").decode(arrayBuffer)
+          return new TextDecoder(charset || "utf-8").decode(body)
         } catch {
-          return new TextDecoder().decode(arrayBuffer)
+          return new TextDecoder().decode(body)
         }
       })()
 
@@ -264,9 +246,6 @@ export const WebFetchTool = Tool.define("webfetch", {
       }
     } finally {
       clearTimeout()
-      try {
-        reader?.releaseLock()
-      } catch {}
       if (!bodyConsumed) {
         await response?.body?.cancel().catch(() => {})
       }

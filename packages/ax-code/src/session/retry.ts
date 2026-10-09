@@ -1,15 +1,14 @@
 import type { NamedError } from "@ax-code/util/error"
-import { abortError } from "@/util/abort"
 import { MessageV2 } from "./message-v2"
 import { parseJsonRecord } from "@/util/json-record"
 import { GITHUB_REPO_URL } from "@/constants/project"
 import { isRecord } from "@/util/record"
+import { sleep as timeoutSleep } from "@/util/timeout"
 
 export namespace SessionRetry {
   const RETRY_INITIAL_DELAY = 2000
   const RETRY_BACKOFF_FACTOR = 2
   const RETRY_MAX_DELAY_NO_HEADERS = 30_000 // 30 seconds
-  const RETRY_MAX_DELAY = 2_147_483_647 // max 32-bit signed integer for setTimeout
   export const RETRY_MAX_ATTEMPTS = 5
   const ALIBABA_TOKEN_PLAN_QUOTA_RETRY_DELAY = 60_000
   // Extended attempt budget for concurrency-limit hits only: a saturated
@@ -31,28 +30,8 @@ export namespace SessionRetry {
   // streak-proportional escalation and jitter.
   const CONCURRENCY_MAX_DELAY_CEILING_MS = 300_000
 
-  export async function sleep(ms: number, signal: AbortSignal): Promise<void> {
-    if (signal.aborted) throw abortError()
-    return new Promise((resolve, reject) => {
-      const abortHandler = () => {
-        clearTimeout(timeout)
-        reject(abortError())
-      }
-      const timeout = setTimeout(
-        () => {
-          signal.removeEventListener("abort", abortHandler)
-          resolve()
-        },
-        Math.min(ms, RETRY_MAX_DELAY),
-      )
-      timeout.unref?.()
-      if (signal.aborted) {
-        clearTimeout(timeout)
-        reject(abortError())
-        return
-      }
-      signal.addEventListener("abort", abortHandler, { once: true })
-    })
+  export function sleep(ms: number, signal: AbortSignal): Promise<void> {
+    return timeoutSleep(ms, { signal })
   }
 
   function isAlibabaTokenPlanShortWindowQuota(error: MessageV2.APIError) {
@@ -162,7 +141,7 @@ export namespace SessionRetry {
   // request won't fix it. The AI SDK marks all 429s as isRetryable, but
   // some 429s are billing/quota exhaustion, not rate limits. Retrying
   // those wastes ~60s of backoff before the user sees the real error.
-  const NON_RETRYABLE_PATTERNS = [
+  export const NON_RETRYABLE_PATTERNS = [
     "allocated quota exceeded",
     "insufficient balance",
     "increase your quota limit",

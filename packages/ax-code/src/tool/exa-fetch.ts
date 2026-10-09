@@ -1,7 +1,8 @@
-import { abortAfterAny } from "../util/abort"
+import { abortAfterAny, isAbortError } from "../util/abort"
 import { EXA_BASE_URL, EXA_ENDPOINT } from "@/constants/network"
 import { Ssrf } from "@/util/ssrf"
 import { parseJsonPayload } from "@/util/json-value"
+import { BodyTooLargeError, readBoundedBody } from "@/util/http-body"
 import z from "zod"
 
 const MAX_RESPONSE_BYTES = 1024 * 1024
@@ -83,32 +84,13 @@ export async function fetchExaTool(config: {
     // that omit Content-Length. Previously the entire body was
     // buffered via response.bytes() before the size check, meaning a
     // server could send arbitrarily large payloads before we noticed.
-    const reader = response.body?.getReader()
-    if (!reader) throw new Error(`${config.errorPrefix}: response has no body`)
-    const chunks: Uint8Array[] = []
-    let totalBytes = 0
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        totalBytes += value.byteLength
-        if (totalBytes > MAX_RESPONSE_BYTES) {
-          await reader.cancel().catch(() => {})
-          throw new Error(`${config.errorPrefix}: response too large`)
-        }
-        chunks.push(value)
-      }
-    } finally {
-      reader.releaseLock()
-    }
+    if (!response.body) throw new Error(`${config.errorPrefix}: response has no body`)
+    const body = await readBoundedBody(response, MAX_RESPONSE_BYTES).catch((error) => {
+      if (error instanceof BodyTooLargeError) throw new Error(`${config.errorPrefix}: response too large`)
+      throw error
+    })
     bodyConsumed = true
-    const assembled = new Uint8Array(totalBytes)
-    let byteOffset = 0
-    for (const chunk of chunks) {
-      assembled.set(chunk, byteOffset)
-      byteOffset += chunk.byteLength
-    }
-    const responseText = new TextDecoder().decode(assembled)
+    const responseText = new TextDecoder().decode(body)
 
     // Parse SSE response. Collect every content-bearing event and
     // return the LAST one. Previously this returned on the first
@@ -135,7 +117,7 @@ export async function fetchExaTool(config: {
       metadata: {},
     }
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
+    if (isAbortError(error)) {
       throw new Error(`${config.errorPrefix} timed out`, { cause: error })
     }
 

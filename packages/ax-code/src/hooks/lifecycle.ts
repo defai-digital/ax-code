@@ -59,6 +59,7 @@ import { Env } from "@/util/env"
 import { Global } from "@/global"
 import { Instance } from "@/project/instance"
 import { ProjectConfigTrust } from "@/config/project-config-trust"
+import { safeUtf8PrefixLength } from "@/tool/bash-helpers"
 
 const log = Log.create({ service: "hooks.lifecycle" })
 
@@ -394,7 +395,8 @@ export namespace LifecycleHooks {
   function appendCaptured(current: string, chunk: Buffer | string) {
     if (Buffer.byteLength(current) >= MAX_CAPTURE_BYTES) return current
     const remaining = MAX_CAPTURE_BYTES - Buffer.byteLength(current)
-    return current + Buffer.from(chunk).subarray(0, remaining).toString("utf8")
+    const bytes = Buffer.from(chunk)
+    return current + bytes.subarray(0, safeUtf8PrefixLength(bytes, remaining)).toString("utf8")
   }
 
   function hookProcessEnv(): NodeJS.ProcessEnv {

@@ -4,6 +4,7 @@ import path from "node:path"
 import z from "zod"
 import { NamedError } from "@ax-code/util/error"
 import { Filesystem } from "@/util/filesystem"
+import { BodyTooLargeError, readBoundedBody } from "@/util/http-body"
 import { parseJsonStrict } from "@/util/json-value"
 import { ModelsDev } from "../models"
 import {
@@ -49,22 +50,11 @@ function assertHubURL(url: URL) {
 
 async function readResponse(response: Response) {
   if (!response.body) throw catalogError("Missing metadata response body")
-  const reader = response.body.getReader()
-  const chunks: Uint8Array[] = []
-  let bytes = 0
-  try {
-    while (true) {
-      const chunk = await reader.read()
-      if (chunk.done) break
-      bytes += chunk.value.byteLength
-      if (bytes > MAX_JSON_BYTES) throw catalogError("Metadata response exceeds the size limit")
-      chunks.push(chunk.value)
-    }
-    return parseJsonStrict(Buffer.concat(chunks).toString("utf8"))
-  } finally {
-    await reader.cancel().catch(() => undefined)
-    reader.releaseLock()
-  }
+  const body = await readBoundedBody(response, MAX_JSON_BYTES).catch((error) => {
+    if (error instanceof BodyTooLargeError) throw catalogError("Metadata response exceeds the size limit")
+    throw error
+  })
+  return parseJsonStrict(Buffer.from(body).toString("utf8"))
 }
 
 async function fetchJSON(url: URL, fetcher: typeof fetch, signal: AbortSignal) {

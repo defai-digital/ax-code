@@ -8,6 +8,7 @@ import { TaskQueue } from "../session/task-queue"
 import { childVisibleText, isEmptySubagentResultText } from "../session/background-subagent-handoff"
 import { Log } from "@/util/log"
 import { abortError } from "@/util/abort"
+import { sleep } from "@/util/timeout"
 
 const log = Log.create({ service: "waitfor-tool" })
 
@@ -38,24 +39,6 @@ const parameters = z.object({
     .max(600)
     .describe("Maximum seconds to wait for the task to reach a terminal state (1-600)"),
 })
-
-function sleep(ms: number, abort: AbortSignal) {
-  return new Promise<void>((resolve, reject) => {
-    if (abort.aborted) {
-      reject(abortError())
-      return
-    }
-    const timer = setTimeout(() => {
-      abort.removeEventListener("abort", onAbort)
-      resolve()
-    }, ms)
-    function onAbort() {
-      clearTimeout(timer)
-      reject(abortError())
-    }
-    abort.addEventListener("abort", onAbort, { once: true })
-  })
-}
 
 // Exported for the background-task control tools (message_background_task),
 // which resolve and scope targets the same way.
@@ -163,7 +146,7 @@ export const WaitForTool = Tool.define("waitfor", async () => {
         if (ctx.abort.aborted) throw abortError()
         const remaining = deadline - Date.now()
         if (remaining <= 0) break
-        await sleep(Math.min(WaitForInternals.pollIntervalMs, remaining), ctx.abort)
+        await sleep(Math.min(WaitForInternals.pollIntervalMs, remaining), { signal: ctx.abort })
         current = await TaskQueue.get(item.id).catch((e) => {
           // A transient read failure must not end the wait early; keep the
           // last known status and retry on the next poll.

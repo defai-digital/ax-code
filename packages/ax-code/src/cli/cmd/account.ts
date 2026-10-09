@@ -2,6 +2,7 @@ import { cmd } from "./cmd"
 import * as prompts from "@clack/prompts"
 import { UI } from "../ui"
 import { AccountID, Account, OrgID, PollExpired, type PollResult } from "@/account"
+import { sleep } from "@/util/timeout"
 import open from "open"
 
 const openBrowser = (url: string) => open(url).catch(() => undefined)
@@ -37,8 +38,6 @@ const isActiveOrgChoice = (
   active: { id: AccountID; active_org_id: OrgID | null } | undefined,
   choice: { accountID: AccountID; orgID: OrgID },
 ) => active !== undefined && active.id === choice.accountID && active.active_org_id === choice.orgID
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 async function pollUntilAuthorized(login: Awaited<ReturnType<typeof Account.login>>): Promise<PollResult> {
   let waitMs = Account.durationToMillis(login.interval)

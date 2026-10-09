@@ -1,6 +1,7 @@
 import z from "zod"
 
 import { Log } from "@/util/log"
+import { sleep } from "@/util/timeout"
 import { toErrorMessage } from "@/util/error-message"
 import { AccountRepo, type AccountRow } from "./repo"
 import {
@@ -141,7 +142,7 @@ function shouldRetry(response: Response) {
 async function backoff(attempt: number): Promise<void> {
   const base = 200 * 2 ** attempt
   const jittered = base * (0.5 + Math.random())
-  await new Promise((resolve) => setTimeout(resolve, jittered))
+  await sleep(jittered)
 }
 
 async function fetchWithReadRetry(fetcher: Fetcher, input: string, init: RequestInit): Promise<Response> {

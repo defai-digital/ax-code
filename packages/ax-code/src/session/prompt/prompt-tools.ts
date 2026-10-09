@@ -26,6 +26,7 @@ import { Isolation } from "@/isolation"
 import { Config } from "@/config/config"
 import { Instance } from "../../project/instance"
 import { Truncate } from "@/tool/truncate"
+import { safeUtf8PrefixLength } from "@/tool/bash-helpers"
 import { uniqueStrings } from "@/util/string-list"
 import { parseJsonResult } from "@/util/json-value"
 import { isRecord } from "@/util/record"
@@ -419,9 +420,7 @@ function validMcpMimeType(value: unknown, fallback: string): string {
 function truncateUtf8Bytes(text: string, maxBytes: number): string {
   if (Buffer.byteLength(text, "utf8") <= maxBytes) return text
   const buf = Buffer.from(text.slice(0, maxBytes), "utf8")
-  let end = Math.min(maxBytes, buf.length)
-  while (end > 0 && end < buf.length && ((buf[end] ?? 0) & 0xc0) === 0x80) end--
-  return buf.subarray(0, end).toString("utf8")
+  return buf.subarray(0, safeUtf8PrefixLength(buf, maxBytes)).toString("utf8")
 }
 
 type McpImageKind = "png" | "jpeg" | "gif" | "webp"

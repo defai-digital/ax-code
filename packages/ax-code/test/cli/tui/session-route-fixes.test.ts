@@ -94,7 +94,7 @@ describe("v2 SDK result.error handling", () => {
   test("workflow dialog fetchers suppress abort errors from deliberate close/navigation", async () => {
     const dialogWorkflow = await fs.readFile(DIALOG_WORKFLOW_SRC, "utf8")
 
-    expect(dialogWorkflow).toContain("function isAbortError(error: unknown)")
+    expect(dialogWorkflow).toContain('import { isAbortError } from "@/util/abort"')
     // Each of the four abortable fetchers (dashboard, run detail, eval
     // summary, artifacts) guards both the resolved `{error}` and the thrown
     // path before toasting.

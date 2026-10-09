@@ -1,4 +1,5 @@
 import path from "path"
+import { safeUtf8PrefixLength } from "@/tool/bash-helpers"
 
 export type ShellOutputState = {
   output: string
@@ -23,16 +24,13 @@ export function appendShellOutputChunk(
     }
   }
 
-  let end = text.length
-  const remaining = hardCap - state.outputBytes
-  while (end > 0 && Buffer.byteLength(text.slice(0, end), "utf-8") > remaining) {
-    end--
-  }
+  const bytes = Buffer.from(text, "utf-8")
+  const end = safeUtf8PrefixLength(bytes, hardCap - state.outputBytes)
 
   let output = state.output
   let outputBytes = state.outputBytes
   if (end > 0) {
-    const slice = text.slice(0, end)
+    const slice = bytes.subarray(0, end).toString("utf-8")
     output += slice
     outputBytes += Buffer.byteLength(slice, "utf-8")
   }

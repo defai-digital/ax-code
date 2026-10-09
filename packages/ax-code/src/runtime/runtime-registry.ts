@@ -8,6 +8,8 @@ import z from "zod"
 import { Global } from "@/global"
 import { FileLock } from "@/util/filelock"
 import { parseJsonResult } from "@/util/json-value"
+import { readBoundedBody } from "@/util/http-body"
+import { sleep } from "@/util/timeout"
 import { ManagedRuntime } from "./managed-runtime"
 import { Installation } from "@/installation"
 import { Shell } from "@/shell/shell"
@@ -99,21 +101,8 @@ export namespace RuntimeRegistry {
       })
       if (!response.ok) return false
       if (!response.body) return false
-      const reader = response.body.getReader()
-      const chunks: Uint8Array[] = []
-      let size = 0
-      try {
-        while (true) {
-          const chunk = await reader.read()
-          if (chunk.done) break
-          size += chunk.value.byteLength
-          if (size > 16_384) return false
-          chunks.push(chunk.value)
-        }
-      } finally {
-        await reader.cancel().catch(() => undefined)
-      }
-      const parsed = parseJsonResult(Buffer.concat(chunks).toString("utf8"))
+      const body = await readBoundedBody(response, 16_384)
+      const parsed = parseJsonResult(Buffer.from(body).toString("utf8"))
       if (!parsed.ok) return false
       const value = ManagedRuntime.Info.safeParse(parsed.value)
       return (
@@ -224,14 +213,14 @@ export namespace RuntimeRegistry {
           child.unref()
           return record
         }
-        await new Promise((resolve) => setTimeout(resolve, 100))
+        await sleep(100)
       }
       throw new Error("Runtime startup timed out; inspect its private log")
     } catch (error) {
       await Shell.killTree(child, { exited: () => child.exitCode !== null || child.signalCode !== null })
       const cleanupDeadline = Date.now() + 3_000
       while (child.pid && child.exitCode === null && child.signalCode === null && Date.now() < cleanupDeadline) {
-        await new Promise((resolve) => setTimeout(resolve, 50))
+        await sleep(50)
       }
       const published = await read(where.file)
       if (published?.pid === child.pid && published?.directory === where.directory) await fs.unlink(where.file)
@@ -267,7 +256,7 @@ export namespace RuntimeRegistry {
         if (current?.id === record.id) await fs.unlink(where.file)
         return true
       }
-      await new Promise((resolve) => setTimeout(resolve, 100))
+      await sleep(100)
     }
     throw new Error("Runtime accepted shutdown but has not exited; inspect status before retrying")
   }

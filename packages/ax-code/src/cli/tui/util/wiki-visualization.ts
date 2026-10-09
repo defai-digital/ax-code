@@ -6,6 +6,7 @@ import { NamedError } from "@ax-code/util/error"
 import { parseWikiGraph } from "@ax-code/ax-wiki/graph"
 import type { WikiGraph } from "@ax-code/ax-wiki/graph"
 import { parseJsonStrict } from "@/util/json-value"
+import { BodyTooLargeError, readBoundedBody } from "@/util/http-body"
 import { directoryRequestHeaders } from "./request-headers"
 
 export const WikiVizError = NamedError.create(
@@ -64,23 +65,12 @@ async function readWikiResponse(input: {
       await response.body.cancel()
       throw new WikiVizError({ reason: "too_large", message: "Wiki snapshot exceeds the response limit." })
     }
-    const reader = response.body.getReader()
-    const chunks: Uint8Array[] = []
-    let size = 0
-    try {
-      while (true) {
-        const chunk = await reader.read()
-        if (chunk.done) break
-        size += chunk.value.byteLength
-        if (size > limit)
-          throw new WikiVizError({ reason: "too_large", message: "Wiki snapshot exceeds the response limit." })
-        chunks.push(chunk.value)
-      }
-    } finally {
-      await reader.cancel().catch(() => {})
-      reader.releaseLock()
-    }
-    const value = parseJsonStrict(Buffer.concat(chunks, size).toString("utf8"))
+    const body = await readBoundedBody(response, limit).catch((error) => {
+      if (error instanceof BodyTooLargeError)
+        throw new WikiVizError({ reason: "too_large", message: "Wiki snapshot exceeds the response limit." })
+      throw error
+    })
+    const value = parseJsonStrict(Buffer.from(body).toString("utf8"))
     if (!response.ok) {
       const code = value && typeof value === "object" && "code" in value ? value.code : undefined
       const reason = code === "missing" || code === "too_large" || code === "invalid" ? code : "failed"

@@ -10,6 +10,7 @@ import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
 import { useDialog, type DialogContext } from "../../ui/dialog"
 import { useToast } from "../../ui/toast"
 import { useSDK } from "@tui/context/sdk"
+import { isAbortError } from "@/util/abort"
 import { createAbortableResourceFetcher } from "../../util/abortable-resource"
 import {
   workflowArtifactDetailItems,
@@ -33,13 +34,6 @@ import {
 // v2 SDK client resolves that as `{error: AbortError}` instead of rejecting,
 // so the fetchers below must recognize aborts to avoid toasting "The
 // operation was aborted." after a deliberate user action.
-// (util/abortable-resource.ts has the same predicate but does not export it.)
-function isAbortError(error: unknown) {
-  return (
-    (error instanceof DOMException && error.name === "AbortError") ||
-    (error instanceof Error && error.name === "AbortError")
-  )
-}
 
 export function DialogWorkflow() {
   const uiText = useLanguage().t

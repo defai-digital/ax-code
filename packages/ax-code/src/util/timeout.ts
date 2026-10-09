@@ -12,10 +12,31 @@
 // Pass `{ unref: true }` only for fire-and-forget background timers that
 // genuinely must not hold the process open. Do not use it in a loop whose
 // result someone awaits.
-export function sleep(ms: number, opts?: { unref?: boolean }): Promise<void> {
-  return new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, ms)
-    if (opts?.unref) timer.unref?.()
+//
+// With `{ signal }` the sleep rejects with the signal's abort reason as soon
+// as the signal aborts; the timer and listener are cleaned up on either
+// outcome. Delays are clamped to the largest value Node's timers accept
+// without emitting a TimeoutOverflowWarning.
+export function sleep(ms: number, opts?: { unref?: boolean; signal?: AbortSignal }): Promise<void> {
+  const { unref, signal } = opts ?? {}
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason)
+      return
+    }
+    const onAbort = () => {
+      clearTimeout(timer)
+      reject(signal?.reason)
+    }
+    const timer = setTimeout(
+      () => {
+        signal?.removeEventListener("abort", onAbort)
+        resolve()
+      },
+      Math.min(ms, 2_147_483_647),
+    )
+    if (unref) timer.unref?.()
+    signal?.addEventListener("abort", onAbort, { once: true })
   })
 }
 

@@ -1,11 +1,5 @@
 import { onCleanup, type ResourceFetcher, type ResourceFetcherInfo } from "solid-js"
-
-function isAbortError(error: unknown) {
-  return (
-    (error instanceof DOMException && error.name === "AbortError") ||
-    (error instanceof Error && error.name === "AbortError")
-  )
-}
+import { isAbortError } from "@/util/abort"
 
 export function createAbortableResourceFetcher<S, T, R = unknown>(
   fetcher: (source: S, signal: AbortSignal, info: ResourceFetcherInfo<T | undefined, R>) => Promise<T | undefined>,
