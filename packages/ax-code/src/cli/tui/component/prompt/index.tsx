@@ -28,7 +28,7 @@ import { blurRenderable, focusRenderable, isRenderableAlive } from "@tui/util/re
 import { scheduleTuiInterval } from "@tui/util/timer"
 import { useExit } from "../../context/exit"
 import { Clipboard } from "../../util/clipboard"
-import { TuiEvent } from "../../event"
+import { TuiEvent } from "@/server/tui-event"
 import { Locale } from "@/util/locale"
 import { formatDuration } from "@/util/format"
 import { useDialog } from "@tui/ui/dialog"
