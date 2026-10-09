@@ -255,11 +255,30 @@ export function renderSingaporePixels(width: number, height: number, style: Sing
     hd.blob(X(p.x), Y(p.y), X(r * 0.8), Y(0.5), stone)
   }
   const fin = tailAt(1)
-  for (const side of [-1, 1]) {
-    const tip = { x: fin.x + side * 1.5, y: fin.y - 1.7 }
-    hd.stroke(fin.x, fin.y, tip.x, tip.y, line * 2.2, side < 0 ? stoneShade : stone)
-    hd.stroke(tip.x, tip.y, tip.x + side * 0.5, tip.y + 0.4, line * 1.2, side < 0 ? stoneShade : stone)
+  // Forked caudal fin: a broad fan of tapered rays, longest at the two lobes and notched in the middle.
+  const sway = Math.sin(phase * 2) * 0.06
+  for (let k = 0; k <= 16; k++) {
+    const a = (k / 16) * 2 - 1
+    const angle = -Math.PI / 2 - 0.12 + a * 1.0 + sway
+    const reach = 0.9 + 2.1 * Math.pow(Math.abs(a), 1.2) + 0.25 * (1 - Math.abs(a))
+    const tipX = fin.x + Math.cos(angle) * reach,
+      tipY = fin.y + Math.sin(angle) * reach
+    hd.stroke(fin.x, fin.y, tipX, tipY, line * 2.4, a < 0 ? hdMix(stone, stoneShade, 0.25) : stone)
   }
+  for (let k = 0; k <= 8; k++) {
+    const a = (k / 8) * 2 - 1
+    const angle = -Math.PI / 2 - 0.12 + a * 1.0 + sway
+    const reach = 0.9 + 2.1 * Math.pow(Math.abs(a), 1.2) + 0.25 * (1 - Math.abs(a))
+    hd.stroke(
+      fin.x + Math.cos(angle) * 0.5,
+      fin.y + Math.sin(angle) * 0.5,
+      fin.x + Math.cos(angle) * reach * 0.95,
+      fin.y + Math.sin(angle) * reach * 0.95,
+      line * 0.5,
+      stoneShade,
+    )
+  }
+  hd.disk(X(fin.x), Y(fin.y), line * 2.6, stone)
   // Body: shaded back-lit side first, then the lit belly, widest at the chest.
   const spine = (t: number) => ({
     x: 14.1 - Math.sin(t * Math.PI) * 0.5,
