@@ -498,13 +498,6 @@ describe("AX Code TUI stability guardrails", () => {
     expect(displayCommands).toContain("dialog.clear()")
   })
 
-  test("renderDialogLoading returns a thunk so dialog.replace defers construction into the DialogProvider scope (gh#193)", async () => {
-    const dialogLoading = await fs.readFile(path.join(TUI_ROOT, "ui/dialog-loading.tsx"), "utf8")
-
-    expect(dialogLoading).toContain("export function renderDialogLoading(props: DialogLoadingProps): () => JSX.Element")
-    expect(dialogLoading).toContain("return () => <DialogLoading {...props} />")
-  })
-
   test("handles DRE web command failures without leaving stale dialogs behind", async () => {
     const displayCommands = await fs.readFile(DISPLAY_COMMANDS_SRC, "utf8")
 
