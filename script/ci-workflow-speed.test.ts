@@ -37,6 +37,9 @@ describe("CI workflow speed policy", () => {
       "node script/check-node-version.mjs",
     )
     expect(readFileSync("script/only-allow-pnpm.mjs", "utf8")).toContain("!supportsNodeVersion()")
+    const agentRun = readFileSync(".github/workflows/agent-run.yml", "utf8")
+    expect(agentRun).toContain("uses: ./.github/actions/setup-ax-code-toolchain")
+    expect(agentRun).not.toContain("corepack enable")
   })
 
   test("repository script tests run once in repo-structure, not in ax-code CI", () => {

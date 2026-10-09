@@ -34,10 +34,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Node
-        uses: actions/setup-node@v7
+      - name: Setup AX Code JavaScript toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
         with:
-          node-version: "26"
+          checkout: "false"
 
       - name: Install ax-code CLI
         # Prefer the published Linux release installer when assets exist.
@@ -50,7 +50,6 @@ jobs:
           # Installer updates GITHUB_PATH for later steps only — export for this step too.
           export PATH="$HOME/.ax-code/bin:$HOME/.local/bin:$HOME/.local/share/ax-code/bin:${PATH:-}"
           if ! command -v ax-code >/dev/null 2>&1; then
-            corepack enable
             pnpm install
             pnpm run setup:cli
             echo "$HOME/.ax-code/bin" >> "$GITHUB_PATH" || true
