@@ -20,6 +20,8 @@ import { createAxCodeClient } from "@ax-code/sdk/v2/client"
 import type {
   Message as ApiMessage,
   AxCodeClient,
+  EventPermissionAsked,
+  EventSessionError,
   Part as ApiPart,
   Provider as ApiProvider,
   Session as ApiSession,
@@ -495,6 +497,39 @@ function classifyError(errMsg: string): Error {
   return new ProviderError(errMsg, { status: 0 })
 }
 
+// Shared event handlers for collectResult and streamEvents.
+// `sdk.event.subscribe()` is a single instance-wide stream, not scoped to
+// the running session — events tagged to a different session must not
+// affect this run. A missing sessionID is a genuine instance-level error
+// and still propagates.
+
+function classifySessionError(
+  sessionID: string,
+  properties: EventSessionError["properties"],
+  hooks?: AgentOptions["hooks"],
+): Error | undefined {
+  if (properties.sessionID !== undefined && properties.sessionID !== sessionID) return undefined
+  const err = classifyError(getErrorMessage(properties.error))
+  if (hooks?.onError) hooks.onError(err)
+  return err
+}
+
+// Returns false when the request belongs to a different session (caller skips).
+async function replyPermissionAsked(
+  sdk: AxCodeClient,
+  sessionID: string,
+  perm: EventPermissionAsked["properties"],
+  hooks?: AgentOptions["hooks"],
+): Promise<boolean> {
+  if (perm.sessionID !== sessionID) return false
+  const hookReply = hooks?.onPermissionRequest
+    ? await hooks.onPermissionRequest({ id: perm.id, permission: perm.permission, patterns: perm.patterns })
+    : "deny"
+  const reply = hookReply === "allow" ? "once" : "reject"
+  await sdk.permission.reply({ requestID: perm.id, reply })
+  return true
+}
+
 // ============================================================
 // SDK TOOL → INTERNAL TOOL ADAPTER
 // ============================================================
@@ -621,24 +656,14 @@ async function collectResult(
       }
 
       if (event.type === "session.error") {
-        // `sdk.event.subscribe()` is a single instance-wide stream, not
-        // scoped to this session — an unrelated concurrent session's error
-        // must not abort this run. A missing sessionID is a genuine
-        // instance-level error and still propagates.
-        if (event.properties.sessionID !== undefined && event.properties.sessionID !== sessionID) continue
-        const err = classifyError(getErrorMessage(event.properties.error))
-        if (hooks?.onError) hooks.onError(err)
+        const err = classifySessionError(sessionID, event.properties, hooks)
+        if (!err) continue
         throw err
       }
 
       if (event.type === "permission.asked") {
-        const perm = event.properties
-        if (perm.sessionID !== sessionID) continue
-        const hookReply = hooks?.onPermissionRequest
-          ? await hooks.onPermissionRequest({ id: perm.id, permission: perm.permission, patterns: perm.patterns })
-          : "deny"
-        const reply = hookReply === "allow" ? "once" : "reject"
-        await sdk.permission.reply({ requestID: perm.id, reply })
+        const handled = await replyPermissionAsked(sdk, sessionID, event.properties, hooks)
+        if (!handled) continue
       }
 
       if (event.type === "session.status") {
@@ -740,23 +765,15 @@ async function* streamEvents(
     }
 
     if (event.type === "session.error") {
-      // See the matching guard in collectResult(): the event stream is
-      // instance-wide, so ignore errors tagged to a different session.
-      if (event.properties.sessionID !== undefined && event.properties.sessionID !== sessionID) continue
-      const err = classifyError(getErrorMessage(event.properties.error))
-      if (hooks?.onError) hooks.onError(err)
+      const err = classifySessionError(sessionID, event.properties, hooks)
+      if (!err) continue
       yield { type: "error", error: err }
       return
     }
 
     if (event.type === "permission.asked") {
-      const perm = event.properties
-      if (perm.sessionID !== sessionID) continue
-      const hookReply = hooks?.onPermissionRequest
-        ? await hooks.onPermissionRequest({ id: perm.id, permission: perm.permission, patterns: perm.patterns })
-        : "deny"
-      const reply = hookReply === "allow" ? "once" : "reject"
-      await sdk.permission.reply({ requestID: perm.id, reply })
+      const handled = await replyPermissionAsked(sdk, sessionID, event.properties, hooks)
+      if (!handled) continue
     }
 
     if (event.type === "session.status") {
