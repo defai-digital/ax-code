@@ -97,9 +97,7 @@ test.skipIf(!executablePath)(
             )
             // ADR-168 amendment: a blocked redirect surfaces as a grantable
             // origin error (the probe names the target), not an opaque failure.
-            await expect(call("new_page", { url: `${origin}/redirect` })).rejects.toThrow(
-              "origin is not allowed",
-            )
+            await expect(call("new_page", { url: `${origin}/redirect` })).rejects.toThrow("origin is not allowed")
             expect(deniedRequests).toBe(0)
             await call("close_page", { pageId })
           } finally {
@@ -110,6 +108,87 @@ test.skipIf(!executablePath)(
     } finally {
       server.closeAllConnections()
       denied.closeAllConnections()
+    }
+  },
+)
+
+test.skipIf(!executablePath)(
+  "real browser continues a saved first read and reuses a separate close approval",
+  { timeout: 90_000, retry: 0 },
+  async () => {
+    const { Permission } = await import("../../src/permission")
+    const { WebMcpApprovals } = await import("../../src/mcp/webmcp-approvals")
+    const { resolveTools } = await import("../../src/session/prompt/prompt-tools")
+    await using server = createServer((_request, response) => {
+      response.setHeader("Content-Type", "text/html; charset=utf-8")
+      response.end("<!doctype html><title>Approval continuity</title><h1>AX_APPROVAL_CONTINUITY_OK</h1>")
+    })
+    server.listen(0, "127.0.0.1")
+    await once(server, "listening")
+    const address = server.address()
+    if (!address || typeof address === "string") throw new Error("Missing fixture address")
+    const origin = `http://127.0.0.1:${address.port}`
+    const entry = {
+      ...WebMcpProfile.config({ allowedOrigins: [origin], read: true, headless: true, executablePath }, true),
+      timeout: 30_000,
+    }
+    await using tmp = await tmpdir({ git: true, config: { mcp: { live: entry } } })
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await MCP.connect("live")
+          const direct = await MCP.tools()
+          const options = { toolCallId: "call_live_approval", messages: [], abortSignal: new AbortController().signal }
+          const open = async () => {
+            await direct.live_new_page.execute!({ url: `${origin}/fixture` }, options)
+            const pages = WebMcpProfile.parseStructuredPages(await direct.live_list_pages.execute!({}, options))
+            const page = [...(pages ?? [])].find(([, url]) => url === `${origin}/fixture`)
+            expect(page).toBeDefined()
+            return page![0]
+          }
+          const wrapped = await resolveTools({
+            agent: { name: "build", permission: [{ permission: "*", pattern: "*", action: "allow" }] },
+            session: { id: "ses_live_approval_flow", permission: [] },
+            model: { providerID: "test", api: { id: "test", npm: "@ai-sdk/openai-compatible" } },
+            tools: {},
+            bypassAgentCheck: false,
+            messages: [],
+            processor: { message: { id: "msg_live_approval_flow" }, partFromToolCall: () => undefined },
+          } as never)
+          const pending = async () => {
+            await expect.poll(async () => (await Permission.list()).length).toBe(1)
+            return (await Permission.list())[0]
+          }
+          const pageId = await open()
+          const read = wrapped.live_take_snapshot.execute!({ pageId }, options)
+          const readRequest = await Promise.race([
+            pending(),
+            read.then(() => {
+              throw new Error("First read finished without requesting permission")
+            }),
+          ])
+          expect(readRequest.webmcpAllowlist?.scope).toEqual({ capability: "read", origin })
+          await Permission.saveWebMcpApproval(readRequest.id)
+          await expect(read).resolves.toMatchObject({ output: expect.stringContaining("AX_APPROVAL_CONTINUITY_OK") })
+          const close = wrapped.live_close_page.execute!({ pageId }, options)
+          close.catch(() => {})
+          const closeRequest = await pending()
+          expect(closeRequest.webmcpAllowlist?.scope).toEqual({ capability: "close", origin })
+          await Permission.saveWebMcpApproval(closeRequest.id)
+          await close
+          await wrapped.live_close_page.execute!({ pageId: await open() }, options)
+          expect(await Permission.list()).toHaveLength(0)
+          const records = await WebMcpApprovals.list("live")
+          await WebMcpApprovals.remove("live", records.find((row) => row.scope.capability === "close")!.id)
+          const denied = wrapped.live_close_page.execute!({ pageId: await open() }, options)
+          const refused = expect(denied).rejects.toThrow()
+          await Permission.reply({ requestID: (await pending()).id, reply: "reject" })
+          await refused
+        },
+      })
+    } finally {
+      await Instance.disposeAll()
     }
   },
 )

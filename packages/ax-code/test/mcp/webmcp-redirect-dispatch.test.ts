@@ -110,7 +110,7 @@ describe("WebMCP dispatch: blocked-redirect normalization (ADR-168)", () => {
       caught = error
     }
     expect(caught).not.toBeInstanceOf(WebMcpProfile.OriginNotGrantedError)
-    expect((caught as Error).message).toContain("WebMCP bridge operation failed")
+    expect((caught as Error).message).toContain("WebMCP navigation failed")
   })
 
   test("a non-navigation tool failure is never probed", async () => {

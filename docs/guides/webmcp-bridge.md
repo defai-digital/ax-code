@@ -35,7 +35,8 @@ AX Code's.
    there by hand.
 5. Ask the agent to open a page. With the product default, navigation is
    unrestricted. A configured or managed origin list narrows it.
-6. Click the chip again to turn the bridge off. That ends every grant below.
+6. Click the chip again to turn the bridge off. That ends temporary session
+   grants; saved approvals remain until you revoke them in MCP settings.
 
 The chip shows `[act]` while the interact tier is on. The product default
 includes that tier. To turn it off, set `interact` to false in the entry's
@@ -73,7 +74,7 @@ labeled with its origin and size-limited.
 
 ## Save an approval
 
-Eligible prompts offer **Add to WebMCP allowlist** with a yellow background.
+Eligible prompts offer **Add to WebMCP allowlist** with a red background.
 Select it, review the scope, then choose **Add and allow**. Saved approvals
 apply to this project on this machine and survive browser reconnects and
 AX Code restarts.
@@ -83,10 +84,17 @@ AX Code restarts.
 - Navigation approves opening or navigating to one exact origin.
 - Read approves snapshots, screenshots, console and network metadata on
   one exact origin. Other origins and ports need their own approval.
+- Close approves closing any page currently on one exact origin, including
+  pages with unsaved work. It is a separate choice: navigation and read
+  approvals do not grant it. The target origin is checked again before closing.
+
+After the first read approval, AX Code continues that read in the same call
+after checking the page again. A page or bridge change stops the call and
+requires a fresh read. It does not replay a failed browser operation.
 
 Navigation restrictions and administrator policy still apply. Saving an
 approval does not edit `allowedOrigins`. Typing, consequential clicks,
-dialogs, closing pages and page-registered tools keep their existing
+dialogs and page-registered tools keep their existing
 approvals. **Allow once** remains temporary; the countdown never saves a
 persistent approval.
 
@@ -98,6 +106,13 @@ Turning the WebMCP chip off disconnects the browser and retains saved choices.
 The local store is `~/.local/share/ax-code/webmcp-approvals.json` by default
 (XDG data-directory overrides apply). Approvals are bound to the bridge
 identity; changing its launch or browser profile requires fresh approval.
+
+### Navigation failures
+
+A navigation error can occur after a page opens or changes. The error reports
+a recognized timeout, network or missing-page category when available, without
+echoing raw bridge error text. Inspect `list_pages` before deciding whether to
+navigate again. Navigation errors do not remove saved approvals.
 
 ## Interact tier
 

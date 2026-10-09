@@ -688,12 +688,13 @@ test("saving the real first-read prompt keeps durable authority out of session g
         } as never)
         const options = { toolCallId: "call_saved_read", messages: [], abortSignal: new AbortController().signal }
         const first = wrapped.bridge_take_snapshot.execute!({ pageId: 1 }, options)
-        const stopped = expect(first).rejects.toThrow("was saved for this project")
+        const completed = expect(first).resolves.toMatchObject({ output: expect.stringContaining("snapshot") })
         await vi.waitFor(async () => expect(await Permission.list()).toHaveLength(1))
         const [request] = await Permission.list()
         expect(request.webmcpAllowlist?.scope).toEqual({ capability: "read", origin: "https://example.test" })
         await Permission.saveWebMcpApproval(request.id)
-        await stopped
+        await completed
+        expect(bridge.call.mock.calls.filter((row) => row[0].name === "take_snapshot")).toHaveLength(1)
         await wrapped.bridge_take_snapshot.execute!({ pageId: 1 }, options)
         expect((await MCP.tools()).bridge_take_snapshot.webmcp!.readGrants!().size).toBe(0)
         await WebMcpApprovals.remove("bridge")
@@ -708,4 +709,196 @@ test("saving the real first-read prompt keeps durable authority out of session g
   } finally {
     registry.mockRestore()
   }
+})
+
+async function withApprovalFlow(
+  run: (state: {
+    tools: Awaited<ReturnType<typeof resolveTools>>
+    options: { toolCallId: string; messages: []; abortSignal: AbortSignal }
+    controller: AbortController
+    page: { url: string; onList?: () => Promise<void>; failRead?: boolean }
+  }) => Promise<void>,
+) {
+  bridge.names = ["list_pages", "take_snapshot", "close_page", "new_page"]
+  const page = { url: "https://example.test/", onList: undefined as (() => Promise<void>) | undefined, failRead: false }
+  bridge.call.mockImplementation(async (call: { name: string }) => {
+    if (call.name === "list_pages") {
+      await page.onList?.()
+      return { content: [], structuredContent: { pages: [{ id: 1, url: page.url, selected: true }] } }
+    }
+    if (call.name === "take_snapshot" && page.failRead) return { content: [], isError: true }
+    return { content: [{ type: "text", text: call.name === "take_snapshot" ? "snapshot" : "closed" }] }
+  })
+  await using tmp = await tmpdir({
+    git: true,
+    config: { mcp: { bridge: WebMcpProfile.config({ allowedOrigins: [], read: true }, true) } },
+  })
+  const registry = vi.spyOn(ToolRegistry, "tools").mockResolvedValue([])
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await MCP.connect("bridge")
+        const tools = await resolveTools({
+          agent: { name: "build", permission: [{ permission: "*", pattern: "*", action: "allow" }] },
+          session: { id: "ses_approval_flow", permission: [] },
+          model: { providerID: "test", api: { id: "test", npm: "@ai-sdk/openai-compatible" } },
+          tools: {},
+          bypassAgentCheck: false,
+          messages: [],
+          processor: { message: { id: "msg_approval_flow" }, partFromToolCall: () => undefined },
+        } as never)
+        const controller = new AbortController()
+        await run({
+          tools,
+          controller,
+          page,
+          options: { toolCallId: "call_flow", messages: [], abortSignal: controller.signal },
+        })
+      },
+    })
+  } finally {
+    registry.mockRestore()
+  }
+}
+
+async function pendingApproval() {
+  await vi.waitFor(async () => expect(await Permission.list()).toHaveLength(1))
+  return (await Permission.list())[0]
+}
+
+test("a temporary first-read grant continues the same call with one content dispatch", async () => {
+  await withApprovalFlow(async ({ tools, options }) => {
+    const first = tools.bridge_take_snapshot.execute!({ pageId: 1 }, options)
+    const done = expect(first).resolves.toMatchObject({ output: expect.stringContaining("snapshot") })
+    const request = await pendingApproval()
+    await Permission.reply({ requestID: request.id, reply: "once" })
+    await done
+    expect(bridge.call.mock.calls.filter((row) => row[0].name === "take_snapshot")).toHaveLength(1)
+    expect(await Permission.list()).toHaveLength(0)
+    expect(await WebMcpApprovals.list("bridge")).toHaveLength(0)
+  })
+})
+
+test.each(["cancel", "reject", "moved", "reconnect", "deny", "revoked", "bridge_failure"] as const)(
+  "read continuation stops on %s without repeating a dispatched read",
+  async (change) => {
+    await withApprovalFlow(async ({ tools, options, controller, page }) => {
+      const first = tools.bridge_take_snapshot.execute!({ pageId: 1 }, options)
+      const failed = expect(first).rejects.toThrow()
+      const request = await pendingApproval()
+      if (change === "cancel") controller.abort()
+      else if (change === "reject") await Permission.reply({ requestID: request.id, reply: "reject" })
+      else {
+        if (change === "moved") page.url = "https://other.test/"
+        if (change === "reconnect") {
+          await MCP.disconnect("bridge")
+          await MCP.connect("bridge")
+        }
+        if (change === "bridge_failure") page.failRead = true
+        if (change === "deny") (await Config.get()).permission = { webmcp: "deny" }
+        if (change === "revoked") {
+          page.onList = async () => {
+            await WebMcpApprovals.remove("bridge")
+          }
+          await Permission.saveWebMcpApproval(request.id)
+        } else await Permission.reply({ requestID: request.id, reply: "once" })
+      }
+      await failed
+      if (["cancel", "reject", "reconnect", "deny", "revoked"].includes(change)) {
+        expect((await MCP.tools()).bridge_take_snapshot.webmcp!.readGrants!().size).toBe(0)
+      }
+      expect(bridge.call.mock.calls.filter((row) => row[0].name === "take_snapshot")).toHaveLength(
+        change === "bridge_failure" ? 1 : 0,
+      )
+      expect(await Permission.list()).toHaveLength(0)
+    })
+  },
+)
+
+test("close needs its own saved scope, reuses it, and asks again after revoke", async () => {
+  await withApprovalFlow(async ({ tools, options }) => {
+    const policies = await MCP.tools()
+    for (const [tool, capability] of [
+      ["take_snapshot", "read"],
+      ["new_page", "navigate"],
+    ] as const) {
+      const candidate = (await WebMcpApprovals.capture(policies[`bridge_${tool}`].webmcp!, {
+        capability,
+        origin: "https://example.test",
+      }))!
+      await WebMcpApprovals.save(candidate, () => true)
+    }
+    const first = tools.bridge_close_page.execute!({ pageId: 1 }, options)
+    first.catch(() => {})
+    const request = await pendingApproval()
+    expect(request.webmcpAllowlist?.scope).toEqual({ capability: "close", origin: "https://example.test" })
+    expect(request.metadata.pageOrigin).toBe("https://example.test")
+    await Permission.saveWebMcpApproval(request.id)
+    await first
+    await tools.bridge_close_page.execute!({ pageId: 1 }, options)
+    expect(await Permission.list()).toHaveLength(0)
+    const record = (await WebMcpApprovals.list("bridge")).find((row) => row.scope.capability === "close")!
+    await WebMcpApprovals.remove("bridge", record.id)
+    const third = tools.bridge_close_page.execute!({ pageId: 1 }, options)
+    const failed = expect(third).rejects.toThrow()
+    await Permission.reply({ requestID: (await pendingApproval()).id, reply: "reject" })
+    await failed
+    expect(bridge.call.mock.calls.filter((row) => row[0].name === "close_page")).toHaveLength(2)
+  })
+})
+
+test.each(["once", "save"] as const)("close checks the target again after %s approval", async (reply) => {
+  await withApprovalFlow(async ({ tools, options, page }) => {
+    const first = tools.bridge_close_page.execute!({ pageId: 1 }, options)
+    const failed = expect(first).rejects.toThrow("page changed after close approval")
+    const request = await pendingApproval()
+    page.url = "https://other.test/"
+    if (reply === "save") await Permission.saveWebMcpApproval(request.id)
+    else await Permission.reply({ requestID: request.id, reply: "once" })
+    await failed
+    expect(bridge.call.mock.calls.filter((row) => row[0].name === "close_page")).toHaveLength(0)
+  })
+})
+
+test.each(["revoke", "deny"] as const)("saved close stops on %s during dispatch preflight", async (change) => {
+  await withApprovalFlow(async ({ tools, options, page }) => {
+    const policy = (await MCP.tools()).bridge_close_page.webmcp!
+    const candidate = (await WebMcpApprovals.capture(policy, { capability: "close", origin: "https://example.test" }))!
+    await WebMcpApprovals.save(candidate, () => true)
+    let lists = 0
+    page.onList = async () => {
+      if (++lists !== 2) return
+      if (change === "revoke") await WebMcpApprovals.remove("bridge")
+      else (await Config.get()).permission = { webmcp: "deny" }
+    }
+    await expect(tools.bridge_close_page.execute!({ pageId: 1 }, options)).rejects.toThrow()
+    expect(bridge.call.mock.calls.filter((row) => row[0].name === "close_page")).toHaveLength(0)
+  })
+})
+
+test("non-HTTP close targets cannot offer a durable approval", async () => {
+  await withApprovalFlow(async ({ tools, options, page }) => {
+    page.url = "about:blank"
+    const first = tools.bridge_close_page.execute!({ pageId: 1 }, options)
+    const failed = expect(first).rejects.toThrow()
+    const request = await pendingApproval()
+    expect(request.webmcpAllowlist).toBeUndefined()
+    await Permission.reply({ requestID: request.id, reply: "reject" })
+    await failed
+  })
+})
+
+test("a once-approved blank page cannot navigate to an HTTP origin before close", async () => {
+  await withApprovalFlow(async ({ tools, options, page }) => {
+    page.url = "about:blank"
+    const first = tools.bridge_close_page.execute!({ pageId: 1 }, options)
+    const failed = expect(first).rejects.toThrow("page changed after close approval")
+    const request = await pendingApproval()
+    expect(request.webmcpAllowlist).toBeUndefined()
+    page.url = "https://other.test/"
+    await Permission.reply({ requestID: request.id, reply: "once" })
+    await failed
+    expect(bridge.call.mock.calls.filter((row) => row[0].name === "close_page")).toHaveLength(0)
+  })
 })

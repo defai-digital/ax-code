@@ -26,9 +26,12 @@ export function webMcpAllowlistPreview(summary: WebMcpApprovalSummary): string[]
           `Origin: ${clean(scope.origin)}`,
           scope.capability === "read"
             ? "Permission: snapshots, screenshots, console and network metadata on this origin."
-            : "Permission: open and navigate pages to this origin.",
+            : scope.capability === "close"
+              ? "Permission: close any browser page currently on this origin."
+              : "Permission: open and navigate pages to this origin.",
+          ...(scope.capability === "close" ? ["Closing a page can discard unsaved work on it."] : []),
           "Future matching calls will run without this prompt.",
-          "Other origins and page actions keep their existing approvals.",
+          "Other origins and other page actions keep their existing approvals.",
         ]),
     "Navigation restrictions and administrator policy still apply.",
     "Remove saved approvals from MCP settings (Manage WebMCP allowlist).",
