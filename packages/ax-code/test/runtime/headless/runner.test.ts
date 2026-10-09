@@ -94,7 +94,7 @@ describe("headless runner", () => {
     expect(closed).toBe(1)
   })
 
-  test("autonomous asks auto-reply through the runtime by default", async () => {
+  test("autonomous clients leave pending permissions to the server", async () => {
     const sent: unknown[] = []
     const runtime = {
       client: undefined as never,
@@ -131,7 +131,7 @@ describe("headless runner", () => {
       },
     })
 
-    expect(sent).toEqual([{ type: "permission.reply", body: { requestID: "perm_1", reply: "once" } }])
+    expect(sent).toEqual([])
   })
 
   test("interactive-only asks stay pending in autonomous mode", async () => {
@@ -218,7 +218,7 @@ describe("headless runner", () => {
     expect(result.state.permission["ses_1"]).toHaveLength(1)
   })
 
-  test("explicit undefined handlers do not wipe the auto-reply defaults", async () => {
+  test("undefined handlers do not bypass server permission decisions", async () => {
     const sent: unknown[] = []
     const runtime = {
       client: undefined as never,
@@ -256,7 +256,7 @@ describe("headless runner", () => {
       },
     })
 
-    expect(sent).toEqual([{ type: "permission.reply", body: { requestID: "perm_1", reply: "once" } }])
+    expect(sent).toEqual([])
   })
 
   test("autonomous questions auto-reply through the runtime by default", async () => {
@@ -298,7 +298,7 @@ describe("headless runner", () => {
     expect((sent[0] as { body: { answers: unknown[] } }).body.answers).toHaveLength(1)
   })
 
-  test("rejected auto-reply delivery warns instead of crashing", async () => {
+  test("rejected question auto-reply delivery warns instead of crashing", async () => {
     const warnings: Array<[string, unknown]> = []
     const runtime = {
       client: undefined as never,
@@ -309,14 +309,11 @@ describe("headless runner", () => {
       subscribe(input: Parameters<HeadlessAgentRuntime["subscribe"]>[0]) {
         return input.onEvent({
           details: {
-            type: "permission.asked",
+            type: "question.asked",
             properties: {
-              id: "perm_1",
+              id: "q_1",
               sessionID: "ses_1",
-              permission: "edit",
-              patterns: ["*"],
-              metadata: {},
-              always: ["*"],
+              questions: [{ question: "Pick one", options: [{ label: "Recommended default" }] }],
             },
           },
         } as never) as Promise<void>
@@ -336,7 +333,7 @@ describe("headless runner", () => {
         },
       },
       stopWhen({ event }) {
-        return event.type === "permission.asked"
+        return event.type === "question.asked"
       },
     })
 
@@ -344,7 +341,7 @@ describe("headless runner", () => {
     // surfaces as a warning, never an unhandled rejection crash.
     await new Promise((resolve) => setTimeout(resolve, 25))
     expect(warnings).toHaveLength(1)
-    expect(warnings[0][0]).toBe("autonomous permission reply failed")
+    expect(warnings[0][0]).toBe("autonomous question reply failed")
     expect((warnings[0][1] as Error).message).toBe("backend closed")
   })
 

@@ -38367,7 +38367,7 @@
                 "type": "boolean"
               },
               "permission_idle_once": {
-                "description": "ADR-138: narrow exception to the interactive-only permission contract. Only fires while running unattended (autonomous) with the sandbox off (full-access), and only for the session's oldest pending ask — a burst of queued asks never mass auto-approves. The ask carries autoOnceAt so clients can render the countdown; any human reply cancels the deadline.",
+                "description": "ADR-138: narrow exception to the interactive-only permission contract. Only fires while running unattended (autonomous) with the sandbox off (full-access). Each session's oldest pending ask gets 15 seconds; queued asks get a fresh countdown when promoted. Live mode changes cancel ineligible countdowns. The ask carries autoOnceAt so clients can render the countdown; any human reply cancels the deadline.",
                 "type": "object",
                 "properties": {
                   "enabled": {
@@ -38375,13 +38375,13 @@
                     "type": "boolean"
                   },
                   "timeout_ms": {
-                    "description": "Countdown before the automatic once reply. Default: 15000.",
+                    "description": "Deprecated: retained for config compatibility. Allow Once countdowns are fixed at 15000 ms.",
                     "type": "integer",
                     "minimum": 5000,
                     "maximum": 300000
                   },
                   "permissions": {
-                    "description": "Interactive permissions that may auto-reply once. Default: every interactive permission. isolation_escalation, hook, ops_approve, computer, and external_directory are always excluded.",
+                    "description": "Permissions that may auto-reply once. Default: every pending permission, including requireInteractive. Requires autonomous mode with full-access; WebMCP additionally requires its corresponding bridge to be connected.",
                     "type": "array",
                     "items": {
                       "type": "string"
@@ -38860,16 +38860,16 @@
             "$ref": "#/components/schemas/Event.task.queue.deleted"
           },
           {
-            "$ref": "#/components/schemas/Event.permission.asked"
-          },
-          {
-            "$ref": "#/components/schemas/Event.permission.replied"
-          },
-          {
             "$ref": "#/components/schemas/Event.mcp.tools.changed"
           },
           {
             "$ref": "#/components/schemas/Event.mcp.browser.open.failed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.permission.asked"
+          },
+          {
+            "$ref": "#/components/schemas/Event.permission.replied"
           },
           {
             "$ref": "#/components/schemas/Event.command.executed"

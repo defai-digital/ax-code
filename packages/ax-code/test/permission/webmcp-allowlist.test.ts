@@ -27,6 +27,7 @@ afterEach(async () => {
 })
 
 test("the idle countdown resolves once and never writes a persistent approval", async () => {
+  vi.spyOn(MCP, "isWebMcpConnected").mockImplementation((name) => name === "bridge")
   vi.stubEnv("AX_CODE_AUTONOMOUS", "1")
   vi.stubEnv("AX_CODE_ISOLATION_MODE", "full-access")
   vi.stubEnv("AX_CODE_PERMISSION_IDLE_ONCE_MS", "300")

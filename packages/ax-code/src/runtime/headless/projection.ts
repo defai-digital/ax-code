@@ -1,6 +1,5 @@
 import type { PermissionRequest, QuestionRequest } from "@ax-code/sdk/v2"
 import { Binary } from "@ax-code/util/binary"
-import { Permission } from "@/permission"
 import type { HeadlessRuntimeEvent, HeadlessRuntimeProbeKey, HeadlessRuntimeStatusEvent } from "./event"
 
 import {
@@ -133,19 +132,9 @@ export function applyHeadlessProjectionEvent<
       return { handled: true, effects }
 
     case "permission.asked":
-      // Interactive-only permissions and permissions that explicitly forbid
-      // autonomous approval (such as real-desktop control) need a human
-      // decision. Leave them pending so a connected UI or explicit reply can
-      // answer; the headless event projection must not bypass Permission.ask.
-      if (
-        options.autonomous &&
-        !Permission.isInteractiveOnly(event.properties.permission, event.properties.metadata) &&
-        !Permission.isNeverAutonomousAutoApprove(event.properties.permission)
-      ) {
-        effects.push({ type: "permission.auto_reply", requestID: event.properties.id })
-        return { handled: true, effects }
-      }
-      appendRequest(state.permission, event.properties)
+      // Only the server knows the effective sandbox and live WebMCP state.
+      // Preserve its pending request and countdown; clients never bypass it.
+      appendRequest(state.permission, event.properties, true)
       return { handled: true, effects }
 
     case "permission.replied":
@@ -348,9 +337,10 @@ export function runtimeProbeKeysForEvent(event: HeadlessRuntimeStatusEvent): Hea
 function appendRequest<TRequest extends { id: string; sessionID: string }>(
   target: Record<string, TRequest[]>,
   request: TRequest,
+  complete = false,
 ) {
   const list = target[request.sessionID] ?? []
-  upsertByID(list, request)
+  upsertByID(list, request, complete)
   target[request.sessionID] = list
 }
 

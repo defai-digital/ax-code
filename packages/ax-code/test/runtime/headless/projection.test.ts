@@ -77,7 +77,7 @@ describe("headless projection", () => {
     expect(result).toEqual({ handled: true, effects: [{ type: "bootstrap.reload" }] })
   })
 
-  test("stores request prompts when autonomy is disabled and emits effects when autonomy is enabled", () => {
+  test("preserves pending permission requests regardless of client autonomy", () => {
     const manual = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
     const autonomous = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
 
@@ -115,13 +115,37 @@ describe("headless projection", () => {
       ses_1: [request],
     })
     expect(manualResult.effects).toEqual([])
-    expect(autonomous.permission).toEqual({})
-    expect(autonomousResult.effects).toEqual([
-      {
-        type: "permission.auto_reply",
-        requestID: "perm_1",
-      },
-    ])
+    expect(autonomous.permission).toEqual({ ses_1: [request] })
+    expect(autonomousResult.effects).toEqual([])
+  })
+
+  test("countdown cancellation clears the deadline without replacing the pending request", () => {
+    const state = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
+    const request = {
+      id: "perm_countdown",
+      sessionID: "ses_1",
+      permission: "webmcp",
+      patterns: ["list_pages"],
+      metadata: { server: "bridge" },
+      always: [],
+    }
+    const first = applyHeadlessProjectionEvent(
+      state,
+      { type: "permission.asked", properties: { ...request, autoOnceAt: 15000 } },
+      { autonomous: true },
+    )
+    const original = state.permission.ses_1[0]
+    expect(original.autoOnceAt).toBe(15000)
+    const cancelled = applyHeadlessProjectionEvent(
+      state,
+      { type: "permission.asked", properties: request },
+      { autonomous: true },
+    )
+    expect(state.permission.ses_1).toHaveLength(1)
+    expect(state.permission.ses_1[0]).toBe(original)
+    expect(original.autoOnceAt).toBeUndefined()
+    expect(first.effects).toEqual([])
+    expect(cancelled.effects).toEqual([])
   })
 
   test("never auto-replies human-confirmation permissions under autonomous mode", () => {
@@ -151,8 +175,7 @@ describe("headless projection", () => {
         { autonomous: true },
       )
 
-      // Critical escalation and real-desktop control stay pending — never
-      // auto-approved, even in headless autonomous mode.
+      // The client must leave the server in control of every pending ask.
       expect(result.effects).toEqual([])
       expect(state.permission).toEqual({ ses_1: [request] })
     }

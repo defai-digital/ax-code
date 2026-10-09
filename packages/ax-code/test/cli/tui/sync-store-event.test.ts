@@ -230,7 +230,7 @@ describe("tui sync store event", () => {
     })
   })
 
-  test("routes autonomous permission requests to reply callbacks only when explicitly opted in", async () => {
+  test("keeps server permission requests pending even with client auto-reply enabled", async () => {
     const [store, setStore] = createTestStore()
     const replies: unknown[] = []
 
@@ -273,8 +273,8 @@ describe("tui sync store event", () => {
     await Promise.resolve()
 
     expect(handled).toBe(true)
-    expect(replies).toHaveLength(1)
-    expect(store.permission).toEqual({})
+    expect(replies).toHaveLength(0)
+    expect(store.permission.ses_1).toHaveLength(1)
   })
 
   test("keeps autonomous questions in the supervised TUI bucket by default", async () => {

@@ -774,7 +774,7 @@ export type Config = {
      */
     autonomous_strict_permission?: boolean
     /**
-     * ADR-138: narrow exception to the interactive-only permission contract. Only fires while running unattended (autonomous) with the sandbox off (full-access), and only for the session's oldest pending ask — a burst of queued asks never mass auto-approves. The ask carries autoOnceAt so clients can render the countdown; any human reply cancels the deadline.
+     * ADR-138: narrow exception to the interactive-only permission contract. Only fires while running unattended (autonomous) with the sandbox off (full-access). Each session's oldest pending ask gets 15 seconds; queued asks get a fresh countdown when promoted. Live mode changes cancel ineligible countdowns. The ask carries autoOnceAt so clients can render the countdown; any human reply cancels the deadline.
      */
     permission_idle_once?: {
       /**
@@ -782,11 +782,11 @@ export type Config = {
        */
       enabled?: boolean
       /**
-       * Countdown before the automatic once reply. Default: 15000.
+       * Deprecated: retained for config compatibility. Allow Once countdowns are fixed at 15000 ms.
        */
       timeout_ms?: number
       /**
-       * Interactive permissions that may auto-reply once. Default: every interactive permission. isolation_escalation, hook, ops_approve, computer, and external_directory are always excluded.
+       * Permissions that may auto-reply once. Default: every pending permission, including requireInteractive. Requires autonomous mode with full-access; WebMCP additionally requires its corresponding bridge to be connected.
        */
       permissions?: Array<string>
     }
@@ -1068,10 +1068,10 @@ export type Event =
   | EventTaskQueueCreated
   | EventTaskQueueUpdated
   | EventTaskQueueDeleted
-  | EventPermissionAsked
-  | EventPermissionReplied
   | EventMcpToolsChanged
   | EventMcpBrowserOpenFailed
+  | EventPermissionAsked
+  | EventPermissionReplied
   | EventCommandExecuted
   | EventTodoUpdated
   | EventSessionStatus

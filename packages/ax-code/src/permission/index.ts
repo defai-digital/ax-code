@@ -24,6 +24,7 @@ import { Flag } from "@/flag/flag"
 import { ScopedFlag } from "@/flag/scoped"
 import { Isolation } from "@/isolation"
 import { ProjectConfigTrust } from "@/config/project-config-trust"
+import { MCP } from "@/mcp"
 import { WebMcpApprovals } from "@/mcp/webmcp-approvals"
 import { FileLock } from "@/util/filelock"
 
@@ -194,6 +195,8 @@ export namespace Permission {
   interface State {
     pending: Map<PermissionID, PendingEntry>
     approved: Ruleset
+    idleOnceWatch?: ReturnType<typeof setInterval>
+    disposed?: boolean
     // Captured at state init so the reply handler can persist the
     // updated `approved` array back to the database. Using
     // `Instance.project.id` at reply time would also work, but the
@@ -206,7 +209,7 @@ export namespace Permission {
   }
 
   const state = Instance.state(
-    async () => {
+    async (): Promise<State> => {
       const row = Database.use((db) =>
         db.select().from(PermissionTable).where(eq(PermissionTable.project_id, Instance.project.id)).get(),
       )
@@ -233,6 +236,8 @@ export namespace Permission {
       } satisfies State
     },
     async (state) => {
+      state.disposed = true
+      clearInterval(state.idleOnceWatch)
       for (const item of state.pending.values()) {
         clearIdleOnceTimer(item)
         item.deferred.reject(new RejectedError())
@@ -241,34 +246,17 @@ export namespace Permission {
     },
   )
 
-  // Permissions that must always require interactive user confirmation
-  // and cannot be auto-approved by wildcard rules or headless autonomous
-  // auto-reply. This prevents agent default rules like
-  // {permission:"*",action:"allow",pattern:"*"} and headless projection
-  // from silently bypassing critical safety checks.
+  // Permissions that always reach a per-call decision instead of wildcard
+  // approval. The server may answer once after the mode-driven countdown;
+  // clients cannot bypass that countdown or persist generic always grants.
   export const INTERACTIVE_ONLY = INTERACTIVE_ONLY_PERMISSIONS
 
   export const EXACT_GRANT_ONLY_PERMISSIONS: ReadonlySet<string> = EXACT_GRANT_ONLY
 
-  // Filesystem sandbox posture and real-desktop authorization are independent.
-  // `full-access` may auto-approve established filesystem/network risk classes,
-  // but it must never silently grant mouse/keyboard control of the host desktop.
+  // Desktop control cannot use immediate autonomous approval. Like other
+  // pending permissions, it can receive the explicit mode-driven countdown.
   export const NEVER_AUTONOMOUS_AUTOAPPROVE: ReadonlySet<string> = new Set(["computer"])
 
-  // ADR-138: permissions that can never receive an idle "Allow once" deadline,
-  // regardless of configuration. These exist because a boundary, a hook
-  // author, an operations reviewer, or an experimental bridge demanded a
-  // human decision; a timeout must not override that.
-  const NEVER_IDLE_ONCE: ReadonlySet<string> = new Set([
-    "isolation_escalation",
-    "hook",
-    "ops_approve",
-    "computer",
-    "external_directory",
-  ])
-
-  const IDLE_ONCE_MIN_MS = 5_000
-  const IDLE_ONCE_MAX_MS = 300_000
   const IDLE_ONCE_DEFAULT_MS = 15_000
 
   export function isInteractiveOnly(permission: string, metadata?: Record<string, unknown>): boolean {
@@ -392,53 +380,72 @@ export namespace Permission {
     entry.autoOnceTimer = undefined
   }
 
-  /**
-   * ADR-138 idle "Allow once": decide whether a registered interactive ask
-   * gets a server-side deadline that auto-replies "once", and if so when.
-   * Must run synchronously right after pending registration — the
-   * registration→asked-publish stretch may not contain awaits
-   * (test/permission/next.test.ts pins that ordering), which is why the
-   * config-dependent gates read Config.peek() — the synchronously cached
-   * config the async gates also use. When the cache was just invalidated
-   * (mid-session edit re-read in flight) peek() returns undefined and the
-   * gate fails CLOSED: no deadline. Env-level gates (autonomous, isolation
-   * override, AX_CODE_PERMISSION_IDLE_ONCE_MS) are read live per ask.
-   * Gates: opt-in config, the permission allowlist, the never-auto
-   * exclusions, unattended operation (autonomous), no filesystem sandbox
-   * (full-access), and head-of-queue — only the session's oldest pending ask
-   * may auto-allow, so a burst of queued asks cannot mass auto-approve while
-   * nobody watches.
-   */
-  function idleOnceDeadline(s: State, info: Request): number | undefined {
+  /** Read current mode and policy without awaits between registration and publication. */
+  function idleOnceTimeout(s: State, entry: PendingEntry): number | undefined {
+    if (s.disposed || entry.saving) return undefined
+    const info = entry.info
     const config = Config.peek()
-    if (!config) return undefined
+    if (!config || !ScopedFlag.autonomous()) return undefined
     const cfg = config.experimental?.permission_idle_once
-    // On by default: the posture gates below (autonomous + full-access) are the
-    // opt-in. `enabled: false` is the explicit kill switch.
     if (cfg?.enabled === false) return undefined
-    if (!ScopedFlag.autonomous()) return undefined
-    // Default allowlist is every interactive permission; NEVER_IDLE_ONCE and
-    // requireInteractive below still apply.
     if (cfg?.permissions && !cfg.permissions.includes(info.permission)) return undefined
-    if (NEVER_IDLE_ONCE.has(info.permission)) return undefined
-    // A caller-marked requireInteractive decision must stay human even when the
-    // permission name is allowlisted — the marker, not the name, is the
-    // contract (see permission/interaction.ts).
-    if (info.metadata?.requireInteractive === true) return undefined
     const isolationMode = Flag.AX_CODE_ISOLATION_MODE ?? config.isolation?.mode ?? Isolation.DEFAULT_MODE
     if (isolationMode !== "full-access") return undefined
-    // Head-of-queue: called right after this ask registered, so head means no
-    // OTHER pending ask for the same session exists right now (the entry
-    // itself is in the map and must be excluded).
-    if ([...s.pending.values()].some((entry) => entry.info.id !== info.id && entry.info.sessionID === info.sessionID))
-      return undefined
-    // The env override (debug/ops/tests) bypasses the clamp; configured values
-    // stay within the 5s–300s band so a typo cannot turn the countdown into a
-    // sub-second auto-approve.
-    const timeoutMs =
-      Flag.AX_CODE_PERMISSION_IDLE_ONCE_MS ??
-      Math.min(Math.max(cfg?.timeout_ms ?? IDLE_ONCE_DEFAULT_MS, IDLE_ONCE_MIN_MS), IDLE_ONCE_MAX_MS)
-    return Date.now() + timeoutMs
+    if (info.permission === "webmcp") {
+      const server = info.metadata.server
+      if (config.webmcp?.allow === false || typeof server !== "string" || !MCP.isWebMcpConnected(server))
+        return undefined
+    }
+    // A new deny while a prompt is open must not be bypassed by its timer.
+    const current = fromConfig(config.permission ?? {})
+    for (const pattern of info.patterns) {
+      if (
+        evaluate(info.permission, pattern, entry.ruleset).action === "deny" ||
+        evaluate(info.permission, pattern, entry.ruleset, s.approved).action === "deny" ||
+        evaluate(info.permission, pattern, current).action === "deny"
+      )
+        return undefined
+    }
+    return Flag.AX_CODE_PERMISSION_IDLE_ONCE_MS ?? IDLE_ONCE_DEFAULT_MS
+  }
+
+  function isIdleOnceHead(s: State, entry: PendingEntry): boolean {
+    for (const item of s.pending.values()) {
+      if (item.info.sessionID === entry.info.sessionID) return item === entry
+    }
+    return false
+  }
+
+  // Keep one live deadline per session. Polling only reads already-loaded state;
+  // it never initializes MCP, loads config or launches a browser. Re-publication
+  // updates the existing request in clients, including cancellation of a deadline.
+  function refreshIdleOnce(s: State, unpublishedID?: PermissionID) {
+    if (s.disposed) return
+    for (const entry of s.pending.values()) {
+      const timeout = isIdleOnceHead(s, entry) ? idleOnceTimeout(s, entry) : undefined
+      if (timeout === undefined) {
+        clearIdleOnceTimer(entry)
+        if (entry.info.autoOnceAt === undefined) continue
+        delete entry.info.autoOnceAt
+      } else {
+        if (entry.autoOnceTimer) continue
+        entry.info.autoOnceAt = Date.now() + timeout
+        entry.autoOnceTimer = setTimeout(() => {
+          void replyPromise({ requestID: entry.info.id, reply: "once" }, entry).catch((error) => {
+            log.error("permission idle-once reply failed", { id: entry.info.id, error })
+          })
+        }, timeout)
+        entry.autoOnceTimer.unref?.()
+      }
+      if (entry.info.id !== unpublishedID) Bus.publishDetached(Event.Asked, { ...entry.info })
+    }
+    if (s.pending.size === 0) {
+      clearInterval(s.idleOnceWatch)
+      s.idleOnceWatch = undefined
+    } else if (!s.idleOnceWatch) {
+      s.idleOnceWatch = setInterval(() => refreshIdleOnce(s), 250)
+      s.idleOnceWatch.unref?.()
+    }
   }
 
   async function askPromise(input: z.infer<typeof AskInput>, options?: { signal?: AbortSignal }): Promise<void> {
@@ -623,29 +630,9 @@ export namespace Permission {
       return await deferred.promise
     }
 
-    // ADR-138: arm the idle "Allow once" deadline before the ask is published
-    // so the countdown travels with the request to every client. The gate
-    // runs synchronously against the just-registered entry — this stretch may
-    // not contain awaits (test/permission/next.test.ts pins that ordering).
-    const idleOnceAt = idleOnceDeadline(s, info)
-    if (idleOnceAt) {
-      info.autoOnceAt = idleOnceAt
-      entry.autoOnceTimer = setTimeout(
-        () => {
-          // First-writer-wins: a human reply removes the pending entry first,
-          // so a late fire is a silent no-op. A WARN log keeps the unattended
-          // destructive approval in the audit trail.
-          log.warn("permission idle-once auto-reply", {
-            id,
-            permission: info.permission,
-            patterns: info.patterns,
-          })
-          void replyPromise({ requestID: id, reply: "once" }).catch(() => undefined)
-        },
-        Math.max(0, idleOnceAt - Date.now()),
-      )
-      entry.autoOnceTimer.unref?.()
-    }
+    // No awaits between registration and publication. Only the head gets a
+    // deadline now; queue promotion and live mode changes reconcile below.
+    refreshIdleOnce(s, id)
 
     Bus.publishDetached(Event.Asked, info)
     if (Recorder.active(info.sessionID)) {
@@ -662,7 +649,8 @@ export namespace Permission {
       return await deferred.promise
     } finally {
       signal?.removeEventListener("abort", onAbort)
-      pending.delete(id)
+      if (pending.get(id) === entry) pending.delete(id)
+      refreshIdleOnce(s)
     }
   }
 
@@ -672,11 +660,24 @@ export namespace Permission {
   // surface `false` as an error rather than the generic success response;
   // an unconditional success response on a no-op reply silently tells the
   // caller their choice took effect when it did not. See #341.
-  async function replyPromise(input: z.infer<typeof ReplyInput>): Promise<boolean> {
+  async function replyPromise(input: z.infer<typeof ReplyInput>, automatic?: PendingEntry): Promise<boolean> {
     const s = await state()
     const { approved, pending, projectID } = s
     const existing = pending.get(input.requestID)
     if (!existing || existing.saving) return false
+    if (automatic) {
+      // Recheck after awaiting state: a human reply, mode switch, disconnect,
+      // replacement request or new deny may have won the race with the timer.
+      if (existing !== automatic || !isIdleOnceHead(s, existing) || idleOnceTimeout(s, existing) === undefined) {
+        refreshIdleOnce(s)
+        return false
+      }
+      log.warn("permission idle-once auto-reply", {
+        id: existing.info.id,
+        permission: existing.info.permission,
+        patterns: existing.info.patterns,
+      })
+    }
 
     // Backend enforcement of the interactive-only invariant: a hostile or
     // buggy client (HTTP/SDK/ACP) must not record or persist an `always`

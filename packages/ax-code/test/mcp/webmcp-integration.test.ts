@@ -473,3 +473,29 @@ test("a failed relaunch rolls the origin grant back (ADR-168)", async () => {
     },
   })
 })
+
+test("WebMCP connection probes do not launch bridges and follow the live directory-scoped connection", async () => {
+  await using first = await tmpdir({ git: true })
+  await using second = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: first.path,
+    fn: async () => {
+      expect(MCP.isWebMcpConnected("bridge")).toBe(false)
+      expect(bridge.launch).not.toHaveBeenCalled()
+      await MCP.add("bridge", profile())
+      expect(MCP.isWebMcpConnected("bridge")).toBe(true)
+      expect(MCP.isWebMcpConnected("other")).toBe(false)
+      await Instance.provide({
+        directory: second.path,
+        fn: async () => {
+          expect(MCP.isWebMcpConnected("bridge")).toBe(false)
+        },
+      })
+      expect(MCP.isWebMcpConnected("bridge")).toBe(true)
+      await MCP.disconnect("bridge")
+      expect(MCP.isWebMcpConnected("bridge")).toBe(false)
+      await Instance.dispose()
+      expect(MCP.isWebMcpConnected("bridge")).toBe(false)
+    },
+  })
+})

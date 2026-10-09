@@ -428,6 +428,15 @@ export namespace MCP {
     webmcpInteractGrants: Record<string, Map<string, number>>
   }
 
+  // Read-only eligibility probes must never initialize MCP or launch a browser.
+  const liveStates = new Map<string, McpState>()
+
+  export function isWebMcpConnected(name: string): boolean {
+    const s = liveStates.get(Instance.directory)
+    const client = s?.clients[name]
+    return !!(s && !s.disposed && s.status[name]?.status === "connected" && client && webMcpProfiles.has(client))
+  }
+
   const rawState = Instance.state(
     (): McpState => {
       const clients: Record<string, MCPClient> = {}
@@ -444,6 +453,7 @@ export namespace MCP {
         webmcpInteractGrants: {},
       }
 
+      liveStates.set(Instance.directory, next)
       next.ready = (async () => {
         const cfg = await Config.get()
         const config = cfg.mcp ?? {}
@@ -506,6 +516,7 @@ export namespace MCP {
     },
     async (mcpState) => {
       mcpState.disposed = true
+      if (liveStates.get(Instance.directory) === mcpState) liveStates.delete(Instance.directory)
       mcpState.tools.unsubscribe?.()
       mcpState.tools.unsubscribe = undefined
       invalidateTools(mcpState)
@@ -1297,6 +1308,7 @@ export namespace MCP {
 
   export async function disconnect(name: string) {
     return withConnectLock(name, "MCP disconnect failed", async (s) => {
+      s.status[name] = { status: "disabled" }
       invalidateTools(s)
       // Toggling a bridge off ends its session-scoped origin, read and
       // interact grants.
