@@ -312,7 +312,6 @@ export const messages = {
   "ui.noSessionsHere": "\u3053\u3053\u306b\u30bb\u30c3\u30b7\u30e7\u30f3\u306f\u3042\u308a\u307e\u305b\u3093",
   "ui.widthWidth": "\u5e45 {width}",
   "ui.sessions": "\u30bb\u30c3\u30b7\u30e7\u30f3",
-  "ui.sessionsNavigation": "\u30bb\u30c3\u30b7\u30e7\u30f3 /navigation",
   "ui.pendingCount": "\u4fdd\u7559\u4e2d {count}",
   "ui.approvalAndQuestionPending": "\u627f\u8a8d\u3068\u56de\u7b54\u5f85\u3061",
   "ui.approvalNeeded": "\u627f\u8a8d\u304c\u5fc5\u8981",

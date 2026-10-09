@@ -266,7 +266,6 @@ export const messages = {
   "ui.noSessionsHere": "Tidak ada sesi di sini",
   "ui.widthWidth": "Lebar {width}",
   "ui.sessions": "Sesi",
-  "ui.sessionsNavigation": "Sesi /navigation",
   "ui.pendingCount": "Tertunda {count}",
   "ui.approvalAndQuestionPending": "Persetujuan dan pertanyaan tertunda",
   "ui.approvalNeeded": "Persetujuan diperlukan",

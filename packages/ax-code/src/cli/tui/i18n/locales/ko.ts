@@ -294,7 +294,6 @@ export const messages = {
   "ui.noSessionsHere": "\uc5ec\uae30\uc5d0 \uc138\uc158\uc774 \uc5c6\uc2b5\ub2c8\ub2e4",
   "ui.widthWidth": "\ub108\ube44 {width}",
   "ui.sessions": "\uc138\uc158",
-  "ui.sessionsNavigation": "\uc138\uc158 /navigation",
   "ui.pendingCount": "\ub300\uae30 \uc911 {count}",
   "ui.approvalAndQuestionPending": "\uc2b9\uc778 \ubc0f \ub2f5\ubcc0 \ub300\uae30",
   "ui.approvalNeeded": "\uc2b9\uc778 \ud544\uc694",

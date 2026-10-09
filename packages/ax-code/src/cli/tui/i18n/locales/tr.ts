@@ -275,7 +275,6 @@ export const messages = {
   "ui.noSessionsHere": "Burada oturum yok",
   "ui.widthWidth": "Geni\u015flik {width}",
   "ui.sessions": "Oturumlar",
-  "ui.sessionsNavigation": "Oturumlar /navigation",
   "ui.pendingCount": "Bekleyen {count}",
   "ui.approvalAndQuestionPending": "Onay ve soru bekliyor",
   "ui.approvalNeeded": "Onay gerekli",

@@ -422,7 +422,6 @@ export const messages = {
   "ui.noSessionsHere": "\u0417\u0434\u0435\u0441\u044c \u043d\u0435\u0442 \u0441\u0435\u0430\u043d\u0441\u043e\u0432",
   "ui.widthWidth": "\u0428\u0438\u0440\u0438\u043d\u0430 {width}",
   "ui.sessions": "\u0421\u0435\u0430\u043d\u0441\u044b",
-  "ui.sessionsNavigation": "\u0421\u0435\u0430\u043d\u0441\u044b /navigation",
   "ui.pendingCount": "\u041e\u0436\u0438\u0434\u0430\u044e\u0442: {count}",
   "ui.approvalAndQuestionPending":
     "\u041e\u0436\u0438\u0434\u0430\u044e\u0442\u0441\u044f \u043e\u0434\u043e\u0431\u0440\u0435\u043d\u0438\u0435 \u0438 \u043e\u0442\u0432\u0435\u0442",

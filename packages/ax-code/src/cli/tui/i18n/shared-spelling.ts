@@ -51,7 +51,6 @@ export const sharedSpelling: Record<string, readonly string[]> = {
     "ensemble.worktreeMany",
     "category.agent",
     "ui.sessions",
-    "ui.sessionsNavigation",
     "ui.plugins",
     "ui.effort",
     "ui.navigation",

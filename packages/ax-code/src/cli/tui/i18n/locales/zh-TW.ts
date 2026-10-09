@@ -276,7 +276,6 @@ export const messages = {
   "ui.noSessionsHere": "\u6b64\u8655\u5c1a\u7121\u5c0d\u8a71",
   "ui.widthWidth": "\u5bec\u5ea6 {width}",
   "ui.sessions": "\u5c0d\u8a71",
-  "ui.sessionsNavigation": "\u5c0d\u8a71 /navigation",
   "ui.pendingCount": "\u5f85\u8655\u7406 {count}",
   "ui.approvalAndQuestionPending": "\u5f85\u6838\u51c6\u53ca\u56de\u7b54",
   "ui.approvalNeeded": "\u9700\u8981\u6838\u51c6",

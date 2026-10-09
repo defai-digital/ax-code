@@ -471,15 +471,15 @@ describe("pending request navigation callbacks", () => {
 describe("navigation recovery entry and width selection", () => {
   test.each([24, 36, 50, 80, 145, 200])("keeps a clickable navigation entry at %i columns", (width) => {
     const tree = mount(() => NavigationBar({ width }))
-    click(tree, "Sessions /navigation")
+    click(tree, "/navigation")
     expect(mocked.trigger).toHaveBeenCalledExactlyOnceWith("session.navigation")
     expect(mocked.navigate).not.toHaveBeenCalled()
     expect(mocked.reply).not.toHaveBeenCalled()
   })
 
-  test("uses a shorter navigation entry on very narrow terminals", () => {
+  test("keeps the compact /navigation entry on very narrow terminals", () => {
     const tree = mount(() => NavigationBar({ width: 20 }))
-    click(tree, "Sessions")
+    click(tree, "/navigation")
     expect(text(tree)).not.toContain("workspace")
     expect(mocked.trigger).toHaveBeenCalledExactlyOnceWith("session.navigation")
   })

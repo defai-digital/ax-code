@@ -287,7 +287,6 @@ export const messages = {
   "ui.noSessionsHere": "Kh\u00f4ng c\u00f3 phi\u00ean \u1edf \u0111\u00e2y",
   "ui.widthWidth": "Chi\u1ec1u r\u1ed9ng {width}",
   "ui.sessions": "C\u00e1c phi\u00ean",
-  "ui.sessionsNavigation": "C\u00e1c phi\u00ean /navigation",
   "ui.pendingCount": "\u0110ang ch\u1edd {count}",
   "ui.approvalAndQuestionPending": "\u0110ang ch\u1edd ph\u00ea duy\u1ec7t v\u00e0 c\u00e2u h\u1ecfi",
   "ui.approvalNeeded": "C\u1ea7n ph\u00ea duy\u1ec7t",

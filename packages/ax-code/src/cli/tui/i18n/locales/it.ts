@@ -268,7 +268,6 @@ export const messages = {
   "ui.noSessionsHere": "Nessuna sessione qui",
   "ui.widthWidth": "Larghezza {width}",
   "ui.sessions": "Sessioni",
-  "ui.sessionsNavigation": "Sessioni /navigation",
   "ui.pendingCount": "In sospeso {count}",
   "ui.approvalAndQuestionPending": "Approvazione e domanda in sospeso",
   "ui.approvalNeeded": "Richiede approvazione",

@@ -272,7 +272,6 @@ export const messages = {
   "ui.noSessionsHere": "Aucune session ici",
   "ui.widthWidth": "Largeur {width}",
   "ui.sessions": "Sessions",
-  "ui.sessionsNavigation": "Sessions /navigation",
   "ui.pendingCount": "En attente {count}",
   "ui.approvalAndQuestionPending": "Approbation et question en attente",
   "ui.approvalNeeded": "Approbation requise",
