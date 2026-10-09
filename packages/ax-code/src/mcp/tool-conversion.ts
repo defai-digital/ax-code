@@ -5,6 +5,7 @@ import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
 import { createHash } from "node:crypto"
 import z from "zod"
+import { WebMcpApprovals } from "./webmcp-approvals"
 import { WebMcpProfile } from "./webmcp-profile"
 import { redirectOriginOutsideAllowlist } from "./webmcp-redirect"
 
@@ -252,6 +253,7 @@ export async function convertMcpTool(
     description,
     inputSchema: jsonSchema(schema),
     execute: async (args: unknown, opts: ToolCallOptions) => {
+      if (webmcp && typeof args === "object" && args !== null) await WebMcpApprovals.checkCall(args)
       const input = webmcp ? WebMcpProfile.validateCall(webmcp.profile, webmcp.toolName, args) : args
       // ADR-171/172: read-scope calls dispatch behind a per-origin session
       // read grant, with the page origin resolved through the bridge before
@@ -293,7 +295,8 @@ export async function convertMcpTool(
             WebMcpProfile.unlocatedPageMessage(before, "could not be located before reading") +
               " Do not retry automatically.",
           )
-        if (!(webmcp.readGrants?.() ?? NO_READ_GRANTS).has(origin)) throw new WebMcpProfile.ReadNotGrantedError(origin)
+        if (!(webmcp.readGrants?.() ?? NO_READ_GRANTS).has(origin) && !(await webmcp.persistentReadAllowed?.(origin)))
+          throw new WebMcpProfile.ReadNotGrantedError(origin)
         readOrigin = origin
       }
       // ADR-174 preflight: resolve the page through the bridge, require the
@@ -311,8 +314,12 @@ export async function convertMcpTool(
             WebMcpProfile.unlocatedPageMessage(before, "could not be located before acting") +
               " Do not retry automatically.",
           )
+        const interactPolicy =
+          webmcp.toolName === "wait_for" && (await webmcp.persistentReadAllowed?.(origin))
+            ? { ...webmcp, readGrants: () => new Set([...(webmcp.readGrants?.() ?? []), origin]) }
+            : webmcp
         webmcpInteractPreflight(
-          webmcp,
+          interactPolicy,
           input as Record<string, unknown>,
           before,
           origin,

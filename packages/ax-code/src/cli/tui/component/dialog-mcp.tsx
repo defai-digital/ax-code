@@ -9,6 +9,8 @@ import { Keybind } from "@/util/keybind"
 import { TextAttributes } from "ax-tui"
 import { useSDK } from "@tui/context/sdk"
 import { normalizeMcpStatusState } from "@tui/context/sync-runtime-store"
+import { useDialog } from "@tui/ui/dialog"
+import { DialogWebMcpAllowlist } from "./dialog-webmcp-allowlist"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "tui.dialog-mcp" })
@@ -32,6 +34,7 @@ export function DialogMcp() {
   const local = useLocal()
   const sync = useSync()
   const sdk = useSDK()
+  const dialog = useDialog()
   const [, setRef] = createSignal<DialogSelectRef<unknown>>()
   const [loading, setLoading] = createSignal<string | null>(null)
 
@@ -55,6 +58,15 @@ export function DialogMcp() {
   })
 
   const keybinds = createMemo(() => [
+    {
+      keybind: Keybind.parse("ctrl+g")[0],
+      title: "Manage WebMCP allowlist",
+      onTrigger: (option: DialogSelectOption<string>) => {
+        const entry = sync.data.config.mcp?.[option.value]
+        if (!entry || !("type" in entry) || entry.type !== "local" || !entry.webmcp) return
+        dialog.replace(() => <DialogWebMcpAllowlist server={option.value} />)
+      },
+    },
     {
       keybind: Keybind.parse("space")[0],
       title: uiText("ui.toggle"),

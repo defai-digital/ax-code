@@ -62,14 +62,42 @@ starts from the chip.
 
 ## What the agent can do
 
-| Tier     | Tools                                                                        | Approval                         |
-| -------- | ---------------------------------------------------------------------------- | -------------------------------- |
-| Pages    | list, open, navigate, close pages; run tools a page registers through WebMCP | each call                        |
-| Read     | page snapshot, screenshot, console, request metadata                         | one grant per origin per session |
-| Interact | click, hover, wait, fill, fill form, press key, answer dialogs               | see below                        |
+| Tier     | Tools                                                                        | Approval                                                   |
+| -------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Pages    | list, open, navigate, close pages; run tools a page registers through WebMCP | each call unless a supported scope was saved               |
+| Read     | page snapshot, screenshot, console, request metadata                         | one grant per origin per session, or a saved read approval |
+| Interact | click, hover, wait, fill, fill form, press key, answer dialogs               | see below                                                  |
 
 Page content is untrusted: a page can try to steer the agent. Output is
 labeled with its origin and size-limited.
+
+## Save an approval
+
+Eligible prompts offer **Add to WebMCP allowlist** with a yellow background.
+Select it, review the scope, then choose **Add and allow**. Saved approvals
+apply to this project on this machine and survive browser reconnects and
+AX Code restarts.
+
+- Page listing approves `list_pages` for the AX Code browser, including
+  titles and URLs from all open origins. It does not approve page content.
+- Navigation approves opening or navigating to one exact origin.
+- Read approves snapshots, screenshots, console and network metadata on
+  one exact origin. Other origins and ports need their own approval.
+
+Navigation restrictions and administrator policy still apply. Saving an
+approval does not edit `allowedOrigins`. Typing, consequential clicks,
+dialogs, closing pages and page-registered tools keep their existing
+approvals. **Allow once** remains temporary; the countdown never saves a
+persistent approval.
+
+Open `/mcp`, select the WebMCP bridge, and press **Ctrl+G** for
+**Manage WebMCP allowlist**. Select an entry to revoke it, or choose the
+clear option to revoke all saved approvals for that bridge in this project.
+Turning the WebMCP chip off disconnects the browser and retains saved choices.
+
+The local store is `~/.local/share/ax-code/webmcp-approvals.json` by default
+(XDG data-directory overrides apply). Approvals are bound to the bridge
+identity; changing its launch or browser profile requires fresh approval.
 
 ## Interact tier
 

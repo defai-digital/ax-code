@@ -23,6 +23,7 @@
     "check:skills": "tsx script/check-skills.ts",
     "check:skills:all": "tsx script/check-skills.ts --all",
     "check:wiki-visualization": "node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node script/check-wiki-visualization-render.tsx",
+    "check:webmcp-allowlist": "node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node script/check-webmcp-allowlist-render.tsx",
     "check:tui-layering": "tsx script/check-tui-layering.ts",
     "check:fixed-context-dialog": "node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node script/check-fixed-context-dialog.tsx",
     "check:prompt-footer": "node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node script/check-prompt-footer-render.tsx",

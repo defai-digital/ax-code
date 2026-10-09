@@ -19,6 +19,7 @@ import { Tool } from "../../tool/tool"
 import { MCP } from "../../mcp"
 import { ToolDiscovery } from "../tool-discovery"
 import { McpPermissionPattern } from "../../mcp/permission-pattern"
+import { WebMcpApprovals } from "../../mcp/webmcp-approvals"
 import { WebMcpProfile } from "../../mcp/webmcp-profile"
 import { ProviderTransform } from "../../provider/transform"
 import { Permission } from "@/permission"
@@ -1498,20 +1499,23 @@ export async function resolveTools(input: ResolveToolsInput) {
             // A managed or disabled refusal fails here without a prompt.
             const allowed = await MCP.checkWebMcpReadGrant(readPolicy.server, error.origin)
             if (!allowed.ok) throw new Error(allowed.error)
-            await ctx.ask({
-              permission: "webmcp",
-              patterns: [key],
-              always: [],
-              metadata: {
-                readGrant: true,
-                server: readPolicy.server,
-                origin: error.origin,
-                experimental: true,
-              },
+            const metadata = { readGrant: true, server: readPolicy.server, origin: error.origin, experimental: true }
+            const candidate = await WebMcpApprovals.capture(readPolicy, { capability: "read", origin: error.origin })
+            WebMcpApprovals.bind(metadata, candidate, {
+              permission: key,
+              patterns: McpPermissionPattern.derive(key, { origin: error.origin }).patterns,
             })
-            const granted = await MCP.grantWebMcpReadOrigin(readPolicy.server, error.origin)
-            if (!granted.ok) throw new Error(granted.error)
-            throw new Error(`WebMCP read access to ${error.origin} was allowed for this session. Retry the call.`)
+            await ctx.ask({ permission: "webmcp", patterns: [key], always: [], metadata })
+            // Saved read authority stays separate from session grants so revoke
+            // takes effect without reconnecting the browser.
+            const saved = !!candidate && (await WebMcpApprovals.allowed(candidate))
+            if (!saved) {
+              const granted = await MCP.grantWebMcpReadOrigin(readPolicy.server, error.origin)
+              if (!granted.ok) throw new Error(granted.error)
+            }
+            throw new Error(
+              `WebMCP read access to ${error.origin} ${saved ? "was saved for this project" : "was allowed for this session"}. Retry the call.`,
+            )
           }
           // ADR-174: a T2 call against an origin with no session interact
           // grant, or whose budget is spent, throws before the bridge acts.
@@ -1669,14 +1673,38 @@ export async function resolveTools(input: ResolveToolsInput) {
           }
           const skipPerCall = readTierTool || grantCovered
           const permissionPattern = McpPermissionPattern.derive(key, webmcp ?? call, { worktree: Instance.worktree })
+          const approvalCandidate =
+            policy && webmcp ? await WebMcpApprovals.captureCall(policy, call as Record<string, unknown>) : undefined
+          const mcpMetadata = { mcp: true, ...permissionPattern.metadata }
+          if (webmcp) {
+            WebMcpApprovals.bind(webmcp, approvalCandidate, { permission: key, patterns: permissionPattern.patterns })
+            WebMcpApprovals.bind(mcpMetadata, approvalCandidate, {
+              permission: key,
+              patterns: permissionPattern.patterns,
+            })
+          }
+          // Recheck both layers at admission and dispatch, including calls
+          // covered by a read/session grant or a saved approval.
+          const checkWebMcpDenials = async () => {
+            if (!webmcp) return
+            for (const request of [
+              { permission: key, patterns: permissionPattern.patterns, metadata: mcpMetadata },
+              { permission: "webmcp", patterns: [key], metadata: webmcp },
+            ])
+              await Permission.checkDenials({
+                ...request,
+                always: [],
+                sessionID: input.session.id,
+                ruleset,
+                agent: input.agent.name,
+              })
+          }
+          await checkWebMcpDenials()
           try {
             if (!skipPerCall) {
               await ctx.ask({
                 permission: key,
-                metadata: {
-                  mcp: true,
-                  ...permissionPattern.metadata,
-                },
+                metadata: mcpMetadata,
                 patterns: permissionPattern.patterns,
                 always: permissionPattern.always,
               })
@@ -1698,6 +1726,7 @@ export async function resolveTools(input: ResolveToolsInput) {
             }
             throw refusal
           }
+          if (webmcp) WebMcpApprovals.bindCall(call as object, webmcp, checkWebMcpDenials)
           if (breaker && !skipPerCall) breaker.approved()
           try {
             const outcome = await execute(call, opts)

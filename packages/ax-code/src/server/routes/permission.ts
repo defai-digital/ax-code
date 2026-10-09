@@ -3,12 +3,37 @@ import { describeRoute, resolver } from "hono-openapi"
 import { validator } from "../validation"
 import z from "zod"
 import { Permission } from "@/permission"
+import { ServerRuntimeAuth } from "../runtime-auth"
 import { errors, notFound } from "../error"
 import { lazy } from "../../util/lazy"
 import { PERMISSION_REQUEST_ID_PARAM, withPermissionRequestID } from "./route-params"
 
 export const PermissionRoutes = lazy(() =>
   new Hono()
+    .post(
+      "/:requestID/webmcp-allowlist",
+      describeRoute({
+        summary: "Save a WebMCP approval and allow the pending operation",
+        operationId: "permission.saveWebMcpApproval",
+        responses: {
+          200: { description: "Approval saved", content: { "application/json": { schema: resolver(z.boolean()) } } },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", PERMISSION_REQUEST_ID_PARAM),
+      withPermissionRequestID(async (requestID, c) => {
+        const unauthorized = ServerRuntimeAuth.require(c)
+        if (unauthorized) return unauthorized
+        const applied = await Permission.saveWebMcpApproval(requestID)
+        if (!applied)
+          return notFound(c, {
+            name: "PermissionUnavailableError",
+            message: "WebMCP approval request is unavailable",
+            resource: "permission",
+          })
+        return c.json(true)
+      }),
+    )
     .post(
       "/:requestID/reply",
       describeRoute({

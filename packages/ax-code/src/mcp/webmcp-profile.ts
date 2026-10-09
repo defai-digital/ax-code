@@ -399,6 +399,7 @@ export namespace WebMcpProfile {
      * snapshot. Absent means no grants.
      */
     readGrants?: () => ReadonlySet<string>
+    persistentReadAllowed?: (origin: string) => Promise<boolean>
     /**
      * Live interact-grant set for this bridge connection (ADR-174): origin to
      * remaining action budget. Absent means no grants.
