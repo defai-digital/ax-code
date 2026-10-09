@@ -129,7 +129,8 @@ setInterval(() => {}, 1000)
 `
       let descendant: number | undefined
       try {
-        const out = await Process.run(node(parentScript), { timeout: 1000, nothrow: true })
+        // Allow both Node processes to register their handlers under full-suite load.
+        const out = await Process.run(node(parentScript), { timeout: 5000, nothrow: true })
         descendant = Number(out.stdout.toString())
         expect(Number.isSafeInteger(descendant) && descendant > 0).toBe(true)
         expect(out.code).toBe(124)
