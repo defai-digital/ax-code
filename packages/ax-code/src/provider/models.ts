@@ -9,7 +9,6 @@ import { Instance } from "../project/instance"
 import { Flag } from "../flag/flag"
 import { isModelSupportedForProvider } from "./model-support"
 import { modelMemoryBlockReason } from "./model-selectability"
-import bundledSnapshot from "./models-snapshot.json"
 import {
   AX_ENGINE_DEFAULT_PORT,
   AX_ENGINE_DISPLAY_NAME,
@@ -282,6 +281,8 @@ export namespace ModelsDev {
     }
 
     log.info("loading bundled model snapshot")
+    // Loaded on demand: the ~160k-line snapshot is only needed once model data is first read.
+    const { default: bundledSnapshot } = await import("./models-snapshot.json")
     const bundled = parse(bundledSnapshot ?? {}, "bundled")
     if (bundled) return bundled
     throw new Error("bundled model snapshot is invalid")

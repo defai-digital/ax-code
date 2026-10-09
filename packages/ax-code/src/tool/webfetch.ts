@@ -1,6 +1,5 @@
 import z from "zod"
 import { Tool } from "./tool"
-import TurndownService from "turndown"
 import DESCRIPTION from "./webfetch.txt"
 import { abortAfterAny } from "../util/abort"
 import { Ssrf } from "../util/ssrf"
@@ -221,7 +220,7 @@ export const WebFetchTool = Tool.define("webfetch", {
       switch (params.format) {
         case "markdown":
           if (contentType.includes("text/html")) {
-            const markdown = convertHTMLToMarkdown(content)
+            const markdown = await convertHTMLToMarkdown(content)
             return {
               output: markdown,
               title,
@@ -311,7 +310,9 @@ function decodeHtmlEntities(input: string): string {
   })
 }
 
-function convertHTMLToMarkdown(html: string): string {
+// Loaded on demand: turndown pulls in a DOM implementation that most commands never need.
+async function convertHTMLToMarkdown(html: string): Promise<string> {
+  const { default: TurndownService } = await import("turndown")
   const turndownService = new TurndownService({
     headingStyle: "atx",
     hr: "---",
