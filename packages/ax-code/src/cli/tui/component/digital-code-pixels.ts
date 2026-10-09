@@ -36,10 +36,11 @@ const GLYPHS = [
   [31, 16, 16, 30, 16, 16, 16],
 ]
 
-// Bounded even on a 4K terminal. 1280x720 stays sharp when the Kitty image is
-// stretched to the window, without blowing the 20 fps zlib budget.
-export const DIGITAL_CODE_PIXEL_MAX_WIDTH = 1280
-export const DIGITAL_CODE_PIXEL_MAX_HEIGHT = 720
+// Bounded even on a 4K terminal. 1920x1080 matches the text-scene cap and stays
+// sharp when the Kitty image is stretched to the window, within the zlib budget:
+// the rain cost follows the column count, and Foliage caches its background.
+export const DIGITAL_CODE_PIXEL_MAX_WIDTH = 1920
+export const DIGITAL_CODE_PIXEL_MAX_HEIGHT = 1080
 
 export function supportsDigitalCodePixels(input: {
   tty: boolean
@@ -63,9 +64,7 @@ export function createDigitalCodePixels(
   random?: DigitalCodeRandom,
   style?: OverlayStyle,
 ) {
-  const maxWidth = isTextSceneStyle(style) ? 1920 : DIGITAL_CODE_PIXEL_MAX_WIDTH
-  const maxHeight = isTextSceneStyle(style) ? 1080 : DIGITAL_CODE_PIXEL_MAX_HEIGHT
-  const scale = Math.min(1, maxWidth / width, maxHeight / height)
+  const scale = Math.min(1, DIGITAL_CODE_PIXEL_MAX_WIDTH / width, DIGITAL_CODE_PIXEL_MAX_HEIGHT / height)
   const w = Math.max(7, Math.floor(width * scale))
   const h = Math.max(7, Math.floor(height * scale))
   return {

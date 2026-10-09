@@ -109,8 +109,8 @@ graphics, valid pixel dimensions, a local TTY, the alternate screen, and no
 multiplexer. Missing capabilities or a graphics failure use the text fallback.
 Automatic advanced mode does not bypass these checks.
 
-Digital Code and Foliage pixel frames are bounded to 1280x720; Fuji Mountain,
-Bench, and Mahjong are bounded to 1920x1080. These animation frames update on a
+All pixel animation frames — Digital Code, Foliage, and the landmark scenes —
+are bounded to 1920x1080. These animation frames update on a
 20 FPS schedule, separately from the renderer's 60 FPS target.
 See [TUI opening and ending animations](tui-animations.md) for previews.
 

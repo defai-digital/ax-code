@@ -53,11 +53,11 @@ test.each(["fuji-day", "fuji-night"] as const)(
   },
 )
 
-test("Fuji retains higher resolution without changing Digital Code bounds", () => {
+test("Fuji and Digital Code share the same 1920x1080 bound", () => {
   const fuji = createDigitalCodePixels(3840, 2160, "down", undefined, "fuji-day")
   const code = createDigitalCodePixels(3840, 2160, "down")
   expect([fuji.width, fuji.height]).toEqual([1920, 1080])
-  expect([code.width, code.height]).toEqual([1280, 720])
+  expect([code.width, code.height]).toEqual([1920, 1080])
   for (const [width, height] of [
     [7, 7],
     [280, 900],

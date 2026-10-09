@@ -113,18 +113,31 @@ function foliageBackground(width: number, height: number, variant: FoliageVarian
   const light: RGB = golden ? [244, 184, 99] : [198, 147, 94]
   glow(hd, hd.X(54), hd.Y(8), Math.min(w, h) * 0.4, light, 0.22)
   hd.disk(hd.X(54), hd.Y(8), Math.min(w, h) * 0.012, hdMix(light, horizon, 0.25))
+  // Thick trunks paint as stepped disks (full overlap at this step) instead of
+  // per-pixel strokes, so a 1080p background build stays a one-time blip.
+  const trunk = (x0: number, y0: number, x1: number, y1: number, radius: number, color: RGB) => {
+    const ax = hd.X(x0),
+      ay = hd.Y(y0),
+      bx = hd.X(x1),
+      by = hd.Y(y1)
+    const steps = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / Math.max(1, radius * 0.35)))
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps
+      hd.disk(ax + (bx - ax) * t, ay + (by - ay) * t, radius, color)
+    }
+  }
   for (let i = 0; i < 11; i++) {
     const random = mulberry32(0xf07e57 + i * 977)
     const x = random() * 82 - 3
     const tint = hdMix(horizon, sky, 0.45 + random() * 0.25)
     const radius = hd.cw * (0.18 + random() * 0.35)
     const lean = random() * 3 - 1.5
-    hd.stroke(x, 24, x + lean, -2, radius * 1.8, hdMix(tint, horizon, 0.25))
-    hd.stroke(x, 24, x + lean, -2, radius, tint)
+    trunk(x, 24, x + lean, -2, radius * 1.8, hdMix(tint, horizon, 0.25))
+    trunk(x, 24, x + lean, -2, radius, tint)
     for (let branch = 0; branch < 3; branch++) {
       const y = 6 + branch * 4 + random() * 2
       const reach = (i % 2 ? -1 : 1) * (3 + random() * 3)
-      hd.stroke(x + 0.5, y + 4, x + reach, y, radius * 0.55, tint)
+      trunk(x + 0.5, y + 4, x + reach, y, radius * 0.55, tint)
     }
   }
   // Soft distant foliage highlights stay behind the moving leaves.

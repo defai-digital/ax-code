@@ -141,7 +141,8 @@ Singapore uses an illustrated Marina Bay composition: a Merlion fountain in the
 foreground, the three Marina Bay Sands towers and boat-shaped SkyPark, Supertree
 crowns, a distant skyline, and a moving bay boat. The daytime opening has a warm
 tropical sky and turquoise water; the night ending has gold windows, purple and
-cyan Supertree lights, and shimmering reflections. The fountain, boat, palette,
+cyan Supertree lights, sweeping SkyPark light-show beams, a rocket-launched
+fireworks burst, and shimmering reflections. The fountain, boat, palette,
 and layout are shared by the native ASCII fallback and the existing freeform HD
 renderer. Both use the existing three-second playback and terminal lifecycle;
 there are no downloaded video files or audio. Preview with `/singapore` or
