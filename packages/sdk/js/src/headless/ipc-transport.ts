@@ -269,7 +269,12 @@ export function createIpcTransport(options: IpcTransportOptions): HeadlessTransp
         }
         // A cancelled caller drops only its receipt. Late replies are ignored;
         // the shared socket and other requests remain live.
-        writeIpcMessage(conn.socket, message).catch(pending.reject)
+        try {
+          writeIpcMessage(conn.socket, message).catch(pending.reject)
+        } catch (error) {
+          // Frame encoding can fail before writeIpcMessage returns a promise.
+          pending.reject(error)
+        }
       })
     })
   }
@@ -310,12 +315,13 @@ export function createIpcTransport(options: IpcTransportOptions): HeadlessTransp
         }
         case "permission.reply":
         case "question.reply": {
-          const path = command.type === "permission.reply" ? "/permission/reply" : "/question/reply"
+          const { requestID, ...body } = command.body
+          const resource = command.type === "permission.reply" ? "permission" : "question"
           const request: HeadlessTransportRequest = {
             ...options,
             method: "POST",
-            path,
-            body: command.body as Record<string, unknown>,
+            path: `/${resource}/${encodeURIComponent(requestID)}/reply`,
+            body,
           }
           const response = await writeRequest(request)
           return commandResult(response, request)

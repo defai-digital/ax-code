@@ -214,7 +214,7 @@ describe("headless SDK types", () => {
     expect(state.permission["sess-1"] ?? []).toHaveLength(0)
   })
 
-  test.each(["isolation_escalation", "bash_destructive", "computer"])(
+  test.each(["isolation_escalation", "bash_destructive", "computer", "ops_approve", "webmcp", "hook"])(
     "permission.asked keeps %s pending when autonomous is true",
     (permission) => {
       const state = createHeadlessProjectionState<
@@ -244,6 +244,25 @@ describe("headless SDK types", () => {
       expect(state.permission["sess-1"]).toEqual([request])
     },
   )
+
+  test("autonomous projection keeps caller-marked interactive permissions pending", () => {
+    const state = createHeadlessProjectionState()
+    const request = {
+      id: "req-interactive",
+      sessionID: "sess-1",
+      permission: "bash",
+      patterns: ["ls"],
+      metadata: { requireInteractive: true },
+      always: ["ls"],
+    }
+    const result = applyHeadlessProjectionEvent(
+      state,
+      { type: "permission.asked", properties: request },
+      { autonomous: true },
+    )
+    expect(result.effects).toEqual([])
+    expect(state.permission["sess-1"]).toEqual([request])
+  })
 
   test("server.resync_required requests an authoritative bootstrap reload", () => {
     const state = createHeadlessProjectionState()

@@ -94,6 +94,8 @@ try {
 
 `createHeadlessProjectionState` and `applyHeadlessProjectionEvent` are pure TypeScript. App UIs should treat `permission`, `question`, `session_diff`, `todo`, `session_status`, and `session_error` as primary state. Autonomous replies are opt-in; supervised apps should render pending permission and question requests.
 
+Autonomous projection keeps `isolation_escalation`, `bash_destructive`, `ops_approve`, `webmcp`, `hook`, and `computer` permissions pending, as well as any request whose metadata sets `requireInteractive: true`. Consumers must obtain an explicit human reply for these requests.
+
 ## gRPC / native desktop
 
 Use `@defai-digital/ax-code-sdk/grpc` when a native host already owns the transport (Electron preload, Tauri, Rust, HTTP/2).

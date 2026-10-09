@@ -28,6 +28,37 @@ const receipt = {
 } satisfies HeadlessSteerReceipt
 
 describe("headless steering and capability contracts", () => {
+  test.each([
+    {
+      kind: "permission",
+      requestID: "permission/1",
+      body: { requestID: "permission/1", reply: "once" as const },
+      payload: { reply: "once" },
+    },
+    {
+      kind: "question",
+      requestID: "question/1",
+      body: { requestID: "question/1", answers: [["Keep existing behavior"]] },
+      payload: { answers: [["Keep existing behavior"]] },
+    },
+  ])("routes $kind replies through the canonical request-id endpoint", async ({ kind, requestID, body, payload }) => {
+    const calls: Array<{ path: string; body: unknown }> = []
+    const expectedPath = `/${kind}/${encodeURIComponent(requestID)}/reply`
+    const client = createHeadlessClient({
+      baseUrl: "http://127.0.0.1:4096",
+      fetch: (async (url, init) => {
+        const path = new URL(String(url)).pathname
+        calls.push({ path, body: JSON.parse(String(init?.body)) })
+        return Response.json(path === expectedPath ? true : { message: "Route not found" }, {
+          status: path === expectedPath ? 200 : 404,
+        })
+      }) as typeof fetch,
+    })
+    const result = "reply" in body ? await client.replyPermission(body) : await client.replyQuestion(body)
+    expect(result).toEqual({ accepted: true, status: 200, body: true })
+    expect(calls).toEqual([{ path: expectedPath, body: payload }])
+  })
+
   test("routes steering with unchanged generation, client id, receipts and inactive queue outcomes", async () => {
     const requests: Array<{ path: string; method: string; body?: Record<string, unknown> }> = []
     const state = {

@@ -106,6 +106,65 @@ describe("ipc transport client", () => {
     }
   }
 
+  test.each([
+    {
+      type: "permission.reply" as const,
+      body: { requestID: "permission/1", reply: "once" as const },
+      path: "/permission/permission%2F1/reply",
+      payload: { reply: "once" },
+    },
+    {
+      type: "question.reply" as const,
+      body: { requestID: "question/1", answers: [["Keep existing behavior"]] },
+      path: "/question/question%2F1/reply",
+      payload: { answers: [["Keep existing behavior"]] },
+    },
+  ])("routes $type through the canonical request-id endpoint", async ({ type, body, path, payload }) => {
+    const transport = createIpcTransport({ socketPath })
+    try {
+      await transport.sendCommand(
+        type === "permission.reply" && "reply" in body
+          ? { type, body }
+          : { type: "question.reply", body: { requestID: body.requestID, answers: payload.answers } },
+      )
+      expect(lastRequest?.path).toBe(path)
+      expect(lastRequest?.body).toEqual(payload)
+    } finally {
+      await transport.close?.()
+    }
+  })
+
+  test("removes request abort listeners after synchronous frame encoding failures", async () => {
+    const transport = createIpcTransport({ socketPath })
+    const add = vi.spyOn(AbortSignal.prototype, "addEventListener")
+    const remove = vi.spyOn(AbortSignal.prototype, "removeEventListener")
+    try {
+      const controller = new AbortController()
+      await expect(
+        transport.requestJson({
+          method: "POST",
+          path: "/session",
+          signal: controller.signal,
+          body: { unsupported: () => undefined },
+        }),
+      ).rejects.toThrow()
+      const unmatched = add.mock.calls.filter(
+        (call, i) =>
+          call[0] === "abort" &&
+          !remove.mock.calls.some(
+            (removed, j) =>
+              removed[0] === "abort" && removed[1] === call[1] && remove.mock.contexts[j] === add.mock.contexts[i],
+          ),
+      )
+      expect(unmatched).toHaveLength(0)
+      expect(await transport.requestJson({ method: "GET", path: "/global/health" })).toEqual({ healthy: true })
+    } finally {
+      await transport.close?.()
+      add.mockRestore()
+      remove.mockRestore()
+    }
+  })
+
   test("cancels one request, ignores its late response, and preserves concurrent callers", async () => {
     const transport = createIpcTransport({ socketPath })
     try {

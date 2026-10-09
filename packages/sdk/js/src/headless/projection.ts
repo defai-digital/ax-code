@@ -13,7 +13,13 @@ import type { HeadlessRuntimeEvent, HeadlessRuntimeProbeKey, HeadlessRuntimeStat
 // Keep this public SDK projection aligned with the runtime permission policy.
 // These requests must remain pending for an explicit human reply even when a
 // headless consumer enables autonomous projection effects.
-const INTERACTIVE_ONLY_PERMISSIONS: ReadonlySet<string> = new Set(["isolation_escalation", "bash_destructive"])
+const INTERACTIVE_ONLY_PERMISSIONS: ReadonlySet<string> = new Set([
+  "isolation_escalation",
+  "bash_destructive",
+  "ops_approve",
+  "webmcp",
+  "hook",
+])
 const NEVER_AUTONOMOUS_AUTOAPPROVE_PERMISSIONS: ReadonlySet<string> = new Set(["computer"])
 const DEFAULT_MAX_SESSION_MESSAGES = 100
 const pendingPartDeltaText = new WeakMap<object, Map<string, Map<string, string>>>()
@@ -134,6 +140,7 @@ export function applyHeadlessProjectionEvent<
     case "permission.asked":
       if (
         options.autonomous &&
+        event.properties.metadata?.requireInteractive !== true &&
         !INTERACTIVE_ONLY_PERMISSIONS.has(event.properties.permission) &&
         !NEVER_AUTONOMOUS_AUTOAPPROVE_PERMISSIONS.has(event.properties.permission)
       ) {

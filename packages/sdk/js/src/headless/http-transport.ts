@@ -126,22 +126,11 @@ async function sendHeadlessRuntimeCommand(input: {
       return postJson(input, `/session/${encodeURIComponent(input.command.sessionID)}/abort`, undefined)
 
     case "permission.reply":
-      return commandResult(
-        await input.request({
-          path: "/permission/reply",
-          method: "POST",
-          body: input.command.body as Record<string, unknown>,
-        }),
-      )
-
-    case "question.reply":
-      return commandResult(
-        await input.request({
-          path: "/question/reply",
-          method: "POST",
-          body: input.command.body as Record<string, unknown>,
-        }),
-      )
+    case "question.reply": {
+      const { requestID, ...body } = input.command.body
+      const resource = input.command.type === "permission.reply" ? "permission" : "question"
+      return postJson(input, `/${resource}/${encodeURIComponent(requestID)}/reply`, body)
+    }
   }
 }
 
