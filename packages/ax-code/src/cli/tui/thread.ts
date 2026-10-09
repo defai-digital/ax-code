@@ -1,3 +1,4 @@
+import { assertTuiMcpPlatform } from "@/tuimcp/endpoint"
 import { cmd } from "@/cli/cmd/cmd"
 import { cliBooleanFlagValue } from "@/cli/boolean-flag"
 import { Rpc } from "@/util/rpc"
@@ -648,6 +649,11 @@ export const TuiThreadCommand = cmd({
         describe:
           "model to use: provider/model from `ax-code models`, or family name deepseek, glm, qwen (Flash defaults)",
       })
+      .option("tui-mcp", {
+        type: "boolean",
+        default: false,
+        describe: "Share this live TUI through experimental local MCP navigation tools (POSIX only)",
+      })
       .option("continue", {
         alias: ["c"],
         describe: "continue the last session",
@@ -671,6 +677,7 @@ export const TuiThreadCommand = cmd({
         describe: "agent to use",
       }),
   handler: async (args) => {
+    if (args.tuiMcp) assertTuiMcpPlatform()
     // Keep ENABLE_PROCESSED_INPUT cleared even if other code flips it.
     // (Important when running under `bun run` wrappers on Windows.)
     const unguard = win32InstallCtrlCGuard()
@@ -1008,6 +1015,7 @@ export const TuiThreadCommand = cmd({
           fetch: transport.fetch,
           events: transport.events,
           args: {
+            tuiMcp: args.tuiMcp,
             continue: args.continue,
             sessionID: args.session,
             agent: args.agent,
