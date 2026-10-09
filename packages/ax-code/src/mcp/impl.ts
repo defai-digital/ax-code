@@ -1448,7 +1448,12 @@ export namespace MCP {
    * approvals cannot exceed the grant cap, and a grant on a bridge that
    * disconnected while its prompt was open does not record.
    */
-  export async function grantWebMcpReadOrigin(name: string, origin: string): Promise<WebMcpProfile.GrantDecision> {
+  export async function grantWebMcpReadOrigin(
+    name: string,
+    origin: string,
+    expectedProfile?: WebMcpProfile.Configuration,
+    signal?: AbortSignal,
+  ): Promise<WebMcpProfile.GrantDecision> {
     const offered = await checkWebMcpReadGrant(name, origin)
     if (!offered.ok) return offered
     return withConnectLock(name, "MCP webmcp read grant failed", async (s): Promise<WebMcpProfile.GrantDecision> => {
@@ -1458,6 +1463,10 @@ export namespace MCP {
       const recheck = WebMcpProfile.checkReadGrant(found.cfg.webmcp, found.profile, current, origin)
       if (!recheck.ok) return recheck
       if (!s.clients[name]) return { ok: false, error: "WebMCP bridge is no longer connected" }
+      if (expectedProfile && webMcpProfiles.get(s.clients[name]) !== expectedProfile) {
+        return { ok: false, error: "WebMCP bridge changed while read approval was pending; request a fresh read" }
+      }
+      signal?.throwIfAborted()
       current.add(origin)
       s.webmcpReadGrants[name] = current
       return { ok: true }

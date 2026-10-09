@@ -294,3 +294,26 @@ test("navigation reuse checks the current destination, and unrelated operations 
     },
   })
 })
+
+test("close authority requires its own exact-origin record and an in-memory target", async () => {
+  await using tmp = await tmpdir({ git: true, config: { mcp: { bridge: entry() } } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const current = policy(entry().webmcp, "close_page")
+      const call = { pageId: 1, origin: "https://example.test" }
+      expect(await WebMcpApprovals.captureCall(current, call)).toBeUndefined()
+      WebMcpApprovals.bindCloseTarget(call, "https://example.test")
+      const candidate = (await WebMcpApprovals.captureCall(current, call))!
+      await WebMcpApprovals.save(candidate, () => true)
+      for (const origin of ["https://other.test", "https://example.test:8443", "https://www.example.test"]) {
+        const other = (await WebMcpApprovals.capture(current, { capability: "close", origin }))!
+        expect(await WebMcpApprovals.allowed(other)).toBe(false)
+      }
+      expect(await WebMcpApprovals.capture(policy(entry().webmcp, "new_page"), candidate.scope)).toBeUndefined()
+      expect(() => WebMcpApprovals.checkCloseTarget(call, 2, "https://example.test")).toThrow("changed")
+      expect(() => WebMcpApprovals.checkCloseTarget(call, 1, undefined)).toThrow("changed")
+      expect(() => WebMcpApprovals.checkCloseTarget(call, 1, "https://example.test")).not.toThrow()
+    },
+  })
+})

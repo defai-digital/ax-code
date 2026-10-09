@@ -51459,6 +51459,24 @@
                   "origin"
                 ],
                 "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "capability": {
+                    "type": "string",
+                    "const": "close"
+                  },
+                  "origin": {
+                    "type": "string",
+                    "maxLength": 2048
+                  }
+                },
+                "required": [
+                  "capability",
+                  "origin"
+                ],
+                "additionalProperties": false
               }
             ]
           },
@@ -51545,6 +51563,24 @@
                   "capability": {
                     "type": "string",
                     "const": "read"
+                  },
+                  "origin": {
+                    "type": "string",
+                    "maxLength": 2048
+                  }
+                },
+                "required": [
+                  "capability",
+                  "origin"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "capability": {
+                    "type": "string",
+                    "const": "close"
                   },
                   "origin": {
                     "type": "string",

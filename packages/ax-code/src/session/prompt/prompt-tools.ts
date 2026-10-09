@@ -1489,12 +1489,9 @@ export async function resolveTools(input: ResolveToolsInput) {
               `WebMCP origin ${alsoOrigin ? `${error.origin} and ${alsoOrigin}` : error.origin} was allowed for this session and the browser bridge was restarted; open pages were closed. Retry the call.`,
             )
           }
-          // ADR-171: a read-tier call against an origin with no session read
-          // grant throws before the bridge is called. The prompt names the
-          // origin and the three read tools; the grant is in-memory and ends
-          // when the bridge is turned off. Unlike an origin grant there is no
-          // relaunch, so the retry is immediate.
-          const grantRead = async (readPolicy: WebMcpProfile.Policy, error: unknown): Promise<never> => {
+          // The read grant refusal precedes content dispatch. T1 can continue
+          // once after approval with fresh origin/policy checks (ADR-176).
+          const grantRead = async (readPolicy: WebMcpProfile.Policy, error: unknown): Promise<void> => {
             if (!(error instanceof WebMcpProfile.ReadNotGrantedError)) throw error
             // A managed or disabled refusal fails here without a prompt.
             const allowed = await MCP.checkWebMcpReadGrant(readPolicy.server, error.origin)
@@ -1506,16 +1503,42 @@ export async function resolveTools(input: ResolveToolsInput) {
               patterns: McpPermissionPattern.derive(key, { origin: error.origin }).patterns,
             })
             await ctx.ask({ permission: "webmcp", patterns: [key], always: [], metadata })
+            ctx.abort.throwIfAborted()
+            await checkWebMcpDenials()
             // Saved read authority stays separate from session grants so revoke
             // takes effect without reconnecting the browser.
-            const saved = !!candidate && (await WebMcpApprovals.allowed(candidate))
+            // Preserve the user's reply type even if another client revokes
+            // the record immediately: never turn a revoked save into a new
+            // temporary grant.
+            const saved = WebMcpApprovals.usedSavedApproval(metadata)
             if (!saved) {
-              const granted = await MCP.grantWebMcpReadOrigin(readPolicy.server, error.origin)
+              const granted = await MCP.grantWebMcpReadOrigin(
+                readPolicy.server,
+                error.origin,
+                readPolicy.profile,
+                ctx.abort,
+              )
               if (!granted.ok) throw new Error(granted.error)
             }
-            throw new Error(
-              `WebMCP read access to ${error.origin} ${saved ? "was saved for this project" : "was allowed for this session"}. Retry the call.`,
-            )
+            if (!WebMcpProfile.READ_SCOPE_TOOLS.some((name) => name === readPolicy.toolName)) {
+              // wait_for belongs to T2 and retains its explicit retry and
+              // per-turn reservation semantics.
+              throw new Error(
+                `WebMCP read access to ${error.origin} ${saved ? "was saved for this project" : "was allowed for this session"}. Retry the call.`,
+              )
+            }
+            WebMcpApprovals.bindReadContinuation(call as object, error.origin, async () => {
+              ctx.abort.throwIfAborted()
+              if (!(await MCP.matchesWebMcpProfile(readPolicy.server, readPolicy.profile))) {
+                throw new Error("WebMCP bridge changed while read approval was pending; request a fresh read")
+              }
+              if (candidate && !(await WebMcpApprovals.valid(candidate))) {
+                throw new Error("WebMCP read approval is no longer valid; request a fresh read")
+              }
+              if (saved && (!candidate || !(await WebMcpApprovals.allowed(candidate)))) {
+                throw new Error("Saved WebMCP read approval was revoked; request a fresh read")
+              }
+            })
           }
           // ADR-174: a T2 call against an origin with no session interact
           // grant, or whose budget is spent, throws before the bridge acts.
@@ -1673,16 +1696,7 @@ export async function resolveTools(input: ResolveToolsInput) {
           }
           const skipPerCall = readTierTool || grantCovered
           const permissionPattern = McpPermissionPattern.derive(key, webmcp ?? call, { worktree: Instance.worktree })
-          const approvalCandidate =
-            policy && webmcp ? await WebMcpApprovals.captureCall(policy, call as Record<string, unknown>) : undefined
           const mcpMetadata = { mcp: true, ...permissionPattern.metadata }
-          if (webmcp) {
-            WebMcpApprovals.bind(webmcp, approvalCandidate, { permission: key, patterns: permissionPattern.patterns })
-            WebMcpApprovals.bind(mcpMetadata, approvalCandidate, {
-              permission: key,
-              patterns: permissionPattern.patterns,
-            })
-          }
           // Recheck both layers at admission and dispatch, including calls
           // covered by a read/session grant or a saved approval.
           const checkWebMcpDenials = async () => {
@@ -1700,6 +1714,21 @@ export async function resolveTools(input: ResolveToolsInput) {
               })
           }
           await checkWebMcpDenials()
+          if (policy?.toolName === "close_page" && webmcp && policy.closePageOrigin) {
+            ctx.abort.throwIfAborted()
+            const origin = await policy.closePageOrigin((call as { pageId: number }).pageId, ctx.abort)
+            if (origin) webmcp.pageOrigin = origin
+            WebMcpApprovals.bindCloseTarget(call as { pageId: number }, origin)
+          }
+          const approvalCandidate =
+            policy && webmcp ? await WebMcpApprovals.captureCall(policy, call as Record<string, unknown>) : undefined
+          if (webmcp) {
+            WebMcpApprovals.bind(webmcp, approvalCandidate, { permission: key, patterns: permissionPattern.patterns })
+            WebMcpApprovals.bind(mcpMetadata, approvalCandidate, {
+              permission: key,
+              patterns: permissionPattern.patterns,
+            })
+          }
           try {
             if (!skipPerCall) {
               await ctx.ask({
@@ -1744,8 +1773,15 @@ export async function resolveTools(input: ResolveToolsInput) {
               ) {
                 breaker.refundWait(reservedWait)
               }
-              if (error instanceof WebMcpProfile.ReadNotGrantedError) await grantRead(policy, error)
-              else if (error instanceof WebMcpProfile.InteractNotGrantedError)
+              if (error instanceof WebMcpProfile.ReadNotGrantedError) {
+                await grantRead(policy, error)
+                await checkWebMcpDenials()
+                ctx.abort.throwIfAborted()
+                await WebMcpApprovals.checkReadContinuation(call as object, error.origin)
+                // Exactly one continuation outside this catch. Any bridge
+                // failure or a second grant refusal propagates, never loops.
+                return await execute(call, opts)
+              } else if (error instanceof WebMcpProfile.InteractNotGrantedError)
                 await grantInteract(policy, error, breaker)
               else {
                 if (breaker && error instanceof WebMcpProfile.TargetBindingError) {

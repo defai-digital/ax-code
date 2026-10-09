@@ -4617,6 +4617,10 @@ export type WebMcpApprovalRecord = {
         capability: "read"
         origin: string
       }
+    | {
+        capability: "close"
+        origin: string
+      }
   id: string
   fingerprint: string
   revision: string
@@ -4638,6 +4642,10 @@ export type WebMcpApprovalSummary = {
       }
     | {
         capability: "read"
+        origin: string
+      }
+    | {
+        capability: "close"
         origin: string
       }
 }

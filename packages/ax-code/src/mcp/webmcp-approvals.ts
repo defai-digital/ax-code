@@ -24,6 +24,7 @@ export namespace WebMcpApprovals {
     z.object({ capability: z.literal("list_pages") }).strict(),
     z.object({ capability: z.literal("navigate"), origin: Origin }).strict(),
     z.object({ capability: z.literal("read"), origin: Origin }).strict(),
+    z.object({ capability: z.literal("close"), origin: Origin }).strict(),
   ])
   export type Scope = z.infer<typeof Scope>
   export const Summary = z
@@ -52,6 +53,31 @@ export namespace WebMcpApprovals {
   const reused = new WeakSet<object>()
   const calls = new WeakMap<object, Candidate>()
   const denialChecks = new WeakMap<object, () => Promise<void>>()
+  const closeTargets = new WeakMap<object, { pageId: number; origin: string | undefined }>()
+  const continuedReads = new WeakMap<object, { origin: string; check: () => Promise<void> }>()
+
+  export function bindCloseTarget(call: { pageId: number }, origin: string | undefined) {
+    closeTargets.set(call, { pageId: call.pageId, origin })
+  }
+
+  export function checkCloseTarget(call: object, pageId: number, origin: string | undefined) {
+    const target = closeTargets.get(call)
+    if (target && (target.pageId !== pageId || target.origin !== origin)) {
+      throw new Error("WebMCP page changed after close approval; inspect list_pages before closing it")
+    }
+  }
+
+  export function bindReadContinuation(call: object, origin: string, check: () => Promise<void>) {
+    continuedReads.set(call, { origin, check })
+  }
+
+  export async function checkReadContinuation(call: object, origin: string) {
+    const expected = continuedReads.get(call)
+    if (expected && expected.origin !== origin) {
+      throw new Error("WebMCP page changed while read approval was pending; request a fresh read")
+    }
+    await expected?.check()
+  }
 
   // Only runtime code registers these object identities. Serialized metadata,
   // project configuration and page annotations cannot mint an approval.
@@ -68,6 +94,9 @@ export namespace WebMcpApprovals {
   }
   export function markReused(metadata: object) {
     reused.add(metadata)
+  }
+  export function usedSavedApproval(metadata: object) {
+    return reused.has(metadata)
   }
   export function bindCall(call: object, metadata: object, checkDenials?: () => Promise<void>) {
     if (checkDenials) denialChecks.set(call, checkDenials)
@@ -91,6 +120,10 @@ export namespace WebMcpApprovals {
 
   export async function captureCall(policy: WebMcpProfile.Policy, call: { [key: string]: unknown }) {
     if (policy.toolName === "list_pages") return capture(policy, { capability: "list_pages" })
+    const target = closeTargets.get(call)
+    if (policy.toolName === "close_page" && target?.origin && target.pageId === call.pageId) {
+      return capture(policy, { capability: "close", origin: target.origin })
+    }
     if (["new_page", "navigate_page"].includes(policy.toolName) && typeof call.url === "string") {
       const origin = WebMcpProfile.grantableOrigin(call.url)
       if (origin) return capture(policy, { capability: "navigate", origin })
@@ -103,6 +136,7 @@ export namespace WebMcpApprovals {
     if (!parsed.success || !WebMcpProfile.allows(policy.toolName, policy.profile)) return undefined
     if (scope.capability === "list_pages" && policy.toolName !== "list_pages") return undefined
     if (scope.capability === "navigate" && !["new_page", "navigate_page"].includes(policy.toolName)) return undefined
+    if (scope.capability === "close" && policy.toolName !== "close_page") return undefined
     if (
       scope.capability === "read" &&
       ![...WebMcpProfile.READ_SCOPE_TOOLS, "wait_for"].some((tool) => tool === policy.toolName)

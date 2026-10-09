@@ -29,14 +29,18 @@ test("listing preview names cross-origin scope; read and navigation name exact o
   const listing = webMcpAllowlistPreview(request.webmcpAllowlist!).join("\n")
   expect(listing).toContain("multiple origins")
   expect(listing).toContain("does not approve navigation")
-  for (const capability of ["read", "navigate"] as const) {
+  for (const capability of ["read", "navigate", "close"] as const) {
     const lines = webMcpAllowlistPreview({
       server: "bridge",
       project: "test",
       scope: { capability, origin: "https://example.test:8443" },
     }).join("\n")
     expect(lines).toContain("Origin: https://example.test:8443")
-    expect(lines).toContain("Other origins and page actions")
+    expect(lines).toContain("Other origins and other page actions")
+    if (capability === "close") {
+      expect(lines).toContain("close any browser page")
+      expect(lines).toContain("unsaved work")
+    }
   }
 })
 

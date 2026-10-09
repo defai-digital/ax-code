@@ -36,7 +36,7 @@ test("approval shows the listed page origin and flags conflicting or missing ann
     allowedOrigins: ["https://example.test"],
     annotations: { readOnly: true, untrustedContent: false, consequential: true },
   }).join("\n")
-  expect(listed).toContain("Listed page origin: https://example.test")
+  expect(listed).toContain("Page origin: https://example.test")
   expect(listed).toContain("CONSEQUENTIAL")
   expect(listed).toContain("Conflicting page hints")
   expect(listed).not.toContain("read-only (page-asserted")

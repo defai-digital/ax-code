@@ -400,6 +400,8 @@ export namespace WebMcpProfile {
      */
     readGrants?: () => ReadonlySet<string>
     persistentReadAllowed?: (origin: string) => Promise<boolean>
+    /** Fresh bridge-resolved origin for a close approval, supplied by tool conversion. */
+    closePageOrigin?: (pageId: number, signal?: AbortSignal) => Promise<string | undefined>
     /**
      * Live interact-grant set for this bridge connection (ADR-174): origin to
      * remaining action budget. Absent means no grants.
@@ -1549,10 +1551,31 @@ export namespace WebMcpProfile {
     return base
   }
 
+  function navigationFailure(result: Record<string, unknown>, structured: Record<string, unknown>): string {
+    // Use untrusted text only to select fixed diagnostics. Never echo URLs,
+    // page text, credentials or bridge paths into the trusted error channel.
+    const parts = Array.isArray(result.content) ? result.content.slice(0, 8) : []
+    const detail = [structured.errorMessage, ...parts.map((part) => (isRecord(part) ? part.text : undefined))]
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => value.slice(0, 1024))
+      .join("\n")
+    const reason = /(?:timed?\s*out|timeout)/i.test(detail)
+      ? "the bridge reported a timeout"
+      : /net::ERR_(?:INTERNET_DISCONNECTED|CONNECTION_REFUSED|CONNECTION_RESET|NAME_NOT_RESOLVED|FAILED)\b/.test(detail)
+        ? "the bridge reported a network error"
+        : /(?:no page|page[^\n]{0,40}(?:not found|does not exist)|invalid page)/i.test(detail)
+          ? "the bridge could not find the requested page"
+          : "the bridge did not confirm completion"
+    return `WebMCP navigation failed: ${reason}. A page may already have opened or navigated. Inspect list_pages before another navigation; do not retry automatically. Saved approvals are unchanged.`
+  }
+
   export function validateResult(name: string, result: unknown): void {
     const record = isRecord(result) ? result : {}
     const structured = isRecord(record.structuredContent) ? record.structuredContent : {}
     if (record.isError === true || structured.errorMessage) {
+      if (name === "new_page" || name === "navigate_page") {
+        throw new Error(navigationFailure(record, structured))
+      }
       // ADR-174 rule 9: the upstream fills a form sequentially and throws on
       // the first failing element, so earlier fields may already hold values.
       throw new Error(

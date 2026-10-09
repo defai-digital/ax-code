@@ -295,6 +295,7 @@ export async function convertMcpTool(
             WebMcpProfile.unlocatedPageMessage(before, "could not be located before reading") +
               " Do not retry automatically.",
           )
+        await WebMcpApprovals.checkReadContinuation(args as object, origin)
         if (!(webmcp.readGrants?.() ?? NO_READ_GRANTS).has(origin) && !(await webmcp.persistentReadAllowed?.(origin)))
           throw new WebMcpProfile.ReadNotGrantedError(origin)
         readOrigin = origin
@@ -349,6 +350,19 @@ export async function convertMcpTool(
         // The approved WebMCP call shares the dispatch deadline: a fresh full
         // timeout here would let one dispatch run past twice its budget and
         // starve the post-listing bind of any time at all.
+        if (webmcp?.toolName === "close_page") {
+          const pageId = (input as { pageId: number }).pageId
+          const origin = WebMcpProfile.pageOriginOf(await webmcpPageUrl(client, pageId, budget(), opts.abortSignal))
+          WebMcpApprovals.checkCloseTarget(args as object, pageId, origin)
+          // The page lookup is asynchronous: revocation or a deny during it
+          // must still stop a saved close before the bridge acts.
+          await WebMcpApprovals.checkCall(args as object)
+        }
+        if (readTier && readOrigin) {
+          await WebMcpApprovals.checkReadContinuation(args as object, readOrigin)
+          await WebMcpApprovals.checkCall(args as object)
+        }
+        opts.abortSignal?.throwIfAborted()
         const mainTimeout = webmcp ? budget() : timeout
         const result = await client.callTool(
           {
@@ -469,5 +483,17 @@ export async function convertMcpTool(
       }
     },
   })
-  return webmcp ? Object.assign(tool, { webmcp }) : tool
+  return webmcp
+    ? Object.assign(tool, {
+        webmcp: {
+          ...webmcp,
+          ...(webmcp.toolName === "close_page"
+            ? {
+                closePageOrigin: async (pageId: number, signal?: AbortSignal) =>
+                  WebMcpProfile.pageOriginOf(await webmcpPageUrl(client, pageId, timeout, signal)),
+              }
+            : {}),
+        },
+      })
+    : tool
 }
