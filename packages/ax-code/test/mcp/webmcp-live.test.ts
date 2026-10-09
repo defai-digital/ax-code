@@ -95,8 +95,10 @@ test.skipIf(!executablePath)(
             await expect(call("new_page", { url: "https://not-allowed.invalid/" })).rejects.toThrow(
               "origin is not allowed",
             )
+            // ADR-168 amendment: a blocked redirect surfaces as a grantable
+            // origin error (the probe names the target), not an opaque failure.
             await expect(call("new_page", { url: `${origin}/redirect` })).rejects.toThrow(
-              "WebMCP bridge operation failed",
+              "origin is not allowed",
             )
             expect(deniedRequests).toBe(0)
             await call("close_page", { pageId })
