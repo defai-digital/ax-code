@@ -6,6 +6,17 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.23.2] - 2026-10-09
+
+### Changed
+
+- Publish SDK 2.6.1 alongside AX Code 7.23.2.
+
+### Fixed
+
+- Cancel both cache-progress timers when an AX Engine download ends, and discard in-flight samples after completion, cancellation, or the transition to verification.
+- Keep failed cache-progress samples from producing unhandled promise rejections while allowing later samples to recover.
+
 ## [7.23.1] - 2026-10-09
 
 ### Changed
