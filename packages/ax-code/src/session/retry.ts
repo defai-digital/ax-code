@@ -1,4 +1,5 @@
 import type { NamedError } from "@ax-code/util/error"
+import { abortError } from "@/util/abort"
 import { MessageV2 } from "./message-v2"
 import { parseJsonRecord } from "@/util/json-record"
 import { GITHUB_REPO_URL } from "@/constants/project"
@@ -31,11 +32,11 @@ export namespace SessionRetry {
   const CONCURRENCY_MAX_DELAY_CEILING_MS = 300_000
 
   export async function sleep(ms: number, signal: AbortSignal): Promise<void> {
-    if (signal.aborted) throw new DOMException("Aborted", "AbortError")
+    if (signal.aborted) throw abortError()
     return new Promise((resolve, reject) => {
       const abortHandler = () => {
         clearTimeout(timeout)
-        reject(new DOMException("Aborted", "AbortError"))
+        reject(abortError())
       }
       const timeout = setTimeout(
         () => {
@@ -47,7 +48,7 @@ export namespace SessionRetry {
       timeout.unref?.()
       if (signal.aborted) {
         clearTimeout(timeout)
-        reject(new DOMException("Aborted", "AbortError"))
+        reject(abortError())
         return
       }
       signal.addEventListener("abort", abortHandler, { once: true })

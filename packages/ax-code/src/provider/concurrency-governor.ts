@@ -8,6 +8,7 @@ import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
 import { parseJsonResult } from "@/util/json-value"
 import { currentLockHost, isSameProcessLockHost } from "@/util/process-lock"
+import { abortError, isAbortError } from "@/util/abort"
 import { sleep } from "@/util/timeout"
 
 // Provider concurrency governor (PRD-2026-09-22 Waves B and C).
@@ -78,16 +79,6 @@ function stateFor(providerID: string): ProviderState {
     providers.set(providerID, state)
   }
   return state
-}
-
-function abortError(): unknown {
-  // Same shape as session/retry.ts sleep()'s rejection (not imported from
-  // there — this module must not depend on session internals).
-  return new DOMException("Aborted", "AbortError")
-}
-
-function isAbortError(err: unknown): boolean {
-  return err instanceof DOMException && err.name === "AbortError"
 }
 
 function noopDisposable(): Disposable {

@@ -33,3 +33,13 @@ export function abortAfterAny(ms: number, ...signals: AbortSignal[]) {
     clearTimeout: timeout.clearTimeout,
   }
 }
+
+/** The canonical abort rejection: a DOMException named "AbortError". */
+export function abortError(): DOMException {
+  return new DOMException("Aborted", "AbortError")
+}
+
+/** Shallow check for the canonical abort rejection (does not walk causes). */
+export function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError"
+}

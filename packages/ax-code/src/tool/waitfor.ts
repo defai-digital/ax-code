@@ -7,6 +7,7 @@ import { NotFoundError } from "../storage/db"
 import { TaskQueue } from "../session/task-queue"
 import { childVisibleText, isEmptySubagentResultText } from "../session/background-subagent-handoff"
 import { Log } from "@/util/log"
+import { abortError } from "@/util/abort"
 
 const log = Log.create({ service: "waitfor-tool" })
 
@@ -37,10 +38,6 @@ const parameters = z.object({
     .max(600)
     .describe("Maximum seconds to wait for the task to reach a terminal state (1-600)"),
 })
-
-function abortError() {
-  return new DOMException("Aborted", "AbortError")
-}
 
 function sleep(ms: number, abort: AbortSignal) {
   return new Promise<void>((resolve, reject) => {

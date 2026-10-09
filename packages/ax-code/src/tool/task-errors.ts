@@ -1,6 +1,8 @@
 import type { MessageV2 } from "../session/message-v2"
 import type { SessionPrompt } from "../session/prompt"
 
+export { isAbortError } from "@/util/abort"
+
 /**
  * Shared rendering for delegated-agent failures.
  *
@@ -30,8 +32,4 @@ export function errorDetails(error: unknown) {
     return { name: "Error", message: error }
   }
   return { name: "Error", message: "Unknown error" }
-}
-
-export function isAbortError(error: unknown) {
-  return error instanceof DOMException && error.name === "AbortError"
 }
