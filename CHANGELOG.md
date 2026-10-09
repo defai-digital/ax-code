@@ -6,6 +6,25 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.23.1] - 2026-10-09
+
+### Changed
+
+- Publish SDK 2.6.0 with generation-bound steering, task-queue steering, request cancellation and deadlines, structured HTTP errors, and runtime capability checks.
+- Register WebMCP as a disabled sidebar entry with origin-bound read and interact tiers, validated launch arguments, and explicit session grants.
+- Enable idle "Allow once" for eligible interactive permissions in autonomous full-access sessions; caller-marked interactive requests still require a human decision.
+- Add experimental POSIX-only `--tui-mcp` navigation for live TUI sessions and isolated SDK consumer validation in CI.
+
+### Fixed
+
+- Route headless HTTP and IPC permission/question replies through the request-ID endpoint and omit the request ID from the JSON body.
+- Keep interactive permissions pending in autonomous SDK projections, including WebMCP, hooks, operations approvals, and requests marked `requireInteractive`.
+- Remove pending IPC requests and abort listeners when frame encoding fails synchronously, while preserving the shared connection.
+- Keep WebMCP circuit breakers attached to their live turn so late calls cannot reset a stopped turn, and release completed turns from memory.
+- Complete TUIMCP endpoint cleanup even when the close callback throws, and make concurrent closes await the same cleanup.
+- Harden WebMCP grants, page-failure handling, dispatch bindings, and read-tool output schemas; add opt-in live qualification fixtures.
+- Respect transcript concealment in completed session renders and refresh upstream model metadata.
+
 ## [7.23.0] - 2026-10-08
 
 ### Changed
