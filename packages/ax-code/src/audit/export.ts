@@ -3,6 +3,7 @@ import type { ReplayEvent } from "../replay/event"
 import type { AuditRecord } from "./index"
 import type { SessionID } from "../session/schema"
 import { Filesystem } from "@/util/filesystem"
+import { finiteNumber } from "@/util/number"
 
 interface ExportContext {
   policy?: { name: string; version: string }
@@ -12,10 +13,6 @@ function summarizeText(text: string | undefined, max: number): string {
   if (!text) return ""
   if (text.length <= max) return text
   return text.slice(0, max - 3) + "..."
-}
-
-function finiteNumber(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0
 }
 
 function eventTokens(value: unknown) {

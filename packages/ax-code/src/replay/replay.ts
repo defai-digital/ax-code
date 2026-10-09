@@ -4,12 +4,9 @@ import type { ReplayEvent } from "./event"
 import type { SessionID } from "@/session/schema"
 import { ToolCallReplayQuery } from "./tool-call-query"
 import { stringList } from "@/util/string-list"
+import { finiteNumber } from "@/util/number"
 
 const log = Log.create({ service: "replay" })
-
-function finiteNumber(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0
-}
 
 function optionalMilliseconds(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? `${Math.round(value)}ms` : "?"

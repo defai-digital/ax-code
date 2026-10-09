@@ -4,6 +4,7 @@ import { Snapshot } from "../../snapshot"
 import { FindingSchema, type Finding } from "../finding"
 import { asRecordOrUndefined } from "@/util/record"
 import { uniqueStrings } from "@/util/string-list"
+import { finiteNumber } from "@/util/number"
 import * as ProbabilisticRolloutReadiness from "./probabilistic-rollout-readiness"
 import * as ProbabilisticRolloutSchema from "./probabilistic-rollout-schema"
 
@@ -144,10 +145,6 @@ export function stringField(input: Record<string, unknown> | undefined, key: str
 
 export function stringValue(value: unknown, fallback = "unknown") {
   return typeof value === "string" && value.length > 0 ? value : fallback
-}
-
-export function finiteNumber(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0
 }
 
 export function toolStatus(value: unknown): ToolSummary["status"] {
