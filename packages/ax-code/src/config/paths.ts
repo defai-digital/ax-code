@@ -322,6 +322,11 @@ export namespace ConfigPaths {
     const configSource = source(input)
     text = await substitute(text, input, options)
 
+    return parseJsoncOrThrow(text, configSource)
+  }
+
+  /** Parse JSONC text, throwing JsonError with a caret-annotated excerpt on syntax errors. */
+  export function parseJsoncOrThrow(text: string, filepath: string) {
     const errors: JsoncParseError[] = []
     const data = parseJsonc(text, errors, { allowTrailingComma: true })
     if (errors.length) {
@@ -341,7 +346,7 @@ export namespace ConfigPaths {
         .join("\n")
 
       throw new JsonError({
-        path: configSource,
+        path: filepath,
         message: `\n--- JSONC Input ---\n${text}\n--- Errors ---\n${errorDetails}\n--- End ---`,
       })
     }
