@@ -84,6 +84,14 @@ an already-running MTPLX, oMLX, Ollama, LM Studio, AX Studio, or any other OpenA
 endpoint, see [MTPLX and oMLX setup](docs/providers/local-mlx-runtimes.md). Release archives are
 verified with minisign; deeper platform notes live in [Installation and Runtime Channels](docs/getting-started/install-runtime.md).
 
+## WebMCP with Chrome
+
+AX Code can work with live web pages through [WebMCP](https://webmachinelearning.github.io/webmcp/), a proposed standard that lets a page offer structured tools to an agent. The bridge is experimental and stays off until you enable it. It needs [Google Chrome](https://www.google.com/chrome/) 150 or newer. AX Code starts an isolated Chrome window for that work and turns the WebMCP feature on in that window.
+
+In the terminal UI, click the **WebMCP** chip in the sidebar footer, or the same chip on the Home prompt footer. That click is the consent: the browser starts then, on a fresh profile. Click the chip again to turn the bridge off.
+
+Enable steps, approval tiers, and limits are in [WebMCP browser bridge](docs/guides/webmcp-bridge.md). Codex and ChatGPT Work document their built-in browser's version of the same standard as [site tools](https://learn.chatgpt.com/docs/webmcp). Read that page when you want to compare how another product turns WebMCP on and how a site registers tools.
+
 ## Standard and Business
 
 **AX Code Standard** is open-source AI coding for individuals and teams, built to work
@@ -369,7 +377,7 @@ Release archives are verified with minisign. Platform support, update paths, sig
 
 ![AX Code components and workflow](docs/images/ax-code-components.svg)
 
-The terminal UI, `ax-code run`, the local HTTP server and TypeScript SDK, and ACP or VS Code hosts enter the same runtime. Extracted packages sit beside that runtime: `ax-wiki` plans the source-backed wiki, `ax-wiki-viewer` draws its evidence graph, `ax-code-intel` runs language servers, and `ax-code-reason` does deterministic debug and refactor analysis. Plugin, the native addons, the GitHub Action, and MCP are the other integration edges. A turn stores the user message, resolves a provider, and streams the model. Each tool call passes a hook and a permission check, then runs inside the configured isolation mode. File changes are snapshotted outside the repository, and the step is appended to the event log. `ax-code session compare`, `risk`, `replay`, and `rollback` read that record.
+The terminal UI, `ax-code run`, the local HTTP server and TypeScript SDK, and ACP or VS Code hosts enter the same runtime. Extracted packages sit beside that runtime: `ax-wiki` plans the source-backed wiki, `ax-wiki-viewer` draws its evidence graph, `ax-code-intel` runs language servers, and `ax-code-reason` does deterministic debug and refactor analysis. Plugin, the native addons, the GitHub Action, and MCP are the other integration edges. WebMCP sits with them as the Chrome bridge: the sidebar chip starts an isolated Chrome 150+ window, and the agent can read a page and, with your approval, act on it. A turn stores the user message, resolves a provider, and streams the model. Each tool call passes a hook and a permission check, then runs inside the configured isolation mode. File changes are snapshotted outside the repository, and the step is appended to the event log. `ax-code session compare`, `risk`, `replay`, and `rollback` read that record.
 
 Council reviews stay advisory. Arena implement builds candidates in isolated Git worktrees and ranks them with the repository's own checks. AX Code does not merge the winner. AX Engine stays a sidecar: AX Code starts `ax-engine serve` and calls it on loopback. Cloud APIs, vendor CLIs, local OpenAI-compatible servers, private GPU endpoints, and AX Trust share the same provider boundary.
 
@@ -491,7 +499,7 @@ Everyday use:
 - [Verified Multi-Model Changes](docs/guides/verified-multi-model-change.md) — council review and arena implementation
 - [Headless CLI](docs/guides/headless-cli.md) — one-shot `ax-code run` for scripts, CI, and agent callers
 - [Documentation Hub](docs/README.md) — guides, architecture, providers, and reference
-- [Sandbox Mode](docs/guides/sandbox.md) · [Autonomous Mode](docs/guides/autonomous.md) · [MCP Integrations](docs/integrations/mcp.md)
+- [Sandbox Mode](docs/guides/sandbox.md) · [Autonomous Mode](docs/guides/autonomous.md) · [MCP Integrations](docs/integrations/mcp.md) · [WebMCP with Chrome](docs/guides/webmcp-bridge.md)
 - [Semantic Layer](docs/architecture/semantic-layer.md) — provenance and replay boundaries for graph and LSP answers
 - [AX Wiki](docs/integrations/wiki.md) · [Wiki map](docs/guides/wiki-visualization.md) · [Stability](docs/architecture/stability.md)
 
@@ -584,7 +592,7 @@ When your change touches one of these areas, read the linked doc first; behavior
 - **Council / arena modes** — [docs/guides/modes.md](docs/guides/modes.md), [docs/guides/verified-multi-model-change.md](docs/guides/verified-multi-model-change.md)
 - **Snapshot, rollback, evidence export** — [docs/guides/execution-evidence.md](docs/guides/execution-evidence.md)
 - **Sandbox / autonomy / permissions** — [docs/guides/sandbox.md](docs/guides/sandbox.md), [docs/guides/autonomous.md](docs/guides/autonomous.md)
-- **MCP and WebMCP** — [docs/integrations/mcp.md](docs/integrations/mcp.md)
+- **MCP and WebMCP** — [docs/integrations/mcp.md](docs/integrations/mcp.md), [docs/guides/webmcp-bridge.md](docs/guides/webmcp-bridge.md)
 - **Standalone install / runtime channels** — [docs/getting-started/install-runtime.md](docs/getting-started/install-runtime.md)
 - **Goal assurance and `verify_project`** — [docs/guides/goal-assurance.md](docs/guides/goal-assurance.md)
 - **Conversation recap and TUI stability** — [docs/architecture/stability.md](docs/architecture/stability.md)

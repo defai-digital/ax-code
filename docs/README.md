@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: public, current-state
-Last reviewed: 2026-09-16
+Last reviewed: 2026-10-09
 Owner: AX Code maintainers
 
 AX Code is an open-source coding-agent runtime for reviewable, reversible work: every session is recorded as a
@@ -48,6 +48,7 @@ For standalone questions about selected files through AX Trust caching, see
 | Keep scheduled work running across process or host exits | [Long-Running Operations](guides/long-running-operations.md)            |
 | Choose local, cloud, hybrid, council, or arena execution | [Execution Modes](guides/modes.md)                                      |
 | Connect external tools and data                          | [MCP Integrations](integrations/mcp.md)                                 |
+| Let the agent read and act in Chrome through WebMCP      | [WebMCP browser bridge](guides/webmcp-bridge.md)                        |
 | Embed AX Code in an application                          | [`@defai-digital/ax-code-sdk`](../packages/sdk/js/README.md)            |
 | Generate a client for another language                   | [HTTP and OpenAPI Compatibility](sdk/http-openapi.md)                   |
 | Build a desktop or native host                           | [Native SDK Transport](sdk/native-transport.md)                         |
