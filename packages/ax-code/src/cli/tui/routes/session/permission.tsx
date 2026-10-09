@@ -670,7 +670,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
             </box>
           }
           options={{ cancel: t("common.cancel"), confirm: "Add and allow" }}
-          warningOption="confirm"
+          dangerOption="confirm"
           escapeKey="cancel"
           onSelect={(option) => {
             if (option === "cancel") {
@@ -776,7 +776,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
           }
           body={permissionInfo().body}
           options={baseOptions()}
-          warningOption="allowlist"
+          dangerOption="allowlist"
           escapeKey="reject"
           fullscreen
           onFullscreenChange={setExpanded}
@@ -903,7 +903,7 @@ export function PermissionChoicePrompt<const T extends Record<string, string>>(p
   body: JSX.Element
   options: T
   escapeKey?: keyof T
-  warningOption?: keyof T
+  dangerOption?: keyof T
   fullscreen?: boolean
   onFullscreenChange?: (expanded: boolean) => void
   onSelect: (option: keyof T) => void
@@ -1020,7 +1020,11 @@ export function PermissionChoicePrompt<const T extends Record<string, string>>(p
                 paddingLeft={1}
                 paddingRight={1}
                 backgroundColor={
-                  option === store.selected || option === props.warningOption ? theme.warning : theme.backgroundMenu
+                  option === props.dangerOption
+                    ? theme.error
+                    : option === store.selected
+                      ? theme.warning
+                      : theme.backgroundMenu
                 }
                 onMouseOver={() => setStore("selected", option)}
                 onMouseUp={() => {
@@ -1030,12 +1034,14 @@ export function PermissionChoicePrompt<const T extends Record<string, string>>(p
               >
                 <text
                   fg={
-                    option === store.selected || option === props.warningOption
-                      ? selectedForeground(theme, theme.warning)
-                      : theme.textMuted
+                    option === props.dangerOption
+                      ? selectedForeground(theme, theme.error)
+                      : option === store.selected
+                        ? selectedForeground(theme, theme.warning)
+                        : theme.textMuted
                   }
                 >
-                  {props.warningOption !== undefined ? (option === store.selected ? "› " : "  ") : ""}
+                  {props.dangerOption !== undefined ? (option === store.selected ? "› " : "  ") : ""}
                   {props.options[option]}
                 </text>
               </box>

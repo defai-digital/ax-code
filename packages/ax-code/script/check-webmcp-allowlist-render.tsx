@@ -25,13 +25,13 @@ let selection = ""
 
 function Preview() {
   const { theme } = useTheme()
-  expectedColor = theme.warning.toString()
+  expectedColor = theme.error.toString()
   return (
     <PermissionChoicePrompt
       title="Experimental WebMCP bridge call"
       body={<text>Operation: list_pages</text>}
       options={{ once: "Allow once", allowlist: "Add to WebMCP allowlist", reject: "Reject" }}
-      warningOption="allowlist"
+      dangerOption="allowlist"
       escapeKey="reject"
       onSelect={(option) => {
         selection = option

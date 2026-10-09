@@ -74,7 +74,7 @@ labeled with its origin and size-limited.
 
 ## Save an approval
 
-Eligible prompts offer **Add to WebMCP allowlist** with a yellow background.
+Eligible prompts offer **Add to WebMCP allowlist** with a red background.
 Select it, review the scope, then choose **Add and allow**. Saved approvals
 apply to this project on this machine and survive browser reconnects and
 AX Code restarts.
