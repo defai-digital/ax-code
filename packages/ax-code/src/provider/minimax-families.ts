@@ -1,3 +1,5 @@
+import { familyDisplayName, familyReleaseTime } from "./family-shared"
+
 const FAMILY_ORDER = ["minimax-m3", "minimax-m2"] as const
 
 export type MiniMaxFamilySource = {
@@ -16,12 +18,7 @@ export function minimaxFamilyId(input: { id?: string; family?: string }): string
 }
 
 export function minimaxDisplayName(name: string | undefined, fallback: string): string {
-  const trimmed = (name ?? fallback)
-    .replace(/\s*\(latest\)\s*/gi, " ")
-    .replace(/^openrouter:\s*/i, "")
-    .replace(/\s+/g, " ")
-    .trim()
-  return trimmed.length > 0 ? trimmed : fallback
+  return familyDisplayName(name, fallback, { stripOpenRouterPrefix: true })
 }
 
 export function latestMiniMaxFamilyModels<T extends MiniMaxFamilySource>(models: Record<string, T>): T[] {
@@ -68,7 +65,7 @@ function compareMiniMaxFamilyModels(a: MiniMaxFamilySource, b: MiniMaxFamilySour
   const bVer = minimaxVersion(bId)
   if (aVer[0] !== bVer[0]) return aVer[0] - bVer[0]
   if (aVer[1] !== bVer[1]) return aVer[1] - bVer[1]
-  return releaseTime(a.release_date) - releaseTime(b.release_date)
+  return familyReleaseTime(a.release_date) - familyReleaseTime(b.release_date)
 }
 
 function isMiniMaxSecondaryVariant(id: string): boolean {
@@ -81,10 +78,4 @@ function minimaxVersion(id: string): [number, number] {
   const match = segment.match(/minimax-m(\d+)(?:[.-](\d+))?/)
   if (!match) return [0, 0]
   return [Number(match[1]), Number(match[2] ?? 0)]
-}
-
-function releaseTime(value?: string): number {
-  if (!value) return 0
-  const time = Date.parse(value)
-  return Number.isFinite(time) ? time : 0
 }

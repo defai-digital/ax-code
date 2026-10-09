@@ -1,3 +1,5 @@
+import { familyDisplayName, familyReleaseTime } from "./family-shared"
+
 const FAMILY_ORDER = ["grok-4"] as const
 
 export type GrokFamilySource = {
@@ -31,12 +33,7 @@ export function grokFamilySortKey(family?: string): number {
 }
 
 export function grokDisplayName(name: string | undefined, fallback: string): string {
-  const trimmed = (name ?? fallback)
-    .replace(/\s*\(latest\)\s*/gi, " ")
-    .replace(/^openrouter:\s*/i, "")
-    .replace(/\s+/g, " ")
-    .trim()
-  return trimmed.length > 0 ? trimmed : fallback
+  return familyDisplayName(name, fallback, { stripOpenRouterPrefix: true })
 }
 
 export function latestGrokFamilyModels<T extends GrokFamilySource>(models: Record<string, T>): T[] {
@@ -79,7 +76,7 @@ function compareGrokFamilyModels(a: GrokFamilySource, b: GrokFamilySource, aKey:
   const bVer = grokVersion(b.id)
   if (aVer[0] !== bVer[0]) return aVer[0] - bVer[0]
   if (aVer[1] !== bVer[1]) return aVer[1] - bVer[1]
-  return releaseTime(a.release_date) - releaseTime(b.release_date)
+  return familyReleaseTime(a.release_date) - familyReleaseTime(b.release_date)
 }
 
 function grokVersion(id: string): [number, number] {
@@ -87,10 +84,4 @@ function grokVersion(id: string): [number, number] {
   const match = segment.match(/grok-(\d+)(?:[.-](\d+))?/)
   if (!match) return [0, 0]
   return [Number(match[1]), Number(match[2] ?? 0)]
-}
-
-function releaseTime(value?: string): number {
-  if (!value) return 0
-  const time = Date.parse(value)
-  return Number.isFinite(time) ? time : 0
 }
