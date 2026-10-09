@@ -1,5 +1,10 @@
 # WebMCP browser bridge
 
+Status: Experimental
+Scope: public, current-state
+Last reviewed: 2026-10-08
+Owner: AX Code maintainers
+
 The WebMCP bridge lets the agent open pages in an isolated Chrome window,
 read them, and (optionally) act on them. It is experimental, off by default,
 and needs Chrome 150 or newer.
