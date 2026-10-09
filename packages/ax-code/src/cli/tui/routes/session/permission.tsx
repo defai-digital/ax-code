@@ -25,6 +25,11 @@ import { Global } from "@/global"
 import { withTimeout } from "@/util/timeout"
 import { replyError } from "../../util/error-message"
 import { CONFIRM_KEYS } from "../../util/keys"
+import {
+  canSaveWebMcpApproval,
+  webMcpAllowlistPreview,
+  permissionOptionsStack,
+} from "../../component/webmcp-allowlist-model"
 import { webMcpApprovalLines } from "@/mcp/webmcp-approval"
 import {
   createPermissionSubmitLatch,
@@ -35,7 +40,7 @@ import {
 
 const log = Log.create({ service: "tui.permission" })
 
-type PermissionStage = "permission" | "always" | "reject"
+type PermissionStage = "permission" | "always" | "reject" | "webmcp-allowlist"
 
 // The reply request goes through a no-timeout fetch (SDK connections stay
 // open indefinitely for streaming), so a dropped/stalled response never
@@ -216,6 +221,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
   const [store, setStore] = createStore({
     stage: "permission" as PermissionStage,
     alwaysRequestID: undefined as string | undefined,
+    allowlistRequestID: undefined as string | undefined,
     // Latch so repeated clicks/Enter while a reply is in flight cannot send
     // duplicate replies for the same request. Pure transitions live in
     // permission-submit-latch.ts (ADR-047 / runtime-stability). See #241.
@@ -233,6 +239,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
         setStore({
           stage: "permission",
           alwaysRequestID: undefined,
+          allowlistRequestID: undefined,
           // Always re-arm from a clean latch for the new request id so a
           // mid-flight previous reply cannot leave submitting=true.
           latch: createPermissionSubmitLatch(id),
@@ -285,6 +292,13 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
 
   const { theme } = useTheme()
 
+  const allowlistAvailable = createMemo(() => canSaveWebMcpApproval(props.request))
+  createEffect(() => {
+    if (store.stage === "webmcp-allowlist" && !canSaveWebMcpApproval(props.request, store.allowlistRequestID)) {
+      setStore({ stage: "permission", allowlistRequestID: undefined })
+    }
+  })
+
   const allowAlwaysAvailable = createMemo(() => canPersistPermission(props.request))
   createEffect(() => {
     if (store.stage === "always" && !allowAlwaysAvailable()) {
@@ -300,7 +314,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
   const [secondsLeft, setSecondsLeft] = createSignal<number | undefined>(undefined)
   createEffect(
     on(
-      () => props.request.id,
+      () => [props.request.id, props.request.autoOnceAt],
       () => {
         const at = props.request.autoOnceAt
         if (!at) {
@@ -319,8 +333,9 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
     const seconds = secondsLeft()
     const opts: Record<string, string> = {
       once: seconds === undefined ? t("permission.once") : t("permission.onceCountdown", { seconds: String(seconds) }),
-      reject: t("common.reject"),
     }
+    if (allowlistAvailable()) opts.allowlist = "Add to WebMCP allowlist"
+    opts.reject = t("common.reject")
     if (allowAlwaysAvailable()) opts.always = t("permission.always")
     return opts
   })
@@ -644,8 +659,36 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
 
   return (
     <Switch>
+      <Match when={store.stage === "webmcp-allowlist"}>
+        <PermissionChoicePrompt
+          title="Add to WebMCP allowlist"
+          body={
+            <box paddingLeft={1} flexDirection="column">
+              <For each={props.request.webmcpAllowlist ? webMcpAllowlistPreview(props.request.webmcpAllowlist) : []}>
+                {(line) => <text fg={theme.textMuted}>{line}</text>}
+              </For>
+            </box>
+          }
+          options={{ cancel: t("common.cancel"), confirm: "Add and allow" }}
+          warningOption="confirm"
+          escapeKey="cancel"
+          onSelect={(option) => {
+            if (option === "cancel") {
+              setStore({ stage: "permission", allowlistRequestID: undefined })
+              return
+            }
+            if (!canSaveWebMcpApproval(props.request, store.allowlistRequestID)) return
+            const requestID = props.request.id
+            submitPermissionReply(
+              () => sdk.client.permission.saveWebMcpApproval({ requestID }),
+              "WebMCP allowlist save failed",
+              "Could not save the WebMCP approval",
+            )
+          }}
+        />
+      </Match>
       <Match when={store.stage === "always"}>
-        <Prompt
+        <PermissionChoicePrompt
           title={t("permission.alwaysTitle")}
           body={
             <Switch>
@@ -708,7 +751,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
         />
       </Match>
       <Match when={store.stage === "permission"}>
-        <Prompt
+        <PermissionChoicePrompt
           title={t("permission.required")}
           header={
             <box flexDirection="column" gap={0}>
@@ -733,10 +776,16 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
           }
           body={permissionInfo().body}
           options={baseOptions()}
+          warningOption="allowlist"
           escapeKey="reject"
           fullscreen
           onFullscreenChange={setExpanded}
           onSelect={(option) => {
+            if (option === "allowlist") {
+              if (!allowlistAvailable()) return
+              setStore({ stage: "webmcp-allowlist", allowlistRequestID: props.request.id })
+              return
+            }
             if (option === "always") {
               if (!allowAlwaysAvailable()) return
               setStore({ stage: "always", alwaysRequestID: props.request.id })
@@ -848,12 +897,13 @@ function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: (
   )
 }
 
-function Prompt<const T extends Record<string, string>>(props: {
+export function PermissionChoicePrompt<const T extends Record<string, string>>(props: {
   title: string
   header?: JSX.Element
   body: JSX.Element
   options: T
   escapeKey?: keyof T
+  warningOption?: keyof T
   fullscreen?: boolean
   onFullscreenChange?: (expanded: boolean) => void
   onSelect: (option: keyof T) => void
@@ -876,7 +926,7 @@ function Prompt<const T extends Record<string, string>>(props: {
     const current = keys()
     if (!current.includes(store.selected)) setStore("selected", current[0])
   })
-  const narrow = createMemo(() => dimensions().width < 80)
+  const narrow = createMemo(() => permissionOptionsStack(dimensions().width, Object.values(props.options)))
   const dialog = useDialog()
 
   useKeyboard((evt) => {
@@ -962,20 +1012,30 @@ function Prompt<const T extends Record<string, string>>(props: {
         justifyContent={narrow() ? "flex-start" : "space-between"}
         alignItems={narrow() ? "flex-start" : "center"}
       >
-        <box flexDirection="row" gap={1} flexShrink={0}>
+        <box flexDirection={narrow() ? "column" : "row"} gap={1} flexShrink={0}>
           <For each={keys()}>
             {(option) => (
               <box
+                id={`permission-option-${String(option)}`}
                 paddingLeft={1}
                 paddingRight={1}
-                backgroundColor={option === store.selected ? theme.warning : theme.backgroundMenu}
+                backgroundColor={
+                  option === store.selected || option === props.warningOption ? theme.warning : theme.backgroundMenu
+                }
                 onMouseOver={() => setStore("selected", option)}
                 onMouseUp={() => {
                   setStore("selected", option)
                   props.onSelect(option)
                 }}
               >
-                <text fg={option === store.selected ? selectedForeground(theme, theme.warning) : theme.textMuted}>
+                <text
+                  fg={
+                    option === store.selected || option === props.warningOption
+                      ? selectedForeground(theme, theme.warning)
+                      : theme.textMuted
+                  }
+                >
+                  {props.warningOption !== undefined ? (option === store.selected ? "› " : "  ") : ""}
                   {props.options[option]}
                 </text>
               </box>

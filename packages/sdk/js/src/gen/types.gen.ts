@@ -3119,6 +3119,7 @@ export type PermissionRequest = {
     [key: string]: unknown
   }
   always: Array<string>
+  webmcpAllowlist?: WebMcpApprovalSummary
   autoOnceAt?: number
   tool?: {
     messageID: string
@@ -4598,6 +4599,47 @@ export type UserMessage = {
 /** AX Code API schema `VcsInfo` (auto-generated from the OpenAPI contract). */
 export type VcsInfo = {
   branch: string
+}
+
+/** AX Code API schema `WebMcpApprovalRecord` (auto-generated from the OpenAPI contract). */
+export type WebMcpApprovalRecord = {
+  server: string
+  project: string
+  scope:
+    | {
+        capability: "list_pages"
+      }
+    | {
+        capability: "navigate"
+        origin: string
+      }
+    | {
+        capability: "read"
+        origin: string
+      }
+  id: string
+  fingerprint: string
+  revision: string
+  policyVersion: 1
+  createdAt: number
+}
+
+/** AX Code API schema `WebMcpApprovalSummary` (auto-generated from the OpenAPI contract). */
+export type WebMcpApprovalSummary = {
+  server: string
+  project: string
+  scope:
+    | {
+        capability: "list_pages"
+      }
+    | {
+        capability: "navigate"
+        origin: string
+      }
+    | {
+        capability: "read"
+        origin: string
+      }
 }
 
 /**
@@ -14400,6 +14442,46 @@ export type PermissionRespondResponses = {
 /** Successful response payload for `POST /session/{sessionID}/permissions/{permissionID}` — Respond to permission */
 export type PermissionRespondResponse = PermissionRespondResponses[keyof PermissionRespondResponses]
 
+/** Request payload shape for `POST /permission/{requestID}/webmcp-allowlist` — Save a WebMCP approval and allow the pending operation */
+export type PermissionSaveWebMcpApprovalData = {
+  body?: never
+  path: {
+    requestID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/permission/{requestID}/webmcp-allowlist"
+}
+
+/** Error response payloads for `POST /permission/{requestID}/webmcp-allowlist` — Save a WebMCP approval and allow the pending operation */
+export type PermissionSaveWebMcpApprovalErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+}
+
+/** Error response payload for `POST /permission/{requestID}/webmcp-allowlist` — Save a WebMCP approval and allow the pending operation */
+export type PermissionSaveWebMcpApprovalError =
+  PermissionSaveWebMcpApprovalErrors[keyof PermissionSaveWebMcpApprovalErrors]
+
+/** Success response payloads for `POST /permission/{requestID}/webmcp-allowlist` — Save a WebMCP approval and allow the pending operation */
+export type PermissionSaveWebMcpApprovalResponses = {
+  /**
+   * Approval saved
+   */
+  200: boolean
+}
+
+/** Successful response payload for `POST /permission/{requestID}/webmcp-allowlist` — Save a WebMCP approval and allow the pending operation */
+export type PermissionSaveWebMcpApprovalResponse =
+  PermissionSaveWebMcpApprovalResponses[keyof PermissionSaveWebMcpApprovalResponses]
+
 /** Request payload shape for `POST /permission/{requestID}/reply` — Respond to permission request */
 export type PermissionReplyData = {
   body?: {
@@ -15717,6 +15799,75 @@ export type EventSubscribeResponses = {
 
 /** Successful response payload for `GET /event` — Subscribe to events */
 export type EventSubscribeResponse = EventSubscribeResponses[keyof EventSubscribeResponses]
+
+/** Request payload shape for `DELETE /mcp/{name}/webmcp-approvals` — Revoke saved WebMCP approvals for this project */
+export type McpRevokeWebMcpApprovalData = {
+  body?: never
+  path: {
+    name: string
+  }
+  query?: {
+    directory?: string
+    id?: string
+  }
+  url: "/mcp/{name}/webmcp-approvals"
+}
+
+/** Error response payloads for `DELETE /mcp/{name}/webmcp-approvals` — Revoke saved WebMCP approvals for this project */
+export type McpRevokeWebMcpApprovalErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+}
+
+/** Error response payload for `DELETE /mcp/{name}/webmcp-approvals` — Revoke saved WebMCP approvals for this project */
+export type McpRevokeWebMcpApprovalError = McpRevokeWebMcpApprovalErrors[keyof McpRevokeWebMcpApprovalErrors]
+
+/** Success response payloads for `DELETE /mcp/{name}/webmcp-approvals` — Revoke saved WebMCP approvals for this project */
+export type McpRevokeWebMcpApprovalResponses = {
+  /**
+   * Approvals revoked
+   */
+  200: boolean
+}
+
+/** Successful response payload for `DELETE /mcp/{name}/webmcp-approvals` — Revoke saved WebMCP approvals for this project */
+export type McpRevokeWebMcpApprovalResponse = McpRevokeWebMcpApprovalResponses[keyof McpRevokeWebMcpApprovalResponses]
+
+/** Request payload shape for `GET /mcp/{name}/webmcp-approvals` — List saved WebMCP approvals for this project */
+export type McpWebMcpApprovalsData = {
+  body?: never
+  path: {
+    name: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/mcp/{name}/webmcp-approvals"
+}
+
+/** Error response payloads for `GET /mcp/{name}/webmcp-approvals` — List saved WebMCP approvals for this project */
+export type McpWebMcpApprovalsErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+}
+
+/** Error response payload for `GET /mcp/{name}/webmcp-approvals` — List saved WebMCP approvals for this project */
+export type McpWebMcpApprovalsError = McpWebMcpApprovalsErrors[keyof McpWebMcpApprovalsErrors]
+
+/** Success response payloads for `GET /mcp/{name}/webmcp-approvals` — List saved WebMCP approvals for this project */
+export type McpWebMcpApprovalsResponses = {
+  /**
+   * Saved approvals
+   */
+  200: Array<WebMcpApprovalRecord>
+}
+
+/** Successful response payload for `GET /mcp/{name}/webmcp-approvals` — List saved WebMCP approvals for this project */
+export type McpWebMcpApprovalsResponse = McpWebMcpApprovalsResponses[keyof McpWebMcpApprovalsResponses]
 
 /** Request payload shape for `GET /mcp` — Get MCP status */
 export type McpStatusData = {

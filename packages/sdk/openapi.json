@@ -30634,6 +30634,68 @@
         ]
       }
     },
+    "/permission/{requestID}/webmcp-allowlist": {
+      "post": {
+        "operationId": "permission.saveWebMcpApproval",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "requestID",
+            "schema": {
+              "type": "string",
+              "pattern": "^per_.*"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Save a WebMCP approval and allow the pending operation",
+        "responses": {
+          "200": {
+            "description": "Approval saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.permission.saveWebMcpApproval({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/permission/{requestID}/reply": {
       "post": {
         "operationId": "permission.reply",
@@ -33571,6 +33633,123 @@
           {
             "lang": "js",
             "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.event.subscribe({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/mcp/{name}/webmcp-approvals": {
+      "get": {
+        "operationId": "mcp.webMcpApprovals",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "required": true
+          }
+        ],
+        "summary": "List saved WebMCP approvals for this project",
+        "responses": {
+          "200": {
+            "description": "Saved approvals",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WebMcpApprovalRecord"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.mcp.webMcpApprovals({\n  ...\n})"
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "mcp.revokeWebMcpApproval",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        ],
+        "summary": "Revoke saved WebMCP approvals for this project",
+        "responses": {
+          "200": {
+            "description": "Approvals revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.mcp.revokeWebMcpApproval({\n  ...\n})"
           }
         ]
       }
@@ -45420,6 +45599,9 @@
               "type": "string"
             }
           },
+          "webmcpAllowlist": {
+            "$ref": "#/components/schemas/WebMcpApprovalSummary"
+          },
           "autoOnceAt": {
             "type": "integer",
             "exclusiveMinimum": 0,
@@ -51217,6 +51399,173 @@
         "required": [
           "branch"
         ]
+      },
+      "WebMcpApprovalRecord": {
+        "type": "object",
+        "properties": {
+          "server": {
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          },
+          "scope": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "capability": {
+                    "type": "string",
+                    "const": "list_pages"
+                  }
+                },
+                "required": [
+                  "capability"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "capability": {
+                    "type": "string",
+                    "const": "navigate"
+                  },
+                  "origin": {
+                    "type": "string",
+                    "maxLength": 2048
+                  }
+                },
+                "required": [
+                  "capability",
+                  "origin"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "capability": {
+                    "type": "string",
+                    "const": "read"
+                  },
+                  "origin": {
+                    "type": "string",
+                    "maxLength": 2048
+                  }
+                },
+                "required": [
+                  "capability",
+                  "origin"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "fingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "revision": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "policyVersion": {
+            "type": "number",
+            "const": 1
+          },
+          "createdAt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "server",
+          "project",
+          "scope",
+          "id",
+          "fingerprint",
+          "revision",
+          "policyVersion",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "WebMcpApprovalSummary": {
+        "type": "object",
+        "properties": {
+          "server": {
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          },
+          "scope": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "capability": {
+                    "type": "string",
+                    "const": "list_pages"
+                  }
+                },
+                "required": [
+                  "capability"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "capability": {
+                    "type": "string",
+                    "const": "navigate"
+                  },
+                  "origin": {
+                    "type": "string",
+                    "maxLength": 2048
+                  }
+                },
+                "required": [
+                  "capability",
+                  "origin"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "capability": {
+                    "type": "string",
+                    "const": "read"
+                  },
+                  "origin": {
+                    "type": "string",
+                    "maxLength": 2048
+                  }
+                },
+                "required": [
+                  "capability",
+                  "origin"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "required": [
+          "server",
+          "project",
+          "scope"
+        ],
+        "additionalProperties": false
       },
       "WebMcpProfileConfig": {
         "description": "Experimental pinned WebMCP bridge policy; requires explicit enablement and interactive approval for every call",

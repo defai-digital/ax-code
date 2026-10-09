@@ -1,6 +1,11 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { afterEach, describe, expect, test, vi } from "vitest"
+import { WebMcpApprovals } from "../../src/mcp/webmcp-approvals"
+import { Config } from "../../src/config/config"
+import { Permission } from "../../src/permission"
+import { ToolRegistry } from "../../src/tool/registry"
+import { resolveTools } from "../../src/session/prompt/prompt-tools"
 import { WebMcpProfile } from "../../src/mcp/webmcp-profile"
 import { webMcpApprovalLines } from "../../src/mcp/webmcp-approval"
 
@@ -561,4 +566,146 @@ describe("WebMCP network metadata admission (ADR-172)", () => {
       ),
     ).toThrow("exceeded the 32 KiB read budget")
   })
+})
+
+describe("saved WebMCP approvals through the connected bridge", () => {
+  test("saved reads survive reconnect, revoke immediately, and retain origin preflight", async () => {
+    bridge.names = ["list_pages", "take_snapshot"]
+    await using tmp = await tmpdir({
+      git: true,
+      config: { mcp: { bridge: WebMcpProfile.config({ allowedOrigins: [], read: true }, true) } },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await MCP.connect("bridge")
+        let currentOrigin = "https://example.test"
+        bridge.call.mockImplementation((call: { name: string }) =>
+          call.name === "list_pages"
+            ? { content: [], structuredContent: { pages: [{ id: 1, url: currentOrigin + "/", selected: true }] } }
+            : { content: [{ type: "text", text: "snapshot" }] },
+        )
+        const tools = await MCP.tools()
+        const policy = tools.bridge_take_snapshot.webmcp!
+        const candidate = (await WebMcpApprovals.capture(policy, { capability: "read", origin: currentOrigin }))!
+        await WebMcpApprovals.save(candidate, () => true)
+        const options = { toolCallId: "saved_read", messages: [], abortSignal: new AbortController().signal }
+        await tools.bridge_take_snapshot.execute!({ pageId: 1 }, options)
+        expect(policy.readGrants!().size).toBe(0)
+        currentOrigin = "https://other.test"
+        await expect(tools.bridge_take_snapshot.execute!({ pageId: 1 }, options)).rejects.toThrow("not granted")
+        currentOrigin = "https://example.test"
+        await MCP.disconnect("bridge")
+        await MCP.connect("bridge")
+        const reconnected = (await MCP.tools()).bridge_take_snapshot
+        await reconnected.execute!({ pageId: 1 }, options)
+        const cfg = await Config.get()
+        const old = cfg.mcp!.bridge
+        cfg.mcp!.bridge = WebMcpProfile.config({ allowedOrigins: [], read: false }, true)
+        expect(
+          await WebMcpApprovals.capture(reconnected.webmcp!, { capability: "read", origin: currentOrigin }),
+        ).toBeUndefined()
+        cfg.mcp!.bridge = old
+        await WebMcpApprovals.remove("bridge")
+        await expect(reconnected.execute!({ pageId: 1 }, options)).rejects.toThrow("not granted")
+      },
+    })
+  })
+
+  test("the real session wrapper offers save for listing, suppresses the next ask and prompts after revoke", async () => {
+    bridge.names = ["list_pages"]
+    bridge.call.mockResolvedValue({ content: [], structuredContent: { pages: [] } })
+    await using tmp = await tmpdir({
+      git: true,
+      config: { mcp: { bridge: WebMcpProfile.config({ allowedOrigins: [], read: true }, true) } },
+    })
+    const registry = vi.spyOn(ToolRegistry, "tools").mockResolvedValue([])
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await MCP.connect("bridge")
+          const wrapped = await resolveTools({
+            agent: { name: "build", permission: [{ permission: "*", pattern: "*", action: "allow" }] },
+            session: { id: "ses_saved_listing", permission: [] },
+            model: { providerID: "test", api: { id: "test", npm: "@ai-sdk/openai-compatible" } },
+            tools: {},
+            bypassAgentCheck: false,
+            messages: [],
+            processor: { message: { id: "msg_saved_listing" }, partFromToolCall: () => undefined },
+          } as never)
+          const options = { toolCallId: "call_saved_listing", messages: [], abortSignal: new AbortController().signal }
+          const first = wrapped.bridge_list_pages.execute!({}, options)
+          first.catch(() => {})
+          await vi.waitFor(async () => expect(await Permission.list()).toHaveLength(1))
+          const [request] = await Permission.list()
+          expect(request.webmcpAllowlist?.scope.capability).toBe("list_pages")
+          await Permission.saveWebMcpApproval(request.id)
+          await first
+          await wrapped.bridge_list_pages.execute!({}, options)
+          expect(await Permission.list()).toHaveLength(0)
+          await WebMcpApprovals.remove("bridge")
+          const third = wrapped.bridge_list_pages.execute!({}, options)
+          const rejected = expect(third).rejects.toThrow()
+          await vi.waitFor(async () => expect(await Permission.list()).toHaveLength(1))
+          const [again] = await Permission.list()
+          await Permission.reply({ requestID: again.id, reply: "reject" })
+          await rejected
+          expect(bridge.call.mock.calls.filter((row) => row[0].name === "list_pages")).toHaveLength(2)
+        },
+      })
+    } finally {
+      registry.mockRestore()
+    }
+  })
+})
+
+test("saving the real first-read prompt keeps durable authority out of session grants", async () => {
+  bridge.names = ["list_pages", "take_snapshot"]
+  bridge.call.mockImplementation((call: { name: string }) =>
+    call.name === "list_pages"
+      ? { content: [], structuredContent: { pages: [{ id: 1, url: "https://example.test/", selected: true }] } }
+      : { content: [{ type: "text", text: "snapshot" }] },
+  )
+  await using tmp = await tmpdir({
+    git: true,
+    config: { mcp: { bridge: WebMcpProfile.config({ allowedOrigins: [], read: true }, true) } },
+  })
+  const registry = vi.spyOn(ToolRegistry, "tools").mockResolvedValue([])
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await MCP.connect("bridge")
+        const wrapped = await resolveTools({
+          agent: { name: "build", permission: [{ permission: "*", pattern: "*", action: "allow" }] },
+          session: { id: "ses_saved_read", permission: [] },
+          model: { providerID: "test", api: { id: "test", npm: "@ai-sdk/openai-compatible" } },
+          tools: {},
+          bypassAgentCheck: false,
+          messages: [],
+          processor: { message: { id: "msg_saved_read" }, partFromToolCall: () => undefined },
+        } as never)
+        const options = { toolCallId: "call_saved_read", messages: [], abortSignal: new AbortController().signal }
+        const first = wrapped.bridge_take_snapshot.execute!({ pageId: 1 }, options)
+        const stopped = expect(first).rejects.toThrow("was saved for this project")
+        await vi.waitFor(async () => expect(await Permission.list()).toHaveLength(1))
+        const [request] = await Permission.list()
+        expect(request.webmcpAllowlist?.scope).toEqual({ capability: "read", origin: "https://example.test" })
+        await Permission.saveWebMcpApproval(request.id)
+        await stopped
+        await wrapped.bridge_take_snapshot.execute!({ pageId: 1 }, options)
+        expect((await MCP.tools()).bridge_take_snapshot.webmcp!.readGrants!().size).toBe(0)
+        await WebMcpApprovals.remove("bridge")
+        const third = wrapped.bridge_take_snapshot.execute!({ pageId: 1 }, options)
+        const rejected = expect(third).rejects.toThrow()
+        await vi.waitFor(async () => expect(await Permission.list()).toHaveLength(1))
+        const [again] = await Permission.list()
+        await Permission.reply({ requestID: again.id, reply: "reject" })
+        await rejected
+      },
+    })
+  } finally {
+    registry.mockRestore()
+  }
 })

@@ -3,6 +3,7 @@ import { describeRoute, resolver } from "hono-openapi"
 import { validator } from "../validation"
 import z from "zod"
 import { MCP } from "../../mcp"
+import { WebMcpApprovals } from "../../mcp/webmcp-approvals"
 import { Config } from "../../config/config"
 import { errors, invalidRequest, notFound } from "../error"
 import { lazy } from "../../util/lazy"
@@ -41,6 +42,47 @@ export const McpRoutes = lazy(() =>
       if (unauthorized) return unauthorized
       return next()
     })
+    .get(
+      "/:name/webmcp-approvals",
+      describeRoute({
+        summary: "List saved WebMCP approvals for this project",
+        operationId: "mcp.webMcpApprovals",
+        responses: {
+          200: {
+            description: "Saved approvals",
+            content: { "application/json": { schema: resolver(WebMcpApprovals.Record.array()) } },
+          },
+          ...errors(400),
+        },
+      }),
+      validator("param", MCP_NAME_PARAM_OBJECT),
+      withMcpName(async (name, c) => c.json(await WebMcpApprovals.list(name))),
+    )
+    .delete(
+      "/:name/webmcp-approvals",
+      describeRoute({
+        summary: "Revoke saved WebMCP approvals for this project",
+        operationId: "mcp.revokeWebMcpApproval",
+        responses: {
+          200: { description: "Approvals revoked", content: { "application/json": { schema: resolver(z.boolean()) } } },
+          ...errors(400),
+        },
+      }),
+      validator("param", MCP_NAME_PARAM_OBJECT),
+      validator(
+        "query",
+        z.object({
+          id: z
+            .string()
+            .regex(/^[a-f0-9]{64}$/)
+            .optional(),
+        }),
+      ),
+      withMcpName(async (name, c) => {
+        await WebMcpApprovals.remove(name, c.req.valid("query").id)
+        return c.json(true)
+      }),
+    )
     .get(
       "/",
       describeRoute({

@@ -24,6 +24,7 @@ import { Flag } from "@/flag/flag"
 import { ScopedFlag } from "@/flag/scoped"
 import { Isolation } from "@/isolation"
 import { ProjectConfigTrust } from "@/config/project-config-trust"
+import { WebMcpApprovals } from "@/mcp/webmcp-approvals"
 import { FileLock } from "@/util/filelock"
 
 // Permissions the opt-in semantic guardian evaluates. The highest-risk RISK
@@ -70,6 +71,7 @@ export namespace Permission {
       patterns: z.string().array(),
       metadata: z.record(z.string(), z.any()),
       always: z.string().array(),
+      webmcpAllowlist: WebMcpApprovals.Summary.optional(),
       // ADR-138: epoch ms when the server auto-replies "once" for an idle
       // interactive ask (full-access + autonomous + configured allowlist).
       // Absent on every other ask; clients render a countdown from it.
@@ -184,6 +186,9 @@ export namespace Permission {
     deferred: PromiseDeferred<void>
     // ADR-138 idle "Allow once" deadline; cleared on every removal path.
     autoOnceTimer?: ReturnType<typeof setTimeout>
+    candidate?: WebMcpApprovals.Candidate
+    saving?: boolean
+    agent?: string
   }
 
   interface State {
@@ -439,7 +444,7 @@ export namespace Permission {
   async function askPromise(input: z.infer<typeof AskInput>, options?: { signal?: AbortSignal }): Promise<void> {
     const s = await state()
     const { approved, pending } = s
-    const { ruleset, ...request } = input
+    const { ruleset, webmcpAllowlist: _untrustedSummary, ...request } = input
     let needsAsk = false
     enforceSafetyPolicy(request, input.agent)
 
@@ -456,6 +461,19 @@ export namespace Permission {
       needsAsk = true
     }
 
+    const candidate = WebMcpApprovals.candidate(request.metadata)
+    if (candidate) await checkDenials(input)
+    if (
+      candidate &&
+      (request.permission === "webmcp" || request.permission === candidate.admission?.permission) &&
+      request.metadata.requireInteractive !== true &&
+      (await WebMcpApprovals.allowed(candidate))
+    ) {
+      if (options?.signal?.aborted) throw abortError(options.signal)
+      WebMcpApprovals.markReused(request.metadata)
+      log.info("saved WebMCP approval applied", { server: candidate.server, capability: candidate.scope.capability })
+      return
+    }
     if (!needsAsk) return
 
     // ADR-098: a full-access sandbox has no filesystem boundary left to
@@ -569,6 +587,9 @@ export namespace Permission {
     const info: Request = {
       id,
       ...request,
+      ...(request.permission === "webmcp" && candidate
+        ? { webmcpAllowlist: { server: candidate.server, project: candidate.project, scope: candidate.scope } }
+        : {}),
     }
     log.info("asking", { id, permission: info.permission, patterns: info.patterns })
 
@@ -578,7 +599,7 @@ export namespace Permission {
     // auto-approve THIS replacement ask. Disarm the previous entry before
     // overwriting; the old caller's hung promise is its own bug to surface.
     clearIdleOnceTimer(pending.get(id))
-    const entry: PendingEntry = { info, ruleset, deferred }
+    const entry: PendingEntry = { info, ruleset, deferred, candidate, agent: input.agent }
     pending.set(id, entry)
 
     const onAbort = () => {
@@ -655,7 +676,7 @@ export namespace Permission {
     const s = await state()
     const { approved, pending, projectID } = s
     const existing = pending.get(input.requestID)
-    if (!existing) return false
+    if (!existing || existing.saving) return false
 
     // Backend enforcement of the interactive-only invariant: a hostile or
     // buggy client (HTTP/SDK/ACP) must not record or persist an `always`
@@ -692,6 +713,7 @@ export namespace Permission {
         // have resolved the request while this sweep awaited the always-queue:
         // only report success when THIS call actually rejected the target row,
         // per the documented false-means-already-resolved contract.
+        if (pending.get(input.requestID) !== existing || existing.saving) return false
         let rejectedTarget = false
         for (const [id, entry] of [...pending.entries()]) {
           if (entry.info.sessionID !== existing.info.sessionID) continue
@@ -714,7 +736,7 @@ export namespace Permission {
     }
 
     return serializeAlwaysReply(s, async () => {
-      if (!pending.delete(input.requestID)) return false
+      if (pending.get(input.requestID) !== existing || existing.saving || !pending.delete(input.requestID)) return false
       clearIdleOnceTimer(existing)
 
       const rules = existing.info.always.map((pattern) => ({
@@ -756,7 +778,7 @@ export namespace Permission {
       existing.deferred.resolve(undefined)
 
       for (const [id, item] of pending.entries()) {
-        if (item.info.sessionID !== existing.info.sessionID) continue
+        if (item.info.sessionID !== existing.info.sessionID || item.saving) continue
         const ok = item.info.patterns.every((pattern) => {
           if (isInteractiveOnly(item.info.permission, item.info.metadata)) return false
           return evaluate(item.info.permission, pattern, item.ruleset, approved).action === "allow"
@@ -928,6 +950,74 @@ export namespace Permission {
     // interactive-only checks. Validate before entering the permission state.
     const patterns = AskInput.shape.patterns.parse(input.patterns)
     return askPromise({ ...input, patterns }, options)
+  }
+
+  /** Check denial and safety rules without resolving an interactive prompt. */
+  export async function checkDenials(input: z.infer<typeof AskInput>) {
+    const { approved } = await state()
+    enforceSafetyPolicy(input, input.agent)
+    const current = fromConfig((await Config.get()).permission ?? {})
+    for (const pattern of AskInput.shape.patterns.parse(input.patterns)) {
+      if (
+        evaluate(input.permission, pattern, input.ruleset).action === "deny" ||
+        evaluate(input.permission, pattern, input.ruleset, approved).action === "deny" ||
+        evaluate(input.permission, pattern, current).action === "deny"
+      ) {
+        throw new DeniedError({ ruleset: input.ruleset, agent: input.agent })
+      }
+    }
+  }
+
+  export async function saveWebMcpApproval(requestID: PermissionID): Promise<boolean> {
+    const s = await state()
+    const entry = s.pending.get(requestID)
+    if (
+      !entry ||
+      entry.saving ||
+      entry.info.permission !== "webmcp" ||
+      !entry.candidate ||
+      entry.info.metadata.requireInteractive === true
+    )
+      return false
+    // Reserve before any asynchronous work. Timers and concurrent replies
+    // cannot turn this explicit choice into a different reply while saving.
+    const candidate = entry.candidate
+    entry.saving = true
+    clearIdleOnceTimer(entry)
+    if (entry.info.autoOnceAt !== undefined) {
+      delete entry.info.autoOnceAt
+      Bus.publishDetached(Event.Asked, { ...entry.info })
+    }
+    const active = () => s.pending.get(requestID) === entry
+    try {
+      const authorize = async () => {
+        await checkDenials({ ...entry.info, ruleset: entry.ruleset, agent: entry.agent })
+        if (candidate.admission)
+          await checkDenials({ ...entry.info, ...candidate.admission, ruleset: entry.ruleset, agent: entry.agent })
+      }
+      await WebMcpApprovals.save(
+        candidate,
+        active,
+        () => {
+          s.pending.delete(requestID)
+          WebMcpApprovals.markReused(entry.info.metadata)
+          Bus.publishDetached(Event.Replied, { sessionID: entry.info.sessionID, requestID, reply: "once" })
+          if (Recorder.active(entry.info.sessionID))
+            Recorder.emit({
+              type: "permission.reply",
+              sessionID: entry.info.sessionID,
+              permission: "webmcp",
+              reply: "once",
+            })
+          log.info("WebMCP approval saved", { server: candidate.server, capability: candidate.scope.capability })
+          entry.deferred.resolve(undefined)
+        },
+        authorize,
+      )
+      return true
+    } finally {
+      entry.saving = false
+    }
   }
 
   export async function reply(input: z.infer<typeof ReplyInput>) {

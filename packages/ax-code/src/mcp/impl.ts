@@ -7,6 +7,7 @@ import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js"
 import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js"
+import { WebMcpApprovals } from "./webmcp-approvals"
 import { Config } from "../config/config"
 import { Log } from "../util/log"
 import { Env } from "../util/env"
@@ -58,6 +59,7 @@ export namespace MCP {
   // reconnects. Reading current config instead could loosen an older client's
   // policy or miss dynamically added clients. Weak ownership follows disposal.
   const webMcpProfiles = new WeakMap<MCPClient, WebMcpProfile.Configuration>()
+  const webMcpLaunchFingerprints = new WeakMap<MCPClient, string>()
   const NO_READ_GRANTS: ReadonlySet<string> = new Set()
   const NO_INTERACT_GRANTS: ReadonlyMap<string, number> = new Map()
   const DEFAULT_TIMEOUT = MCP_DEFAULT_TIMEOUT_MS
@@ -1056,7 +1058,16 @@ export namespace MCP {
       const connectTimeout = mcp.timeout ?? DEFAULT_TIMEOUT
       try {
         const client = createClient()
-        if (webmcp) webMcpProfiles.set(client, webmcp)
+        if (webmcp && configured && mcp.type === "local") {
+          webMcpProfiles.set(client, webmcp)
+          webMcpLaunchFingerprints.set(
+            client,
+            McpTrust.fingerprint(key, {
+              ...mcp,
+              ...WebMcpProfile.config(configured, mcp.enabled),
+            }),
+          )
+        }
         await withTimeout(client.connect(transport), connectTimeout)
         rememberClientTransport(client, transport)
         registerNotificationHandlers(client, key, owner)
@@ -1316,6 +1327,17 @@ export namespace MCP {
         )
       }
     })
+  }
+
+  export async function matchesWebMcpProfile(name: string, profile: WebMcpProfile.Configuration, fingerprint?: string) {
+    const s = await state()
+    const client = s.clients[name]
+    return (
+      s.status[name]?.status === "connected" &&
+      !!client &&
+      webMcpProfiles.get(client) === profile &&
+      (fingerprint === undefined || webMcpLaunchFingerprints.get(client) === fingerprint)
+    )
   }
 
   async function webMcpEntry(name: string) {
@@ -1629,6 +1651,13 @@ export namespace MCP {
                   // ADR-171: read dispatch checks the live grant set, not a
                   // conversion-time snapshot.
                   readGrants: () => s.webmcpReadGrants[clientName] ?? NO_READ_GRANTS,
+                  persistentReadAllowed: async (origin: string) => {
+                    const candidate = await WebMcpApprovals.capture(
+                      { server: clientName, toolName: mcpTool.name, profile: profile! },
+                      { capability: "read", origin },
+                    )
+                    return !!candidate && (await WebMcpApprovals.allowed(candidate))
+                  },
                   // ADR-174: interact dispatch checks and spends the live
                   // per-origin budget.
                   interactGrants: () => s.webmcpInteractGrants[clientName] ?? NO_INTERACT_GRANTS,

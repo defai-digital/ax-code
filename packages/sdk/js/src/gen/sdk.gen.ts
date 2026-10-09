@@ -94,7 +94,11 @@ import type {
   McpResourceReadErrors,
   McpResourceReadResponses,
   McpResourcesListResponses,
+  McpRevokeWebMcpApprovalErrors,
+  McpRevokeWebMcpApprovalResponses,
   McpStatusResponses,
+  McpWebMcpApprovalsErrors,
+  McpWebMcpApprovalsResponses,
   OutputFormat,
   Part as Part2,
   PartDeleteErrors,
@@ -108,6 +112,8 @@ import type {
   PermissionRespondErrors,
   PermissionRespondResponses,
   PermissionRuleset,
+  PermissionSaveWebMcpApprovalErrors,
+  PermissionSaveWebMcpApprovalResponses,
   ProjectCurrentResponses,
   ProjectInitGitResponses,
   ProjectListResponses,
@@ -5511,6 +5517,38 @@ export class Permission extends HeyApiClient {
   }
 
   /**
+   * Save a WebMCP approval and allow the pending operation
+   */
+  public saveWebMcpApproval<ThrowOnError extends boolean = false>(
+    parameters: {
+      requestID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "requestID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      PermissionSaveWebMcpApprovalResponses,
+      PermissionSaveWebMcpApprovalErrors,
+      ThrowOnError
+    >({
+      url: "/permission/{requestID}/webmcp-allowlist",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
    * Respond to permission request
    *
    * Approve or deny a permission request from the AI assistant.
@@ -7005,6 +7043,68 @@ export class Auth2 extends HeyApiClient {
 
 /** AX Code API schema `Mcp` (auto-generated from the OpenAPI contract). */
 export class Mcp extends HeyApiClient {
+  /**
+   * Revoke saved WebMCP approvals for this project
+   */
+  public revokeWebMcpApproval<ThrowOnError extends boolean = false>(
+    parameters: {
+      name: string
+      directory?: string
+      id?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "name" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<
+      McpRevokeWebMcpApprovalResponses,
+      McpRevokeWebMcpApprovalErrors,
+      ThrowOnError
+    >({
+      url: "/mcp/{name}/webmcp-approvals",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List saved WebMCP approvals for this project
+   */
+  public webMcpApprovals<ThrowOnError extends boolean = false>(
+    parameters: {
+      name: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "name" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<McpWebMcpApprovalsResponses, McpWebMcpApprovalsErrors, ThrowOnError>({
+      url: "/mcp/{name}/webmcp-approvals",
+      ...options,
+      ...params,
+    })
+  }
+
   /**
    * Get MCP status
    *
