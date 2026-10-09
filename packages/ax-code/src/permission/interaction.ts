@@ -5,8 +5,8 @@ export const INTERACTIVE_ONLY_PERMISSIONS: ReadonlySet<string> = new Set([
   "ops_approve",
   "webmcp",
   // A PreToolUse lifecycle hook answered `ask`: the hook author asked for a
-  // human decision on this call, so no wildcard rule or autonomous
-  // auto-approval may answer on the human's behalf.
+  // per-call decision, so wildcard rules cannot bypass the prompt. The
+  // mode-driven idle Allow Once countdown remains available (ADR-138).
   "hook",
 ])
 

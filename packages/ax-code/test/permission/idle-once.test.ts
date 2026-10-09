@@ -5,15 +5,17 @@ import path from "path"
 import { Bus } from "../../src/bus"
 import { Config } from "../../src/config/config"
 import { Permission } from "../../src/permission"
+import { MCP } from "../../src/mcp"
 import { Instance } from "../../src/project/instance"
 import { SessionID } from "../../src/session/schema"
 import { tmpdir } from "../fixture/fixture"
 
-// ADR-138: an opt-in idle "Allow once" — full-access + autonomous +
-// allowlisted interactive permission + head-of-queue gets a server-side
+// ADR-138: mode-driven idle "Allow once" — full-access + autonomous +
+// an eligible pending permission at the head of its queue gets a server-side
 // deadline that auto-replies "once"; any human reply cancels it. The tests
 // use the AX_CODE_PERMISSION_IDLE_ONCE_MS debug override with real timers.
 afterEach(async () => {
+  vi.restoreAllMocks()
   vi.unstubAllEnvs()
   await Instance.disposeAll()
 })
@@ -127,8 +129,9 @@ describe("permission idle-once deadline (ADR-138)", () => {
     })
   })
 
-  test("only the head-of-queue ask for a session gets the deadline", async () => {
+  test("queued asks receive a fresh countdown when the head completes", async () => {
     armedEnv()
+    vi.stubEnv("AX_CODE_PERMISSION_IDLE_ONCE_MS", "300")
     await using tmp = await tmpdir({ git: true, config: ARMED_CONFIG as never })
     await Instance.provide({
       directory: tmp.path,
@@ -152,10 +155,9 @@ describe("permission idle-once deadline (ADR-138)", () => {
 
         // The head auto-replies at its deadline.
         await first
-        const tailNow = (await Permission.list())[0]!
-        const tailRejection = expect(second).rejects.toThrow("rejected")
-        await Permission.reply({ requestID: tailNow.id, reply: "reject" })
-        await tailRejection
+        expect(await waitForAutoOnceAt(tail.id)).toBeGreaterThan(head.autoOnceAt!)
+        await second
+        expect(await Permission.list()).toEqual([])
       },
     })
   })
@@ -242,8 +244,9 @@ describe("permission idle-once deadline (ADR-138)", () => {
   })
 
   test.each([undefined, 20_000])(
-    "webmcp countdown respects the default and configured timeout (%s)",
+    "webmcp countdown is always 15 seconds, including legacy timeout config (%s)",
     async (timeoutMs) => {
+      vi.spyOn(MCP, "isWebMcpConnected").mockImplementation((name) => name === "bridge")
       vi.stubEnv("AX_CODE_AUTONOMOUS", "1")
       vi.stubEnv("AX_CODE_ISOLATION_MODE", "full-access")
       vi.stubEnv("AX_CODE_PERMISSION_IDLE_ONCE_MS", "")
@@ -260,13 +263,13 @@ describe("permission idle-once deadline (ADR-138)", () => {
             sessionID: SessionID.make("ses_idle_once_webmcp"),
             permission: "webmcp",
             patterns: ["navigate_page"],
-            metadata: {},
+            metadata: { server: "bridge" },
             always: [],
             ruleset: [],
           })
           const pending = await waitForPending()
           const deadline = await waitForAutoOnceAt(pending[0]!.id)
-          const expectedTimeout = timeoutMs ?? 15_000
+          const expectedTimeout = 15_000
           expect(deadline).toBeGreaterThanOrEqual(before + expectedTimeout)
           expect(deadline).toBeLessThanOrEqual(Date.now() + expectedTimeout)
           await Permission.reply({ requestID: pending[0]!.id, reply: "once" })
@@ -295,7 +298,7 @@ describe("permission idle-once deadline (ADR-138)", () => {
     })
   })
 
-  test("requireInteractive metadata suppresses the deadline even for allowlisted permissions", async () => {
+  test("requireInteractive still allows a countdown under minimal-interaction mode", async () => {
     armedEnv()
     await using tmp = await tmpdir({ git: true, config: ARMED_CONFIG as never })
     await Instance.provide({
@@ -311,10 +314,8 @@ describe("permission idle-once deadline (ADR-138)", () => {
           ruleset: [],
         })
         const pending = await waitForPending()
-        expect(pending[0]!.autoOnceAt).toBeUndefined()
-        const rejection = expect(ask).rejects.toThrow("rejected")
-        await Permission.reply({ requestID: pending[0]!.id, reply: "reject" })
-        await rejection
+        expect(pending[0]!.autoOnceAt).toBeTypeOf("number")
+        await ask
       },
     })
   })
@@ -341,31 +342,182 @@ describe("permission idle-once deadline (ADR-138)", () => {
     })
   })
 
-  test("never-auto permissions cannot be configured into the allowlist", async () => {
+  test.each(["hook", "isolation_escalation", "ops_approve", "computer"])(
+    "%s receives the same 15-second countdown in minimal-interaction mode",
+    async (permission) => {
+      vi.stubEnv("AX_CODE_AUTONOMOUS", "1")
+      vi.stubEnv("AX_CODE_ISOLATION_MODE", "full-access")
+      vi.stubEnv("AX_CODE_PERMISSION_IDLE_ONCE_MS", "")
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const before = Date.now()
+          const ask = Permission.ask({
+            sessionID: SessionID.make("ses_idle_once_all"),
+            permission,
+            patterns: ["test-action"],
+            metadata: { requireInteractive: true },
+            always: [],
+            ruleset: [],
+          })
+          const [pending] = await waitForPending()
+          expect(pending.autoOnceAt).toBeGreaterThanOrEqual(before + 15_000)
+          expect(pending.autoOnceAt).toBeLessThanOrEqual(Date.now() + 15_000)
+          await Permission.reply({ requestID: pending.id, reply: "once" })
+          await ask
+        },
+      })
+    },
+  )
+
+  test.each(["auto", "sandbox", "webmcp"])("turning off eligibility (%s) cancels an armed countdown", async (gate) => {
     armedEnv()
-    await using tmp = await tmpdir({
-      git: true,
-      config: {
-        experimental: { permission_idle_once: { enabled: true, timeout_ms: 5_000, permissions: ["hook"] } },
-      } as never,
-    })
+    vi.stubEnv("AX_CODE_PERMISSION_IDLE_ONCE_MS", "500")
+    let connected = true
+    vi.spyOn(MCP, "isWebMcpConnected").mockImplementation((name) => name === "bridge" && connected)
+    await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const sessionID = SessionID.make("ses_idle_once_hook")
+        const events: (number | undefined)[] = []
+        const unsubscribe = Bus.subscribe(Permission.Event.Asked, (event) => events.push(event.properties.autoOnceAt))
+        try {
+          const ask = Permission.ask({
+            sessionID: SessionID.make("ses_idle_once_cancel"),
+            permission: "webmcp",
+            patterns: ["list_pages"],
+            metadata: { server: "bridge" },
+            always: [],
+            ruleset: [],
+          })
+          const [pending] = await waitForPending()
+          expect(pending.autoOnceAt).toBeTypeOf("number")
+          if (gate === "auto") vi.stubEnv("AX_CODE_AUTONOMOUS", "0")
+          if (gate === "sandbox") vi.stubEnv("AX_CODE_ISOLATION_MODE", "workspace-write")
+          if (gate === "webmcp") connected = false
+          await sleep(650)
+          const [remaining] = await Permission.list()
+          expect(remaining?.id).toBe(pending.id)
+          expect(remaining.autoOnceAt).toBeUndefined()
+          expect(events.at(-1)).toBeUndefined()
+          await Permission.reply({ requestID: pending.id, reply: "once" })
+          await ask
+        } finally {
+          unsubscribe()
+        }
+      },
+    })
+  })
+
+  test.each([undefined, "off", "other"])("WebMCP requires its own connected bridge (%s)", async (server) => {
+    armedEnv()
+    vi.spyOn(MCP, "isWebMcpConnected").mockImplementation((name) => name === "bridge")
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
         const ask = Permission.ask({
-          sessionID,
-          permission: "hook",
-          patterns: ["bash"],
-          metadata: { reason: "hook author asked" },
+          sessionID: SessionID.make("ses_idle_once_off_bridge"),
+          permission: "webmcp",
+          patterns: ["list_pages"],
+          metadata: { server },
           always: [],
           ruleset: [],
         })
-        const pending = await waitForPending()
-        expect(pending[0]!.autoOnceAt).toBeUndefined()
+        const [pending] = await waitForPending()
+        expect(pending.autoOnceAt).toBeUndefined()
+        await sleep(100)
+        expect(await Permission.list()).toHaveLength(1)
+        await Permission.reply({ requestID: pending.id, reply: "once" })
+        await ask
+      },
+    })
+  })
+
+  test("a pending external-directory request starts its countdown after sandbox is switched off", async () => {
+    armedEnv()
+    vi.stubEnv("AX_CODE_ISOLATION_MODE", "workspace-write")
+    vi.stubEnv("AX_CODE_PERMISSION_IDLE_ONCE_MS", "300")
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const ask = Permission.ask({
+          sessionID: SessionID.make("ses_idle_once_external"),
+          permission: "external_directory",
+          patterns: ["/outside/fixture"],
+          metadata: { requireInteractive: true },
+          always: [],
+          ruleset: [],
+        })
+        const [pending] = await waitForPending()
+        expect(pending.autoOnceAt).toBeUndefined()
+        vi.stubEnv("AX_CODE_ISOLATION_MODE", "full-access")
+        await waitForAutoOnceAt(pending.id)
+        await ask
+        expect(await Permission.list()).toEqual([])
+      },
+    })
+  })
+  test("a new explicit deny cancels an already armed countdown", async () => {
+    armedEnv()
+    vi.stubEnv("AX_CODE_PERMISSION_IDLE_ONCE_MS", "500")
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const ruleset: Permission.Ruleset = []
+        const ask = Permission.ask({
+          sessionID: SessionID.make("ses_idle_once_new_deny"),
+          permission: "hook",
+          patterns: ["test-action"],
+          metadata: {},
+          always: [],
+          ruleset,
+        })
+        const [pending] = await waitForPending()
+        expect(pending.autoOnceAt).toBeTypeOf("number")
+        ruleset.push({ permission: "hook", pattern: "*", action: "deny" })
+        await sleep(650)
+        const [remaining] = await Permission.list()
+        expect(remaining?.id).toBe(pending.id)
+        expect(remaining.autoOnceAt).toBeUndefined()
         const rejection = expect(ask).rejects.toThrow("rejected")
-        await Permission.reply({ requestID: pending[0]!.id, reply: "reject" })
+        await Permission.reply({ requestID: pending.id, reply: "reject" })
         await rejection
+      },
+    })
+  })
+
+  test("abort promotes the next request with a fresh countdown", async () => {
+    armedEnv()
+    vi.stubEnv("AX_CODE_PERMISSION_IDLE_ONCE_MS", "300")
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const abort = new AbortController()
+        const input = {
+          sessionID: SessionID.make("ses_idle_once_abort_queue"),
+          permission: "hook",
+          patterns: ["test-action"],
+          metadata: {},
+          always: [],
+          ruleset: [],
+        }
+        const first = Permission.ask(input, { signal: abort.signal })
+        const [head] = await waitForPending()
+        const second = Permission.ask(input)
+        await vi.waitFor(async () => expect(await Permission.list()).toHaveLength(2))
+        const tail = (await Permission.list()).find((item) => item.id !== head.id)!
+        expect(tail.autoOnceAt).toBeUndefined()
+        const rejection = expect(first).rejects.toBeDefined()
+        abort.abort()
+        await rejection
+        expect(await waitForAutoOnceAt(tail.id)).toBeGreaterThan(Date.now())
+        await second
+        expect(await Permission.list()).toEqual([])
       },
     })
   })
