@@ -1034,6 +1034,8 @@ export const messages = {
   "animation.steppeNight": "Stepa: Malam",
   "animation.canyonDay": "Ngarai: Siang",
   "animation.canyonNight": "Ngarai: Malam",
+  "animation.singaporeDay": "Singapore: Marina Bay Siang",
+  "animation.singaporeNight": "Singapore: Marina Bay Malam",
   "ui.steerNowHint": "{keybind} arahkan sekarang",
   "ui.steerQueueEmpty": "Tidak ada tindak lanjut tersimpan untuk diarahkan",
   "ui.steerNothingSteerable": "Tidak ada dalam antrean yang dapat mengarahkan giliran yang berjalan",

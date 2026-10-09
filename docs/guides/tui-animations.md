@@ -8,7 +8,7 @@ Owner: AX Code TUI maintainers
 See [Terminal rendering](terminal-rendering.md) for automatic terminal profiles,
 manual overrides, and the difference between pixel graphics and text rendering.
 
-Each TUI launch randomly selects one of thirty-five animation pairs with equal probability (1/35 each):
+Each TUI launch randomly selects one of thirty-six animation pairs with equal probability (1/36 each):
 
 - Digital Code: purple/blue falling code for the opening, reverse code for the ending.
 - Foliage: classic autumn leaves for the opening, golden leaves for the ending.
@@ -45,6 +45,7 @@ Each TUI launch randomly selects one of thirty-five animation pairs with equal p
 - Waterfall: daytime for the opening, moonlit night for the ending.
 - Steppe: daytime for the opening, night for the ending.
 - Canyon: daytime for the opening, night for the ending.
+- Singapore: Marina Bay daytime for the opening, illuminated bay for the ending.
 
 Fuji Mountain includes a snow-capped mountain, a reflective lake, cherry blossoms,
 falling petals, and a Shinkansen travelling across the foreground. The 74-column,
@@ -104,7 +105,7 @@ colors.
 Explicit theme previews do not change this launch's selected pair.
 
 Press `Ctrl+P` (the default command-palette key) and search `Digital Code`,
-`Foliage`, `Bench`, `Fuji Mountain`, `Mahjong`, and more. All seventy opening/ending previews are
+`Foliage`, `Bench`, `Fuji Mountain`, `Mahjong`, and more. All seventy-two opening/ending previews are
 available independently of the launch selection. Family names remain searchable
 in all fourteen interface languages.
 
@@ -135,6 +136,17 @@ glyph widths do not affect it. Text fallback uses ASCII suit codes (`1C`, `2B`,
 `RD`, `GD`, `WD`) and `##` for concealed tiles. Narrow text screens crop the
 centered scene. Resize, missing graphics capability, and image cleanup follow
 the same lifecycle as Fuji and Bench.
+
+Singapore uses an illustrated Marina Bay composition: a Merlion fountain in the
+foreground, the three Marina Bay Sands towers and boat-shaped SkyPark, Supertree
+crowns, a distant skyline, and a moving bay boat. The daytime opening has a warm
+tropical sky and turquoise water; the night ending has gold windows, purple and
+cyan Supertree lights, and shimmering reflections. The fountain, boat, palette,
+and layout are shared by the native ASCII fallback and the existing freeform HD
+renderer. Both use the existing three-second playback and terminal lifecycle;
+there are no downloaded video files or audio. Preview with `/singapore` or
+`/singapore-ending`, or search `Singapore` in the command palette. Explicit
+previews do not change the launch's selected pair.
 
 City uses a night skyline with a moon, twinkling stars, and twinkling
 windows for the opening, and a dawn skyline with a low sun for the ending.

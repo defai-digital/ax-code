@@ -1558,6 +1558,8 @@ export const messages = {
   "animation.steppeNight": "Степь: Ночь",
   "animation.canyonDay": "Каньон: День",
   "animation.canyonNight": "Каньон: Ночь",
+  "animation.singaporeDay": "Singapore: Marina Bay \u0414\u0435\u043d\u044c",
+  "animation.singaporeNight": "Singapore: Marina Bay \u041d\u043e\u0447\u044c",
   "ui.steerNowHint":
     "{keybind} \u043d\u0430\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0441\u0435\u0439\u0447\u0430\u0441",
   "ui.steerQueueEmpty":

@@ -1116,6 +1116,8 @@ export const messages = {
   "animation.steppeNight": "Thảo nguyên: Đêm",
   "animation.canyonDay": "Hẻm núi: Ngày",
   "animation.canyonNight": "Hẻm núi: Đêm",
+  "animation.singaporeDay": "Singapore: Marina Bay Ng\u00e0y",
+  "animation.singaporeNight": "Singapore: Marina Bay \u0110\u00eam",
   "ui.steerNowHint": "{keybind} \u0111i\u1ec1u h\u01b0\u1edbng ngay",
   "ui.steerQueueEmpty":
     "Kh\u00f4ng c\u00f3 theo d\u00f5i \u0111\u00e3 l\u01b0u \u0111\u1ec3 \u0111i\u1ec1u h\u01b0\u1edbng",

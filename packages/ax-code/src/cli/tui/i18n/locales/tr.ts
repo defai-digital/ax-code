@@ -1073,6 +1073,8 @@ export const messages = {
   "animation.steppeNight": "Bozkır: Gece",
   "animation.canyonDay": "Kanyon: Gündüz",
   "animation.canyonNight": "Kanyon: Gece",
+  "animation.singaporeDay": "Singapore: Marina Bay G\u00fcnd\u00fcz",
+  "animation.singaporeNight": "Singapore: Marina Bay Gece",
   "ui.steerNowHint": "{keybind} \u015fimdi y\u00f6nlendir",
   "ui.steerQueueEmpty": "Y\u00f6nlendirilecek kay\u0131tl\u0131 takip yok",
   "ui.steerNothingSteerable": "Kuyrukta \u00e7al\u0131\u015fan tura y\u00f6nlendirilebilecek \u00f6\u011fe yok",

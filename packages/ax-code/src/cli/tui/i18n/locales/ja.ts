@@ -1198,6 +1198,8 @@ export const messages = {
   "animation.steppeNight": "ステップ：夜",
   "animation.canyonDay": "渓谷：昼",
   "animation.canyonNight": "渓谷：夜",
+  "animation.singaporeDay": "Singapore: Marina Bay \u663c",
+  "animation.singaporeNight": "Singapore: Marina Bay \u591c",
   "ui.steerNowHint": "{keybind} \u4eca\u3059\u3050\u8a98\u5c0e",
   "ui.steerQueueEmpty":
     "\u8a98\u5c0e\u3067\u304d\u308b\u4fdd\u5b58\u6e08\u307f\u30d5\u30a9\u30ed\u30fc\u30a2\u30c3\u30d7\u304c\u3042\u308a\u307e\u305b\u3093",

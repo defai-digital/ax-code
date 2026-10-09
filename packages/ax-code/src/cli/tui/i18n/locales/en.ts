@@ -1033,6 +1033,8 @@ export const messages = {
   "animation.steppeNight": "Steppe: Night",
   "animation.canyonDay": "Canyon: Day",
   "animation.canyonNight": "Canyon: Night",
+  "animation.singaporeDay": "Singapore: Marina Bay Day",
+  "animation.singaporeNight": "Singapore: Marina Bay Night",
   "ui.steerNowHint": "{keybind} steer now",
   "ui.steerQueueEmpty": "No saved follow-ups to steer",
   "ui.steerNothingSteerable": "Nothing in the queue can steer the running turn",

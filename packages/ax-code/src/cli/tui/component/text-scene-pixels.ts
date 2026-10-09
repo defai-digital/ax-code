@@ -31,6 +31,8 @@ import { isLighthouseStyle } from "./lighthouse-view-model"
 import { isFallsStyle } from "./falls-view-model"
 import { isSteppeStyle } from "./steppe-view-model"
 import { isCanyonStyle } from "./canyon-view-model"
+import { isSingaporeStyle } from "./singapore-view-model"
+import { renderSingaporePixels } from "./singapore-pixels"
 import { renderFujiPixels } from "./fuji-pixels"
 import { renderMahjongPixels } from "./mahjong-pixels"
 import { renderBenchPixels } from "./bench-pixels"
@@ -101,5 +103,6 @@ export function renderTextScenePixels(width: number, height: number, style: Text
   if (isFallsStyle(style)) return renderFallsPixels(width, height, style, elapsedMs)
   if (isSteppeStyle(style)) return renderSteppePixels(width, height, style, elapsedMs)
   if (isCanyonStyle(style)) return renderCanyonPixels(width, height, style, elapsedMs)
+  if (isSingaporeStyle(style)) return renderSingaporePixels(width, height, style, elapsedMs)
   return style satisfies never
 }

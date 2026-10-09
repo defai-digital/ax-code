@@ -5,7 +5,7 @@ import { translate, LOCALES } from "../../../src/cli/tui/i18n"
 import type { DialogContext } from "../../../src/cli/tui/ui/dialog"
 
 describe("animation command palette", () => {
-  test.each(LOCALES)("all thirty-five themes are searchable and actionable in %s", (locale) => {
+  test.each(LOCALES)("all thirty-six themes are searchable and actionable in %s", (locale) => {
     const calls: string[] = []
     const options = animationPreviewCommands({
       t: (key, values) => translate(locale, key, values),
@@ -16,9 +16,9 @@ describe("animation command palette", () => {
         calls.push(`ending:${style}`)
       },
     })
-    expect(options).toHaveLength(70)
-    expect(new Set(options.map((option) => option.value)).size).toBe(70)
-    expect(new Set(options.map((option) => option.slash!.name)).size).toBe(70)
+    expect(options).toHaveLength(72)
+    expect(new Set(options.map((option) => option.value)).size).toBe(72)
+    expect(new Set(options.map((option) => option.slash!.name)).size).toBe(72)
     expect(options.every((option) => option.slash?.hidden === true)).toBe(true)
     for (const family of [
       "Digital Code",
@@ -56,6 +56,7 @@ describe("animation command palette", () => {
       "Waterfall",
       "Steppe",
       "Canyon",
+      "Singapore",
     ]) {
       const found = dialogSelectFilteredOptions(options, family)
       for (const option of options.filter((item) => item.category!.endsWith(family))) expect(found).toContain(option)
@@ -207,6 +208,10 @@ describe("animation command palette", () => {
       "opening:canyon-day",
       "clear",
       "ending:canyon-night",
+      "clear",
+      "opening:singapore-day",
+      "clear",
+      "ending:singapore-night",
     ])
   })
 })

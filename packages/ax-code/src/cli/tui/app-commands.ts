@@ -766,9 +766,13 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
                                                                         ? uiText("animation.fallsDay")
                                                                         : input.animationPair?.opening === "steppe-day"
                                                                           ? uiText("animation.steppeDay")
-                                                                          : input.animationPair?.opening === "canyon-day"
+                                                                          : input.animationPair?.opening ===
+                                                                              "canyon-day"
                                                                             ? uiText("animation.canyonDay")
-                                                                            : uiText("animation.classicFoliage"),
+                                                                            : input.animationPair?.opening ===
+                                                                                "singapore-day"
+                                                                              ? uiText("animation.singaporeDay")
+                                                                              : uiText("animation.classicFoliage"),
       slash: { name: "ov", aliases: ["op"], hidden: true },
       value: "app.digital_code.play",
       category: t("category.system"),
@@ -846,9 +850,13 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
                                                                         ? uiText("animation.fallsMoon")
                                                                         : input.animationPair?.ending === "steppe-night"
                                                                           ? uiText("animation.steppeNight")
-                                                                          : input.animationPair?.ending === "canyon-night"
+                                                                          : input.animationPair?.ending ===
+                                                                              "canyon-night"
                                                                             ? uiText("animation.canyonNight")
-                                                                            : uiText("animation.goldenFoliage"),
+                                                                            : input.animationPair?.ending ===
+                                                                                "singapore-night"
+                                                                              ? uiText("animation.singaporeNight")
+                                                                              : uiText("animation.goldenFoliage"),
       slash: { name: "ev", hidden: true },
       value: "app.digital_code.play_reverse",
       category: t("category.system"),

@@ -1046,6 +1046,8 @@ export const messages = {
   "animation.steppeNight": "Estepa: Noche",
   "animation.canyonDay": "Cañón: Día",
   "animation.canyonNight": "Cañón: Noche",
+  "animation.singaporeDay": "Singapore: Marina Bay D\u00eda",
+  "animation.singaporeNight": "Singapore: Marina Bay Noche",
   "ui.steerNowHint": "{keybind} dirigir ahora",
   "ui.steerQueueEmpty": "No hay seguimientos guardados para dirigir",
   "ui.steerNothingSteerable": "Nada en la cola puede dirigir el turno en curso",

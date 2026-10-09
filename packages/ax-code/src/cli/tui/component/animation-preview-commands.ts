@@ -563,6 +563,22 @@ const PREVIEWS = [
     value: "app.animation.canyon_ending",
     slash: "canyon-ending",
   },
+  {
+    family: "Singapore",
+    ending: false,
+    style: "singapore-day",
+    key: "animation.singaporeDay",
+    value: "app.animation.singapore",
+    slash: "singapore",
+  },
+  {
+    family: "Singapore",
+    ending: true,
+    style: "singapore-night",
+    key: "animation.singaporeNight",
+    value: "app.animation.singapore_ending",
+    slash: "singapore-ending",
+  },
 ] as const
 
 /** Named theme families remain searchable in every interface language. */

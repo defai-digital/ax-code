@@ -1045,6 +1045,8 @@ export const messages = {
   "animation.steppeNight": "Steppe: Nacht",
   "animation.canyonDay": "Canyon: Tag",
   "animation.canyonNight": "Canyon: Nacht",
+  "animation.singaporeDay": "Singapore: Marina Bay Tag",
+  "animation.singaporeNight": "Singapore: Marina Bay Nacht",
   "ui.steerNowHint": "{keybind} jetzt steuern",
   "ui.steerQueueEmpty": "Keine gespeicherten Folgeauftr\u00e4ge zum Steuern",
   "ui.steerNothingSteerable": "Nichts in der Warteschlange kann den laufenden Durchlauf steuern",

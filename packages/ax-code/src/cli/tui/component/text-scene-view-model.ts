@@ -32,15 +32,11 @@ import { jungleRows, jungleBackground, isJungleStyle, type JungleStyle } from ".
 import { reefRows, reefBackground, isReefStyle, type ReefStyle } from "./reef-view-model"
 import { pyramidsRows, pyramidsBackground, isPyramidsStyle, type PyramidsStyle } from "./pyramids-view-model"
 import { auroraRows, auroraBackground, isAuroraStyle, type AuroraStyle } from "./aurora-view-model"
-import {
-  lighthouseRows,
-  lighthouseBackground,
-  isLighthouseStyle,
-  type LighthouseStyle,
-} from "./lighthouse-view-model"
+import { lighthouseRows, lighthouseBackground, isLighthouseStyle, type LighthouseStyle } from "./lighthouse-view-model"
 import { fallsRows, fallsBackground, isFallsStyle, type FallsStyle } from "./falls-view-model"
 import { steppeRows, steppeBackground, isSteppeStyle, type SteppeStyle } from "./steppe-view-model"
 import { canyonRows, canyonBackground, isCanyonStyle, type CanyonStyle } from "./canyon-view-model"
+import { singaporeRows, singaporeBackground, isSingaporeStyle, type SingaporeStyle } from "./singapore-view-model"
 export type TextSceneStyle =
   | BenchStyle
   | FujiStyle
@@ -75,6 +71,7 @@ export type TextSceneStyle =
   | FallsStyle
   | SteppeStyle
   | CanyonStyle
+  | SingaporeStyle
 export type SceneRun = FujiRun
 export function isTextSceneStyle(style: string | undefined): style is TextSceneStyle {
   return (
@@ -110,7 +107,8 @@ export function isTextSceneStyle(style: string | undefined): style is TextSceneS
     isLighthouseStyle(style) ||
     isFallsStyle(style) ||
     isSteppeStyle(style) ||
-    isCanyonStyle(style)
+    isCanyonStyle(style) ||
+    isSingaporeStyle(style)
   )
 }
 export function textSceneBackground(style: TextSceneStyle) {
@@ -145,6 +143,7 @@ export function textSceneBackground(style: TextSceneStyle) {
   if (isFallsStyle(style)) return fallsBackground(style)
   if (isSteppeStyle(style)) return steppeBackground(style)
   if (isCanyonStyle(style)) return canyonBackground(style)
+  if (isSingaporeStyle(style)) return singaporeBackground(style)
   return isFujiStyle(style) ? fujiBackground(style) : benchBackground(style)
 }
 export function textSceneRows(width: number, height: number, style: TextSceneStyle, elapsedMs: number): SceneRun[][] {
@@ -179,5 +178,6 @@ export function textSceneRows(width: number, height: number, style: TextSceneSty
   if (isFallsStyle(style)) return fallsRows(width, height, style, elapsedMs)
   if (isSteppeStyle(style)) return steppeRows(width, height, style, elapsedMs)
   if (isCanyonStyle(style)) return canyonRows(width, height, style, elapsedMs)
+  if (isSingaporeStyle(style)) return singaporeRows(width, height, style, elapsedMs)
   return isFujiStyle(style) ? fujiRows(width, height, style, elapsedMs) : benchRows(width, height, style, elapsedMs)
 }
