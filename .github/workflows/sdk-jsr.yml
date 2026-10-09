@@ -69,6 +69,9 @@ jobs:
       - name: Test SDK
         run: pnpm --dir packages/sdk/js run test
 
+      - name: Verify isolated SDK consumer
+        run: pnpm --dir packages/sdk/js run test:consumer
+
       - name: Verify JSR package
         run: pnpm --dir packages/sdk/js run check:jsr
 

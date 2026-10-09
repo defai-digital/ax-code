@@ -41,6 +41,10 @@ export type {
   HeadlessCreateSessionInput,
   HeadlessGlobalHealth,
   HeadlessRuntimeCapabilities,
+  HeadlessSteeringState,
+  HeadlessSteerInput,
+  HeadlessSteerReceipt,
+  HeadlessTaskQueueSteerResult,
   HeadlessSessionEvidence,
   HeadlessSessionEvidenceInput,
   HeadlessScheduledTask,
@@ -124,3 +128,13 @@ export type {
 export { commandAcceptsAsyncMode } from "./headless/command.js"
 
 export { isLoopbackHostname } from "./internal/server-shared.js"
+
+export { HeadlessRequestError } from "./headless/request.js"
+export type { HeadlessRequestOptions } from "./headless/request.js"
+export type {
+  HeadlessTransport,
+  HeadlessTransportRequest,
+  HeadlessTransportSubscribeOptions,
+} from "./headless/transport.js"
+export { checkHeadlessRuntimeCompatibility } from "./headless/compatibility.js"
+export type { HeadlessCompatibilityRequirements, HeadlessCompatibilityResult } from "./headless/compatibility.js"

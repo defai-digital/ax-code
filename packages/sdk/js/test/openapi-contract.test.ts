@@ -36,6 +36,8 @@ describe("OpenAPI snapshot contract", () => {
     expect(REQUIRED_OPENAPI_PATHS).toContain("/event")
     expect(REQUIRED_OPENAPI_PATHS).toContain("/session")
     expect(REQUIRED_OPENAPI_PATHS).toContain("/session/{sessionID}/prompt_async")
+    expect(REQUIRED_OPENAPI_PATHS).toContain("/session/{sessionID}/steering")
+    expect(REQUIRED_OPENAPI_PATHS).toContain("/task-queue/{taskID}/steer")
     expect(REQUIRED_OPENAPI_PATHS).toContain("/permission/{requestID}/reply")
     expect(REQUIRED_OPENAPI_PATHS).toContain("/provider/ax-engine/status")
     expect(REQUIRED_OPENAPI_PATHS).toContain("/super-long/status")
@@ -49,6 +51,16 @@ describe("OpenAPI snapshot contract", () => {
       expect(paths).toHaveProperty(path)
     }
     expect(paths).not.toHaveProperty("/session/{sessionID}/share")
+  })
+
+  test("locks steering methods to the runtime operation contract", () => {
+    const paths = snapshotPaths(parseOpenApiSnapshot(readFileSync(openApiSnapshotPath, "utf8"))) as Record<
+      string,
+      Record<string, { operationId: string }>
+    >
+    expect(paths["/session/{sessionID}/steering"].get.operationId).toBe("session.steering")
+    expect(paths["/session/{sessionID}/steering"].post.operationId).toBe("session.steer")
+    expect(paths["/task-queue/{taskID}/steer"].post.operationId).toBe("taskQueue.steer")
   })
 
   test("keeps optional numeric query parameters optional in the generated SDK", () => {

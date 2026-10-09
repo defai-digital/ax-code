@@ -1,13 +1,16 @@
 import type { Event } from "../v2/index.js"
 import type { HeadlessRuntimeCommand, HeadlessRuntimeCommandResult } from "./command.js"
+import type { HeadlessRequestOptions } from "./request.js"
 
-export type HeadlessTransportRequest = {
+/** A JSON route request plus optional cancellation and deadline controls. */
+export type HeadlessTransportRequest = HeadlessRequestOptions & {
   path: string
   method: "GET" | "POST" | "DELETE"
   query?: Record<string, string | number | boolean | undefined>
   body?: Record<string, unknown>
 }
 
+/** Independent cancellation controls for an event subscription. */
 export type HeadlessTransportSubscribeOptions = {
   signal?: AbortSignal
 }
@@ -23,7 +26,7 @@ export interface HeadlessTransport {
   requestJson<TResult>(request: HeadlessTransportRequest): Promise<TResult>
 
   /** Send a headless runtime command (prompt, command, permission reply, etc.). */
-  sendCommand(command: HeadlessRuntimeCommand): Promise<HeadlessRuntimeCommandResult>
+  sendCommand(command: HeadlessRuntimeCommand, options?: HeadlessRequestOptions): Promise<HeadlessRuntimeCommandResult>
 
   /** Subscribe to the runtime event stream. */
   subscribe(options?: HeadlessTransportSubscribeOptions): AsyncIterable<Event>

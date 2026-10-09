@@ -11,6 +11,7 @@ import type {
   HeadlessTransportSubscribeOptions,
 } from "./transport.js"
 import { parseHeadlessRuntimeResponseBody } from "./util.js"
+import { HeadlessRequestError, runHeadlessRequest, type HeadlessRequestOptions } from "./request.js"
 
 export type HttpSseTransportOptions = {
   baseUrl: string
@@ -42,35 +43,46 @@ export function createHttpSseTransport(options: HttpSseTransportOptions): Headle
     experimental_workspaceID: options.experimental_workspaceID,
   })
 
-  const request = async (request: HeadlessTransportRequest): Promise<HttpTransportResponse> => {
-    const url = new URL(request.path, options.baseUrl)
-    for (const [key, value] of Object.entries(request.query ?? {})) {
-      if (value !== undefined) url.searchParams.set(key, String(value))
-    }
+  const request = (request: HeadlessTransportRequest): Promise<HttpTransportResponse> =>
+    runHeadlessRequest(request, async (signal) => {
+      const url = new URL(request.path, options.baseUrl)
+      for (const [key, value] of Object.entries(request.query ?? {})) {
+        if (value !== undefined) url.searchParams.set(key, String(value))
+      }
 
-    const response = await fetchFn(url, {
-      method: request.method,
-      headers: {
-        ...headlessHeaders(options),
-        ...(request.body ? { "Content-Type": "application/json" } : {}),
-      },
-      body: request.body ? JSON.stringify(request.body) : undefined,
+      const response = await fetchFn(url, {
+        method: request.method,
+        signal,
+        headers: {
+          ...headlessHeaders(options),
+          ...(request.body ? { "Content-Type": "application/json" } : {}),
+        },
+        body: request.body ? JSON.stringify(request.body) : undefined,
+      })
+      if (!response.ok) {
+        const text = await response.text().catch(() => "")
+        let body: unknown = text || response.statusText
+        try {
+          body = parseHeadlessRuntimeResponseBody(text || response.statusText)
+        } catch {
+          // Proxy and older backend errors may be plain text.
+        }
+        throw new HeadlessRequestError({ status: response.status, body, method: request.method, path: request.path })
+      }
+      return {
+        status: response.status,
+        body: parseHeadlessRuntimeResponseBody(await response.text()),
+      }
     })
-    if (!response.ok) {
-      const text = await response.text().catch(() => "")
-      throw new Error(`Headless runtime request failed (${response.status}): ${text || response.statusText}`)
-    }
-    return {
-      status: response.status,
-      body: parseHeadlessRuntimeResponseBody(await response.text()),
-    }
-  }
 
   const requestJson = async <TResult>(requestInput: HeadlessTransportRequest): Promise<TResult> =>
     (await request(requestInput)).body as TResult
 
-  const sendCommand = (command: HeadlessRuntimeCommand): Promise<HeadlessRuntimeCommandResult> =>
-    sendHeadlessRuntimeCommand({ command, request })
+  const sendCommand = (
+    command: HeadlessRuntimeCommand,
+    options?: HeadlessRequestOptions,
+  ): Promise<HeadlessRuntimeCommandResult> =>
+    sendHeadlessRuntimeCommand({ command, request: (input) => request({ ...input, ...options }) })
 
   return {
     requestJson,

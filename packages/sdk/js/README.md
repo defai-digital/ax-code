@@ -7,18 +7,18 @@ Use it to supervise a compatible signed AX Code runtime through typed **headless
 ## Install
 
 ```bash
-pnpm add jsr:@defai-digital/ax-code-sdk@2.5.62
+pnpm add jsr:@defai-digital/ax-code-sdk@2.6.0
 ```
 
 ```bash
-deno add jsr:@defai-digital/ax-code-sdk@2.5.62
+deno add jsr:@defai-digital/ax-code-sdk@2.6.0
 ```
 
 ```bash
-npx jsr add @defai-digital/ax-code-sdk@2.5.62
+npx jsr add @defai-digital/ax-code-sdk@2.6.0
 ```
 
-Requires **Node.js 26+** (or Deno with Node compatibility). Headless and gRPC lifecycle helpers expect a signed `ax-code` executable on `PATH`, or an absolute path passed as `binary`. This SDK release is published with AX Code CLI v7.21.1.
+Requires **Node.js 26+** (or Deno with Node compatibility). Headless and gRPC lifecycle helpers expect a signed `ax-code` executable on `PATH`, or an absolute path passed as `binary`. SDK and runtime versions are independent. Check the runtime capability protocol before enabling app features; an SDK version check alone does not establish runtime compatibility.
 
 The workspace package name `@ax-code/sdk` is private to this monorepo. Public consumers always install `@defai-digital/ax-code-sdk` from JSR.
 
@@ -202,13 +202,72 @@ if (!isSDKVersionCompatible("^2.0.0")) {
 }
 ```
 
+## Request controls and steering
+
+SDK 2.6 adds optional controls to headless requests. Existing calls retain their behavior; no default deadline is imposed.
+
+```ts
+import { createHeadlessClient, HeadlessRequestError } from "@defai-digital/ax-code-sdk/headless"
+
+const client = createHeadlessClient({
+  baseUrl: backend.url,
+  headers: backend.headers,
+  directory,
+  requestOptions: { timeoutMs: 30_000 },
+})
+const compatibility = await client.checkCompatibility({ requiredFeatures: ["sessions", "asyncPrompt"] })
+if (!compatibility.compatible) throw new Error(compatibility.issues.join("; "))
+
+const controller = new AbortController()
+const state = await client.steering(sessionID, { signal: controller.signal, timeoutMs: 5_000 })
+if (state.generation) {
+  try {
+    const receipt = await client.steer(
+      sessionID,
+      {
+        expectedGeneration: state.generation,
+        clientID, // Keep this id with the correction so uncertain outcomes can be reconciled.
+        text: "Use the existing session contract.",
+      },
+      { signal: controller.signal },
+    )
+    console.log(receipt.status)
+  } catch (error) {
+    if (error instanceof HeadlessRequestError && error.status === 409) {
+      console.log("Correction conflicts with a prior request; reconcile the steering state.")
+    } else {
+      throw error
+    }
+  }
+}
+```
+
+`client.taskQueue.steer(taskID)` exposes the atomic queued-follow-up endpoint. Its `generation_not_active` result leaves the row unchanged. The SDK returns receipts and rejection reasons verbatim. `accepted` means admitted for a later loop boundary; `applied` means durably admitted at that boundary, with provider completion still separate. Receipts are process-local and bounded, so their absence after a restart does not prove a correction was never applied.
+
+`requestOptions` supplies defaults for all headless convenience requests and commands, including workflow and task-queue operations. Core session/command methods and steering accept per-call overrides; `timeoutMs: 0` disables a default deadline. Subscriptions use their own `signal`, and `client.client` retains the generated client's controls. A custom `HeadlessTransport` receives the signal and should release its pending resources when it aborts.
+
+HTTP and IPC cancellation stop the local wait. A dispatched mutation can still execute; reconcile session/queue state before taking further action. Neither transport retries mutations. Deadlines raise `TimeoutError`; caller aborts preserve the signal's reason. Non-success HTTP and IPC responses raise `HeadlessRequestError` with `status`, `body`, `method`, and `path`; IPC protocol error frames retain `IpcTransportError`.
+
+## Runtime compatibility and upgrading from SDK 2.5
+
+| Check                                             | What it establishes                                                                        |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `isSDKVersionCompatible(range)`                   | Installed SDK version satisfies the supported SDK range syntax                             |
+| `client.checkCompatibility({ requiredFeatures })` | Runtime advertises capability schema 1, headless schema 1, and the requested feature flags |
+| `client.steering(sessionID)`                      | This runtime exposes the session steering endpoint and its current generation              |
+| Signed runtime verification                       | Binary identity and provenance, independently of capability responses                      |
+
+The current generated contract baseline is AX Code source v7.23.0. SDK 2.6 does not infer unadvertised features from the runtime version. The current capability catalog does not advertise steering separately; check the read endpoint before offering steering, and handle unsupported-route errors. SDK 2.6 preserves the existing generated and headless entry points. New response-error metadata and request controls are additive; code catching `Error` continues to work.
+
+Applications upgrading older pins should first verify their signed runtime, then test capability negotiation, event projection, pending permissions/questions, cancellation, and backend shutdown. Consumer pin changes belong in the consuming repository after the target SDK is published. Validate the compiled package locally with `pnpm --dir packages/sdk/js run test:consumer`; this checks public imports, declarations, and proto assets in an isolated fixture without the private runtime source package.
+
 ## Cross-language integrations
 
 This package is the first-party TypeScript/JavaScript SDK. For Python, Go, Java, Rust, or other runtimes, generate from the repository gRPC proto or use the CLI/runtime boundary owned by that integration.
 
 ## Migration from `@ax-code/sdk` 1.4.0
 
-| Before (`@ax-code/sdk` 1.4.0)                             | After (`@defai-digital/ax-code-sdk` 2.5.62)                                  |
+| Before (`@ax-code/sdk` 1.4.0)                             | After (`@defai-digital/ax-code-sdk` 2.6.0)                                   |
 | --------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `import { createAxCode } from "@ax-code/sdk"`             | `import { startHeadlessBackend } from "@defai-digital/ax-code-sdk/headless"` |
 | `import { createAxCodeClient } from "@ax-code/sdk"`       | `import { createHeadlessClient } from "@defai-digital/ax-code-sdk/headless"` |

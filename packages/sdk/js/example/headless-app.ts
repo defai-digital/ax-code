@@ -13,7 +13,10 @@ try {
     baseUrl: backend.url,
     directory,
     headers: backend.headers,
+    requestOptions: { timeoutMs: 30_000 },
   })
+  const compatibility = await client.checkCompatibility({ requiredFeatures: ["sessions", "asyncPrompt"] })
+  if (!compatibility.compatible) throw new Error(compatibility.issues.join("; "))
   const state = createHeadlessProjectionState()
   const session = await client.createSession({ title: "Headless app example" })
 

@@ -13,6 +13,12 @@
 import { createAxCodeClient } from "../v2/client.js"
 import type {
   Event,
+  GlobalHealthResponse,
+  GlobalCapabilitiesResponse,
+  SessionSteeringResponse,
+  SessionSteerData,
+  SessionSteerResponse,
+  TaskQueueSteerResponse,
   WorkflowRoutineCreateData,
   WorkflowRoutineCreateResponse,
   WorkflowRoutineListResponse,
@@ -51,6 +57,8 @@ import type {
   HeadlessShellBody,
 } from "./command.js"
 import { createHttpSseTransport } from "./http-transport.js"
+import { runHeadlessRequest, type HeadlessRequestOptions } from "./request.js"
+import { checkHeadlessRuntimeCompatibility, type HeadlessCompatibilityRequirements } from "./compatibility.js"
 import type { HeadlessTransport } from "./transport.js"
 import { errorMessage, parseHeadlessRuntimeJsonBody, parseHeadlessRuntimeResponseBody } from "./util.js"
 
@@ -71,6 +79,8 @@ export type HeadlessClientOptions = {
    * the local IPC transport used by Desktop.
    */
   transport?: HeadlessTransport
+  /** Defaults for headless requests and commands; subscriptions and the raw generated client have separate controls. */
+  requestOptions?: HeadlessRequestOptions
 }
 
 /** Options for `client.subscribe()` (currently an abort signal). */
@@ -90,90 +100,22 @@ const SESSION_SHARE_UNSUPPORTED_MESSAGE =
   "Session sharing is not supported by this headless backend; the HTTP /session/{sessionID}/share route has been removed."
 
 /** Payload of `GET /global/health` after the backend has become ready. */
-export type HeadlessGlobalHealth = {
-  healthy: true
-  version: string
-  startup?: {
-    startedAt: number
-    uptimeMs: number
-    checkedAt: number
-  }
-  readiness?: {
-    processAlive: true
-    apiReady: true
-    providersReady: "ready" | "degraded" | "unknown"
-    indexReady: "ready" | "degraded" | "unknown"
-  }
-  runtime?: {
-    directory: string
-    services: Array<{
-      name: string
-      state: "idle" | "starting" | "running" | "stopping" | "stopped" | "failed"
-      pendingTasks: number
-      startedAt?: number
-      stoppedAt?: number
-      lastError?: string
-    }>
-    taskSummary: {
-      queued: number
-      running: number
-      completed: number
-      failed: number
-      aborted: number
-    }
-  }
-}
+export type HeadlessGlobalHealth = GlobalHealthResponse
 
-/** Capability catalog advertised by a headless backend for app-shell feature detection. */
-export type HeadlessRuntimeCapabilities = {
-  schemaVersion: 1
-  product: "ax-code"
-  version: string
-  compatibility: {
-    minDesktopVersion: string | null
-    sdkHeadless: {
-      schemaVersion: 1
-      supportsManagedLifecycle: true
-      supportsExplicitBinary: true
-      supportsExplicitArgs: true
-      supportsStructuredDiagnostics: true
-      authSchemes: Array<"basic">
-      defaultTransport: "http-sse"
-    }
-  }
-  endpoints: {
-    health: "/global/health"
-    events: "/global/event"
-    config: "/global/config"
-    capabilityCatalog: "/capability"
-    fileSearch: "/find/file"
-    sessions: "/session"
-    providers: "/config/providers"
-    agents: "/agent"
-  }
-  features: {
-    sessions: true
-    asyncPrompt: true
-    globalEvents: true
-    fileSearch: true
-    skills: true
-    plugins: true
-    mcp: true
-    worktrees: true
-    providerManagement: true
-    usage: true
-  }
-  events: {
-    heartbeat: "server.heartbeat"
-    connected: "server.connected"
-    resyncRequired: "server.resync_required"
-    sessionCreated: "session.created"
-    sessionStatus: "session.status"
-    sessionError: "session.error"
-    permission: "permission"
-    question: "question"
-  }
-}
+/** Capability catalog advertised by a headless backend for app feature detection. */
+export type HeadlessRuntimeCapabilities = GlobalCapabilitiesResponse
+
+/** Active generation and process-local steering receipts. */
+export type HeadlessSteeringState = SessionSteeringResponse
+
+/** Correction bound to the generation observed by the caller and a stable client id. */
+export type HeadlessSteerInput = NonNullable<SessionSteerData["body"]>
+
+/** Receipt of admission; applied does not guarantee provider completion. */
+export type HeadlessSteerReceipt = SessionSteerResponse
+
+/** Atomic task-queue steering outcome, including generation_not_active and the latest queue item. */
+export type HeadlessTaskQueueSteerResult = TaskQueueSteerResponse
 
 /** Kind of a task-queue item (prompt, command, shell, followup, subagent, review, automation). */
 export type HeadlessTaskQueueKind = "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
@@ -403,7 +345,21 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
   if (!input.transport && !input.baseUrl) {
     throw new Error("HeadlessClientOptions requires either baseUrl or transport")
   }
-  const transport = input.transport ?? createHttpSseTransport(input as { baseUrl: string } & typeof input)
+  const baseTransport = input.transport ?? createHttpSseTransport(input as { baseUrl: string } & typeof input)
+  const transport: HeadlessTransport = {
+    requestJson(request) {
+      const options = { ...input.requestOptions, ...request }
+      return runHeadlessRequest(options, (signal) => baseTransport.requestJson({ ...request, signal, timeoutMs: 0 }))
+    },
+    sendCommand(command, options) {
+      return runHeadlessRequest({ ...input.requestOptions, ...options }, (signal) =>
+        baseTransport.sendCommand(command, { signal, timeoutMs: 0 }),
+      )
+    },
+    subscribe(options) {
+      return baseTransport.subscribe(options)
+    },
+  }
   const client = createAxCodeClient({
     baseUrl: input.baseUrl,
     directory: input.directory,
@@ -418,20 +374,31 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
 
   return {
     client,
-    health() {
+    health(options?: HeadlessRequestOptions) {
       return transport.requestJson<HeadlessGlobalHealth>({
+        ...options,
         path: "/global/health",
         method: "GET",
       })
     },
-    capabilities() {
+    capabilities(options?: HeadlessRequestOptions) {
       return transport.requestJson<HeadlessRuntimeCapabilities>({
+        ...options,
         path: "/global/capabilities",
         method: "GET",
       })
     },
-    async createSession(session?: HeadlessCreateSessionInput) {
+    async checkCompatibility(requirements?: HeadlessCompatibilityRequirements, options?: HeadlessRequestOptions) {
+      const capabilities = await transport.requestJson<unknown>({
+        ...options,
+        path: "/global/capabilities",
+        method: "GET",
+      })
+      return checkHeadlessRuntimeCompatibility(capabilities, requirements)
+    },
+    async createSession(session?: HeadlessCreateSessionInput, options?: HeadlessRequestOptions) {
       const result = await transport.requestJson<{ id?: string }>({
+        ...options,
         path: "/session",
         method: "POST",
         body: session ?? {},
@@ -440,17 +407,29 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
       return { id: result.id }
     },
     send,
-    sendPrompt(sessionID: string, body: HeadlessPromptBody, options?: { mode?: "sync" | "async" }) {
-      return send({ type: "session.prompt", mode: options?.mode ?? "async", sessionID, body })
+    sendPrompt(
+      sessionID: string,
+      body: HeadlessPromptBody,
+      options?: { mode?: "sync" | "async" } & HeadlessRequestOptions,
+    ) {
+      return send({ type: "session.prompt", mode: options?.mode ?? "async", sessionID, body }, options)
     },
-    sendCommand(sessionID: string, body: HeadlessCommandBody, options?: { mode?: "sync" | "async" }) {
-      return send({ type: "session.command", mode: options?.mode ?? "async", sessionID, body })
+    sendCommand(
+      sessionID: string,
+      body: HeadlessCommandBody,
+      options?: { mode?: "sync" | "async" } & HeadlessRequestOptions,
+    ) {
+      return send({ type: "session.command", mode: options?.mode ?? "async", sessionID, body }, options)
     },
-    sendShell(sessionID: string, body: HeadlessShellBody, options?: { mode?: "sync" | "async" }) {
-      return send({ type: "session.shell", mode: options?.mode ?? "async", sessionID, body })
+    sendShell(
+      sessionID: string,
+      body: HeadlessShellBody,
+      options?: { mode?: "sync" | "async" } & HeadlessRequestOptions,
+    ) {
+      return send({ type: "session.shell", mode: options?.mode ?? "async", sessionID, body }, options)
     },
-    abort(sessionID: string) {
-      return send({ type: "session.abort", sessionID })
+    abort(sessionID: string, options?: HeadlessRequestOptions) {
+      return send({ type: "session.abort", sessionID }, options)
     },
     shareSession(sessionID: string) {
       void sessionID
@@ -460,11 +439,28 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
       void sessionID
       return Promise.reject(new Error(SESSION_SHARE_UNSUPPORTED_MESSAGE))
     },
-    replyPermission(body: HeadlessPermissionReplyBody) {
-      return send({ type: "permission.reply", body })
+    replyPermission(body: HeadlessPermissionReplyBody, options?: HeadlessRequestOptions) {
+      return send({ type: "permission.reply", body }, options)
     },
-    replyQuestion(body: HeadlessQuestionReplyBody) {
-      return send({ type: "question.reply", body })
+    replyQuestion(body: HeadlessQuestionReplyBody, options?: HeadlessRequestOptions) {
+      return send({ type: "question.reply", body }, options)
+    },
+    /** Read the active generation before submitting a correction. */
+    steering(sessionID: string, options?: HeadlessRequestOptions) {
+      return transport.requestJson<HeadlessSteeringState>({
+        ...options,
+        method: "GET",
+        path: `/session/${encodeURIComponent(sessionID)}/steering`,
+      })
+    },
+    /** Admit a correction at the next loop boundary. Never retries or refreshes expectedGeneration. */
+    steer(sessionID: string, body: HeadlessSteerInput, options?: HeadlessRequestOptions) {
+      return transport.requestJson<HeadlessSteerReceipt>({
+        ...options,
+        method: "POST",
+        path: `/session/${encodeURIComponent(sessionID)}/steering`,
+        body,
+      })
     },
     sessionEvidence: {
       load(sessionID: string, parameters?: HeadlessSessionEvidenceInput) {
@@ -635,6 +631,14 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
       },
       sendNow(id: string) {
         return taskQueueCommand(transport.requestJson, id, "send-now")
+      },
+      /** Steer a queued text follow-up atomically; callers reconcile rejected or uncertain outcomes. */
+      steer(id: string, options?: HeadlessRequestOptions) {
+        return transport.requestJson<HeadlessTaskQueueSteerResult>({
+          ...options,
+          method: "POST",
+          path: `/task-queue/${encodeURIComponent(id)}/steer`,
+        })
       },
       reorder(id: string, position: number) {
         return transport.requestJson<HeadlessTaskQueueItem>({
