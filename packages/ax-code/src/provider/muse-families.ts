@@ -19,11 +19,6 @@ export function museFamilyId(input: { id?: string; family?: string }): string | 
   return undefined
 }
 
-export function museFamilySortKey(family?: string): number {
-  const index = FAMILY_ORDER.indexOf(family as (typeof FAMILY_ORDER)[number])
-  return index === -1 ? FAMILY_ORDER.length : index
-}
-
 export function museDisplayName(name: string | undefined, fallback: string): string {
   return familyDisplayName(name, fallback, { stripOpenRouterPrefix: true })
 }

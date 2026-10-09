@@ -1,13 +1,5 @@
 import z from "zod"
 
-/**
- * @deprecated Legacy schema helper. New code should use Zod directly.
- */
-export const withStatics =
-  <S extends object, M extends Record<string, unknown>>(methods: (schema: S) => M) =>
-  (schema: S): S & M =>
-    Object.assign(schema, methods(schema))
-
 export const JsonBoolean = z.preprocess((value) => {
   if (typeof value !== "string") return value
   const normalized = value.trim().toLowerCase()

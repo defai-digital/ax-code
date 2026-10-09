@@ -6,8 +6,6 @@ import { QuestionID } from "@/question/schema"
 import { PermissionID } from "@/permission/schema"
 import z from "zod"
 
-import { assertSessionExists } from "./session-lookup"
-
 export type SessionRouteContext = {
   req: {
     valid: (input: "param") => { sessionID: string }
@@ -34,12 +32,6 @@ export const QUESTION_REQUEST_ID_PARAM = z.object({
 export const PERMISSION_REQUEST_ID_PARAM = z.object({
   requestID: PermissionID.zod,
 })
-
-export async function parseExistingSessionID(c: SessionRouteContext) {
-  const sessionID = parseSessionID(c)
-  await assertSessionExists(sessionID)
-  return sessionID
-}
 
 export function withRouteParam<TKey extends string, TValue>(key: TKey, handler: (value: TValue, c: any) => any) {
   return (c: any) => {

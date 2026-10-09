@@ -23,8 +23,6 @@ export function scheduleSummary(schedule: ScheduledTaskInfo["schedule"]): string
   }
 }
 
-export type TaskStatusTone = "active" | "paused" | "disabled"
-
 export function taskStatusLabel(task: ScheduledTaskInfo): string {
   switch (task.status) {
     case "active":

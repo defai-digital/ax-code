@@ -6,8 +6,6 @@ import open from "open"
 import { toErrorMessage } from "@/util/error-message"
 import { which } from "@/util/which"
 
-export const DEFAULT_WEBUI_PORT = 3100
-
 export type DesktopInvocation = {
   command: string
   args: string[]

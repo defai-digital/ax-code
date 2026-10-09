@@ -39,7 +39,6 @@ const PBKDF2_LEGACY_ITERATIONS = 100_000 // backward compat
 // indistinguishable on disk apart from the version number.
 const PBKDF2_ITERATIONS_V2 = 10_000
 const ENCRYPTION_VERSION = 2
-const TEST_KEY_VALUE = "test-api-key-12345"
 
 // Sentinel value encrypted alongside real keys. On startup we try to
 // decrypt this first — if it fails, we know the crypto runtime changed
@@ -415,19 +414,6 @@ export function decryptField<T extends Record<string, unknown>>(obj: T, field: s
       err: toErrorMessage(err),
     })
     return { ...obj, [field]: undefined }
-  }
-}
-
-/**
- * Test encryption round-trip
- */
-export function test(): boolean {
-  try {
-    const plain = TEST_KEY_VALUE
-    const enc = encrypt(plain)
-    return decrypt(enc) === plain
-  } catch {
-    return false
   }
 }
 

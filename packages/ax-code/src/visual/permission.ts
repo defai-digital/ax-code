@@ -16,15 +16,6 @@ export type BrowserSitePermission = {
   grantedAt: string
 }
 
-export type ComputerGrantMode = "allow-session" | "always-allow" | "deny"
-
-export type ComputerAppPermission = {
-  appID: string
-  displayName: string
-  capture: { mode: ComputerGrantMode; grantedAt: string }
-  input: { mode: ComputerGrantMode; grantedAt: string }
-}
-
 export namespace BrowserPermission {
   /**
    * Check if a URL is allowed by the permission store.

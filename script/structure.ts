@@ -29,7 +29,6 @@ const runtimeBoundaryAllowedFiles = new Set([
   // Node runtime entry points — boot the CLI exactly like index.ts does.
   "packages/ax-code/src/index-node.ts",
   "packages/ax-code/src/index-node-tui.ts",
-  "packages/ax-code/src/node.ts",
   "packages/ax-code/src/sdk/programmatic.ts",
   "packages/ax-code/src/sdk/programmatic-impl.ts",
   "packages/ax-code/src/runtime/local-client.ts",

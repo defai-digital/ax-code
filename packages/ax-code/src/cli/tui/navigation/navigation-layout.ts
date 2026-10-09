@@ -1,9 +1,8 @@
-import { CHROME_WIDTHS, NAVIGATION_WIDTH_DEFAULT, chromeWidth } from "../chrome-width"
+import { NAVIGATION_WIDTH_DEFAULT, chromeWidth } from "../chrome-width"
 
 export const NAVIGATION_RAIL_WIDTH = NAVIGATION_WIDTH_DEFAULT
 export const NAVIGATION_DOCK_MIN_WIDTH = 146
 export const NAVIGATION_CONTENT_MIN_WIDTH = 122
-export const NAVIGATION_WIDTHS = CHROME_WIDTHS
 
 export function navigationWidth(value: unknown): number {
   return chromeWidth(value, NAVIGATION_RAIL_WIDTH)

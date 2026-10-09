@@ -67,9 +67,3 @@ export interface WarmupOptions {
   /** Show what would be cached without writing */
   dryRun?: boolean
 }
-
-export interface WarmupResult {
-  memory: ProjectMemory
-  isNew: boolean
-  changed: boolean
-}

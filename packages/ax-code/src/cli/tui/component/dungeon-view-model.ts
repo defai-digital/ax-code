@@ -71,18 +71,6 @@ export function dungeonBackground(style: DungeonStyle) {
   return style === "dungeon-descent" ? "#0d0a10" : "#140d08"
 }
 
-/** Sample the vertical wall gradient. `t` is 0 at the top of the frame. */
-export function dungeonSkyRgb(style: DungeonStyle, t: number): readonly [number, number, number] {
-  const x = Math.max(0, Math.min(1, t))
-  const from = [1, 3, 5].map((offset) => parseInt(dungeonBackground(style).slice(offset, offset + 2), 16))
-  const to = [1, 3, 5].map((offset) => parseInt(DUNGEON_COLORS[style].skyBottom.slice(offset, offset + 2), 16))
-  return [0, 1, 2].map((channel) => Math.round(from[channel]! + (to[channel]! - from[channel]!) * x)) as [
-    number,
-    number,
-    number,
-  ]
-}
-
 /** Loop phase in [0, 1). All motion derives from it so frames loop bit-identically. */
 export function dungeonPhase(elapsedMs: number): number {
   return (Math.max(0, elapsedMs) % DUNGEON_CYCLE_MS) / DUNGEON_CYCLE_MS

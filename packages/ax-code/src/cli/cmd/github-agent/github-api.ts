@@ -1,15 +1,9 @@
 import type { Octokit } from "@octokit/rest"
-import type { graphql } from "@octokit/graphql"
 import * as core from "@actions/core"
 import { toErrorMessage } from "../../../util/error-message"
 import { AGENT_USERNAME, AGENT_REACTION } from "./types"
 import { hasNewCommits } from "./git-ops"
 import type { GitStatusRunner } from "./git-ops"
-
-export type GitHubClients = {
-  octoRest: Octokit
-  octoGraph: typeof graphql
-}
 
 // --- Token management ---
 

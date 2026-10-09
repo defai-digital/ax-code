@@ -71,13 +71,6 @@ export function vrect(hd: HdCanvas, x0: number, y0: number, x1: number, y1: numb
   for (let y = ya; y < yb; y++) hd.rect(x0, y, x1, y + 1, hdMix(top, bottom, (y + 0.5 - y0) / (y1 - y0 || 1)))
 }
 
-/** Horizontal gradient box, good for cylinders and lit/shaded faces. */
-export function hrect(hd: HdCanvas, x0: number, y0: number, x1: number, y1: number, left: RGB, right: RGB) {
-  const xa = Math.max(0, Math.floor(Math.min(x0, x1)))
-  const xb = Math.min(hd.w, Math.ceil(Math.max(x0, x1)))
-  for (let x = xa; x < xb; x++) hd.rect(x, y0, x + 1, y1, hdMix(left, right, (x + 0.5 - x0) / (x1 - x0 || 1)))
-}
-
 /** Deterministic 0..1 hash of an integer pair. */
 export function hash2(x: number, y: number): number {
   let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263)) | 0

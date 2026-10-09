@@ -8,7 +8,6 @@ import type { TaskPhase, TaskPlan, ExecutionBatch, Complexity } from "./types"
 const BASE_TOKENS_PER_PHASE = 2000
 const TOKENS_PER_OBJECTIVE = 500
 const COORDINATION_OVERHEAD = 200
-const PARALLEL_OVERHEAD = 1.1
 const TOKENS_PER_SECOND = 50
 
 const TOOL_TOKEN_COSTS: Record<string, number> = {
@@ -63,18 +62,6 @@ export function plan(p: TaskPlan): number {
     total += phase(ph, p.complexity)
   }
   total += p.phases.length * COORDINATION_OVERHEAD
-  return Math.round(total)
-}
-
-/**
- * Estimate tokens for a batch
- */
-export function batch(b: ExecutionBatch, complexity: Complexity = "moderate"): number {
-  let total = 0
-  for (const p of b.phases) {
-    total += phase(p, complexity)
-  }
-  if (b.canRunInParallel) total *= PARALLEL_OVERHEAD
   return Math.round(total)
 }
 

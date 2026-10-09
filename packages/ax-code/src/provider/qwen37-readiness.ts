@@ -11,13 +11,7 @@ export interface Qwen37ReadinessMatrix {
   webOrBuiltInTools: FeatureSupport
 }
 
-/** @deprecated Use {@link Qwen37ReadinessMatrix} instead. */
-export type Qwen37MaxReadinessMatrix = Qwen37ReadinessMatrix
-
 export type Qwen37RouteClassification = "alibaba" | "together" | "gateway" | "unknown"
-
-/** @deprecated Use {@link Qwen37RouteClassification} instead. */
-export type Qwen37MaxRouteClassification = Qwen37RouteClassification
 
 // First-party Alibaba plan providers serving Qwen 3.7 Max/Plus. Exported so
 // the capability registry (model-capabilities.ts) derives its providerIds from

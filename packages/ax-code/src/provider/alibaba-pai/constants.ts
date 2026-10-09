@@ -10,4 +10,3 @@ export const ALIBABA_PAI_NPM = vendor.npm
 
 /** Cold GPU services can take a while to emit the first token. */
 export const ALIBABA_PAI_REQUEST_TIMEOUT_MS = 180_000
-export const ALIBABA_PAI_DISCOVERY_TIMEOUT_MS = 10_000

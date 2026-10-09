@@ -13,7 +13,6 @@ export const CORCOVADO_STATUE = { x: 38, head: 2, arms: 3, base: 6 } as const
 export const CORCOVADO_GROUND_TOP = 19
 export const CORCOVADO_CLOUD_COUNT = 6
 export const CORCOVADO_SUGARLOAF = { x0: 10, x1: 16, top: 12, base: 14 } as const
-export const CORCOVADO_SAIL_PERIOD_MS = 9600
 export const CORCOVADO_CABLE_ROW = 11
 export const CORCOVADO_CABLE_X0 = 2
 export const CORCOVADO_CABLE_X1 = 13

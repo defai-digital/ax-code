@@ -19,8 +19,6 @@ export type TuiRendererContractRequirement = {
   gate: TuiRendererContractGate
 }
 
-export const TUI_RENDERER_CONTRACT_VERSION = "2026-06-17"
-
 export const TUI_RENDERER_CONTRACT: TuiRendererContractRequirement[] = [
   {
     id: "frame.lifecycle",

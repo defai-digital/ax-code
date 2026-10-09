@@ -10,7 +10,6 @@ export const BALLOONS_COLUMNS = 76
 export const BALLOONS_ROWS = 24
 export const BALLOONS_COUNT = 5
 export const BALLOONS_GROUND_TOP = 19
-export const BALLOONS_CYCLE_MS = 9600
 /** Fairy-chimney rock spires along the valley floor. */
 export const BALLOONS_SPIRES = [8, 20, 55, 66] as const
 /** Night stars in row-major order, shared by both renderers. */

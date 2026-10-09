@@ -1,5 +1,3 @@
-export type SubagentPanelMode = "off" | "solo" | "list"
-
 export function subagentPanelLayout(input: { terminalHeight: number; activeCount: number; collapsed: boolean }) {
   if (input.activeCount <= 0) return { mode: "off" as const, rows: 0, visible: 0, hidden: 0 }
   if (input.activeCount === 1) return { mode: "solo" as const, rows: 1, visible: 1, hidden: 0 }

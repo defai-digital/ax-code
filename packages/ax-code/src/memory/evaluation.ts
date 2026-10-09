@@ -24,7 +24,6 @@ const EvaluationFileSchema = z.object({
   cases: z.array(EvaluationCaseSchema).min(1),
 })
 
-export type MemoryEvaluationCase = z.infer<typeof EvaluationCaseSchema>
 export type MemoryEvaluationFile = z.infer<typeof EvaluationFileSchema>
 
 export interface MemoryEvaluationOptions {

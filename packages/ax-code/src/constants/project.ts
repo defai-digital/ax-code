@@ -17,16 +17,6 @@ export const GITHUB_REPO_URL = `https://github.com/${GITHUB_REPO_SLUG}`
 /** New-issue page; callers append a `?template=` query as needed. */
 export const GITHUB_NEW_ISSUE_URL = `${GITHUB_REPO_URL}/issues/new`
 
-/** GitHub REST endpoint for recent published releases (newest first). */
-export const GITHUB_RELEASES_API_URL = `https://api.github.com/repos/${GITHUB_REPO_SLUG}/releases?per_page=50`
-
-/**
- * GitHub REST endpoint for the latest published release.
- * Prefer GITHUB_RELEASES_API_URL for CLI version resolution: `/latest` can be a
- * desktop-v* sibling published after the matching CLI tag.
- */
-export const GITHUB_LATEST_RELEASE_API_URL = `https://api.github.com/repos/${GITHUB_REPO_SLUG}/releases/latest`
-
 /** GitHub Action reference (`owner/repo/path`) used in generated workflow YAML. */
 export const GITHUB_ACTION_REF = `${GITHUB_REPO_SLUG}/packages/integration-github`
 
@@ -38,12 +28,6 @@ export const CONFIG_SCHEMA_URL = `${RAW_MAIN_BASE}/packages/${PACKAGE_NAME}/conf
 
 /** JSON Schema for the TUI config, used by the legacy-config migrator. */
 export const TUI_SCHEMA_URL = `${RAW_MAIN_BASE}/packages/${PACKAGE_NAME}/tui.schema.json`
-
-/** Standalone Unix installer for new installations; upgrades pin an explicit release. */
-export const INSTALL_SCRIPT_URL = "https://download.ax-code.com/install"
-
-/** Standalone Windows installer for new installations; upgrades pin an explicit release. */
-export const INSTALL_PS1_SCRIPT_URL = "https://download.ax-code.com/install.ps1"
 
 // Homebrew distribution. All DefAI Digital projects publish into one shared
 // tap; LEGACY_HOMEBREW_TAP keeps upgrades working for pre-migration installs.

@@ -38,7 +38,6 @@ export const TAEGEUK_FRAME_MS = 300
 /** One eased turn of the emblem before it rests in the official orientation. */
 export const TAEGEUK_SPIN_MS = 1500
 export const TAEGEUK_CONFETTI_COUNT = 12
-export const TAEGEUK_SPARK_COUNT = 4
 /** Floodlight pylon masts outside the flag field. */
 export const TAEGEUK_PYLONS = [1, 74] as const
 

@@ -98,8 +98,7 @@ export const MAHJONG_ENDING_LAYOUT = {
 
 const MAHJONG_SEATS = ["SOUTH", "EAST", "NORTH", "WEST"] as const
 export const MAHJONG_SCORES = [32000, 23000, 21000, 24000] as const
-/** Dealer seat (index into the seat order) and the opening roll. */
-export const MAHJONG_DEALER = 0
+/** The opening roll. */
 export const MAHJONG_DICE = [3, 5] as const
 
 /** The thirty-four tile faces: nine circles, nine bamboo, nine characters, four winds, three dragons. */

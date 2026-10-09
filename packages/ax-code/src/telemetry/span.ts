@@ -1,18 +1,7 @@
 /**
  * Lightweight span helper for instrumenting code paths with OpenTelemetry.
  *
- * Usage:
- * ```ts
- * import { withSpan } from "@/telemetry/span"
- *
- * const result = await withSpan("tool.edit", { file: path }, async (span) => {
- *   const content = await fs.readFile(path)
- *   span.setAttribute("file.size", content.length)
- *   return applyEdit(content, edit)
- * })
- * ```
- *
- * When OTel is not enabled, the function runs without tracing overhead.
+ * When OTel is not enabled, the helper runs without tracing overhead.
  */
 
 import { createRequire } from "node:module"
@@ -33,36 +22,6 @@ const noop: Span = {
   setAttribute() {},
   setStatus() {},
   end() {},
-}
-
-export async function withSpan<T>(
-  name: string,
-  attributes: Record<string, string | number | boolean>,
-  fn: (span: Span) => Promise<T>,
-): Promise<T> {
-  if (!Telemetry.enabled()) return fn(noop)
-
-  try {
-    const { trace, SpanStatusCode } = await import("@opentelemetry/api")
-    const tracer = trace.getTracer("ax-code")
-    return tracer.startActiveSpan(name, { attributes }, async (span) => {
-      try {
-        const result = await fn(span)
-        span.setStatus({ code: SpanStatusCode.OK })
-        return result
-      } catch (err) {
-        span.setStatus({ code: SpanStatusCode.ERROR, message: toErrorMessage(err) })
-        throw err
-      } finally {
-        try {
-          span.end()
-        } catch {}
-      }
-    })
-  } catch {
-    // OTel not available, run without tracing
-    return fn(noop)
-  }
 }
 
 /** Synchronous span variant for CPU-bound operations. */

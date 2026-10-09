@@ -12,7 +12,6 @@ import { responseErrorMessage } from "@tui/util/error-message"
  * needs to show so they do not vanish until they execute.
  */
 export const FOLLOW_UP_KINDS = ["followup", "command", "prompt", "shell"] as const
-export type FollowUpKind = (typeof FOLLOW_UP_KINDS)[number]
 
 const FOLLOW_UP_KIND_SET: ReadonlySet<string> = new Set(FOLLOW_UP_KINDS)
 

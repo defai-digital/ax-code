@@ -10,8 +10,6 @@ export type TuiPerformanceCriterion = {
   measurement: string
 }
 
-export const TUI_PERFORMANCE_CRITERIA_VERSION = "2026-04-13"
-
 export const TUI_PERFORMANCE_CRITERIA: TuiPerformanceCriterion[] = [
   {
     id: "startup.first-frame",

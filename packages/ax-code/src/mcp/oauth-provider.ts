@@ -21,9 +21,6 @@ let _actualCallbackPort: number = OAUTH_CALLBACK_PORT
 export function setCallbackPort(port: number) {
   _actualCallbackPort = port
 }
-export function getCallbackPort(): number {
-  return _actualCallbackPort
-}
 
 export interface McpOAuthConfig {
   clientId?: string
