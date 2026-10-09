@@ -316,10 +316,10 @@ export namespace Skill {
     }
 
     if (!Flag.AX_CODE_DISABLE_EXTERNAL_SKILLS) {
-      for (const dir of EXTERNAL_DIRS) {
-        const root = path.join(Global.Path.home, dir)
-        const exists = await Filesystem.isDir(root)
-        if (!exists) continue
+      const globalRoots = EXTERNAL_DIRS.map((dir) => ({ dir, root: path.join(Global.Path.home, dir) }))
+      const globalExists = await Promise.all(globalRoots.map(({ root }) => Filesystem.isDir(root)))
+      for (const [index, { dir, root }] of globalRoots.entries()) {
+        if (!globalExists[index]) continue
         await scanDir(s, root, EXTERNAL_SKILL_PATTERN, {
           dot: true,
           scope: "global",

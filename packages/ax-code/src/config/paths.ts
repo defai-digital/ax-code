@@ -29,14 +29,10 @@ export namespace ConfigPaths {
       current = parent
     }
 
-    const files: string[] = []
-    for (const dir of dirs.toReversed()) {
-      for (const file of [`${name}.json`, `${name}.jsonc`]) {
-        const candidate = path.join(dir, file)
-        if (await Filesystem.exists(candidate)) files.push(candidate)
-      }
-    }
-    return files
+    // Probe all candidates concurrently; Promise.all preserves the precedence order.
+    const candidates = dirs.toReversed().flatMap((dir) => [`${name}.json`, `${name}.jsonc`].map((file) => path.join(dir, file)))
+    const found = await Promise.all(candidates.map((candidate) => Filesystem.exists(candidate)))
+    return candidates.filter((_, index) => found[index])
   }
 
   export async function directories(directory: string, worktree: string) {
