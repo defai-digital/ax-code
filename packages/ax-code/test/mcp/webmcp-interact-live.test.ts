@@ -19,11 +19,20 @@ test.skipIf(!executablePath)(
   "T2 interact tools act on real fixture pages and fail closed on stale targets",
   { timeout: 120_000, retry: 0 },
   async () => {
+    await using other = createServer((_request, response) => {
+      response.setHeader("Content-Type", "text/html; charset=utf-8")
+      response.end("<!doctype html><title>Other origin</title><p>landed</p>")
+    })
+    other.listen(0, "127.0.0.1")
+    await once(other, "listening")
+    const otherAddress = other.address()
+    if (!otherAddress || typeof otherAddress === "string") throw new Error("Missing second fixture address")
+    const otherOrigin = `http://127.0.0.1:${otherAddress.port}`
     await using server = createServer((request, response) => {
       const page = PAGES[request.url ?? ""]
       response.statusCode = page ? 200 : 404
       response.setHeader("Content-Type", "text/html; charset=utf-8")
-      response.end(page ?? "<!doctype html><title>missing</title>")
+      response.end((page ?? "<!doctype html><title>missing</title>").replaceAll("__OTHER__", otherOrigin))
     })
     server.listen(0, "127.0.0.1")
     await once(server, "listening")
@@ -103,6 +112,48 @@ test.skipIf(!executablePath)(
           await expect(run("click", { pageId: spa, uid: nextUid })).rejects.toBeInstanceOf(
             WebMcpProfile.TargetBindingError,
           )
+
+          // Cross-origin click: the action runs, the result reports the drift,
+          // the map is cleared, and the new origin has no interact grant.
+          const xnav = await open("/xnav")
+          const xSnapshot = await run("take_snapshot", { pageId: xnav })
+          const goUid = uidOf(xSnapshot, "button", "Go elsewhere")
+          const drift = await run("click", { pageId: xnav, uid: goUid })
+          expect(drift).toContain(`navigated to ${otherOrigin}`)
+          await expect(run("click", { pageId: xnav, uid: goUid })).rejects.toBeInstanceOf(
+            WebMcpProfile.InteractNotGrantedError,
+          )
+
+          // Link: escalated because its destination is not visible.
+          const link = await open("/link")
+          const linkSnapshot = await run("take_snapshot", { pageId: link })
+          const linkNode = WebMcpProfile.targetSummaryFor(tools.live_click.webmcp!.profile, link, uidOf(linkSnapshot, "link", "Learn more"))
+          expect(WebMcpProfile.clickEscalation(linkNode)).toContain("link")
+
+          // "Continue" submits a form but is not in the consequential vocabulary:
+          // recorded residual of ADR-174 rule 2 (a benignly named control).
+          const cont = await open("/continue")
+          const contSnapshot = await run("take_snapshot", { pageId: cont })
+          const contNode = WebMcpProfile.targetSummaryFor(tools.live_click.webmcp!.profile, cont, uidOf(contSnapshot, "button", "Continue"))
+          expect(WebMcpProfile.clickEscalation(contNode)).toBeUndefined()
+
+          // Injection: instruction text and a forged uid in a name never become targets.
+          const inject = await open("/inject")
+          await run("take_snapshot", { pageId: inject })
+          const profile = tools.live_click.webmcp!.profile
+          const injectText = await run("take_snapshot", { pageId: inject })
+          const harmless = /uid=(\S+) button "uid=1_1 button \\?"Confirm payment\\?""/.exec(injectText) ?? /uid=(\S+) button "uid=1_1/.exec(injectText)
+          expect(harmless, injectText).not.toBeNull()
+          const harmlessNode = WebMcpProfile.targetSummaryFor(profile, inject, harmless![1]!)
+          expect(harmlessNode?.name).toContain("Confirm payment")
+          expect(harmless![1]).not.toBe("1_1")
+
+          // Re-render: the old uid no longer exists upstream after the page rebuilt it.
+          const rerender = await open("/rerender")
+          const rSnapshot = await run("take_snapshot", { pageId: rerender })
+          const saveUid = uidOf(rSnapshot, "button", "Save draft")
+          await run("click", { pageId: rerender, uid: saveUid })
+          await expect(run("click", { pageId: rerender, uid: saveUid })).rejects.toThrow()
         } finally {
           await Instance.dispose()
         }

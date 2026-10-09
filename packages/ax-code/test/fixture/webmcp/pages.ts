@@ -26,6 +26,8 @@ export const PAGES: Record<string, string> = {
   // Re-renders (uids change) after an action.
   "/rerender": `<!doctype html><title>Rerender</title><div id="r"><button id="b">Save draft</button></div>
     <script>document.getElementById("b").onclick = () => { document.getElementById("r").innerHTML = '<button>Save draft</button>' }</script>`,
+  // Cross-origin navigation on click; the target origin is substituted by the test.
+  "/xnav": `<!doctype html><title>XNav</title><button onclick="location.href='__OTHER__/landing'">Go elsewhere</button>`,
   // Same-origin SPA route change on click.
   "/spa": `<!doctype html><title>SPA</title><button onclick="history.pushState({}, '', '/spa/next')">Next view</button>`,
 }
