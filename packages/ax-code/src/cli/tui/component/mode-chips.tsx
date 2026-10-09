@@ -1,6 +1,4 @@
 import { useLanguage } from "../context/language"
-import { english, type Translate } from "../i18n"
-import { stringWidth } from "@/bun/node-compat"
 // Shared mode chip row (work mode / run mode / sandbox).
 //
 // Rendered in the session sidebar footer and, on Home, in the prompt footer
@@ -16,25 +14,13 @@ import { selectedForeground, useTheme } from "@tui/context/theme"
 import { useSync } from "@tui/context/sync"
 import { useKV } from "@tui/context/kv"
 import { useCommandDialog } from "@tui/component/dialog-command"
-import { runMode, runModeLabel, type RunMode } from "./prompt/run-mode-view-model"
+import { runMode, runModeLabel } from "./prompt/run-mode-view-model"
 import { footerToggleLabel } from "./prompt/footer-toggle"
 import { workModeAvailability, workModeChipView, workModeChipVisible } from "./work-mode-availability"
 
 // Chrome fills come from the active theme so chips follow the palette
 // instead of a hardcoded green/blue/purple/pink set. Labels distinguish
 // work modes; brand identity stays on the Home logo gradient.
-
-/** Display width of a single chip, including its toggle glyph and padding. */
-export function modeChipWidth(label: string) {
-  return stringWidth(footerToggleLabel(label, false))
-}
-
-/** Total row width of the visible chips in their current state. Agent has no work-mode chip. */
-export function modeChipsRowWidth(input: { workMode: WorkMode.Id; runMode: RunMode; t?: Translate }) {
-  const t = input.t ?? english
-  const work = workModeChipVisible(input.workMode) ? modeChipWidth(WorkMode.label(input.workMode)) : 0
-  return work + modeChipWidth(runModeLabel(input.runMode, t)) + modeChipWidth(t("mode.sandbox"))
-}
 
 export function ModeChips() {
   const t = useLanguage().t

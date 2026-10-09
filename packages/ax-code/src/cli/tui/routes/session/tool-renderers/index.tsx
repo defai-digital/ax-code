@@ -5,12 +5,12 @@ import { RefactorPlan, RefactorApply, ImpactAnalyze, DedupScan } from "./dre"
 import { ApplyPatch, Bash, Edit, Write } from "./file-edits"
 import { GenericTool } from "./generic"
 import { ArenaToolView, CouncilToolView } from "./ensemble"
-import { BlockTool, InlineTool, type ToolProps } from "./primitives"
+import type { ToolProps } from "./primitives"
 import { Question, Read, TodoWrite } from "./session"
 import { Task } from "./task"
 import { ScheduleTask } from "./schedule"
 
-export { BlockTool, InlineTool, type ToolProps }
+export type { ToolProps }
 
 export type ToolRendererComponent = (props: ToolProps<any>) => JSX.Element
 

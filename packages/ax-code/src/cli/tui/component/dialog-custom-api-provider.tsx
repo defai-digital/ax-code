@@ -19,7 +19,6 @@ import { CustomApiProvider } from "@/provider/custom-api-provider"
 import { isAxTrustProviderID } from "@/mode/provider-category"
 
 const Protocol = z.enum(["openai-compatible", "anthropic-compatible"])
-export type CustomApiProviderProtocol = z.infer<typeof Protocol>
 
 const Model = z.object({
   id: z.string(),
