@@ -22,8 +22,6 @@ function drain(stream: Readable): Promise<Buffer> {
   })
 }
 
-const TIMEOUT_FORCE_KILL_GRACE_MS = 250
-
 export namespace Process {
   export type Stdio = "inherit" | "pipe" | "ignore" | number
   export type Shell = boolean
@@ -141,7 +139,7 @@ export namespace Process {
     const proc = launch(file, args, spawnOpts) // lgtm[js/shell-command-injection-from-environment, js/indirect-command-line-injection]
 
     let closed = false
-    let forceKillTimer: ReturnType<typeof setTimeout> | undefined
+    let termination: Promise<void> | undefined
     let timeoutTimer: ReturnType<typeof setTimeout> | undefined
     let timedOut = false
 
@@ -151,21 +149,9 @@ export namespace Process {
       closed = true
       if (timeoutTimer) clearTimeout(timeoutTimer)
       if (!graceful) timedOut = true
-      // Abort and timeout semantics diverge:
-      // - graceful (abort): prefer full-tree termination so we don't leave subprocesses behind,
-      //   with a short hard-kill fallback handled inside killProcessTree.
-      // - non-graceful (timeout): keep existing timed escalation behavior.
-      if (graceful) {
-        void killProcessTree(proc, { signal: opts.kill }).catch(() => undefined)
-        return
-      }
-
-      const signal = opts.kill ?? "SIGTERM"
-      proc.kill(signal)
-      if (TIMEOUT_FORCE_KILL_GRACE_MS <= 0) return
-      forceKillTimer = setTimeout(() => {
-        void killProcessTree(proc, { signal: opts.kill }).catch(() => undefined)
-      }, TIMEOUT_FORCE_KILL_GRACE_MS)
+      // Snapshot and signal the tree before the parent can exit and orphan its
+      // descendants. Shell.killTree owns the bounded hard-kill escalation.
+      termination = killProcessTree(proc, { signal: opts.kill }).catch(() => undefined)
     }
 
     const exited = new Promise<number>((resolve, reject) => {
@@ -173,13 +159,13 @@ export namespace Process {
         if (opts.abort && onAbort) {
           opts.abort.removeEventListener("abort", onAbort)
         }
-        if (forceKillTimer) clearTimeout(forceKillTimer)
         if (timeoutTimer) clearTimeout(timeoutTimer)
       }
 
       proc.once("exit", (code, signal) => {
         done()
-        resolve(timedOut ? 124 : (code ?? (signal ? 1 : 0)))
+        // A short-lived caller must not exit while descendant cleanup is pending.
+        void Promise.resolve(termination).then(() => resolve(timedOut ? 124 : (code ?? (signal ? 1 : 0))))
         // Background children spawned by the command inherit the pipe FDs and
         // keep them open, preventing stream EOF. Destroy after one I/O cycle
         // (giving Node.js a chance to drain the kernel buffer first) so that
@@ -223,6 +209,7 @@ export namespace Process {
       env: opts.env,
       stdin: opts.stdin,
       shell: opts.shell,
+      detached: opts.detached,
       abort: opts.abort,
       kill: opts.kill,
       timeout: opts.timeout,

@@ -107,6 +107,67 @@ describe("util.process", () => {
     expect(Date.now() - started).toBeLessThan(1000)
   }, 3000)
 
+  test.skipIf(process.platform === "win32")(
+    "timeout reaps descendants when the parent exits on SIGTERM",
+    { timeout: 10000, retry: 0 },
+    async () => {
+      await using tmp = await tmpdir()
+      const heartbeat = path.join(tmp.path, "heartbeat")
+      const descendantScript = `
+const fs = require("node:fs")
+process.on("SIGTERM", () => {})
+setInterval(() => fs.writeFileSync(process.argv[1], String(Date.now())), 10)
+process.send("ready")
+`
+      const parentScript = `
+const { spawn } = require("node:child_process")
+const child = spawn(process.execPath, ["-e", ${JSON.stringify(descendantScript)}, ${JSON.stringify(heartbeat)}], {
+  stdio: ["ignore", "ignore", "ignore", "ipc"],
+})
+child.once("message", () => process.stdout.write(String(child.pid)))
+setInterval(() => {}, 1000)
+`
+      let descendant: number | undefined
+      try {
+        const out = await Process.run(node(parentScript), { timeout: 1000, nothrow: true })
+        descendant = Number(out.stdout.toString())
+        expect(Number.isSafeInteger(descendant) && descendant > 0).toBe(true)
+        expect(out.code).toBe(124)
+        await vi.waitFor(
+          async () => {
+            const before = await fs.readFile(heartbeat, "utf8")
+            await new Promise((resolve) => setTimeout(resolve, 50))
+            expect(await fs.readFile(heartbeat, "utf8")).toBe(before)
+          },
+          { timeout: 2000, interval: 100 },
+        )
+      } finally {
+        if (descendant !== undefined && descendant > 0) {
+          try {
+            process.kill(descendant, "SIGKILL")
+          } catch {
+            // Independent fixture cleanup also handles a failed regression.
+          }
+        }
+      }
+    },
+  )
+
+  test.skipIf(process.platform === "win32")("run preserves the requested detached process group", async () => {
+    const out = await Process.run(
+      node(`
+try {
+  process.kill(-process.pid, 0)
+  process.stdout.write("group leader")
+} catch {
+  process.stdout.write("shared group")
+}
+`),
+      { detached: true },
+    )
+    expect(out.stdout.toString()).toBe("group leader")
+  })
+
   test("uses cwd when spawning commands", async () => {
     await using tmp = await tmpdir()
     const out = await Process.run(node("process.stdout.write(process.cwd())"), {
