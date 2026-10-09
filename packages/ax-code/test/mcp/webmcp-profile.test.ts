@@ -372,3 +372,18 @@ describe("WebMCP unrestricted profile (ADR-170)", () => {
     expect(dirOf(WebMcpProfile.command(granted))).not.toBe(dirOf(base))
   })
 })
+
+describe("WebMcpProfile.argvMismatch", () => {
+  const server = (command: string[]) =>
+    ({ type: "local", command, webmcp: { allowedOrigins: [], read: true } }) as never
+
+  test("names a drifted flag and accepts the regenerated argv", () => {
+    const profile = WebMcpProfile.validateLaunch(server(["x"]))!
+    const expected = WebMcpProfile.command(profile)
+    expect(WebMcpProfile.argvMismatch(server(expected))).toBeUndefined()
+    const drifted = WebMcpProfile.argvMismatch(server([...expected, "--no-category-network"]))
+    expect(drifted).toContain("extra --no-category-network")
+    expect(WebMcpProfile.argvMismatch(server(expected.slice(0, -1)))).toContain("missing")
+    expect(WebMcpProfile.argvMismatch({ type: "local", command: ["x"] } as never)).toBeUndefined()
+  })
+})

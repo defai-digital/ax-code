@@ -2810,6 +2810,7 @@ export type McpStatusNeedsClientRegistration = {
 export type McpStatusNeedsTrust = {
   status: "needs_trust"
   fingerprint: string
+  error?: string
   source: {
     kind:
       | "wellknown"

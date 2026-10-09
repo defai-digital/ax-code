@@ -421,6 +421,34 @@ export namespace WebMcpProfile {
     return Object.freeze(profile)
   }
 
+  /**
+   * Why a webmcp-profiled entry does not carry the reviewed launch argv for its
+   * validated profile, or undefined when it does (ADR-173). The entry is then
+   * trusted on an explicit connect; any other entry falls to the normal trust
+   * gate, which says nothing about a drifted `command`, so name the difference.
+   */
+  export function argvMismatch(server: Server): string | undefined {
+    if (server.type !== "local" || server.webmcp === undefined) return undefined
+    let profile: Configuration | undefined
+    try {
+      profile = validateLaunch(server)
+    } catch (error) {
+      return `webmcp profile is invalid: ${error instanceof Error ? error.message : String(error)}`
+    }
+    if (!profile) return undefined
+    const expected = command(profile)
+    if (JSON.stringify(server.command) === JSON.stringify(expected)) return undefined
+    const actual = server.command ?? []
+    const extra = actual.filter((arg) => !expected.includes(arg))
+    const missing = expected.filter((arg) => !actual.includes(arg))
+    const parts = [
+      ...(extra.length > 0 ? [`extra ${extra.join(" ")}`] : []),
+      ...(missing.length > 0 ? [`missing ${missing.join(" ")}`] : []),
+    ]
+    const detail = parts.length > 0 ? parts.join("; ") : "argument order differs"
+    return `command differs from its webmcp profile (${detail})`
+  }
+
   export type PolicyDecision =
     | { ok: true; profile: Configuration }
     | { ok: false; reason: "managed_policy" | "managed_origins" | "persistent_profile" | "vendored" }

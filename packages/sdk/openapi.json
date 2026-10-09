@@ -44595,6 +44595,9 @@
           "fingerprint": {
             "type": "string"
           },
+          "error": {
+            "type": "string"
+          },
           "source": {
             "type": "object",
             "properties": {

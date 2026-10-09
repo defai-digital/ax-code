@@ -264,6 +264,7 @@ export namespace MCP {
         .object({
           status: z.literal("needs_trust"),
           fingerprint: z.string(),
+          error: z.string().optional(),
           source: z.object({
             kind: Config.McpSourceKind,
             path: z.string().optional(),
@@ -453,7 +454,7 @@ export namespace MCP {
 
             const trust = await McpTrust.decision(key, mcp, entries[key]?.source ?? Config.trustedMcpSource("unknown"))
             if (!trust.trusted) {
-              if (!next.disposed) status[key] = needsTrustStatus(trust)
+              if (!next.disposed) status[key] = needsTrustStatus(trust, webmcpTrustNote(key, mcp))
               return
             }
 
@@ -595,10 +596,11 @@ export namespace MCP {
     })
   }
 
-  function needsTrustStatus(decision: McpTrust.Decision): Status {
+  function needsTrustStatus(decision: McpTrust.Decision, error?: string): Status {
     return {
       status: "needs_trust",
       fingerprint: decision.fingerprint,
+      ...(error ? { error } : {}),
       source: {
         kind: decision.source.kind,
         path: decision.source.path,
@@ -623,12 +625,18 @@ export namespace MCP {
   // launch a browser without any gesture.
   function webmcpTrustExempt(mcp: Config.Mcp): boolean {
     if (mcp.type !== "local" || mcp.webmcp === undefined) return false
-    try {
-      const profile = WebMcpProfile.validateLaunch(mcp)
-      return profile !== undefined && JSON.stringify(mcp.command) === JSON.stringify(WebMcpProfile.command(profile))
-    } catch {
-      return false
-    }
+    return WebMcpProfile.argvMismatch(mcp) === undefined
+  }
+
+  // The reason a webmcp entry fell to the trust gate instead of the explicit
+  // connect exemption, logged and carried on the status so the chip can say it
+  // rather than a bare "server is not trusted".
+  function webmcpTrustNote(key: string, mcp: Config.Mcp): string | undefined {
+    if (mcp.type !== "local" || mcp.webmcp === undefined) return undefined
+    const note = WebMcpProfile.argvMismatch(mcp)
+    if (note)
+      log.warn("webmcp entry does not match its reviewed launch argv; update or remove its command", { key, note })
+    return note
   }
 
   // Generic helper for prompts-resources: fetch the array, log on
@@ -1177,7 +1185,7 @@ export namespace MCP {
 
     const trust = await trustDecision(name, mcp)
     if (!trust.trusted && !webmcpTrustExempt(mcp)) {
-      s.status[name] = needsTrustStatus(trust)
+      s.status[name] = needsTrustStatus(trust, webmcpTrustNote(name, mcp))
       if (s.clients[name]) {
         await closeIfPossible(s.clients[name], name, "trust revoked")
         delete s.clients[name]
