@@ -18,6 +18,11 @@ export function fallsCliffTopF(x: number): number {
   const wobble = Math.sin(x * 0.83 + 1.3) * 0.45 + Math.sin(x * 0.37) * 0.35
   return 6.6 - rise * 3.2 + wobble
 }
+/** Broken inner gorge edges, shared by the rock silhouettes in text and pixels. */
+export function fallsCliffEdgeF(y: number, side: -1 | 1): number {
+  const relief = Math.sin(y * 1.35 + side) * 0.7 + Math.sin(y * 0.52) * 0.9
+  return (side < 0 ? 31.5 : 44.5) + side * (relief + Math.max(0, y - 11) * 0.2)
+}
 export const FALLS_FALLS = { x0: 32, x1: 43, top: 6, base: 16 } as const
 export const FALLS_POOL_TOP = 17
 export const FALLS_GROUND_TOP = 20
@@ -152,6 +157,9 @@ export function fallsRows(width: number, height: number, style: FallsStyle, elap
   for (const cliff of [FALLS_CLIFF_LEFT, FALLS_CLIFF_RIGHT]) {
     for (let x = cliff.x0; x <= cliff.x1; x++) {
       for (let y = Math.max(cliff.top, Math.round(fallsCliffTopF(x))); y <= cliff.base; y++) {
+        const side = cliff === FALLS_CLIFF_LEFT ? -1 : 1
+        const edge = fallsCliffEdgeF(y, side)
+        if (side < 0 ? x > edge : x < edge) continue
         paint(x, y, "#", colors.cliff, colors.cliffBg)
       }
     }

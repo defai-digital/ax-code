@@ -14,7 +14,9 @@ test.each(["space-launch", "space-drift"] as const)("%s paints deterministically
   expect(first.equals(moving)).toBe(false)
   expect(renderSpacePixels(WIDTH, HEIGHT, style, 900).equals(moving)).toBe(true)
   expect(renderSpacePixels(WIDTH, HEIGHT, style, -100).equals(first)).toBe(true)
-  expect(renderSpacePixels(WIDTH, HEIGHT, style, 2400).equals(first)).toBe(true)
+  const settled = renderSpacePixels(WIDTH, HEIGHT, style, 2400)
+  expect(settled.equals(first)).toBe(!launch)
+  expect(renderSpacePixels(WIDTH, HEIGHT, style, 4800).equals(settled)).toBe(true)
   // The top-left pixel samples the sky gradient start.
   expect(pixel(first, 0, 0)).toEqual(launch ? [16, 26, 58] : [4, 6, 15])
   // The planet surface deep below the limb never moves and reads as blue ocean.

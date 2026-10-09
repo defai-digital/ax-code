@@ -11,7 +11,7 @@ import {
   SAGRADA_ROSE,
   SAGRADA_ROWS,
   SAGRADA_SPIRE_BASE,
-  SAGRADA_SPIRE_TOP,
+  SAGRADA_SPIRE_TOPS,
   SAGRADA_SPIRES,
   SAGRADA_STARS,
   SAGRADA_TREES,
@@ -143,17 +143,50 @@ export function renderSagradaPixels(width: number, height: number, style: Sagrad
     const yy = gTop + S * (1.1 + k * 0.55)
     hd.rect(gx0, yy, gx1, yy + 1, hdDarken(stoneDark, 0.9))
   }
+  // Layered facade pinnacles, niches and projecting ribs catch the same upper-left light.
+  for (const [cx, top] of [
+    [21, 11.8],
+    [29, 12.8],
+    [47, 12.8],
+    [55, 11.8],
+  ] as const) {
+    fillPoly(
+      hd,
+      [
+        [hd.X(cx - 2.8), baseLine],
+        [hd.X(cx - 2.2), hd.Y(top + 1.7)],
+        [hd.X(cx), hd.Y(top)],
+        [hd.X(cx + 2.2), hd.Y(top + 1.7)],
+        [hd.X(cx + 2.8), baseLine],
+      ],
+      (x, y) => hdMix(wallAt(x, y), x < hd.X(cx) ? lit : shade, 0.35),
+    )
+    hd.stroke(cx, top, cx, SAGRADA_GROUND_TOP, Math.max(1, hd.cw * 0.12), hdMix(lit, light, 0.15))
+    const nx = hd.X(cx)
+    const ny = hd.Y(top + 2.1)
+    hd.blob(nx, ny, hd.cw * 0.65, hd.ch * 0.85, hdDarken(shade, 0.65))
+    hd.disk(nx - hd.cw * 0.1, ny - S * 0.15, S * 0.12, hdMix(stone, light, 0.2))
+    hd.blob(nx, ny + S * 0.17, S * 0.15, S * 0.32, rib)
+    for (let k = 0; k < 3; k++) {
+      const y = ny + S * (1.2 + k * 0.55)
+      hd.rect(nx - hd.cw, y, nx + hd.cw, y + Math.max(1, S * 0.06), hdDarken(shade, 0.7))
+    }
+  }
   // Rose window with spokes and a warm inner glow.
   const rx = hd.X(SAGRADA_ROSE.x)
   const ry = hd.Y(SAGRADA_ROSE.y - 0.6)
   const rr = Math.max(4, Math.min(hd.cw * 2.1, S * 1.05))
-  hd.disk(rx, ry, rr * 1.18, hdDarken(stoneDark, 0.75))
+  hd.disk(rx, ry, rr * 1.4, hdMix(stone, light, 0.25))
+  hd.disk(rx, ry, rr * 1.27, hdDarken(stoneDark, 0.75))
+  hd.disk(rx, ry, rr * 1.1, rib)
   hd.disk(rx, ry, rr, rose)
-  for (let k = 0; k < 8; k++) {
-    const a = (k / 8) * Math.PI * 2
+  for (let k = 0; k < 12; k++) {
+    const a = (k / 12) * Math.PI * 2
     const px = rx + Math.cos(a) * rr * 0.62
     const py = ry + Math.sin(a) * rr * 0.62
-    hd.disk(px, py, Math.max(1.4, rr * 0.2), k % 2 ? glassWarm : glass)
+    hd.disk(px, py, Math.max(1.4, rr * 0.2), hdDarken(stoneDark, 0.6))
+    hd.disk(px, py, Math.max(1, rr * 0.14), k % 3 === 0 ? roseLight : k % 2 ? glassWarm : glass)
+    hd.stroke(rx / hd.cw, ry / hd.ch, px / hd.cw, py / hd.ch, Math.max(0.6, rr * 0.025), rib)
   }
   hd.disk(rx, ry, rr * 0.28, night ? light : roseLight)
   if (night) glow(hd, rx, ry, rr * 3, glassWarm, 0.45)
@@ -171,7 +204,7 @@ export function renderSagradaPixels(width: number, height: number, style: Sagrad
     const r = (x1 - x0) / 2
     for (let y = Math.floor(topY); y < baseLine; y++) {
       const dy = y + 0.5 - (topY + r)
-      const half = dy < 0 ? Math.sqrt(Math.max(0, r * r - dy * dy)) : r
+      const half = dy < 0 ? r * (1 - Math.pow(Math.min(1, -dy / r), 0.75)) : r
       const v = clamp01((y - topY) / (baseLine - topY || 1))
       const inner = night
         ? hdMix(glassWarm, hdHex("#2a1a10"), 0.35 + v * 0.3)
@@ -179,16 +212,23 @@ export function renderSagradaPixels(width: number, height: number, style: Sagrad
       for (let x = Math.floor(midX - half); x < Math.ceil(midX + half); x++) hd.set(x, y, inner)
       hd.set(Math.floor(midX - half) - 1, y, hdDarken(stoneDark, 0.8))
       hd.set(Math.ceil(midX + half), y, hdMix(lit, light, 0.3))
+      // Nested carved archivolts and alternating lit/shadowed relief.
+      for (let band = 1; band <= 4; band++) {
+        const offset = band * Math.max(1, hd.cw * 0.16)
+        hd.set(Math.floor(midX - half - offset), y, band % 2 ? hdMix(lit, light, 0.25) : rib)
+        hd.set(Math.ceil(midX + half + offset), y, band % 2 ? stoneDark : hdMix(rib, lit, 0.2))
+      }
+      if (dy >= 0) hd.set(Math.floor(midX), y, hdDarken(stoneDark, 0.6))
     }
     if (night) glow(hd, midX, baseLine - hd.ch * ah * 0.35, r * 3, glassWarm, 0.28, 1.2)
   }
   // Four towers: rounded tops, cylinder shading, ribs, lancet slots, mosaic finials.
-  const topY = hd.Y(SAGRADA_SPIRE_TOP)
   const botY = hd.Y(SAGRADA_SPIRE_BASE)
-  const Hs = botY - topY
   const Wmax = hd.cw * 3.1
   const mosaic: RGB[] = [hdHex("#e8553c"), hdHex("#f2c53d"), hdHex("#3fa7c4"), hdHex("#7bc65a")]
   SAGRADA_SPIRES.forEach((peak, ti) => {
+    const topY = hd.Y(SAGRADA_SPIRE_TOPS[ti]!)
+    const Hs = botY - topY
     const px = hd.X(peak + 0.5)
     const halfAt = (f: number) => Wmax * (0.4 + 0.42 * f) * Math.min(1, Math.sqrt(f / 0.26) * 0.9 + 0.08)
     const towerLit = night ? hdMix(stone, hdHex("#f0c888"), 0.5) : hdMix(stone, light, 0.3)
@@ -219,12 +259,14 @@ export function renderSagradaPixels(width: number, height: number, style: Sagrad
     }
     // Finial: mosaic cluster and a small cross.
     const fy = topY - hd.ch * 0.3
-    const fr = Math.max(1.5, hd.cw * 0.2)
+    const fr = Math.max(1.5, hd.cw * 0.45)
     for (let k = 0; k < 4; k++) {
       const a = (k / 4) * Math.PI * 2 + 0.6
       hd.disk(px + Math.cos(a) * fr * 1.3, fy + Math.sin(a) * fr * 0.9, fr * 0.85, mosaic[(k + ti) % 4]!)
     }
     hd.disk(px, fy - fr * 0.3, fr * 1.05, night ? light : hdMix(glassWarm, light, 0.4))
+    hd.rect(px - fr * 0.12, fy - fr * 2.6, px + fr * 0.12, fy - fr * 1.2, hdMix(rib, light, 0.35))
+    hd.rect(px - fr * 0.6, fy - fr * 2.2, px + fr * 0.6, fy - fr * 1.95, hdMix(rib, light, 0.35))
     if (night) glow(hd, px, fy, fr * 7, light, 0.5)
     // Tower-base floodlight at night.
     if (night) glow(hd, px, botY - S * 0.5, hd.cw * 4.4, hdHex("#ffcf80"), 0.35, 2.4)

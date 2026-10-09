@@ -13,6 +13,7 @@ import {
   SPACE_SATELLITE_ROW,
   SPACE_STARS,
   spaceFlicker,
+  spaceLaunchProgress,
   spacePhase,
   spaceSkyRgb,
   spaceTwinkle,
@@ -25,7 +26,7 @@ import {
  * climbs a shaded multi-stage rocket on a long flame with an expanding
  * exhaust trail into a dawn sky; the drift scene floats a solar-panel
  * satellite past a soft nebula and a shooting star. Everything derives from
- * `elapsedMs` and loops on the shared cycle.
+ * `elapsedMs`; the environment loops while the launch ascends once and holds.
  */
 export function renderSpacePixels(width: number, height: number, style: SpaceStyle, elapsedMs: number): Buffer {
   const hd = createHdCanvas(width, height, SPACE_COLUMNS, SPACE_ROWS)
@@ -187,7 +188,7 @@ export function renderSpacePixels(width: number, height: number, style: SpaceSty
   }
 
   if (launch) {
-    const nose = SPACE_ROCKET_BASE - phase * (SPACE_ROCKET_BASE - SPACE_ROCKET_TOP + 1)
+    const nose = SPACE_ROCKET_BASE - spaceLaunchProgress(t) * (SPACE_ROCKET_BASE - SPACE_ROCKET_TOP + 1)
     const hot = spaceFlicker(t)
     const cx = hd.X(SPACE_ROCKET_X + 0.5)
     const len = hd.ch * 4.4

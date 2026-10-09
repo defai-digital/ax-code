@@ -2,7 +2,7 @@
 
 Status: Current
 Scope: TUI opening and ending animations and rendering fallbacks
-Last reviewed: 2026-09-30
+Last reviewed: 2026-10-09
 Owner: AX Code TUI maintainers
 
 See [Terminal rendering](terminal-rendering.md) for automatic terminal profiles,
@@ -88,7 +88,11 @@ Foliage leaves fall downward with different speeds, sizes, and gentle sideways
 sway. Leaf parameters derive from a fixed per-variant seed and positions from
 elapsed time alone, so the text outlines and the HD silhouettes show the same
 leaves for the same millisecond and the full scene loops with its cycle. Each
-frame is cleared so leaves leave no trails.
+frame is cleared so leaves leave no trails. On animated pixel terminals, a hazy
+autumn grove sits behind near, middle, and far leaves with curved silhouettes,
+branching veins, curled edges, and directional highlights. The golden ending
+uses warmer grove lighting; the text fallback shares the leaf paths and depth
+colors.
 
 | Command                | Preview                                        |
 | ---------------------- | ---------------------------------------------- |
@@ -104,8 +108,8 @@ Press `Ctrl+P` (the default command-palette key) and search `Digital Code`,
 available independently of the launch selection. Family names remain searchable
 in all fourteen interface languages.
 
-These previews are also available in the command palette. Opening playback lasts
-2.5 seconds; ending playback lasts 3 seconds. Existing animation preferences and
+These previews are also available in the command palette. Opening and ending playback each last
+3 seconds. Startup then plays the existing short AX Code logo handoff. Existing animation preferences and
 startup opt-out remain effective. Task-completion playback remains opt-in.
 
 Local alternate-screen terminals with confirmed Kitty graphics support display
@@ -162,3 +166,18 @@ embers — and ends on a calm crater under twinkling stars and a fixed moon.
 Cone shape, crater glow, lava channel, and particle paths come from one scene
 model shared by the text fallback and the freeform HD painting, bounded to
 1920x1080. Preview with `/volcano` or `/volcano-ending`.
+
+Sagrada Familia uses a taller central pair of bell towers, shorter outer towers,
+mosaic finials, projecting facade ribs, sculptural niches, pointed carved
+portals, and stained-glass rose-window tracery in its pixel scenes. The text
+fallback shares the tower-height composition. Preview with `/sagrada` or
+`/sagrada-ending`.
+
+Waterfall uses broken gorge edges shared by text and pixels. Its pixel scenes
+add recessed rock ledges, fissures, moss, and close fern fronds framing the
+cascade and misty pool. Preview with `/falls` or `/falls-ending`.
+
+Space opens with one ascent during the three-second playback. The rocket
+rises for 2.4 seconds and holds its final altitude without returning to the
+launch pad; stars and atmospheric effects continue moving. Its drift ending
+retains the looping environment. Preview with `/space` or `/space-ending`.

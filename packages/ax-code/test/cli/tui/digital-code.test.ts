@@ -409,7 +409,7 @@ describe("Digital Code duration", () => {
   test("stays inside the requested 2.5 to 5 second window", () => {
     expect(DIGITAL_CODE_MIN_DURATION_MS).toBeGreaterThanOrEqual(2_500)
     expect(DIGITAL_CODE_MAX_DURATION_MS).toBeLessThanOrEqual(5_000)
-    expect(DIGITAL_CODE_DURATION_MS).toBe(3_500)
+    expect(DIGITAL_CODE_DURATION_MS).toBe(3_000)
     expect(DIGITAL_CODE_DURATION_MS).toBeGreaterThanOrEqual(DIGITAL_CODE_MIN_DURATION_MS)
     expect(DIGITAL_CODE_DURATION_MS).toBeLessThanOrEqual(DIGITAL_CODE_MAX_DURATION_MS)
   })
@@ -946,8 +946,8 @@ describe("startup logo color", () => {
 })
 
 describe("reverse exit rain", () => {
-  test("plays for the requested three and a half seconds", () => {
-    expect(DIGITAL_CODE_REVERSE_DURATION_MS).toBe(3_500)
+  test("plays for the requested three seconds", () => {
+    expect(DIGITAL_CODE_REVERSE_DURATION_MS).toBe(3_000)
   })
 
   test("defaults to the startup fall", () => {

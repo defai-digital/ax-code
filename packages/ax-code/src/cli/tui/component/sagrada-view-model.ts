@@ -11,6 +11,8 @@ export const SAGRADA_ROWS = 24
 /** Four spire peaks, left to right. */
 export const SAGRADA_SPIRES = [24, 33, 43, 52] as const
 export const SAGRADA_SPIRE_TOP = 2
+/** Outer bell towers sit below the central pair in both renderers. */
+export const SAGRADA_SPIRE_TOPS = [3.4, SAGRADA_SPIRE_TOP, SAGRADA_SPIRE_TOP, 3.4] as const
 export const SAGRADA_SPIRE_BASE = 16
 export const SAGRADA_BODY_TOP = 14
 export const SAGRADA_GROUND_TOP = 19
@@ -149,13 +151,14 @@ export function sagradaRows(columns: number, rows: number, style: SagradaStyle, 
   paint(rose.x + 1, rose.y + 1, "o", colors.rose)
   paint(rose.x, rose.y + 2, "o", colors.rose)
   // Ribbed tapering spires with glowing tips.
-  for (const peak of SAGRADA_SPIRES) {
-    for (let y = SAGRADA_SPIRE_TOP; y <= SAGRADA_SPIRE_BASE; y++) {
-      const half = 1 + Math.floor(((y - SAGRADA_SPIRE_TOP) / (SAGRADA_SPIRE_BASE - SAGRADA_SPIRE_TOP)) * 3)
+  for (const [index, peak] of SAGRADA_SPIRES.entries()) {
+    const top = Math.round(SAGRADA_SPIRE_TOPS[index]!)
+    for (let y = top; y <= SAGRADA_SPIRE_BASE; y++) {
+      const half = 1 + Math.floor(((y - top) / (SAGRADA_SPIRE_BASE - top)) * 3)
       paint(peak - half, y, "|" + " ".repeat(half * 2 - 1) + "|", colors.stoneDark, colors.stone)
       paint(peak, y, ":", colors.rib, colors.stone)
     }
-    paint(peak, SAGRADA_SPIRE_TOP - 1, night ? "*" : "+", night ? colors.light : colors.glass)
+    paint(peak, top - 1, night ? "*" : "+", night ? colors.light : colors.glass)
   }
   // Construction crane still finishing the temple.
   const crane = SAGRADA_CRANE_X

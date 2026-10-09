@@ -16,12 +16,12 @@ export const DIGITAL_CODE_GLYPHS = DIGITAL_CODE_HEAVY_GLYPHS + DIGITAL_CODE_LIGH
 // default opening sits above this floor, which stays as the lower clamp bound.
 export const DIGITAL_CODE_MIN_DURATION_MS = 2_500
 export const DIGITAL_CODE_MAX_DURATION_MS = 5_000
-export const DIGITAL_CODE_DURATION_MS = 3_500
+export const DIGITAL_CODE_DURATION_MS = 3_000
 export const DIGITAL_CODE_TICK_MS = 50
 // Reverse (bottom-to-top) playback for the explicit-exit flourish. Fixed at
-// three and a half seconds, matching the opening: long enough to read as the
+// three seconds, matching the opening: long enough to read as the
 // session winding down, short enough that quitting still feels immediate.
-export const DIGITAL_CODE_REVERSE_DURATION_MS = 3_500
+export const DIGITAL_CODE_REVERSE_DURATION_MS = 3_000
 
 // Startup sequence: rain -> logo drop -> app. Every character of the mark
 // falls on its own schedule: a random stagger delay decides who leaves first

@@ -38,7 +38,9 @@ test.each(["space-launch", "space-drift"] as const)("%s clips its scene to resiz
 test("the rocket ascends deterministically past twinkling stars", () => {
   expect(spaceRocketY(0)).toBe(15)
   expect(spaceRocketY(1200)).toBe(8)
-  expect(spaceRocketY(SPACE_CYCLE_MS)).toBe(spaceRocketY(0))
+  expect(spaceRocketY(SPACE_CYCLE_MS)).toBeLessThan(spaceRocketY(1200))
+  expect(spaceRocketY(3000)).toBe(spaceRocketY(SPACE_CYCLE_MS))
+  expect(spaceRocketY(SPACE_CYCLE_MS * 2)).toBe(spaceRocketY(SPACE_CYCLE_MS))
   expect(spaceRocketY(-100)).toBe(spaceRocketY(0))
   expect(spaceTwinkle(0, 0)).toBe(true)
   expect(spaceTwinkle(0, 1)).toBe(false)
@@ -57,7 +59,11 @@ test("the rocket ascends deterministically past twinkling stars", () => {
 test.each(["space-launch", "space-drift"] as const)("%s renders deterministically", (style) => {
   expect(spaceRows(76, 24, style, 0)).toEqual(spaceRows(76, 24, style, 0))
   expect(spaceRows(76, 24, style, 450)).not.toEqual(spaceRows(76, 24, style, 0))
-  expect(spaceRows(76, 24, style, SPACE_CYCLE_MS)).toEqual(spaceRows(76, 24, style, 0))
+  if (style === "space-drift") expect(spaceRows(76, 24, style, SPACE_CYCLE_MS)).toEqual(spaceRows(76, 24, style, 0))
+  else {
+    expect(spaceRows(76, 24, style, SPACE_CYCLE_MS)).not.toEqual(spaceRows(76, 24, style, 0))
+    expect(spaceRows(76, 24, style, SPACE_CYCLE_MS * 2)).toEqual(spaceRows(76, 24, style, SPACE_CYCLE_MS))
+  }
   expect(spaceRows(76, 24, style, -100)).toEqual(spaceRows(76, 24, style, 0))
 })
 
@@ -80,4 +86,13 @@ test("the drift scene carries a satellite and nebulae", () => {
   expect(line(11).slice(35, 40)).toBe("~~~~~")
   expect(line(1)[4]).toBe("*")
   expect(line(21)[52]).toBe("o")
+})
+
+test("liftoff never reverses or restarts during the three-second playback", () => {
+  let previous = spaceRocketY(0)
+  for (let elapsed = 50; elapsed <= 3000; elapsed += 50) {
+    const current = spaceRocketY(elapsed)
+    expect(current).toBeLessThanOrEqual(previous)
+    previous = current
+  }
 })

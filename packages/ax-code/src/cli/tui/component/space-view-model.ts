@@ -40,6 +40,8 @@ export const SPACE_STARS = [
   { x: 8, y: 6 },
 ] as const
 export const SPACE_CYCLE_MS = 2400
+/** One launch per playback; the last 600ms holds the rocket above the horizon. */
+export const SPACE_LAUNCH_MS = 2400
 
 /** Palette shared by the text and pixel renderers. */
 export const SPACE_COLORS = {
@@ -89,7 +91,7 @@ export function spaceSkyRgb(style: SpaceStyle, t: number): readonly [number, num
   ]
 }
 
-/** Loop phase in [0, 1). All motion derives from it so frames loop bit-identically. */
+/** Loop phase for the environment and drift ending, independent of liftoff. */
 export function spacePhase(elapsedMs: number): number {
   return (Math.max(0, elapsedMs) % SPACE_CYCLE_MS) / SPACE_CYCLE_MS
 }
@@ -104,10 +106,15 @@ export function spaceFlicker(elapsedMs: number): boolean {
   return Math.floor(Math.max(0, elapsedMs) / 200) % 2 === 0
 }
 
-/** Scene-space Y of the rocket nose, ascending from base to top each loop. */
+/** Clamped launch progress shared by text and pixel painters. */
+export function spaceLaunchProgress(elapsedMs: number): number {
+  return Math.min(1, Math.max(0, elapsedMs) / SPACE_LAUNCH_MS)
+}
+
+/** Scene-space Y of the rocket nose; it never falls back to the launch pad. */
 export function spaceRocketY(elapsedMs: number): number {
   const travel = SPACE_ROCKET_BASE - SPACE_ROCKET_TOP
-  return SPACE_ROCKET_BASE - Math.floor(spacePhase(elapsedMs) * (travel + 1))
+  return SPACE_ROCKET_BASE - Math.floor(spaceLaunchProgress(elapsedMs) * (travel + 1))
 }
 
 /** Scene-space X of the satellite nose, crossing left to right each loop. */

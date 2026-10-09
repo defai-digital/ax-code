@@ -1,6 +1,6 @@
 import { renderTextScenePixels } from "./text-scene-pixels"
 import { isTextSceneStyle } from "./text-scene-view-model"
-import { isFoliageVariant, renderFoliagePixels, type OverlayStyle } from "./foliage-view-model"
+import { createFoliagePixelPainter, isFoliageVariant, type OverlayStyle } from "./foliage-view-model"
 import { deflateSync } from "node:zlib"
 import { randomInt } from "node:crypto"
 import {
@@ -362,6 +362,7 @@ export function kittyDigitalCodeFrame(
 export function digitalCodePixelPlayer(write: (data: string) => void) {
   const id = randomInt(1, 0x7fffffff)
   let frame: DigitalCodePixels | undefined
+  let foliagePainter: ReturnType<typeof createFoliagePixelPainter> | undefined
   let tick = 0
   const started = performance.now()
   let size = ""
@@ -382,6 +383,9 @@ export function digitalCodePixelPlayer(write: (data: string) => void) {
       if (!frame || next !== size) {
         if (frame) clear()
         frame = createDigitalCodePixels(input.width, input.height, input.direction, undefined, input.style)
+        foliagePainter = isFoliageVariant(input.style)
+          ? createFoliagePixelPainter(frame.width, frame.height, input.style)
+          : undefined
         size = next
         tick = 0
       } else if (!isTextSceneStyle(input.style) && !isFoliageVariant(input.style)) {
@@ -400,8 +404,8 @@ export function digitalCodePixelPlayer(write: (data: string) => void) {
           input.rows,
           isTextSceneStyle(input.style)
             ? renderTextScenePixels(frame.width, frame.height, input.style, input.elapsedMs ?? now - started)
-            : isFoliageVariant(input.style)
-              ? renderFoliagePixels(frame.width, frame.height, input.style, input.elapsedMs ?? now - started)
+            : foliagePainter
+              ? foliagePainter(input.elapsedMs ?? now - started)
               : undefined,
         ),
       )
@@ -409,8 +413,10 @@ export function digitalCodePixelPlayer(write: (data: string) => void) {
     dispose() {
       if (closed) return
       closed = true
-      if (frame) clear()
+      const active = frame
       frame = undefined
+      foliagePainter = undefined
+      if (active) clear()
     },
   }
 }

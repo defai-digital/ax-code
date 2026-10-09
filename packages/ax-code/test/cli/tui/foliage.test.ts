@@ -3,6 +3,7 @@ import { inflateSync } from "node:zlib"
 import {
   FOLIAGE_COLORS,
   FOLIAGE_CYCLE_MS,
+  createFoliagePixelPainter,
   foliageCells,
   foliageLeaves,
   isFoliageVariant,
@@ -43,13 +44,13 @@ describe("falling foliage", () => {
       expect(pixels).toEqual(renderFoliagePixels(320, 180, variant, 0))
       expect(pixels).not.toEqual(renderFoliagePixels(320, 180, variant, 1200))
       expect(pixels.some((v) => v !== 5)).toBe(true)
-      const colors = new Set(
-        FOLIAGE_COLORS[variant].flatMap((c) => [c.join(","), c.map((v) => Math.round(v * 0.65)).join(",")]),
-      )
-      for (let i = 0; i < pixels.length; i += 3) {
-        const color = [...pixels.subarray(i, i + 3)].join(",")
-        expect(color === "5,5,5" || colors.has(color)).toBe(true)
-      }
+      expect(pixels).toEqual(renderFoliagePixels(320, 180, variant, FOLIAGE_CYCLE_MS))
+      expect(pixels).toEqual(renderFoliagePixels(320, 180, variant, -100))
+      // Drawing a later frame must not mutate previously returned pixels or leave trails.
+      const saved = Buffer.from(pixels)
+      renderFoliagePixels(320, 180, variant, 1800)
+      expect(pixels).toEqual(saved)
+      expect(pixels).toEqual(renderFoliagePixels(320, 180, variant, 0))
       for (const [width, height] of [
         [1, 1],
         [36, 20],
@@ -65,19 +66,39 @@ describe("falling foliage", () => {
       }
     },
   )
+  test.each(["classic-foliage", "golden-foliage"] as const)(
+    "%s reuses its background without sharing mutable frame pixels",
+    (variant) => {
+      const paint = createFoliagePixelPainter(320, 180, variant)
+      const first = paint(0)
+      expect(first).toEqual(renderFoliagePixels(320, 180, variant, 0))
+      expect(paint(1200)).toEqual(renderFoliagePixels(320, 180, variant, 1200))
+      first.fill(0)
+      expect(paint(0)).toEqual(renderFoliagePixels(320, 180, variant, 0))
+    },
+  )
   test("pixel transport switches styles and deletes its image only once on disposal", () => {
     const output: string[] = []
     const player = digitalCodePixelPlayer((data) => output.push(data))
     const input = { width: 320, height: 180, columns: 40, rows: 12, direction: "down" as const }
-    player.draw({ ...input, style: "classic-foliage" })
-    player.draw({ ...input, style: "golden-foliage" })
+    player.draw({ ...input, style: "classic-foliage", elapsedMs: 0 })
+    player.draw({ ...input, style: "classic-foliage", elapsedMs: 1200 })
+    player.draw({ ...input, style: "golden-foliage", elapsedMs: 1200 })
     const packets = [...output.at(-1)!.matchAll(/\x1b_G[^;]+;([A-Za-z0-9+/=]*)\x1b\\/g)]
-    expect(inflateSync(Buffer.from(packets.map((p) => p[1]).join(""), "base64")).length).toBe(320 * 180 * 3)
+    expect(inflateSync(Buffer.from(packets.map((p) => p[1]).join(""), "base64"))).toEqual(
+      renderFoliagePixels(320, 180, "golden-foliage", 1200),
+    )
     expect(output.filter((s) => s.includes("a=d,d=I"))).toHaveLength(1)
-    player.dispose()
-    player.dispose()
+    player.draw({ ...input, width: 160, height: 90, style: "golden-foliage", elapsedMs: 1200 })
+    const resized = [...output.at(-1)!.matchAll(/\x1b_G[^;]+;([A-Za-z0-9+/=]*)\x1b\\/g)]
+    expect(inflateSync(Buffer.from(resized.map((p) => p[1]).join(""), "base64"))).toEqual(
+      renderFoliagePixels(160, 90, "golden-foliage", 1200),
+    )
     expect(output.filter((s) => s.includes("a=d,d=I"))).toHaveLength(2)
+    player.dispose()
+    player.dispose()
+    expect(output.filter((s) => s.includes("a=d,d=I"))).toHaveLength(3)
     player.draw(input)
-    expect(output).toHaveLength(4)
+    expect(output).toHaveLength(7)
   })
 })

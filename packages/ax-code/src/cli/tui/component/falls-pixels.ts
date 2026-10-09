@@ -11,6 +11,7 @@ import {
   FALLS_ROWS,
   FALLS_STARS,
   fallsCliffTopF,
+  fallsCliffEdgeF,
   fallsFireflies,
   fallsMist,
   fallsSkyRgb,
@@ -146,17 +147,28 @@ export function renderFallsPixels(width: number, height: number, style: FallsSty
     // Spray-darkened rock near the base of the falls.
     const wet = clamp01((v - 11) / 6) * Math.exp(-depth / 9)
     color = hdMix(color, flow, wet * 0.28)
+    // Deep ledges break up the broad face; moss grows in their sheltered recesses.
+    const layer = v * 0.85 + crack * 1.4
+    const ledge = layer - Math.floor(layer)
+    const exposed = crack
+    if (ledge < 0.07 && exposed > 0.35) color = hdMix(color, hdDarken(rock, 1.2), 0.3 * (1 - ledge / 0.07))
+    if (ledge > 0.9 && exposed > 0.45) color = hdDarken(color, 0.78 + (1 - ledge) * 1.5)
+    const fissure = Math.abs(Math.sin(u * 1.1 + v * 0.3 + crack * 2))
+    if (fissure < 0.055 && exposed > 0.6) color = hdDarken(color, 0.75 + fissure * 3)
+    if (ledge > 0.72 && grain > 0.55 && depth < 18)
+      color = hdMix(color, hdDarken(grass, night ? 0.6 : 0.8), (grain - 0.55) * 1.1)
     return color
   }
   for (const side of [-1, 1] as const) {
-    const edgeCell = side < 0 ? 31.5 : 44.5
+    const edges = Float64Array.from({ length: h }, (_, y) => hd.X(fallsCliffEdgeF(y / hd.ch, side)))
     for (let x = 0; x < w; x++) {
       const u = (x + 0.5) / hd.cw
-      const inside = side < 0 ? u < edgeCell : u > edgeCell
+      const inside = side < 0 ? u < 33 : u > 43
       if (!inside) continue
       const crest = hd.Y(fallsCliffTopF(u)) + (vnoise((x / s) * 0.9, 5) - 0.5) * s * 1.1
-      const wallEdgeX = hd.X(edgeCell)
       for (let y = Math.max(0, Math.floor(crest)); y < Math.min(h, Math.ceil(poolY)); y++) {
+        const wallEdgeX = edges[y]!
+        if (side < 0 ? x >= wallEdgeX : x <= wallEdgeX) continue
         // Ragged inner face near the falls.
         const inner = Math.abs(x - wallEdgeX) / hd.cw
         const jag = vnoise((y / s) * 0.5 + side * 3, 11) * 1.8
@@ -352,6 +364,32 @@ export function renderFallsPixels(width: number, height: number, style: FallsSty
       const fy = hd.Y(fly.y + 0.5)
       glow(fx, fy, s * 2.6, glowColor, 0.45)
       hd.disk(fx, fy, Math.max(1.3, s * 0.2), hdMix(glowColor, [255, 255, 255], 0.5))
+    }
+  }
+  // Close fern fronds frame the pool with darker, larger silhouettes than the ridge pines.
+  const fern = hdDarken(grass, night ? 0.55 : 0.65)
+  for (const root of [3, 11, 65, 73]) {
+    for (let frond = 0; frond < 3; frond++) {
+      const reach = (frond - 1) * 2.8
+      const tip = 17.5 + frond * 0.8
+      const sway = Math.sin(theta + root) * 0.18
+      hd.stroke(root, 24, root + reach + sway, tip, s * 0.14, hdDarken(fern, 0.7))
+      for (let k = 1; k < 8; k++) {
+        const f = k / 8
+        const x = root + (reach + sway) * f
+        const y = 24 + (tip - 24) * f
+        const span = (1 - f) * 1.7
+        for (const side of [-1, 1]) {
+          hd.stroke(
+            x,
+            y,
+            x + side * span,
+            y - 0.65,
+            s * (0.22 + (1 - f) * 0.16),
+            side < 0 ? hdMix(fern, grass, 0.2) : fern,
+          )
+        }
+      }
     }
   }
   return hd.pixels
