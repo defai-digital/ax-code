@@ -1145,6 +1145,21 @@ export namespace MCP {
     return result
   }
 
+  /**
+   * Highest WebMCP tier among connected bridges, or undefined when none is
+   * connected. Drives the conditional <webmcp_bridge> system-prompt block.
+   */
+  export async function webmcpPromptTier(): Promise<WebMcpProfile.PromptTier | undefined> {
+    const s = await state()
+    const tiers: WebMcpProfile.PromptTier[] = []
+    for (const [name, client] of Object.entries(s.clients)) {
+      if (s.status[name]?.status !== "connected") continue
+      const profile = webMcpProfiles.get(client)
+      if (profile) tiers.push(WebMcpProfile.promptTier(profile))
+    }
+    return WebMcpProfile.highestPromptTier(tiers)
+  }
+
   export async function clients() {
     return state().then((state) => state.clients)
   }

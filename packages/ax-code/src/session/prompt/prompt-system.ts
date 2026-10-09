@@ -3,6 +3,7 @@ import { ScopedFlag } from "../../flag/scoped"
 import { providerModelKey } from "../../provider/model-key"
 import type { ProviderID } from "../../provider/schema"
 import { InstructionPrompt } from "../instruction"
+import { MCP } from "../../mcp"
 import type { MessageV2 } from "../message-v2"
 import { SystemPrompt } from "../system"
 
@@ -91,7 +92,10 @@ export async function systemPrompt(input: {
   // block (present when it should be gone, or vice versa) until the model
   // happens to change.
   const modelKey = providerModelKey({ providerID: input.model.providerID, modelID: input.model.api.id })
-  const environmentCacheKey = `${modelKey}:${ScopedFlag.autonomous() ? "autonomous" : "manual"}`
+  // The WebMCP bridge block appears when a bridge connects mid-session
+  // (sidebar chip), so its tier is part of the key too.
+  const webmcpTier = input.environment ? undefined : await MCP.webmcpPromptTier().catch(() => undefined)
+  const environmentCacheKey = `${modelKey}:${ScopedFlag.autonomous() ? "autonomous" : "manual"}:${webmcpTier ?? "nobridge"}`
   if (
     input.environmentOverride === undefined &&
     (!input.cache.environment || input.cache.environmentModelKey !== environmentCacheKey)

@@ -36,6 +36,8 @@ import { Config } from "../config/config"
 import type { ModePolicy } from "../mode/policy"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import { ToolProfile } from "@/tool/profile"
+import { MCP } from "../mcp"
+import { WebMcpProfile } from "../mcp/webmcp-profile"
 import { maybeRenderAxWikiProtocol, type AxWikiConfig } from "@ax-code/ax-wiki/node"
 
 export namespace SystemPrompt {
@@ -211,11 +213,17 @@ export namespace SystemPrompt {
           `  IMPORTANT: Do NOT run \`open\`, \`xdg-open\`, \`start\`, or \`sensible-browser\` commands to verify your output.`,
           `  After applying changes, report: "Changes applied — refresh your browser to see the update."`,
           `  Avoid double-quoted CSS values such as url("data:image/...") inside double-quoted style attributes; verify rendered DOM when visual output matters.`,
-          `  If the playwright MCP server is connected, use browser_screenshot to verify rendering without opening a new window.`,
+          `  If the playwright MCP server is connected (and no <webmcp_bridge> block is present), use browser_screenshot to verify rendering without opening a new window.`,
           `  Only open the browser when the user explicitly asks you to.`,
           `</html_dev_workflow>`,
         ]
       : []
+
+    const webmcpTier = await MCP.webmcpPromptTier().catch((error) => {
+      log.warn("webmcp prompt tier resolve failed", { error })
+      return undefined
+    })
+    const webmcpBridge = webmcpTier ? WebMcpProfile.promptBlock(webmcpTier) : []
 
     const debugEngineWorkflow =
       Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE && !codingProfile
@@ -296,6 +304,7 @@ export namespace SystemPrompt {
         ...executionModesProtocol,
         ...wikiProtocol,
         ...htmlDevWorkflow,
+        ...webmcpBridge,
         ...debugEngineWorkflow,
       ].join("\n"),
     ]
