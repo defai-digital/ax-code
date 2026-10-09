@@ -406,6 +406,12 @@ jobs:
           AX_TEST_FILES: test/script/node-launcher.test.ts,test/script/source-launcher.test.ts
         run: pnpm exec vitest run --retry=0
 
+      - name: Qualify TUIMCP private endpoints and full CLI on Node 26
+        working-directory: packages/ax-code
+        env:
+          AX_TEST_FILES: test/tuimcp/controller.test.ts,test/tuimcp/endpoint.test.ts,test/tuimcp/mcp.test.ts
+        run: pnpm exec vitest run --retry=0
+
       - name: Cache manifest-verified TUI native dependencies
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
