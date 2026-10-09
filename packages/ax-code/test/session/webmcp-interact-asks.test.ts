@@ -205,7 +205,8 @@ describe("WebMCP T2 asks through the session layer", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const tools = await resolveTools(resolveInput("msg_turn_1"))
+        const input = resolveInput("msg_turn_1")
+        const tools = await resolveTools(input)
         for (let attempt = 0; attempt < 3; attempt += 1) {
           await expect(
             (tools.bridge_fill.execute as any)({ pageId: 1, uid: "9_9", value: "x" }, execOptions()),
@@ -218,10 +219,18 @@ describe("WebMCP T2 asks through the session layer", () => {
           "stopped for this turn",
         )
         expect(client.calls).not.toContain("click")
+        const sameTurn = await resolveTools(input)
+        await expect((sameTurn.bridge_click.execute as any)({ pageId: 1, uid: "1_1" }, execOptions())).rejects.toThrow(
+          "stopped for this turn",
+        )
         // A new turn resets it.
         const next = await resolveTools(resolveInput("msg_turn_2"))
         await (next.bridge_click.execute as any)({ pageId: 1, uid: "1_1" }, execOptions())
         expect(client.calls).toContain("click")
+        // Late calls from an old turn cannot reset its tripped breaker.
+        await expect((tools.bridge_click.execute as any)({ pageId: 1, uid: "1_1" }, execOptions())).rejects.toThrow(
+          "stopped for this turn",
+        )
       },
     })
   })

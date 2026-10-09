@@ -39,17 +39,18 @@ import { createHash } from "node:crypto"
 const log = Log.create({ service: "session.prompt.tools" })
 
 /**
- * ADR-174 rule 11: one T2 circuit breaker per session, replaced when the
- * turn (assistant message) changes, so the next user message resets it.
+ * ADR-174 rule 11: each live assistant-turn processor owns its T2 breaker.
+ * Weak keys release completed turns and prevent late calls from replacing
+ * another turn's counters.
  */
-const webmcpBreakers = Instance.state(() => new Map<string, WebMcpProfile.InteractBreaker>())
+const webmcpBreakers = Instance.state(() => new WeakMap<SessionProcessor.Info, WebMcpProfile.InteractBreaker>())
 
-function webmcpTurnBreaker(sessionID: string, turn: string): WebMcpProfile.InteractBreaker {
+function webmcpTurnBreaker(processor: SessionProcessor.Info): WebMcpProfile.InteractBreaker {
   const map = webmcpBreakers()
-  const existing = map.get(sessionID)
-  if (existing && existing.turn === turn) return existing
-  const fresh = new WebMcpProfile.InteractBreaker(turn)
-  map.set(sessionID, fresh)
+  const existing = map.get(processor)
+  if (existing) return existing
+  const fresh = new WebMcpProfile.InteractBreaker(processor.message.id)
+  map.set(processor, fresh) // @scan-suppress lifecycle_scan: weak processor keys are collected after the turn
   return fresh
 }
 
@@ -1612,7 +1613,7 @@ export async function resolveTools(input: ResolveToolsInput) {
           // presses, dialogs and escalated clicks keep the per-call asks with
           // the target and full value in the metadata.
           const interactTool = policy !== undefined && WebMcpProfile.isInteractTool(policy.toolName)
-          const breaker = interactTool ? webmcpTurnBreaker(ctx.sessionID, input.processor.message.id) : undefined
+          const breaker = interactTool ? webmcpTurnBreaker(input.processor) : undefined
           if (breaker?.tripped) throw new Error(breaker.tripped)
           // A wait reservation is refunded when the call stops at a grant
           // prompt before any waiting happened.

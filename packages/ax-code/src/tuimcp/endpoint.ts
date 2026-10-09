@@ -64,6 +64,7 @@ export async function startTuiMcpEndpoint(controller: TuiMcpController, onClose?
   }
   const sockets = new Set<net.Socket>()
   let closed = false
+  let closePromise: Promise<void> | undefined
   const server = net.createServer((socket) => {
     if (closed || sockets.size >= 16) {
       socket.destroy()
@@ -145,14 +146,20 @@ export async function startTuiMcpEndpoint(controller: TuiMcpController, onClose?
     await fs.rm(directory, { recursive: true, force: true })
     throw error
   }
-  async function close() {
-    if (closed) return
+  function close(): Promise<void> {
+    if (closePromise) return closePromise
     closed = true
-    controller.dispose()
-    onClose?.()
-    for (const socket of sockets) socket.destroy()
-    await new Promise<void>((resolve) => server.close(() => resolve()))
-    await fs.rm(directory, { recursive: true, force: true })
+    closePromise = Promise.resolve().then(async () => {
+      try {
+        controller.dispose()
+        onClose?.()
+      } finally {
+        for (const socket of sockets) socket.destroy()
+        await new Promise<void>((resolve) => server.close(() => resolve()))
+        await fs.rm(directory, { recursive: true, force: true })
+      }
+    })
+    return closePromise
   }
   // Fail closed and release the listener and capability on runtime errors.
   server.on("error", () => {

@@ -16,7 +16,7 @@ import { parseJsonStrict } from "../../src/util/json-value"
 import { SessionID } from "../../src/session/schema"
 import { tmpdir } from "../fixture/fixture"
 
-async function fixture(validate?: (signal: AbortSignal) => Promise<void>) {
+async function fixture(validate?: (signal: AbortSignal) => Promise<void>, onClose?: () => void) {
   const state: LiveState = { workspace: "/private/workspace", route: "home", ready: true, blocked: false }
   let navigations = 0
   const controller = createTuiMcpController({
@@ -30,7 +30,7 @@ async function fixture(validate?: (signal: AbortSignal) => Promise<void>) {
       state.sessionId = sessionId
     },
   })
-  const endpoint = await startTuiMcpEndpoint(controller)
+  const endpoint = await startTuiMcpEndpoint(controller, onClose)
   const view = controller.context()
   return {
     controller,
@@ -67,6 +67,36 @@ async function raw(filename: string, body: string) {
 }
 
 describe.skipIf(process.platform === "win32")("TUIMCP private socket", () => {
+  test("cleans the private endpoint even when its close callback throws", async () => {
+    const f = await fixture(undefined, () => {
+      throw new Error("Close callback failed")
+    })
+    try {
+      await expect(f.endpoint.close()).rejects.toThrow("Close callback failed")
+      await expect(fs.stat(path.dirname(f.endpoint.filename))).rejects.toMatchObject({ code: "ENOENT" })
+      expect(
+        await f.controller.dispatch({ operation: "get_view_context" }, new AbortController().signal),
+      ).toMatchObject({
+        code: "revoked",
+      })
+    } finally {
+      await f.endpoint.close().catch(() => {})
+    }
+  })
+
+  test("concurrent and reentrant close calls await the same completed cleanup", async () => {
+    let nested: Promise<void> | undefined
+    const f = await fixture(undefined, () => {
+      nested = f.endpoint.close()
+    })
+    const first = f.endpoint.close()
+    const second = f.endpoint.close()
+    await Promise.all([first, second])
+    expect(second).toBe(first)
+    expect(nested).toBe(first)
+    await expect(fs.stat(path.dirname(f.endpoint.filename))).rejects.toMatchObject({ code: "ENOENT" })
+  })
+
   test("uses private modes and acknowledges actual route state", async () => {
     await using f = await fixture()
     const file = f.endpoint.filename

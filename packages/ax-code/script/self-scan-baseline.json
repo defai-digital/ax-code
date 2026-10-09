@@ -3,7 +3,7 @@
   "scope": "packages/ax-code/src, packages/ax-code-intel/src, packages/ax-code-reason/src",
   "scanners": {
     "race_scan": {
-      "count": 28,
+      "count": 37,
       "findings": [
         {
           "fingerprint": "06f87a1f14481b595da798d0184f8ce120d3e0ff858065f7e48ca62e2c8c57cd",
@@ -231,6 +231,78 @@
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
+        },
+        {
+          "fingerprint": "4e7ee1c853915d807901990420b5e099c0c99917a2e57e4cecf9316374f2bfb7",
+          "file": "src/tuimcp/endpoint.ts",
+          "line": 78,
+          "severity": "medium",
+          "kind": "stale_listener",
+          "summary": "Reviewed: socket listeners belong to bounded connections destroyed at deadline or endpoint close; server listeners are scoped to the closed server, with pending work aborted on socket close."
+        },
+        {
+          "fingerprint": "e2517b14cce8a9db451acbbf8cd9f4a42e05e0d07bdfd0579b10fc62c584790d",
+          "file": "src/tuimcp/endpoint.ts",
+          "line": 79,
+          "severity": "medium",
+          "kind": "stale_listener",
+          "summary": "Reviewed: socket listeners belong to bounded connections destroyed at deadline or endpoint close; server listeners are scoped to the closed server, with pending work aborted on socket close."
+        },
+        {
+          "fingerprint": "74e554029e2e0bc7650002f5d3ecb526fa6b2a81ce47ebfcb984d25fed696da6",
+          "file": "src/tuimcp/endpoint.ts",
+          "line": 87,
+          "severity": "medium",
+          "kind": "stale_listener",
+          "summary": "Reviewed: socket listeners belong to bounded connections destroyed at deadline or endpoint close; server listeners are scoped to the closed server, with pending work aborted on socket close."
+        },
+        {
+          "fingerprint": "3fbdf97b5d921c4f7a0d9a2c97b4d59e5e7418184683f383ba9a8a3be9d85ff9",
+          "file": "src/tuimcp/endpoint.ts",
+          "line": 136,
+          "severity": "medium",
+          "kind": "stale_listener",
+          "summary": "Reviewed: socket listeners belong to bounded connections destroyed at deadline or endpoint close; server listeners are scoped to the closed server, with pending work aborted on socket close."
+        },
+        {
+          "fingerprint": "45aaa621b728e773fc1c2681b9997b9f822bb399f85c78b99f4e7d365ec63d6d",
+          "file": "src/tuimcp/endpoint.ts",
+          "line": 165,
+          "severity": "medium",
+          "kind": "stale_listener",
+          "summary": "Reviewed: socket listeners belong to bounded connections destroyed at deadline or endpoint close; server listeners are scoped to the closed server, with pending work aborted on socket close."
+        },
+        {
+          "fingerprint": "79a049536518c129ca72f6e362f69a678348f00f3957474dfe0735a96962c096",
+          "file": "src/tuimcp/mcp-server.ts",
+          "line": 68,
+          "severity": "medium",
+          "kind": "stale_listener",
+          "summary": "Reviewed: stdin and process shutdown listeners are explicitly removed in serveTuiMcp finally, followed by server close."
+        },
+        {
+          "fingerprint": "62d86296155c99bd5eeefe1932976422e568077ce76876dfba0931ecf6d754ae",
+          "file": "src/tuimcp/mcp-server.ts",
+          "line": 69,
+          "severity": "medium",
+          "kind": "stale_listener",
+          "summary": "Reviewed: stdin and process shutdown listeners are explicitly removed in serveTuiMcp finally, followed by server close."
+        },
+        {
+          "fingerprint": "21d064c27afff97754d365d79dcf45fd56b9dcf1304570dbafa033d1ceb480f7",
+          "file": "src/tuimcp/mcp-server.ts",
+          "line": 70,
+          "severity": "medium",
+          "kind": "stale_listener",
+          "summary": "Reviewed: stdin and process shutdown listeners are explicitly removed in serveTuiMcp finally, followed by server close."
+        },
+        {
+          "fingerprint": "7b5f8dfdf4cb78e9312e8166d868190f5824c05c6decdd3934d68fb751565bc4",
+          "file": "src/tuimcp/mcp-server.ts",
+          "line": 71,
+          "severity": "medium",
+          "kind": "stale_listener",
+          "summary": "Reviewed: stdin and process shutdown listeners are explicitly removed in serveTuiMcp finally, followed by server close."
         }
       ]
     },
@@ -1952,7 +2024,7 @@
       ]
     },
     "security_scan": {
-      "count": 496,
+      "count": 501,
       "findings": [
         {
           "fingerprint": "437e1d0157fc1965a429fe7f0e9474576f6c0db625ea27bb6ce1b57af9e2cd9f",
@@ -5921,6 +5993,46 @@
           "severity": "medium",
           "kind": "missing_validation",
           "summary": "missing_validation"
+        },
+        {
+          "fingerprint": "69262ab962139d855f2fa1d0a099644eb6820b53df8c9a57f859b64523825161",
+          "file": "src/tuimcp/endpoint.ts",
+          "line": 34,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "Reviewed: endpoint reads require canonical absolute paths, owner/mode checks and O_NOFOLLOW; generated socket paths live in a private mkdtemp directory. Same-user capability access is the ADR-167 trust boundary."
+        },
+        {
+          "fingerprint": "ae5ca2d62d4638bd145b8201d5699f7948cf6599e3f7fce54a3a841b65c97fff",
+          "file": "src/tuimcp/endpoint.ts",
+          "line": 55,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "Reviewed: endpoint reads require canonical absolute paths, owner/mode checks and O_NOFOLLOW; generated socket paths live in a private mkdtemp directory. Same-user capability access is the ADR-167 trust boundary."
+        },
+        {
+          "fingerprint": "ca374de8ee77c7438a655d0c70af8a2976585613eea2ae76c1b463abad2420f5",
+          "file": "src/tuimcp/endpoint.ts",
+          "line": 57,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "Reviewed: endpoint reads require canonical absolute paths, owner/mode checks and O_NOFOLLOW; generated socket paths live in a private mkdtemp directory. Same-user capability access is the ADR-167 trust boundary."
+        },
+        {
+          "fingerprint": "67f0b06e97724ad72b69a89587c60d3a6f2935dd28ef03b25e294d67b23b3a35",
+          "file": "src/tuimcp/endpoint.ts",
+          "line": 58,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "Reviewed: endpoint reads require canonical absolute paths, owner/mode checks and O_NOFOLLOW; generated socket paths live in a private mkdtemp directory. Same-user capability access is the ADR-167 trust boundary."
+        },
+        {
+          "fingerprint": "bf575a0f40cb1330997fda014fac366b921c54dee824b84c6571af0b8e6d8669",
+          "file": "src/tuimcp/endpoint.ts",
+          "line": 190,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "Reviewed: endpoint reads require canonical absolute paths, owner/mode checks and O_NOFOLLOW; generated socket paths live in a private mkdtemp directory. Same-user capability access is the ADR-167 trust boundary."
         }
       ]
     },

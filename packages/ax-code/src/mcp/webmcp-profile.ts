@@ -734,7 +734,7 @@ export namespace WebMcpProfile {
    * consecutive user refusals, or three consecutive fail-closed target
    * checks, stop further T2 calls in the turn with a summary. Also accounts
    * the turn's cumulative wait_for budget (rule 9). Pure state; the session
-   * layer keys one instance per session and replaces it on a new turn.
+   * layer keys one instance per live assistant-turn processor.
    */
   export class InteractBreaker {
     refusals = 0
