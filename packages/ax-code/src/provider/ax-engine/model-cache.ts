@@ -886,6 +886,9 @@ export async function reclaimManagedCopy(
 
   using _ = await FileLock.acquire(AxEnginePaths.prepareLock, { timeoutMs: 30_000, staleMs: PREPARE_LOCK_STALE_MS })
 
+  // A concurrent reclaim may have removed the copy while we waited for the lock.
+  if (!(await exists(managedPath))) return undefined
+
   // Repoint prepare.json off the managed dir before deleting it.
   const current = await readPrepareState()
   if (current.error) return undefined

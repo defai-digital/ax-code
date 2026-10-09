@@ -13,7 +13,13 @@ import { installNodeBunCompat } from "./bun/node-compat"
 // Node workers inherit startup --import preloads even after NODE_OPTIONS is
 // restored. This entry may therefore load in a parser worker; only the main
 // thread owns CLI startup, process state, and terminal initialization.
-if (isMainThread) {
+// Fast path: a bare `--version` / `-v` prints the build-time version without
+// loading the CLI graph. Only taken when the build defines the constant (source
+// runs fall through to yargs, which reads package.json).
+const versionOnly = process.argv.length === 3 && (process.argv[2] === "--version" || process.argv[2] === "-v")
+if (isMainThread && versionOnly && typeof AX_CODE_VERSION === "string") {
+  process.stdout.write(`${AX_CODE_VERSION}\n`, () => process.exit(0))
+} else if (isMainThread) {
   // Before anything else: drop the launcher's boot chain from NODE_OPTIONS so
   // Node children spawned by the CLI graph never re-import this entry (see
   // util/node-options.ts). Record the real entry path in the same breath: the
