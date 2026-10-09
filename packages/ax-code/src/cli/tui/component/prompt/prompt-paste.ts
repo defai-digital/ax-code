@@ -216,7 +216,9 @@ export function createPromptPaste(host: PromptPasteHost) {
             }
             // Fall through to plain-text paste if read failed.
           }
-        } catch {}
+        } catch (error) {
+          host.log.warn("prompt paste handling failed", { error, filepath })
+        }
       }
 
       const lineCount = (normalizedText.match(/\n/g)?.length ?? 0) + 1

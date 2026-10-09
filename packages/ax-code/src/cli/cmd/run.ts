@@ -2166,7 +2166,9 @@ export const RunCommand = cmd({
           if (process.cwd() !== previousCwd) {
             try {
               process.chdir(previousCwd)
-            } catch {}
+            } catch (error) {
+              Log.Default.warn("failed to restore working directory", { error, previousCwd })
+            }
           }
         }
       },

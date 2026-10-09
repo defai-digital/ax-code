@@ -5,6 +5,8 @@
 // the terminal in alt-screen + raw mode. Each entry point used to register
 // some subset of these by hand; centralizing keeps the behavior consistent.
 
+import { toErrorMessage } from "./error-message"
+
 export type ShutdownCallback = (signal: NodeJS.Signals) => void | Promise<void>
 
 export interface RegisterOptions {
@@ -22,10 +24,14 @@ export function registerShutdownSignals(callback: ShutdownCallback, options?: Re
     try {
       const result = callback(signal)
       if (result && typeof (result as Promise<void>).catch === "function") {
-        ;(result as Promise<void>).catch(() => {})
+        ;(result as Promise<void>).catch((error) => {
+          // The process is on its way out; stderr is the last place the
+          // failure can still surface.
+          console.error(`shutdown callback rejected on ${signal}`, toErrorMessage(error))
+        })
       }
-    } catch {
-      // swallow — callback owns error reporting
+    } catch (error) {
+      console.error(`shutdown callback threw on ${signal}`, toErrorMessage(error))
     }
   }
   for (const sig of signals) process.on(sig, onSignal)

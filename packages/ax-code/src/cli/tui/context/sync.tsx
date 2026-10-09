@@ -8,7 +8,7 @@ import { useExit } from "./exit"
 import { useArgs } from "./args"
 import { createEffect, createMemo, on, onMount, onCleanup, batch } from "solid-js"
 import { Log } from "@/util/log"
-import type { SessionGoal } from "@/session/goal"
+import { SessionGoal } from "@/session/goal"
 import { withTimeout } from "@/util/timeout"
 import { Flag } from "@/flag/flag"
 import { createTuiStartupSpan, recordTuiStartupOnce } from "@tui/util/startup-trace"
@@ -119,7 +119,12 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           { headers: sessionDerivedRequestHeaders(sdk.directory) },
         )
         if (!response.ok) throw new Error(`session goal request failed: ${response.status}`)
-        return { data: (await response.json()) as SessionGoal.PublicInfo | null }
+        const parsed = SessionGoal.PublicInfo.nullable().safeParse(await response.json())
+        if (!parsed.success) {
+          Log.Default.warn("session goal payload failed validation", { sessionID })
+          return { data: null }
+        }
+        return { data: parsed.data }
       },
       onMissingSnapshot(sessionID) {
         Log.Default.warn("session sync returned no session data", { sessionID })

@@ -146,10 +146,11 @@ export namespace ACP {
           for await (const event of events.stream) {
             if (this.eventAbort.signal.aborted) return
             retryAttempt = 0
-            const payload = (event as any)?.payload
-            if (!payload) continue
+            const payload: unknown = (event as { payload?: unknown } | null)?.payload
+            if (typeof payload !== "object" || payload === null) continue
+            if (typeof (payload as { type?: unknown }).type !== "string") continue
             await this.handleEvent(payload as Event).catch((error) => {
-              log.error("failed to handle event", { error, type: payload.type })
+              log.error("failed to handle event", { error, type: (payload as { type: string }).type })
             })
           }
           if (this.eventAbort.signal.aborted) return
