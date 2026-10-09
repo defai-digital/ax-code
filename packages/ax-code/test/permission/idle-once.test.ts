@@ -182,23 +182,6 @@ describe("permission idle-once deadline (ADR-138)", () => {
     })
   })
 
-  test("stays off without the opt-in config", async () => {
-    armedEnv()
-    await using tmp = await tmpdir({ git: true })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const sessionID = SessionID.make("ses_idle_once_optin")
-        const ask = askDestructive(sessionID, "rm -rf /tmp/opt")
-        const pending = await waitForPending()
-        expect(pending[0]!.autoOnceAt).toBeUndefined()
-        const rejection = expect(ask).rejects.toThrow("rejected")
-        await Permission.reply({ requestID: pending[0]!.id, reply: "reject" })
-        await rejection
-      },
-    })
-  })
-
   test("a mid-session sandbox toggle suppresses the deadline", async () => {
     vi.stubEnv("AX_CODE_AUTONOMOUS", "1")
     vi.stubEnv("AX_CODE_PERMISSION_IDLE_ONCE_MS", "50")
@@ -232,6 +215,67 @@ describe("permission idle-once deadline (ADR-138)", () => {
         expect(secondPending[0]!.autoOnceAt).toBeUndefined()
         const rejection = expect(second).rejects.toThrow("rejected")
         await Permission.reply({ requestID: secondPending[0]!.id, reply: "reject" })
+        await rejection
+      },
+    })
+  })
+
+  test("is armed by default (no config) for any non-excluded interactive permission", async () => {
+    armedEnv()
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const ask = Permission.ask({
+          sessionID: SessionID.make("ses_idle_once_default"),
+          permission: "task_spawn",
+          patterns: ["x"],
+          metadata: {},
+          always: [],
+          ruleset: [],
+        })
+        const pending = await waitForPending()
+        await waitForAutoOnceAt(pending[0]!.id)
+        await ask
+      },
+    })
+  })
+
+  test("webmcp asks get the countdown", async () => {
+    armedEnv()
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const ask = Permission.ask({
+          sessionID: SessionID.make("ses_idle_once_webmcp"),
+          permission: "webmcp",
+          patterns: ["navigate_page"],
+          metadata: {},
+          always: [],
+          ruleset: [],
+        })
+        const pending = await waitForPending()
+        await waitForAutoOnceAt(pending[0]!.id)
+        await ask
+      },
+    })
+  })
+
+  test("enabled: false is the kill switch", async () => {
+    armedEnv()
+    await using tmp = await tmpdir({
+      git: true,
+      config: { experimental: { permission_idle_once: { enabled: false } } } as never,
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const ask = askDestructive(SessionID.make("ses_idle_once_off"), "rm -rf /tmp/off")
+        const pending = await waitForPending()
+        expect(pending[0]!.autoOnceAt).toBeUndefined()
+        const rejection = expect(ask).rejects.toThrow("rejected")
+        await Permission.reply({ requestID: pending[0]!.id, reply: "reject" })
         await rejection
       },
     })

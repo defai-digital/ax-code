@@ -258,12 +258,10 @@ export namespace Permission {
     "isolation_escalation",
     "hook",
     "ops_approve",
-    "webmcp",
     "computer",
     "external_directory",
   ])
 
-  const IDLE_ONCE_DEFAULT_PERMISSIONS: readonly string[] = ["bash_destructive"]
   const IDLE_ONCE_MIN_MS = 5_000
   const IDLE_ONCE_MAX_MS = 300_000
   const IDLE_ONCE_DEFAULT_MS = 90_000
@@ -410,10 +408,13 @@ export namespace Permission {
     const config = Config.peek()
     if (!config) return undefined
     const cfg = config.experimental?.permission_idle_once
-    if (!cfg?.enabled) return undefined
+    // On by default: the posture gates below (autonomous + full-access) are the
+    // opt-in. `enabled: false` is the explicit kill switch.
+    if (cfg?.enabled === false) return undefined
     if (!ScopedFlag.autonomous()) return undefined
-    const allowlist = cfg.permissions ?? IDLE_ONCE_DEFAULT_PERMISSIONS
-    if (!allowlist.includes(info.permission)) return undefined
+    // Default allowlist is every interactive permission; NEVER_IDLE_ONCE and
+    // requireInteractive below still apply.
+    if (cfg?.permissions && !cfg.permissions.includes(info.permission)) return undefined
     if (NEVER_IDLE_ONCE.has(info.permission)) return undefined
     // A caller-marked requireInteractive decision must stay human even when the
     // permission name is allowlisted — the marker, not the name, is the
@@ -431,7 +432,7 @@ export namespace Permission {
     // sub-second auto-approve.
     const timeoutMs =
       Flag.AX_CODE_PERMISSION_IDLE_ONCE_MS ??
-      Math.min(Math.max(cfg.timeout_ms ?? IDLE_ONCE_DEFAULT_MS, IDLE_ONCE_MIN_MS), IDLE_ONCE_MAX_MS)
+      Math.min(Math.max(cfg?.timeout_ms ?? IDLE_ONCE_DEFAULT_MS, IDLE_ONCE_MIN_MS), IDLE_ONCE_MAX_MS)
     return Date.now() + timeoutMs
   }
 

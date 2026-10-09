@@ -778,7 +778,7 @@ export type Config = {
      */
     permission_idle_once?: {
       /**
-       * Idle 'Allow once': auto-reply once after a countdown for allowlisted interactive permissions. Default: false (opt-in).
+       * Idle 'Allow once': auto-reply once after a countdown for allowlisted interactive permissions. Default: true; the autonomous + full-access posture is the opt-in. Set false to disable.
        */
       enabled?: boolean
       /**
@@ -786,7 +786,7 @@ export type Config = {
        */
       timeout_ms?: number
       /**
-       * Interactive permissions that may auto-reply once. Default: ["bash_destructive"]. isolation_escalation, hook, ops_approve, webmcp, computer, and external_directory are always excluded.
+       * Interactive permissions that may auto-reply once. Default: every interactive permission. isolation_escalation, hook, ops_approve, computer, and external_directory are always excluded.
        */
       permissions?: Array<string>
     }

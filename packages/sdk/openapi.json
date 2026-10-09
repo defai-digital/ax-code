@@ -38192,7 +38192,7 @@
                 "type": "object",
                 "properties": {
                   "enabled": {
-                    "description": "Idle 'Allow once': auto-reply once after a countdown for allowlisted interactive permissions. Default: false (opt-in).",
+                    "description": "Idle 'Allow once': auto-reply once after a countdown for allowlisted interactive permissions. Default: true; the autonomous + full-access posture is the opt-in. Set false to disable.",
                     "type": "boolean"
                   },
                   "timeout_ms": {
@@ -38202,7 +38202,7 @@
                     "maximum": 300000
                   },
                   "permissions": {
-                    "description": "Interactive permissions that may auto-reply once. Default: [\"bash_destructive\"]. isolation_escalation, hook, ops_approve, webmcp, computer, and external_directory are always excluded.",
+                    "description": "Interactive permissions that may auto-reply once. Default: every interactive permission. isolation_escalation, hook, ops_approve, computer, and external_directory are always excluded.",
                     "type": "array",
                     "items": {
                       "type": "string"
