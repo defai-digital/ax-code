@@ -173,10 +173,6 @@ export async function getAxEngineStatus(
   }
 }
 
-export async function getAxEngineLifecycle(options: AxEngineRuntimeOptions = {}): Promise<LocalEngineLifecycle> {
-  return (await getAxEngineStatus(options)).lifecycle
-}
-
 /** Re-export phase types for API consumers. */
 export type { LocalEngineBackendKind, LocalEngineLifecycle, LocalEnginePhase }
 export { AX_CODE_LOCAL_ENGINE_BACKEND }

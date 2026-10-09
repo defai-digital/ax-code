@@ -24,7 +24,6 @@
 // **new** icons that would otherwise not exist (e.g. file-type icons in
 // the file picker).
 
-import { Flag } from "@/flag/flag"
 import path from "node:path"
 
 export const NERD_FONT_KV_KEY = "nerd_font_enabled"
@@ -148,18 +147,4 @@ const NERD_GLYPHS: GlyphSet = {
 
 export function buildGlyphSet(enabled: boolean): GlyphSet {
   return enabled ? NERD_GLYPHS : SAFE_GLYPHS
-}
-
-// Resolve the glyph set without solid context — for non-reactive call
-// sites and tests. Reads env override and terminal detection at call time.
-export function getGlyphSet(input: { kv?: boolean } = {}): GlyphSet {
-  const enabled = resolveNerdFontEnabled({
-    env: Flag.AX_CODE_NERD_FONT_ENV,
-    kv: input.kv,
-    detected: detectNerdFontTerminal({
-      termProgram: process.env["TERM_PROGRAM"],
-      term: process.env["TERM"],
-    }),
-  })
-  return buildGlyphSet(enabled)
 }
