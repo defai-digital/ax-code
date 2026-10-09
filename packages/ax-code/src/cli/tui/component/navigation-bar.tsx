@@ -10,6 +10,7 @@ import { knownAttentionRequests } from "../util/session-activity"
 import { projectLabel } from "../navigation/navigation-model"
 import { truncateToCellWidth } from "../routes/session/last-input-view-model"
 import { sidebarRestoreEntry } from "../sidebar-restore-view-model"
+import { CHROME_CONTROL_COLOR } from "./chrome-action"
 
 /** A visible navigation entry survives both responsive collapse and opt-out. */
 export function NavigationBar(props: { width: number; showSidebarRestore?: boolean }) {
@@ -19,8 +20,7 @@ export function NavigationBar(props: { width: number; showSidebarRestore?: boole
   const { theme } = useTheme()
   const command = useCommandDialog()
   const pending = createMemo(() => knownAttentionRequests(sync.data.permission, sync.data.question).length)
-  const entry = () =>
-    props.width >= 24 && (!pending() || props.width >= 40) ? uiText("ui.sessionsNavigation") : uiText("ui.sessions")
+  const entry = () => "/navigation"
   const sidebarEntry = () => (props.showSidebarRestore ? sidebarRestoreEntry(props.width) : "")
   const attentionLabel = () => uiText("ui.pendingCount", { count: pending() }) + (sdk.sseConnected ? "" : "*")
   const pendingChipWidth = () => (pending() ? stringWidth(attentionLabel()) + 4 : 0)
@@ -44,7 +44,7 @@ export function NavigationBar(props: { width: number; showSidebarRestore?: boole
     >
       <box flexGrow={1} minWidth={0} flexDirection="row" gap={2}>
         <box flexShrink={0} onMouseUp={() => command.trigger("session.navigation")}>
-          <text fg={theme.primary} selectable={false}>
+          <text fg={CHROME_CONTROL_COLOR} selectable={false}>
             {entry()}
           </text>
         </box>
@@ -74,7 +74,7 @@ export function NavigationBar(props: { width: number; showSidebarRestore?: boole
       </box>
       <Show when={sidebarEntry()}>
         <box flexShrink={0} paddingRight={1} onMouseUp={() => command.trigger("session.sidebar.toggle")}>
-          <text fg={theme.primary} selectable={false}>
+          <text fg={CHROME_CONTROL_COLOR} selectable={false}>
             {sidebarEntry()}
           </text>
         </box>

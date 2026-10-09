@@ -1,10 +1,12 @@
 import { useLanguage } from "../context/language"
 import { createSignal, type JSX } from "solid-js"
-import { TextAttributes } from "ax-tui"
+import { TextAttributes, RGBA } from "ax-tui"
 import { useTheme } from "@tui/context/theme"
 
+export const CHROME_CONTROL_COLOR = RGBA.fromHex("#a78bfa")
+
 /** Chrome control. Muted by default, brightens on hover; link=true renders an underlined link-colored action. Clicks stay on the wrapper box. */
-export function ChromeAction(props: { onMouseUp: () => void; children: JSX.Element; link?: boolean }) {
+export function ChromeAction(props: { onMouseUp: () => void; children: JSX.Element; link?: boolean; fg?: RGBA }) {
   const { theme } = useTheme()
   const [hover, setHover] = createSignal(false)
   return (
@@ -17,7 +19,7 @@ export function ChromeAction(props: { onMouseUp: () => void; children: JSX.Eleme
     >
       <text
         flexShrink={0}
-        fg={props.link ? theme.markdownLink : hover() ? theme.text : theme.textMuted}
+        fg={props.fg ?? (props.link ? theme.markdownLink : hover() ? theme.text : theme.textMuted)}
         attributes={props.link ? TextAttributes.UNDERLINE : undefined}
         selectable={false}
       >
@@ -28,7 +30,11 @@ export function ChromeAction(props: { onMouseUp: () => void; children: JSX.Eleme
 }
 
 /** Both rails use one reactive width label; only the command and value differ. */
-export function ChromeWidthAction(props: { width: number; onMouseUp: () => void }) {
+export function ChromeWidthAction(props: { width: number; onMouseUp: () => void; fg?: RGBA }) {
   const { t } = useLanguage()
-  return <ChromeAction onMouseUp={props.onMouseUp}>{t("ui.widthWidth", { width: props.width })}</ChromeAction>
+  return (
+    <ChromeAction onMouseUp={props.onMouseUp} fg={props.fg}>
+      {t("ui.widthWidth", { width: props.width })}
+    </ChromeAction>
+  )
 }

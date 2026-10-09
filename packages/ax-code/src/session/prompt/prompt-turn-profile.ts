@@ -354,5 +354,3 @@ export function responseOnlyUsesFastReasoning(user: Pick<MessageV2.User, "reques
   const variant = user.variant?.trim().toLowerCase()
   return variant === undefined || variant === "" || variant === "auto" || variant === "default"
 }
-
-export const textOnlyUsesFastReasoning = responseOnlyUsesFastReasoning

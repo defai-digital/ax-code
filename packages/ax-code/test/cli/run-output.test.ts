@@ -16,7 +16,6 @@ import {
   isBlockedRun,
   isRunAuthFailure,
   isRunMutatingToolCompletion,
-  isRunReadOnlyToolDenial,
   isRunSelfAbortError,
   isRunToolDenial,
   parseDisallowedTools,
@@ -383,14 +382,6 @@ test("read-only sandbox and permission-rule tool denials are classified by their
       status: "error",
       error:
         "The user has specified a rule which prevents you from using this specific tool call. Here are some of the relevant rules …",
-    }),
-  ).toBe(true)
-  // The legacy export stays an alias of the generalized predicate.
-  expect(isRunReadOnlyToolDenial).toBe(isRunToolDenial)
-  expect(
-    isRunReadOnlyToolDenial({
-      status: "error",
-      error: "The user has specified a rule which prevents you from using this specific tool call. …",
     }),
   ).toBe(true)
   // Other tool errors, completed tools, and missing error text do not count.

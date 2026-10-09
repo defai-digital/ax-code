@@ -442,9 +442,6 @@ export function isRunToolDenial(state: { status: string; error?: string }): bool
   )
 }
 
-/** Backwards-compatible alias for the generalized {@link isRunToolDenial}. */
-export const isRunReadOnlyToolDenial = isRunToolDenial
-
 /**
  * A run is blocked when every permission ask was denied and none of the
  * denied mutations ever completed. A run that recovered (denied once, then
