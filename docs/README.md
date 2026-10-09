@@ -22,6 +22,9 @@ pages are the ones linked here.
 For opt-in shared terminal navigation through an external MCP client, see
 [Share a live TUI through MCP](guides/tui-mcp.md).
 
+For the experimental browser bridge (read pages, optionally click and fill), see
+[WebMCP browser bridge](guides/webmcp-bridge.md).
+
 For standalone questions about selected files through AX Trust caching, see
 [Fixed-context questions](guides/fixed-context-questions.md).
 
