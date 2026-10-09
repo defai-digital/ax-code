@@ -1,3 +1,4 @@
+import { hash, vnoise } from "./atmos-paint"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
 import {
   GREATWALL_BRAZIERS,
@@ -18,24 +19,6 @@ import {
   type GreatwallStyle,
 } from "./greatwall-view-model"
 
-function hash(x: number, y: number): number {
-  let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263)
-  h = Math.imul(h ^ (h >>> 13), 1274126177)
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296
-}
-function vnoise(x: number, y: number): number {
-  const xi = Math.floor(x)
-  const yi = Math.floor(y)
-  const fx = x - xi
-  const fy = y - yi
-  const sx = fx * fx * (3 - 2 * fx)
-  const sy = fy * fy * (3 - 2 * fy)
-  const a = hash(xi, yi)
-  const b = hash(xi + 1, yi)
-  const c = hash(xi, yi + 1)
-  const d = hash(xi + 1, yi + 1)
-  return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy
-}
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
 
 /**

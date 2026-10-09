@@ -5,11 +5,10 @@ import { Instance } from "../project/instance"
 import { DebugEngine } from "@ax-code/ax-code-reason"
 import { RefactorPlanID } from "@ax-code/ax-code-reason/id"
 import { extractFilesFromDiff } from "@ax-code/ax-code-reason/analyze-impact"
-import { CodeIntelligence } from "../code-intelligence"
 import { Installation } from "../installation"
 import { currentSourceState } from "../quality/source-state"
 import { fromRefactorApplyResult } from "../quality/verification-envelope-builder"
-import type { VerificationGraph } from "../quality/verification-envelope"
+import { currentGraphState } from "./verify_project"
 import { Hash } from "../util/hash"
 import { normalizeToWorkspacePath } from "./file-path"
 import { ToolBoolean } from "./schema"
@@ -30,21 +29,6 @@ const CommandOverrides = z
     test: z.string().min(1).nullable().optional(),
   })
   .strict()
-
-// Phase 1 provenance: defensive graph snapshot for the verification
-// envelopes. The graph may not be indexed (no cursor row) or the
-// intelligence store may be unavailable — either way the field is omitted.
-function currentGraphState(): VerificationGraph | undefined {
-  try {
-    const status = CodeIntelligence.status(Instance.project.id)
-    if (status.lastUpdated == null) return undefined
-    // revision is reserved for the derived graph revision hash; the graph
-    // status endpoint does not compute one yet.
-    return { revision: null, lastCommitSha: status.lastCommitSha, indexedAt: status.lastUpdated }
-  } catch {
-    return undefined
-  }
-}
 
 export const RefactorApplyTool = Tool.define("refactor_apply", {
   description: DESCRIPTION,

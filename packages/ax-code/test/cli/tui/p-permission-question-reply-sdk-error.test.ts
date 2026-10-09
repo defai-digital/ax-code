@@ -30,7 +30,7 @@ describe("permission/question prompt reply SDK error routing", () => {
     expect(throwIndex).toBeGreaterThanOrEqual(0)
     expect(removeIndex).toBeGreaterThan(throwIndex)
     // The helper carries the server message into the existing error toast.
-    expect(src).toContain("function replyError(error: unknown, fallback: string): Error")
+    expect(src).toContain('import { replyError } from "../../util/error-message"')
   })
 
   test("question reply and reject inspect result.error and throw into the failure path", async () => {
@@ -42,6 +42,6 @@ describe("permission/question prompt reply SDK error routing", () => {
     const removeIndex = src.indexOf("removeRequestLocally(sessionID, id)", throwIndex)
     expect(throwIndex).toBeGreaterThanOrEqual(0)
     expect(removeIndex).toBeGreaterThan(throwIndex)
-    expect(src).toContain("function replyError(error: unknown, fallback: string): Error")
+    expect(src).toContain('import { replyError } from "../../util/error-message"')
   })
 })

@@ -1,3 +1,5 @@
+import { isIPv4Loopback } from "@/util/local-host"
+
 export function isLoopbackHostname(hostname: string): boolean {
   const host = normalizeLoopbackHostname(hostname)
   if (host === "localhost" || host === "::1") return true
@@ -12,16 +14,6 @@ export function normalizeLoopbackHostname(hostname: string): string {
 export function formatHostnameForUrl(hostname: string): string {
   const normalized = normalizeLoopbackHostname(hostname)
   return normalized.includes(":") ? `[${normalized}]` : normalized
-}
-
-function isIPv4Loopback(hostname: string): boolean {
-  const parts = hostname.split(".")
-  if (parts.length !== 4 || parts[0] !== "127") return false
-  return parts.every((part) => {
-    if (!/^\d{1,3}$/.test(part)) return false
-    const value = Number(part)
-    return value >= 0 && value <= 255
-  })
 }
 
 export function assertAuthenticatedNetworkBind(hostname: string): void {

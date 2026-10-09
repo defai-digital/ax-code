@@ -14,23 +14,10 @@ import { useTextareaKeybindings } from "../../component/textarea-keybindings"
 import { useDialog } from "../../ui/dialog"
 import { useToast } from "../../ui/toast"
 import { Log } from "@/util/log"
-import { errorPayloadMessage } from "../../util/error-message"
+import { replyError } from "../../util/error-message"
 import { focusRenderable, isRenderableAlive } from "@tui/util/renderable-safety"
 
 const log = Log.create({ service: "tui.question" })
-
-// The v2 SDK client resolves { error } instead of rejecting when throwOnError
-// is unset (the default here), so a reply/reject's HTTP/network failure lands
-// in the success `.then`, not `.catch`. Turn a resolved error into a throw
-// carrying the best available message so the existing `.catch` path (reset
-// guard, log, toast, keep prompt mounted for retry) handles it.
-function replyError(error: unknown, fallback: string): Error {
-  if (error instanceof Error) return error
-  const fromPayload = errorPayloadMessage(error)
-  if (fromPayload) return new Error(fromPayload)
-  if (typeof error === "string" && error.length > 0) return new Error(error)
-  return new Error(fallback)
-}
 
 // Bound so a dropped/stalled reply cannot latch `submitting` forever. Mirrors
 // permission.tsx (see #341).

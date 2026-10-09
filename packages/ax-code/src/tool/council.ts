@@ -21,7 +21,7 @@ import { Provider } from "../provider/provider"
 import { stripThinkTags } from "../provider/think-tags"
 import { ProviderTransform } from "../provider/transform"
 import { Log } from "../util/log"
-import { parseJsonResult } from "../util/json-value"
+import { parseJsonFromText } from "../util/json-value"
 import { FanOut } from "../util/fan-out"
 import { Tool } from "./tool"
 import DESCRIPTION from "./council.txt"
@@ -106,13 +106,12 @@ function clampOptionalText(value: string | undefined, max: number): string | und
   return clampText(trimmed, max)
 }
 
-// Kept local to avoid circular-dependency at module-load time (identical to arena.ts).
-const MemberSelectionSchema = z.object({
+export const MemberSelectionSchema = z.object({
   providerID: z.string().min(1).max(200),
   modelID: z.string().min(1).max(300).optional(),
 })
 
-function validateMemberSelections(
+export function validateMemberSelections(
   selections: Array<z.infer<typeof MemberSelectionSchema>>,
   ctx: z.RefinementCtx,
 ): void {
@@ -192,23 +191,6 @@ function isUnsupportedSpecVersionError(error: unknown): boolean {
   if (name === "AI_UnsupportedModelVersionError") return true
   const message = error instanceof Error ? error.message : String(error)
   return /unsupported model version/i.test(message)
-}
-
-// Extract a JSON value from raw model text: accept the bare text, a fenced
-// ```json block, or the outermost {...} span. Returns undefined when nothing
-// parses.
-function parseJsonFromText(text: string): unknown {
-  const candidates: string[] = [text.trim()]
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)
-  if (fenced?.[1]) candidates.push(fenced[1].trim())
-  const start = text.indexOf("{")
-  const end = text.lastIndexOf("}")
-  if (start >= 0 && end > start) candidates.push(text.slice(start, end + 1))
-  for (const candidate of candidates) {
-    const parsed = parseJsonResult(candidate)
-    if (parsed.ok) return parsed.value
-  }
-  return undefined
 }
 
 type ResolvedMember = {

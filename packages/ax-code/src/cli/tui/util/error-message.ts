@@ -63,3 +63,16 @@ export async function responseErrorMessage(response: Pick<Response, "status" | "
   const text = await response.text().catch(() => "")
   return textErrorMessage(text) ?? `Request failed with status ${response.status}`
 }
+
+// The v2 SDK client resolves { error } instead of rejecting when throwOnError
+// is unset (the default here), so a reply/reject's HTTP/network failure lands
+// in the success `.then`, not `.catch`. Turn a resolved error into a throw
+// carrying the best available message so the existing `.catch` path (reset
+// guard, log, toast, keep prompt mounted for retry) handles it.
+export function replyError(error: unknown, fallback: string): Error {
+  if (error instanceof Error) return error
+  const fromPayload = errorPayloadMessage(error)
+  if (fromPayload) return new Error(fromPayload)
+  if (typeof error === "string" && error.length > 0) return new Error(error)
+  return new Error(fallback)
+}

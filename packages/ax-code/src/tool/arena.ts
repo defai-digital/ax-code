@@ -27,7 +27,7 @@ import { Log } from "../util/log"
 import { FanOut } from "../util/fan-out"
 import { Tool } from "./tool"
 import { inspectImplementArenaBase, runImplementArena } from "./arena-implement"
-import { resolveMemberTimeoutMs } from "./council"
+import { MemberSelectionSchema, resolveMemberTimeoutMs, validateMemberSelections } from "./council"
 import DESCRIPTION from "./arena.txt"
 
 const log = Log.create({ service: "tool.arena" })
@@ -85,26 +85,6 @@ function clampProposal(proposal: z.infer<typeof ProposalSchema>): z.infer<typeof
     steps: proposal.steps.slice(0, 12).map((step) => clampProposalText(step, 300)),
     risks: proposal.risks.slice(0, 8).map((risk) => clampProposalText(risk, 300)),
   }
-}
-
-// Kept local to avoid circular-dependency at module-load time (identical to council.ts).
-const MemberSelectionSchema = z.object({
-  providerID: z.string().min(1).max(200),
-  modelID: z.string().min(1).max(300).optional(),
-})
-
-function validateMemberSelections(
-  selections: Array<z.infer<typeof MemberSelectionSchema>>,
-  ctx: z.RefinementCtx,
-): void {
-  const seen = new Set<string>()
-  selections.forEach((selection, index) => {
-    const key = `${selection.providerID}\u0000${selection.modelID ?? ""}`
-    if (seen.has(key)) {
-      ctx.addIssue({ code: "custom", message: "Duplicate provider/model selection", path: [index] })
-    }
-    seen.add(key)
-  })
 }
 
 const parameters = z.object({

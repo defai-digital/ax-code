@@ -19,7 +19,7 @@ import type { ProviderModel } from "@/provider/model-info"
 import { Provider } from "@/provider/provider"
 import { ProviderTransform } from "@/provider/transform"
 import { FanOut } from "@/util/fan-out"
-import { parseJsonResult } from "@/util/json-value"
+import { parseJsonFromText } from "@/util/json-value"
 import { withTimeout } from "@/util/timeout"
 
 export const CandidateSchema = z.object({
@@ -104,23 +104,6 @@ function isSchemaConformanceError(error: unknown): boolean {
   if (name === "AI_NoObjectGeneratedError") return true
   const message = error instanceof Error ? error.message : String(error)
   return /no object generated/i.test(message) || /response did not match schema/i.test(message)
-}
-
-// Extract a JSON value from raw model text: accept the bare text, a fenced
-// ```json block, or the outermost {...} span. Returns undefined when nothing
-// parses.
-function parseJsonFromText(text: string): unknown {
-  const candidates: string[] = [text.trim()]
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)
-  if (fenced?.[1]) candidates.push(fenced[1].trim())
-  const start = text.indexOf("{")
-  const end = text.lastIndexOf("}")
-  if (start >= 0 && end > start) candidates.push(text.slice(start, end + 1))
-  for (const candidate of candidates) {
-    const parsed = parseJsonResult(candidate)
-    if (parsed.ok) return parsed.value
-  }
-  return undefined
 }
 
 async function generate<T>(input: {

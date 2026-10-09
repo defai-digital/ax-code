@@ -42,7 +42,7 @@ const log = Log.create({ service: "task-tool" })
 
 // User lifecycle hooks (SubagentStop) — observational only; hook failures
 // never affect the task result.
-async function fireSubagentStop(input: { sessionID: string; agent: string; status: "completed" | "failed" }) {
+export async function fireSubagentStop(input: { sessionID: string; agent: string; status: "completed" | "failed" }) {
   try {
     const { LifecycleHooks } = await import("@/hooks/lifecycle")
     await LifecycleHooks.runForWorkspace({

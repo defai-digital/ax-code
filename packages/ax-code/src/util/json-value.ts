@@ -37,3 +37,20 @@ export function parseJsonPayload(raw: string | undefined): unknown | undefined {
   }
   return parsed.value
 }
+
+// Extract a JSON value from raw model text: accept the bare text, a fenced
+// ```json block, or the outermost {...} span. Returns undefined when nothing
+// parses.
+export function parseJsonFromText(text: string): unknown {
+  const candidates: string[] = [text.trim()]
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  if (fenced?.[1]) candidates.push(fenced[1].trim())
+  const start = text.indexOf("{")
+  const end = text.lastIndexOf("}")
+  if (start >= 0 && end > start) candidates.push(text.slice(start, end + 1))
+  for (const candidate of candidates) {
+    const parsed = parseJsonResult(candidate)
+    if (parsed.ok) return parsed.value
+  }
+  return undefined
+}

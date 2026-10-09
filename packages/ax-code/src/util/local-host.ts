@@ -17,7 +17,7 @@ export function isLocalHostname(hostname: string) {
   return false
 }
 
-function isIPv4Loopback(hostname: string) {
+export function isIPv4Loopback(hostname: string) {
   const parts = hostname.split(".")
   if (parts.length !== 4 || parts[0] !== "127") return false
   return parts.every((part) => {

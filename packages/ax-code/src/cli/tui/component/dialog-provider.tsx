@@ -57,6 +57,7 @@ import { providerConnectCategoryMeta } from "@/mode/provider-category"
 import { requireDedicatedPrivateGpuVendor } from "@/provider/private-gpu/presets"
 import { disableProviderPatch, enableProviderPatch } from "@/provider/enablement"
 import { isRetiredProviderID } from "@/provider/retired-providers"
+import { sdkErrorMessage } from "../routes/session/sdk-error-message"
 import {
   localLlmRuntimePreset,
   localRuntimeEndpointPreset,
@@ -91,16 +92,6 @@ type AxEngineTuiStatus = {
 
 function offlineProviderHint() {
   return "not running"
-}
-
-function sdkErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error) return error.message
-  if (typeof error === "string" && error) return error
-  if (typeof error === "object" && error) {
-    const candidate = error as { data?: { message?: string }; message?: string }
-    return candidate.data?.message ?? candidate.message ?? fallback
-  }
-  return fallback
 }
 
 const log = Log.create({ service: "tui.dialog-provider" })

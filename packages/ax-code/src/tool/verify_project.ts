@@ -69,7 +69,7 @@ async function timed<T>(fn: () => Promise<T>): Promise<Timed<T>> {
 // Phase 1 provenance capture. Graph state is defensive: the code graph may
 // not be indexed (no cursor row) or the intelligence store may be
 // unavailable — either way the envelope simply omits the field.
-function currentGraphState(): VerificationGraph | undefined {
+export function currentGraphState(): VerificationGraph | undefined {
   try {
     const status = CodeIntelligence.status(Instance.project.id)
     if (status.lastUpdated == null) return undefined

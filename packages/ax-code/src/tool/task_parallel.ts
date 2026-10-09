@@ -1,3 +1,4 @@
+import { fireSubagentStop } from "./task"
 import { taskParentConstraints } from "./task-constraints"
 import { assistantError, assistantErrorMessage, errorDetails, isAbortError } from "./task-errors"
 import { toErrorMessage } from "@/util/error-message"
@@ -214,21 +215,6 @@ type TaskOutcome = {
   structured?: unknown
   // Mirrors tool/task.ts: set only when this task requested output_schema.
   structuredStatus?: "absent" | "captured"
-}
-
-// User lifecycle hooks (SubagentStop): observational only, same contract as
-// tool/task.ts. Hook failures never affect the parallel result.
-async function fireSubagentStop(input: { sessionID: string; agent: string; status: "completed" | "failed" }) {
-  try {
-    const { LifecycleHooks } = await import("@/hooks/lifecycle")
-    await LifecycleHooks.runForWorkspace({
-      event: "SubagentStop",
-      sessionID: input.sessionID,
-      args: { agent: input.agent, status: input.status },
-    })
-  } catch (error) {
-    log.warn("SubagentStop lifecycle hooks failed", { sessionID: input.sessionID, error })
-  }
 }
 
 async function runOneTask(input: {
