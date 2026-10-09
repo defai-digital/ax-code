@@ -6,6 +6,18 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.23.3] - 2026-10-09
+
+### Changed
+
+- Publish SDK 2.6.2 alongside AX Code 7.23.3.
+- Load model metadata and HTML conversion on demand, and probe configuration files and global skill roots concurrently.
+
+### Fixed
+
+- Reap subprocess descendants on timeout even when their parent exits on SIGTERM, and wait for tree cleanup before reporting process completion.
+- Preserve the requested detached process group when running commands through the process helper.
+
 ## [7.23.2] - 2026-10-09
 
 ### Changed
