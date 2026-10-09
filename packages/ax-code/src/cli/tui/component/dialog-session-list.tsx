@@ -35,18 +35,9 @@ import {
 } from "./session-list-data"
 import { sessionRecapPreview } from "./session-picker-view-model"
 import { createSessionActivityIndex } from "../util/session-activity"
+import { requestErrorMessage } from "../util/error-message"
 
 const log = Log.create({ service: "tui.dialog-session-list" })
-
-function errorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error) return error.message
-  if (typeof error === "string" && error) return error
-  if (error && typeof error === "object") {
-    const candidate = error as { data?: { message?: string }; message?: string }
-    return candidate.data?.message ?? candidate.message ?? fallback
-  }
-  return fallback
-}
 
 // Shared implementation for the main session list and the workspace-scoped
 // session list (component/workspace/dialog-session-list.tsx re-exports this).
@@ -81,7 +72,7 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
             if (!signal.aborted) {
               log.warn("workspace session list load failed", { error: result.error, workspaceID })
               toast.show({
-                message: errorMessage(result.error, "Failed to load workspace sessions"),
+                message: requestErrorMessage(result.error, "Failed to load workspace sessions"),
                 variant: "error",
               })
             }
@@ -122,7 +113,7 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
               workspaceID: props.workspaceID,
             })
             toast.show({
-              message: errorMessage(result.error, "Failed to search sessions"),
+              message: requestErrorMessage(result.error, "Failed to search sessions"),
               variant: "error",
             })
           }

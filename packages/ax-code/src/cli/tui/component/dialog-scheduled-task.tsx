@@ -11,6 +11,7 @@ import { useToast } from "../ui/toast"
 import { useTheme } from "../context/theme"
 import { Keybind } from "@/util/keybind"
 import { Log } from "@/util/log"
+import { requestErrorMessage } from "../util/error-message"
 import type { ScheduledTaskInfo, ScheduledTaskRunInfo } from "./dialog-scheduled-task-view-model"
 import {
   SCHEDULED_TASK_EVENTS,
@@ -28,15 +29,6 @@ import {
 } from "./dialog-scheduled-task-view-model"
 
 const log = Log.create({ service: "tui.dialog-scheduled-task" })
-
-function errorMessage(error: unknown, fallback: string): string {
-  if (error instanceof Error && error.message) return error.message
-  if (error && typeof error === "object") {
-    const candidate = error as { data?: { message?: string }; message?: string }
-    return candidate.data?.message ?? candidate.message ?? fallback
-  }
-  return fallback
-}
 
 function StatusBadge(props: { task: ScheduledTaskInfo }) {
   const { theme } = useTheme()
@@ -80,14 +72,14 @@ export function DialogScheduledTask() {
       if (current !== refreshGeneration) return
       if (result.error) {
         log.warn("scheduled task list load failed", { error: result.error })
-        toast.show({ message: errorMessage(result.error, "Failed to load scheduled tasks"), variant: "error" })
+        toast.show({ message: requestErrorMessage(result.error, "Failed to load scheduled tasks"), variant: "error" })
         return
       }
       setTasks(result.data ?? [])
     } catch (error) {
       if (current !== refreshGeneration) return
       log.warn("scheduled task list load failed", { error })
-      toast.show({ message: errorMessage(error, "Failed to load scheduled tasks"), variant: "error" })
+      toast.show({ message: requestErrorMessage(error, "Failed to load scheduled tasks"), variant: "error" })
     }
   }
 
@@ -128,13 +120,16 @@ export function DialogScheduledTask() {
     try {
       const result = await fn()
       if (result.error) {
-        toast.show({ message: errorMessage(result.error, `Failed to ${action} scheduled task`), variant: "error" })
+        toast.show({
+          message: requestErrorMessage(result.error, `Failed to ${action} scheduled task`),
+          variant: "error",
+        })
         return
       }
       await refresh()
     } catch (error) {
       log.warn(`scheduled task ${action} failed`, { error, id })
-      toast.show({ message: errorMessage(error, `Failed to ${action} scheduled task`), variant: "error" })
+      toast.show({ message: requestErrorMessage(error, `Failed to ${action} scheduled task`), variant: "error" })
     } finally {
       setBusy(null)
     }
@@ -160,7 +155,10 @@ export function DialogScheduledTask() {
       for (const task of targets) {
         const result = await sdk.client.scheduledTask.delete({ scheduledTaskID: task.id })
         if (result.error) {
-          toast.show({ message: errorMessage(result.error, "Failed to delete scheduled task"), variant: "error" })
+          toast.show({
+            message: requestErrorMessage(result.error, "Failed to delete scheduled task"),
+            variant: "error",
+          })
           break
         }
         deleted++
@@ -168,7 +166,7 @@ export function DialogScheduledTask() {
       if (deleted > 0) toast.show({ message: cleanupResultMessage(deleted), variant: "success" })
     } catch (error) {
       log.warn("scheduled task cleanup failed", { error })
-      toast.show({ message: errorMessage(error, "Failed to clean up scheduled tasks"), variant: "error" })
+      toast.show({ message: requestErrorMessage(error, "Failed to clean up scheduled tasks"), variant: "error" })
     } finally {
       setBusy(null)
     }
@@ -290,7 +288,7 @@ function DialogScheduledTaskRuns(props: { task: ScheduledTaskInfo }) {
         if (result.error) {
           setRunsState("error")
           log.warn("scheduled task runs load failed", { error: result.error, id: props.task.id })
-          toast.show({ message: errorMessage(result.error, "Failed to load runs"), variant: "error" })
+          toast.show({ message: requestErrorMessage(result.error, "Failed to load runs"), variant: "error" })
           return
         }
         setRuns(result.data ?? [])
@@ -299,7 +297,7 @@ function DialogScheduledTaskRuns(props: { task: ScheduledTaskInfo }) {
       .catch((error) => {
         setRunsState("error")
         log.warn("scheduled task runs load failed", { error, id: props.task.id })
-        toast.show({ message: errorMessage(error, "Failed to load runs"), variant: "error" })
+        toast.show({ message: requestErrorMessage(error, "Failed to load runs"), variant: "error" })
       })
   })
 
