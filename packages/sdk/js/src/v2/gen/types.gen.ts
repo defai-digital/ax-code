@@ -782,7 +782,7 @@ export type Config = {
        */
       enabled?: boolean
       /**
-       * Countdown before the automatic once reply. Default: 30000.
+       * Countdown before the automatic once reply. Default: 15000.
        */
       timeout_ms?: number
       /**

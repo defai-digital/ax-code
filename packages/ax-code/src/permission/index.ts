@@ -269,7 +269,7 @@ export namespace Permission {
 
   const IDLE_ONCE_MIN_MS = 5_000
   const IDLE_ONCE_MAX_MS = 300_000
-  const IDLE_ONCE_DEFAULT_MS = 30_000
+  const IDLE_ONCE_DEFAULT_MS = 15_000
 
   export function isInteractiveOnly(permission: string, metadata?: Record<string, unknown>): boolean {
     return isInteractivePermission(permission, metadata)

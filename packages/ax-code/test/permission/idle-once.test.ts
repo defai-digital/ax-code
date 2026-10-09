@@ -241,26 +241,40 @@ describe("permission idle-once deadline (ADR-138)", () => {
     })
   })
 
-  test("webmcp asks get the countdown", async () => {
-    armedEnv()
-    await using tmp = await tmpdir({ git: true })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const ask = Permission.ask({
-          sessionID: SessionID.make("ses_idle_once_webmcp"),
-          permission: "webmcp",
-          patterns: ["navigate_page"],
-          metadata: {},
-          always: [],
-          ruleset: [],
-        })
-        const pending = await waitForPending()
-        await waitForAutoOnceAt(pending[0]!.id)
-        await ask
-      },
-    })
-  })
+  test.each([undefined, 20_000])(
+    "webmcp countdown respects the default and configured timeout (%s)",
+    async (timeoutMs) => {
+      vi.stubEnv("AX_CODE_AUTONOMOUS", "1")
+      vi.stubEnv("AX_CODE_ISOLATION_MODE", "full-access")
+      vi.stubEnv("AX_CODE_PERMISSION_IDLE_ONCE_MS", "")
+      await using tmp = await tmpdir({
+        git: true,
+        config:
+          timeoutMs === undefined ? undefined : { experimental: { permission_idle_once: { timeout_ms: timeoutMs } } },
+      })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const before = Date.now()
+          const ask = Permission.ask({
+            sessionID: SessionID.make("ses_idle_once_webmcp"),
+            permission: "webmcp",
+            patterns: ["navigate_page"],
+            metadata: {},
+            always: [],
+            ruleset: [],
+          })
+          const pending = await waitForPending()
+          const deadline = await waitForAutoOnceAt(pending[0]!.id)
+          const expectedTimeout = timeoutMs ?? 15_000
+          expect(deadline).toBeGreaterThanOrEqual(before + expectedTimeout)
+          expect(deadline).toBeLessThanOrEqual(Date.now() + expectedTimeout)
+          await Permission.reply({ requestID: pending[0]!.id, reply: "once" })
+          await ask
+        },
+      })
+    },
+  )
 
   test("enabled: false is the kill switch", async () => {
     armedEnv()
