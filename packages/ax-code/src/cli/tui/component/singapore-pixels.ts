@@ -229,7 +229,7 @@ export function renderSingaporePixels(width: number, height: number, style: Sing
     hd.blob(X(tree.x), Y(18), X(tree.radius * 0.6), Y(0.24), green)
     if (night) reflection(tree.x, canopy, index, 1.1)
   }
-  // Foreground Merlion: lion head with a curled mane, scaled fish body, and a tail that flicks up.
+  // Foreground Merlion: big maned lion head, plump scaled fish body, and a tail curling up behind it.
   const lion = SINGAPORE_MERLION
   hd.blob(X(lion.x - 1), Y(lion.base + 0.35), X(7), Y(0.6), hdMix(hdHex(colors.waterDeep), shade, 0.6))
   hd.rect(X(lion.x - 5.6), Y(lion.base - 0.15), X(lion.x + 2.6), Y(lion.base + 0.2), stoneShade)
@@ -242,52 +242,82 @@ export function renderSingaporePixels(width: number, height: number, style: Sing
       hdMix(fountain, hdHex(colors.water), 0.25),
     )
   }
-  const spine = (t: number) => ({ x: 14.1 - Math.sin(t * Math.PI) * 0.7, y: 13.8 + t * 5.4, r: 2.15 - t * 0.95 })
-  for (let i = 0; i <= 36; i++) {
-    const p = spine(i / 36)
+  // Tail: sweeps left from the belly, rises in an S-curve, and ends in a fan fin.
+  const tailAt = (t: number) => ({
+    x: 13.3 - t * 6.6 + Math.sin(t * Math.PI * 2) * 0.5,
+    y: 18.9 - Math.pow(t, 1.4) * 5.6,
+  })
+  for (let i = 0; i <= 48; i++) {
+    const t = i / 48,
+      p = tailAt(t),
+      r = 1.6 - t * 0.85
+    hd.blob(X(p.x + r * 0.25), Y(p.y), X(r), Y(0.62), stoneShade)
+    hd.blob(X(p.x), Y(p.y), X(r * 0.8), Y(0.5), stone)
+  }
+  const fin = tailAt(1)
+  for (const side of [-1, 1]) {
+    const tip = { x: fin.x + side * 1.5, y: fin.y - 1.7 }
+    hd.stroke(fin.x, fin.y, tip.x, tip.y, line * 2.2, side < 0 ? stoneShade : stone)
+    hd.stroke(tip.x, tip.y, tip.x + side * 0.5, tip.y + 0.4, line * 1.2, side < 0 ? stoneShade : stone)
+  }
+  // Body: shaded back-lit side first, then the lit belly, widest at the chest.
+  const spine = (t: number) => ({
+    x: 14.1 - Math.sin(t * Math.PI) * 0.5,
+    y: 13.4 + t * 5.6,
+    r: 1.6 + Math.sin(t * Math.PI * 0.8) * 0.9 - t * 0.5,
+  })
+  for (let i = 0; i <= 40; i++) {
+    const p = spine(i / 40)
     hd.blob(X(p.x + p.r * 0.3), Y(p.y), X(p.r), Y(0.5), stoneShade)
   }
-  for (let i = 0; i <= 36; i++) {
-    const p = spine(i / 36)
-    hd.blob(X(p.x - 0.1), Y(p.y), X(p.r * 0.82), Y(0.5), stone)
-  }
-  // Tail sweeps left from the base, curls up, and ends in a two-lobed fin.
   for (let i = 0; i <= 40; i++) {
-    const t = i / 40,
-      tx = 13.2 - t * 6.4,
-      ty = 19.1 - t * t * 3.6
-    hd.blob(X(tx), Y(ty), X(1.05 - t * 0.6), Y(0.55 - t * 0.2), t < 0.5 ? stone : hdMix(stone, stoneShade, 0.3))
+    const p = spine(i / 40)
+    hd.blob(X(p.x - 0.1), Y(p.y), X(p.r * 0.8), Y(0.5), stone)
   }
-  hd.stroke(6.9, 15.7, 5.6, 14.6, line * 1.6, stone)
-  hd.stroke(6.9, 15.7, 7.9, 14.3, line * 1.6, stoneShade)
-  hd.stroke(6.9, 15.7, 5.5, 16.2, line * 1.4, stoneShade)
-  for (let row = 0; row < 7; row++) {
+  hd.blob(X(15.9), Y(16.1), X(0.8), Y(0.45), stoneShade)
+  hd.stroke(15.2, 15.8, 16.5, 16.7, line * 1.2, stoneShade)
+  for (let row = 0; row < 8; row++) {
     for (let column = 0; column < 3; column++) {
-      const x = 12.7 + column * 0.8 + (row % 2) * 0.4,
-        y = 15.3 + row * 0.55
-      hd.stroke(x - 0.3, y - 0.08, x, y + 0.1, line * 0.8, stoneShade)
-      hd.stroke(x, y + 0.1, x + 0.3, y - 0.08, line * 0.8, stoneShade)
+      const x = 12.8 + column * 0.85 + (row % 2) * 0.42,
+        y = 15.1 + row * 0.55
+      hd.stroke(x - 0.32, y - 0.08, x, y + 0.12, line * 0.8, stoneShade)
+      hd.stroke(x, y + 0.12, x + 0.32, y - 0.08, line * 0.8, stoneShade)
     }
   }
-  // Mane: two rings of curled tufts behind the face, then face, muzzle and open mouth.
-  for (let i = 0; i < 12; i++) {
-    const angle = (i / 12) * Math.PI * 2
+  // Head: two rings of curled mane tufts, round face, ears, brow, eye, muzzle and open mouth.
+  const hx = 14.4,
+    hy = 12
+  for (let i = 0; i < 18; i++) {
+    const angle = (i / 18) * Math.PI * 2
     hd.blob(
-      X(14.3 + Math.cos(angle) * 1.7),
-      Y(12.5 + Math.sin(angle) * 1.5),
-      cw * 0.8,
-      ch * 0.62,
-      i % 2 === 0 ? stoneShade : stone,
+      X(hx + Math.cos(angle) * 2.3),
+      Y(hy + Math.sin(angle) * 2.05),
+      cw * 1.05,
+      ch * 0.8,
+      i % 2 === 0 ? hdMix(stoneShade, shade, 0.35) : stoneShade,
     )
   }
-  hd.blob(X(14.9), Y(12.6), X(1.45), Y(1.15), stone)
-  hd.blob(X(16.1), Y(12.95), X(1.2), Y(0.62), stone)
-  hd.blob(X(15.9), Y(13.55), X(0.8), Y(0.3), stoneShade)
-  hd.blob(X(16.85), Y(12.55), X(0.32), Y(0.22), shade)
-  hd.disk(X(16.55), Y(13.05), line * 1.2, shade)
-  hd.disk(X(15.35), Y(11.95), line * 1.9, shade)
-  hd.disk(X(15.4), Y(11.9), line * 0.7, light)
-  hd.stroke(14.2, 11.35, 15.2, 11.15, line * 0.9, stoneShade)
+  for (let i = 0; i < 12; i++) {
+    const angle = (i / 12) * Math.PI * 2 + 0.25
+    hd.blob(
+      X(hx + Math.cos(angle) * 1.7),
+      Y(hy + Math.sin(angle) * 1.5),
+      cw * 0.9,
+      ch * 0.7,
+      i % 2 === 0 ? stoneShade : hdMix(stoneShade, stone, 0.5),
+    )
+  }
+  hd.blob(X(hx + 0.7), Y(hy + 0.4), X(1.75), Y(1.5), stone)
+  hd.disk(X(hx - 0.6), Y(hy - 1.45), line * 2.2, stoneShade)
+  hd.disk(X(hx + 1), Y(hy - 1.6), line * 2.2, stoneShade)
+  hd.blob(X(hx + 1.95), Y(hy + 1), X(1.15), Y(0.7), stone)
+  hd.blob(X(hx + 1.8), Y(hy + 1.9), X(0.85), Y(0.32), stoneShade)
+  hd.blob(X(hx + 2.55), Y(hy + 0.4), X(0.28), Y(0.2), shade)
+  hd.blob(X(hx + 2.4), Y(hy + 1.1), X(0.4), Y(0.18), shade)
+  hd.stroke(hx + 0.7, hy - 0.45, hx + 2, hy - 0.8, line * 1.1, stoneShade)
+  hd.disk(X(hx + 1.25), Y(hy - 0.1), line * 2, shade)
+  hd.disk(X(hx + 1.3), Y(hy - 0.15), line * 0.7, light)
+
   // The fountain and splash use the same parabolic path as the text fallback.
   let previous = singaporeJet(0, elapsedMs)
   for (let i = 1; i <= 90; i++) {
