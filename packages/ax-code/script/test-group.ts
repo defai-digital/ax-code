@@ -111,7 +111,7 @@ const recovery = new Set([
   "test/session/session-recovery.test.ts",
 ])
 
-// Focused, Node 24-safe coverage for the ax-tui consumption boundary.
+// Focused coverage for the ax-tui consumption boundary on Node 26+.
 // Native source-mode rendering remains in `check:tui-snapshot` under Node 26.
 // Framework-internal tests (spinner, vendored-native-resolver,
 // package-integrity) moved to the ax-tui repo with ADR-074.

@@ -70,59 +70,54 @@ describe.skipIf(process.platform === "win32")("TUIMCP MCP interoperability", () 
       await server.close()
     }
   })
-  // The complete CLI requires node:ffi; Node 24 still qualifies the protocol-only tests.
-  test.skipIf(Number(process.versions.node.split(".")[0]) < 26)(
-    "the registered CLI keeps serving after the normal forced-exit grace period",
-    async () => {
-      await using f = await fixture()
-      await using tmp = await tmpdir()
-      const client = new Client({ name: "cli-test", version: "1" })
-      const transport = new StdioClientTransport({
-        command: process.execPath,
-        args: [
-          fileURLToPath(new URL("../../../../script/node-ffi-runner.mjs", import.meta.url)),
-          "--import",
-          "tsx",
-          "--import",
-          fileURLToPath(new URL("../../../../script/solid-loader.mjs", import.meta.url)),
-          "--conditions=node",
-          fileURLToPath(new URL("../../src/index-node-tui.ts", import.meta.url)),
-          "mcp",
-          "tui",
-          "--endpoint",
-          f.endpoint.filename,
-        ],
-        cwd: fileURLToPath(new URL("../../", import.meta.url)),
-        env: {
-          ...Object.fromEntries(
-            Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
-          ),
-          AX_CODE_TEST_HOME: tmp.path,
-          AX_CODE_DISABLE_MODELS_FETCH: "1",
-          AX_CODE_DISABLE_AUTOUPDATE: "1",
-          AX_CODE_DISABLE_PROJECT_CONFIG: "1",
-          AX_CODE_DISABLE_LSP_DOWNLOAD: "1",
-          AX_CODE_DISABLE_AUTO_INDEX: "1",
-        },
-        stderr: "pipe",
-      })
-      let stderr = ""
-      transport.stderr?.on("data", (chunk) => {
-        stderr = (stderr + String(chunk)).slice(-16 * 1024)
-      })
-      try {
-        await client.connect(transport)
-        await new Promise((resolve) => setTimeout(resolve, 2_250))
-        expect((await client.listTools()).tools).toHaveLength(2)
-        expect(await client.callTool({ name: "get_view_context", arguments: {} })).toMatchObject({ isError: false })
-      } catch (error) {
-        throw new Error(`TUIMCP CLI interoperability failed.\n${stderr}`, { cause: error })
-      } finally {
-        await client.close()
-      }
-    },
-    30_000,
-  )
+  test("the registered CLI keeps serving after the normal forced-exit grace period", async () => {
+    await using f = await fixture()
+    await using tmp = await tmpdir()
+    const client = new Client({ name: "cli-test", version: "1" })
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [
+        fileURLToPath(new URL("../../../../script/node-ffi-runner.mjs", import.meta.url)),
+        "--import",
+        "tsx",
+        "--import",
+        fileURLToPath(new URL("../../../../script/solid-loader.mjs", import.meta.url)),
+        "--conditions=node",
+        fileURLToPath(new URL("../../src/index-node-tui.ts", import.meta.url)),
+        "mcp",
+        "tui",
+        "--endpoint",
+        f.endpoint.filename,
+      ],
+      cwd: fileURLToPath(new URL("../../", import.meta.url)),
+      env: {
+        ...Object.fromEntries(
+          Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+        ),
+        AX_CODE_TEST_HOME: tmp.path,
+        AX_CODE_DISABLE_MODELS_FETCH: "1",
+        AX_CODE_DISABLE_AUTOUPDATE: "1",
+        AX_CODE_DISABLE_PROJECT_CONFIG: "1",
+        AX_CODE_DISABLE_LSP_DOWNLOAD: "1",
+        AX_CODE_DISABLE_AUTO_INDEX: "1",
+      },
+      stderr: "pipe",
+    })
+    let stderr = ""
+    transport.stderr?.on("data", (chunk) => {
+      stderr = (stderr + String(chunk)).slice(-16 * 1024)
+    })
+    try {
+      await client.connect(transport)
+      await new Promise((resolve) => setTimeout(resolve, 2_250))
+      expect((await client.listTools()).tools).toHaveLength(2)
+      expect(await client.callTool({ name: "get_view_context", arguments: {} })).toMatchObject({ isError: false })
+    } catch (error) {
+      throw new Error(`TUIMCP CLI interoperability failed.\n${stderr}`, { cause: error })
+    } finally {
+      await client.close()
+    }
+  }, 30_000)
   test("real stdio remains valid MCP and closes on client exit", async () => {
     await using f = await fixture()
     const client = new Client({ name: "stdio-test", version: "1" })

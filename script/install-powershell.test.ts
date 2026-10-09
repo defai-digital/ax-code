@@ -45,7 +45,7 @@ async function runInstaller(body: string) {
     if (process.platform === "win32") {
       await copyFile(process.execPath, node)
     } else {
-      // The fixture checks module resolution even when CI itself uses Node 24.
+      // The fixture checks module resolution under the supported Node runtime.
       // Production archives carry their own Node 26 runtime.
       await writeFile(
         node,

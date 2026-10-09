@@ -10,6 +10,7 @@
 // npm_config_user_agent starts with "pnpm/", so pnpm-driven workflows pass the
 // check unchanged.
 import { pathToFileURL } from "node:url"
+import { supportsNodeVersion, nodeSupportMessage } from "./check-node-version.mjs"
 
 /**
  * Whether the package manager that launched this process may run scripts here.
@@ -37,6 +38,10 @@ export function blockMessage(used) {
 
 // CLI entry — skipped when the test suite imports this module.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  if (!supportsNodeVersion()) {
+    console.error(nodeSupportMessage())
+    process.exit(1)
+  }
   const verdict = resolvePnpmEnforcement()
   if (!verdict.allowed) {
     console.error(blockMessage(verdict.used))

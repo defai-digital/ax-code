@@ -13,7 +13,7 @@
     "node": ">=26"
   },
   "scripts": {
-    "preinstall": "npx only-allow pnpm",
+    "preinstall": "node script/check-node-version.mjs && npx only-allow pnpm",
     "predev": "node script/only-allow-pnpm.mjs",
     "dev": "node node_modules/@typescript/native/bin/tsc -p packages/sdk/js/tsconfig.json && pnpm --dir packages/ax-code exec node ../../script/node-ffi-runner.mjs --optional-env-file=../../.env --import tsx --import ../../script/solid-loader.mjs --conditions=node ./src/index-node-tui.ts",
     "precli": "node script/only-allow-pnpm.mjs",

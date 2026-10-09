@@ -22,7 +22,7 @@ changes belong to AX Coder.
 - Remove pending IPC requests and abort listeners when frame encoding fails synchronously, while preserving the shared connection.
 - Keep WebMCP circuit breakers attached to their live turn so late calls cannot reset a stopped turn, and release completed turns from memory.
 - Complete TUIMCP endpoint cleanup even when the close callback throws, and make concurrent closes await the same cleanup.
-- Qualify the full TUIMCP CLI in the Node 26 CI lane while retaining protocol-only coverage on Node 24, and retain bounded subprocess diagnostics on failures.
+- Align all runtime and SDK CI lanes with the Node.js 26+ support floor, reject older Node versions during installation, and retain bounded TUIMCP subprocess diagnostics on failures.
 - Harden WebMCP grants, page-failure handling, dispatch bindings, and read-tool output schemas; add opt-in live qualification fixtures.
 - Respect transcript concealment in completed session renders and refresh upstream model metadata.
 

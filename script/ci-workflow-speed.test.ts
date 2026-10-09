@@ -23,6 +23,22 @@ function githubAutomationSources(directory = ".github"): string[] {
 }
 
 describe("CI workflow speed policy", () => {
+  test("AX Code and SDK automation enforce the Node 26 support floor", () => {
+    for (const source of githubAutomationSources()) {
+      for (const match of source.matchAll(/node-version:\s*["']?(\d+)/g)) {
+        expect(Number(match[1])).toBeGreaterThanOrEqual(26)
+      }
+    }
+    expect(toolchain).toContain('default: "26"')
+    for (const filename of ["package.json", "packages/ax-code/package.json", "packages/sdk/js/package.json"]) {
+      expect(JSON.parse(readFileSync(filename, "utf8")).engines.node).toBe(">=26")
+    }
+    expect(JSON.parse(readFileSync("package.json", "utf8")).scripts.preinstall).toContain(
+      "node script/check-node-version.mjs",
+    )
+    expect(readFileSync("script/only-allow-pnpm.mjs", "utf8")).toContain("!supportsNodeVersion()")
+  })
+
   test("repository script tests run once in repo-structure, not in ax-code CI", () => {
     expect(ci).not.toContain("pnpm run test:scripts")
     expect(repoStructure).toContain("pnpm run test:scripts")
@@ -78,7 +94,7 @@ describe("CI workflow speed policy", () => {
     expect(lane).toBeDefined()
     expect(lane).toContain("timeout-minutes: 15")
     expect(lane).toContain('AX_TEST_MAX_WORKERS: "2"')
-    expect(lane).toContain('node-version: "24"')
+    expect(lane).toContain('node-version: "26"')
     expect(lane).toContain("test:ci -- runtime-contract --rerun-on-fail 0")
     expect(lane).toContain("name: ax-code-runtime-contract-report")
     expect(lane).toContain("if-no-files-found: error")

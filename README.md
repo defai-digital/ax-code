@@ -31,11 +31,9 @@ with managed 35B-class inference through AX Engine, on Windows, and on Ubuntu; c
 private-GPU, and AX Trust providers remain available when you want them. For a non-technical
 overview and screenshots, see [ax-code.app](https://ax-code.app).
 
-**Public downloads are temporarily unavailable (2026-09-16).** The release installer URLs and
-the Homebrew formula below currently return 404 because the original GitHub repository is private.
-These commands document the supported install channels; for current status, see the
-[ax-code.app install guide](https://ax-code.app/en/download/). The Standard open-source
-direction does not itself change repository visibility or restore public downloads.
+**Node.js 26 or later is required.** AX Code and its SDK do not support older Node.js versions.
+Standalone installers include a verified Node runtime; source checkouts and Node-based SDK
+applications must provide Node.js 26+ themselves.
 
 ### macOS (Apple Silicon)
 
@@ -306,10 +304,8 @@ managed activation contract, and the MTP policy.
 
 The installation blocks below are kept as a single-page reference and for change history. The
 canonical, current copy lives in the [Install](#install) section near the top of this README.
-The original GitHub repository is private, so the release installer URLs and the Homebrew formula
-currently return 404 for anonymous users; the Standard open-source direction does not itself
-change repository visibility or restore public downloads. For the current download status, see
-the [ax-code.app install guide](https://ax-code.app/en/download/).
+Public release installers and signed runtime archives are served by `download.ax-code.com`.
+AX Code and its SDK support Node.js 26 or later only; standalone releases bundle their runtime.
 
 ### macOS (Apple Silicon)
 

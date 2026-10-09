@@ -14,9 +14,8 @@ afterEach(async () => {
 })
 
 describe("Unix node launcher", () => {
-  // Release launch arguments require Node 26. The dedicated Node 26 CI lane
-  // executes this contract; the Node 24 deterministic lane cannot launch FFI.
-  test.skipIf(process.platform === "win32" || Number(process.versions.node.split(".")[0]) < 26)(
+  // Release launch arguments require the supported Node 26+ runtime.
+  test.skipIf(process.platform === "win32")(
     "does not replay application work or run preload hooks during admission",
     async () => {
       const root = await mkdtemp(path.join(os.tmpdir(), "ax-code-node-once-"))

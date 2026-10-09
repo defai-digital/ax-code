@@ -2,18 +2,19 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-09-19
+Last reviewed: 2026-10-09
 Owner: ax-code runtime
 
 The root [README](../../README.md) keeps the primary install path. This page is the source of truth for supported CLI installer channels, `ax-code doctor` runtime labels, local launcher behavior, and how those channels relate to Desktop installers.
 
 ## Public availability
 
-As of 2026-09-16, the original repository is private. Anonymous requests for the GitHub
-release installers below return 404, and the Homebrew formula references an archive in
-that same repository. The commands document existing channels; they are not currently
-working public download instructions. Do not work around this by embedding private
-GitHub credentials in a public installer.
+Public release installers and signed runtime archives are distributed through
+`download.ax-code.com`. Installation does not require private GitHub credentials.
+
+AX Code and the SDK support **Node.js 26 or later only**. Standalone installers bundle
+a verified Node runtime. Source checkouts and Node-based SDK applications must supply
+Node.js 26+; package installation rejects older Node versions.
 
 AX Code Standard remains open source and free for personal and commercial use. The
 planned proprietary Business components have separate licensing; this does not change
@@ -30,7 +31,7 @@ version after that workflow has signed assets and published. Until then, Latest
 stays on the previous published tag. After validate succeeds, maintainers can
 see a Draft for the new tag; it is not public Latest.
 
-## Recommended Path (when public release access is available)
+## Recommended Path
 
 Use a supported packaged installer unless you are developing from a checkout. The release installer is the primary CLI path on macOS and Linux; use the native PowerShell installer on Windows.
 
