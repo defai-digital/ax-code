@@ -95,30 +95,30 @@
 
   <text x="40" y="656" fill="#5c6b7a" font-size="11" font-weight="700" letter-spacing="1.1">NATIVE AND INTEGRATIONS</text>
   <g fill="#ffffff" stroke="#d9dee7">
-    <rect x="40" y="668" width="208" height="76" rx="8"/>
-    <rect x="260" y="668" width="208" height="76" rx="8"/>
-    <rect x="480" y="668" width="208" height="76" rx="8"/>
-    <rect x="700" y="668" width="208" height="76" rx="8"/>
+    <rect x="40" y="668" width="278" height="76" rx="8"/>
+    <rect x="335" y="668" width="278" height="76" rx="8"/>
+    <rect x="630" y="668" width="278" height="76" rx="8"/>
+    <rect x="40" y="760" width="428" height="96" rx="8"/>
   </g>
   <g fill="#142033" font-size="13" font-weight="700" text-anchor="middle">
-    <text x="144" y="696">Plugin</text>
-    <text x="364" y="696">Native addons</text>
-    <text x="584" y="696">GitHub Action</text>
-    <text x="804" y="696">MCP</text>
+    <text x="179" y="696">Plugin</text>
+    <text x="474" y="696">Native addons</text>
+    <text x="769" y="696">GitHub Action</text>
   </g>
   <g fill="#5c6b7a" font-size="11" text-anchor="middle">
-    <text x="144" y="716">@ax-code/plugin</text>
-    <text x="364" y="714">index, fs, diff, parser,</text>
-    <text x="364" y="728">terminal</text>
-    <text x="584" y="716">issues and pull requests</text>
-    <text x="804" y="716">external tool servers</text>
+    <text x="179" y="716">@ax-code/plugin</text>
+    <text x="474" y="714">index, fs, diff, parser,</text>
+    <text x="474" y="728">terminal</text>
+    <text x="769" y="716">issues and pull requests</text>
   </g>
+  <text x="56" y="786" fill="#142033" font-size="14" font-weight="700">MCP</text>
+  <text x="56" y="808" fill="#3d4c5c" font-size="12">External tool servers you add and trust</text>
+  <text x="56" y="826" fill="#3d4c5c" font-size="12">before they connect.</text>
 
-  <text x="40" y="768" fill="#1f4e79" font-size="11" font-weight="700" letter-spacing="1.1">WEBMCP</text>
-  <rect x="40" y="780" width="868" height="76" rx="8" fill="#e7f0f8" stroke="#1f4e79"/>
-  <text x="56" y="808" fill="#1f4e79" font-size="14" font-weight="700">WebMCP</text>
-  <text x="136" y="808" fill="#1f4e79" font-size="12">The sidebar chip starts an isolated Chrome 150+ window.</text>
-  <text x="56" y="832" fill="#1f4e79" font-size="12">The agent can read the page and, with approval, act on it and on tools the page registers.</text>
+  <rect x="480" y="760" width="428" height="96" rx="8" fill="#d6e6f5" stroke="#1f4e79" stroke-width="2"/>
+  <text x="496" y="786" fill="#1f4e79" font-size="14" font-weight="700">WebMCP</text>
+  <text x="496" y="808" fill="#1f4e79" font-size="12">Isolated Chrome 150+. The sidebar chip starts it.</text>
+  <text x="496" y="826" fill="#1f4e79" font-size="12">Read, and with approval, act on page tools.</text>
 
   <!-- Workflow -->
   <rect x="20" y="892" width="920" height="420" rx="14" fill="#ffffff" stroke="#d9dee7"/>
@@ -160,9 +160,9 @@
     <text x="56" y="1136">Run the PreToolUse hook,</text>
     <text x="56" y="1154">then the permission check.</text>
     <text x="56" y="1172">Denial stops that call.</text>
-    <text x="276" y="1136">Run the tool inside the</text>
-    <text x="276" y="1154">isolation mode. Writes</text>
-    <text x="276" y="1172">take the write gate.</text>
+    <text x="276" y="1136">Run inside isolation.</text>
+    <text x="276" y="1154">Writes use the write gate.</text>
+    <text x="276" y="1172">WebMCP opens Chrome.</text>
     <text x="496" y="1136">Snapshot the file change</text>
     <text x="496" y="1154">outside the repository.</text>
     <text x="496" y="1172">Append the event log.</text>
