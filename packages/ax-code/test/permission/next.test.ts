@@ -1674,6 +1674,45 @@ test("reply - publishes replied event", async () => {
   })
 })
 
+test("replacing a pending request settles its caller and isolates cancellation", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const abort = new AbortController()
+      const input = {
+        id: PermissionID.make("per_replaced_request"),
+        sessionID: SessionID.make("ses_replaced_request"),
+        permission: "bash",
+        patterns: ["first"],
+        metadata: {},
+        always: [],
+        ruleset: [],
+      }
+      let rejected = false
+      const first = Permission.ask(input, { signal: abort.signal }).catch((error) => {
+        rejected = error instanceof Permission.RejectedError
+      })
+      await waitForPending(1)
+      const second = Permission.ask({ ...input, patterns: ["replacement"] })
+      try {
+        await vi.waitFor(async () => {
+          expect((await Permission.list())[0]?.patterns).toEqual(["replacement"])
+        })
+        abort.abort()
+        await first
+        expect(rejected).toBe(true)
+        expect((await Permission.list())[0]?.patterns).toEqual(["replacement"])
+        expect(await Permission.reply({ requestID: input.id, reply: "once" })).toBe(true)
+        await second
+        expect(await Permission.list()).toEqual([])
+      } finally {
+        await Permission.reply({ requestID: input.id, reply: "once" })
+      }
+    },
+  })
+})
+
 test("permission requests stay isolated by directory", async () => {
   await using one = await tmpdir({ git: true })
   await using two = await tmpdir({ git: true })

@@ -601,17 +601,17 @@ export namespace Permission {
     log.info("asking", { id, permission: info.permission, patterns: info.patterns })
 
     const deferred = createDeferred<void>()
-    // A caller-supplied id that collides with a live pending entry would
-    // orphan the old entry's deadline timer (still armed, same id) and could
-    // auto-approve THIS replacement ask. Disarm the previous entry before
-    // overwriting; the old caller's hung promise is its own bug to surface.
-    clearIdleOnceTimer(pending.get(id))
+    // Settle the displaced caller as well as disarming its deadline. Its
+    // cancellation and finally handlers must never remove the replacement.
+    const previous = pending.get(id)
+    clearIdleOnceTimer(previous)
+    previous?.deferred.reject(new RejectedError())
     const entry: PendingEntry = { info, ruleset, deferred, candidate, agent: input.agent }
     pending.set(id, entry)
 
     const onAbort = () => {
       clearIdleOnceTimer(entry)
-      if (!pending.delete(id)) return
+      if (pending.get(id) !== entry || !pending.delete(id)) return
       // The ask died without a user decision (turn aborted, session
       // cancelled). Publish a reject reply so subscribed prompts (TUI,
       // desktop) unmount instead of lingering as an unanswerable dialog —
