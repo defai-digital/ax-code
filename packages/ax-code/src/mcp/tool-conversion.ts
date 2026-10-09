@@ -247,7 +247,7 @@ export async function convertMcpTool(
     (mcpTool.description ?? "").length > MAX_TOOL_DESCRIPTION
       ? `${(mcpTool.description ?? "").slice(0, MAX_TOOL_DESCRIPTION)}...`
       : (mcpTool.description ?? "")
-  const description = webmcp ? `${baseDescription} ${WebMcpProfile.limitsNote(webmcp.profile)}`.trim() : baseDescription
+  const description = webmcp ? WebMcpProfile.toolDescription(webmcp.toolName, webmcp.profile) : baseDescription
 
   const tool = dynamicTool({
     description,

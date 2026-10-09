@@ -25,13 +25,13 @@ Inspect the project to determine the correct run command:
 
 ## Phase 3 - Observe
 
-- If browser tools are available: open the app URL, take a snapshot, and capture a screenshot.
+- If browser tools are available: follow the WebMCP skill when available, discover deferred tools with `tool_search`, and use the actual bridge schemas. Open the app URL and observe it with the admitted page tools or snapshots; capture a screenshot for visual questions only when supported. Do not assume a T0 bridge can read or interact.
 - If $ARGUMENTS specifies a route or page, navigate there.
 - If browser tools are NOT available: curl the root URL and report the HTTP status + first 500 bytes of the response.
 
 ## Phase 4 - Report
 
-- Confirm the app is running with: URL, HTTP status, and a brief description of what rendered.
+- Report the URL, observed HTTP status, and runtime evidence. Describe what rendered only if actually observed; HTTP-only output establishes reachability, with rendering and interaction NOT VERIFIED. State any missing browser capability rather than calling the UI verified.
 - If a screenshot was captured, include it.
 - Leave the dev server running in the background (report the shell ID so it can be killed later).
 

@@ -51,6 +51,40 @@ async function writeSkill(root: string, name: string, policy = "", sidecar?: str
   }
 }
 
+test("bundled WebMCP guidance is discoverable and loads through the skill and command paths", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const agent = await Agent.get("build")
+      const entry = await Skill.get("webmcp")
+      expect(Skill.BUILTIN_NAMES.has("webmcp")).toBe(true)
+      expect(entry).toMatchObject({ name: "webmcp", agent: "build", builtin: true, modelInvocable: true })
+      const prompt = await SystemPrompt.skills(agent!)
+      expect(prompt).toContain("webmcp")
+      expect(prompt).not.toContain("## Recover without duplicating actions")
+      const tool = await SkillTool.init({ agent })
+      const ctx = context()
+      const loaded = await tool.execute({ name: "webmcp" }, ctx)
+      expect(loaded.output).toContain("JSON-encoded string")
+      expect(loaded.output).toContain("BLOCKED")
+      expect(loaded.output).toContain("no `uid`")
+      expect(loaded.output).toContain("when `browser_workflow` is available")
+      expect(loaded.output).not.toContain("references/")
+      expect(ctx.ask).toHaveBeenCalledWith(expect.objectContaining({ permission: "skill", patterns: ["webmcp"] }))
+      const command = await Command.get("webmcp")
+      expect(command).toMatchObject({ source: "skill", agent: "build" })
+      expect(await command?.template).toContain("## Recover without duplicating actions")
+      for (const name of ["run", "verify"]) {
+        const content = (await Skill.get(name))!.content
+        expect(content).not.toContain("AX_CODE_EXPERIMENTAL_BROWSER_AGENT")
+        expect(content).toContain("tool_search")
+        expect(content).toMatch(/HTTP.*reachability/)
+      }
+    },
+  })
+})
+
 test("manual-only skills stay explicit commands but cannot be advertised, searched or model-loaded", async () => {
   await using tmp = await tmpdir({
     git: true,

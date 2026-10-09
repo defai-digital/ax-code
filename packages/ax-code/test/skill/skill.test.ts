@@ -157,7 +157,7 @@ test("built-in skill instructions are portable across repositories", async () =>
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const builtins = (await Skill.all()).filter((skill) => Skill.BUILTIN_NAMES.has(skill.name))
+      const builtins = (await Skill.all()).filter((skill) => skill.builtin)
       expect(builtins.map((skill) => skill.name).sort()).toEqual([...Skill.BUILTIN_NAMES].sort())
       for (const skill of builtins) {
         expect(skill.content).not.toContain("packages/ax-code")
