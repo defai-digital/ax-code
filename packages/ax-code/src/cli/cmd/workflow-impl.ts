@@ -3,6 +3,7 @@ import type { Argv } from "yargs"
 import { bootstrap } from "../bootstrap"
 import { UI } from "../ui"
 import { cmd } from "./cmd"
+import { jsonOption, writeJson } from "./json-output"
 import { truncate } from "../../util/format"
 import { compactWorkflowArtifact } from "../../workflow/artifact"
 import { WorkflowRun } from "../../workflow/run"
@@ -1058,17 +1059,6 @@ async function withWorkflowRuntime(fn: () => Promise<void> | void) {
   await bootstrap(process.cwd(), async () => {
     await fn()
   })
-}
-
-function jsonOption() {
-  return {
-    type: "boolean" as const,
-    describe: "output machine-readable JSON",
-  }
-}
-
-function writeJson(value: unknown) {
-  process.stdout.write(JSON.stringify(value, null, 2) + EOL)
 }
 
 function countBy(values: string[]) {

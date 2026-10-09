@@ -5,6 +5,7 @@ import { cmd } from "./cmd"
 import { TaskQueue } from "../../session/task-queue"
 import { TaskQueueExecutor } from "../../session/task-queue-executor"
 import { SessionID, TaskQueueID } from "../../session/schema"
+import { jsonOption, writeJson } from "./json-output"
 
 type JsonOption = {
   json?: boolean
@@ -69,17 +70,6 @@ function parseStatus(value: unknown) {
     throw new Error(`Unknown task status "${value}". Expected one of: ${TaskQueue.Status.options.join(", ")}`)
   }
   return parsed.data
-}
-
-function jsonOption() {
-  return {
-    type: "boolean" as const,
-    describe: "output machine-readable JSON",
-  }
-}
-
-function writeJson(value: unknown) {
-  process.stdout.write(JSON.stringify(value, null, 2) + EOL)
 }
 
 async function withProject<T>(fn: () => Promise<T>) {
