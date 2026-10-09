@@ -51247,6 +51247,10 @@
             "description": "Enable the T1 read tier: page snapshot, screenshot and console tools for granted origins. Default off. A managed allowRead: false forces it off.",
             "type": "boolean"
           },
+          "interact": {
+            "description": "Enable the T2 interact tier: click, hover, wait_for, fill, fill_form, press_key and handle_dialog for granted origins, each confirmed interactively. Default off. A managed allowInteract: false forces it off.",
+            "type": "boolean"
+          },
           "executablePath": {
             "description": "Optional explicit Chrome 150+ executable; never attaches to an existing browser session",
             "type": "string",
@@ -51286,6 +51290,10 @@
           },
           "allowRead": {
             "description": "Managed gate for the T1 read tier. Default off. false forces the read tools off even when the profile sets read: true; it can only restrict, never enable.",
+            "type": "boolean"
+          },
+          "allowInteract": {
+            "description": "Managed gate for the T2 interact tier. false forces the interact tools off even when the profile sets interact: true; it can only restrict, never enable.",
             "type": "boolean"
           }
         },

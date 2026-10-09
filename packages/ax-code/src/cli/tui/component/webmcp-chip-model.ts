@@ -53,9 +53,17 @@ export function webMcpChipModel(
   statuses: Record<string, WebMcpChipStatus> | undefined,
 ): WebMcpChipModel {
   const servers: string[] = []
+  // ADR-174: an acting bridge is distinguishable from a read-only one at a
+  // glance. The marker follows the configured profile; a managed
+  // allowInteract: false surfaces as the bridge's blocked/attention state.
+  let interact = false
   if (isRecord(configMcp)) {
     for (const [name, entry] of Object.entries(configMcp)) {
-      if (isRecord(entry) && isRecord((entry as { webmcp?: unknown }).webmcp)) servers.push(name)
+      if (!isRecord(entry)) continue
+      const profile = (entry as { webmcp?: unknown }).webmcp
+      if (!isRecord(profile)) continue
+      servers.push(name)
+      if (profile.interact === true) interact = true
     }
   }
   const connected = servers.filter((name) => statuses?.[name]?.status === "connected")
@@ -81,7 +89,7 @@ export function webMcpChipModel(
   const view: WebMcpChipModel["view"] =
     connected.length > 0 ? "toggle" : attentions.length > 0 ? "warning" : actionable ? "toggle" : "lock"
   const markers = `${blocked.length > 0 ? " 🔒" : ""}${attentions.length > 0 ? " ⚠" : ""}`
-  const base = servers.length > 1 ? `WebMCP (${connected.length}/${servers.length})` : "WebMCP"
+  const base = `${servers.length > 1 ? `WebMCP (${connected.length}/${servers.length})` : "WebMCP"}${interact ? " ·act" : ""}`
   const label = view === "toggle" ? `${base}${markers}` : base
   // The lock is the only dead-end view, so it always names the denied
   // servers and the first policy reason instead of a bare padlock.

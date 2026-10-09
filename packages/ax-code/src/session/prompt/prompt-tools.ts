@@ -38,6 +38,32 @@ import { createHash } from "node:crypto"
 
 const log = Log.create({ service: "session.prompt.tools" })
 
+/**
+ * ADR-174 rule 11: one T2 circuit breaker per session, replaced when the
+ * turn (assistant message) changes, so the next user message resets it.
+ */
+const webmcpBreakers = Instance.state(() => new Map<string, WebMcpProfile.InteractBreaker>())
+
+function webmcpTurnBreaker(sessionID: string, turn: string): WebMcpProfile.InteractBreaker {
+  const map = webmcpBreakers()
+  const existing = map.get(sessionID)
+  if (existing && existing.turn === turn) return existing
+  const fresh = new WebMcpProfile.InteractBreaker(turn)
+  map.set(sessionID, fresh)
+  return fresh
+}
+
+function webmcpTargetSummary(metadata: Record<string, unknown> | undefined): string | undefined {
+  if (!metadata) return undefined
+  const parts: string[] = []
+  if (typeof metadata.tool === "string") parts.push(metadata.tool)
+  const target = isRecord(metadata.target) ? metadata.target : undefined
+  if (target && typeof target.uid === "string" && target.uid) parts.push(`uid ${target.uid}`)
+  if (target && typeof target.name === "string" && target.name) parts.push(`"${target.name.slice(0, 60)}"`)
+  if (typeof metadata.pageOrigin === "string") parts.push(`on ${metadata.pageOrigin}`)
+  return parts.length > 0 ? parts.join(" ") : undefined
+}
+
 // Schema transforms may capture project-defined tool schemas. Keep both the
 // LRU and in-flight work scoped to the active project instance so two projects
 // with the same tool ID/model cannot reuse each other's schema.
@@ -1487,6 +1513,49 @@ export async function resolveTools(input: ResolveToolsInput) {
             if (!granted.ok) throw new Error(granted.error)
             throw new Error(`WebMCP read access to ${error.origin} was allowed for this session. Retry the call.`)
           }
+          // ADR-174: a T2 call against an origin with no session interact
+          // grant, or whose budget is spent, throws before the bridge acts.
+          // The prompt names the origin and what the grant covers; approval
+          // records (or renews) the grant in memory, and the retry is
+          // immediate — never a relaunch.
+          const grantInteract = async (
+            interactPolicy: WebMcpProfile.Policy,
+            error: unknown,
+            breaker: WebMcpProfile.InteractBreaker | undefined,
+          ): Promise<never> => {
+            if (!(error instanceof WebMcpProfile.InteractNotGrantedError)) throw error
+            const allowed = await MCP.checkWebMcpInteractGrant(interactPolicy.server, error.origin)
+            if (!allowed.ok) throw new Error(allowed.error)
+            try {
+              await ctx.ask({
+                permission: "webmcp",
+                patterns: [key],
+                always: [],
+                metadata: {
+                  interactGrant: true,
+                  renewal: error.renewal,
+                  budget: WebMcpProfile.INTERACT_BUDGET,
+                  server: interactPolicy.server,
+                  origin: error.origin,
+                  experimental: true,
+                },
+              })
+            } catch (refusal) {
+              if (
+                breaker &&
+                (refusal instanceof Permission.RejectedError || refusal instanceof Permission.CorrectedError)
+              ) {
+                breaker.refused(`interaction grant for ${error.origin}`)
+              }
+              throw refusal
+            }
+            breaker?.approved()
+            const granted = await MCP.grantWebMcpInteractOrigin(interactPolicy.server, error.origin)
+            if (!granted.ok) throw new Error(granted.error)
+            throw new Error(
+              `WebMCP interaction with ${error.origin} was ${error.renewal ? "renewed" : "allowed"} for this session (${WebMcpProfile.INTERACT_BUDGET} grant-covered actions). Retry the call.`,
+            )
+          }
           let call: Record<string, unknown> | unknown = args
           if (policy) {
             try {
@@ -1537,34 +1606,91 @@ export async function resolveTools(input: ResolveToolsInput) {
           // per-call asks.
           const readTierTool =
             policy !== undefined && WebMcpProfile.READ_SCOPE_TOOLS.some((name) => name === policy.toolName)
+          // ADR-174: hover, wait_for and ordinary clicks run under the
+          // per-origin interact grant (the dispatch raises
+          // InteractNotGrantedError and the prompt happens then); fills, key
+          // presses, dialogs and escalated clicks keep the per-call asks with
+          // the target and full value in the metadata.
+          const interactTool = policy !== undefined && WebMcpProfile.isInteractTool(policy.toolName)
+          const breaker = interactTool ? webmcpTurnBreaker(ctx.sessionID, input.processor.message.id) : undefined
+          if (breaker?.tripped) throw new Error(breaker.tripped)
+          if (interactTool && policy && webmcp) {
+            // A target nobody listed can never be approved meaningfully and
+            // would fail closed at dispatch anyway; fail it here without
+            // spending the user's attention on a doomed prompt.
+            const target = isRecord(webmcp.target) ? webmcp.target : undefined
+            const targets = Array.isArray(webmcp.targets) ? webmcp.targets : []
+            if (target?.unlisted === true || targets.some((entry) => isRecord(entry) && entry.unlisted === true)) {
+              breaker?.failed(webmcpTargetSummary(webmcp))
+              throw new WebMcpProfile.TargetBindingError(
+                policy.toolName === "press_key"
+                  ? "WebMCP press_key needs a focused control in the latest snapshot of this page; take a new snapshot or click the control first"
+                  : "WebMCP target is not in the latest snapshot of this page; take a new snapshot before acting",
+              )
+            }
+            if (policy.toolName === "wait_for") {
+              const requested = (call as { timeout?: unknown }).timeout
+              const waitMs = typeof requested === "number" ? requested : WebMcpProfile.MAX_WAIT_TIMEOUT_MS
+              if (breaker && !breaker.reserveWait(waitMs)) {
+                throw new Error(
+                  `WebMCP wait_for budget for this turn (${WebMcpProfile.MAX_WAIT_PER_TURN_MS / 1000} s cumulative) is exhausted; do not retry automatically`,
+                )
+              }
+            }
+          }
+          const grantCovered =
+            interactTool &&
+            policy !== undefined &&
+            !WebMcpProfile.perActionCall(policy.profile, policy.toolName, call as Record<string, unknown>)
+          const skipPerCall = readTierTool || grantCovered
           const permissionPattern = McpPermissionPattern.derive(key, webmcp ?? call, { worktree: Instance.worktree })
-          if (!readTierTool) {
-            await ctx.ask({
-              permission: key,
-              metadata: {
-                mcp: true,
-                ...permissionPattern.metadata,
-              },
-              patterns: permissionPattern.patterns,
-              always: permissionPattern.always,
-            })
-          }
-          if (webmcp && !readTierTool) {
-            await ctx.ask({
-              permission: "webmcp",
-              patterns: [key],
-              always: [],
-              metadata: webmcp,
-            })
-          }
           try {
-            return await execute(call, opts)
+            if (!skipPerCall) {
+              await ctx.ask({
+                permission: key,
+                metadata: {
+                  mcp: true,
+                  ...permissionPattern.metadata,
+                },
+                patterns: permissionPattern.patterns,
+                always: permissionPattern.always,
+              })
+            }
+            if (webmcp && !skipPerCall) {
+              await ctx.ask({
+                permission: "webmcp",
+                patterns: [key],
+                always: [],
+                metadata: webmcp,
+              })
+            }
+          } catch (refusal) {
+            if (
+              breaker &&
+              (refusal instanceof Permission.RejectedError || refusal instanceof Permission.CorrectedError)
+            ) {
+              breaker.refused(webmcpTargetSummary(webmcp))
+            }
+            throw refusal
+          }
+          if (breaker && !skipPerCall) breaker.approved()
+          try {
+            const outcome = await execute(call, opts)
+            breaker?.succeeded()
+            return outcome
           } catch (error) {
             // A redirect target the bridge blocked surfaces only after
             // dispatch; offer the same grant the call-time path would.
             if (policy) {
               if (error instanceof WebMcpProfile.ReadNotGrantedError) await grantRead(policy, error)
-              else await grantOrigin(policy, error)
+              else if (error instanceof WebMcpProfile.InteractNotGrantedError)
+                await grantInteract(policy, error, breaker)
+              else {
+                if (breaker && error instanceof WebMcpProfile.TargetBindingError) {
+                  breaker.failed(webmcpTargetSummary(webmcp))
+                }
+                await grantOrigin(policy, error)
+              }
             }
             throw error
           }

@@ -12,6 +12,55 @@ const log = Log.create({ service: "mcp" })
 const MAX_TOOL_DESCRIPTION = 4_000
 const MAX_TOOL_SCHEMA_BYTES = 64 * 1024
 const NO_READ_GRANTS: ReadonlySet<string> = new Set()
+const NO_INTERACT_GRANTS: ReadonlyMap<string, number> = new Map()
+
+/**
+ * ADR-174 preflight for a T2 call, after the page URL was resolved. Checks
+ * the interact grant (and, for wait_for, the read grant), binds every uid to
+ * the latest snapshot of the page, requires a focused control for press_key,
+ * and spends one budget unit for a grant-covered action. Throws the typed
+ * grant or binding errors the caller turns into prompts or fail-closed
+ * results.
+ */
+function webmcpInteractPreflight(
+  policy: WebMcpProfile.Policy,
+  call: Record<string, unknown>,
+  pageUrl: string | undefined,
+  origin: string,
+) {
+  const grants = policy.interactGrants?.() ?? NO_INTERACT_GRANTS
+  if (!grants.has(origin)) throw new WebMcpProfile.InteractNotGrantedError(origin)
+  if (policy.toolName === "wait_for" && !(policy.readGrants?.() ?? NO_READ_GRANTS).has(origin)) {
+    throw new WebMcpProfile.ReadNotGrantedError(origin)
+  }
+  const pageId = call.pageId as number
+  const uids: string[] = []
+  if (typeof call.uid === "string") uids.push(call.uid)
+  if (Array.isArray(call.elements)) {
+    for (const element of call.elements) {
+      if (element && typeof element === "object" && typeof (element as { uid?: unknown }).uid === "string") {
+        uids.push((element as { uid: string }).uid)
+      }
+    }
+  }
+  for (const uid of uids) WebMcpProfile.verifyTarget(policy.profile, pageId, uid, pageUrl)
+  if (policy.toolName === "press_key") {
+    // The key goes to whatever holds focus; bind it to the control the
+    // snapshot recorded as focused, on the URL the snapshot was taken on.
+    const focused = WebMcpProfile.focusedTargetFor(policy.profile, pageId)
+    if (!focused) {
+      throw new WebMcpProfile.TargetBindingError(
+        "WebMCP press_key needs a focused control in the latest snapshot; take a new snapshot or click the control first",
+      )
+    }
+    WebMcpProfile.verifyTarget(policy.profile, pageId, focused.uid, pageUrl)
+  }
+  // A per-action call was confirmed by the user; only grant-covered actions
+  // spend the budget, and an exhausted budget renews through the same prompt.
+  if (!WebMcpProfile.perActionCall(policy.profile, policy.toolName, call)) {
+    if (!policy.consumeInteractBudget?.(origin)) throw new WebMcpProfile.InteractNotGrantedError(origin, true)
+  }
+}
 
 async function webmcpPageUrl(
   client: Client,
@@ -203,6 +252,7 @@ export async function convertMcpTool(
       // read grant, with the page origin resolved through the bridge before
       // the call and re-verified after it.
       const readTier = webmcp !== undefined && WebMcpProfile.READ_SCOPE_TOOLS.some((name) => name === webmcp.toolName)
+      const interactTier = webmcp !== undefined && WebMcpProfile.isInteractTool(webmcp.toolName)
       // The approval-time snapshot rides on the validated call object the
       // permission wrapper approved; direct dispatches without an approval
       // fall back to the live baseline check. A call the approval marked as
@@ -240,6 +290,25 @@ export async function convertMcpTool(
           )
         if (!(webmcp.readGrants?.() ?? NO_READ_GRANTS).has(origin)) throw new WebMcpProfile.ReadNotGrantedError(origin)
         readOrigin = origin
+      }
+      // ADR-174 preflight: resolve the page through the bridge, require the
+      // interact grant for its origin, bind every uid (and the focused
+      // control) to the latest snapshot of that page, spend the budget.
+      let interactOrigin: string | undefined
+      let interactUrl: string | undefined
+      if (interactTier && webmcp) {
+        const pageId = (input as Record<string, unknown>).pageId
+        const before =
+          typeof pageId === "number" ? await webmcpPageUrl(client, pageId, budget(), opts.abortSignal) : undefined
+        const origin = WebMcpProfile.pageOriginOf(before)
+        if (!origin)
+          throw new Error(
+            WebMcpProfile.unlocatedPageMessage(before, "could not be located before acting") +
+              " Do not retry automatically.",
+          )
+        webmcpInteractPreflight(webmcp, input as Record<string, unknown>, before, origin)
+        interactOrigin = origin
+        interactUrl = before
       }
       if (webmcp) {
         await webmcpPreflight(
@@ -313,6 +382,37 @@ export async function convertMcpTool(
               throw new Error("WebMCP page navigated during the read; the read output is discarded")
             }
             WebMcpProfile.boundReadResult(webmcp.toolName, result, readOrigin)
+            // ADR-174 rule 5: the structured snapshot becomes the uid map
+            // for later actions, bound to the URL resolved right after it.
+            if (webmcp.toolName === "take_snapshot") {
+              const nodes = WebMcpProfile.parseStructuredSnapshot(result)
+              if (nodes && after) WebMcpProfile.recordSnapshot(webmcp.profile, pageId, nodes, after)
+              else WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
+            }
+          }
+          if (interactTier && webmcp && interactOrigin) {
+            // ADR-174 rules 6, 8, 9: the action happened, so a navigation is
+            // reported, never discarded; any URL change invalidates the uid
+            // map; wait_for output is a snapshot and is bounded as one.
+            const pageId = (input as Record<string, unknown>).pageId as number
+            const after = await webmcpPageUrl(client, pageId, budget(), opts.abortSignal)
+            const afterOrigin = WebMcpProfile.pageOriginOf(after)
+            if (webmcp.toolName === "wait_for") {
+              if (afterOrigin !== interactOrigin) {
+                WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
+                throw new Error("WebMCP page navigated during the wait; the snapshot is discarded")
+              }
+              WebMcpProfile.boundReadResult("wait_for", result, interactOrigin)
+              const nodes = WebMcpProfile.parseStructuredSnapshot(result)
+              if (nodes && after) WebMcpProfile.recordSnapshot(webmcp.profile, pageId, nodes, after)
+              else WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
+            } else {
+              WebMcpProfile.boundActionResult(result, interactOrigin, afterOrigin, after !== interactUrl)
+              if (after !== interactUrl) WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
+            }
+          }
+          if (webmcp && typeof (input as Record<string, unknown>).pageId === "number") {
+            WebMcpProfile.recordDialog(webmcp.profile, (input as Record<string, unknown>).pageId as number, result)
           }
           if (listingPageId !== undefined) {
             const after = await webmcpPageUrl(client, listingPageId, budget(), opts.abortSignal)
@@ -338,7 +438,7 @@ export async function convertMcpTool(
             if (!recorded.ok) throw new Error(recorded.error)
           }
         }
-        if (webmcp) WebMcpProfile.annotateBlockingDialog(result)
+        if (webmcp) WebMcpProfile.annotateBlockingDialog(result, webmcp.profile.interact === true)
         return result
       } catch (e) {
         // A successful listing returns immediately after it is recorded, so

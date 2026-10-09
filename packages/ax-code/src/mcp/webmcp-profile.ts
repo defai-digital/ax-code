@@ -35,6 +35,97 @@ export namespace WebMcpProfile {
    */
   export const READ_SCOPE_TOOLS = [...READ_TOOLS, "list_network_requests"] as const
   /**
+   * The T2 interact tier (ADR-174). Admitted only when the effective profile
+   * has `interact: true`; `wait_for` additionally needs `read: true` because
+   * its result is a snapshot. Every other upstream input tool (click_at,
+   * type_text, drag, upload_file, select_page, resize_page) stays rejected.
+   */
+  export const INTERACT_TOOLS = [
+    "click",
+    "hover",
+    "wait_for",
+    "fill",
+    "fill_form",
+    "press_key",
+    "handle_dialog",
+  ] as const
+  /** Interact-grant actions: no per-call prompt while the origin's grant and budget hold. */
+  export const GRANT_COVERED_TOOLS = ["click", "hover", "wait_for"] as const
+  /** Always approved per action: they carry values or force state. */
+  export const PER_ACTION_TOOLS = ["fill", "fill_form", "press_key", "handle_dialog"] as const
+  /** Grant-covered actions per interact grant before the prompt renews it (ADR-174 rule 2). */
+  export const INTERACT_BUDGET = 20
+  export const MAX_FILL_VALUE_BYTES = 1024
+  export const MAX_FILL_FORM_ELEMENTS = 8
+  export const MAX_WAIT_TEXTS = 8
+  export const MAX_WAIT_TEXT_CHARS = 200
+  export const MAX_WAIT_TIMEOUT_MS = 30_000
+  /** Cumulative `wait_for` time admitted per turn (ADR-174 rule 9). */
+  export const MAX_WAIT_PER_TURN_MS = 120_000
+  /**
+   * Keys `press_key` may send (ADR-174 rule 7): navigation and editing keys
+   * only. No Control/Meta/Alt chords (clipboard and browser shortcuts stay
+   * out) and no printable characters (`fill` covers text). Every name is in
+   * the pinned upstream's `validKeys` set.
+   */
+  export const PRESS_KEYS = [
+    "Enter",
+    "Tab",
+    "Shift+Tab",
+    "Escape",
+    "Space",
+    "Backspace",
+    "Delete",
+    "ArrowUp",
+    "ArrowDown",
+    "ArrowLeft",
+    "ArrowRight",
+    "Home",
+    "End",
+    "PageUp",
+    "PageDown",
+  ] as const
+  /**
+   * A click whose target name or description matches this vocabulary is
+   * escalated to a per-action prompt (ADR-174 rule 2). Maintained as a list;
+   * extended during qualification.
+   */
+  export const CONSEQUENTIAL_NAME =
+    /submit|send|publish|post|delete|remove|destroy|pay|buy|purchase|checkout|order|transfer|confirm|approve|authori[sz]e|allow|grant|sign|agree|accept|subscribe|cancel|disable|revoke|reset|install|download|upload|share|invite/i
+  /**
+   * Targets whose name or description looks like a credential field are
+   * labeled SENSITIVE and their value is masked in the prompt (ADR-174 rule
+   * 4). The pinned snapshot does not expose `input type`, so this is a name
+   * heuristic, never a structural check.
+   */
+  export const SENSITIVE_NAME =
+    /password|passwd|pwd|passcode|passphrase|\bpin\b|\botp\b|one-time|\b2fa\b|totp|verification code|security code|secret|token|api[ -]?key|\bcvv\b|\bcvc\b|card number|\bssn\b|social security|recovery|seed phrase|mnemonic/i
+  /**
+   * Localized equivalents of the sensitive vocabulary, matched as
+   * case-insensitive substrings. Kept as a list so qualification can extend
+   * it without touching the regex above.
+   */
+  export const LOCALIZED_SENSITIVE_TERMS: readonly string[] = []
+  /**
+   * Values that look like a bearer credential are refused before any prompt
+   * (ADR-174 rule 4): typing a credential is transmitting it. Unanchored, so
+   * a secret embedded in a longer value is still caught. Publishable keys
+   * (`pk_`) are deliberately absent; a JWT shape is labeled, not refused.
+   */
+  export const CREDENTIAL_VALUE: readonly RegExp[] = [
+    /\b(?:sk|rk)[-_](?:live|test|proj)?[-_]?[A-Za-z0-9_-]{16,}/,
+    /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/,
+    /\bgh[pousr]_[A-Za-z0-9]{20,}/,
+    /\bgithub_pat_[A-Za-z0-9_]{20,}/,
+    /\bxox[abcepsr]-[A-Za-z0-9-]{10,}/,
+    /\bAIza[0-9A-Za-z_-]{30,}/,
+    /\bya29\.[0-9A-Za-z_-]{20,}/,
+    /\bage-secret-key-1[a-z0-9]{20,}/i,
+    /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
+  ]
+  /** A JWT-shaped value: labeled and masked, never refused (fixtures use the shape). */
+  export const JWT_SHAPE = /[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/
+  /**
    * Resource types the pinned chrome-devtools-mcp@1.8.0 bridge accepts
    * (FILTERABLE_RESOURCE_TYPES in its network tool). The local schema must
    * accept exactly this enum.
@@ -105,13 +196,25 @@ export namespace WebMcpProfile {
     "Limits: read access is limited to four tools — page snapshot, screenshot, console messages, and request metadata (method/url/status/type) — for the allowed origins. " +
     "Interaction is still impossible: it cannot click, type, run scripts, upload files, or read network bodies. " +
     "Page-registered WebMCP tools remain the only operations it can run."
-  /** The T0 note when the read tier is off, the read-tier note when it is on. */
+  /**
+   * T2 interact-tier boundary note (ADR-174). Names the seven tools and the
+   * two approval shapes so the model plans snapshots before actions.
+   */
+  export const INTERACT_LIMITS_NOTE =
+    "Limits: this bridge can read (snapshot, screenshot, console, request metadata) and act (click, hover, wait_for, fill, fill_form, press_key, handle_dialog) on allowed origins. " +
+    "Every action needs a uid from the latest take_snapshot of the same page; hovering and ordinary clicks run under a per-origin interaction grant, while typing, key presses, dialogs, links and consequential-looking clicks are confirmed by the user each time. " +
+    "It still cannot run scripts, upload files, drag, click coordinates, or read network bodies."
+  /** The T0 note by default, the read-tier note with read on, the interact note with interact on. */
   export function limitsNote(profile: Configuration): string {
+    if (profile.interact === true) return INTERACT_LIMITS_NOTE
     return profile.read === true ? READ_LIMITS_NOTE : LIMITS_NOTE
   }
   const tools = new Set<string>(TOOLS)
   const readTools = new Set<string>(READ_TOOLS)
   const readScopeTools = new Set<string>(READ_SCOPE_TOOLS)
+  const interactTools = new Set<string>(INTERACT_TOOLS)
+  const grantCoveredTools = new Set<string>(GRANT_COVERED_TOOLS)
+  const perActionTools = new Set<string>(PER_ACTION_TOOLS)
   const loopback = new Set(["localhost", "127.0.0.1", "[::1]"])
 
   function exactOrigin(value: string): boolean {
@@ -179,6 +282,12 @@ export namespace WebMcpProfile {
         .describe(
           "Managed gate for the T1 read tier. Default off. false forces the read tools off even when the profile sets read: true; it can only restrict, never enable.",
         ),
+      allowInteract: z
+        .boolean()
+        .optional()
+        .describe(
+          "Managed gate for the T2 interact tier. false forces the interact tools off even when the profile sets interact: true; it can only restrict, never enable.",
+        ),
     })
     .strict()
     .meta({ ref: "WebMcpRequirementConfig" })
@@ -208,6 +317,12 @@ export namespace WebMcpProfile {
         .describe(
           "Enable the T1 read tier: page snapshot, screenshot and console tools for granted origins. Default off. A managed allowRead: false forces it off.",
         ),
+      interact: z
+        .boolean()
+        .optional()
+        .describe(
+          "Enable the T2 interact tier: click, hover, wait_for, fill, fill_form, press_key and handle_dialog for granted origins, each confirmed interactively. Default off. A managed allowInteract: false forces it off.",
+        ),
       executablePath: z
         .string()
         .max(4096)
@@ -228,6 +343,17 @@ export namespace WebMcpProfile {
      * snapshot. Absent means no grants.
      */
     readGrants?: () => ReadonlySet<string>
+    /**
+     * Live interact-grant set for this bridge connection (ADR-174): origin to
+     * remaining action budget. Absent means no grants.
+     */
+    interactGrants?: () => ReadonlyMap<string, number>
+    /**
+     * Spend one grant-covered action from the origin's budget. Returns false
+     * when the origin has no grant or its budget is exhausted, in which case
+     * the dispatch raises `InteractNotGrantedError` so the prompt renews it.
+     */
+    consumeInteractBudget?: (origin: string) => boolean
   }
 
   type Server = {
@@ -480,6 +606,19 @@ export namespace WebMcpProfile {
   }
 
   /**
+   * Managed interact gate (ADR-174). `allowInteract: false` forces the T2
+   * tier off even when the profile opted in; the profile can never re-enable
+   * it. Returns the same frozen object when interact is already off.
+   */
+  function withoutInteract(profile: Configuration): Configuration {
+    if (profile.interact !== true) return profile
+    const { interact: _interact, ...rest } = profile
+    const effective = Configuration.parse(rest)
+    Object.freeze(effective.allowedOrigins)
+    return Object.freeze(effective)
+  }
+
+  /**
    * Evaluate a managed requirement against a launch-validated profile. A deny or
    * a narrowing that admits no origin fails closed with a reason the caller can
    * surface as a distinct blocked state; a partial narrowing only makes the
@@ -495,7 +634,8 @@ export namespace WebMcpProfile {
     if (profile.vendored === true && requirement?.allowVendored !== true) {
       return { ok: false, reason: "vendored" }
     }
-    const gated = requirement?.allowRead === false ? withoutRead(profile) : profile
+    const readGated = requirement?.allowRead === false ? withoutRead(profile) : profile
+    const gated = requirement?.allowInteract === false ? withoutInteract(readGated) : readGated
     if (!requirement) return { ok: true, profile: gated }
     const allowed = requirement.allowedOrigins
     if (!allowed) return { ok: true, profile: gated }
@@ -549,6 +689,93 @@ export namespace WebMcpProfile {
     constructor(readonly origin: string) {
       super("WebMCP read access to this origin is not granted")
       this.name = "ReadNotGrantedError"
+    }
+  }
+
+  /**
+   * A T2 call against an origin with no session interact grant, or whose
+   * grant budget is spent (ADR-174 rule 2). Raised before the bridge is
+   * called; the caller that can prompt records or renews the grant and asks
+   * the model to retry. App-layer only, never a relaunch.
+   */
+  export class InteractNotGrantedError extends Error {
+    constructor(
+      readonly origin: string,
+      readonly renewal = false,
+    ) {
+      super(
+        renewal
+          ? "WebMCP interaction budget for this origin is spent"
+          : "WebMCP interaction with this origin is not granted",
+      )
+      this.name = "InteractNotGrantedError"
+    }
+  }
+
+  /**
+   * A fail-closed T2 preflight outcome (ADR-174 rules 5 and 7): a stale or
+   * unknown uid, a page URL that moved since its snapshot, or a key press
+   * with no focused control. Typed so the circuit breaker can count it.
+   */
+  export class TargetBindingError extends Error {
+    constructor(message: string) {
+      super(message)
+      this.name = "WebMcpTargetBindingError"
+    }
+  }
+
+  export const BREAKER_LIMIT = 3
+
+  /**
+   * Per-turn circuit breaker for T2 actions (ADR-174 rule 11): three
+   * consecutive user refusals, or three consecutive fail-closed target
+   * checks, stop further T2 calls in the turn with a summary. Also accounts
+   * the turn's cumulative wait_for budget (rule 9). Pure state; the session
+   * layer keys one instance per session and replaces it on a new turn.
+   */
+  export class InteractBreaker {
+    refusals = 0
+    failures = 0
+    waitMs = 0
+    tripped: string | undefined
+    last: string | undefined
+    constructor(readonly turn: string) {}
+
+    private trip(reason: string): void {
+      this.tripped = `WebMCP interaction stopped for this turn after ${BREAKER_LIMIT} consecutive ${reason}${this.last ? ` (last target: ${this.last})` : ""}. Summarize what happened to the user and stop; the next user message resets this.`
+    }
+
+    /** The user refused a T2 prompt (grant or per-action). */
+    refused(last?: string): void {
+      this.failures = 0
+      this.refusals += 1
+      if (last) this.last = last
+      if (this.refusals >= BREAKER_LIMIT) this.trip("refusals")
+    }
+
+    /** A T2 preflight failed closed (stale uid, moved page, no focus). */
+    failed(last?: string): void {
+      this.refusals = 0
+      this.failures += 1
+      if (last) this.last = last
+      if (this.failures >= BREAKER_LIMIT) this.trip("fail-closed target checks")
+    }
+
+    /** The user approved a T2 prompt. */
+    approved(): void {
+      this.refusals = 0
+    }
+
+    /** A T2 call completed. */
+    succeeded(): void {
+      this.failures = 0
+    }
+
+    /** Reserve wait time against the turn budget; false when it would exceed the cap. */
+    reserveWait(ms: number): boolean {
+      if (this.waitMs + ms > MAX_WAIT_PER_TURN_MS) return false
+      this.waitMs += ms
+      return true
     }
   }
 
@@ -655,6 +882,34 @@ export namespace WebMcpProfile {
   }
 
   /**
+   * Decide whether a session interact grant may be offered for an origin
+   * (ADR-174 rule 2). Same ceiling as the read grant: managed requirement
+   * re-evaluated, the effective profile must have the interact tier on, a
+   * narrowing list bounds the origin, and the ninth origin is refused rather
+   * than evicted. An origin that already holds a grant may always renew.
+   */
+  export function checkInteractGrant(
+    requirement: Requirement | undefined,
+    profile: Configuration,
+    granted: ReadonlyMap<string, number>,
+    origin: string,
+  ): GrantDecision {
+    if (!exactOrigin(origin))
+      return { ok: false, error: "WebMCP origin must be an exact HTTPS or loopback HTTP origin" }
+    const decision = evaluate(requirement, profile)
+    if (!decision.ok) return { ok: false, error: blockedMessage(decision.reason) }
+    if (decision.profile.interact !== true) {
+      return { ok: false, error: "WebMCP interact tier is not enabled for this bridge" }
+    }
+    if (restricted(decision.profile) && !decision.profile.allowedOrigins.includes(origin)) {
+      return { ok: false, error: "WebMCP origin is outside this bridge's narrowing list" }
+    }
+    if (granted.has(origin)) return { ok: true }
+    if (granted.size >= 8) return { ok: false, error: "WebMCP already has the maximum of 8 interact grants" }
+    return { ok: true }
+  }
+
+  /**
    * The exact origin of a URL that could ever be granted: HTTPS, or HTTP on
    * loopback, with no credentials. Anything else (other schemes, `blob:`,
    * credentials, malformed) returns undefined. Mirrors the shape rule in
@@ -681,11 +936,34 @@ export namespace WebMcpProfile {
    */
   export function allows(name: string, profile?: Configuration): boolean {
     if (tools.has(name)) return true
-    return profile?.read === true && readScopeTools.has(name)
+    if (profile?.read === true && readScopeTools.has(name)) return true
+    if (profile?.interact !== true || !interactTools.has(name)) return false
+    // wait_for returns a snapshot, so it exists only when reads are admitted
+    // too: a managed allowRead: false must not leave a snapshot oracle behind.
+    return name !== "wait_for" || profile.read === true
+  }
+
+  /** Whether a tool is a T2 interact tool (admitted or not). */
+  export function isInteractTool(name: string): boolean {
+    return interactTools.has(name)
+  }
+
+  /** Whether a T2 tool is always approved per action (never grant-covered). */
+  export function isPerActionTool(name: string): boolean {
+    return perActionTools.has(name)
+  }
+
+  /** Whether a T2 tool runs under the interact grant when not escalated. */
+  export function isGrantCoveredTool(name: string): boolean {
+    return grantCoveredTools.has(name)
   }
 
   const pageId = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)
   const url = z.string().min(1).max(2048)
+  const uid = z.string().min(1).max(128)
+  const fillValue = z
+    .string()
+    .refine((value) => Buffer.byteLength(value, "utf8") <= MAX_FILL_VALUE_BYTES, "Value exceeds 1 KiB")
   const schemas = {
     list_pages: z.object({}).strict(),
     new_page: z.object({ url }).strict(),
@@ -739,6 +1017,40 @@ export namespace WebMcpProfile {
         resourceTypes: z.array(NETWORK_RESOURCE_TYPES).max(18).optional(),
       })
       .strict(),
+    // T2 interact tools (ADR-174 rule 1). Strict: the upstream
+    // `includeSnapshot` option is never admitted (reads go through T1 with
+    // their grant and caps), values are byte-bounded, keys come from a fixed
+    // allowlist, and every call names its page.
+    click: z.object({ pageId, uid, dblClick: z.boolean().optional() }).strict(),
+    hover: z.object({ pageId, uid }).strict(),
+    wait_for: z
+      .object({
+        pageId,
+        text: z.array(z.string().min(1).max(MAX_WAIT_TEXT_CHARS)).min(1).max(MAX_WAIT_TEXTS),
+        timeout: z.number().int().min(1).max(MAX_WAIT_TIMEOUT_MS).optional(),
+      })
+      .strict(),
+    fill: z.object({ pageId, uid, value: fillValue }).strict(),
+    fill_form: z
+      .object({
+        pageId,
+        elements: z
+          .array(z.object({ uid, value: fillValue }).strict())
+          .min(1)
+          .max(MAX_FILL_FORM_ELEMENTS),
+      })
+      .strict(),
+    press_key: z.object({ pageId, key: z.enum(PRESS_KEYS) }).strict(),
+    handle_dialog: z
+      .object({
+        pageId,
+        action: z.enum(["dismiss", "accept"]),
+        promptText: z
+          .string()
+          .refine((value) => Buffer.byteLength(value, "utf8") <= MAX_FILL_VALUE_BYTES, "Prompt text exceeds 1 KiB")
+          .optional(),
+      })
+      .strict(),
   }
 
   export function callSchema(name: string, profile?: Configuration) {
@@ -777,9 +1089,247 @@ export namespace WebMcpProfile {
         throw new Error("WebMCP tool input must be a JSON object of at most 64 KiB")
       }
     }
-    // All admitted arguments are scalars: a frozen schema copy cannot change
-    // while the user is reviewing it, unlike the plugin-owned source object.
+    // ADR-174 rule 4: a value that looks like a bearer credential is refused
+    // before any prompt. Typing a credential is transmitting it; the user
+    // types credentials themselves.
+    for (const value of typedValues(name, call)) {
+      if (credentialLike(value)) {
+        throw new Error(
+          "WebMCP refuses to type a value that looks like a credential; the user must enter credentials themselves",
+        )
+      }
+    }
+    // Admitted arguments are scalars or arrays of scalar records; freeze so
+    // the reviewed call cannot change under the approver.
+    if (Array.isArray(call.elements)) {
+      for (const element of call.elements) Object.freeze(element)
+      Object.freeze(call.elements)
+    }
+    if (Array.isArray(call.text)) Object.freeze(call.text)
     return Object.freeze(call)
+  }
+
+  /** Every page-bound text value a T2 call would type. */
+  function typedValues(name: string, call: Record<string, unknown>): string[] {
+    if (name === "fill" && typeof call.value === "string") return [call.value]
+    if (name === "fill_form" && Array.isArray(call.elements)) {
+      return call.elements.flatMap((element) =>
+        isRecord(element) && typeof element.value === "string" ? [element.value] : [],
+      )
+    }
+    if (name === "handle_dialog" && typeof call.promptText === "string") return [call.promptText]
+    return []
+  }
+
+  /** Whether a value contains a bearer-credential shape (ADR-174 rule 4). */
+  export function credentialLike(value: string): boolean {
+    return CREDENTIAL_VALUE.some((pattern) => pattern.test(value))
+  }
+
+  /** Whether a value should be masked in prompts: a JWT shape or a credential. */
+  export function maskedValue(value: string): boolean {
+    return JWT_SHAPE.test(value) || credentialLike(value)
+  }
+
+  /** Whether a snapshot node names a credential-like field (ADR-174 rule 4). */
+  export function sensitiveTarget(node: SnapshotNode | undefined): boolean {
+    if (!node) return false
+    const text = `${node.name} ${node.description ?? ""}`
+    if (SENSITIVE_NAME.test(text)) return true
+    const lower = text.toLowerCase()
+    return LOCALIZED_SENSITIVE_TERMS.some((term) => term.length > 0 && lower.includes(term.toLowerCase()))
+  }
+
+  /**
+   * Why a click is escalated from the interact grant to a per-action prompt
+   * (ADR-174 rule 2), or undefined when the grant covers it. An unknown
+   * target is escalated too: dispatch fails it closed, but the approver must
+   * never see an ordinary grant-covered click for a node nobody listed.
+   */
+  export function clickEscalation(node: SnapshotNode | undefined, dblClick?: boolean): string | undefined {
+    if (!node) return "target not in the latest snapshot"
+    if (dblClick === true) return "double click"
+    if (node.role === "link") return "link (destination not visible in the snapshot)"
+    if (CONSEQUENTIAL_NAME.test(`${node.name} ${node.description ?? ""}`)) return "consequential-looking name"
+    return undefined
+  }
+
+  /** Whether a T2 call is approved per action (always for value tools, escalated clicks otherwise). */
+  export function perActionCall(profile: Configuration, name: string, call: Record<string, unknown>): boolean {
+    if (perActionTools.has(name)) return true
+    if (name !== "click") return false
+    const pageId = typeof call.pageId === "number" ? call.pageId : undefined
+    const node =
+      pageId === undefined || typeof call.uid !== "string" ? undefined : targetSummaryFor(profile, pageId, call.uid)
+    return clickEscalation(node, call.dblClick === true) !== undefined
+  }
+
+  // ---------------------------------------------------------------------
+  // Structured snapshot state (ADR-174 rules 3, 5, 7, 8). The uid map is read
+  // from the bridge's JSON snapshot, never from the page-influenced text
+  // rendering, and bound to the page URL recorded right after the snapshot.
+  // ---------------------------------------------------------------------
+
+  export type SnapshotNode = {
+    uid: string
+    role: string
+    name: string
+    description?: string
+    focused: boolean
+    attributes: Record<string, string | number | boolean>
+  }
+  export type DialogInfo = { type: string; message: string; defaultValue?: string }
+  type SnapshotState = { url: string; nodes: Map<string, SnapshotNode>; dialog?: DialogInfo }
+  const snapshotStates = new WeakMap<Configuration, Map<number, SnapshotState>>()
+
+  function snapshotStateFor(profile: Configuration): Map<number, SnapshotState> {
+    let state = snapshotStates.get(profile)
+    if (!state) {
+      state = new Map()
+      snapshotStates.set(profile, state)
+    }
+    return state
+  }
+
+  const MAX_SNAPSHOT_NODES = 5000
+  const MAX_NODE_TEXT = 512
+
+  function nodeText(value: unknown): string {
+    return typeof value === "string" ? value.slice(0, MAX_NODE_TEXT) : ""
+  }
+
+  /**
+   * Parse the bridge's structured snapshot (`structuredContent.snapshot`, a
+   * JSON tree with id/role/name/attributes/children) into a uid map. Returns
+   * undefined when the result carries no structured snapshot; a malformed or
+   * oversized tree yields undefined too, so the caller clears the baseline
+   * instead of binding against a partial map.
+   */
+  export function parseStructuredSnapshot(result: unknown): Map<string, SnapshotNode> | undefined {
+    const record = isRecord(result) ? result : {}
+    const structured = isRecord(record.structuredContent) ? record.structuredContent : undefined
+    if (!structured || !isRecord(structured.snapshot)) return undefined
+    const nodes = new Map<string, SnapshotNode>()
+    const stack: unknown[] = [structured.snapshot]
+    while (stack.length > 0) {
+      const raw = stack.pop()
+      if (!isRecord(raw)) continue
+      if (nodes.size >= MAX_SNAPSHOT_NODES) return undefined
+      const id = raw.id
+      if (typeof id === "string" && id.length > 0 && id.length <= 128 && !nodes.has(id)) {
+        const attributes: Record<string, string | number | boolean> = {}
+        for (const [key, value] of Object.entries(raw)) {
+          if (key === "id" || key === "role" || key === "name" || key === "description" || key === "children") continue
+          if (typeof value === "boolean" || typeof value === "number") attributes[key] = value
+          else if (typeof value === "string") attributes[key] = value.slice(0, MAX_NODE_TEXT)
+        }
+        nodes.set(id, {
+          uid: id,
+          role: nodeText(raw.role),
+          name: nodeText(raw.name),
+          description: typeof raw.description === "string" ? nodeText(raw.description) : undefined,
+          focused: raw.focused === true,
+          attributes,
+        })
+      }
+      if (Array.isArray(raw.children)) for (const child of raw.children) stack.push(child)
+    }
+    return nodes
+  }
+
+  /** Record a page's structured snapshot together with the URL resolved right after it. */
+  export function recordSnapshot(
+    profile: Configuration,
+    pageId: number,
+    nodes: Map<string, SnapshotNode>,
+    pageUrl: string,
+  ): void {
+    const state = snapshotStateFor(profile)
+    const existing = state.get(pageId)
+    state.set(pageId, { url: pageUrl, nodes, dialog: existing?.dialog })
+  }
+
+  /** Forget a page's uid map (navigation, failed read, disconnect); the dialog note survives. */
+  export function clearSnapshot(profile: Configuration, pageId: number): void {
+    const state = snapshotStateFor(profile)
+    const existing = state.get(pageId)
+    if (!existing) return
+    state.set(pageId, { url: "", nodes: new Map(), dialog: existing.dialog })
+  }
+
+  /** The recorded node for a uid, when the model listed it in the latest snapshot of that page. */
+  export function targetSummaryFor(profile: Configuration, pageId: number, uid: string): SnapshotNode | undefined {
+    return snapshotStates.get(profile)?.get(pageId)?.nodes.get(uid)
+  }
+
+  /** The node that held focus in the latest snapshot of a page, for `press_key`. */
+  export function focusedTargetFor(profile: Configuration, pageId: number): SnapshotNode | undefined {
+    const nodes = snapshotStates.get(profile)?.get(pageId)?.nodes
+    if (!nodes) return undefined
+    for (const node of nodes.values()) if (node.focused) return node
+    return undefined
+  }
+
+  /** The URL recorded with the latest snapshot of a page. */
+  export function snapshotUrlFor(profile: Configuration, pageId: number): string | undefined {
+    const url = snapshotStates.get(profile)?.get(pageId)?.url
+    return url ? url : undefined
+  }
+
+  /**
+   * Fail-closed target binding (ADR-174 rule 5): the uid must be in the
+   * latest snapshot of this page and the page must still be on the URL
+   * recorded with that snapshot.
+   */
+  export function verifyTarget(profile: Configuration, pageId: number, uid: string, currentUrl: string | undefined) {
+    const state = snapshotStates.get(profile)?.get(pageId)
+    if (!state || state.nodes.size === 0) {
+      throw new TargetBindingError(
+        `WebMCP page ${pageId} has no snapshot on this connection; take a new snapshot of this page before acting on it`,
+      )
+    }
+    if (!currentUrl || currentUrl !== state.url) {
+      throw new TargetBindingError(
+        "WebMCP page moved since its snapshot; take a new snapshot of this page before acting on it",
+      )
+    }
+    const node = state.nodes.get(uid)
+    if (!node) {
+      throw new TargetBindingError(
+        `WebMCP uid ${uid} is not in the latest snapshot of this page; take a new snapshot before acting on it`,
+      )
+    }
+    return node
+  }
+
+  /** Record the structured dialog block a page tool result carries, if any. */
+  export function recordDialog(profile: Configuration, pageId: number, result: unknown): void {
+    const record = isRecord(result) ? result : {}
+    const structured = isRecord(record.structuredContent) ? record.structuredContent : undefined
+    const state = snapshotStateFor(profile)
+    const existing = state.get(pageId) ?? { url: "", nodes: new Map<string, SnapshotNode>() }
+    if (structured && isRecord(structured.dialog) && typeof structured.dialog.message === "string") {
+      state.set(pageId, {
+        ...existing,
+        dialog: {
+          type: nodeText(structured.dialog.type) || "dialog",
+          message: nodeText(structured.dialog.message),
+          ...(typeof structured.dialog.defaultValue === "string"
+            ? { defaultValue: nodeText(structured.dialog.defaultValue) }
+            : {}),
+        },
+      })
+      return
+    }
+    if (existing.dialog && structured) {
+      // A page tool result without a dialog block means the dialog closed.
+      state.set(pageId, { url: existing.url, nodes: existing.nodes })
+    }
+  }
+
+  /** The last dialog recorded for a page, for the handle_dialog prompt. */
+  export function dialogFor(profile: Configuration, pageId: number): DialogInfo | undefined {
+    return snapshotStates.get(profile)?.get(pageId)?.dialog
   }
 
   export function approvalMetadata(
@@ -796,22 +1346,29 @@ export namespace WebMcpProfile {
     // the tier when the effective profile has it enabled, so a read-off profile
     // never emits a read label.
     const isRead = readTools.has(tool) && profile.read === true
+    const isInteract = interactTools.has(tool) && profile.interact === true
     const listedOrigin =
       typeof call.pageId === "number" && (isRead || typeof call.toolName === "string")
         ? listedOriginFor(profile, call.pageId)
         : undefined
+    const snapshotOrigin =
+      isInteract && typeof call.pageId === "number" ? pageOrigin(snapshotUrlFor(profile, call.pageId)) : undefined
     return {
       server,
       tool,
       allowedOrigins: [...profile.allowedOrigins],
       ...(typeof call.pageId === "number" ? { pageId: call.pageId } : {}),
       ...(typeof call.toolName === "string" ? { toolName: call.toolName } : {}),
-      ...(listedOrigin ? { pageOrigin: listedOrigin } : {}),
+      ...(listedOrigin ? { pageOrigin: listedOrigin } : snapshotOrigin ? { pageOrigin: snapshotOrigin } : {}),
       ...(typeof call.url === "string" ? { origin: new URL(call.url).origin } : {}),
       ...(typeof call.input === "string" ? { inputBytes: Buffer.byteLength(call.input, "utf8") } : {}),
       // Marks a T1 read call so the approval screen can label it as reading
       // page content from the listed origin.
       ...(isRead ? { readTier: true } : {}),
+      // ADR-174: a per-action T2 call carries its target (as the approver saw
+      // it in the latest snapshot), the full value or a masked length, the
+      // key, or the dialog it answers.
+      ...(isInteract && typeof call.pageId === "number" ? interactMetadata(profile, tool, call.pageId, call) : {}),
       // Page annotations describe a page tool, so they only belong on an
       // execute call that names one. Attaching them to bridge operations
       // would let a page tool named e.g. `close_page` forge the approval
@@ -830,11 +1387,92 @@ export namespace WebMcpProfile {
     }
   }
 
+  type TargetMetadata = {
+    uid: string
+    role?: string
+    name?: string
+    focused?: boolean
+    sensitive?: boolean
+    unlisted?: boolean
+  }
+
+  function targetMetadata(node: SnapshotNode | undefined, uidValue: string): TargetMetadata {
+    if (!node) return { uid: uidValue, unlisted: true }
+    return {
+      uid: node.uid,
+      role: node.role,
+      name: node.name,
+      ...(node.focused ? { focused: true } : {}),
+      ...(sensitiveTarget(node) ? { sensitive: true } : {}),
+    }
+  }
+
+  /** A value for the prompt: full text, or masked to its length for sensitive targets and credential shapes. */
+  function valueMetadata(
+    value: string,
+    sensitive: boolean,
+  ): { value: string } | { valueMasked: true; valueLength: number } {
+    return sensitive || maskedValue(value) ? { valueMasked: true, valueLength: value.length } : { value }
+  }
+
+  function interactMetadata(
+    profile: Configuration,
+    tool: string,
+    pageId: number,
+    call: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const perAction = perActionCall(profile, tool, call)
+    const base: Record<string, unknown> = perAction ? { interactAction: true } : { interactGrantCovered: true }
+    if ((tool === "click" || tool === "hover" || tool === "fill") && typeof call.uid === "string") {
+      const node = targetSummaryFor(profile, pageId, call.uid)
+      base.target = targetMetadata(node, call.uid)
+      if (tool === "click") {
+        const escalation = clickEscalation(node, call.dblClick === true)
+        if (escalation) base.escalation = escalation
+        if (call.dblClick === true) base.dblClick = true
+      }
+      if (tool === "fill" && typeof call.value === "string") {
+        Object.assign(base, valueMetadata(call.value, sensitiveTarget(node)))
+      }
+    }
+    if (tool === "fill_form" && Array.isArray(call.elements)) {
+      base.targets = call.elements.flatMap((element) => {
+        if (!isRecord(element) || typeof element.uid !== "string" || typeof element.value !== "string") return []
+        const node = targetSummaryFor(profile, pageId, element.uid)
+        return [{ ...targetMetadata(node, element.uid), ...valueMetadata(element.value, sensitiveTarget(node)) }]
+      })
+    }
+    if (tool === "press_key" && typeof call.key === "string") {
+      base.key = call.key
+      const focused = focusedTargetFor(profile, pageId)
+      base.target = focused ? targetMetadata(focused, focused.uid) : { uid: "", unlisted: true }
+    }
+    if (tool === "handle_dialog") {
+      base.dialogAction = call.action
+      const dialog = dialogFor(profile, pageId)
+      if (dialog) base.dialog = { type: dialog.type, message: dialog.message }
+      if (typeof call.promptText === "string") {
+        const masked = valueMetadata(call.promptText, false)
+        base.promptText = "value" in masked ? masked.value : `(masked, ${masked.valueLength} characters)`
+      }
+    }
+    if (tool === "wait_for" && Array.isArray(call.text)) {
+      base.waitText = call.text.filter((item): item is string => typeof item === "string")
+    }
+    return base
+  }
+
   export function validateResult(name: string, result: unknown): void {
     const record = isRecord(result) ? result : {}
     const structured = isRecord(record.structuredContent) ? record.structuredContent : {}
     if (record.isError === true || structured.errorMessage) {
-      throw new Error("WebMCP bridge operation failed; do not retry automatically")
+      // ADR-174 rule 9: the upstream fills a form sequentially and throws on
+      // the first failing element, so earlier fields may already hold values.
+      throw new Error(
+        name === "fill_form"
+          ? "WebMCP fill_form failed part-way; elements before the failing one may already be filled. Take a new snapshot before continuing; do not retry automatically"
+          : "WebMCP bridge operation failed; do not retry automatically",
+      )
     }
     if (name === "execute_webmcp_tool") {
       const completion = typeof structured.message === "string" ? parseJsonPayload(structured.message) : undefined
@@ -899,9 +1537,14 @@ export namespace WebMcpProfile {
       }
       textBytes += Buffer.byteLength(text, "utf8")
     }
-    if ((name === "take_snapshot" || name === "list_network_requests") && textBytes > MAX_READ_TEXT_BYTES) {
+    // wait_for always carries a fresh snapshot (ADR-174 rule 9), so it is
+    // bounded exactly like take_snapshot.
+    if (
+      (name === "take_snapshot" || name === "list_network_requests" || name === "wait_for") &&
+      textBytes > MAX_READ_TEXT_BYTES
+    ) {
       throw new Error(
-        `WebMCP ${name === "take_snapshot" ? "snapshot" : "network list"} exceeded the ${MAX_READ_TEXT_BYTES / 1024} KiB read budget; narrow the request and retry`,
+        `WebMCP ${name === "list_network_requests" ? "network list" : "snapshot"} exceeded the ${MAX_READ_TEXT_BYTES / 1024} KiB read budget; narrow the request and retry${name === "wait_for" ? " (the wait itself had no side effect; do not retry automatically)" : ""}`,
       )
     }
     if (name === "list_console_messages") {
@@ -935,6 +1578,33 @@ export namespace WebMcpProfile {
     }
     contents.unshift({ type: "text", text: `[Untrusted web content from ${origin}]` })
     result.content = contents
+  }
+
+  /**
+   * Label an action result (ADR-174 rules 6 and 9): untrusted-origin label,
+   * plus a drift note when the action navigated. An origin change means the
+   * next action there needs its own grant; a same-origin URL change only
+   * invalidates the uid map.
+   */
+  export function boundActionResult(
+    result: unknown,
+    origin: string,
+    afterOrigin: string | undefined,
+    urlChanged: boolean,
+  ): void {
+    if (!isRecord(result)) return
+    const contents = Array.isArray(result.content) ? result.content : []
+    const note =
+      afterOrigin !== origin
+        ? `[AX Code] The page navigated to ${afterOrigin ?? "a non-web address"}; further actions there need an interaction grant, and the previous snapshot no longer applies. Take a new snapshot before acting.`
+        : urlChanged
+          ? "[AX Code] The page URL changed after this action; the previous snapshot no longer applies. Take a new snapshot before acting."
+          : undefined
+    result.content = [
+      { type: "text", text: `[Untrusted web content from ${origin}]` },
+      ...contents,
+      ...(note ? [{ type: "text", text: note }] : []),
+    ]
   }
 
   function pageOrigin(pageUrl: string | undefined): string | undefined {
@@ -973,7 +1643,7 @@ export namespace WebMcpProfile {
    * every bridge call, and handle_dialog is not an admitted tool. Surface that
    * as a plain note so the model stops retrying list/execute against it.
    */
-  export function annotateBlockingDialog(result: unknown): void {
+  export function annotateBlockingDialog(result: unknown, interact = false): void {
     if (!isRecord(result) || !Array.isArray(result.content)) return
     const texts = result.content.flatMap((item) =>
       isRecord(item) && item.type === "text" && typeof item.text === "string" ? [item.text] : [],
@@ -983,7 +1653,9 @@ export namespace WebMcpProfile {
       ...result.content,
       {
         type: "text",
-        text: "[AX Code] The page is blocked by a JavaScript dialog. handle_dialog is not available through this bridge, so the page cannot be listed, read or driven until the dialog closes. Report this blocker to the user, or navigate to a different URL; do not retry list_webmcp_tools or execute_webmcp_tool against this page.",
+        text: interact
+          ? "[AX Code] The page is blocked by a JavaScript dialog. Input and read tools fail until it closes: call handle_dialog (dismiss or accept) to continue; the user confirms that call."
+          : "[AX Code] The page is blocked by a JavaScript dialog. handle_dialog is not available through this bridge, so the page cannot be listed, read or driven until the dialog closes. Report this blocker to the user, or navigate to a different URL; do not retry list_webmcp_tools or execute_webmcp_tool against this page.",
       },
     ]
   }

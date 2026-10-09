@@ -59,6 +59,7 @@ export namespace MCP {
   // policy or miss dynamically added clients. Weak ownership follows disposal.
   const webMcpProfiles = new WeakMap<MCPClient, WebMcpProfile.Configuration>()
   const NO_READ_GRANTS: ReadonlySet<string> = new Set()
+  const NO_INTERACT_GRANTS: ReadonlyMap<string, number> = new Map()
   const DEFAULT_TIMEOUT = MCP_DEFAULT_TIMEOUT_MS
   const MAX_STDERR_LINE = 2_000
   const isErrnoException = (error: unknown): error is NodeJS.ErrnoException =>
@@ -418,6 +419,11 @@ export namespace MCP {
     webmcpGrants: Record<string, string[]>
     /** Session-only WebMCP read grants per server (ADR-171). Never persisted. */
     webmcpReadGrants: Record<string, Set<string>>
+    /**
+     * Session-only WebMCP interact grants per server (ADR-174): origin to the
+     * remaining grant-covered action budget. Never persisted.
+     */
+    webmcpInteractGrants: Record<string, Map<string, number>>
   }
 
   const rawState = Instance.state(
@@ -433,6 +439,7 @@ export namespace MCP {
         ready: Promise.resolve(),
         webmcpGrants: {},
         webmcpReadGrants: {},
+        webmcpInteractGrants: {},
       }
 
       next.ready = (async () => {
@@ -1265,9 +1272,11 @@ export namespace MCP {
   export async function disconnect(name: string) {
     return withConnectLock(name, "MCP disconnect failed", async (s) => {
       invalidateTools(s)
-      // Toggling a bridge off ends its session-scoped origin and read grants.
+      // Toggling a bridge off ends its session-scoped origin, read and
+      // interact grants.
       delete s.webmcpGrants[name]
       delete s.webmcpReadGrants[name]
+      delete s.webmcpInteractGrants[name]
       const client = s.clients[name]
       if (client) {
         await closeIfPossible(client, name, "disconnecting")
@@ -1418,6 +1427,48 @@ export namespace MCP {
     })
   }
 
+  /**
+   * ADR-174: whether a session interact grant may be offered (or renewed) for
+   * an origin. Same ceiling as the read grant; refusals never prompt.
+   */
+  export async function checkWebMcpInteractGrant(name: string, origin: string): Promise<WebMcpProfile.GrantDecision> {
+    const found = await webMcpEntry(name)
+    if (!found) return { ok: false, error: `WebMCP bridge not found: ${name}` }
+    const s = await state()
+    return WebMcpProfile.checkInteractGrant(
+      found.cfg.webmcp,
+      found.profile,
+      s.webmcpInteractGrants[name] ?? NO_INTERACT_GRANTS,
+      origin,
+    )
+  }
+
+  /**
+   * Record or renew a human-approved, session-only interact grant (ADR-174
+   * rule 2). App-layer only: never relaunches the browser. The grant carries
+   * a fresh action budget; the pre-prompt check ran outside this lock, so the
+   * ceiling and cap are re-validated against live state.
+   */
+  export async function grantWebMcpInteractOrigin(name: string, origin: string): Promise<WebMcpProfile.GrantDecision> {
+    const offered = await checkWebMcpInteractGrant(name, origin)
+    if (!offered.ok) return offered
+    return withConnectLock(
+      name,
+      "MCP webmcp interact grant failed",
+      async (s): Promise<WebMcpProfile.GrantDecision> => {
+        const found = await webMcpEntry(name)
+        if (!found) return { ok: false, error: `WebMCP bridge not found: ${name}` }
+        const current = s.webmcpInteractGrants[name] ?? new Map<string, number>()
+        const recheck = WebMcpProfile.checkInteractGrant(found.cfg.webmcp, found.profile, current, origin)
+        if (!recheck.ok) return recheck
+        if (!s.clients[name]) return { ok: false, error: "WebMCP bridge is no longer connected" }
+        current.set(origin, WebMcpProfile.INTERACT_BUDGET)
+        s.webmcpInteractGrants[name] = current
+        return { ok: true }
+      },
+    )
+  }
+
   export async function trust(name: string): Promise<Record<string, Status>> {
     const entry = await Config.mcpEntry(name)
     const mcp = entry?.config
@@ -1563,6 +1614,16 @@ export namespace MCP {
                   // ADR-171: read dispatch checks the live grant set, not a
                   // conversion-time snapshot.
                   readGrants: () => s.webmcpReadGrants[clientName] ?? NO_READ_GRANTS,
+                  // ADR-174: interact dispatch checks and spends the live
+                  // per-origin budget.
+                  interactGrants: () => s.webmcpInteractGrants[clientName] ?? NO_INTERACT_GRANTS,
+                  consumeInteractBudget: (origin: string) => {
+                    const grants = s.webmcpInteractGrants[clientName]
+                    const remaining = grants?.get(origin)
+                    if (grants === undefined || remaining === undefined || remaining <= 0) return false
+                    grants.set(origin, remaining - 1)
+                    return true
+                  },
                 }
               : undefined,
           )

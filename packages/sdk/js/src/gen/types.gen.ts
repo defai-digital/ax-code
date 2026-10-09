@@ -4625,6 +4625,10 @@ export type WebMcpProfileConfig = {
    */
   read?: boolean
   /**
+   * Enable the T2 interact tier: click, hover, wait_for, fill, fill_form, press_key and handle_dialog for granted origins, each confirmed interactively. Default off. A managed allowInteract: false forces it off.
+   */
+  interact?: boolean
+  /**
    * Optional explicit Chrome 150+ executable; never attaches to an existing browser session
    */
   executablePath?: string
@@ -4654,6 +4658,10 @@ export type WebMcpRequirementConfig = {
    * Managed gate for the T1 read tier. Default off. false forces the read tools off even when the profile sets read: true; it can only restrict, never enable.
    */
   allowRead?: boolean
+  /**
+   * Managed gate for the T2 interact tier. false forces the interact tools off even when the profile sets interact: true; it can only restrict, never enable.
+   */
+  allowInteract?: boolean
 }
 
 /** AX Code API schema `WikiMaintenanceStatus` (auto-generated from the OpenAPI contract). */

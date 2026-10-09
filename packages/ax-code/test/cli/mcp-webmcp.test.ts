@@ -70,3 +70,18 @@ test("WebMCP CLI preserves explicit browser selection and enablement", async () 
     output.mockRestore()
   }
 })
+
+test("WebMCP CLI --interact prints an interact entry that also carries read (ADR-174)", async () => {
+  const output = vi.spyOn(process.stdout, "write").mockReturnValue(true)
+  try {
+    await yargs().exitProcess(false).command(McpWebMcpCommand).parseAsync(["webmcp", "--interact"])
+    const parsed = Config.Info.parse(parseJsonPayload(output.mock.calls.map(([text]) => text).join("")))
+    expect(parsed.mcp?.webmcp).toMatchObject({
+      type: "local",
+      enabled: false,
+      webmcp: { allowedOrigins: [], read: true, interact: true },
+    })
+  } finally {
+    output.mockRestore()
+  }
+})

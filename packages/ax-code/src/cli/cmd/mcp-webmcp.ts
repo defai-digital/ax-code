@@ -24,6 +24,12 @@ export const McpWebMcpCommand = cmd({
         default: false,
         describe: "Enable the T1 read tier (page snapshot, screenshot, console) in the printed config",
       })
+      .option("interact", {
+        type: "boolean",
+        default: false,
+        describe:
+          "Enable the T2 interact tier (click, hover, wait_for, fill, fill_form, press_key, handle_dialog) in the printed config; implies --read for wait_for",
+      })
       .option("persistent-profile", {
         type: "boolean",
         default: false,
@@ -48,7 +54,10 @@ export const McpWebMcpCommand = cmd({
       {
         allowedOrigins: args.origin ?? [],
         headless: args.headless,
-        read: args.read === true ? true : undefined,
+        // wait_for returns a snapshot and is admitted only with the read tier
+        // on, so an interact entry carries read as well.
+        read: args.read === true || args.interact === true ? true : undefined,
+        interact: args.interact === true ? true : undefined,
         executablePath: args.executablePath,
         persistentProfile: args.persistentProfile,
         vendored: args.vendored,
