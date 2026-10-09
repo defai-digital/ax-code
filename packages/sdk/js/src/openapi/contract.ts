@@ -5,6 +5,8 @@ export const REQUIRED_OPENAPI_PATHS = [
   "/session",
   "/session/{sessionID}",
   "/session/{sessionID}/prompt_async",
+  "/session/{sessionID}/steering",
+  "/task-queue/{taskID}/steer",
   "/permission",
   "/permission/{requestID}/reply",
   "/provider",

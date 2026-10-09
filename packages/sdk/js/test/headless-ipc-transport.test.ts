@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { createServer, type Server, type Socket } from "node:net"
 import { realpathSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { rm } from "node:fs/promises"
+import { HeadlessRequestError } from "../src/headless.js"
 import { createIpcTransport } from "../src/headless/ipc-transport.js"
 import { readIpcMessages, writeIpcMessage } from "../src/headless/ipc-protocol.js"
 import { applyHeadlessProjectionEvent, createHeadlessProjectionState } from "../src/headless/projection.js"
@@ -14,11 +15,13 @@ describe("ipc transport client", () => {
   let socketPath: string
   let lastRequest: IpcRequestMessage | undefined
   const sockets = new Set<Socket>()
+  let stalledRequests: IpcRequestMessage[] = []
 
   beforeEach(async () => {
     socketPath = join(canonicalTmpdir(), `ax-code-ipc-client-test-${Date.now()}.sock`)
     lastRequest = undefined
     sockets.clear()
+    stalledRequests = []
     server = createServer((socket) => {
       sockets.add(socket)
       socket.once("close", () => sockets.delete(socket))
@@ -43,6 +46,10 @@ describe("ipc transport client", () => {
       for await (const message of readIpcMessages(socket)) {
         if (message.type === "request") {
           lastRequest = message
+          if (message.path.includes("stalled")) {
+            stalledRequests.push(message)
+            continue
+          }
           if (message.path === "/global/health") {
             await writeIpcMessage(socket, {
               type: "response",
@@ -98,6 +105,74 @@ describe("ipc transport client", () => {
       socket.destroy()
     }
   }
+
+  test("cancels one request, ignores its late response, and preserves concurrent callers", async () => {
+    const transport = createIpcTransport({ socketPath })
+    try {
+      const controller = new AbortController()
+      const outcome = expect(
+        transport.requestJson({ method: "POST", path: "/stalled", signal: controller.signal }),
+      ).rejects.toMatchObject({ name: "AbortError" })
+      await vi.waitFor(() => expect(stalledRequests).toHaveLength(1))
+      const other = transport.requestJson({ method: "GET", path: "/global/health" })
+      controller.abort()
+      await outcome
+      expect(await other).toEqual({ healthy: true })
+      for (const socket of sockets) {
+        await writeIpcMessage(socket, {
+          type: "response",
+          id: stalledRequests[0].id,
+          status: 200,
+          body: { late: true },
+        })
+      }
+      expect(await transport.requestJson({ method: "GET", path: "/global/health" })).toEqual({ healthy: true })
+    } finally {
+      await transport.close?.()
+    }
+  })
+
+  test("times out a command without replaying it or closing the shared transport", async () => {
+    const transport = createIpcTransport({ socketPath })
+    try {
+      await expect(
+        transport.sendCommand(
+          { type: "session.prompt", sessionID: "stalled", body: { parts: [] } },
+          { timeoutMs: 250 },
+        ),
+      ).rejects.toMatchObject({ name: "TimeoutError" })
+      expect(stalledRequests).toHaveLength(1)
+      expect(await transport.requestJson({ method: "GET", path: "/global/health" })).toEqual({ healthy: true })
+    } finally {
+      await transport.close?.()
+    }
+  })
+
+  test("does not connect or dispatch an already aborted request", async () => {
+    const transport = createIpcTransport({ socketPath })
+    try {
+      const controller = new AbortController()
+      controller.abort()
+      await expect(
+        transport.requestJson({ method: "GET", path: "/global/health", signal: controller.signal }),
+      ).rejects.toMatchObject({ name: "AbortError" })
+      expect(lastRequest).toBeUndefined()
+      expect(sockets.size).toBe(0)
+    } finally {
+      await transport.close?.()
+    }
+  })
+
+  test("preserves HTTP-equivalent response errors", async () => {
+    const transport = createIpcTransport({ socketPath })
+    try {
+      const error = await transport.requestJson({ method: "GET", path: "/not-found" }).catch((error: unknown) => error)
+      expect(error).toBeInstanceOf(HeadlessRequestError)
+      expect(error).toMatchObject({ status: 404, body: { error: "missing" }, method: "GET", path: "/not-found" })
+    } finally {
+      await transport.close?.()
+    }
+  })
 
   test("round-trips a request and response", async () => {
     const transport = createIpcTransport({ socketPath })

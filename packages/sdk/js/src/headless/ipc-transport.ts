@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { connect, type Socket } from "node:net"
 import { resolve as resolvePath } from "node:path"
+import { HeadlessRequestError, runHeadlessRequest, type HeadlessRequestOptions } from "./request.js"
 import { withDirectoryHeaders, withWorkspaceHeaders } from "../protocol.js"
 import type { Event } from "../v2/index.js"
 import type { HeadlessRuntimeCommand, HeadlessRuntimeCommandResult } from "./command.js"
@@ -122,7 +123,7 @@ export function createIpcTransport(options: IpcTransportOptions): HeadlessTransp
   let pendingConnection: Promise<IpcTransportConnectResult> | undefined
   const pendingRequests = new Map<
     string,
-    { resolve: (value: IpcTransportResponse) => void; reject: (error: Error) => void }
+    { resolve: (value: IpcTransportResponse) => void; reject: (error: unknown) => void }
   >()
   const pendingEvents: Event[] = []
   let pendingEventsOverflowed = false
@@ -225,74 +226,99 @@ export function createIpcTransport(options: IpcTransportOptions): HeadlessTransp
     }
   }
 
-  async function writeRequest(request: HeadlessTransportRequest): Promise<IpcTransportResponse> {
-    if (closed) throw new Error("IPC transport is closed")
-    const conn = await ensureConnection()
-    const id = generateRequestId()
-    const message: IpcRequestMessage = {
-      type: "request",
-      id,
-      method: request.method,
-      path: request.path,
-      query: sanitizeQuery(request.query),
-      headers: baseHeaders,
-    }
-    if (request.body !== undefined) {
-      message.body = request.body
-    }
-    const responsePromise = new Promise<IpcTransportResponse>((resolve, reject) => {
-      pendingRequests.set(id, { resolve, reject })
+  function writeRequest(request: HeadlessTransportRequest): Promise<IpcTransportResponse> {
+    return runHeadlessRequest(request, async (signal) => {
+      if (closed) throw new Error("IPC transport is closed")
+      const conn = await ensureConnection()
+      signal?.throwIfAborted()
+      if (closed) throw new Error("IPC transport is closed")
+      const id = generateRequestId()
+      const message: IpcRequestMessage = {
+        type: "request",
+        id,
+        method: request.method,
+        path: request.path,
+        query: sanitizeQuery(request.query),
+        headers: baseHeaders,
+      }
+      if (request.body !== undefined) message.body = request.body
+      return new Promise<IpcTransportResponse>((resolve, reject) => {
+        const cleanup = () => {
+          pendingRequests.delete(id)
+          signal?.removeEventListener("abort", onAbort)
+        }
+        const onAbort = () => {
+          cleanup()
+          reject(signal?.reason)
+        }
+        const pending = {
+          resolve(value: IpcTransportResponse) {
+            cleanup()
+            resolve(value)
+          },
+          reject(error: unknown) {
+            cleanup()
+            reject(error)
+          },
+        }
+        pendingRequests.set(id, pending)
+        signal?.addEventListener("abort", onAbort, { once: true })
+        if (signal?.aborted) {
+          onAbort()
+          return
+        }
+        // A cancelled caller drops only its receipt. Late replies are ignored;
+        // the shared socket and other requests remain live.
+        writeIpcMessage(conn.socket, message).catch(pending.reject)
+      })
     })
-    try {
-      await writeIpcMessage(conn.socket, message)
-    } catch (error) {
-      // The request never reached the server, so no response will arrive.
-      // Remove the pending entry to avoid failing it later with no observer
-      // (an unhandled rejection that crashes Node >= 15).
-      pendingRequests.delete(id)
-      throw error
-    }
-    return responsePromise
   }
 
   const transport: HeadlessTransport = {
     async requestJson<TResult>(request: HeadlessTransportRequest): Promise<TResult> {
       const response = await writeRequest(request)
-      if (!isOkStatus(response.status)) {
-        throw new Error(`Headless runtime request failed (${response.status}): ${formatResponseBody(response.body)}`)
-      }
+      ensureOkResponse(response, request)
       return (response.body ?? true) as TResult
     },
 
-    async sendCommand(command: HeadlessRuntimeCommand): Promise<HeadlessRuntimeCommandResult> {
+    async sendCommand(
+      command: HeadlessRuntimeCommand,
+      options?: HeadlessRequestOptions,
+    ): Promise<HeadlessRuntimeCommandResult> {
       switch (command.type) {
         case "session.prompt":
         case "session.command":
         case "session.shell": {
           const route = commandRoute(command)
-          const response = await writeRequest({
+          const request: HeadlessTransportRequest = {
+            ...options,
             method: "POST",
             path: `/session/${encodeURIComponent(command.sessionID)}/${route}`,
             body: command.body as Record<string, unknown>,
-          })
-          return commandResult(response)
+          }
+          const response = await writeRequest(request)
+          return commandResult(response, request)
         }
         case "session.abort": {
-          const response = await writeRequest({
+          const request: HeadlessTransportRequest = {
+            ...options,
             method: "POST",
             path: `/session/${encodeURIComponent(command.sessionID)}/abort`,
-          })
-          return commandResult(response)
+          }
+          const response = await writeRequest(request)
+          return commandResult(response, request)
         }
         case "permission.reply":
         case "question.reply": {
           const path = command.type === "permission.reply" ? "/permission/reply" : "/question/reply"
-          const response = await writeRequest({
+          const request: HeadlessTransportRequest = {
+            ...options,
             method: "POST",
             path,
             body: command.body as Record<string, unknown>,
-          })
-          return commandResult(response)
+          }
+          const response = await writeRequest(request)
+          return commandResult(response, request)
         }
       }
     },
@@ -446,24 +472,22 @@ function isOkStatus(status: number) {
   return status >= 200 && status < 300
 }
 
-function formatResponseBody(body: unknown) {
-  if (body === undefined || body === true || body === "") return ""
-  if (typeof body === "string") return body
-  try {
-    return JSON.stringify(body)
-  } catch {
-    return String(body)
-  }
-}
-
-function ensureOkResponse(response: IpcTransportResponse) {
+function ensureOkResponse(response: IpcTransportResponse, request: HeadlessTransportRequest) {
   if (!isOkStatus(response.status)) {
-    throw new Error(`Headless runtime request failed (${response.status}): ${formatResponseBody(response.body)}`)
+    throw new HeadlessRequestError({
+      status: response.status,
+      body: response.body,
+      method: request.method,
+      path: request.path,
+    })
   }
 }
 
-function commandResult(response: IpcTransportResponse): HeadlessRuntimeCommandResult {
-  ensureOkResponse(response)
+function commandResult(
+  response: IpcTransportResponse,
+  request: HeadlessTransportRequest,
+): HeadlessRuntimeCommandResult {
+  ensureOkResponse(response, request)
   if (response.status === 202) return { accepted: true, status: 202 }
   return { accepted: true, status: 200, body: response.body ?? true }
 }
