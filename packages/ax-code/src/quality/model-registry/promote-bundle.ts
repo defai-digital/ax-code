@@ -20,7 +20,7 @@ import {
   submissionBundleRecordSummary,
 } from "./model-registry-record-summary"
 import { QualityModelRegistry } from "./"
-import { finalizePromotion } from "./promote"
+import { evaluateDecisionBundleForPromotion, finalizePromotion } from "./promote"
 import { assertPromotionSummaryPass } from "./promotion-summary"
 
 type PromotionMetadata = QualityModelRegistry.PromotionMetadata
@@ -235,38 +235,7 @@ export async function promoteApprovedDecisionBundle(
   }
   assertPromotionSummaryPass(decisionBundle.source, "approval policy not satisfied", approvalEvaluation)
 
-  const evaluation = await QualityModelRegistry.evaluatePromotionEligibility(decisionBundle.benchmark, {
-    ...decisionBundle.policy,
-    releasePolicyDigest: decisionBundle.releasePolicy?.provenance.digest ?? null,
-    reviewerCarryoverLookbackPromotions:
-      decisionBundle.releasePolicy?.policy?.approval?.rules?.reentry?.reviewerCarryoverLookbackPromotions,
-    teamCarryoverLookbackPromotions:
-      decisionBundle.releasePolicy?.policy?.approval?.rules?.reentry?.teamCarryoverLookbackPromotions,
-    reportingChainCarryoverLookbackPromotions:
-      decisionBundle.releasePolicy?.policy?.approval?.rules?.reentry?.reportingChainCarryoverLookbackPromotions,
-  })
-  const drift = QualityPromotionDecisionBundle.driftReasons(decisionBundle, {
-    ...evaluation,
-    releasePolicy: options?.releasePolicyResolution
-      ? {
-          policy: options.releasePolicyResolution.policy,
-          provenance: QualityPromotionReleasePolicyStore.provenance(options.releasePolicyResolution),
-        }
-      : undefined,
-  })
-  if (drift.length > 0 && !options?.force) {
-    throw new Error(`Cannot promote model ${decisionBundle.source}: decision bundle is stale (${drift[0]})`)
-  }
-  if (evaluation.eligibility.requiredOverride === "force" && !options?.force) {
-    throw new Error(
-      `Cannot promote model ${decisionBundle.source}: ${QualityPromotionEligibility.blockingReason(evaluation.eligibility) ?? "force override required"}`,
-    )
-  }
-  if (evaluation.eligibility.requiredOverride === "allow_warn" && !options?.allowWarn && !options?.force) {
-    throw new Error(
-      `Cannot promote model ${decisionBundle.source}: ${QualityPromotionEligibility.reviewReason(evaluation.eligibility) ?? "allowWarn or force required"} (use allowWarn or force)`,
-    )
-  }
+  const evaluation = await evaluateDecisionBundleForPromotion(decisionBundle, options)
   return finalizePromotion({
     bundle: decisionBundle.benchmark,
     currentActive: evaluation.currentActive,

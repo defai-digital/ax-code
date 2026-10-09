@@ -187,12 +187,13 @@ export async function promote(
   })
 }
 
-export async function promoteDecisionBundle(
+// Re-evaluates a decision bundle's eligibility against the current registry
+// and throws unless the caller's overrides (force / allowWarn) cover it.
+export async function evaluateDecisionBundleForPromotion(
   decisionBundle: QualityPromotionDecisionBundle.DecisionBundle,
   options?: {
     allowWarn?: boolean
     force?: boolean
-    promotionMetadata?: PromotionMetadata
     releasePolicyResolution?: QualityPromotionReleasePolicyStore.Resolution
   },
 ) {
@@ -228,6 +229,19 @@ export async function promoteDecisionBundle(
       `Cannot promote model ${decisionBundle.source}: ${QualityPromotionEligibility.reviewReason(evaluation.eligibility) ?? "allowWarn or force required"} (use allowWarn or force)`,
     )
   }
+  return evaluation
+}
+
+export async function promoteDecisionBundle(
+  decisionBundle: QualityPromotionDecisionBundle.DecisionBundle,
+  options?: {
+    allowWarn?: boolean
+    force?: boolean
+    promotionMetadata?: PromotionMetadata
+    releasePolicyResolution?: QualityPromotionReleasePolicyStore.Resolution
+  },
+) {
+  const evaluation = await evaluateDecisionBundleForPromotion(decisionBundle, options)
   requireReentryApprovalPath({
     source: decisionBundle.source,
     eligibility: evaluation.eligibility,
