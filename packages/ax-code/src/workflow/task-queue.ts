@@ -143,7 +143,7 @@ function aggregatePhaseStatus(
       return "blocked"
     }
     if (children.every((child) => child.status === "cancelled")) return "cancelled"
-    if (children.every((child) => isTerminalChildStatus(child.status))) return "failed"
+    if (children.every((child) => WorkflowRun.isTerminalChildStatus(child.status))) return "failed"
     if (children.some((child) => child.status === "paused")) return "paused"
     return "running"
   }
@@ -159,7 +159,7 @@ function aggregatePhaseStatus(
     if (children.some((child) => child.status === "blocked_permission" || child.status === "blocked_question")) {
       return "blocked"
     }
-    if (children.every((child) => isTerminalChildStatus(child.status))) return "failed"
+    if (children.every((child) => WorkflowRun.isTerminalChildStatus(child.status))) return "failed"
     if (children.some((child) => child.status === "paused")) return "paused"
     return "running"
   }
@@ -175,7 +175,7 @@ function aggregatePhaseStatus(
   // Without this, the phase (and therefore the run) would stay "running"
   // forever. The first-success and majority branches above already guard
   // against this same case.
-  if (children.every((child) => isTerminalChildStatus(child.status))) return "failed"
+  if (children.every((child) => WorkflowRun.isTerminalChildStatus(child.status))) return "failed"
   if (children.some((child) => child.status === "paused")) return "paused"
   return "running"
 }
@@ -223,28 +223,20 @@ function aggregateCriticPhaseStatus(children: WorkflowChildRecord[]): WorkflowRu
   const completed = children.filter((child) => child.status === "completed").length
   if (children.every((child) => child.status === "cancelled")) return "cancelled"
   if (critic?.status === "completed" && completed > children.length / 2) return "completed"
-  if (critic && isTerminalChildStatus(critic.status)) return "failed"
+  if (critic && WorkflowRun.isTerminalChildStatus(critic.status)) return "failed"
 
   const failedOrCancelled = children.filter((child) => child.status === "failed" || child.status === "cancelled").length
   if (failedOrCancelled > children.length / 2) return "failed"
   if (children.some((child) => child.status === "blocked_permission" || child.status === "blocked_question")) {
     return "blocked"
   }
-  if (children.every((child) => isTerminalChildStatus(child.status))) return "failed"
+  if (children.every((child) => WorkflowRun.isTerminalChildStatus(child.status))) return "failed"
   if (children.some((child) => child.status === "paused")) return "paused"
   return "running"
 }
 
 function isCriticMergeStrategy(strategy: WorkflowPhaseMergeStrategy) {
   return strategy === "vote-with-critic" || strategy === "critic-confirmation"
-}
-
-function isTerminalChildStatus(status: WorkflowRun.ChildStatus) {
-  return status === "completed" || status === "failed" || status === "cancelled"
-}
-
-function isTerminalPhaseStatus(status: WorkflowRun.PhaseStatus) {
-  return status === "completed" || status === "failed" || status === "cancelled"
 }
 
 function aggregateRunStatus(phases: WorkflowRunDetailPhase[]): WorkflowRun.Status {
@@ -260,7 +252,7 @@ function aggregateRunStatus(phases: WorkflowRunDetailPhase[]): WorkflowRun.Statu
   // run can never make further progress, so without this fallback it would
   // stay "running" forever — the scheduler only advances past a "completed"
   // phase and has no path to resolve a cancelled one.
-  if (phases.every((phase) => isTerminalPhaseStatus(phase.status))) return "failed"
+  if (phases.every((phase) => WorkflowRun.isTerminalPhaseStatus(phase.status))) return "failed"
   if (phases.some((phase) => phase.status === "paused")) return "paused"
   return "running"
 }

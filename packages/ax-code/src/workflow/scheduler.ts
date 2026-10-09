@@ -214,12 +214,12 @@ export namespace WorkflowScheduler {
       if (child.taskQueueID) {
         await cancelWorkflowQueueItem(child.taskQueueID).catch(() => undefined)
       }
-      if (!isTerminalChildStatus(child.status)) {
+      if (!WorkflowRun.isTerminalChildStatus(child.status)) {
         await WorkflowRun.setChildStatus({ id: child.id, status: "cancelled" })
       }
     }
     for (const phase of detail.phases) {
-      if (!isTerminalPhaseStatus(phase.status)) {
+      if (!WorkflowRun.isTerminalPhaseStatus(phase.status)) {
         await WorkflowRun.setPhaseStatus({ id: phase.id, status: "cancelled" })
       }
     }
@@ -232,7 +232,7 @@ export namespace WorkflowScheduler {
     const detail = await WorkflowRun.getDetail(runID)
     await assertEnabledForSpec(detail.spec.id)
     for (const child of detail.children) {
-      if (isTerminalChildStatus(child.status) || child.status === "paused") continue
+      if (WorkflowRun.isTerminalChildStatus(child.status) || child.status === "paused") continue
       if (child.taskQueueID) {
         const item = await TaskQueue.get(child.taskQueueID).catch(() => undefined)
         if (item?.status === "queued" || item?.status === "waiting_for_idle") {
@@ -510,14 +510,6 @@ function assertExecutableMergeStrategies(spec: WorkflowSpecV1) {
   }
 }
 
-function isTerminalPhaseStatus(status: WorkflowRun.PhaseStatus) {
-  return status === "completed" || status === "failed" || status === "cancelled"
-}
-
-function isTerminalChildStatus(status: WorkflowRun.ChildStatus) {
-  return status === "completed" || status === "failed" || status === "cancelled"
-}
-
 async function refreshPausedRunState(runID: WorkflowRunID) {
   const detail = await WorkflowRun.getDetail(runID)
   const active = detail.children.some(
@@ -527,7 +519,7 @@ async function refreshPausedRunState(runID: WorkflowRunID) {
   if (active) return
   for (const phase of detail.phases) {
     const phaseChildren = detail.children.filter((child) => child.phaseID === phase.id)
-    if (phaseChildren.some((child) => child.status === "paused") && !isTerminalPhaseStatus(phase.status)) {
+    if (phaseChildren.some((child) => child.status === "paused") && !WorkflowRun.isTerminalPhaseStatus(phase.status)) {
       await WorkflowRun.setPhaseStatus({ id: phase.id, status: "paused" })
     }
   }
