@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import {
   applyProgressEvent,
   completeProgress,
@@ -8,6 +8,7 @@ import {
   parseProgressJsonLine,
   percentFromDoneTotal,
   progressFromCacheBytes,
+  startCacheProgressPolling,
 } from "../../../src/provider/ax-engine/download-progress"
 
 describe("download-progress", () => {
@@ -77,5 +78,64 @@ describe("download-progress", () => {
     expect(half.done).toBeLessThanOrEqual(84)
     expect(half.message).toContain(`${formatGiB((total ?? 0) / 2)}/${formatGiB(total ?? 0)} GiB`)
     expect(half.message).toMatch(/elapsed 1m/)
+  })
+})
+
+describe("cache progress polling", () => {
+  test.each(["stopped", "verification", "cancelled"])("discards an in-flight sample after %s", async (reason) => {
+    vi.useFakeTimers()
+    let stop: (() => void) | undefined
+    try {
+      const gate = Promise.withResolvers<number>()
+      let active = true
+      const publish = vi.fn()
+      const sample = vi.fn(() => gate.promise)
+      stop = startCacheProgressPolling({ sample, active: () => active, publish, onError: vi.fn() })
+      await vi.advanceTimersByTimeAsync(250)
+      expect(sample).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(4000)
+      expect(sample).toHaveBeenCalledTimes(1)
+      if (reason === "stopped") stop()
+      else active = false
+      gate.resolve(1024)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(publish).not.toHaveBeenCalled()
+    } finally {
+      stop?.()
+      vi.useRealTimers()
+    }
+  })
+
+  test("stopping before the first sample cancels both timers", async () => {
+    vi.useFakeTimers()
+    try {
+      const sample = vi.fn(async () => 1024)
+      const stop = startCacheProgressPolling({ sample, active: () => true, publish: vi.fn(), onError: vi.fn() })
+      stop()
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(sample).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test("reports a failed sample and continues polling", async () => {
+    vi.useFakeTimers()
+    let stop: (() => void) | undefined
+    try {
+      const error = new Error("unreadable cache")
+      const sample = vi.fn().mockRejectedValueOnce(error).mockResolvedValue(1024)
+      const publish = vi.fn()
+      const onError = vi.fn()
+      stop = startCacheProgressPolling({ sample, active: () => true, publish, onError })
+      await vi.advanceTimersByTimeAsync(250)
+      expect(onError).toHaveBeenCalledWith(error)
+      await vi.advanceTimersByTimeAsync(1750)
+      expect(publish).toHaveBeenCalledWith(1024)
+    } finally {
+      stop?.()
+      vi.useRealTimers()
+    }
   })
 })

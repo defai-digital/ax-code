@@ -178,3 +178,33 @@ export function progressFromCacheBytes(input: {
     message: `Downloading weights (${formatGiB(downloaded)} GiB so far, elapsed ${elapsed})`,
   }
 }
+
+/** Own both timers and discard samples that outlive their download phase. */
+export function startCacheProgressPolling(input: {
+  sample: () => Promise<number>
+  active: () => boolean
+  publish: (bytes: number) => void
+  onError: (error: unknown) => void
+}): () => void {
+  let stopped = false
+  let walking = false
+  const tick = async () => {
+    if (stopped || walking || !input.active()) return
+    walking = true
+    try {
+      const bytes = await input.sample()
+      if (!stopped && input.active()) input.publish(bytes)
+    } catch (error) {
+      input.onError(error)
+    } finally {
+      walking = false
+    }
+  }
+  const interval = setInterval(() => void tick(), 2000)
+  const initial = setTimeout(() => void tick(), 250)
+  return () => {
+    stopped = true
+    clearInterval(interval)
+    clearTimeout(initial)
+  }
+}

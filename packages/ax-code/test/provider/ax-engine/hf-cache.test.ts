@@ -393,6 +393,11 @@ console.log(JSON.stringify({ dest: ${JSON.stringify(snapshot)}, revision: ${JSON
         quantization: selected.quant,
         onProgress: (p) => progressEvents.push({ percent: p.percent, message: p.message }),
       })
+      const settledEvents = [...progressEvents]
+      // A fast engine exits before the initial 250 ms cache sample. Neither
+      // that timer nor an in-flight walk may publish after the download ends.
+      await new Promise((resolve) => setTimeout(resolve, 350))
+      expect(progressEvents).toEqual(settledEvents)
       const downloadCall = spawnSpy.mock.calls.find(
         ([cmd]) =>
           Array.isArray(cmd) &&

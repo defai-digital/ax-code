@@ -27,6 +27,7 @@ import {
   parseGiBTotalFromMessage,
   parseProgressJsonLine,
   progressFromCacheBytes,
+  startCacheProgressPolling,
   type AxEngineDownloadProgress,
 } from "./download-progress"
 import { HfCache } from "./hf-cache"
@@ -617,33 +618,18 @@ async function runAxEngineDownload(input: {
 
     // Poll HF cache while snapshot_download is blocked inside the engine —
     // progress-json is otherwise silent for most of a multi-GB download.
-    const CACHE_POLL_MS = 2000
-    let pollTimer: ReturnType<typeof setInterval> | undefined
+    let stopPolling: (() => void) | undefined
     if (input.watchRepo && input.onProgress) {
       const repoPath = HfCache.repoDir(input.watchRepo, input.env)
-      let walking = false
-      const tick = () => {
-        // Prefer engine events once we leave the weight phase (>= 85).
-        if (progress && progress.percent >= 85) return
-        if (walking) return // skip overlapping ticks while a slow cache walk finishes
-        walking = true
-        void measureDirBytes(repoPath)
-          .then((downloaded) => {
-            if (downloaded <= 0 && !progress) return
-            const event = progressFromCacheBytes({
-              downloadedBytes: downloaded,
-              totalBytes: expectedBytes,
-              startedAt,
-            })
-            publish(event)
-          })
-          .finally(() => {
-            walking = false
-          })
-      }
-      pollTimer = setInterval(tick, CACHE_POLL_MS)
-      // First sample quickly so the bar moves off a frozen 5%/0.0 GiB.
-      setTimeout(tick, 250)
+      stopPolling = startCacheProgressPolling({
+        sample: () => measureDirBytes(repoPath),
+        active: () => !input.signal?.aborted && (!progress || progress.percent < 85),
+        publish: (downloaded) => {
+          if (downloaded <= 0 && !progress) return
+          publish(progressFromCacheBytes({ downloadedBytes: downloaded, totalBytes: expectedBytes, startedAt }))
+        },
+        onError: (error) => log.warn("cache progress polling failed", { error: toErrorMessage(error) }),
+      })
     }
 
     const stdoutDone = readLines(proc.stdout, onStdoutLine)
@@ -663,7 +649,7 @@ async function runAxEngineDownload(input: {
         lastSummary,
       }
     } finally {
-      if (pollTimer) clearInterval(pollTimer)
+      stopPolling?.()
     }
   }
 
