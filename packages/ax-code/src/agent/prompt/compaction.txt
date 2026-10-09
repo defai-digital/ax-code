@@ -25,6 +25,13 @@ What is done and what is in flight. State verification status explicitly: which 
 
 ## Errors
 Errors hit and how each was resolved — or that it remains unresolved, with the exact error text when it matters.
+For active debugging, preserve the original symptom check (command/action, input,
+expected versus observed behavior), observed environment, evidence/case/hypothesis
+ids when present, predictions already tested and refuted, remaining unconfirmed
+causes, and the next discriminating check. Preserve temporary probe locations and
+removal instructions, including whether cleanup and verification after cleanup
+are still pending. Keep observations separate from explanations; never promote
+an untested hypothesis or unrelated passing check into a confirmed repair.
 
 ## Next steps
 What remains, in order. Name the immediate next action first.

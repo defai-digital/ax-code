@@ -624,7 +624,7 @@ When constructing the summary, try to stick to this template:
 
 ## Errors
 
-[What errors were hit, and how was each resolved — or is it still unresolved?]
+[What errors were hit, and how was each resolved — or is it still unresolved? For active debugging, preserve the original symptom check (command/action, input, expected versus observed behavior), observed environment, evidence/case/hypothesis ids, tested and refuted predictions, remaining unconfirmed causes, and the next discriminating check. Include temporary probe locations and removal instructions, plus pending cleanup and verification after cleanup. Keep observations separate from explanations; do not turn an untested hypothesis or unrelated passing check into a confirmed repair.]
 
 ## Next steps
 

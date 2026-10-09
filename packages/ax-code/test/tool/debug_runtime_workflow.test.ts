@@ -182,7 +182,7 @@ describe("runtime debug workflow", () => {
               workflow: "debug",
               paths: ["src/worker-pool.ts"],
               commands: {
-                typecheck: `bun -e "process.exit(0)"`,
+                typecheck: `node -e "process.exit(0)"`,
                 lint: null,
                 test: null,
               },
@@ -199,6 +199,7 @@ describe("runtime debug workflow", () => {
           const selectedEnvelope = (verify.metadata.envelopeIds as Array<{ envelopeId: string; status: string }>).find(
             (item) => item.status === "passed",
           )
+          expect(selectedEnvelope, verify.output).toBeDefined()
           if (!selectedEnvelope) throw new Error("missing passed verification envelope")
 
           const appliedVerification = await (

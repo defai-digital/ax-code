@@ -19,6 +19,12 @@ Classify before editing:
 
 Do not treat a code smell or call-chain guess as proof.
 
+## Isolate the cause
+
+- Use `repo_wiki` for module responsibilities and `code_intelligence` or `lsp` for symbols/callers when available, then confirm the source. Empty, stale, partial, or truncated results do not prove absence.
+- Give each candidate cause a testable prediction. Choose the smallest check that can rule it out, change one variable at a time, and revise contradicted hypotheses rather than stacking patches.
+- Use available debug evidence/hypothesis tools for repair work; fall back to focused read/search/bash checks if absent. Diagnosis-only work stays read-only, including tools that persist state.
+
 ## Phase 2 — Fix
 
 Implement a fix only for a confirmed bug or a failing test. If the user asked to diagnose only, stop after the report.
@@ -30,7 +36,9 @@ Implement a fix only for a confirmed bug or a failing test. If the user asked to
 ## Phase 3 — Verify
 
 - Re-run the original failure path.
+- Remove only your temporary probes before final verification; update any instrumentation plan to `removed` and rerun checks after cleanup.
 - Run the most specific relevant test or typecheck for the touched code.
+- When available, run `verify_project` with `workflow: "debug"`, include the symptom check when default commands miss it, and apply the whole verification set using `debug_apply_verification`. Report skipped checks as skipped; they provide no evidence. Stale, failed, or inconclusive results do not verify a repair.
 - In the final report, include pre-fix evidence and post-fix verification.
 
 ## Report

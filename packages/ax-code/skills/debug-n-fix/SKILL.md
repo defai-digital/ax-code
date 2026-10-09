@@ -1,6 +1,6 @@
 ---
 name: debug-n-fix
-description: Diagnose a bug and implement the fix. Confirms root cause before making changes, then verifies with the relevant tests.
+description: Diagnose and repair a reported bug, error, or failing test using reproduction evidence and checks of the original symptom. Use when a fix is requested.
 agent: debug
 argument-hint: <symptom, error message, or failing test>
 ---
@@ -9,11 +9,26 @@ Diagnose and fix the issue described in $ARGUMENTS.
 
 ## Phase 1 - Diagnose
 
-Follow the same investigation steps as `debug-only`:
-
 1. **Reproduce**: trace the symptom to a minimal entry path.
 2. **Bug reality gate**: capture the concrete failure signal before diagnosing: command/action, input, observed output/error, and expected behavior.
 3. **Root cause**: confirm the exact file, line, and condition. State the root cause explicitly before moving to Phase 2.
+
+Build a small repeatable feedback loop that fails on the reported symptom and
+can pass after the fix: a focused test, CLI fixture, request replay, or bounded
+runtime probe. Record the input, environment, expected behavior, and actual
+failure. A generic successful build is not a reproduction check.
+
+Use `repo_wiki` for module responsibilities and `code_intelligence` or `lsp` for exact
+symbols/callers when available; confirm the relevant source and index freshness.
+Empty or partial results do not prove absence. Trace values across the failing
+boundary and check existing guards. For ambiguous causes, record each candidate's
+prediction and test the cheapest observation that can rule it out, one variable
+at a time. Revise contradicted hypotheses rather than accumulating patches.
+
+When available, use `debug_open_case`, `debug_capture_evidence`, and
+`debug_propose_hypothesis` to keep observations separate from explanations.
+Use `debug_analyze` for stack traces; its confidence and unresolved frames are
+not proof. Otherwise use focused read/search/bash checks.
 
 Do not start writing code until the root cause is confirmed. If the bug cannot be reproduced or evidenced, stop and report the attempted reproduction path, unconfirmed hypotheses, and the evidence needed next.
 
@@ -43,6 +58,18 @@ Do not fix an unconfirmed hypothesis unless the user explicitly asks for a specu
 10. If tests fail after the fix, diagnose and resolve before reporting done.
 11. Check that no related path regresses by reading the test output carefully.
 12. In the final report, include the pre-fix failure evidence and post-fix verification command/output summary.
+
+Prefer existing debugger or replay support when it answers the question without
+source edits. If temporary probes are necessary, record their purpose and removal
+path with `debug_plan_instrumentation` when available, capture the observations,
+then remove only your probes and mark the plan `removed` before final verification.
+Cleanup changes source bytes: rerun checks on the final files.
+
+When available, run `verify_project` with `workflow: "debug"`, include the symptom
+check in `commands.test` when the inferred command does not cover it, and pass a
+returned envelope id to `debug_apply_verification` for the hypothesis. Apply the
+whole verification set; report skipped, stale, failed, or inconclusive checks
+explicitly. Do not claim resolution from an unrelated passing check.
 
 ## Constraints
 

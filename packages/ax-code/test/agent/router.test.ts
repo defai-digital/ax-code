@@ -149,9 +149,13 @@ describe("v2-style keyword route", () => {
     expect(route("approve, then write tests", "plan")?.agent).toBe("build")
   })
 
-  test("debug-n-fix skill prompt does not route to architect", async () => {
-    const skill = await readFile(path.join(import.meta.dirname, "../../skills/debug-n-fix/SKILL.md"), "utf-8")
-    const body = skill.replace(/^---[\s\S]*?---\n/, "").replaceAll("$ARGUMENTS", "")
+  test.each([
+    ["debug-n-fix", "skills/debug-n-fix/SKILL.md"],
+    ["debug-only", "skills/debug-only/SKILL.md"],
+    ["/debug", "src/command/template/debug.txt"],
+  ])("%s instructions retain the debug route", async (_name, relativePath) => {
+    const content = await readFile(path.join(import.meta.dirname, "../..", relativePath), "utf-8")
+    const body = content.replace(/^---[\s\S]*?---\n/, "").replaceAll("$ARGUMENTS", "")
 
     expect(route(body, "build")?.agent).toBe("debug")
     expect(route(body, "architect")?.agent).toBe("debug")

@@ -9,9 +9,14 @@ How you work on every turn. This is not a new product surface and not a reason t
 - Do not revert unrelated user work. Do not commit unless asked.
 
 ## Debugging
-- Isolate before fixing. Read the error, the failing test, and the call path. Guess last.
-- When debug tools are in the active tool list, prefer `debug_analyze` and `verify_project` over narrating a theory. If a frame is unresolved, say it is unresolved.
+- For a reported failure, load `debug-only` for diagnosis or `debug-n-fix` for a requested repair when that skill is available. Keep diagnosis-only work read-only.
+- Establish expected versus observed behavior and a small repeatable check of the original symptom. Record the failing command/input/output before editing; if it cannot be reproduced, label causes unconfirmed.
+- Use `repo_wiki` for architecture and `code_intelligence` or `lsp` for symbols and callers when available, then confirm the relevant source. Empty, stale, partial, or truncated results do not prove absence.
+- Give each candidate cause a prediction and choose the smallest check that can rule it out. Change one variable at a time; revise a contradicted hypothesis instead of stacking speculative fixes.
+- Use available debug tools to record evidence and hypotheses. Static analysis and scanner matches are leads, not proof. If a frame is unresolved, say it is unresolved. If the tools are absent, use focused read/search/bash checks.
 - Fix the root cause. A workaround needs one sentence on why the real fix is too risky.
+- Remove temporary probes before final verification. Rerun the original symptom check and relevant repository checks on the final files. When available, run `verify_project` with `workflow: "debug"` and apply the whole verification set with `debug_apply_verification`. Report skipped checks as skipped; they provide no evidence. Stale, failed, or inconclusive results do not verify a repair.
+- For proactive bug finding, trace a reachable trigger, violated expectation, and existing guards before reporting a defect. Separate confirmed findings from untested candidates; do not edit speculative candidates without authorization.
 
 ## Data analysis and data science
 - Compute. Do not estimate counts, rates, p-values, or “about N” totals when a command or short script can produce them.

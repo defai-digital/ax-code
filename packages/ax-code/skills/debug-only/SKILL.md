@@ -1,6 +1,6 @@
 ---
 name: debug-only
-description: Investigate and diagnose a bug or unexpected behaviour without modifying any files. Reports root cause, reproduction path, and affected scope.
+description: Investigate a reported bug, error, or unexpected behavior without modifying files. Use for diagnosis-only requests; separate observed failures from untested hypotheses.
 agent: debug
 argument-hint: <symptom, error message, or failing test>
 ---
@@ -27,9 +27,12 @@ Do not treat a plausible code smell, a suspicious branch, or a `debug_analyze` c
 
 ## Phase 2 - Trace
 
+- Use `repo_wiki` for module responsibilities and `code_intelligence` or `lsp` for symbols and callers when available, then confirm the relevant source. Check freshness and completeness; empty or partial results do not prove absence.
 - Follow the call chain from the entry point to the failure site.
 - Read only the files necessary to trace the path - avoid reading unrelated code.
 - Note every assumption the code makes that could be violated.
+- Turn each candidate cause into a prediction and choose the smallest read-only observation that can rule it out. Compare failing and working inputs/configurations one variable at a time.
+- Prefer existing logs, captured traces, or available debugger observations. Do not add probes, record durable debug cases, or invoke state-writing tools in this read-only workflow.
 
 ## Phase 3 - Root Cause
 
@@ -51,6 +54,8 @@ Produce a structured report:
 **Reproduction Path**: minimal steps from entry point to failure.
 
 **Unconfirmed Hypotheses**: candidate causes with confidence and missing evidence. Include this instead of Root Cause when the bug is not confirmed.
+
+**Next Check**: the smallest permitted check that distinguishes the remaining candidates, including its expected signal. A passing build or clean heuristic scan does not establish that the reported symptom is absent.
 
 **Affected Scope**: list of files and symbols implicated (not just the failure site - include callers if the bug propagates).
 
