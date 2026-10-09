@@ -2,10 +2,12 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-09-08
+Last reviewed: 2026-10-09
 Owner: ax-code runtime
 
 AX Code can connect to Model Context Protocol servers for external tools, prompts, and resources. MCP is powerful, so AX Code treats MCP configuration and MCP-provided content as a trust boundary.
+
+The experimental browser bridge is a separate path. It launches an isolated Chrome window and can call tools a page registers through WebMCP. Enable it from the terminal UI; the steps and approval tiers are in [WebMCP browser bridge](../guides/webmcp-bridge.md).
 
 ## Trust Model
 

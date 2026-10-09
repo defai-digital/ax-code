@@ -32,7 +32,7 @@ import {
 import { HfCache } from "./hf-cache"
 import { Log } from "@/util/log"
 import type { Readable } from "node:stream"
-import fsSync from "fs"
+import type { Dirent } from "fs"
 
 const log = Log.create({ service: "ax-engine-model-cache" })
 
@@ -500,9 +500,9 @@ async function readLines(stream: Readable, onLine: (line: string) => void): Prom
 }
 
 /** Best-effort recursive size for progress only (does not throw). */
-function measureDirBytes(target: string): number {
+async function measureDirBytes(target: string): Promise<number> {
   try {
-    const stat = fsSync.statSync(target)
+    const stat = await fs.stat(target)
     if (stat.isFile()) return stat.size
     if (!stat.isDirectory()) return 0
   } catch {
@@ -512,26 +512,29 @@ function measureDirBytes(target: string): number {
   const stack = [target]
   while (stack.length > 0) {
     const current = stack.pop()!
-    let entries: fsSync.Dirent[]
+    let entries: Dirent[]
     try {
-      entries = fsSync.readdirSync(current, { withFileTypes: true })
+      entries = await fs.readdir(current, { withFileTypes: true })
     } catch {
       continue
     }
-    for (const entry of entries) {
-      const full = path.join(current, entry.name)
-      // Stay under the progress root — readdir entries should already, but
-      // refuse any escape (security_scan path_traversal).
-      if (!Filesystem.contains(target, full)) continue
-      try {
-        if (entry.isDirectory()) stack.push(full)
-        else if (entry.isFile() || entry.isSymbolicLink()) {
-          total += fsSync.statSync(full).size
+    // Every entry handles its own errors, so the batch can never reject.
+    await Promise.all(
+      entries.map(async (entry) => {
+        const full = path.join(current, entry.name)
+        // Stay under the progress root — readdir entries should already, but
+        // refuse any escape (security_scan path_traversal).
+        if (!Filesystem.contains(target, full)) return
+        try {
+          if (entry.isDirectory()) stack.push(full)
+          else if (entry.isFile() || entry.isSymbolicLink()) {
+            total += (await fs.stat(full)).size
+          }
+        } catch {
+          // ignore unreadable entries mid-download
         }
-      } catch {
-        // ignore unreadable entries mid-download
-      }
-    }
+      }),
+    )
   }
   return total
 }
@@ -618,17 +621,25 @@ async function runAxEngineDownload(input: {
     let pollTimer: ReturnType<typeof setInterval> | undefined
     if (input.watchRepo && input.onProgress) {
       const repoPath = HfCache.repoDir(input.watchRepo, input.env)
+      let walking = false
       const tick = () => {
         // Prefer engine events once we leave the weight phase (>= 85).
         if (progress && progress.percent >= 85) return
-        const downloaded = measureDirBytes(repoPath)
-        if (downloaded <= 0 && !progress) return
-        const event = progressFromCacheBytes({
-          downloadedBytes: downloaded,
-          totalBytes: expectedBytes,
-          startedAt,
-        })
-        publish(event)
+        if (walking) return // skip overlapping ticks while a slow cache walk finishes
+        walking = true
+        void measureDirBytes(repoPath)
+          .then((downloaded) => {
+            if (downloaded <= 0 && !progress) return
+            const event = progressFromCacheBytes({
+              downloadedBytes: downloaded,
+              totalBytes: expectedBytes,
+              startedAt,
+            })
+            publish(event)
+          })
+          .finally(() => {
+            walking = false
+          })
       }
       pollTimer = setInterval(tick, CACHE_POLL_MS)
       // First sample quickly so the bar moves off a frozen 5%/0.0 GiB.

@@ -3,7 +3,7 @@ import { createSimpleContext } from "./helper"
 import { pickFirstEnvValue } from "../util/env"
 import { parseInitialRoutePayload, type Route } from "./route-util"
 
-export type { HomeRoute, SessionRoute, Route } from "./route-util"
+export type { Route } from "./route-util"
 
 export function parseInitialRoute(raw?: string): Route {
   return parseInitialRoutePayload(raw)
@@ -29,8 +29,6 @@ export const { use: useRoute, provider: RouteProvider } = createSimpleContext({
     }
   },
 })
-
-export type RouteContext = ReturnType<typeof useRoute>
 
 export function useRouteData<T extends Route["type"]>(type: T) {
   const route = useRoute()

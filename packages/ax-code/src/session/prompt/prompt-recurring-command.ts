@@ -1,9 +1,7 @@
 import type { MessageV2 } from "../message-v2"
-import { createStoppedAssistantTextResponse } from "./prompt-assistant-response"
-import { commandModel } from "./prompt-command-selection"
+import { controlCommandMessage } from "./prompt-control-message"
 import type { CommandInput } from "./prompt-input"
 import { parseRecurringArguments, formatLoopInterval } from "./prompt-recurring-arguments"
-import { createUserMessage } from "./prompt-user-message"
 import { SessionRecurring } from "../recurring"
 
 // /loop command handler (ADR-050). Unlike /goal, no PromptRunner is
@@ -11,27 +9,7 @@ import { SessionRecurring } from "../recurring"
 // SessionPrompt.prompt from the SessionRecurring timer.
 
 async function loopControlMessage(input: CommandInput, text: string): Promise<MessageV2.WithParts> {
-  const model = await commandModel({ model: input.model, sessionID: input.sessionID })
-  const user = await createUserMessage({
-    sessionID: input.sessionID,
-    messageID: input.messageID,
-    agent: input.agent,
-    model,
-    agentRouting: "preserve",
-    noReply: true,
-    parts: [
-      {
-        type: "text",
-        text: `/loop ${input.arguments}`.trim(),
-      },
-    ],
-  })
-  return createStoppedAssistantTextResponse({
-    sessionID: input.sessionID,
-    parent: user.info,
-    text,
-    tokenTotal: 0,
-  })
+  return controlCommandMessage(input, "/loop", text)
 }
 
 export async function executeRecurringCommand(input: CommandInput): Promise<MessageV2.WithParts> {

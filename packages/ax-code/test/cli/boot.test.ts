@@ -394,7 +394,7 @@ describe("cli.boot.fatal", () => {
 
 describe("cli.boot.forced-exit", () => {
   test("uncaught exception flush timer stays referenced", async () => {
-    const src = await readFile(path.join(import.meta.dirname, "../../src/cli/boot.ts"), "utf-8")
+    const src = await readFile(path.join(import.meta.dirname, "../../src/cli/boot-lifecycle.ts"), "utf-8")
     const start = src.indexOf("function onUncaughtException")
     const end = src.indexOf("\n}\n\nexport function clearForcedExitTimer", start)
     expect(start).toBeGreaterThan(-1)

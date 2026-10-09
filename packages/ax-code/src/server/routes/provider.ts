@@ -175,6 +175,39 @@ function axEngineInvalidRequest(c: Parameters<typeof invalidRequest>[0], error: 
   return invalidRequest(c, { message: toErrorMessage(error), details: { resource: "axEngine" } })
 }
 
+// Shared body of the ax-engine prepare/start routes: identical preparation
+// flow, differing only in the start flag and the log label.
+async function axEnginePrepareHandler(
+  c: Parameters<typeof invalidRequest>[0],
+  body: z.output<typeof AxEngineStartBody>,
+  start: boolean | undefined,
+  action: string,
+) {
+  try {
+    const modelID = normalizeModelID(body.modelID)
+    const quantization = normalizeQuantization(body.quantization, modelID)
+    const result = await prepareAxEngine({
+      modelID,
+      binaryPath: body.binaryPath,
+      modelPath: body.modelPath,
+      quantization,
+      download: body.download,
+      mtpPolicy: resolveAxEngineMtpPolicy({
+        ...(await Config.get()).provider?.["ax-engine"]?.options,
+        ...(body.mtpPolicy !== undefined ? { mtpPolicy: body.mtpPolicy } : {}),
+      }),
+      start,
+      signal: c.req.raw.signal,
+    })
+    await Provider.invalidate().catch((error) =>
+      log.warn(`failed to invalidate provider after ax-engine ${action}`, { error }),
+    )
+    return c.json(result)
+  } catch (error) {
+    return axEngineInvalidRequest(c, error)
+  }
+}
+
 async function savedAxEngineApiKey() {
   const auth = await Auth.get(AX_ENGINE_PROVIDER_ID)
   return auth?.type === "api" ? auth.key : undefined
@@ -762,29 +795,7 @@ export const ProviderRoutes = lazy(() =>
       validator("json", AxEnginePrepareBody),
       async (c) => {
         const body = c.req.valid("json")
-        try {
-          const modelID = normalizeModelID(body.modelID)
-          const quantization = normalizeQuantization(body.quantization, modelID)
-          const result = await prepareAxEngine({
-            modelID,
-            binaryPath: body.binaryPath,
-            modelPath: body.modelPath,
-            quantization,
-            download: body.download,
-            mtpPolicy: resolveAxEngineMtpPolicy({
-              ...(await Config.get()).provider?.["ax-engine"]?.options,
-              ...(body.mtpPolicy !== undefined ? { mtpPolicy: body.mtpPolicy } : {}),
-            }),
-            start: body.start,
-            signal: c.req.raw.signal,
-          })
-          await Provider.invalidate().catch((error) =>
-            log.warn("failed to invalidate provider after ax-engine prepare", { error }),
-          )
-          return c.json(result)
-        } catch (error) {
-          return axEngineInvalidRequest(c, error)
-        }
+        return axEnginePrepareHandler(c, body, body.start, "prepare")
       },
     )
     .post(
@@ -808,29 +819,7 @@ export const ProviderRoutes = lazy(() =>
       validator("json", AxEngineStartBody),
       async (c) => {
         const body = c.req.valid("json")
-        try {
-          const modelID = normalizeModelID(body.modelID)
-          const quantization = normalizeQuantization(body.quantization, modelID)
-          const result = await prepareAxEngine({
-            modelID,
-            binaryPath: body.binaryPath,
-            modelPath: body.modelPath,
-            quantization,
-            download: body.download,
-            mtpPolicy: resolveAxEngineMtpPolicy({
-              ...(await Config.get()).provider?.["ax-engine"]?.options,
-              ...(body.mtpPolicy !== undefined ? { mtpPolicy: body.mtpPolicy } : {}),
-            }),
-            start: true,
-            signal: c.req.raw.signal,
-          })
-          await Provider.invalidate().catch((error) =>
-            log.warn("failed to invalidate provider after ax-engine start", { error }),
-          )
-          return c.json(result)
-        } catch (error) {
-          return axEngineInvalidRequest(c, error)
-        }
+        return axEnginePrepareHandler(c, body, true, "start")
       },
     )
     .post(

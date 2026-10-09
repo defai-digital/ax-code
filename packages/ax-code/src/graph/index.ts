@@ -4,6 +4,7 @@ import type { ReplayEvent } from "../replay/event"
 import { Risk } from "../risk/score"
 import { extractTarget } from "../audit/report"
 import { truncate } from "../util/format"
+import { finiteNumber } from "../util/number"
 import type { SessionID } from "../session/schema"
 
 export namespace ExecutionGraph {
@@ -89,10 +90,6 @@ export namespace ExecutionGraph {
     })
     .meta({ ref: "ExecutionGraphResponse" })
   export type Response = z.output<typeof Response>
-
-  function finiteNumber(value: unknown) {
-    return typeof value === "number" && Number.isFinite(value) ? value : 0
-  }
 
   function stringValue(value: unknown, fallback = "unknown") {
     return typeof value === "string" && value.length > 0 ? value : fallback

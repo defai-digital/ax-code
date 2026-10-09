@@ -6,6 +6,7 @@ import { SessionVerifications } from "../session/verifications"
 import type { VerificationEnvelope } from "../quality/verification-envelope"
 import { Risk } from "../risk/score"
 import { truncate } from "../util/format"
+import { finiteNumber } from "../util/number"
 import { Env } from "../util/env"
 import { stringList } from "../util/string-list"
 import path from "path"
@@ -38,10 +39,6 @@ function formatDuration(rawMs: number): string {
   if (m > 0) return `${m}m ${s}s`
   if (s === 0) return `${ms}ms`
   return `${s}.${Math.floor((ms % MS_PER_SECOND) / TENTH_SECOND_UNIT_MS)}s`
-}
-
-function finiteNumber(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0
 }
 
 function eventTokens(value: unknown): { input: number; output: number; reasoning: number } {

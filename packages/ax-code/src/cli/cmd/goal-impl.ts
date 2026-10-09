@@ -11,17 +11,7 @@ import { assertLoopbackHttpUrl } from "@/runtime/listen-security"
 import type { HeadlessRuntimeCommand } from "@/runtime/headless"
 import { SessionGoal } from "../../session/goal"
 import { SessionID } from "../../session/schema"
-
-function jsonOption() {
-  return {
-    type: "boolean" as const,
-    describe: "output machine-readable JSON",
-  }
-}
-
-function writeJson(value: unknown) {
-  process.stdout.write(JSON.stringify(value, null, 2) + EOL)
-}
+import { jsonOption, writeJson } from "./json-output"
 
 // Statuses a bare `goal resume` may pick on its own. A complete goal would be
 // reactivated and a budget-limited one refused, so neither is a safe default.

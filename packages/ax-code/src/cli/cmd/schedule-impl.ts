@@ -7,6 +7,7 @@ import { ScheduledTaskID } from "../../session/schema"
 import { RuntimeRegistry } from "@/runtime/runtime-registry"
 import { assertLoopbackHttpUrl } from "@/runtime/listen-security"
 import { parseJsonResult } from "@/util/json-value"
+import { jsonOption, writeJson } from "./json-output"
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
@@ -84,17 +85,6 @@ function parseStatus(value: unknown) {
     throw new Error(`Unknown task status "${value}". Expected one of: ${ScheduledTask.Status.options.join(", ")}`)
   }
   return parsed.data
-}
-
-function jsonOption() {
-  return {
-    type: "boolean" as const,
-    describe: "output machine-readable JSON",
-  }
-}
-
-function writeJson(value: unknown) {
-  process.stdout.write(JSON.stringify(value, null, 2) + EOL)
 }
 
 async function withProject<T>(fn: () => Promise<T>) {

@@ -1,4 +1,4 @@
-import { realpathSync, statSync } from "fs"
+import { statSync } from "fs"
 import type { Context } from "hono"
 import os from "os"
 import path from "path"
@@ -57,17 +57,13 @@ export function requestDirectory(c: Context): string | Response {
     return invalidRequest(c, { message: "Directory contains null byte", details: { resource: "directory" } })
   }
   if (!path.isAbsolute(decoded)) return invalidRequest(c, { message: "Directory must be absolute" })
+  // Filesystem.resolve already realpaths (falling back to the unresolved path
+  // on ENOENT), so a second realpathSync here would only re-do that work on
+  // every request.
   const directory = Filesystem.resolve(decoded)
-  const realDirectory = (() => {
-    try {
-      return realpathSync(directory)
-    } catch {
-      return directory
-    }
-  })()
   const stat = (() => {
     try {
-      return statSync(realDirectory)
+      return statSync(directory)
     } catch {
       return undefined
     }
@@ -77,10 +73,10 @@ export function requestDirectory(c: Context): string | Response {
   const home = Filesystem.resolve(os.homedir())
   const sensitiveHomeDirectories = SENSITIVE_HOME_DIRECTORIES.map((entry) => path.join(home, entry))
   const isSensitiveHomeDirectory = sensitiveHomeDirectories.some(
-    (blocked) => realDirectory === blocked || Filesystem.contains(blocked, realDirectory),
+    (blocked) => directory === blocked || Filesystem.contains(blocked, directory),
   )
-  if (isDangerousRoot(realDirectory) || isSensitiveHomeDirectory) {
+  if (isDangerousRoot(directory) || isSensitiveHomeDirectory) {
     return invalidRequest(c, { message: "Directory is not allowed", details: { resource: "directory" } })
   }
-  return realDirectory
+  return directory
 }

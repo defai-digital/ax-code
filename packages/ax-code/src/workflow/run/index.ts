@@ -467,6 +467,9 @@ export const WorkflowRun = {
   attachVerificationEnvelopeIDs,
   ensureFinalReportArtifact,
   recoverInterrupted,
+  isTerminalRunStatus,
+  isTerminalPhaseStatus,
+  isTerminalChildStatus,
 }
 
 export namespace WorkflowRun {

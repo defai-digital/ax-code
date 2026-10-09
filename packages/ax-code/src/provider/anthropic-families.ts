@@ -1,3 +1,5 @@
+import { familyDisplayName, familyReleaseTime } from "./family-shared"
+
 const DATED_ID = /-\d{8}$/
 const FAMILY_ORDER = ["claude-opus", "claude-sonnet", "claude-haiku", "claude-fable"] as const
 
@@ -25,11 +27,7 @@ export function claudeFamilySortKey(family?: string): number {
 }
 
 export function claudeDisplayName(name: string | undefined, fallback: string): string {
-  const trimmed = (name ?? fallback)
-    .replace(/\s*\(latest\)\s*/gi, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-  return trimmed.length > 0 ? trimmed : fallback
+  return familyDisplayName(name, fallback)
 }
 
 export function latestAnthropicFamilyModels<T extends AnthropicFamilySource>(models: Record<string, T>): T[] {
@@ -44,17 +42,11 @@ export function latestAnthropicFamilyModels<T extends AnthropicFamilySource>(mod
 }
 
 function compareAnthropicFamilyModels(a: AnthropicFamilySource, b: AnthropicFamilySource, aKey: string): number {
-  const byDate = releaseTime(a.release_date) - releaseTime(b.release_date)
+  const byDate = familyReleaseTime(a.release_date) - familyReleaseTime(b.release_date)
   if (byDate !== 0) return byDate
   const byDated = Number(DATED_ID.test(b.id)) - Number(DATED_ID.test(a.id ?? aKey))
   if (byDated !== 0) return byDated
   const byLatest = Number(/\(latest\)/i.test(a.name ?? "")) - Number(/\(latest\)/i.test(b.name ?? ""))
   if (byLatest !== 0) return byLatest
   return (a.id ?? aKey).localeCompare(b.id)
-}
-
-function releaseTime(value?: string): number {
-  if (!value) return 0
-  const time = Date.parse(value)
-  return Number.isFinite(time) ? time : 0
 }

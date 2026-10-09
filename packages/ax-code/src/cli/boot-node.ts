@@ -13,61 +13,13 @@ import { UI } from "./ui"
 import { Installation } from "../installation"
 import { Log } from "../util/log"
 import { setAxCodeProcessTitle } from "../util/process-title"
-import { DiagnosticLog } from "../debug/diagnostic-log"
-import { isHarmlessInterrupt } from "../util/harmless-interrupt"
+import { clearForcedExitTimer, scheduleForcedExit } from "./boot-lifecycle"
 
 const cmds = [DoctorCommand, GenerateCommand]
 
-// The lifecycle machinery below (forced-exit timer, process error hooks,
-// scheduleForcedExit/clearForcedExitTimer) is duplicated from boot.ts. Keep the
-// two in sync; boot.ts is the source of truth for the full CLI.
-
-let forcedExitTimer: ReturnType<typeof setTimeout> | undefined
-let hooksInstalled = false
-
-function onUnhandledRejection(err: unknown) {
-  if (isHarmlessInterrupt(err)) return
-  DiagnosticLog.recordProcess("cli.unhandledRejection", { error: err })
-  Log.Default.error("rejection", {
-    e: err instanceof Error ? err.message : err,
-  })
-  process.exitCode = 1
-}
-
-function onUncaughtException(err: Error) {
-  if (isHarmlessInterrupt(err)) return
-  DiagnosticLog.recordProcess("cli.uncaughtException", { error: err })
-  Log.Default.error("exception", {
-    e: err instanceof Error ? err.message : err,
-  })
-  setTimeout(() => process.exit(1), 100)
-}
-
-export function hooks() {
-  if (hooksInstalled) return
-  hooksInstalled = true
-  process.on("unhandledRejection", onUnhandledRejection)
-  process.on("uncaughtException", onUncaughtException)
-}
-
-export function clearForcedExitTimer() {
-  if (!forcedExitTimer) return
-  clearTimeout(forcedExitTimer)
-  forcedExitTimer = undefined
-}
-
-/** Grace period for WAL checkpoint / log flush before forced process exit (STAB-13). */
-export const FORCED_EXIT_GRACE_MS = 2_000
-
-export function scheduleForcedExit(exit: () => void = () => process.exit()) {
-  clearForcedExitTimer()
-  forcedExitTimer = setTimeout(() => {
-    forcedExitTimer = undefined
-    exit()
-  }, FORCED_EXIT_GRACE_MS)
-  forcedExitTimer.unref?.()
-  return forcedExitTimer
-}
+// Process-lifecycle machinery (forced-exit timer, process error hooks) is
+// shared with the full CLI via boot-lifecycle.ts.
+export { clearForcedExitTimer, FORCED_EXIT_GRACE_MS, hooks, scheduleForcedExit } from "./boot-lifecycle"
 
 export function cli(argv = hideBin(process.argv)) {
   const rawArgv = argv.slice()

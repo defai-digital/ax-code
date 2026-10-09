@@ -1,3 +1,5 @@
+import { familyDisplayName, familyReleaseTime } from "./family-shared"
+
 const FAMILY_ORDER = ["muse-spark"] as const
 
 export type MuseFamilySource = {
@@ -23,12 +25,7 @@ export function museFamilySortKey(family?: string): number {
 }
 
 export function museDisplayName(name: string | undefined, fallback: string): string {
-  const trimmed = (name ?? fallback)
-    .replace(/\s*\(latest\)\s*/gi, " ")
-    .replace(/^openrouter:\s*/i, "")
-    .replace(/\s+/g, " ")
-    .trim()
-  return trimmed.length > 0 ? trimmed : fallback
+  return familyDisplayName(name, fallback, { stripOpenRouterPrefix: true })
 }
 
 export function latestMuseFamilyModels<T extends MuseFamilySource>(models: Record<string, T>): T[] {
@@ -75,7 +72,7 @@ function compareMuseFamilyModels(a: MuseFamilySource, b: MuseFamilySource, aKey:
   const bVer = museSparkVersion(bId)
   if (aVer[0] !== bVer[0]) return aVer[0] - bVer[0]
   if (aVer[1] !== bVer[1]) return aVer[1] - bVer[1]
-  return releaseTime(a.release_date) - releaseTime(b.release_date)
+  return familyReleaseTime(a.release_date) - familyReleaseTime(b.release_date)
 }
 
 function isMuseSecondaryVariant(id: string): boolean {
@@ -88,10 +85,4 @@ function museSparkVersion(id: string): [number, number] {
   const match = segment.match(/muse-spark-(\d+)[.-](\d+)/)
   if (!match) return [0, 0]
   return [Number(match[1]), Number(match[2])]
-}
-
-function releaseTime(value?: string): number {
-  if (!value) return 0
-  const time = Date.parse(value)
-  return Number.isFinite(time) ? time : 0
 }

@@ -113,7 +113,7 @@ export namespace WorkflowDispatchAdapter {
         for (const sibling of children) {
           const live = budgetChecked.children.find((candidate) => candidate.id === sibling.id)
           const status = live?.status ?? sibling.status
-          if (isTerminalChildStatus(status)) continue
+          if (WorkflowRun.isTerminalChildStatus(status)) continue
           await WorkflowRun.setChildStatus({
             id: sibling.id,
             status: "failed",
@@ -197,10 +197,6 @@ function childStatus(result: DispatchResult): WorkflowRun.ChildStatus {
   if (result.status === "completed") return "completed"
   if (result.status === "cancelled") return "cancelled"
   return "failed"
-}
-
-function isTerminalChildStatus(status: WorkflowRun.ChildStatus) {
-  return status === "completed" || status === "failed" || status === "cancelled"
 }
 
 function phaseStatusFromResults(

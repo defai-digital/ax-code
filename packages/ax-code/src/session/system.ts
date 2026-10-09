@@ -1,6 +1,6 @@
 import { wikiProjectRoot } from "../wiki/root"
 import path from "path"
-import { existsSync } from "fs"
+import { Filesystem } from "@/util/filesystem"
 
 import { Instance } from "../project/instance"
 
@@ -193,10 +193,13 @@ export namespace SystemPrompt {
         }),
       ]
     }
-    const isHtmlProject = (() => {
+    const isHtmlProject = await (async () => {
       try {
         const dir = Instance.directory
-        return existsSync(path.join(dir, "index.html")) || existsSync(path.join(dir, "index.htm"))
+        return (
+          (await Filesystem.exists(path.join(dir, "index.html"))) ||
+          (await Filesystem.exists(path.join(dir, "index.htm")))
+        )
       } catch {
         return false
       }

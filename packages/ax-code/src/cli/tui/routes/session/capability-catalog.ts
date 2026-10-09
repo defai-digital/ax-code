@@ -1,3 +1,5 @@
+import { isRecord } from "@/util/record"
+
 export type CapabilityCatalogItem = {
   kind: "instruction" | "command" | "skill" | "agent" | "workflow"
   name: string
@@ -128,10 +130,6 @@ function warningLabel(capability: CapabilityCatalogItem) {
 
 function clean(value: string | undefined) {
   return value?.replace(/\s+/g, " ").trim() || undefined
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
 function numberValue(value: unknown) {

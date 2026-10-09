@@ -49,6 +49,16 @@ export function textErrorMessage(text: string) {
   return errorPayloadMessage(parseJsonRecord(text)) ?? text
 }
 
+// Dialog error renderer for SDK/API rejections: Error message, plain string,
+// or a message buried in an error payload; anything else falls back.
+export function requestErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error) return error.message
+  const text = nonEmptyString(error)
+  if (text) return text
+  if (!error || typeof error !== "object") return fallback
+  return errorPayloadMessage(error) ?? fallback
+}
+
 export async function responseErrorMessage(response: Pick<Response, "status" | "text">) {
   const text = await response.text().catch(() => "")
   return textErrorMessage(text) ?? `Request failed with status ${response.status}`

@@ -6,6 +6,7 @@ import { Shell } from "@/shell/shell"
 import { Bus } from "@/bus"
 import { NotificationEvent } from "@/notification/events"
 import { TOAST_DURATION_LONG_MS } from "@/constants/server"
+import { abortError } from "@/util/abort"
 
 const log = Log.create({ service: "bash-background" })
 
@@ -397,10 +398,6 @@ export namespace BackgroundShell {
     }
 
     return read(id, sessionID)
-  }
-
-  function abortError() {
-    return new DOMException("Aborted", "AbortError")
   }
 
   /** Return output produced since the previous read() for this shell. */

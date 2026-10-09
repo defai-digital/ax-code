@@ -1,4 +1,5 @@
 import { Server } from "../../server/server"
+import { isRecord } from "../../util/record"
 import type { CommandModule } from "yargs"
 
 /** Canonical JSON for the OpenAPI document. Component schema keys are sorted
@@ -20,10 +21,6 @@ function stabilizeOpenApi(specs: unknown): unknown {
       schemas: sortRecord(schemas),
     },
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object" && !Array.isArray(value)
 }
 
 function sortRecord(value: Record<string, unknown>): Record<string, unknown> {

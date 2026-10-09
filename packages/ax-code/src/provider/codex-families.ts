@@ -1,3 +1,5 @@
+import { familyDisplayName, familyReleaseTime } from "./family-shared"
+
 const FAMILY_ORDER = ["gpt-flagship", "gpt-mini", "gpt-codex-spark"] as const
 
 export type CodexFamilySource = {
@@ -26,12 +28,7 @@ export function codexFamilySortKey(family?: string): number {
 }
 
 export function codexDisplayName(name: string | undefined, fallback: string): string {
-  const trimmed = (name ?? fallback)
-    .replace(/\s*\(latest\)\s*/gi, " ")
-    .replace(/^openrouter:\s*/i, "")
-    .replace(/\s+/g, " ")
-    .trim()
-  return trimmed.length > 0 ? trimmed : fallback
+  return familyDisplayName(name, fallback, { stripOpenRouterPrefix: true })
 }
 
 export function latestCodexFamilyModels<T extends CodexFamilySource>(models: Record<string, T>): T[] {
@@ -91,7 +88,7 @@ function compareCodexFamilyModels(a: CodexFamilySource, b: CodexFamilySource, aK
   if (aVer[1] !== bVer[1]) return aVer[1] - bVer[1]
   const bySuffix = Number(hasFlavorSuffix(bId)) - Number(hasFlavorSuffix(aId))
   if (bySuffix !== 0) return bySuffix
-  return releaseTime(a.release_date) - releaseTime(b.release_date)
+  return familyReleaseTime(a.release_date) - familyReleaseTime(b.release_date)
 }
 
 function hasFlavorSuffix(id: string): boolean {
@@ -104,10 +101,4 @@ function gptVersion(id: string): [number, number] {
   const match = segment.match(/gpt-(\d+)(?:\.(\d+))?/)
   if (!match) return [0, 0]
   return [Number(match[1]), Number(match[2] ?? 0)]
-}
-
-function releaseTime(value?: string): number {
-  if (!value) return 0
-  const time = Date.parse(value)
-  return Number.isFinite(time) ? time : 0
 }
