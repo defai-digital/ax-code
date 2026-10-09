@@ -157,44 +157,43 @@ async function pruneLeaseFile(file: string): Promise<boolean> {
 // empty lockfiles: never reclaim something that might be mid-write).
 async function countLiveLeases(dir: string): Promise<number> {
   const entries = await fs.readdir(dir)
-  const counts = await Promise.all(
-    entries
-      .filter((name) => name.endsWith(".json"))
-      .map(async (name): Promise<number> => {
-        // @scan-suppress security_scan - readdir supplies a single entry name beneath the internal lease directory.
-        const file = path.join(dir, name)
-        const body = await readLeaseBody(file).catch(() => undefined)
-        if (!body) {
-          const mtimeMs = await fs
-            .stat(file)
-            .then((stats) => stats.mtimeMs)
-            .catch(() => undefined)
-          if (mtimeMs === undefined) return 0 // vanished — not holding anything
-          if (Date.now() - mtimeMs > ProviderConcurrencyGovernor.DEFAULT_TTL_MS) {
-            await pruneLeaseFile(file) // abandoned beyond any legitimate write
-            return 0
-          }
-          return 1 // ambiguous (possibly mid-write) — count conservatively
-        }
-        if (Date.now() - body.acquiredAt > body.ttlMs) {
+  let live = 0
+  for (const name of entries) {
+    if (!name.endsWith(".json")) continue
+    // @scan-suppress security_scan - readdir supplies a single entry name beneath the internal lease directory.
+    const file = path.join(dir, name)
+    const body = await readLeaseBody(file).catch(() => undefined)
+    if (!body) {
+      const mtimeMs = await fs
+        .stat(file)
+        .then((stats) => stats.mtimeMs)
+        .catch(() => undefined)
+      if (mtimeMs === undefined) continue // vanished — not holding anything
+      if (Date.now() - mtimeMs > ProviderConcurrencyGovernor.DEFAULT_TTL_MS) {
+        await pruneLeaseFile(file) // abandoned beyond any legitimate write
+      } else {
+        live++ // ambiguous (possibly mid-write) — count conservatively
+      }
+      continue
+    }
+    if (Date.now() - body.acquiredAt > body.ttlMs) {
+      await pruneLeaseFile(file)
+      continue
+    }
+    if (isSameProcessLockHost(body) && body.pid !== process.pid) {
+      try {
+        process.kill(body.pid, 0)
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException)?.code === "ESRCH") {
           await pruneLeaseFile(file)
-          return 0
+          continue
         }
-        if (isSameProcessLockHost(body) && body.pid !== process.pid) {
-          try {
-            process.kill(body.pid, 0)
-          } catch (err) {
-            if ((err as NodeJS.ErrnoException)?.code === "ESRCH") {
-              await pruneLeaseFile(file)
-              return 0
-            }
-            // EPERM etc. means the process exists — the lease stays live.
-          }
-        }
-        return 1
-      }),
-  )
-  return counts.reduce((sum, value) => sum + value, 0)
+        // EPERM etc. means the process exists — the lease stays live.
+      }
+    }
+    live++
+  }
+  return live
 }
 
 interface HeldLease {

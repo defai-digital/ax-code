@@ -113,22 +113,22 @@ export namespace InstructionPrompt {
     const paths = new Set<string>()
 
     if (!Flag.AX_CODE_DISABLE_PROJECT_CONFIG) {
-      const matches = await Promise.all(
-        FILES.map((file) => Filesystem.findUp(file, Instance.directory, Instance.worktree)),
-      )
-      const found = matches.find((list) => list.length > 0)
-      if (found) {
-        found.forEach((p) => {
-          paths.add(path.resolve(p))
-        })
+      for (const file of FILES) {
+        const matches = await Filesystem.findUp(file, Instance.directory, Instance.worktree)
+        if (matches.length > 0) {
+          matches.forEach((p) => {
+            paths.add(path.resolve(p))
+          })
+          break
+        }
       }
     }
 
-    const globals = globalFiles()
-    const globalExists = await Promise.all(globals.map((file) => Filesystem.exists(file)))
-    const globalFile = globals.find((_, index) => globalExists[index])
-    if (globalFile) {
-      paths.add(path.resolve(globalFile))
+    for (const file of globalFiles()) {
+      if (await Filesystem.exists(file)) {
+        paths.add(path.resolve(file))
+        break
+      }
     }
 
     if (config.instructions) {
@@ -302,10 +302,10 @@ export namespace InstructionPrompt {
   }
 
   export async function find(dir: string) {
-    const candidates = FILES.map((file) => path.resolve(path.join(dir, file)))
-    const exists = await Promise.all(candidates.map((filepath) => Filesystem.exists(filepath)))
-    const index = exists.indexOf(true)
-    return index >= 0 ? candidates[index] : undefined
+    for (const file of FILES) {
+      const filepath = path.resolve(path.join(dir, file))
+      if (await Filesystem.exists(filepath)) return filepath
+    }
   }
 
   export async function resolve(messages: MessageV2.WithParts[], filepath: string, messageID: string) {
