@@ -38,6 +38,8 @@ import type { Dirent } from "fs"
 const log = Log.create({ service: "ax-engine-model-cache" })
 
 // Longest a model download is allowed to run.
+const MAX_TRANSCRIPT_LINES = 2000
+const MAX_TRANSCRIPT_BYTES = 1024 * 1024
 const DOWNLOAD_TIMEOUT_MS = 6 * 60 * 60 * 1000
 
 // FileLock steals by lockfile age using the *acquirer's* staleMs — a live
@@ -501,7 +503,7 @@ async function readLines(stream: Readable, onLine: (line: string) => void): Prom
 }
 
 /** Best-effort recursive size for progress only (does not throw). */
-async function measureDirBytes(target: string): Promise<number> {
+export async function measureDirBytes(target: string): Promise<number> {
   try {
     const stat = await fs.stat(target)
     if (stat.isFile()) return stat.size
@@ -529,7 +531,10 @@ async function measureDirBytes(target: string): Promise<number> {
         try {
           if (entry.isDirectory()) stack.push(full)
           else if (entry.isFile() || entry.isSymbolicLink()) {
-            total += (await fs.stat(full)).size
+            // Read the size first: `total += await …` would capture `total`
+            // before the await and lose concurrent updates.
+            const size = (await fs.stat(full)).size
+            total += size
           }
         } catch {
           // ignore unreadable entries mid-download
@@ -574,8 +579,11 @@ async function runAxEngineDownload(input: {
     let progress: AxEngineDownloadProgress | undefined
     let lastSummary: Record<string, unknown> | undefined
     let expectedBytes = input.expectedBytes
+    // Keep only a bounded tail of the raw transcript for error diagnostics;
+    // a multi-hour download must not grow these without limit.
     const stdoutChunks: string[] = []
     const stderrChunks: Buffer[] = []
+    let stderrBytes = 0
     // Pretty-printed final summaries from the engine wrapper span multiple
     // lines. Accumulate from the first "{" until JSON.parse succeeds.
     let multiLineJson: string | undefined
@@ -606,6 +614,7 @@ async function runAxEngineDownload(input: {
 
     const onStdoutLine = (line: string) => {
       stdoutChunks.push(line)
+      if (stdoutChunks.length > MAX_TRANSCRIPT_LINES) stdoutChunks.shift()
       if (multiLineJson !== undefined) {
         multiLineJson += `\n${line}`
         if (tryConsumeJsonObject(multiLineJson)) multiLineJson = undefined
@@ -635,7 +644,11 @@ async function runAxEngineDownload(input: {
     const stdoutDone = readLines(proc.stdout, onStdoutLine)
     const stderrDone = (async () => {
       for await (const chunk of proc.stderr!) {
-        stderrChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+        stderrChunks.push(buf)
+        stderrBytes += buf.length
+        while (stderrBytes > MAX_TRANSCRIPT_BYTES && stderrChunks.length > 1)
+          stderrBytes -= stderrChunks.shift()!.length
       }
     })()
 
