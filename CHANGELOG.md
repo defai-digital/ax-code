@@ -6,6 +6,19 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.24.0] - 2026-10-09
+
+### Changed
+
+- Publish SDK 2.6.3 alongside AX Code 7.24.0.
+- Follow live Auto and Sandbox modes for server-owned Allow Once countdowns, with queue promotion and WebMCP connection checks.
+- Add reproducible WebMCP browser development and debugging workflows.
+- Improve Singapore pixel scenes and use a shared 1920x1080 animation limit, with cached foliage backgrounds.
+
+### Fixed
+
+- Reject displaced permission requests and keep their cancellation handlers from removing replacement requests with the same ID.
+
 ## [7.23.3] - 2026-10-09
 
 ### Changed
