@@ -1139,7 +1139,7 @@ export const Info = z
             timeout_ms: PositiveInteger.min(5_000)
               .max(300_000)
               .optional()
-              .describe("Countdown before the automatic once reply. Default: 90000."),
+              .describe("Countdown before the automatic once reply. Default: 30000."),
             permissions: z
               .string()
               .array()

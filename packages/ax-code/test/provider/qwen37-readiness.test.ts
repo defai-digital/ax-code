@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest"
 import {
-  classifyQwen37MaxRoute,
   classifyQwen37Route,
   qwen37MaxReadiness,
   qwen37PlusReadiness,
@@ -28,10 +27,6 @@ describe("classifyQwen37Route", () => {
 
   test("returns unknown for unrecognized providers", () => {
     expect(classifyQwen37Route("some-custom-provider")).toBe("unknown")
-  })
-
-  test("classifyQwen37MaxRoute is an alias for classifyQwen37Route", () => {
-    expect(classifyQwen37MaxRoute).toBe(classifyQwen37Route)
   })
 })
 

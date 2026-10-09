@@ -38196,7 +38196,7 @@
                     "type": "boolean"
                   },
                   "timeout_ms": {
-                    "description": "Countdown before the automatic once reply. Default: 90000.",
+                    "description": "Countdown before the automatic once reply. Default: 30000.",
                     "type": "integer",
                     "minimum": 5000,
                     "maximum": 300000

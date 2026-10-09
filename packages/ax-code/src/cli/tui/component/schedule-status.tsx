@@ -1,5 +1,6 @@
 import { useLanguage } from "@tui/context/language"
 import { createEffect, createMemo, createSignal, onCleanup, onMount, Show } from "solid-js"
+import type { RGBA } from "ax-tui"
 import { useSDK } from "@tui/context/sdk"
 import { useTheme } from "@tui/context/theme"
 import { useCommandDialog } from "./dialog-command"
@@ -7,7 +8,13 @@ import { truncateToCellWidth } from "../routes/session/last-input-view-model"
 import type { ScheduledTaskInfo } from "./dialog-scheduled-task-view-model"
 import { SCHEDULED_TASK_EVENTS, scheduleStatus, type ScheduleLoadState } from "./dialog-scheduled-task-view-model"
 
-export function ScheduleStatus(props: { width: number; compact?: boolean; showWhenEmpty?: boolean }) {
+export function ScheduleStatus(props: {
+  width: number
+  compact?: boolean
+  showWhenEmpty?: boolean
+  fg?: RGBA
+  showArrow?: boolean
+}) {
   const uiText = useLanguage().t
 
   const sdk = useSDK()
@@ -103,17 +110,18 @@ export function ScheduleStatus(props: { width: number; compact?: boolean; showWh
           when={props.compact}
           fallback={
             <>
-              <text fg={theme.text} selectable={false}>
+              <text fg={props.fg ?? theme.text} selectable={false}>
                 <b>{label()}</b>
               </text>
-              <text fg={fg()} selectable={false}>
+              <text fg={props.fg ?? fg()} selectable={false}>
                 {truncateToCellWidth(detailText(), props.width)}
               </text>
             </>
           }
         >
-          <text fg={fg()} selectable={false}>
-            {truncateToCellWidth(compactText(), Math.max(8, props.width))}
+          <text fg={props.fg ?? fg()} selectable={false}>
+            {truncateToCellWidth(compactText(), Math.max(8, props.width) - (props.showArrow ? 2 : 0))}
+            {props.showArrow ? " ›" : ""}
           </text>
         </Show>
       </box>

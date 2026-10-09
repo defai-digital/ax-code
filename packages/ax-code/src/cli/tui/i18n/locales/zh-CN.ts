@@ -1,11 +1,11 @@
 import type { Dictionary } from "../index"
 
 export const messages = {
-  "ui.wikiQueued": "Wiki\uff1a\u7b49\u5f85\u7a7a\u95f2",
-  "ui.wikiRunning": "Wiki\uff1a\u6b63\u5728\u751f\u6210",
-  "ui.wikiReady": "Wiki\uff1a\u5df2\u5c31\u7eea",
-  "ui.wikiDisabled": "Wiki\uff1a\u81ea\u52a8\u7ef4\u62a4\u5df2\u7981\u7528",
-  "ui.wikiFailed": "Wiki\uff1a\u751f\u6210\u5931\u8d25",
+  "ui.wikiQueued": "\u7b49\u5f85\u7a7a\u95f2",
+  "ui.wikiRunning": "\u6b63\u5728\u751f\u6210",
+  "ui.wikiReady": "\u5df2\u5c31\u7eea",
+  "ui.wikiDisabled": "\u81ea\u52a8\u7ef4\u62a4\u5df2\u7981\u7528",
+  "ui.wikiFailed": "\u751f\u6210\u5931\u8d25",
 
   "ui.openWikiVisualization": "\u6253\u5f00 Wiki \u56fe\u8c31",
   "ui.openingWikiVisualization": "\u6b63\u5728\u6253\u5f00 Wiki \u56fe\u8c31\u2026",

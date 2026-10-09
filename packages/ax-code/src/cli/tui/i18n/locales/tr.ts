@@ -1,11 +1,11 @@
 import type { Dictionary } from "../index"
 
 export const messages = {
-  "ui.wikiQueued": "Wiki: bo\u015fta kalmay\u0131 bekliyor",
-  "ui.wikiRunning": "Wiki: olu\u015fturuluyor",
-  "ui.wikiReady": "Wiki: haz\u0131r",
-  "ui.wikiDisabled": "Wiki: bak\u0131m devre d\u0131\u015f\u0131",
-  "ui.wikiFailed": "Wiki: olu\u015fturma ba\u015far\u0131s\u0131z",
+  "ui.wikiQueued": "bo\u015fta kalmay\u0131 bekliyor",
+  "ui.wikiRunning": "olu\u015fturuluyor",
+  "ui.wikiReady": "haz\u0131r",
+  "ui.wikiDisabled": "bak\u0131m devre d\u0131\u015f\u0131",
+  "ui.wikiFailed": "olu\u015fturma ba\u015far\u0131s\u0131z",
 
   "ui.openWikiVisualization": "Wiki grafi\u011fini a\u00e7",
   "ui.openingWikiVisualization": "Wiki grafi\u011fi a\u00e7\u0131l\u0131yor\u2026",

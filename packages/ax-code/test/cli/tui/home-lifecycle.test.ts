@@ -125,7 +125,6 @@ vi.mock("@tui/ui/toast", () => ({ Toast: () => undefined, useToast: () => ({ sho
 vi.mock("../../../src/cli/tui/component/dialog-command", () => ({
   useCommandDialog: () => ({ trigger: mocked.commandTrigger }),
 }))
-vi.mock("../../../src/cli/tui/component/logo", () => ({ Logo: () => undefined }))
 vi.mock("../../../src/cli/tui/component/mode-chips", () => ({ ModeChips: () => undefined }))
 vi.mock("../../../src/cli/tui/component/work-mode-notice", () => ({ WorkModeNotice: () => undefined }))
 

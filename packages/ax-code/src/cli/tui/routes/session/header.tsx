@@ -1,5 +1,5 @@
 import { stringWidth } from "@/bun/node-compat"
-import { ChromeAction } from "@tui/component/chrome-action"
+import { CHROME_CONTROL_COLOR, ChromeAction } from "@tui/component/chrome-action"
 import { useLanguage } from "@tui/context/language"
 import { useTerminalDimensions } from "ax-tui/solid"
 import { useContentDimensions } from "@tui/context/content-dimensions"
@@ -290,7 +290,7 @@ export function Header() {
                 </Show>
                 <Show when={sidebarRestoreLabel()}>
                   <box flexShrink={0} onMouseUp={() => command.trigger("session.sidebar.toggle")}>
-                    <text fg={theme.primary} selectable={false}>
+                    <text fg={CHROME_CONTROL_COLOR} selectable={false}>
                       {sidebarRestoreLabel()}
                     </text>
                   </box>

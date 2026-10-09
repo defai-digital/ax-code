@@ -5,7 +5,7 @@ import type { SystemPrompt } from "../system"
 import {
   CONVERSATION_SYSTEM_PROMPT,
   RESPONSE_ONLY_SYSTEM_PROMPT,
-  textOnlyUsesFastReasoning,
+  responseOnlyUsesFastReasoning,
   type TurnExecutionProfile,
 } from "./prompt-turn-profile"
 
@@ -45,6 +45,6 @@ export function resolveTurnPromptPolicy(input: {
     requestMessagesSource: profile.requestMessages,
     environmentOverride: [profile.kind === "response-only" ? RESPONSE_ONLY_SYSTEM_PROMPT : CONVERSATION_SYSTEM_PROMPT],
     omitTools: true,
-    fastReasoning: textOnlyUsesFastReasoning(input.user),
+    fastReasoning: responseOnlyUsesFastReasoning(input.user),
   }
 }

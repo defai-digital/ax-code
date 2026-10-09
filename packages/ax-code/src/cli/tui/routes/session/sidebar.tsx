@@ -5,6 +5,7 @@ import { useContentDimensions } from "@tui/context/content-dimensions"
 import { useSync } from "@tui/context/sync"
 import { createMemo, createEffect, untrack, type Accessor, For, Match, Show, Switch } from "solid-js"
 import { createStore } from "solid-js/store"
+import { RGBA } from "ax-tui"
 import { useTheme } from "../../context/theme"
 import { Installation } from "@/installation"
 import { useDirectory } from "../../context/directory"
@@ -13,7 +14,7 @@ import { ModeChips } from "../../component/mode-chips"
 import { WebMcpChip } from "../../component/webmcp-chip"
 import { GoalChip } from "../../component/goal-chip"
 import { TodoItem } from "../../component/todo-item"
-import { ChromeAction, ChromeWidthAction } from "../../component/chrome-action"
+import { CHROME_CONTROL_COLOR, ChromeAction, ChromeWidthAction } from "../../component/chrome-action"
 import { useCommandDialog } from "../../component/dialog-command"
 import { useSDK } from "@tui/context/sdk"
 import { useToast } from "../../ui/toast"
@@ -69,6 +70,7 @@ import {
 } from "./workflow-status"
 
 const log = Log.create({ service: "tui.sidebar.queue" })
+const PATH_BACKGROUND = RGBA.fromHex("#000000")
 
 const QUEUED_DELETE_ICON = "x"
 const QUEUED_DELETE_ICON_WIDTH = 2
@@ -384,6 +386,16 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
           paddingRight={2}
           position={props.overlay ? "absolute" : "relative"}
         >
+          <box flexShrink={0} flexDirection="row" gap={2} flexWrap="wrap" marginBottom={1}>
+            <ChromeAction fg={CHROME_CONTROL_COLOR} onMouseUp={() => command.trigger("session.sidebar.toggle")}>
+              /sidebar
+            </ChromeAction>
+            <ChromeWidthAction
+              fg={CHROME_CONTROL_COLOR}
+              width={chromeWidth(kv.get("sidebar_width"), SIDEBAR_WIDTH_DEFAULT)}
+              onMouseUp={() => command.trigger("session.sidebar.width")}
+            />
+          </box>
           <scrollbox
             flexGrow={1}
             verticalScrollbarOptions={{
@@ -1002,7 +1014,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
             </box>
           </scrollbox>
 
-          <box flexShrink={0} gap={1} paddingTop={1}>
+          <box flexShrink={0} gap={0} paddingTop={1}>
             <Show when={localInference()}>
               {(metrics) => (
                 <box gap={0}>
@@ -1050,8 +1062,21 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                 </box>
               </box>
             </Show>
-            <box flexDirection="column" gap={0}>
-              <text fg={theme.textMuted}>{uiText("ui.wikiSnapshotCaption")}</text>
+            <box flexDirection="row" flexWrap="wrap" flexShrink={0} gap={0} marginBottom={1}>
+              <ModeChips />
+              <WebMcpChip />
+            </box>
+            <box flexDirection="row" gap={1} flexWrap="wrap">
+              <ChromeAction
+                link
+                onMouseUp={() => {
+                  if (!wikiVisualization.opening()) command.trigger("session.wiki.viz")
+                }}
+              >
+                {wikiVisualization.opening()
+                  ? uiText("ui.openingWikiVisualization")
+                  : uiText("ui.openWikiVisualization")}
+              </ChromeAction>
               <Show when={wikiVisualization.maintenance()}>
                 {(status) => (
                   <text fg={status().phase === "failed" ? theme.error : theme.textMuted}>
@@ -1072,35 +1097,18 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                   </text>
                 )}
               </Show>
-              <ChromeAction
-                link
-                onMouseUp={() => {
-                  if (!wikiVisualization.opening()) command.trigger("session.wiki.viz")
-                }}
-              >
-                {wikiVisualization.opening()
-                  ? uiText("ui.openingWikiVisualization")
-                  : uiText("ui.openWikiVisualization")}
-              </ChromeAction>
             </box>
             <text>
               <Show
                 when={directory().split("/").length > 1}
-                fallback={<span style={{ fg: theme.text }}>{directory()}</span>}
+                fallback={<span style={{ fg: theme.text, bg: PATH_BACKGROUND }}>{directory()}</span>}
               >
-                <span style={{ fg: theme.textMuted }}>{directory().split("/").slice(0, -1).join("/")}/</span>
-                <span style={{ fg: theme.text }}>{directory().split("/").at(-1)}</span>
+                <span style={{ fg: theme.textMuted, bg: PATH_BACKGROUND }}>
+                  {directory().split("/").slice(0, -1).join("/")}/
+                </span>
+                <span style={{ fg: theme.text, bg: PATH_BACKGROUND }}>{directory().split("/").at(-1)}</span>
               </Show>
             </text>
-            <box flexShrink={0} flexDirection="row" gap={2} flexWrap="wrap">
-              <ChromeAction onMouseUp={() => command.trigger("session.sidebar.toggle")}>/sidebar</ChromeAction>
-              <ChromeWidthAction
-                width={chromeWidth(kv.get("sidebar_width"), SIDEBAR_WIDTH_DEFAULT)}
-                onMouseUp={() => command.trigger("session.sidebar.width")}
-              />
-            </box>
-            <ModeChips />
-            <WebMcpChip />
             <GoalChip sessionID={props.sessionID} />
             <text fg={theme.textMuted}>
               <span style={{ fg: theme.success }}>•</span> <b>AX</b>

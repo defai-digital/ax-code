@@ -1,5 +1,6 @@
 import { useLanguage } from "@tui/context/language"
 import type { BoxRenderable, ScrollBoxRenderable } from "ax-tui"
+import { RGBA } from "ax-tui"
 import { createEffect, createMemo, createSignal, For, onCleanup, Show, type Setter } from "solid-js"
 import { useKV } from "@tui/context/kv"
 import { NAVIGATION_WIDTH_DEFAULT, chromeWidth } from "../chrome-width"
@@ -17,7 +18,7 @@ import { useRoute } from "@tui/context/route"
 import { useTheme } from "@tui/context/theme"
 import { useLocal } from "@tui/context/local"
 import { scheduleTuiTimeout } from "../util/timer"
-import { ChromeAction, ChromeWidthAction } from "./chrome-action"
+import { CHROME_CONTROL_COLOR, ChromeAction, ChromeWidthAction } from "./chrome-action"
 import { useCommandDialog } from "./dialog-command"
 import { ScheduleStatus } from "./schedule-status"
 import { ScheduledSessionNavigation } from "./scheduled-session-navigation"
@@ -31,6 +32,7 @@ import { Spinner } from "./spinner"
 // Braille dot-cycle frames for the goal-planning pixel: braille is the only
 // CJK-safe dot-matrix family (same constraint as the footer's animated pixel).
 const GOAL_PLANNER_PIXEL_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+const OPTIONS_BACKGROUND = RGBA.fromHex("#000000")
 
 export function SessionNavigation(props: {
   width: number
@@ -148,6 +150,16 @@ export function SessionNavigation(props: {
       borderColor={theme.border}
       customBorderChars={SplitBorder.customBorderChars}
     >
+      <box flexShrink={0} flexDirection="row" gap={2} flexWrap="wrap" marginBottom={1}>
+        <ChromeAction fg={CHROME_CONTROL_COLOR} onMouseUp={() => command.trigger("session.navigation")}>
+          /navigation
+        </ChromeAction>
+        <ChromeWidthAction
+          fg={CHROME_CONTROL_COLOR}
+          width={preferredWidth()}
+          onMouseUp={() => command.trigger("session.navigation.width")}
+        />
+      </box>
       <box flexShrink={0} marginBottom={1} onMouseUp={() => command.trigger("session.navigation.info")}>
         <text fg={theme.text} selectable={false}>
           <b>{truncateToCellWidth(projectLabel(directory()), innerWidth())}</b>
@@ -361,14 +373,12 @@ export function SessionNavigation(props: {
         </box>
       </Show>
       <box flexShrink={0} marginTop={1}>
-        <ScheduleStatus width={innerWidth()} compact showWhenEmpty />
-        <box flexShrink={0} flexDirection="row" gap={2} flexWrap="wrap">
-          <ChromeAction onMouseUp={() => command.trigger("session.navigation")}>/navigation</ChromeAction>
-          <ChromeWidthAction width={preferredWidth()} onMouseUp={() => command.trigger("session.navigation.width")} />
-        </box>
+        <ScheduleStatus width={innerWidth()} compact showWhenEmpty showArrow fg={CHROME_CONTROL_COLOR} />
         <box onMouseUp={() => command.trigger("session.navigation.options")}>
-          <text fg={theme.textMuted} selectable={false}>
-            {truncateToCellWidth(uiText("navigation.options"), Math.max(0, innerWidth() - 2))} ›
+          <text fg={CHROME_CONTROL_COLOR} selectable={false}>
+            <span style={{ bg: OPTIONS_BACKGROUND }}>
+              {truncateToCellWidth(uiText("navigation.options"), Math.max(0, innerWidth() - 2))} ›
+            </span>
           </text>
         </box>
       </box>

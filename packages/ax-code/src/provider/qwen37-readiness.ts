@@ -38,9 +38,6 @@ export function classifyQwen37Route(providerId: string): Qwen37RouteClassificati
   return "unknown"
 }
 
-/** @deprecated Use {@link classifyQwen37Route} instead. */
-export const classifyQwen37MaxRoute = classifyQwen37Route
-
 // ── Qwen 3.7 Max readiness ──────────────────────────────────────────────────
 // Max supports DashScope enable_search on Alibaba routes (web/built-in tools).
 
