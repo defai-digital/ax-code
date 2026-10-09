@@ -367,7 +367,12 @@ export async function convertMcpTool(
         const result = await client.callTool(
           {
             name: mcpTool.name,
-            arguments: (input || {}) as Record<string, unknown>,
+            arguments: {
+              ...((input || {}) as Record<string, unknown>),
+              ...(webmcp?.toolName === "new_page"
+                ? WebMcpProfile.workflowContextArguments(webmcp.profile, input as object)
+                : {}),
+            },
           },
           CallToolResultSchema,
           {

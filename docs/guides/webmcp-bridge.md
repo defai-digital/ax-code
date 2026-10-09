@@ -168,3 +168,143 @@ managed `webmcp` requirement (`allow`, `allowRead`, `allowInteract`,
 
 Servers you add with `ax-code mcp add` are a different trust path. See
 [MCP Integrations](../integrations/mcp.md).
+
+## Reproduce and verify a development change
+
+The `browser_workflow` tool freezes acceptance steps before you edit a web
+application, runs them through the connected WebMCP bridge, and records
+structured assertions. Enable the bridge first. The first supported environment
+is a disposable HTTP server on `127.0.0.1`; each run allocates a different port
+and temporary data directory, plus a fresh isolated browser context. Persistent
+browser profiles are refused. Empty contexts are retained by the upstream bridge
+until disconnect; after 32 runs on one connection, reconnect the bridge before
+continuing. The workflow never reuses their cookies or storage.
+
+Ask the agent to freeze a scenario with `action: "freeze"`. For example, a
+project-owned `test/browser-server.mjs` that accepts a port argument can use:
+
+```json
+{
+  "action": "freeze",
+  "manifest": {
+    "version": 1,
+    "name": "Search returns a matching result",
+    "server": "node test/browser-server.mjs {port}",
+    "path": "/",
+    "setup": [],
+    "reset": [],
+    "cleanup": [],
+    "steps": [
+      { "action": "fill", "locator": { "role": "textbox", "name": "Search" }, "value": "example" },
+      {
+        "action": "assert",
+        "assertion": {
+          "locator": { "role": "status", "name": "One result" },
+          "property": "count",
+          "equals": 1
+        }
+      }
+    ]
+  }
+}
+```
+
+Keep the returned hash. Run with `{"action":"run","hash":"<hash>","server":"webmcp"}`
+(use your connected bridge's name). Reproduce the failure, make the change,
+and run the **same hash twice**. Each run starts the declared server, opens its
+own page, checks the steps, closes the page and stops its server. Lifecycle
+commands run in the repository root through the normal shell permissions.
+`{port}` expands to the allocated port; `{data}` expands to a quoted temporary
+directory. Setup, reset and cleanup commands must terminate within 15 seconds;
+readiness has a 15-second deadline and the browser run has a 120-second deadline.
+Browser actions keep their existing permissions and interaction budgets.
+
+Supported steps are click, hover, fill, structured assertion and page-tool
+contract checks. Locators use an exact role and accessible name. Actions with
+zero or multiple matches stop as `unknown`; there is no guessed UID or CSS/script
+fallback. Assertions compare count, value, checked or disabled state. An absent
+state property is unknown. For asynchronous rendering, add `timeoutMs` (0-10000,
+default 0) to an `assert` step. The runner polls fresh structured snapshots
+until the assertion matches or the deadline expires; it never repeats the
+preceding click or fill. The timeout is frozen with the scenario and retained
+in its exported test. Scenarios are bounded to 32 steps and 32 KiB.
+
+`inspect` returns the frozen manifest and runtime receipts. Receipts bind the
+scenario to the repository revision/content, operation outcomes, snapshot
+hashes and bounded console/network metadata. Changed source, denied operations,
+missing evidence, timeouts and incomplete cleanup cannot pass. These results
+validate the declared assertions; they do not prove every behavior of the app.
+Frozen state and authoritative receipts live in the current runtime session.
+After restarting, freeze and qualify again; copied JSON receipts are not
+accepted as runtime authority.
+
+### Export a regression test
+
+`{"action":"export","hash":"<hash>"}` returns a standalone Node module using
+`playwright-core`. Save the returned code as a project test and run it with
+`AX_TEST_WEBMCP_CHROME` pointing to Chrome. It starts the same fixture and uses
+fresh browser contexts, stable role/name locators and the frozen assertions.
+Actually run the exported test before calling it validated. Exported tests are
+an independent regression artifact; their output is not an Arena receipt.
+Page-tool contract steps use Chrome's native WebMCP protocol with exact descriptor
+hashes and expected output, without evaluating arbitrary page scripts. Chrome
+must support that experimental protocol for contract exports.
+
+### Develop a page-tool contract and investigate failures
+
+With a page open, `{"action":"contracts","server":"webmcp","pageId":1}`
+returns its registered descriptors and exact descriptor hashes. Freeze a
+`contract` step containing `name`, `descriptorHash`, `input`, `resultPath` and
+`equals`. Hash changes fail the check. Set `expectError: true` for negative
+inputs: only a confirmed page-tool execution error satisfies it; canceled
+calls, permission refusal and missing completion are unknown. Add assertions
+after mutations to check the resulting page state as well as the return value.
+
+The `template` action takes `name`, a relative application `module`, an explicit
+`exportName`, and `schema`. It verifies the local export exists and returns a
+registration skeleton. Review it against the application's input validation,
+authorization and business logic before enabling it; the tool cannot establish
+those guarantees from an exported function name.
+
+An optional `sources` list names repository-local files with one-based `line`
+and zero-based `column`, and optionally a local `map` file. Failed runs return
+bounded diagnostics and source links labelled `explicit`, `local_map` or
+`unresolved`. Mapping is advisory, never proof of a root cause or a passing
+assertion. Remote maps, paths outside the repository and files over 1 MiB are
+not read. Browser network evidence remains metadata only.
+
+### Require browser evidence in implement Arena
+
+Supply `browserScenario: "<hash>"` with `mode: "implement"`. Freeze the scenario
+and record a real failing assertion on the current clean base before starting
+the Arena. Every candidate receives that frozen contract in its isolated
+worktree and must run it twice successfully through its connected isolated
+bridge. Browser activation and permissions remain supervised. Missing bridge
+access, stale content, unknown results or missing receipts prevent promotion,
+even if the repository checks pass. Normal code verification and mutation
+checks still run, and no candidate merges automatically.
+
+### Choose evidence efficiently
+
+Native WebMCP tools describe application operations; Chrome DevTools MCP supplies
+browser inspection and automation. Prefer a page's registered tool for an
+explicit application operation, then verify its result and resulting page state.
+Use accessibility snapshots for text and stable element locators. For layout,
+canvas or image-only content, take a screenshot: crop to a fresh snapshot `uid`
+or use JPEG with reduced quality to stay within inline limits. Interpreting
+pixels requires a vision-capable model. Neither WebMCP nor the documented
+DevTools MCP tool list provides a dedicated OCR tool; inferred image text is
+advisory and cannot satisfy a structured acceptance assertion.
+
+Narrow console reads with `types` and `pageSize`; narrow network metadata with
+`resourceTypes` and `pageSize`. Workflow receipts retain pre-action baselines
+and bounded deltas so errors introduced by the reproduction are easier to find.
+Network bodies and arbitrary evaluation remain outside the bridge's granted
+surface. Performance traces, emulation, Lighthouse, screencasts, memory and
+extension tools in upstream DevTools MCP are separate capabilities and are not
+exposed by this profile.
+
+See Chrome's [WebMCP debugging guide](https://developer.chrome.com/docs/devtools/agents/webmcp-debugging)
+and the upstream [DevTools MCP tool reference](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/main/docs/tool-reference.md).
+Upstream main can differ from AX Code's pinned bridge; only the local tool
+schemas describe the supported arguments.

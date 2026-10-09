@@ -22,6 +22,8 @@ export namespace ImplementArena {
     completed: boolean
     /** Verification command outcomes */
     verification: Arena.Verification
+    browserScenarioHash?: string
+    browserQualified?: boolean
     verifyDetail?: string
     riskScore?: number
     changedFiles?: number
@@ -38,6 +40,8 @@ export namespace ImplementArena {
     worktreeBranch?: string
     sessionID?: string
     summary?: string
+    browserScenarioHash?: string
+    browserQualified?: boolean
     verifyDetail?: string
     changedFiles?: number
     baseCommit?: string
@@ -48,7 +52,10 @@ export namespace ImplementArena {
   export function toArenaCandidate(result: ContestantResult): Arena.ArenaCandidate {
     const hasPatch =
       typeof result.changedFiles === "number" && Number.isFinite(result.changedFiles) && result.changedFiles > 0
-    const verification = !result.completed || !hasPatch ? "fail" : result.verification
+    const verification =
+      !result.completed || !hasPatch || (result.browserScenarioHash !== undefined && result.browserQualified !== true)
+        ? "fail"
+        : result.verification
     return {
       id: result.id,
       providerID: result.providerID,
@@ -76,6 +83,8 @@ export namespace ImplementArena {
         sessionID: src?.sessionID,
         summary: src?.summary,
         verifyDetail: src?.verifyDetail,
+        browserScenarioHash: src?.browserScenarioHash,
+        browserQualified: src?.browserQualified,
         changedFiles: src?.changedFiles,
         baseCommit: src?.baseCommit,
         commit: src?.commit,
@@ -109,6 +118,10 @@ export namespace ImplementArena {
       if (c.sessionID) lines.push(`   session: \`${c.sessionID}\``)
       if (c.changedFiles !== undefined) lines.push(`   changed files: ${c.changedFiles}`)
       if (c.summary) lines.push(`   summary: ${c.summary.slice(0, 300)}`)
+      if (c.browserScenarioHash)
+        lines.push(
+          `   browser: ${c.browserQualified ? "qualified" : "not qualified"} (scenario ${c.browserScenarioHash})`,
+        )
       if (c.verifyDetail) lines.push(`   verify: ${c.verifyDetail}`)
       if (c.error) lines.push(`   error: ${c.error}`)
       lines.push(`   reasons: ${c.reasons.join(", ")}`)

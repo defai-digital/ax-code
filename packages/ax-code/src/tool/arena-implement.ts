@@ -3,6 +3,8 @@
  * Creates isolated worktrees, runs one agent per contestant, verifies, ranks.
  */
 
+import { BrowserWorkflowStore } from "../browser-workflow/store"
+import type { BrowserScenario } from "../browser-workflow/scenario"
 import { createHash } from "crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
@@ -374,6 +376,7 @@ export async function runImplementContestant(input: {
   task: string
   context?: string
   parentSessionID: SessionID
+  browserScenario?: BrowserScenario.Frozen
   baseCommit: string
   agentName: string
   abort: AbortSignal
@@ -446,12 +449,16 @@ export async function runImplementContestant(input: {
           ],
         })
         contestantSessionID = session.id
+        if (input.browserScenario) BrowserWorkflowStore.put(session.id, input.browserScenario)
 
         const prompt = [
           `You are a contestant in an implement arena. Work only in this worktree.`,
           `Implement the task completely. Prefer minimal correct changes.`,
           `Do not create nested subagents. Do not call arena/council.`,
           `After edits, leave the tree in a state that typecheck/tests can validate.`,
+          input.browserScenario
+            ? `Browser acceptance is required. The parent froze scenario ${input.browserScenario.hash} before generation and qualified a failing assertion control. Use browser_workflow inspect with this hash. After edits, run this exact scenario twice through your connected isolated WebMCP bridge; do not replace assertions. Each run owns a unique server port/data directory and page. Existing browser approvals remain required. Missing, unknown, changed-tree or failed receipts prevent promotion. Report unavailable bridge access honestly.`
+            : "",
           "",
           `Task: ${input.task}`,
           // ADR-099: context is admitted verbatim by the arena tool (or the
@@ -498,7 +505,10 @@ export async function runImplementContestant(input: {
             timeoutMs,
             `Arena contestant timed out after ${timeoutMs / 60_000} minutes`,
           )
-          return { sessionID: session.id, promptResult }
+          const browserQualified = input.browserScenario
+            ? await BrowserWorkflowStore.qualify(session.id, input.browserScenario.hash)
+            : undefined
+          return { sessionID: session.id, promptResult, browserQualified }
         } catch (error) {
           await cancel().catch((cancelError) => {
             log.warn("failed to cancel arena contestant", {
@@ -541,7 +551,11 @@ export async function runImplementContestant(input: {
       verifiedFingerprint && snapshot.fingerprint !== verifiedFingerprint
         ? "Verification commands modified the contestant worktree; the resulting patch is not verified"
         : undefined
-    const error = failMsg ?? noPatch ?? verificationMutation
+    const browserFailure =
+      input.browserScenario && !result.browserQualified
+        ? "Required browser scenario lacks two successful runtime receipts for this candidate content"
+        : undefined
+    const error = failMsg ?? noPatch ?? verificationMutation ?? browserFailure
     const verification: Arena.Verification = error ? "fail" : verify.verification
     const riskScore = snapshot.hasChanges ? Math.min(20, Math.max(1, Math.round(snapshot.linesChanged / 20))) : 20
 
@@ -562,6 +576,8 @@ export async function runImplementContestant(input: {
       sessionID: result.sessionID,
       completed: !error,
       verification,
+      browserScenarioHash: input.browserScenario?.hash,
+      browserQualified: result.browserQualified,
       verifyDetail: error
         ? `${error}; ${verify.detail}; diff: ${snapshot.stat}`
         : `${verify.detail}; diff: ${snapshot.stat}`,
@@ -642,6 +658,7 @@ export async function runImplementArena(input: {
   task: string
   context?: string
   parentSessionID: SessionID
+  browserScenario?: BrowserScenario.Frozen
   baseCommit: string
   agentName: string
   strategy: Arena.Strategy
@@ -685,6 +702,7 @@ export async function runImplementArena(input: {
         task: input.task,
         context: input.context,
         parentSessionID: input.parentSessionID,
+        browserScenario: input.browserScenario,
         baseCommit: input.baseCommit,
         agentName: input.agentName,
         abort: signal,

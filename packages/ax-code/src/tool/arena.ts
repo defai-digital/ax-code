@@ -8,6 +8,8 @@ import { streamObject } from "ai"
 import { createHash } from "crypto"
 import z from "zod"
 import path from "path"
+import { BrowserScenario } from "../browser-workflow/scenario"
+import { BrowserWorkflowStore } from "../browser-workflow/store"
 import { Config } from "../config/config"
 import { Arena } from "../mode/arena"
 import { Budget } from "../mode/budget"
@@ -98,6 +100,9 @@ const parameters = z.object({
     ),
   providers: z.array(MemberSelectionSchema).min(2).max(HARD_MAX).superRefine(validateMemberSelections).optional(),
   strategy: z.enum(["verify_first", "diversity", "hybrid_score"]).optional(),
+  browserScenario: BrowserScenario.Hash.optional().describe(
+    "Frozen browser_workflow hash with a failing assertion control on the current clean base. Requires two matching successful browser runs per candidate before promotion.",
+  ),
   enableIfDisabled: z
     .boolean()
     .optional()
@@ -438,6 +443,8 @@ export const ArenaTool = Tool.define("arena", async () => {
       const providerSnap = await EnsembleShared.snapshotSelectableProviders()
       const suggestedTool = EnsemblePreflight.suggestTool(args.task)
       const arenaMode = args.mode ?? "plan"
+      if (args.browserScenario && args.mode !== "implement")
+        throw new Error("browserScenario is available only in implement arena")
       let baseCommit: string | undefined
 
       // Display-only config path in disabled messages; not a filesystem open.
@@ -648,12 +655,16 @@ export const ArenaTool = Tool.define("arena", async () => {
       // --- Implement arena (worktree-isolated writers + verify) ---
       if (arenaMode === "implement") {
         if (!baseCommit) throw new Error("Implement arena base commit was not resolved")
+        const browserScenario = args.browserScenario
+          ? await BrowserWorkflowStore.admitControl(ctx.sessionID, args.browserScenario)
+          : undefined
         const agentName = await Agent.defaultAgent().catch(() => "build")
         const impl = await runImplementArena({
           members,
           task: args.task,
           context: args.context,
           parentSessionID: ctx.sessionID,
+          browserScenario,
           baseCommit,
           agentName,
           strategy,

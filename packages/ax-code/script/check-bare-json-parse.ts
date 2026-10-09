@@ -35,6 +35,8 @@ export namespace JsonParseGuard {
   export const AllowedFiles: ReadonlySet<string> = new Set([
     "src/bun/node-compat.ts",
     "src/hooks/lifecycle.ts",
+    // Standalone generated Playwright module; its decode helper catches invalid JSON.
+    "src/browser-workflow/export.ts",
     "src/quality/dre-graph/dre-graph-assets.ts",
   ])
 

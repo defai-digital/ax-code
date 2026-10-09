@@ -21,6 +21,7 @@ import { ToolDiscovery } from "../tool-discovery"
 import { McpPermissionPattern } from "../../mcp/permission-pattern"
 import { WebMcpApprovals } from "../../mcp/webmcp-approvals"
 import { WebMcpProfile } from "../../mcp/webmcp-profile"
+import { BrowserWorkflow } from "../../browser-workflow/service"
 import { ProviderTransform } from "../../provider/transform"
 import { Permission } from "@/permission"
 import { Isolation } from "@/isolation"
@@ -1409,6 +1410,9 @@ export async function resolveTools(input: ResolveToolsInput) {
     })
   }
 
+  // Private invocation identity: nested workflow calls retain this session's
+  // permission/lifecycle wrappers while reusing the workflow's exclusive lane.
+  const browserCalls = new WeakMap<object, { result?: unknown }>()
   const mcpTools = await MCP.tools()
   const discoveryCatalog: ToolDiscovery.Entry[] = []
   const disabledMcpTools = Permission.disabled(Object.keys(mcpTools), ruleset)
@@ -1436,7 +1440,9 @@ export async function resolveTools(input: ResolveToolsInput) {
     mcpTool.execute = async (args, opts) => {
       const ctx = context(args, opts)
       let hookFeedback: string | undefined
-      const releaseLane = await ToolWriteGate.acquire(ctx.sessionID, "exclusive", ctx.abort)
+      // @scan-suppress race_scan - This invocation-local token is installed synchronously by the workflow while it holds the exclusive session lane; only that nested call can reuse the lane.
+      const nestedBrowser = browserCalls.get(opts)
+      const releaseLane = nestedBrowser ? () => {} : await ToolWriteGate.acquire(ctx.sessionID, "exclusive", ctx.abort)
       using _lane = defer(releaseLane)
       const result = await runToolLifecycle({
         toolID: key,
@@ -1579,7 +1585,7 @@ export async function resolveTools(input: ResolveToolsInput) {
             breaker?.approved()
             const granted = await MCP.grantWebMcpInteractOrigin(interactPolicy.server, error.origin)
             if (!granted.ok) throw new Error(granted.error)
-            throw new Error(
+            throw new WebMcpProfile.GrantRetryError(
               `WebMCP interaction with ${error.origin} was ${error.renewal ? "renewed" : "allowed"} for this session (${WebMcpProfile.INTERACT_BUDGET} grant-covered actions). Retry the call.`,
             )
           }
@@ -1795,6 +1801,7 @@ export async function resolveTools(input: ResolveToolsInput) {
         },
       })
 
+      if (nestedBrowser) nestedBrowser.result = result
       const { textParts, attachments } = collectMcpToolResult(result)
 
       const outputText = textParts.length ? `[Untrusted MCP tool content from ${key}]\n\n${textParts.join("\n\n")}` : ""
@@ -1823,6 +1830,79 @@ export async function resolveTools(input: ResolveToolsInput) {
       }
     }
     tools[key] = mcpTool
+  }
+
+  if (
+    Object.values(mcpTools).some((item) => item.webmcp) &&
+    !isDisabledByConfig("browser_workflow") &&
+    !Permission.disabled(["browser_workflow"], ruleset).has("browser_workflow")
+  ) {
+    if (Object.hasOwn(tools, "browser_workflow")) throw new Error("Browser workflow conflicts with an existing tool")
+    const admittedBrowserTools = new Map(
+      Object.entries(mcpTools)
+        .filter(([key, item]) => item.webmcp && tools[key])
+        .map(([key, item]) => [key, { policy: item.webmcp!, wrapped: tools[key]! }]),
+    )
+    tools.browser_workflow = tool({
+      description: BrowserWorkflow.description,
+      inputSchema: jsonSchema(ProviderTransform.schema(input.model, z.toJSONSchema(BrowserWorkflow.Parameters)) as any),
+      async execute(raw, options) {
+        const args = BrowserWorkflow.Parameters.parse(raw)
+        const ctx = context(args, options)
+        const release = await ToolWriteGate.acquire(ctx.sessionID, "exclusive", ctx.abort)
+        using _lane = defer(release)
+        let sequence = 0
+        return runToolLifecycle({
+          toolID: "browser_workflow",
+          sessionID: ctx.sessionID,
+          callID: options.toolCallId,
+          args,
+          cwd: Instance.directory,
+          ask: (request) => ctx.ask(request),
+          execute: () =>
+            BrowserWorkflow.execute(BrowserWorkflow.Parameters.parse(args), {
+              context: ctx,
+              registry: registryDispatcher!,
+              requireBridge(server) {
+                const found = [...admittedBrowserTools.values()].find((entry) => entry.policy.server === server)
+                if (
+                  !found ||
+                  !found.policy.profile.read ||
+                  !found.policy.profile.interact ||
+                  found.policy.profile.persistentProfile
+                )
+                  throw new Error("Browser workflow needs a connected isolated read/interact WebMCP bridge")
+              },
+              async browser(server, name, parameters, signal) {
+                const entry = [...admittedBrowserTools.values()].find(
+                  (entry) => entry.policy.server === server && entry.policy.toolName === name,
+                )
+                if (!entry?.wrapped.execute) throw new Error("Required browser tool is disabled or unavailable")
+                const nested = {
+                  toolCallId: `${options.toolCallId}:browser:${++sequence}`,
+                  messages: options.messages,
+                  abortSignal: signal,
+                }
+                const capture: { result?: unknown } = {}
+                browserCalls.set(nested, capture)
+                try {
+                  try {
+                    await entry.wrapped.execute(parameters, nested)
+                  } catch (error) {
+                    if (!(error instanceof WebMcpProfile.GrantRetryError)) throw error
+                    // The grant path never dispatched the action. One continuation only.
+                    await entry.wrapped.execute(parameters, nested)
+                  }
+                  if (capture.result === undefined) throw new Error("Browser operation produced no runtime evidence")
+                  return capture.result
+                } finally {
+                  browserCalls.delete(nested)
+                }
+              },
+            }),
+        })
+      },
+    })
   }
 
   const discoveryEnabled = (await Config.get()).experimental?.mcp_tool_discovery === true
