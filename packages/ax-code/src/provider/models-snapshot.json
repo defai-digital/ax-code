@@ -15236,6 +15236,52 @@
         "release_date": "2026-04-23",
         "temperature": true,
         "tool_call": true
+      },
+      "gemma-4-26b-a4b-it-chimeraxheretic": {
+        "attachment": true,
+        "family": "gemma",
+        "id": "gemma-4-26b-a4b-it-chimeraxheretic",
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemma 4 26B A4B Chimera X Heretic",
+        "reasoning": true,
+        "release_date": "2026-10-08",
+        "tool_call": true
+      },
+      "gemma-4-31b-it-scarlet": {
+        "attachment": true,
+        "family": "gemma",
+        "id": "gemma-4-31b-it-scarlet",
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemma 4 31B Scarlet",
+        "reasoning": true,
+        "release_date": "2026-10-08",
+        "tool_call": true
       }
     }
   },
@@ -31103,6 +31149,58 @@
         "temperature": true,
         "tool_call": true,
         "canonical_model_id": "alibaba/qwen3.6-35b-a3b"
+      },
+      "mimo-v2.6-pro": {
+        "attachment": true,
+        "canonical_model_id": "xiaomi/mimo-v2.6-pro",
+        "family": "mimo",
+        "id": "mimo-v2.6-pro",
+        "interleaved": true,
+        "limit": {
+          "context": 1048560,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "MiMo-V2.6-Pro",
+        "reasoning": true,
+        "release_date": "2026-09-22",
+        "temperature": true,
+        "tool_call": true
+      },
+      "mimo-v2.6-pro-flex": {
+        "attachment": true,
+        "canonical_model_id": "xiaomi/mimo-v2.6-pro",
+        "family": "mimo",
+        "id": "mimo-v2.6-pro-flex",
+        "interleaved": true,
+        "limit": {
+          "context": 1048560,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "MiMo-V2.6-Pro Flex",
+        "reasoning": true,
+        "release_date": "2026-09-22",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -40794,14 +40892,15 @@
         "provider": {
           "npm": "@ai-sdk/google-vertex/anthropic"
         },
-        "canonical_model_id": "anthropic/claude-sonnet-4-5-20250929"
+        "canonical_model_id": "anthropic/claude-sonnet-4-5-20250929",
+        "status": "deprecated"
       },
       "qwen/qwen3-235b-a22b-instruct-2507-maas": {
         "id": "qwen/qwen3-235b-a22b-instruct-2507-maas",
         "name": "Qwen3 235B A22B Instruct",
         "family": "qwen",
         "attachment": false,
-        "reasoning": true,
+        "reasoning": false,
         "tool_call": true,
         "temperature": true,
         "release_date": "2025-08-13",
@@ -40834,8 +40933,7 @@
         "release_date": "2025-08-28",
         "modalities": {
           "input": [
-            "text",
-            "pdf"
+            "text"
           ],
           "output": [
             "text"
@@ -40862,8 +40960,7 @@
         "release_date": "2025-12-17",
         "modalities": {
           "input": [
-            "text",
-            "pdf"
+            "text"
           ],
           "output": [
             "text"
@@ -40877,6 +40974,9 @@
         "provider": {
           "npm": "@ai-sdk/openai-compatible",
           "api": "https://${GOOGLE_VERTEX_ENDPOINT}/v1/projects/${GOOGLE_VERTEX_PROJECT}/locations/${GOOGLE_VERTEX_LOCATION}/endpoints/openapi"
+        },
+        "interleaved": {
+          "field": "reasoning_content"
         }
       },
       "zai-org/glm-5-maas": {
@@ -41042,7 +41142,6 @@
         },
         "reasoning": true,
         "release_date": "2026-08-12",
-        "status": "beta",
         "temperature": true,
         "tool_call": true,
         "canonical_model_id": "xai/grok-4.6"
@@ -41160,6 +41259,149 @@
         "reasoning": true,
         "release_date": "2026-10-07",
         "temperature": false,
+        "tool_call": true
+      },
+      "codestral-2": {
+        "attachment": false,
+        "canonical_model_id": "mistral/codestral-2508",
+        "family": "codestral",
+        "id": "codestral-2",
+        "limit": {
+          "context": 128000,
+          "output": 8192
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Codestral 2",
+        "provider": {
+          "api": "https://${GOOGLE_VERTEX_ENDPOINT}/v1/projects/${GOOGLE_VERTEX_PROJECT}/locations/${GOOGLE_VERTEX_LOCATION}/publishers/mistralai/models",
+          "npm": "@ai-sdk/mistral"
+        },
+        "reasoning": false,
+        "release_date": "2025-07-30",
+        "temperature": true,
+        "tool_call": true
+      },
+      "google/gemma-4-26b-a4b-it-maas": {
+        "attachment": true,
+        "canonical_model_id": "google/gemma-4-26b-a4b-it",
+        "family": "gemma",
+        "id": "google/gemma-4-26b-a4b-it-maas",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 262144,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemma 4 26B A4B IT",
+        "provider": {
+          "api": "https://${GOOGLE_VERTEX_ENDPOINT}/v1/projects/${GOOGLE_VERTEX_PROJECT}/locations/${GOOGLE_VERTEX_LOCATION}/endpoints/openapi",
+          "npm": "@ai-sdk/openai-compatible"
+        },
+        "reasoning": true,
+        "release_date": "2026-04-02",
+        "status": "alpha",
+        "temperature": true,
+        "tool_call": true
+      },
+      "meta/llama-4-scout-17b-16e-instruct-maas": {
+        "attachment": true,
+        "canonical_model_id": "meta/llama-4-scout-17b-instruct",
+        "family": "llama",
+        "id": "meta/llama-4-scout-17b-16e-instruct-maas",
+        "limit": {
+          "context": 1310720,
+          "output": 8192
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Llama 4 Scout 17B Instruct",
+        "provider": {
+          "api": "https://${GOOGLE_VERTEX_ENDPOINT}/v1/projects/${GOOGLE_VERTEX_PROJECT}/locations/${GOOGLE_VERTEX_LOCATION}/endpoints/openapi",
+          "npm": "@ai-sdk/openai-compatible"
+        },
+        "reasoning": false,
+        "release_date": "2025-04-05",
+        "temperature": true,
+        "tool_call": true
+      },
+      "mistral-medium-3": {
+        "attachment": true,
+        "canonical_model_id": "mistral/mistral-medium-2505",
+        "family": "mistral-medium",
+        "id": "mistral-medium-3",
+        "limit": {
+          "context": 131072,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Mistral Medium 3",
+        "provider": {
+          "api": "https://${GOOGLE_VERTEX_ENDPOINT}/v1/projects/${GOOGLE_VERTEX_PROJECT}/locations/${GOOGLE_VERTEX_LOCATION}/publishers/mistralai/models",
+          "npm": "@ai-sdk/mistral"
+        },
+        "reasoning": false,
+        "release_date": "2025-05-07",
+        "temperature": true,
+        "tool_call": true
+      },
+      "mistral-small-2503": {
+        "attachment": true,
+        "canonical_model_id": "mistral/mistral-small-3-1-24b-instruct-2503",
+        "family": "mistral-small",
+        "id": "mistral-small-2503",
+        "limit": {
+          "context": 128000,
+          "output": 16384
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Mistral Small 3.1 24B",
+        "provider": {
+          "api": "https://${GOOGLE_VERTEX_ENDPOINT}/v1/projects/${GOOGLE_VERTEX_PROJECT}/locations/${GOOGLE_VERTEX_LOCATION}/publishers/mistralai/models",
+          "npm": "@ai-sdk/mistral"
+        },
+        "reasoning": false,
+        "release_date": "2025-03-17",
+        "temperature": true,
         "tool_call": true
       }
     }
@@ -53089,29 +53331,6 @@
         },
         "canonical_model_id": "alibaba/qwen3.7-plus"
       },
-      "deepseek-v4-pro": {
-        "id": "deepseek-v4-pro",
-        "name": "DeepSeek V4 Pro",
-        "family": "deepseek-thinking",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-07-06",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 1000000,
-          "output": 384000
-        },
-        "canonical_model_id": "deepseek/deepseek-v4-pro"
-      },
       "gpt-oss-120b": {
         "id": "gpt-oss-120b",
         "name": "GPT OSS 120B",
@@ -53215,7 +53434,7 @@
         },
         "limit": {
           "context": 1000000,
-          "output": 128000
+          "output": 64000
         },
         "canonical_model_id": "anthropic/claude-sonnet-4-6"
       },
@@ -60249,6 +60468,30 @@
         "release_date": "2026-09-29",
         "temperature": false,
         "tool_call": true
+      },
+      "anthropic/claude-haiku-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "anthropic/claude-haiku-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5",
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
+        "tool_call": true
       }
     }
   },
@@ -64387,27 +64630,6 @@
           "output": 32768
         }
       },
-      "qwen3-coder-30b-a3b-instruct": {
-        "id": "qwen3-coder-30b-a3b-instruct",
-        "name": "Qwen3-Coder-30B-A3B-Instruct",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-10-28",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 262144,
-          "output": 262144
-        }
-      },
       "qwen3.5-397b-a17b": {
         "id": "qwen3.5-397b-a17b",
         "name": "Qwen3.5-397B-A17B",
@@ -66016,7 +66238,7 @@
             "text"
           ]
         },
-        "name": "deepseek-ai/DeepSeek-V4.1-Flash-Fast",
+        "name": "DeepSeek V4.1 Flash Fast",
         "reasoning": true,
         "release_date": "2026-09-10",
         "temperature": false,
@@ -72094,8 +72316,8 @@
           ]
         },
         "limit": {
-          "context": 60288,
-          "output": 16000
+          "context": 131072,
+          "output": 131072
         }
       },
       "mistral/codestral-embed": {
@@ -73673,6 +73895,27 @@
         "name": "Glyph Cluster",
         "reasoning": true,
         "release_date": "2026-10-07",
+        "tool_call": true
+      },
+      "callstack/apex": {
+        "attachment": true,
+        "id": "callstack/apex",
+        "limit": {
+          "context": 262144,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Apex",
+        "reasoning": true,
+        "release_date": "2026-10-08",
         "tool_call": true
       }
     }
@@ -85978,18 +86221,7 @@
           "context": 1048576,
           "output": 1048576
         },
-        "canonical_model_id": "thinkingmachines/inkling",
-        "experimental": {
-          "modes": {
-            "priority": {
-              "provider": {
-                "body": {
-                  "service_tier": "priority"
-                }
-              }
-            }
-          }
-        }
+        "canonical_model_id": "thinkingmachines/inkling"
       },
       "accounts/fireworks/models/gpt-oss-120b": {
         "id": "accounts/fireworks/models/gpt-oss-120b",
@@ -92220,7 +92452,8 @@
           "context": 262144,
           "output": 262144
         },
-        "canonical_model_id": "nvidia/nemotron-3-nano-30b-a3b"
+        "canonical_model_id": "nvidia/nemotron-3-nano-30b-a3b",
+        "status": "deprecated"
       },
       "google/gemma-4-31B-it": {
         "id": "google/gemma-4-31B-it",
@@ -93066,7 +93299,8 @@
           "input": 192000,
           "output": 128000
         },
-        "canonical_model_id": "tencent/hy3"
+        "canonical_model_id": "tencent/hy3",
+        "status": "deprecated"
       },
       "XiaomiMiMo/MiMo-V2.5-Pro": {
         "id": "XiaomiMiMo/MiMo-V2.5-Pro",
@@ -93529,8 +93763,8 @@
           ]
         },
         "limit": {
-          "context": 131072,
-          "output": 32768
+          "context": 262144,
+          "output": 235929
         },
         "canonical_model_id": "alibaba/qwen3-next-80b-a3b-instruct"
       },
@@ -93675,7 +93909,7 @@
         },
         "limit": {
           "context": 262144,
-          "output": 235929
+          "output": 32768
         },
         "canonical_model_id": "alibaba/qwen3.5-35b-a3b"
       },
@@ -93930,7 +94164,7 @@
         },
         "limit": {
           "context": 262144,
-          "output": 81920
+          "output": 235929
         },
         "canonical_model_id": "alibaba/qwen3.5-397b-a17b"
       },
@@ -94282,8 +94516,8 @@
           ]
         },
         "limit": {
-          "context": 128000,
-          "output": 32000
+          "context": 262144,
+          "output": 235929
         }
       },
       "qwen/qwen3.6-flash": {
@@ -94587,29 +94821,6 @@
         "limit": {
           "context": 131072,
           "output": 32768
-        }
-      },
-      "baidu/ernie-4.5-vl-424b-a47b": {
-        "id": "baidu/ernie-4.5-vl-424b-a47b",
-        "name": "Baidu: ERNIE 4.5 VL 424B A47B  (retires Oct 8)",
-        "family": "ernie",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": false,
-        "temperature": true,
-        "release_date": "2025-06-30",
-        "modalities": {
-          "input": [
-            "image",
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 123000,
-          "output": 16000
         }
       },
       "aion-labs/aion-2.0": {
@@ -95058,29 +95269,6 @@
           "output": 65536
         },
         "canonical_model_id": "stepfun/step-3.5-flash"
-      },
-      "stepfun/step-3.7-flash:free": {
-        "id": "stepfun/step-3.7-flash:free",
-        "name": "StepFun: Step 3.7 Flash (free)",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-05-29",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 262144,
-          "output": 262144
-        },
-        "canonical_model_id": "stepfun/step-3.7-flash"
       },
       "mistralai/ministral-14b-2512": {
         "id": "mistralai/ministral-14b-2512",
@@ -95835,7 +96023,7 @@
         },
         "limit": {
           "context": 262144,
-          "output": 16384
+          "output": 235929
         },
         "canonical_model_id": "nvidia/nemotron-3-super-120b-a12b"
       },
@@ -97258,8 +97446,8 @@
           ]
         },
         "limit": {
-          "context": 128000,
-          "output": 16000
+          "context": 163840,
+          "output": 16384
         },
         "canonical_model_id": "deepseek/deepseek-chat"
       },
@@ -97581,28 +97769,6 @@
           "output": 32768
         }
       },
-      "inclusionai/ling-3.0-flash-sante:free": {
-        "id": "inclusionai/ling-3.0-flash-sante:free",
-        "name": "inclusionAI: Ling 3.0 Flash Sante (free)",
-        "family": "ling",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-09-04",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 262144,
-          "output": 32768
-        }
-      },
       "anthracite-org/magnum-v4-72b": {
         "id": "anthracite-org/magnum-v4-72b",
         "name": "Magnum v4 72B",
@@ -97696,7 +97862,7 @@
         "family": "llama",
         "attachment": false,
         "reasoning": false,
-        "tool_call": true,
+        "tool_call": false,
         "temperature": true,
         "release_date": "2024-08-28",
         "modalities": {
@@ -101250,7 +101416,7 @@
         "family": "mistral-large",
         "id": "mistralai/mistral-large-4-0",
         "limit": {
-          "context": 524288,
+          "context": 1048576,
           "output": 262144
         },
         "modalities": {
@@ -101262,7 +101428,7 @@
             "text"
           ]
         },
-        "name": "Mistral: Mistral Large 4",
+        "name": "Mistral: Mistral Large 4 (50% off)",
         "reasoning": true,
         "release_date": "2026-10-06",
         "temperature": true,
@@ -101291,6 +101457,97 @@
         "reasoning": true,
         "release_date": "2026-10-07",
         "temperature": false,
+        "tool_call": true
+      },
+      "inclusionai/ling-3.0-flash-sante": {
+        "attachment": false,
+        "family": "ling",
+        "id": "inclusionai/ling-3.0-flash-sante",
+        "limit": {
+          "context": 262144,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "inclusionAI: Ling 3.0 Flash Sante",
+        "reasoning": true,
+        "release_date": "2026-09-04",
+        "temperature": true,
+        "tool_call": true
+      },
+      "stealth/glyph-cluster": {
+        "attachment": false,
+        "id": "stealth/glyph-cluster",
+        "limit": {
+          "context": 256000,
+          "output": 256000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Stealth: Glyph Cluster (free)",
+        "reasoning": true,
+        "release_date": "2025-08-26",
+        "temperature": true,
+        "tool_call": true
+      },
+      "stepfun/step-5-preview": {
+        "attachment": true,
+        "canonical_model_id": "stepfun/step-5-preview",
+        "id": "stepfun/step-5-preview",
+        "limit": {
+          "context": 1000000,
+          "input": 1000000,
+          "output": 64000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Step 5 Preview",
+        "reasoning": true,
+        "release_date": "2026-09-16",
+        "temperature": true,
+        "tool_call": true
+      },
+      "stepfun/step-5-preview-free": {
+        "attachment": true,
+        "family": "step",
+        "id": "stepfun/step-5-preview-free",
+        "limit": {
+          "context": 1000000,
+          "output": 64000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "StepFun: Step 5 Preview (free)",
+        "reasoning": true,
+        "release_date": "2025-08-26",
+        "temperature": true,
         "tool_call": true
       }
     }
@@ -106007,7 +106264,18 @@
         "reasoning": true,
         "release_date": "2026-09-29",
         "temperature": false,
-        "tool_call": true
+        "tool_call": true,
+        "experimental": {
+          "modes": {
+            "ultrafast": {
+              "provider": {
+                "body": {
+                  "service_tier": "ultrafast"
+                }
+              }
+            }
+          }
+        }
       },
       "openai.gpt-6.1-sol": {
         "attachment": true,
@@ -106038,7 +106306,18 @@
         "reasoning": true,
         "release_date": "2026-09-29",
         "temperature": false,
-        "tool_call": true
+        "tool_call": true,
+        "experimental": {
+          "modes": {
+            "ultrafast": {
+              "provider": {
+                "body": {
+                  "service_tier": "ultrafast"
+                }
+              }
+            }
+          }
+        }
       },
       "us.openai.gpt-6.1-sol": {
         "attachment": true,
@@ -106063,7 +106342,18 @@
         "reasoning": true,
         "release_date": "2026-09-29",
         "temperature": false,
-        "tool_call": true
+        "tool_call": true,
+        "experimental": {
+          "modes": {
+            "ultrafast": {
+              "provider": {
+                "body": {
+                  "service_tier": "ultrafast"
+                }
+              }
+            }
+          }
+        }
       },
       "in.anthropic.claude-haiku-4-5-20251001-v1:0": {
         "attachment": true,
@@ -110016,7 +110306,7 @@
         "tool_call": true
       },
       "anthropic/claude-haiku-5-5": {
-        "attachment": false,
+        "attachment": true,
         "canonical_model_id": "anthropic/claude-haiku-5-5",
         "family": "claude-haiku",
         "id": "anthropic/claude-haiku-5-5",
@@ -110026,7 +110316,9 @@
         },
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -110036,7 +110328,7 @@
         "reasoning": true,
         "release_date": "2026-10-07",
         "temperature": false,
-        "tool_call": false
+        "tool_call": true
       }
     }
   },
@@ -114219,7 +114511,8 @@
         "reasoning": true,
         "release_date": "2026-10-01",
         "temperature": true,
-        "tool_call": true
+        "tool_call": true,
+        "status": "deprecated"
       },
       "ling-3.1-flash-free": {
         "attachment": false,
@@ -114288,7 +114581,10 @@
         "reasoning": true,
         "release_date": "2026-10-06",
         "temperature": true,
-        "tool_call": true
+        "tool_call": true,
+        "provider": {
+          "npm": "@ai-sdk/mistral"
+        }
       },
       "claude-haiku-5-5": {
         "attachment": true,
@@ -114316,6 +114612,33 @@
         "reasoning": true,
         "release_date": "2026-10-07",
         "temperature": false,
+        "tool_call": true
+      },
+      "step-5-preview-free": {
+        "attachment": true,
+        "canonical_model_id": "stepfun/step-5-preview",
+        "id": "step-5-preview-free",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 1000000,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Step 5 Preview Free",
+        "reasoning": true,
+        "release_date": "2026-09-16",
         "tool_call": true
       }
     }
@@ -129272,7 +129595,7 @@
         "family": "mistral-large",
         "id": "mistral-large-4",
         "limit": {
-          "context": 524288,
+          "context": 1048576,
           "output": 262144
         },
         "modalities": {
@@ -130654,14 +130977,15 @@
         "id": "@cf/mistralai/mistral-small-3.1-24b-instruct",
         "name": "Mistral Small 3.1 24B Instruct",
         "family": "mistral-small",
-        "attachment": false,
+        "attachment": true,
         "reasoning": false,
         "tool_call": true,
         "temperature": true,
         "release_date": "2025-03-17",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
@@ -135764,6 +136088,31 @@
         "release_date": "2026-10-06",
         "temperature": true,
         "tool_call": true
+      },
+      "claude-haiku-5.5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "claude-haiku-5.5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5",
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
+        "tool_call": true
       }
     }
   },
@@ -136002,86 +136351,6 @@
         "limit": {
           "context": 131072,
           "output": 16384
-        }
-      }
-    }
-  },
-  "v0": {
-    "id": "v0",
-    "env": [
-      "V0_API_KEY"
-    ],
-    "npm": "@ai-sdk/vercel",
-    "name": "v0",
-    "doc": "https://sdk.vercel.ai/providers/ai-sdk-providers/vercel",
-    "models": {
-      "v0-1.5-lg": {
-        "id": "v0-1.5-lg",
-        "name": "v0-1.5-lg",
-        "family": "v0",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-06-09",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 512000,
-          "output": 32000
-        }
-      },
-      "v0-1.5-md": {
-        "id": "v0-1.5-md",
-        "name": "v0-1.5-md",
-        "family": "v0",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-06-09",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 128000,
-          "output": 32000
-        }
-      },
-      "v0-1.0-md": {
-        "id": "v0-1.0-md",
-        "name": "v0-1.0-md",
-        "family": "v0",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-05-22",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 128000,
-          "output": 32000
         }
       }
     }
@@ -138422,6 +138691,33 @@
         "reasoning": true,
         "release_date": "2026-10-07",
         "temperature": false,
+        "tool_call": true
+      },
+      "step-5-preview-free": {
+        "attachment": true,
+        "canonical_model_id": "stepfun/step-5-preview",
+        "id": "step-5-preview-free",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 1000000,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Step 5 Preview Free",
+        "reasoning": true,
+        "release_date": "2026-09-16",
         "tool_call": true
       }
     }
@@ -143987,7 +144283,7 @@
         "family": "voxtral",
         "id": "amazon/mistral.voxtral-mini-3b-2507",
         "limit": {
-          "context": 128000,
+          "context": 32768,
           "output": 32768
         },
         "modalities": {
@@ -144011,7 +144307,7 @@
         "family": "voxtral",
         "id": "amazon/mistral.voxtral-mini-3b-2507@us",
         "limit": {
-          "context": 128000,
+          "context": 32768,
           "output": 32768
         },
         "modalities": {
@@ -144035,7 +144331,7 @@
         "family": "voxtral",
         "id": "amazon/mistral.voxtral-small-24b-2507",
         "limit": {
-          "context": 128000,
+          "context": 32768,
           "output": 32768
         },
         "modalities": {
@@ -144059,7 +144355,7 @@
         "family": "voxtral",
         "id": "amazon/mistral.voxtral-small-24b-2507@us",
         "limit": {
-          "context": 128000,
+          "context": 32768,
           "output": 32768
         },
         "modalities": {
