@@ -12,6 +12,7 @@ import { english, type Translate, type MessageKey } from "../../../i18n"
 // - localized only at presentation time; raw evidence and identities are preserved.
 
 import { truncateToCellWidth } from "../last-input-view-model"
+import { isRecord } from "@/util/record"
 
 /** Closed tone union so the renderer never has to invent a color fallback. */
 export type EnsembleTone = "ok" | "warn" | "error" | "muted"
@@ -49,10 +50,6 @@ export type ArenaView = {
 const MAX_ROSTER = 5
 const MAX_RANKED = 5
 const ID_BUDGET = 32
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
 
 function stringField(record: Record<string, unknown>, key: string): string | undefined {
   const value = record[key]

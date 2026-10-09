@@ -4,6 +4,7 @@ import { Global } from "../global"
 import { Filesystem } from "../util/filesystem"
 import { encryptField, decryptField } from "../auth/encryption"
 import { Lock } from "../util/lock"
+import { isRecord } from "../util/record"
 
 export namespace McpAuth {
   export const Tokens = z.object({
@@ -32,10 +33,6 @@ export namespace McpAuth {
   export type Entry = z.infer<typeof Entry>
 
   const filepath = path.join(Global.Path.data, "mcp-auth.json")
-
-  function isRecord(value: unknown): value is Record<string, unknown> {
-    return !!value && typeof value === "object" && !Array.isArray(value)
-  }
 
   async function readRawFile(): Promise<Record<string, unknown>> {
     const raw = await Filesystem.readJson<unknown>(filepath).catch((error) => {

@@ -1,5 +1,6 @@
 import path from "node:path"
 import { Env } from "@/util/env"
+import { isRecord } from "@/util/record"
 
 type DeriveOptions = {
   worktree?: string
@@ -14,10 +15,6 @@ const URL_KEYS = new Set(["url", "uri", "endpoint"])
 const PATH_KEYS = new Set(["path", "file", "filePath", "filepath", "root", "directory"])
 const MAX_VALUE_LENGTH = 240
 const MAX_PATTERNS = 8
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
 
 function scalar(value: unknown): string | undefined {
   if (typeof value === "string") return value

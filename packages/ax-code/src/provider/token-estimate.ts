@@ -6,6 +6,7 @@
 
 import type { ModelMessage } from "ai"
 import { Token } from "@/util/token"
+import { isRecord } from "@/util/record"
 
 export namespace TokenEstimate {
   // Fixed per-item media constants (ADR-139 spec Module 1). Video/audio are
@@ -24,10 +25,6 @@ export namespace TokenEstimate {
   }
 
   type ContentPart = Record<string, unknown>
-
-  function isRecord(value: unknown): value is ContentPart {
-    return typeof value === "object" && value !== null && !Array.isArray(value)
-  }
 
   function mediaTypeOf(part: ContentPart): string | undefined {
     for (const key of ["mediaType", "mime", "mimeType"]) {
@@ -100,9 +97,7 @@ export namespace TokenEstimate {
     return total
   }
 
-  export function toolSchemaTokens(
-    tools: Iterable<{ id: string; description?: string; inputSchema: unknown }>,
-  ) {
+  export function toolSchemaTokens(tools: Iterable<{ id: string; description?: string; inputSchema: unknown }>) {
     let total = 0
     for (const item of tools) {
       total += Token.estimate(

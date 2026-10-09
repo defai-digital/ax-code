@@ -38,6 +38,7 @@ import { CLI_PLAN_PROVIDER_IDS, LOCAL_RUNTIME_PROVIDER_IDS } from "../mode/provi
 import { GraphContext } from "../code-intelligence/graph-context"
 import { Installation } from "../installation"
 import { Instance } from "../project/instance"
+import { isRecord } from "../util/record"
 import { AX_ENGINE_PROVIDER_ID } from "../provider/ax-engine/constants"
 import { isDedicatedPrivateGpuProviderID } from "../provider/private-gpu/presets"
 import { Provider } from "../provider/provider"
@@ -195,10 +196,6 @@ export function repairWikiPageText(text: string): string | null {
     changed = true
   }
   return changed ? JSON.stringify(record) : null
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object" && !Array.isArray(value)
 }
 
 function symbolGloss(nameHint: string, value: unknown): { name: string; summary: string } | undefined {

@@ -3,6 +3,7 @@ import path from "node:path"
 import { NamedError } from "@ax-code/util/error"
 import { toErrorMessage } from "@/util/error-message"
 import { parseJsonResult } from "@/util/json-value"
+import { isRecord } from "@/util/record"
 
 type JsonSchema = boolean | Record<string, unknown>
 type RunOutputPartRecord = {
@@ -764,8 +765,4 @@ function jsonEqual(left: unknown, right: unknown): boolean {
     return leftKeys.every((key) => key in right && jsonEqual(left[key], right[key]))
   }
   return false
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
 }
