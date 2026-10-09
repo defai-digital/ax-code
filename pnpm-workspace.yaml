@@ -10,7 +10,6 @@ catalog:
   "@actions/core": "1.11.1"
   "@actions/github": "6.0.1"
   "@cloudflare/workers-types": "4.20251008.0"
-  "@hono/zod-validator": "0.4.2"
   "@napi-rs/cli": "3.10.6"
   "@octokit/graphql": "9.0.5"
   "@octokit/rest": "22.0.1"
