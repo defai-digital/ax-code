@@ -90,7 +90,11 @@ test("ships a pre-registered, disabled, unrestricted default entry (ADR-170)", a
       directory: tmp.path,
       fn: async () => {
         const entry = (await Config.get()).mcp?.webmcp
-        expect(entry).toMatchObject({ type: "local", enabled: false, webmcp: { allowedOrigins: [] } })
+        expect(entry).toMatchObject({
+          type: "local",
+          enabled: false,
+          webmcp: { allowedOrigins: [], read: true, interact: true },
+        })
         if (entry && "type" in entry && entry.type === "local") {
           expect(entry.command.some((arg) => arg.startsWith("--allowed-url-pattern="))).toBe(false)
         }

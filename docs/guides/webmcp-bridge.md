@@ -2,7 +2,7 @@
 
 Status: Experimental
 Scope: public, current-state
-Last reviewed: 2026-10-08
+Last reviewed: 2026-10-09
 Owner: AX Code maintainers
 
 The WebMCP bridge lets the agent open pages in an isolated Chrome window,
@@ -22,15 +22,17 @@ profile, so it holds no logins unless you sign in by hand in its window.
 | ---- | ----- | -------- |
 | Pages | list, open, navigate, close pages; run tools a page registers through WebMCP | each call |
 | Read | page snapshot, screenshot, console, request metadata | one grant per origin per session |
-| Interact (opt-in) | click, hover, wait, fill, fill form, press key, answer dialogs | see below |
+| Interact | click, hover, wait, fill, fill form, press key, answer dialogs | see below |
 
 Page content is untrusted: a page can try to steer the agent. Output is
 labeled with its origin and size-limited.
 
 ## Interact tier
 
-Enable it by generating an entry with `ax-code mcp webmcp --interact`. The
-chip then shows `[act]`.
+It is on in the default entry, and the chip shows `[act]` while it is. To turn
+it off, set `interact` to false in the entry's `webmcp` profile; an entry you
+saved earlier keeps the tiers it had. `ax-code mcp webmcp --interact` prints an
+entry with it on.
 
 - Hovering and ordinary clicks run under one grant per origin, good for 20
   actions, then the same prompt returns.

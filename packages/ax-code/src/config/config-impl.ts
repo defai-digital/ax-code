@@ -1639,12 +1639,12 @@ export namespace Config {
   }
 
   /**
-   * The injected product default (ADR-170, read tier per ADR-171). One
+   * The injected product default (ADR-170; read tier per ADR-171, interact tier per ADR-174). One
    * definition shared by the injection and by the write-path filter, so the
    * two can never drift apart.
    */
   function productDefaultWebMcpEntry() {
-    return WebMcpProfile.config({ allowedOrigins: [], read: true }, false)
+    return WebMcpProfile.config({ allowedOrigins: [], read: true, interact: true }, false)
   }
 
   /**
