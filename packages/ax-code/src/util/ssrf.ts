@@ -200,41 +200,42 @@ export namespace Ssrf {
     return init?.body === null ? undefined : init?.body
   }
 
-  async function nodePinnedHttpsFetch(input: {
+  async function nodePinnedFetch(input: {
     originalUrl: URL
     resolvedAddress: string
     headers: Headers
     init: PinnedFetchInit | undefined
     hostname: string
+    secure: boolean
   }): Promise<Response> {
+    const { secure } = input
     const method = input.init?.method ?? "GET"
     const body = requestBody(input.init)
     const requestHeaders = Object.fromEntries(input.headers.entries())
 
     return new Promise<Response>((resolve, reject) => {
-      const servername = net.isIP(input.hostname) ? undefined : input.hostname
-      const req = https.request(
-        {
-          protocol: input.originalUrl.protocol,
-          host: input.resolvedAddress,
-          hostname: input.resolvedAddress,
-          port: input.originalUrl.port || 443,
-          method,
-          path: `${input.originalUrl.pathname}${input.originalUrl.search}`,
-          headers: requestHeaders,
-          ...(servername ? { servername } : {}),
-        },
-        (res) => {
-          const webBody = Readable.toWeb(res) as ReadableStream<Uint8Array>
-          resolve(
-            new Response(webBody, {
-              status: res.statusCode ?? 0,
-              statusText: res.statusMessage,
-              headers: responseHeaders(res.headers),
-            }),
-          )
-        },
-      )
+      const servername = secure && !net.isIP(input.hostname) ? input.hostname : undefined
+      const options = {
+        protocol: input.originalUrl.protocol,
+        host: input.resolvedAddress,
+        hostname: input.resolvedAddress,
+        port: input.originalUrl.port || (secure ? 443 : 80),
+        method,
+        path: `${input.originalUrl.pathname}${input.originalUrl.search}`,
+        headers: requestHeaders,
+        ...(servername ? { servername } : {}),
+      }
+      const onResponse = (res: http.IncomingMessage) => {
+        const webBody = Readable.toWeb(res) as ReadableStream<Uint8Array>
+        resolve(
+          new Response(webBody, {
+            status: res.statusCode ?? 0,
+            statusText: res.statusMessage,
+            headers: responseHeaders(res.headers),
+          }),
+        )
+      }
+      const req = secure ? https.request(options, onResponse) : http.request(options, onResponse)
 
       req.on("error", reject)
       input.init?.signal?.addEventListener(
@@ -262,74 +263,15 @@ export namespace Ssrf {
         req.end(body.toString())
         return
       }
-      reject(new TypeError("ssrf: unsupported HTTPS pinned fetch body type"))
+      reject(new TypeError(`ssrf: unsupported ${secure ? "HTTPS" : "HTTP"} pinned fetch body type`))
       req.destroy()
     })
   }
 
-  async function nodePinnedHttpFetch(input: {
-    originalUrl: URL
-    resolvedAddress: string
-    headers: Headers
-    init: PinnedFetchInit | undefined
-  }): Promise<Response> {
-    const method = input.init?.method ?? "GET"
-    const body = requestBody(input.init)
-    const requestHeaders = Object.fromEntries(input.headers.entries())
-
-    return new Promise<Response>((resolve, reject) => {
-      const req = http.request(
-        {
-          protocol: input.originalUrl.protocol,
-          host: input.resolvedAddress,
-          hostname: input.resolvedAddress,
-          port: input.originalUrl.port || 80,
-          method,
-          path: `${input.originalUrl.pathname}${input.originalUrl.search}`,
-          headers: requestHeaders,
-        },
-        (res) => {
-          const webBody = Readable.toWeb(res) as ReadableStream<Uint8Array>
-          resolve(
-            new Response(webBody, {
-              status: res.statusCode ?? 0,
-              statusText: res.statusMessage,
-              headers: responseHeaders(res.headers),
-            }),
-          )
-        },
-      )
-
-      req.on("error", reject)
-      input.init?.signal?.addEventListener(
-        "abort",
-        () => {
-          req.destroy(input.init?.signal?.reason)
-          reject(input.init?.signal?.reason ?? new DOMException("The operation was aborted", "AbortError"))
-        },
-        { once: true },
-      )
-
-      if (body === undefined || method.toUpperCase() === "GET" || method.toUpperCase() === "HEAD") {
-        req.end()
-        return
-      }
-      if (typeof body === "string" || body instanceof Uint8Array) {
-        req.end(body)
-        return
-      }
-      if (body instanceof ArrayBuffer) {
-        req.end(new Uint8Array(body))
-        return
-      }
-      if (body instanceof URLSearchParams) {
-        req.end(body.toString())
-        return
-      }
-      reject(new TypeError("ssrf: unsupported HTTP pinned fetch body type"))
-      req.destroy()
-    })
-  }
+  type PinnedRequest = Omit<Parameters<typeof nodePinnedFetch>[0], "secure">
+  const nodePinnedHttpsFetch = (input: PinnedRequest) => nodePinnedFetch({ ...input, secure: true })
+  const nodePinnedHttpFetch = (input: Omit<PinnedRequest, "hostname">) =>
+    nodePinnedFetch({ ...input, hostname: input.originalUrl.hostname, secure: false })
 
   /**
    * Reject if the URL's scheme is anything other than http/https, or

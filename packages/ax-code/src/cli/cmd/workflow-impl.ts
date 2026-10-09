@@ -316,6 +316,76 @@ export function formatWorkflowRunDetail(detail: WorkflowRunDetail) {
   return lines.join(EOL).concat(EOL)
 }
 
+// Options shared by the commands that create a workflow run.
+function withRunOptions(yargs: Argv) {
+  return yargs
+    .option("parent-session", {
+      type: "string",
+      describe: "parent session id for spawned workflow child sessions",
+    })
+    .option("allow-scale", {
+      type: "boolean",
+      describe: "allow plans beyond conservative default scale limits",
+    })
+    .option("allow-write", {
+      type: "boolean",
+      describe: "allow workflow specs with write-capable phases",
+    })
+    .option("enqueue", {
+      type: "boolean",
+      default: true,
+      describe: "enqueue child-agent work items",
+    })
+    .option("durable-children", {
+      type: "boolean",
+      default: true,
+      describe: "persist child-agent execution state",
+    })
+    .option("effort", {
+      type: "string",
+      choices: ["normal", "deep", "workflow", "max-workflow"] as const,
+      describe: "override workflow model effort preset",
+    })
+    .option("default-model", {
+      type: "string",
+      describe: "override default workflow model",
+    })
+    .option("cheap-model", {
+      type: "string",
+      describe: "override cheap exploration model",
+    })
+    .option("strong-model", {
+      type: "string",
+      describe: "override strong synthesis model",
+    })
+    .option("planner-model", {
+      type: "string",
+      describe: "override planner model",
+    })
+    .option("worker-model", {
+      type: "string",
+      describe: "override worker model",
+    })
+    .option("verifier-model", {
+      type: "string",
+      describe: "override verifier model",
+    })
+    .option("synthesizer-model", {
+      type: "string",
+      describe: "override synthesizer model",
+    })
+    .option("allowed-provider", {
+      type: "array",
+      alias: "allowed-providers",
+      describe: "restrict workflow model routing to provider IDs; repeat or comma-separate for multiple providers",
+    })
+    .option("input", {
+      type: "array",
+      describe: "workflow input assignment as key=JSON; repeat for multiple inputs",
+    })
+    .option("json", jsonOption())
+}
+
 const WorkflowTemplateListCommand = cmd({
   command: "templates",
   describe: "list workflow templates",
@@ -560,77 +630,13 @@ const WorkflowRunStartCommand = cmd({
   command: "start <templateID>",
   describe: "create and start a workflow run from a template",
   builder: (yargs: Argv) =>
-    yargs
-      .positional("templateID", {
+    withRunOptions(
+      yargs.positional("templateID", {
         type: "string",
         demandOption: true,
         describe: "workflow template id, for example builtin:issue-triage",
-      })
-      .option("parent-session", {
-        type: "string",
-        describe: "parent session id for spawned workflow child sessions",
-      })
-      .option("allow-scale", {
-        type: "boolean",
-        describe: "allow plans beyond conservative default scale limits",
-      })
-      .option("allow-write", {
-        type: "boolean",
-        describe: "allow workflow specs with write-capable phases",
-      })
-      .option("enqueue", {
-        type: "boolean",
-        default: true,
-        describe: "enqueue child-agent work items",
-      })
-      .option("durable-children", {
-        type: "boolean",
-        default: true,
-        describe: "persist child-agent execution state",
-      })
-      .option("effort", {
-        type: "string",
-        choices: ["normal", "deep", "workflow", "max-workflow"] as const,
-        describe: "override workflow model effort preset",
-      })
-      .option("default-model", {
-        type: "string",
-        describe: "override default workflow model",
-      })
-      .option("cheap-model", {
-        type: "string",
-        describe: "override cheap exploration model",
-      })
-      .option("strong-model", {
-        type: "string",
-        describe: "override strong synthesis model",
-      })
-      .option("planner-model", {
-        type: "string",
-        describe: "override planner model",
-      })
-      .option("worker-model", {
-        type: "string",
-        describe: "override worker model",
-      })
-      .option("verifier-model", {
-        type: "string",
-        describe: "override verifier model",
-      })
-      .option("synthesizer-model", {
-        type: "string",
-        describe: "override synthesizer model",
-      })
-      .option("allowed-provider", {
-        type: "array",
-        alias: "allowed-providers",
-        describe: "restrict workflow model routing to provider IDs; repeat or comma-separate for multiple providers",
-      })
-      .option("input", {
-        type: "array",
-        describe: "workflow input assignment as key=JSON; repeat for multiple inputs",
-      })
-      .option("json", jsonOption()),
+      }),
+    ),
   async handler(args) {
     await withWorkflowRuntime(async () => {
       const options = args as unknown as StartOptions
@@ -659,77 +665,13 @@ const WorkflowRoutineRunCommand = cmd({
   command: "run-routine <route>",
   describe: "run a trusted local workflow routine",
   builder: (yargs: Argv) =>
-    yargs
-      .positional("route", {
+    withRunOptions(
+      yargs.positional("route", {
         type: "string",
         demandOption: true,
         describe: "workflow routine route, for example workflow/issue-triage",
-      })
-      .option("parent-session", {
-        type: "string",
-        describe: "parent session id for spawned workflow child sessions",
-      })
-      .option("allow-scale", {
-        type: "boolean",
-        describe: "allow plans beyond conservative default scale limits",
-      })
-      .option("allow-write", {
-        type: "boolean",
-        describe: "allow workflow specs with write-capable phases",
-      })
-      .option("enqueue", {
-        type: "boolean",
-        default: true,
-        describe: "enqueue child-agent work items",
-      })
-      .option("durable-children", {
-        type: "boolean",
-        default: true,
-        describe: "persist child-agent execution state",
-      })
-      .option("effort", {
-        type: "string",
-        choices: ["normal", "deep", "workflow", "max-workflow"] as const,
-        describe: "override workflow model effort preset",
-      })
-      .option("default-model", {
-        type: "string",
-        describe: "override default workflow model",
-      })
-      .option("cheap-model", {
-        type: "string",
-        describe: "override cheap exploration model",
-      })
-      .option("strong-model", {
-        type: "string",
-        describe: "override strong synthesis model",
-      })
-      .option("planner-model", {
-        type: "string",
-        describe: "override planner model",
-      })
-      .option("worker-model", {
-        type: "string",
-        describe: "override worker model",
-      })
-      .option("verifier-model", {
-        type: "string",
-        describe: "override verifier model",
-      })
-      .option("synthesizer-model", {
-        type: "string",
-        describe: "override synthesizer model",
-      })
-      .option("allowed-provider", {
-        type: "array",
-        alias: "allowed-providers",
-        describe: "restrict workflow model routing to provider IDs; repeat or comma-separate for multiple providers",
-      })
-      .option("input", {
-        type: "array",
-        describe: "workflow input assignment as key=JSON; repeat for multiple inputs",
-      })
-      .option("json", jsonOption()),
+      }),
+    ),
   async handler(args) {
     await withWorkflowRuntime(async () => {
       const options = args as unknown as RoutineRunOptions
