@@ -1,7 +1,7 @@
 import { UI } from "../ui"
 import { Log } from "../../util/log"
 import { toErrorMessage } from "../../util/error-message"
-import { isRunEventStreamFormat } from "./run"
+import { isRunEventStreamFormat } from "./run-format"
 
 /**
  * Build the pending-schedule exit notice for a headless `ax-code run`. Only

@@ -64,6 +64,7 @@ import { assertLoopbackHttpUrl } from "../../runtime/listen-security"
 import { sameSkuOnConnectedProvider } from "../../provider/model-selectability"
 import { DEFAULT_STDIN_PIPE_QUIET_WINDOW_MS, readNonTtyStdin } from "../stdin"
 import { CLI_CONCISE_MAX_LINES, diffSummary, formatDiffSummary, tailLines } from "../../util/tool-output"
+import { isRunEventStreamFormat } from "./run-format"
 
 type ToolProps<T extends Tool.Info> = {
   input: Tool.InferParameters<T>
@@ -142,13 +143,7 @@ function block(info: Inline, output: string | undefined, full: boolean) {
   UI.empty()
 }
 
-// `--format json` is a newline-delimited JSON (NDJSON) event stream — one
-// JSON object per line, not a single JSON document — kept as-is for backward
-// compatibility. `jsonl` and `ndjson` are explicit aliases for the same
-// stream (#419).
-export function isRunEventStreamFormat(format: string | undefined): boolean {
-  return format === "json" || format === "jsonl" || format === "ndjson"
-}
+export { isRunEventStreamFormat }
 
 export function joinRunMessageArguments(args: readonly string[]): string {
   // Yargs has already removed shell quoting and preserved each argument's
