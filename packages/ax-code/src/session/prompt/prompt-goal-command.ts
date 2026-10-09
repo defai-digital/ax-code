@@ -2,11 +2,10 @@ import { SessionGoal } from "../goal"
 import { GoalPlan } from "../goal-plan"
 import { GoalPlanOrchestration } from "../goal-plan-orchestration"
 import type { MessageV2 } from "../message-v2"
-import { createStoppedAssistantTextResponse } from "./prompt-assistant-response"
 import { commandModel } from "./prompt-command-selection"
+import { controlCommandMessage } from "./prompt-control-message"
 import { parseGoalArguments } from "./prompt-goal-arguments"
 import type { CommandInput, PromptInput } from "./prompt-input"
-import { createUserMessage } from "./prompt-user-message"
 import { toErrorMessage } from "../../util/error-message"
 
 type PromptRunner = (input: PromptInput) => Promise<MessageV2.WithParts>
@@ -22,29 +21,7 @@ async function goalControlText(action: () => Promise<SessionGoal.Info>): Promise
   }
 }
 
-async function goalControlMessage(input: CommandInput, text: string) {
-  const model = await commandModel({ model: input.model, sessionID: input.sessionID })
-  const user = await createUserMessage({
-    sessionID: input.sessionID,
-    messageID: input.messageID,
-    agent: input.agent,
-    model,
-    agentRouting: "preserve",
-    noReply: true,
-    parts: [
-      {
-        type: "text",
-        text: `/goal ${input.arguments}`.trim(),
-      },
-    ],
-  })
-  return createStoppedAssistantTextResponse({
-    sessionID: input.sessionID,
-    parent: user.info,
-    text,
-    tokenTotal: 0,
-  })
-}
+const goalControlMessage = (input: CommandInput, text: string) => controlCommandMessage(input, "/goal", text)
 
 async function cancelRunningSession(sessionID: CommandInput["sessionID"]) {
   const { SessionPrompt } = await import("../prompt")

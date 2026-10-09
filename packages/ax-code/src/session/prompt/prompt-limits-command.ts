@@ -3,36 +3,14 @@ import { Config } from "../../config/config"
 import { ScopedFlag } from "../../flag/scoped"
 import type { MessageV2 } from "../message-v2"
 import { autonomyBudgetDiagnostics, formatAutonomyBudgetReport, resolveAutonomyBudget } from "../autonomy-budget"
-import { createStoppedAssistantTextResponse } from "./prompt-assistant-response"
-import { commandModel } from "./prompt-command-selection"
+import { controlCommandMessage } from "./prompt-control-message"
 import type { CommandInput } from "./prompt-input"
-import { createUserMessage } from "./prompt-user-message"
 
 // /limits doctor — print the resolved autonomy budget stack for this session
 // (ADR-051 follow-up). Does not start a model turn.
 
 async function limitsControlMessage(input: CommandInput, text: string): Promise<MessageV2.WithParts> {
-  const model = await commandModel({ model: input.model, sessionID: input.sessionID })
-  const user = await createUserMessage({
-    sessionID: input.sessionID,
-    messageID: input.messageID,
-    agent: input.agent,
-    model,
-    agentRouting: "preserve",
-    noReply: true,
-    parts: [
-      {
-        type: "text",
-        text: `/limits ${input.arguments}`.trim(),
-      },
-    ],
-  })
-  return createStoppedAssistantTextResponse({
-    sessionID: input.sessionID,
-    parent: user.info,
-    text,
-    tokenTotal: 0,
-  })
+  return controlCommandMessage(input, "/limits", text)
 }
 
 export async function executeLimitsCommand(input: CommandInput): Promise<MessageV2.WithParts> {
