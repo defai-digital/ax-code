@@ -1540,9 +1540,13 @@ export const RunCommand = cmd({
                 )
                   continue
                 observedErrors.add(JSON.stringify(props.error))
-                let err = String(props.error.name)
-                if ("data" in props.error && props.error.data && "message" in props.error.data) {
-                  err = String(props.error.data.message)
+                // The error payload is remote data: a primitive here would make
+                // the `in` checks throw and turn a healthy run into an event
+                // stream failure.
+                const payload = isNonEmptyRecord(props.error) ? props.error : undefined
+                let err = payload ? String(payload.name) : String(props.error)
+                if (payload && "data" in payload && isNonEmptyRecord(payload.data) && "message" in payload.data) {
+                  err = String(payload.data.message)
                 }
                 error = error ? error + EOL + err : err
                 if (emit("error", { error: props.error })) continue
@@ -2003,15 +2007,23 @@ export const RunCommand = cmd({
               }
             }
           } catch (e) {
-            // F1: record the failure so the terminal result reports "error"
-            // and the exit-code precedence keeps 1 instead of downgrading to
-            // 130/124/3. Stream formats also get one structured error event
-            // (before the terminal result line).
-            const outputMessage = e instanceof Error ? e.message : String(e)
-            error = error ? error + EOL + outputMessage : outputMessage
-            emit("error", { error: { name: "StructuredOutputError", data: { message: outputMessage } } })
-            UI.error(outputMessage)
-            process.exitCode = 1
+            // A run that --timeout or a signal stopped before any final text
+            // has nothing to validate or write: 124/130 already describe the
+            // outcome, and turning the missing message into exit 1 would break
+            // the documented timeout/cancel contract.
+            if ((lifecycle.timedOut() || lifecycle.cancelled()) && !finalText?.trim()) {
+              // Nothing to report beyond the timeout/cancel outcome itself.
+            } else {
+              // F1: record the failure so the terminal result reports "error"
+              // and the exit-code precedence keeps 1 instead of downgrading to
+              // 130/124/3. Stream formats also get one structured error event
+              // (before the terminal result line).
+              const outputMessage = e instanceof Error ? e.message : String(e)
+              error = error ? error + EOL + outputMessage : outputMessage
+              emit("error", { error: { name: "StructuredOutputError", data: { message: outputMessage } } })
+              UI.error(outputMessage)
+              process.exitCode = 1
+            }
           }
           if (error) process.exitCode = 1
 

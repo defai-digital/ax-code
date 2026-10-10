@@ -29,11 +29,14 @@ export namespace RunReportServer {
   export async function ensure(): Promise<Live> {
     if (shared) return shared
     const next: Promise<Live> = Promise.resolve(listen(0))
-    shared = next.catch((err: unknown) => {
+    shared = next
+    // Forget a failed start so the next caller retries instead of replaying the
+    // rejection for the rest of the process. Compared against `next` itself:
+    // comparing against a derived promise never matched.
+    next.catch(() => {
       if (shared === next) shared = undefined
-      throw err
     })
-    return shared
+    return next
   }
 
   export async function page(input: { base?: string; sessionID?: string; directory?: string; index?: boolean }) {
