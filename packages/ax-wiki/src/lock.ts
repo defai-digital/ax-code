@@ -34,6 +34,14 @@ import os from "node:os"
 import path from "node:path"
 import type { WikiBuildLock, WikiBuildLockHandle } from "./types.js"
 
+/**
+ * Another process holds the build lock. Callers that remember deterministic
+ * failures must treat this as contention, not as a failed build.
+ */
+export class WikiBuildLockBusyError extends Error {
+  override readonly name = "WikiBuildLockBusyError"
+}
+
 // Automatic maintenance jobs carry a 10-minute deadline, so a lock untouched for
 // 30 minutes belongs to a wedged holder, not a healthy build.
 const STALE_LOCK_MS = 30 * 60 * 1000
@@ -336,7 +344,7 @@ export function createWikiBuildLock(root: string, wikiDir: string, options: Wiki
           // fall through and retry on the next loop.
         }
         if (performance.now() >= deadline) {
-          throw new Error(`AX Wiki build lock is held by another process (lockfile: ${lockPath})`)
+          throw new WikiBuildLockBusyError(`AX Wiki build lock is held by another process (lockfile: ${lockPath})`)
         }
         await new Promise((resolve) => setTimeout(resolve, retryIntervalMs))
       }

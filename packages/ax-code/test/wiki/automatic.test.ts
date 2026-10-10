@@ -11,6 +11,7 @@ import { WikiAutomatic } from "../../src/wiki/automatic"
 import { readWikiFailureMemory } from "../../src/wiki/failure-memory"
 import { wikiProjectRoot } from "../../src/wiki/root"
 import { tmpdir } from "../fixture/fixture"
+import { WikiBuildLockBusyError } from "@ax-code/ax-wiki/node"
 
 const state = vi.hoisted(() => ({
   build: vi.fn(async (_input: { root: string; signal: AbortSignal; includeGraphEvidence: boolean }) => {}),
@@ -230,6 +231,27 @@ test("records a durable failure memory when a maintenance build fails", async ()
   expect(memory?.consecutiveFailures).toBe(1)
   expect(memory?.error).toContain("deterministic failure")
   expect(memory?.lastHead).toBeTruthy()
+})
+
+test("losing the build lock to another process is not recorded as a durable failure", async () => {
+  await using tmp = await tmpdir({ git: true })
+  vi.spyOn(Agent, "get").mockImplementation(async (name) => ({
+    name,
+    mode: "primary",
+    native: true,
+    options: {},
+    permission: Permission.fromConfig({ "*": "allow" }),
+  }))
+  state.build.mockRejectedValueOnce(new WikiBuildLockBusyError("AX Wiki build lock is held by another process"))
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await WikiAutomatic.refresh("build")
+      await waitForBuildCalls(1)
+      await waitForStatus({ phase: "failed" })
+      expect(await readWikiFailureMemory(tmp.path, ".ax-wiki")).toBeUndefined()
+    },
+  })
 })
 
 test("a preempted maintenance build is not recorded as a durable failure", async () => {

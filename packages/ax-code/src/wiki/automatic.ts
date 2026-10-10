@@ -11,7 +11,7 @@ import { SessionStatus } from "../session/status"
 import type { SessionID } from "../session/schema"
 import { TaskQueue } from "../session/task-queue"
 import { FileWatcher } from "../file/watcher"
-import { getWikiStatus } from "@ax-code/ax-wiki/node"
+import { getWikiStatus, WikiBuildLockBusyError } from "@ax-code/ax-wiki/node"
 import { createWikiIdleController } from "./idle-controller"
 import { resolveWikiRuntimeConfig, engineConfig } from "./config"
 import { readWikiBuildReport } from "./build-report"
@@ -196,8 +196,10 @@ export namespace WikiAutomatic {
           } catch (error) {
             // A preempted build (foreground activity, disposal, or the run
             // deadline aborted the signal) is not a deterministic failure: it
-            // must never climb the durable cooldown ladder.
-            if (!signal.aborted) {
+            // must never climb the durable cooldown ladder. Neither is losing
+            // the build lock to another process (a CLI update or a second
+            // server on the same checkout): the page set was never attempted.
+            if (!signal.aborted && !(error instanceof WikiBuildLockBusyError)) {
               const report = await readWikiBuildReport(root, cfg.dir)
               await recordWikiFailure(root, cfg.dir, {
                 head,
