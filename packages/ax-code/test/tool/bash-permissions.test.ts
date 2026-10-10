@@ -186,6 +186,40 @@ describe("tool.bash permissions", () => {
     })
   })
 
+  test.each([
+    ["tee after --", (file: string) => `tee -- '${file}'`],
+    ["glued curl -o", (file: string) => `curl -o'${file}' https://example.invalid/x`],
+    ["glued wget -O", (file: string) => `wget -O'${file}' https://example.invalid/x`],
+    ["path-qualified bash -c", (file: string) => `/bin/bash -c "cat '${file}'"`],
+    ["glued git -C", (_file: string, dir: string) => `git -C'${dir}' config user.email nobody@example.invalid`],
+  ])("asks for external_directory permission for %s", async (_label, build) => {
+    await using outerTmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(path.join(dir, "outside.txt"), "x")
+      },
+    })
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const posix = (value: string) => value.replaceAll("\\", "/").replaceAll("'", "'\\''")
+        const command = build(posix(path.join(outerTmp.path, "outside.txt")), posix(outerTmp.path))
+        const requests = await collectPermissionRequests(
+          (testCtx) => bash.execute({ command, description: "External path" }, testCtx),
+          (req) => req.permission === "external_directory",
+        )
+        const extDirReq = requests.find((r) => r.permission === "external_directory")
+        expect(extDirReq, command).toBeDefined()
+        // A resolvable path is asked by directory; git config relocation fails
+        // closed with the whole command as the pattern. Either is an ask.
+        expect(extDirReq!.patterns.some((pattern) => pattern.startsWith(outerTmp.path) || pattern === command)).toBe(
+          true,
+        )
+      },
+    })
+  })
+
   test("does not ask for external_directory permission when rm inside project", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

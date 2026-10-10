@@ -224,6 +224,11 @@ function gitConfigLocationFlags(args: string[]): { cdChain: string[]; gitDir?: s
       i++
       continue
     }
+    // git also accepts the directory glued to the flag: `git -C<dir> ...`.
+    if (arg.startsWith("-C") && arg.length > 2) {
+      cdChain.push(arg.slice(2))
+      continue
+    }
     if (arg === "-c" || arg === "--work-tree" || arg === "--namespace") {
       i++
       continue
@@ -692,8 +697,14 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           return
         }
         if (name === "tee") {
+          let operands = false
           for (const arg of args) {
-            if (arg.startsWith("-")) continue
+            // `--` ends option parsing: a later `-x` is a file named "-x".
+            if (!operands && arg === "--") {
+              operands = true
+              continue
+            }
+            if (!operands && arg.startsWith("-")) continue
             const resolved = await recordResolvedPath(arg, decoded)
             if (resolved) redirectWritePaths.add(resolved)
           }
@@ -728,7 +739,10 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
               remoteName = true
               continue
             }
-            const inline = arg.match(/^--(?:output|output-document)=(.+)$/)?.[1]
+            // Short options take a glued value too: `curl -oPATH`, `wget -OPATH`.
+            const inline =
+              arg.match(/^--(?:output|output-document)=(.+)$/)?.[1] ??
+              arg.match(name === "wget" ? /^-[oO](.+)$/ : /^-o(.+)$/)?.[1]
             if (inline) {
               const output = await recordResolvedPath(inline, decoded)
               if (output) redirectWritePaths.add(output)
@@ -969,9 +983,11 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         // command string to extract paths. For source/., we resolve
         // the script path. Arguments containing command substitution
         // ($(...), `...`, ${...}) are opaque — flag the whole command.
-        if (["eval", "bash", "sh", "zsh", "source", "."].includes(scanParts[0])) {
-          const isShellWithC = ["bash", "sh", "zsh"].includes(scanParts[0]) && scanParts.includes("-c")
-          const isEval = scanParts[0] === "eval"
+        // Match on the basename so `/bin/bash -c` and `/usr/bin/rm` take the
+        // same inner-parse and path-recording branches as the bare names.
+        if (["eval", "bash", "sh", "zsh", "source", "."].includes(executable)) {
+          const isShellWithC = ["bash", "sh", "zsh"].includes(executable) && scanParts.includes("-c")
+          const isEval = executable === "eval"
 
           // Collect the inner command string for eval / shell -c
           let innerCmd: string | undefined
@@ -1080,9 +1096,9 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         }
 
         // not an exhaustive list, but covers most common cases
-        if (["cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown", "cat"].includes(scanParts[0])) {
+        if (["cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown", "cat"].includes(executable)) {
           for (const arg of scanParts.slice(1)) {
-            if (arg.startsWith("-") || (scanParts[0] === "chmod" && arg.startsWith("+"))) continue
+            if (arg.startsWith("-") || (executable === "chmod" && arg.startsWith("+"))) continue
             await recordResolvedPath(arg, true)
           }
         }
