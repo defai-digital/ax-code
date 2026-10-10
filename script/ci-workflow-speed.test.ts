@@ -78,6 +78,7 @@ describe("CI workflow speed policy", () => {
     expect(lane).toContain(`shard: [${shards}]`)
     expect(lane).toContain("AX_TEST_SHARD_INDEX: ${{ matrix.shard }}")
     expect(lane).toContain(`AX_TEST_SHARD_COUNT: "${DETERMINISTIC_SHARD_COUNT}"`)
+    expect(lane).toContain(`name: deterministic (\${{ matrix.shard }}/${DETERMINISTIC_SHARD_COUNT})`)
     expect(lane).toContain("test:ci -- deterministic --rerun-on-fail 0")
     expect(lane).not.toContain("AX_TEST_SHARD_SIZE")
     expect(lane).not.toContain("AX_TEST_MAX_WORKERS")

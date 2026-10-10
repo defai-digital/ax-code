@@ -315,7 +315,7 @@ jobs:
         run: pnpm --dir packages/ax-code run typecheck
 
   deterministic:
-    name: deterministic (${{ matrix.shard }}/4)
+    name: deterministic (${{ matrix.shard }}/8)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
