@@ -358,6 +358,27 @@ describe("source mapping and authoring", () => {
     expect(result.mappings[0]!.confidence).toBe("unresolved")
     expect(result.unresolved).toHaveLength(2)
   })
+  test("signed numeric schema literals and upper-case extensions still map", async () => {
+    await using tmp = await tmpdir()
+    const signed = {
+      ...descriptor,
+      inputSchema: { type: "object", properties: { lat: { type: "number", minimum: -90, maximum: +90 } } },
+    }
+    await fs.writeFile(
+      path.join(tmp.path, "geo.ts"),
+      "context.registerTool({name:'lookup', inputSchema:{type:'object', properties:{lat:{type:'number', minimum:-90, maximum:+90}}}})",
+    )
+    await fs.writeFile(path.join(tmp.path, "Page.HTML"), '<form toolname="search"></form>')
+    const result = await BrowserInventory.sources(
+      tmp.path,
+      ["geo.ts", "Page.HTML"],
+      [signed, { ...descriptor, name: "search" }],
+      async () => {},
+    )
+    expect(result.mappings[0]!.confidence).toBe("name_and_schema_candidate")
+    expect(result.mappings[1]!.confidence).toBe("name_only_candidate")
+    expect(result.mappings[1]!.candidates[0]!.kind).toBe("declarative")
+  })
   test.each([
     "../secret.ts",
     "/tmp/private.ts",

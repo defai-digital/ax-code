@@ -89,6 +89,12 @@ export namespace BrowserInventory {
     if (depth > 16) return undefined
     if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text
     if (ts.isNumericLiteral(node)) return Number(node.text)
+    if (
+      ts.isPrefixUnaryExpression(node) &&
+      ts.isNumericLiteral(node.operand) &&
+      (node.operator === ts.SyntaxKind.MinusToken || node.operator === ts.SyntaxKind.PlusToken)
+    )
+      return node.operator === ts.SyntaxKind.MinusToken ? -Number(node.operand.text) : Number(node.operand.text)
     if (node.kind === ts.SyntaxKind.TrueKeyword) return true
     if (node.kind === ts.SyntaxKind.FalseKeyword) return false
     if (node.kind === ts.SyntaxKind.NullKeyword) return null
@@ -123,7 +129,7 @@ export namespace BrowserInventory {
       const source = await readLocalSource(root, file, allow)
       bytes += Buffer.byteLength(source.content)
       if (bytes > 2 * 1024 * 1024) throw new Error("Source inventory exceeds total byte limit")
-      if (/\.html?$/.test(file)) {
+      if (/\.html?$/i.test(file)) {
         const clean = source.content.replace(/<!--[\s\S]*?-->/g, (comment) => comment.replace(/[^\n]/g, " "))
         for (const match of clean.matchAll(/<form\b[^>]*\btoolname\s*=\s*(["'])([^"']+)\1[^>]*>/gi)) {
           candidates.push({
@@ -145,7 +151,7 @@ export namespace BrowserInventory {
           source.content,
           ts.ScriptTarget.Latest,
           true,
-          /\.[jt]sx$/.test(file) ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+          /\.[jt]sx$/i.test(file) ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
         )
         // Parser recovery can produce plausible partial nodes; never present those as mappings.
         if ((tree as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] }).parseDiagnostics?.length) {
