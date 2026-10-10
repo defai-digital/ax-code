@@ -1807,10 +1807,13 @@ export namespace WebMcpProfile {
         )
       }
       let text = part.text
+      // Tail console text before redacting it: the discarded prefix is
+      // neither scanned nor redacted.
+      if (name === "list_console_messages") text = consoleTail(text)
       if (redactUrls) {
         text = redactUrlText(text)
-        part.text = text
       }
+      part.text = text
       textBytes += Buffer.byteLength(text, "utf8")
     }
     // wait_for always carries a fresh snapshot (ADR-174 rule 9), so it is
@@ -1824,10 +1827,6 @@ export namespace WebMcpProfile {
       )
     }
     if (name === "list_console_messages") {
-      for (const part of contents) {
-        if (!isRecord(part) || part.type !== "text" || typeof part.text !== "string") continue
-        part.text = consoleTail(part.text)
-      }
       const structured = isRecord(result.structuredContent) ? result.structuredContent : undefined
       if (structured && Array.isArray(structured.messages) && structured.messages.length > CONSOLE_TAIL) {
         structured.messages = structured.messages.slice(-CONSOLE_TAIL)
@@ -2062,11 +2061,10 @@ export namespace WebMcpProfile {
             }
           : undefined,
       })
-      // The count cap fails the listing either way; stop retaining entries
-      // once it is certainly exceeded so a huge listing cannot grow this
-      // array or the downstream duplicate/byte walks.
-      if (descriptors.length > MAX_TOOLS) break
     }
+    // Never truncate: the browser-workflow contracts listing and the runner's
+    // find-by-name treat the result as complete. Callers that enforce the caps
+    // (recordListing, verifyBinding) check the count before any per-entry work.
     return descriptors
   }
 
@@ -2111,10 +2109,13 @@ export namespace WebMcpProfile {
   function descriptorBytes(descriptors: ToolDescriptor[]): number {
     // Accumulate per descriptor and stop once the cap is certainly exceeded:
     // this runs before the cap check, so a listing of oversized schemas must
-    // not be serialized in full just to be rejected.
+    // not be serialized in full just to be rejected. JSON separates entries
+    // with a comma only between them, so the first entry adds no separator.
     let total = 2
+    let first = true
     for (const descriptor of descriptors) {
-      total += Buffer.byteLength(JSON.stringify(descriptor), "utf8") + 1
+      total += Buffer.byteLength(JSON.stringify(descriptor), "utf8") + (first ? 0 : 1)
+      first = false
       if (total > MAX_DESCRIPTOR_BYTES) return total
     }
     return total
@@ -2194,10 +2195,11 @@ export namespace WebMcpProfile {
     descriptors: ToolDescriptor[],
     pageUrl?: string | undefined,
   ): ListingResult {
-    const duplicate = duplicateToolName(descriptors)
-    const error = duplicate
-      ? `WebMCP page registers a duplicate tool name (${duplicate})`
-      : checkListingCaps(descriptors)
+    // Caps before the duplicate walk: an oversized listing fails on its O(1)
+    // count without scanning every entry.
+    const capped = checkListingCaps(descriptors)
+    const duplicate = capped ? undefined : duplicateToolName(descriptors)
+    const error = capped ?? (duplicate ? `WebMCP page registers a duplicate tool name (${duplicate})` : undefined)
     if (error) {
       clearBaseline(state, pageId)
       return { ok: false, error }
@@ -2325,11 +2327,12 @@ export namespace WebMcpProfile {
     }
     // The re-listing is a listing too: an over-cap or ambiguous fresh
     // listing is not an approvable page state even when the one approved
-    // tool still hashes the same.
-    const duplicate = duplicateToolName(descriptors)
-    if (duplicate) return { ok: false, error: `WebMCP re-listing registers a duplicate tool name (${duplicate})` }
+    // tool still hashes the same. Caps before the duplicate walk: an
+    // oversized listing fails on its O(1) count without scanning every entry.
     const capped = checkListingCaps(descriptors)
     if (capped) return { ok: false, error: capped }
+    const duplicate = duplicateToolName(descriptors)
+    if (duplicate) return { ok: false, error: `WebMCP re-listing registers a duplicate tool name (${duplicate})` }
     const origin = pageOrigin(pageUrl)
     if (!origin) return { ok: false, error: unlocatedPageMessage(pageUrl, "could not be located before execution") }
     if (expected) {

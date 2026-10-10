@@ -90,6 +90,15 @@ describe("WebMCP managed requirement", () => {
     expect(WebMcpProfile.parseToolListing({})).toBeUndefined()
   })
 
+  test("parse keeps an over-cap listing complete; only the recording caps reject it", () => {
+    // browser-workflow's contracts listing and the runner's find-by-name treat
+    // the parse result as the full list, so the parser must not truncate.
+    const tools = Array.from({ length: WebMcpProfile.MAX_TOOLS + 1 }, (_, i) => ({ name: `t${i}` }))
+    const parsed = WebMcpProfile.parseToolListing({ structuredContent: { webmcpTools: tools } })
+    expect(parsed).toHaveLength(WebMcpProfile.MAX_TOOLS + 1)
+    expect(WebMcpProfile.recordListing(WebMcpProfile.stateFor(profile()), 1, parsed!)).toMatchObject({ ok: false })
+  })
+
   test("descriptor caps fail closed", () => {
     const state = WebMcpProfile.stateFor(profile())
     const many = Array.from({ length: WebMcpProfile.MAX_TOOLS + 1 }, (_, i) => ({ name: `t${i}` }))
@@ -99,6 +108,16 @@ describe("WebMCP managed requirement", () => {
         { name: "a", description: "x".repeat(WebMcpProfile.MAX_DESCRIPTOR_BYTES) },
       ]),
     ).toMatchObject({ ok: false })
+  })
+
+  test("the descriptor byte cap matches the serialized listing exactly", () => {
+    const state = WebMcpProfile.stateFor(profile())
+    const pad = WebMcpProfile.MAX_DESCRIPTOR_BYTES - Buffer.byteLength(JSON.stringify([{ name: "a", description: "" }]))
+    const exact = [{ name: "a", description: "x".repeat(pad) }]
+    expect(Buffer.byteLength(JSON.stringify(exact))).toBe(WebMcpProfile.MAX_DESCRIPTOR_BYTES)
+    expect(WebMcpProfile.recordListing(state, 1, exact, "https://example.test/")).toEqual({ ok: true })
+    const over = [{ name: "a", description: "x".repeat(pad + 1) }]
+    expect(WebMcpProfile.recordListing(state, 2, over, "https://example.test/")).toMatchObject({ ok: false })
   })
 
   test("definition churn past the cap disables the page", () => {
