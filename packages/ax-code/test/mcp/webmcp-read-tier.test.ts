@@ -556,6 +556,29 @@ describe("WebMCP network metadata admission (ADR-172)", () => {
     expect(text).toContain("page=2")
   })
 
+  test.each(["list_network_requests", "list_console_messages"])(
+    "%s redacts percent-encoded secret query keys without rewriting ordinary queries",
+    (name) => {
+      const result = {
+        content: [
+          {
+            type: "text",
+            text: "https://api.test/?%74oken=private-token&access%5Ftoken=private-access&%61PI%5FKey=private-key&size=large%20image&bad%ZZ=keep",
+          },
+        ],
+      }
+      WebMcpProfile.boundReadResult(name, result, "https://example.test")
+      const text = result.content[1].text as string
+      expect(text).not.toContain("private-token")
+      expect(text).not.toContain("private-access")
+      expect(text).not.toContain("private-key")
+      expect(text).toContain("%74oken=[redacted]")
+      expect(text).toContain("access%5Ftoken=[redacted]")
+      expect(text).toContain("%61PI%5FKey=[redacted]")
+      expect(text).toContain("size=large%20image&bad%ZZ=keep")
+    },
+  )
+
   test("an oversized network list is rejected with narrowing guidance", () => {
     const big = "x".repeat(33 * 1024)
     expect(() =>

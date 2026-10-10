@@ -1784,13 +1784,24 @@ export namespace WebMcpProfile {
    * fragments never leave the bridge (ADR-172).
    */
   const SECRET_QUERY_KEY =
-    /([?&](?:token|access_token|auth|sig|signature|session|secret|password|passwd|api_key|apikey|credential|key)=)[^&\s]*/gi
+    /^(?:token|access_token|auth|sig|signature|session|secret|password|passwd|api_key|apikey|credential|key)$/i
 
   function redactUrlText(text: string): string {
     return text
       .replace(/:\/\/[^\s/]*@/g, "://")
       .replace(/(https?:\/\/[^\s#]+)#[^\s]*/g, "$1")
-      .replace(SECRET_QUERY_KEY, "$1[redacted]")
+      .replace(/([?&])([^=&\s]+)=([^&\s]*)/g, (match, separator: string, key: string) => {
+        // Query names are decoded by URL consumers. Keep the original bytes
+        // for ordinary parameters, but classify encoded names before deciding
+        // whether their values may leave the bridge.
+        let decoded: string
+        try {
+          decoded = decodeURIComponent(key.replace(/\+/g, " "))
+        } catch {
+          return match
+        }
+        return SECRET_QUERY_KEY.test(decoded) ? `${separator}${key}=[redacted]` : match
+      })
   }
 
   /**
