@@ -231,6 +231,11 @@ describe("WebMCP profile", () => {
     },
   )
 
+  test("a page-tool Error status without errorText is still a page execution error", () => {
+    const result = { content: [], structuredContent: { message: JSON.stringify({ status: "Error" }) } }
+    expect(() => WebMcpProfile.validateResult("execute_webmcp_tool", result)).toThrow(WebMcpProfile.PageInvocationError)
+  })
+
   test("requires confirmed execution and navigation, with bridge errors remaining failures", () => {
     expect(() =>
       WebMcpProfile.validateResult("execute_webmcp_tool", {

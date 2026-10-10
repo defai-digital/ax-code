@@ -1740,7 +1740,10 @@ export namespace WebMcpProfile {
       const completion = typeof structured.message === "string" ? parseJsonPayload(structured.message) : undefined
       // MCP transport success is not page-tool success. Missing/unknown status
       // and canceled/error invocations must not become successful session parts.
-      if (isRecord(completion) && completion.status === "Error" && typeof completion.errorText === "string") {
+      // The bridge serializes `{ status, output, errorText }` with JSON.stringify,
+      // so a page tool that fails without text arrives as `{ status: "Error" }`;
+      // the status alone marks a page-side failure, not a bridge failure.
+      if (isRecord(completion) && completion.status === "Error") {
         throw new PageInvocationError(
           "WebMCP invocation did not confirm completion; page tool reported an execution error",
         )

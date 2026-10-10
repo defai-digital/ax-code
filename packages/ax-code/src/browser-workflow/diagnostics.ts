@@ -24,7 +24,8 @@ export async function readLocalSource(
   const realRoot = await fs.realpath(root)
   const target = await fs.realpath(path.resolve(realRoot, file))
   const relative = path.relative(realRoot, target)
-  if (relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("Source reference leaves the repository")
+  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative))
+    throw new Error("Source reference leaves the repository")
   await allow(relative)
   const handle = await fs.open(target, constants.O_RDONLY | constants.O_NOFOLLOW)
   try {
@@ -70,7 +71,7 @@ export async function linkSources(
           typeof payload.mappings !== "string"
         )
           throw new Error("Invalid local source map")
-        if (payload.file !== path.basename(reference.file))
+        if (typeof payload.file !== "string" || path.basename(payload.file) !== path.basename(reference.file))
           throw new Error("Source map does not name the generated file")
         const entry = new SourceMap(payload as unknown as ConstructorParameters<typeof SourceMap>[0]).findEntry(
           reference.line - 1,

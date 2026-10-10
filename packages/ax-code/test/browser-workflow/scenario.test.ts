@@ -373,6 +373,31 @@ describe("frozen browser scenarios", () => {
     await fs.writeFile(path.join(tmp.path, "app.js.map"), sourceMap("https://external.test/private.ts"))
     expect((await linkSources(tmp.path, references, async () => {}))[0]!.confidence).toBe("unresolved")
   })
+  test("source maps may name the generated file with a directory and dot-dot file names stay in the repository", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.mkdir(path.join(tmp.path, "dist"))
+    await fs.writeFile(path.join(tmp.path, "dist", "app.js"), "console.log(1)\n")
+    await fs.writeFile(path.join(tmp.path, "dist", "app.ts"), "console.log(1)\n")
+    await fs.writeFile(
+      path.join(tmp.path, "dist", "app.js.map"),
+      JSON.stringify({ version: 3, file: "dist/app.js", sources: ["app.ts"], names: [], mappings: "AAAA" }),
+    )
+    await fs.writeFile(path.join(tmp.path, "..config.js"), "module.exports = {}\n")
+    const links = await linkSources(
+      tmp.path,
+      [
+        { file: "dist/app.js", line: 1, column: 0, map: "dist/app.js.map" },
+        { file: "..config.js", line: 1, column: 0 },
+      ],
+      async () => {},
+    )
+    expect(links.map((link) => link.confidence)).toEqual(["local_map", "explicit"])
+    expect(links[0]).toMatchObject({ file: path.join("dist", "app.ts"), line: 1 })
+  })
+  test("a snapshot node with a huge children array is rejected without throwing", () => {
+    const snapshot = { id: "0", role: "document", children: new Array(300_000).fill({ id: "1", role: "text" }) }
+    expect(BrowserRunner.losslessSnapshot({ content: [], structuredContent: { snapshot } })).toBe(false)
+  })
   test("forged, modified and replayed receipts are rejected", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

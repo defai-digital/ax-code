@@ -68,7 +68,12 @@ export namespace BrowserRunner {
       if (!isRecord(node) || ++count > 5000) return false
       if ([node.role, node.name, node.value].some((value) => typeof value === "string" && value.length > 512))
         return false
-      if (Array.isArray(node.children)) nodes.push(...node.children)
+      if (Array.isArray(node.children)) {
+        // The tree is page-controlled: bound the pending stack before copying
+        // children instead of spreading an arbitrarily long array into push.
+        if (nodes.length + node.children.length > 5000) return false
+        for (const child of node.children) nodes.push(child)
+      }
     }
     return true
   }
