@@ -99,14 +99,22 @@ export namespace WebMcpChrome {
     const candidates = [
       ...new Set(executablePath ? [executablePath] : [...knownPaths(platform), ...pathCandidates(platform)]),
     ]
-    let best: { executable: string; major: number } | undefined
-    let unreadable: string | undefined
+    const executables: string[] = []
     for (const executable of candidates) {
       if (!(await Filesystem.isExecutable(executable))) continue
       // Windows `chrome.exe --version` opens a window instead of printing, so
       // an installed binary counts as present without a version.
       if (platform === "win32") return { state: "ready", executable }
-      const major = await version(executable)
+      executables.push(executable)
+    }
+    // Probe every installed candidate at once and read the answers in
+    // candidate order: a binary that hangs until its 10 s kill bounds the
+    // whole probe to one timeout instead of one per candidate.
+    const majors = await Promise.all(executables.map((executable) => version(executable)))
+    let best: { executable: string; major: number } | undefined
+    let unreadable: string | undefined
+    for (const [index, executable] of executables.entries()) {
+      const major = majors[index]
       if (major === undefined) {
         unreadable ??= executable
         continue

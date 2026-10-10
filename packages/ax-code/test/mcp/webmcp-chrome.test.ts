@@ -57,6 +57,31 @@ test("well-known locations are platform specific and PATH names skip win32", () 
   expect(WebMcpChrome.pathCandidates("linux", { PATH: "/a:/b" })).toContain(path.join("/b", "chromium"))
 })
 
+test.skipIf(process.platform === "win32")(
+  "installed candidates are probed concurrently, in candidate order",
+  async () => {
+    const slow = async (output: string) => {
+      const dir = await fs.mkdtemp(path.join(os.tmpdir(), "webmcp-chrome-"))
+      dirs.push(dir)
+      const file = path.join(dir, "chrome")
+      await fs.writeFile(file, `#!/bin/sh\nsleep 2\necho "${output}"\n`, { mode: 0o755 })
+      return dir
+    }
+    const [first, second] = await Promise.all([slow("Google Chrome 149.0.0.1"), slow("Google Chrome 151.0.0.1")])
+    const previous = process.env.PATH
+    process.env.PATH = `${first}:${second}`
+    try {
+      const started = Date.now()
+      const result = await WebMcpChrome.status(undefined, "linux")
+      // Two 2 s probes run side by side: well under the 4 s a sequential walk needs.
+      expect(Date.now() - started).toBeLessThan(3_600)
+      expect(result).toEqual({ state: "ready", major: 151, executable: path.join(second, "chrome") })
+    } finally {
+      process.env.PATH = previous
+    }
+  },
+)
+
 async function recordingChrome() {
   const file = await fakeChrome("Google Chrome 150.0.7000.1")
   const marker = path.join(path.dirname(file), "executed")

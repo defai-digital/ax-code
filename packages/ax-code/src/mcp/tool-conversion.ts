@@ -31,6 +31,9 @@ function webmcpInteractPreflight(
   /** The ask-time decision bound to the raw call object, when the session layer made one. */
   boundPerAction: boolean | undefined,
 ) {
+  // Grant before binding (ADR-174 rule 6, locked by the dispatch tests): after
+  // a cross-origin navigation the next action there surfaces the grant prompt
+  // for the new origin, which is how the user learns where the page went.
   const grants = policy.interactGrants?.() ?? NO_INTERACT_GRANTS
   if (!grants.has(origin)) throw new WebMcpProfile.InteractNotGrantedError(origin)
   if (policy.toolName === "wait_for" && !(policy.readGrants?.() ?? NO_READ_GRANTS).has(origin)) {

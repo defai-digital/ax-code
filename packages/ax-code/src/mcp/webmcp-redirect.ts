@@ -52,13 +52,26 @@ export async function redirectOriginOutsideAllowlist(
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   const onAbort = () => controller.abort()
   options.signal?.addEventListener("abort", onAbort, { once: true })
+  // The deadline must end the probe even if the fetch implementation never
+  // settles on abort: race every hop against the controller's own signal.
+  // The sentinel is handled up front so a late abort after the probe
+  // returned cannot surface as an unhandled rejection.
+  const aborted = new Promise<never>((_, reject) => {
+    controller.signal.addEventListener("abort", () => reject(new Error("WebMCP redirect probe aborted")), {
+      once: true,
+    })
+  })
+  aborted.catch(() => undefined)
   try {
     let current = requestedUrl
     for (let hop = 0; hop < MAX_REDIRECT_HOPS; hop++) {
       if (controller.signal.aborted || Date.now() >= deadline) return undefined
       let response: Awaited<ReturnType<ProbeFetch>>
       try {
-        response = await fetchImpl(current, { method: "HEAD", redirect: "manual", signal: controller.signal })
+        response = await Promise.race([
+          fetchImpl(current, { method: "HEAD", redirect: "manual", signal: controller.signal }),
+          aborted,
+        ])
       } catch {
         return undefined
       }
@@ -84,5 +97,7 @@ export async function redirectOriginOutsideAllowlist(
   } finally {
     clearTimeout(timer)
     options.signal?.removeEventListener("abort", onAbort)
+    // Settle the sentinel so a never-fired listener holds nothing after return.
+    controller.abort()
   }
 }

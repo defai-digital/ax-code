@@ -624,6 +624,19 @@ describe("WebMCP T2 dispatch", () => {
 })
 
 describe("WebMCP T2 approval metadata and prompt lines", () => {
+  test("approval metadata bounds element and wait-text counts on its own", () => {
+    const profile = full()
+    WebMcpProfile.recordSnapshot(profile, 1, WebMcpProfile.parseStructuredSnapshot(snapshotResult())!, PAGE)
+    const elements = Array.from({ length: 40 }, () => ({ uid: "1_5", value: "x" }))
+    const form = WebMcpProfile.approvalMetadata("bridge", profile, "fill_form", { pageId: 1, elements })
+    expect((form.targets as unknown[]).length).toBe(WebMcpProfile.MAX_FILL_FORM_ELEMENTS)
+    const text = Array.from({ length: 40 }, () => "w".repeat(5_000))
+    const wait = WebMcpProfile.approvalMetadata("bridge", profile, "wait_for", { pageId: 1, text })
+    const waitText = wait.waitText as string[]
+    expect(waitText).toHaveLength(WebMcpProfile.MAX_WAIT_TEXTS)
+    expect(waitText.every((item) => item.length <= WebMcpProfile.MAX_WAIT_TEXT_CHARS)).toBe(true)
+  })
+
   test("per-action prompts show the target, the full value, masking for sensitive fields, keys and dialogs", () => {
     const profile = full()
     WebMcpProfile.recordSnapshot(profile, 1, WebMcpProfile.parseStructuredSnapshot(snapshotResult())!, PAGE)

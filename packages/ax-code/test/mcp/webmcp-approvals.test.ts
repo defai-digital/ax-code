@@ -186,6 +186,24 @@ test("corrupt stores fail closed and are preserved", async () => {
   })
 })
 
+test("an unreadable store names the file and the recovery step; a schema mismatch is preserved too", async () => {
+  await using tmp = await tmpdir({ git: true, config: { mcp: { bridge: entry() } } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const candidate = (await WebMcpApprovals.capture(policy(entry().webmcp), { capability: "list_pages" }))!
+      await fs.writeFile(WebMcpApprovals.filepath, "{ not json")
+      await expect(WebMcpApprovals.list("bridge")).rejects.toThrow(WebMcpApprovals.filepath)
+      await expect(WebMcpApprovals.allowed(candidate)).rejects.toThrow("not valid JSON")
+      const mismatch = JSON.stringify({ version: 1, records: [{ unexpected: true }] })
+      await fs.writeFile(WebMcpApprovals.filepath, mismatch)
+      await expect(WebMcpApprovals.allowed(candidate)).rejects.toThrow("record schema")
+      await expect(WebMcpApprovals.remove("bridge")).rejects.toThrow("repaired or removed")
+      expect(await fs.readFile(WebMcpApprovals.filepath, "utf8")).toBe(mismatch)
+    },
+  })
+})
+
 test("origin scopes reject wildcards, credentials, paths and arbitrary HTTP origins", () => {
   for (const origin of [
     "https://*.test",

@@ -1664,8 +1664,10 @@ export namespace WebMcpProfile {
         Object.assign(base, valueMetadata(call.value, sensitiveTarget(node)))
       }
     }
+    // validateCall already bounds these arrays; bound them here as well so the
+    // approval text stays small even for a caller that skipped validation.
     if (tool === "fill_form" && Array.isArray(call.elements)) {
-      base.targets = call.elements.flatMap((element) => {
+      base.targets = call.elements.slice(0, MAX_FILL_FORM_ELEMENTS).flatMap((element) => {
         if (!isRecord(element) || typeof element.uid !== "string" || typeof element.value !== "string") return []
         const node = targetSummaryFor(profile, pageId, element.uid)
         return [{ ...targetMetadata(node, element.uid), ...valueMetadata(element.value, sensitiveTarget(node)) }]
@@ -1686,7 +1688,10 @@ export namespace WebMcpProfile {
       }
     }
     if (tool === "wait_for" && Array.isArray(call.text)) {
-      base.waitText = call.text.filter((item): item is string => typeof item === "string")
+      base.waitText = call.text
+        .slice(0, MAX_WAIT_TEXTS)
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.slice(0, MAX_WAIT_TEXT_CHARS))
     }
     return base
   }

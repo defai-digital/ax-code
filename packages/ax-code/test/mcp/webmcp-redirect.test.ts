@@ -121,6 +121,23 @@ describe("WebMCP redirect probe (ADR-168)", () => {
     ).toBeUndefined()
   })
 
+  test("the deadline ends the probe even when fetch ignores its abort signal", async () => {
+    const fetchImpl: ProbeFetch = () => new Promise(() => {})
+    const started = Date.now()
+    expect(
+      await redirectOriginOutsideAllowlist("https://a.test/start", allowed, fetchImpl, { timeoutMs: 40 }),
+    ).toBeUndefined()
+    expect(Date.now() - started).toBeLessThan(2_000)
+    // An external abort ends it the same way.
+    const controller = new AbortController()
+    const pending = redirectOriginOutsideAllowlist("https://a.test/start", allowed, fetchImpl, {
+      timeoutMs: 60_000,
+      signal: controller.signal,
+    })
+    controller.abort()
+    expect(await pending).toBeUndefined()
+  })
+
   test("an exhausted probe budget never sends a request", async () => {
     const calls: string[] = []
     expect(

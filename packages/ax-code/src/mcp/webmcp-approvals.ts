@@ -9,6 +9,7 @@ import { Filesystem } from "../util/filesystem"
 import { FileLock } from "../util/filelock"
 import { Lock } from "../util/lock"
 import { NamedError } from "@ax-code/util/error"
+import { parseJsonResult } from "@/util/json-value"
 import { McpTrust } from "./trust"
 import { WebMcpProfile } from "./webmcp-profile"
 
@@ -199,8 +200,27 @@ export namespace WebMcpApprovals {
       throw error
     })
     if (!stat) return { version: 1, records: [] }
-    if (stat.size > 4 * 1024 * 1024) throw new Error("WebMCP approval store exceeds its size limit")
-    return Store.parse(await Filesystem.readJson<unknown>(filepath))
+    // An unreadable store fails closed and is preserved for inspection (no
+    // saved approval applies, every prompt is asked again). The message names
+    // the file and the recovery step so the operator is not left with a bare
+    // schema error and no way out of the "could not load approvals" state.
+    const unreadable = (reason: string) =>
+      new Error(
+        `WebMCP approval store ${reason} (${filepath}). Saved approvals are ignored until the file is repaired or removed; approvals can then be saved again.`,
+      )
+    if (stat.size > 4 * 1024 * 1024) throw unreadable("exceeds its size limit")
+    // Read and parse separately: a filesystem error (permissions, I/O) keeps
+    // its own message; only a parse or schema failure is labeled unreadable.
+    const text = await Filesystem.readText(filepath).catch((error) => {
+      if (Filesystem.isEnoent(error)) return undefined
+      throw error
+    })
+    if (text === undefined) return { version: 1, records: [] }
+    const parsed = parseJsonResult(text)
+    if (!parsed.ok) throw unreadable("is not valid JSON")
+    const result = Store.safeParse(parsed.value)
+    if (!result.success) throw unreadable("does not match the expected record schema")
+    return result.data
   }
 
   export async function allowed(value: Candidate): Promise<boolean> {
@@ -250,6 +270,10 @@ export namespace WebMcpApprovals {
     const kept = store.records.filter((row) => row.id !== id).sort((a, b) => a.createdAt - b.createdAt)
     const trimmed = kept.slice(Math.max(0, kept.length - (MAX_RECORDS - 1)))
     const next = Store.parse({ version: 1, records: [...trimmed, record] })
+    // `authorize` is the caller's deny-rule check (read-only, idempotent). It
+    // runs before the write so a denied request never touches the store, and
+    // again after it so a deny that landed during the write rolls the record
+    // back instead of leaving a persisted approval the rules now forbid.
     await authorize?.()
     if (!active()) throw new Error("WebMCP approval request was canceled")
     await Filesystem.writeJson(filepath, next, 0o600)
