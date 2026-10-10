@@ -120,6 +120,22 @@ describe("Log.init", () => {
     expect(truncateCalls).toBe(0)
   })
 
+  test("a cached logger follows a later init to the new JSON destination", async () => {
+    await using tmp = await tmpdir()
+    const first = path.join(tmp.path, "first")
+    const second = path.join(tmp.path, "second")
+    const logger = Log.create({ service: "reinit-probe" })
+    await Log.init({ print: false, dir: first, name: "reinit" })
+    logger.error("first destination")
+    await Log.init({ print: false, dir: second, name: "reinit" })
+    logger.error("second destination")
+    const secondJson = await fs.readFile(path.join(second, "reinit.json.log"), "utf8")
+    expect(secondJson).toContain("second destination")
+    expect(secondJson).not.toContain("first destination")
+    const firstJson = await fs.readFile(path.join(first, "reinit.json.log"), "utf8")
+    expect(firstJson).not.toContain("second destination")
+  })
+
   test("falls back to a temp log dir when the preferred path is unavailable", async () => {
     await using tmp = await tmpdir()
     const preferred = path.join(tmp.path, "preferred")

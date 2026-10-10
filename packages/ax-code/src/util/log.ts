@@ -615,8 +615,19 @@ export namespace Log {
     // Pino child is created lazily — only when pinoLogger is active (file mode).
     // Its tags are a sink too, so they take the same key-aware redaction as the
     // text path; `Log.tag("token", …)` must not land in the JSON log verbatim.
+    // Keyed on the live Pino logger: a cached logger must follow a later
+    // Log.init() to its new destination instead of writing JSON to the file
+    // (or the discarded print-mode state) that was active when it was first used.
     let child: pino.Logger | undefined
-    const pino_child = () => (child ??= pinoLogger?.child(pinoExtra(tags)))
+    let childOf: pino.Logger | undefined
+    const pino_child = () => {
+      if (!pinoLogger) return undefined
+      if (childOf !== pinoLogger) {
+        child = pinoLogger.child(pinoExtra(tags))
+        childOf = pinoLogger
+      }
+      return child
+    }
     // The JSON file log carries the message too: redact and cap it exactly like
     // the text sink, or a credential named in a message reaches disk unredacted.
     const pinoMessage = (message: unknown) => redactLogText(safeLogString(message ?? ""), LOG_MESSAGE_MAX_CHARS)
