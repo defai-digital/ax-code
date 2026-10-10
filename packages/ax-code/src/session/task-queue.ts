@@ -162,6 +162,30 @@ export namespace TaskQueue {
     })
   }
 
+  // Every read and payload-write of a queue row funnels through these two
+  // helpers so the not-found message stays identical across callers.
+  function readRow(db: Database.TxOrDb, id: TaskQueueID): typeof TaskQueueTable.$inferSelect {
+    const row = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get()
+    if (!row) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
+    return row
+  }
+
+  function writePayloadRow(
+    db: Database.TxOrDb,
+    id: TaskQueueID,
+    payload: Payload,
+    now: number,
+  ): typeof TaskQueueTable.$inferSelect {
+    const row = db
+      .update(TaskQueueTable)
+      .set({ payload, time_updated: now })
+      .where(eq(TaskQueueTable.id, id))
+      .returning()
+      .get()
+    if (!row) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
+    return row
+  }
+
   /**
    * Extract a stable comparison key from a `command` row's payload. Returns
    * `undefined` when the payload is not shaped like a slash command (no
@@ -498,8 +522,7 @@ export namespace TaskQueue {
 
   export async function get(id: TaskQueueID): Promise<Info> {
     const item = SessionShard.storeForProject(Instance.project.id).use((db) => {
-      const row = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get()
-      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
+      const row = readRow(db, id)
       return fromRow(row)
     })
     assertProjectItem(item)
@@ -555,8 +578,7 @@ export namespace TaskQueue {
         .returning()
         .get()
       if (!row) {
-        const fresh = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, input.id)).get()
-        if (!fresh) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+        const fresh = readRow(db, input.id)
         return fromRow(fresh)
       }
       return fromRow(row)
@@ -622,8 +644,7 @@ export namespace TaskQueue {
   }): Promise<{ item: Info; claim?: ResultDeliveryClaim; claimed: boolean; accepted: boolean }> {
     const now = Date.now()
     const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
-      const currentRow = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, input.id)).get()
-      if (!currentRow) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      const currentRow = readRow(db, input.id)
       const current = fromRow(currentRow)
       const status = DeliveryStatus.safeParse(current.payload["deliveryStatus"])
       const existing = resultDeliveryClaim(current)
@@ -650,13 +671,7 @@ export namespace TaskQueue {
       }
       delete payload["deliveryError"]
       if (input.resultEmpty !== undefined) payload["deliveryEmpty"] = input.resultEmpty
-      const row = db
-        .update(TaskQueueTable)
-        .set({ payload, time_updated: now })
-        .where(eq(TaskQueueTable.id, input.id))
-        .returning()
-        .get()
-      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      const row = writePayloadRow(db, input.id, payload, now)
       return { item: fromRow(row), claim: input.claim, claimed: true, accepted: true }
     })
     assertProjectItem(result.item)
@@ -671,8 +686,7 @@ export namespace TaskQueue {
   }): Promise<{ item: Info; completed: boolean }> {
     const now = Date.now()
     const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
-      const currentRow = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, input.id)).get()
-      if (!currentRow) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      const currentRow = readRow(db, input.id)
       const current = fromRow(currentRow)
       const existing = resultDeliveryClaim(current)
       if (!existing || !sameResultDeliveryClaim(existing, input.claim)) {
@@ -687,13 +701,7 @@ export namespace TaskQueue {
       }
       delete payload["deliveryError"]
       if (input.resultEmpty !== undefined) payload["deliveryEmpty"] = input.resultEmpty
-      const row = db
-        .update(TaskQueueTable)
-        .set({ payload, time_updated: now })
-        .where(eq(TaskQueueTable.id, input.id))
-        .returning()
-        .get()
-      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      const row = writePayloadRow(db, input.id, payload, now)
       return { item: fromRow(row), completed: true, changed: true }
     })
     assertProjectItem(result.item)
@@ -727,8 +735,7 @@ export namespace TaskQueue {
   }): Promise<{ item: Info; blocked: boolean }> {
     const now = Date.now()
     const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
-      const currentRow = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, input.id)).get()
-      if (!currentRow) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      const currentRow = readRow(db, input.id)
       const current = fromRow(currentRow)
       const existing = resultDeliveryClaim(current)
       if (
@@ -743,13 +750,7 @@ export namespace TaskQueue {
         deliveryStatus: "blocked",
         deliveryError: input.error,
       }
-      const row = db
-        .update(TaskQueueTable)
-        .set({ payload, time_updated: now })
-        .where(eq(TaskQueueTable.id, input.id))
-        .returning()
-        .get()
-      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      const row = writePayloadRow(db, input.id, payload, now)
       return { item: fromRow(row), blocked: true, changed: true }
     })
     assertProjectItem(result.item)
@@ -763,8 +764,7 @@ export namespace TaskQueue {
   }): Promise<{ item: Info; released: boolean }> {
     const now = Date.now()
     const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
-      const currentRow = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, input.id)).get()
-      if (!currentRow) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      const currentRow = readRow(db, input.id)
       const current = fromRow(currentRow)
       const existing = resultDeliveryClaim(current)
       if (!existing || !sameResultDeliveryClaim(existing, input.claim)) {
@@ -777,13 +777,7 @@ export namespace TaskQueue {
       delete payload["resultDelivery"]
       delete payload["deliveryError"]
       delete payload["deliveryEmpty"]
-      const row = db
-        .update(TaskQueueTable)
-        .set({ payload, time_updated: now })
-        .where(eq(TaskQueueTable.id, input.id))
-        .returning()
-        .get()
-      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      const row = writePayloadRow(db, input.id, payload, now)
       return { item: fromRow(row), released: true, changed: true }
     })
     assertProjectItem(result.item)
@@ -803,8 +797,7 @@ export namespace TaskQueue {
     // (result handoff vs the control-message ledger) can each read a stale
     // snapshot and the later write clobbers the earlier one's keys.
     const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
-      const currentRow = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, input.id)).get()
-      if (!currentRow) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      const currentRow = readRow(db, input.id)
       const current = fromRow(currentRow)
       const payload: Payload = {
         ...current.payload,
@@ -817,13 +810,7 @@ export namespace TaskQueue {
         delete payload["resultDelivery"]
         delete payload["deliveryEmpty"]
       }
-      const row = db
-        .update(TaskQueueTable)
-        .set({ payload, time_updated: now })
-        .where(eq(TaskQueueTable.id, input.id))
-        .returning()
-        .get()
-      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      const row = writePayloadRow(db, input.id, payload, now)
       return fromRow(row)
     })
     assertProjectItem(item)
@@ -876,8 +863,7 @@ export namespace TaskQueue {
     // writer, or a redelivery after crash allocates fresh message/part ids
     // and the child sees the control message twice (ADR-057 exactly-once).
     const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
-      const currentRow = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, input.id)).get()
-      if (!currentRow) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      const currentRow = readRow(db, input.id)
       const current = fromRow(currentRow)
       const entries = controlDeliveries(current).filter((entry) => entry.messageID !== input.messageID)
       entries.push({
@@ -891,13 +877,7 @@ export namespace TaskQueue {
         ...current.payload,
         controlDeliveries: entries.slice(-MAX_CONTROL_DELIVERIES),
       }
-      const row = db
-        .update(TaskQueueTable)
-        .set({ payload, time_updated: now })
-        .where(eq(TaskQueueTable.id, input.id))
-        .returning()
-        .get()
-      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      const row = writePayloadRow(db, input.id, payload, now)
       return fromRow(row)
     })
     assertProjectItem(item)
@@ -922,8 +902,7 @@ export namespace TaskQueue {
   }): Promise<{ item: Info; entry: ControlDelivery; claimed: boolean }> {
     const now = Date.now()
     const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
-      const currentRow = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, input.id)).get()
-      if (!currentRow) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      const currentRow = readRow(db, input.id)
       const current = fromRow(currentRow)
       const existing = controlDeliveries(current)
         .filter((entry) => entry.status === "pending" && entry.text === input.text)
@@ -943,13 +922,7 @@ export namespace TaskQueue {
         ...current.payload,
         controlDeliveries: entries,
       }
-      const row = db
-        .update(TaskQueueTable)
-        .set({ payload, time_updated: now })
-        .where(eq(TaskQueueTable.id, input.id))
-        .returning()
-        .get()
-      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      const row = writePayloadRow(db, input.id, payload, now)
       return { item: fromRow(row), entry, claimed: true }
     })
     assertProjectItem(result.item)
@@ -1174,8 +1147,7 @@ export namespace TaskQueue {
   export async function pauseIfActive(id: TaskQueueID): Promise<{ info: Info; changed: boolean }> {
     const now = Date.now()
     const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
-      const fresh = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get()
-      if (!fresh) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
+      const fresh = readRow(db, id)
       const current = fromRow(fresh)
       if (current.status === "paused") return { item: current, changed: false as const }
       const row = db
@@ -1232,8 +1204,7 @@ export namespace TaskQueue {
         .returning()
         .get()
       if (row) return fromRow(row)
-      const fresh = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, input.id)).get()
-      if (!fresh) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      const fresh = readRow(db, input.id)
       return fromRow(fresh)
     })
     assertProjectItem(item)
@@ -1279,8 +1250,7 @@ export namespace TaskQueue {
     const fromStatuses: Status[] = ["queued", "waiting_for_idle", "paused"]
     const now = Date.now()
     const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
-      const fresh = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get()
-      if (!fresh) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
+      const fresh = readRow(db, id)
       const current = fromRow(fresh)
       if (!fromStatuses.includes(current.status)) return { item: current, raced: true as const }
       // A fresh admission overwrites the previous steer audit; drop any stale
@@ -1566,8 +1536,7 @@ export namespace TaskQueue {
         .returning()
         .get()
       if (row) return { item: fromRow(row), raced: false as const }
-      const fresh = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get()
-      if (!fresh) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
+      const fresh = readRow(db, id)
       return { item: fromRow(fresh), raced: true as const }
     })
     assertProjectItem(result.item)
@@ -1934,8 +1903,7 @@ export namespace TaskQueue {
         .returning()
         .get()
       if (row) return { item: fromRow(row), raced: false }
-      const fresh = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, parsed.id)).get()
-      if (!fresh) throw new NotFoundError({ message: `Task queue item not found: ${parsed.id}` })
+      const fresh = readRow(db, parsed.id)
       return { item: fromRow(fresh), raced: true }
     })
     if (result.raced) {
