@@ -100,9 +100,12 @@ persistent approval.
 
 Select the **WebMCP allowlist** link beside the WebMCP chip (session
 sidebar footer and Home prompt footer), run `/webmcp-allowlist`, or open
-`/mcp`, select the bridge, and press **Ctrl+G**. Select an entry to revoke
-it, or choose the clear option to revoke all saved approvals for that bridge
-in this project. Press Escape or click outside the panel to close it.
+`/mcp`, select the bridge, and press **Ctrl+G**. Double click an entry (or
+press Enter twice) to revoke it; the first activation marks the row and a
+second one within a few seconds confirms, so a single click never revokes.
+The clear row revokes all saved approvals for that bridge in this project
+the same way. Long lists scroll. Press Escape or click outside the panel to
+close it.
 
 The search box also adds approvals. Type an exact `https://` origin (or
 `http://localhost`), then select the navigation, read or close row to save

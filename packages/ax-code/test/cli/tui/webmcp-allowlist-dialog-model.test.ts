@@ -4,6 +4,7 @@ import {
   WEBMCP_ALLOWLIST_ADD,
   WEBMCP_ALLOWLIST_ORIGIN_HINT,
   WEBMCP_ALLOWLIST_SAVED,
+  webMcpAllowlistActionKey,
   webMcpAllowlistDialogOptions,
   webMcpAllowlistGrantOptions,
   webMcpAllowlistOrigin,
@@ -117,6 +118,39 @@ describe("webMcpAllowlistDialogOptions", () => {
     ])
     expect(kinds(options)).toEqual(["revoke", "revoke", "revoke", "revoke", "clear"])
     expect(options[1]?.value).toEqual({ kind: "revoke", id: saved[1]!.id })
+    expect(options.slice(0, 4).every((option) => option.description === "double click to revoke")).toBe(true)
+    expect(options[4]?.description).toBe("double click to revoke all")
+  })
+
+  test("only the armed destructive row asks for its second activation", () => {
+    const revoke = webMcpAllowlistActionKey({ kind: "revoke", id: saved[1]!.id })
+    expect(revoke).toBe(`revoke:${saved[1]!.id}`)
+    expect(webMcpAllowlistActionKey({ kind: "clear" })).toBe("clear")
+    expect(webMcpAllowlistActionKey({ kind: "grant", scope: { capability: "list_pages" } })).toBeUndefined()
+    expect(webMcpAllowlistActionKey({ kind: "retry" })).toBeUndefined()
+    const armedRow = webMcpAllowlistDialogOptions({
+      records: saved,
+      query: "",
+      loading: false,
+      failed: false,
+      armed: revoke,
+    })
+    expect(armedRow.map((option) => option.description)).toEqual([
+      "double click to revoke",
+      "click again to revoke",
+      "double click to revoke",
+      "double click to revoke",
+      "double click to revoke all",
+    ])
+    const armedClear = webMcpAllowlistDialogOptions({
+      records: saved,
+      query: "",
+      loading: false,
+      failed: false,
+      armed: "clear",
+    })
+    expect(armedClear[4]?.description).toBe("click again to revoke all")
+    expect(armedClear.slice(0, 4).every((option) => option.description === "double click to revoke")).toBe(true)
   })
 
   test("a query narrows saved rows, hides the clear row and appends grant rows for its origin", () => {

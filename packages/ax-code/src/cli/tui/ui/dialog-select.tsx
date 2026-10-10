@@ -44,6 +44,8 @@ export interface DialogSelectProps<T> {
     disabled?: boolean
     onTrigger: (option: DialogSelectOption<T>) => void
   }[]
+  /** Muted footer line after the keybind hints, for interaction guidance that is not a single key. */
+  hint?: string
   current?: T
 }
 
@@ -507,7 +509,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
           </For>
         </scrollbox>
       </Show>
-      <Show when={keybinds().length} fallback={<box flexShrink={0} />}>
+      <Show when={keybinds().length || props.hint} fallback={<box flexShrink={0} />}>
         <box paddingRight={2} paddingLeft={4} flexDirection="row" gap={2} flexShrink={0} paddingTop={1}>
           <For each={keybinds()}>
             {(item) => (
@@ -519,6 +521,11 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
               </text>
             )}
           </For>
+          <Show when={props.hint}>
+            <text fg={theme.textMuted} wrapMode="word">
+              {props.hint}
+            </text>
+          </Show>
         </box>
       </Show>
     </box>

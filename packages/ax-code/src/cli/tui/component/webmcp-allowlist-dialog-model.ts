@@ -23,6 +23,13 @@ export const WEBMCP_ALLOWLIST_SAVED = "Saved approvals"
 export const WEBMCP_ALLOWLIST_ADD = "Add approval"
 export const WEBMCP_ALLOWLIST_PLACEHOLDER = "Filter, or type an origin to add"
 export const WEBMCP_ALLOWLIST_ORIGIN_HINT = "Type an https:// origin (or http://localhost) to add an approval"
+export const WEBMCP_ALLOWLIST_FOOTER_HINT = "Double click an entry (or press Enter twice) to revoke it"
+/**
+ * How long a first activation keeps a revoke row armed. A second activation
+ * inside the window revokes; the row says so meanwhile. Long enough to read
+ * the prompt, short enough that a stray click minutes later cannot revoke.
+ */
+export const WEBMCP_ALLOWLIST_ARM_MS = 4000
 
 const CAPABILITY_ORDER: WebMcpAllowlistCapability[] = ["list_pages", "navigate", "read", "close"]
 const ORIGIN_CAPABILITIES = ["navigate", "read", "close"] as const
@@ -46,6 +53,17 @@ export function webMcpAllowlistOrigin(value: string): string | undefined {
   } catch {
     return undefined
   }
+}
+
+/**
+ * Identity of a destructive action for the two-step confirmation: revoking a
+ * row and clearing the bridge each arm on the first activation and run on the
+ * second. Grant rows have no key, so adding stays a single activation.
+ */
+export function webMcpAllowlistActionKey(action: WebMcpAllowlistAction): string | undefined {
+  if (action.kind === "revoke") return `revoke:${action.id}`
+  if (action.kind === "clear") return "clear"
+  return undefined
 }
 
 export function webMcpAllowlistScopeTitle(scope: WebMcpAllowlistScope): string {
@@ -117,30 +135,40 @@ export function webMcpAllowlistGrantOptions(
  * picker's own fuzzy filter off, so the query both narrows the saved rows
  * and feeds the add rows; a non-empty query that matches nothing and is not
  * an origin explains the accepted shape instead of showing an empty list.
+ * Destructive rows carry their confirmation state in the description, so a
+ * single activation never revokes silently.
  */
 export function webMcpAllowlistDialogOptions(input: {
   records: readonly WebMcpApprovalRecord[] | undefined
   query: string
   loading: boolean
   failed: boolean
+  /** Action key (webMcpAllowlistActionKey) of the row whose first activation is pending confirmation. */
+  armed?: string
 }): WebMcpAllowlistOption[] {
   if (input.failed) return [{ title: "Could not load approvals — select to retry", value: { kind: "retry" } }]
   const records = input.records ?? []
   const rows: WebMcpAllowlistOption[] = webMcpAllowlistRows(records)
     .filter((record) => matches(webMcpAllowlistScopeTitle(record.scope), input.query))
-    .map((record) => ({
-      title: webMcpAllowlistScopeTitle(record.scope),
-      value: { kind: "revoke", id: record.id },
-      description: "This project • select to revoke",
-      category: WEBMCP_ALLOWLIST_SAVED,
-    }))
+    .map((record) => {
+      const value: WebMcpAllowlistAction = { kind: "revoke", id: record.id }
+      return {
+        title: webMcpAllowlistScopeTitle(record.scope),
+        value,
+        description:
+          input.armed === webMcpAllowlistActionKey(value) ? "click again to revoke" : "double click to revoke",
+        category: WEBMCP_ALLOWLIST_SAVED,
+      }
+    })
   const grants = webMcpAllowlistGrantOptions(records, input.query)
   const out: WebMcpAllowlistOption[] = [...rows]
   if (rows.length > 0 && input.query.trim() === "") {
+    const value: WebMcpAllowlistAction = { kind: "clear" }
     out.push({
       title: "Revoke all saved approvals for this bridge",
-      value: { kind: "clear" },
-      description: "This project only",
+      value,
+      description:
+        input.armed === webMcpAllowlistActionKey(value) ? "click again to revoke all" : "double click to revoke all",
       category: WEBMCP_ALLOWLIST_SAVED,
     })
   }
