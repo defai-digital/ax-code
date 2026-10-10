@@ -30,6 +30,7 @@ import type {
 import { internalBaseUrl } from "../util/internal-url.js"
 import { ServerRuntimeAuth } from "../server/runtime-auth.js"
 import { toError, toErrorMessage } from "../util/error-message.js"
+import { withTimeout } from "../util/timeout.js"
 import type {
   Agent,
   AgentOptions,
@@ -137,49 +138,18 @@ type SessionLifecycle = {
   register(sessionID: string): void
 }
 
-// Local `withTimeout` that wraps a promise so post-timeout rejections
-// don't become unhandled rejections and the timer is cleared as soon
-// as the inner promise settles. The previous implementation used
-// `Promise.race([p, new Promise((_, r) => setTimeout(r, ms))])` which
-// leaked the timer for ms after p resolved *and* left p unhandled if
-// it rejected after the timeout fired — the exact pathology the util
-// package's `withTimeout` already documents and avoids. Keeping this
-// one local so we can plug in a typed TimeoutError instead of the
-// util's generic Error.
+// SDK timeouts reuse util's `withTimeout` (post-timeout rejections are
+// handled and the timer is cleared as soon as the inner promise settles),
+// with two SDK-specific adaptations: a typed TimeoutError via `error`, and an
+// unref'd timer via `unref` — the SDK is embedded in long-lived host
+// processes, so a timeout timer must not hold the host's event loop open.
 function withSdkTimeout<T>(
   promise: Promise<T>,
   ms: number,
   makeError: () => Error,
   onTimeout?: () => void,
 ): Promise<T> {
-  let settled = false
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      if (settled) return
-      settled = true
-      onTimeout?.()
-      try {
-        reject(makeError())
-      } catch (e) {
-        reject(toError(e))
-      }
-    }, ms)
-    if (typeof timer === "object" && "unref" in timer) timer.unref()
-    promise.then(
-      (value) => {
-        if (settled) return
-        settled = true
-        clearTimeout(timer)
-        resolve(value)
-      },
-      (err) => {
-        if (settled) return
-        settled = true
-        clearTimeout(timer)
-        reject(err)
-      },
-    )
-  })
+  return withTimeout(promise, ms, undefined, { unref: true, error: makeError, onTimeout })
 }
 
 let logInitialized = false

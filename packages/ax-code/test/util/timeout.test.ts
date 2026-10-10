@@ -57,6 +57,46 @@ describe("util.timeout", () => {
     await expect(pending).rejects.toThrow(/timed out/)
     expect(read()).toBe(true)
   })
+
+  test("rejects with the custom error factory when provided", async () => {
+    class TimeoutError extends Error {}
+    const pending = withTimeout(new Promise<never>(() => {}), 20, undefined, {
+      error: () => new TimeoutError("sdk timeout"),
+    })
+    await expect(pending).rejects.toBeInstanceOf(TimeoutError)
+  })
+
+  test("a throwing error factory rejects with the thrown error", async () => {
+    const pending = withTimeout(new Promise<never>(() => {}), 20, undefined, {
+      error: () => {
+        throw new TypeError("factory blew up")
+      },
+    })
+    await expect(pending).rejects.toBeInstanceOf(TypeError)
+  })
+
+  test("fires onTimeout exactly once when the timeout wins", async () => {
+    let calls = 0
+    const pending = withTimeout(new Promise<never>(() => {}), 20, undefined, { onTimeout: () => calls++ })
+    await expect(pending).rejects.toThrow(/timed out/)
+    expect(calls).toBe(1)
+  })
+
+  test("does not fire onTimeout when the promise settles first", async () => {
+    let calls = 0
+    const result = await withTimeout(Promise.resolve("ok"), 50, undefined, { onTimeout: () => calls++ })
+    expect(result).toBe("ok")
+    expect(calls).toBe(0)
+  })
+
+  test("unrefs the timer only when explicitly requested", async () => {
+    let pending!: Promise<never>
+    const read = captureTimerRef(() => {
+      pending = withTimeout(new Promise<never>(() => {}), 20, undefined, { unref: true })
+    })
+    await expect(pending).rejects.toThrow(/timed out/)
+    expect(read()).toBe(false)
+  })
 })
 
 describe("util.timeout.sleep", () => {

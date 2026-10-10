@@ -1,3 +1,5 @@
+import { toError } from "./error-message"
+
 // Resolve after `ms`. The timer is ref'd by default, matching
 // `node:timers/promises` setTimeout, which the rest of the codebase uses.
 //
@@ -40,7 +42,12 @@ export function sleep(ms: number, opts?: { unref?: boolean; signal?: AbortSignal
   })
 }
 
-export function withTimeout<T>(promise: Promise<T>, ms: number, message?: string): Promise<T> {
+export function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  message?: string,
+  opts?: { unref?: boolean; error?: () => Error; onTimeout?: () => void },
+): Promise<T> {
   // Manual race implementation so that a post-timeout rejection from
   // `promise` does not become an unhandled rejection. The previous
   // Promise.race pattern left the original promise unhandled once the
@@ -53,14 +60,26 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, message?: string
   // so it must remain capable of settling even when the wrapped promise owns no
   // event-loop handles. Unref'ing here makes a short-lived CLI exit with an
   // unsettled await instead of reporting the timeout (the same failure mode
-  // documented for sleep() above).
+  // documented for sleep() above). `opts.unref` exists only for embedded hosts
+  // (the programmatic SDK), where the library must not hold the host's event
+  // loop open — see withSdkTimeout in sdk/programmatic-impl.ts.
   let settled = false
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
       if (settled) return
       settled = true
+      opts?.onTimeout?.()
+      if (opts?.error) {
+        try {
+          reject(opts.error())
+        } catch (e) {
+          reject(toError(e))
+        }
+        return
+      }
       reject(new Error(message ?? `Operation timed out after ${ms}ms`))
     }, ms)
+    if (opts?.unref) timer.unref?.()
     promise.then(
       (value) => {
         if (settled) return
