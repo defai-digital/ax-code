@@ -5,14 +5,20 @@
 // the write phase. This lock follows the same host/PID/staleness contract used by
 // the code-intelligence index lock, plus three hardening rules:
 //
-// - Ownership: the lockfile carries a per-acquisition `token`; `release()` only
-//   removes the file while it still carries that token, so a holder whose lock
-//   was stolen after going stale cannot delete the new holder's lock.
-// - Heartbeat: a live holder refreshes the lockfile mtime with `utimes` on an
-//   interval — a touch cannot corrupt another holder's content, unlike a
-//   rewrite. Long builds keep their lock; a wedged process (touches stopped)
-//   still goes stale on the `staleMs` budget. The mtime check only applies to
-//   the real clock; an injected `now` (tests) falls back to `startedAt`.
+// - Ownership: the lockfile carries a per-acquisition `token`; `release()`
+//   renames the lockfile aside and only deletes the moved body while it still
+//   carries that token, so a holder whose lock was stolen after going stale
+//   cannot delete the new holder's lock — not even when the steal lands in the
+//   middle of the release. A foreign body is restored with `link`, which fails
+//   closed when the path has already been re-created.
+// - Heartbeat: a live holder refreshes the lockfile mtime on an interval via
+//   one open descriptor (read body, then `handle.utimes` on that fd) — a touch
+//   cannot corrupt another holder's content, unlike a rewrite, and the pinned
+//   inode keeps a mid-tick steal from tricking us into refreshing a
+//   successor's mtime. Long builds keep their lock; a wedged process (touches
+//   stopped) still goes stale on the `staleMs` budget. The mtime check only
+//   applies to the real clock; an injected `now` (tests) falls back to
+//   `startedAt`.
 // - Verified steal: a stale lock is claimed by renaming it away and then
 //   verifying the moved bytes are the same stale body that was observed —
 //   otherwise the rename could have stolen a fresh lock created in between.
@@ -23,7 +29,7 @@
 // `./node` subpath, never from `./core`.
 
 import { randomUUID } from "node:crypto"
-import { link, mkdir, open, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises"
+import { link, mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import type { WikiBuildLock, WikiBuildLockHandle } from "./types.js"
@@ -239,19 +245,32 @@ export function createWikiBuildLock(root: string, wikiDir: string, options: Wiki
           // lock was stolen after we went stale, a bare touch would keep
           // refreshing the NEW holder's mtime and make a wedged successor's
           // lock immortal, so the interval clears itself once the token is
-          // gone. A read failure other than ENOENT just skips this tick.
+          // gone. ENOENT is tolerated for a few ticks: a steal or a successor
+          // release momentarily displaces the path before restoring it, and
+          // stopping on the first gap would silence a live holder's heartbeat
+          // for good. A read failure other than ENOENT just skips this tick.
+          let missingTicks = 0
           const heartbeat = setInterval(() => {
             void (async () => {
+              // One descriptor pins the inode for the whole check-and-touch:
+              // a steal that renames the lock away between the read and the
+              // utimes cannot make us refresh a successor's mtime — the fd
+              // still points at the moved (or deleted) body, never the new file.
+              let handle: Awaited<ReturnType<typeof open>> | undefined
               try {
-                const text = await readFile(lockPath, "utf8")
+                handle = await open(lockPath, "r")
+                missingTicks = 0
+                const text = await handle.readFile("utf8")
                 if (parseBody(text)?.token !== token) {
                   clearInterval(heartbeat)
                   return
                 }
                 const stamp = new Date()
-                await utimes(lockPath, stamp, stamp).catch(() => {})
+                await handle.utimes(stamp, stamp).catch(() => {})
               } catch (error) {
-                if (errorCode(error) === "ENOENT") clearInterval(heartbeat)
+                if (errorCode(error) === "ENOENT" && ++missingTicks >= 3) clearInterval(heartbeat)
+              } finally {
+                await handle?.close().catch(() => {})
               }
             })()
           }, heartbeatMs)
@@ -261,20 +280,52 @@ export function createWikiBuildLock(root: string, wikiDir: string, options: Wiki
               if (released) return
               released = true
               clearInterval(heartbeat)
-              // Ownership check: if our lock was stolen after going stale, the
-              // file now belongs to another holder's token and must survive.
-              // Only ENOENT means "already gone". Any other read failure (EMFILE,
-              // EACCES, ...) must surface: treating it as "not ours" would leave
-              // a live-pid lock behind until the staleness budget expires.
-              let text: string
+              // Ownership is verified on the moved body, not on the path. A
+              // read-then-rm races with a waiter stealing the lock in between:
+              // the rm could land on a successor's freshly created lockfile.
+              // Renaming first means we only ever delete the exact inode whose
+              // token we verified; a foreign body is linked back into place.
+              const releasePath = `${lockPath}.release-${randomUUID()}`
               try {
-                text = await readFile(lockPath, "utf8")
+                await rename(lockPath, releasePath)
               } catch (error) {
+                // Only ENOENT means "already gone". Any other failure (EMFILE,
+                // EACCES, ...) must surface: treating it as "not ours" would
+                // leave a live-pid lock behind until the staleness budget expires.
                 if (errorCode(error) === "ENOENT") return
                 throw new Error(`AX Wiki build lock release failed: ${lockPath}`, { cause: error })
               }
-              if (parseBody(text)?.token !== token) return
-              await rm(lockPath, { force: true })
+              let text: string | undefined
+              let readError: unknown
+              try {
+                text = await readFile(releasePath, "utf8")
+              } catch (error) {
+                readError = error
+              }
+              if (text !== undefined && parseBody(text)?.token === token) {
+                await rm(releasePath, { force: true })
+                return
+              }
+              // Not ours (a successor's fresh lock) or unverifiable: put the
+              // moved body back. `link` fails closed when another holder has
+              // already re-created the path; any other failure strands the
+              // displaced body at releasePath while the lock path sits empty —
+              // surface that instead of returning a successful release.
+              try {
+                await link(releasePath, lockPath)
+                await rm(releasePath, { force: true }).catch(() => {})
+              } catch (error) {
+                if (errorCode(error) === "EEXIST") {
+                  await rm(releasePath, { force: true }).catch(() => {})
+                } else {
+                  throw new Error(`AX Wiki build lock release failed: ${lockPath}`, { cause: error })
+                }
+              }
+              // A body we could not read (EISDIR, EACCES, ...) surfaces the same
+              // way a direct read failure did before.
+              if (readError !== undefined) {
+                throw new Error(`AX Wiki build lock release failed: ${lockPath}`, { cause: readError })
+              }
             },
           }
         }

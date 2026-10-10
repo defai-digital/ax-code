@@ -172,6 +172,25 @@ describe("createWikiBuildLock hardening", () => {
     await expect(handle.release()).resolves.toBeUndefined()
   })
 
+  test("the heartbeat survives a brief lockfile absence", async () => {
+    const root = await tmp()
+    const lockPath = path.join(root, "ax-wiki/.build-lock")
+    const lock = createWikiBuildLock(root, "ax-wiki", { heartbeatMs: 25 })
+    const handle = await lock.acquire()
+    const body = await readFile(lockPath, "utf8")
+    // A steal or a successor's rename-based release displaces the path for a
+    // moment before restoring it; the heartbeat must not die on the first
+    // ENOENT, or the live holder's lock would go stale and be re-stolen.
+    await rm(lockPath)
+    await new Promise((resolve) => setTimeout(resolve, 40)) // ~1-2 ticks of absence
+    await writeFile(lockPath, body)
+    const before = (await stat(lockPath)).mtimeMs
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    const after = (await stat(lockPath)).mtimeMs
+    expect(after).toBeGreaterThan(before)
+    await handle.release()
+  })
+
   test("a lock owned by a dead same-host process is stale immediately", async () => {
     const root = await tmp()
     const child = spawn(process.execPath, ["-e", "process.exit(0)"])
