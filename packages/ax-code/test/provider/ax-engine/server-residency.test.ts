@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest"
 import fs from "node:fs/promises"
 import path from "node:path"
+import net from "node:net"
 import { tmpdir } from "../../fixture/fixture"
 import { Process } from "../../../src/util/process"
 import { Filesystem } from "../../../src/util/filesystem"
@@ -24,6 +25,11 @@ import { AxEngineStartupError } from "../../../src/provider/ax-engine/errors"
 import { resolveAxEngineSetup } from "../../../src/provider/ax-engine/setup"
 
 async function fixture(mode: "ready" | "unready" | "exit" | "reload" = "ready") {
+  // Concurrent checkouts must not contend for the same fixed preferred port.
+  const probe = net.createServer()
+  await new Promise<void>((resolve) => probe.listen(0, "127.0.0.1", resolve))
+  const preferredPort = (probe.address() as net.AddressInfo).port
+  await new Promise<void>((resolve, reject) => probe.close((error) => (error ? reject(error) : resolve())))
   const tmp = await tmpdir()
   const originalPaths = { ...AxEnginePaths }
   Object.assign(AxEnginePaths, {
@@ -70,7 +76,7 @@ http.createServer((req, res) => {
       modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
       apiModelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
       modelPath: path.join(tmp.path, "model"),
-      preferredPort: 39141,
+      preferredPort,
       readyTimeoutMs: 5_000,
     } satisfies AxEngineServerOptions,
     children,
