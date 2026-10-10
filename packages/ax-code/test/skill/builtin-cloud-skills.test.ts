@@ -51,3 +51,10 @@ test("vyos-firewall mandates commit-confirm and junos-firewall mandates commit c
   const junosMd = await ConfigMarkdown.parseText("junos-firewall/SKILL.md", junos)
   expect(junosMd.content).toContain("commit confirmed")
 })
+
+test("cloud operations runbooks stay loadable but are hidden from slash autocomplete", () => {
+  for (const dir of CLOUD_SKILL_DIRS) {
+    expect(Skill.BUILTIN_NAMES.has(dir), dir).toBe(true)
+    expect(Skill.SLASH_HIDDEN_BUILTIN_SKILLS.has(dir), dir).toBe(true)
+  }
+})

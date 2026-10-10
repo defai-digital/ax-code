@@ -236,6 +236,14 @@ export namespace Skill {
     "verify",
     "run",
     "ruby-on-rails",
+    // Cloud Operations runbooks: the cloudops agent loads them by name.
+    "cloud-ops-aws",
+    "cloud-ops-gcp",
+    "cloud-ops-cloudflare",
+    "cloud-ops-digitalocean",
+    "cloud-ops-runpod",
+    "vyos-firewall",
+    "junos-firewall",
   ])
 
   const BuiltinSkillEntry = z.object({
