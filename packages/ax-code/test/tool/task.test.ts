@@ -7,6 +7,7 @@ import { MessageID, SessionID, TaskQueueID } from "../../src/session/schema"
 import { TaskTool } from "../../src/tool/task"
 import { MessageV2 } from "../../src/session/message-v2"
 import { TaskQueue } from "../../src/session/task-queue"
+import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
 import { tmpdir } from "../fixture/fixture"
 
 afterEach(async () => {
@@ -965,6 +966,75 @@ describe("tool.task", () => {
         } finally {
           promptSpy.mockRestore()
           loopSpy.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("a background spawn whose queue start fails reports the failure and fails the queue row", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: parent.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: "test" as any, modelID: "test-model" as any },
+          mode: "build",
+        } as any)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: parent.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          modelID: "test-model",
+          providerID: "test",
+          time: { created: Date.now() },
+        } as MessageV2.Assistant)
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockResolvedValue(undefined as never)
+        const startSpy = vi.spyOn(TaskQueueExecutor, "start").mockRejectedValue(new Error("executor down"))
+        try {
+          const result = await (
+            await TaskTool.init()
+          ).execute(
+            {
+              description: "Explore the repo",
+              prompt: "find the auth entrypoint",
+              subagent_type: "explore",
+              background: true,
+            },
+            {
+              sessionID: parent.id,
+              messageID: assistant.id,
+              callID: "",
+              agent: "build",
+              abort: AbortSignal.any([]),
+              messages: [],
+              metadata: () => {},
+              ask: async () => {},
+              extra: {},
+            } as any,
+          )
+          expect(result.output).not.toContain("state: running")
+          expect(result.output).toContain("Subagent failed before returning a usable result")
+          expect(result.metadata.subagentError).toBe(true)
+          const child = SessionID.make(String(result.metadata.sessionId))
+          const rows = await TaskQueue.list({ sessionID: child, limit: 10 })
+          expect(rows).toHaveLength(1)
+          expect(rows[0]!.status).toBe("failed")
+          expect(rows[0]!.error).toContain("executor down")
+        } finally {
+          promptSpy.mockRestore()
+          startSpy.mockRestore()
         }
       },
     })

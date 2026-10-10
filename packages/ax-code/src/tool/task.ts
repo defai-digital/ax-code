@@ -163,6 +163,20 @@ async function startBackgroundSubagent(input: {
       queueID: queued.id,
       error,
     })
+    // The row exists but nothing will run it: leave it terminal so it stops
+    // counting against background capacity and cannot be resumed as live
+    // work, then surface the failure instead of reporting a running task.
+    await TaskQueue.setStatus({
+      id: queued.id,
+      status: "failed",
+      error: error instanceof Error ? error.message : String(error),
+    }).catch((statusError) => {
+      log.warn("failed to mark unstarted background subagent queue item", {
+        queueID: queued.id,
+        error: statusError,
+      })
+    })
+    throw error
   }
 
   const metadata = {
