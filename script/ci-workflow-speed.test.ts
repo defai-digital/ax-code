@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import { DETERMINISTIC_SHARD_COUNT } from "./ci-release-deterministic-skip"
 import { readFileSync, readdirSync } from "node:fs"
 import path from "node:path"
 
@@ -73,9 +74,10 @@ describe("CI workflow speed policy", () => {
     const lane = workflowJob(ci, "deterministic")
     expect(lane).toBeDefined()
     expect(lane).toContain("timeout-minutes: 20")
-    expect(lane).toContain("shard: [1, 2, 3, 4]")
+    const shards = Array.from({ length: DETERMINISTIC_SHARD_COUNT }, (_, index) => index + 1).join(", ")
+    expect(lane).toContain(`shard: [${shards}]`)
     expect(lane).toContain("AX_TEST_SHARD_INDEX: ${{ matrix.shard }}")
-    expect(lane).toContain('AX_TEST_SHARD_COUNT: "4"')
+    expect(lane).toContain(`AX_TEST_SHARD_COUNT: "${DETERMINISTIC_SHARD_COUNT}"`)
     expect(lane).toContain("test:ci -- deterministic --rerun-on-fail 0")
     expect(lane).not.toContain("AX_TEST_SHARD_SIZE")
     expect(lane).not.toContain("AX_TEST_MAX_WORKERS")
@@ -168,7 +170,7 @@ describe("CI workflow speed policy", () => {
     expect(codeql).not.toMatch(/^ {2}pull_request:/m)
   })
 
-  test("TypeScript native qualification leaves windows-11-arm off the push path", () => {
+  test("TypeScript native qualification leaves Windows runners off the push path", () => {
     const plan = workflowJob(typescriptNative, "native-matrix")
     const lane = workflowJob(typescriptNative, "native")
     expect(plan).toBeDefined()
@@ -176,9 +178,30 @@ describe("CI workflow speed policy", () => {
     expect(plan).toContain('"${{ github.event_name }}" = "schedule"')
     expect(plan).toContain('"${{ github.event_name }}" = "workflow_dispatch"')
     expect(plan).toContain("windows-11-arm")
+    expect(plan).toContain("windows-2022")
+    const pushInclude = plan?.match(/include='(\[[^\]]+\])'/)?.[1] ?? ""
+    expect(pushInclude).not.toContain("windows-")
     expect(lane).toContain("needs: native-matrix")
     expect(lane).toContain("fromJSON(needs.native-matrix.outputs.include)")
     expect(lane).not.toContain("windows-11-arm")
+    expect(lane).not.toContain("windows-2022")
     expect(typescriptNative).toContain('cron: "47 6 * * 1"')
+  })
+
+  test("windows-11-arm runtime stays off unchanged push and pull request paths", () => {
+    const plan = workflowJob(ci, "windows-plan")
+    const lane = workflowJob(ci, "windows-snapshot")
+    expect(plan).toBeDefined()
+    expect(lane).toBeDefined()
+    expect(plan).toContain("script/ci-windows-arm-needed.ts")
+    expect(plan).toContain("windows-11-arm")
+    expect(plan).toContain("windows-2022")
+    expect(plan).toContain('cache: ""')
+    expect(lane).toContain("needs: windows-plan")
+    expect(lane).toContain("fromJSON(needs.windows-plan.outputs.include)")
+    expect(lane).not.toContain("os: [windows-2022, windows-11-arm]")
+    expect(lane).toContain("actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9")
+    expect(lane).toContain("steps.pty-cache.outputs.cache-hit != 'true'")
+    expect(ci).toContain('cron: "11 7 * * 1"')
   })
 })

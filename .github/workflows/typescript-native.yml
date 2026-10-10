@@ -3,7 +3,7 @@ name: TypeScript native qualification
 on:
   workflow_dispatch:
   schedule:
-    # Push and pull_request skip windows-11-arm. This weekly run qualifies it.
+    # Push and pull_request skip both Windows runners. This weekly run qualifies them.
     - cron: "47 6 * * 1"
   push:
     branches: [main, dev]
@@ -38,7 +38,8 @@ concurrency:
 
 jobs:
   # Job-level if cannot read matrix. Build the include list here so push and
-  # pull_request never request the scarce windows-11-arm runner.
+  # pull_request never request a Windows runner. windows-2022 spent about four
+  # minutes on the candidate distribution and competed with ax-code CI.
   native-matrix:
     name: TypeScript native matrix
     runs-on: ubuntu-latest
@@ -50,7 +51,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          include='[{"os":"macos-latest","distribution":"ax-code-darwin-arm64"},{"os":"ubuntu-24.04","distribution":"ax-code-linux-x64"},{"os":"ubuntu-24.04-arm","distribution":"ax-code-linux-arm64"},{"os":"windows-2022","distribution":"ax-code-windows-x64"}]'
+          include='[{"os":"macos-latest","distribution":"ax-code-darwin-arm64"},{"os":"ubuntu-24.04","distribution":"ax-code-linux-x64"},{"os":"ubuntu-24.04-arm","distribution":"ax-code-linux-arm64"}]'
           if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             include='[{"os":"macos-latest","distribution":"ax-code-darwin-arm64"},{"os":"ubuntu-24.04","distribution":"ax-code-linux-x64"},{"os":"ubuntu-24.04-arm","distribution":"ax-code-linux-arm64"},{"os":"windows-2022","distribution":"ax-code-windows-x64"},{"os":"windows-11-arm","distribution":"ax-code-windows-arm64"}]'
           fi

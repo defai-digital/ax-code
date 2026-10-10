@@ -134,7 +134,7 @@ jobs:
       - name: Run AX Code self-scan
         run: pnpm run check:self-scan -- --report .internal/reports/qa/self-scan.md
 
-      # The four ax-code CI shards already cover this SHA on a normal tag.
+      # The ax-code CI shards already cover this SHA on a normal tag.
       # A missing, cancelled, or failed shard still runs the suite here.
       - name: Decide whether deterministic tests already passed
         id: deterministic

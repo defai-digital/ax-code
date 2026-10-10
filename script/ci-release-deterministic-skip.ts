@@ -1,12 +1,12 @@
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
-export const DETERMINISTIC_SHARD_NAMES = [
-  "deterministic (1/4)",
-  "deterministic (2/4)",
-  "deterministic (3/4)",
-  "deterministic (4/4)",
-] as const
+export const DETERMINISTIC_SHARD_COUNT = 8
+
+export const DETERMINISTIC_SHARD_NAMES = Array.from(
+  { length: DETERMINISTIC_SHARD_COUNT },
+  (_, index) => `deterministic (${index + 1}/${DETERMINISTIC_SHARD_COUNT})`,
+)
 
 export type CheckRun = {
   name: string

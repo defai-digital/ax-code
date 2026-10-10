@@ -1,12 +1,18 @@
 import { expect, test } from "vitest"
-import { deterministicSuiteAlreadyPassed, parseCheckRunTsv, type CheckRun } from "./ci-release-deterministic-skip"
+import {
+  DETERMINISTIC_SHARD_COUNT,
+  DETERMINISTIC_SHARD_NAMES,
+  deterministicSuiteAlreadyPassed,
+  parseCheckRunTsv,
+  type CheckRun,
+} from "./ci-release-deterministic-skip"
 
 function shard(index: number, conclusion: string, completedAt: string, status = "completed"): CheckRun {
-  return { name: `deterministic (${index}/4)`, status, conclusion, completedAt }
+  return { name: `deterministic (${index}/${DETERMINISTIC_SHARD_COUNT})`, status, conclusion, completedAt }
 }
 
 function green(completedAt = "2026-09-30T20:12:00Z"): CheckRun[] {
-  return [1, 2, 3, 4].map((index) => shard(index, "success", completedAt))
+  return Array.from({ length: DETERMINISTIC_SHARD_COUNT }, (_, index) => shard(index + 1, "success", completedAt))
 }
 
 test("skips when every latest shard succeeded", () => {
@@ -15,7 +21,7 @@ test("skips when every latest shard succeeded", () => {
 
 test("runs when a shard is missing or not green", () => {
   expect(deterministicSuiteAlreadyPassed([])).toBe(false)
-  expect(deterministicSuiteAlreadyPassed(green().slice(0, 3))).toBe(false)
+  expect(deterministicSuiteAlreadyPassed(green().slice(0, DETERMINISTIC_SHARD_COUNT - 1))).toBe(false)
   const failed = green()
   failed[2] = shard(3, "failure", "2026-09-30T20:12:00Z")
   expect(deterministicSuiteAlreadyPassed(failed)).toBe(false)
@@ -35,7 +41,7 @@ test("uses the latest attempt for each shard", () => {
 
 test("treats a tied failing attempt as not green", () => {
   const runs = green("2026-09-30T20:12:00Z")
-  runs.push(shard(4, "cancelled", "2026-09-30T20:12:00Z"))
+  runs.push(shard(DETERMINISTIC_SHARD_COUNT, "cancelled", "2026-09-30T20:12:00Z"))
   expect(deterministicSuiteAlreadyPassed(runs)).toBe(false)
 })
 
@@ -47,12 +53,9 @@ test("ignores unrelated checks and blank lines", () => {
   expect(deterministicSuiteAlreadyPassed(runs)).toBe(true)
   const parsed = parseCheckRunTsv(
     [
-      "deterministic (1/4)\tcompleted\tsuccess\t2026-09-30T20:12:00Z",
       "",
       "not-a-run",
-      "deterministic (2/4)\tcompleted\tsuccess\t2026-09-30T20:12:00Z",
-      "deterministic (3/4)\tcompleted\tsuccess\t2026-09-30T20:12:00Z",
-      "deterministic (4/4)\tcompleted\tsuccess\t2026-09-30T20:12:00Z",
+      ...DETERMINISTIC_SHARD_NAMES.map((name) => `${name}\tcompleted\tsuccess\t2026-09-30T20:12:00Z`),
     ].join("\n"),
   )
   expect(deterministicSuiteAlreadyPassed(parsed)).toBe(true)

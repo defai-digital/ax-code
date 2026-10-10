@@ -38,6 +38,10 @@ on:
       - "packages/plugin/**"
       - "packages/script/**"
       - "script/**"
+  schedule:
+    # Weekly windows-11-arm qualification. Review events skip that runner
+    # unless the changed files can affect the ARM PTY runtime.
+    - cron: "11 7 * * 1"
   workflow_dispatch:
     inputs:
       live:
@@ -128,12 +132,71 @@ jobs:
       - name: Test native evidence contracts
         run: cargo test --manifest-path crates/Cargo.toml -p ax-code-fs --lib
 
+  # One Ubuntu job decides. Unchanged reviews must not take windows-11-arm:
+  # that runner is the ax-code CI critical path, and windows-2022 still runs
+  # the same suite.
+  windows-plan:
+    name: Windows runtime plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      include: ${{ steps.set.outputs.include }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+      - uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+          cache: ""
+      - name: Decide Windows ARM runtime
+        id: set
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          base='[{"os":"windows-2022"}]'
+          full='[{"os":"windows-2022"},{"os":"windows-11-arm"}]'
+          event_name="${{ github.event_name }}"
+          if [ "$event_name" != "pull_request" ] && [ "$event_name" != "push" ]; then
+            echo "Qualifying windows-11-arm for ${event_name}."
+            echo "include=${full}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=""
+          if [ "$event_name" = "pull_request" ]; then
+            files="$(gh api --paginate "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --jq '.[].filename' || true)"
+          else
+            before="${{ github.event.before }}"
+            if [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
+              echo "No previous commit; qualifying windows-11-arm."
+              echo "include=${full}" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            files="$(gh api --paginate "repos/${{ github.repository }}/compare/${before}...${{ github.sha }}" --jq '.files[].filename' || true)"
+          fi
+          file_count="$(printf '%s\n' "$files" | awk 'NF { n++ } END { print n+0 }')"
+          if [ "$file_count" -eq 0 ] || [ "$file_count" -ge 300 ]; then
+            echo "Could not list a complete changed-file set (${file_count} files); qualifying windows-11-arm."
+            echo "include=${full}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if printf '%s\n' "$files" | node --experimental-strip-types script/ci-windows-arm-needed.ts; then
+            echo "Changed files can affect the Windows ARM runtime."
+            echo "include=${full}" >> "$GITHUB_OUTPUT"
+          else
+            echo "Skipping windows-11-arm; windows-2022 still runs the runtime suite."
+            echo "include=${base}" >> "$GITHUB_OUTPUT"
+          fi
+
   windows-snapshot:
     name: Windows runtime and recovery (${{ matrix.os }})
+    needs: windows-plan
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-2022, windows-11-arm]
+        include: ${{ fromJSON(needs.windows-plan.outputs.include) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
@@ -146,14 +209,29 @@ jobs:
       # Install deterministically, then qualify PTY on each native architecture.
       - name: Install deps
         run: pnpm install --frozen-lockfile --ignore-scripts
+      # The rebuilt tree is small. Restoring it skips a full node-gyp compile
+      # when the lockfile, patch, and rebuild script are unchanged.
+      - name: Restore Windows PTY build
+        id: pty-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: packages/ax-code/node_modules/node-pty-prebuilt-multiarch/build
+          key: ax-pty-v1-${{ runner.os }}-${{ runner.arch }}-node-26-${{ hashFiles('pnpm-lock.yaml', 'patches/node-pty-prebuilt-multiarch@0.10.1-pre.5.patch', 'script/rebuild-node-pty.mjs') }}
       # pnpm 10.33.4's node-gyp 11.5.0 rejects Visual Studio 2026 on windows-11-arm.
       - name: Build Windows PTY native addons
+        if: steps.pty-cache.outputs.cache-hit != 'true'
         run: node script/rebuild-node-pty.mjs
       - name: Verify Windows PTY build configuration
         run: node .github/scripts/assert-windows-pty-build.cjs
       - name: Test native PTY input, output, resize, and exit
         timeout-minutes: 1
         run: node script/verify-pty.cjs packages/ax-code/node_modules/node-pty-prebuilt-multiarch
+      - name: Save Windows PTY build
+        if: steps.pty-cache.outputs.cache-hit != 'true' && success()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: packages/ax-code/node_modules/node-pty-prebuilt-multiarch/build
+          key: ${{ steps.pty-cache.outputs.cache-primary-key }}
       - name: Build SDK runtime exports
         working-directory: packages/sdk/js
         run: pnpm exec tsc
@@ -243,11 +321,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     env:
       AX_CODE_DISABLE_SHARE: "true"
       AX_TEST_SHARD_INDEX: ${{ matrix.shard }}
-      AX_TEST_SHARD_COUNT: "4"
+      AX_TEST_SHARD_COUNT: "8"
     steps:
       - uses: actions/checkout@v7
 
@@ -291,7 +369,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Four GitHub runners split the suite with round-robin
+          # Eight GitHub runners split the suite with round-robin
           # AX_TEST_SHARD_INDEX. Keep each runner as a single Vitest process;
           # coverage remains a local AX_TEST_COVERAGE=1 run.
           pnpm --dir packages/ax-code run test:ci -- deterministic --rerun-on-fail 0
