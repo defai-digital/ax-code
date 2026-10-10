@@ -1567,6 +1567,15 @@ export namespace ProviderTransform {
   }
 
   export function schema(model: Provider.Model, schema: JSONSchema.BaseSchema | JSONSchema7): JSONSchema7 {
+    // Function-calling APIs want an object root. A tool whose parameters are
+    // a top-level discriminated union (`browser_workflow`, `computer_action`)
+    // serializes as a bare `oneOf`/`anyOf` with no `type`; DeepSeek (direct
+    // and through the AX Trust gateway) rejects that with an opaque 400
+    // `upstream_invalid_request`, while MiniMax and Qwen accept it. Keep the
+    // union for validation and add an object root whose properties are the
+    // union of every variant's properties, so the model still sees each field.
+    schema = objectRoot(schema)
+
     // Moonshot expands $ref before validation and rejects sibling keywords
     // (description on the same node) plus tuple-style `items` arrays.
     if (isKimiFamily(model)) {
@@ -1682,5 +1691,53 @@ export namespace ProviderTransform {
     }
 
     return schema as JSONSchema7
+  }
+
+  function objectRoot(schema: JSONSchema.BaseSchema | JSONSchema7): JSONSchema.BaseSchema | JSONSchema7 {
+    // Only a root without any declared type is a bare union; a declared
+    // type (including a nullable array form) is left to the provider.
+    if (!isRecord(schema) || schema.type !== undefined) return schema
+    const variants = Array.isArray(schema.oneOf) ? schema.oneOf : Array.isArray(schema.anyOf) ? schema.anyOf : undefined
+    if (!variants) return schema
+    const members = variants.filter(
+      (variant): variant is Record<string, unknown> => isRecord(variant) && isRecord(variant.properties),
+    )
+    // A union of scalars is not an object tool schema; leave it alone.
+    if (members.length === 0) return schema
+    const candidates = new Map<string, unknown[]>()
+    for (const variant of members) {
+      for (const [key, value] of Object.entries(variant.properties as Record<string, unknown>)) {
+        const list = candidates.get(key) ?? []
+        if (!list.some((seen) => JSON.stringify(seen) === JSON.stringify(value))) list.push(value)
+        candidates.set(key, list)
+      }
+    }
+    const properties: Record<string, unknown> = {}
+    for (const [key, list] of candidates) properties[key] = mergeVariantProperty(list)
+    if (isRecord(schema.properties)) Object.assign(properties, schema.properties)
+    return { ...schema, type: "object", properties } as JSONSchema7
+  }
+
+  // One definition per key across the variants. The discriminator differs per
+  // variant as a string literal, so it folds into one `enum`; anything else
+  // that differs is offered as the set of alternatives rather than the first
+  // variant's definition, which would contradict the union.
+  function mergeVariantProperty(list: unknown[]): unknown {
+    if (list.length === 1) return list[0]
+    const literals = list.map((value) => {
+      if (!isRecord(value) || value.type !== "string") return undefined
+      if (value.const !== undefined) return [String(value.const)]
+      if (Array.isArray(value.enum)) return value.enum.map(String)
+      return undefined
+    })
+    if (literals.every((values): values is string[] => values !== undefined)) {
+      const first = list[0] as Record<string, unknown>
+      return {
+        type: "string",
+        enum: [...new Set(literals.flat())],
+        ...(typeof first.description === "string" ? { description: first.description } : {}),
+      }
+    }
+    return { anyOf: list }
   }
 }

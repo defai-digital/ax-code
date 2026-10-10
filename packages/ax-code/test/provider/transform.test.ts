@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import { z } from "zod"
 import { ProviderTransform } from "../../src/provider/transform"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 
@@ -1180,6 +1181,68 @@ describe("ProviderTransform.schema - gemini circular schemas", () => {
 
     expect(result.properties.self).toEqual({})
     expect(() => JSON.stringify(result)).not.toThrow()
+  })
+})
+
+describe("ProviderTransform.schema - object root for union parameters", () => {
+  const deepseekModel = {
+    id: "deepseek-flash",
+    providerID: "defai-01-ax-trust-com",
+    api: { id: "deepseek-flash", npm: "@ai-sdk/openai-compatible" },
+  } as any
+
+  test("wraps a top-level discriminated union in an object root and keeps the union", () => {
+    const schema = z.toJSONSchema(
+      z.discriminatedUnion("action", [
+        z.object({ action: z.literal("freeze"), manifest: z.object({ name: z.string() }) }),
+        z.object({ action: z.literal("run"), hash: z.string() }),
+      ]),
+    ) as any
+    expect(schema.type).toBeUndefined()
+
+    const result = ProviderTransform.schema(deepseekModel, schema) as any
+
+    expect(result.type).toBe("object")
+    expect(Object.keys(result.properties)).toEqual(["action", "manifest", "hash"])
+    // The discriminator folds into one enum instead of the first literal.
+    expect(result.properties.action).toEqual({ type: "string", enum: ["freeze", "run"] })
+    expect(result.properties.hash).toEqual({ type: "string" })
+    expect(result.oneOf ?? result.anyOf).toHaveLength(2)
+    expect(result.required).toBeUndefined()
+  })
+
+  test("offers alternatives when a shared key differs by shape", () => {
+    const schema = {
+      oneOf: [
+        { type: "object", properties: { kind: { type: "string", const: "a" }, value: { type: "string" } } },
+        { type: "object", properties: { kind: { type: "string", const: "b" }, value: { type: "number" } } },
+      ],
+    } as any
+
+    const result = ProviderTransform.schema(deepseekModel, schema) as any
+
+    expect(result.properties.value).toEqual({ anyOf: [{ type: "string" }, { type: "number" }] })
+  })
+
+  test("leaves a scalar union and a typed root alone", () => {
+    const scalar = { oneOf: [{ type: "string" }, { type: "number" }] } as any
+    expect(ProviderTransform.schema(deepseekModel, scalar)).toEqual(scalar)
+    const nullable = {
+      type: ["object", "null"],
+      oneOf: [{ type: "object", properties: { a: { type: "string" } } }],
+    } as any
+    expect(ProviderTransform.schema(deepseekModel, nullable)).toEqual(nullable)
+  })
+
+  test("leaves an object root with nested unions untouched", () => {
+    const schema = {
+      type: "object",
+      properties: { x: { oneOf: [{ type: "string" }, { type: "number" }] } },
+    } as any
+
+    const result = ProviderTransform.schema(deepseekModel, schema) as any
+
+    expect(result).toEqual(schema)
   })
 })
 
