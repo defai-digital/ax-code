@@ -2,10 +2,17 @@ import { afterEach, expect, test } from "vitest"
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
+import { Instance } from "../../src/project/instance"
+import { tmpdir } from "../fixture/fixture"
+import { Config } from "../../src/config/config"
+import { McpTrust } from "../../src/mcp/trust"
+import { WebMcpProfile } from "../../src/mcp/webmcp-profile"
 import { WebMcpChrome } from "../../src/mcp/webmcp-chrome"
 
 const dirs: string[] = []
 afterEach(async () => {
+  await Instance.disposeAll()
+  await fs.rm(process.env.AX_CODE_TEST_MANAGED_CONFIG_DIR!, { recursive: true, force: true })
   await Promise.all(dirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })))
 })
 
@@ -49,3 +56,58 @@ test("well-known locations are platform specific and PATH names skip win32", () 
   expect(WebMcpChrome.pathCandidates("win32", { PATH: "/a" })).toEqual([])
   expect(WebMcpChrome.pathCandidates("linux", { PATH: "/a:/b" })).toContain(path.join("/b", "chromium"))
 })
+
+async function recordingChrome() {
+  const file = await fakeChrome("Google Chrome 150.0.7000.1")
+  const marker = path.join(path.dirname(file), "executed")
+  await fs.writeFile(file, `#!/bin/sh\ntouch "${marker}"\necho "Google Chrome 150.0.7000.1"\n`, { mode: 0o755 })
+  return { file, marker }
+}
+
+test.skipIf(process.platform === "win32")("an untrusted project Chrome probe cannot execute its binary", async () => {
+  const { file, marker } = await recordingChrome()
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      const bridge = WebMcpProfile.config({ executablePath: file, allowedOrigins: [] }, false)
+      await fs.writeFile(path.join(dir, "ax-code.json"), JSON.stringify({ mcp: { bridge } }))
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const result = await WebMcpChrome.statusForServer("bridge")
+      expect(await fs.stat(marker).catch(() => undefined)).toBeUndefined()
+      expect(result).toBeUndefined()
+      const entry = (await Config.mcpEntry("bridge"))!
+      if (!("type" in entry.config)) throw new Error("Expected a full MCP entry")
+      await McpTrust.trust("bridge", entry.config, entry.source)
+      expect(await WebMcpChrome.statusForServer("bridge")).toEqual({ state: "ready", major: 150, executable: file })
+      expect(await fs.stat(marker)).toBeDefined()
+    },
+  })
+})
+
+test.skipIf(process.platform === "win32")(
+  "managed WebMCP denial prevents even an advisory Chrome process",
+  async () => {
+    const { file, marker } = await recordingChrome()
+    const managed = process.env.AX_CODE_TEST_MANAGED_CONFIG_DIR!
+    await fs.mkdir(managed, { recursive: true })
+    await fs.writeFile(
+      path.join(managed, "ax-code.json"),
+      JSON.stringify({
+        webmcp: { allow: false },
+        mcp: { bridge: WebMcpProfile.config({ executablePath: file, allowedOrigins: [] }, false) },
+      }),
+    )
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        expect(await WebMcpChrome.statusForServer("bridge")).toBeUndefined()
+        expect(await fs.stat(marker).catch(() => undefined)).toBeUndefined()
+      },
+    })
+  },
+)

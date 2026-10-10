@@ -5,6 +5,7 @@ import path from "node:path"
 import z from "zod"
 import { Config } from "../config/config"
 import { Filesystem } from "../util/filesystem"
+import { McpTrust } from "./trust"
 import { WebMcpProfile } from "./webmcp-profile"
 
 const execFileAsync = promisify(execFile)
@@ -94,7 +95,14 @@ export namespace WebMcpChrome {
     const entry = cfg.mcp?.[server]
     if (!entry || !("type" in entry) || entry.type !== "local" || !entry.webmcp) return undefined
     const profile = WebMcpProfile.validateLaunch(entry)
-    if (!profile) return undefined
+    if (!profile || !WebMcpProfile.evaluate(cfg.webmcp, profile).ok) return undefined
+    // An advisory probe is still process execution. A project-supplied
+    // executable must pass the same config-source trust gate as MCP launch;
+    // fetching status is not an explicit connect/trust gesture.
+    if (profile.executablePath) {
+      const source = (await Config.mcpEntry(server))?.source ?? Config.trustedMcpSource("unknown")
+      if (!(await McpTrust.decision(server, entry, source)).trusted) return undefined
+    }
     return status(profile.executablePath)
   }
 }
