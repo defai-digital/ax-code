@@ -28,15 +28,20 @@ export async function toggleWebMcpBridges(deps: WebMcpToggleDeps) {
   if (model.connected.length > 0) {
     // Reconcile so a mixed warning marker never dead-ends behind a
     // disconnect-only click.
-    for (const name of model.connected) void deps.toggle(name)
-    for (const { name } of model.attentions) void deps.toggle(name)
+    await Promise.allSettled([
+      ...model.connected.map((name) => deps.toggle(name)),
+      ...model.attentions.map(({ name }) => deps.toggle(name)),
+    ])
     return
   }
   const targets = model.servers.filter((name) => deps.statusOf(name) !== "blocked")
   if (targets.length === 0) return
   const notice = webMcpChromeNotice(await deps.chrome(targets[0]!).catch(() => undefined))
   if (notice) deps.warn(notice)
-  for (const name of targets) void deps.toggle(name)
+  // Toggles reject on a failed connect/disconnect (see dialog-mcp.tsx): settle
+  // every bridge so a rejection is handled and the status refresh surfaces the
+  // failure, instead of leaking an unhandled rejection per bridge.
+  await Promise.allSettled(targets.map((name) => deps.toggle(name)))
 }
 
 export type WebMcpTuiContext = {

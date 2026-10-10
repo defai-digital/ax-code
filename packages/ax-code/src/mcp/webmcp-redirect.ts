@@ -46,7 +46,7 @@ export async function redirectOriginOutsideAllowlist(
   if (!startOrigin || !allowed.has(startOrigin)) return undefined
   if (options.signal?.aborted) return undefined
   const timeoutMs = Math.min(options.timeoutMs ?? REDIRECT_PROBE_TIMEOUT_MS, MAX_TIMER_MS)
-  if (timeoutMs <= 0) return undefined
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return undefined
   const deadline = Date.now() + timeoutMs
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)

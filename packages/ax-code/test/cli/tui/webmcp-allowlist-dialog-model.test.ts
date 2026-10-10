@@ -179,4 +179,19 @@ describe("webMcpAllowlistDialogOptions", () => {
     expect(options[0]?.disabled).toBe(true)
     expect(options[0]?.value).toEqual({ kind: "none" })
   })
+
+  test("a query carrying a path or port still shows the saved rows of its origin", () => {
+    const options = webMcpAllowlistDialogOptions({
+      records: saved,
+      query: "https://a.test/some/page?q=1",
+      loading: false,
+      failed: false,
+    })
+    expect(titles(options)).toEqual([
+      "navigate: https://a.test",
+      "close: https://a.test",
+      "Allow reads on https://a.test",
+    ])
+    expect(kinds(options)).toEqual(["revoke", "revoke", "grant"])
+  })
 })

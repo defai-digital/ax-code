@@ -71,7 +71,9 @@ export function WebMcpChip() {
     // The warning names the failing bridges: retry those instead of fanning
     // out to healthy or disconnected siblings. No attention means the status
     // changed under the click; do nothing rather than toggle unrelated peers.
-    for (const { name } of model().attentions) void local.mcp.toggle(name)
+    // Toggle failures surface through the status refresh; settle them here so
+    // a rejection never escapes as an unhandled promise rejection.
+    void Promise.allSettled(model().attentions.map(({ name }) => local.mcp.toggle(name)))
   }
 
   return (

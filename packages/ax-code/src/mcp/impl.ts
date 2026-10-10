@@ -1,6 +1,8 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
-import { execFileSync } from "node:child_process"
+import { execFile } from "node:child_process"
+import { promisify } from "node:util"
 import { existsSync, readFileSync } from "node:fs"
+import { rm } from "node:fs/promises"
 import path from "node:path"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
@@ -55,6 +57,7 @@ import {
 
 export namespace MCP {
   const log = Log.create({ service: "mcp" })
+  const execFileAsync = promisify(execFile)
   // Bind admission to the actual connected client, including MCP.add() and
   // reconnects. Reading current config instead could loosen an older client's
   // policy or miss dynamically added clients. Weak ownership follows disposal.
@@ -744,35 +747,22 @@ export namespace MCP {
    * Install the pinned bridge into an AX-owned cache and verify the tarball
    * integrity recorded in the generated lockfile. Reached only for an
    * explicitly vendored profile; any failure is terminal (no npx fallback).
-   * The install is synchronous, so concurrent connects cannot interleave
-   * inside it; every launch re-verifies, so a planted cache never passes.
+   * Concurrent connects share one install pass through the module singleflight
+   * instead of interleaving npm runs into the same directory, and the npm run
+   * is async so a cold install cannot freeze the server's event loop. A cached
+   * install whose bytes fail verification is dropped and installed fresh: a
+   * partial or tampered cache must not wedge the bridge until manual cleanup.
    */
-  function ensureVendoredBridge(): { ok: true } | { ok: false; error: string } {
-    const bin = WebMcpProfile.vendoredBin()
-    const dir = WebMcpProfile.vendoredDir()
-    if (!existsSync(bin)) {
-      try {
-        execFileSync(
-          "npm",
-          [
-            "install",
-            "--prefix",
-            dir,
-            // Pin the registry and the working directory: a repository
-            // .npmrc must not redirect the pinned tarball elsewhere.
-            "--registry=https://registry.npmjs.org",
-            "--ignore-scripts",
-            "--no-audit",
-            "--no-fund",
-            WebMcpProfile.VENDORED_PACKAGE,
-          ],
-          { encoding: "utf8", timeout: 300_000, stdio: "pipe", cwd: Global.Path.home },
-        )
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        return { ok: false, error: `WebMCP vendored install failed: ${message}` }
-      }
-    }
+  let vendoredInstall: Promise<{ ok: true } | { ok: false; error: string }> | undefined
+
+  async function ensureVendoredBridge(): Promise<{ ok: true } | { ok: false; error: string }> {
+    vendoredInstall ??= installVendoredBridge().finally(() => {
+      vendoredInstall = undefined
+    })
+    return vendoredInstall
+  }
+
+  function verifyVendoredCache(dir: string, bin: string): { ok: true } | { ok: false; error: string } {
     // Always verify, even when the binary is already cached: the cache path
     // is predictable, so a planted file or symlink must never skip the check.
     let lock: string
@@ -789,6 +779,41 @@ export namespace MCP {
     if (!bytes.ok) return bytes
     if (!existsSync(bin)) return { ok: false, error: "WebMCP vendored install produced no executable" }
     return { ok: true }
+  }
+
+  async function installVendoredBridge(): Promise<{ ok: true } | { ok: false; error: string }> {
+    const bin = WebMcpProfile.vendoredBin()
+    const dir = WebMcpProfile.vendoredDir()
+    if (existsSync(bin)) {
+      const cached = verifyVendoredCache(dir, bin)
+      if (cached.ok) return cached
+      log.warn("webmcp vendored cache failed verification; reinstalling", { error: cached.error })
+      await rm(dir, { recursive: true, force: true }).catch((error: unknown) => {
+        log.warn("webmcp vendored cache cleanup failed", { error: toErrorMessage(error) })
+      })
+    }
+    try {
+      await execFileAsync(
+        "npm",
+        [
+          "install",
+          "--prefix",
+          dir,
+          // Pin the registry and the working directory: a repository
+          // .npmrc must not redirect the pinned tarball elsewhere.
+          "--registry=https://registry.npmjs.org",
+          "--ignore-scripts",
+          "--no-audit",
+          "--no-fund",
+          WebMcpProfile.VENDORED_PACKAGE,
+        ],
+        { encoding: "utf8", timeout: 300_000, maxBuffer: 8 * 1024 * 1024, cwd: Global.Path.home },
+      )
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return { ok: false, error: `WebMCP vendored install failed: ${message}` }
+    }
+    return verifyVendoredCache(dir, bin)
   }
 
   async function create(key: string, mcp: Config.Mcp, owner: McpState) {
@@ -851,7 +876,7 @@ export namespace MCP {
       }
     }
     if (webmcp?.vendored) {
-      const vendored = ensureVendoredBridge()
+      const vendored = await ensureVendoredBridge()
       if (!vendored.ok) {
         log.error("webmcp vendored bridge unavailable", { key, error: vendored.error })
         return { mcpClient: undefined, status: { status: "failed" as const, error: vendored.error } }
@@ -1369,7 +1394,17 @@ export namespace MCP {
     const cfg = await Config.get()
     const entry = cfg.mcp?.[name]
     if (!entry || !isConfigured(entry) || entry.type !== "local" || entry.webmcp === undefined) return undefined
-    return { cfg, entry, profile: WebMcpProfile.validateLaunch(entry)! }
+    // validateLaunch throws on an invalid profile (schema violations,
+    // environment overrides): an unlaunchable bridge must read as "not found"
+    // to the grant APIs, not propagate an exception.
+    let profile: WebMcpProfile.Configuration | undefined
+    try {
+      profile = WebMcpProfile.validateLaunch(entry)
+    } catch {
+      return undefined
+    }
+    if (!profile) return undefined
+    return { cfg, entry, profile }
   }
 
   /**
@@ -1432,10 +1467,14 @@ export namespace MCP {
       if (!recheck.ok) return recheck
       const client = s.clients[name]
       if (!client) return { ok: false, error: "WebMCP bridge is no longer connected" }
-      invalidateTools(s)
       const granted = s.webmcpGrants[name] ?? []
       const added = wanted.filter((item) => !granted.includes(item))
-      if (added.length > 0) s.webmcpGrants[name] = [...granted, ...added]
+      // Every requested origin is already granted and the running bridge
+      // carries it (grants apply at connect time): a relaunch would only drop
+      // open pages without changing anything.
+      if (added.length === 0) return { ok: true }
+      invalidateTools(s)
+      s.webmcpGrants[name] = [...granted, ...added]
       await closeIfPossible(client, name, "webmcp origin grant relaunch")
       delete s.clients[name]
       s.status[name] = { status: "disabled" }
@@ -1446,10 +1485,8 @@ export namespace MCP {
       if (status?.status === "connected" && s.clients[name]) return { ok: true }
       // The caller reports failure, so roll the grant back: the origin must
       // not silently apply on a later connect.
-      if (added.length > 0) {
-        const current = s.webmcpGrants[name]
-        if (current) s.webmcpGrants[name] = current.filter((item) => !added.includes(item))
-      }
+      const current = s.webmcpGrants[name]
+      if (current) s.webmcpGrants[name] = current.filter((item) => !added.includes(item))
       return { ok: false, error: "WebMCP bridge did not reconnect after the origin grant" }
     })
   }

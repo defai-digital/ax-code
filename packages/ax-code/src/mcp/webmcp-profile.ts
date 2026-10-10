@@ -1366,6 +1366,13 @@ export namespace WebMcpProfile {
   }
 
   const MAX_SNAPSHOT_NODES = 5000
+  /**
+   * Walk bound for the whole tree: records visited, the work stack and any
+   * single children array. The 32 KiB read budget caps text parts, never
+   * structuredContent, so a wide or deep hostile snapshot must fail closed
+   * before it grows the stack or holds the event loop.
+   */
+  const MAX_SNAPSHOT_VISITS = 50_000
   const MAX_NODE_TEXT = 512
 
   function nodeText(value: unknown): string {
@@ -1385,10 +1392,11 @@ export namespace WebMcpProfile {
     if (!structured || !isRecord(structured.snapshot)) return undefined
     const nodes = new Map<string, SnapshotNode>()
     const stack: unknown[] = [structured.snapshot]
+    let visited = 0
     while (stack.length > 0) {
       const raw = stack.pop()
       if (!isRecord(raw)) continue
-      if (nodes.size >= MAX_SNAPSHOT_NODES) return undefined
+      if (++visited > MAX_SNAPSHOT_VISITS || nodes.size >= MAX_SNAPSHOT_NODES) return undefined
       const id = raw.id
       if (typeof id === "string" && id.length > 0 && id.length <= 128 && !nodes.has(id)) {
         const attributes: Record<string, string | number | boolean> = {}
@@ -1406,9 +1414,16 @@ export namespace WebMcpProfile {
           attributes,
         })
       }
-      if (Array.isArray(raw.children)) for (const child of raw.children) stack.push(child)
+      if (Array.isArray(raw.children)) {
+        if (raw.children.length > MAX_SNAPSHOT_VISITS) return undefined
+        for (const child of raw.children) stack.push(child)
+        if (stack.length > MAX_SNAPSHOT_VISITS) return undefined
+      }
     }
-    return nodes
+    // A tree with no usable ids binds nothing: return undefined like the
+    // malformed/oversized paths so the caller clears the baseline instead of
+    // recording a URL with an empty uid map.
+    return nodes.size > 0 ? nodes : undefined
   }
 
   /** Record a page's structured snapshot together with the URL resolved right after it. */
@@ -1704,6 +1719,24 @@ export namespace WebMcpProfile {
   const CONSOLE_TAIL = 50
 
   /**
+   * The last `count` lines of a console blob, prefixed by the omitted count.
+   * Scans for newlines instead of splitting: a huge dump must not
+   * materialize a line array many times the size of the tail that is kept.
+   */
+  function consoleTail(text: string): string {
+    let total = 1
+    let index = text.indexOf("\n")
+    while (index !== -1) {
+      total += 1
+      index = text.indexOf("\n", index + 1)
+    }
+    if (total <= CONSOLE_TAIL) return text
+    let cut = text.length
+    for (let i = 0; i < CONSOLE_TAIL; i++) cut = text.lastIndexOf("\n", cut - 1)
+    return `... ${total - CONSOLE_TAIL} earlier console messages omitted\n${text.slice(cut + 1)}`
+  }
+
+  /**
    * Secret-like query keys redacted from network/console URLs; ordinary query
    * strings stay (signed CDN URLs must remain downloadable). Userinfo and
    * fragments never leave the bridge (ADR-172).
@@ -1760,13 +1793,7 @@ export namespace WebMcpProfile {
     if (name === "list_console_messages") {
       for (const part of contents) {
         if (!isRecord(part) || part.type !== "text" || typeof part.text !== "string") continue
-        const lines = part.text.split("\n")
-        if (lines.length > CONSOLE_TAIL) {
-          part.text = [
-            `... ${lines.length - CONSOLE_TAIL} earlier console messages omitted`,
-            ...lines.slice(-CONSOLE_TAIL),
-          ].join("\n")
-        }
+        part.text = consoleTail(part.text)
       }
       const structured = isRecord(result.structuredContent) ? result.structuredContent : undefined
       if (structured && Array.isArray(structured.messages) && structured.messages.length > CONSOLE_TAIL) {
@@ -2002,6 +2029,10 @@ export namespace WebMcpProfile {
             }
           : undefined,
       })
+      // The count cap fails the listing either way; stop retaining entries
+      // once it is certainly exceeded so a huge listing cannot grow this
+      // array or the downstream duplicate/byte walks.
+      if (descriptors.length > MAX_TOOLS) break
     }
     return descriptors
   }
@@ -2045,7 +2076,15 @@ export namespace WebMcpProfile {
   }
 
   function descriptorBytes(descriptors: ToolDescriptor[]): number {
-    return Buffer.byteLength(JSON.stringify(descriptors), "utf8")
+    // Accumulate per descriptor and stop once the cap is certainly exceeded:
+    // this runs before the cap check, so a listing of oversized schemas must
+    // not be serialized in full just to be rejected.
+    let total = 2
+    for (const descriptor of descriptors) {
+      total += Buffer.byteLength(JSON.stringify(descriptor), "utf8") + 1
+      if (total > MAX_DESCRIPTOR_BYTES) return total
+    }
+    return total
   }
 
   function duplicateToolName(descriptors: ToolDescriptor[]): string | undefined {
@@ -2316,10 +2355,13 @@ export namespace WebMcpProfile {
   ): Promise<{ ok: true } | { ok: false; error: string }> {
     let output: string
     try {
-      // Async so a hung executable cannot stall the event loop for the timeout.
+      // Async so a hung executable cannot stall the event loop, with SIGKILL
+      // so a binary that ignores SIGTERM cannot leave the preflight pending
+      // forever; the timeout then bounds the wait.
       ;({ stdout: output } = await execFileAsync(executablePath, ["--version"], {
         encoding: "utf8",
         timeout: 10_000,
+        killSignal: "SIGKILL",
       }))
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)

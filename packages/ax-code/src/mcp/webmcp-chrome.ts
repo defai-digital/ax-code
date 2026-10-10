@@ -10,6 +10,15 @@ import { WebMcpProfile } from "./webmcp-profile"
 
 const execFileAsync = promisify(execFile)
 
+/** os.homedir() throws in minimal environments (no HOME, no passwd entry); the probe then has no user-relative candidates. */
+function safeHomedir(): string {
+  try {
+    return os.homedir()
+  } catch {
+    return ""
+  }
+}
+
 /**
  * Best-effort, read-only Chrome detection for the WebMCP chip (ADR-180). It
  * only runs `<chrome> --version` on an explicit or well-known executable, so it
@@ -38,7 +47,7 @@ export namespace WebMcpChrome {
   }
 
   /** Well-known install locations; PATH names are resolved by {@link pathCandidates}. */
-  export function knownPaths(platform: NodeJS.Platform, home = os.homedir(), env = process.env): string[] {
+  export function knownPaths(platform: NodeJS.Platform, home = safeHomedir(), env = process.env): string[] {
     if (platform === "darwin") {
       return [
         "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
@@ -65,7 +74,13 @@ export namespace WebMcpChrome {
 
   async function version(executable: string): Promise<number | undefined> {
     try {
-      const { stdout } = await execFileAsync(executable, ["--version"], { encoding: "utf8", timeout: 10_000 })
+      const { stdout } = await execFileAsync(executable, ["--version"], {
+        encoding: "utf8",
+        timeout: 10_000,
+        // SIGKILL so a binary that ignores SIGTERM cannot keep the advisory
+        // probe pending forever; the timeout then bounds the wait.
+        killSignal: "SIGKILL",
+      })
       return WebMcpProfile.chromeMajor(stdout)
     } catch {
       return undefined
@@ -79,7 +94,11 @@ export namespace WebMcpChrome {
    */
   export async function status(executablePath?: string, platform: NodeJS.Platform = process.platform): Promise<Status> {
     const minimum = WebMcpProfile.MIN_CHROME_MAJOR
-    const candidates = executablePath ? [executablePath] : [...knownPaths(platform), ...pathCandidates(platform)]
+    // A duplicated PATH entry or a HOME that coincides with a fixed install
+    // root must not probe the same binary twice.
+    const candidates = [
+      ...new Set(executablePath ? [executablePath] : [...knownPaths(platform), ...pathCandidates(platform)]),
+    ]
     let best: { executable: string; major: number } | undefined
     let unreadable: string | undefined
     for (const executable of candidates) {
@@ -105,7 +124,15 @@ export namespace WebMcpChrome {
     const cfg = await Config.get()
     const entry = cfg.mcp?.[server]
     if (!entry || !("type" in entry) || entry.type !== "local" || !entry.webmcp) return undefined
-    const profile = WebMcpProfile.validateLaunch(entry)
+    // validateLaunch throws on an invalid profile (schema, environment
+    // overrides) — an advisory probe reports "not a launchable bridge"
+    // instead of rejecting into the route handler.
+    let profile: WebMcpProfile.Configuration | undefined
+    try {
+      profile = WebMcpProfile.validateLaunch(entry)
+    } catch {
+      return undefined
+    }
     if (!profile || !WebMcpProfile.evaluate(cfg.webmcp, profile).ok) return undefined
     // An advisory probe is still process execution. A project-supplied
     // executable must pass the same config-source trust gate as MCP launch;

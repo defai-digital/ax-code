@@ -267,6 +267,27 @@ describe("WebMCP T2 snapshot binding and escalation", () => {
     ).toBeUndefined()
     const huge = Array.from({ length: 5001 }, (_, i) => ({ id: `2_${i}`, role: "button", name: "x" }))
     expect(WebMcpProfile.parseStructuredSnapshot(snapshotResult(huge))).toBeUndefined()
+    // A snapshot tree with no usable ids binds nothing: like the malformed
+    // paths it returns undefined so the caller clears the baseline instead of
+    // recording a URL with an empty uid map.
+    expect(
+      WebMcpProfile.parseStructuredSnapshot({
+        structuredContent: { snapshot: { role: "RootWebArea", children: [{ role: "button" }] } },
+      }),
+    ).toBeUndefined()
+    // The walk is bounded beyond the uid cap: a single oversized children
+    // array or a deep id-less tree fails closed instead of growing the work
+    // stack or holding the event loop.
+    expect(
+      WebMcpProfile.parseStructuredSnapshot({
+        structuredContent: {
+          snapshot: { id: "1_0", role: "RootWebArea", children: new Array(50_001).fill(null) },
+        },
+      }),
+    ).toBeUndefined()
+    let deep: Record<string, unknown> = { role: "leaf" }
+    for (let i = 0; i < 60_000; i++) deep = { role: "node", children: [deep] }
+    expect(WebMcpProfile.parseStructuredSnapshot({ structuredContent: { snapshot: deep } })).toBeUndefined()
   })
 
   test("verifyTarget fails closed on no snapshot, moved page, or unknown uid; URL changes clear the map", () => {

@@ -362,6 +362,12 @@ export async function convertMcpTool(
           await WebMcpApprovals.checkReadContinuation(args as object, readOrigin)
           await WebMcpApprovals.checkCall(args as object)
         }
+        // Same window as close_page above: a revocation or deny during the
+        // interact page lookup must still stop the action before the bridge
+        // runs it.
+        if (interactTier && interactOrigin) {
+          await WebMcpApprovals.checkCall(args as object)
+        }
         opts.abortSignal?.throwIfAborted()
         const mainTimeout = webmcp ? budget() : timeout
         const result = await client.callTool(

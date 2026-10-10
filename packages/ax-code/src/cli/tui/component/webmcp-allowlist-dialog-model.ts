@@ -156,9 +156,16 @@ export function webMcpAllowlistDialogOptions(input: {
   const records = input.records ?? []
   const needle = needleOf(input.query)
   const blank = needle === ""
+  // A query typed as a URL canonicalizes to an origin for the add rows; keep
+  // the saved rows for that origin too, or `https://a.test/path` would hide
+  // the revoke row for the already-saved `https://a.test` approvals.
+  const queryOrigin = webMcpAllowlistOrigin(input.query)
   const rows: WebMcpAllowlistOption[] = webMcpAllowlistRows(records)
     .map((record) => ({ record, title: webMcpAllowlistScopeTitle(record.scope) }))
-    .filter(({ title }) => matches(title, needle))
+    .filter(
+      ({ record, title }) =>
+        matches(title, needle) || (queryOrigin !== undefined && scopeOrigin(record.scope) === queryOrigin),
+    )
     .map(({ record, title }) => {
       const value: WebMcpAllowlistAction = { kind: "revoke", id: record.id }
       return {

@@ -235,7 +235,12 @@ export namespace WebMcpApprovals {
       policyVersion: POLICY_VERSION,
       createdAt: Date.now(),
     })
-    const next = Store.parse({ version: 1, records: [...store.records.filter((row) => row.id !== id), record] })
+    // A full store must not fail every later distinct save with a schema
+    // error: evict the oldest records (convenience approvals, re-approvable)
+    // until the new record fits.
+    const kept = store.records.filter((row) => row.id !== id).sort((a, b) => a.createdAt - b.createdAt)
+    const trimmed = kept.slice(Math.max(0, kept.length - (MAX_RECORDS - 1)))
+    const next = Store.parse({ version: 1, records: [...trimmed, record] })
     await authorize?.()
     if (!active()) throw new Error("WebMCP approval request was canceled")
     await Filesystem.writeJson(filepath, next, 0o600)
