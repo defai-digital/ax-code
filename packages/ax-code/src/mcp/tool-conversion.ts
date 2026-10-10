@@ -308,11 +308,11 @@ export async function convertMcpTool(
       // control) to the latest snapshot of that page, spend the budget.
       let interactOrigin: string | undefined
       let interactUrl: string | undefined
-      // Set once the bridge accepted an action, and once the page was looked
-      // up after it: an accepted action whose page could not be observed
-      // afterwards leaves the uid map in doubt.
-      let actionAccepted = false
-      let actionObserved = false
+      // Set once the bridge accepted a read or an action, and once the page
+      // was looked up after it: an accepted call whose page could not be
+      // observed afterwards leaves the uid map in doubt.
+      let callAccepted = false
+      let pageObserved = false
       if (interactTier && webmcp) {
         const pageId = (input as Record<string, unknown>).pageId
         const before =
@@ -378,6 +378,15 @@ export async function convertMcpTool(
         }
         opts.abortSignal?.throwIfAborted()
         const mainTimeout = webmcp ? budget() : timeout
+        // A wait that cannot settle before the request times out is refused
+        // here, before the bridge is involved, so its reservation is returned.
+        if (
+          webmcp?.toolName === "wait_for" &&
+          mainTimeout !== undefined &&
+          mainTimeout <= WebMcpProfile.WAIT_SETTLE_MARGIN_MS
+        ) {
+          throw new Error("WebMCP dispatch budget is too short to wait for page text; do not retry automatically")
+        }
         // The request is about to reach the bridge: the session layer refunds
         // a wait_for reservation only for failures before this point.
         if (webmcp) WebMcpProfile.markDispatched(args)
@@ -432,12 +441,13 @@ export async function convertMcpTool(
             if (redirect) throw new WebMcpProfile.OriginNotGrantedError(redirect)
             throw error
           }
-          actionAccepted = true
+          callAccepted = true
           if (readTier && webmcp && readOrigin) {
             // Re-resolve the page after the call: a page that navigated to
             // another origin mid-read discards its output (ADR-171).
             const pageId = (input as Record<string, unknown>).pageId as number
             const after = await webmcpPageUrl(client, pageId, budget(), opts.abortSignal)
+            pageObserved = true
             if (WebMcpProfile.pageOriginOf(after) !== readOrigin) {
               // The page left its origin or the page list: no earlier uid map
               // may stand in for the snapshot that is being discarded.
@@ -459,7 +469,7 @@ export async function convertMcpTool(
             // map; wait_for output is a snapshot and is bounded as one.
             const pageId = (input as Record<string, unknown>).pageId as number
             const after = await webmcpPageUrl(client, pageId, budget(), opts.abortSignal)
-            actionObserved = true
+            pageObserved = true
             const afterOrigin = WebMcpProfile.pageOriginOf(after)
             if (webmcp.toolName === "wait_for") {
               if (afterOrigin !== interactOrigin) {
@@ -515,12 +525,13 @@ export async function convertMcpTool(
         if (webmcp && listingPageId !== undefined) {
           WebMcpProfile.invalidateListing(webmcp.profile, listingPageId)
         }
-        // An action the bridge accepted may have changed the page even though
-        // the lookup after it failed (budget, abort, transport): the uid map
-        // is no longer known to match, so the next action must not bind to
-        // it (ADR-174 rule 8). A bridge-reported action failure keeps the
+        // A read or action the bridge accepted whose page could not be looked
+        // up afterwards (budget, abort, transport) leaves the page in an
+        // unknown state: a fresh snapshot was not recorded, an action may
+        // have changed the page, so the previous uid map must not stand in
+        // for either (ADR-174 rule 8). A bridge-reported failure keeps the
         // map: the page was not observed to change and the result says so.
-        if (webmcp && interactOrigin !== undefined && actionAccepted && !actionObserved) {
+        if (webmcp && (readOrigin !== undefined || interactOrigin !== undefined) && callAccepted && !pageObserved) {
           WebMcpProfile.clearSnapshot(webmcp.profile, (input as Record<string, unknown>).pageId as number)
         }
         log.error("MCP tool call failed", { tool: mcpTool.name, error: toErrorMessage(e) })

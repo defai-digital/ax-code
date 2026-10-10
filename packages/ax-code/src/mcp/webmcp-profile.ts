@@ -914,8 +914,12 @@ export namespace WebMcpProfile {
     return typeof call === "object" && call !== null && dispatched.has(call)
   }
 
-  /** Milliseconds kept back so the bridge settles a wait before the MCP request itself times out. */
-  const WAIT_SETTLE_MARGIN_MS = 1_000
+  /**
+   * Milliseconds kept back so the bridge settles a wait before the MCP
+   * request itself times out. A dispatch with less than this left refuses
+   * the wait before it reaches the bridge, so its reservation is returned.
+   */
+  export const WAIT_SETTLE_MARGIN_MS = 1_000
 
   /**
    * The page-side wait a `wait_for` may run within the remaining dispatch

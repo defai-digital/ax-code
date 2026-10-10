@@ -1551,14 +1551,15 @@ export async function resolveTools(input: ResolveToolsInput) {
           // ADR-174: a T2 call against an origin with no session interact
           // grant, or whose budget is spent, throws before the bridge acts.
           // The prompt names the origin and what the grant covers; approval
-          // records (or renews) the grant in memory, and the retry is
-          // immediate — never a relaunch.
+          // records (or renews) the grant in memory — never a relaunch. The
+          // caller then either continues in the same call (a per-action tool
+          // that asked for the grant before its own asks) or tells the model
+          // to retry (a grant-covered dispatch that stopped at the grant).
           const grantInteract = async (
             interactPolicy: WebMcpProfile.Policy,
-            error: unknown,
+            error: WebMcpProfile.InteractNotGrantedError,
             breaker: WebMcpProfile.InteractBreaker | undefined,
-          ): Promise<never> => {
-            if (!(error instanceof WebMcpProfile.InteractNotGrantedError)) throw error
+          ): Promise<void> => {
             const allowed = await MCP.checkWebMcpInteractGrant(interactPolicy.server, error.origin)
             if (!allowed.ok) throw new Error(allowed.error)
             try {
@@ -1590,9 +1591,6 @@ export async function resolveTools(input: ResolveToolsInput) {
             breaker?.approved()
             const granted = await MCP.grantWebMcpInteractOrigin(interactPolicy.server, error.origin)
             if (!granted.ok) throw new Error(granted.error)
-            throw new WebMcpProfile.GrantRetryError(
-              `WebMCP interaction with ${error.origin} was ${error.renewal ? "renewed" : "allowed"} for this session (${WebMcpProfile.INTERACT_BUDGET} grant-covered actions). Retry the call.`,
-            )
           }
           let call: Record<string, unknown> | unknown = args
           if (policy) {
@@ -1707,6 +1705,9 @@ export async function resolveTools(input: ResolveToolsInput) {
               })
           }
           try {
+            // Deny rules first: a call the rules forbid must not spend a grant
+            // prompt (or record a grant) before it fails.
+            await checkWebMcpDenials()
             const grantCovered =
               interactTool &&
               policy !== undefined &&
@@ -1718,9 +1719,11 @@ export async function resolveTools(input: ResolveToolsInput) {
               WebMcpProfile.bindInteractDecision(call as object, !grantCovered)
               // A per-action tool on an origin with no interact grant would
               // pass both asks and then stop at the grant prompt; ask for the
-              // grant first so the user confirms the action once, not twice.
-              // The snapshot origin is the page origin at snapshot time; the
-              // dispatch re-checks the live page.
+              // grant first, then continue into the per-action asks and the
+              // dispatch in this same call, so the user confirms the action
+              // once and the model needs no retry. The snapshot origin is the
+              // page origin at snapshot time; the dispatch re-checks the live
+              // page.
               if (!grantCovered) {
                 const pageId = (call as { pageId?: unknown }).pageId
                 const origin =
@@ -1733,6 +1736,9 @@ export async function resolveTools(input: ResolveToolsInput) {
               }
             }
             const skipPerCall = readTierTool || grantCovered
+            // Again after the grant prompt: a deny rule written while that
+            // prompt was open must stop the call before its own asks (the
+            // dispatch re-checks once more through the bound call).
             await checkWebMcpDenials()
             if (policy?.toolName === "close_page" && webmcp && policy.closePageOrigin) {
               ctx.abort.throwIfAborted()
@@ -1793,9 +1799,14 @@ export async function resolveTools(input: ResolveToolsInput) {
                   // Exactly one continuation outside this catch. Any bridge
                   // failure or a second grant refusal propagates, never loops.
                   return await execute(call, opts)
-                } else if (error instanceof WebMcpProfile.InteractNotGrantedError)
+                } else if (error instanceof WebMcpProfile.InteractNotGrantedError) {
+                  // The dispatch stopped before the bridge acted; the grant
+                  // is recorded now and the model retries the same call.
                   await grantInteract(policy, error, breaker)
-                else {
+                  throw new WebMcpProfile.GrantRetryError(
+                    `WebMCP interaction with ${error.origin} was ${error.renewal ? "renewed" : "allowed"} for this session (${WebMcpProfile.INTERACT_BUDGET} grant-covered actions). Retry the call.`,
+                  )
+                } else {
                   if (breaker && error instanceof WebMcpProfile.TargetBindingError) {
                     breaker.failed(webmcpTargetSummary(webmcp))
                   }

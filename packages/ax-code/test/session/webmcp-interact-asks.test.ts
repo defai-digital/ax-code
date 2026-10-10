@@ -177,18 +177,49 @@ describe("WebMCP T2 asks through the session layer", () => {
         expect(ask).toHaveBeenCalledTimes(1)
         expect(grants.interact.get(ORIGIN)).toBe(19)
 
-        // Per-action fill on a fresh origin: the grant prompt comes first, before the per-action asks.
+        // Per-action fill on a fresh origin: the grant prompt comes first, then
+        // the per-action asks and the dispatch continue in the same call.
         grants.interact.clear()
-        await expect(
-          (tools.bridge_fill.execute as any)({ pageId: 1, uid: "1_5", value: "Jane" }, execOptions()),
-        ).rejects.toThrow("allowed for this session")
-        expect(ask).toHaveBeenCalledTimes(2)
-        expect(ask.mock.calls[1]?.[0]).toMatchObject({ metadata: expect.objectContaining({ interactGrant: true }) })
-        expect(client.calls).not.toContain("fill")
         await (tools.bridge_fill.execute as any)({ pageId: 1, uid: "1_5", value: "Jane" }, execOptions())
         expect(ask).toHaveBeenCalledTimes(4)
+        expect(ask.mock.calls[1]?.[0]).toMatchObject({ metadata: expect.objectContaining({ interactGrant: true }) })
         expect(ask.mock.calls[3]?.[0]).toMatchObject({ metadata: expect.objectContaining({ interactAction: true }) })
         expect(client.calls).toContain("fill")
+        // A per-action call spends none of the fresh budget.
+        expect(grants.interact.get(ORIGIN)).toBe(20)
+      },
+    })
+  })
+
+  test("a deny rule stops a per-action call before the interact grant is offered", async () => {
+    await using tmp = await tmpdir()
+    const profile = WebMcpProfile.config({ allowedOrigins: [], read: true, interact: true }, true).webmcp
+    WebMcpProfile.recordSnapshot(profile, 1, snapshotNodes(), PAGE)
+    const grants: GrantState = { read: new Set([ORIGIN]), interact: new Map() }
+    const client = fakeClient()
+    vi.spyOn(ToolRegistry, "tools").mockResolvedValue([])
+    vi.spyOn(MCP, "tools").mockResolvedValue(await bridgeTools(profile, grants, client))
+    vi.spyOn(MCP, "checkWebMcpInteractGrant").mockResolvedValue({ ok: true })
+    const grant = vi.spyOn(MCP, "grantWebMcpInteractOrigin").mockResolvedValue({ ok: true })
+    const ask = vi.spyOn(Permission, "ask").mockResolvedValue(undefined)
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const input = resolveInput("msg_turn_deny")
+        input.agent = {
+          name: "build",
+          permission: [
+            { permission: "*", pattern: "*", action: "allow" },
+            { permission: "webmcp", pattern: "*", action: "deny" },
+          ],
+        } as never
+        const tools = await resolveTools(input)
+        await expect(
+          (tools.bridge_fill.execute as any)({ pageId: 1, uid: "1_5", value: "Jane" }, execOptions()),
+        ).rejects.toBeInstanceOf(Permission.DeniedError)
+        expect(ask).not.toHaveBeenCalled()
+        expect(grant).not.toHaveBeenCalled()
+        expect(client.calls).not.toContain("fill")
       },
     })
   })

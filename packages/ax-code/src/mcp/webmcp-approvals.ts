@@ -270,10 +270,13 @@ export namespace WebMcpApprovals {
     const kept = store.records.filter((row) => row.id !== id).sort((a, b) => a.createdAt - b.createdAt)
     const trimmed = kept.slice(Math.max(0, kept.length - (MAX_RECORDS - 1)))
     const next = Store.parse({ version: 1, records: [...trimmed, record] })
-    // `authorize` is the caller's deny-rule check (read-only, idempotent). It
-    // runs before the write so a denied request never touches the store, and
-    // again after it so a deny that landed during the write rolls the record
-    // back instead of leaving a persisted approval the rules now forbid.
+    // `authorize` is the caller's deny-rule check: read-only and idempotent by
+    // contract (Permission.checkDenials). It runs before the write so a denied
+    // request never touches the store, and once more after it so a deny that
+    // lands while the write is in flight rolls the record back instead of
+    // leaving a persisted approval the rules now forbid. The post-write
+    // re-check is locked by test/permission/webmcp-allowlist.test.ts
+    // ("denial during persistence rolls back the saved approval").
     await authorize?.()
     if (!active()) throw new Error("WebMCP approval request was canceled")
     await Filesystem.writeJson(filepath, next, 0o600)

@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "vitest"
+import { afterEach, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
@@ -136,6 +136,21 @@ test.skipIf(process.platform === "win32")(
     })
   },
 )
+
+test("a failing config lookup makes the advisory probe report no status instead of rejecting", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const get = vi.spyOn(Config, "get").mockRejectedValueOnce(new Error("config unreadable"))
+      try {
+        expect(await WebMcpChrome.statusForServer("bridge")).toBeUndefined()
+      } finally {
+        get.mockRestore()
+      }
+    },
+  })
+})
 
 test("Chrome discovery ignores relative home, install, and PATH roots", () => {
   expect(WebMcpChrome.pathCandidates("linux", { PATH: "./tools:../bin:/usr/bin" })).toEqual([

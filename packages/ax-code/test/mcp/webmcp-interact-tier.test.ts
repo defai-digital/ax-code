@@ -500,6 +500,24 @@ describe("WebMCP T2 dispatch", () => {
     expect(WebMcpProfile.waitTimeoutWithin(30_000, 10_000)).toBe(9_000)
     expect(WebMcpProfile.waitTimeoutWithin(2_000, 10_000)).toBe(2_000)
     expect(WebMcpProfile.waitTimeoutWithin(undefined, 500)).toBe(1)
+    // A dispatch with less than the settle margin left refuses the wait
+    // before the bridge is involved, so the reservation can be returned.
+    const short = await tool("wait_for", profile, client, grants)
+    client.callTool.mockClear()
+    const args = { pageId: 1, text: ["Saved"] }
+    await expect(
+      convertMcpTool({ name: "wait_for", inputSchema: { type: "object" } } as never, client as never, 900, {
+        server: "bridge",
+        toolName: "wait_for",
+        profile,
+        readGrants: () => grants.read,
+        interactGrants: () => grants.interact,
+        consumeInteractBudget: () => true,
+      }).then((t) => t.execute!(args, options())),
+    ).rejects.toThrow("too short to wait")
+    expect(WebMcpProfile.wasDispatched(args)).toBe(false)
+    expect(client.callTool.mock.calls.some(([request]) => request.name === "wait_for")).toBe(false)
+    void short
   })
 
   test("a closed page drops its uid map, listing baseline and dialog; a vanished page clears the map on read", async () => {
@@ -565,6 +583,20 @@ describe("WebMCP T2 dispatch", () => {
     const lost = { pageId: 1, uid: "1_1" }
     await expect(click.execute!(lost, options())).rejects.toThrow("transport closed")
     expect(WebMcpProfile.wasDispatched(lost)).toBe(true)
+    expect(WebMcpProfile.targetSummaryFor(profile, 1, "1_1")).toBeUndefined()
+    // A read whose page could not be looked up afterwards drops the previous
+    // map as well: the fresh snapshot was never recorded.
+    WebMcpProfile.recordSnapshot(profile, 1, WebMcpProfile.parseStructuredSnapshot(snapshotResult())!, PAGE)
+    const snapshot = await tool("take_snapshot", profile, client, grants)
+    calls = 0
+    client.callTool.mockImplementation(async (request: { name: string }) => {
+      calls += 1
+      if (request.name === "list_pages" && calls > 1) throw new Error("transport closed")
+      if (request.name === "list_pages")
+        return { content: [], structuredContent: { pages: [{ id: 1, url: PAGE, selected: true }] } }
+      return snapshotResult()
+    })
+    await expect(snapshot.execute!({ pageId: 1 }, options())).rejects.toThrow("transport closed")
     expect(WebMcpProfile.targetSummaryFor(profile, 1, "1_1")).toBeUndefined()
   })
 

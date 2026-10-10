@@ -4,6 +4,8 @@ import os from "node:os"
 import nodePath from "node:path"
 import z from "zod"
 import { Config } from "../config/config"
+import { Log } from "../util/log"
+import { toErrorMessage } from "../util/error-message"
 import { Filesystem } from "../util/filesystem"
 import { McpTrust } from "./trust"
 import { WebMcpProfile } from "./webmcp-profile"
@@ -27,6 +29,8 @@ function safeHomedir(): string {
  * bridge may still find a Chrome in a place this probe does not know.
  */
 export namespace WebMcpChrome {
+  const log = Log.create({ service: "webmcp-chrome" })
+
   export const Status = z.discriminatedUnion("state", [
     z.object({ state: z.literal("ready"), major: z.number().int().optional(), executable: z.string() }),
     z.object({ state: z.literal("outdated"), major: z.number().int(), minimum: z.number().int() }),
@@ -127,28 +131,35 @@ export namespace WebMcpChrome {
     return { state: "missing", minimum }
   }
 
-  /** Status for the Chrome a configured WebMCP bridge would launch. */
+  /**
+   * Status for the Chrome a configured WebMCP bridge would launch, or
+   * undefined when there is no launchable, policy-admitted, trusted bridge to
+   * probe. The probe is advisory: a config, policy or trust lookup that fails
+   * is logged and reads as "no status" (the chip then shows nothing and the
+   * connect reports the real failure) instead of failing the status route.
+   */
   export async function statusForServer(server: string): Promise<Status | undefined> {
-    const cfg = await Config.get()
-    const entry = cfg.mcp?.[server]
-    if (!entry || !("type" in entry) || entry.type !== "local" || !entry.webmcp) return undefined
-    // validateLaunch throws on an invalid profile (schema, environment
-    // overrides) — an advisory probe reports "not a launchable bridge"
-    // instead of rejecting into the route handler.
-    let profile: WebMcpProfile.Configuration | undefined
+    let executablePath: string | undefined
     try {
-      profile = WebMcpProfile.validateLaunch(entry)
-    } catch {
+      const cfg = await Config.get()
+      const entry = cfg.mcp?.[server]
+      if (!entry || !("type" in entry) || entry.type !== "local" || !entry.webmcp) return undefined
+      // validateLaunch throws on an invalid profile (schema, environment
+      // overrides): not a launchable bridge.
+      const profile = WebMcpProfile.validateLaunch(entry)
+      if (!profile || !WebMcpProfile.evaluate(cfg.webmcp, profile).ok) return undefined
+      // An advisory probe is still process execution. A project-supplied
+      // executable must pass the same config-source trust gate as MCP launch;
+      // fetching status is not an explicit connect/trust gesture.
+      if (profile.executablePath) {
+        const source = (await Config.mcpEntry(server))?.source ?? Config.trustedMcpSource("unknown")
+        if (!(await McpTrust.decision(server, entry, source)).trusted) return undefined
+      }
+      executablePath = profile.executablePath
+    } catch (error) {
+      log.warn("webmcp chrome probe skipped", { server, error: toErrorMessage(error) })
       return undefined
     }
-    if (!profile || !WebMcpProfile.evaluate(cfg.webmcp, profile).ok) return undefined
-    // An advisory probe is still process execution. A project-supplied
-    // executable must pass the same config-source trust gate as MCP launch;
-    // fetching status is not an explicit connect/trust gesture.
-    if (profile.executablePath) {
-      const source = (await Config.mcpEntry(server))?.source ?? Config.trustedMcpSource("unknown")
-      if (!(await McpTrust.decision(server, entry, source)).trusted) return undefined
-    }
-    return status(profile.executablePath)
+    return status(executablePath)
   }
 }
