@@ -1,8 +1,7 @@
 import z from "zod"
-import { Storage } from "../../storage/storage"
 import { QualityPromotionApprovalPolicyStore } from "./promotion-approval-policy-store"
 import { QualityPromotionReleasePolicy } from "./promotion-release-policy"
-import { QualityStorageKey } from "../storage-key"
+import { QualityScopedPolicyStore } from "./policy-store"
 
 export namespace QualityPromotionReleasePolicyStore {
   export const Scope = z.enum(["global", "project"])
@@ -30,22 +29,28 @@ export namespace QualityPromotionReleasePolicyStore {
   })
   export type Resolution = z.output<typeof Resolution>
 
-  const encode = QualityStorageKey.encode
-  const decode = QualityStorageKey.decode
+  const store = QualityScopedPolicyStore.create<PolicyRecord, QualityPromotionReleasePolicy.Policy>({
+    keyPrefix: "quality_model_release_policy",
+    scopeNoun: "release policies",
+    parseRecord: (raw) => PolicyRecord.parse(raw),
+    buildRecord: (scope, projectID, policy) =>
+      PolicyRecord.parse({
+        schemaVersion: 1,
+        kind: "ax-code-quality-promotion-release-policy-record",
+        scope,
+        projectID,
+        updatedAt: new Date().toISOString(),
+        policy,
+      }),
+  })
 
-  function requireProjectID(projectID: string | null | undefined) {
-    const normalized = projectID?.trim()
-    if (!normalized) throw new Error("projectID is required for project-scoped release policies")
-    return normalized
-  }
-
-  function globalKey() {
-    return ["quality_model_release_policy", "global"]
-  }
-
-  function projectKey(projectID: string) {
-    return ["quality_model_release_policy", "project", encode(projectID)]
-  }
+  export const getGlobal = store.getGlobal
+  export const getProject = store.getProject
+  export const setGlobal = store.setGlobal
+  export const setProject = store.setProject
+  export const clearGlobal = store.clearGlobal
+  export const clearProject = store.clearProject
+  export const list = store.list
 
   export function provenance(resolution: Resolution): QualityPromotionReleasePolicy.PolicyProvenance {
     return QualityPromotionReleasePolicy.PolicyProvenance.parse({
@@ -56,81 +61,6 @@ export namespace QualityPromotionReleasePolicyStore {
       persistedScope: resolution.record?.scope ?? null,
       persistedUpdatedAt: resolution.record?.updatedAt ?? null,
       digest: QualityPromotionReleasePolicy.digest(resolution.policy),
-    })
-  }
-
-  async function writeRecord(scope: Scope, policy: QualityPromotionReleasePolicy.Policy, projectID?: string | null) {
-    const normalizedProjectID = scope === "project" ? requireProjectID(projectID) : null
-    const next = PolicyRecord.parse({
-      schemaVersion: 1,
-      kind: "ax-code-quality-promotion-release-policy-record",
-      scope,
-      projectID: normalizedProjectID,
-      updatedAt: new Date().toISOString(),
-      policy,
-    })
-    const targetKey = scope === "project" ? projectKey(requireProjectID(normalizedProjectID)) : globalKey()
-    await Storage.write(targetKey, next)
-    return next
-  }
-
-  export async function getGlobal() {
-    try {
-      return PolicyRecord.parse(await Storage.read<unknown>(globalKey()))
-    } catch (err) {
-      if (Storage.NotFoundError.isInstance(err)) return
-      throw err
-    }
-  }
-
-  export async function getProject(projectID: string) {
-    try {
-      return PolicyRecord.parse(await Storage.read<unknown>(projectKey(requireProjectID(projectID))))
-    } catch (err) {
-      if (Storage.NotFoundError.isInstance(err)) return
-      throw err
-    }
-  }
-
-  export async function setGlobal(policy: QualityPromotionReleasePolicy.Policy) {
-    return writeRecord("global", policy, null)
-  }
-
-  export async function setProject(projectID: string, policy: QualityPromotionReleasePolicy.Policy) {
-    return writeRecord("project", policy, projectID)
-  }
-
-  export async function clearGlobal() {
-    await Storage.remove(globalKey())
-  }
-
-  export async function clearProject(projectID: string) {
-    await Storage.remove(projectKey(requireProjectID(projectID)))
-  }
-
-  export async function list() {
-    const keys = await Storage.list(["quality_model_release_policy"])
-    const records: PolicyRecord[] = []
-    for (const parts of keys) {
-      if (parts[1] === "global") {
-        const record = await getGlobal()
-        if (record) records.push(record)
-        continue
-      }
-      if (parts[1] !== "project") continue
-      const encodedProjectID = parts[2]
-      if (!encodedProjectID) continue
-      const projectID = decode(encodedProjectID)
-      if (!projectID) continue
-      const record = await getProject(projectID)
-      if (record) records.push(record)
-    }
-    return records.sort((a, b) => {
-      const byScope = a.scope.localeCompare(b.scope)
-      if (byScope !== 0) return byScope
-      const byProject = (a.projectID ?? "").localeCompare(b.projectID ?? "")
-      if (byProject !== 0) return byProject
-      return a.updatedAt.localeCompare(b.updatedAt)
     })
   }
 

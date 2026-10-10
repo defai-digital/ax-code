@@ -1,7 +1,6 @@
 import z from "zod"
-import { Storage } from "../../storage/storage"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
-import { QualityStorageKey } from "../storage-key"
+import { QualityScopedPolicyStore } from "./policy-store"
 
 export namespace QualityPromotionApprovalPolicyStore {
   export const Scope = z.enum(["global", "project"])
@@ -28,97 +27,28 @@ export namespace QualityPromotionApprovalPolicyStore {
   })
   export type Resolution = z.output<typeof Resolution>
 
-  const encode = QualityStorageKey.encode
-  const decode = QualityStorageKey.decode
+  const store = QualityScopedPolicyStore.create<PolicyRecord, QualityPromotionApprovalPolicy.Policy>({
+    keyPrefix: "quality_model_approval_policy",
+    scopeNoun: "approval policies",
+    parseRecord: (raw) => PolicyRecord.parse(raw),
+    buildRecord: (scope, projectID, policy) =>
+      PolicyRecord.parse({
+        schemaVersion: 1,
+        kind: "ax-code-quality-promotion-approval-policy-record",
+        scope,
+        projectID,
+        updatedAt: new Date().toISOString(),
+        policy,
+      }),
+  })
 
-  function requireProjectID(projectID: string | null | undefined) {
-    const normalized = projectID?.trim()
-    if (!normalized) throw new Error("projectID is required for project-scoped approval policies")
-    return normalized
-  }
-
-  function globalKey() {
-    return ["quality_model_approval_policy", "global"]
-  }
-
-  function projectKey(projectID: string) {
-    return ["quality_model_approval_policy", "project", encode(projectID)]
-  }
-
-  async function writeRecord(scope: Scope, policy: QualityPromotionApprovalPolicy.Policy, projectID?: string | null) {
-    const normalizedProjectID = scope === "project" ? requireProjectID(projectID) : null
-    const next = PolicyRecord.parse({
-      schemaVersion: 1,
-      kind: "ax-code-quality-promotion-approval-policy-record",
-      scope,
-      projectID: normalizedProjectID,
-      updatedAt: new Date().toISOString(),
-      policy,
-    })
-    const targetKey = scope === "project" ? projectKey(requireProjectID(normalizedProjectID)) : globalKey()
-    await Storage.write(targetKey, next)
-    return next
-  }
-
-  export async function getGlobal() {
-    try {
-      return PolicyRecord.parse(await Storage.read<unknown>(globalKey()))
-    } catch (err) {
-      if (Storage.NotFoundError.isInstance(err)) return
-      throw err
-    }
-  }
-
-  export async function getProject(projectID: string) {
-    try {
-      return PolicyRecord.parse(await Storage.read<unknown>(projectKey(requireProjectID(projectID))))
-    } catch (err) {
-      if (Storage.NotFoundError.isInstance(err)) return
-      throw err
-    }
-  }
-
-  export async function setGlobal(policy: QualityPromotionApprovalPolicy.Policy) {
-    return writeRecord("global", policy, null)
-  }
-
-  export async function setProject(projectID: string, policy: QualityPromotionApprovalPolicy.Policy) {
-    return writeRecord("project", policy, projectID)
-  }
-
-  export async function clearGlobal() {
-    await Storage.remove(globalKey())
-  }
-
-  export async function clearProject(projectID: string) {
-    await Storage.remove(projectKey(requireProjectID(projectID)))
-  }
-
-  export async function list() {
-    const keys = await Storage.list(["quality_model_approval_policy"])
-    const records: PolicyRecord[] = []
-    for (const parts of keys) {
-      if (parts[1] === "global") {
-        const record = await getGlobal()
-        if (record) records.push(record)
-        continue
-      }
-      if (parts[1] !== "project") continue
-      const encodedProjectID = parts[2]
-      if (!encodedProjectID) continue
-      const projectID = decode(encodedProjectID)
-      if (!projectID) continue
-      const record = await getProject(projectID)
-      if (record) records.push(record)
-    }
-    return records.sort((a, b) => {
-      const byScope = a.scope.localeCompare(b.scope)
-      if (byScope !== 0) return byScope
-      const byProject = (a.projectID ?? "").localeCompare(b.projectID ?? "")
-      if (byProject !== 0) return byProject
-      return a.updatedAt.localeCompare(b.updatedAt)
-    })
-  }
+  export const getGlobal = store.getGlobal
+  export const getProject = store.getProject
+  export const setGlobal = store.setGlobal
+  export const setProject = store.setProject
+  export const clearGlobal = store.clearGlobal
+  export const clearProject = store.clearProject
+  export const list = store.list
 
   export async function resolve(input?: {
     projectID?: string | null
@@ -177,20 +107,13 @@ export namespace QualityPromotionApprovalPolicyStore {
   function pushPolicy(lines: string[], policy: QualityPromotionApprovalPolicy.Policy) {
     const formatWeights = (weights: QualityPromotionApprovalPolicy.ApprovalConcentrationWeights) =>
       `approver:${weights.approver},team:${weights.team},reporting_chain:${weights.reportingChain}`
+    const formatRule = (label: string, rule: QualityPromotionApprovalPolicy.Policy["rules"]["none"]) =>
+      `- ${label}: approvals=${rule.minimumApprovals}; role=${rule.minimumRole ?? "none"}; distinct=${rule.requireDistinctApprovers}; independent=${rule.requireIndependentReviewer}; fresh=${rule.requirePriorApproverExclusion}; overlap_cap=${rule.maxPriorApproverOverlapRatio ?? "none"}; carryover_budget=${rule.reviewerCarryoverBudget ?? "none"}; carryover_lookback=${rule.reviewerCarryoverLookbackPromotions ?? "none"}; team_carryover_budget=${rule.teamCarryoverBudget ?? "none"}; team_carryover_lookback=${rule.teamCarryoverLookbackPromotions ?? "none"}; reporting_chain_overlap_cap=${rule.maxPriorReportingChainOverlapRatio ?? "none"}; reporting_chain_carryover_budget=${rule.reportingChainCarryoverBudget ?? "none"}; reporting_chain_carryover_lookback=${rule.reportingChainCarryoverLookbackPromotions ?? "none"}; cohort_diversity=${rule.requireRoleCohortDiversity}; min_cohorts=${rule.minimumDistinctRoleCohorts ?? "none"}; team_diversity=${rule.requireReviewerTeamDiversity}; min_teams=${rule.minimumDistinctReviewerTeams ?? "none"}; reporting_chain_diversity=${rule.requireReportingChainDiversity}; min_reporting_chains=${rule.minimumDistinctReportingChains ?? "none"}; concentration_budget=${rule.approvalConcentrationBudget ?? "none"}; concentration_preset=${rule.approvalConcentrationPreset ?? "none"}; concentration_weights=${formatWeights(rule.approvalConcentrationWeights)}`
     lines.push("")
     lines.push("Rules:")
-    lines.push(
-      `- none: approvals=${policy.rules.none.minimumApprovals}; role=${policy.rules.none.minimumRole ?? "none"}; distinct=${policy.rules.none.requireDistinctApprovers}; independent=${policy.rules.none.requireIndependentReviewer}; fresh=${policy.rules.none.requirePriorApproverExclusion}; overlap_cap=${policy.rules.none.maxPriorApproverOverlapRatio ?? "none"}; carryover_budget=${policy.rules.none.reviewerCarryoverBudget ?? "none"}; carryover_lookback=${policy.rules.none.reviewerCarryoverLookbackPromotions ?? "none"}; team_carryover_budget=${policy.rules.none.teamCarryoverBudget ?? "none"}; team_carryover_lookback=${policy.rules.none.teamCarryoverLookbackPromotions ?? "none"}; reporting_chain_overlap_cap=${policy.rules.none.maxPriorReportingChainOverlapRatio ?? "none"}; reporting_chain_carryover_budget=${policy.rules.none.reportingChainCarryoverBudget ?? "none"}; reporting_chain_carryover_lookback=${policy.rules.none.reportingChainCarryoverLookbackPromotions ?? "none"}; cohort_diversity=${policy.rules.none.requireRoleCohortDiversity}; min_cohorts=${policy.rules.none.minimumDistinctRoleCohorts ?? "none"}; team_diversity=${policy.rules.none.requireReviewerTeamDiversity}; min_teams=${policy.rules.none.minimumDistinctReviewerTeams ?? "none"}; reporting_chain_diversity=${policy.rules.none.requireReportingChainDiversity}; min_reporting_chains=${policy.rules.none.minimumDistinctReportingChains ?? "none"}; concentration_budget=${policy.rules.none.approvalConcentrationBudget ?? "none"}; concentration_preset=${policy.rules.none.approvalConcentrationPreset ?? "none"}; concentration_weights=${formatWeights(policy.rules.none.approvalConcentrationWeights)}`,
-    )
-    lines.push(
-      `- allow_warn: approvals=${policy.rules.allow_warn.minimumApprovals}; role=${policy.rules.allow_warn.minimumRole ?? "none"}; distinct=${policy.rules.allow_warn.requireDistinctApprovers}; independent=${policy.rules.allow_warn.requireIndependentReviewer}; fresh=${policy.rules.allow_warn.requirePriorApproverExclusion}; overlap_cap=${policy.rules.allow_warn.maxPriorApproverOverlapRatio ?? "none"}; carryover_budget=${policy.rules.allow_warn.reviewerCarryoverBudget ?? "none"}; carryover_lookback=${policy.rules.allow_warn.reviewerCarryoverLookbackPromotions ?? "none"}; team_carryover_budget=${policy.rules.allow_warn.teamCarryoverBudget ?? "none"}; team_carryover_lookback=${policy.rules.allow_warn.teamCarryoverLookbackPromotions ?? "none"}; reporting_chain_overlap_cap=${policy.rules.allow_warn.maxPriorReportingChainOverlapRatio ?? "none"}; reporting_chain_carryover_budget=${policy.rules.allow_warn.reportingChainCarryoverBudget ?? "none"}; reporting_chain_carryover_lookback=${policy.rules.allow_warn.reportingChainCarryoverLookbackPromotions ?? "none"}; cohort_diversity=${policy.rules.allow_warn.requireRoleCohortDiversity}; min_cohorts=${policy.rules.allow_warn.minimumDistinctRoleCohorts ?? "none"}; team_diversity=${policy.rules.allow_warn.requireReviewerTeamDiversity}; min_teams=${policy.rules.allow_warn.minimumDistinctReviewerTeams ?? "none"}; reporting_chain_diversity=${policy.rules.allow_warn.requireReportingChainDiversity}; min_reporting_chains=${policy.rules.allow_warn.minimumDistinctReportingChains ?? "none"}; concentration_budget=${policy.rules.allow_warn.approvalConcentrationBudget ?? "none"}; concentration_preset=${policy.rules.allow_warn.approvalConcentrationPreset ?? "none"}; concentration_weights=${formatWeights(policy.rules.allow_warn.approvalConcentrationWeights)}`,
-    )
-    lines.push(
-      `- force: approvals=${policy.rules.force.minimumApprovals}; role=${policy.rules.force.minimumRole ?? "none"}; distinct=${policy.rules.force.requireDistinctApprovers}; independent=${policy.rules.force.requireIndependentReviewer}; fresh=${policy.rules.force.requirePriorApproverExclusion}; overlap_cap=${policy.rules.force.maxPriorApproverOverlapRatio ?? "none"}; carryover_budget=${policy.rules.force.reviewerCarryoverBudget ?? "none"}; carryover_lookback=${policy.rules.force.reviewerCarryoverLookbackPromotions ?? "none"}; team_carryover_budget=${policy.rules.force.teamCarryoverBudget ?? "none"}; team_carryover_lookback=${policy.rules.force.teamCarryoverLookbackPromotions ?? "none"}; reporting_chain_overlap_cap=${policy.rules.force.maxPriorReportingChainOverlapRatio ?? "none"}; reporting_chain_carryover_budget=${policy.rules.force.reportingChainCarryoverBudget ?? "none"}; reporting_chain_carryover_lookback=${policy.rules.force.reportingChainCarryoverLookbackPromotions ?? "none"}; cohort_diversity=${policy.rules.force.requireRoleCohortDiversity}; min_cohorts=${policy.rules.force.minimumDistinctRoleCohorts ?? "none"}; team_diversity=${policy.rules.force.requireReviewerTeamDiversity}; min_teams=${policy.rules.force.minimumDistinctReviewerTeams ?? "none"}; reporting_chain_diversity=${policy.rules.force.requireReportingChainDiversity}; min_reporting_chains=${policy.rules.force.minimumDistinctReportingChains ?? "none"}; concentration_budget=${policy.rules.force.approvalConcentrationBudget ?? "none"}; concentration_preset=${policy.rules.force.approvalConcentrationPreset ?? "none"}; concentration_weights=${formatWeights(policy.rules.force.approvalConcentrationWeights)}`,
-    )
-    lines.push(
-      `- reentry: approvals=${policy.rules.reentry.minimumApprovals}; role=${policy.rules.reentry.minimumRole ?? "none"}; distinct=${policy.rules.reentry.requireDistinctApprovers}; independent=${policy.rules.reentry.requireIndependentReviewer}; fresh=${policy.rules.reentry.requirePriorApproverExclusion}; overlap_cap=${policy.rules.reentry.maxPriorApproverOverlapRatio ?? "none"}; carryover_budget=${policy.rules.reentry.reviewerCarryoverBudget ?? "none"}; carryover_lookback=${policy.rules.reentry.reviewerCarryoverLookbackPromotions ?? "none"}; team_carryover_budget=${policy.rules.reentry.teamCarryoverBudget ?? "none"}; team_carryover_lookback=${policy.rules.reentry.teamCarryoverLookbackPromotions ?? "none"}; reporting_chain_overlap_cap=${policy.rules.reentry.maxPriorReportingChainOverlapRatio ?? "none"}; reporting_chain_carryover_budget=${policy.rules.reentry.reportingChainCarryoverBudget ?? "none"}; reporting_chain_carryover_lookback=${policy.rules.reentry.reportingChainCarryoverLookbackPromotions ?? "none"}; cohort_diversity=${policy.rules.reentry.requireRoleCohortDiversity}; min_cohorts=${policy.rules.reentry.minimumDistinctRoleCohorts ?? "none"}; team_diversity=${policy.rules.reentry.requireReviewerTeamDiversity}; min_teams=${policy.rules.reentry.minimumDistinctReviewerTeams ?? "none"}; reporting_chain_diversity=${policy.rules.reentry.requireReportingChainDiversity}; min_reporting_chains=${policy.rules.reentry.minimumDistinctReportingChains ?? "none"}; concentration_budget=${policy.rules.reentry.approvalConcentrationBudget ?? "none"}; concentration_preset=${policy.rules.reentry.approvalConcentrationPreset ?? "none"}; concentration_weights=${formatWeights(policy.rules.reentry.approvalConcentrationWeights)}`,
-    )
+    for (const key of ["none", "allow_warn", "force", "reentry"] as const) {
+      lines.push(formatRule(key, policy.rules[key]))
+    }
   }
 
   export function renderStoredPolicy(record: PolicyRecord) {
