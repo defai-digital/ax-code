@@ -55,7 +55,7 @@ export namespace Ssrf {
   }
 
   function isRedirect(status: number) {
-    return status >= 300 && status < 400
+    return status === 301 || status === 302 || status === 303 || status === 307 || status === 308
   }
 
   function redirectInit(init: PinnedFetchInit | undefined, status: number, crossOrigin: boolean): PinnedFetchInit {
@@ -72,8 +72,11 @@ export namespace Ssrf {
     }
 
     const next: PinnedFetchInit = { ...init, headers, redirect: "manual" }
-    const method = init?.method?.toUpperCase()
-    if (status === 303 || ((status === 301 || status === 302) && method && method !== "GET" && method !== "HEAD")) {
+    const method = init?.method?.toUpperCase() ?? "GET"
+    if (
+      (status === 303 && method !== "GET" && method !== "HEAD") ||
+      ((status === 301 || status === 302) && method === "POST")
+    ) {
       next.method = "GET"
       delete next.body
       headers.delete("content-length")
@@ -211,6 +214,9 @@ export namespace Ssrf {
     const { secure } = input
     const method = input.init?.method ?? "GET"
     const body = requestBody(input.init)
+    if (body !== undefined && (method.toUpperCase() === "GET" || method.toUpperCase() === "HEAD")) {
+      throw new TypeError("ssrf: GET/HEAD requests cannot have a body")
+    }
     const requestHeaders = Object.fromEntries(input.headers.entries())
 
     return new Promise<Response>((resolve, reject) => {
@@ -225,27 +231,47 @@ export namespace Ssrf {
         headers: requestHeaders,
         ...(servername ? { servername } : {}),
       }
+      const signal = input.init?.signal
+      const cleanup = () => signal?.removeEventListener("abort", onAbort)
+      const onAbort = () => {
+        const reason = signal?.reason ?? new DOMException("The operation was aborted", "AbortError")
+        cleanup()
+        req.destroy(reason instanceof Error ? reason : new Error(String(reason)))
+        reject(reason)
+      }
       const onResponse = (res: http.IncomingMessage) => {
-        const webBody = Readable.toWeb(res) as ReadableStream<Uint8Array>
-        resolve(
-          new Response(webBody, {
-            status: res.statusCode ?? 0,
+        res.once("end", cleanup)
+        res.once("close", cleanup)
+        res.once("error", cleanup)
+        try {
+          const status = res.statusCode ?? 0
+          const empty = method.toUpperCase() === "HEAD" || status === 204 || status === 205 || status === 304
+          const webBody = empty ? null : (Readable.toWeb(res) as ReadableStream<Uint8Array>)
+          const response = new Response(webBody, {
+            status,
             statusText: res.statusMessage,
             headers: responseHeaders(res.headers),
-          }),
-        )
+          })
+          if (empty) res.resume()
+          resolve(response)
+        } catch (error) {
+          cleanup()
+          res.destroy()
+          req.destroy()
+          reject(error)
+        }
       }
       const req = secure ? https.request(options, onResponse) : http.request(options, onResponse)
 
-      req.on("error", reject)
-      input.init?.signal?.addEventListener(
-        "abort",
-        () => {
-          req.destroy(input.init?.signal?.reason)
-          reject(input.init?.signal?.reason ?? new DOMException("The operation was aborted", "AbortError"))
-        },
-        { once: true },
-      )
+      req.on("error", (error) => {
+        cleanup()
+        reject(error)
+      })
+      signal?.addEventListener("abort", onAbort, { once: true })
+      if (signal?.aborted) {
+        onAbort()
+        return
+      }
 
       if (body === undefined || method.toUpperCase() === "GET" || method.toUpperCase() === "HEAD") {
         req.end()
@@ -263,6 +289,7 @@ export namespace Ssrf {
         req.end(body.toString())
         return
       }
+      cleanup()
       reject(new TypeError(`ssrf: unsupported ${secure ? "HTTPS" : "HTTP"} pinned fetch body type`))
       req.destroy()
     })
@@ -478,8 +505,12 @@ export namespace Ssrf {
       const response = await pinnedFetchOnce(currentUrl, currentInit, label, fetchFn, dnsResolveFn, localOrigin)
       if (!isRedirect(response.status)) return response
       if (redirectMode === "manual") return response
-      if (redirectMode === "error") throw new Error(`${label}: redirect refused: ${currentUrl}`)
+      if (redirectMode === "error") {
+        await response.body?.cancel()
+        throw new Error(`${label}: redirect refused: ${currentUrl}`)
+      }
       if (redirectCount === MAX_REDIRECTS) {
+        await response.body?.cancel()
         throw new Error(`${label}: too many redirects while fetching: ${url}`)
       }
 

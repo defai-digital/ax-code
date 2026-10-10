@@ -1,10 +1,66 @@
 import { expect, test, vi } from "vitest"
 import https from "node:https"
+import http from "node:http"
 import { EventEmitter } from "node:events"
+import { getEventListeners } from "node:events"
 import { Readable } from "node:stream"
 
 const ssrfModule = "../../src/util/ssrf.ts" + "?ssrf-unit"
 const { Ssrf } = (await import(ssrfModule)) as typeof import("../../src/util/ssrf")
+
+test.each([
+  ["GET", 204],
+  ["GET", 205],
+  ["GET", 304],
+  ["HEAD", 200],
+] as const)("pinned HTTPS %s %s returns a null body", async (method, status) => {
+  const request = vi.spyOn(https, "request").mockImplementation((...args: unknown[]) => {
+    const callback = args[1] as (response: http.IncomingMessage) => void
+    const req = new EventEmitter() as EventEmitter & { end(): void; destroy(): void }
+    req.end = () => {
+      const res = Object.assign(Readable.from([]), { statusCode: status, statusMessage: "OK", headers: {} })
+      callback(res as http.IncomingMessage)
+    }
+    req.destroy = () => {}
+    return req as ReturnType<typeof https.request>
+  })
+  try {
+    const response = await Ssrf.pinnedFetch("https://93.184.216.34/empty", { method })
+    expect(response.status).toBe(status)
+    expect(response.body).toBeNull()
+    expect(await response.text()).toBe("")
+  } finally {
+    request.mockRestore()
+  }
+})
+
+test("completed pinned HTTPS requests release their shared abort listener", async () => {
+  const controller = new AbortController()
+  const baseline = getEventListeners(controller.signal, "abort").length
+  const request = vi.spyOn(https, "request").mockImplementation((...args: unknown[]) => {
+    const callback = args[1] as (response: http.IncomingMessage) => void
+    const req = new EventEmitter() as EventEmitter & { end(): void; destroy(): void }
+    req.end = () => {
+      const res = Object.assign(Readable.from([Buffer.from("ok")]), {
+        statusCode: 200,
+        statusMessage: "OK",
+        headers: {},
+      })
+      callback(res as http.IncomingMessage)
+    }
+    req.destroy = () => {}
+    return req as ReturnType<typeof https.request>
+  })
+  try {
+    for (let index = 0; index < 12; index++) {
+      const response = await Ssrf.pinnedFetch("https://93.184.216.34/body", { signal: controller.signal })
+      expect(await response.text()).toBe("ok")
+      expect(getEventListeners(controller.signal, "abort")).toHaveLength(baseline)
+    }
+  } finally {
+    request.mockRestore()
+  }
+})
 
 test("pinnedFetch rejects non-http redirect targets before following them", async () => {
   // Use injected DNS and fetch functions so this unit test never opens a socket.
@@ -120,6 +176,82 @@ test("pinnedFetch omits TLS servername for HTTPS IP literals", async () => {
     expect(seenOptions?.hostname).toBe("93.184.216.34")
     expect(seenOptions?.servername).toBeUndefined()
     expect(new Headers(seenOptions?.headers as HeadersInit).get("host")).toBe("93.184.216.34")
+  } finally {
+    request.mockRestore()
+  }
+})
+
+test("pinned HTTP abort remains active while the response body is streaming", async () => {
+  const server = http.createServer((_request, response) => {
+    response.writeHead(200)
+    response.write("first chunk")
+  })
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+  const address = server.address() as import("node:net").AddressInfo
+  const origin = `http://127.0.0.1:${address.port}`
+  const controller = new AbortController()
+  try {
+    const response = await Ssrf.pinnedLoopbackFetch(origin, origin, { signal: controller.signal })
+    expect(getEventListeners(controller.signal, "abort")).toHaveLength(1)
+    const body = response.text()
+    controller.abort(new Error("stop body"))
+    await expect(body).rejects.toThrow()
+    expect(getEventListeners(controller.signal, "abort")).toHaveLength(0)
+  } finally {
+    server.closeAllConnections()
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+  }
+})
+
+test.each([
+  [301, "PUT", "PUT"],
+  [302, "DELETE", "DELETE"],
+  [303, "HEAD", "HEAD"],
+  [301, "POST", "GET"],
+  [303, "PUT", "GET"],
+] as const)("redirect %s preserves the correct method for %s", async (status, method, expected) => {
+  const requests: RequestInit[] = []
+  const fetchFn: NonNullable<Parameters<typeof Ssrf.pinnedFetch>[2]> = async (_url, init) => {
+    requests.push(init!)
+    return requests.length === 1
+      ? new Response(null, { status, headers: { location: "/next" } })
+      : new Response(null, { status: 200 })
+  }
+  const body = method === "HEAD" ? undefined : "payload"
+  await Ssrf.pinnedFetch("https://93.184.216.34/start", { method, body }, fetchFn)
+  expect(requests[1].method).toBe(expected)
+  expect(requests[1].body).toBe(expected === "GET" ? undefined : body)
+})
+
+test("304 is returned even when redirects are refused", async () => {
+  const fetchFn: NonNullable<Parameters<typeof Ssrf.pinnedFetch>[2]> = async () => new Response(null, { status: 304 })
+  const response = await Ssrf.pinnedFetch("https://93.184.216.34/cache", { redirect: "error" }, fetchFn)
+  expect(response.status).toBe(304)
+})
+
+test("refused redirects cancel the unreturned response body", async () => {
+  const cancel = vi.fn()
+  const fetchFn: NonNullable<Parameters<typeof Ssrf.pinnedFetch>[2]> = async () =>
+    new Response(new ReadableStream({ cancel }), { status: 302, headers: { location: "/next" } })
+  await expect(Ssrf.pinnedFetch("https://93.184.216.34/start", { redirect: "error" }, fetchFn)).rejects.toThrow(
+    "redirect refused",
+  )
+  expect(cancel).toHaveBeenCalledTimes(1)
+})
+
+test.each(["GET", "HEAD"])("pinned %s rejects a body before opening a request", async (method) => {
+  const request = vi.spyOn(https, "request").mockImplementation(() => {
+    throw new Error("unexpected request")
+  })
+  try {
+    await expect(
+      Ssrf.pinnedFetch("https://93.184.216.34/body", {
+        method,
+        body: "hello",
+        headers: { "content-length": "5" },
+      }),
+    ).rejects.toThrow("GET/HEAD requests cannot have a body")
+    expect(request).not.toHaveBeenCalled()
   } finally {
     request.mockRestore()
   }
