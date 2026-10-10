@@ -1355,6 +1355,12 @@ export namespace Session {
           ? Math.max(0, safe(inputTokens - cacheReadInputTokens - cacheWriteInputTokens))
           : safe(inputTokens)
 
+      // Structured SDK/provider output totals include reasoning. Store only
+      // the remaining completion tokens in output so consumers can sum the
+      // disjoint components without counting reasoning twice. Flat legacy
+      // usage retains its historical separate output/reasoning semantics.
+      const adjustedOutputTokens = outputTokenDetails ? Math.max(0, outputTokens - reasoningTokens) : outputTokens
+
       const rawTotal = structuredDetails
         ? usage.totalTokens
         : anthropicMeta
@@ -1362,13 +1368,13 @@ export namespace Session {
           : usage.totalTokens
       const reportedTotal = rawTotal != null ? safe(rawTotal) : undefined
       const componentTotal =
-        adjustedInputTokens + outputTokens + reasoningTokens + cacheReadInputTokens + cacheWriteInputTokens
+        adjustedInputTokens + adjustedOutputTokens + reasoningTokens + cacheReadInputTokens + cacheWriteInputTokens
       const total = Math.max(reportedTotal ?? 0, componentTotal)
 
       const tokens = {
         total,
         input: adjustedInputTokens,
-        output: outputTokens,
+        output: adjustedOutputTokens,
         reasoning: reasoningTokens,
         cache: {
           write: cacheWriteInputTokens,

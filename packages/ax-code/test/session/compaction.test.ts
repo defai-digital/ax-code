@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from "vitest"
 import path from "path"
 import { writeFile } from "node:fs/promises"
 import { SessionCompaction } from "../../src/session/compaction"
+import { effectiveTokenTotal } from "../../src/session/compaction-budget"
 import { Token } from "../../src/util/token"
 import { Instance } from "../../src/project/instance"
 import { Log } from "../../src/util/log"
@@ -1234,6 +1235,41 @@ describe("session.getUsage", () => {
     expect(result.tokens.cache.read).toBe(200)
     expect(result.tokens.cache.write).toBe(0)
     expect(result.tokens.total).toBe(1700)
+  })
+
+  test.each([
+    {
+      name: "AI SDK v6",
+      usage: {
+        inputTokens: 1000,
+        inputTokenDetails: { noCacheTokens: 800, cacheReadTokens: 200, cacheWriteTokens: 0 },
+        outputTokens: 500,
+        outputTokenDetails: { textTokens: 400, reasoningTokens: 100 },
+        reasoningTokens: 100,
+        totalTokens: 1500,
+      },
+    },
+    {
+      name: "raw V3 provider",
+      usage: {
+        inputTokens: { total: 1000, noCache: 800, cacheRead: 200, cacheWrite: 0 },
+        outputTokens: { total: 500, text: 400, reasoning: 100 },
+      },
+    },
+  ])("counts structured reasoning once for $name usage", ({ usage }) => {
+    const result = Session.getUsage({
+      model: createModel({ context: 100_000, output: 32_000 }),
+      usage: usage as Parameters<typeof Session.getUsage>[0]["usage"],
+    })
+    expect(result.source).toBe("exact")
+    expect(result.tokens).toEqual({
+      input: 800,
+      output: 400,
+      reasoning: 100,
+      cache: { read: 200, write: 0 },
+      total: 1500,
+    })
+    expect(effectiveTokenTotal(result.tokens)).toBe(1500)
   })
 
   test("does not double-count Anthropic cache for AI SDK v6 usage", () => {
