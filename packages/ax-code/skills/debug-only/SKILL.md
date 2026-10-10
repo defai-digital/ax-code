@@ -14,6 +14,8 @@ Diagnose the issue described in $ARGUMENTS. **Do not modify any files.**
 - Capture the concrete failure signal before diagnosing: command/action, input, observed output/error, and expected behavior.
 - If the symptom cannot be reproduced from available context, continue only as an investigation and label every suspected cause as unconfirmed.
 
+For UI symptoms: when a read-capable WebMCP bridge is connected, read T1 evidence — a11y snapshot, console errors, failed-request metadata, plus a screenshot for visual symptoms — only from pages the user has already opened and authorized. Do not open, navigate, or refresh pages, interact (T2), or freeze scenarios in this read-only workflow. If reproduction needs interaction, ask the user to perform it; otherwise classify as not reproduced or BLOCKED. If a read grant is denied, fall back to static tracing and record the missing evidence.
+
 ## Bug Reality Gate
 
 Classify the investigation before reporting a root cause:

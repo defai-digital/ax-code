@@ -206,8 +206,9 @@ fails:
    For asynchronous state, wait; never repeat the triggering action.
 4. Verdict: PASS, FAIL, or BLOCKED with the missing capability named. A tool
    acknowledgement is not proof of application success.
-5. If the failure is reproducible, freeze it as a `browser_workflow` scenario
-   (below) so the fix is verified by running the same frozen assertions twice.
+5. If the localhost failure can be expressed as a structured assertion, freeze
+   it as a `browser_workflow` scenario (below), record the failing control, and
+   run the same hash twice after the fix.
 
 ## Reproduce and verify a development change
 

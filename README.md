@@ -88,6 +88,12 @@ AX Code can work with live web pages through [WebMCP](https://webmachinelearning
 
 In the terminal UI, click the **WebMCP** chip in the sidebar footer, or the same chip on the Home prompt footer. That click is the consent: the browser starts then, on a fresh profile. Click the chip again to turn the bridge off.
 
+With the bridge connected, prompts like these put it to work — navigation, reads, and interactions remain subject to runtime approval and any scopes you explicitly saved:
+
+- `Verify the login-form change at http://localhost:3000 through the WebMCP bridge.`
+- `Debug why the dashboard at http://localhost:5173 renders blank — read the console errors and failed request metadata through the WebMCP bridge.`
+- `Freeze a browser scenario for the search flow with browser_workflow, record a failing assertion on the clean base, then run Arena implement mode with that scenario.` Arena still requires a failing control plus two passing runs per candidate and never merges automatically.
+
 Enable steps, approval tiers, and limits are in [WebMCP browser bridge](docs/guides/webmcp-bridge.md). Codex and ChatGPT Work document their built-in browser's version of the same standard as [site tools](https://learn.chatgpt.com/docs/webmcp). Read that page when you want to compare how another product turns WebMCP on and how a site registers tools.
 
 ## Standard and Business

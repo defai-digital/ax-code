@@ -22,6 +22,8 @@ Implement the change described in $ARGUMENTS and treat "done" as observed proof,
   - **Already passing**: stop and ask — do not "fix" a green path unless the user wants a refactor.
 - Do not start the production edit until the before-signal is captured.
 
+For a localhost web UI change whose expected behavior can be expressed as a structured assertion: when a read-capable WebMCP bridge is connected, freeze a `browser_workflow` scenario before editing and run it once to record a real failing assertion (`unknown` does not qualify); after editing, run the same hash twice on the same final content — reuse the hash, never re-freeze. Layout, canvas, and purely visual changes are not expressible this way; keep the normal probe. If the bridge is not connected or the flow cannot be frozen (for example it requires sign-in), keep the standard before/after probe. Existing approvals apply unchanged.
+
 ## Phase 3 - Minimal edit
 
 - Change only what the request requires.

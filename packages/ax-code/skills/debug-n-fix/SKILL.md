@@ -13,6 +13,10 @@ Diagnose and fix the issue described in $ARGUMENTS.
 2. **Bug reality gate**: capture the concrete failure signal before diagnosing: command/action, input, observed output/error, and expected behavior.
 3. **Root cause**: confirm the exact file, line, and condition. State the root cause explicitly before moving to Phase 2.
 
+For UI symptoms (misrendering, dead controls, blank pages, console errors, failed requests): when a read-capable WebMCP bridge is connected, capture the T1 evidence triad on the authorized page — a11y snapshot, console errors, and failed-request metadata — as the concrete failure signal before static reading. Use a screenshot as additional evidence for visual symptoms; it does not replace the structured snapshot. Never replay an action whose completion is uncertain just to gather evidence; read current state instead. If a read grant is denied, fall back to static tracing and record the missing evidence.
+
+For a reproducible localhost UI bug whose failure can be expressed as a structured assertion, prefer `browser_workflow` when available: freeze the scenario with a failing assertion control, fix, then run the same hash twice. Existing approvals apply unchanged.
+
 Build a small repeatable feedback loop that fails on the reported symptom and
 can pass after the fix: a focused test, CLI fixture, request replay, or bounded
 runtime probe. Record the input, environment, expected behavior, and actual

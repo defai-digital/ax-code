@@ -29,6 +29,10 @@ Prefer semantic snapshots for text, locators and assertions. Use screenshots for
 
 After UI or URL changes, refresh the snapshot before targeting elements. Verify the expected outcome with an available observation; a tool acknowledgement is not proof of application success. Wait for asynchronous state instead of repeating the action that triggered it.
 
+## Investigate a failure
+
+Capture a baseline before acting: a fresh snapshot plus the console errors and failed-request metadata around the target. Act once, then read the same signals again and compare the delta. Use `wait_for` for asynchronous state instead of repeating the triggering action, and handle a blocking dialog before refreshing a snapshot. A delta that shows no change is evidence — narrow the cause from it instead of escalating to repeated actions.
+
 ## Recover without duplicating actions
 
 - Retry once only when a host grant result explicitly requests a retry before dispatch. Successful reads may already include approval continuation; do not repeat them just because permission was granted.
