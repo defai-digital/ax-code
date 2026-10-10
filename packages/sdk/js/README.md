@@ -22,6 +22,12 @@ Requires **Node.js 26+** (or Deno with Node compatibility). Older Node.js versio
 
 The workspace package name `@ax-code/sdk` is private to this monorepo. Public consumers always install `@defai-digital/ax-code-sdk` from JSR.
 
+## Report API migration
+
+AX Code 7.24.1 replaces the DRE graph report with Run Report. Report integrations must use `ax-code run-report` and the `/run-report` HTTP routes; the old `dre-graph` command and `/dre-graph` routes are removed. Generated SDK operations are now `getRunReportSessionSessionId` and `getRunReportSessionSessionIdFingerprint`, replacing the corresponding `getDreGraph` operations.
+
+Upgrade the report integration and runtime together. Other integration surfaces still require their own runtime capability checks.
+
 ## Choose an integration surface
 
 | Need                        | Use                                           | Why                                                                                     |

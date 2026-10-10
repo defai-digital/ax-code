@@ -6,15 +6,12 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
-### Changed
-
-- **Breaking:** rename the DRE graph web report to Run Report. The CLI command is now `ax-code run-report`, the HTTP routes are `/run-report` and `/run-report/session/{sessionID}[/fingerprint]` (the `/dre-graph` routes are removed), the TUI command ids are `session.report.web` and `session.execution.graph`, and the SDK operations are regenerated accordingly. Consumers that proxy or call `/dre-graph` must switch to `/run-report`.
-- Share one event-log decode across the run report loaders (about 2.5x faster on large sessions).
-
 ## [7.24.1] - 2026-10-10
 
 ### Changed
 
+- **Breaking:** rename the DRE graph web report to Run Report. The CLI command is now `ax-code run-report`, the HTTP routes are `/run-report` and `/run-report/session/{sessionID}[/fingerprint]` (the `/dre-graph` routes are removed), the TUI command ids are `session.report.web` and `session.execution.graph`, and the SDK operations are regenerated accordingly. Consumers that proxy or call `/dre-graph` must switch to `/run-report`.
+- Share one event-log decode across the run report loaders (about 2.5x faster on large sessions).
 - Publish SDK 2.6.4 alongside AX Code 7.24.1.
 - Update the AX TUI consumer to 1.0.4 and improve WebMCP prompts and debugging guidance.
 - Share pinned HTTP transport, workflow options, signed-archive evidence, and decision promotion guards.
@@ -27,7 +24,7 @@ changes belong to AX Coder.
 - Recover download progress after malformed JSON, preserve UTF-8 across output chunks, and bound download lines, summaries, and diagnostic transcripts.
 - Avoid lost updates in concurrent download size measurements and recheck managed copies under the reclaim lock.
 - Add a fast path for the CLI version flag and aggregate stats usage in SQLite without full CLI bootstrap.
-- Decode each session event log once across the DRE graph page projections within a request.
+- Decode each session event log once across the Run Report page projections within a request.
 
 ## [7.24.0] - 2026-10-09
 
