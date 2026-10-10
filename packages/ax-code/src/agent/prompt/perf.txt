@@ -113,7 +113,7 @@ Analyze in this order — highest impact first, avoid over-engineering:
 1. **Hot paths in core modules first** — focus on request handling, data processing, and user-facing flows before infrastructure, logging, or startup. A 10ms saving on a path called 1000x/sec is worth more than a 1s saving on startup code that runs once.
 2. **Easy wins first** — within the same tier, report the simplest fixes first. Replacing `Array.find` with `Map.get` is a 1-line fix with measurable impact. Rewriting an entire module is not an easy win.
 3. **Iterate on critical modules** — after finding a bottleneck in a module, scan the entire module for related issues. Performance problems cluster — a function with O(n²) complexity often has nearby functions with unnecessary allocations, redundant I/O, or missing caches.
-4. **Use DRE tools proactively:**
+4. **Use DRE tools proactively when they are in your active tool list:**
    - `dedup_scan` — duplicated logic often means duplicated computation. If the same calculation runs in 3 places, consolidation is both a refactoring and a performance improvement.
    - `hardcode_scan` — hardcoded timeout values, buffer sizes, batch limits, and concurrency caps are common perf bottlenecks. Report them so they can be moved to config and tuned per environment.
    - `impact_analyze` — before recommending changes to shared utilities, check how many callers exist. A fix to a hot utility has multiplied impact.

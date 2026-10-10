@@ -32,6 +32,19 @@ describe("tool.registry", () => {
     }
   })
 
+  test("includes the built-in multiedit tool", async () => {
+    await using tmp = await tmpdir()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const ids = await ToolRegistry.ids()
+        expect(ids).toContain("multiedit")
+        expect(ids.filter((id) => id === "multiedit")).toHaveLength(1)
+      },
+    })
+  })
+
   test("includes the built-in list tool", async () => {
     await using tmp = await tmpdir()
 

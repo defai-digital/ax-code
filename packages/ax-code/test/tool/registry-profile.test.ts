@@ -34,6 +34,7 @@ test("coding is opt-in, retains lifecycle and verification tools, and invalidate
           "read",
           "write",
           "edit",
+          "multiedit",
           "bash",
           "bash_output",
           "bash_input",

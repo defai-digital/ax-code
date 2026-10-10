@@ -29,6 +29,12 @@ describe("repo-structure workflow policy", () => {
     expect(structureIndex).toBeGreaterThan(testsIndex)
   })
 
+  test("runs Knip against the core package after the structure audit", () => {
+    const structureIndex = workflow.indexOf("pnpm run check:structure")
+    const knipIndex = workflow.indexOf("pnpm --dir packages/ax-code run knip")
+    expect(knipIndex).toBeGreaterThan(structureIndex)
+  })
+
   test("guards the canonical internal planning folder", () => {
     expect(workflow).toContain('".internal/**"')
     expect(workflow).toContain("script/check-tracked-internal.ts")

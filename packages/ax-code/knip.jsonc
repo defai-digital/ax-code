@@ -1,0 +1,27 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  // Runtime indexes are already Knip entries through package.json exports.
+  // Scripts and tests stay out of this graph; pnpm and Vitest run them.
+  "project": ["src/**/*.{ts,tsx}"],
+  "ignore": ["**/*.d.ts"],
+  "ignoreExportsUsedInFile": true,
+  // Aliases such as LEGACY_HOMEBREW_TAP and the AX Engine memory limits are intentional.
+  // pnpm catalog: versions live in the repo-root pnpm-workspace.yaml. Knip resolves that
+  // file only when this package is the workspace root, and `pnpm run knip` is not.
+  "exclude": ["duplicates", "catalogReferences"],
+  "ignoreBinaries": ["scutil", "sqlite3", "setsid", "pbpaste", "mkfifo"],
+  "ignoreDependencies": [
+    "@ax-code/script",
+    // Optional platform packages selected by @parcel/watcher at runtime.
+    "@parcel/watcher-*",
+    // WASM grammars loaded by file path, not by an import specifier.
+    "tree-sitter-javascript",
+    "tree-sitter-typescript",
+    // Installed so the provider npm id resolves under pnpm.
+    "ai-gateway-provider",
+    // Declared here so Hono's WebSocket adapter and the language client resolve from this package.
+    "ws",
+    "@types/ws",
+    "vscode-jsonrpc"
+  ]
+}

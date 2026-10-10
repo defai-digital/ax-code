@@ -15,9 +15,6 @@ catalogs:
     '@ai-sdk/anthropic':
       specifier: 3.0.66
       version: 3.0.66
-    '@ai-sdk/provider-utils':
-      specifier: 4.0.33
-      version: 4.0.33
     '@napi-rs/cli':
       specifier: 3.10.6
       version: 3.0.0
@@ -52,9 +49,6 @@ catalogs:
       specifier: npm:typescript@7.0.2
       version: 7.0.2
     '@vitest/coverage-v8':
-      specifier: 4.1.11
-      version: 4.1.11
-    '@vitest/expect':
       specifier: 4.1.11
       version: 4.1.11
     ai:
@@ -267,9 +261,6 @@ importers:
       '@ai-sdk/provider':
         specifier: 3.0.8
         version: 3.0.8
-      '@ai-sdk/provider-utils':
-        specifier: 'catalog:'
-        version: 4.0.33(zod@4.3.6)
       '@ax-code/ax-agent-runtime':
         specifier: workspace:*
         version: link:../ax-agent-runtime
@@ -309,9 +300,6 @@ importers:
       '@ax-code/sdk':
         specifier: workspace:*
         version: link:../sdk/js
-      '@ax-code/terminal':
-        specifier: workspace:*
-        version: link:../ax-code-terminal-native
       '@ax-code/util':
         specifier: workspace:*
         version: link:../util
@@ -402,9 +390,6 @@ importers:
       fuzzysort:
         specifier: 'catalog:'
         version: 3.1.0
-      google-auth-library:
-        specifier: 10.5.0
-        version: 10.5.0
       gray-matter:
         specifier: 4.0.3
         version: 4.0.3(patch_hash=3754dca03e5459f3f551402ecbeee1cd9588f9fde966158da964ae31a723dee7)
@@ -432,9 +417,6 @@ importers:
       open:
         specifier: 10.1.2
         version: 10.1.2
-      partial-json:
-        specifier: 0.1.7
-        version: 0.1.7
       pino:
         specifier: ^10.4.0
         version: 10.4.0
@@ -547,9 +529,6 @@ importers:
       '@vitest/coverage-v8':
         specifier: 'catalog:'
         version: 4.1.11(vitest@4.1.11)
-      '@vitest/expect':
-        specifier: 'catalog:'
-        version: 4.1.11
       drizzle-kit:
         specifier: 'catalog:'
         version: 1.0.0-rc.3
@@ -571,12 +550,6 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@24.13.2)(@vitest/coverage-v8@4.1.11)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1))
-      vscode-languageserver-types:
-        specifier: 3.17.5
-        version: 3.17.5
-      why-is-node-running:
-        specifier: 3.2.2
-        version: 3.2.2
 
   packages/ax-code-daemon:
     devDependencies:
@@ -5587,9 +5560,6 @@ packages:
     resolution: {integrity: sha512-CiyeOxFT/JZyN5m0z9PfXw4SCBJ6Sygz1Dpl0wqjlhDEGGBP1GnsUVEL0p63hoG1fcj3fHynXi9NYO4nWOL+qQ==}
     engines: {node: '>= 0.8'}
 
-  partial-json@0.1.7:
-    resolution: {integrity: sha512-Njv/59hHaokb/hRUjce3Hdv12wd60MtM9Z5Olmn+nehe0QDAsRtRbJPvJ0Z91TusF0SuZRIvnM+S4l6EIP8leA==}
-
   path-exists@3.0.0:
     resolution: {integrity: sha512-bpC7GYwiDYQ4wYLe+FA8lhRjhQCMcQGuSgGGqDkg/QerRWw9CmGRT0iSOVRSZJ29NMLZgIzqaljJ63oaL4NIJQ==}
     engines: {node: '>=4'}
@@ -6544,11 +6514,6 @@ packages:
   why-is-node-running@2.3.0:
     resolution: {integrity: sha512-hUrmaWBdVDcxvYqnyh09zunKzROWjbZTiNy8dBEjkS7ehEDQibXJ7XvlmtbwuTclUiIyN+CyXQD4Vmko8fNm8w==}
     engines: {node: '>=8'}
-    hasBin: true
-
-  why-is-node-running@3.2.2:
-    resolution: {integrity: sha512-NKUzAelcoCXhXL4dJzKIwXeR8iEVqsA0Lq6Vnd0UXvgaKbzVo4ZTHROF2Jidrv+SgxOQ03fMinnNhzZATxOD3A==}
-    engines: {node: '>=20.11'}
     hasBin: true
 
   wide-align@1.1.5:
@@ -9628,7 +9593,8 @@ snapshots:
       require-from-string: 2.0.2
     optional: true
 
-  bignumber.js@9.3.1: {}
+  bignumber.js@9.3.1:
+    optional: true
 
   binary@0.3.0:
     dependencies:
@@ -9931,7 +9897,8 @@ snapshots:
 
   d3-timer@3.0.1: {}
 
-  data-uri-to-buffer@4.0.1: {}
+  data-uri-to-buffer@4.0.1:
+    optional: true
 
   data-urls@6.0.1:
     dependencies:
@@ -10289,7 +10256,8 @@ snapshots:
     dependencies:
       is-extendable: 0.1.1
 
-  extend@3.0.2: {}
+  extend@3.0.2:
+    optional: true
 
   fast-content-type-parse@3.0.0: {}
 
@@ -10356,6 +10324,7 @@ snapshots:
     dependencies:
       node-domexception: 1.0.0
       web-streams-polyfill: 3.3.3
+    optional: true
 
   file-entry-cache@8.0.0:
     dependencies:
@@ -10426,6 +10395,7 @@ snapshots:
   formdata-polyfill@4.0.10:
     dependencies:
       fetch-blob: 3.2.0
+    optional: true
 
   forwarded@0.2.0: {}
 
@@ -10466,6 +10436,7 @@ snapshots:
       node-fetch: 3.3.2
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   gcp-metadata@8.1.2:
     dependencies:
@@ -10474,6 +10445,7 @@ snapshots:
       json-bigint: 1.0.0
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   gensync@1.0.0-beta.2: {}
 
@@ -10572,8 +10544,10 @@ snapshots:
       jws: 4.0.1
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
-  google-logging-utils@1.1.3: {}
+  google-logging-utils@1.1.3:
+    optional: true
 
   gopd@1.2.0: {}
 
@@ -10592,6 +10566,7 @@ snapshots:
       jws: 4.0.1
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   has-flag@4.0.0: {}
 
@@ -10839,6 +10814,7 @@ snapshots:
   json-bigint@1.0.0:
     dependencies:
       bignumber.js: 9.3.1
+    optional: true
 
   json-buffer@3.0.1: {}
 
@@ -11196,13 +11172,15 @@ snapshots:
 
   node-addon-api@8.9.2: {}
 
-  node-domexception@1.0.0: {}
+  node-domexception@1.0.0:
+    optional: true
 
   node-fetch@3.3.2:
     dependencies:
       data-uri-to-buffer: 4.0.1
       fetch-blob: 3.2.0
       formdata-polyfill: 4.0.10
+    optional: true
 
   node-gyp-build@4.8.4: {}
 
@@ -11405,8 +11383,6 @@ snapshots:
     optional: true
 
   parseurl@1.3.3: {}
-
-  partial-json@0.1.7: {}
 
   path-exists@3.0.0: {}
 
@@ -12332,7 +12308,8 @@ snapshots:
 
   wasm-sjlj@1.0.6: {}
 
-  web-streams-polyfill@3.3.3: {}
+  web-streams-polyfill@3.3.3:
+    optional: true
 
   web-tree-sitter@0.25.10: {}
 
@@ -12366,8 +12343,6 @@ snapshots:
     dependencies:
       siginfo: 2.0.0
       stackback: 0.0.2
-
-  why-is-node-running@3.2.2: {}
 
   wide-align@1.1.5:
     dependencies:

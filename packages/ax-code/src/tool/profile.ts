@@ -26,6 +26,7 @@ export namespace ToolProfile {
     "grep",
     "repo_wiki",
     "edit",
+    "multiedit",
     "write",
     "apply_patch",
     "notebook_edit",

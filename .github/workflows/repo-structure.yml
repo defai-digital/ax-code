@@ -76,6 +76,9 @@ jobs:
       - name: Check repo structure
         run: pnpm run check:structure
 
+      - name: Check core package with Knip
+        run: pnpm --dir packages/ax-code run knip
+
       - name: Compile SDK for self-scan
         run: pnpm --dir packages/sdk/js exec tsc
 

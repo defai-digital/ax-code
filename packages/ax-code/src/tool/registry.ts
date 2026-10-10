@@ -8,6 +8,7 @@ import { MonitorTool } from "./monitor"
 import { NotebookEditTool } from "./notebook_edit"
 import { ImageGenTool } from "./image_gen"
 import { EditTool } from "./edit"
+import { MultiEditTool } from "./multiedit"
 import { GlobTool } from "./glob"
 import { GrepTool } from "./grep"
 import { ListTool } from "./ls"
@@ -292,6 +293,7 @@ export namespace ToolRegistry {
       GrepTool,
       RepoWikiTool,
       EditTool,
+      MultiEditTool,
       WriteTool,
       NotebookEditTool,
       TaskTool,

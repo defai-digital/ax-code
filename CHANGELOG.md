@@ -6,6 +6,15 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Fixed
+
+- Register the built-in `multiedit` tool. Permissions, hooks, and prompts already treated it as a file-editing tool, but the tool registry never exposed it.
+- Tell the performance agent to call debug-engine tools only when those tools are in the active tool list.
+
+### Changed
+
+- Check the core package with Knip in the repo-structure workflow. The config ignores pnpm catalog references, intentional export aliases, OS binaries, and packages loaded by path or package name.
+
 ## [7.24.1] - 2026-10-10
 
 ### Changed
