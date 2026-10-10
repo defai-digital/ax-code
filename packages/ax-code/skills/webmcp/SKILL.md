@@ -33,6 +33,12 @@ After UI or URL changes, refresh the snapshot before targeting elements. Verify 
 
 Capture a baseline before acting: a fresh snapshot plus the console errors and failed-request metadata around the target. Act once, then read the same signals again and compare the delta. Use `wait_for` for asynchronous state instead of repeating the triggering action, and handle a blocking dialog before refreshing a snapshot. A delta that shows no change is evidence — narrow the cause from it instead of escalating to repeated actions.
 
+First reads by symptom (within the baseline/act-once/delta sequence above):
+
+- Page won't open or renders blank: the navigation failure category, failed-request metadata for the navigation URL, and whether the a11y root is present.
+- A control does nothing: a fresh snapshot to confirm the element uid, one admitted action, then the console error delta.
+- Live data is stale (SSE or polling): network metadata for the stream or poll request (status and type only, never bodies) plus console errors.
+
 ## Recover without duplicating actions
 
 - Retry once only when a host grant result explicitly requests a retry before dispatch. Successful reads may already include approval continuation; do not repeat them just because permission was granted.
@@ -45,6 +51,12 @@ Capture a baseline before acting: a fresh snapshot plus the console errors and f
 
 Only for a reproducible localhost fix, when `browser_workflow` is available: freeze acceptance assertions before editing, reproduce a failing control, then reuse that hash for two fixed runs. For asynchronous assertions choose `timeoutMs` (0-10000) before the control and retain it. Inspect runtime receipts; unknown is not pass. Run an exported Playwright regression before calling the export validated. Routine browsing does not require this workflow.
 
+When using implement Arena for a localhost change with browser-observable behavior, freeze the scenario on the clean base first and pass that hash as `browserScenario` so candidates share the same frozen assertions. The parameter stays optional; bridge activation and approvals remain supervised.
+
+## Develop a page tool for your app
+
+Order matters: `contracts` on the open page to inspect existing descriptors and exact hashes; `template` for a registration skeleton bound to an explicit application export — a skeleton to review against the app's validation and authorization, never an authority; then freeze a `contract` step with the exact `descriptorHash`, a positive case with `input`, `resultPath` and `equals`, and a negative input with `expectError: true` — only a confirmed page-tool execution error satisfies the negative case. After a successful mutation, add an assertion on the resulting page state. The WebMCP bridge guide covers the field-level details.
+
 ## Report and cleanup
 
 Report the tested page, expected versus observed behavior, and evidence scope:
@@ -52,5 +64,7 @@ Report the tested page, expected versus observed behavior, and evidence scope:
 - **PASS**: the expected outcome was observed.
 - **FAIL**: an observed outcome contradicted the expectation, including an actually observed blank/broken UI.
 - **BLOCKED**: the needed capability, authority or evidence was unavailable; state what remains unverified.
+
+For a localhost FAIL investigated through a frozen scenario, attach an evidence bundle for the bug report: scenario name and hash, the failing assertion result (without captured page content), receipt IDs from `browser_workflow inspect`, snapshot hashes, the bounded console error and network metadata deltas, source links with their `explicit`/`local_map`/`unresolved` labels, and the origin. Include only runtime-bounded, runtime-redacted output — never request or response bodies, headers, cookies, storage, page content, or credential-shaped console or query values. Receipt IDs and copied receipt data are references only; authoritative receipt state remains runtime-owned, and the bundle is a human-readable copy, not proof.
 
 Clean up only pages you created under the existing close approval. Follow the user's requested lifecycle for any dev server you started.

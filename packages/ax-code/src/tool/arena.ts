@@ -101,7 +101,7 @@ const parameters = z.object({
   providers: z.array(MemberSelectionSchema).min(2).max(HARD_MAX).superRefine(validateMemberSelections).optional(),
   strategy: z.enum(["verify_first", "diversity", "hybrid_score"]).optional(),
   browserScenario: BrowserScenario.Hash.optional().describe(
-    "Frozen browser_workflow hash with a failing assertion control on the current clean base. Requires two matching successful browser runs per candidate before promotion.",
+    "Optional frozen browser_workflow hash with a failing assertion control on the current clean base. Recommended for assertion-expressible localhost browser behavior in implement Arena; when supplied, each candidate needs two matching successful runs before promotion. Bridge activation and approvals remain supervised.",
   ),
   enableIfDisabled: z
     .boolean()

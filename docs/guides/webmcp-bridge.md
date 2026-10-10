@@ -210,6 +210,19 @@ fails:
    it as a `browser_workflow` scenario (below), record the failing control, and
    run the same hash twice after the fix.
 
+### Attach evidence to a bug report
+
+For a localhost failure investigated through a frozen scenario, an evidence
+bundle makes the report reviewable: the scenario name and hash, the failing
+assertion result (without captured page content), the receipt IDs from
+`browser_workflow inspect`, snapshot hashes, the bounded console error and
+network metadata deltas, source links with their
+`explicit`/`local_map`/`unresolved` labels, and the origin. Include only
+runtime-bounded, runtime-redacted output — never request or response bodies,
+headers, cookies, storage, page content, or credential-shaped values. Receipt
+IDs and copied receipt data are references only; authoritative receipt state
+remains runtime-owned.
+
 ## Reproduce and verify a development change
 
 The `browser_workflow` tool freezes acceptance steps before you edit a web
