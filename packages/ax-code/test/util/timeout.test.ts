@@ -89,6 +89,24 @@ describe("util.timeout", () => {
       },
     })
     await expect(pending).rejects.toBeInstanceOf(TypeError)
+    class TimeoutError extends Error {}
+    const withFactory = withTimeout(new Promise<never>(() => {}), 20, undefined, {
+      onTimeout: () => {
+        throw new TypeError("cleanup blew up")
+      },
+      error: () => new TimeoutError("sdk timeout"),
+    })
+    await expect(withFactory).rejects.toBeInstanceOf(TimeoutError)
+  })
+
+  test("a delay beyond the timer limit waits instead of firing immediately", async () => {
+    let timedOut = false
+    const pending = withTimeout(new Promise<never>(() => {}), 2 ** 40).catch(() => {
+      timedOut = true
+    })
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    expect(timedOut).toBe(false)
+    void pending
   })
 
   test("does not fire onTimeout when the promise settles first", async () => {

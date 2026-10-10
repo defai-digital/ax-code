@@ -68,13 +68,15 @@ export function withTimeout<T>(
     const timer = setTimeout(() => {
       if (settled) return
       settled = true
+      let cleanupFailure: unknown
       try {
         opts?.onTimeout?.()
       } catch (e) {
         // A throw here would escape the timer callback as an uncaught exception
-        // and leave the returned promise pending forever.
-        reject(toError(e))
-        return
+        // and leave the returned promise pending forever. Callers that supply
+        // an error factory still get their timeout error; the cleanup failure
+        // only stands in when there is nothing better to report.
+        cleanupFailure = e
       }
       if (opts?.error) {
         try {
@@ -84,8 +86,12 @@ export function withTimeout<T>(
         }
         return
       }
+      if (cleanupFailure !== undefined) {
+        reject(toError(cleanupFailure))
+        return
+      }
       reject(new Error(message ?? `Operation timed out after ${ms}ms`))
-    }, ms)
+    }, clampDelay(ms))
     if (opts?.unref) timer.unref?.()
     promise.then(
       (value) => {
@@ -104,10 +110,18 @@ export function withTimeout<T>(
   })
 }
 
+// Node silently replaces a delay above 2^31 - 1 ms (or a non-finite one) with
+// 1 ms, so an "effectively never" timeout would fire immediately; pin it to
+// the largest delay the timer accepts instead.
+const MAX_TIMER_DELAY_MS = 2_147_483_647
+function clampDelay(ms: number) {
+  return Number.isFinite(ms) ? Math.min(Math.max(ms, 0), MAX_TIMER_DELAY_MS) : MAX_TIMER_DELAY_MS
+}
+
 // Fire-and-forget timer for background batching; unref'd so it never holds the
 // process open. Never use it for a window someone awaits (see `sleep`).
 export function scheduleUnref(fn: () => void, ms: number) {
-  const id = setTimeout(fn, ms)
+  const id = setTimeout(fn, clampDelay(ms))
   id.unref?.()
   return { clear: () => clearTimeout(id) }
 }

@@ -1136,10 +1136,10 @@ export namespace Session {
     async (input) => {
       SessionExecutionContext.assertWritable()
       const store = SessionShard.storeFor(input.sessionID, { write: true })
-      store.use((db) => {
-        // The registry schema cascades parts from the message row, but the
-        // shard "part" table carries no foreign key, so delete them explicitly
-        // in both modes instead of leaving orphaned parts behind.
+      // One transaction: the registry schema cascades parts from the message
+      // row, but the shard "part" table carries no foreign key, so delete them
+      // explicitly in both modes and never leave a half-deleted message behind.
+      store.transaction((db) => {
         db.delete(PartTable)
           .where(and(eq(PartTable.message_id, input.messageID), eq(PartTable.session_id, input.sessionID)))
           .run()

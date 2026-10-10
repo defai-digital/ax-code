@@ -147,7 +147,7 @@ export namespace MigrationLock {
           if (Date.now() >= deadline) {
             throw new Error(`Timed out waiting for migration lock: ${target}`)
           }
-          sleep(Math.min(pollMs, Math.max(1, deadline - Date.now())))
+          sleep(Math.max(1, Math.min(pollMs, deadline - Date.now())))
           continue
         }
         if (reclaimable(snapshot, malformedGraceMs) && removeIfUnchanged(target, snapshot)) {
@@ -161,7 +161,8 @@ export namespace MigrationLock {
         if (Date.now() >= deadline) {
           throw new Error(`Timed out waiting for migration lock: ${target}`)
         }
-        sleep(Math.min(pollMs, Math.max(1, deadline - Date.now())))
+        // Never a zero wait: a pollMs of 0 would turn the poll into a busy loop.
+        sleep(Math.max(1, Math.min(pollMs, deadline - Date.now())))
       }
     } catch (error) {
       prepared.cleanup()
