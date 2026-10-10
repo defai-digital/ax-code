@@ -318,7 +318,15 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
     }))
 
     // Check permissions if needed
-    const relativePaths = fileChanges.map((c) => normalizeToWorkspacePath(c.filePath, Instance.worktree))
+    // A move writes its destination as well as its source: both paths must
+    // pass the edit permission rules, not only isolation and blast radius.
+    const relativePaths = [
+      ...new Set(
+        fileChanges.flatMap((c) =>
+          [c.filePath, ...(c.movePath ? [c.movePath] : [])].map((p) => normalizeToWorkspacePath(p, Instance.worktree)),
+        ),
+      ),
+    ]
     await ctx.ask({
       permission: "edit",
       patterns: relativePaths,
