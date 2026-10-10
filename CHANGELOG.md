@@ -6,6 +6,18 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.24.4] - 2026-10-10
+
+### Changed
+
+- Publish AX Code 7.24.4 with SDK 2.6.7.
+- Improve WebMCP approval continuity, bounded probes, listing invalidation, and Chrome status diagnostics.
+
+### Fixed
+
+- Redact secret query parameter values even when their names use percent encoding in WebMCP network and console output.
+- Preserve per-action approval after an interaction grant and fail closed on stale browser bindings or unreadable approval storage.
+
 ## [7.24.3] - 2026-10-10
 
 ### Changed
