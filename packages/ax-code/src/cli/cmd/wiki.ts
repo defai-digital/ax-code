@@ -4,7 +4,7 @@ import type { Argv } from "yargs"
 import path from "node:path"
 import open from "open"
 import { WikiVisualization } from "../../wiki/visualization"
-import { bootstrap } from "../bootstrap"
+import { bootstrap, bootstrapReadonly } from "../bootstrap"
 import { UI } from "../ui"
 import { Filesystem } from "../../util/filesystem"
 import {
@@ -34,11 +34,15 @@ function rootFromArgs(directory?: string): string {
   return Filesystem.resolve(directory ? path.resolve(caller, directory) : caller)
 }
 
-async function withWiki<T>(args: CommonArgs, fn: (input: { root: string; config: WikiRuntimeConfig }) => Promise<T>) {
+type WikiRun<T> = (input: { root: string; config: WikiRuntimeConfig }) => Promise<T>
+
+// Subcommands that only read the repository and wiki files use the read-only
+// bootstrap: the full one starts providers, LSP, and watchers whose open
+// handles keep the process alive until the 2 s forced-exit grace expires.
+async function withWiki<T>(args: CommonArgs, fn: WikiRun<T>, options: { models?: boolean } = {}) {
   const root = rootFromArgs(args.directory)
-  return bootstrap(root, async () =>
-    fn({ root: await wikiProjectRoot(), config: await resolveWikiRuntimeConfig(args) }),
-  )
+  const run = async () => fn({ root: await wikiProjectRoot(), config: await resolveWikiRuntimeConfig(args) })
+  return options.models ? bootstrap(root, run) : bootstrapReadonly(root, run)
 }
 
 export function wikiStatusExitCode(status: Pick<WikiStatus, "exists" | "healthy" | "freshness">): number {
@@ -197,47 +201,54 @@ async function runGenerateOrUpdate(
   action: "generate" | "update",
   args: CommonArgs & { "skip-agents"?: boolean; quiet?: boolean; force?: boolean },
 ) {
-  await withWiki(args, async ({ root, config }) => {
-    UI.println(
-      `${UI.Style.TEXT_INFO_BOLD}${action === "generate" ? "Generating" : "Updating"} native AX Wiki…${UI.Style.TEXT_NORMAL}`,
-    )
-    UI.println(`  root:  ${root}`)
-    UI.println(`  dir:   ${config.dir}/`)
-    UI.println(`  model: ${config.model ?? "AX Code default"}`)
-    const started = Date.now()
-    const result = await runNativeWiki({
-      root,
-      action,
-      dir: config.dir,
-      model: config.model,
-      force: args.force === true,
-      onProgress: args.quiet
-        ? undefined
-        : (progress) => {
-            if (progress.type === "discover") UI.println(`  discovered ${progress.sourceCount} source files`)
-            else if (progress.type === "plan") UI.println(`  planned ${progress.pageCount} pages`)
-            else if (progress.type === "page_start")
-              UI.println(`  [${progress.index}/${progress.total}] ${progress.path}`)
-            else if (progress.type === "page_cached") UI.println(`  reused completed page: ${progress.path}`)
-            else if (progress.type === "page_failed")
-              UI.println(
-                `  [${progress.index}/${progress.total}] ${progress.path} failed; ${action === "update" ? "other pages continue" : "generation stopped"}`,
-              )
-            else if (progress.type === "validate") UI.println(`  validation issues: ${progress.issueCount}`)
-          },
-    })
-    if (args["skip-agents"] !== true && config.autoInjectAgents) {
-      const agents = await ensureAgentsWikiPointers(root, { wikiDir: config.dir, touchClaudeMd: config.touchClaudeMd })
-      if (agents.updated.length) UI.println(`  agent pointers: ${agents.updated.join(", ")}`)
-    }
-    const seconds = ((Date.now() - started) / 1000).toFixed(1)
-    UI.println(
-      `AX Wiki ${action} completed in ${seconds}s: ${result.generatedPages.length} generated, ${result.unchangedPages.length} unchanged, ${result.removedPages.length} removed${result.failedPages.length ? `, ${result.failedPages.length} failed` : ""}.`,
-    )
-    // ADR-156: an update publishes the pages that succeeded; report which pages
-    // still need a later build instead of hiding the partial outcome.
-    for (const page of result.failedPages) UI.println(`  failed: ${page.path} - ${page.error}`)
-  })
+  await withWiki(
+    args,
+    async ({ root, config }) => {
+      UI.println(
+        `${UI.Style.TEXT_INFO_BOLD}${action === "generate" ? "Generating" : "Updating"} native AX Wiki…${UI.Style.TEXT_NORMAL}`,
+      )
+      UI.println(`  root:  ${root}`)
+      UI.println(`  dir:   ${config.dir}/`)
+      UI.println(`  model: ${config.model ?? "AX Code default"}`)
+      const started = Date.now()
+      const result = await runNativeWiki({
+        root,
+        action,
+        dir: config.dir,
+        model: config.model,
+        force: args.force === true,
+        onProgress: args.quiet
+          ? undefined
+          : (progress) => {
+              if (progress.type === "discover") UI.println(`  discovered ${progress.sourceCount} source files`)
+              else if (progress.type === "plan") UI.println(`  planned ${progress.pageCount} pages`)
+              else if (progress.type === "page_start")
+                UI.println(`  [${progress.index}/${progress.total}] ${progress.path}`)
+              else if (progress.type === "page_cached") UI.println(`  reused completed page: ${progress.path}`)
+              else if (progress.type === "page_failed")
+                UI.println(
+                  `  [${progress.index}/${progress.total}] ${progress.path} failed; ${action === "update" ? "other pages continue" : "generation stopped"}`,
+                )
+              else if (progress.type === "validate") UI.println(`  validation issues: ${progress.issueCount}`)
+            },
+      })
+      if (args["skip-agents"] !== true && config.autoInjectAgents) {
+        const agents = await ensureAgentsWikiPointers(root, {
+          wikiDir: config.dir,
+          touchClaudeMd: config.touchClaudeMd,
+        })
+        if (agents.updated.length) UI.println(`  agent pointers: ${agents.updated.join(", ")}`)
+      }
+      const seconds = ((Date.now() - started) / 1000).toFixed(1)
+      UI.println(
+        `AX Wiki ${action} completed in ${seconds}s: ${result.generatedPages.length} generated, ${result.unchangedPages.length} unchanged, ${result.removedPages.length} removed${result.failedPages.length ? `, ${result.failedPages.length} failed` : ""}.`,
+      )
+      // ADR-156: an update publishes the pages that succeeded; report which pages
+      // still need a later build instead of hiding the partial outcome.
+      for (const page of result.failedPages) UI.println(`  failed: ${page.path} - ${page.error}`)
+    },
+    { models: true },
+  )
 }
 
 function generationOptions(yargs: Argv) {
