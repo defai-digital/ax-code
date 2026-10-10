@@ -141,7 +141,7 @@ function workflowMetrics(run: z.infer<typeof WorkflowRunDetail>, elapsedMs: numb
   })
 }
 
-function workflowElapsedMs(run: z.infer<typeof WorkflowRunDetail>, now: number) {
+export function workflowElapsedMs(run: z.infer<typeof WorkflowRunDetail>, now: number) {
   if (!run.time.started) return 0
   return Math.max(0, (run.time.completed ?? now) - run.time.started)
 }

@@ -1,4 +1,4 @@
-import { familyDisplayName, familyReleaseTime } from "./family-shared"
+import { familyDisplayName, familyReleaseTime, latestFamilyModels } from "./family-shared"
 
 const FAMILY_ORDER = ["muse-spark"] as const
 
@@ -24,14 +24,7 @@ export function museDisplayName(name: string | undefined, fallback: string): str
 }
 
 export function latestMuseFamilyModels<T extends MuseFamilySource>(models: Record<string, T>): T[] {
-  const best: Record<string, T | undefined> = {}
-  for (const [id, model] of Object.entries(models)) {
-    const family = museFamilyId({ id: model.id ?? id, family: model.family })
-    if (!family) continue
-    const current = best[family]
-    if (!current || compareMuseFamilyModels(model, current, id) > 0) best[family] = model
-  }
-  return FAMILY_ORDER.map((family) => best[family]).filter((model): model is T => model !== undefined)
+  return latestFamilyModels(models, FAMILY_ORDER, museFamilyId, compareMuseFamilyModels)
 }
 
 export function museFallbackLatest(): MuseFamilySource & {

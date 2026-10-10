@@ -6,6 +6,7 @@
  * streaming) can share a short window so a turn with many deltas does not
  * issue one SQLite write per token chunk.
  */
+import { scheduleUnref } from "../util/timeout"
 
 export type PartWriteBatcher<TPart extends { id: string }> = {
   /** Schedule a force-write; later writes for the same id replace earlier ones. */
@@ -34,12 +35,7 @@ export function createPartWriteBatcher<TPart extends { id: string }>(input: {
   let timer: { clear: () => void } | undefined
   let chain: Promise<void> = Promise.resolve()
 
-  const defaultSchedule = (fn: () => void, ms: number) => {
-    const id = setTimeout(fn, ms)
-    id.unref?.()
-    return { clear: () => clearTimeout(id) }
-  }
-  const scheduleTimer = input.schedule ?? defaultSchedule
+  const scheduleTimer = input.schedule ?? scheduleUnref
 
   const writeOne = async (part: TPart) => {
     try {
@@ -67,8 +63,10 @@ export function createPartWriteBatcher<TPart extends { id: string }>(input: {
 
   const arm = () => {
     if (timer) return
+    // writeOne already reported the failure through onError; swallow the
+    // re-thrown rejection so a timer-driven flush cannot become unhandled.
     timer = scheduleTimer(() => {
-      void flushPending()
+      void flushPending().catch(() => undefined)
     }, windowMs)
   }
 

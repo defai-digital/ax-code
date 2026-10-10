@@ -1,4 +1,4 @@
-import { familyDisplayName, familyReleaseTime } from "./family-shared"
+import { familyDisplayName, familyReleaseTime, familySortKey, latestFamilyModels } from "./family-shared"
 
 const FAMILY_ORDER = ["grok-4"] as const
 
@@ -28,8 +28,7 @@ export function grokFamilyId(input: { id?: string; family?: string }): string | 
 }
 
 export function grokFamilySortKey(family?: string): number {
-  const index = FAMILY_ORDER.indexOf(family as (typeof FAMILY_ORDER)[number])
-  return index === -1 ? FAMILY_ORDER.length : index
+  return familySortKey(FAMILY_ORDER, family)
 }
 
 export function grokDisplayName(name: string | undefined, fallback: string): string {
@@ -37,14 +36,7 @@ export function grokDisplayName(name: string | undefined, fallback: string): str
 }
 
 export function latestGrokFamilyModels<T extends GrokFamilySource>(models: Record<string, T>): T[] {
-  const best: Record<string, T | undefined> = {}
-  for (const [id, model] of Object.entries(models)) {
-    const family = grokFamilyId({ id: model.id ?? id, family: model.family })
-    if (!family) continue
-    const current = best[family]
-    if (!current || compareGrokFamilyModels(model, current, id) > 0) best[family] = model
-  }
-  return FAMILY_ORDER.map((family) => best[family]).filter((model): model is T => model !== undefined)
+  return latestFamilyModels(models, FAMILY_ORDER, grokFamilyId, compareGrokFamilyModels)
 }
 
 export function grokFallbackLatest(): GrokFamilySource & {

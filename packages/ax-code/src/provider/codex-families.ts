@@ -1,4 +1,4 @@
-import { familyDisplayName, familyReleaseTime } from "./family-shared"
+import { familyDisplayName, familyReleaseTime, familySortKey, latestFamilyModels } from "./family-shared"
 
 const FAMILY_ORDER = ["gpt-flagship", "gpt-mini", "gpt-codex-spark"] as const
 
@@ -23,8 +23,7 @@ export function codexFamilyId(input: { id?: string; family?: string }): string |
 }
 
 export function codexFamilySortKey(family?: string): number {
-  const index = FAMILY_ORDER.indexOf(family as (typeof FAMILY_ORDER)[number])
-  return index === -1 ? FAMILY_ORDER.length : index
+  return familySortKey(FAMILY_ORDER, family)
 }
 
 export function codexDisplayName(name: string | undefined, fallback: string): string {
@@ -32,14 +31,7 @@ export function codexDisplayName(name: string | undefined, fallback: string): st
 }
 
 export function latestCodexFamilyModels<T extends CodexFamilySource>(models: Record<string, T>): T[] {
-  const best: Record<string, T | undefined> = {}
-  for (const [id, model] of Object.entries(models)) {
-    const family = codexFamilyId({ id: model.id ?? id, family: model.family })
-    if (!family) continue
-    const current = best[family]
-    if (!current || compareCodexFamilyModels(model, current, id) > 0) best[family] = model
-  }
-  return FAMILY_ORDER.map((family) => best[family]).filter((model): model is T => model !== undefined)
+  return latestFamilyModels(models, FAMILY_ORDER, codexFamilyId, compareCodexFamilyModels)
 }
 
 export function codexFallbackModels(): Array<

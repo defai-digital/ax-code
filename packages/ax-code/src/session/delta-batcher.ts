@@ -5,6 +5,7 @@
  * as its own bus event is wasteful; coalescing within a short window cuts
  * fan-out without delaying the final force-write on text-end / reasoning-end.
  */
+import { scheduleUnref } from "../util/timeout"
 
 export type DeltaPublish = (input: {
   sessionID: string
@@ -41,12 +42,7 @@ export function createDeltaBatcher(input: {
   const pending = new Map<string, { offset?: number; chunks: string[] }>()
   let timer: { clear: () => void } | undefined
 
-  const defaultSchedule = (fn: () => void, ms: number) => {
-    const id = setTimeout(fn, ms)
-    id.unref?.()
-    return { clear: () => clearTimeout(id) }
-  }
-  const schedule = input.schedule ?? defaultSchedule
+  const schedule = input.schedule ?? scheduleUnref
 
   const flush = (): Promise<unknown> | undefined => {
     timer = undefined

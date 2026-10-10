@@ -1,4 +1,4 @@
-import { familyReleaseTime } from "./family-shared"
+import { familyReleaseTime, familySortKey, latestFamilyModels } from "./family-shared"
 
 const FAMILY_ORDER = ["kimi-k3", "kimi-coding"] as const
 
@@ -21,19 +21,11 @@ export function kimiFamilyId(input: { id?: string; family?: string }): string | 
 }
 
 export function kimiFamilySortKey(family?: string): number {
-  const index = FAMILY_ORDER.indexOf(family as (typeof FAMILY_ORDER)[number])
-  return index === -1 ? FAMILY_ORDER.length : index
+  return familySortKey(FAMILY_ORDER, family)
 }
 
 export function latestKimiFamilyModels<T extends KimiFamilySource>(models: Record<string, T>): T[] {
-  const best: Record<string, T | undefined> = {}
-  for (const [id, model] of Object.entries(models)) {
-    const family = kimiFamilyId({ id: model.id ?? id, family: model.family })
-    if (!family) continue
-    const current = best[family]
-    if (!current || compareKimiFamilyModels(model, current, id) > 0) best[family] = model
-  }
-  return FAMILY_ORDER.map((family) => best[family]).filter((model): model is T => model !== undefined)
+  return latestFamilyModels(models, FAMILY_ORDER, kimiFamilyId, compareKimiFamilyModels)
 }
 
 export function kimiFallbackModels(): Array<

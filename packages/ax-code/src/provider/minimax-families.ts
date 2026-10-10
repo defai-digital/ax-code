@@ -1,4 +1,4 @@
-import { familyDisplayName, familyReleaseTime } from "./family-shared"
+import { familyDisplayName, familyReleaseTime, latestFamilyModels } from "./family-shared"
 
 const FAMILY_ORDER = ["minimax-m3", "minimax-m2"] as const
 
@@ -22,14 +22,7 @@ export function minimaxDisplayName(name: string | undefined, fallback: string): 
 }
 
 export function latestMiniMaxFamilyModels<T extends MiniMaxFamilySource>(models: Record<string, T>): T[] {
-  const best: Record<string, T | undefined> = {}
-  for (const [id, model] of Object.entries(models)) {
-    const family = minimaxFamilyId({ id: model.id ?? id, family: model.family })
-    if (!family) continue
-    const current = best[family]
-    if (!current || compareMiniMaxFamilyModels(model, current, id) > 0) best[family] = model
-  }
-  return FAMILY_ORDER.map((family) => best[family]).filter((model): model is T => model !== undefined)
+  return latestFamilyModels(models, FAMILY_ORDER, minimaxFamilyId, compareMiniMaxFamilyModels)
 }
 
 export function minimaxFallbackLatest(): MiniMaxFamilySource & {

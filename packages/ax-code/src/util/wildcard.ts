@@ -3,23 +3,15 @@ import { sortBy, pipe } from "remeda"
 export namespace Wildcard {
   const regexCache = new Map<string, RegExp>()
 
-  function getRegex(escaped: string, flags: string): RegExp {
-    const key = escaped + "|" + flags
-    let cached = regexCache.get(key)
-    if (cached) return cached
-    cached = new RegExp("^" + escaped + "$", flags)
-    if (regexCache.size >= 500) {
-      const oldest = regexCache.keys().next().value
-      if (oldest !== undefined) regexCache.delete(oldest)
-    }
-    regexCache.set(key, cached)
-    return cached
-  }
+  const flags = process.platform === "win32" ? "si" : "s"
 
-  export function match(str: string, pattern: string) {
-    if (str) str = str.replaceAll("\\", "/")
-    if (pattern) pattern = pattern.replaceAll("\\", "/")
+  // Keyed by the raw pattern so a cache hit skips the escaping work; permission
+  // evaluation calls this once per rule per check.
+  function getRegex(pattern: string): RegExp {
+    let cached = regexCache.get(pattern)
+    if (cached) return cached
     let escaped = pattern
+      .replaceAll("\\", "/")
       .replace(/[.+^${}()|[\]\\]/g, "\\$&")
       .replace(/\*/g, ".*")
       .replace(/\?/g, ".")
@@ -27,9 +19,18 @@ export namespace Wildcard {
     if (escaped.endsWith(" .*")) {
       escaped = escaped.slice(0, -3) + "( .*)?"
     }
+    cached = new RegExp("^" + escaped + "$", flags)
+    if (regexCache.size >= 500) {
+      const oldest = regexCache.keys().next().value
+      if (oldest !== undefined) regexCache.delete(oldest)
+    }
+    regexCache.set(pattern, cached)
+    return cached
+  }
 
-    const flags = process.platform === "win32" ? "si" : "s"
-    return getRegex(escaped, flags).test(str)
+  export function match(str: string, pattern: string) {
+    if (str) str = str.replaceAll("\\", "/")
+    return getRegex(pattern).test(str)
   }
 
   export function all(input: string, patterns: Record<string, any>) {

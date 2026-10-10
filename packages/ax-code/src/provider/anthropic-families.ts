@@ -1,4 +1,4 @@
-import { familyDisplayName, familyReleaseTime } from "./family-shared"
+import { familyDisplayName, familyReleaseTime, familySortKey, latestFamilyModels } from "./family-shared"
 
 const DATED_ID = /-\d{8}$/
 const FAMILY_ORDER = ["claude-opus", "claude-sonnet", "claude-haiku", "claude-fable"] as const
@@ -22,8 +22,7 @@ export function claudeFamilyId(input: { id?: string; family?: string }): string 
 }
 
 export function claudeFamilySortKey(family?: string): number {
-  const index = FAMILY_ORDER.indexOf(family as (typeof FAMILY_ORDER)[number])
-  return index === -1 ? FAMILY_ORDER.length : index
+  return familySortKey(FAMILY_ORDER, family)
 }
 
 export function claudeDisplayName(name: string | undefined, fallback: string): string {
@@ -31,14 +30,7 @@ export function claudeDisplayName(name: string | undefined, fallback: string): s
 }
 
 export function latestAnthropicFamilyModels<T extends AnthropicFamilySource>(models: Record<string, T>): T[] {
-  const best: Record<string, T | undefined> = {}
-  for (const [id, model] of Object.entries(models)) {
-    const family = claudeFamilyId({ id: model.id ?? id, family: model.family })
-    if (!family) continue
-    const current = best[family]
-    if (!current || compareAnthropicFamilyModels(model, current, id) > 0) best[family] = model
-  }
-  return FAMILY_ORDER.map((family) => best[family]).filter((model): model is T => model !== undefined)
+  return latestFamilyModels(models, FAMILY_ORDER, claudeFamilyId, compareAnthropicFamilyModels)
 }
 
 function compareAnthropicFamilyModels(a: AnthropicFamilySource, b: AnthropicFamilySource, aKey: string): number {

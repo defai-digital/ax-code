@@ -96,3 +96,11 @@ export function withTimeout<T>(
     )
   })
 }
+
+// Fire-and-forget timer for background batching; unref'd so it never holds the
+// process open. Never use it for a window someone awaits (see `sleep`).
+export function scheduleUnref(fn: () => void, ms: number) {
+  const id = setTimeout(fn, ms)
+  id.unref?.()
+  return { clear: () => clearTimeout(id) }
+}

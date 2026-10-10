@@ -144,4 +144,31 @@ describe("createPartWriteBatcher", () => {
     await Promise.all([force, flush])
     expect(writes).toEqual(["force", "snap"])
   })
+
+  test("a failing timer-driven flush reports through onError without an unhandled rejection", async () => {
+    const errors: string[] = []
+    let scheduled: (() => void) | undefined
+    const unhandled: unknown[] = []
+    const onUnhandled = (reason: unknown) => unhandled.push(reason)
+    process.on("unhandledRejection", onUnhandled)
+    try {
+      const batcher = createPartWriteBatcher<{ id: string }>({
+        write: async () => {
+          throw new Error("disk full")
+        },
+        onError: (_error, id) => errors.push(id),
+        schedule: (fn) => {
+          scheduled = fn
+          return { clear: () => undefined }
+        },
+      })
+      batcher.schedule({ id: "p1" })
+      scheduled!()
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(errors).toEqual(["p1"])
+      expect(unhandled).toEqual([])
+    } finally {
+      process.off("unhandledRejection", onUnhandled)
+    }
+  })
 })

@@ -1,5 +1,5 @@
 import z from "zod"
-import { evaluateWorkflowRun, WorkflowEvalSummary } from "./eval"
+import { evaluateWorkflowRun, workflowElapsedMs, WorkflowEvalSummary } from "./eval"
 import { WorkflowRunDetail, WorkflowUsageDelta } from "./state"
 
 const StatusCount = z.number().int().min(0)
@@ -116,11 +116,6 @@ export function summarizeWorkflowRunDetail(
     evaluation: evaluateWorkflowRun({ run: detail, now }),
     blockedReason: blockedReason(detail),
   })
-}
-
-function workflowElapsedMs(detail: z.infer<typeof WorkflowRunDetail>, now: number) {
-  if (!detail.time.started) return 0
-  return Math.max(0, (detail.time.completed ?? now) - detail.time.started)
 }
 
 function countPhaseStatuses(detail: z.infer<typeof WorkflowRunDetail>): WorkflowPhaseStatusCounts {
