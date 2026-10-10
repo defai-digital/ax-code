@@ -111,3 +111,17 @@ test.skipIf(process.platform === "win32")(
     })
   },
 )
+
+test("Chrome discovery ignores relative home, install, and PATH roots", () => {
+  expect(WebMcpChrome.pathCandidates("linux", { PATH: "./tools:../bin:/usr/bin" })).toEqual([
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/chrome",
+  ])
+  expect(WebMcpChrome.knownPaths("win32", "C:/u", { ProgramFiles: "relative" })).toEqual([])
+  expect(WebMcpChrome.knownPaths("darwin", "relative")).not.toContain(
+    "relative/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  )
+})

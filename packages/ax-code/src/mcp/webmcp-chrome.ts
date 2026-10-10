@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import os from "node:os"
-import path from "node:path"
+import nodePath from "node:path"
 import z from "zod"
 import { Config } from "../config/config"
 import { Filesystem } from "../util/filesystem"
@@ -26,12 +26,23 @@ export namespace WebMcpChrome {
   ])
   export type Status = z.infer<typeof Status>
 
+  // Discovery must not execute a project-relative binary through a relative
+  // HOME/install/PATH entry. Keep fixed browser names inside an absolute root.
+  function candidatePath(platform: NodeJS.Platform, root: string, ...parts: string[]): string[] {
+    const path = platform === "win32" ? nodePath.win32 : nodePath.posix
+    if (!path.isAbsolute(root)) return []
+    const candidate = path.join(root, ...parts)
+    const relative = path.relative(root, candidate)
+    if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) return []
+    return [candidate]
+  }
+
   /** Well-known install locations; PATH names are resolved by {@link pathCandidates}. */
   export function knownPaths(platform: NodeJS.Platform, home = os.homedir(), env = process.env): string[] {
     if (platform === "darwin") {
       return [
         "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-        path.join(home, "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+        ...candidatePath(platform, home, "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
         "/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
         "/Applications/Chromium.app/Contents/MacOS/Chromium",
       ]
@@ -39,7 +50,7 @@ export namespace WebMcpChrome {
     if (platform === "win32") {
       return [env["ProgramFiles"], env["ProgramFiles(x86)"], env["LOCALAPPDATA"]]
         .filter((root): root is string => !!root)
-        .map((root) => path.join(root, "Google", "Chrome", "Application", "chrome.exe"))
+        .flatMap((root) => candidatePath(platform, root, "Google", "Chrome", "Application", "chrome.exe"))
     }
     return []
   }
@@ -48,8 +59,8 @@ export namespace WebMcpChrome {
 
   export function pathCandidates(platform: NodeJS.Platform, env = process.env): string[] {
     if (platform === "win32") return []
-    const dirs = (env["PATH"] ?? "").split(path.delimiter).filter(Boolean)
-    return dirs.flatMap((dir) => PATH_NAMES.map((name) => path.join(dir, name)))
+    const dirs = (env["PATH"] ?? "").split(":").filter(Boolean)
+    return dirs.flatMap((dir) => PATH_NAMES.flatMap((name) => candidatePath(platform, dir, name)))
   }
 
   async function version(executable: string): Promise<number | undefined> {
