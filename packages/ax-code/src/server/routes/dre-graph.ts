@@ -1,6 +1,7 @@
 import { Hono } from "hono"
 import { validator } from "../validation"
 import z from "zod"
+import { EventQuery } from "../../replay/query"
 import { Session } from "../../session"
 import { SessionBranchRank } from "../../session/branch"
 import { SessionDre } from "../../session/dre"
@@ -72,6 +73,14 @@ type SessionGraphContext = {
 }
 
 async function loadSessionGraphContext(sessionID: SessionID, includeQuality: boolean): Promise<SessionGraphContext> {
+  // The views below each read the session's event log; share one decode.
+  return EventQuery.memoizeReads(() => loadSessionGraphContextUnmemoized(sessionID, includeQuality))
+}
+
+async function loadSessionGraphContextUnmemoized(
+  sessionID: SessionID,
+  includeQuality: boolean,
+): Promise<SessionGraphContext> {
   const session = await Session.get(sessionID)
   const [graph, dre, risk, rank, rollback, usage] = await Promise.all([
     Promise.resolve(SessionGraph.snapshot(sessionID)),

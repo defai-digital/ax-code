@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks"
 import { Database, eq, and, or, gt, gte, lte, desc, sql } from "../storage/db"
 import { EventLogTable } from "./event-log.sql"
 import { EventLogID } from "./index"
@@ -68,11 +69,35 @@ export namespace EventQuery {
     return Math.max(0, Math.min(Math.floor(limit), BY_SESSION_LIMIT))
   }
 
-  export function bySession(sessionID: SessionID): ReplayEvent[] {
+  // Per-scope memo of decoded `bySession` reads. A session's event log can be
+  // tens of MB of JSON, and report-style callers (the DRE graph page loads the
+  // risk, graph, rank, and rollback views side by side) each re-read and
+  // re-decode the same rows. Scoping the memo to one call tree keeps it exact:
+  // it is dropped when the scope ends, so nothing stale outlives a request.
+  type TimedEvent = { event_data: ReplayEvent; time_created: number }
+  const readMemo = new AsyncLocalStorage<Map<SessionID, TimedEvent[]>>()
+
+  /**
+   * Run `fn` so repeated `bySession` / `bySessionWithTimestamp` reads of the
+   * same session inside it share one decode. Events are treated as read-only by
+   * callers; each read still returns its own array. Reads see a single consistent snapshot per session
+   * for the duration of `fn`.
+   */
+  export function memoizeReads<T>(fn: () => T): T {
+    return readMemo.getStore() ? fn() : readMemo.run(new Map(), fn)
+  }
+
+  function timedRows(sessionID: SessionID): TimedEvent[] {
+    const memo = readMemo.getStore()
+    const memoized = memo?.get(sessionID)
+    if (memoized) return memoized
     const store = SessionShard.storeFor(sessionID)
     const rows = store.use((db) =>
       db
-        .select()
+        .select({
+          event_data: EventLogTable.event_data,
+          time_created: EventLogTable.time_created,
+        })
         .from(EventLogTable)
         .where(eq(EventLogTable.session_id, sessionID))
         .orderBy(EventLogTable.sequence)
@@ -80,7 +105,12 @@ export namespace EventQuery {
         .all(),
     )
     warnIfTruncated(sessionID, rows.length)
-    return rows.map((row) => row.event_data)
+    memo?.set(sessionID, rows)
+    return rows
+  }
+
+  export function bySession(sessionID: SessionID): ReplayEvent[] {
+    return timedRows(sessionID).map((row) => row.event_data)
   }
 
   /**
@@ -121,21 +151,7 @@ export namespace EventQuery {
   }
 
   export function bySessionWithTimestamp(sessionID: SessionID): { event_data: ReplayEvent; time_created: number }[] {
-    const store = SessionShard.storeFor(sessionID)
-    const rows = store.use((db) =>
-      db
-        .select({
-          event_data: EventLogTable.event_data,
-          time_created: EventLogTable.time_created,
-        })
-        .from(EventLogTable)
-        .where(eq(EventLogTable.session_id, sessionID))
-        .orderBy(EventLogTable.sequence)
-        .limit(BY_SESSION_LIMIT)
-        .all(),
-    )
-    warnIfTruncated(sessionID, rows.length)
-    return rows
+    return timedRows(sessionID).slice()
   }
 
   /**
