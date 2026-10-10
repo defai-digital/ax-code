@@ -345,6 +345,13 @@ export async function aggregateSessionStats(
     stats.totalTokens.cache.write += sessionTokens.cache.write
   }
 
+  // When every store failed, earliest/latest never moved off their sentinels:
+  // report the requested window (or 0) instead of an inverted range.
+  if (sessionTotalTokens.length === 0) {
+    stats.days = windowDays ?? 0
+    return stats
+  }
+
   const rangeDays = Math.max(1, Math.ceil((latestTime - earliestTime) / MS_IN_DAY))
   const effectiveDays = windowDays ?? rangeDays
   stats.dateRange = {
@@ -358,7 +365,9 @@ export async function aggregateSessionStats(
     stats.totalTokens.reasoning +
     stats.totalTokens.cache.read +
     stats.totalTokens.cache.write
-  stats.tokensPerSession = filteredSessions.length > 0 ? totalTokens / filteredSessions.length : 0
+  // Average over the sessions that actually loaded — the same population the
+  // median uses — so a failed store does not drag the mean toward zero.
+  stats.tokensPerSession = totalTokens / sessionTotalTokens.length
   sessionTotalTokens.sort((a, b) => a - b)
   const mid = Math.floor(sessionTotalTokens.length / 2)
   stats.medianTokensPerSession =

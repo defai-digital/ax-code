@@ -167,6 +167,11 @@ test("aggregateSessionStats skips a store whose usage query fails with an unprin
 
       expect(stats.totalSessions).toBe(2)
       expect(stats.totalMessages).toBe(0)
+      // Failed sessions contribute no usage: the mean must not treat them as
+      // zero-token sessions, and the day count must not fall back to an
+      // inverted sentinel range (which used to report 1 day for all-time).
+      expect(stats.tokensPerSession).toBe(0)
+      expect(stats.days).toBe(0)
       expect(warnings.join("\n")).toContain("Warning: stats batch failed: Unknown error")
 
       await Session.remove(first.id)
