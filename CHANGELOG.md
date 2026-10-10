@@ -22,6 +22,7 @@ changes belong to AX Coder.
 - Recover download progress after malformed JSON, preserve UTF-8 across output chunks, and bound download lines, summaries, and diagnostic transcripts.
 - Avoid lost updates in concurrent download size measurements and recheck managed copies under the reclaim lock.
 - Add a fast path for the CLI version flag and aggregate stats usage in SQLite without full CLI bootstrap.
+- Decode each session event log once across the DRE graph page projections within a request.
 
 ## [7.24.0] - 2026-10-09
 
