@@ -878,6 +878,23 @@ describe("session.prompt helpers", () => {
     })
   })
 
+  test("an errored turn with a terminal finish keeps the loop running so the retry can happen", () => {
+    expect(
+      assistantLoopExitDecision({
+        lastUserID: "001",
+        lastAssistant: { id: "002", finish: "stop", error: { name: "APIError", data: {} } } as any,
+        hasPendingSubtask: false,
+      }),
+    ).toEqual({ action: "continue" })
+    expect(
+      assistantLoopExitDecision({
+        lastUserID: "001",
+        lastAssistant: { id: "002", finish: "stop", error: { name: "MessageAbortedError", data: {} } } as any,
+        hasPendingSubtask: false,
+      }),
+    ).toEqual({ action: "complete" })
+  })
+
   test("keeps loop running for actionable, stale, or unfinished assistant turns", () => {
     expect(
       assistantLoopExitDecision({

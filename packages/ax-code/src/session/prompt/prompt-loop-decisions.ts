@@ -19,11 +19,13 @@ type AssistantLoopExitDecision =
 type AssistantTurnCursor = {
   lastUserID: string
   lastUserCreatedAt?: number
-  lastAssistant?: Pick<MessageV2.Assistant, "id" | "finish"> & { time?: Pick<MessageV2.Assistant["time"], "created"> }
+  lastAssistant?: Pick<MessageV2.Assistant, "id" | "finish" | "error"> & {
+    time?: Pick<MessageV2.Assistant["time"], "created">
+  }
 }
 
 type RespondedAssistantTurnCursor = AssistantTurnCursor & {
-  lastAssistant: Pick<MessageV2.Assistant, "id" | "finish"> & { finish: string }
+  lastAssistant: Pick<MessageV2.Assistant, "id" | "finish" | "error"> & { finish: string }
 }
 
 type ConsecutiveErrorDecision =
@@ -449,6 +451,14 @@ export function assistantLoopExitDecision(
   },
 ): AssistantLoopExitDecision {
   if (!assistantRespondedAfterUser(input)) return { action: "continue" }
+
+  // A turn that errored after its finish event (provider error chunk, stream
+  // ending early) still carries finish "stop"; the error transition already
+  // chose to retry it, so it must not end the run as completed. A user abort
+  // is the one error that does end the run here.
+  if (input.lastAssistant.error && input.lastAssistant.error.name !== "MessageAbortedError") {
+    return { action: "continue" }
+  }
 
   const finish = input.lastAssistant.finish
   if (modelTurnFinished(finish)) {
