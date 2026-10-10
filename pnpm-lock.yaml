@@ -61,8 +61,8 @@ catalogs:
       specifier: 6.0.146
       version: 6.0.146
     ax-tui:
-      specifier: jsr:@defai-digital/ax-tui@1.0.3
-      version: 1.0.3
+      specifier: jsr:@defai-digital/ax-tui@1.0.4
+      version: 1.0.4
     d3-force:
       specifier: 3.0.0
       version: 3.0.0
@@ -380,7 +380,7 @@ importers:
         version: 3.1.3(@ai-sdk/openai-compatible@2.0.38(zod@4.3.6))(@ai-sdk/provider-utils@4.0.33(zod@4.3.6))(@ai-sdk/provider@3.0.8)(ai@6.0.146(zod@4.3.6))(zod@4.3.6)
       ax-tui:
         specifier: 'catalog:'
-        version: '@jsr/defai-digital__ax-tui@1.0.3(@typescript/typescript6@6.0.2)'
+        version: '@jsr/defai-digital__ax-tui@1.0.4(@typescript/typescript6@6.0.2)'
       bonjour-service:
         specifier: 1.4.4
         version: 1.4.4
@@ -1905,8 +1905,8 @@ packages:
   '@jsdevtools/ono@7.1.3':
     resolution: {integrity: sha512-4JQNk+3mVzK3xh2rqd6RB4J46qUR19azEHBneZyTZM+c456qOrbbM/5xcR8huNCCcbVt7+UmizG6GuUvPvKUYg==}
 
-  '@jsr/defai-digital__ax-tui@1.0.3':
-    resolution: {integrity: sha512-K62cCv+k9HGgq88vsLgwYjln0fKd1LKtIC04V7KwA+8pVuuQXa8zGPO8TmEnAgmq6gu935A34jcC7lq+qj54uw==, tarball: https://npm.jsr.io/~/11/@jsr/defai-digital__ax-tui/1.0.3.tgz}
+  '@jsr/defai-digital__ax-tui@1.0.4':
+    resolution: {integrity: sha512-i5UADyLVj/DsMOd5l6jIEG9aHueFwH3VoHlIOYHLT7quHxMQfxUMgQxaK6z8FCadAcCyUrWE9Ig7AKEWtgNZig==, tarball: https://npm.jsr.io/~/11/@jsr/defai-digital__ax-tui/1.0.4.tgz}
 
   '@leichtgewicht/ip-codec@2.0.5':
     resolution: {integrity: sha512-Vo+PSpZG2/fmgmiNzYK9qWRh8h/CHrwD0mo1h1DzL4yzHNSfWYujGTYsWGreD000gcgmZ7K4Ys6Tx9TxtsKdDw==}
@@ -4658,10 +4658,6 @@ packages:
   get-caller-file@2.0.5:
     resolution: {integrity: sha512-DyFP3BM/3YHTQOCUL/w0OZHR0lpKeGrxotcHWcqNEdnltqFwXVfhEBQ94eIo34AfQpo0rGki4cyIiftY06h2Fg==}
     engines: {node: 6.* || 8.* || >= 10.*}
-
-  get-east-asian-width@1.5.0:
-    resolution: {integrity: sha512-CQ+bEO+Tva/qlmw24dCejulK5pMzVnUOFOijVogd3KQs07HnRIgp8TGipvCCRT06xeYEbpbgwaCxglFyiuIcmA==}
-    engines: {node: '>=18'}
 
   get-east-asian-width@1.7.0:
     resolution: {integrity: sha512-XjH1AECxf0giL2V1aU8vKyRR2ppRUb5c0EvT7zuJTokQ74bNo52zOtghqdWIqrhUD79fo3x0WfKZdOqxF6LG1Q==}
@@ -7924,7 +7920,7 @@ snapshots:
 
   '@jsdevtools/ono@7.1.3': {}
 
-  '@jsr/defai-digital__ax-tui@1.0.3(@typescript/typescript6@6.0.2)':
+  '@jsr/defai-digital__ax-tui@1.0.4(@typescript/typescript6@6.0.2)':
     dependencies:
       '@babel/core': 7.29.6
       '@babel/preset-typescript': 7.27.1(@babel/core@7.29.6)
@@ -9059,7 +9055,6 @@ snapshots:
   '@types/node@26.6.4':
     dependencies:
       undici-types: 8.9.0
-    optional: true
 
   '@types/normalize-package-data@2.4.4': {}
 
@@ -9728,7 +9723,7 @@ snapshots:
 
   bun-types@1.4.1:
     dependencies:
-      '@types/node': 26.0.0
+      '@types/node': 26.6.4
 
   bundle-name@4.1.0:
     dependencies:
@@ -9826,7 +9821,7 @@ snapshots:
   cliui@9.0.1:
     dependencies:
       string-width: 7.2.0
-      strip-ansi: 7.1.2
+      strip-ansi: 7.2.0
       wrap-ansi: 9.0.2
 
   cockatiel@3.2.1: {}
@@ -10483,8 +10478,6 @@ snapshots:
   gensync@1.0.0-beta.2: {}
 
   get-caller-file@2.0.5: {}
-
-  get-east-asian-width@1.5.0: {}
 
   get-east-asian-width@1.7.0: {}
 
@@ -11918,13 +11911,13 @@ snapshots:
   string-width@7.2.0:
     dependencies:
       emoji-regex: 10.6.0
-      get-east-asian-width: 1.5.0
-      strip-ansi: 7.1.2
+      get-east-asian-width: 1.7.0
+      strip-ansi: 7.2.0
 
   string-width@8.3.0:
     dependencies:
       get-east-asian-width: 1.7.0
-      strip-ansi: 7.1.2
+      strip-ansi: 7.2.0
 
   string_decoder@1.1.1:
     dependencies:
@@ -12233,8 +12226,7 @@ snapshots:
 
   undici-types@8.3.0: {}
 
-  undici-types@8.9.0:
-    optional: true
+  undici-types@8.9.0: {}
 
   undici@6.28.1: {}
 
@@ -12379,7 +12371,7 @@ snapshots:
 
   wide-align@1.1.5:
     dependencies:
-      string-width: 1.0.2
+      string-width: 4.2.3
 
   word-wrap@1.2.5: {}
 
@@ -12405,7 +12397,7 @@ snapshots:
     dependencies:
       ansi-styles: 6.2.3
       string-width: 7.2.0
-      strip-ansi: 7.1.2
+      strip-ansi: 7.2.0
 
   wrappy@1.0.2: {}
 
