@@ -18,7 +18,7 @@ import {
   useContextMenu,
 } from "./context-menu"
 
-export function Dialog(
+function Dialog(
   props: ParentProps<{
     size?: "medium" | "large"
     onClose: () => void

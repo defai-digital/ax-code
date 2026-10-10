@@ -4,7 +4,7 @@ import type { WikiGraphNodeKind } from "@ax-code/ax-wiki/graph"
 
 /** DOM-free three-lane force layout for the evidence map. Runs headless under Node. */
 export const LAYOUT_WORLD = { width: 900, height: 600 } as const
-export const LAYOUT_LIMITS = { maxTicks: 300, minRadius: 6, maxRadius: 18 } as const
+const LAYOUT_LIMITS = { maxTicks: 300, minRadius: 6, maxRadius: 18 } as const
 export const LAYOUT_LANES: Record<WikiGraphNodeKind, number> = {
   page: LAYOUT_WORLD.width * 0.25,
   symbol: LAYOUT_WORLD.width * 0.5,
@@ -28,7 +28,7 @@ export type LayoutNode = {
 export type LayoutLink = SimulationLinkDatum<LayoutNode> & { from: string; to: string }
 
 /** Present only on radial layouts; the force layout leaves it undefined. */
-export type RadialMeta = {
+type RadialMeta = {
   cx: number
   cy: number
   /** Angle in radians from the +x axis, clockwise on screen, for every node. */
@@ -37,13 +37,13 @@ export type RadialMeta = {
   treeParent: ReadonlyMap<string, string>
 }
 
-export type Bounds = { minX: number; minY: number; maxX: number; maxY: number }
+type Bounds = { minX: number; minY: number; maxX: number; maxY: number }
 
 /** Arc diagram: nodes on one baseline, edges drawn as arcs above (citations) or below (imports). */
-export type ArcMeta = { baselineY: number }
+type ArcMeta = { baselineY: number }
 
 /** Nested treemap: every node is a rectangle centered on its x/y. */
-export type TreemapMeta = { rects: ReadonlyMap<string, { w: number; h: number; depth: number }> }
+type TreemapMeta = { rects: ReadonlyMap<string, { w: number; h: number; depth: number }> }
 
 export type ForceLayout = {
   radial?: RadialMeta

@@ -26,7 +26,7 @@ const log = Log.create({ service: "tui.dialog-command" })
 type Context = ReturnType<typeof init>
 const ctx = createContext<Context>()
 
-export type Slash = {
+type Slash = {
   name: string
   aliases?: string[]
   /** Typeable via `/name`, but omitted from `/` autocomplete. */

@@ -32,7 +32,8 @@ export const WEBMCP_ALLOWLIST_FOOTER_HINT = "Double click an entry (or press Ent
  */
 export const WEBMCP_ALLOWLIST_ARM_MS = 4000
 
-const CAPABILITY_ORDER: WebMcpAllowlistCapability[] = ["list_pages", "navigate", "read", "close"]
+/** Display rank per capability: listing first, then navigation, read and close. */
+const CAPABILITY_RANK: Record<WebMcpAllowlistCapability, number> = { list_pages: 0, navigate: 1, read: 2, close: 3 }
 const ORIGIN_CAPABILITIES = ["navigate", "read", "close"] as const
 
 /**
@@ -83,14 +84,22 @@ function matches(title: string, needle: string): boolean {
   return needle === "" || title.toLowerCase().includes(needle)
 }
 
-/** Saved records in a stable order: listing first, then by capability and origin. */
+function scopeOrigin(scope: WebMcpAllowlistScope): string {
+  return scope.capability === "list_pages" ? "" : scope.origin
+}
+
+/**
+ * Saved records in a stable order: listing first, then by capability rank
+ * and origin. Origins compare by code point, not locale, so the order is
+ * the same on every machine and never depends on the ICU data available.
+ */
 export function webMcpAllowlistRows(records: readonly WebMcpApprovalRecord[]): WebMcpApprovalRecord[] {
   return [...records].sort((a, b) => {
-    const order = CAPABILITY_ORDER.indexOf(a.scope.capability) - CAPABILITY_ORDER.indexOf(b.scope.capability)
-    if (order !== 0) return order
-    const left = a.scope.capability === "list_pages" ? "" : a.scope.origin
-    const right = b.scope.capability === "list_pages" ? "" : b.scope.origin
-    return left.localeCompare(right)
+    const rank = CAPABILITY_RANK[a.scope.capability] - CAPABILITY_RANK[b.scope.capability]
+    if (rank !== 0) return rank
+    const left = scopeOrigin(a.scope)
+    const right = scopeOrigin(b.scope)
+    return left < right ? -1 : left > right ? 1 : 0
   })
 }
 
@@ -131,7 +140,9 @@ export function webMcpAllowlistGrantOptions(
  * and feeds the add rows; a non-empty query that matches nothing and is not
  * an origin explains the accepted shape instead of showing an empty list.
  * Destructive rows carry their confirmation state in the description, so a
- * single activation never revokes silently.
+ * single activation never revokes silently. `armed` is caller-owned state:
+ * this function cannot expire it, so the caller must clear it whenever the
+ * armed row can leave the output (query change, refetch, revoke).
  */
 export function webMcpAllowlistDialogOptions(input: {
   records: readonly WebMcpApprovalRecord[] | undefined

@@ -67,7 +67,7 @@ export function DialogQuality(props: { sessionID: string; setPrompt: (prompt: Pr
   return <DialogSelect title={uiText("ui.qualityReadiness")} options={options()} skipFilter={false} />
 }
 
-export function DialogQualityDetail(props: {
+function DialogQualityDetail(props: {
   sessionID: string
   workflow: SessionQualityWorkflow
   kind: SessionQualityActionKind

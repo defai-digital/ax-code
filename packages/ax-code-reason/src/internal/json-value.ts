@@ -1,6 +1,6 @@
 import { toErrorMessage } from "./error-message"
 
-export type JsonParseResult =
+type JsonParseResult =
   | {
       ok: true
       value: unknown
@@ -10,7 +10,7 @@ export type JsonParseResult =
       error: unknown
     }
 
-export function parseJsonResult(text: string): JsonParseResult {
+function parseJsonResult(text: string): JsonParseResult {
   try {
     return { ok: true, value: JSON.parse(text) }
   } catch (error) {

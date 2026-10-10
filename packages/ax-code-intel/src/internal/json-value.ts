@@ -27,13 +27,3 @@ export function parseJsonStrict(text: string): unknown {
   }
   return parsed.value
 }
-
-export function parseJsonPayload(raw: string | undefined): unknown | undefined {
-  const text = raw?.trim()
-  if (!text) return undefined
-  const parsed = parseJsonResult(text)
-  if (!parsed.ok) {
-    return undefined
-  }
-  return parsed.value
-}

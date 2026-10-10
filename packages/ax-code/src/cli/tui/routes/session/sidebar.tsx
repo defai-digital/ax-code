@@ -81,7 +81,7 @@ const QUEUED_STEER_ICON_WIDTH = 2
 const QUEUED_EDIT_ICON = "✎"
 const QUEUED_EDIT_ICON_WIDTH = 2
 
-export function activityColor(status: string, theme: ReturnType<typeof useTheme>["theme"]) {
+function activityColor(status: string, theme: ReturnType<typeof useTheme>["theme"]) {
   switch (status) {
     case "running":
     case "delegate":

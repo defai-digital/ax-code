@@ -66,7 +66,7 @@ type QueuedToast = { options: ToastOptions; repeat: number }
 // collapse into a ×N counter, and a new error flushes queued info toasts.
 const MAX_QUEUED_TOASTS = 5
 
-export function sameToast(a: ToastOptions, b: ToastOptions) {
+function sameToast(a: ToastOptions, b: ToastOptions) {
   return a.variant === b.variant && a.title === b.title && a.message === b.message
 }
 
@@ -164,7 +164,7 @@ export function createToastStore() {
   return toast
 }
 
-export type ToastContext = ReturnType<typeof createToastStore>
+type ToastContext = ReturnType<typeof createToastStore>
 
 const ctx = createContext<ToastContext>()
 

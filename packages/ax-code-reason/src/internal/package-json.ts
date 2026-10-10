@@ -17,7 +17,3 @@ export function packageJsonStringMap(value: unknown): Record<string, string> {
   }
   return result
 }
-
-export function packageJsonObjectKeys(value: unknown): string[] {
-  return isRecord(value) ? Object.keys(value) : []
-}

@@ -10,8 +10,6 @@ import { Question, Read, TodoWrite } from "./session"
 import { Task } from "./task"
 import { ScheduleTask } from "./schedule"
 
-export type { ToolProps }
-
 export type ToolRendererComponent = (props: ToolProps<any>) => JSX.Element
 
 const TOOL_RENDERER_COMPONENTS: Record<SessionToolRendererKey, ToolRendererComponent> = {

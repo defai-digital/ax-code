@@ -262,7 +262,7 @@ type CodeBlock = {
 
 // Pull fenced code blocks out of raw markdown text. Unclosed trailing fences
 // are ignored — there is no complete block to copy yet.
-export function extractCodeBlocks(text: string): CodeBlock[] {
+function extractCodeBlocks(text: string): CodeBlock[] {
   const blocks: CodeBlock[] = []
   for (const match of text.matchAll(/```([^\n]*)\n([\s\S]*?)```/g)) {
     blocks.push({ language: match[1].trim(), code: match[2].replace(/\n$/, "") })

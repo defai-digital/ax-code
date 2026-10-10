@@ -31,7 +31,7 @@ export function isDefaultFilters(filters: ViewFilters): boolean {
   )
 }
 
-export function nodeMatchesQuery(node: WikiGraphNode, query: string): boolean {
+function nodeMatchesQuery(node: WikiGraphNode, query: string): boolean {
   const needle = query.trim().toLowerCase()
   return !needle || `${node.label} ${node.path}`.toLowerCase().includes(needle)
 }

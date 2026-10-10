@@ -8,7 +8,7 @@ import { shouldUseTuiAnimations } from "@tui/component/spinner-profile"
 import { resolveNerdFontEnabled, detectNerdFontTerminal, NERD_FONT_KV_KEY } from "@tui/ui/glyphs"
 import { resolveVisualCapability, type VisualCapability } from "./capability"
 
-export const { use: useVisualCapability, provider: VisualCapabilityProvider } = createSimpleContext({
+export const { provider: VisualCapabilityProvider } = createSimpleContext({
   name: "VisualCapability",
   init: (): { capability: Accessor<VisualCapability> } => {
     const kv = useKV()
