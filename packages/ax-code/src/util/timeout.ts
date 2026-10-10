@@ -68,7 +68,14 @@ export function withTimeout<T>(
     const timer = setTimeout(() => {
       if (settled) return
       settled = true
-      opts?.onTimeout?.()
+      try {
+        opts?.onTimeout?.()
+      } catch (e) {
+        // A throw here would escape the timer callback as an uncaught exception
+        // and leave the returned promise pending forever.
+        reject(toError(e))
+        return
+      }
       if (opts?.error) {
         try {
           reject(opts.error())

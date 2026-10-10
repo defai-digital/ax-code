@@ -145,6 +145,43 @@ describe("createPartWriteBatcher", () => {
     expect(writes).toEqual(["force", "snap"])
   })
 
+  test("a failing write does not drop the other coalesced parts", async () => {
+    const writes: string[] = []
+    const errors: string[] = []
+    const batcher = createPartWriteBatcher<{ id: string }>({
+      write: async (part) => {
+        if (part.id === "a") throw new Error("disk full")
+        writes.push(part.id)
+      },
+      onError: (_error, id) => errors.push(id),
+      schedule: () => ({ clear: () => undefined }),
+    })
+    batcher.schedule({ id: "a" })
+    batcher.schedule({ id: "b" })
+    batcher.schedule({ id: "c" })
+    await expect(batcher.flush()).rejects.toThrow("disk full")
+    expect(writes).toEqual(["b", "c"])
+    expect(errors).toEqual(["a"])
+  })
+
+  test("an empty flush after a failed window flush does not replay the reported error", async () => {
+    let scheduled: (() => void) | undefined
+    const batcher = createPartWriteBatcher<{ id: string }>({
+      write: async () => {
+        throw new Error("disk full")
+      },
+      onError: () => undefined,
+      schedule: (fn) => {
+        scheduled = fn
+        return { clear: () => undefined }
+      },
+    })
+    batcher.schedule({ id: "p1" })
+    scheduled!()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await expect(batcher.flush()).resolves.toBeUndefined()
+  })
+
   test("a failing timer-driven flush reports through onError without an unhandled rejection", async () => {
     const errors: string[] = []
     let scheduled: (() => void) | undefined

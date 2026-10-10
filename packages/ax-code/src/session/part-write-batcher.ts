@@ -48,15 +48,25 @@ export function createPartWriteBatcher<TPart extends { id: string }>(input: {
 
   const flushPending = (): Promise<void> => {
     timer = undefined
-    if (pending.size === 0) return chain
+    // Nothing new to write: wait for in-flight work, but do not replay a
+    // rejection that writeOne already reported through onError.
+    if (pending.size === 0) return chain.catch(() => undefined)
     const parts = [...pending.values()]
     pending.clear()
     chain = chain
       .catch(() => undefined)
       .then(async () => {
+        // The parts were already removed from `pending`, so a failure for one
+        // must not drop the others; write them all and rethrow the first error.
+        let failure: { error: unknown } | undefined
         for (const part of parts) {
-          await writeOne(part)
+          try {
+            await writeOne(part)
+          } catch (error) {
+            failure ??= { error }
+          }
         }
+        if (failure) throw failure.error
       })
     return chain
   }

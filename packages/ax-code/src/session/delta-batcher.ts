@@ -49,18 +49,24 @@ export function createDeltaBatcher(input: {
     if (pending.size === 0) return undefined
     const entries = [...pending]
     pending.clear()
+    // The executor turns a synchronous throw from publish into a rejection, so
+    // one failing part neither skips the remaining batches (already removed
+    // from `pending`) nor escapes the timer callback past onFlushError.
     return Promise.all(
-      entries.map(([partID, batch]) =>
-        Promise.resolve(
-          input.publish({
-            sessionID: input.sessionID,
-            messageID: input.messageID,
-            partID,
-            field: "text",
-            delta: batch.chunks.join(""),
-            offset: batch.offset,
-          }),
-        ),
+      entries.map(
+        ([partID, batch]) =>
+          new Promise((resolve) =>
+            resolve(
+              input.publish({
+                sessionID: input.sessionID,
+                messageID: input.messageID,
+                partID,
+                field: "text",
+                delta: batch.chunks.join(""),
+                offset: batch.offset,
+              }),
+            ),
+          ),
       ),
     )
   }

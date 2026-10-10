@@ -75,6 +75,32 @@ describe("createDeltaBatcher", () => {
     expect(String(onFlushError.mock.calls[0]![0])).toContain("publish failed")
   })
 
+  test("a synchronously throwing publish still publishes the other parts and reports once", async () => {
+    const published: string[] = []
+    const onFlushError = vi.fn()
+    let scheduled: (() => void) | undefined
+    const batcher = createDeltaBatcher({
+      sessionID: "ses_1",
+      messageID: "msg_1",
+      publish: (event) => {
+        if (event.partID === "p1") throw new Error("sync publish failed")
+        published.push(event.partID)
+      },
+      onFlushError,
+      schedule: (fn) => {
+        scheduled = fn
+        return { clear: () => undefined }
+      },
+    })
+    batcher.push("p1", "x")
+    batcher.push("p2", "y")
+    expect(() => scheduled!()).not.toThrow()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(published).toEqual(["p2"])
+    expect(onFlushError).toHaveBeenCalledTimes(1)
+    expect(String(onFlushError.mock.calls[0]![0])).toContain("sync publish failed")
+  })
+
   test("each flushed batch carries the offset of its first chunk", async () => {
     const publishes: Array<{ partID: string; delta: string; offset?: number }> = []
     let scheduled: (() => void) | undefined

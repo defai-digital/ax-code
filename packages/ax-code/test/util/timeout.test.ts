@@ -82,6 +82,15 @@ describe("util.timeout", () => {
     expect(calls).toBe(1)
   })
 
+  test("a throwing onTimeout rejects the promise instead of escaping the timer", async () => {
+    const pending = withTimeout(new Promise<never>(() => {}), 20, undefined, {
+      onTimeout: () => {
+        throw new TypeError("cleanup blew up")
+      },
+    })
+    await expect(pending).rejects.toBeInstanceOf(TypeError)
+  })
+
   test("does not fire onTimeout when the promise settles first", async () => {
     let calls = 0
     const result = await withTimeout(Promise.resolve("ok"), 50, undefined, { onTimeout: () => calls++ })
