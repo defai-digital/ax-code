@@ -290,6 +290,28 @@ describe("GoalPlan persistence", () => {
     })
   })
 
+  test("copyForFork keeps an unassured goal unassured instead of leaving the fork unplanned", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const source = await Session.create({})
+        const target = await Session.create({})
+        const fromCreated = Date.now()
+        const toCreated = fromCreated + 1
+        GoalPlan.markUnassured(source.id, fromCreated)
+        await GoalPlan.copyForFork({ from: source.id, fromCreated, to: target.id, toCreated })
+        // "missing" would make resume run the planner and upgrade a goal whose
+        // assurance the user declined.
+        expect(GoalPlan.lookupContract(target.id, toCreated).state).toBe("unassured")
+        await GoalPlan.remove(source.id, fromCreated)
+        await GoalPlan.remove(target.id, toCreated)
+        await Session.remove(source.id)
+        await Session.remove(target.id)
+      },
+    })
+  })
+
   test("remove deletes the unassured marker with the other goal artifacts", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

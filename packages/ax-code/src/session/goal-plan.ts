@@ -412,8 +412,12 @@ export namespace GoalPlan {
     const digestFile = digestPathFor(sessionID, created)
     await fs.promises.mkdir(path.dirname(file), { recursive: true })
     await fs.promises.mkdir(path.dirname(digestFile), { recursive: true })
-    const tmp = `${file}.${process.pid}.tmp`
-    const digestTmp = `${digestFile}.${process.pid}.tmp`
+    // Unique per call (same scheme as copyForFork): two writers for the same
+    // goal in one process must not share a temp file and publish a digest
+    // that does not match the plan beside it.
+    const suffix = `${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`
+    const tmp = `${file}.${suffix}`
+    const digestTmp = `${digestFile}.${suffix}`
     try {
       await fs.promises.writeFile(tmp, rendered, "utf8")
       await fs.promises.writeFile(digestTmp, digestOf(contract) + "\n", "utf8")
@@ -451,6 +455,10 @@ export namespace GoalPlan {
     const fromDigest = digestPathFor(input.from, input.fromCreated)
     const toPlan = pathFor(input.to, input.toCreated)
     const toDigest = digestPathFor(input.to, input.toCreated)
+    // A goal created without an assurance contract carries only its marker:
+    // the fork must stay unassured too, or resume would run the planner and
+    // silently upgrade it to a contract the user declined.
+    if (isUnassured(input.from, input.fromCreated)) markUnassured(input.to, input.toCreated)
     await fs.promises.mkdir(path.dirname(toPlan), { recursive: true })
     await fs.promises.mkdir(path.dirname(toDigest), { recursive: true })
     const suffix = `${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`
