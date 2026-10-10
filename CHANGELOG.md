@@ -6,6 +6,18 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.24.3] - 2026-10-10
+
+### Changed
+
+- Enforce MCP trust and managed WebMCP policy before advisory Chrome executable probes.
+- Fix structured reasoning usage double-counting that inflated session totals and could trigger compaction early.
+- Improve automatic compaction diagnostics and usage-less provider recovery.
+- Normalize union tool schemas for providers requiring an object root.
+- Improve WebMCP discovery, Chrome checks, and browser workflow guidance.
+- Refresh the validated upstream model catalog.
+- Publish AX Code 7.24.3 with SDK 2.6.6.
+
 ## [7.24.2] - 2026-10-10
 
 ### Changed
