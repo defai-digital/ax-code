@@ -51,6 +51,7 @@ async function resolveModel(initModel: { providerID: string; modelID: string } |
 async function resolveBudget(model: Provider.Model): Promise<{
   budget: CompactionBudget
   auto: boolean
+  autoCompactionReason?: SessionCompaction.AutoCompactionDisabledReason
   windowSource: "catalog" | "observed" | "unknown"
   observedWindow?: number
 }> {
@@ -65,14 +66,15 @@ async function resolveBudget(model: Provider.Model): Promise<{
     resolution.kind === "observed" ? "observed" : resolution.kind === "unknown" ? "unknown" : "catalog"
   const observedWindow = resolution.kind === "observed" ? resolution.window : undefined
 
-  const auto = await SessionCompaction.budget(model)
-  if (auto) return { budget: auto, auto: true, windowSource, observedWindow }
+  const status = await SessionCompaction.budgetStatus(model)
+  if (status.budget) return { budget: status.budget, auto: true, windowSource, observedWindow }
   const config = await Config.get()
   const request = calculateCompactionBudget(model, config.compaction?.reserved, windowOptions)
   if (request) {
     return {
       budget: request,
       auto: false,
+      autoCompactionReason: status.reason,
       windowSource,
       observedWindow,
     }
@@ -90,7 +92,7 @@ async function resolveBudget(model: Provider.Model): Promise<{
       `Cannot determine the context window for model ${model.providerID}/${model.id}; it declares no token limit.`,
     )
   }
-  return { budget: fallback, auto: false, windowSource, observedWindow }
+  return { budget: fallback, auto: false, autoCompactionReason: status.reason, windowSource, observedWindow }
 }
 
 function lastUsedTokens(messages: MessageV2.WithParts[]) {
@@ -157,7 +159,7 @@ export const ContextStatusTool = Tool.define("context_status", async (initCtx) =
     parameters,
     async execute(_params, ctx) {
       const model = await resolveModel(initModel, ctx)
-      const { budget, auto, windowSource, observedWindow } = await resolveBudget(model)
+      const { budget, auto, autoCompactionReason, windowSource, observedWindow } = await resolveBudget(model)
       const breakdown = await ledgerBreakdown(model, ctx).catch(() => undefined)
       // The ledger total (measured anchor + drift-corrected tail estimate)
       // replaces the last-step usage snapshot only when a matching anchor
@@ -176,6 +178,7 @@ export const ContextStatusTool = Tool.define("context_status", async (initCtx) =
           ...status,
           reserved: budget.cap - budget.usable,
           autoCompaction: auto,
+          ...(autoCompactionReason ? { autoCompactionDisabledReason: autoCompactionReason } : {}),
           providerID: model.providerID,
           modelID: model.id,
           windowSource,

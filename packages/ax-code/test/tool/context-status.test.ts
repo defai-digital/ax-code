@@ -18,10 +18,11 @@ const PROVIDER_ID = "context-status-provider"
 const MODEL_ID = "context-status-model"
 const LIMIT = { context: 200_000, input: 100_000, output: 8_000 }
 
-function project(config?: { contextTools?: boolean }) {
+function project(config?: { contextTools?: boolean; compaction?: Record<string, unknown> }) {
   return tmpdir({
     config: {
       ...(config?.contextTools ? { experimental: { context_tools: true } } : {}),
+      ...(config?.compaction ? { compaction: config.compaction } : {}),
       provider: {
         [PROVIDER_ID]: {
           name: "Context Status Provider",
@@ -133,6 +134,26 @@ describe("tool.context_status", () => {
           used: effectiveTokenTotal(ASSISTANT_TOKENS),
           headroom: expected!.usable - effectiveTokenTotal(ASSISTANT_TOKENS),
         })
+      },
+    })
+  })
+
+  test("reports why automatic compaction is disabled", async () => {
+    await using tmp = await project({ contextTools: true, compaction: { auto: false } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tools = await ToolRegistry.tools(modelRef)
+        const tool = tools.find((candidate) => candidate.id === "context_status")
+        expect(tool).toBeDefined()
+
+        const session = await Session.create({})
+        await seedConversation(session.id, tmp.path)
+        const messages = await Session.messages({ sessionID: session.id })
+
+        const result = await tool!.execute({}, toolContext(session.id, messages))
+        expect(result.metadata.autoCompaction).toBe(false)
+        expect(result.metadata.autoCompactionDisabledReason).toBe("auto_disabled")
       },
     })
   })

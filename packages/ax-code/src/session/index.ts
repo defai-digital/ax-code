@@ -1310,13 +1310,22 @@ export namespace Session {
         return 0
       }
       const usage = input.usage as Record<string, unknown>
-      const inputTokenDetails = usage.inputTokens as Record<string, unknown> | undefined
-      const outputTokenDetails = usage.outputTokens as Record<string, unknown> | undefined
+      const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+        value && typeof value === "object" ? (value as Record<string, unknown>) : undefined
+      // The AI SDK (v6) normalizes usage to `{ inputTokens: number, inputTokenDetails: {...} }`,
+      // while the raw provider spec nests the breakdown inside `inputTokens` itself.
+      // Read whichever shape is present so both normalize the same way.
+      const inputTokenDetails = asRecord(usage.inputTokenDetails) ?? asRecord(usage.inputTokens)
+      const outputTokenDetails = asRecord(usage.outputTokenDetails) ?? asRecord(usage.outputTokens)
       const inputTokens = safe(usage.inputTokens ?? 0)
       const outputTokens = safe(usage.outputTokens ?? 0)
-      const reasoningTokens = safe(usage.reasoningTokens ?? outputTokenDetails?.reasoning ?? 0)
+      const reasoningTokens = safe(
+        usage.reasoningTokens ?? outputTokenDetails?.["reasoningTokens"] ?? outputTokenDetails?.["reasoning"] ?? 0,
+      )
 
-      const cacheReadInputTokens = safe(usage.cachedInputTokens ?? inputTokenDetails?.cacheRead ?? 0)
+      const cacheReadInputTokens = safe(
+        usage.cachedInputTokens ?? inputTokenDetails?.["cacheReadTokens"] ?? inputTokenDetails?.["cacheRead"] ?? 0,
+      )
 
       const anthropicMeta = (input.metadata as Record<string, unknown>)?.["anthropic"] as
         | Record<string, number>
@@ -1329,20 +1338,28 @@ export namespace Session {
       const cacheWriteInputTokens = safe(
         (anthropicMeta?.["cacheCreationInputTokens"] ??
           veniceUsage?.["cacheCreationInputTokens"] ??
-          inputTokenDetails?.cacheWrite ??
+          inputTokenDetails?.["cacheWriteTokens"] ??
+          inputTokenDetails?.["cacheWrite"] ??
           0) as number,
       )
 
-      // Anthropic already reports NET input tokens (excluding cached). Other providers report
-      // total (including cached), so we subtract cache tokens to get net for those.
-      // Also, Anthropic's totalTokens excludes cache tokens, so we add them back.
-      const adjustedInputTokens = anthropicMeta
-        ? safe(inputTokens)
-        : Math.max(0, safe(inputTokens - cacheReadInputTokens - cacheWriteInputTokens))
+      // When the usage carries a structured breakdown, `inputTokens` is the TOTAL
+      // prompt size including cached tokens (both the AI SDK v6 normalization and
+      // the provider spec promise this), so cache is subtracted to get the NET
+      // input the rest of the pipeline (token ledger, compaction) expects. A bare
+      // legacy number with no breakdown keeps the historical per-provider rule:
+      // Anthropic reported net input and a cache-excluding total.
+      const structuredDetails = inputTokenDetails !== undefined
+      const adjustedInputTokens =
+        structuredDetails || !anthropicMeta
+          ? Math.max(0, safe(inputTokens - cacheReadInputTokens - cacheWriteInputTokens))
+          : safe(inputTokens)
 
-      const rawTotal = anthropicMeta
-        ? safe(usage.totalTokens ?? 0) + cacheReadInputTokens + cacheWriteInputTokens
-        : usage.totalTokens
+      const rawTotal = structuredDetails
+        ? usage.totalTokens
+        : anthropicMeta
+          ? safe(usage.totalTokens ?? 0) + cacheReadInputTokens + cacheWriteInputTokens
+          : usage.totalTokens
       const reportedTotal = rawTotal != null ? safe(rawTotal) : undefined
       const componentTotal =
         adjustedInputTokens + outputTokens + reasoningTokens + cacheReadInputTokens + cacheWriteInputTokens

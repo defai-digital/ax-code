@@ -68,7 +68,11 @@ export namespace ProviderError {
     if (input.code === "context_length_exceeded" || nested?.code === "context_length_exceeded") return true
     const message =
       typeof nested?.message === "string" ? nested.message : typeof input.message === "string" ? input.message : ""
-    return isOverflow(message, providerID)
+    if (isOverflow(message, providerID)) return true
+    // A gateway can put the real reason in the response body while the SDK
+    // message carries only the status text; test the raw body too so the
+    // overflow is still recognized (and compaction still triggers).
+    return typeof input.responseBody === "string" && isOverflow(input.responseBody, providerID)
   }
 
   /** Classifies non-standard SDK errors that did not arrive as APICallError. */
@@ -78,7 +82,13 @@ export namespace ProviderError {
     const nested = isRecord(input.error) ? input.error : undefined
     const message =
       typeof nested?.message === "string" ? nested.message : typeof input.message === "string" ? input.message : ""
-    if (input.code === "context_length_exceeded" || nested?.code === "context_length_exceeded" || isOverflow(message)) {
+    const body = typeof input.responseBody === "string" ? input.responseBody : ""
+    const haystack = body ? `${message}\n${body}` : message
+    if (
+      input.code === "context_length_exceeded" ||
+      nested?.code === "context_length_exceeded" ||
+      isOverflow(haystack)
+    ) {
       return false
     }
     return (
@@ -88,7 +98,7 @@ export namespace ProviderError {
       isHttp413(nested?.status) ||
       input.code === "request_too_large" ||
       nested?.code === "request_too_large" ||
-      isRequestTooLargeMessage(message)
+      isRequestTooLargeMessage(haystack)
     )
   }
 
@@ -319,11 +329,19 @@ export namespace ProviderError {
     const m = message(input.error)
     const body = parseJsonRecord(input.error.responseBody)
     const bodyError = isRecord(body?.error) ? body.error : undefined
+    // `message()` drops the raw body whenever the SDK message differs from the
+    // status text, so a gateway that only states "exceeds the context window"
+    // in the body would otherwise miss detection. Match the body text too.
+    const bodyText = typeof input.error.responseBody === "string" ? input.error.responseBody : ""
     // Prefer explicit token/context evidence even when a gateway happens to
     // use HTTP 413. Generic 413/request-entity errors are request-body limits
     // (commonly accumulated base64 media) and need a media projection before
     // token-driven compaction.
-    if (isOverflow(m, input.providerID) || bodyError?.code === "context_length_exceeded") {
+    if (
+      isOverflow(m, input.providerID) ||
+      (bodyText.length > 0 && isOverflow(bodyText, input.providerID)) ||
+      bodyError?.code === "context_length_exceeded"
+    ) {
       return {
         type: "context_overflow",
         message: m,

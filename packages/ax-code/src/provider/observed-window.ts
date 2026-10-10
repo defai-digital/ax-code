@@ -343,7 +343,7 @@ export namespace ObservedWindow {
       if (options.statedLimit !== undefined && Number.isFinite(options.statedLimit) && options.statedLimit > 0) {
         const window = Math.min(Math.floor(options.statedLimit), catalogLimit)
         if (window < MIN_PLAUSIBLE_WINDOW) {
-          this.markUnknown(routeKey)
+          this.markUnknown(routeKey, { evidence: "provider-stated", window })
           await this.persist()
           return
         }
@@ -368,7 +368,7 @@ export namespace ObservedWindow {
       const candidate = Math.min(Math.max(0, Math.floor(promptTokens)), catalogLimit)
       const window = Math.max(candidate, floor)
       if (window < MIN_PLAUSIBLE_WINDOW) {
-        this.markUnknown(routeKey)
+        this.markUnknown(routeKey, { evidence: "boundary", window })
         await this.persist()
         return
       }
@@ -386,7 +386,18 @@ export namespace ObservedWindow {
       if (next.confirmations >= 2) await this.persist()
     }
 
-    private markUnknown(routeKey: string): void {
+    private markUnknown(
+      routeKey: string,
+      evidence: { evidence: "provider-stated" | "boundary"; window: number },
+    ): void {
+      // Auto-compaction is disabled for an unknown route, so this is never a
+      // silent no-op: log the measurement that tripped the floor.
+      log.warn("observed context window below the plausibility floor; auto-compaction disabled for this route", {
+        routeKey,
+        observedWindow: evidence.window,
+        floor: MIN_PLAUSIBLE_WINDOW,
+        evidence: evidence.evidence,
+      })
       this.unknownRoutes.add(routeKey)
       this.records.delete(routeKey)
       this.touch()

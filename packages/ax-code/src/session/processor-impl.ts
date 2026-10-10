@@ -1576,7 +1576,14 @@ export namespace SessionProcessor {
                   ).catch((e) => log.warn("summarize failed", { error: e }))
                   if (
                     !input.assistantMessage.summary &&
-                    (await SessionCompaction.isOverflow({ tokens: usage.tokens, model: input.model }))
+                    (await SessionCompaction.isOverflow({
+                      tokens: usage.tokens,
+                      model: input.model,
+                      // Providers that omit `usage` leave effectiveTokenTotal at
+                      // 0; fall back to the ledger's estimate of the request we
+                      // just sent so auto-compaction still engages.
+                      fallbackTokens: TokenLedger.forSession(input.sessionID).lastTotal(),
+                    }))
                   ) {
                     needsCompaction = true
                   }

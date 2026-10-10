@@ -13,6 +13,8 @@ import {
 import { estimateRequestTokens } from "./prompt-request"
 import { estimateRegistryToolSchemaTokens } from "./prompt-tools"
 import { SessionRetry } from "../retry"
+import { TokenLedger } from "../../provider/token-ledger"
+import { zeroTokenUsage } from "./prompt-message-builders"
 import type { SessionID } from "../schema"
 
 const log = Log.create({ service: "session.prompt" })
@@ -102,11 +104,15 @@ export async function maybeScheduleUsageCompaction(input: {
   // the message totals only when no step-finish part exists (single-step
   // turns, where they agree).
   const tokens = input.lastFinishedStepTokens ?? input.lastFinished?.tokens
-  const overflow = tokens
+  // When the provider reported no usage (tokens undefined or all-zero), fall
+  // back to the session ledger's estimate of the request we just sent, so a
+  // usage-less provider still triggers compaction instead of growing blindly.
+  const overflow = input.lastFinished
     ? await SessionCompaction.isOverflow({
-        tokens,
+        tokens: tokens ?? zeroTokenUsage(),
         model: input.model,
         superLong: input.superLong,
+        fallbackTokens: TokenLedger.forSession(input.sessionID).lastTotal(),
       })
     : false
   if (!shouldScheduleUsageCompaction({ lastFinished: input.lastFinished, overflow })) return false

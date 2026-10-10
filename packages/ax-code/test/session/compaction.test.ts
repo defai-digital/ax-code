@@ -139,6 +139,25 @@ describe("session.compaction.isOverflow", () => {
     })
   })
 
+  test("falls back to a local estimate when the provider reported no usage", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        // cap = 100k → usable = 90k.
+        const model = createModel({ context: 100_000, output: 32_000 })
+        const zeros = { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
+        // No usage and no estimate: not overflowing (previous behavior).
+        expect(await SessionCompaction.isOverflow({ tokens: zeros, model })).toBe(false)
+        // Missing usage, but the ledger's estimate says the context is full.
+        expect(await SessionCompaction.isOverflow({ tokens: zeros, model, fallbackTokens: 95_000 })).toBe(true)
+        // A real measurement always wins over the estimate.
+        const measured = { input: 10_000, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
+        expect(await SessionCompaction.isOverflow({ tokens: measured, model, fallbackTokens: 95_000 })).toBe(false)
+      },
+    })
+  })
+
   test("super-long runs overflow earlier at 75% of the usable budget", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
@@ -425,6 +444,32 @@ describe("session.compaction.isOverflow", () => {
   })
 })
 
+describe("session.compaction.budgetStatus", () => {
+  test("reports why auto-compaction is disabled instead of failing silently", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        // limit.context === 0 → no budget at all.
+        const noLimit = createModel({ context: 0, output: 32_000 })
+        expect(await SessionCompaction.budgetStatus(noLimit)).toEqual({ reason: "no_context_limit" })
+        expect(await SessionCompaction.budget(noLimit)).toBeUndefined()
+
+        // A usable budget below the floor is clamped off.
+        const tiny = createModel({ context: 1_000, output: 512 })
+        expect(await SessionCompaction.budgetStatus(tiny)).toEqual({ reason: "usable_below_floor" })
+        expect(await SessionCompaction.budget(tiny)).toBeUndefined()
+
+        // A healthy model reports a budget and no reason.
+        const healthy = createModel({ context: 100_000, output: 32_000 })
+        const status = await SessionCompaction.budgetStatus(healthy)
+        expect(status.reason).toBeUndefined()
+        expect(status.budget).toEqual({ cap: 100_000, reserved: 10_000, usable: 90_000 })
+      },
+    })
+  })
+})
+
 describe("util.token.estimate", () => {
   test("estimates tokens from text (4 chars per token)", () => {
     const text = "x".repeat(4000)
@@ -438,6 +483,17 @@ describe("util.token.estimate", () => {
 
   test("returns 0 for empty string", () => {
     expect(Token.estimate("")).toBe(0)
+  })
+
+  test("weights CJK characters at roughly one token each", () => {
+    // 4 Chinese characters ≈ 4 tokens, not the 1 token chars/4 would give.
+    expect(Token.estimate("你好世界")).toBe(4)
+    expect(Token.estimate("繁體中文測試")).toBe(6)
+  })
+
+  test("mixes CJK and Latin text proportionally", () => {
+    // 2 CJK (2 tokens) + 8 ASCII (2 tokens) = 4.
+    expect(Token.estimate("中文abcdefgh")).toBe(4)
   })
 })
 
@@ -1154,6 +1210,54 @@ describe("session.getUsage", () => {
     expect(result.tokens.cache.read).toBe(200)
     expect(result.tokens.cache.write).toBe(300)
     expect(result.tokens.total).toBe(2000)
+  })
+
+  test("uses the structured breakdown and subtracts cache for AI SDK v6 usage", () => {
+    const model = createModel({ context: 100_000, output: 32_000 })
+    const result = Session.getUsage({
+      model,
+      // ai@6 normalized shape: inputTokens is the TOTAL (cache included) and the
+      // breakdown lives in inputTokenDetails.
+      usage: {
+        inputTokens: 1200,
+        inputTokenDetails: { noCacheTokens: 1000, cacheReadTokens: 200, cacheWriteTokens: 0 },
+        outputTokens: 500,
+        outputTokenDetails: { textTokens: 500, reasoningTokens: 0 },
+        totalTokens: 1700,
+        cachedInputTokens: 200,
+        reasoningTokens: 0,
+      } as any,
+    })
+
+    expect(result.tokens.input).toBe(1000)
+    expect(result.tokens.output).toBe(500)
+    expect(result.tokens.cache.read).toBe(200)
+    expect(result.tokens.cache.write).toBe(0)
+    expect(result.tokens.total).toBe(1700)
+  })
+
+  test("does not double-count Anthropic cache for AI SDK v6 usage", () => {
+    const model = createModel({ context: 200_000, output: 32_000 })
+    const result = Session.getUsage({
+      model,
+      usage: {
+        inputTokens: 115_000, // 5000 net + 10_000 cache write + 100_000 cache read
+        inputTokenDetails: { noCacheTokens: 5000, cacheReadTokens: 100_000, cacheWriteTokens: 10_000 },
+        outputTokens: 1000,
+        outputTokenDetails: { textTokens: 1000, reasoningTokens: 0 },
+        totalTokens: 116_000,
+        cachedInputTokens: 100_000,
+        reasoningTokens: 0,
+      } as any,
+      metadata: { anthropic: { cacheCreationInputTokens: 10_000 } },
+    })
+
+    expect(result.tokens.input).toBe(5000)
+    expect(result.tokens.cache.read).toBe(100_000)
+    expect(result.tokens.cache.write).toBe(10_000)
+    // 5000 + 1000 output + 100_000 cache read + 10_000 cache write = 116_000,
+    // NOT 226_000 (the value the old cache-additive math produced).
+    expect(result.tokens.total).toBe(116_000)
   })
 })
 

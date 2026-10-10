@@ -33,6 +33,7 @@ import {
   SUPER_LONG_USABLE_FRACTION,
   calculateCompactionBudget,
   effectiveTokenTotal,
+  type CompactionBudget,
 } from "./compaction-budget"
 import { MediaProjection } from "./media-projection"
 import { agentModel } from "./prompt/prompt-command-selection"
@@ -185,29 +186,81 @@ export namespace SessionCompaction {
     )
   }
 
-  /** The budget used to decide whether automatic compaction should run. */
-  export async function budget(model: Provider.Model) {
+  export type AutoCompactionDisabledReason =
+    | "auto_disabled"
+    | "unknown_window"
+    | "no_context_limit"
+    | "usable_below_floor"
+
+  export type AutoCompactionStatus =
+    | { budget: CompactionBudget; reason?: undefined }
+    | { budget?: undefined; reason: AutoCompactionDisabledReason }
+
+  // Log each (route, reason) transition once instead of on every prompt step:
+  // the budget is queried several times per step, and this message is a
+  // diagnostic for a silently-disabled safety net, not per-request evidence.
+  const budgetReasonLogged = new Map<string, AutoCompactionDisabledReason>()
+
+  function reportBudgetDisabled(model: Provider.Model, reason: AutoCompactionDisabledReason) {
+    const routeKey = ObservedWindow.routeKeyFor(model)
+    if (budgetReasonLogged.get(routeKey) === reason) return
+    budgetReasonLogged.set(routeKey, reason)
+    const detail = {
+      command: "session.compaction.budget",
+      status: "disabled",
+      reason,
+      providerID: model.providerID,
+      modelID: model.id,
+      contextLimit: model.limit.context,
+    }
+    // An explicit `compaction.auto: false` is the user's own choice; the other
+    // reasons are conditions the user did not ask for and cannot see otherwise.
+    if (reason === "auto_disabled") log.info("automatic compaction disabled", detail)
+    else log.warn("automatic compaction disabled", detail)
+  }
+
+  /**
+   * The auto-compaction budget plus, when it is unavailable, the reason it was
+   * disabled. `budget()` stays the boolean-ish gate; this variant lets callers
+   * (context_status, diagnostics) surface WHY compaction is not running instead
+   * of silently doing nothing.
+   */
+  export async function budgetStatus(model: Provider.Model): Promise<AutoCompactionStatus> {
     const config = await Config.get()
-    if (config.compaction?.auto === false) return undefined
+    if (config.compaction?.auto === false) {
+      reportBudgetDisabled(model, "auto_disabled")
+      return { reason: "auto_disabled" }
+    }
     // Observed-window calibration (ADR-139 D3): a shrunken deployment window
-    // replaces the catalog cap; an unknown route disables auto-compaction
-    // (calculateCompactionBudget returns undefined, same as no context limit).
+    // replaces the catalog cap; an unknown route disables auto-compaction.
     const resolved = await ObservedWindow.store().resolveWindow(ObservedWindow.routeKeyFor(model), model.limit.context)
+    if (resolved.kind === "unknown") {
+      reportBudgetDisabled(model, "unknown_window")
+      return { reason: "unknown_window" }
+    }
     const result = calculateCompactionBudget(
       model,
       config.compaction?.reserved,
-      resolved.kind === "observed"
-        ? { observedWindow: resolved.window }
-        : resolved.kind === "unknown"
-          ? { windowUnknown: true }
-          : undefined,
+      resolved.kind === "observed" ? { observedWindow: resolved.window } : undefined,
     )
-    if (!result) return undefined
+    if (!result) {
+      reportBudgetDisabled(model, "no_context_limit")
+      return { reason: "no_context_limit" }
+    }
     // Clamp tiny usable budgets off: if reserved nearly consumes the cap,
     // any realistic compacted message still overflows and compaction fires
     // on every step.
-    if (result.usable < MIN_USABLE_TOKENS) return undefined
-    return result
+    if (result.usable < MIN_USABLE_TOKENS) {
+      reportBudgetDisabled(model, "usable_below_floor")
+      return { reason: "usable_below_floor" }
+    }
+    budgetReasonLogged.delete(ObservedWindow.routeKeyFor(model))
+    return { budget: result }
+  }
+
+  /** The budget used to decide whether automatic compaction should run. */
+  export async function budget(model: Provider.Model) {
+    return (await budgetStatus(model)).budget
   }
 
   // Extra headroom for provider framing and estimation error. The actual
@@ -260,11 +313,21 @@ export namespace SessionCompaction {
     tokens: MessageV2.Assistant["tokens"]
     model: Provider.Model
     superLong?: boolean
+    /**
+     * Local estimate to compare when the provider reported no usage at all
+     * (`effectiveTokenTotal` is 0). Some OpenAI-compatible/self-hosted servers
+     * omit `usage` from the stream, which otherwise left the usage-driven
+     * safety net permanently blind. Callers pass the session ledger's last
+     * prompt-size estimate; 0/undefined keeps the previous behavior.
+     */
+    fallbackTokens?: number
   }) {
     const tokenBudget = await budget(input.model)
     if (!tokenBudget) return false
     const limit = input.superLong ? tokenBudget.usable * SUPER_LONG_USABLE_FRACTION : tokenBudget.usable
-    return effectiveTokenTotal(input.tokens) >= limit
+    const measured = effectiveTokenTotal(input.tokens)
+    const total = measured > 0 ? measured : Math.max(0, input.fallbackTokens ?? 0)
+    return total >= limit
   }
 
   const PRUNE_PROTECTED_TOOLS = ["skill"]

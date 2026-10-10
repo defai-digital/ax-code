@@ -131,6 +131,39 @@ describe("provider error decoding", () => {
     expect(parsed.type).toBe("context_overflow")
   })
 
+  test("recognizes a context overflow stated only in the response body", () => {
+    // The SDK message ("Request failed") differs from the status text, so
+    // message() returns it verbatim and never appends the body. Only the
+    // responseBody carries the overflow marker.
+    const parsed = ProviderError.parseAPICallError({
+      providerID: ProviderID.make("openai"),
+      error: new APICallError({
+        message: "Request failed",
+        url: "https://example.com",
+        requestBodyValues: {},
+        statusCode: 400,
+        responseHeaders: { "content-type": "application/json" },
+        responseBody: JSON.stringify({
+          error: { code: "invalid_request_error", detail: "maximum context length is 8192 tokens" },
+        }),
+        isRetryable: false,
+      }),
+    })
+
+    expect(parsed.type).toBe("context_overflow")
+  })
+
+  test("classifies a non-standard error whose overflow marker is only in responseBody", () => {
+    expect(
+      ProviderError.isContextOverflow({
+        message: "Request failed",
+        responseBody: "This model's maximum context length is 4096 tokens",
+      }),
+    ).toBe(true)
+    // Without the marker anywhere, it is not an overflow.
+    expect(ProviderError.isContextOverflow({ message: "Request failed", responseBody: "bad request" })).toBe(false)
+  })
+
   test("only treats Alibaba quota URLs as Alibaba hosts", () => {
     const body = JSON.stringify({ error: { message: "allocated quota exceeded" } })
     const safe = ProviderError.parseAPICallError({
