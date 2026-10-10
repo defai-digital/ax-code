@@ -77,10 +77,12 @@ export async function redirectOriginOutsideAllowlist(
       }
       if (controller.signal.aborted || Date.now() >= deadline) return undefined
       if (!REDIRECT_STATUSES.has(response.status)) return undefined
-      const location = response.headers.get("location")
-      if (!location) return undefined
+      // Reading the hop is fail-closed too: a response object whose header
+      // accessor throws, or a Location that does not parse, ends the probe.
       let next: URL
       try {
+        const location = response.headers.get("location")
+        if (!location) return undefined
         next = new URL(location, current)
       } catch {
         return undefined

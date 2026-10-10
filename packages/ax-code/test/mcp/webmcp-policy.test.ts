@@ -172,6 +172,18 @@ describe("WebMCP managed requirement", () => {
     expect(pages.get(2)).toBe("https://other.test/")
   })
 
+  test("parsePages carries no matcher state between calls: repeated and mixed calls agree", () => {
+    const text = "1: Title (https://forged.test/) more (https://real.test/) [selected]"
+    const first = WebMcpProfile.parsePages(text)
+    // A second parse while nothing else ran, then one interleaved with a
+    // call that stops after its first line, must all agree.
+    const second = WebMcpProfile.parsePages(text)
+    const other = WebMcpProfile.parsePages(`${text}\n2: Other (https://other.test/)`)
+    const third = WebMcpProfile.parsePages(text)
+    for (const pages of [first, second, third]) expect(pages.get(1)).toBe("https://real.test/")
+    expect(other.get(2)).toBe("https://other.test/")
+  })
+
   test("parsePages keeps IPv6 loopback addresses and skips unsafe or repeated ids", () => {
     const pages = WebMcpProfile.parsePages(
       "## Pages\n1: App (http://[::1]:3000/)\n9007199254740993: Big (https://example.test/)\n1: Dup (https://other.test/)",

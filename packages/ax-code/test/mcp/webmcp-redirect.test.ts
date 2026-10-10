@@ -138,6 +138,20 @@ describe("WebMCP redirect probe (ADR-168)", () => {
     expect(await pending).toBeUndefined()
   })
 
+  test("a hop whose header accessor throws or whose Location does not parse fails closed", async () => {
+    const throwing: ProbeFetch = async () => ({
+      status: 302,
+      headers: {
+        get: () => {
+          throw new Error("broken headers")
+        },
+      },
+    })
+    expect(await redirectOriginOutsideAllowlist("https://a.test/start", allowed, throwing)).toBeUndefined()
+    const unparsable = fakeFetch({ "https://a.test/start": { status: 302, location: "http://[::1" } })
+    expect(await redirectOriginOutsideAllowlist("https://a.test/start", allowed, unparsable)).toBeUndefined()
+  })
+
   test("an exhausted probe budget never sends a request", async () => {
     const calls: string[] = []
     expect(

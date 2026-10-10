@@ -2017,7 +2017,9 @@ export namespace WebMcpProfile {
   export const MAX_DESCRIPTOR_BYTES = 64 * 1024
   export const MAX_REGISTRATION_CHANGES = 10
   const PAGE_LINE = /^(\d+):\s+(.*)$/
-  const PAGE_URL = /\((https?:\/\/[^)\s]+)\)/g
+  // Source only: parsePages builds a fresh global matcher per call, so no
+  // lastIndex state is shared between calls or interleaved iterations.
+  const PAGE_URL_SOURCE = String.raw`\((https?:\/\/[^)\s]+)\)`
 
   export type ToolDescriptor = {
     name: string
@@ -2080,6 +2082,7 @@ export namespace WebMcpProfile {
   /** Parse `list_pages` text into pageId -> URL (non-http pages keep raw text). */
   export function parsePages(text: string): Map<number, string> {
     const pages = new Map<number, string>()
+    const urlPattern = new RegExp(PAGE_URL_SOURCE, "g")
     for (const line of text.split("\n")) {
       const match = PAGE_LINE.exec(line)
       if (!match) continue
@@ -2093,7 +2096,7 @@ export namespace WebMcpProfile {
       // appends the real address last, so read the last parenthesized URL —
       // never the first URL on the line, which a title can forge.
       let url: string | undefined
-      for (const candidate of match[2].matchAll(PAGE_URL)) url = candidate[1]
+      for (const candidate of match[2].matchAll(urlPattern)) url = candidate[1]
       pages.set(pageId, url ?? match[2].trim())
     }
     return pages

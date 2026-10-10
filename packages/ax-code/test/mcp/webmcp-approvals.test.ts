@@ -186,6 +186,87 @@ test("corrupt stores fail closed and are preserved", async () => {
   })
 })
 
+test("save runs the deny check before and after the write, mutates nothing between them, and rolls back on the second", async () => {
+  await using tmp = await tmpdir({ git: true, config: { mcp: { bridge: entry() } } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const candidate = (await WebMcpApprovals.capture(policy(entry().webmcp), { capability: "list_pages" }))!
+      const seen: (string | undefined)[] = []
+      const observe = async () => {
+        seen.push(await fs.readFile(WebMcpApprovals.filepath, "utf8").catch(() => undefined))
+      }
+      const record = await WebMcpApprovals.save(candidate, () => true, undefined, observe)
+      // Exactly two checks: one before the write (no store yet) and one after
+      // it (the store holds the new record and nothing else changed).
+      expect(seen).toHaveLength(2)
+      expect(seen[0]).toBeUndefined()
+      expect(JSON.parse(seen[1]!).records.map((row: { id: string }) => row.id)).toEqual([record.id])
+      expect(await WebMcpApprovals.list("bridge")).toHaveLength(1)
+      // A deny that lands between the write and the second check rolls the
+      // store back to its previous content.
+      await WebMcpApprovals.remove("bridge")
+      let calls = 0
+      await expect(
+        WebMcpApprovals.save(
+          candidate,
+          () => true,
+          undefined,
+          async () => {
+            if (++calls === 2) throw new Error("denied while persisting")
+          },
+        ),
+      ).rejects.toThrow("denied while persisting")
+      expect(calls).toBe(2)
+      expect(await WebMcpApprovals.list("bridge")).toEqual([])
+    },
+  })
+})
+
+test("save refuses a candidate whose bridge identity changed before the store lock was taken", async () => {
+  await using tmp = await tmpdir({ git: true, config: { mcp: { bridge: entry() } } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const candidate = (await WebMcpApprovals.capture(policy(entry().webmcp), { capability: "list_pages" }))!
+      // The bridge relaunched (or went off) while the prompt was open: the
+      // live profile no longer matches the one the candidate was bound to.
+      vi.spyOn(MCP, "matchesWebMcpProfile").mockResolvedValue(false)
+      await expect(WebMcpApprovals.save(candidate, () => true)).rejects.toThrow("no longer valid")
+      expect(await fs.readFile(WebMcpApprovals.filepath, "utf8").catch(() => undefined)).toBeUndefined()
+    },
+  })
+})
+
+test("the store is replaced atomically: a reader never observes a partial file", async () => {
+  // Same style as test/mcp/connect-lock.test.ts: the guarantee lives in the
+  // shared writer, so assert the code path rather than race a reader. The
+  // store writes through Filesystem.writeJson, which lands the content in a
+  // temp file in the same directory and renames it over the target.
+  const store = await fs.readFile(path.resolve(import.meta.dirname, "../../src/mcp/webmcp-approvals.ts"), "utf8")
+  expect(store).toContain("await Filesystem.writeJson(filepath, next, 0o600)")
+  expect(store).toContain("await Filesystem.writeJson(filepath, store, 0o600)")
+  expect(store).not.toMatch(/fs\.writeFile\(filepath/)
+  const filesystem = await fs.readFile(path.resolve(import.meta.dirname, "../../src/util/filesystem.ts"), "utf8")
+  const write = filesystem.slice(
+    filesystem.indexOf("export async function write("),
+    filesystem.indexOf("export async function writeJson("),
+  )
+  expect(write).toContain("await fs.writeFile(tmp, content, writeOptions)")
+  expect(write).toContain("await fs.rename(tmp, p)")
+  expect(write.indexOf("fs.writeFile(tmp")).toBeLessThan(write.indexOf("fs.rename(tmp, p)"))
+  // And the result of a real save is a complete, parseable store.
+  await using tmp = await tmpdir({ git: true, config: { mcp: { bridge: entry() } } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const candidate = (await WebMcpApprovals.capture(policy(entry().webmcp), { capability: "list_pages" }))!
+      await WebMcpApprovals.save(candidate, () => true)
+      expect(JSON.parse(await fs.readFile(WebMcpApprovals.filepath, "utf8")).records).toHaveLength(1)
+    },
+  })
+})
+
 test("an unreadable store names the file and the recovery step; a schema mismatch is preserved too", async () => {
   await using tmp = await tmpdir({ git: true, config: { mcp: { bridge: entry() } } })
   await Instance.provide({

@@ -533,7 +533,10 @@ describe("WebMCP T2 dispatch", () => {
     expect(WebMcpProfile.dialogFor(profile, 1)).toBeDefined()
 
     const close = await tool("close_page", profile, client, grants)
+    state.calls.length = 0
     await close.execute!({ pageId: 1 }, options())
+    // close_page has no post-call page lookup: the bridge call is the last one.
+    expect(state.calls.at(-1)).toBe("close_page")
     expect(WebMcpProfile.targetSummaryFor(profile, 1, "1_1")).toBeUndefined()
     expect(WebMcpProfile.snapshotUrlFor(profile, 1)).toBeUndefined()
     expect(WebMcpProfile.listedOriginFor(profile, 1)).toBeUndefined()
@@ -656,6 +659,33 @@ describe("WebMCP T2 dispatch", () => {
 })
 
 describe("WebMCP T2 approval metadata and prompt lines", () => {
+  test("oversized interact calls are rejected before any approval metadata or bridge call", async () => {
+    const profile = full()
+    const grants: GrantState = { read: new Set([ORIGIN]), interact: new Map([[ORIGIN, 20]]) }
+    const { client } = bridge()
+    WebMcpProfile.recordSnapshot(profile, 1, WebMcpProfile.parseStructuredSnapshot(snapshotResult())!, PAGE)
+    const form = await tool("fill_form", profile, client, grants)
+    const huge = Array.from({ length: 20_000 }, () => ({ uid: "1_5", value: "x".repeat(2_000) }))
+    await expect(form.execute!({ pageId: 1, elements: huge }, options())).rejects.toThrow("Invalid arguments")
+    const wait = await tool("wait_for", profile, client, grants)
+    const texts = Array.from({ length: 20_000 }, () => "w".repeat(5_000))
+    await expect(wait.execute!({ pageId: 1, text: texts }, options())).rejects.toThrow("Invalid arguments")
+    const fill = await tool("fill", profile, client, grants)
+    await expect(fill.execute!({ pageId: 1, uid: "1_5", value: "v".repeat(1_025) }, options())).rejects.toThrow(
+      "Invalid arguments",
+    )
+    expect(client.callTool).not.toHaveBeenCalled()
+    // Node text from the page is bounded when the uid map is built, so a
+    // hostile name or attribute never reaches the approval text whole.
+    const nodes = WebMcpProfile.parseStructuredSnapshot({
+      structuredContent: {
+        snapshot: { id: "9_0", role: "textbox", name: "n".repeat(100_000), checked: "c".repeat(100_000) },
+      },
+    })!
+    expect(nodes.get("9_0")?.name.length).toBe(512)
+    expect(String(nodes.get("9_0")?.attributes.checked).length).toBe(512)
+  })
+
   test("approval metadata bounds element and wait-text counts on its own", () => {
     const profile = full()
     WebMcpProfile.recordSnapshot(profile, 1, WebMcpProfile.parseStructuredSnapshot(snapshotResult())!, PAGE)
