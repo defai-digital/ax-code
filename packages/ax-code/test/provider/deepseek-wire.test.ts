@@ -199,6 +199,79 @@ describe("DeepSeek request wire contract", () => {
     expect(sent[2]).toHaveProperty("reasoning_content", "")
   })
 
+  test("disables thinking when tools replay assistant history without reasoning", () => {
+    const target = model("deepseek-flash")
+    const original = {
+      thinking: { type: "enabled" },
+      reasoningEffort: "high",
+      reasoning_effort: "max",
+      custom: "retained",
+    }
+    const messages: ModelMessage[] = [
+      { role: "user", content: "Search flights" },
+      {
+        role: "assistant",
+        content: [{ type: "tool-call", toolCallId: "call-click", toolName: "webmcp_click", input: { ref: "e1" } }],
+      },
+      {
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            toolCallId: "call-click",
+            toolName: "webmcp_click",
+            output: { type: "text", value: "clicked" },
+          },
+        ],
+      },
+    ]
+    expect(ProviderTransform.disableDeepSeekThinkingForToolHistory(target, original, messages, true)).toEqual({
+      thinking: { type: "disabled" },
+      custom: "retained",
+    })
+    expect(original.thinking.type).toBe("enabled")
+    expect(ProviderTransform.disableDeepSeekThinkingForToolHistory(target, original, messages, false)).toEqual(original)
+  })
+
+  test("keeps thinking when every prior assistant message has reasoning", () => {
+    const target = model("deepseek-flash")
+    const original = { reasoningEffort: "high", thinking: { type: "enabled" } }
+    const messages: ModelMessage[] = [
+      {
+        role: "assistant",
+        content: [
+          { type: "reasoning", text: "Check the date first." },
+          { type: "tool-call", toolCallId: "call-read", toolName: "read", input: { path: "file.ts" } },
+        ],
+      },
+    ]
+    expect(ProviderTransform.disableDeepSeekThinkingForToolHistory(target, original, messages, true)).toBe(original)
+    const carried: ModelMessage[] = [
+      {
+        role: "assistant",
+        content: [{ type: "text", text: "Result" }],
+        providerOptions: { openaiCompatible: { reasoning_content: "Preserved history." } },
+      },
+    ]
+    expect(ProviderTransform.disableDeepSeekThinkingForToolHistory(target, original, carried, true)).toBe(original)
+  })
+
+  test("does not disable thinking for groq or a non-DeepSeek model", () => {
+    const original = { reasoningEffort: "high" }
+    const messages: ModelMessage[] = [{ role: "assistant", content: [{ type: "text", text: "Hello" }] }]
+    expect(
+      ProviderTransform.disableDeepSeekThinkingForToolHistory(
+        { ...model("deepseek-v4-pro"), providerID: ProviderID.make("groq") },
+        original,
+        messages,
+        true,
+      ),
+    ).toBe(original)
+    expect(
+      ProviderTransform.disableDeepSeekThinkingForToolHistory(model("qwen3.7-flash"), original, messages, true),
+    ).toBe(original)
+  })
+
   test("does not add reasoning metadata to routes that reject it", async () => {
     const target = { ...model("deepseek-r1-distill-llama-70b"), providerID: ProviderID.make("groq") }
     const sent = await wireMessages(

@@ -909,6 +909,91 @@ describe("session.llm.stream", () => {
     },
   )
 
+  test("disables DeepSeek thinking when tool history has no reasoning", async () => {
+    const providerID = ProviderID.make("deepseek-review-gateway")
+    const modelID = ModelID.make("deepseek-flash")
+    const request = waitRequest(
+      "/chat/completions",
+      new Response(createChatStream("Hello"), { headers: { "Content-Type": "text/event-stream" } }),
+    )
+    await using tmp = await tmpdir({
+      config: {
+        enabled_providers: [providerID],
+        provider: {
+          [providerID]: {
+            npm: "@ai-sdk/openai-compatible",
+            options: { apiKey: "test-key", baseURL: `${state.server.url.origin}/v1` },
+            models: {
+              [modelID]: {
+                name: "DeepSeek Flash",
+                reasoning: true,
+                tool_call: true,
+                limit: { context: 1_000_000, output: 32_000 },
+              },
+            },
+          },
+        },
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await Provider.getModel(providerID, modelID)
+        const sessionID = SessionID.make("session-deepseek-history")
+        const stream = await LLM.stream({
+          sessionID,
+          model: resolved,
+          user: {
+            id: MessageID.make("user-deepseek-history"),
+            sessionID,
+            role: "user",
+            time: { created: Date.now() },
+            agent: "test",
+            model: { providerID, modelID },
+          },
+          agent: {
+            name: "test",
+            mode: "primary",
+            options: { thinking: { type: "enabled" }, reasoningEffort: "high", reasoning_effort: "high" },
+            permission: [{ permission: "*", pattern: "*", action: "allow" }],
+          },
+          system: ["Return the structured result."],
+          abort: new AbortController().signal,
+          messages: [
+            { role: "user", content: "Search flights" },
+            {
+              role: "assistant",
+              content: [{ type: "tool-call", toolCallId: "call-click", toolName: "result", input: { value: "nrt" } }],
+            },
+            {
+              role: "tool",
+              content: [
+                {
+                  type: "tool-result",
+                  toolCallId: "call-click",
+                  toolName: "result",
+                  output: { type: "text", value: "clicked" },
+                },
+              ],
+            },
+            { role: "user", content: "Continue" },
+          ],
+          tools: { result: tool({ description: "Return the result", inputSchema: z.object({ value: z.string() }) }) },
+          toolChoice: "auto",
+        })
+        for await (const _ of stream.fullStream) {
+        }
+        const capture = await request
+        expect(capture.body.tool_choice).toBe("auto")
+        expect(capture.body.tools).toHaveLength(1)
+        expect(capture.body.thinking).toEqual({ type: "disabled" })
+        expect(capture.body).not.toHaveProperty("reasoning_effort")
+        expect(capture.body).not.toHaveProperty("reasoningEffort")
+        expect(JSON.stringify(capture.body.messages)).toContain("call-click")
+      },
+    })
+  })
+
   test("sends OpenRouter headers and strips generic reasoningEffort parameters", async () => {
     vi.spyOn(ScopedFlag, "autonomous").mockReturnValue(false)
     const providerID = "openrouter"

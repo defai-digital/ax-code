@@ -1403,17 +1403,47 @@ export namespace ProviderTransform {
     // request after all option merges. Match the upstream API id as well as
     // the display id so custom gateways retain the same behavior. Older R1
     // and unrelated OpenAI-compatible deployments do not share this switch.
-    if (
-      toolChoice === "required" &&
-      model.api.npm === "@ai-sdk/openai-compatible" &&
-      [model.id, model.api.id].some((id) =>
-        /^deepseek-(?:flash|v4-(?:pro|flash))(?:$|[.-])/i.test(modelIdFinalSegment(id)),
-      )
-    ) {
-      const { reasoningEffort: _reasoningEffort, reasoning_effort: _reasoning_effort, ...rest } = result
-      return { ...rest, thinking: { type: "disabled" } }
+    if (toolChoice === "required" && isDeepSeekV4ToolModel(model)) {
+      return disableDeepSeekThinking(result)
     }
     return result
+  }
+
+  // Thinking mode plus tools requires every prior assistant message to carry
+  // the reasoning DeepSeek actually produced. An empty pad, or reasoning from
+  // another model that never reached the wire as nonblank reasoning_content,
+  // is still a 400. Disable thinking for that one request and keep the tools.
+  export function disableDeepSeekThinkingForToolHistory(
+    model: Provider.Model,
+    options: Record<string, any>,
+    messages: ModelMessage[],
+    hasTools: boolean,
+  ): Record<string, any> {
+    if (!hasTools || !isDeepSeekV4ToolModel(model)) return options
+    if (!messages.some((message) => message.role === "assistant" && !assistantHasDeepSeekReasoning(message))) {
+      return options
+    }
+    return disableDeepSeekThinking(options)
+  }
+
+  function isDeepSeekV4ToolModel(model: Provider.Model): boolean {
+    if (model.api.npm !== "@ai-sdk/openai-compatible") return false
+    if (model.providerID === "groq" || model.providerID === "openrouter" || isGptOssFamily(model)) return false
+    return [model.id, model.api.id].some((id) =>
+      /^deepseek-(?:flash|v4-(?:pro|flash))(?:$|[.-])/i.test(modelIdFinalSegment(id)),
+    )
+  }
+
+  function assistantHasDeepSeekReasoning(message: ModelMessage): boolean {
+    const carried = message.providerOptions?.openaiCompatible?.reasoning_content
+    if (typeof carried === "string" && carried.trim().length > 0) return true
+    if (!Array.isArray(message.content)) return false
+    return message.content.some((part) => part.type === "reasoning" && part.text.trim().length > 0)
+  }
+
+  function disableDeepSeekThinking(options: Record<string, any>): Record<string, any> {
+    const { reasoningEffort: _reasoningEffort, reasoning_effort: _reasoning_effort, ...rest } = options
+    return { ...rest, thinking: { type: "disabled" } }
   }
 
   export function smallOptions(model: Provider.Model, providerOptions?: Record<string, any>) {

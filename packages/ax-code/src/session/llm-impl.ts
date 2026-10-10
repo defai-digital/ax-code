@@ -728,6 +728,16 @@ export namespace LLM {
                 if (args.type === "stream") {
                   args.params.prompt = ProviderTransform.message(args.params.prompt, input.model, options)
                 }
+                const tools = args.params?.tools
+                const hasTools = Array.isArray(tools) && tools.length > 0
+                const prompt = args.params?.prompt
+                const wrapped = args.params?.providerOptions
+                const key = input.model.providerID
+                const flat = wrapped?.[key]
+                if (hasTools && Array.isArray(prompt) && flat && typeof flat === "object") {
+                  const next = ProviderTransform.disableDeepSeekThinkingForToolHistory(input.model, flat, prompt, true)
+                  if (next !== flat) args.params.providerOptions = { ...wrapped, [key]: next }
+                }
                 return args.params
               },
             },
