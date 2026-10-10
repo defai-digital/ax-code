@@ -13,6 +13,7 @@ export namespace RoutePolicy {
       // cannot masquerade as loopback, and mapped 127/8 retains local privacy.
       return (
         host === "localhost" ||
+        host === "localhost." ||
         host === "::1" ||
         /^127(?:\.\d{1,3}){3}$/.test(host) ||
         /^::ffff:7f[0-9a-f]{2}:[0-9a-f]{1,4}$/.test(host)

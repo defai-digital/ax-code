@@ -1006,6 +1006,7 @@ describe("isLoopbackBaseURL", () => {
   test("detects loopback URLs", () => {
     expect(isLoopbackBaseURL("http://127.0.0.1:31418/v1")).toBe(true)
     expect(isLoopbackBaseURL("http://localhost:11434/v1")).toBe(true)
+    expect(isLoopbackBaseURL("http://localhost.:11434/v1")).toBe(true)
     expect(isLoopbackBaseURL("http://[::1]:8080")).toBe(true)
     expect(isLoopbackBaseURL("http://127.1:8080/v1")).toBe(true)
     expect(isLoopbackBaseURL("http://127.255.255.255:8080/v1")).toBe(true)
