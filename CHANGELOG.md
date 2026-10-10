@@ -6,14 +6,23 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
-### Fixed
-
-- Register the built-in `multiedit` tool. Permissions, hooks, and prompts already treated it as a file-editing tool, but the tool registry never exposed it.
-- Tell the performance agent to call debug-engine tools only when those tools are in the active tool list.
+## [7.24.2] - 2026-10-10
 
 ### Changed
 
-- Check the core package with Knip in the repo-structure workflow. The config ignores pnpm catalog references, intentional export aliases, OS binaries, and packages loaded by path or package name.
+- Publish SDK 2.6.5 alongside AX Code 7.24.2.
+- Preserve exact model selections and use only user-configured, ordered recovery targets after safe transient failures.
+- Add a WebMCP allowlist link with explicit origin grants and require a second activation to revoke approvals.
+- Share scoped-policy storage, ACP reattach handling, token parsing, and TUI helpers; remove unused helpers and exports.
+- Check the core package with Knip in the repo-structure workflow and split deterministic CI across eight named shards.
+
+### Fixed
+
+- Recognize IPv4-mapped IPv6 loopback endpoints so automatic recovery cannot send local prompts to a remote provider; reject remote DNS names that start with `127.` and non-HTTP endpoints as loopback.
+- Allow pending child stdout and stderr to drain after process exit so complete output and harness usage remain intact, while bounding descendant-held pipes.
+- Register the built-in `multiedit` tool, which permissions, hooks, and prompts already treated as a file-editing tool.
+- Disable DeepSeek thinking when tool history lacks reasoning and preserve accurate averages in stats.
+- Tell the performance agent to call debug-engine tools only when those tools are in the active tool list.
 
 ## [7.24.1] - 2026-10-10
 
