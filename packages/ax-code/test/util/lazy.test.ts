@@ -54,6 +54,21 @@ describe("util.lazy", () => {
     expect(value.peek()).toBeUndefined()
   })
 
+  test("retries an async initializer after its promise rejects", async () => {
+    let calls = 0
+    const value = lazy(async () => {
+      calls++
+      if (calls === 1) throw new Error("transient")
+      return "ready"
+    })
+    await expect(value()).rejects.toThrow("transient")
+    expect(value.loaded()).toBe(false)
+    await expect(value()).resolves.toBe("ready")
+    expect(calls).toBe(2)
+    await expect(value()).resolves.toBe("ready")
+    expect(calls).toBe(2)
+  })
+
   test("should work with different return types", () => {
     const lazyString = lazy(() => "string")
     const lazyNumber = lazy(() => 123)

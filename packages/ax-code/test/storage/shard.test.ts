@@ -95,6 +95,21 @@ describe("Database project resolver", () => {
 })
 
 describe("Database.close integration", () => {
+  test("a handle that fails to close does not stop the others from closing", () => {
+    const first = pid("project-close-fail-a")
+    Shard.handle(first).use(() => {})
+    Shard.handle(pid("project-close-fail-b")).use(() => {})
+    const client = Shard.peek(first)!.$client as { close: () => void }
+    const original = client.close.bind(client)
+    client.close = () => {
+      client.close = original
+      throw new Error("statement still finalizing")
+    }
+    expect(() => Shard.closeAll()).not.toThrow()
+    expect(Shard.openCount()).toBe(0)
+    original()
+  })
+
   test("closes all open shard handles", () => {
     Shard.handle(pid("project-close-a")).use(() => {})
     Shard.handle(pid("project-close-b")).use(() => {})

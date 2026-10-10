@@ -107,7 +107,14 @@ export namespace Shard {
     } catch (error) {
       log.warn("shard wal checkpoint during close failed", { projectID: key, error: toErrorMessage(error) })
     }
-    db.$client.close()
+    // Same guard as Database.close (BUG-008): one handle that fails its own
+    // close must not abort closeAll, LRU eviction, or project removal and
+    // leak every handle after it.
+    try {
+      db.$client.close()
+    } catch (error) {
+      log.warn("failed to close shard handle", { projectID: key, error: toErrorMessage(error) })
+    }
   }
 
   // Session-scoped tables that live in the shard (Slice 1: message + part;

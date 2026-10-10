@@ -278,6 +278,14 @@ export namespace JsonMigration {
       // Migrate sessions (depends on projects)
       // Derive all IDs from directory/file paths, not JSON content, since earlier
       // migrations may have moved sessions to new directories without updating the JSON
+      // The glob returns files in arbitrary order while the session table
+      // enforces parent_id -> session.id. Session IDs sort in creation order,
+      // so inserting by ID puts every parent before its children; a parent
+      // that is missing or was skipped is dropped from the child instead of
+      // failing the child's insert.
+      sessionFiles.sort((a, b) =>
+        path.basename(a) < path.basename(b) ? -1 : path.basename(a) > path.basename(b) ? 1 : 0,
+      )
       const sessionProjects = sessionFiles.map((file) => ProjectID.make(path.basename(path.dirname(file))))
       const sessionIds = new Set<SessionID>()
       const sessionValues: SessionInsert[] = []
@@ -298,7 +306,7 @@ export namespace JsonMigration {
           sessionValues.push({
             id,
             project_id: projectID,
-            parent_id: data.parentID ?? null,
+            parent_id: data.parentID && sessionIds.has(data.parentID as SessionID) ? data.parentID : null,
             slug: data.slug ?? "",
             directory: data.directory ?? "",
             title: data.title ?? "",

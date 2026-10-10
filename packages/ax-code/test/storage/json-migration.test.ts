@@ -270,6 +270,44 @@ describe("JSON to SQLite migration", () => {
     expect(sessions[0].share_url).toBe("https://example.com/share")
   })
 
+  test("keeps forked sessions when the parent is migrated and drops a dangling parent reference", async () => {
+    await writeProject(storageDir, {
+      id: "proj_fork",
+      worktree: "/test/fork",
+      time: { created: Date.now(), updated: Date.now() },
+      sandboxes: [],
+    })
+    // Child IDs sort after their parent (IDs are creation-ordered), so the
+    // child file is written first to make sure glob order cannot matter.
+    await writeSession(storageDir, "proj_fork", {
+      id: "ses_fork_0002_child",
+      projectID: "proj_fork",
+      parentID: "ses_fork_0001_parent",
+      time: { created: 2, updated: 2 },
+    })
+    await writeSession(storageDir, "proj_fork", {
+      id: "ses_fork_0001_parent",
+      projectID: "proj_fork",
+      time: { created: 1, updated: 1 },
+    })
+    await writeSession(storageDir, "proj_fork", {
+      id: "ses_fork_0003_orphan",
+      projectID: "proj_fork",
+      parentID: "ses_fork_0000_missing",
+      time: { created: 3, updated: 3 },
+    })
+
+    const result = await JsonMigration.run(sqlite)
+    expect(result.errors).toEqual([])
+
+    const db = drizzle({ client: sqlite })
+    const sessions = db.select().from(SessionTable).all()
+    const byID = new Map(sessions.map((row) => [String(row.id), row]))
+    expect([...byID.keys()].sort()).toEqual(["ses_fork_0001_parent", "ses_fork_0002_child", "ses_fork_0003_orphan"])
+    expect(String(byID.get("ses_fork_0002_child")!.parent_id)).toBe("ses_fork_0001_parent")
+    expect(byID.get("ses_fork_0003_orphan")!.parent_id).toBeNull()
+  })
+
   test("migrates messages and parts", async () => {
     await writeProject(storageDir, {
       id: "proj_test123abc",
