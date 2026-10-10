@@ -1352,6 +1352,19 @@ export namespace MCP {
     )
   }
 
+  /**
+   * The live validated profile of a connected WebMCP bridge, or undefined when
+   * the bridge is off, failed or not webmcp-profiled. Explicit allowlist grants
+   * (ADR-178) bind to this object so the saved record carries the same launch
+   * identity as a request-bound save.
+   */
+  export async function webMcpLiveProfile(name: string): Promise<WebMcpProfile.Configuration | undefined> {
+    const s = await state()
+    const client = s.clients[name]
+    if (!client || s.status[name]?.status !== "connected") return undefined
+    return webMcpProfiles.get(client)
+  }
+
   async function webMcpEntry(name: string) {
     const cfg = await Config.get()
     const entry = cfg.mcp?.[name]

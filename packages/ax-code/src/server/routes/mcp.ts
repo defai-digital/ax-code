@@ -83,6 +83,34 @@ export const McpRoutes = lazy(() =>
         return c.json(true)
       }),
     )
+    .post(
+      "/:name/webmcp-approvals",
+      describeRoute({
+        summary: "Save a WebMCP approval for this project without a pending request",
+        description:
+          "Explicit user grant for a connected WebMCP bridge. The record binds to the live bridge identity and is rechecked at dispatch like a request-bound save.",
+        operationId: "mcp.grantWebMcpApproval",
+        responses: {
+          200: {
+            description: "Approval saved",
+            content: { "application/json": { schema: resolver(WebMcpApprovals.Record) } },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", MCP_NAME_PARAM_OBJECT),
+      validator("json", z.object({ scope: WebMcpApprovals.Scope }).strict()),
+      withMcpName(async (name, c) => {
+        try {
+          return c.json(await WebMcpApprovals.grant(name, c.req.valid("json").scope))
+        } catch (error) {
+          if (!WebMcpApprovals.GrantError.isInstance(error)) throw error
+          if (error.data.reason === "not_webmcp")
+            return notFound(c, { message: error.data.message, resource: "mcpServer" })
+          return invalidRequest(c, { message: error.data.message, details: { reason: error.data.reason } })
+        }
+      }),
+    )
     .get(
       "/",
       describeRoute({

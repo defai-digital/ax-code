@@ -8,6 +8,7 @@ export const messages = {
   "ui.wikiFailed": "generazione fallita",
 
   "ui.openWikiVisualization": "Apri grafo Wiki",
+  "ui.webMcpAllowlist": "Elenco consentiti WebMCP",
   "ui.openingWikiVisualization": "Apertura grafo Wiki\u2026",
   "ui.wikiSnapshotCaption": "Istantanea Wiki /wiki-viz",
   "ui.wikiBrowserFallback": "Il browser non si \u00e8 aperto: copia il link",

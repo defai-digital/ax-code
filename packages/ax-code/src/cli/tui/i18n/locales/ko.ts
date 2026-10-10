@@ -8,6 +8,7 @@ export const messages = {
   "ui.wikiFailed": "\uc0dd\uc131 \uc2e4\ud328",
 
   "ui.openWikiVisualization": "Wiki \uadf8\ub798\ud504 \uc5f4\uae30",
+  "ui.webMcpAllowlist": "WebMCP \ud5c8\uc6a9 \ubaa9\ub85d",
   "ui.openingWikiVisualization": "Wiki \uadf8\ub798\ud504 \uc5ec\ub294 \uc911\u2026",
   "ui.wikiSnapshotCaption": "Wiki \uc2a4\ub0c5\uc0f7 /wiki-viz",
   "ui.wikiBrowserFallback":

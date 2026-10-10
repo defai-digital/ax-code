@@ -8,6 +8,7 @@ export const messages = {
   "ui.wikiFailed": "olu\u015fturma ba\u015far\u0131s\u0131z",
 
   "ui.openWikiVisualization": "Wiki grafi\u011fini a\u00e7",
+  "ui.webMcpAllowlist": "WebMCP izin listesi",
   "ui.openingWikiVisualization": "Wiki grafi\u011fi a\u00e7\u0131l\u0131yor\u2026",
   "ui.wikiSnapshotCaption": "Wiki anl\u0131k g\u00f6r\u00fcnt\u00fcs\u00fc /wiki-viz",
   "ui.wikiBrowserFallback": "Taray\u0131c\u0131 a\u00e7\u0131lmad\u0131: ba\u011flant\u0131y\u0131 kopyalay\u0131n",

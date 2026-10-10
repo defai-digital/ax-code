@@ -15877,6 +15877,61 @@ export type McpWebMcpApprovalsResponses = {
 /** Successful response payload for `GET /mcp/{name}/webmcp-approvals` — List saved WebMCP approvals for this project */
 export type McpWebMcpApprovalsResponse = McpWebMcpApprovalsResponses[keyof McpWebMcpApprovalsResponses]
 
+/** Request payload shape for `POST /mcp/{name}/webmcp-approvals` — Save a WebMCP approval for this project without a pending request */
+export type McpGrantWebMcpApprovalData = {
+  body?: {
+    scope:
+      | {
+          capability: "list_pages"
+        }
+      | {
+          capability: "navigate"
+          origin: string
+        }
+      | {
+          capability: "read"
+          origin: string
+        }
+      | {
+          capability: "close"
+          origin: string
+        }
+  }
+  path: {
+    name: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/mcp/{name}/webmcp-approvals"
+}
+
+/** Error response payloads for `POST /mcp/{name}/webmcp-approvals` — Save a WebMCP approval for this project without a pending request */
+export type McpGrantWebMcpApprovalErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+}
+
+/** Error response payload for `POST /mcp/{name}/webmcp-approvals` — Save a WebMCP approval for this project without a pending request */
+export type McpGrantWebMcpApprovalError = McpGrantWebMcpApprovalErrors[keyof McpGrantWebMcpApprovalErrors]
+
+/** Success response payloads for `POST /mcp/{name}/webmcp-approvals` — Save a WebMCP approval for this project without a pending request */
+export type McpGrantWebMcpApprovalResponses = {
+  /**
+   * Approval saved
+   */
+  200: WebMcpApprovalRecord
+}
+
+/** Successful response payload for `POST /mcp/{name}/webmcp-approvals` — Save a WebMCP approval for this project without a pending request */
+export type McpGrantWebMcpApprovalResponse = McpGrantWebMcpApprovalResponses[keyof McpGrantWebMcpApprovalResponses]
+
 /** Request payload shape for `GET /mcp` — Get MCP status */
 export type McpStatusData = {
   body?: never

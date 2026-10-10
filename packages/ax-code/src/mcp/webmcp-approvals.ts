@@ -8,11 +8,20 @@ import { Instance } from "../project/instance"
 import { Filesystem } from "../util/filesystem"
 import { FileLock } from "../util/filelock"
 import { Lock } from "../util/lock"
+import { NamedError } from "@ax-code/util/error"
 import { McpTrust } from "./trust"
 import { WebMcpProfile } from "./webmcp-profile"
 
 export namespace WebMcpApprovals {
   const POLICY_VERSION = 1
+  export const GrantError = NamedError.create(
+    "WebMcpGrantError",
+    z.object({
+      server: z.string(),
+      reason: z.enum(["not_webmcp", "not_connected", "rejected"]),
+      message: z.string(),
+    }),
+  )
   const MAX_RECORDS = 1024
   // @scan-suppress security_scan - the filename is a fixed literal under the user-owned XDG data directory; no request or repository value participates in this path.
   export const filepath = path.join(Global.Path.data, "webmcp-approvals.json")
@@ -241,6 +250,62 @@ export namespace WebMcpApprovals {
       await Filesystem.writeJson(filepath, store, 0o600)
       throw error
     }
+  }
+
+  /**
+   * Why an otherwise well-formed scope is outside the bridge policy, for the
+   * explicit-grant error message. Mirrors the ceiling that valid() enforces.
+   */
+  function rejectionReason(
+    requirement: Parameters<typeof WebMcpProfile.evaluate>[0],
+    profile: WebMcpProfile.Configuration,
+    scope: Scope,
+  ): string {
+    const decision = WebMcpProfile.evaluate(requirement, profile)
+    if (!decision.ok) return WebMcpProfile.blockedMessage(decision.reason)
+    if (scope.capability !== "list_pages" && WebMcpProfile.restricted(decision.profile)) {
+      if (!decision.profile.allowedOrigins.includes(scope.origin))
+        return `origin ${scope.origin} is outside the allowed origins of this bridge`
+    }
+    if (scope.capability === "read" && !decision.profile.read) return "the read tier is not enabled for this bridge"
+    return "the bridge identity changed; reconnect and try again"
+  }
+
+  /**
+   * Explicit user grant without a pending request (ADR-178). The record binds
+   * to the connected bridge's live profile and launch fingerprint, so it is
+   * indistinguishable at dispatch from a request-bound save and is rechecked
+   * by the same valid() ceiling. A bridge that is off cannot receive grants:
+   * there is no reviewed launch identity to bind them to.
+   */
+  export async function grant(server: string, scope: Scope): Promise<Record> {
+    const parsed = Scope.safeParse(scope)
+    if (!parsed.success)
+      throw new GrantError({ server, reason: "rejected", message: "WebMCP approval scope is not grantable" })
+    const found = await identity(server)
+    if (!found) throw new GrantError({ server, reason: "not_webmcp", message: `WebMCP bridge not found: ${server}` })
+    const { MCP } = await import("./impl")
+    const live = await MCP.webMcpLiveProfile(server)
+    if (!live)
+      throw new GrantError({
+        server,
+        reason: "not_connected",
+        message: "WebMCP bridge is not connected; turn it on before saving approvals",
+      })
+    const value: Candidate = {
+      server,
+      project: projectScope(),
+      scope: parsed.data,
+      fingerprint: found.fingerprint,
+      profile: live,
+    }
+    if (!(await valid(value)))
+      throw new GrantError({
+        server,
+        reason: "rejected",
+        message: `WebMCP approval was not saved: ${rejectionReason(found.cfg.webmcp, live, parsed.data)}`,
+      })
+    return save(value, () => true)
   }
 
   export async function list(server: string): Promise<Record[]> {

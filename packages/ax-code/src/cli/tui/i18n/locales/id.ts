@@ -8,6 +8,7 @@ export const messages = {
   "ui.wikiFailed": "pembuatan gagal",
 
   "ui.openWikiVisualization": "Buka graf Wiki",
+  "ui.webMcpAllowlist": "Daftar izin WebMCP",
   "ui.openingWikiVisualization": "Membuka graf Wiki\u2026",
   "ui.wikiSnapshotCaption": "Snapshot Wiki /wiki-viz",
   "ui.wikiBrowserFallback": "Browser tidak terbuka: salin tautan",

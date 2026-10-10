@@ -16,6 +16,7 @@ import { parseIsolationState } from "./context/sync-runtime-store"
 import { nextRunMode, runModeLabel, type RunMode } from "./component/prompt/run-mode-view-model"
 import { DIGITAL_CODE_ON_START_DEFAULT } from "./component/digital-code-view-model"
 import { workModeCycleToast } from "./component/work-mode-availability"
+import { webMcpChipModel } from "./component/webmcp-chip-model"
 import type { CommandOption } from "./component/dialog-command"
 import type { TuiDialogLoaders } from "./tui-dialogs"
 import { DialogConfirm } from "@tui/ui/dialog-confirm"
@@ -105,6 +106,8 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
     playDigitalCode,
     playReverseDigitalCode,
   } = input
+
+  const webMcpServers = webMcpChipModel(sync.data.config?.mcp, sync.data.mcp).servers
 
   const commands: CommandOption[] = [
     {
@@ -375,6 +378,21 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
       onSelect: () => {
         void dialogs.showMcpDialog()
+      },
+    },
+    {
+      title: t("ui.webMcpAllowlist"),
+      value: "app.webmcp.allowlist",
+      category: t("category.agent"),
+      // Triggered by the footer link beside the WebMCP chip; palette and
+      // slash entries follow the chip's visibility (a webmcp bridge exists).
+      hidden: webMcpServers.length === 0,
+      enabled: webMcpServers.length > 0,
+      slash: {
+        name: "webmcp-allowlist",
+      },
+      onSelect: () => {
+        void dialogs.showWebMcpAllowlistDialog(webMcpServers)
       },
     },
     {

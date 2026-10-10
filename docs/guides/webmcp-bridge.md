@@ -98,9 +98,18 @@ dialogs and page-registered tools keep their existing
 approvals. **Allow once** remains temporary; the countdown never saves a
 persistent approval.
 
-Open `/mcp`, select the WebMCP bridge, and press **Ctrl+G** for
-**Manage WebMCP allowlist**. Select an entry to revoke it, or choose the
-clear option to revoke all saved approvals for that bridge in this project.
+Select the **WebMCP allowlist** link beside the WebMCP chip (session
+sidebar footer and Home prompt footer), run `/webmcp-allowlist`, or open
+`/mcp`, select the bridge, and press **Ctrl+G**. Select an entry to revoke
+it, or choose the clear option to revoke all saved approvals for that bridge
+in this project. Press Escape or click outside the panel to close it.
+
+The search box also adds approvals. Type an exact `https://` origin (or
+`http://localhost`), then select the navigation, read or close row to save
+it; a page-listing row is offered until it is saved. The bridge must be
+connected: an explicit approval binds to the running bridge identity and is
+checked at every call exactly like one saved from a prompt, so managed origin
+lists, the read-tier switch and administrator policy still apply.
 Turning the WebMCP chip off disconnects the browser and retains saved choices.
 
 The local store is `~/.local/share/ax-code/webmcp-approvals.json` by default

@@ -212,6 +212,16 @@ export function createTuiDialogLoaders(input: {
           return () => <DialogMcp />
         },
       }),
+    showWebMcpAllowlistDialog: (servers: string[]) =>
+      replaceLazyDialog({
+        ...host,
+        warn: "failed to load webmcp allowlist dialog",
+        fail: "Failed to open WebMCP allowlist",
+        load: async () => {
+          const { DialogWebMcpAllowlistEntry } = await import("@tui/component/dialog-webmcp-allowlist")
+          return () => <DialogWebMcpAllowlistEntry servers={servers} />
+        },
+      }),
     showScheduledTasksDialog: () =>
       replaceLazyDialog({
         ...host,

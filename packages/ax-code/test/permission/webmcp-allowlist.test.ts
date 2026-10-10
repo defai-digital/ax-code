@@ -260,3 +260,38 @@ test("HTTP save requires runtime authorization, binds the pending request, and s
     },
   })
 })
+
+test("HTTP explicit grant requires runtime authorization, a connected bridge and a grantable scope", async () => {
+  await using tmp = await tmpdir({ git: true, config: { mcp: { bridge: entry() } } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const app = new Hono().route("/mcp", McpRoutes())
+      const url = "http://localhost/mcp/bridge/webmcp-approvals"
+      const json = { "content-type": "application/json" }
+      const headers = { ...ServerRuntimeAuth.headers(), ...json }
+      const body = JSON.stringify({ scope: { capability: "read", origin: "https://example.test" } })
+      expect((await app.request(url, { method: "POST", body, headers: json })).status).toBe(403)
+      const live = vi.spyOn(MCP, "webMcpLiveProfile").mockResolvedValue(undefined)
+      const off = await app.request(url, { method: "POST", body, headers })
+      expect(off.status).toBe(400)
+      expect(((await off.json()) as { message: string }).message).toContain("not connected")
+      live.mockResolvedValue(entry().webmcp)
+      expect(
+        (await app.request("http://localhost/mcp/missing/webmcp-approvals", { method: "POST", body, headers })).status,
+      ).toBe(404)
+      const wildcard = JSON.stringify({ scope: { capability: "read", origin: "https://*.test" } })
+      expect((await app.request(url, { method: "POST", body: wildcard, headers })).status).toBe(400)
+      const extra = JSON.stringify({ scope: { capability: "list_pages" }, server: "other" })
+      expect((await app.request(url, { method: "POST", body: extra, headers })).status).toBe(400)
+      expect(await WebMcpApprovals.list("bridge")).toEqual([])
+      const ok = await app.request(url, { method: "POST", body, headers })
+      expect(ok.status).toBe(200)
+      const record = (await ok.json()) as { id: string; scope: unknown }
+      expect(record.scope).toEqual({ capability: "read", origin: "https://example.test" })
+      expect((await WebMcpApprovals.list("bridge")).map((row) => row.id)).toEqual([record.id])
+      const list = await app.request(url)
+      expect(((await list.json()) as { id: string }[]).map((row) => row.id)).toEqual([record.id])
+    },
+  })
+})

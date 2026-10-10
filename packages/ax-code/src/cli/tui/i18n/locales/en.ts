@@ -6,6 +6,7 @@ export const messages = {
   "ui.wikiFailed": "generation failed",
 
   "ui.openWikiVisualization": "Wiki graph",
+  "ui.webMcpAllowlist": "WebMCP allowlist",
   "ui.openingWikiVisualization": "Opening Wiki graph...",
   "ui.wikiSnapshotCaption": "Wiki snapshot /wiki-viz",
   "ui.wikiBrowserFallback": "Browser did not open: copy the link",

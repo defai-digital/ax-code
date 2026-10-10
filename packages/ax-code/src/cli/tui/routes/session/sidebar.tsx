@@ -11,7 +11,7 @@ import { Installation } from "@/installation"
 import { useDirectory } from "../../context/directory"
 import { useKV } from "../../context/kv"
 import { ModeChips } from "../../component/mode-chips"
-import { WebMcpChip } from "../../component/webmcp-chip"
+import { WebMcpAllowlistLink, WebMcpChip } from "../../component/webmcp-chip"
 import { GoalChip } from "../../component/goal-chip"
 import { TodoItem } from "../../component/todo-item"
 import { CHROME_CONTROL_COLOR, ChromeAction, ChromeWidthAction } from "../../component/chrome-action"
@@ -1065,6 +1065,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
             <box flexDirection="row" flexWrap="wrap" flexShrink={0} gap={0} marginBottom={1}>
               <ModeChips />
               <WebMcpChip />
+              <WebMcpAllowlistLink />
             </box>
             <box flexDirection="row" gap={1} flexWrap="wrap">
               <ChromeAction

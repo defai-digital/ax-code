@@ -1,9 +1,35 @@
 import { createMemo, Show } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { useLocal } from "@tui/context/local"
+import { useLanguage } from "@tui/context/language"
 import { useTheme } from "@tui/context/theme"
+import { ChromeAction } from "./chrome-action"
+import { useCommandDialog } from "./dialog-command"
 import { ModeToggle } from "./mode-chips"
 import { webMcpChipModel } from "./webmcp-chip-model"
+
+/**
+ * Accent-colored link beside the WebMCP chip that opens the project-scoped
+ * allowlist dialog (ADR-178) through the `app.webmcp.allowlist` command, so
+ * the same entry is reachable from the command palette and `/webmcp-allowlist`.
+ * It shares the chip's visibility rule: a webmcp-profiled server must exist.
+ */
+export function WebMcpAllowlistLink() {
+  const sync = useSync()
+  const { theme } = useTheme()
+  const { t } = useLanguage()
+  const command = useCommandDialog()
+  const servers = createMemo(() => webMcpChipModel(sync.data.config?.mcp, sync.data.mcp).servers)
+  return (
+    <Show when={servers().length > 0}>
+      <box flexShrink={0} paddingLeft={1}>
+        <ChromeAction link fg={theme.accent} onMouseUp={() => command.trigger("app.webmcp.allowlist")}>
+          {t("ui.webMcpAllowlist")}
+        </ChromeAction>
+      </box>
+    </Show>
+  )
+}
 
 /**
  * Toggle chip for the experimental WebMCP bridge, rendered in the session

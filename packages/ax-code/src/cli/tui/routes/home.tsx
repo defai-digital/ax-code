@@ -10,7 +10,7 @@ import { Prompt, type PromptRef } from "@tui/component/prompt"
 import { createEffect, createMemo, Match, on, onMount, Show, Switch } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 import { ModeChips } from "../component/mode-chips"
-import { WebMcpChip } from "../component/webmcp-chip"
+import { WebMcpAllowlistLink, WebMcpChip } from "../component/webmcp-chip"
 import { WorkModeNotice } from "../component/work-mode-notice"
 import { useCommandDialog } from "../component/dialog-command"
 import { homeCompactHeaderPlan, homeStatusBarMcpWidth, homeStatusBarPlan } from "./home-layout"
@@ -317,6 +317,7 @@ export function Home() {
               <>
                 <ModeChips />
                 <WebMcpChip />
+                <WebMcpAllowlistLink />
               </>
             }
             workspaceID={route.workspaceID}

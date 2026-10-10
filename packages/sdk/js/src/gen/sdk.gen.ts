@@ -89,6 +89,8 @@ import type {
   McpAuthStartResponses,
   McpConnectResponses,
   McpDisconnectResponses,
+  McpGrantWebMcpApprovalErrors,
+  McpGrantWebMcpApprovalResponses,
   McpLocalConfig,
   McpRemoteConfig,
   McpResourceReadErrors,
@@ -7102,6 +7104,62 @@ export class Mcp extends HeyApiClient {
       url: "/mcp/{name}/webmcp-approvals",
       ...options,
       ...params,
+    })
+  }
+
+  /**
+   * Save a WebMCP approval for this project without a pending request
+   *
+   * Explicit user grant for a connected WebMCP bridge. The record binds to the live bridge identity and is rechecked at dispatch like a request-bound save.
+   */
+  public grantWebMcpApproval<ThrowOnError extends boolean = false>(
+    parameters: {
+      name: string
+      directory?: string
+      scope:
+        | {
+            capability: "list_pages"
+          }
+        | {
+            capability: "navigate"
+            origin: string
+          }
+        | {
+            capability: "read"
+            origin: string
+          }
+        | {
+            capability: "close"
+            origin: string
+          }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "name" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "scope" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      McpGrantWebMcpApprovalResponses,
+      McpGrantWebMcpApprovalErrors,
+      ThrowOnError
+    >({
+      url: "/mcp/{name}/webmcp-approvals",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 

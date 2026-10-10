@@ -317,3 +317,61 @@ test("close authority requires its own exact-origin record and an in-memory targ
     },
   })
 })
+
+test("explicit grants bind to the connected bridge and share the request-bound ceiling", async () => {
+  await using tmp = await tmpdir({ git: true, config: { mcp: { bridge: entry() } } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const profile = entry().webmcp
+      const live = vi.spyOn(MCP, "webMcpLiveProfile").mockResolvedValue(undefined)
+      await expect(WebMcpApprovals.grant("bridge", { capability: "list_pages" })).rejects.toMatchObject({
+        data: { reason: "not_connected" },
+      })
+      await expect(WebMcpApprovals.grant("missing", { capability: "list_pages" })).rejects.toMatchObject({
+        data: { reason: "not_webmcp" },
+      })
+      expect(await WebMcpApprovals.list("bridge")).toEqual([])
+      live.mockResolvedValue(profile)
+      const listing = await WebMcpApprovals.grant("bridge", { capability: "list_pages" })
+      expect(listing.scope).toEqual({ capability: "list_pages" })
+      const read = await WebMcpApprovals.grant("bridge", { capability: "read", origin: "https://example.test" })
+      expect(read.scope).toEqual({ capability: "read", origin: "https://example.test" })
+      // Granting a saved scope again keeps a single record for it.
+      await WebMcpApprovals.grant("bridge", { capability: "read", origin: "https://example.test" })
+      expect(await WebMcpApprovals.list("bridge")).toHaveLength(2)
+      // A request-bound candidate for the same scope reuses the explicit grant.
+      const candidate = (await WebMcpApprovals.capture(policy(profile, "take_snapshot"), {
+        capability: "read",
+        origin: "https://example.test",
+      }))!
+      expect(await WebMcpApprovals.allowed(candidate)).toBe(true)
+      // Non-grantable shapes never reach the store.
+      for (const scope of [
+        { capability: "read", origin: "https://*.test" },
+        { capability: "navigate", origin: "https://example.test/path" },
+        { capability: "close", origin: "http://example.test" },
+        { capability: "list_pages", origin: "https://example.test" },
+      ]) {
+        await expect(WebMcpApprovals.grant("bridge", scope as WebMcpApprovals.Scope)).rejects.toMatchObject({
+          data: { reason: "rejected" },
+        })
+      }
+      expect(await WebMcpApprovals.list("bridge")).toHaveLength(2)
+      // The managed ceiling applies at grant time with a reason the user can act on.
+      const cfg = await Config.get()
+      cfg.webmcp = { allowedOrigins: ["https://other.test"] }
+      await expect(
+        WebMcpApprovals.grant("bridge", { capability: "navigate", origin: "https://example.test" }),
+      ).rejects.toThrow("outside the allowed origins")
+      cfg.webmcp = { allowRead: false }
+      await expect(
+        WebMcpApprovals.grant("bridge", { capability: "read", origin: "https://other.test" }),
+      ).rejects.toThrow("read tier is not enabled")
+      cfg.webmcp = { allow: false }
+      await expect(WebMcpApprovals.grant("bridge", { capability: "list_pages" })).rejects.toThrow("managed policy")
+      delete cfg.webmcp
+      expect(await WebMcpApprovals.list("bridge")).toHaveLength(2)
+    },
+  })
+})

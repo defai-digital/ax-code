@@ -9,6 +9,8 @@ export const messages = {
   "ui.wikiFailed": "\u043e\u0448\u0438\u0431\u043a\u0430 \u0441\u043e\u0437\u0434\u0430\u043d\u0438\u044f",
 
   "ui.openWikiVisualization": "\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0433\u0440\u0430\u0444 Wiki",
+  "ui.webMcpAllowlist":
+    "\u0421\u043f\u0438\u0441\u043e\u043a \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043d\u0438\u0439 WebMCP",
   "ui.openingWikiVisualization":
     "\u041e\u0442\u043a\u0440\u044b\u0442\u0438\u0435 \u0433\u0440\u0430\u0444\u0430 Wiki\u2026",
   "ui.wikiSnapshotCaption": "\u0421\u043d\u0438\u043c\u043e\u043a Wiki /wiki-viz",
