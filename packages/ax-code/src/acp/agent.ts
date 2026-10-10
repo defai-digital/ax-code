@@ -389,33 +389,9 @@ export namespace ACP {
           this.eventAbort,
         )
         this.beginReplay(sessionId)
-        const messages = await this.sdk.session
-          .messages({ sessionID: sessionId, directory }, { throwOnError: true })
-          .then((x) => x.data)
-          .catch((err) => {
-            log.error("unexpected error when fetching message", { error: err })
-            return undefined
-          })
-        const lastUser = messages?.findLast((m) => m.info.role === "user")?.info
-        if (lastUser?.role === "user") {
-          result.models.currentModelId = providerModelKey(lastUser.model)
-          this.sessionManager.setModel(sessionId, {
-            providerID: ProviderID.make(lastUser.model.providerID),
-            modelID: ModelID.make(lastUser.model.modelID),
-          })
-          if (result.modes?.availableModes?.some((m) => m.id === lastUser.agent)) {
-            result.modes.currentModeId = lastUser.agent
-            this.sessionManager.setMode(sessionId, lastUser.agent)
-          }
-        }
-        try {
-          for (const msg of messages ?? []) {
-            log.debug("replay message", msg)
-            await this.processMessage(msg)
-          }
-        } finally {
-          await this.endReplay(sessionId)
-        }
+        const messages = await this.fetchSessionMessages(sessionId, directory)
+        this.restoreLastUsedModelMode(sessionId, messages, result)
+        await this.replayMessages(sessionId, messages)
         await sendUsageUpdate(this.connection, this.sdk, sessionId, directory)
         return result
       } catch (e) {
@@ -480,39 +456,9 @@ export namespace ACP {
           this.eventAbort,
         )
         this.beginReplay(sessionId)
-        const messages = await this.sdk.session
-          .messages({ sessionID: sessionId, directory }, { throwOnError: true })
-          .then((x) => x.data)
-          .catch((err) => {
-            log.error("unexpected error when fetching message", { error: err })
-            return undefined
-          })
-        // Restore the model/mode actually last used on this session (see
-        // loadSession) before replaying. Without this, a forked session that
-        // was last driven in a restricted agent (e.g. "plan") silently
-        // reports and runs under the default agent instead — a permission
-        // regression, since prompt() picks the agent from
-        // sessionManager.getModel()/modeId.
-        const lastUser = messages?.findLast((m) => m.info.role === "user")?.info
-        if (lastUser?.role === "user") {
-          mode.models.currentModelId = providerModelKey(lastUser.model)
-          this.sessionManager.setModel(sessionId, {
-            providerID: ProviderID.make(lastUser.model.providerID),
-            modelID: ModelID.make(lastUser.model.modelID),
-          })
-          if (mode.modes?.availableModes?.some((m) => m.id === lastUser.agent)) {
-            mode.modes.currentModeId = lastUser.agent
-            this.sessionManager.setMode(sessionId, lastUser.agent)
-          }
-        }
-        try {
-          for (const msg of messages ?? []) {
-            log.debug("replay message", msg)
-            await this.processMessage(msg)
-          }
-        } finally {
-          await this.endReplay(sessionId)
-        }
+        const messages = await this.fetchSessionMessages(sessionId, directory)
+        this.restoreLastUsedModelMode(sessionId, messages, mode)
+        await this.replayMessages(sessionId, messages)
         await sendUsageUpdate(this.connection, this.sdk, sessionId, directory)
         return mode
       } catch (e) {
@@ -540,32 +486,12 @@ export namespace ACP {
           this.pendingSessionUpdates,
           this.eventAbort,
         )
-        // sessionManager.load() always tracks a fresh state with no
-        // model/modeId, so a resumed session otherwise silently falls back to
-        // the default model/agent even if it was previously driven under a
-        // different (possibly permission-restricted) agent. Restore from the
-        // last user message, matching loadSession/unstable_forkSession —
-        // without replaying the transcript, since the client reattaching via
-        // resume already has it rendered.
-        const messages = await this.sdk.session
-          .messages({ sessionID: sessionId, directory }, { throwOnError: true })
-          .then((x) => x.data)
-          .catch((err) => {
-            log.error("unexpected error when fetching message", { error: err })
-            return undefined
-          })
-        const lastUser = messages?.findLast((m) => m.info.role === "user")?.info
-        if (lastUser?.role === "user") {
-          result.models.currentModelId = providerModelKey(lastUser.model)
-          this.sessionManager.setModel(sessionId, {
-            providerID: ProviderID.make(lastUser.model.providerID),
-            modelID: ModelID.make(lastUser.model.modelID),
-          })
-          if (result.modes?.availableModes?.some((m) => m.id === lastUser.agent)) {
-            result.modes.currentModeId = lastUser.agent
-            this.sessionManager.setMode(sessionId, lastUser.agent)
-          }
-        }
+        // Restore the last-used model/agent, matching
+        // loadSession/unstable_forkSession — but without replaying the
+        // transcript, since the client reattaching via resume already has it
+        // rendered.
+        const messages = await this.fetchSessionMessages(sessionId, directory)
+        this.restoreLastUsedModelMode(sessionId, messages, result)
         await sendUsageUpdate(this.connection, this.sdk, sessionId, directory)
         return result
       } catch (e) {
@@ -913,6 +839,52 @@ export namespace ACP {
           return event.properties.part.sessionID
         case "message.part.delta":
           return event.properties.sessionID
+      }
+    }
+
+    private fetchSessionMessages(sessionId: string, directory: string) {
+      return this.sdk.session
+        .messages({ sessionID: sessionId, directory }, { throwOnError: true })
+        .then((x) => x.data)
+        .catch((err) => {
+          log.error("unexpected error when fetching message", { error: err })
+          return undefined
+        })
+    }
+
+    // Restore the model/mode actually last used on this session from the last
+    // user message. Without this, a re-attached (load/fork/resume) session
+    // silently reports and runs under the default agent instead — a permission
+    // regression, since prompt() picks the agent from sessionManager state.
+    private restoreLastUsedModelMode(
+      sessionId: string,
+      messages: SessionMessageResponse[] | undefined,
+      target: {
+        models: { currentModelId: string }
+        modes?: { availableModes: { id: string }[]; currentModeId: string }
+      },
+    ) {
+      const lastUser = messages?.findLast((m) => m.info.role === "user")?.info
+      if (lastUser?.role !== "user") return
+      target.models.currentModelId = providerModelKey(lastUser.model)
+      this.sessionManager.setModel(sessionId, {
+        providerID: ProviderID.make(lastUser.model.providerID),
+        modelID: ModelID.make(lastUser.model.modelID),
+      })
+      if (target.modes?.availableModes?.some((m) => m.id === lastUser.agent)) {
+        target.modes.currentModeId = lastUser.agent
+        this.sessionManager.setMode(sessionId, lastUser.agent)
+      }
+    }
+
+    private async replayMessages(sessionId: string, messages: SessionMessageResponse[] | undefined) {
+      try {
+        for (const msg of messages ?? []) {
+          log.debug("replay message", msg)
+          await this.processMessage(msg)
+        }
+      } finally {
+        await this.endReplay(sessionId)
       }
     }
 
