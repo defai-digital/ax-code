@@ -7,6 +7,10 @@ export const messages = {
 
   "ui.openWikiVisualization": "Wiki graph",
   "ui.webMcpAllowlist": "WebMCP allowlist",
+  "ui.webMcpToggleCommand": "Toggle WebMCP browser",
+  "ui.webMcpChromeMissing": "Chrome {min}+ was not found in the usual places. WebMCP will still try to start it; install Chrome {min} or newer if it fails.",
+  "ui.webMcpChromeOutdated": "Chrome {major} is too old for WebMCP (needs {min}+). WebMCP will still try to start; update Chrome if it fails.",
+  "ui.webMcpPromptHint": "This prompt names a web page. Click WebMCP in the sidebar or run /webmcp to let the agent open it in an isolated browser.",
   "ui.openingWikiVisualization": "Opening Wiki graph...",
   "ui.wikiSnapshotCaption": "Wiki snapshot /wiki-viz",
   "ui.wikiBrowserFallback": "Browser did not open: copy the link",

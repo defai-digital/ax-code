@@ -9,6 +9,13 @@ export const messages = {
 
   "ui.openWikiVisualization": "Wiki grafi\u011fini a\u00e7",
   "ui.webMcpAllowlist": "WebMCP izin listesi",
+  "ui.webMcpToggleCommand": "WebMCP taray\u0131c\u0131s\u0131n\u0131 a\u00e7/kapat",
+  "ui.webMcpChromeMissing":
+    "Chrome {min}+ ola\u011fan konumlarda bulunamad\u0131. WebMCP yine de ba\u015flatmay\u0131 dener; ba\u015far\u0131s\u0131z olursa Chrome {min} veya daha yenisini kurun.",
+  "ui.webMcpChromeOutdated":
+    "Chrome {major} WebMCP i\u00e7in \u00e7ok eski ({min}+ gerekir). WebMCP yine de ba\u015flatmay\u0131 dener; ba\u015far\u0131s\u0131z olursa Chrome'u g\u00fcncelleyin.",
+  "ui.webMcpPromptHint":
+    "Bu istem bir web sayfas\u0131ndan s\u00f6z ediyor. Ajan\u0131n sayfay\u0131 yal\u0131t\u0131lm\u0131\u015f bir taray\u0131c\u0131da a\u00e7abilmesi i\u00e7in kenar \u00e7ubu\u011fundaki WebMCP'ye t\u0131klay\u0131n veya /webmcp \u00e7al\u0131\u015ft\u0131r\u0131n.",
   "ui.openingWikiVisualization": "Wiki grafi\u011fi a\u00e7\u0131l\u0131yor\u2026",
   "ui.wikiSnapshotCaption": "Wiki anl\u0131k g\u00f6r\u00fcnt\u00fcs\u00fc /wiki-viz",
   "ui.wikiBrowserFallback": "Taray\u0131c\u0131 a\u00e7\u0131lmad\u0131: ba\u011flant\u0131y\u0131 kopyalay\u0131n",

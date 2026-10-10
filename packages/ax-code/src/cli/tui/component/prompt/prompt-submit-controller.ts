@@ -33,6 +33,8 @@ import type { AsyncSessionRoute } from "./prompt-types"
 import { createSubmitAbortError, isSubmitAbortError, type SubmitStage } from "./submit-state"
 import { isPromptExitCommand, promptSubmissionView } from "./view-model"
 import type { PromptInfo } from "./history"
+import { webMcpServers } from "../webmcp-chip-model"
+import { WEBMCP_HINT_KEY, webMcpHintDue } from "../webmcp-enable-model"
 
 type PromptSubmitStore = {
   prompt: PromptInfo
@@ -95,7 +97,8 @@ export type PromptSubmitHost = {
       provider_loaded: boolean
       provider_failed: boolean
       task_queue: readonly unknown[]
-      config?: { modes?: WorkModeConfig } | undefined
+      config?: { modes?: WorkModeConfig; mcp?: unknown } | undefined
+      mcp?: Record<string, { status?: string } | undefined>
     }
     set: (key: "session", update: (sessions: Session[]) => Session[]) => void
   }
@@ -124,6 +127,7 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
   const t = host.t ?? english
   let submitAbort: AbortController | undefined
   let submitRunID = 0
+  let webMcpHintShownThisRun = false
   let submitInFlight = false
   let cancelRouteHandoff: (() => void) | undefined
   let retrySubmission: { fingerprint: string; messageID: MessageID; followup: boolean } | undefined
@@ -428,6 +432,25 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
       model: providerModelKey(selectedModel),
       sessionID: props.sessionID ?? draftSessionID() ?? "new",
     })
+
+    // ADR-180: a prompt that names a web page while the bridge is off gets a
+    // one-time pointer to the chip and /webmcp. Never blocks the submit.
+    const webMcpBridges = webMcpServers(sync.data.config?.mcp)
+    if (
+      currentMode === "normal" &&
+      webMcpHintDue({
+        text: submitText,
+        configured: webMcpBridges.length > 0,
+        connected: webMcpBridges.some((name) => sync.data.mcp?.[name]?.status === "connected"),
+        shownThisRun: webMcpHintShownThisRun,
+        shownBefore: kv.get(WEBMCP_HINT_KEY, 0),
+      })
+    ) {
+      webMcpHintShownThisRun = true
+      const before = kv.get(WEBMCP_HINT_KEY, 0)
+      kv.set?.(WEBMCP_HINT_KEY, (typeof before === "number" ? before : 0) + 1)
+      toast.show({ variant: "info", message: t("ui.webMcpPromptHint"), duration: 9000 })
+    }
 
     // Managed AX Engine weights still downloading: the request would fail
     // server-side with MODEL_NOT_PREPARED. Keep the draft intact and explain.

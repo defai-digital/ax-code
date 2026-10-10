@@ -9,6 +9,10 @@ export const messages = {
 
   "ui.openWikiVisualization": "Buka graf Wiki",
   "ui.webMcpAllowlist": "Daftar izin WebMCP",
+  "ui.webMcpToggleCommand": "Alihkan browser WebMCP",
+  "ui.webMcpChromeMissing": "Chrome {min}+ tidak ditemukan di lokasi umum. WebMCP tetap akan mencoba memulai; jika gagal, pasang Chrome {min} atau lebih baru.",
+  "ui.webMcpChromeOutdated": "Chrome {major} terlalu lama untuk WebMCP (butuh {min}+). WebMCP tetap akan mencoba memulai; jika gagal, perbarui Chrome.",
+  "ui.webMcpPromptHint": "Prompt ini menyebut halaman web. Klik WebMCP di bilah samping atau jalankan /webmcp agar agen dapat membukanya di browser terisolasi.",
   "ui.openingWikiVisualization": "Membuka graf Wiki\u2026",
   "ui.wikiSnapshotCaption": "Snapshot Wiki /wiki-viz",
   "ui.wikiBrowserFallback": "Browser tidak terbuka: salin tautan",

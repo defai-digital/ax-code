@@ -9,6 +9,13 @@ export const messages = {
 
   "ui.openWikiVisualization": "M\u1edf \u0111\u1ed3 th\u1ecb Wiki",
   "ui.webMcpAllowlist": "Danh s\u00e1ch cho ph\u00e9p WebMCP",
+  "ui.webMcpToggleCommand": "B\u1eadt/t\u1eaft tr\u00ecnh duy\u1ec7t WebMCP",
+  "ui.webMcpChromeMissing":
+    "Kh\u00f4ng t\u00ecm th\u1ea5y Chrome {min}+ \u1edf c\u00e1c v\u1ecb tr\u00ed th\u00f4ng th\u01b0\u1eddng. WebMCP v\u1eabn s\u1ebd th\u1eed kh\u1edfi \u0111\u1ed9ng; n\u1ebfu l\u1ed7i, h\u00e3y c\u00e0i Chrome {min} tr\u1edf l\u00ean.",
+  "ui.webMcpChromeOutdated":
+    "Chrome {major} qu\u00e1 c\u0169 \u0111\u1ed1i v\u1edbi WebMCP (c\u1ea7n {min}+). WebMCP v\u1eabn s\u1ebd th\u1eed kh\u1edfi \u0111\u1ed9ng; n\u1ebfu l\u1ed7i, h\u00e3y c\u1eadp nh\u1eadt Chrome.",
+  "ui.webMcpPromptHint":
+    "L\u1eddi nh\u1eafc n\u00e0y nh\u1eafc \u0111\u1ebfn m\u1ed9t trang web. Nh\u1ea5p WebMCP \u1edf thanh b\u00ean ho\u1eb7c ch\u1ea1y /webmcp \u0111\u1ec3 t\u00e1c t\u1eed m\u1edf trang trong tr\u00ecnh duy\u1ec7t t\u00e1ch bi\u1ec7t.",
   "ui.openingWikiVisualization": "\u0110ang m\u1edf \u0111\u1ed3 th\u1ecb Wiki\u2026",
   "ui.wikiSnapshotCaption": "\u1ea2nh ch\u1ee5p Wiki /wiki-viz",
   "ui.wikiBrowserFallback": "Tr\u00ecnh duy\u1ec7t kh\u00f4ng m\u1edf: sao ch\u00e9p li\u00ean k\u1ebft",

@@ -2,11 +2,14 @@ import { createMemo, Show } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { useLocal } from "@tui/context/local"
 import { useLanguage } from "@tui/context/language"
+import { useSDK } from "@tui/context/sdk"
+import { useToast } from "@tui/ui/toast"
 import { useTheme } from "@tui/context/theme"
 import { ChromeAction } from "./chrome-action"
 import { useCommandDialog } from "./dialog-command"
 import { ModeToggle } from "./mode-chips"
 import { webMcpChipModel, webMcpServers } from "./webmcp-chip-model"
+import { toggleWebMcpFromTui } from "./webmcp-toggle"
 
 /**
  * Accent-colored link beside the WebMCP chip that opens the project-scoped
@@ -47,6 +50,9 @@ export function WebMcpAllowlistLink() {
 export function WebMcpChip() {
   const sync = useSync()
   const local = useLocal()
+  const sdk = useSDK()
+  const toast = useToast()
+  const { t } = useLanguage()
   const { theme } = useTheme()
 
   const model = createMemo(() =>
@@ -58,18 +64,7 @@ export function WebMcpChip() {
   )
 
   const toggle = () => {
-    const current = model()
-    if (current.connected.length > 0) {
-      // Reconcile: disconnect what is live and retry what needs attention, so
-      // a mixed warning marker never dead-ends behind a disconnect-only click.
-      for (const name of current.connected) void local.mcp.toggle(name)
-      for (const { name } of current.attentions) void local.mcp.toggle(name)
-      return
-    }
-    // Otherwise (re)connect everything that a managed policy has not locked.
-    for (const name of current.servers) {
-      if (sync.data.mcp?.[name]?.status !== "blocked") void local.mcp.toggle(name)
-    }
+    void toggleWebMcpFromTui({ t, sync, local, sdk, toast })
   }
 
   const retryAttention = () => {

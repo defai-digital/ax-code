@@ -29,7 +29,12 @@ AX Code's.
    alone.
 2. Start the terminal UI with `ax-code`.
 3. Click the **WebMCP** chip in the sidebar footer, or the same chip on the
-   Home prompt footer. The click is the consent. No browser starts before it.
+   Home prompt footer, or run `/webmcp`. The click or command is the consent.
+   No browser starts before it. AX Code first checks, without starting a
+   browser, whether a Chrome 150 or newer is installed in the usual places and
+   warns you if not; the check is advice and never blocks the attempt. Your
+   choice is saved to your user config, so the bridge comes back on at the next
+   start without another click.
 4. AX Code opens that isolated window with the WebMCP feature enabled
    (`--enable-features=WebMCP`). The window holds no logins until you sign in
    there by hand.
@@ -60,6 +65,13 @@ the Chrome profile you use while building a site, follow
 
 That flag applies to the Chrome profile you opened. The AX Code bridge still
 starts from the chip.
+
+### Prompt hint
+
+While the bridge is off, a prompt that names a URL or a local server (for
+example `localhost:3000`) shows a one-line pointer to the chip and `/webmcp`.
+It appears at most once per session and three times in total, and it never
+changes what is sent to the agent.
 
 ## What the agent can do
 
@@ -180,6 +192,22 @@ managed `webmcp` requirement (`allow`, `allowRead`, `allowInteract`,
 
 Servers you add with `ax-code mcp add` are a different trust path. See
 [MCP Integrations](../integrations/mcp.md).
+
+## Debug a localhost page in five steps
+
+For a page that renders wrong, a control that does nothing, or a request that
+fails:
+
+1. Navigate to the page and take a snapshot — the a11y tree is the structural
+   baseline. Navigation and reads use the existing approvals.
+2. Perform the failing action once, under the existing interaction approvals.
+3. Read the delta: console errors and network metadata (method, URL, status,
+   type — request and response bodies stay out of scope) around the action.
+   For asynchronous state, wait; never repeat the triggering action.
+4. Verdict: PASS, FAIL, or BLOCKED with the missing capability named. A tool
+   acknowledgement is not proof of application success.
+5. If the failure is reproducible, freeze it as a `browser_workflow` scenario
+   (below) so the fix is verified by running the same frozen assertions twice.
 
 ## Reproduce and verify a development change
 

@@ -101,6 +101,8 @@ import type {
   McpStatusResponses,
   McpWebMcpApprovalsErrors,
   McpWebMcpApprovalsResponses,
+  McpWebMcpChromeErrors,
+  McpWebMcpChromeResponses,
   OutputFormat,
   Part as Part2,
   PartDeleteErrors,
@@ -7045,6 +7047,36 @@ export class Auth2 extends HeyApiClient {
 
 /** AX Code API schema `Mcp` (auto-generated from the OpenAPI contract). */
 export class Mcp extends HeyApiClient {
+  /**
+   * Check the Chrome a WebMCP bridge would launch
+   *
+   * Read-only: runs `--version` on an explicit or well-known Chrome executable and never starts a browser. Advisory only; the launch preflight stays authoritative.
+   */
+  public webMcpChrome<ThrowOnError extends boolean = false>(
+    parameters: {
+      name: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "name" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<McpWebMcpChromeResponses, McpWebMcpChromeErrors, ThrowOnError>({
+      url: "/mcp/{name}/webmcp-chrome",
+      ...options,
+      ...params,
+    })
+  }
+
   /**
    * Revoke saved WebMCP approvals for this project
    */

@@ -15818,6 +15818,63 @@ export type EventSubscribeResponses = {
 /** Successful response payload for `GET /event` — Subscribe to events */
 export type EventSubscribeResponse = EventSubscribeResponses[keyof EventSubscribeResponses]
 
+/** Request payload shape for `GET /mcp/{name}/webmcp-chrome` — Check the Chrome a WebMCP bridge would launch */
+export type McpWebMcpChromeData = {
+  body?: never
+  path: {
+    name: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/mcp/{name}/webmcp-chrome"
+}
+
+/** Error response payloads for `GET /mcp/{name}/webmcp-chrome` — Check the Chrome a WebMCP bridge would launch */
+export type McpWebMcpChromeErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+}
+
+/** Error response payload for `GET /mcp/{name}/webmcp-chrome` — Check the Chrome a WebMCP bridge would launch */
+export type McpWebMcpChromeError = McpWebMcpChromeErrors[keyof McpWebMcpChromeErrors]
+
+/** Success response payloads for `GET /mcp/{name}/webmcp-chrome` — Check the Chrome a WebMCP bridge would launch */
+export type McpWebMcpChromeResponses = {
+  /**
+   * Chrome availability
+   */
+  200:
+    | {
+        state: "ready"
+        major?: number
+        executable: string
+      }
+    | {
+        state: "outdated"
+        major: number
+        minimum: number
+      }
+    | {
+        state: "missing"
+        minimum: number
+      }
+    | {
+        state: "unreadable"
+        executable: string
+        reason: string
+      }
+}
+
+/** Successful response payload for `GET /mcp/{name}/webmcp-chrome` — Check the Chrome a WebMCP bridge would launch */
+export type McpWebMcpChromeResponse = McpWebMcpChromeResponses[keyof McpWebMcpChromeResponses]
+
 /** Request payload shape for `DELETE /mcp/{name}/webmcp-approvals` — Revoke saved WebMCP approvals for this project */
 export type McpRevokeWebMcpApprovalData = {
   body?: never

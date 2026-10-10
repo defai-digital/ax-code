@@ -17,6 +17,7 @@ import { nextRunMode, runModeLabel, type RunMode } from "./component/prompt/run-
 import { DIGITAL_CODE_ON_START_DEFAULT } from "./component/digital-code-view-model"
 import { workModeCycleToast } from "./component/work-mode-availability"
 import { webMcpServers } from "./component/webmcp-chip-model"
+import { toggleWebMcpFromTui } from "./component/webmcp-toggle"
 import type { CommandOption } from "./component/dialog-command"
 import type { TuiDialogLoaders } from "./tui-dialogs"
 import { DialogConfirm } from "@tui/ui/dialog-confirm"
@@ -378,6 +379,21 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
       onSelect: () => {
         void dialogs.showMcpDialog()
+      },
+    },
+    {
+      title: t("ui.webMcpToggleCommand"),
+      value: "app.webmcp.toggle",
+      category: t("category.agent"),
+      // Keyboard route to the same toggle as the sidebar chip (ADR-180); the
+      // command is the user's explicit gesture, so it connects like the chip.
+      hidden: webMcpBridges.length === 0,
+      enabled: webMcpBridges.length > 0,
+      slash: {
+        name: "webmcp",
+      },
+      onSelect: () => {
+        void toggleWebMcpFromTui({ t, sync, local, sdk, toast })
       },
     },
     {

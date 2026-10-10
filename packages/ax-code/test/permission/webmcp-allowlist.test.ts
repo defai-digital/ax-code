@@ -295,3 +295,18 @@ test("HTTP explicit grant requires runtime authorization, a connected bridge and
     },
   })
 })
+
+test("HTTP Chrome status is read-only, advisory, and only answers for a configured bridge", async () => {
+  await using tmp = await tmpdir({ git: true, config: { mcp: { bridge: entry() } } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const app = new Hono().route("/mcp", McpRoutes())
+      const known = await app.request("http://localhost/mcp/bridge/webmcp-chrome")
+      expect(known.status).toBe(200)
+      const body = (await known.json()) as { state: string }
+      expect(["ready", "outdated", "missing", "unreadable"]).toContain(body.state)
+      expect((await app.request("http://localhost/mcp/missing/webmcp-chrome")).status).toBe(404)
+    },
+  })
+})

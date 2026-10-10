@@ -4,6 +4,7 @@ import { validator } from "../validation"
 import z from "zod"
 import { MCP } from "../../mcp"
 import { WebMcpApprovals } from "../../mcp/webmcp-approvals"
+import { WebMcpChrome } from "../../mcp/webmcp-chrome"
 import { Config } from "../../config/config"
 import { errors, invalidRequest, notFound } from "../error"
 import { lazy } from "../../util/lazy"
@@ -42,6 +43,28 @@ export const McpRoutes = lazy(() =>
       if (unauthorized) return unauthorized
       return next()
     })
+    .get(
+      "/:name/webmcp-chrome",
+      describeRoute({
+        summary: "Check the Chrome a WebMCP bridge would launch",
+        description:
+          "Read-only: runs `--version` on an explicit or well-known Chrome executable and never starts a browser. Advisory only; the launch preflight stays authoritative.",
+        operationId: "mcp.webMcpChrome",
+        responses: {
+          200: {
+            description: "Chrome availability",
+            content: { "application/json": { schema: resolver(WebMcpChrome.Status) } },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", MCP_NAME_PARAM_OBJECT),
+      withMcpName(async (name, c) => {
+        const status = await WebMcpChrome.statusForServer(name)
+        if (!status) return notFound(c, { message: `WebMCP bridge not found: ${name}`, resource: "mcpServer" })
+        return c.json(status)
+      }),
+    )
     .get(
       "/:name/webmcp-approvals",
       describeRoute({

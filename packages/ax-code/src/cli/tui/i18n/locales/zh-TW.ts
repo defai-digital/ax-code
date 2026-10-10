@@ -9,6 +9,10 @@ export const messages = {
 
   "ui.openWikiVisualization": "\u958b\u555f Wiki \u5716\u8b5c",
   "ui.webMcpAllowlist": "WebMCP \u5141\u8a31\u6e05\u55ae",
+  "ui.webMcpToggleCommand": "\u5207\u63db WebMCP \u700f\u89bd\u5668",
+  "ui.webMcpChromeMissing": "\u5728\u5e38\u898b\u4f4d\u7f6e\u627e\u4e0d\u5230 Chrome {min}+\u3002WebMCP \u4ecd\u6703\u5617\u8a66\u555f\u52d5\uff1b\u82e5\u5931\u6557\u8acb\u5b89\u88dd Chrome {min} \u6216\u66f4\u65b0\u7248\u672c\u3002",
+  "ui.webMcpChromeOutdated": "Chrome {major} \u592a\u820a\uff0cWebMCP \u9700\u8981 {min}+\u3002WebMCP \u4ecd\u6703\u5617\u8a66\u555f\u52d5\uff1b\u82e5\u5931\u6557\u8acb\u66f4\u65b0 Chrome\u3002",
+  "ui.webMcpPromptHint": "\u6b64\u63d0\u793a\u63d0\u5230\u7db2\u9801\u3002\u9ede\u9078\u5074\u908a\u6b04\u7684 WebMCP \u6216\u57f7\u884c /webmcp\uff0c\u8b93\u4ee3\u7406\u5728\u9694\u96e2\u7684\u700f\u89bd\u5668\u4e2d\u958b\u555f\u3002",
   "ui.openingWikiVisualization": "\u6b63\u5728\u958b\u555f Wiki \u5716\u8b5c\u2026",
   "ui.wikiSnapshotCaption": "Wiki \u5feb\u7167 /wiki-viz",
   "ui.wikiBrowserFallback": "\u700f\u89bd\u5668\u672a\u958b\u555f\uff1a\u8acb\u8907\u88fd\u9023\u7d50",

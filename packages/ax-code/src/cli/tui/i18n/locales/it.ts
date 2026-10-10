@@ -9,6 +9,10 @@ export const messages = {
 
   "ui.openWikiVisualization": "Apri grafo Wiki",
   "ui.webMcpAllowlist": "Elenco consentiti WebMCP",
+  "ui.webMcpToggleCommand": "Attiva o disattiva il browser WebMCP",
+  "ui.webMcpChromeMissing": "Chrome {min}+ non \u00e8 stato trovato nelle posizioni consuete. WebMCP prover\u00e0 comunque ad avviarsi; se fallisce, installa Chrome {min} o successivo.",
+  "ui.webMcpChromeOutdated": "Chrome {major} \u00e8 troppo vecchio per WebMCP (richiede {min}+). WebMCP prover\u00e0 comunque ad avviarsi; se fallisce, aggiorna Chrome.",
+  "ui.webMcpPromptHint": "Questo prompt cita una pagina web. Fai clic su WebMCP nella barra laterale o esegui /webmcp per far aprire la pagina all'agente in un browser isolato.",
   "ui.openingWikiVisualization": "Apertura grafo Wiki\u2026",
   "ui.wikiSnapshotCaption": "Istantanea Wiki /wiki-viz",
   "ui.wikiBrowserFallback": "Il browser non si \u00e8 aperto: copia il link",
