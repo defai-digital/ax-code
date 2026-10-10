@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "vitest"
 import { OsSandbox } from "../../src/isolation/os-sandbox"
 import { Isolation } from "../../src/isolation"
+import { tmpdir } from "../fixture/fixture"
 import fs from "fs"
 import os from "os"
-import path from "path"
 
 // Clear both before and after so tests asserting on the default backend/mode
 // are not skewed by AX_CODE_ISOLATION_MODE / _NETWORK inherited from the parent
@@ -116,11 +116,13 @@ describe("Isolation.shouldUseOsSandbox", () => {
     expect(Isolation.shouldUseOsSandbox(full)).toBe(false)
   })
 
-  test("true for os and auto backends", () => {
-    const osBackend = Isolation.resolve({ mode: "workspace-write", backend: "os" }, os.tmpdir())
+  test("true for os and auto backends", async () => {
+    await using tmp = await tmpdir()
+    const osBackend = Isolation.resolve({ mode: "workspace-write", backend: "os" }, tmp.path)
     expect(osBackend.backend).toBe("os")
     expect(Isolation.shouldUseOsSandbox(osBackend)).toBe(true)
-    const auto = Isolation.resolve({ mode: "workspace-write", backend: "auto" }, path.join(os.tmpdir(), "x"))
+    const auto = Isolation.resolve({ mode: "workspace-write", backend: "auto" }, tmp.path)
+    expect(auto.backend).toBe("auto")
     expect(Isolation.shouldUseOsSandbox(auto)).toBe(true)
   })
 
