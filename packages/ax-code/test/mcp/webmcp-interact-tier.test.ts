@@ -484,6 +484,90 @@ describe("WebMCP T2 dispatch", () => {
     await expect(wait.execute!({ pageId: 1, text: ["Saved"] }, options())).rejects.toThrow("32 KiB read budget")
   })
 
+  test("wait_for forwards a page-side timeout inside the remaining dispatch budget", async () => {
+    const profile = full()
+    const grants: GrantState = { read: new Set([ORIGIN]), interact: new Map([[ORIGIN, 20]]) }
+    const { client } = bridge()
+    const wait = await tool("wait_for", profile, client, grants)
+    await wait.execute!({ pageId: 1, text: ["Saved"], timeout: 30_000 }, options())
+    const forwarded = client.callTool.mock.calls.find(([request]) => request.name === "wait_for")?.[0]
+    const timeout = forwarded?.arguments?.timeout
+    // The converted tool has a 5 s dispatch budget: the full 30 s wait would
+    // outlive the MCP request, so the bridge is asked for less than that.
+    expect(typeof timeout).toBe("number")
+    expect(timeout as number).toBeLessThanOrEqual(4_000)
+    expect(timeout as number).toBeGreaterThan(0)
+    expect(WebMcpProfile.waitTimeoutWithin(30_000, 10_000)).toBe(9_000)
+    expect(WebMcpProfile.waitTimeoutWithin(2_000, 10_000)).toBe(2_000)
+    expect(WebMcpProfile.waitTimeoutWithin(undefined, 500)).toBe(1)
+  })
+
+  test("a closed page drops its uid map, listing baseline and dialog; a vanished page clears the map on read", async () => {
+    const profile = full()
+    const grants: GrantState = { read: new Set([ORIGIN]), interact: new Map([[ORIGIN, 20]]) }
+    const { client, state } = bridge()
+    const snapshot = await tool("take_snapshot", profile, client, grants)
+    await snapshot.execute!({ pageId: 1 }, options())
+    WebMcpProfile.recordListing(WebMcpProfile.stateFor(profile), 1, [{ name: "search" }], PAGE)
+    WebMcpProfile.recordDialog(profile, 1, { structuredContent: { dialog: { type: "alert", message: "hi" } } })
+    expect(WebMcpProfile.targetSummaryFor(profile, 1, "1_1")).toBeDefined()
+    expect(WebMcpProfile.listedOriginFor(profile, 1)).toBe(ORIGIN)
+    expect(WebMcpProfile.dialogFor(profile, 1)).toBeDefined()
+
+    const close = await tool("close_page", profile, client, grants)
+    await close.execute!({ pageId: 1 }, options())
+    expect(WebMcpProfile.targetSummaryFor(profile, 1, "1_1")).toBeUndefined()
+    expect(WebMcpProfile.snapshotUrlFor(profile, 1)).toBeUndefined()
+    expect(WebMcpProfile.listedOriginFor(profile, 1)).toBeUndefined()
+    expect(WebMcpProfile.dialogFor(profile, 1)).toBeUndefined()
+
+    // A read whose page left the list after the call discards the output and
+    // the previous uid map together.
+    await snapshot.execute!({ pageId: 1 }, options())
+    expect(WebMcpProfile.targetSummaryFor(profile, 1, "1_1")).toBeDefined()
+    let listings = 0
+    client.callTool.mockImplementation(async (request: { name: string }) => {
+      if (request.name === "list_pages") {
+        listings += 1
+        return listings === 1
+          ? { content: [], structuredContent: { pages: [{ id: 1, url: state.url, selected: true }] } }
+          : { content: [], structuredContent: { pages: [] } }
+      }
+      return snapshotResult()
+    })
+    await expect(snapshot.execute!({ pageId: 1 }, options())).rejects.toThrow("navigated during the read")
+    expect(WebMcpProfile.targetSummaryFor(profile, 1, "1_1")).toBeUndefined()
+  })
+
+  test("the dispatched marker distinguishes a failure before the bridge call from one after it", async () => {
+    const profile = full()
+    const grants: GrantState = { read: new Set([ORIGIN]), interact: new Map() }
+    const { client } = bridge()
+    const click = await tool("click", profile, client, grants)
+    WebMcpProfile.recordSnapshot(profile, 1, WebMcpProfile.parseStructuredSnapshot(snapshotResult())!, PAGE)
+    const refused = { pageId: 1, uid: "1_1" }
+    await expect(click.execute!(refused, options())).rejects.toBeInstanceOf(WebMcpProfile.InteractNotGrantedError)
+    expect(WebMcpProfile.wasDispatched(refused)).toBe(false)
+    grants.interact.set(ORIGIN, 1)
+    const acted = { pageId: 1, uid: "1_1" }
+    await click.execute!(acted, options())
+    expect(WebMcpProfile.wasDispatched(acted)).toBe(true)
+    // An action whose post-call lookup fails leaves no uid map to bind to.
+    grants.interact.set(ORIGIN, 1)
+    let calls = 0
+    client.callTool.mockImplementation(async (request: { name: string }) => {
+      calls += 1
+      if (request.name === "list_pages" && calls > 2) throw new Error("transport closed")
+      if (request.name === "list_pages")
+        return { content: [], structuredContent: { pages: [{ id: 1, url: PAGE, selected: true }] } }
+      return { content: [{ type: "text", text: "clicked" }], structuredContent: {} }
+    })
+    const lost = { pageId: 1, uid: "1_1" }
+    await expect(click.execute!(lost, options())).rejects.toThrow("transport closed")
+    expect(WebMcpProfile.wasDispatched(lost)).toBe(true)
+    expect(WebMcpProfile.targetSummaryFor(profile, 1, "1_1")).toBeUndefined()
+  })
+
   test("fill_form failures are reported as partial and dialogs are recorded for the next prompt", async () => {
     const profile = full()
     const grants: GrantState = { read: new Set([ORIGIN]), interact: new Map([[ORIGIN, 20]]) }

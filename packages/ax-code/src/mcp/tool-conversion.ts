@@ -305,6 +305,11 @@ export async function convertMcpTool(
       // control) to the latest snapshot of that page, spend the budget.
       let interactOrigin: string | undefined
       let interactUrl: string | undefined
+      // Set once the bridge accepted an action, and once the page was looked
+      // up after it: an accepted action whose page could not be observed
+      // afterwards leaves the uid map in doubt.
+      let actionAccepted = false
+      let actionObserved = false
       if (interactTier && webmcp) {
         const pageId = (input as Record<string, unknown>).pageId
         const before =
@@ -370,6 +375,9 @@ export async function convertMcpTool(
         }
         opts.abortSignal?.throwIfAborted()
         const mainTimeout = webmcp ? budget() : timeout
+        // The request is about to reach the bridge: the session layer refunds
+        // a wait_for reservation only for failures before this point.
+        if (webmcp) WebMcpProfile.markDispatched(args)
         const result = await client.callTool(
           {
             name: mcpTool.name,
@@ -377,6 +385,11 @@ export async function convertMcpTool(
               ...((input || {}) as Record<string, unknown>),
               ...(webmcp?.toolName === "new_page"
                 ? WebMcpProfile.workflowContextArguments(webmcp.profile, input as object)
+                : {}),
+              // A wait longer than the remaining dispatch budget would outlive
+              // the MCP request; let the bridge settle first and report.
+              ...(webmcp?.toolName === "wait_for" && mainTimeout !== undefined
+                ? { timeout: WebMcpProfile.waitTimeoutWithin((input as Record<string, unknown>).timeout, mainTimeout) }
                 : {}),
             },
           },
@@ -416,12 +429,16 @@ export async function convertMcpTool(
             if (redirect) throw new WebMcpProfile.OriginNotGrantedError(redirect)
             throw error
           }
+          actionAccepted = true
           if (readTier && webmcp && readOrigin) {
             // Re-resolve the page after the call: a page that navigated to
             // another origin mid-read discards its output (ADR-171).
             const pageId = (input as Record<string, unknown>).pageId as number
             const after = await webmcpPageUrl(client, pageId, budget(), opts.abortSignal)
             if (WebMcpProfile.pageOriginOf(after) !== readOrigin) {
+              // The page left its origin or the page list: no earlier uid map
+              // may stand in for the snapshot that is being discarded.
+              WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
               throw new Error("WebMCP page navigated during the read; the read output is discarded")
             }
             WebMcpProfile.boundReadResult(webmcp.toolName, result, readOrigin)
@@ -439,6 +456,7 @@ export async function convertMcpTool(
             // map; wait_for output is a snapshot and is bounded as one.
             const pageId = (input as Record<string, unknown>).pageId as number
             const after = await webmcpPageUrl(client, pageId, budget(), opts.abortSignal)
+            actionObserved = true
             const afterOrigin = WebMcpProfile.pageOriginOf(after)
             if (webmcp.toolName === "wait_for") {
               if (afterOrigin !== interactOrigin) {
@@ -455,7 +473,12 @@ export async function convertMcpTool(
             }
           }
           if (webmcp && typeof (input as Record<string, unknown>).pageId === "number") {
-            WebMcpProfile.recordDialog(webmcp.profile, (input as Record<string, unknown>).pageId as number, result)
+            const pageId = (input as Record<string, unknown>).pageId as number
+            // A closed page's id is never reissued by the bridge: drop its uid
+            // map, listing baseline and dialog note instead of carrying them
+            // for the rest of the connection.
+            if (webmcp.toolName === "close_page") WebMcpProfile.forgetPage(webmcp.profile, pageId)
+            else WebMcpProfile.recordDialog(webmcp.profile, pageId, result)
           }
           if (listingPageId !== undefined) {
             const after = await webmcpPageUrl(client, listingPageId, budget(), opts.abortSignal)
@@ -488,6 +511,14 @@ export async function convertMcpTool(
         // every failure here must invalidate the previous page baseline.
         if (webmcp && listingPageId !== undefined) {
           WebMcpProfile.invalidateListing(webmcp.profile, listingPageId)
+        }
+        // An action the bridge accepted may have changed the page even though
+        // the lookup after it failed (budget, abort, transport): the uid map
+        // is no longer known to match, so the next action must not bind to
+        // it (ADR-174 rule 8). A bridge-reported action failure keeps the
+        // map: the page was not observed to change and the result says so.
+        if (webmcp && interactOrigin !== undefined && actionAccepted && !actionObserved) {
+          WebMcpProfile.clearSnapshot(webmcp.profile, (input as Record<string, unknown>).pageId as number)
         }
         log.error("MCP tool call failed", { tool: mcpTool.name, error: toErrorMessage(e) })
         throw e

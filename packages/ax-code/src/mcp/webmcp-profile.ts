@@ -896,6 +896,39 @@ export namespace WebMcpProfile {
     return interactDecisions.get(args)
   }
 
+  const dispatched = new WeakSet<object>()
+
+  /**
+   * Mark the call object the session layer passed to dispatch once its main
+   * request is handed to the bridge. Failures before this point (a grant
+   * prompt, a denial, a missing page, an exhausted dispatch budget, an abort)
+   * never reached the browser, so the session layer can return a wait_for
+   * reservation for them (ADR-174 rule 9) without refunding a wait that ran.
+   */
+  export function markDispatched(call: unknown): void {
+    if (typeof call === "object" && call !== null) dispatched.add(call)
+  }
+
+  /** Whether a dispatch-time call object reached the bridge. */
+  export function wasDispatched(call: unknown): boolean {
+    return typeof call === "object" && call !== null && dispatched.has(call)
+  }
+
+  /** Milliseconds kept back so the bridge settles a wait before the MCP request itself times out. */
+  const WAIT_SETTLE_MARGIN_MS = 1_000
+
+  /**
+   * The page-side wait a `wait_for` may run within the remaining dispatch
+   * budget. The schema admits the full 30 s while the whole dispatch shares
+   * one deadline of the same order, so an unclamped wait reliably outlives
+   * the MCP request: the client reports a timeout while the bridge keeps the
+   * page busy, instead of the bridge's own clean "not found" result.
+   */
+  export function waitTimeoutWithin(requested: unknown, remainingMs: number): number {
+    const wanted = typeof requested === "number" && Number.isFinite(requested) ? requested : MAX_WAIT_TIMEOUT_MS
+    return Math.max(1, Math.min(wanted, Math.floor(remainingMs - WAIT_SETTLE_MARGIN_MS)))
+  }
+
   /** Configured profile plus session-granted origins; frozen like a launch-validated profile. */
   export function withGrants(profile: Configuration, granted: readonly string[]): Configuration {
     const extra = granted.filter((origin) => !profile.allowedOrigins.includes(origin))
@@ -2142,6 +2175,17 @@ export namespace WebMcpProfile {
 
   export function invalidateListing(profile: Configuration, pageId: number): void {
     clearBaseline(stateFor(profile), pageId)
+  }
+
+  /**
+   * Drop every per-page record (uid map, listing baseline, dialog note) for a
+   * page the bridge closed. The pinned bridge never reissues a page id within
+   * one launch, so nothing can bind to the stale entries; keeping them only
+   * grows the connection's state for as long as it lives.
+   */
+  export function forgetPage(profile: Configuration, pageId: number): void {
+    snapshotStates.get(profile)?.delete(pageId)
+    listingStates.get(profile)?.pages.delete(pageId)
   }
 
   export function recordListing(

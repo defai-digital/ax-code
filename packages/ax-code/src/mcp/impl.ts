@@ -33,6 +33,7 @@ import { NotificationEvent } from "@/notification/events"
 import open from "open"
 import { isRecord } from "@/util/record"
 import { KeyedSerialQueue } from "@/util/queue"
+import { FileLock } from "../util/filelock"
 import { Shell } from "../shell/shell"
 import {
   convertMcpTool,
@@ -784,6 +785,13 @@ export namespace MCP {
   async function installVendoredBridge(): Promise<{ ok: true } | { ok: false; error: string }> {
     const bin = WebMcpProfile.vendoredBin()
     const dir = WebMcpProfile.vendoredDir()
+    // The module singleflight covers this process only. Two AX Code processes
+    // cold-installing at once would interleave `rm` and `npm install` in the
+    // same prefix and leave a tree that fails verification for both; the
+    // cross-process lock makes the second one wait and then reuse the cache.
+    // Stale and wait bounds exceed the install timeout so a live install is
+    // never stolen mid-way.
+    using _lock = await FileLock.acquire(dir, { timeoutMs: 330_000, staleMs: 360_000 })
     if (existsSync(bin)) {
       const cached = verifyVendoredCache(dir, bin)
       if (cached.ok) return cached

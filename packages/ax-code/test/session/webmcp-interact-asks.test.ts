@@ -71,7 +71,7 @@ async function bridgeTools(
     },
   })
   const entries = await Promise.all(
-    ["click", "fill"].map(async (name) => [
+    ["click", "fill", "wait_for"].map(async (name) => [
       `bridge_${name}`,
       await convertMcpTool({ name, inputSchema: { type: "object" } } as never, client as never, 5000, policy(name)),
     ]),
@@ -189,6 +189,52 @@ describe("WebMCP T2 asks through the session layer", () => {
         expect(ask).toHaveBeenCalledTimes(4)
         expect(ask.mock.calls[3]?.[0]).toMatchObject({ metadata: expect.objectContaining({ interactAction: true }) })
         expect(client.calls).toContain("fill")
+      },
+    })
+  })
+
+  test("a wait_for reservation is returned when the call never reaches the bridge and kept when it does", async () => {
+    await using tmp = await tmpdir()
+    const profile = WebMcpProfile.config({ allowedOrigins: [], read: true, interact: true }, true).webmcp
+    WebMcpProfile.recordSnapshot(profile, 1, snapshotNodes(), PAGE)
+    const grants: GrantState = { read: new Set([ORIGIN]), interact: new Map([[ORIGIN, 20]]) }
+    const client = fakeClient()
+    vi.spyOn(ToolRegistry, "tools").mockResolvedValue([])
+    vi.spyOn(MCP, "tools").mockResolvedValue(await bridgeTools(profile, grants, client))
+    vi.spyOn(Permission, "ask").mockResolvedValue(undefined)
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tools = await resolveTools(resolveInput("msg_turn_wait"))
+        const wait = (args: Record<string, unknown>) => (tools.bridge_wait_for.execute as any)(args, execOptions())
+        // The page is gone before the bridge is asked to wait: four such
+        // failures must not exhaust the 120 s per-turn wait budget.
+        client.callTool.mockImplementation(async (request: { name: string }) => {
+          client.calls.push(request.name)
+          if (request.name === "list_pages") return { content: [], structuredContent: { pages: [] } }
+          return { content: [{ type: "text", text: "ok" }], structuredContent: {} }
+        })
+        for (let i = 0; i < 5; i++) {
+          await expect(wait({ pageId: 1, text: ["Saved"], timeout: 30_000 })).rejects.toThrow(
+            "not in the bridge page list",
+          )
+        }
+        expect(client.calls).not.toContain("wait_for")
+        // Waits that reach the bridge keep their reservation: the fifth one
+        // trips the per-turn budget.
+        client.callTool.mockImplementation(async (request: { name: string }) => {
+          client.calls.push(request.name)
+          if (request.name === "list_pages") {
+            return { content: [], structuredContent: { pages: [{ id: 1, url: PAGE, selected: true }] } }
+          }
+          return {
+            content: [{ type: "text", text: "snapshot" }],
+            structuredContent: { snapshot: { id: "1_0", role: "RootWebArea", name: "App" } },
+          }
+        })
+        for (let i = 0; i < 4; i++) await wait({ pageId: 1, text: ["Saved"], timeout: 30_000 })
+        expect(client.calls.filter((name) => name === "wait_for")).toHaveLength(4)
+        await expect(wait({ pageId: 1, text: ["Saved"], timeout: 1 })).rejects.toThrow("wait_for budget for this turn")
       },
     })
   })

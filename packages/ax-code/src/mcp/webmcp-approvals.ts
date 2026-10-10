@@ -121,7 +121,16 @@ export namespace WebMcpApprovals {
     const cfg = await Config.get()
     const entry = cfg.mcp?.[server]
     if (!entry || !("type" in entry) || entry.type !== "local" || !entry.webmcp) return undefined
-    const profile = WebMcpProfile.validateLaunch(entry)
+    // validateLaunch throws on an invalid profile (schema violations,
+    // environment overrides). A config edited into that state while a bridge
+    // is connected must read as "no identity" (no saved approval applies),
+    // not throw out of every tool call that captures a candidate.
+    let profile: WebMcpProfile.Configuration | undefined
+    try {
+      profile = WebMcpProfile.validateLaunch(entry)
+    } catch {
+      return undefined
+    }
     if (!profile) return undefined
     const normalized = { ...entry, ...WebMcpProfile.config(profile, entry.enabled) }
     return { cfg, fingerprint: McpTrust.fingerprint(server, normalized) }

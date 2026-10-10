@@ -1489,6 +1489,8 @@ export async function resolveTools(input: ResolveToolsInput) {
                 experimental: true,
               },
             })
+            // An abort while the prompt was open must not restart the browser.
+            ctx.abort.throwIfAborted()
             const granted = await MCP.grantWebMcpOrigin(grantPolicy.server, error.origin, alsoOrigin)
             if (!granted.ok) throw new Error(granted.error)
             throw new Error(
@@ -1582,6 +1584,9 @@ export async function resolveTools(input: ResolveToolsInput) {
               }
               throw refusal
             }
+            // An abort while the prompt was open records neither the grant nor
+            // the approval.
+            ctx.abort.throwIfAborted()
             breaker?.approved()
             const granted = await MCP.grantWebMcpInteractOrigin(interactPolicy.server, error.origin)
             if (!granted.ok) throw new Error(granted.error)
@@ -1647,9 +1652,17 @@ export async function resolveTools(input: ResolveToolsInput) {
           const interactTool = policy !== undefined && WebMcpProfile.isInteractTool(policy.toolName)
           const breaker = interactTool ? webmcpTurnBreaker(input.processor) : undefined
           if (breaker?.tripped) throw new Error(breaker.tripped)
-          // A wait reservation is refunded when the call stops at a grant
-          // prompt before any waiting happened.
+          // A wait reservation is refunded when the call fails before its
+          // request reaches the bridge (a grant prompt, a denial, a missing
+          // page, an exhausted budget, an abort): nothing waited, so the
+          // turn budget stays available (ADR-174 rule 9).
           let reservedWait = 0
+          const refundIfNotDispatched = (dispatchCall: unknown) => {
+            if (breaker && reservedWait > 0 && !WebMcpProfile.wasDispatched(dispatchCall)) {
+              breaker.refundWait(reservedWait)
+              reservedWait = 0
+            }
+          }
           if (interactTool && policy && webmcp) {
             // A target nobody listed can never be approved meaningfully and
             // would fail closed at dispatch anyway; fail it here without
@@ -1675,32 +1688,6 @@ export async function resolveTools(input: ResolveToolsInput) {
               reservedWait = waitMs
             }
           }
-          const grantCovered =
-            interactTool &&
-            policy !== undefined &&
-            !WebMcpProfile.perActionCall(policy.profile, policy.toolName, call as Record<string, unknown>)
-          if (interactTool && policy) {
-            // Bind the ask-time decision to the call so dispatch spends the
-            // budget on exactly this decision, whatever the snapshot map
-            // looks like after the bridge round-trips.
-            WebMcpProfile.bindInteractDecision(call as object, !grantCovered)
-            // A per-action tool on an origin with no interact grant would
-            // pass both asks and then stop at the grant prompt; ask for the
-            // grant first so the user confirms the action once, not twice.
-            // The snapshot origin is the page origin at snapshot time; the
-            // dispatch re-checks the live page.
-            if (!grantCovered) {
-              const pageId = (call as { pageId?: unknown }).pageId
-              const origin =
-                typeof pageId === "number"
-                  ? WebMcpProfile.pageOriginOf(WebMcpProfile.snapshotUrlFor(policy.profile, pageId))
-                  : undefined
-              if (origin && !(policy.interactGrants?.() ?? new Map<string, number>()).has(origin)) {
-                await grantInteract(policy, new WebMcpProfile.InteractNotGrantedError(origin), breaker)
-              }
-            }
-          }
-          const skipPerCall = readTierTool || grantCovered
           const permissionPattern = McpPermissionPattern.derive(key, webmcp ?? call, { worktree: Instance.worktree })
           const mcpMetadata = { mcp: true, ...permissionPattern.metadata }
           // Recheck both layers at admission and dispatch, including calls
@@ -1719,83 +1706,106 @@ export async function resolveTools(input: ResolveToolsInput) {
                 agent: input.agent.name,
               })
           }
-          await checkWebMcpDenials()
-          if (policy?.toolName === "close_page" && webmcp && policy.closePageOrigin) {
-            ctx.abort.throwIfAborted()
-            const origin = await policy.closePageOrigin((call as { pageId: number }).pageId, ctx.abort)
-            if (origin) webmcp.pageOrigin = origin
-            WebMcpApprovals.bindCloseTarget(call as { pageId: number }, origin)
-          }
-          const approvalCandidate =
-            policy && webmcp ? await WebMcpApprovals.captureCall(policy, call as Record<string, unknown>) : undefined
-          if (webmcp) {
-            WebMcpApprovals.bind(webmcp, approvalCandidate, { permission: key, patterns: permissionPattern.patterns })
-            WebMcpApprovals.bind(mcpMetadata, approvalCandidate, {
-              permission: key,
-              patterns: permissionPattern.patterns,
-            })
-          }
           try {
-            if (!skipPerCall) {
-              await ctx.ask({
+            const grantCovered =
+              interactTool &&
+              policy !== undefined &&
+              !WebMcpProfile.perActionCall(policy.profile, policy.toolName, call as Record<string, unknown>)
+            if (interactTool && policy) {
+              // Bind the ask-time decision to the call so dispatch spends the
+              // budget on exactly this decision, whatever the snapshot map
+              // looks like after the bridge round-trips.
+              WebMcpProfile.bindInteractDecision(call as object, !grantCovered)
+              // A per-action tool on an origin with no interact grant would
+              // pass both asks and then stop at the grant prompt; ask for the
+              // grant first so the user confirms the action once, not twice.
+              // The snapshot origin is the page origin at snapshot time; the
+              // dispatch re-checks the live page.
+              if (!grantCovered) {
+                const pageId = (call as { pageId?: unknown }).pageId
+                const origin =
+                  typeof pageId === "number"
+                    ? WebMcpProfile.pageOriginOf(WebMcpProfile.snapshotUrlFor(policy.profile, pageId))
+                    : undefined
+                if (origin && !(policy.interactGrants?.() ?? new Map<string, number>()).has(origin)) {
+                  await grantInteract(policy, new WebMcpProfile.InteractNotGrantedError(origin), breaker)
+                }
+              }
+            }
+            const skipPerCall = readTierTool || grantCovered
+            await checkWebMcpDenials()
+            if (policy?.toolName === "close_page" && webmcp && policy.closePageOrigin) {
+              ctx.abort.throwIfAborted()
+              const origin = await policy.closePageOrigin((call as { pageId: number }).pageId, ctx.abort)
+              if (origin) webmcp.pageOrigin = origin
+              WebMcpApprovals.bindCloseTarget(call as { pageId: number }, origin)
+            }
+            const approvalCandidate =
+              policy && webmcp ? await WebMcpApprovals.captureCall(policy, call as Record<string, unknown>) : undefined
+            if (webmcp) {
+              WebMcpApprovals.bind(webmcp, approvalCandidate, { permission: key, patterns: permissionPattern.patterns })
+              WebMcpApprovals.bind(mcpMetadata, approvalCandidate, {
                 permission: key,
-                metadata: mcpMetadata,
                 patterns: permissionPattern.patterns,
-                always: permissionPattern.always,
               })
             }
-            if (webmcp && !skipPerCall) {
-              await ctx.ask({
-                permission: "webmcp",
-                patterns: [key],
-                always: [],
-                metadata: webmcp,
-              })
-            }
-          } catch (refusal) {
-            if (
-              breaker &&
-              (refusal instanceof Permission.RejectedError || refusal instanceof Permission.CorrectedError)
-            ) {
-              breaker.refused(webmcpTargetSummary(webmcp))
-            }
-            throw refusal
-          }
-          if (webmcp) WebMcpApprovals.bindCall(call as object, webmcp, checkWebMcpDenials)
-          if (breaker && !skipPerCall) breaker.approved()
-          try {
-            const outcome = await execute(call, opts)
-            breaker?.succeeded()
-            return outcome
-          } catch (error) {
-            // A redirect target the bridge blocked surfaces only after
-            // dispatch; offer the same grant the call-time path would.
-            if (policy) {
+            try {
+              if (!skipPerCall) {
+                await ctx.ask({
+                  permission: key,
+                  metadata: mcpMetadata,
+                  patterns: permissionPattern.patterns,
+                  always: permissionPattern.always,
+                })
+              }
+              if (webmcp && !skipPerCall) {
+                await ctx.ask({
+                  permission: "webmcp",
+                  patterns: [key],
+                  always: [],
+                  metadata: webmcp,
+                })
+              }
+            } catch (refusal) {
               if (
                 breaker &&
-                reservedWait > 0 &&
-                (error instanceof WebMcpProfile.ReadNotGrantedError ||
-                  error instanceof WebMcpProfile.InteractNotGrantedError)
+                (refusal instanceof Permission.RejectedError || refusal instanceof Permission.CorrectedError)
               ) {
-                breaker.refundWait(reservedWait)
+                breaker.refused(webmcpTargetSummary(webmcp))
               }
-              if (error instanceof WebMcpProfile.ReadNotGrantedError) {
-                await grantRead(policy, error)
-                await checkWebMcpDenials()
-                ctx.abort.throwIfAborted()
-                await WebMcpApprovals.checkReadContinuation(call as object, error.origin)
-                // Exactly one continuation outside this catch. Any bridge
-                // failure or a second grant refusal propagates, never loops.
-                return await execute(call, opts)
-              } else if (error instanceof WebMcpProfile.InteractNotGrantedError)
-                await grantInteract(policy, error, breaker)
-              else {
-                if (breaker && error instanceof WebMcpProfile.TargetBindingError) {
-                  breaker.failed(webmcpTargetSummary(webmcp))
-                }
-                await grantOrigin(policy, error)
-              }
+              throw refusal
             }
+            if (webmcp) WebMcpApprovals.bindCall(call as object, webmcp, checkWebMcpDenials)
+            if (breaker && !skipPerCall) breaker.approved()
+            try {
+              const outcome = await execute(call, opts)
+              breaker?.succeeded()
+              return outcome
+            } catch (error) {
+              // A redirect target the bridge blocked surfaces only after
+              // dispatch; offer the same grant the call-time path would.
+              if (policy) {
+                if (error instanceof WebMcpProfile.ReadNotGrantedError) {
+                  await grantRead(policy, error)
+                  await checkWebMcpDenials()
+                  ctx.abort.throwIfAborted()
+                  await WebMcpApprovals.checkReadContinuation(call as object, error.origin)
+                  // Exactly one continuation outside this catch. Any bridge
+                  // failure or a second grant refusal propagates, never loops.
+                  return await execute(call, opts)
+                } else if (error instanceof WebMcpProfile.InteractNotGrantedError)
+                  await grantInteract(policy, error, breaker)
+                else {
+                  if (breaker && error instanceof WebMcpProfile.TargetBindingError) {
+                    breaker.failed(webmcpTargetSummary(webmcp))
+                  }
+                  await grantOrigin(policy, error)
+                }
+              }
+              throw error
+            }
+          } catch (error) {
+            refundIfNotDispatched(call)
             throw error
           }
         },

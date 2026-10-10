@@ -36,12 +36,18 @@ export async function toggleWebMcpBridges(deps: WebMcpToggleDeps) {
   }
   const targets = model.servers.filter((name) => deps.statusOf(name) !== "blocked")
   if (targets.length === 0) return
-  const notice = webMcpChromeNotice(await deps.chrome(targets[0]!).catch(() => undefined))
-  if (notice) deps.warn(notice)
+  // The probe is advisory and can take seconds per candidate binary, so it
+  // runs beside the connects instead of delaying them: a slow or hung probe
+  // never makes the chip look as if it ignored the click, and the connect
+  // reports its own failure either way.
+  const probe = deps.chrome(targets[0]!).catch(() => undefined)
   // Toggles reject on a failed connect/disconnect (see dialog-mcp.tsx): settle
   // every bridge so a rejection is handled and the status refresh surfaces the
   // failure, instead of leaking an unhandled rejection per bridge.
-  await Promise.allSettled(targets.map((name) => deps.toggle(name)))
+  const settled = Promise.allSettled(targets.map((name) => deps.toggle(name)))
+  const notice = webMcpChromeNotice(await probe)
+  if (notice) deps.warn(notice)
+  await settled
 }
 
 export type WebMcpTuiContext = {
