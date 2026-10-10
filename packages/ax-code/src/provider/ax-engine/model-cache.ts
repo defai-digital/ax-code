@@ -25,21 +25,19 @@ import { axEngineDownloadEnv } from "./python"
 import {
   applyProgressEvent,
   parseGiBTotalFromMessage,
-  parseProgressJsonLine,
   progressFromCacheBytes,
   startCacheProgressPolling,
   type AxEngineDownloadProgress,
 } from "./download-progress"
 import { HfCache } from "./hf-cache"
 import { Log } from "@/util/log"
-import type { Readable } from "node:stream"
+import { readDownloadLines, createDownloadJsonParser, createDownloadTranscript } from "./download-output"
 import type { Dirent } from "fs"
 
 const log = Log.create({ service: "ax-engine-model-cache" })
 
 // Longest a model download is allowed to run.
 const MAX_TRANSCRIPT_LINES = 2000
-const MAX_TRANSCRIPT_BYTES = 1024 * 1024
 const DOWNLOAD_TIMEOUT_MS = 6 * 60 * 60 * 1000
 
 // FileLock steals by lockfile age using the *acquirer's* staleMs — a live
@@ -487,21 +485,6 @@ function parseDownloadSummary(record: Record<string, unknown>): { dest?: string;
   }
 }
 
-async function readLines(stream: Readable, onLine: (line: string) => void): Promise<void> {
-  let buffer = ""
-  for await (const chunk of stream) {
-    buffer += typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8")
-    let newline = buffer.indexOf("\n")
-    while (newline !== -1) {
-      const line = buffer.slice(0, newline)
-      buffer = buffer.slice(newline + 1)
-      if (line.trim()) onLine(line)
-      newline = buffer.indexOf("\n")
-    }
-  }
-  if (buffer.trim()) onLine(buffer)
-}
-
 /** Best-effort recursive size for progress only (does not throw). */
 export async function measureDirBytes(target: string): Promise<number> {
   try {
@@ -581,48 +564,25 @@ async function runAxEngineDownload(input: {
     let expectedBytes = input.expectedBytes
     // Keep only a bounded tail of the raw transcript for error diagnostics;
     // a multi-hour download must not grow these without limit.
-    const stdoutChunks: string[] = []
-    const stderrChunks: Buffer[] = []
-    let stderrBytes = 0
-    // Pretty-printed final summaries from the engine wrapper span multiple
-    // lines. Accumulate from the first "{" until JSON.parse succeeds.
-    let multiLineJson: string | undefined
+    const stdoutTranscript = createDownloadTranscript(MAX_TRANSCRIPT_LINES)
+    const stderrTranscript = createDownloadTranscript()
 
     const publish = (event: { done: number; total: number; message?: string }) => {
       progress = applyProgressEvent(progress, event)
       input.onProgress?.(progress)
     }
 
-    const tryConsumeJsonObject = (text: string): boolean => {
-      const parsed = parseProgressJsonLine(text)
+    const consumeJson = createDownloadJsonParser((parsed) => {
       if (parsed.kind === "progress") {
         const fromMessage = parseGiBTotalFromMessage(parsed.event.file)
         if (fromMessage) expectedBytes = expectedBytes ?? fromMessage
-        publish({
-          done: parsed.event.done,
-          total: parsed.event.total,
-          message: parsed.event.file,
-        })
-        return true
+        publish({ done: parsed.event.done, total: parsed.event.total, message: parsed.event.file })
       }
-      if (parsed.kind === "summary") {
-        lastSummary = parsed.value
-        return true
-      }
-      return false
-    }
-
+      if (parsed.kind === "summary") lastSummary = parsed.value
+    })
     const onStdoutLine = (line: string) => {
-      stdoutChunks.push(line)
-      if (stdoutChunks.length > MAX_TRANSCRIPT_LINES) stdoutChunks.shift()
-      if (multiLineJson !== undefined) {
-        multiLineJson += `\n${line}`
-        if (tryConsumeJsonObject(multiLineJson)) multiLineJson = undefined
-        return
-      }
-      if (tryConsumeJsonObject(line)) return
-      // Start of a pretty-printed object (engine final summary).
-      if (line.trimStart().startsWith("{")) multiLineJson = line
+      stdoutTranscript.append(Buffer.from(`${line}\n`))
+      consumeJson(line)
     }
 
     // Poll HF cache while snapshot_download is blocked inside the engine —
@@ -641,24 +601,20 @@ async function runAxEngineDownload(input: {
       })
     }
 
-    const stdoutDone = readLines(proc.stdout, onStdoutLine)
+    const stdoutDone = readDownloadLines(proc.stdout, onStdoutLine)
     const stderrDone = (async () => {
       for await (const chunk of proc.stderr!) {
         const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-        stderrChunks.push(buf)
-        stderrBytes += buf.length
-        while (stderrBytes > MAX_TRANSCRIPT_BYTES && stderrChunks.length > 1)
-          stderrBytes -= stderrChunks.shift()!.length
+        stderrTranscript.append(buf)
       }
     })()
 
     try {
-      const code = await proc.exited
-      await Promise.all([stdoutDone, stderrDone])
+      const [code] = await Promise.all([proc.exited, stdoutDone, stderrDone])
       return {
         code,
-        stdout: stdoutChunks.join("\n"),
-        stderr: Buffer.concat(stderrChunks).toString("utf8"),
+        stdout: stdoutTranscript.text().replace(/\n$/, ""),
+        stderr: stderrTranscript.text(),
         lastSummary,
       }
     } finally {
