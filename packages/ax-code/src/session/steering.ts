@@ -232,6 +232,10 @@ export namespace SessionSteering {
     const pending = [...current.receipts.values()].filter((item) => item.admitted && item.receipt.status === "accepted")
     let applied = false
     for (const item of pending) {
+      // finish() may have run while an earlier item was applying: it already
+      // rejected the rest and handed them to the queue, so skip them instead
+      // of applying undefined text and overwriting that verdict below.
+      if (item.receipt.status !== "accepted" || item.text === undefined) continue
       // A follow-up row cancelled on admission is protected from restart
       // recovery only by its owner's liveness; refresh the row heartbeat at
       // this step boundary so a second backend booting while the steer waits
@@ -271,7 +275,9 @@ export namespace SessionSteering {
       } catch (error) {
         // A notification failure after commit must not misreport saved text,
         // and must not abort the loop after the correction is already durable.
-        if (item.receipt.status !== "applied") {
+        // A receipt finish() already rejected keeps its reason and its single
+        // reconcile hand-off.
+        if (item.receipt.status === "accepted") {
           item.receipt.status = "rejected"
           item.receipt.reason = "application_rejected"
           item.text = undefined

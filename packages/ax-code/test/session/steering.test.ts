@@ -118,6 +118,42 @@ describe("generation-scoped steering", () => {
     })
   })
 
+  test("a drain that outlives finish() keeps the rejection finish() recorded", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const id = SessionID.ascending()
+        const controller = new AbortController()
+        SessionSteering.begin(id, controller.signal)
+        const generation = SessionSteering.view(id).generation!
+        for (const clientID of ["first", "second"]) {
+          const receipt = await SessionSteering.submit(
+            id,
+            { expectedGeneration: generation, clientID, text: `${clientID} text` },
+            async () => {},
+          )
+          expect(receipt.status).toBe("accepted")
+        }
+        let applies = 0
+        await SessionSteering.drain(id, controller.signal, async ({ beforeCommit, afterCommit }) => {
+          applies++
+          beforeCommit()
+          afterCommit()
+          // The generation ends while the first steer is still being applied.
+          SessionSteering.finish(id)
+        })
+        expect(applies).toBe(1)
+        const receipts = SessionSteering.view(id).receipts
+        expect(receipts.find((item) => item.clientID === "first")?.status).toBe("applied")
+        expect(receipts.find((item) => item.clientID === "second")).toMatchObject({
+          status: "rejected",
+          reason: "generation_ended_before_application",
+        })
+      },
+    })
+  })
+
   test("a successor generation cannot commit pending text from its predecessor", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
