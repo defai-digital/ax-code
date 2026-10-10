@@ -1,10 +1,13 @@
 import type { Argv } from "yargs"
 import { cmd } from "./cmd"
 import { Session } from "../../session"
-import { bootstrap } from "../bootstrap"
+import { bootstrapReadonly } from "../bootstrap"
 import { Database } from "../../storage/db"
-import { providerModelKey } from "../../provider/model-key"
+import type { SessionID } from "../../session/schema"
 import { SessionTable } from "../../session/session.sql"
+import { SessionShard } from "../../session/shard"
+import { SessionUsageStats } from "../../session/usage-stats"
+import type { ProjectID } from "../../project/schema"
 import { Project } from "../../project/project"
 import { Instance } from "../../project/instance"
 import { isNonEmptyRecord } from "../../util/record"
@@ -81,7 +84,7 @@ export const StatsCommand = cmd({
       })
   },
   handler: async (args) => {
-    await bootstrap(process.cwd(), async () => {
+    await bootstrapReadonly(process.cwd(), async () => {
       try {
         const stats = await aggregateSessionStats(args.days, args.project, { json: args.json === true })
 
@@ -273,116 +276,73 @@ export async function aggregateSessionStats(
 
   const sessionTotalTokens: number[] = []
 
-  const BATCH_SIZE = 20
-  for (let i = 0; i < filteredSessions.length; i += BATCH_SIZE) {
-    const batch = filteredSessions.slice(i, i + BATCH_SIZE)
-
-    const batchPromises = batch.map(async (session) => {
-      const messages = await Session.messages({ sessionID: session.id })
-
-      let sessionTokens = { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
-      let sessionToolUsage: Record<string, number> = {}
-      let sessionModelUsage: Record<
-        string,
-        {
-          messages: number
-          tokens: {
-            input: number
-            output: number
-            cache: {
-              read: number
-              write: number
-            }
-          }
-        }
-      > = {}
-
-      for (const message of messages) {
-        if (message.info.role === "assistant") {
-          const modelKey = providerModelKey(message.info)
-          if (!sessionModelUsage[modelKey]) {
-            sessionModelUsage[modelKey] = {
-              messages: 0,
-              tokens: { input: 0, output: 0, cache: { read: 0, write: 0 } },
-            }
-          }
-          sessionModelUsage[modelKey].messages++
-
-          if (message.info.tokens) {
-            sessionTokens.input += message.info.tokens.input ?? 0
-            sessionTokens.output += message.info.tokens.output ?? 0
-            sessionTokens.reasoning += message.info.tokens.reasoning ?? 0
-            sessionTokens.cache.read += message.info.tokens.cache?.read ?? 0
-            sessionTokens.cache.write += message.info.tokens.cache?.write ?? 0
-
-            sessionModelUsage[modelKey].tokens.input += message.info.tokens.input ?? 0
-            sessionModelUsage[modelKey].tokens.output +=
-              (message.info.tokens.output ?? 0) + (message.info.tokens.reasoning ?? 0)
-            sessionModelUsage[modelKey].tokens.cache.read += message.info.tokens.cache?.read ?? 0
-            sessionModelUsage[modelKey].tokens.cache.write += message.info.tokens.cache?.write ?? 0
-          }
-        }
-
-        for (const part of message.parts) {
-          if (part.type === "tool" && part.tool) {
-            sessionToolUsage[part.tool] = (sessionToolUsage[part.tool] ?? 0) + 1
-          }
-        }
-      }
-
-      return {
-        messageCount: messages.length,
-        sessionTokens,
-        sessionTotalTokens:
-          sessionTokens.input +
-          sessionTokens.output +
-          sessionTokens.reasoning +
-          sessionTokens.cache.read +
-          sessionTokens.cache.write,
-        sessionToolUsage,
-        sessionModelUsage,
-        earliestTime: cutoffTime > 0 ? session.time.updated : session.time.created,
-        latestTime: session.time.updated,
-      }
-    })
-
-    const settled = await Promise.allSettled(batchPromises)
-
-    for (const entry of settled) {
-      if (entry.status === "rejected") {
-        console.warn("Warning: stats batch failed:", toErrorMessage(entry.reason))
-        continue
-      }
-      const result = entry.value
-      earliestTime = Math.min(earliestTime, result.earliestTime)
-      latestTime = Math.max(latestTime, result.latestTime)
-      sessionTotalTokens.push(result.sessionTotalTokens)
-
-      stats.totalMessages += result.messageCount
-      stats.totalTokens.input += result.sessionTokens.input
-      stats.totalTokens.output += result.sessionTokens.output
-      stats.totalTokens.reasoning += result.sessionTokens.reasoning
-      stats.totalTokens.cache.read += result.sessionTokens.cache.read
-      stats.totalTokens.cache.write += result.sessionTokens.cache.write
-
-      for (const [tool, count] of Object.entries(result.sessionToolUsage)) {
-        stats.toolUsage[tool] = (stats.toolUsage[tool] ?? 0) + count
-      }
-
-      for (const [model, usage] of Object.entries(result.sessionModelUsage)) {
-        if (!stats.modelUsage[model]) {
-          stats.modelUsage[model] = {
-            messages: 0,
-            tokens: { input: 0, output: 0, cache: { read: 0, write: 0 } },
-          }
-        }
-        stats.modelUsage[model].messages += usage.messages
-        stats.modelUsage[model].tokens.input += usage.tokens.input
-        stats.modelUsage[model].tokens.output += usage.tokens.output
-        stats.modelUsage[model].tokens.cache.read += usage.tokens.cache.read
-        stats.modelUsage[model].tokens.cache.write += usage.tokens.cache.write
-      }
+  // Aggregate inside SQLite, one pass per store (a shared registry store, or
+  // one shard per project). A store that fails is skipped with a warning, the
+  // same way a failing session batch used to be.
+  const usage = new Map<SessionID, SessionUsageStats.Aggregate>()
+  const failed = new Set<SessionID>()
+  const byStore = new Map<SessionShard.Store, SessionID[]>()
+  const storeByProject = new Map<ProjectID, SessionShard.Store>()
+  for (const session of filteredSessions) {
+    let store = storeByProject.get(session.projectID)
+    if (!store) {
+      store = SessionShard.storeForProject(session.projectID)
+      storeByProject.set(session.projectID, store)
     }
+    const ids = byStore.get(store)
+    if (ids) ids.push(session.id)
+    else byStore.set(store, [session.id])
+  }
+  for (const [store, ids] of byStore) {
+    try {
+      for (const [sessionID, aggregate] of SessionUsageStats.load(store, ids)) usage.set(sessionID, aggregate)
+    } catch (error) {
+      console.warn("Warning: stats batch failed:", toErrorMessage(error))
+      for (const id of ids) failed.add(id)
+    }
+  }
+
+  for (const session of filteredSessions) {
+    if (failed.has(session.id)) continue
+    const aggregate = usage.get(session.id)
+    const sessionTokens = SessionUsageStats.emptyTokens()
+    for (const [model, modelUsage] of aggregate?.models ?? []) {
+      sessionTokens.input += modelUsage.tokens.input
+      sessionTokens.output += modelUsage.tokens.output
+      sessionTokens.reasoning += modelUsage.tokens.reasoning
+      sessionTokens.cache.read += modelUsage.tokens.cache.read
+      sessionTokens.cache.write += modelUsage.tokens.cache.write
+
+      const total = (stats.modelUsage[model] ??= {
+        messages: 0,
+        tokens: { input: 0, output: 0, cache: { read: 0, write: 0 } },
+      })
+      total.messages += modelUsage.messages
+      total.tokens.input += modelUsage.tokens.input
+      // Model rows report reasoning together with output.
+      total.tokens.output += modelUsage.tokens.output + modelUsage.tokens.reasoning
+      total.tokens.cache.read += modelUsage.tokens.cache.read
+      total.tokens.cache.write += modelUsage.tokens.cache.write
+    }
+    for (const [tool, count] of aggregate?.tools ?? []) {
+      stats.toolUsage[tool] = (stats.toolUsage[tool] ?? 0) + count
+    }
+
+    earliestTime = Math.min(earliestTime, cutoffTime > 0 ? session.time.updated : session.time.created)
+    latestTime = Math.max(latestTime, session.time.updated)
+    sessionTotalTokens.push(
+      sessionTokens.input +
+        sessionTokens.output +
+        sessionTokens.reasoning +
+        sessionTokens.cache.read +
+        sessionTokens.cache.write,
+    )
+    stats.totalMessages += aggregate?.messageCount ?? 0
+    stats.totalTokens.input += sessionTokens.input
+    stats.totalTokens.output += sessionTokens.output
+    stats.totalTokens.reasoning += sessionTokens.reasoning
+    stats.totalTokens.cache.read += sessionTokens.cache.read
+    stats.totalTokens.cache.write += sessionTokens.cache.write
   }
 
   const rangeDays = Math.max(1, Math.ceil((latestTime - earliestTime) / MS_IN_DAY))
