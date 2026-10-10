@@ -40,7 +40,7 @@ import {
 import { ModelID, ProviderID } from "./schema"
 import { levenshtein } from "@/util/levenshtein"
 import { isModelSupportedForProvider } from "./model-support"
-import { isNonChatModelID, modelSelectableForProvider } from "./model-selectability"
+import { modelSelectableForProvider } from "./model-selectability"
 import { defaultModelIDForProvider, MODEL_FORMAT_HELP, modelFamilyDefault } from "./implicit-default"
 import {
   CUSTOM_LOADERS,
@@ -1286,15 +1286,6 @@ export namespace Provider {
       throw new ModelNotFoundError({ providerID, modelID, suggestions })
     }
     return info
-  }
-
-  async function tryGetModel(providerID: ProviderID, modelID: ModelID) {
-    try {
-      return await getModel(providerID, modelID)
-    } catch (error) {
-      if (ModelNotFoundError.isInstance(error)) return undefined
-      throw error
-    }
   }
 
   export async function getLanguage(

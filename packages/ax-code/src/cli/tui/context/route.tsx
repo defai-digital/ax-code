@@ -5,7 +5,7 @@ import { parseInitialRoutePayload, type Route } from "./route-util"
 
 export type { Route } from "./route-util"
 
-export function parseInitialRoute(raw?: string): Route {
+function parseInitialRoute(raw?: string): Route {
   return parseInitialRoutePayload(raw)
 }
 

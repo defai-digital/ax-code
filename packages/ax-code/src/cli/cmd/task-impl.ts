@@ -7,10 +7,6 @@ import { TaskQueueExecutor } from "../../session/task-queue-executor"
 import { SessionID, TaskQueueID } from "../../session/schema"
 import { jsonOption, writeJson } from "./json-output"
 
-type JsonOption = {
-  json?: boolean
-}
-
 export function formatTaskList(items: TaskQueue.Info[]) {
   if (items.length === 0) return `No tasks found.${EOL}`
   const header = ["status".padEnd(18), "delivery".padEnd(10), "kind".padEnd(12), "id".padEnd(30), "title"].join(" ")

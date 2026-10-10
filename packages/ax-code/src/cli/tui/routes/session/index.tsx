@@ -25,11 +25,7 @@ import { ScrollBoxRenderable, addDefaultParsers, MacOSScrollAccel, type ScrollAc
 import { Prompt, type PromptRef } from "@tui/component/prompt"
 import type {
   AssistantMessage as AssistantMessageInfo,
-  Part,
-  ToolPart,
   UserMessage as UserMessageInfo,
-  TextPart,
-  ReasoningPart,
 } from "@ax-code/sdk/v2"
 import { useLocal } from "@tui/context/local"
 import { Locale } from "@/util/locale"

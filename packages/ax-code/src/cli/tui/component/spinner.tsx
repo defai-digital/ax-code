@@ -9,7 +9,7 @@ import { shouldUseTuiAnimations } from "./spinner-profile"
 
 const frames = ["|", "/", "-", "\\"]
 
-export function AxTuiSpinner(props: { frames: string[]; interval: number; color: RGBA | ColorGenerator }) {
+function AxTuiSpinner(props: { frames: string[]; interval: number; color: RGBA | ColorGenerator }) {
   return <spinner frames={props.frames} interval={props.interval} color={props.color} />
 }
 

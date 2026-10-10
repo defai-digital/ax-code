@@ -12,7 +12,6 @@ import {
   type CodeEdgeKind,
   type LspCacheOperation,
   type LspCacheCompleteness,
-  type SymbolNoteKind,
   type SymbolSignalType,
   type NoteOrigin,
 } from "./schema.sql"

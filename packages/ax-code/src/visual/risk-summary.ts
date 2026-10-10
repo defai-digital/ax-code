@@ -5,7 +5,7 @@
  * summary that describes what remains unfixed and the overall
  * confidence level of the visual review.
  */
-import type { VisualFinding, VisualFindingSeverity } from "./run"
+import type { VisualFinding } from "./run"
 import { summarizeFindings, openFindings, type FindingsSummary } from "./findings"
 
 export type ResidualRiskLevel = "none" | "low" | "medium" | "high" | "critical"

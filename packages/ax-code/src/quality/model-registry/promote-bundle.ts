@@ -8,7 +8,6 @@ import { QualityPromotionApprovalPolicy } from "../promotion/promotion-approval-
 import { QualityPromotionApprovalPolicyStore } from "../promotion/promotion-approval-policy-store"
 import { QualityPromotionBoardDecision } from "../promotion/promotion-board-decision"
 import { QualityPromotionDecisionBundle } from "../promotion/promotion-decision-bundle"
-import { QualityPromotionEligibility } from "../promotion/promotion-eligibility"
 import { QualityPromotionReleaseDecisionRecord } from "../promotion/promotion-release-decision-record"
 import { QualityPromotionReleasePolicyStore } from "../promotion/promotion-release-policy-store"
 import { QualityPromotionReviewDossier } from "../promotion/promotion-review-dossier"

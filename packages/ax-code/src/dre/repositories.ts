@@ -38,7 +38,7 @@ import type {
   PlanRow,
 } from "@ax-code/ax-code-reason/repository"
 import type { ProjectID } from "@ax-code/ax-code-reason/id"
-import type { RefactorPlanID, EmbeddingCacheID } from "@ax-code/ax-code-reason/id"
+import type { RefactorPlanID } from "@ax-code/ax-code-reason/id"
 
 // ─── Plan repository ──────────────────────────────────────────────────
 

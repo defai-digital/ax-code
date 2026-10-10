@@ -6,7 +6,7 @@
  * findings to artifacts, and computes residual risk.
  */
 import crypto from "crypto"
-import type { VisualFinding, VisualFindingCategory, VisualFindingSeverity, VisualFindingStatus, VisualRun } from "./run"
+import type { VisualFinding, VisualFindingCategory, VisualFindingSeverity, VisualFindingStatus } from "./run"
 
 export type FindingsSummary = {
   total: number
