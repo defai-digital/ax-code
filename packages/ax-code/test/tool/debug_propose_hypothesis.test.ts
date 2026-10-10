@@ -228,6 +228,32 @@ describe("DebugProposeHypothesisTool", () => {
     })
   })
 
+  test("repeating the same evidence id does not raise confidence", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const { caseId, evidenceId } = await emitCaseAndEvidence(session.id, tmp.path, "p", "x")
+        const tool = await DebugProposeHypothesisTool.init()
+        const once = await tool.execute(
+          { caseId, claim: "claim once", evidenceRefs: [evidenceId] },
+          fakeCtx(session.id),
+        )
+        const repeated = await tool.execute(
+          {
+            caseId,
+            claim: "claim repeated",
+            evidenceRefs: [evidenceId, evidenceId, evidenceId, evidenceId, evidenceId],
+          },
+          fakeCtx(session.id),
+        )
+        expect(repeated.metadata.confidence).toBe(once.metadata.confidence)
+        expect(repeated.metadata.debugHypothesis.evidenceRefs).toEqual([evidenceId])
+      },
+    })
+  })
+
   test("confidence climbs with more evidence (capped at 0.95)", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

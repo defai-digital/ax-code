@@ -120,7 +120,9 @@ export const DebugProposeHypothesisTool = Tool.define("debug_propose_hypothesis"
     // Phase 0 design intent — see verify-after-fix.ts: a hypothesis that
     // has been verified-after-fix carries the envelope id alongside the
     // raw evidence ids). Reject only ids that exist in NEITHER namespace.
-    const evidenceRefs = args.evidenceRefs ?? []
+    // Deduplicate: confidence grows with the evidence count, so citing the
+    // same id several times must not buy a higher score.
+    const evidenceRefs = [...new Set(args.evidenceRefs ?? [])]
     const { caseIds, evidenceIds } = SessionDebug.indexedIds(sessionID)
     if (!caseIds.has(args.caseId)) {
       throw new Error(
