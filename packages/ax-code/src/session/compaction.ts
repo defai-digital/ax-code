@@ -1,3 +1,4 @@
+import { findFallbackModel } from "./prompt/prompt-provider-fallback"
 import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
 import { Session } from "."
@@ -176,10 +177,7 @@ export namespace SessionCompaction {
     // A known observed window replaces the catalog cap for manual compactions
     // too; an unknown window falls back to the catalog (manual compaction is
     // still attempted — only AUTO-compaction is disabled for those routes).
-    const resolved = await ObservedWindow.store().resolveWindow(
-      ObservedWindow.routeKeyFor(model),
-      model.limit.context,
-    )
+    const resolved = await ObservedWindow.store().resolveWindow(ObservedWindow.routeKeyFor(model), model.limit.context)
     return calculateCompactionBudget(
       model,
       config.compaction?.reserved,
@@ -194,10 +192,7 @@ export namespace SessionCompaction {
     // Observed-window calibration (ADR-139 D3): a shrunken deployment window
     // replaces the catalog cap; an unknown route disables auto-compaction
     // (calculateCompactionBudget returns undefined, same as no context limit).
-    const resolved = await ObservedWindow.store().resolveWindow(
-      ObservedWindow.routeKeyFor(model),
-      model.limit.context,
-    )
+    const resolved = await ObservedWindow.store().resolveWindow(ObservedWindow.routeKeyFor(model), model.limit.context)
     const result = calculateCompactionBudget(
       model,
       config.compaction?.reserved,
@@ -524,35 +519,24 @@ export namespace SessionCompaction {
     const agent = await Agent.get("compaction")
     if (!agent) throw new Error("Compaction agent is not configured or has been disabled")
     const userModel = await Provider.resolveRequestedModel(userMessage.model)
-    // Compaction is an aux call: explicit agent pin first, then the
-    // provider's small tier, and only bill the session's main model as the
-    // fallback (providers without a small-model mapping).
+    // Compaction uses an exact role pin, an explicit small_model, or the
+    // original session primary. Catalog recommendations grant no route.
     const pinned = await agentModel(agent)
     let model = pinned
       ? await Provider.getModel(pinned.providerID, pinned.modelID)
       : ((await Provider.getSmallModel(userModel.providerID)) ??
         (await Provider.getModel(userModel.providerID, userModel.modelID)))
-    // C9: resolve the next ladder rung lazily — only on a recoverable failure —
-    // so the happy path performs no extra provider lookups. Order mirrors the
-    // primary selection: the provider's small tier first (when an agent pin
-    // skipped it), then the session's main model.
+    // Resolve the next explicit recovery target only after a transient failure.
     const resolveNextRung = async (
       current: Provider.Model,
       sessionOnly = false,
     ): Promise<Provider.Model | undefined> => {
-      const candidates: Array<Provider.Model | undefined> = []
-      if (agent.model && !sessionOnly) {
-        candidates.push(await Provider.getSmallModel(userModel.providerID).catch(() => undefined))
-      }
-      candidates.push(await Provider.getModel(userModel.providerID, userModel.modelID).catch(() => undefined))
-      return candidates.find(
-        (candidate) => candidate && (candidate.providerID !== current.providerID || candidate.id !== current.id),
-      )
+      if (sessionOnly || (await isLocalProvider(current.providerID))) return undefined
+      const next = await findFallbackModel(current.providerID, current.id)
+      return next ? Provider.getModel(next.providerID, next.modelID) : undefined
     }
-    // C9: a transient provider error retries once against the next ladder
-    // rung (max CompactionFallback.MAX_ATTEMPTS total attempts). An explicit
-    // Codex account/model incompatibility goes straight to the session model.
-    // Other invalid requests and context-window-exceeded never retry.
+    // A transient failure may use one explicit recovery target (at most two
+    // attempts). Invalid requests and context overflow never change models.
     for (let attempt = 1; attempt <= CompactionFallback.MAX_ATTEMPTS; attempt++) {
       const msg = (await Session.updateMessage({
         id: MessageID.ascending(),
@@ -748,7 +732,7 @@ When constructing the summary, try to stick to this template:
         const failure = CompactionFallback.classify(error)
         CompactionFallback.annotate(error, { retryAttempt: attempt, failureClass: failure.class })
         await Session.updateMessage(processor.message)
-        if (failure.retryable && attempt < CompactionFallback.MAX_ATTEMPTS) {
+        if (processor.recoverySafe !== false && failure.retryable && attempt < CompactionFallback.MAX_ATTEMPTS) {
           const next = await resolveNextRung(model, failure.class === "model_unsupported")
           if (next) {
             // Privacy guard (same rule as the prompt loop's provider

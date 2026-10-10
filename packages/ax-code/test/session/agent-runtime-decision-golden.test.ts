@@ -431,7 +431,7 @@ describe("provider fallback goldens", () => {
           error: { name: "APIError", statusCode: 500, message: "broken" },
         }),
       ),
-    ).toEqual({ action: "skip" })
+    ).toEqual({ action: "lookup", errorMessage: "broken", stopWithoutFallback: true })
     expect(
       AgentRuntimeGlue.toFallbackLookup(
         providerFallbackLookupDecision({
@@ -447,7 +447,7 @@ describe("provider fallback goldens", () => {
           error: { name: "APIError", statusCode: 429, message: "slow" },
         }),
       ),
-    ).toEqual({ action: "lookup", errorMessage: "slow", stopWithoutFallback: false })
+    ).toEqual({ action: "lookup", errorMessage: "slow", stopWithoutFallback: true })
   })
 
   test("auth failures stop without waiting for repetition", () => {
@@ -458,7 +458,7 @@ describe("provider fallback goldens", () => {
           error: { name: "APIError", statusCode: 401, message: "nope" },
         }),
       ),
-    ).toEqual({ action: "lookup", errorMessage: "nope", stopWithoutFallback: true })
+    ).toEqual({ action: "skip" })
   })
 
   test("nested status and quota messages resolve", () => {
@@ -469,7 +469,7 @@ describe("provider fallback goldens", () => {
           error: { name: "APIError", data: { statusCode: 429, message: "nested" } },
         }),
       ),
-    ).toEqual({ action: "lookup", errorMessage: "nested", stopWithoutFallback: false })
+    ).toEqual({ action: "lookup", errorMessage: "nested", stopWithoutFallback: true })
     expect(
       AgentRuntimeGlue.toFallbackLookup(
         providerFallbackLookupDecision({
@@ -477,7 +477,7 @@ describe("provider fallback goldens", () => {
           error: { name: "APIError", statusCode: 429, message: "quota exceeded" },
         }),
       ),
-    ).toEqual({ action: "lookup", errorMessage: "quota exceeded", stopWithoutFallback: true })
+    ).toEqual({ action: "skip" })
   })
 
   test("responseBody JSON messages resolve", () => {
@@ -488,7 +488,7 @@ describe("provider fallback goldens", () => {
           error: { name: "APIError", statusCode: 429, responseBody: `{"message":"rb"}` },
         }),
       ),
-    ).toEqual({ action: "lookup", errorMessage: "rb", stopWithoutFallback: false })
+    ).toEqual({ action: "lookup", errorMessage: "rb", stopWithoutFallback: true })
   })
 
   test("switch state halves errors and formats the notice", () => {

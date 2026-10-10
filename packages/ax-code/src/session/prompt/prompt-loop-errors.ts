@@ -1,3 +1,5 @@
+import { providerFailureIsPermanent } from "./prompt-loop-decisions"
+import type { FallbackOptions } from "./prompt-provider-fallback"
 import { MAX_CONSECUTIVE_ERRORS } from "@/constants/session"
 import { Log } from "../../util/log"
 import { Session } from ".."
@@ -59,6 +61,7 @@ type PromptLoopErrorDeps = {
     providerID: MessageV2.User["model"]["providerID"],
     preferredModelID?: MessageV2.User["model"]["modelID"],
     excludedProviderIDs?: Iterable<MessageV2.User["model"]["providerID"]>,
+    options?: FallbackOptions,
   ) => Promise<MessageV2.User["model"] | undefined>
   isLocal?: (providerID: MessageV2.User["model"]["providerID"]) => Promise<boolean>
   warn?: (message: string, fields: Record<string, unknown>) => void
@@ -179,11 +182,21 @@ export async function handlePromptLoopError(
     consecutiveErrors: number
     step: number
     failedProviderIDs?: Iterable<MessageV2.User["model"]["providerID"]>
+    fallbackOptions?: FallbackOptions
+    recoverySafe?: boolean
     /** Override for autonomy.stall.max_consecutive_errors; defaults to the shipped constant. */
     maxConsecutiveErrors?: number
   },
   deps: PromptLoopErrorDeps = {},
 ): Promise<PromptLoopErrorResult> {
+  if (input.recoverySafe === false) {
+    ;(deps.publishError ?? Session.publishError)({
+      sessionID: input.sessionID,
+      message:
+        "The request failed after output or tool execution started. Automatic replay stopped; resume from the recorded progress.",
+    })
+    return { action: "stop", reason: "error", consecutiveErrors: input.consecutiveErrors }
+  }
   const cap = terminalAutonomousCap(input.error)
   if (cap) {
     ;(deps.warn ?? log.warn)("autonomous cap exceeded, stopping without retry", {
@@ -236,9 +249,18 @@ export async function handlePromptLoopError(
     return { action: "stop", reason: "error", consecutiveErrors: input.consecutiveErrors }
   }
 
-  // Provider fallback: if the error is a provider API failure (rate limit,
-  // no credit, auth error), try switching to another available provider
-  // instead of retrying the same broken one.
+  if (providerFailureIsPermanent(input.error)) {
+    ;(deps.publishError ?? Session.publishError)({
+      sessionID: input.sessionID,
+      message: providerFallbackUnavailableMessage({
+        ...input.currentModel,
+        errorMessage: terminalProviderErrorMessage(input.error),
+      }),
+    })
+    return { action: "stop", reason: "error", consecutiveErrors: input.consecutiveErrors }
+  }
+
+  // Only recognized transient failures may advance through an explicit route.
   const fallbackLookup = providerFallbackLookupDecision({
     consecutiveErrors: input.consecutiveErrors,
     error: input.error,
@@ -247,8 +269,7 @@ export async function handlePromptLoopError(
     // Privacy guard: never migrate a session off a local provider. The user
     // chose local inference to keep prompts and code on this machine, so
     // silently retrying against a remote provider would leak their data.
-    // Transient local failures (engine busy, overloaded) fall through to the
-    // ordinary consecutive-error retry path below; terminal ones stop here.
+    // Same-target processor retries have already run; local recovery stops here.
     if (await (deps.isLocal ?? isLocalProvider)(input.currentModel.providerID)) {
       if (fallbackLookup.stopWithoutFallback) {
         const reason = fallbackLookup.errorMessage?.trim() || "unknown error"
@@ -282,6 +303,7 @@ export async function handlePromptLoopError(
         input.currentModel.providerID,
         input.currentModel.modelID,
         input.failedProviderIDs,
+        input.fallbackOptions,
       ).catch(() => undefined)
       if (fallback) {
         const fallbackSwitch = providerFallbackSwitchState({
@@ -400,6 +422,8 @@ export async function resolvePromptLoopErrorTransition(
     fallbackModelOverride: MessageV2.User["model"] | undefined
     step: number
     failedProviderIDs?: Iterable<MessageV2.User["model"]["providerID"]>
+    fallbackOptions?: FallbackOptions
+    recoverySafe?: boolean
     /** Override for autonomy.stall.max_consecutive_errors; defaults to the shipped constant. */
     maxConsecutiveErrors?: number
   },
@@ -438,6 +462,8 @@ export async function resolvePromptLoopErrorTransition(
     consecutiveErrors: input.consecutiveErrors + 1,
     step: input.step,
     failedProviderIDs: input.failedProviderIDs,
+    fallbackOptions: input.fallbackOptions,
+    recoverySafe: input.recoverySafe,
     maxConsecutiveErrors: input.maxConsecutiveErrors,
   })
 

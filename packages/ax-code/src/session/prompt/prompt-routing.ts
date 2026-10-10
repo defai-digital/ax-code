@@ -97,7 +97,8 @@ export async function resolveUserMessageRouting(input: {
   const anchor =
     !input.requestedModel && !pinnedModel ? await lastModel(input.sessionID).catch(() => undefined) : undefined
   const messageComplexity = input.messageText
-    ? (await classifyComplexity(input.messageText, anchor?.providerID)).complexity
+    ? (await classifyComplexity(input.messageText, (input.requestedModel ?? pinnedModel ?? anchor)?.providerID))
+        .complexity
     : null
   let complexityModel: PromptRouteModel | undefined
   let hybridModel: PromptRouteModel | undefined

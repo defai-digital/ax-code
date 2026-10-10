@@ -1,3 +1,4 @@
+import { RoutePolicy } from "../provider/route-policy"
 import { isMissingAnswer, MISSING_ANSWER_RECOVERY } from "./prompt/prompt-missing-answer"
 import { SessionSteering } from "./steering"
 import { NativePerf } from "@/perf/native"
@@ -602,6 +603,7 @@ export namespace SessionPrompt {
     let cachedModel: PromptCacheEntry<Provider.Model>
     let resolvedUserModelCache: { source: string; model: MessageV2.User["model"] } | undefined
     let fallbackModelOverride: MessageV2.User["model"] | undefined
+    let fallbackUserID: MessageID | undefined
     // Pending user-facing notice for an automatic provider fallback (#394,
     // #415). Only the ORIGINALLY requested provider is recorded here; the
     // single clean notice persisted on the fallback turn's assistant message
@@ -614,7 +616,8 @@ export namespace SessionPrompt {
     // ONE notice, on the message of the provider that actually answered.
     let fallbackNoticeOrigin: ProviderID | undefined
     let fallbackNoticePart: { messageID: MessageID; partID: PartID } | undefined
-    const failedFallbackProviderIDs = new Set<ProviderID>()
+    const failedFallbackModelKeys = new Set<string>()
+    let fallbackCandidates = structuredClone(cfg.llm_routing?.fallback ?? [])
     // Cache session history — only load from DB on first step, refresh on subsequent steps
     let cachedMsgs: MessageV2.WithParts[] | undefined
     // Hoisted so continueAutonomousLoop can reuse the latest in-memory list
@@ -674,7 +677,7 @@ export namespace SessionPrompt {
       fallbackModelOverride = undefined
       fallbackNoticeOrigin = undefined
       fallbackNoticePart = undefined
-      failedFallbackProviderIDs.clear()
+      failedFallbackModelKeys.clear()
       // PERF-01: keep cachedMsgs across continuations. loopMessages() already
       // appends the just-created continuation message incrementally via
       // MessageV2.after(sessionID, lastID); clearing it here forced a full
@@ -808,10 +811,19 @@ export namespace SessionPrompt {
         mediaProjectionUserID = lastUser.id
         mediaProjection = "normal"
       }
+      if (fallbackUserID !== lastUser.id) {
+        fallbackUserID = lastUser.id
+        fallbackCandidates = structuredClone((await Config.get()).llm_routing?.fallback ?? [])
+        fallbackModelOverride = undefined
+        failedFallbackModelKeys.clear()
+        fallbackNoticeOrigin = undefined
+        fallbackNoticePart = undefined
+      }
       if (fallbackModelOverride) {
         lastUser = {
           ...lastUser,
           model: fallbackModelOverride,
+          modelOrigin: "fallback",
         }
       } else {
         const source = providerModelKey(lastUser.model)
@@ -2464,7 +2476,8 @@ export namespace SessionPrompt {
         consecutiveErrors,
         fallbackModelOverride,
         step,
-        failedProviderIDs: failedFallbackProviderIDs,
+        fallbackOptions: { candidates: fallbackCandidates, failedModelKeys: failedFallbackModelKeys },
+        recoverySafe: processor.recoverySafe,
         maxConsecutiveErrors,
       })
       consecutiveErrors = errorTransition.consecutiveErrors
@@ -2473,7 +2486,7 @@ export namespace SessionPrompt {
         cachedModel = undefined
       }
       if (errorTransition.action === "retry") {
-        failedFallbackProviderIDs.add(lastUser.model.providerID)
+        failedFallbackModelKeys.add(RoutePolicy.key(lastUser.model))
         // Multi-hop fallback (A -> B -> C): remember only the FIRST failed
         // provider — the notice persisted on the fallback turn names the
         // origin and the provider actually serving. Each hop's raw failure

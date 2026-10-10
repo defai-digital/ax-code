@@ -83,6 +83,7 @@ For standalone questions about selected files through AX Trust caching, see
 - [Execution Modes](guides/modes.md) — agent, hybrid, council, and arena behavior.
 - [Multi-Model Routing Best Practices](guides/multi-model-routing.md) — split premium reasoning and lower-cost support
   work without silently weakening correctness-sensitive tasks.
+- [Model recovery](guides/model-recovery.md) — exact model selection, explicit fallback configuration and diagnostics.
 - [Auto-Route](guides/auto-route.md) — specialist routing and optional complexity routing.
 - [Model Effort](guides/effort.md) — thinking levels and provider-specific behavior.
 - [Performance](guides/performance.md) — coding tool profiles and local request-timing diagnostics.

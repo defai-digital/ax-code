@@ -65,19 +65,10 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       return modelPreferenceStatus(model) === "valid"
     }
 
-    // Config / agent pins outlive provider changes: follow them to the same
-    // SKU on a connected provider instead of silently dropping the pin.
+    // Check availability without relocating the selected provider/model pair.
     function resolvePin(model: { providerID: string; modelID: string } | undefined) {
       if (!model) return undefined
       return resolvePinnedModelPreference(sync.data.provider, model)
-    }
-
-    function getFirstValidModel(...modelFns: (() => { providerID: string; modelID: string } | undefined)[]) {
-      for (const modelFn of modelFns) {
-        const model = modelFn()
-        if (!model) continue
-        if (isModelValid(model)) return model
-      }
     }
 
     const agent = iife(() => {
@@ -324,21 +315,9 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
 
       const args = useArgs()
       const fallbackModel = createMemo(() => {
-        if (args.model) {
-          const requested = resolvePin(Provider.parseModel(args.model))
-          if (requested) return requested
-        }
-
-        if (sync.data.config.model) {
-          const configured = resolvePin(Provider.parseModel(sync.data.config.model))
-          if (configured) return configured
-        }
-
-        for (const item of modelStore.recent) {
-          if (isModelValid(item)) {
-            return item
-          }
-        }
+        if (args.model) return Provider.parseModel(args.model)
+        if (sync.data.config.model) return Provider.parseModel(sync.data.config.model)
+        if (modelStore.recent[0]) return modelStore.recent[0]
 
         const implicit = pickImplicitDefaultModel(sync.data.provider)
         if (!implicit) return undefined
@@ -352,12 +331,10 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         const a = agent.current()
         const sessionID = activeSessionID()
         return (
-          getFirstValidModel(
-            () => resolvePin(sessionModelPreference(sessionModels(), sessionID, a.name)),
-            () => resolvePin(modelStore.model[a.name]),
-            () => resolvePin(a.model),
-            fallbackModel,
-          ) ?? undefined
+          sessionModelPreference(sessionModels(), sessionID, a.name) ??
+          modelStore.model[a.name] ??
+          a.model ??
+          fallbackModel()
         )
       })
 
@@ -373,11 +350,12 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             favorite: modelStore.favorite,
             variant: modelStore.variant,
           },
-          modelPreferenceStatus,
+          (model) => (modelPreferenceStatus(model) === "valid" ? "valid" : "unknown"),
           variantPreferenceStatus,
-          resolvePin,
         )
-        const prunedSessions = pruneSessionModelPreferences(sessionModels(), modelPreferenceStatus, resolvePin)
+        const prunedSessions = pruneSessionModelPreferences(sessionModels(), (model) =>
+          modelPreferenceStatus(model) === "valid" ? "valid" : "unknown",
+        )
         if (pruned.changed || prunedSessions.changed) {
           for (const agentName of Object.keys(modelStore.model)) {
             if (Object.hasOwn(pruned.model, agentName)) continue

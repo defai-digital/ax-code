@@ -609,7 +609,7 @@ export namespace Agent {
       }),
     } satisfies Parameters<typeof generateObject>[0]
 
-    const result = await generateObject(params).then((r) => r.object)
+    const result = await generateObject({ ...params, maxRetries: 0 }).then((r) => r.object)
     result.identifier = result.identifier
       .toLowerCase()
       .replace(/[^a-z0-9_-]/g, "-")

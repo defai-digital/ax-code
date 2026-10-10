@@ -4,7 +4,7 @@ import {
   providerModelList,
   type ProviderModelKeyInput,
 } from "@/provider/model-key"
-import { modelSelectableForProvider, sameSkuOnConnectedProvider } from "@/provider/model-selectability"
+import { modelSelectableForProvider } from "@/provider/model-selectability"
 
 export const RECENT_MODEL_LIMIT = 5
 export const SESSION_MODEL_LIMIT = 150
@@ -25,12 +25,7 @@ export function modelPreferenceStatus(
   return modelSelectableForProvider(model.providerID, info) ? "valid" : "invalid"
 }
 
-/**
- * A configured or agent-pinned model resolved against the connected
- * providers: the pin itself when valid, else the same SKU on another
- * connected provider (the native provider was disabled after the model moved
- * behind a custom gateway), else undefined.
- */
+/** Return only the exact connected pin. Callers retain unavailable preferences separately. */
 export function resolvePinnedModelPreference(
   providers: readonly {
     id: string
@@ -39,7 +34,7 @@ export function resolvePinnedModelPreference(
   model: ProviderModelKeyInput,
 ): ProviderModelKeyInput | undefined {
   if (modelPreferenceStatus(providers, model) === "valid") return model
-  return sameSkuOnConnectedProvider(providers, model)
+  return undefined
 }
 
 export type ModelPreferenceStore = {

@@ -1145,9 +1145,7 @@ test("defaultModel returns first available model when no config set", async () =
       Env.set("DEEPSEEK_API_KEY", "test-deepseek")
     },
     fn: async () => {
-      const model = await Provider.defaultModel()
-      expect(String(model.providerID)).toBe("deepseek")
-      expect(String(model.modelID)).toBe("deepseek-flash")
+      await expect(Provider.defaultModel()).rejects.toThrow("No model selected")
     },
   })
 })
@@ -1177,7 +1175,7 @@ test("defaultModel respects config model setting", async () => {
   })
 })
 
-test("defaultModel skips recent models that are not selectable for agent tool use", async () => {
+test("defaultModel preserves the most recent exact selection even when unavailable", async () => {
   const statePath = path.join(Global.Path.state, "model.json")
   const previousState = await fs.readFile(statePath, "utf-8").catch(() => undefined)
 
@@ -1224,7 +1222,7 @@ test("defaultModel skips recent models that are not selectable for agent tool us
       fn: async () => {
         const model = await Provider.defaultModel()
         expect(String(model.providerID)).toBe("custom-openai")
-        expect(String(model.modelID)).toBe("tool-model")
+        expect(String(model.modelID)).toBe("text-only")
       },
     })
   } finally {
@@ -1280,9 +1278,7 @@ test("defaultModel skips configured providers with no selectable models", async 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const model = await Provider.defaultModel()
-        expect(String(model.providerID)).toBe("tool-provider")
-        expect(String(model.modelID)).toBe("glm-5.3-flash")
+        await expect(Provider.defaultModel()).rejects.toThrow("No model selected")
       },
     })
   } finally {
@@ -1327,9 +1323,7 @@ test("defaultModel treats a missing recent-model store as empty state", async ()
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const model = await Provider.defaultModel()
-        expect(String(model.providerID)).toBe("custom-openai")
-        expect(String(model.modelID)).toBe("deepseek-flash")
+        await expect(Provider.defaultModel()).rejects.toThrow("No model selected")
       },
     })
   } finally {
@@ -2043,7 +2037,7 @@ test("model modalities default correctly", async () => {
   })
 })
 
-test("getSmallModel returns appropriate small model", async () => {
+test("getSmallModel requires explicit configuration: returns appropriate small model", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -2060,14 +2054,12 @@ test("getSmallModel returns appropriate small model", async () => {
       Env.set("GOOGLE_GENERATIVE_AI_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const model = await Provider.getSmallModel(ProviderID.google)
-      expect(model).toBeDefined()
-      expect(model?.id).toBeDefined()
+      await expect(Provider.getSmallModel(ProviderID.google)).resolves.toBeUndefined()
     },
   })
 })
 
-test("getSmallModel uses MiniMax Token Plan M2.7 after the highspeed SKU was filtered", async () => {
+test("getSmallModel requires explicit configuration: uses MiniMax Token Plan M2.7 after the highspeed SKU was filtered", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -2084,14 +2076,12 @@ test("getSmallModel uses MiniMax Token Plan M2.7 after the highspeed SKU was fil
       Env.set("MINIMAX_TOKEN_PLAN_API_KEY", "sk-cp-test-intl")
     },
     fn: async () => {
-      const model = await Provider.getSmallModel(ProviderID.make("minimax-coding-plan"))
-      expect(model).toBeDefined()
-      expect(String(model?.id)).toBe("MiniMax-M2.7")
+      await expect(Provider.getSmallModel(ProviderID.make("minimax-coding-plan"))).resolves.toBeUndefined()
     },
   })
 })
 
-test("getSmallModel uses a supported Alibaba plan model", async () => {
+test("getSmallModel requires explicit configuration: uses a supported Alibaba plan model", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -2108,16 +2098,12 @@ test("getSmallModel uses a supported Alibaba plan model", async () => {
       Env.set("ALIBABA_TOKEN_PLAN_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const model = await Provider.getSmallModel(ProviderID.make("alibaba-token-plan"))
-      expect(model).toBeDefined()
-      if (!model) throw new Error("expected Alibaba token-plan small model")
-      expect(["qwen3.8-flash", "qwen3.6-flash", "qwen3.6-plus"]).toContain(model.id)
-      expect(model.id).toBe("qwen3.8-flash")
+      await expect(Provider.getSmallModel(ProviderID.make("alibaba-token-plan"))).resolves.toBeUndefined()
     },
   })
 })
 
-test("getSmallModel uses OpenRouter's Qwen coder flash model", async () => {
+test("getSmallModel requires explicit configuration: uses OpenRouter's Qwen coder flash model", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -2134,9 +2120,7 @@ test("getSmallModel uses OpenRouter's Qwen coder flash model", async () => {
       Env.set("OPENROUTER_API_KEY", "test-openrouter-key")
     },
     fn: async () => {
-      const model = await Provider.getSmallModel(ProviderID.make("openrouter"))
-      expect(model).toBeDefined()
-      expect(String(model?.id)).toBe("qwen/qwen3-coder-flash")
+      await expect(Provider.getSmallModel(ProviderID.make("openrouter"))).resolves.toBeUndefined()
     },
   })
 })
@@ -2167,7 +2151,7 @@ test("getSmallModel respects config small_model override", async () => {
   })
 })
 
-test("getSmallModel uses the model id when the catalog family is blank", async () => {
+test("getSmallModel requires explicit configuration: uses the model id when the catalog family is blank", async () => {
   const providerID = "gateway-blank-family"
   await using tmp = await tmpdir({
     init: async (dir) => {
@@ -2203,8 +2187,7 @@ test("getSmallModel uses the model id when the catalog family is blank", async (
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const model = await Provider.getSmallModel(ProviderID.make(providerID))
-        expect(String(model?.id)).toBe("lane-flash-lite")
+        await expect(Provider.getSmallModel(ProviderID.make(providerID))).resolves.toBeUndefined()
       },
     })
   } finally {
@@ -2212,7 +2195,7 @@ test("getSmallModel uses the model id when the catalog family is blank", async (
   }
 })
 
-test("getSmallModel follows a retired flash id on the current gateway", async () => {
+test("getSmallModel rejects unavailable explicit configuration: follows a retired flash id on the current gateway", async () => {
   const providerID = "gateway-retired-flash"
   await using tmp = await tmpdir({
     init: async (dir) => {
@@ -2254,10 +2237,7 @@ test("getSmallModel follows a retired flash id on the current gateway", async ()
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const model = await Provider.getSmallModel(ProviderID.make(providerID))
-        expect(model).toBeDefined()
-        expect(String(model?.providerID)).toBe(providerID)
-        expect(String(model?.id)).toBe("deepseek-flash")
+        await expect(Provider.getSmallModel(ProviderID.make(providerID))).rejects.toThrow()
       },
     })
   } finally {
@@ -2265,7 +2245,7 @@ test("getSmallModel follows a retired flash id on the current gateway", async ()
   }
 })
 
-test("getSmallModel falls back when configured small_model is disconnected", async () => {
+test("getSmallModel rejects unavailable explicit configuration: falls back when configured small_model is disconnected", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -2283,14 +2263,12 @@ test("getSmallModel falls back when configured small_model is disconnected", asy
       Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const model = await Provider.getSmallModel(ProviderID.make("groq"))
-      expect(model).toBeDefined()
-      expect(String(model?.providerID)).toBe("groq")
+      await expect(Provider.getSmallModel(ProviderID.make("groq"))).rejects.toThrow()
     },
   })
 })
 
-test("getSmallModel derives from family metadata when no hardcoded list matches", async () => {
+test("getSmallModel requires explicit configuration: derives from family metadata when no hardcoded list matches", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -2308,15 +2286,12 @@ test("getSmallModel derives from family metadata when no hardcoded list matches"
       Env.set("DEEPSEEK_API_KEY", "test-deepseek-key")
     },
     fn: async () => {
-      const model = await Provider.getSmallModel(ProviderID.make("deepseek"))
-      expect(model).toBeDefined()
-      // The current first-party Flash ID sorts ahead of its legacy V4 aliases.
-      expect(String(model?.id)).toBe("deepseek-flash")
+      await expect(Provider.getSmallModel(ProviderID.make("deepseek"))).resolves.toBeUndefined()
     },
   })
 })
 
-test('getSmallModel prefers "flash-lite" over "flash" when both exist', async () => {
+test("getSmallModel does not rank flash-lite or flash without an explicit pin", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -2351,13 +2326,12 @@ test('getSmallModel prefers "flash-lite" over "flash" when both exist', async ()
     },
     fn: async () => {
       const model = await Provider.getSmallModel(ProviderID.make("venice"))
-      expect(model).toBeDefined()
-      expect(String(model?.id)).toBe("gemini-3.8-flash-lite")
+      expect(model).toBeUndefined()
     },
   })
 })
 
-test("getSmallModel excludes family matches that cannot drive the agent loop", async () => {
+test("getSmallModel requires explicit configuration: excludes family matches that cannot drive the agent loop", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -2375,16 +2349,12 @@ test("getSmallModel excludes family matches that cannot drive the agent loop", a
       Env.set("HELICONE_API_KEY", "test-helicone-key")
     },
     fn: async () => {
-      const model = await Provider.getSmallModel(ProviderID.make("helicone"))
-      expect(model).toBeDefined()
-      expect(String(model?.id)).not.toBe("o1-mini")
-      expect(model?.capabilities.toolcall).toBe(true)
-      expect(model?.capabilities.output.text).toBe(true)
+      await expect(Provider.getSmallModel(ProviderID.make("helicone"))).resolves.toBeUndefined()
     },
   })
 })
 
-test("getSmallModel picks glm-5.3-flash for zai", async () => {
+test("getSmallModel requires explicit configuration: picks glm-5.3-flash for zai", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -2402,14 +2372,12 @@ test("getSmallModel picks glm-5.3-flash for zai", async () => {
       Env.set("ZHIPU_API_KEY", "test-zhipu-key")
     },
     fn: async () => {
-      const model = await Provider.getSmallModel(ProviderID.make("zai"))
-      expect(model).toBeDefined()
-      expect(String(model?.id)).toBe("glm-5.3-flash")
+      await expect(Provider.getSmallModel(ProviderID.make("zai"))).resolves.toBeUndefined()
     },
   })
 })
 
-test("getSmallModel picks glm-5.3-flash for zhipuai-coding-plan", async () => {
+test("getSmallModel requires explicit configuration: picks glm-5.3-flash for zhipuai-coding-plan", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -2429,9 +2397,7 @@ test("getSmallModel picks glm-5.3-flash for zhipuai-coding-plan", async () => {
     fn: async () => {
       // No tier-suffixed family in this catalog, so the hardcoded zhipuai
       // priority list must match — "zhipuai" does not start with "zai".
-      const model = await Provider.getSmallModel(ProviderID.make("zhipuai-coding-plan"))
-      expect(model).toBeDefined()
-      expect(String(model?.id)).toBe("glm-5.3-flash")
+      await expect(Provider.getSmallModel(ProviderID.make("zhipuai-coding-plan"))).resolves.toBeUndefined()
     },
   })
 })
@@ -2568,7 +2534,7 @@ test("google provider only exposes Gemini 3.8 or later models", async () => {
   })
 })
 
-test("getSmallModel prefers a Gemini 3.8 model for google", async () => {
+test("getSmallModel requires explicit configuration: prefers a Gemini 3.8 model for google", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -2586,9 +2552,7 @@ test("getSmallModel prefers a Gemini 3.8 model for google", async () => {
       Env.set("GOOGLE_GENERATIVE_AI_API_KEY", "test-google-key")
     },
     fn: async () => {
-      const model = await Provider.getSmallModel(ProviderID.google)
-      expect(model).toBeDefined()
-      expect(String(model?.id)).toContain("gemini-3.8")
+      await expect(Provider.getSmallModel(ProviderID.google)).resolves.toBeUndefined()
     },
   })
 })
@@ -2739,7 +2703,7 @@ test("retired xai provider cannot be re-enabled by config or credentials", async
   })
 })
 
-test("provider.sort prioritizes preferred models", () => {
+test("provider.sort is stable display ordering without brand priorities", () => {
   const models = [
     { id: "random-model", name: "Random" },
     { id: "claude-sonnet-4-latest", name: "Claude Sonnet 4" },
@@ -2748,10 +2712,12 @@ test("provider.sort prioritizes preferred models", () => {
   ] as any[]
 
   const sorted = Provider.sort(models)
-  expect(sorted[0].id).toContain("gpt-5")
-  expect(sorted[1].id).toContain("sonnet-4")
-  expect(sorted[1].id).toContain("latest")
-  expect(sorted[sorted.length - 1].id).not.toContain("sonnet-4")
+  expect(sorted.map((model) => model.id)).toEqual(
+    models
+      .map((model) => model.id)
+      .sort()
+      .reverse(),
+  )
 })
 
 test("provider.sort does not prioritize removed model families", () => {
@@ -4134,7 +4100,7 @@ test("cloudflare-ai-gateway forwards config metadata options", async () => {
   })
 })
 
-test("getSmallModel skips embedding lanes on a custom-api gateway", async () => {
+test("getSmallModel requires explicit configuration: skips embedding lanes on a custom-api gateway", async () => {
   vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
   await using tmp = await tmpdir({
     init: async (dir) => {
@@ -4173,13 +4139,12 @@ test("getSmallModel skips embedding lanes on a custom-api gateway", async () => 
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const model = await Provider.getSmallModel(ProviderID.make("127-0-0-1"))
-      expect(String(model?.id)).toBe("deepseek-v4-pro")
+      await expect(Provider.getSmallModel(ProviderID.make("127-0-0-1"))).resolves.toBeUndefined()
     },
   })
 })
 
-test("defaultModel falls back when the configured model's provider is disabled", async () => {
+test("defaultModel preserves the exact pin when the configured model's provider is disabled", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -4199,13 +4164,13 @@ test("defaultModel falls back when the configured model's provider is disabled",
     },
     fn: async () => {
       const model = await Provider.defaultModel()
-      expect(String(model.providerID)).toBe("groq")
-      expect(String(model.modelID)).toBe("qwen/qwen3.8-27b")
+      expect(String(model.providerID)).toBe("alibaba-token-plan")
+      expect(String(model.modelID)).toBe("qwen3.8-max")
     },
   })
 })
 
-test("defaultModel follows a recent model to the connected provider that serves the same SKU", async () => {
+test("defaultModel does not relocate a recent model to another provider", async () => {
   vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
   const statePath = path.join(Global.Path.state, "model.json")
   const previousState = await fs.readFile(statePath, "utf-8").catch(() => undefined)
@@ -4255,7 +4220,7 @@ test("defaultModel follows a recent model to the connected provider that serves 
       directory: tmp.path,
       fn: async () => {
         const model = await Provider.defaultModel()
-        expect(String(model.providerID)).toBe("127-0-0-1")
+        expect(String(model.providerID)).toBe("deepseek")
         expect(String(model.modelID)).toBe("deepseek-v4-pro")
       },
     })
@@ -4265,7 +4230,7 @@ test("defaultModel follows a recent model to the connected provider that serves 
   }
 })
 
-test("defaultModel follows a configured model to the connected provider that serves the same SKU", async () => {
+test("defaultModel does not relocate a configured model to another provider", async () => {
   vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
   await using tmp = await tmpdir({
     init: async (dir) => {
@@ -4307,7 +4272,7 @@ test("defaultModel follows a configured model to the connected provider that ser
     directory: tmp.path,
     fn: async () => {
       const model = await Provider.defaultModel()
-      expect(String(model.providerID)).toBe("127-0-0-1")
+      expect(String(model.providerID)).toBe("deepseek")
       expect(String(model.modelID)).toBe("deepseek-v4-pro")
 
       await expect(
@@ -4315,7 +4280,7 @@ test("defaultModel follows a configured model to the connected provider that ser
           providerID: ProviderID.make("deepseek"),
           modelID: ModelID.make("deepseek-v4-pro"),
         }),
-      ).resolves.toEqual({ providerID: "127-0-0-1", modelID: "deepseek-v4-pro" })
+      ).resolves.toEqual({ providerID: "deepseek", modelID: "deepseek-v4-pro" })
       await expect(
         Provider.resolveRequestedModel({
           providerID: ProviderID.make("deepseek"),
@@ -4326,7 +4291,7 @@ test("defaultModel follows a configured model to the connected provider that ser
   })
 })
 
-test("getSmallModel skips a same-ID model on the current provider that cannot drive the agent loop", async () => {
+test("getSmallModel rejects unavailable explicit configuration: skips a same-ID model on the current provider that cannot drive the agent loop", async () => {
   vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
   await using tmp = await tmpdir({
     init: async (dir) => {
@@ -4367,14 +4332,12 @@ test("getSmallModel skips a same-ID model on the current provider that cannot dr
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const model = await Provider.getSmallModel(ProviderID.make("gateway"))
-      expect(String(model?.providerID)).toBe("gateway")
-      expect(String(model?.id)).toBe("tool-model")
+      await expect(Provider.getSmallModel(ProviderID.make("gateway"))).rejects.toThrow()
     },
   })
 })
 
-test("getSmallModel follows small_model to the connected provider serving the same SKU", async () => {
+test("getSmallModel rejects unavailable explicit configuration: follows small_model to the connected provider serving the same SKU", async () => {
   vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
   await using tmp = await tmpdir({
     init: async (dir) => {
@@ -4412,9 +4375,7 @@ test("getSmallModel follows small_model to the connected provider serving the sa
       Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const model = await Provider.getSmallModel(ProviderID.make("groq"))
-      expect(String(model?.providerID)).toBe("127-0-0-1")
-      expect(String(model?.id)).toBe("deepseek-v4-pro")
+      await expect(Provider.getSmallModel(ProviderID.make("groq"))).rejects.toThrow()
     },
   })
 })

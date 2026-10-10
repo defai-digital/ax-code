@@ -146,6 +146,7 @@ export namespace LLM {
   }
 
   export async function stream(input: StreamInput) {
+    await Provider.assertLocalRoute(input.user.model.providerID, input.model.providerID)
     const timing = RequestTiming.create()
     const l = log
       .clone()
@@ -574,6 +575,11 @@ export namespace LLM {
     if (input.replay && Recorder.active(input.sessionID)) {
       const baseEvent = {
         type: "llm.request" as const,
+        purpose: input.agent.name,
+        selectionOrigin:
+          input.user.model.providerID === input.model.providerID && input.user.model.modelID === input.model.id
+            ? (input.user.modelOrigin ?? "unknown")
+            : "auxiliary",
         sessionID: input.sessionID,
         messageID: input.replay.messageID,
         stepIndex: input.replay.stepIndex,

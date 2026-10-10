@@ -119,6 +119,9 @@ describe("session.compaction model fallback (C9)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const config = await Config.get()
+        config.llm_routing = { fallback: [{ providerID: "test", modelID: "test-model" }] }
+
         const small = createModel({ providerID: "test", modelID: "test-small" })
         const session = createModel({ providerID: "test", modelID: "test-model" })
         const smallSpy = vi.spyOn(Provider, "getSmallModel").mockResolvedValue(small)
@@ -168,7 +171,7 @@ describe("session.compaction model fallback (C9)", () => {
   })
 
   test.each([false, true])(
-    "a ChatGPT-incompatible helper falls back directly to the session model (pinned=%s)",
+    "an incompatible explicit helper stops without silently using the session model (pinned=%s)",
     async (pinned) => {
       await using tmp = await tmpdir({ config: pinned ? { agent: { compaction: { model: "test/test-pin" } } } : {} })
       await Instance.provide({
@@ -207,18 +210,15 @@ describe("session.compaction model fallback (C9)", () => {
               auto: true,
             })
 
-            expect(result).toBe("continue")
+            expect(result).toBe("stop")
             // Exactly one retry: small tier first, session model as the next rung.
-            expect(processor.models).toEqual([
-              { providerID: "test", modelID: pinned ? "test-pin" : "test-small" },
-              { providerID: "test", modelID: "test-model" },
-            ])
+            expect(processor.models).toEqual([{ providerID: "test", modelID: pinned ? "test-pin" : "test-small" }])
 
             // Both attempts are recorded as assistant messages; the failed one
             // carries the retryAttempt metadata.
             const assistants = await compactionAssistantMessages(s.id)
-            expect(assistants).toHaveLength(2)
-            const [failed, succeeded] = assistants
+            expect(assistants).toHaveLength(1)
+            const [failed] = assistants
             expect(failed?.providerID).toBe("test")
             expect(failed?.modelID).toBe(pinned ? "test-pin" : "test-small")
             expect(MessageV2.APIError.isInstance(failed?.error)).toBe(true)
@@ -226,8 +226,6 @@ describe("session.compaction model fallback (C9)", () => {
               expect(failed.error.data.metadata?.retryAttempt).toBe("1")
               expect(failed.error.data.metadata?.failureClass).toBe("model_unsupported")
             }
-            expect(succeeded?.modelID).toBe("test-model")
-            expect(succeeded?.error).toBeUndefined()
           } finally {
             resolvePin.mockRestore()
             processor.spy.mockRestore()
@@ -410,6 +408,9 @@ describe("session.compaction model fallback (C9)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const config = await Config.get()
+        config.llm_routing = { fallback: [{ providerID: "test", modelID: "test-model" }] }
+
         const small = createModel({ providerID: "test", modelID: "test-small" })
         const session = createModel({ providerID: "test", modelID: "test-model" })
         const smallSpy = vi.spyOn(Provider, "getSmallModel").mockResolvedValue(small)

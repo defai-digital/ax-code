@@ -622,7 +622,10 @@ describe("session.processor", () => {
     const src = await readFile(path.join(import.meta.dirname, "../../src/session/processor-impl.ts"), "utf-8")
     const catchStart = src.indexOf("} catch (e: unknown) {")
     // Per-provider circuit breaker (STAB-14b) passes providerID into retryable().
-    const retryStart = src.indexOf("const retry = SessionRetry.retryable(error, input.model.providerID)", catchStart)
+    const retryStart = src.indexOf(
+      "const retry = replayUnsafe ? undefined : SessionRetry.retryable(error, input.model.providerID)",
+      catchStart,
+    )
     expect(catchStart).toBeGreaterThan(-1)
     expect(retryStart).toBeGreaterThan(catchStart)
     expect(src.slice(catchStart, retryStart)).toContain("resetShortLivedToolLoopState()")
@@ -2143,6 +2146,36 @@ test("local checkpoints preserve the system prefix and follow tool evidence in e
       expect((await checkpoint.projectMessages("stripped")).at(-1)).toEqual({ role: "user", content: reminder })
       expect(messages).toEqual(before)
       expect(await Session.messages({ sessionID: streamInput.sessionID })).toEqual(before)
+    },
+  })
+})
+
+test("partial output locks automatic replay even when the API error is transient", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const stream = vi.fn(
+        async () =>
+          ({
+            fullStream: (async function* () {
+              yield { type: "start" }
+              yield { type: "start-step" }
+              yield { type: "text-start", id: "partial" }
+              yield { type: "text-delta", id: "partial", text: "Already published" }
+              throw new MessageV2.APIError({ message: "Service Unavailable", statusCode: 503, isRetryable: true })
+            })(),
+          }) as unknown as Awaited<ReturnType<typeof LLM.stream>>,
+      )
+      const sleep = vi.fn(async () => {})
+      const { processor, streamInput } = await createProcessorFixture(
+        tmp.path,
+        processorDependencies({ stream, sleep }),
+      )
+      expect(await processor.process(streamInput)).toBe("stop")
+      expect(processor.recoverySafe).toBe(false)
+      expect(stream).toHaveBeenCalledTimes(1)
+      expect(sleep).not.toHaveBeenCalled()
     },
   })
 })

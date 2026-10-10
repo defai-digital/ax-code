@@ -1,3 +1,4 @@
+import { RoutePolicy } from "./route-policy"
 import z from "zod"
 import fuzzysort from "fuzzysort"
 import { Config } from "../config/config"
@@ -39,19 +40,8 @@ import {
 import { ModelID, ProviderID } from "./schema"
 import { levenshtein } from "@/util/levenshtein"
 import { isModelSupportedForProvider } from "./model-support"
-import {
-  isNonChatModelID,
-  modelSelectableForProvider,
-  retiredCatalogSuccessors,
-  sameSkuOnConnectedProvider,
-} from "./model-selectability"
-import {
-  defaultModelIDForProvider,
-  IMPLICIT_DEFAULT_UNAVAILABLE_MESSAGE,
-  MODEL_FORMAT_HELP,
-  modelFamilyDefault,
-  pickImplicitDefaultModel,
-} from "./implicit-default"
+import { isNonChatModelID, modelSelectableForProvider } from "./model-selectability"
+import { defaultModelIDForProvider, MODEL_FORMAT_HELP, modelFamilyDefault } from "./implicit-default"
 import {
   CUSTOM_LOADERS,
   type CustomModelLoader,
@@ -1414,208 +1404,49 @@ export namespace Provider {
     }
   }
 
-  // Small-tier family suffixes, longest first. Adding a new tier here is the
-  // only change needed to teach pickSmallFromFamily() about it for any provider
-  // whose catalog uses the family metadata convention. The hardcoded priority
-  // lists inside getSmallModel() remain as a safety net for providers whose
-  // family values don't follow the tier-suffix convention (e.g. CLI providers
-  // whose small tier is named differently than the catalog convention).
-  const FAMILY_TIER_SUFFIXES = ["flash-lite", "flash", "mini", "nano", "haiku", "lite", "free"] as const
-
-  // Derive the small model from the provider's family metadata. A model is a
-  // candidate when its family string equals a known tier suffix or ends with
-  // "-<suffix>" (e.g. "deepseek-flash", "gemini-flash-lite", "claude-haiku",
-  // "gpt-mini"). Only models usable by the agent loop are eligible. Among
-  // candidates, the earliest-listed suffix wins, with shortest id breaking
-  // ties — so "flash-lite" always beats "flash" when both exist in the same
-  // provider's catalog. Sync because getSmallModel() has already awaited
-  // discovery and the provider object is in hand.
-  function pickSmallFromFamily(provider: Info): Model | undefined {
-    const candidates: Array<{ id: string; family: string; tierRank: number }> = []
-    for (const [id, m] of Object.entries(provider.models)) {
-      if (!modelSelectableForProvider(provider.id, m)) continue
-      // Discovery stores an unknown family as "". `??` would keep that blank
-      // and skip the id, so a gateway catalog whose ids already end in
-      // `-flash` never entered this scan.
-      const family = m.family?.trim() || id
-      const tierRank = FAMILY_TIER_SUFFIXES.findIndex((s) => family === s || family.endsWith("-" + s))
-      if (tierRank >= 0) candidates.push({ id, family, tierRank })
-    }
-    if (candidates.length === 0) return undefined
-    candidates.sort((a, b) => {
-      if (a.tierRank !== b.tierRank) return a.tierRank - b.tierRank
-      return a.id.length - b.id.length || a.id.localeCompare(b.id)
-    })
-    const winner = candidates[0]
-    return provider.models[ModelID.make(winner.id)] as Model | undefined
+  export async function isLocalProvider(providerID: ProviderID) {
+    if (providerID === AX_ENGINE_PROVIDER_ID) return true
+    const provider = (await state()).providers[providerID]
+    return (
+      RoutePolicy.isLoopbackBaseURL(provider?.options?.["baseURL"]) ||
+      RoutePolicy.isLoopbackBaseURL(Object.values(provider?.models ?? {})[0]?.api?.url)
+    )
   }
 
-  export async function getSmallModel(providerID: ProviderID) {
-    const cfg = await Config.get()
-
-    if (cfg.small_model) {
-      const parsed = parseModel(cfg.small_model)
-      const configured = await tryGetModel(parsed.providerID, parsed.modelID)
-      if (configured) return configured
-      // One-API / New-API / AX Trust style gateways expose the same SKU under
-      // the custom provider ID, not the native `deepseek` / `openai` catalog.
-      // Prefer the session's own provider, then any connected provider.
-      const onCurrent = await tryGetModel(providerID, parsed.modelID)
-      if (onCurrent && modelSelectableForProvider(providerID, onCurrent)) return onCurrent
-      // The configured id may be a retired alias (deepseek-v4-flash) while the
-      // gateway only lists the current SKU (deepseek-flash). Resolve that
-      // before the family scan, which would otherwise pick the shortest
-      // unrelated flash model.
-      for (const successor of retiredCatalogSuccessors(parsed.modelID)) {
-        const successorID = ModelID.make(successor)
-        const aliased = await tryGetModel(providerID, successorID)
-        if (aliased && modelSelectableForProvider(providerID, aliased)) return aliased
-        const movedSuccessor = await resolvePinnedModel({
-          providerID: parsed.providerID,
-          modelID: successorID,
-        })
-        if (movedSuccessor) return getModel(movedSuccessor.providerID, movedSuccessor.modelID)
-      }
-      const moved = await resolvePinnedModel(parsed)
-      if (moved) {
-        log.warn("configured small_model moved to another provider", {
-          small_model: cfg.small_model,
-          providerID: moved.providerID,
-          modelID: moved.modelID,
-        })
-        return getModel(moved.providerID, moved.modelID)
-      }
-      log.warn("configured small_model is unavailable; using provider catalog", {
-        small_model: cfg.small_model,
-        providerID,
-      })
-    }
-
-    // Codex's catalog includes API models that the CLI's current ChatGPT
-    // account may not support. Without an explicit override, auxiliary calls
-    // must use their session model rather than infer access from a mini family.
-    if (providerID === "codex-cli") return undefined
-
-    // Await discovery so models populated solely by discovery loaders (e.g. a
-    // local Ollama endpoint) are visible before the priority scan runs.
-    // getModel() and defaultModel() both do this; omitting it here caused
-    // getSmallModel() to return undefined during the startup discovery window.
-    const s = await state()
-    await s.discovery
-    const provider = s.providers[providerID]
-    if (provider) {
-      // Family-metadata first: covers any provider whose catalog tags models
-      // with a tier-bearing family string (deepseek-flash, gemini-flash,
-      // gpt-mini, claude-haiku, etc.). The hardcoded priority lists below
-      // remain as a safety net for providers whose families don't follow
-      // that convention.
-      const familyPick = pickSmallFromFamily(provider)
-      if (familyPick) return familyPick
-      let priority = ["gemini-3.8-flash", "gemini-flash", "llama-3.1-8b", "llama3-8b"]
-      if (providerID.startsWith("zai") || providerID.startsWith("zhipuai")) {
-        // Coding-plan catalogs start at GLM-5.3; prefer the flash SKU for aux
-        // calls, then the 1M variant, then the base flagship. zhipuai
-        // (bigmodel.cn) shares the GLM catalog but does not start with "zai".
-        priority = ["glm-5.3-flash", "glm-5.3", "glm-5.3[1m]"]
-      }
-      if (providerID.startsWith("minimax")) {
-        // Only the MiniMax Token Plan (subscription) is supported; its
-        // catalogs start at M2.7 after the highspeed SKU was filtered out.
-        priority = ["MiniMax-M2.7", "MiniMax-M3"]
-      }
-      if (providerID.startsWith("alibaba")) {
-        priority = ["qwen3.8-flash", "qwen3.7-plus"]
-      }
-      if (providerID === "openrouter") {
-        priority = ["qwen/qwen3-coder-flash", "google/gemini-3.8-flash", "qwen/qwen3.7-plus"]
-      }
-      // UnoRouter and Hugging Face were missing — the default gemini/llama
-      // list never matched their catalogs (HF ids are repo-prefixed), so
-      // getSmallModel returned undefined: auto-route's LLM tier silently
-      // disabled and title/summary aux calls billed the full main model.
-      if (providerID === "unorouter") {
-        priority = ["gemini-3.8-flash", "deepseek-v4-flash", "glm-5.2"]
-      }
-      if (providerID === "huggingface") {
-        priority = ["Qwen/Qwen3.5-9B", "Qwen/Qwen3.6-27B", "google/gemma-4-26B-A4B-it"]
-      }
-      // OpenAI and Anthropic were missing — without overrides they fell through to the
-      // gemini/llama default list which never matched their model IDs, returning undefined
-      // and silently disabling Auto-route's LLM tier for the majority of users.
-      if (providerID === "openai" || providerID.startsWith("openai-")) {
-        priority = ["gpt-5-mini", "gpt-5-nano", "gpt-4.1-mini", "gpt-4o-mini"]
-      }
-      if (providerID === "anthropic" || providerID.startsWith("anthropic-")) {
-        priority = ["claude-haiku-4-5", "claude-3-5-haiku"]
-      }
-      // Prefer exact ID, then bare id without a "[Nm]" context-window suffix,
-      // then shortest includes-match. Plain `includes` used to pick
-      // "glm-5.2[1m]" for priority "glm-5.2" (or even "glm-5") depending on
-      // Object.keys order — a 1M-context model for title/summary aux calls.
-      for (const item of priority) {
-        const keys = Object.keys(provider.models)
-        const exact = keys.find((model) => model === item)
-        if (exact) return getModel(providerID, ModelID.make(exact))
-        const bare = keys.find((model) => stripContextWindowSuffix(model) === item)
-        if (bare) return getModel(providerID, ModelID.make(bare))
-        const includes = keys
-          .filter((model) => model.includes(item))
-          .sort((a, b) => a.length - b.length || a.localeCompare(b))
-        if (includes[0]) return getModel(providerID, ModelID.make(includes[0]))
-      }
-      // Custom OpenAI-compatible catalogs (one-api, new-api, AX Trust) have no
-      // models.dev family tags. Prefer a flash/mini SKU, else the first
-      // selectable model so title/recap aux calls still have a lane.
-      // Only lanes the agent loop can use: a gateway that lists
-      // `text-embedding-3-small` must not get it picked for "small".
-      const keys = Object.keys(provider.models).filter(
-        (model) =>
-          modelSelectableForProvider(providerID, provider.models[ModelID.make(model)]) && !isNonChatModelID(model),
+  export async function assertLocalRoute(primary: ProviderID, target: ProviderID) {
+    if (primary !== target && (await isLocalProvider(primary))) {
+      throw new Error(
+        `Automatic model routing cannot leave local provider ${primary}. Configure an auxiliary model on that provider or remove the override.`,
       )
-      for (const token of ["flash", "mini", "haiku", "small", "lite"]) {
-        const hit = keys
-          .filter((model) => model.toLowerCase().includes(token))
-          .sort((a, b) => a.length - b.length || a.localeCompare(b))
-        if (hit[0]) return getModel(providerID, ModelID.make(hit[0]))
-      }
-      const first = keys[0]
-      if (first) return provider.models[ModelID.make(first)]
     }
+  }
 
-    return undefined
+  /** Auxiliary selection is explicit. Callers inherit their primary when absent. */
+  export async function getSmallModel(_providerID: ProviderID) {
+    const cfg = await Config.get()
+    if (!cfg.small_model) return undefined
+    const target = parseModel(cfg.small_model)
+    await assertLocalRoute(_providerID, target.providerID)
+    return getModel(target.providerID, target.modelID)
   }
 
   // This ranks models within a provider; it does not rank providers for
   // Council/Arena. CLI discovery may publish both a generic fallback model
   // and the model resolved from the CLI's own settings. Prefer that resolved
   // model when it exists.
-  const MODEL_ID_PRIORITY = ["gpt-5", "claude-sonnet-4"]
 
   export function defaultModelID(providerID: string, models: Record<string, Model>) {
     return defaultModelIDForProvider(providerID, models)
   }
 
   export function sort<T extends { id: string; providerID?: string }>(models: T[]) {
-    return sortBy(
-      models,
-      [(model) => (isGenericCliFallbackModel(model) ? 1 : 0), "asc"],
-      [
-        (model) => {
-          const index = MODEL_ID_PRIORITY.findIndex((filter) => model.id.includes(filter))
-          return index === -1 ? Number.POSITIVE_INFINITY : index
-        },
-        "asc",
-      ],
-      [(model) => (model.id.includes("latest") ? 0 : 1), "asc"],
-      [(model) => model.id, "desc"],
-    )
+    return sortBy(models, [(model) => (isGenericCliFallbackModel(model) ? 1 : 0), "asc"], [(model) => model.id, "desc"])
   }
 
   // Whether a pinned model (config `model`, `agent.<name>.model`) can be
   // used right now: its provider is connected and not disabled, and the model
-  // is selectable for the agent loop. Pins outlive provider changes — moving
-  // a SKU behind a custom gateway and disabling the native provider is the
-  // common case — so callers fall back instead of failing with ModelNotFound.
+  // is selectable for the agent loop. Availability never authorizes relocation
+  // of an exact pin to another provider or model.
   export async function isModelAvailable(model: { providerID: ProviderID; modelID: ModelID }) {
     const check = async () => {
       const provider = (await list())[model.providerID]
@@ -1628,88 +1459,32 @@ export namespace Provider {
     return check()
   }
 
-  // Resolve a pin to something usable: the pin itself, else the same model
-  // ID on a connected provider (the SKU moved behind a custom gateway — the
-  // user still means "that model"), else undefined so the caller falls back
-  // to the last selected model.
+  /** Preserve exact user intent; availability is checked by getModel at dispatch. */
   export async function resolvePinnedModel(model: {
     providerID: ProviderID
     modelID: ModelID
   }): Promise<{ providerID: ProviderID; modelID: ModelID } | undefined> {
-    if (await isModelAvailable(model)) return model
-    const providers = await list()
-    const sameSku = sameSkuOnConnectedProvider(Object.values(providers), model)
-    if (sameSku) return { providerID: ProviderID.make(sameSku.providerID), modelID: ModelID.make(sameSku.modelID) }
-    return undefined
+    return model
   }
 
-  /**
-   * Resolve an explicit model request to the connected provider serving the
-   * same SKU. Unlike a config pin, an unknown request is preserved so its
-   * eventual getModel call fails loudly instead of silently choosing a
-   * different model.
-   */
-  export async function resolveRequestedModel(model: {
-    providerID: ProviderID
-    modelID: ModelID
-  }): Promise<{ providerID: ProviderID; modelID: ModelID }> {
-    return (await resolvePinnedModel(model)) ?? model
+  export async function resolveRequestedModel(model: { providerID: ProviderID; modelID: ModelID }) {
+    return model
   }
 
   export async function defaultModel() {
     const cfg = await Config.get()
-    if (cfg.model) {
-      const configured = parseModel(cfg.model)
-      const resolved = await resolvePinnedModel(configured)
-      if (resolved && resolved.providerID !== configured.providerID) {
-        log.warn("configured model moved to another provider", {
-          model: cfg.model,
-          providerID: resolved.providerID,
-        })
-      }
-      if (resolved) return resolved
-      log.warn("configured model is unavailable; falling back to the provider catalog", { model: cfg.model })
-    }
-
-    // Wait for background discovery: the persisted "recent" model may point at
-    // a CLI/local provider whose `models` are only populated by discovery. On
-    // a cache miss `list()` would skip that recent entry (its model is absent
-    // pre-discovery) and silently fall through to a different default. Unlike
-    // `getModel()`, this resolution has no retry, so block until complete.
-    await ready()
-    const recent = (await Filesystem.readJson<{ recent?: unknown }>(path.join(Global.Path.state, "model.json"))
-      .then((x) => providerModelList(x.recent))
+    if (cfg.model) return parseModel(cfg.model)
+    const recent = await Filesystem.readJson<{ recent?: unknown }>(path.join(Global.Path.state, "model.json"))
+      .then((value) => providerModelList(value.recent))
       .catch((error) => {
         if (Filesystem.isEnoent(error)) return []
         throw error
-      })) as { providerID: ProviderID; modelID: ModelID }[]
-    // Recents are stored as provider/model pairs. After the native provider is
-    // disabled and the same SKU is served by a custom gateway, the TUI migrates
-    // the store — CLI, headless, and server sessions do not, so resolve here.
-    for (const entry of recent) {
-      const resolved = await resolvePinnedModel(entry)
-      if (resolved && resolved.providerID !== entry.providerID) {
-        log.warn("recent model moved to another provider", {
-          modelID: entry.modelID,
-          from: entry.providerID,
-          to: resolved.providerID,
-        })
-      }
-      if (resolved) return resolved
-    }
-
-    const providers = Object.values(await list()).filter((provider) => {
-      if (cfg.provider && !Object.keys(cfg.provider).includes(provider.id)) return false
-      return true
-    })
-    const implicit = pickImplicitDefaultModel(providers)
-    if (implicit) {
-      return {
-        providerID: ProviderID.make(implicit.providerID),
-        modelID: ModelID.make(implicit.modelID),
-      }
-    }
-    throw new Error(IMPLICIT_DEFAULT_UNAVAILABLE_MESSAGE)
+      })
+    // An unavailable most-recent selection is still user intent. Do not walk
+    // older models or catalog recommendations after its provider disappears.
+    const selected = recent[0]
+    if (selected) return { providerID: ProviderID.make(selected.providerID), modelID: ModelID.make(selected.modelID) }
+    throw new Error("No model selected. Choose a model or configure model / pass --model provider/model.")
   }
 
   export function parseModel(model: string | { providerID?: unknown; modelID?: unknown; id?: unknown }) {

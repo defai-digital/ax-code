@@ -1,11 +1,8 @@
+import recommendations from "./model-recommendations.json"
 import { AX_ENGINE_DEFAULT_MODEL_ID, AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
 import { modelSelectableForProvider, skuKey } from "./model-selectability"
 
-const FAMILY_DEFAULTS = {
-  deepseek: { providerID: "deepseek", modelID: "deepseek-flash" },
-  glm: { providerID: "zai", modelID: "glm-5.3-flash" },
-  qwen: { providerID: "alibaba-token-plan", modelID: "qwen3.8-flash" },
-} as const
+const FAMILY_DEFAULTS = recommendations.families
 
 /** Expand only unversioned family names; explicit model IDs stay verbatim. */
 export function modelFamilyDefault(name: string) {
@@ -17,17 +14,8 @@ export function modelFamilyDefault(name: string) {
 export const MODEL_FORMAT_HELP = 'expected "provider/model" from `ax-code models`, or family name deepseek, glm, qwen'
 
 /** Session default when the user does not pass --model / config.model. */
-export const IMPLICIT_DEFAULT_MODEL_SKUS = [
-  FAMILY_DEFAULTS.deepseek.modelID,
-  FAMILY_DEFAULTS.glm.modelID,
-  FAMILY_DEFAULTS.qwen.modelID,
-  "MiniMax-M3",
-  "grok-4.6",
-  "claude-sonnet-5",
-  "gpt-6",
-  "gemini-3.8-flash",
-  "qwen3.8-27b",
-] as const
+/** UI suggestions only. Runtime defaultModel never traverses this list. */
+export const IMPLICIT_DEFAULT_MODEL_SKUS = recommendations.startup
 
 export const IMPLICIT_DEFAULT_UNAVAILABLE_MESSAGE =
   "No default model is available. Connect a provider that offers deepseek-flash, glm-5.3-flash, qwen3.8-flash, MiniMax-M3, grok-4.6, claude-sonnet-5, gpt-6, gemini-3.8-flash, or qwen3.8-27b, or pass --model provider/model. AX Engine requires an explicit model ID."
@@ -41,12 +29,13 @@ export function preferredDefaultSkuForProvider(providerID: string): string | und
   if (providerID === AX_ENGINE_PROVIDER_ID) return undefined
   if (providerID === "deepseek" || providerID.startsWith("deepseek-")) return FAMILY_DEFAULTS.deepseek.modelID
   if (providerID.startsWith("zai") || providerID.startsWith("zhipuai")) return FAMILY_DEFAULTS.glm.modelID
-  if (providerID === "alibaba-coding-plan" || providerID === "alibaba-coding-plan-cn") return "qwen3-coder-plus"
+  if (providerID === "alibaba-coding-plan" || providerID === "alibaba-coding-plan-cn")
+    return recommendations.providers["alibaba-coding-plan"]
   if (providerID.startsWith("alibaba")) return FAMILY_DEFAULTS.qwen.modelID
-  if (providerID.startsWith("minimax")) return "MiniMax-M3"
-  if (providerID === "meta" || providerID === "muse-cli") return "muse-spark-1.3"
-  if (providerID === "google" || providerID === "google-vertex") return "gemini-3.8-flash"
-  if (providerID === "groq") return "openai/gpt-oss-20b"
+  if (providerID.startsWith("minimax")) return recommendations.providers.minimax
+  if (providerID === "meta" || providerID === "muse-cli") return recommendations.providers.meta
+  if (providerID === "google" || providerID === "google-vertex") return recommendations.providers.google
+  if (providerID === "groq") return recommendations.providers.groq
   return undefined
 }
 

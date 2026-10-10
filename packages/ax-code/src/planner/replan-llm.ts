@@ -152,6 +152,7 @@ export function providerReplanGenerator(opts: ProviderReplanOptions = {}): Repla
     const timer = setTimeout(() => abort.abort(), opts.timeoutMs ?? 30_000)
     try {
       const result = await generateObject({
+        maxRetries: 0,
         model: language,
         maxOutputTokens: ProviderTransform.auxMaxOutputTokens(resolved),
         schema: REPLAN_SCHEMA,

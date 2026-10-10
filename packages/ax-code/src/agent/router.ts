@@ -370,7 +370,7 @@ export async function classifyComplexity(message: string, providerID?: ProviderI
   // the same provider as the turn; fresh sessions fall back to the default.
   const anchor = providerID ?? (await Provider.defaultModel().catch(() => undefined))?.providerID
   if (!anchor) return { complexity: null }
-  const small = await Provider.getSmallModel(anchor)
+  const small = await Provider.getSmallModel(anchor).catch(() => undefined)
   if (!small) {
     log.info("complexity-skipped", { reason: "no-small-model" })
     return { complexity: null }
@@ -381,6 +381,7 @@ export async function classifyComplexity(message: string, providerID?: ProviderI
   const timer = setTimeout(() => abort.abort(), LLM_TIMEOUT)
   try {
     const result = await generateObject({
+      maxRetries: 0,
       model: language,
       maxOutputTokens: ProviderTransform.auxMaxOutputTokens(small),
       temperature: 0,

@@ -37783,9 +37783,38 @@
             "type": "string",
             "description": "Model to use in the format of provider/model, eg openai/gpt-5"
           },
+          "llm_routing": {
+            "description": "Explicit ordered recovery targets. Empty by default; only user-owned config grants targets.",
+            "type": "object",
+            "properties": {
+              "fallback": {
+                "maxItems": 8,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "providerID": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "modelID": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "providerID",
+                    "modelID"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          },
           "small_model": {
             "type": "string",
-            "description": "Small model to use for tasks like title generation in the format of provider/model"
+            "description": "Explicit auxiliary model in provider/model format. When omitted, auxiliary tasks inherit the selected model."
           },
           "default_agent": {
             "description": "Default agent to use when none is specified. Must be a primary agent. Falls back to 'build' if not set or if the specified agent is invalid.",
@@ -51485,6 +51514,17 @@
             "required": [
               "providerID",
               "modelID"
+            ]
+          },
+          "modelOrigin": {
+            "type": "string",
+            "enum": [
+              "request",
+              "agent",
+              "complexity",
+              "hybrid",
+              "session-or-config",
+              "fallback"
             ]
           },
           "system": {

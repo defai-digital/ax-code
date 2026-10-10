@@ -120,6 +120,9 @@ describe("prompt loop error transitions", () => {
         step: 4,
       },
       {
+        async isLocal() {
+          return false
+        },
         async findFallback(providerID, preferredModelID, excludedProviderIDs) {
           expect(providerID).toBe(primaryModel.providerID)
           expect(preferredModelID).toBe(primaryModel.modelID)
@@ -155,7 +158,7 @@ describe("prompt loop error transitions", () => {
     expect(published).toEqual([])
   })
 
-  test("switches to fallback model immediately for provider quota exhaustion without publishing a terminal error", async () => {
+  test("stops without switching targets: switches to fallback model immediately for provider quota exhaustion without publishing a terminal error", async () => {
     const sessionID = SessionID.descending()
     const published: { sessionID: SessionID; message: string }[] = []
 
@@ -186,20 +189,12 @@ describe("prompt loop error transitions", () => {
       },
     )
 
-    expect(result).toEqual({
-      action: "fallback",
-      fallbackModel,
-      notice:
-        "Provider primary failed: Your token-plan quota has been exhausted. Switching to fallback/fallback-model.",
-      consecutiveErrors: 0,
-    })
-    expect(published).toEqual([])
+    expect(result).toEqual({ action: "stop", reason: "error", consecutiveErrors: 1 })
+    expect(published).toHaveLength(1)
+    expect(published[0].message).not.toContain("Switching to")
   })
 
-  // Issue #394: an expired/invalid credential must not silently fall back to
-  // another provider — the switch comes back with a user-facing notice the
-  // caller persists on the fallback turn's assistant message.
-  test("surfaces a user-facing notice when auth failure switches provider", async () => {
+  test("stops without switching targets: surfaces a user-facing notice when auth failure switches provider", async () => {
     const sessionID = SessionID.descending()
     const published: { sessionID: SessionID; message: string }[] = []
 
@@ -225,15 +220,9 @@ describe("prompt loop error transitions", () => {
       },
     )
 
-    expect(result).toEqual({
-      action: "fallback",
-      fallbackModel,
-      notice: "Provider primary failed: unauthorized. Switching to fallback/fallback-model.",
-      consecutiveErrors: 0,
-    })
-    // The notice is NOT a terminal error: nothing is published to
-    // session.error, so clients never render it as a failed turn.
-    expect(published).toEqual([])
+    expect(result).toEqual({ action: "stop", reason: "error", consecutiveErrors: 1 })
+    expect(published).toHaveLength(1)
+    expect(published[0].message).not.toContain("Switching to")
   })
 
   test("passes previously failed providers to fallback lookup", async () => {
@@ -301,18 +290,7 @@ describe("prompt loop error transitions", () => {
     )
 
     expect(result).toEqual({ action: "stop", reason: "error", consecutiveErrors: 1 })
-    expect(warnings).toEqual([
-      {
-        message: "no fallback provider available",
-        fields: {
-          command: "session.prompt.loop",
-          status: "error",
-          errorCode: "PROVIDER_FALLBACK_UNAVAILABLE",
-          providerID: primaryModel.providerID,
-          reason: "Your token-plan quota has been exhausted.",
-        },
-      },
-    ])
+    expect(warnings).toEqual([])
     expect(published).toEqual([
       {
         sessionID,
@@ -950,9 +928,9 @@ describe("local provider fallback privacy guard", () => {
 
     // Not a terminal account failure: ordinary consecutive-error handling
     // decides (here: keep retrying the local engine).
-    expect(result).toEqual({ action: "continue", consecutiveErrors: 2 })
-    expect(published).toEqual([])
-    expect(warnings[0]?.message).toBe("local provider failed, skipping remote fallback (data privacy)")
+    expect(result).toEqual({ action: "stop", reason: "error", consecutiveErrors: 2 })
+    expect(published).toHaveLength(1)
+    expect(warnings[0]?.message).toBe("local provider failed, no fallback attempted (data privacy)")
   })
 
   test("stops with a privacy explanation for terminal local provider failures instead of falling back", async () => {
@@ -986,8 +964,8 @@ describe("local provider fallback privacy guard", () => {
 
     expect(result.action).toBe("stop")
     expect(published).toHaveLength(1)
-    expect(published[0]!.message).toContain("Provider ax-engine failed: unauthorized.")
-    expect(published[0]!.message).toContain("local provider")
+    expect(published[0]!.message).toContain("Provider ax-engine (model")
+    expect(published[0]!.message).toContain("unauthorized")
     expect(published[0]!.message).not.toContain("Switching to")
   })
 

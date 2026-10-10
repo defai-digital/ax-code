@@ -338,7 +338,7 @@ describe("session.prompt helpers", () => {
     })
   })
 
-  test("follows a persisted session model to the connected provider serving the same SKU", async () => {
+  test("preserves a persisted exact model after its provider is disconnected", async () => {
     vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
     await using tmp = await tmpdir({
       git: true,
@@ -381,7 +381,7 @@ describe("session.prompt helpers", () => {
         } as MessageV2.User)
 
         await expect(lastModel(session.id)).resolves.toEqual({
-          providerID: "127.0.0.1",
+          providerID: "deepseek",
           modelID: "deepseek-v4-pro",
         })
         await Session.remove(session.id)
@@ -643,134 +643,32 @@ describe("session.prompt helpers", () => {
     })
   })
 
-  test("looks up fallback providers immediately for account failures and after repeated rate limits", () => {
+  test("only transient provider failures are eligible for configured recovery", () => {
+    for (const statusCode of [401, 402, 403, 400]) {
+      expect(
+        providerFallbackLookupDecision({
+          consecutiveErrors: 3,
+          error: { name: "APIError", data: { statusCode, message: "failure" } },
+        }),
+      ).toEqual({ action: "skip" })
+    }
+    for (const statusCode of [429, 500, 502, 503, 504]) {
+      expect(
+        providerFallbackLookupDecision({
+          consecutiveErrors: 2,
+          error: { name: "APIError", data: { statusCode, message: "temporary failure" } },
+        }),
+      ).toEqual({ action: "lookup", errorMessage: "temporary failure", stopWithoutFallback: true })
+    }
     expect(
       providerFallbackLookupDecision({
-        consecutiveErrors: 1,
-        error: { name: "APIError", data: { statusCode: 429, message: "rate limited" } },
-      }),
-    ).toEqual({ action: "skip" })
-    expect(
-      providerFallbackLookupDecision({
-        consecutiveErrors: 2,
-        error: { name: "APIError", data: { statusCode: 429, message: "rate limited" } },
-      }),
-    ).toEqual({
-      action: "lookup",
-      errorMessage: "rate limited",
-      stopWithoutFallback: false,
-    })
-    expect(
-      providerFallbackLookupDecision({
-        consecutiveErrors: 1,
-        error: {
-          name: "APIError",
-          data: { statusCode: 429, message: "Your token-plan quota has been exhausted." },
-        },
-      }),
-    ).toEqual({
-      action: "lookup",
-      errorMessage: "Your token-plan quota has been exhausted.",
-      stopWithoutFallback: true,
-    })
-    expect(
-      providerFallbackLookupDecision({
-        consecutiveErrors: 1,
-        error: {
-          name: "AI_APICallError",
-          statusCode: 429,
-          responseBody: JSON.stringify({
-            error: {
-              message: "Your token-plan quota has been exhausted.",
-              type: "insufficient_quota",
-              code: "insufficient_quota",
-            },
-          }),
-        },
-      }),
-    ).toEqual({
-      action: "lookup",
-      errorMessage: "Your token-plan quota has been exhausted.",
-      stopWithoutFallback: true,
-    })
-    expect(
-      providerFallbackLookupDecision({
-        consecutiveErrors: 1,
-        error: {
-          name: "AI_APICallError",
-          statusCode: 429,
-          responseBody: JSON.stringify({
-            error: {
-              code: "insufficient_quota",
-            },
-          }),
-        },
-      }),
-    ).toEqual({
-      action: "lookup",
-      errorMessage: "insufficient_quota",
-      stopWithoutFallback: true,
-    })
-    expect(
-      providerFallbackLookupDecision({
-        consecutiveErrors: 1,
-        error: {
-          name: "AI_APICallError",
-          message: "Too Many Requests",
-          statusCode: 429,
-          responseBody: JSON.stringify({
-            error: {
-              code: "insufficient_quota",
-            },
-          }),
-        },
-      }),
-    ).toEqual({
-      action: "lookup",
-      errorMessage: "insufficient_quota",
-      stopWithoutFallback: true,
-    })
-    expect(
-      providerFallbackLookupDecision({
-        consecutiveErrors: 1,
-        error: { name: "APIError", data: { statusCode: 402, message: "payment required" } },
-      }),
-    ).toEqual({
-      action: "lookup",
-      errorMessage: "payment required",
-      stopWithoutFallback: true,
-    })
-    expect(
-      providerFallbackLookupDecision({
-        consecutiveErrors: 1,
-        error: { name: "APIError", data: { statusCode: 403, message: "forbidden" } },
-      }),
-    ).toEqual({
-      action: "lookup",
-      errorMessage: "forbidden",
-      stopWithoutFallback: true,
-    })
-    expect(
-      providerFallbackLookupDecision({
-        consecutiveErrors: 2,
-        error: { name: "APIError", data: { statusCode: 500, message: "server error" } },
-      }),
-    ).toEqual({ action: "skip" })
-    expect(
-      providerFallbackLookupDecision({
-        consecutiveErrors: 2,
-        error: { name: "OtherError", data: { statusCode: 429, message: "rate limited" } },
-      }),
-    ).toEqual({ action: "skip" })
-    expect(
-      providerFallbackLookupDecision({
-        consecutiveErrors: Number.NaN,
-        error: { name: "APIError", data: { statusCode: 429, message: "rate limited" } },
+        consecutiveErrors: 3,
+        error: { name: "APIError", data: { statusCode: 429, message: "insufficient_quota" } },
       }),
     ).toEqual({ action: "skip" })
   })
 
-  test("chooses the same model from another provider before sorted fallback models", () => {
+  test("never searches other providers without configured recovery targets", () => {
     const providers = {
       "alibaba-token-plan": {
         id: ProviderID.make("alibaba-token-plan"),
@@ -801,10 +699,7 @@ describe("session.prompt helpers", () => {
       preferredModelID: ModelID.make("glm-5.1"),
     })
 
-    expect(result).toEqual({
-      providerID: ProviderID.make("zai-coding-plan"),
-      modelID: ModelID.make("glm-5.1"),
-    })
+    expect(result).toBeUndefined()
 
     const excludedResult = chooseFallbackModel(providers, {
       failedProviderID: ProviderID.make("alibaba-token-plan"),
@@ -812,10 +707,7 @@ describe("session.prompt helpers", () => {
       excludedProviderIDs: [ProviderID.make("zai-coding-plan")],
     })
 
-    expect(excludedResult).toEqual({
-      providerID: ProviderID.make("openrouter"),
-      modelID: ModelID.make("z-model"),
-    })
+    expect(excludedResult).toBeUndefined()
   })
 
   test("builds fallback provider switch state", () => {

@@ -98,7 +98,7 @@ describe("session.prompt resume_existing", () => {
     })
   })
 
-  test("resolves a persisted model through the connected provider before resuming", async () => {
+  test("preserves the exact persisted model when resuming", async () => {
     vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
     await using tmp = await tmpdir({
       git: true,
@@ -166,7 +166,7 @@ describe("session.prompt resume_existing", () => {
 
         await SessionPrompt.loop({ sessionID: session.id, resume_existing: true })
 
-        expect(modelSpy).toHaveBeenCalledWith("127.0.0.1", "deepseek-v4-pro")
+        expect(modelSpy).toHaveBeenCalledWith("deepseek", "deepseek-v4-pro")
         await Session.remove(session.id)
       },
     })

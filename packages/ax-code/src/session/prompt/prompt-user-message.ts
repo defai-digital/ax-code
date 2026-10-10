@@ -83,9 +83,7 @@ export async function createUserMessage(
     .map((p) => p.text)
     .join(" ")
 
-  // The client's model, followed to the connected provider serving the same
-  // SKU when its own provider is disabled: config, docs, and `run --model`
-  // keep naming a model by its native provider after a gateway took it over.
+  // Preserve the exact client selection, including an unavailable provider.
   const requested = input.model ? await requestedModel(input.model) : undefined
   const route = await resolveUserMessageRouting({
     sessionID: input.sessionID,
@@ -124,6 +122,15 @@ export async function createUserMessage(
     tools: input.tools,
     agent: agent.name,
     model,
+    modelOrigin: requested
+      ? "request"
+      : complexityModel
+        ? "complexity"
+        : hybridModel
+          ? "hybrid"
+          : pinned
+            ? "agent"
+            : "session-or-config",
     system: input.system,
     format: input.format,
     isolation: input.isolation,

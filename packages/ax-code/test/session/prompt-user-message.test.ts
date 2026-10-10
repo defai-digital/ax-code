@@ -82,7 +82,7 @@ describe("prompt user message helpers", () => {
 })
 
 describe("prompt user message agent model fallback", () => {
-  test("an agent pinned to a disabled provider falls back instead of failing", async () => {
+  test("an unavailable agent pin is preserved for an explicit dispatch error", async () => {
     await using tmp = await tmpdir({
       git: true,
       config: {
@@ -107,7 +107,7 @@ describe("prompt user message agent model fallback", () => {
           parts: [{ type: "text", text: "start" }],
         })
         expect(message.info.agent).toBe("build")
-        expect(message.info.model.providerID).not.toBe("deepseek")
+        expect(message.info.model.providerID).toBe("deepseek")
         expect(message.info.model.modelID).toBeTruthy()
       },
     })
@@ -143,7 +143,7 @@ describe("prompt user message requested model", () => {
     },
   }
 
-  test("a model requested on a disabled provider runs on the connected provider serving the same SKU", async () => {
+  test("an unavailable requested model never relocates to another provider", async () => {
     vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
     await using tmp = await tmpdir({ git: true, config })
 
@@ -161,7 +161,7 @@ describe("prompt user message requested model", () => {
           parts: [{ type: "text", text: "start" }],
         })
         expect(message.info.agent).toBe("build")
-        expect(message.info.model).toEqual({ providerID: "127.0.0.1", modelID: "deepseek-v4-pro" })
+        expect(message.info.model).toEqual({ providerID: "deepseek", modelID: "deepseek-v4-pro" })
       },
     })
   })
@@ -247,7 +247,7 @@ describe("prompt user message auto-route model precedence", () => {
           parts: [{ type: "text", text: "debug this crash and find the bug" }],
         })
         expect(fallback.info.agent).toBe("debug")
-        expect(fallback.info.model).toEqual({ providerID: "127.0.0.1", modelID: "deepseek-v4-pro" })
+        expect(fallback.info.model).toEqual({ providerID: "deepseek", modelID: "deepseek-v4-pro" })
         expect(fallback.info.variant).toBe("high")
       },
     })

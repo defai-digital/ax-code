@@ -1,6 +1,8 @@
+import { Config } from "../../config/config"
+import { RoutePolicy } from "../../provider/route-policy"
+import { modelSelectableForProvider } from "../../provider/model-selectability"
 import { Provider } from "../../provider/provider"
 import { ModelID, ProviderID } from "../../provider/schema"
-import { AX_ENGINE_PROVIDER_ID } from "../../provider/ax-engine/constants"
 
 /**
  * Privacy guard: a session pinned to a local provider must never silently
@@ -8,43 +10,38 @@ import { AX_ENGINE_PROVIDER_ID } from "../../provider/ax-engine/constants"
  * their prompts and code off third-party servers, so an automatic fallback
  * to a cloud provider would be a data leak.
  */
-export function isLoopbackBaseURL(value: unknown): boolean {
-  if (typeof value !== "string" || !value.trim()) return false
-  try {
-    const hostname = new URL(value).hostname.toLowerCase().replace(/^\[|\]$/g, "")
-    return hostname === "localhost" || hostname === "::1" || hostname.startsWith("127.")
-  } catch {
-    return false
-  }
+export const isLoopbackBaseURL = RoutePolicy.isLoopbackBaseURL
+export function isLocalProvider(providerID: ProviderID) {
+  return Provider.isLocalProvider(providerID)
 }
 
-/**
- * Best-effort locality check. ax-engine is always local; any other provider
- * whose configured baseURL (or catalog api URL) points at a loopback address
- * (user-configured Ollama/LM Studio etc.) is treated as local too.
- */
-export async function isLocalProvider(providerID: ProviderID): Promise<boolean> {
-  if (providerID === AX_ENGINE_PROVIDER_ID) return true
-  const providers = await Provider.list().catch(() => undefined)
-  const info = providers?.[providerID]
-  if (!info) return false
-  if (isLoopbackBaseURL(info.options?.["baseURL"])) return true
-  const firstModel = Object.values(info.models)[0]
-  return isLoopbackBaseURL(firstModel?.api?.url)
+export type FallbackOptions = {
+  candidates?: readonly RoutePolicy.Target[]
+  failedModelKeys?: Iterable<string>
 }
 
-/**
- * Find a fallback model from a different provider when the current one fails.
- * Skips the failed provider and prefers the same model from another provider
- * before falling back to that provider's best available model.
- */
+/** Resolve only the next explicitly configured target, never a catalog substitute. */
 export async function findFallbackModel(
   failedProviderID: ProviderID,
   preferredModelID?: ModelID,
   excludedProviderIDs: Iterable<ProviderID> = [],
+  options: FallbackOptions = {},
 ): Promise<{ providerID: ProviderID; modelID: ModelID } | undefined> {
-  const providers = await Provider.list()
-  return chooseFallbackModel(providers, { failedProviderID, preferredModelID, excludedProviderIDs })
+  const candidates = options.candidates ?? (await Config.get()).llm_routing?.fallback ?? []
+  if (!candidates.length) return undefined
+  const candidate = RoutePolicy.next({
+    current: { providerID: failedProviderID, modelID: preferredModelID ?? "" },
+    candidates,
+    failed: options.failedModelKeys,
+  })
+  if (!candidate || new Set(excludedProviderIDs).has(ProviderID.make(candidate.providerID))) return undefined
+  const target = { providerID: ProviderID.make(candidate.providerID), modelID: ModelID.make(candidate.modelID) }
+  // A missing/unusable next target stops recovery; never skip to another one.
+  const model = await Provider.getModel(target.providerID, target.modelID)
+  if (!modelSelectableForProvider(target.providerID, model)) {
+    throw new Error(`Configured fallback ${target.providerID}/${target.modelID} is not eligible for an agent request.`)
+  }
+  return target
 }
 
 export function chooseFallbackModel(
@@ -53,25 +50,17 @@ export function chooseFallbackModel(
     failedProviderID: ProviderID
     preferredModelID?: ModelID
     excludedProviderIDs?: Iterable<ProviderID>
+    candidates?: readonly RoutePolicy.Target[]
+    failedModelKeys?: Iterable<string>
   },
 ): { providerID: ProviderID; modelID: ModelID } | undefined {
-  const excluded = new Set<string>([input.failedProviderID, ...(input.excludedProviderIDs ?? [])])
-  if (input.preferredModelID) {
-    for (const [id, provider] of Object.entries(providers)) {
-      if (excluded.has(id)) continue
-      const preferred = provider.models[input.preferredModelID]
-      if (preferred) {
-        return { providerID: ProviderID.make(id), modelID: preferred.id }
-      }
-    }
-  }
-
-  for (const [id, provider] of Object.entries(providers)) {
-    if (excluded.has(id)) continue
-    const models = Provider.sort(Object.values(provider.models))
-    if (models.length > 0) {
-      return { providerID: ProviderID.make(id), modelID: models[0].id }
-    }
-  }
-  return undefined
+  const candidate = RoutePolicy.next({
+    current: { providerID: input.failedProviderID, modelID: input.preferredModelID ?? "" },
+    candidates: input.candidates ?? [],
+    failed: input.failedModelKeys,
+  })
+  if (!candidate || new Set(input.excludedProviderIDs).has(ProviderID.make(candidate.providerID))) return undefined
+  const model = providers[ProviderID.make(candidate.providerID)]?.models[ModelID.make(candidate.modelID)]
+  if (!model) return undefined
+  return { providerID: ProviderID.make(candidate.providerID), modelID: ModelID.make(candidate.modelID) }
 }

@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "purpose": "Visible model-picker recommendations only; never authorizes dispatch or recovery",
+  "families": {
+    "deepseek": {
+      "providerID": "deepseek",
+      "modelID": "deepseek-flash"
+    },
+    "glm": {
+      "providerID": "zai",
+      "modelID": "glm-5.3-flash"
+    },
+    "qwen": {
+      "providerID": "alibaba-token-plan",
+      "modelID": "qwen3.8-flash"
+    }
+  },
+  "startup": [
+    "deepseek-flash",
+    "glm-5.3-flash",
+    "qwen3.8-flash",
+    "MiniMax-M3",
+    "grok-4.6",
+    "claude-sonnet-5",
+    "gpt-6",
+    "gemini-3.8-flash",
+    "qwen3.8-27b"
+  ],
+  "providers": {
+    "alibaba-coding-plan": "qwen3-coder-plus",
+    "alibaba-coding-plan-cn": "qwen3-coder-plus",
+    "minimax": "MiniMax-M3",
+    "meta": "muse-spark-1.3",
+    "muse-cli": "muse-spark-1.3",
+    "google": "gemini-3.8-flash",
+    "google-vertex": "gemini-3.8-flash",
+    "groq": "openai/gpt-oss-20b"
+  }
+}

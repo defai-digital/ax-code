@@ -354,7 +354,16 @@ export type Config = {
    */
   model?: string
   /**
-   * Small model to use for tasks like title generation in the format of provider/model
+   * Explicit ordered recovery targets. Empty by default; only user-owned config grants targets.
+   */
+  llm_routing?: {
+    fallback?: Array<{
+      providerID: string
+      modelID: string
+    }>
+  }
+  /**
+   * Explicit auxiliary model in provider/model format. When omitted, auxiliary tasks inherit the selected model.
    */
   small_model?: string
   /**
@@ -4584,6 +4593,7 @@ export type UserMessage = {
     providerID: string
     modelID: string
   }
+  modelOrigin?: "request" | "agent" | "complexity" | "hybrid" | "session-or-config" | "fallback"
   system?: string
   tools?: {
     [key: string]: boolean

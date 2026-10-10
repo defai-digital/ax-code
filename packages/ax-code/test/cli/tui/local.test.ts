@@ -406,13 +406,12 @@ describe("resolvePinnedModelPreference", () => {
     ["deepseek", "deepseek-flash"],
     ["glm", "glm-5.3-flash"],
     ["qwen", "qwen3.8-flash"],
-  ])("resolves the %s startup family to Flash on a connected gateway", (family, modelID) => {
+  ])("keeps the %s family provider exact unless the gateway was named", (family, modelID) => {
     const providers = [{ id: "gateway", models: { [modelID]: { capabilities: { toolcall: true } } } }]
     for (const input of [family, `gateway/${family}`]) {
-      expect(resolvePinnedModelPreference(providers, Provider.parseModel(input))).toEqual({
-        providerID: "gateway",
-        modelID,
-      })
+      expect(resolvePinnedModelPreference(providers, Provider.parseModel(input))).toEqual(
+        input.startsWith("gateway/") ? { providerID: "gateway", modelID } : undefined,
+      )
       expect(resolvePinnedModelPreference([], Provider.parseModel(input))).toBeUndefined()
     }
   })
@@ -433,11 +432,10 @@ describe("resolvePinnedModelPreference", () => {
     })
   })
 
-  test("follows a disabled native provider pin to the connected SKU", () => {
-    expect(resolvePinnedModelPreference(providers, { providerID: "deepseek", modelID: "deepseek-v4-pro" })).toEqual({
-      providerID: "127.0.0.1",
-      modelID: "deepseek-v4-pro",
-    })
+  test("does not relocate a disabled native provider pin", () => {
+    expect(
+      resolvePinnedModelPreference(providers, { providerID: "deepseek", modelID: "deepseek-v4-pro" }),
+    ).toBeUndefined()
   })
 
   test("returns undefined when the SKU is not served by any connected provider", () => {

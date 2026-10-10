@@ -2,14 +2,14 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-05-03
+Last reviewed: 2026-10-10
 Owner: ax-code runtime
 
 Auto-route controls two independent routing behaviors in ax-code:
 
 1. **Keyword routing** — active by default. Switches the agent when a message matches a specialist's keywords or patterns. Fires in under 1ms and requires no LLM call. It is skipped when routing is explicitly disabled, the user explicitly names an agent, or the message is a synthetic continuation that preserves the current agent.
 
-2. **Complexity routing** — optional, enabled by the auto-route toggle. A lightweight LLM call classifies each message as `low`, `medium`, or `high` complexity. `low`-complexity messages are automatically served by the provider's small/fast model, reducing latency for simple questions.
+2. **Complexity routing** — optional, enabled by the auto-route toggle. A lightweight LLM call classifies each message as `low`, `medium`, or `high` complexity. `low`-complexity messages are automatically served by the explicitly configured `small_model`, reducing latency for simple questions.
 
 By default, auto-route is **off** — complexity routing is disabled. Keyword routing is separate from this toggle and remains active by default unless disabled by config or bypassed by an explicit agent choice.
 
@@ -51,9 +51,9 @@ User messages are matched against keyword and regex patterns for each specialist
 
 When auto-route is enabled, each message is sent to a fast/cheap model via `classifyComplexity()`. This LLM call returns a complexity estimate (`low` / `medium` / `high`):
 
-- `low`-complexity messages use the provider's small/fast model automatically
+- `low`-complexity messages use the explicitly configured `small_model` automatically
 - `medium` and `high` messages use the default model as usual
-- Skipped if no small model is available from the current provider
+- Skipped if `small_model` is absent or unavailable
 - 1.5-second timeout — falls back silently if the LLM is slow or unavailable
 - All errors are caught silently — never blocks the user
 
@@ -79,7 +79,7 @@ Complexity routing adds **200-500ms** to messages that trigger the classificatio
 
 ### Requires a Small Model
 
-Complexity routing requires a small/flash model from the configured provider (e.g., Gemini Flash, GLM Flash, Grok Fast). If no small model is available, the classification is silently skipped and the default model is used.
+Complexity routing requires an explicit `small_model` configuration. AX Code does not infer a helper from model names or move an unavailable pin to another provider. Without a usable helper, classification is skipped and the selected primary is preserved. See [Model recovery](model-recovery.md).
 
 ### Token Usage
 
@@ -115,12 +115,12 @@ The environment variable overrides the config file setting.
 
 ## Auto-Route + Other Settings
 
-| Setting             | Interaction                                                                                                                     |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| **Autonomous Mode** | Auto-route works independently. Agent routing and complexity classification happen before permission checks.                    |
-| **Sandbox Mode**    | No interaction. Auto-route only affects which agent and model tier is selected, not what the agent can do.                      |
-| **Model Selection** | `low`-complexity messages use the provider's small model automatically when auto-route is on and no model is explicitly pinned. |
-| **Execution Modes** | Hybrid placement (`modes.default: "hybrid"`) is separate: it chooses local vs cloud. See [Execution Modes](modes.md).           |
+| Setting             | Interaction                                                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **Autonomous Mode** | Auto-route works independently. Agent routing and complexity classification happen before permission checks.                   |
+| **Sandbox Mode**    | No interaction. Auto-route only affects which agent and model tier is selected, not what the agent can do.                     |
+| **Model Selection** | `low`-complexity messages use the explicitly configured `small_model` when auto-route is on and no model is explicitly pinned. |
+| **Execution Modes** | Hybrid placement (`modes.default: "hybrid"`) is separate: it chooses local vs cloud. See [Execution Modes](modes.md).          |
 
 ## When to Enable Auto-Route
 

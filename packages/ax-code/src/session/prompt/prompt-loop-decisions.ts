@@ -206,7 +206,7 @@ export function consecutiveErrorDecision(input: {
   }
 }
 
-const PROVIDER_FALLBACK_STATUS_CODES = new Set([401, 402, 403, 429])
+const PROVIDER_FALLBACK_STATUS_CODES = new Set([429, 500, 502, 503, 504])
 
 function hasRepeatedErrors(value: number, threshold: number) {
   return Number.isFinite(value) && value >= threshold
@@ -227,6 +227,17 @@ function fallbackSwitchMessage(input: { providerID: ProviderID; reason: string; 
   return `Provider ${input.providerID} failed: ${input.reason}${punctuation} Switching to ${input.to}.`
 }
 
+export function providerFailureIsPermanent(error: unknown): boolean {
+  if (!error || typeof error !== "object" || !providerErrorName(error)) return false
+  const data = "data" in error ? (error.data as { metadata?: Record<string, unknown> }) : undefined
+  if (data?.metadata?.errorCode === "alibaba_token_plan_short_window_quota") return false
+  const statusCode = providerErrorStatusCode(error)
+  return (
+    typeof statusCode === "number" &&
+    shouldStopWithoutFallbackForProviderError({ statusCode, message: providerErrorMessage(error) })
+  )
+}
+
 export function providerFallbackLookupDecision(input: {
   consecutiveErrors: number
   error: unknown
@@ -243,16 +254,17 @@ export function providerFallbackLookupDecision(input: {
   }
 
   const errorMessage = providerErrorMessage(input.error)
-  const stopWithoutFallback = shouldStopWithoutFallbackForProviderError({ statusCode, message: errorMessage })
-  if (!stopWithoutFallback && !hasRepeatedErrors(input.consecutiveErrors, 2)) {
-    return { action: "skip" }
-  }
-
-  return {
-    action: "lookup",
-    errorMessage,
-    stopWithoutFallback,
-  }
+  if (providerFailureIsPermanent(input.error)) return { action: "skip" }
+  const data =
+    "data" in input.error
+      ? (input.error.data as { isRetryable?: boolean; metadata?: Record<string, unknown> })
+      : undefined
+  // Exhaustion is a typed processor outcome, not inferred from error prose.
+  const exhausted = data?.metadata?.retryExhausted === "true"
+  const retryable = data?.isRetryable ?? (input.error as { isRetryable?: boolean }).isRetryable
+  if (data?.metadata?.replayUnsafe === true || (retryable === false && !exhausted)) return { action: "skip" }
+  if (!exhausted && !hasRepeatedErrors(input.consecutiveErrors, 2)) return { action: "skip" }
+  return { action: "lookup", errorMessage, stopWithoutFallback: true }
 }
 
 function providerErrorName(error: object) {

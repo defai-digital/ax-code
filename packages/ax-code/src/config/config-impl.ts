@@ -1,3 +1,4 @@
+import { RoutePolicy } from "../provider/route-policy"
 import { Log } from "../util/log"
 import path from "path"
 import { pathToFileURL, fileURLToPath } from "url"
@@ -426,7 +427,12 @@ export namespace Config {
 
     function mergeFromSource(source: McpSource, config: Info) {
       recordMcpSources(config, source)
-      const scoped = source.kind === "managed" ? config : withoutWebmcpRequirement(source, config)
+      let scoped = source.kind === "managed" ? config : withoutWebmcpRequirement(source, config)
+      // Repository/remote settings and managed ceilings may restrict user grants,
+      // but cannot turn a connected provider into an automatic recovery target.
+      if (scoped.llm_routing && !["global", "custom", "inline"].includes(source.kind)) {
+        scoped = { ...scoped, llm_routing: RoutePolicy.narrow(result.llm_routing, scoped.llm_routing) }
+      }
       result = mergeConfigConcatArrays(result, migrateDeprecatedModeIntoAgent(scoped))
     }
 

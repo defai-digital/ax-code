@@ -1,3 +1,6 @@
+import { ModelID, ProviderID } from "../../src/provider/schema"
+import { Config } from "../../src/config/config"
+import { MessageV2 } from "../../src/session/message-v2"
 import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import { APICallError } from "ai"
 import path from "path"
@@ -330,7 +333,7 @@ describe("session.prompt flow", () => {
     await using tmp = await tmpdir({ git: true })
 
     // Multi-hop chain: subconscious -> fallback -> fallback2, with each hop
-    // failing auth. The rendered transcript must carry exactly one synthetic
+    // failing with an exhausted transient error. The rendered transcript must carry exactly one synthetic
     // notice naming the originally requested provider and the provider
     // actually serving — never the raw "Provider ... failed" hop messages.
     const withProvider = (providerID: string, modelID: string): Provider.Model => ({
@@ -364,21 +367,19 @@ describe("session.prompt flow", () => {
       fallback2: { id: "fallback2", models: { "fallback-model-2": withProvider("fallback2", "fallback-model-2") } },
     } as any)
     summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
-    const authFailure = () =>
-      new APICallError({
-        message: "Authentication Failed",
-        url: "https://example.com/v1/chat/completions",
-        requestBodyValues: {},
-        statusCode: 401,
-        responseHeaders: {},
-        responseBody: "",
+    const transientFailure = () =>
+      new MessageV2.APIError({
+        message: "Service Unavailable",
+        statusCode: 503,
+        isRetryable: false,
+        metadata: { retryExhausted: "true" },
       })
     streamSpy = vi.spyOn(LLM, "stream").mockImplementation((input: any) => {
       // Small-model side calls (title generation) always succeed; the turn
-      // stream rejects while the chain is on a provider that fails auth.
+      // stream rejects while the chain is on a provider that exhausted transient recovery.
       if (input.small) return Promise.resolve(successStream("title"))
       if (input.model.providerID === "subconscious" || input.model.providerID === "fallback") {
-        return Promise.reject(authFailure())
+        return Promise.reject(transientFailure())
       }
       return Promise.resolve(successStream("hello from fallback2"))
     })
@@ -387,6 +388,14 @@ describe("session.prompt flow", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
+          const config = await Config.get()
+          config.llm_routing = {
+            fallback: [
+              { providerID: "fallback", modelID: "fallback-model" },
+              { providerID: "fallback2", modelID: "fallback-model-2" },
+            ],
+          }
+
           const session = await Session.create({ title: "Fallback Notice Test" })
 
           const msg = await SessionPrompt.prompt({
@@ -401,6 +410,11 @@ describe("session.prompt flow", () => {
           )
 
           const messages = await Session.messages({ sessionID: session.id })
+          const originalUser = messages.find((message) => message.info.role === "user")
+          expect(originalUser?.info).toMatchObject({
+            model: { providerID: "subconscious", modelID: "test-model" },
+            modelOrigin: "request",
+          })
           const texts = messages.flatMap((message) =>
             message.parts.filter((part): part is Extract<typeof part, { type: "text" }> => part.type === "text"),
           )
@@ -408,10 +422,25 @@ describe("session.prompt flow", () => {
           expect(notices).toHaveLength(1)
           expect(notices[0]!.text).toBe("Note: Using fallback2/fallback-model-2 (subconscious unavailable)")
           for (const part of texts) {
-            expect(part.text).not.toContain("Authentication Failed")
+            expect(part.text).not.toContain("Service Unavailable")
             expect(part.text).not.toContain("Switching to")
             expect(part.text).not.toContain("failed:")
           }
+
+          // A later user turn starts from the primary and reads a fresh route.
+          config.llm_routing = { fallback: [{ providerID: "replacement", modelID: "replacement-model" }] }
+          const callCount = streamSpy!.mock.calls.length
+          await SessionPrompt.prompt({
+            model: { providerID: ProviderID.make("subconscious"), modelID: ModelID.make("test-model") },
+            sessionID: session.id,
+            agent: "build",
+            parts: [{ type: "text", text: "next turn" }],
+          })
+          const nextTargets = streamSpy!.mock.calls
+            .slice(callCount)
+            .filter(([input]) => !input.small)
+            .map(([input]) => input.model.providerID)
+          expect(nextTargets).toEqual(["subconscious", "replacement"])
         },
       })
     } finally {

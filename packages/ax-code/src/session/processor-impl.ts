@@ -438,6 +438,7 @@ export namespace SessionProcessor {
     let snapshot: string | undefined
     let blocked = false
     let attempt = 0
+    let replayUnsafe = false
     let needsCompaction = false
     let requestTooLargeCompaction = false
     // Underlying provider/stream error captured when a turn finishes with no
@@ -490,6 +491,9 @@ export namespace SessionProcessor {
     }
 
     const result = {
+      get recoverySafe() {
+        return !replayUnsafe
+      },
       get message() {
         return input.assistantMessage
       },
@@ -680,6 +684,7 @@ export namespace SessionProcessor {
                   break
 
                 case "reasoning-delta":
+                  if (value.text) replayUnsafe = true
                   if (value.id in reasoningMap) {
                     const part = reasoningMap[value.id]
                     const offset = part.text.length
@@ -768,6 +773,7 @@ export namespace SessionProcessor {
                   break
 
                 case "tool-call": {
+                  replayUnsafe = true
                   usedTools = true
                   await setBusyStatus({
                     waitState: "tool",
@@ -1602,6 +1608,7 @@ export namespace SessionProcessor {
                   break
 
                 case "text-delta":
+                  if (value.text) replayUnsafe = true
                   if (currentText) {
                     const offset = currentText.text.length
                     currentText.text += value.text
@@ -1740,7 +1747,11 @@ export namespace SessionProcessor {
               }
               if (currentText) currentText.text = StreamRepetition.truncateLoopedText(currentText.text)
             }
-            if (MessageV2.RequestTooLargeError.isInstance(error)) {
+            if (replayUnsafe) {
+              // Even compaction/media repair cannot replay a request that
+              // already published output or started a tool.
+              input.assistantMessage.error ??= error
+            } else if (MessageV2.RequestTooLargeError.isInstance(error)) {
               const recovery = options?.mediaRecovery
               let retryMedia = false
               if (recovery?.mediaCount) {
@@ -1805,7 +1816,7 @@ export namespace SessionProcessor {
                 error,
               })
             } else {
-              const retry = SessionRetry.retryable(error, input.model.providerID)
+              const retry = replayUnsafe ? undefined : SessionRetry.retryable(error, input.model.providerID)
               if (retry !== undefined) {
                 attempt++
                 // Concurrency-limit hits get an extended attempt budget (a
@@ -1860,9 +1871,11 @@ export namespace SessionProcessor {
                     ? new MessageV2.APIError({
                         ...apiError.data,
                         isRetryable: false,
-                        metadata: terminalErrorCode
-                          ? { ...apiError.data.metadata, errorCode: terminalErrorCode }
-                          : apiError.data.metadata,
+                        metadata: {
+                          ...apiError.data.metadata,
+                          retryExhausted: "true",
+                          ...(terminalErrorCode ? { errorCode: terminalErrorCode } : {}),
+                        },
                         message: `${apiErrorMessage} (stopped after ${maxAttempts} retries)`,
                       }).toObject()
                     : new NamedError.Unknown({

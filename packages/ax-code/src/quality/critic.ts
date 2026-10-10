@@ -98,6 +98,7 @@ INFO = stylistic. Do not flag style-only issues unless they affect correctness.`
       modelLabel = providerModelKey(modelRef)
       timer = setTimeout(() => abort.abort(), input.timeoutMs ?? 60_000)
       raw = await generateObject({
+        maxRetries: 0,
         model: language,
         maxOutputTokens: ProviderTransform.auxMaxOutputTokens(resolved),
         schema: CRITIC_OUTPUT,

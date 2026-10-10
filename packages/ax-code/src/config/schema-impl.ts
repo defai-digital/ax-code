@@ -1,4 +1,5 @@
 import z from "zod"
+import { RoutePolicy } from "../provider/route-policy"
 import { isRecord } from "@/util/record"
 import { ModelsDev } from "../provider/models"
 import { Log } from "../util/log"
@@ -671,8 +672,11 @@ export const Info = z
       .optional()
       .describe("When set, ONLY these providers will be enabled. All other providers will be ignored"),
     model: ModelId.describe("Model to use in the format of provider/model, eg openai/gpt-5").optional(),
+    llm_routing: RoutePolicy.Configuration.optional().describe(
+      "Explicit ordered recovery targets. Empty by default; only user-owned config grants targets.",
+    ),
     small_model: ModelId.describe(
-      "Small model to use for tasks like title generation in the format of provider/model",
+      "Explicit auxiliary model in provider/model format. When omitted, auxiliary tasks inherit the selected model.",
     ).optional(),
     default_agent: z
       .string()

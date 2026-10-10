@@ -39,6 +39,8 @@ export const AgentRouteEvent = Base.extend({
 
 export const LLMRequestEvent = Base.extend({
   type: z.literal("llm.request"),
+  purpose: z.string().optional(),
+  selectionOrigin: z.string().optional(),
   model: z.string(),
   messageCount: z.number().int(),
   temperature: z.number().optional(),

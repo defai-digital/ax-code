@@ -1413,11 +1413,10 @@ describe("AX Code TUI stability guardrails", () => {
     expect(local).toContain("if (state.persistenceBlocked)")
     expect(local).toContain("persistence disabled to avoid overwriting state")
     expect(local).toContain('"Failed to load model preferences"')
-    // `--model deepseek/…` after the native provider was disabled must follow
-    // the SKU onto a connected gateway, not toast "is not valid" and drop it.
-    expect(local).toContain("const requested = resolvePin(Provider.parseModel(args.model))")
+    // Keep an unavailable explicit pin visible until the user changes it.
+    expect(local).toContain("if (args.model) return Provider.parseModel(args.model)")
     expect(local).toContain("sessionModelPreference(sessionModels(), sessionID, a.name)")
-    expect(local).toContain("() => resolvePin(modelStore.model[a.name])")
+    expect(local).toContain("modelStore.model[a.name]")
     expect(local).toContain("const resolved = isModelValid(model) ? model : resolvePin(model)")
     expect(local).not.toContain("if (isModelValid({ providerID, modelID }))")
   })
