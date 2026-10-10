@@ -3,7 +3,7 @@ import { Hono } from "hono"
 import { Pty } from "../../src/pty"
 import { PtyID } from "../../src/pty/schema"
 import { PtyRoutes } from "../../src/server/routes/pty"
-import { serve } from "../../src/server/runtime-adapter"
+import { serve } from "../../src/util/runtime-adapter"
 
 test("PTY route upgrades a real socket and forwards replay, input, and close", async () => {
   const id = PtyID.make("pty_websocket_qualification")

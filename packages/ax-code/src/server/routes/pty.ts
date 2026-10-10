@@ -1,7 +1,7 @@
 import { Hono } from "hono"
 import { describeRoute, resolver } from "hono-openapi"
 import { validator } from "../validation"
-import { upgradeWebSocket } from "../runtime-adapter"
+import { upgradeWebSocket } from "../../util/runtime-adapter"
 import z from "zod"
 import { Pty } from "@/pty"
 import { PtyID } from "@/pty/schema"

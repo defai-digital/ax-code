@@ -1958,6 +1958,12 @@ export namespace WebMcpProfile {
     return pageOrigin(pageUrl)
   }
 
+  function structuredPageEntries(result: unknown): unknown[] | undefined {
+    const record = isRecord(result) ? result : {}
+    const structured = isRecord(record.structuredContent) ? record.structuredContent : undefined
+    return structured && Array.isArray(structured.pages) ? structured.pages : undefined
+  }
+
   /**
    * Parse the bridge's structured page list into pageId -> URL. The
    * structured URL comes from the browser target (`page.url()`), not the
@@ -1965,11 +1971,10 @@ export namespace WebMcpProfile {
    * rendering. Returns undefined when the bridge returned no page list.
    */
   export function parseStructuredPages(result: unknown): Map<number, string> | undefined {
-    const record = isRecord(result) ? result : {}
-    const structured = isRecord(record.structuredContent) ? record.structuredContent : undefined
-    if (!structured || !Array.isArray(structured.pages)) return undefined
+    const entries = structuredPageEntries(result)
+    if (!entries) return undefined
     const pages = new Map<number, string>()
-    for (const entry of structured.pages) {
+    for (const entry of entries) {
       if (!isRecord(entry) || typeof entry.url !== "string") continue
       const id: unknown = entry.id
       if (typeof id !== "number" || !Number.isSafeInteger(id) || id < 0 || pages.has(id)) continue
@@ -1980,10 +1985,7 @@ export namespace WebMcpProfile {
 
   /** URL of the bridge-selected page, if the result carries a structured page list. */
   export function structuredSelectedPageUrl(result: unknown): string | undefined {
-    const record = isRecord(result) ? result : {}
-    const structured = isRecord(record.structuredContent) ? record.structuredContent : undefined
-    if (!structured || !Array.isArray(structured.pages)) return undefined
-    for (const entry of structured.pages) {
+    for (const entry of structuredPageEntries(result) ?? []) {
       if (isRecord(entry) && entry.selected === true && typeof entry.url === "string") return entry.url
     }
     return undefined

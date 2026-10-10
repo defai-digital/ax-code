@@ -129,8 +129,8 @@
           "summary": "stale_listener"
         },
         {
-          "fingerprint": "bfb7d19789bd1671a43dfa388db6c20893fb99fdb315ba13f31cbf4e082e477a",
-          "file": "src/server/runtime-adapter.ts",
+          "fingerprint": "1d52238ba476231e9e64c3c97a5f1b7ee18a8c3d9b6f9942b5a842420340a652",
+          "file": "src/util/runtime-adapter.ts",
           "line": 172,
           "severity": "medium",
           "kind": "stale_listener",
@@ -1782,8 +1782,8 @@
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "352b61eb93afe770434105b903fa9ab2af809517c9658412f2365bb1932aa6a3",
-          "file": "src/server/runtime-adapter.ts",
+          "fingerprint": "a0b3239b8ccd9ac8c4536a4ae1c12435facefa69b7621e273263deec3b3d6151",
+          "file": "src/util/runtime-adapter.ts",
           "line": 174,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",

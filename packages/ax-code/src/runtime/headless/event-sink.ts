@@ -19,7 +19,17 @@ export function createHeadlessCompositeEventSink(sinks: readonly HeadlessEventSi
       for (const sink of sinks) await sink.write(record)
     },
     async close() {
-      for (const sink of [...sinks].reverse()) await sink.close?.()
+      // Close every sink even when one fails, so a broken sink cannot leak the
+      // resources of the sinks opened before it; report the first failure.
+      const failures: unknown[] = []
+      for (const sink of [...sinks].reverse()) {
+        try {
+          await sink.close?.()
+        } catch (error) {
+          failures.push(error)
+        }
+      }
+      if (failures.length > 0) throw failures[0]
     },
   }
 }

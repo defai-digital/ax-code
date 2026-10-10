@@ -40,7 +40,7 @@ async function main() {
   const runtime = typeof (globalThis as { Bun?: { serve?: unknown } }).Bun?.serve === "function" ? "Bun" : "Node"
   console.log(`\n=== S1 ws-adapter spike on ${runtime} ===`)
 
-  const { serve, upgradeWebSocket } = await import("../src/server/runtime-adapter")
+  const { serve, upgradeWebSocket } = await import("../src/util/runtime-adapter")
 
   // App with a ws echo route that mirrors pty.ts's ws.raw usage.
   const app = new Hono().get(

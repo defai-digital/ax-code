@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 import { Hono } from "hono"
 import { streamSSE } from "hono/streaming"
-import { serve, upgradeWebSocket } from "../../src/server/runtime-adapter"
+import { serve, upgradeWebSocket } from "../../src/util/runtime-adapter"
 
 // Covers the runtime adapter on the test runtime (Bun: Bun.serve + hono/bun).
 //
@@ -14,7 +14,7 @@ import { serve, upgradeWebSocket } from "../../src/server/runtime-adapter"
 // adapter logic `bun test` can exercise reliably: HTTP serve, ws-route
 // registration, the EADDRINUSE reject contract, and input validation.
 
-describe("server/runtime-adapter", () => {
+describe("util/runtime-adapter", () => {
   test("serves HTTP on an app that also registers a websocket route", async () => {
     // Registering a ws route via the adapter's upgradeWebSocket must not break
     // the app, and the ws-capable serve path must still serve plain HTTP.

@@ -32,7 +32,7 @@ const SHIMMED = new Set([
 // the runtime boundary itself (capability-gated, never reached under Node).
 const ALLOWED_FILES = new Set([
   path.join(srcDir, "bun", "node-compat.ts"),
-  path.join(srcDir, "server", "runtime-adapter.ts"), // Bun.serve, capability-checked
+  path.join(srcDir, "util", "runtime-adapter.ts"), // Bun.serve, capability-checked
 ])
 
 async function walk(target: string): Promise<string[]> {

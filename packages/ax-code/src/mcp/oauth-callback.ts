@@ -1,6 +1,6 @@
 import { Log } from "../util/log"
 import { OAUTH_CALLBACK_PORT, OAUTH_CALLBACK_PATH, setCallbackPort } from "./oauth-provider"
-import { serve, type ServerHandle } from "../server/runtime-adapter"
+import { serve, type ServerHandle } from "../util/runtime-adapter"
 
 const log = Log.create({ service: "mcp.oauth-callback" })
 
@@ -71,6 +71,11 @@ export namespace McpOAuthCallback {
   let initGeneration = 0
   const pendingAuths = new Map<string, PendingAuth>()
   const pendingStates = new Map<string, string>()
+  const forgetPendingState = (state: string) => {
+    for (const [name, value] of pendingStates) {
+      if (value === state) pendingStates.delete(name)
+    }
+  }
 
   const CALLBACK_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
   // Defense-in-depth cap. The 5-minute timeout is the primary cleanup path
@@ -88,12 +93,7 @@ export namespace McpOAuthCallback {
     if (!entry) return
     clearTimeout(entry.timeout)
     pendingAuths.delete(oldest)
-    for (const [name, value] of pendingStates) {
-      if (value === oldest) {
-        pendingStates.delete(name)
-        break
-      }
-    }
+    forgetPendingState(oldest)
     log.warn("evicting oldest pending oauth callback — pendingAuths cap reached", {
       cap: PENDING_AUTHS_MAX,
       evictedState: oldest,
@@ -143,9 +143,7 @@ export namespace McpOAuthCallback {
               const pending = pendingAuths.get(state)!
               clearTimeout(pending.timeout)
               pendingAuths.delete(state)
-              for (const [name, value] of pendingStates) {
-                if (value === state) pendingStates.delete(name)
-              }
+              forgetPendingState(state)
               pending.reject(new Error(errorMsg))
             }
             return new Response(HTML_ERROR(errorMsg), {
@@ -174,9 +172,7 @@ export namespace McpOAuthCallback {
 
           clearTimeout(pending.timeout)
           pendingAuths.delete(state)
-          for (const [name, value] of pendingStates) {
-            if (value === state) pendingStates.delete(name)
-          }
+          forgetPendingState(state)
           pending.resolve(code)
 
           return new Response(HTML_SUCCESS, {

@@ -1,5 +1,5 @@
 import path from "path"
-import { minimatch } from "minimatch"
+import { Minimatch } from "minimatch"
 import type { MemoryEntry } from "./types"
 import { uniqueStrings } from "../util/string-list"
 
@@ -51,12 +51,12 @@ export function matchesPath(projectRoot: string, entry: MemoryEntry, targetPaths
   if (!entry.pathGlobs || entry.pathGlobs.length === 0) return true
   if (!targetPaths || targetPaths.length === 0) return true
   const candidates = targetPaths.flatMap((targetPath) => normalizePathForMatch(projectRoot, targetPath))
-  return entry.pathGlobs.some((pattern) =>
-    candidates.some((candidate) => {
-      const normalizedPattern = pattern.replace(/\\/g, "/")
-      return minimatch(candidate, normalizedPattern, { dot: true, matchBase: !normalizedPattern.includes("/") })
-    }),
-  )
+  return entry.pathGlobs.some((pattern) => {
+    const normalizedPattern = pattern.replace(/\\/g, "/")
+    // Compile the glob once per pattern instead of once per candidate path.
+    const matcher = new Minimatch(normalizedPattern, { dot: true, matchBase: !normalizedPattern.includes("/") })
+    return candidates.some((candidate) => matcher.match(candidate))
+  })
 }
 
 export function entryApplies(entry: MemoryEntry, opts: MemoryApplicabilityOptions): boolean {

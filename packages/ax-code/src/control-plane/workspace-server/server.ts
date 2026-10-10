@@ -7,7 +7,7 @@ import { Flag } from "@/flag/flag"
 import { WorkspaceID } from "../schema"
 import { assertAuthenticatedNetworkBind, normalizeLoopbackHostname } from "@/runtime/listen-security"
 import { encodeSsePayload } from "@/util/sse-queue"
-import { serve, type ServerHandle } from "@/server/runtime-adapter"
+import { serve, type ServerHandle } from "@/util/runtime-adapter"
 import { EventStream } from "@/server/event-stream"
 import {
   AX_CODE_WORKSPACE_HEADER,
