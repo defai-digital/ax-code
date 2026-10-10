@@ -18,6 +18,19 @@ import { createShellTurnMessages } from "./prompt-shell-turn"
 
 const log = Log.create({ service: "session.prompt" })
 
+// Default shell timeout to prevent hung commands from blocking forever.
+const DEFAULT_SHELL_TIMEOUT_MS = 300_000 // 5 minutes
+let shellTimeoutMs = DEFAULT_SHELL_TIMEOUT_MS
+
+/** Test hook: shorten the shell timeout; pass undefined to restore the default. */
+export function setShellTimeoutForTests(ms?: number) {
+  shellTimeoutMs = ms ?? DEFAULT_SHELL_TIMEOUT_MS
+}
+
+function describeTimeout(ms: number) {
+  return ms % 60_000 === 0 ? `${ms / 60_000} minutes` : `${ms / 1000} seconds`
+}
+
 type ShellCommandController = {
   start(sessionID: SessionID): AbortSignal | undefined
   queuedCallbacks(sessionID: SessionID): unknown[]
@@ -203,11 +216,12 @@ export async function executeShellCommand(
 
   abort.addEventListener("abort", abortHandler, { once: true })
 
-  // Default shell timeout to prevent hung commands from blocking forever
-  const SHELL_TIMEOUT = 300_000 // 5 minutes
+  const SHELL_TIMEOUT = shellTimeoutMs
   const SHELL_ABORT_TIMEOUT = "Shell abort timed out while waiting for process to exit"
+  let timedOut = false
   const shellTimer = setTimeout(() => {
     if (!exited) {
+      timedOut = true
       log.warn("shell command timed out", {
         command: "session.prompt.shell",
         status: "error",
@@ -321,10 +335,13 @@ export async function executeShellCommand(
     clearShellCommandListeners()
   }
 
-  if (aborted) {
+  if (aborted || timedOut) {
+    // The 5-minute timeout reuses the abort grace path to bound a hung kill, so
+    // without this distinction a timed-out command was reported as a user abort.
+    const note = timedOut ? `Command timed out after ${describeTimeout(SHELL_TIMEOUT)}` : "User aborted the command"
     shellOutput = {
       ...shellOutput,
-      output: shellOutput.output + "\n\n" + ["<metadata>", "User aborted the command", "</metadata>"].join("\n"),
+      output: shellOutput.output + "\n\n" + ["<metadata>", note, "</metadata>"].join("\n"),
     }
   }
   await pending

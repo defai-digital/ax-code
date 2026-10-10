@@ -192,7 +192,9 @@ export const TuiRoutes = lazy(() =>
       validator("json", z.object({ command: z.string() })),
       async (c) => {
         const command = c.req.valid("json").command
-        const mapped = TUI_COMMAND_MAPPINGS[command]
+        // Own-property lookup only: "constructor" or "toString" would otherwise
+        // resolve through Object.prototype and publish a function as a command.
+        const mapped = Object.hasOwn(TUI_COMMAND_MAPPINGS, command) ? TUI_COMMAND_MAPPINGS[command] : undefined
         if (!mapped) return invalidRequest(c, { message: "Unknown TUI command", details: { resource: "tuiCommand" } })
         await Bus.publish(TuiEvent.CommandExecute, { command: mapped })
         return c.json(true)
