@@ -15,7 +15,6 @@ import PROMPT_PLAN from "./template/plan.txt"
 import PROMPT_DEBUG from "./template/debug.txt"
 import PROMPT_COUNCIL from "./template/council.txt"
 import PROMPT_ARENA from "./template/arena.txt"
-import PROMPT_MODE from "./template/mode.txt"
 import PROMPT_WIKI from "./template/wiki.txt"
 import PROMPT_COMMIT from "./template/commit.txt"
 import PROMPT_PR from "./template/pr.txt"
@@ -123,7 +122,6 @@ export namespace Command {
     LIMITS: "limits",
     COUNCIL: "council",
     ARENA: "arena",
-    MODE: "mode",
     WIKI: "wiki",
     COMMIT: "commit",
     PR: "pr",
@@ -246,17 +244,6 @@ export namespace Command {
         return PROMPT_ARENA
       },
       hints: hints(PROMPT_ARENA),
-    }
-    commands[Default.MODE] = {
-      name: Default.MODE,
-      description: "explain or configure local / cloud / hybrid / council / arena modes",
-      source: "command",
-      sourceTool: "builtin",
-      scope: "builtin",
-      get template() {
-        return PROMPT_MODE
-      },
-      hints: hints(PROMPT_MODE),
     }
     commands[Default.WIKI] = {
       name: Default.WIKI,

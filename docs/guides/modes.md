@@ -16,7 +16,7 @@ When behavior changes, verify against:
 - `packages/ax-code/src/tool/arena.ts` and `arena-implement.ts` — plan and implement arena
 - `packages/ax-code/src/session/prompt/prompt-routing.ts` — hybrid placement when `modes.default` is `hybrid`
 - `packages/ax-code/src/config/schema-impl.ts` — `modes` config schema
-- `packages/ax-code/src/command/template/{council,arena,mode}.txt` — `/council`, `/arena`, and `/mode` are all in the default slash menu
+- `packages/ax-code/src/command/template/{council,arena}.txt` — `/council` and `/arena` are in the default slash menu
 
 ## Work mode selector (Agent | Council | Arena)
 
@@ -211,11 +211,10 @@ Naive majority vote on similar wrong patches is an anti-pattern (popularity trap
 
 ## Slash commands
 
-| Command      | Purpose                                 |
-| ------------ | --------------------------------------- |
-| `/mode …`    | Explain modes and how to configure them |
-| `/council …` | Drive multi-provider advisory review    |
-| `/arena …`   | Drive plan or implement best-of-N       |
+| Command      | Purpose                              |
+| ------------ | ------------------------------------ |
+| `/council …` | Drive multi-provider advisory review |
+| `/arena …`   | Drive plan or implement best-of-N    |
 
 ## Safety and cost
 
