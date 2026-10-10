@@ -6,6 +6,23 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.24.1] - 2026-10-10
+
+### Changed
+
+- Publish SDK 2.6.4 alongside AX Code 7.24.1.
+- Update the AX TUI consumer to 1.0.4 and improve WebMCP prompts and debugging guidance.
+- Share pinned HTTP transport, workflow options, signed-archive evidence, and decision promotion guards.
+- Remove unused core dependencies and break import cycles through shared leaf modules.
+
+### Fixed
+
+- Return null bodies for HEAD, 204, 205, and 304 responses, release completed HTTP abort listeners, and cancel refused redirect bodies.
+- Preserve HTTP methods across redirects and reject GET or HEAD request bodies before opening a connection.
+- Recover download progress after malformed JSON, preserve UTF-8 across output chunks, and bound download lines, summaries, and diagnostic transcripts.
+- Avoid lost updates in concurrent download size measurements and recheck managed copies under the reclaim lock.
+- Add a fast path for the CLI version flag and aggregate stats usage in SQLite without full CLI bootstrap.
+
 ## [7.24.0] - 2026-10-09
 
 ### Changed

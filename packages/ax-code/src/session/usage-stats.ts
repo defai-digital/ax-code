@@ -44,7 +44,7 @@ export namespace SessionUsageStats {
       let aggregate = result.get(sessionID)
       if (!aggregate) {
         aggregate = { messageCount: 0, models: new Map(), tools: new Map() }
-        result.set(sessionID, aggregate)
+        result.set(sessionID, aggregate) // @scan-suppress lifecycle_scan - Call-local query output is bounded by the selected session IDs.
       }
       return aggregate
     }
@@ -86,7 +86,7 @@ export namespace SessionUsageStats {
         usage.tokens.reasoning += row.reasoning
         usage.tokens.cache.read += row.cacheRead
         usage.tokens.cache.write += row.cacheWrite
-        aggregate.models.set(key, usage)
+        aggregate.models.set(key, usage) // @scan-suppress lifecycle_scan - Call-local output is bounded by this session's SQL model groups.
       }
 
       const toolRows = store.use((db) => {
@@ -110,7 +110,7 @@ export namespace SessionUsageStats {
       for (const row of toolRows) {
         if (!row.tool) continue
         const tools = entry(row.sessionID).tools
-        tools.set(row.tool, (tools.get(row.tool) ?? 0) + row.calls)
+        tools.set(row.tool, (tools.get(row.tool) ?? 0) + row.calls) // @scan-suppress lifecycle_scan - Call-local output is bounded by this session's SQL tool groups.
       }
     }
     return result
