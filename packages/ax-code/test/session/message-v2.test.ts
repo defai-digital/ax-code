@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest"
 import { APICallError } from "ai"
 import { MessageV2 } from "../../src/session/message-v2"
+import { MediaProjection } from "../../src/session/media-projection"
 import type { Provider } from "../../src/provider/provider"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { SessionID, MessageID, PartID } from "../../src/session/schema"
@@ -449,6 +450,66 @@ describe("session.message-v2.toModelMessage", () => {
     const wire = JSON.stringify(converted)
     expect(wire).not.toContain("removed to reduce context size")
     expect(wire).not.toContain("media omitted from this request")
+  })
+
+  test("media count skips recipe-projected children so degraded mode keeps the newest media", async () => {
+    const userID = "r-user"
+    const assistantID = "r-assistant"
+    const image = (id: string, name: string) => ({
+      ...basePart(assistantID, id),
+      type: "file" as const,
+      mime: "image/png",
+      filename: name,
+      url: `data:image/png;base64,${name}`,
+    })
+    const tool = (id: string, callID: string, attachments: unknown[], parentCallID?: string) => ({
+      ...basePart(assistantID, id),
+      type: "tool",
+      callID,
+      tool: "read",
+      ...(parentCallID ? { parentCallID } : {}),
+      state: {
+        status: "completed",
+        input: {},
+        output: `output ${callID}`,
+        title: "read",
+        metadata: {},
+        time: { start: 0, end: 1 },
+        attachments,
+      },
+    })
+    const input: MessageV2.WithParts[] = [
+      {
+        info: userInfo(userID),
+        parts: [{ ...basePart(userID, "u1"), type: "text", text: "run tool" }] as MessageV2.Part[],
+      },
+      {
+        info: assistantInfo(assistantID, userID),
+        parts: [
+          {
+            ...basePart(assistantID, "recipe"),
+            type: "tool",
+            callID: "recipe",
+            tool: "read_recipe",
+            state: {
+              status: "completed",
+              input: {},
+              output: "selection",
+              title: "recipe",
+              metadata: { recipeProjection: true },
+              time: { start: 0, end: 2 },
+            },
+          },
+          tool("child", "child-call", [image("c1", "childOne"), image("c2", "childTwo")], "recipe"),
+          tool("later", "later-call", [image("l1", "laterOne"), image("l2", "laterTwo")]),
+        ] as MessageV2.Part[],
+      },
+    ]
+    expect(MessageV2.requestMediaCount(input)).toBe(2)
+    const wire = JSON.stringify(await MessageV2.toModelMessages(input, model, { mediaProjection: "degraded" }))
+    expect(wire).toContain("laterOne")
+    expect(wire).toContain("laterTwo")
+    expect(wire).not.toContain(MediaProjection.OMITTED_TEXT)
   })
 
   test("media projection still appends the omission note for tool attachments", async () => {

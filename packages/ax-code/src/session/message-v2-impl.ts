@@ -710,6 +710,21 @@ export namespace MessageV2 {
     )
   }
 
+  /** A child tool output that a completed read_recipe parent replaced in the request. */
+  function recipeProjected(msg: WithParts, part: ToolPart): boolean {
+    return (
+      part.parentCallID !== undefined &&
+      msg.parts.some(
+        (parent) =>
+          parent.type === "tool" &&
+          parent.tool === "read_recipe" &&
+          parent.callID === part.parentCallID &&
+          parent.state.status === "completed" &&
+          parent.state.metadata.recipeProjection === true,
+      )
+    )
+  }
+
   export function requestMediaCount(input: WithParts[]) {
     let count = 0
     for (const msg of input) {
@@ -729,6 +744,10 @@ export namespace MessageV2 {
       if (assistantMessageSuppressed(msg)) continue
       for (const part of msg.parts) {
         if (part.type !== "tool" || part.state.status !== "completed" || part.state.time.compacted) continue
+        // Conversion never calls the selector for a child a completed recipe
+        // replaced, so counting its media here would shift the degraded
+        // window and drop the newest media the mode promises to keep.
+        if (recipeProjected(msg, part)) continue
         count += (part.state.attachments ?? []).filter((attachment) => isMedia(attachment.mime)).length
       }
     }
@@ -943,18 +962,7 @@ export namespace MessageV2 {
           if (part.type === "tool") {
             // Only a completed recipe may replace its own child outputs. An
             // interrupted or missing parent retains normal recoverable output.
-            if (
-              part.parentCallID &&
-              msg.parts.some(
-                (parent) =>
-                  parent.type === "tool" &&
-                  parent.tool === "read_recipe" &&
-                  parent.callID === part.parentCallID &&
-                  parent.state.status === "completed" &&
-                  parent.state.metadata.recipeProjection === true,
-              )
-            )
-              continue
+            if (recipeProjected(msg, part)) continue
             toolNames.add(part.tool)
             if (part.state.status === "completed") {
               const sourceAttachments = part.state.time.compacted ? [] : (part.state.attachments ?? [])

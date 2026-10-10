@@ -1134,10 +1134,15 @@ export namespace Session {
       messageID: MessageID.zod,
     }),
     async (input) => {
-      // CASCADE delete handles parts automatically
       SessionExecutionContext.assertWritable()
       const store = SessionShard.storeFor(input.sessionID, { write: true })
       store.use((db) => {
+        // The registry schema cascades parts from the message row, but the
+        // shard "part" table carries no foreign key, so delete them explicitly
+        // in both modes instead of leaving orphaned parts behind.
+        db.delete(PartTable)
+          .where(and(eq(PartTable.message_id, input.messageID), eq(PartTable.session_id, input.sessionID)))
+          .run()
         db.delete(MessageTable)
           .where(and(eq(MessageTable.id, input.messageID), eq(MessageTable.session_id, input.sessionID)))
           .run()
