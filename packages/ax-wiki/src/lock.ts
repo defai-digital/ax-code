@@ -35,6 +35,9 @@ const ACQUIRE_TIMEOUT_MS = 30_000
 const RETRY_INTERVAL_MS = 100
 const HEARTBEAT_INTERVAL_MS = 60_000
 const CLOCK_SKEW_TOLERANCE_MS = 5 * 60 * 1000
+// A lockfile is created with open(O_EXCL) and then written, so for a moment it
+// is empty. A reader that sees that body must not call the lock corrupt.
+const UNPARSEABLE_GRACE_MS = 5_000
 
 type LockBody = { pid: number; startedAt: number; host: string; token: string }
 
@@ -97,8 +100,11 @@ export function createWikiBuildLock(root: string, wikiDir: string, options: Wiki
 
   const isStale = (text: string, mtimeMs?: number): boolean => {
     const parsed = parseBody(text)
-    // An unparseable lockfile is treated as stale so it cannot wedge builds.
-    if (!parsed) return true
+    // An unparseable lockfile is treated as stale so it cannot wedge builds,
+    // but only once it is older than the publish window: a fresh empty or
+    // partial body is a holder still writing it, and stealing it would give two
+    // processes the lock.
+    if (!parsed) return !(realClock && mtimeMs !== undefined && now() - mtimeMs < UNPARSEABLE_GRACE_MS)
     const startedAt = parsed.startedAt
     if (typeof startedAt !== "number" || !Number.isFinite(startedAt)) return true
     // A lock stamped beyond small clock-skew tolerance is corrupt, not fresh:
@@ -257,8 +263,17 @@ export function createWikiBuildLock(root: string, wikiDir: string, options: Wiki
               clearInterval(heartbeat)
               // Ownership check: if our lock was stolen after going stale, the
               // file now belongs to another holder's token and must survive.
-              const current = parseBody((await readFile(lockPath, "utf8").catch(() => "")) ?? "")
-              if (current?.token !== token) return
+              // Only ENOENT means "already gone". Any other read failure (EMFILE,
+              // EACCES, ...) must surface: treating it as "not ours" would leave
+              // a live-pid lock behind until the staleness budget expires.
+              let text: string
+              try {
+                text = await readFile(lockPath, "utf8")
+              } catch (error) {
+                if (errorCode(error) === "ENOENT") return
+                throw new Error(`AX Wiki build lock release failed: ${lockPath}`, { cause: error })
+              }
+              if (parseBody(text)?.token !== token) return
               await rm(lockPath, { force: true })
             },
           }

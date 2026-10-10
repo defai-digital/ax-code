@@ -202,6 +202,41 @@ describe("createWikiBuildLock hardening", () => {
     await second.release()
   })
 
+  test("a freshly created empty lockfile is a holder still writing it, not a corrupt lock", async () => {
+    const root = await tmp()
+    const file = path.join(root, "ax-wiki/.build-lock")
+    await mkdir(path.dirname(file), { recursive: true })
+    await writeFile(file, "")
+    const lock = createWikiBuildLock(root, "ax-wiki", { retryIntervalMs: 5, acquireTimeoutMs: 150 })
+    await expect(lock.acquire()).rejects.toThrow(/held by another process/)
+    // The in-progress file must survive the failed attempt untouched.
+    expect(await readFile(file, "utf8")).toBe("")
+  })
+
+  test("an old unparseable lockfile is still treated as corrupt and replaced", async () => {
+    const root = await tmp()
+    const file = path.join(root, "ax-wiki/.build-lock")
+    await mkdir(path.dirname(file), { recursive: true })
+    await writeFile(file, "{not json")
+    const old = new Date(Date.now() - 60_000)
+    await utimes(file, old, old)
+    const lock = createWikiBuildLock(root, "ax-wiki", { retryIntervalMs: 5, acquireTimeoutMs: 3_000 })
+    const handle = await lock.acquire()
+    await handle.release()
+  })
+
+  test("release surfaces a read failure instead of leaving the lock behind silently", async () => {
+    const root = await tmp()
+    const file = path.join(root, "ax-wiki/.build-lock")
+    const lock = createWikiBuildLock(root, "ax-wiki", { retryIntervalMs: 5, acquireTimeoutMs: 3_000 })
+    const handle = await lock.acquire()
+    // Replace the lockfile with a directory so reading it fails with EISDIR (not ENOENT).
+    await rm(file, { force: true })
+    await mkdir(file)
+    await expect(handle.release()).rejects.toThrow(/lock release failed/)
+    await rm(file, { recursive: true, force: true })
+  })
+
   test("a live holder's heartbeat keeps the lock past the startedAt budget", async () => {
     const root = await tmp()
     const holder = createWikiBuildLock(root, "ax-wiki", { staleMs: 300, heartbeatMs: 50 })
