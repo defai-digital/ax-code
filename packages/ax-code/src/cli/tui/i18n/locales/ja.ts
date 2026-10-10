@@ -347,7 +347,7 @@ export const messages = {
   "ui.providers": "\u30d7\u30ed\u30d0\u30a4\u30c0\u30fc",
   "ui.manage": "\u7ba1\u7406",
   "ui.analysis": "\u5206\u6790",
-  "ui.dashboard": "\u30c0\u30c3\u30b7\u30e5\u30dc\u30fc\u30c9",
+  "ui.runReport": "\u5b9f\u884c\u30ec\u30dd\u30fc\u30c8",
   "ui.followUps": "\u30d5\u30a9\u30ed\u30fc\u30a2\u30c3\u30d7",
   "ui.todo": "\u30bf\u30b9\u30af",
   "ui.quality": "\u54c1\u8cea",
@@ -451,8 +451,8 @@ export const messages = {
   "ui.viewQualityReadiness": "\u54c1\u8cea\u306e\u6e96\u5099\u72b6\u6cc1\u3092\u8868\u793a",
   "ui.viewWorkflowRuns": "\u30ef\u30fc\u30af\u30d5\u30ed\u30fc\u5b9f\u884c\u3092\u8868\u793a",
   "ui.viewExecutionGraphDre": "\u5b9f\u884c\u30b0\u30e9\u30d5\u3092\u8868\u793a\uff08DRE\uff09",
-  "ui.openDreDashboardInBrowser":
-    "\u30d6\u30e9\u30a6\u30b6\u30fc\u3067 DRE \u30c0\u30c3\u30b7\u30e5\u30dc\u30fc\u30c9\u3092\u958b\u304f",
+  "ui.openRunReportInBrowser":
+    "\u30d6\u30e9\u30a6\u30b6\u30fc\u3067\u5b9f\u884c\u30ec\u30dd\u30fc\u30c8\u3092\u958b\u304f",
   "ui.viewBranchRanking": "\u30d6\u30e9\u30f3\u30c1\u306e\u9806\u4f4d\u3092\u8868\u793a",
   "ui.compareBranchExecutions": "\u30d6\u30e9\u30f3\u30c1\u306e\u5b9f\u884c\u7d50\u679c\u3092\u6bd4\u8f03",
   "ui.viewRollbackPoints": "\u30ed\u30fc\u30eb\u30d0\u30c3\u30af\u30dd\u30a4\u30f3\u30c8\u3092\u8868\u793a",
@@ -687,8 +687,8 @@ export const messages = {
     "\u4f1a\u8a71\u8a18\u9332\u306e\u518d\u8aad\u307f\u8fbc\u307f\u306b\u5931\u6557\u3057\u307e\u3057\u305f",
   "ui.failedToSaveFastModelRoutingSetting":
     "\u9ad8\u901f\u30e2\u30c7\u30eb\u30eb\u30fc\u30c6\u30a3\u30f3\u30b0\u8a2d\u5b9a\u306e\u4fdd\u5b58\u306b\u5931\u6557\u3057\u307e\u3057\u305f",
-  "ui.failedToOpenDreGraphInTheBrowser":
-    "\u30d6\u30e9\u30a6\u30b6\u30fc\u3067\u306e DRE \u30b0\u30e9\u30d5\u8868\u793a\u306b\u5931\u6557\u3057\u307e\u3057\u305f",
+  "ui.failedToOpenRunReportInTheBrowser":
+    "\u30d6\u30e9\u30a6\u30b6\u30fc\u3067\u306e\u5b9f\u884c\u30ec\u30dd\u30fc\u30c8\u8868\u793a\u306b\u5931\u6557\u3057\u307e\u3057\u305f",
   "ui.failedToCopyToClipboard":
     "\u30af\u30ea\u30c3\u30d7\u30dc\u30fc\u30c9\u3078\u306e\u30b3\u30d4\u30fc\u306b\u5931\u6557\u3057\u307e\u3057\u305f",
   "ui.failedToCopySessionTranscript":
@@ -721,7 +721,7 @@ export const messages = {
   "ui.noDuplicateClustersFound":
     "\u91cd\u8907\u30b0\u30eb\u30fc\u30d7\u306f\u898b\u3064\u304b\u308a\u307e\u305b\u3093\u3067\u3057\u305f\u3002",
   "ui.noAnalysisDataYet": "\u5206\u6790\u30c7\u30fc\u30bf\u306f\u307e\u3060\u3042\u308a\u307e\u305b\u3093",
-  "ui.dreGraph": "DRE \u30b0\u30e9\u30d5",
+  "ui.executionGraph": "\u5b9f\u884c\u30b0\u30e9\u30d5",
   "ui.visual": "\u30b0\u30e9\u30d5\u8868\u793a",
   "ui.detail": "\u8a73\u7d30",
   "ui.noExecutionGraphRecordedRunASessionWithToolsOrRoutesToPopulateExecutionEvidence":

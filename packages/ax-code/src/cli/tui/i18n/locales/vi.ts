@@ -322,7 +322,7 @@ export const messages = {
   "ui.providers": "Nh\u00e0 cung c\u1ea5p",
   "ui.manage": "qu\u1ea3n l\u00fd",
   "ui.analysis": "Ph\u00e2n t\u00edch",
-  "ui.dashboard": "b\u1ea3ng t\u1ed5ng quan",
+  "ui.runReport": "b\u00e1o c\u00e1o ch\u1ea1y",
   "ui.followUps": "Theo d\u00f5i",
   "ui.todo": "Vi\u1ec7c c\u1ea7n l\u00e0m",
   "ui.quality": "Ch\u1ea5t l\u01b0\u1ee3ng",
@@ -419,7 +419,7 @@ export const messages = {
   "ui.viewQualityReadiness": "Xem m\u1ee9c s\u1eb5n s\u00e0ng ch\u1ea5t l\u01b0\u1ee3ng",
   "ui.viewWorkflowRuns": "Xem c\u00e1c l\u1ea7n ch\u1ea1y quy tr\u00ecnh",
   "ui.viewExecutionGraphDre": "Xem \u0111\u1ed3 th\u1ecb th\u1ef1c thi (DRE)",
-  "ui.openDreDashboardInBrowser": "M\u1edf b\u1ea3ng t\u1ed5ng quan DRE trong tr\u00ecnh duy\u1ec7t",
+  "ui.openRunReportInBrowser": "M\u1edf b\u00e1o c\u00e1o ch\u1ea1y trong tr\u00ecnh duy\u1ec7t",
   "ui.viewBranchRanking": "Xem x\u1ebfp h\u1ea1ng nh\u00e1nh",
   "ui.compareBranchExecutions": "So s\u00e1nh c\u00e1c l\u1ea7n ch\u1ea1y nh\u00e1nh",
   "ui.viewRollbackPoints": "Xem \u0111i\u1ec3m kh\u00f4i ph\u1ee5c",
@@ -625,8 +625,8 @@ export const messages = {
   "ui.failedToReloadTranscript": "Kh\u00f4ng t\u1ea3i l\u1ea1i \u0111\u01b0\u1ee3c b\u1ea3n ghi",
   "ui.failedToSaveFastModelRoutingSetting":
     "Kh\u00f4ng l\u01b0u \u0111\u01b0\u1ee3c \u0111\u1ecbnh tuy\u1ebfn m\u00f4 h\u00ecnh nhanh",
-  "ui.failedToOpenDreGraphInTheBrowser":
-    "Kh\u00f4ng m\u1edf \u0111\u01b0\u1ee3c \u0111\u1ed3 th\u1ecb DRE trong tr\u00ecnh duy\u1ec7t",
+  "ui.failedToOpenRunReportInTheBrowser":
+    "Kh\u00f4ng m\u1edf \u0111\u01b0\u1ee3c b\u00e1o c\u00e1o ch\u1ea1y trong tr\u00ecnh duy\u1ec7t",
   "ui.failedToCopyToClipboard": "Kh\u00f4ng sao ch\u00e9p \u0111\u01b0\u1ee3c v\u00e0o b\u1ed9 nh\u1edb t\u1ea1m",
   "ui.failedToCopySessionTranscript": "Kh\u00f4ng sao ch\u00e9p \u0111\u01b0\u1ee3c b\u1ea3n ghi phi\u00ean",
   "ui.failedToExportSession": "Kh\u00f4ng xu\u1ea5t \u0111\u01b0\u1ee3c phi\u00ean",
@@ -653,7 +653,7 @@ export const messages = {
     "Kh\u00f4ng t\u00ecm th\u1ea5y m\u1ee5c ph\u1ee5 thu\u1ed9c trong ng\u00e2n s\u00e1ch duy\u1ec7t.",
   "ui.noDuplicateClustersFound": "Kh\u00f4ng t\u00ecm th\u1ea5y nh\u00f3m tr\u00f9ng l\u1eb7p.",
   "ui.noAnalysisDataYet": "Ch\u01b0a c\u00f3 d\u1eef li\u1ec7u ph\u00e2n t\u00edch",
-  "ui.dreGraph": "\u0110\u1ed3 th\u1ecb DRE",
+  "ui.executionGraph": "Bi\u1ec3u \u0111\u1ed3 th\u1ef1c thi",
   "ui.visual": "Tr\u1ef1c quan",
   "ui.detail": "Chi ti\u1ebft",
   "ui.noExecutionGraphRecordedRunASessionWithToolsOrRoutesToPopulateExecutionEvidence":

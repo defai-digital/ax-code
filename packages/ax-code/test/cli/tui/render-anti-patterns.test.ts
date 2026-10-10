@@ -501,8 +501,8 @@ describe("AX Code TUI stability guardrails", () => {
   test("handles DRE web command failures without leaving stale dialogs behind", async () => {
     const displayCommands = await fs.readFile(DISPLAY_COMMANDS_SRC, "utf8")
 
-    expect(displayCommands).toContain('value: "session.dre.web"')
-    expect(displayCommands).toContain('message: uiText("ui.failedToOpenDreGraphInTheBrowser")')
+    expect(displayCommands).toContain('value: "session.report.web"')
+    expect(displayCommands).toContain('message: uiText("ui.failedToOpenRunReportInTheBrowser")')
     expect(displayCommands).toContain(".finally(() => dialog.clear())")
   })
 

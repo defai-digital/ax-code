@@ -37,7 +37,7 @@ export namespace JsonParseGuard {
     "src/hooks/lifecycle.ts",
     // Standalone generated Playwright module; its decode helper catches invalid JSON.
     "src/browser-workflow/export.ts",
-    "src/quality/dre-graph/dre-graph-assets.ts",
+    "src/quality/run-report/run-report-assets.ts",
   ])
 
   // Pre-existing bare JSON.parse call sites, grandfathered pending

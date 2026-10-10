@@ -463,7 +463,7 @@ Evidence and review:
 | `ax-code audit export`               | Export run evidence as JSON Lines                   |
 | `ax-code audit report`               | Generate a Markdown audit report for a run          |
 | `ax-code audit otlp`                 | Export a run as OpenTelemetry trace spans           |
-| `ax-code dre-graph`                  | Open the local run-report dashboard in a browser    |
+| `ax-code run-report`                 | Open the local run report in a browser              |
 
 Everyday use:
 

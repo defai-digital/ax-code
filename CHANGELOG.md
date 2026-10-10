@@ -6,6 +6,11 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** rename the DRE graph web report to Run Report. The CLI command is now `ax-code run-report`, the HTTP routes are `/run-report` and `/run-report/session/{sessionID}[/fingerprint]` (the `/dre-graph` routes are removed), the TUI command ids are `session.report.web` and `session.execution.graph`, and the SDK operations are regenerated accordingly. Consumers that proxy or call `/dre-graph` must switch to `/run-report`.
+- Share one event-log decode across the run report loaders (about 2.5x faster on large sessions).
+
 ## [7.24.1] - 2026-10-10
 
 ### Changed

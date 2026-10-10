@@ -28,7 +28,7 @@ import { QuestionRoutes } from "./routes/question"
 import { PermissionRoutes } from "./routes/permission"
 import { AuditRoutes } from "./routes/audit"
 import { GraphRoutes } from "./routes/graph"
-import { DreGraphRoutes } from "./routes/dre-graph"
+import { RunReportRoutes } from "./routes/run-report"
 import { IsolationRoutes } from "./routes/isolation"
 import { AutonomousRoutes } from "./routes/autonomous"
 import { SmartLlmRoutes } from "./routes/smart-llm"
@@ -330,7 +330,7 @@ export namespace Server {
       .route("/permission", PermissionRoutes())
       .route("/audit", AuditRoutes())
       .route("/graph", GraphRoutes())
-      .route("/dre-graph", DreGraphRoutes())
+      .route("/run-report", RunReportRoutes())
       .route("/question", QuestionRoutes())
       .route("/provider", ProviderRoutes())
       .route("/", FileRoutes())

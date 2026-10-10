@@ -51,8 +51,8 @@ import type {
   FindTextResponses,
   FixedContextInput,
   FormatterStatusResponses,
-  GetDreGraphSessionSessionIdFingerprintResponses,
-  GetDreGraphSessionSessionIdResponses,
+  GetRunReportSessionSessionIdFingerprintResponses,
+  GetRunReportSessionSessionIdResponses,
   GlobalCapabilitiesResponses,
   GlobalConfigGetResponses,
   GlobalConfigUpdateErrors,
@@ -8048,9 +8048,9 @@ export class AxCodeClient extends HeyApiClient {
   /**
    * Generated API method.
    * 
-   * Calls `GET /dre-graph/session/{sessionID}`.
+   * Calls `GET /run-report/session/{sessionID}`.
    */
-  public getDreGraphSessionSessionId<ThrowOnError extends boolean = false>(
+  public getRunReportSessionSessionId<ThrowOnError extends boolean = false>(
     parameters: {
       sessionID: string
       directory?: string
@@ -8070,8 +8070,8 @@ export class AxCodeClient extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).get<GetDreGraphSessionSessionIdResponses, unknown, ThrowOnError>({
-      url: "/dre-graph/session/{sessionID}",
+    return (options?.client ?? this.client).get<GetRunReportSessionSessionIdResponses, unknown, ThrowOnError>({
+      url: "/run-report/session/{sessionID}",
       ...options,
       ...params,
     })
@@ -8080,9 +8080,9 @@ export class AxCodeClient extends HeyApiClient {
   /**
    * Generated API method.
    * 
-   * Calls `GET /dre-graph/session/{sessionID}/fingerprint`.
+   * Calls `GET /run-report/session/{sessionID}/fingerprint`.
    */
-  public getDreGraphSessionSessionIdFingerprint<ThrowOnError extends boolean = false>(
+  public getRunReportSessionSessionIdFingerprint<ThrowOnError extends boolean = false>(
     parameters: {
       sessionID: string
       directory?: string
@@ -8102,13 +8102,15 @@ export class AxCodeClient extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).get<GetDreGraphSessionSessionIdFingerprintResponses, unknown, ThrowOnError>(
-      {
-        url: "/dre-graph/session/{sessionID}/fingerprint",
-        ...options,
-        ...params,
-      },
-    )
+    return (options?.client ?? this.client).get<
+      GetRunReportSessionSessionIdFingerprintResponses,
+      unknown,
+      ThrowOnError
+    >({
+      url: "/run-report/session/{sessionID}/fingerprint",
+      ...options,
+      ...params,
+    })
   }
 
   private _global?: Global

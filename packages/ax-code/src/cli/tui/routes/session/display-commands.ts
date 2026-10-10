@@ -10,7 +10,7 @@ import { lastAssistantText, scrollDelta, scrollTo, transcriptItems } from "./dis
 import { resolveTranscriptExportPath, transcriptFilename } from "./display-command-helpers"
 import { sdkErrorMessage } from "./sdk-error-message"
 import { Filesystem } from "@/util/filesystem"
-import { DreGraphServer } from "@/cli/cmd/dre-graph-server"
+import { RunReportServer } from "@/cli/cmd/run-report-server"
 import open from "open"
 
 type Session = SessionInfo & {
@@ -40,7 +40,7 @@ export function displayCommands(input: {
   dialogReplaceCapability: (dialog: DialogContext) => void
   dialogReplaceCompare: (dialog: DialogContext) => void
   dialogReplaceDre: (dialog: DialogContext) => void
-  dialogReplaceDreGraph: (dialog: DialogContext) => void
+  dialogReplaceExecutionGraph: (dialog: DialogContext) => void
   dialogReplaceGoal: (dialog: DialogContext) => void
   dialogReplaceQuality: (dialog: DialogContext) => void
   dialogReplaceWorkflow: (dialog: DialogContext) => void
@@ -181,16 +181,16 @@ export function displayCommands(input: {
     },
     {
       title: uiText("ui.viewExecutionGraphDre"),
-      value: "session.dre.graph",
+      value: "session.execution.graph",
       category: uiText("common.session"),
-      onSelect: (dialog: DialogContext) => input.dialogReplaceDreGraph(dialog),
+      onSelect: (dialog: DialogContext) => input.dialogReplaceExecutionGraph(dialog),
     },
     {
-      title: uiText("ui.openDreDashboardInBrowser"),
-      value: "session.dre.web",
+      title: uiText("ui.openRunReportInBrowser"),
+      value: "session.report.web",
       category: uiText("common.session"),
       onSelect: async (dialog: DialogContext) => {
-        await DreGraphServer.page({
+        await RunReportServer.page({
           base: input.sdk.url,
           sessionID: input.routeSessionID,
           directory: input.session()?.directory,
@@ -198,7 +198,7 @@ export function displayCommands(input: {
           .then((url) => open(url.toString()))
           .catch(() =>
             input.toast.show({
-              message: uiText("ui.failedToOpenDreGraphInTheBrowser"),
+              message: uiText("ui.failedToOpenRunReportInTheBrowser"),
               variant: "error",
             }),
           )

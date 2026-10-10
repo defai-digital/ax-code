@@ -60,7 +60,7 @@ import { DialogWorkflow } from "./dialog-workflow"
 import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
 import { DialogDre } from "./dialog-dre"
-import { DialogDreGraph } from "./dialog-dre-graph"
+import { DialogExecutionGraph } from "./dialog-execution-graph"
 import { DialogGoal } from "./dialog-goal"
 import { DialogBranch } from "./dialog-branch"
 import { DialogCompare } from "./dialog-compare"
@@ -956,7 +956,7 @@ export function Session() {
         )),
       dialogReplaceCapability: (dialog) => dialog.replace(() => <DialogCapabilityCatalog />),
       dialogReplaceDre: (dialog) => dialog.replace(() => <DialogDre sessionID={route.sessionID} />),
-      dialogReplaceDreGraph: (dialog) => dialog.replace(() => <DialogDreGraph sessionID={route.sessionID} />),
+      dialogReplaceExecutionGraph: (dialog) => dialog.replace(() => <DialogExecutionGraph sessionID={route.sessionID} />),
       dialogReplaceGoal: (dialog) =>
         dialog.replace(() => (
           <DialogGoal

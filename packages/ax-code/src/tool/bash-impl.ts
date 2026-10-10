@@ -240,14 +240,14 @@ function gitConfigLocationFlags(args: string[]): { cdChain: string[]; gitDir?: s
 
 // Patterns that identify intentional (non-development) browser opens.
 // These are allowed through even when targeting localhost/local files.
-const BROWSER_INTENT_PASSTHROUGH_RE = /(?:callback|oauth|auth|token|dre-graph|mcp)/i
+const BROWSER_INTENT_PASSTHROUGH_RE = /(?:callback|oauth|auth|token|run-report|mcp)/i
 const BROWSER_OPEN_ARG_RE = /"[^"]*"|'[^']*'|[^\s]+/g
 const WRITE_REDIRECT_OPERATORS = new Set([">", ">>", ">|", "&>", "&>>", "<>"])
 
 /**
  * Returns the target argument if the command is a browser-open call targeting
  * a local HTML file or localhost URL that should be intercepted. Returns null
- * for OAuth flows, DRE graph, MCP auth, or non-local targets.
+ * for OAuth flows, the run report, MCP auth, or non-local targets.
  */
 function isBrowserOpenToLocal(command: string): string | null {
   const normalized = command.trimStart()

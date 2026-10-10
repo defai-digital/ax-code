@@ -48,13 +48,13 @@ describe("bug report lifecycle visibility guards", () => {
   })
 
   test("keeps best-effort DRE and mDNS cleanup failures observable", async () => {
-    const dreGraph = await source("server/routes/dre-graph.ts")
+    const runReport = await source("server/routes/run-report.ts")
     const mdns = await source("server/mdns.ts")
 
-    expect(dreGraph).toContain('log.warn("failed to load DRE branch rank"')
-    expect(dreGraph).toContain('log.warn("failed to load DRE rollback points"')
-    expect(dreGraph).not.toContain("SessionBranchRank.family(sessionID).catch(() => undefined)")
-    expect(dreGraph).not.toContain("SessionRollback.points(sessionID).catch((): SessionRollback.Point[] => [])")
+    expect(runReport).toContain('log.warn("failed to load DRE branch rank"')
+    expect(runReport).toContain('log.warn("failed to load DRE rollback points"')
+    expect(runReport).not.toContain("SessionBranchRank.family(sessionID).catch(() => undefined)")
+    expect(runReport).not.toContain("SessionRollback.points(sessionID).catch((): SessionRollback.Point[] => [])")
     expect(mdns).toContain('log.warn("mDNS cleanup after publish failure failed"')
     expect(mdns).not.toContain("} catch {}")
   })

@@ -14699,8 +14699,8 @@ export type GraphGetResponses = {
 /** Successful response payload for `GET /graph/{sessionID}` — Get execution graph */
 export type GraphGetResponse = GraphGetResponses[keyof GraphGetResponses]
 
-/** AX Code API schema `GetDreGraphSessionSessionIdData` (auto-generated from the OpenAPI contract). */
-export type GetDreGraphSessionSessionIdData = {
+/** AX Code API schema `GetRunReportSessionSessionIdData` (auto-generated from the OpenAPI contract). */
+export type GetRunReportSessionSessionIdData = {
   body?: never
   path: {
     sessionID: string
@@ -14709,16 +14709,16 @@ export type GetDreGraphSessionSessionIdData = {
     directory?: string
     quality?: boolean
   }
-  url: "/dre-graph/session/{sessionID}"
+  url: "/run-report/session/{sessionID}"
 }
 
-/** AX Code API schema `GetDreGraphSessionSessionIdResponses` (auto-generated from the OpenAPI contract). */
-export type GetDreGraphSessionSessionIdResponses = {
+/** AX Code API schema `GetRunReportSessionSessionIdResponses` (auto-generated from the OpenAPI contract). */
+export type GetRunReportSessionSessionIdResponses = {
   200: unknown
 }
 
-/** AX Code API schema `GetDreGraphSessionSessionIdFingerprintData` (auto-generated from the OpenAPI contract). */
-export type GetDreGraphSessionSessionIdFingerprintData = {
+/** AX Code API schema `GetRunReportSessionSessionIdFingerprintData` (auto-generated from the OpenAPI contract). */
+export type GetRunReportSessionSessionIdFingerprintData = {
   body?: never
   path: {
     sessionID: string
@@ -14727,11 +14727,11 @@ export type GetDreGraphSessionSessionIdFingerprintData = {
     directory?: string
     quality?: boolean
   }
-  url: "/dre-graph/session/{sessionID}/fingerprint"
+  url: "/run-report/session/{sessionID}/fingerprint"
 }
 
-/** AX Code API schema `GetDreGraphSessionSessionIdFingerprintResponses` (auto-generated from the OpenAPI contract). */
-export type GetDreGraphSessionSessionIdFingerprintResponses = {
+/** AX Code API schema `GetRunReportSessionSessionIdFingerprintResponses` (auto-generated from the OpenAPI contract). */
+export type GetRunReportSessionSessionIdFingerprintResponses = {
   200: unknown
 }
 

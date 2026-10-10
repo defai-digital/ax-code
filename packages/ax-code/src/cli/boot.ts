@@ -20,7 +20,7 @@ import { GithubCommand } from "./cmd/github"
 import { GraphCommand } from "./cmd/graph"
 import { HeadlessRunCommand } from "./cmd/headless-run"
 import { RiskCommand } from "./cmd/risk"
-import { DreGraphCommand } from "./cmd/dre-graph"
+import { RunReportCommand } from "./cmd/run-report"
 import { IndexCommand } from "./cmd/index-graph"
 import { InitCommand } from "./cmd/init"
 import { LoginCommand } from "./cmd/login"
@@ -83,7 +83,7 @@ const cmds = [
   ContextCommand,
   RiskCommand,
   GraphCommand,
-  DreGraphCommand,
+  RunReportCommand,
   GoalCommand,
   // Customize
   AgentCommand,
@@ -143,7 +143,7 @@ setKnownCommands([
 // back into the plain "Commands:" section.
 const commandGroups: ReadonlyArray<readonly [string, readonly string[]]> = [
   ["Core:", ["run", "ask", "attach", "login", "logout", "models", "providers"]],
-  ["Sessions & evidence:", ["session", "audit", "stats", "context", "risk", "graph", "dre-graph"]],
+  ["Sessions & evidence:", ["session", "audit", "stats", "context", "risk", "graph", "run-report"]],
   ["Customize:", ["agent", "skill", "capability", "memory", "wiki", "mcp"]],
   ["Project:", ["init", "index", "design-check", "github", "workflow"]],
   ["Servers & runtime:", ["serve", "runtime", "acp"]],

@@ -149,11 +149,11 @@ JSONL and OTLP make the run record consumable by your own review or observabilit
 ## Browse it
 
 ```bash
-ax-code dre-graph                 # latest session
-ax-code dre-graph --index         # session index
+ax-code run-report                 # latest session
+ax-code run-report --index         # session index
 ```
 
-Opens a local browser dashboard with the run summary, timeline, changes, validation state, risk detail, branch information, and rollback points. The server binds to loopback only.
+Opens the local run report in a browser with the run summary, timeline, changes, validation state, risk detail, branch information, and rollback points. The server binds to loopback only.
 
 ## Related
 
@@ -161,4 +161,4 @@ Opens a local browser dashboard with the run summary, timeline, changes, validat
 - [Why AX Code](../why-ax-code.md) — what this evidence layer is for
 - [Verified Multi-Model Changes](verified-multi-model-change.md) — producing candidates worth comparing
 - [Semantic Layer](../architecture/semantic-layer.md) — provenance envelopes on graph and LSP answers
-- [Web Dashboard](dashboard.md) — the workspace-level view
+- [Run Report](run-report.md) — the workspace-level view and per-session report

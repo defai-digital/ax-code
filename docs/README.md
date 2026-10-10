@@ -89,7 +89,7 @@ For standalone questions about selected files through AX Trust caching, see
 - [Memory usage](guides/memory-usage.md) — memory profiles, cache retention, and background output limits.
 - [Local Evidence Cache](guides/evidence-cache.md) — optional SQLite and RocksDB evidence reuse, qualification, and rollback.
 - [Lifecycle Hooks](guides/hooks.md) — hook events and bundled policy packs.
-- [Web Dashboard](guides/dashboard.md) — workspace usage, activity, model/tool breakdowns, and per-session reports.
+- [Run Report](guides/run-report.md) — workspace usage, activity, model/tool breakdowns, and per-session reports.
 
 ## Providers
 

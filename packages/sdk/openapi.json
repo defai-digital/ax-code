@@ -31127,9 +31127,9 @@
         ]
       }
     },
-    "/dre-graph/session/{sessionID}": {
+    "/run-report/session/{sessionID}": {
       "get": {
-        "operationId": "getDre-graphSession:sessionID",
+        "operationId": "getRun-reportSession:sessionID",
         "parameters": [
           {
             "in": "query",
@@ -31162,14 +31162,14 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.getDre-graphSession:sessionID({\n  ...\n})"
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.getRun-reportSession:sessionID({\n  ...\n})"
           }
         ]
       }
     },
-    "/dre-graph/session/{sessionID}/fingerprint": {
+    "/run-report/session/{sessionID}/fingerprint": {
       "get": {
-        "operationId": "getDre-graphSession:sessionIDFingerprint",
+        "operationId": "getRun-reportSession:sessionIDFingerprint",
         "parameters": [
           {
             "in": "query",
@@ -31202,7 +31202,7 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.getDre-graphSession:sessionIDFingerprint({\n  ...\n})"
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.getRun-reportSession:sessionIDFingerprint({\n  ...\n})"
           }
         ]
       }

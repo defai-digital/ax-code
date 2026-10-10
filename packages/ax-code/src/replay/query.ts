@@ -70,7 +70,7 @@ export namespace EventQuery {
   }
 
   // Per-scope memo of decoded `bySession` reads. A session's event log can be
-  // tens of MB of JSON, and report-style callers (the DRE graph page loads the
+  // tens of MB of JSON, and report-style callers (the run report page loads the
   // risk, graph, rank, and rollback views side by side) each re-read and
   // re-decode the same rows. Scoping the memo to one call tree keeps it exact:
   // it is dropped when the scope ends, so nothing stale outlives a request.

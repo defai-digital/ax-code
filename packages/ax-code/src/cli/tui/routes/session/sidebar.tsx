@@ -504,10 +504,10 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                       }}
                       onMouseUp={(e: any) => {
                         e.stopPropagation()
-                        command.trigger("session.dre.web")
+                        command.trigger("session.report.web")
                       }}
                     >
-                      <u>{uiText("ui.dashboard")}</u>
+                      <u>{uiText("ui.runReport")}</u>
                     </text>
                   </box>
 

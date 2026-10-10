@@ -310,7 +310,7 @@ export const messages = {
   "ui.providers": "Sa\u011flay\u0131c\u0131lar",
   "ui.manage": "y\u00f6net",
   "ui.analysis": "Analiz",
-  "ui.dashboard": "pano",
+  "ui.runReport": "\u00e7al\u0131\u015ft\u0131rma raporu",
   "ui.followUps": "Takipler",
   "ui.todo": "Yap\u0131lacaklar",
   "ui.quality": "Kalite",
@@ -403,7 +403,7 @@ export const messages = {
   "ui.viewWorkflowRuns":
     "\u0130\u015f ak\u0131\u015f\u0131 \u00e7al\u0131\u015ft\u0131rmalar\u0131n\u0131 g\u00f6r\u00fcnt\u00fcle",
   "ui.viewExecutionGraphDre": "Y\u00fcr\u00fctme grafi\u011fini g\u00f6r\u00fcnt\u00fcle (DRE)",
-  "ui.openDreDashboardInBrowser": "DRE panosunu taray\u0131c\u0131da a\u00e7",
+  "ui.openRunReportInBrowser": "\u00c7al\u0131\u015ft\u0131rma raporunu taray\u0131c\u0131da a\u00e7",
   "ui.viewBranchRanking": "Dal s\u0131ralamas\u0131n\u0131 g\u00f6r\u00fcnt\u00fcle",
   "ui.compareBranchExecutions": "Dal \u00e7al\u0131\u015ft\u0131rmalar\u0131n\u0131 kar\u015f\u0131la\u015ft\u0131r",
   "ui.viewRollbackPoints": "Geri alma noktalar\u0131n\u0131 g\u00f6r\u00fcnt\u00fcle",
@@ -597,7 +597,8 @@ export const messages = {
   "ui.failedToReadClipboard": "Pano okunamad\u0131",
   "ui.failedToReloadTranscript": "D\u00f6k\u00fcm yeniden y\u00fcklenemedi",
   "ui.failedToSaveFastModelRoutingSetting": "H\u0131zl\u0131 model y\u00f6nlendirmesi kaydedilemedi",
-  "ui.failedToOpenDreGraphInTheBrowser": "DRE grafi\u011fi taray\u0131c\u0131da a\u00e7\u0131lamad\u0131",
+  "ui.failedToOpenRunReportInTheBrowser":
+    "\u00c7al\u0131\u015ft\u0131rma raporu taray\u0131c\u0131da a\u00e7\u0131lamad\u0131",
   "ui.failedToCopyToClipboard": "Panoya kopyalanamad\u0131",
   "ui.failedToCopySessionTranscript": "Oturum d\u00f6k\u00fcm\u00fc kopyalanamad\u0131",
   "ui.failedToExportSession": "Oturum d\u0131\u015fa aktar\u0131lamad\u0131",
@@ -622,7 +623,7 @@ export const messages = {
     "Tarama b\u00fct\u00e7esi i\u00e7inde ba\u011f\u0131ml\u0131 \u00f6\u011fe bulunamad\u0131.",
   "ui.noDuplicateClustersFound": "Yinelenen k\u00fcme bulunamad\u0131.",
   "ui.noAnalysisDataYet": "Hen\u00fcz analiz verisi yok",
-  "ui.dreGraph": "DRE grafi\u011fi",
+  "ui.executionGraph": "Y\u00fcr\u00fctme grafi\u011fi",
   "ui.visual": "G\u00f6rsel",
   "ui.detail": "Ayr\u0131nt\u0131",
   "ui.noExecutionGraphRecordedRunASessionWithToolsOrRoutesToPopulateExecutionEvidence":

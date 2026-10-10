@@ -89,6 +89,6 @@ export const FILE_TOUCHING_TOOLS: ReadonlySet<string> = new Set(["read", ...MUTA
  *   permission for config rules, same boundary, keyed by string.
  * - `hooks/lifecycle.ts` matches ids with a regex inside a hook matcher.
  * - Display classification: `cli/cmd/run-output.ts` (blocked-run rule, counts
- *   `bash`), `graph/format.ts`, `quality/dre-graph/*`.
+ *   `bash`), `graph/format.ts`, `quality/run-report/*`.
  * Those are presentation or boundary questions, not "did the workspace change".
  */

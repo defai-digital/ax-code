@@ -767,7 +767,7 @@
         },
         {
           "fingerprint": "a5f8f224ed0f761700c7f49de25850538b33b464b87c7097038ede5755d32c1a",
-          "file": "src/cli/cmd/dre-graph.ts",
+          "file": "src/cli/cmd/run-report.ts",
           "line": 55,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
@@ -775,7 +775,7 @@
         },
         {
           "fingerprint": "e28d5c0afbe59e1064d23344fecaa17461a278e991a942a79e5e2fccc4debeec",
-          "file": "src/cli/cmd/dre-graph.ts",
+          "file": "src/cli/cmd/run-report.ts",
           "line": 67,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
@@ -783,7 +783,7 @@
         },
         {
           "fingerprint": "40b7c4942ae502261a4e17f2265698bac8da1524bc56cdd7bf23ef441cf456ff",
-          "file": "src/cli/cmd/dre-graph.ts",
+          "file": "src/cli/cmd/run-report.ts",
           "line": 68,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
@@ -1607,7 +1607,7 @@
         },
         {
           "fingerprint": "94eff865cb081514efb1b9ae25f7a22fefdd06591da677dcbbd44111920d07c8",
-          "file": "src/quality/dre-graph/dre-graph-activity.ts",
+          "file": "src/quality/run-report/run-report-activity.ts",
           "line": 40,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
@@ -1615,7 +1615,7 @@
         },
         {
           "fingerprint": "daf9b6022953515795cfaed67933b98661f3fd6e731a9b11be62ae854d383cee",
-          "file": "src/quality/dre-graph/dre-graph-assets.ts",
+          "file": "src/quality/run-report/run-report-assets.ts",
           "line": 267,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
@@ -1623,7 +1623,7 @@
         },
         {
           "fingerprint": "5d7b767f00ed9af930ac89abdd277a45f65c234ad58a5c786a5ce27c87bbf140",
-          "file": "src/quality/dre-graph/dre-graph-rollback.ts",
+          "file": "src/quality/run-report/run-report-rollback.ts",
           "line": 37,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
@@ -1631,7 +1631,7 @@
         },
         {
           "fingerprint": "c9c45b263a215d34066da2f97795fd19ec944d06add5a829e5dd8b78d7425597",
-          "file": "src/quality/dre-graph/dre-graph-widgets.ts",
+          "file": "src/quality/run-report/run-report-widgets.ts",
           "line": 55,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",

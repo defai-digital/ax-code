@@ -329,7 +329,7 @@ export const messages = {
   "ui.providers": "\uacf5\uae09\uc790",
   "ui.manage": "\uad00\ub9ac",
   "ui.analysis": "\ubd84\uc11d",
-  "ui.dashboard": "\ub300\uc2dc\ubcf4\ub4dc",
+  "ui.runReport": "\uc2e4\ud589 \ubcf4\uace0\uc11c",
   "ui.followUps": "\ud6c4\uc18d \uc791\uc5c5",
   "ui.todo": "\ud560 \uc77c",
   "ui.quality": "\ud488\uc9c8",
@@ -429,7 +429,7 @@ export const messages = {
   "ui.viewQualityReadiness": "\ud488\uc9c8 \uc900\ube44 \uc0c1\ud0dc \ubcf4\uae30",
   "ui.viewWorkflowRuns": "\uc6cc\ud06c\ud50c\ub85c \uc2e4\ud589 \ubcf4\uae30",
   "ui.viewExecutionGraphDre": "\uc2e4\ud589 \uadf8\ub798\ud504 \ubcf4\uae30 (DRE)",
-  "ui.openDreDashboardInBrowser": "\ube0c\ub77c\uc6b0\uc800\uc5d0\uc11c DRE \ub300\uc2dc\ubcf4\ub4dc \uc5f4\uae30",
+  "ui.openRunReportInBrowser": "\ube0c\ub77c\uc6b0\uc800\uc5d0\uc11c \uc2e4\ud589 \ubcf4\uace0\uc11c \uc5f4\uae30",
   "ui.viewBranchRanking": "\ubd84\uae30 \uc21c\uc704 \ubcf4\uae30",
   "ui.compareBranchExecutions": "\ubd84\uae30 \uc2e4\ud589 \uacb0\uacfc \ube44\uad50",
   "ui.viewRollbackPoints": "\ub864\ubc31 \uc9c0\uc810 \ubcf4\uae30",
@@ -641,8 +641,8 @@ export const messages = {
   "ui.failedToReloadTranscript": "\ub300\ud654 \uae30\ub85d \ub2e4\uc2dc \ubd88\ub7ec\uc624\uae30 \uc2e4\ud328",
   "ui.failedToSaveFastModelRoutingSetting":
     "\ube60\ub978 \ubaa8\ub378 \ub77c\uc6b0\ud305 \uc124\uc815 \uc800\uc7a5 \uc2e4\ud328",
-  "ui.failedToOpenDreGraphInTheBrowser":
-    "\ube0c\ub77c\uc6b0\uc800\uc5d0\uc11c DRE \uadf8\ub798\ud504 \uc5f4\uae30 \uc2e4\ud328",
+  "ui.failedToOpenRunReportInTheBrowser":
+    "\ube0c\ub77c\uc6b0\uc800\uc5d0\uc11c \uc2e4\ud589 \ubcf4\uace0\uc11c\ub97c \uc5f4\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4",
   "ui.failedToCopyToClipboard": "\ud074\ub9bd\ubcf4\ub4dc\uc5d0 \ubcf5\uc0ac \uc2e4\ud328",
   "ui.failedToCopySessionTranscript": "\uc138\uc158 \uae30\ub85d \ubcf5\uc0ac \uc2e4\ud328",
   "ui.failedToExportSession": "\uc138\uc158 \ub0b4\ubcf4\ub0b4\uae30 \uc2e4\ud328",
@@ -669,7 +669,7 @@ export const messages = {
     "\ud0d0\uc0c9 \ud55c\ub3c4 \ub0b4\uc5d0\uc11c \uc758\uc874 \ud56d\ubaa9\uc744 \ucc3e\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4.",
   "ui.noDuplicateClustersFound": "\uc911\ubcf5 \uadf8\ub8f9\uc744 \ucc3e\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4.",
   "ui.noAnalysisDataYet": "\uc544\uc9c1 \ubd84\uc11d \ub370\uc774\ud130\uac00 \uc5c6\uc2b5\ub2c8\ub2e4",
-  "ui.dreGraph": "DRE \uadf8\ub798\ud504",
+  "ui.executionGraph": "\uc2e4\ud589 \uadf8\ub798\ud504",
   "ui.visual": "\uc2dc\uac01\ud654",
   "ui.detail": "\uc0c1\uc138",
   "ui.noExecutionGraphRecordedRunASessionWithToolsOrRoutesToPopulateExecutionEvidence":
