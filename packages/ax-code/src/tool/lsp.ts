@@ -237,11 +237,14 @@ export const LspTool = Tool.define("lsp", {
       })
       throw new Error(`${args.operation} requires \`filePath\``)
     }
-    if (args.line === undefined) {
+    // documentSymbol lists a whole document: it takes the URI only, so a
+    // position must not be demanded for it.
+    const needsPosition = args.operation !== "documentSymbol"
+    if (needsPosition && args.line === undefined) {
       audit({ operation: args.operation, args, envelope: syntheticEnvelope([]), errorCode: "MissingLine" })
       throw new Error(`${args.operation} requires \`line\``)
     }
-    if (args.character === undefined) {
+    if (needsPosition && args.character === undefined) {
       audit({ operation: args.operation, args, envelope: syntheticEnvelope([]), errorCode: "MissingCharacter" })
       throw new Error(`${args.operation} requires \`character\``)
     }
@@ -265,12 +268,15 @@ export const LspTool = Tool.define("lsp", {
     const uri = pathToFileURL(file).href
     const position = {
       file,
-      line: args.line - 1,
-      character: args.character - 1,
+      line: (args.line ?? 1) - 1,
+      character: (args.character ?? 1) - 1,
     }
 
     const relPath = normalizeToWorkspacePath(file, Instance.worktree)
-    const title = `${args.operation} ${relPath}:${args.line}:${args.character}`
+    const title =
+      args.line !== undefined && args.character !== undefined
+        ? `${args.operation} ${relPath}:${args.line}:${args.character}`
+        : `${args.operation} ${relPath}`
 
     const method = semanticMethodByOperation[args.operation]
     // Best practice for content-addressed semantic ops: probe the cache before

@@ -212,6 +212,38 @@ describe("tool.lsp", () => {
     }
   })
 
+  test("documentSymbol lists a file without requiring a position", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "demo.ts")
+    await writeFile(file, "export const value = 1\n")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        hasClientsSpy = vi.spyOn(LSP, "hasClients").mockResolvedValue(true)
+        touchFileSpy = vi.spyOn(LSP, "touchFile").mockResolvedValue(1 as never)
+        const cached = vi.spyOn(LSP, "documentSymbolCachedEnvelope").mockResolvedValue({
+          data: [{ name: "value", kind: 13 }],
+          source: "cache",
+          completeness: "full",
+          timestamp: Date.now(),
+          serverIDs: ["typescript"],
+          cacheKey: "lsc_symbols",
+          degraded: false,
+        } as any)
+        try {
+          const tool = await LspTool.init()
+          const result = await tool.execute({ operation: "documentSymbol", filePath: file } as any, ctx)
+          expect(cached).toHaveBeenCalledWith(expect.stringMatching(/^file:/))
+          expect(result.title).toBe("documentSymbol demo.ts")
+          expect(result.output).toContain("value")
+        } finally {
+          cached.mockRestore()
+        }
+      },
+    })
+  })
+
   test("findReferences cache hit skips live server startup", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
