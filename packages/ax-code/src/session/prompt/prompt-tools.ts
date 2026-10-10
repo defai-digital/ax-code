@@ -22,6 +22,8 @@ import { McpPermissionPattern } from "../../mcp/permission-pattern"
 import { WebMcpApprovals } from "../../mcp/webmcp-approvals"
 import { WebMcpProfile } from "../../mcp/webmcp-profile"
 import { BrowserWorkflow } from "../../browser-workflow/service"
+import { BrowserSelection } from "../../browser-workflow/selection"
+import { isKnownCliProviderID } from "../../provider/cli/ids"
 import { ProviderTransform } from "../../provider/transform"
 import { Permission } from "@/permission"
 import { Isolation } from "@/isolation"
@@ -1884,6 +1886,34 @@ export async function resolveTools(input: ResolveToolsInput) {
             BrowserWorkflow.execute(BrowserWorkflow.Parameters.parse(args), {
               context: ctx,
               registry: registryDispatcher!,
+              selectionModel: `${input.model.providerID}/${input.model.id}`,
+              selectionUnavailable: isKnownCliProviderID(input.model.providerID)
+                ? "Tool selection evaluation requires an API model; CLI providers can execute their own tools outside this evaluator"
+                : undefined,
+              async select(prompt, signal) {
+                if (isKnownCliProviderID(input.model.providerID))
+                  throw new Error("CLI model cannot guarantee no-tool evaluation")
+                const { generateText } = await import("ai")
+                const language = await Provider.getLanguage(input.model)
+                const result = await generateText({
+                  model: language,
+                  maxRetries: 0,
+                  maxOutputTokens: Math.min(2048, ProviderTransform.auxMaxOutputTokens(input.model)),
+                  abortSignal: signal,
+                  tools: {},
+                  toolChoice: "none",
+                  system: BrowserSelection.SYSTEM,
+                  prompt,
+                })
+                return result.text
+              },
+              async connection(server) {
+                const entries = [...admittedBrowserTools.values()].filter((entry) => entry.policy.server === server)
+                const profile = entries[0]?.policy.profile
+                if (!profile || !(await MCP.matchesWebMcpProfile(server, profile)))
+                  throw new Error("Browser bridge changed or disconnected; resolve tools again")
+                return { identity: profile, profile, tools: entries.map((entry) => entry.policy.toolName) }
+              },
               requireBridge(server) {
                 const found = [...admittedBrowserTools.values()].find((entry) => entry.policy.server === server)
                 if (

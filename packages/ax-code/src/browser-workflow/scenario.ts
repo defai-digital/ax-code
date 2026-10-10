@@ -3,7 +3,7 @@ import { createHash } from "node:crypto"
 import { WebMcpProfile } from "../mcp/webmcp-profile"
 
 export namespace BrowserScenario {
-  export const VERSION = "1"
+  export const VERSION = "2"
   export const Hash = z.string().regex(/^[a-f0-9]{64}$/)
   const text = z.string().min(1).max(512)
   export const Locator = z
@@ -45,6 +45,14 @@ export namespace BrowserScenario {
     })
     .strict()
   const action = z.discriminatedUnion("action", [
+    z
+      .object({
+        action: z.literal("tool_presence"),
+        name: text,
+        present: z.boolean(),
+        descriptorHash: Hash.optional(),
+      })
+      .strict(),
     z.object({ action: z.literal("click"), locator: Locator }).strict(),
     z.object({ action: z.literal("fill"), locator: Locator, value: z.string().max(1024) }).strict(),
     z.object({ action: z.literal("hover"), locator: Locator }).strict(),
@@ -96,7 +104,11 @@ export namespace BrowserScenario {
         ctx.addIssue({ code: "custom", message: "Credentials are not allowed in scenarios" })
       if (Buffer.byteLength(JSON.stringify(value)) > 32768)
         ctx.addIssue({ code: "custom", message: "Scenario exceeds 32 KiB" })
-      if (!value.steps.some((step) => step.action === "assert" || step.action === "contract"))
+      if (
+        !value.steps.some(
+          (step) => step.action === "assert" || step.action === "contract" || step.action === "tool_presence",
+        )
+      )
         ctx.addIssue({ code: "custom", message: "Scenario requires an assertion" })
       const pending: Array<{ value: unknown; depth: number }> = [{ value, depth: 0 }]
       while (pending.length) {
@@ -109,6 +121,8 @@ export namespace BrowserScenario {
           for (const child of Object.values(item.value)) pending.push({ value: child, depth: item.depth + 1 })
       }
       for (const step of value.steps) {
+        if (step.action === "tool_presence" && !step.present && step.descriptorHash)
+          ctx.addIssue({ code: "custom", message: "An absent tool cannot have an expected descriptor hash" })
         if (
           step.action === "fill" &&
           WebMcpProfile.sensitiveTarget({ ...step.locator, uid: "", focused: false, attributes: {} })

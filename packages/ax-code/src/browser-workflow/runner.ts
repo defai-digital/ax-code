@@ -38,7 +38,7 @@ export namespace BrowserRunner {
     stop(): Promise<void>
     identity(): Promise<BrowserScenario.Identity>
   }
-  function lines(value: unknown): string[] {
+  export function lines(value: unknown): string[] {
     if (!isRecord(value) || !Array.isArray(value.content)) return []
     return value.content
       .flatMap((item) =>
@@ -48,7 +48,7 @@ export namespace BrowserRunner {
       .slice(-50)
       .map((line) => line.slice(0, 512))
   }
-  function delta(before: string[], after: string[]): string[] {
+  export function delta(before: string[], after: string[]): string[] {
     const counts = new Map<string, number>()
     for (const line of before) counts.set(line, (counts.get(line) ?? 0) + 1)
     return after.filter((line) => {
@@ -58,7 +58,7 @@ export namespace BrowserRunner {
       return false
     })
   }
-  function losslessSnapshot(result: unknown): boolean {
+  export function losslessSnapshot(result: unknown): boolean {
     if (!isRecord(result) || !isRecord(result.structuredContent) || !isRecord(result.structuredContent.snapshot))
       return false
     const nodes: unknown[] = [result.structuredContent.snapshot]
@@ -72,7 +72,7 @@ export namespace BrowserRunner {
     }
     return true
   }
-  function output(value: unknown): unknown {
+  export function output(value: unknown): unknown {
     if (!isRecord(value) || !isRecord(value.structuredContent)) return undefined
     const completion = parseJsonPayload(
       typeof value.structuredContent.message === "string" ? value.structuredContent.message : undefined,
@@ -82,7 +82,7 @@ export namespace BrowserRunner {
       ? (parseJsonPayload(completion.output) ?? completion.output)
       : completion.output
   }
-  function at(value: unknown, path: string[]): unknown {
+  export function at(value: unknown, path: string[]): unknown {
     for (const key of path) {
       if (!isRecord(value) || !Object.hasOwn(value, key)) return undefined
       value = value[key]
@@ -187,6 +187,15 @@ export namespace BrowserRunner {
               : status === "fail"
                 ? "Structured assertion differed"
                 : "Assertion state unavailable or ambiguous"
+        } else if (step.action === "tool_presence") {
+          const listing = await call("list_webmcp_tools", { pageId })
+          const descriptors = WebMcpProfile.parseToolListing(listing)
+          if (!descriptors) throw new Error("Structured page-tool descriptors unavailable")
+          const found = descriptors.filter((entry) => entry.name === step.name)
+          status = found.length > 1 ? "unknown" : (found.length === 1) === step.present ? "pass" : "fail"
+          if (status === "pass" && step.present && step.descriptorHash)
+            status = WebMcpProfile.descriptorHash(found[0]!) === step.descriptorHash ? "pass" : "fail"
+          reason = status === "pass" ? "Tool lifecycle checkpoint matched" : "Tool lifecycle checkpoint differed"
         } else if (step.action === "contract") {
           const listing = await call("list_webmcp_tools", { pageId })
           const descriptors = WebMcpProfile.parseToolListing(listing)

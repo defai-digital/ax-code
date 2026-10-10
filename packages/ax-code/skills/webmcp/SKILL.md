@@ -17,6 +17,16 @@ Use the connected browser bridge for the task in $ARGUMENTS. Establish the expec
 
 ## Observe, act, verify
 
+When `browser_workflow` is exposed, use its task actions on an existing authorized page:
+
+- `status` with `server`, `pageId`, exact `origin`: inspect native tools, snapshot fallback and unavailable capabilities. Do not infer iframe coverage or grant authority from this report.
+- `inventory` with the same target and optional repository-relative `sourceFiles`: retain `inventoryId`; pass it later as `baselineId` to inspect field-level tool changes. Source matches are confidence-labelled candidates, not proof. Unknown dynamic registrations stay unresolved.
+- `observe` with the target, explicit structured `assertions`, and optional `sourceFiles`: retain `observationId`, perform the requested action once under its own approval (or let the user act), then `diagnose` with that ID. Expect bounded console/request deltas, inventory changes and source candidates. Do not call another action to repair a denied observation. Empty assertions produce observation only, not PASS.
+- `promote` takes `observationId` and an explicit localhost `manifest` with the existing server/step fields. It freezes the manifest; it does not copy observation results into acceptance. Run the failing control before editing, then the fixed scenario twice.
+- `recipe` takes `server`, `pageId` and `definition: {version: 1, name, origin, assertions, queries: []}` for an on-demand snapshot check. It never navigates or schedules. Optional `queries` contain `name`, exact `descriptorHash`, `input` as an object, `resultPath`, and `equals`; each invokes a real application tool under existing approval. These calls have unverified application effects, even if marked read-only. Save reviewed definitions only; do not save captured outputs, credentials or implicit authority. Missing evidence is not an empty successful result.
+
+Observation IDs are session-owned, bounded and expire after 30 minutes. A changed URL or bridge connection requires a new capture. Same-URL document reload identity is unavailable; comparisons are advisory. These actions use currently admitted tools and leave the existing browser profile in place.
+
 Prefer semantic snapshots for text, locators and assertions. Use screenshots for layout, canvas or image-only questions when model vision is available. Narrow console/network reads around the action when investigating a failure.
 
 | Action                   | Required context                                                                                                                        |
@@ -54,6 +64,13 @@ Only for a reproducible localhost fix, when `browser_workflow` is available: fre
 When using implement Arena for a localhost change with browser-observable behavior, freeze the scenario on the clean base first and pass that hash as `browserScenario` so candidates share the same frozen assertions. The parameter stays optional; bridge activation and approvals remain supervised.
 
 ## Develop a page tool for your app
+
+For a complete integration use `author` with `name`, meaningful `description`, relative `module`, `exportName`, an explicit object `schema`, `format: imperative | declarative`, and `effect: read | change` (default change). It verifies a direct application function export. Review the returned JavaScript/HTML before writing it into the app. Imperative registration takes a lifecycle AbortSignal; `acceptsSignal: true` also forwards execution cancellation to an application function that supports it. Declarative generation supports primitive fields and human submission, and rejects unsupported schema constraints rather than dropping them. Connect its `webmcp-result` event to the application UI. These templates reuse application authorization; hints do not enforce it, and avoiding Submit does not prevent autosave.
+
+Separate two kinds of verification:
+
+1. Deterministic behavior: existing `contract` cases for outputs/errors plus `tool_presence` steps (`name`, `present`, optional exact `descriptorHash`) after route/role/component changes. Checkpoint absence is not complete lifecycle event tracing. Add resulting UI assertions where applicable.
+2. Model selection: `selection_eval` with an `inventoryId`, `cases: [{task, expected: {name, arguments}}]`, optional `repeats` (1-3). Include distractors and `name: null, arguments: {}` cases. The selected API model sees only task and inventory; gold answers are hidden and execution is disabled. Unknown provider/schema outcomes remain in the denominator. CLI-provider evaluation is unavailable because those CLIs can execute their own tools. Scores are advisory and never browser acceptance.
 
 Order matters: `contracts` on the open page to inspect existing descriptors and exact hashes; `template` for a registration skeleton bound to an explicit application export — a skeleton to review against the app's validation and authorization, never an authority; then freeze a `contract` step with the exact `descriptorHash`, a positive case with `input`, `resultPath` and `equals`, and a negative input with `expectError: true` — only a confirmed page-tool execution error satisfies the negative case. After a successful mutation, add an assertion on the resulting page state. The WebMCP bridge guide covers the field-level details.
 

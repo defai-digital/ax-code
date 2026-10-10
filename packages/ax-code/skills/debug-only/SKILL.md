@@ -9,6 +9,8 @@ Diagnose the issue described in $ARGUMENTS. **Do not modify any files.**
 
 ## Phase 1 - Reproduce
 
+For an already-open authorized browser page, `browser_workflow observe` followed by `diagnose` can compare bounded evidence before and after a user-performed action. Use explicit expected assertions and repository sourceFiles; load the webmcp skill for the schemas. These actions only observe. Do not use recipes with semantic queries, start a scenario server, or perform interactions in a diagnosis-only task. Source candidates and same-URL comparisons remain advisory.
+
 - Understand the symptom and identify the minimal path that triggers it.
 - Locate the entry point (CLI command, API call, test, event) and confirm the failure is reproducible from that point.
 - Capture the concrete failure signal before diagnosing: command/action, input, observed output/error, and expected behavior.

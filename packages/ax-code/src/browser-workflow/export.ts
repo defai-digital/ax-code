@@ -7,6 +7,7 @@ export function exportPlaywright(frozen: BrowserScenario.Frozen): string {
     `page.getByRole(${quote(value.role)}, { name: ${quote(value.name)}, exact: true })`
   const steps = frozen.manifest.steps
     .map((step, index) => {
+      if (step.action === "tool_presence") return `await checkToolPresence(${quote(step)});`
       if (step.action === "contract") return `await checkContract(${quote(step)});`
       if (step.action === "assert") {
         const target = locator(step.assertion.locator)
@@ -93,7 +94,7 @@ try {
     for (const tool of event.tools) pageTools.delete(tool.frameId + ":" + tool.name);
   });
   cdp.on("WebMCP.toolResponded", event => responses.set(event.invocationId, event));
-  if (manifest.steps.some(step => step.action === "contract")) await cdp.send("WebMCP.enable");
+  if (manifest.steps.some(step => step.action === "contract" || step.action === "tool_presence")) await cdp.send("WebMCP.enable");
   const pause = () => new Promise(resolve => setTimeout(resolve, 25));
   const decode = value => { if (typeof value !== "string") return value; try { return JSON.parse(value); } catch { return value; } };
   async function checkAssertion(check, timeoutMs) {
@@ -108,6 +109,17 @@ try {
       }
     }
   }
+  function descriptorHash(tool) {
+    const annotations = tool.annotations ? { readOnly: tool.annotations.readOnly === true, untrustedContent: tool.annotations.untrustedContent === true, consequential: tool.annotations.consequential === true } : null;
+    return createHash("sha256").update(JSON.stringify([tool.name, tool.description ?? "", tool.inputSchema ?? null, annotations])).digest("hex");
+  }
+  async function checkToolPresence(step) {
+    // Flush protocol events before observing this checkpoint; do not poll an absent tool into success.
+    const { frameTree } = await cdp.send("Page.getFrameTree");
+    const tool = pageTools.get(frameTree.frame.id + ":" + step.name);
+    assert.equal(Boolean(tool), step.present, "Tool lifecycle checkpoint differed");
+    if (step.present && step.descriptorHash) assert.equal(descriptorHash(tool), step.descriptorHash, "Page-tool descriptor drift");
+  }
   async function checkContract(step) {
     const { frameTree } = await cdp.send("Page.getFrameTree");
     const frameId = frameTree.frame.id;
@@ -115,9 +127,7 @@ try {
     while (!pageTools.has(frameId + ":" + step.name) && Date.now() < until) await pause();
     const tool = pageTools.get(frameId + ":" + step.name);
     assert.ok(tool, "Named page tool unavailable");
-    const annotations = tool.annotations ? { readOnly: tool.annotations.readOnly === true, untrustedContent: tool.annotations.untrustedContent === true, consequential: tool.annotations.consequential === true } : null;
-    const hash = createHash("sha256").update(JSON.stringify([tool.name, tool.description ?? "", tool.inputSchema ?? null, annotations])).digest("hex");
-    assert.equal(hash, step.descriptorHash, "Page-tool descriptor drift");
+    assert.equal(descriptorHash(tool), step.descriptorHash, "Page-tool descriptor drift");
     const { invocationId } = await cdp.send("WebMCP.invokeTool", { frameId, toolName: step.name, input: step.input });
     while (!responses.has(invocationId) && Date.now() < until) await pause();
     const response = responses.get(invocationId);

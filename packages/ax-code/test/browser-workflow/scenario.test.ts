@@ -79,6 +79,39 @@ function fakePort(
 }
 
 describe("frozen browser scenarios", () => {
+  test("lifecycle checkpoints fail on leaked tools, pass when removed, and unknown listings never prove absence", async () => {
+    const frozen = BrowserScenario.freeze(
+      { ...manifest(), steps: [{ action: "tool_presence", name: "admin_reset", present: false }] },
+      identity,
+    )
+    for (const [listing, status] of [
+      [result({ webmcpTools: [{ name: "admin_reset" }] }), "fail"],
+      [result({ webmcpTools: [] }), "pass"],
+      [result({}), "unknown"],
+    ] as const) {
+      const port = fakePort()
+      const original = port.call
+      port.call = async (name, args) => (name === "list_webmcp_tools" ? listing : original(name, args))
+      const receipt = await BrowserRunner.run(frozen, port, new AbortController().signal)
+      expect(receipt.status).toBe(status)
+      if (status === "fail") {
+        await using tmp = await tmpdir({ git: true })
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const session = "ses_lifecycle_control" as SessionID
+            BrowserWorkflowStore.put(session, frozen)
+            BrowserWorkflowStore.record(session, receipt)
+            expect(BrowserWorkflowStore.control(session, frozen.hash, identity).hash).toBe(frozen.hash)
+          },
+        })
+      }
+    }
+    const exported = exportPlaywright(frozen)
+    expect(exported).toContain('"Tool lifecycle checkpoint differed"')
+    expect(exported).toContain('await cdp.send("WebMCP.enable")')
+    expect(exported).not.toContain("page.evaluate")
+  })
   test("canonical freeze is immutable and rejects unbounded/credential/unsupported scenarios", () => {
     const input = manifest()
     const frozen = BrowserScenario.freeze(input, identity)

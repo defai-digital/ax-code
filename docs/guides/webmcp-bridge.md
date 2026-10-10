@@ -2,7 +2,7 @@
 
 Status: Experimental
 Scope: public, current-state
-Last reviewed: 2026-10-09
+Last reviewed: 2026-10-10
 Owner: AX Code maintainers
 
 The WebMCP bridge lets the agent open pages in an isolated Chrome window,
@@ -154,7 +154,156 @@ actions, then the same prompt returns.
 The name-based checks are heuristics, not a guarantee. The prompt is the
 control, so read it.
 
-## Register a tool on your page
+## Work with an existing page
+
+Ask AX Code to inspect the page's capabilities, develop its native tools, or
+diagnose a specific behavior. The `browser_workflow` tool groups these tasks
+without requiring you to start a test server for ordinary observations. Enable
+the bridge first and identify the intended page; none of these actions opens a
+page, signs in, changes the browser profile or schedules future work.
+
+For example: "Inspect the tools on my local app and show which application
+functions they correspond to," or "Capture this page before I reproduce the
+blank results, then compare the errors and point me to candidate source files."
+
+### Inspect native tools and their source
+
+Call `status` with `server`, `pageId` and the exact `origin` to see the actual
+admitted tools and native/snapshot availability. An empty listing does not
+establish that inaccessible frames have no tools. Existing connectors may be
+better suited to tasks that do not need page context.
+
+```json
+{
+  "action": "inventory",
+  "server": "webmcp",
+  "pageId": 1,
+  "origin": "http://localhost:3000",
+  "sourceFiles": ["src/tools.ts", "public/search.html"]
+}
+```
+
+Keep the returned `inventoryId`. Pass it as `baselineId` on a later inventory
+call to see added/removed tools and changed schema fields. Files are explicitly
+permission-checked, repository-contained and bounded. Static imperative
+registrations and quoted HTML form attributes produce source candidates;
+computed names, duplicate definitions and unsupported templates remain
+unresolved or ambiguous. A matching name and schema corroborate a candidate,
+but do not prove that the browser loaded that source revision.
+
+### Generate an application integration
+
+Use `author` to return reviewable integration code:
+
+```json
+{
+  "action": "author",
+  "name": "find_products",
+  "description": "Find products matching a query in the current catalog.",
+  "module": "./src/catalog.js",
+  "exportName": "findProducts",
+  "schema": {
+    "type": "object",
+    "properties": { "query": { "type": "string" } },
+    "required": ["query"]
+  },
+  "format": "imperative",
+  "effect": "read"
+}
+```
+
+The named function must be a direct export. The generated registration takes
+an AbortSignal for component/route cleanup. Set `acceptsSignal: true` only when
+the application function accepts a second `{signal}` argument and honors it.
+`format: "declarative"` returns a form plus a module binding for human
+submission; connect its `webmcp-result` event to the application's UI. Primitive
+fields are supported; unsupported schema constraints are rejected instead of
+silently discarded. Review application validation, authorization and actual
+effects before applying either template. Field edits may trigger autosave even
+when a form requires human submission.
+
+### Check execution and model selection separately
+
+Existing `contract` steps verify fixed inputs and expected results. Add
+`{"action":"tool_presence","name":"admin_reset","present":false}`
+after a route or role change to check that an unavailable operation was
+unregistered. `present: true` can also pin `descriptorHash`. These are lifecycle
+checkpoints, not an event trace. Exported regressions include the same checks.
+
+Use a separate selection evaluation to discover whether a model chooses the
+right tool and arguments:
+
+```json
+{
+  "action": "selection_eval",
+  "inventoryId": "<returned inventory UUID>",
+  "cases": [
+    { "task": "Find AX products", "expected": { "name": "find_products", "arguments": { "query": "AX" } } },
+    { "task": "Delete every product", "expected": { "name": null, "arguments": {} } }
+  ],
+  "repeats": 2
+}
+```
+
+The selected API model receives only the task and captured catalog, with no
+execution tools or expected answers. Calls are approved and bounded to 12
+cases, three repeats and a two-minute evaluation deadline. The report records
+model identity, a suite hash, separate exact choice/argument counts, joint
+correctness and unknown outcomes. Failures stay in the denominator. CLI models
+are unavailable for this evaluation because they can run their own tools.
+Selection scores do not prove tool correctness or qualify Arena.
+
+### Diagnose before and after an action
+
+Call `observe` with the same page target, optional `sourceFiles`, and explicit
+`assertions` using the existing role/name and count/value/checked/disabled
+schema. Perform the requested action once through an approved tool or by hand.
+Then call `{"action":"diagnose","observationId":"<returned UUID>"}`.
+The result compares assertion outcomes, snapshot hashes, bounded console and
+request metadata deltas, semantic inventory changes and source candidates.
+Correlation is evidence to investigate, not a proven root cause. Without
+assertions the status is `observed`, not `pass`.
+
+Baselines are held only in the current runtime session, expire after 30 minutes
+and are limited to 16 per session. Connection/page-location changes invalidate
+reuse. The pinned bridge cannot identify a same-URL reload, so these comparisons
+remain advisory. Only hashes of page locations and snapshots are retained;
+bounded diagnostic text and tool descriptors are untrusted evidence.
+
+For a reproducible localhost problem, `promote` takes the observation ID and
+an explicit normal `manifest` containing the local test-server command and
+steps. It freezes a new controlled scenario. Observation results are never
+copied into acceptance: run a failing control before editing and qualify the
+fixed runs through the existing workflow.
+
+### Repeat a daily observation task
+
+An on-demand recipe checks an existing page without navigation or scheduling:
+
+```json
+{
+  "action": "recipe",
+  "server": "webmcp",
+  "pageId": 1,
+  "definition": {
+    "version": 1,
+    "name": "Preview health",
+    "origin": "http://localhost:3000",
+    "assertions": [{ "locator": { "role": "status", "name": "Ready" }, "property": "count", "equals": 1 }]
+  }
+}
+```
+
+The default is snapshot-only. Optional `queries` contain an exact tool `name`,
+`descriptorHash`, object `input`, `resultPath` and `equals`. They invoke real
+application tools under existing per-call approval; read-only hints do not
+certify effects. The result explicitly distinguishes snapshot observation from
+application calls with unverified effects, and rechecks snapshots after queries.
+Save reviewed definitions, not captured contents or credentials. Definitions
+carry no permission and never become Arena receipts. A pass means only the
+declared observations matched; missing data cannot satisfy a check.
+
+## Register a tool manually
 
 Ask the agent to add a tool that reuses logic your page already has, or
 register one from the page's JavaScript. Chrome's guide covers the imperative

@@ -103,8 +103,10 @@ export namespace BrowserWorkflowStore {
         receipt.steps.some(
           (step) =>
             step.status === "fail" &&
-            frozen.manifest.steps[step.index]?.action === "assert" &&
-            step.reason === "Structured assertion differed",
+            ((frozen.manifest.steps[step.index]?.action === "assert" &&
+              step.reason === "Structured assertion differed") ||
+              (frozen.manifest.steps[step.index]?.action === "tool_presence" &&
+                step.reason === "Tool lifecycle checkpoint differed")),
         ),
     )
     if (!found)
