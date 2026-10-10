@@ -183,6 +183,36 @@ describe("explicit model recovery policy", () => {
     ).resolves.toBeUndefined()
   })
 
+  test("mapped-loopback primary stops recovery before resolving a remote candidate", async () => {
+    const findFallback = vi.fn(async () => third)
+    const result = await handlePromptLoopError(
+      {
+        sessionID: SessionID.descending(),
+        currentModel: primary,
+        error: {
+          name: "APIError",
+          data: {
+            statusCode: 503,
+            message: "temporary overload",
+            isRetryable: false,
+            metadata: { retryExhausted: "true" },
+          },
+        },
+        consecutiveErrors: 1,
+        step: 1,
+        fallbackOptions: { candidates: [third] },
+      },
+      {
+        isLocal: async () => RoutePolicy.isLoopbackBaseURL("http://[::ffff:127.0.0.1]:8080/v1"),
+        findFallback,
+        publishError() {},
+        warn() {},
+      },
+    )
+    expect(result.action).toBe("stop")
+    expect(findFallback).not.toHaveBeenCalled()
+  })
+
   test("project config narrows an owner route without adding or reordering", async () => {
     await using owner = await tmpdir()
     const file = path.join(owner.path, "user.json")

@@ -1007,6 +1007,21 @@ describe("isLoopbackBaseURL", () => {
     expect(isLoopbackBaseURL("http://127.0.0.1:31418/v1")).toBe(true)
     expect(isLoopbackBaseURL("http://localhost:11434/v1")).toBe(true)
     expect(isLoopbackBaseURL("http://[::1]:8080")).toBe(true)
+    expect(isLoopbackBaseURL("http://127.1:8080/v1")).toBe(true)
+    expect(isLoopbackBaseURL("http://127.255.255.255:8080/v1")).toBe(true)
+  })
+
+  test("detects IPv4-mapped IPv6 loopback endpoints", () => {
+    expect(isLoopbackBaseURL("http://[::ffff:127.0.0.1]:8080/v1")).toBe(true)
+    expect(isLoopbackBaseURL("http://[::ffff:7f05:607]:8080/v1")).toBe(true)
+    expect(isLoopbackBaseURL("http://[::ffff:126.255.255.255]:8080/v1")).toBe(false)
+    expect(isLoopbackBaseURL("http://[::ffff:128.0.0.1]:8080/v1")).toBe(false)
+  })
+
+  test("does not treat a DNS prefix or a non-HTTP URL as a local endpoint", () => {
+    expect(isLoopbackBaseURL("https://127.gateway.example/v1")).toBe(false)
+    expect(isLoopbackBaseURL("https://127.0.0.1.example/v1")).toBe(false)
+    expect(isLoopbackBaseURL("ftp://localhost/v1")).toBe(false)
   })
 
   test("rejects remote and malformed URLs", () => {

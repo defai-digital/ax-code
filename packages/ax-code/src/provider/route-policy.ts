@@ -5,8 +5,18 @@ export namespace RoutePolicy {
   export function isLoopbackBaseURL(value: unknown): boolean {
     if (typeof value !== "string" || !value.trim()) return false
     try {
-      const host = new URL(value).hostname.toLowerCase().replace(/^\[|\]$/g, "")
-      return host === "localhost" || host === "::1" || host.startsWith("127.")
+      const url = new URL(value)
+      if (url.protocol !== "http:" && url.protocol !== "https:") return false
+      const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "")
+      // URL canonicalizes IPv4 literals and IPv4-mapped IPv6 addresses. Match
+      // the full address so a remote DNS name such as 127.gateway.example
+      // cannot masquerade as loopback, and mapped 127/8 retains local privacy.
+      return (
+        host === "localhost" ||
+        host === "::1" ||
+        /^127(?:\.\d{1,3}){3}$/.test(host) ||
+        /^::ffff:7f[0-9a-f]{2}:[0-9a-f]{1,4}$/.test(host)
+      )
     } catch {
       return false
     }
