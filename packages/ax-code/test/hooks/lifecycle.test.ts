@@ -307,6 +307,21 @@ describe("LifecycleHooks claude-code wire protocol", () => {
     expect(result.blockReason).toBe("boom")
   })
 
+  test("exit 0 with a top-level decision block blocks a PreToolUse", async () => {
+    const result = await LifecycleHooks.runHooks(
+      [
+        {
+          event: "PreToolUse",
+          protocol: "claude-code",
+          command: `node -e "console.log(JSON.stringify({decision:'block',reason:'policy says no'}))"`,
+        },
+      ],
+      { event: "PreToolUse", tool: "bash", args: {}, cwd: process.cwd() },
+    )
+    expect(result.blocked).toBe(true)
+    expect(result.blockReason).toBe("policy says no")
+  })
+
   test("exit 0 with permissionDecision allow proceeds", async () => {
     const result = await LifecycleHooks.runHooks(
       [

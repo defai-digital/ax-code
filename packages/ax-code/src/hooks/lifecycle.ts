@@ -179,6 +179,12 @@ export namespace LifecycleHooks {
       return { block: true, reason: reason ?? (stderr || undefined) }
     }
     if (output.exit !== 0 || !structured) return { block: false }
+    // The schema admits the PostToolUse-style top-level `decision: "block"`
+    // on every event; a hook that uses it on a blockable event means deny,
+    // not "proceed" because only permissionDecision was consulted.
+    if (structured.decision === "block") {
+      return { block: true, reason: reason ?? (stderr || undefined) }
+    }
     const decision = permissionDecisionOf(structured)
     if (decision === undefined || decision === "allow") return { block: false }
     if (decision === "deny") {
