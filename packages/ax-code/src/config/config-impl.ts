@@ -1678,7 +1678,7 @@ export namespace Config {
   }
 
   export async function update(config: Info) {
-    const filepath = path.join(Instance.directory, "ax-code.json")
+    const filepath = projectConfigFile()
     using _inProcess = await Lock.write(filepath)
     using _crossProcess = await FileLock.acquire(filepath)
     // This is a read-modify-write operation, not a config evaluation. Parsing
@@ -1695,6 +1695,17 @@ export namespace Config {
     await Instance.reload({
       directory: Instance.directory,
     })
+  }
+
+  // Project files load .json before .jsonc, so the .jsonc wins when both
+  // exist: writing a project that uses ax-code.jsonc into a fresh ax-code.json
+  // would be silently shadowed on reload. Prefer the file that is live.
+  function projectConfigFile() {
+    const candidates = ["ax-code.jsonc", "ax-code.json"].map((file) => path.join(Instance.directory, file))
+    for (const file of candidates) {
+      if (existsSync(file)) return file
+    }
+    return candidates[1]!
   }
 
   function globalConfigFile() {

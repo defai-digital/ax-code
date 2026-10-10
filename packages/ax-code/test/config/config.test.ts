@@ -1101,6 +1101,30 @@ test("update preserves unevaluated file references in project config", async () 
   })
 })
 
+test("Config.update writes into an existing ax-code.jsonc instead of a shadowed ax-code.json", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      await fs.writeFile(
+        path.join(dir, "ax-code.jsonc"),
+        ["{", "  // keep this comment", '  "model": "before/model"', "}", ""].join("\n"),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Config.update({ model: "updated/model" })
+      const jsonc = await Filesystem.readText(path.join(tmp.path, "ax-code.jsonc"))
+      expect(jsonc).toContain("updated/model")
+      expect(jsonc).toContain("keep this comment")
+      expect(await Filesystem.exists(path.join(tmp.path, "ax-code.json"))).toBe(false)
+      expect((await Config.get()).model).toBe("updated/model")
+    },
+  })
+})
+
 test("gets config directories", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
