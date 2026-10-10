@@ -7,6 +7,7 @@ import { promisify } from "node:util"
 import { readdirSync, readFileSync } from "node:fs"
 import { parseJsonPayload } from "@/util/json-value"
 import { isRecord } from "@/util/record"
+import { exactOrigin, grantableOrigin as sharedGrantableOrigin, webMcpSchemeAllowed } from "./webmcp-origin"
 
 /** Consumer policy for the pinned external bridge, not a browser engine. */
 export namespace WebMcpProfile {
@@ -320,21 +321,6 @@ export namespace WebMcpProfile {
   const interactTools = new Set<string>(INTERACT_TOOLS)
   const grantCoveredTools = new Set<string>(GRANT_COVERED_TOOLS)
   const perActionTools = new Set<string>(PER_ACTION_TOOLS)
-  const loopback = new Set(["localhost", "127.0.0.1", "[::1]"])
-
-  function exactOrigin(value: string): boolean {
-    try {
-      const url = new URL(value)
-      return (
-        value === url.origin &&
-        !/[*+(){}\\]/.test(value) &&
-        (url.protocol === "https:" || (url.protocol === "http:" && loopback.has(url.hostname)))
-      )
-    } catch {
-      return false
-    }
-  }
-
   const Origin = z.string().max(240).refine(exactOrigin, "Use an exact HTTPS origin or HTTP loopback origin")
   const uniqueOrigins = (origins: string[]) => new Set(origins).size === origins.length
   const Origins = z.array(Origin).min(1).max(8).refine(uniqueOrigins, "Origins must be unique")
@@ -1048,14 +1034,7 @@ export namespace WebMcpProfile {
    * non-grantable target. Used by the redirect probe to classify hops.
    */
   export function grantableOrigin(value: string): string | undefined {
-    try {
-      const url = new URL(value)
-      if (url.username || url.password) return undefined
-      if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback.has(url.hostname))) return undefined
-      return url.origin
-    } catch {
-      return undefined
-    }
+    return sharedGrantableOrigin(value)
   }
 
   /**
@@ -1267,7 +1246,7 @@ export namespace WebMcpProfile {
       }
       // blob: and other non-web schemes inherit or fake a web origin, so an
       // origin match alone would admit non-page targets.
-      if (target.protocol !== "https:" && !(target.protocol === "http:" && loopback.has(target.hostname))) {
+      if (!webMcpSchemeAllowed(target)) {
         throw new Error("WebMCP navigation requires an https: URL or an http: loopback URL")
       }
       if (target.username || target.password) throw new Error("WebMCP navigation origin is not allowed")

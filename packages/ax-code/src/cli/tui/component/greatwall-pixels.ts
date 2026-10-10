@@ -1,4 +1,4 @@
-import { hash, vnoise } from "./atmos-paint"
+import { clamp01, hash, vnoise } from "./atmos-paint"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
 import {
   GREATWALL_BRAZIERS,
@@ -18,8 +18,6 @@ import {
   greatwallTorch,
   type GreatwallStyle,
 } from "./greatwall-view-model"
-
-const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
 
 /**
  * Freeform HD wall. Mountain ranges recede in atmospheric haze behind a

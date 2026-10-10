@@ -17,14 +17,9 @@ import {
 } from "./singapore-view-model"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
 import { blitGlyphText } from "./text-scene-glyphs"
+import { hash } from "./atmos-paint"
 
 /** Deterministic hash in [0, 1). */
-function hash(x: number, y: number): number {
-  let n = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263)
-  n = Math.imul(n ^ (n >>> 13), 1274126177)
-  return ((n ^ (n >>> 16)) >>> 0) / 4294967296
-}
-
 /** Paints the existing RGB scene transport; never writes to the terminal itself. */
 export function renderSingaporePixels(width: number, height: number, style: SingaporeStyle, elapsedMs: number): Buffer {
   const hd = createHdCanvas(width, height, SINGAPORE_COLUMNS, SINGAPORE_ROWS)

@@ -22,13 +22,7 @@ import {
   eiffelSkyRgb,
   type EiffelStyle,
 } from "./eiffel-view-model"
-
-function hash(x: number, y: number): number {
-  let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263)
-  h = Math.imul(h ^ (h >>> 13), 1274126177)
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296
-}
-const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
+import { clamp01, hash } from "./atmos-paint"
 
 /**
  * Freeform HD tower. A curved wrought-iron lattice: four flared legs joined by

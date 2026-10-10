@@ -1,17 +1,9 @@
-import fs from "fs/promises"
-import { accessSync, constants as fsConstants } from "fs"
+import { accessSync } from "fs"
 import path from "path"
 import { Process } from "@/util/process"
 import { Filesystem } from "@/util/filesystem"
 import { AX_ENGINE_BINARY_RELEASE, AX_ENGINE_MANAGED_BINARY_NAME } from "./constants"
 import { AX_ENGINE_BUNDLED_DIR_NAME, missingAxEngineRuntimeFiles } from "./payload"
-
-async function isExecutable(file: string) {
-  return fs
-    .access(file, fsConstants.X_OK)
-    .then(() => true)
-    .catch(() => false)
-}
 
 function existsSyncPath(file: string) {
   try {
@@ -55,7 +47,7 @@ export async function getBundledBinary(
   if (!root) return undefined
   const dir = bundledEngineDir(root, release.version)
   const binary = bundledPath(dir, AX_ENGINE_MANAGED_BINARY_NAME)
-  if (!(await isExecutable(binary))) return undefined
+  if (!(await Filesystem.isExecutable(binary))) return undefined
   const missing = missingAxEngineRuntimeFiles(dir, existsSyncPath)
   if (missing.length) return undefined
   // Browser-unzipped or AirDropped runtimes can carry com.apple.quarantine.

@@ -1,4 +1,5 @@
 import type { WebMcpApprovalRecord } from "@ax-code/sdk/v2"
+import { grantableOrigin } from "@/mcp/webmcp-origin"
 
 export type WebMcpAllowlistScope = WebMcpApprovalRecord["scope"]
 export type WebMcpAllowlistCapability = WebMcpAllowlistScope["capability"]
@@ -33,26 +34,16 @@ export const WEBMCP_ALLOWLIST_ARM_MS = 4000
 
 const CAPABILITY_ORDER: WebMcpAllowlistCapability[] = ["list_pages", "navigate", "read", "close"]
 const ORIGIN_CAPABILITIES = ["navigate", "read", "close"] as const
-const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"])
 
 /**
- * The exact origin a typed value would grant, mirroring the server-side
- * Scope rule (https, or http on loopback; no credentials; wildcards never
- * parse). The server validates again; this only decides whether an add row
- * is offered, so a stricter client never hides a server-accepted origin and
- * a looser one only earns a toast.
+ * The exact origin a typed value would grant: the shared bridge rule plus
+ * the store's wildcard and length limits. The server validates again; this
+ * only decides whether an add row is offered.
  */
 export function webMcpAllowlistOrigin(value: string): string | undefined {
   const trimmed = value.trim()
   if (trimmed === "" || trimmed.includes("*") || trimmed.length > 2048) return undefined
-  try {
-    const url = new URL(trimmed)
-    if (url.username || url.password) return undefined
-    if (url.protocol !== "https:" && !(url.protocol === "http:" && LOOPBACK.has(url.hostname))) return undefined
-    return url.origin
-  } catch {
-    return undefined
-  }
+  return grantableOrigin(trimmed)
 }
 
 /**
@@ -79,13 +70,16 @@ function grantTitle(scope: WebMcpAllowlistScope): string {
 }
 
 function sameScope(a: WebMcpAllowlistScope, b: WebMcpAllowlistScope): boolean {
-  if (a.capability !== b.capability) return false
-  if (a.capability === "list_pages" || b.capability === "list_pages") return true
-  return a.origin === b.origin
+  if (a.capability === "list_pages" || b.capability === "list_pages") return a.capability === b.capability
+  return a.capability === b.capability && a.origin === b.origin
 }
 
-function matches(title: string, query: string): boolean {
-  const needle = query.trim().toLowerCase()
+/** Lower-cased, trimmed query; empty matches everything. */
+function needleOf(query: string): string {
+  return query.trim().toLowerCase()
+}
+
+function matches(title: string, needle: string): boolean {
   return needle === "" || title.toLowerCase().includes(needle)
 }
 
@@ -114,7 +108,8 @@ export function webMcpAllowlistGrantOptions(
   const saved = records.map((record) => record.scope)
   const scopes: WebMcpAllowlistScope[] = []
   const listing: WebMcpAllowlistScope = { capability: "list_pages" }
-  if (!saved.some((scope) => sameScope(scope, listing)) && matches(grantTitle(listing), query)) scopes.push(listing)
+  if (!saved.some((scope) => sameScope(scope, listing)) && matches(grantTitle(listing), needleOf(query)))
+    scopes.push(listing)
   const origin = webMcpAllowlistOrigin(query)
   if (origin) {
     for (const capability of ORIGIN_CAPABILITIES) {
@@ -148,12 +143,15 @@ export function webMcpAllowlistDialogOptions(input: {
 }): WebMcpAllowlistOption[] {
   if (input.failed) return [{ title: "Could not load approvals — select to retry", value: { kind: "retry" } }]
   const records = input.records ?? []
+  const needle = needleOf(input.query)
+  const blank = needle === ""
   const rows: WebMcpAllowlistOption[] = webMcpAllowlistRows(records)
-    .filter((record) => matches(webMcpAllowlistScopeTitle(record.scope), input.query))
-    .map((record) => {
+    .map((record) => ({ record, title: webMcpAllowlistScopeTitle(record.scope) }))
+    .filter(({ title }) => matches(title, needle))
+    .map(({ record, title }) => {
       const value: WebMcpAllowlistAction = { kind: "revoke", id: record.id }
       return {
-        title: webMcpAllowlistScopeTitle(record.scope),
+        title,
         value,
         description:
           input.armed === webMcpAllowlistActionKey(value) ? "click again to revoke" : "double click to revoke",
@@ -162,7 +160,7 @@ export function webMcpAllowlistDialogOptions(input: {
     })
   const grants = webMcpAllowlistGrantOptions(records, input.query)
   const out: WebMcpAllowlistOption[] = [...rows]
-  if (rows.length > 0 && input.query.trim() === "") {
+  if (rows.length > 0 && blank) {
     const value: WebMcpAllowlistAction = { kind: "clear" }
     out.push({
       title: "Revoke all saved approvals for this bridge",
@@ -172,7 +170,7 @@ export function webMcpAllowlistDialogOptions(input: {
       category: WEBMCP_ALLOWLIST_SAVED,
     })
   }
-  if (rows.length === 0 && input.query.trim() === "") {
+  if (rows.length === 0 && blank) {
     out.push({
       title: input.loading ? "Loading approvals..." : "No saved approvals",
       value: { kind: "none" },
@@ -181,7 +179,7 @@ export function webMcpAllowlistDialogOptions(input: {
     })
   }
   out.push(...grants)
-  if (rows.length === 0 && grants.length === 0 && input.query.trim() !== "") {
+  if (rows.length === 0 && grants.length === 0 && !blank) {
     out.push({ title: WEBMCP_ALLOWLIST_ORIGIN_HINT, value: { kind: "none" }, disabled: true })
   }
   return out

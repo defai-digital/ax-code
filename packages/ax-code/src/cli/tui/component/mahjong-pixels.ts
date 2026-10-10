@@ -34,11 +34,11 @@ import {
   type MahjongStyle,
 } from "./mahjong-view-model"
 import { blitGlyphText } from "./text-scene-glyphs"
+import { clamp01 } from "./atmos-paint"
 
 /** Ending confetti loop and match loop share one 4800ms cycle. */
 const MAHJONG_CYCLE_MS = 4800
 
-const clamp01 = (t: number) => Math.max(0, Math.min(1, t))
 const easeOut = (t: number) => 1 - (1 - clamp01(t)) ** 3
 const white: RGB = [255, 255, 255]
 

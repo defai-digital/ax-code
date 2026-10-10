@@ -1,5 +1,4 @@
 import fs from "fs/promises"
-import { constants as fsConstants } from "fs"
 import path from "path"
 import z from "zod"
 import semver from "semver"
@@ -100,13 +99,6 @@ export function isAxEngineInstallable(platform?: string, arch?: string, env?: No
   return !!resolveInstallableRelease(platform, arch, env)
 }
 
-async function isExecutable(file: string): Promise<boolean> {
-  return fs
-    .access(file, fsConstants.X_OK)
-    .then(() => true)
-    .catch(() => false)
-}
-
 async function pathExists(file: string): Promise<boolean> {
   return fs
     .access(file)
@@ -160,7 +152,7 @@ async function readInstallState(): Promise<AxEngineInstallState | undefined> {
 export async function getManagedBinary(): Promise<{ path: string; version: string } | undefined> {
   const state = await readInstallState()
   if (!state) return undefined
-  if (!(await isExecutable(state.path))) return undefined
+  if (!(await Filesystem.isExecutable(state.path))) return undefined
   try {
     await assertAxEngineRuntimePayload(path.dirname(state.path))
   } catch {

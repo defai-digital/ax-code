@@ -22,8 +22,8 @@ import {
   type FestivalStyle,
 } from "./festival-view-model"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
+import { clamp01 } from "./atmos-paint"
 
-const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
 const hash = (n: number) => {
   const s = Math.sin(n * 127.1 + 311.7) * 43758.5453
   return s - Math.floor(s)

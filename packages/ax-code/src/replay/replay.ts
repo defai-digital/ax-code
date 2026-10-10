@@ -5,20 +5,12 @@ import type { SessionID } from "@/session/schema"
 import { ToolCallReplayQuery } from "./tool-call-query"
 import { stringList } from "@/util/string-list"
 import { finiteNumber } from "@/util/number"
+import { eventTokens } from "./tokens"
 
 const log = Log.create({ service: "replay" })
 
 function optionalMilliseconds(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? `${Math.round(value)}ms` : "?"
-}
-
-function eventTokens(value: unknown) {
-  if (!value || typeof value !== "object") return { input: 0, output: 0 }
-  const tokens = value as { input?: unknown; output?: unknown }
-  return {
-    input: finiteNumber(tokens.input),
-    output: finiteNumber(tokens.output),
-  }
 }
 
 function skillNames(value: unknown) {

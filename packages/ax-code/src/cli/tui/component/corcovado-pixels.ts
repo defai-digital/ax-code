@@ -17,14 +17,9 @@ import {
   corcovadoSurf,
   type CorcovadoStyle,
 } from "./corcovado-view-model"
+import { hash } from "./atmos-paint"
 
 /** Deterministic hash in [0, 1). */
-function hash(x: number, y: number): number {
-  let n = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263)
-  n = Math.imul(n ^ (n >>> 13), 1274126177)
-  return ((n ^ (n >>> 16)) >>> 0) / 4294967296
-}
-
 /** Smooth 2D value noise. */
 function vnoise(x: number, y: number, seed = 0): number {
   const ix = Math.floor(x)

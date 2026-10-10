@@ -1,8 +1,7 @@
-import fs from "fs/promises"
-import { constants } from "fs"
 import z from "zod"
 import semver from "semver"
 import { which } from "@/util/which"
+import { Filesystem } from "@/util/filesystem"
 import {
   AX_ENGINE_BINARY_RELEASE,
   AX_ENGINE_BUNDLED_MIN_VERSION,
@@ -34,13 +33,6 @@ export type AxEngineDependencyOptions = {
   binaryPath?: unknown
   entryPath?: string
   [key: string]: unknown
-}
-
-async function isExecutable(file: string) {
-  return fs
-    .access(file, constants.X_OK)
-    .then(() => true)
-    .catch(() => false)
 }
 
 // Selection and executable access remain live. Only successful version probes
@@ -124,7 +116,7 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
   // Resolution order: explicit config/env wins when it meets AX_ENGINE_MIN_VERSION.
   // PATH, managed overlay, and the bundled sidecar must meet the same floor.
   if (candidate) {
-    if (!(await isExecutable(candidate))) {
+    if (!(await Filesystem.isExecutable(candidate))) {
       return {
         available: false,
         mode: "configured",

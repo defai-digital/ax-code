@@ -13,6 +13,7 @@ import {
   type FujiStyle,
 } from "./fuji-view-model"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
+import { clamp01 } from "./atmos-paint"
 
 // Scene-map anchors in the shared 74x20 space. The text path paints the same
 // rows, so both renderers agree on layout for the same millisecond.
@@ -38,7 +39,6 @@ const STAR_COUNT = 70
 const WINDOW_FIRST = 12
 const WINDOW_PITCH = 6
 
-const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
 const smooth = (a: number, b: number, v: number) => {
   const t = clamp01((v - a) / (b - a || 1))
   return t * t * (3 - 2 * t)

@@ -41,6 +41,22 @@ function attentionError(rawError: unknown, status: unknown): string | undefined 
   return text
 }
 
+function webMcpEntries(configMcp: unknown): { name: string; profile: Record<string, unknown> }[] {
+  if (!isRecord(configMcp)) return []
+  const entries: { name: string; profile: Record<string, unknown> }[] = []
+  for (const [name, entry] of Object.entries(configMcp)) {
+    if (!isRecord(entry)) continue
+    const profile = (entry as { webmcp?: unknown }).webmcp
+    if (isRecord(profile)) entries.push({ name, profile })
+  }
+  return entries
+}
+
+/** Names of the webmcp-profiled MCP servers in the merged config, in config order. */
+export function webMcpServers(configMcp: unknown): string[] {
+  return webMcpEntries(configMcp).map((entry) => entry.name)
+}
+
 /**
  * Pure derivation of the experimental WebMCP bridge footer chip. Mixed states
  * never hide a denial or a failure behind a healthy-looking toggle: the
@@ -54,7 +70,8 @@ export function webMcpChipModel(
   /** The managed `webmcp` requirement from the merged config, if any (ADR-166). */
   requirement?: unknown,
 ): WebMcpChipModel {
-  const servers: string[] = []
+  const entries = webMcpEntries(configMcp)
+  const servers = entries.map((entry) => entry.name)
   // ADR-174: an acting bridge is distinguishable from a read-only one at a
   // glance. The marker follows the effective tier: a managed
   // allowInteract: false (or allow: false) leaves the bridge connectable
@@ -62,16 +79,7 @@ export function webMcpChipModel(
   // advertise an acting bridge that cannot act.
   const managed = isRecord(requirement) ? requirement : undefined
   const interactAllowed = managed?.allow !== false && managed?.allowInteract !== false
-  let interact = false
-  if (isRecord(configMcp)) {
-    for (const [name, entry] of Object.entries(configMcp)) {
-      if (!isRecord(entry)) continue
-      const profile = (entry as { webmcp?: unknown }).webmcp
-      if (!isRecord(profile)) continue
-      servers.push(name)
-      if (profile.interact === true && interactAllowed) interact = true
-    }
-  }
+  const interact = interactAllowed && entries.some((entry) => entry.profile.interact === true)
   const connected = servers.filter((name) => statuses?.[name]?.status === "connected")
   const blocked: WebMcpChipModel["blocked"] = []
   const attentions: WebMcpChipModel["attentions"] = []

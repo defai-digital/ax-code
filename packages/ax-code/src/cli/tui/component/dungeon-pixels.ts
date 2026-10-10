@@ -1,4 +1,4 @@
-import { hash, vnoise } from "./atmos-paint"
+import { clamp01, hash, vnoise } from "./atmos-paint"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
 import {
   DUNGEON_CHEST,
@@ -26,8 +26,6 @@ import {
   dungeonTwinkle,
   type DungeonStyle,
 } from "./dungeon-view-model"
-
-const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
 
 /**
  * Freeform HD dungeon. A torch-lit chamber of irregular masonry: each torch

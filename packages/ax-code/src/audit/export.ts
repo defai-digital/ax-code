@@ -4,6 +4,7 @@ import type { AuditRecord } from "./index"
 import type { SessionID } from "../session/schema"
 import { Filesystem } from "@/util/filesystem"
 import { finiteNumber } from "@/util/number"
+import { eventTokens } from "../replay/tokens"
 
 interface ExportContext {
   policy?: { name: string; version: string }
@@ -13,15 +14,6 @@ function summarizeText(text: string | undefined, max: number): string {
   if (!text) return ""
   if (text.length <= max) return text
   return text.slice(0, max - 3) + "..."
-}
-
-function eventTokens(value: unknown) {
-  if (!value || typeof value !== "object") return { input: 0, output: 0 }
-  const tokens = value as { input?: unknown; output?: unknown }
-  return {
-    input: finiteNumber(tokens.input),
-    output: finiteNumber(tokens.output),
-  }
 }
 
 function arrayLength(value: unknown) {

@@ -6,7 +6,7 @@ import { useTheme } from "@tui/context/theme"
 import { ChromeAction } from "./chrome-action"
 import { useCommandDialog } from "./dialog-command"
 import { ModeToggle } from "./mode-chips"
-import { webMcpChipModel } from "./webmcp-chip-model"
+import { webMcpChipModel, webMcpServers } from "./webmcp-chip-model"
 
 /**
  * Accent-colored link beside the WebMCP chip that opens the project-scoped
@@ -19,7 +19,7 @@ export function WebMcpAllowlistLink() {
   const { theme } = useTheme()
   const { t } = useLanguage()
   const command = useCommandDialog()
-  const servers = createMemo(() => webMcpChipModel(sync.data.config?.mcp, sync.data.mcp).servers)
+  const servers = createMemo(() => webMcpServers(sync.data.config?.mcp))
   return (
     <Show when={servers().length > 0}>
       <box flexShrink={0} paddingLeft={1}>

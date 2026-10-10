@@ -1,4 +1,5 @@
 import { EventQuery } from "../replay/query"
+import { eventTokens } from "../replay/tokens"
 import type { ReplayEvent } from "../replay/event"
 import { Session } from "../session"
 import type { SessionID } from "../session/schema"
@@ -39,18 +40,6 @@ function formatDuration(rawMs: number): string {
   if (m > 0) return `${m}m ${s}s`
   if (s === 0) return `${ms}ms`
   return `${s}.${Math.floor((ms % MS_PER_SECOND) / TENTH_SECOND_UNIT_MS)}s`
-}
-
-function eventTokens(value: unknown): { input: number; output: number; reasoning: number } {
-  if (!value || typeof value !== "object") {
-    return { input: 0, output: 0, reasoning: 0 }
-  }
-  const tokens = value as { input?: unknown; output?: unknown; reasoning?: unknown }
-  return {
-    input: finiteNumber(tokens.input),
-    output: finiteNumber(tokens.output),
-    reasoning: finiteNumber(tokens.reasoning),
-  }
 }
 
 function summarize(s: string | undefined, max: number): string {

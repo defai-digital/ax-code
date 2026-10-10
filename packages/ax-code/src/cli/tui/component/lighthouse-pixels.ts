@@ -15,8 +15,8 @@ import {
   lighthouseSurf,
   type LighthouseStyle,
 } from "./lighthouse-view-model"
+import { clamp01 } from "./atmos-paint"
 
-const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
 const smooth = (a: number, b: number, v: number) => {
   const t = clamp01((v - a) / (b - a || 1))
   return t * t * (3 - 2 * t)

@@ -1,4 +1,4 @@
-import { hash, vnoise } from "./atmos-paint"
+import { clamp01, hash, vnoise } from "./atmos-paint"
 import {
   DOMES_BASE_BOTTOM,
   DOMES_BASE_TOP,
@@ -17,8 +17,6 @@ import {
   type DomesStyle,
 } from "./domes-view-model"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
-
-const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
 
 /**
  * Freeform HD renderer. Three ribbed, gilded onion domes rise from arcaded

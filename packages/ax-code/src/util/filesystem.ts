@@ -22,6 +22,14 @@ export namespace Filesystem {
       })
   }
 
+  /** Executable access (X_OK); any failure, including a missing path, is false. */
+  export async function isExecutable(p: string): Promise<boolean> {
+    return fs
+      .access(p, fs.constants.X_OK)
+      .then(() => true)
+      .catch(() => false)
+  }
+
   export async function isDir(p: string): Promise<boolean> {
     return fs
       .stat(p)

@@ -19,14 +19,9 @@ import {
   type ColosseumStyle,
 } from "./colosseum-view-model"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
+import { hash } from "./atmos-paint"
 
 /** Deterministic hash in [0, 1). */
-function hash(x: number, y: number): number {
-  let n = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263)
-  n = Math.imul(n ^ (n >>> 13), 1274126177)
-  return ((n ^ (n >>> 16)) >>> 0) / 4294967296
-}
-
 /** Bays across the visible front half of the ellipse, odd so the gate sits in the middle. */
 const BAYS = 29
 const RIM_CURVE = 0.55

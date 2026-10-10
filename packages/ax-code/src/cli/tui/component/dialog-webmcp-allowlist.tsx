@@ -97,6 +97,9 @@ export function DialogWebMcpAllowlist(props: { server: string }) {
         if (current !== undefined && webMcpAllowlistActionKey(option.value) !== current) disarm()
       }}
       onSelect={async (option) => {
+        // One request at a time: arming or re-targeting while a grant or a
+        // revoke is in flight would act on a list about to be replaced.
+        if (busy()) return
         const action = option.value
         if (action.kind === "retry") {
           void refetch()
