@@ -23,6 +23,25 @@ describe("util.process", () => {
     expect(out.stderr.toString()).toBe("err")
   })
 
+  test("allows pending pipe delivery to reach EOF after the exit event", async () => {
+    const child = Process.spawn(node('process.stdout.write("final output")'), { stdout: "pipe" })
+    const stdout = child.stdout!
+    const chunks: Buffer[] = []
+    let ended = false
+    stdout.on("data", (chunk: Buffer) => chunks.push(chunk))
+    stdout.on("end", () => {
+      ended = true
+    })
+    stdout.pause()
+    const closed = new Promise<void>((resolve) => stdout.once("close", resolve))
+    await child.exited
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    stdout.resume()
+    await closed
+    expect(Buffer.concat(chunks).toString()).toBe("final output")
+    expect(ended).toBe(true)
+  })
+
   test("returns code when nothrow is enabled", async () => {
     const out = await Process.run(node("process.exit(7)"), { nothrow: true })
     expect(out.code).toBe(7)

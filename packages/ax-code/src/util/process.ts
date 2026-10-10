@@ -167,13 +167,16 @@ export namespace Process {
         // A short-lived caller must not exit while descendant cleanup is pending.
         void Promise.resolve(termination).then(() => resolve(timedOut ? 124 : (code ?? (signal ? 1 : 0))))
         // Background children spawned by the command inherit the pipe FDs and
-        // keep them open, preventing stream EOF. Destroy after one I/O cycle
-        // (giving Node.js a chance to drain the kernel buffer first) so that
-        // any awaiter of the piped streams unblocks regardless.
-        setImmediate(() => {
+        // keep them open, preventing stream EOF. Allow a bounded drain grace:
+        // a single setImmediate can run before pending pipe data or EOF under
+        // load, truncating output and making complete metrics look partial.
+        // Descendant-held pipes still close without waiting for the descendant.
+        const drainTimer = setTimeout(() => {
           if (opts.stdout === "pipe") (proc as ChildProcess).stdout?.destroy()
           if (opts.stderr === "pipe") (proc as ChildProcess).stderr?.destroy()
-        })
+        }, 100)
+        drainTimer.unref()
+        proc.once("close", () => clearTimeout(drainTimer))
       })
 
       proc.once("error", (error) => {
