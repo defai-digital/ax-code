@@ -273,6 +273,30 @@ describe("tool.webfetch", () => {
     )
   })
 
+  test("a 304 without Location is a final response, not a redirect to follow", async () => {
+    let calls = 0
+    await withFetch(
+      async () => {
+        calls++
+        return new Response(null, { status: 304 })
+      },
+      async () => {
+        await Instance.provide({
+          directory: projectRoot,
+          fn: async () => {
+            const webfetch = await WebFetchTool.init()
+            const failure = await webfetch.execute({ url: "https://93.184.216.34/file.txt", format: "text" }, ctx).then(
+              () => undefined,
+              (error: unknown) => error,
+            )
+            expect(String(failure)).not.toContain("missing Location")
+            expect(calls).toBe(1)
+          },
+        })
+      },
+    )
+  })
+
   test("asks permission again when a redirect changes origin", async () => {
     let calls = 0
     const permissions: string[][] = []

@@ -34,6 +34,16 @@ export namespace Ssrf {
   type ResolvedAddress = { address: string; family: number }
   const MAX_REDIRECTS = 10
 
+  // Classify by the address text itself, not the resolver's `family` field: a
+  // mismatched pair (an IPv6 string tagged as family 4) must still hit the
+  // IPv6 rules, and anything that is not an IP literal fails closed.
+  function isPrivateAddress(address: string): boolean {
+    const version = net.isIP(address)
+    if (version === 4) return isPrivateIPv4(address)
+    if (version === 6) return isPrivateIPv6(address)
+    return true
+  }
+
   function isPrivateIPv4(addr: string): boolean {
     const parts = addr.split(".").map((p) => parseInt(p, 10))
     if (parts.length !== 4 || parts.some((p) => Number.isNaN(p))) return false
@@ -331,8 +341,8 @@ export namespace Ssrf {
     if (addresses.length === 0) {
       throw new Error(`${label}: could not resolve hostname: ${hostname}`)
     }
-    for (const { address, family } of addresses) {
-      const bad = family === 4 ? isPrivateIPv4(address) : isPrivateIPv6(address)
+    for (const { address } of addresses) {
+      const bad = isPrivateAddress(address)
       if (bad) {
         throw new Error(`${label}: refusing to fetch ${hostname} — resolves to private/reserved address ${address}`)
       }
@@ -413,7 +423,7 @@ export namespace Ssrf {
     }
 
     // Validate ALL resolved addresses
-    for (const { address, family } of addresses) {
+    for (const { address } of addresses) {
       if (localOrigin !== undefined) {
         if (!isLoopbackAddress(address)) {
           throw new Error(
@@ -422,7 +432,7 @@ export namespace Ssrf {
         }
         continue
       }
-      const bad = family === 4 ? isPrivateIPv4(address) : isPrivateIPv6(address)
+      const bad = isPrivateAddress(address)
       if (bad) {
         throw new Error(`${label}: refusing to fetch ${hostname} — resolves to private/reserved address ${address}`)
       }

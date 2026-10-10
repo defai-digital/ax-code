@@ -183,6 +183,9 @@ export const WaitForTool = Tool.define("waitfor", async () => {
       if (item.kind === "subagent") {
         text = await childResultText(latest)
       }
+      // Decide emptiness before the placeholder below replaces an empty child
+      // result with non-empty status prose.
+      const resultEmpty = latest.status !== "completed" || isEmptySubagentResultText(text)
       if (!text) {
         text =
           latest.error ??
@@ -203,7 +206,7 @@ export const WaitForTool = Tool.define("waitfor", async () => {
             callID: ctx.callID ?? "",
             time: Date.now(),
           },
-          resultEmpty: latest.status !== "completed" || isEmptySubagentResultText(text),
+          resultEmpty,
         }).catch((error) => {
           log.warn("failed to claim background task result", { taskQueueID: item.id, error })
           return undefined

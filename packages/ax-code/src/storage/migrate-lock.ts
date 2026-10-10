@@ -140,7 +140,16 @@ export namespace MigrationLock {
         }
 
         const snapshot = readSnapshot(target)
-        if (!snapshot) continue
+        if (!snapshot) {
+          // The link failed but nothing readable is there (the holder released
+          // between the two calls, or the target is a dangling symlink): poll
+          // within the deadline instead of spinning on the CPU forever.
+          if (Date.now() >= deadline) {
+            throw new Error(`Timed out waiting for migration lock: ${target}`)
+          }
+          sleep(Math.min(pollMs, Math.max(1, deadline - Date.now())))
+          continue
+        }
         if (reclaimable(snapshot, malformedGraceMs) && removeIfUnchanged(target, snapshot)) {
           log.warn("reclaimed abandoned migration compatibility lock", {
             target,

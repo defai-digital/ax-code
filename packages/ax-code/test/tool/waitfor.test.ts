@@ -143,6 +143,26 @@ describe("tool.waitfor", () => {
     })
   })
 
+  test("an empty completed child result is claimed as empty rather than as the placeholder text", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const { item } = await enqueueBackgroundSubagent({ parent: parent.id, directory: tmp.path, resultText: "" })
+
+        const result = await (
+          await WaitForTool.init()
+        ).execute({ task_id: item.id, timeout: 30 }, toolContext(parent.id))
+
+        expect(result.output).toContain("Task completed without a final response.")
+        const latest = await TaskQueue.get(TaskQueueID.make(item.id))
+        expect(latest.payload["deliveryEmpty"]).toBe(true)
+      },
+    })
+  })
+
   test("already-delivered target resolves by child session id without duplicating the result", async () => {
     await using tmp = await tmpdir({ git: true })
 

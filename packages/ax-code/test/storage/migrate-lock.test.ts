@@ -131,6 +131,16 @@ describe("MigrationLock", () => {
     release()
   })
 
+  test.skipIf(process.platform === "win32")(
+    "a dangling symlink at the lock path times out instead of spinning",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const db = path.join(tmp.path, "ax-code.db")
+      fs.symlinkSync(path.join(tmp.path, "missing-target"), db + ".migrate.lock")
+      expect(() => MigrationLock.acquire(db, { timeoutMs: 50 })).toThrow(/Timed out waiting for migration lock/)
+    },
+  )
+
   test("release does not remove a replacement owner's lock", async () => {
     await using tmp = await tmpdir({ git: true })
     const db = path.join(tmp.path, "ax-code.db")

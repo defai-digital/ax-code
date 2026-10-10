@@ -79,6 +79,18 @@ test("pinnedFetch rejects non-http redirect targets before following them", asyn
   expect(fetchCalls).toBe(1)
 })
 
+test("pinnedFetch classifies a resolved address by its own shape, not the resolver's family tag", async () => {
+  const fetchFn: NonNullable<Parameters<typeof Ssrf.pinnedFetch>[2]> = async () => new Response("unreachable")
+  const mislabeled = vi.fn(async (_hostname: string) => [{ address: "::ffff:169.254.169.254", family: 4 }])
+  await expect(Ssrf.pinnedFetch("http://example.invalid/", { label: "t" }, fetchFn, mislabeled)).rejects.toThrow(
+    "private/reserved",
+  )
+  const garbage = vi.fn(async (_hostname: string) => [{ address: "not-an-ip", family: 4 }])
+  await expect(Ssrf.pinnedFetch("http://example.invalid/", { label: "t" }, fetchFn, garbage)).rejects.toThrow(
+    "private/reserved",
+  )
+})
+
 test("assertPublicUrl rejects hex-form IPv4-mapped IPv6 literals (loopback + cloud metadata)", async () => {
   // ::ffff:7f00:1 == 127.0.0.1, ::ffff:a9fe:a9fe == 169.254.169.254 (metadata).
   await expect(Ssrf.assertPublicUrl("http://[::ffff:7f00:1]/", "t")).rejects.toThrow("private/reserved")

@@ -77,7 +77,12 @@ export namespace SessionCompaction {
     const selected = todos.filter(
       (todo) => todo.status !== "cancelled" && (todo.status !== "completed" || keepCompleted.has(todo)),
     )
-    const shown = selected.slice(0, PLAN_CARRYOVER_MAX_ITEMS)
+    // The cap must never drop the item the model is told to resume: keep every
+    // in_progress item, then fill the remaining budget in plan order.
+    const working = selected.filter((todo) => todo.status === "in_progress")
+    const budget = Math.max(0, PLAN_CARRYOVER_MAX_ITEMS - working.length)
+    const kept = new Set([...working, ...selected.filter((todo) => todo.status !== "in_progress").slice(0, budget)])
+    const shown = selected.filter((todo) => kept.has(todo))
     const omitted = selected.length - shown.length
     return [
       PLAN_CARRYOVER_HEADING,

@@ -20,6 +20,10 @@ import { originPermissionPatterns } from "@/util/url-permission"
 const assertPublicUrl = (url: string) => Ssrf.assertPublicUrl(url, "webfetch")
 const pinnedFetch = (url: string, init?: RequestInit) => Ssrf.pinnedFetch(url, { ...init, label: "webfetch" })
 
+// 304 Not Modified and the other non-redirect 3xx responses carry no Location
+// and are final answers, not hops to follow.
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
+
 export const WebFetchTool = Tool.define("webfetch", {
   description: DESCRIPTION,
   parameters: z.object({
@@ -106,7 +110,7 @@ export const WebFetchTool = Tool.define("webfetch", {
         // 3xx with a Location header → re-validate target and loop.
         // Anything else (including opaqueredirect from same-origin
         // fetches) falls through to the response-handling path.
-        if (res.status >= 300 && res.status < 400) {
+        if (REDIRECT_STATUSES.has(res.status)) {
           const location = res.headers.get("location")
           await res.body?.cancel().catch(() => {})
           if (!location) {

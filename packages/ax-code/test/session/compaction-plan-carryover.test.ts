@@ -155,6 +155,18 @@ describe("session.compaction.renderPlanCarryover", () => {
     expect(rendered).toContain("Done 4")
   })
 
+  test("the cap never drops the in_progress item the model is told to resume", () => {
+    const todos = [
+      ...Array.from({ length: 60 }, (_, i) => TODO(`Step ${i}`, "pending")),
+      TODO("Working step", "in_progress"),
+    ]
+    const rendered = SessionCompaction.renderPlanCarryover(todos)
+    expect(rendered).toContain("- [in_progress] Working step")
+    expect(rendered).toContain("- [pending] Step 48")
+    expect(rendered).not.toContain("- [pending] Step 49")
+    expect(rendered).toContain("11 more items omitted")
+  })
+
   test("discloses omitted items once the cap is reached", () => {
     const todos = Array.from({ length: 60 }, (_, i) => TODO(`Step ${i}`, "pending"))
     const rendered = SessionCompaction.renderPlanCarryover(todos)
