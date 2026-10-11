@@ -401,6 +401,73 @@ describe("tool.bash truncation", () => {
     })
   })
 
+  test.each([
+    ["glued curl -o anchored at the first o", (src: string) => `curl -s -oout.txt ${shellQuote("file://" + src)}`],
+    ["bundled curl -sO remote name", (src: string) => `curl -sO ${shellQuote("file://" + src)}`],
+    ["curl -O with a quoted URL", (src: string) => `curl -s -O ${shellQuote("file://" + src)}`],
+    ["bundled wget-style value after the cluster", (src: string) => `curl -sLo out.txt ${shellQuote("file://" + src)}`],
+  ])("download targets count against the autonomous blast radius: %s", async (_label, build) => {
+    await using tmp = await tmpdir({ git: true })
+    await withAutonomous(async () => {
+      const sessionID = SessionID.make("ses_bash_blast_download")
+      BlastRadius.reset(sessionID)
+      try {
+        BlastRadius.applyConfigCaps(sessionID, { lines: 5 })
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const bash = await BashTool.init()
+            // The remote-name case lands at <cwd>/payload.txt, so the source
+            // must live elsewhere or curl would read and truncate the same file.
+            await fs.mkdir(path.join(tmp.path, "remote"))
+            const source = path.join(tmp.path, "remote", "payload.txt")
+            await fs.writeFile(source, "x".repeat(1000))
+            let caught: unknown
+            try {
+              await bash.execute({ command: build(source), description: "Download a file" }, { ...ctx, sessionID })
+            } catch (error) {
+              caught = error
+            }
+            expect(caught, build(source)).toBeInstanceOf(Error)
+            expect((caught as { data?: { message?: string } }).data?.message).toContain(
+              "Autonomous line-change cap reached",
+            )
+          },
+        })
+      } finally {
+        BlastRadius.reset(sessionID)
+      }
+    })
+  })
+
+  test("a stdout download (-o -) records no write path", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await withAutonomous(async () => {
+      const sessionID = SessionID.make("ses_bash_blast_download_stdout")
+      BlastRadius.reset(sessionID)
+      try {
+        BlastRadius.applyConfigCaps(sessionID, { lines: 5 })
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const bash = await BashTool.init()
+            const source = path.join(tmp.path, "payload.txt")
+            await fs.writeFile(source, "x".repeat(1000))
+            const result = await bash.execute(
+              { command: `curl -so- ${shellQuote("file://" + source)} | wc -c`, description: "Stream a file" },
+              { ...ctx, sessionID },
+            )
+            expect(result.output).toMatch(/1000/)
+            expect(BlastRadius.get(sessionID).lines).toBe(0)
+            expect(BlastRadius.get(sessionID).files.size).toBe(0)
+          },
+        })
+      } finally {
+        BlastRadius.reset(sessionID)
+      }
+    })
+  })
+
   test("redirect blast radius ignores timeout-killed commands", async () => {
     await using tmp = await tmpdir({ git: true })
     await withAutonomous(async () => {

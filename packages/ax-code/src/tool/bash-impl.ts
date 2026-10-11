@@ -727,25 +727,30 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             // written to the URL basename in the cwd. Only wget's -O takes
             // an output path, so treat -O as value-taking for wget alone.
             // Short options may be bundled (`wget -qO path`, `curl -so path`):
-            // the output flag is the LAST letter of the cluster and takes the
-            // rest of the token or, when nothing follows, the next argument.
-            const cluster = arg.match(name === "wget" ? /^-([a-zA-Z]*)([oO])(.*)$/ : /^-([a-zA-Z]*)(o)(.*)$/)
+            // getopt consumes the cluster left to right, so the FIRST output
+            // letter ends the flags and the rest of the token (or, when nothing
+            // follows, the next argument) is its value. The lazy `*?` is what
+            // keeps `-ooutput.json` anchored at the first `o`, not the last.
+            const cluster = arg.match(name === "wget" ? /^-([a-zA-Z]*?)([oO])(.*)$/ : /^-([a-zA-Z]*?)(o)(.*)$/)
             const takesOutputValue =
               arg === "--output" || arg === "--output-document" || (cluster !== null && cluster[3] === "")
             if (takesOutputValue) {
               const next = args[i + 1]
-              const output = next ? await recordResolvedPath(next, decoded) : undefined
+              // `-o -` / `-O -` stream to stdout: no file is written.
+              const output = next && next !== "-" ? await recordResolvedPath(next, decoded) : undefined
               if (output) redirectWritePaths.add(output)
               i++
               continue
             }
-            if (name === "curl" && (arg === "-O" || arg === "--remote-name")) {
+            // `-O` may also sit inside a cluster (`curl -sO URL`); only letters
+            // before the first value-taking `o` are still flags.
+            if (name === "curl" && (arg === "--remote-name" || /^-[a-np-zA-Z]*O/.test(arg))) {
               remoteName = true
               continue
             }
             // Short options take a glued value too: `curl -oPATH`, `wget -OPATH`.
             const inline = arg.match(/^--(?:output|output-document)=(.+)$/)?.[1] ?? (cluster ? cluster[3] : undefined)
-            if (inline) {
+            if (inline && inline !== "-") {
               const output = await recordResolvedPath(inline, decoded)
               if (output) redirectWritePaths.add(output)
             }
@@ -755,8 +760,12 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             // blast-radius and autonomous line-budget checks see it. The URL
             // is the first arg with a scheme (falls back to the first
             // non-flag arg); query strings are not part of the file name.
+            // Args still carry their shell quotes here (`'https://…'`), which
+            // would hide the scheme and leave a stray quote on the basename.
+            const unquoted = args.map((a) => (a ? (stripShellQuotes(a) ?? "") : ""))
             const url =
-              args.find((a) => a && /^[a-z][a-z0-9+.-]*:\/\//i.test(a)) ?? args.find((a) => a && !a.startsWith("-"))
+              unquoted.find((a) => a && /^[a-z][a-z0-9+.-]*:\/\//i.test(a)) ??
+              unquoted.find((a) => a && !a.startsWith("-"))
             const basename = url?.split("/").pop()?.split("?")[0]
             if (basename) {
               const output = await recordResolvedPath(basename, decoded)
