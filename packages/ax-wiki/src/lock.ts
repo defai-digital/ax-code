@@ -187,8 +187,16 @@ export function createWikiBuildLock(root: string, wikiDir: string, options: Wiki
       // Re-stat the moved file instead of trusting the observed mtime: rename
       // preserves it, so a heartbeat that landed between our read and the
       // rename is visible here and keeps the live holder's lock unstealable.
-      const movedMtime = (await stat(stalePath).catch(() => undefined))?.mtimeMs ?? observed.mtimeMs
-      if (moved !== undefined && moved === observed.text && isStale(moved, movedMtime)) {
+      // If the re-stat itself fails, staleness cannot be verified: falling back
+      // to the observed mtime would let a heartbeat that landed in between go
+      // unseen and steal a live holder's lock, so treat it as not stale.
+      const movedStat = await stat(stalePath).catch(() => undefined)
+      if (
+        moved !== undefined &&
+        movedStat !== undefined &&
+        moved === observed.text &&
+        isStale(moved, movedStat.mtimeMs)
+      ) {
         await rm(stalePath, { force: true }).catch(() => {})
         return true
       }
