@@ -62,6 +62,7 @@ describe("distribution support guardrails", () => {
 
   test("default formula installs the node-bundled distribution", async () => {
     const text = await readFile(homebrewDefaultScript, "utf-8")
+    expect(text).toContain('homepage "https://ax-code.app"')
     expect(text).toContain("download.ax-code.com/releases/download")
     expect(text).toContain('gh release download "${TAG}"')
     expect(text).toContain('--repo "${SOURCE_REPO}"')
