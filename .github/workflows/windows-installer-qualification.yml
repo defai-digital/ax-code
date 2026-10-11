@@ -78,8 +78,10 @@ jobs:
         with:
           checkout: "false"
       - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Test installer downloads
+        run: pnpm exec vitest run script/install-download.test.ts --reporter=verbose
       - name: Test installer replacement and rollback
-        run: pnpm exec vitest run script/install-powershell.test.ts script/install-download.test.ts script/windows-runtime-integrity.test.ts
+        run: pnpm exec vitest run script/install-powershell.test.ts script/windows-runtime-integrity.test.ts --reporter=verbose
       - name: Test runtime probes with PowerShell 7
         env:
           AX_TEST_POWERSHELL: pwsh

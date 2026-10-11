@@ -100,8 +100,11 @@ Write-Output "DOWNLOAD_COMPLETED"
       args = ["-NoLogo", "-NoProfile", "-NonInteractive", "-File", script]
     }
     const result = await new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve, reject) => {
+      // Windows on Arm can spend over 20 seconds initializing PowerShell
+      // before the first HTTP request. Match the other installer fixtures.
+      const timeout = runtime === "bash" ? 20_000 : 60_000
       const child = spawn(command, args, {
-        timeout: 20_000,
+        timeout,
         env: powershellEnvironment(command, {
           ...process.env,
           AX_TEST_URL: url,
@@ -117,7 +120,17 @@ Write-Output "DOWNLOAD_COMPLETED"
       child.stdout.on("data", (chunk) => (stdout += chunk))
       child.stderr.on("data", (chunk) => (stderr += chunk))
       child.on("error", reject)
-      child.on("close", (code) => resolve({ code, stdout, stderr }))
+      child.on("close", (code, signal) => {
+        if (signal) {
+          reject(
+            new Error(
+              `${runtime} download fixture terminated by ${signal} (budget ${timeout}ms, HTTP requests ${requests})\n${stdout}\n${stderr}`,
+            ),
+          )
+          return
+        }
+        resolve({ code, stdout, stderr })
+      })
     })
     return {
       ...result,
@@ -134,7 +147,7 @@ Write-Output "DOWNLOAD_COMPLETED"
 
 for (const runtime of ["bash", "powershell", "powershell-legacy"] as const) {
   const available = runtime === "bash" ? process.platform !== "win32" : powershellAvailable
-  describe.skipIf(!available)(`${runtime} installer downloads`, () => {
+  describe.skipIf(!available)(`${runtime} installer downloads`, { timeout: 120_000 }, () => {
     test.each([500, 503, 429])("recovers from transient HTTP %s without retaining its error body", async (status) => {
       const result = await transfer(runtime, [status, 200])
       expect(result.code, result.stderr).toBe(0)

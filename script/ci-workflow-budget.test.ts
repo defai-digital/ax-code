@@ -49,9 +49,12 @@ describe("CI resource budgets", () => {
     expect(concurrency).toContain("github.event_name == 'workflow_dispatch' && github.run_id")
     expect(concurrency).toContain("cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}")
     expect(source).toMatch(/^    timeout-minutes: 60$/m)
+    const downloads = "vitest run script/install-download.test.ts --reporter=verbose"
+    expect(source).toContain(downloads)
     expect(source).toContain(
-      "vitest run script/install-powershell.test.ts script/install-download.test.ts script/windows-runtime-integrity.test.ts",
+      "vitest run script/install-powershell.test.ts script/windows-runtime-integrity.test.ts --reporter=verbose",
     )
+    expect(source.indexOf(downloads)).toBeLessThan(source.indexOf("- name: Test installer replacement and rollback"))
   })
 
   test("release build and publish budgets leave room for native compilation and mirror convergence", () => {
