@@ -318,7 +318,7 @@ managed activation contract, and the MTP policy.
 
 The installation blocks below are kept as a single-page reference and for change history. The
 canonical, current copy lives in the [Install](#install) section near the top of this README.
-Public release installers and signed runtime archives are served by `download.ax-code.com`. The same files are also available under `download.automatosx.com/ax-code/`, which is the address used in the install commands below.
+Public release installers and signed runtime archives are served by `download.ax-code.com`. The same files are also available under `download.automatosx.com/ax-code/`, which is the address used in the install commands below. If `download.automatosx.com` does not resolve yet because a resolver still caches the earlier failure, run the same install command with `download.ax-code.com` in place of `download.automatosx.com/ax-code`.
 AX Code and its SDK support Node.js 26 or later only; standalone releases bundle their runtime.
 
 ### macOS (Apple Silicon)

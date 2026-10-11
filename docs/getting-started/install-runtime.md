@@ -56,6 +56,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.aut
 curl -fsSL https://download.automatosx.com/ax-code/install | bash
 ```
 
+If `download.automatosx.com` does not resolve ("host not found"), a resolver that looked the name up before it existed is still caching the failure, usually for up to 30 minutes. The original host serves identical signed files, so use it meanwhile:
+
+```bash
+curl -fsSL https://download.ax-code.com/install | bash
+```
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.ax-code.com/install.ps1 | iex"
+```
+
 Homebrew remains a supported alternative for the macOS CLI:
 
 ```bash
