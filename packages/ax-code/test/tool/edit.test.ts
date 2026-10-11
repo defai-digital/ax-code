@@ -1005,7 +1005,9 @@ describe("tool.edit", () => {
 
   test("only retries normalized replacement when the converted match is absent", async () => {
     const source = await fs.readFile(path.join(__dirname, "../../src/tool/edit-impl.ts"), "utf-8")
-    const replaceStart = source.indexOf("replaced = replace(contentOld, old, next, params.replaceAll)")
+    const replaceStart = source.indexOf(
+      "replaced = await replaceAsync(contentOld, old, next, params.replaceAll, ctx.abort)",
+    )
     expect(replaceStart).toBeGreaterThan(-1)
 
     const retryGuard = source.slice(replaceStart, source.indexOf("const normalizedContent", replaceStart))

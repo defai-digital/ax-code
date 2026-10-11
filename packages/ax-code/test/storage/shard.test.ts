@@ -110,12 +110,12 @@ describe("Database.close integration", () => {
     original()
   })
 
-  test("closes all open shard handles", () => {
+  test("closes all open shard handles", async () => {
     Shard.handle(pid("project-close-a")).use(() => {})
     Shard.handle(pid("project-close-b")).use(() => {})
     expect(Shard.openCount()).toBe(2)
 
-    Database.close()
+    await Database.close()
     expect(Shard.openCount()).toBe(0)
   })
 })

@@ -17,7 +17,7 @@ const runtime = Promise.all([
 
 afterAll(async () => {
   const [, , { Database }] = await runtime
-  Database.close()
+  await Database.close()
   if (originalTestHome === undefined) delete process.env.AX_CODE_TEST_HOME
   else process.env.AX_CODE_TEST_HOME = originalTestHome
   await fs.rm(testHome, { recursive: true, force: true })

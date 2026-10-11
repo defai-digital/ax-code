@@ -3,7 +3,7 @@ import fs from "fs/promises"
 import path from "path"
 
 import { DebugEngine } from "./index"
-import { nativeDetectSecurity } from "./native-scan"
+import { hasNativeDiagnosticWorker, nativeDetectFiles, nativeDetectSecurity } from "./native-scan"
 import {
   collectScannerFileBatch,
   resolveScannerDefaults,
@@ -369,9 +369,9 @@ export async function detectSecurityImpl(input: DetectSecurityInput): Promise<De
   ]
   const enabledPatterns = new Set(patterns)
   const cwd = codeReasonHost().projectRoot()
-
-  // Native fast-path: run entire detection in Rust (walk + read + regex in parallel)
-  if (!scannerUsesIncrementalFiles(input)) {
+  const signal = input.signal ?? codeReasonHost().abort()
+  signal.throwIfAborted()
+  if (!scannerUsesIncrementalFiles(input) && !hasNativeDiagnosticWorker()) {
     const native = nativeDetectSecurity({ cwd, include, patterns, maxFiles, maxPerFile, excludeTests })
     if (native) {
       return {
@@ -398,11 +398,25 @@ export async function detectSecurityImpl(input: DetectSecurityInput): Promise<De
   const fileBatch = await collectScannerFileBatch(input, { cwd, include, excludeTests, maxFiles })
   heuristics.push(...scannerFileBatchHeuristics(fileBatch))
 
-  const { findings, usedNativeBatchRead } = await scanScannerFiles(fileBatch.files, (file, content) =>
-    scanFile(file, enabledPatterns, maxPerFile, content),
+  const nativeFindings = await nativeDetectFiles("security", fileBatch.files, patterns, maxPerFile, input.signal)
+  if (nativeFindings) {
+    sortScannerFindings(nativeFindings)
+    return {
+      findings: nativeFindings,
+      filesScanned: fileBatch.files.length,
+      truncated: fileBatch.truncated,
+      explain: DebugEngine.buildExplain("detect-security", [], [...heuristics, "native-worker"]),
+      auditCaveat: DETECT_SECURITY_AUDIT_CAVEAT,
+    }
+  }
+
+  const { findings, usedNativeBatchRead } = await scanScannerFiles(
+    fileBatch.files,
+    (file, content) => scanFile(file, enabledPatterns, maxPerFile, content),
+    hasNativeDiagnosticWorker() ? { readFilesBatch: () => undefined } : {},
   )
   if (usedNativeBatchRead) heuristics.push("native-batch-read")
-
+  signal.throwIfAborted()
   sortScannerFindings(findings)
 
   return {

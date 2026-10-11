@@ -11,10 +11,12 @@ mod lock;
 mod node;
 mod schema;
 mod store;
+mod worker;
 
 pub use interval_tree::IntervalTree;
 pub use lock::AdvisoryLock;
 pub use store::IndexStore;
+pub use worker::*;
 
 #[napi]
 pub fn hash_sha256(data: napi::bindgen_prelude::Buffer) -> String {

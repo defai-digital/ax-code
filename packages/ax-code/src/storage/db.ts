@@ -162,7 +162,7 @@ export namespace Database {
     return db
   })
 
-  export function close() {
+  export async function close() {
     // Drain any queued replay events before tearing down the SQLite
     // handle. Without this, emit() calls in the same tick as Database.close
     // get scheduled on a microtask that never runs (the handle closes
@@ -209,11 +209,12 @@ export namespace Database {
     // stay open for the lifetime of the process — a real fd / WAL leak in
     // long-running server / desktop / TUI hosts (BUG-008). NativeStore.close
     // is idempotent and safe to call when the addon isn't loaded.
-    NativeStore.close()
+    const nativeClosing = NativeStore.close()
     // Close + evict every open per-project shard handle (idempotent). Shard
     // handles are opened lazily, so an empty cache is a no-op — but a
     // long-running server / desktop host may hold up to Shard.MAX_OPEN of them.
     Shard.closeAll()
+    await nativeClosing
   }
 
   // node:sqlite reports lock contention as errcode 5 (SQLITE_BUSY — extended

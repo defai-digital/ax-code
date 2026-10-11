@@ -64,6 +64,8 @@ export declare function chunkFile(path: string, content: string, maxLines: numbe
 /** Compute content hash for dedup. */
 export declare function contentHash(content: string): string
 
+export declare function detectFilesAsync(inputJson: string, cancellation: ScanCancellation): Promise<string>
+
 export declare function detectHardcodes(inputJson: string): string
 
 export declare function detectLifecycle(inputJson: string): string

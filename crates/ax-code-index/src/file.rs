@@ -200,6 +200,27 @@ impl IndexStore {
         edges_json: String,
         file_meta_json: String,
     ) -> napi::Result<()> {
+        self.ingest_file_cancellable(
+            project_id,
+            file_path,
+            nodes_json,
+            edges_json,
+            file_meta_json,
+            None,
+        )
+    }
+}
+
+impl IndexStore {
+    pub(crate) fn ingest_file_cancellable(
+        &self,
+        project_id: String,
+        file_path: String,
+        nodes_json: String,
+        edges_json: String,
+        file_meta_json: String,
+        cancelled: Option<&std::sync::atomic::AtomicBool>,
+    ) -> napi::Result<()> {
         let nodes: Vec<crate::node::NodeRow> = serde_json::from_str(&nodes_json)
             .map_err(|e| napi::Error::from_reason(format!("invalid nodes JSON: {e}")))?;
         let edges: Vec<crate::edge::EdgeRow> = serde_json::from_str(&edges_json)
@@ -207,8 +228,25 @@ impl IndexStore {
         let file_meta: FileRow = serde_json::from_str(&file_meta_json)
             .map_err(|e| napi::Error::from_reason(format!("invalid file meta JSON: {e}")))?;
 
+        if cancelled.is_some()
+            && (nodes
+                .iter()
+                .any(|n| n.project_id != project_id || n.file != file_path)
+                || edges.iter().any(|e| e.project_id != project_id)
+                || file_meta.project_id != project_id
+                || file_meta.path != file_path)
+        {
+            return Err(napi::Error::from_reason("Invalid graph ingest scope"));
+        }
+
         self.with_conn_mut(|conn| {
       let tx = conn.transaction()?;
+      let check = || {
+        if cancelled.is_some_and(|c| c.load(std::sync::atomic::Ordering::Relaxed)) {
+          Err(rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_INTERRUPT), None))
+        } else { Ok(()) }
+      };
+      check()?;
 
       // 1. Get node IDs for edge cleanup
       let node_ids: Vec<String> = {
@@ -220,6 +258,7 @@ impl IndexStore {
 
       // 2. Delete edges touching this file's nodes
       for chunk in node_ids.chunks(500) {
+        check()?;
         if chunk.is_empty() { continue; }
         let placeholders: String = chunk.iter().enumerate()
           .map(|(i, _)| format!("?{}", i + 2))
@@ -242,6 +281,7 @@ impl IndexStore {
 
       // 4. Insert new nodes
       for node in &nodes {
+        check()?;
         tx.execute(
           "INSERT INTO code_node (id, project_id, kind, name, qualified_name, file, range_start_line, range_start_char, range_end_line, range_end_char, signature, visibility, metadata) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
           params![
@@ -255,6 +295,7 @@ impl IndexStore {
 
       // 5. Insert new edges
       for edge in &edges {
+        check()?;
         tx.execute(
           "INSERT INTO code_edge (id, project_id, kind, from_node, to_node, file, range_start_line, range_start_char, range_end_line, range_end_char) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
           params![
@@ -272,6 +313,7 @@ impl IndexStore {
         params![file_meta.id, file_meta.project_id, file_meta.path, file_meta.sha, file_meta.size, file_meta.lang, file_meta.completeness],
       )?;
 
+      check()?;
       tx.commit()?;
       Ok(())
     })

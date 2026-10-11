@@ -7,6 +7,9 @@ import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
 import { parseJsonResult } from "@/util/json-value"
 import { NativeAddon } from "../native/addon"
+import { NativePerf } from "../perf/native"
+import { runNativeScan } from "../native/scan"
+import { WorkQueueFullError } from "@ax-code/util/work-queue"
 import { CODE_NODE_KINDS, type CodeNodeKind } from "./schema.sql"
 
 // Syntactic fallback extraction for the code-intelligence builder.
@@ -15,10 +18,8 @@ import { CODE_NODE_KINDS, type CodeNodeKind } from "./schema.sql"
 // documents `"partial" = indexed via tree-sitter (symbols only, no
 // cross-references)` — but the builder only ever had the LSP path, so a
 // file without a healthy semantic language server contributed nothing to
-// the graph. This module completes the design: when LSP yields zero
-// document symbols, the builder asks for a deterministic local parse via
-// web-tree-sitter and the grammar .wasm packages that already ship beside
-// the bundle (see build-node-tui's distDeps).
+// the graph. When LSP yields zero document symbols, use the bounded native
+// syntax worker or the compatible web-tree-sitter grammar fallback.
 //
 // Scope and guarantees:
 //   - Symbols only. References/call edges need semantic analysis; files
@@ -26,7 +27,7 @@ import { CODE_NODE_KINDS, type CodeNodeKind } from "./schema.sql"
 //     consumers never over-trust them, and nodes carry
 //     `metadata: { source: "tree-sitter", precision: "syntactic" }`.
 //   - Bounded. Sources larger than MAX_SOURCE_BYTES are skipped (the wasm
-//     parse is synchronous on the backend event loop), and a grammar that
+//     fallback is synchronous on the backend event loop), and a grammar that
 //     fails to load is latched broken for the process lifetime instead of
 //     being retried per file.
 //   - Local and deterministic: no LLM, no network, byte-identical inputs
@@ -110,6 +111,7 @@ export namespace SyntacticExtractor {
   }
 
   function grammarIdentity(lang: string): string {
+    if (NativeAddon.parser()?.extractInventoryAsync) return `native-inventory-v1:${lang}`
     return GRAMMARS[lang] ?? `native:${lang}`
   }
 
@@ -169,7 +171,7 @@ export namespace SyntacticExtractor {
   }
 
   // Bump this identity whenever the import walker or bundled grammar contract changes.
-  const IMPORT_CACHE_VERSION = "syntactic-imports-v1"
+  const IMPORT_CACHE_VERSION = "syntactic-imports-v2"
   const CachedImports = z
     .array(
       z.object({
@@ -180,7 +182,7 @@ export namespace SyntacticExtractor {
     .max(MAX_IMPORTS_PER_FILE)
 
   // Bump this identity whenever the extractor or bundled grammar contract changes.
-  const CACHE_VERSION = "syntactic-v2"
+  const CACHE_VERSION = "syntactic-v3"
   const CachedSymbols = z
     .array(
       z.object({
@@ -196,27 +198,40 @@ export namespace SyntacticExtractor {
     )
     .max(MAX_SYMBOLS_PER_FILE)
 
-  export async function extract(lang: string, text: string): Promise<Symbol[] | undefined> {
+  export async function extract(lang: string, text: string, signal?: AbortSignal): Promise<Symbol[] | undefined> {
+    signal?.throwIfAborted()
     if (evidenceCacheMode() === "off" || !supported(lang) || text.length > MAX_SOURCE_BYTES)
-      return extractFresh(lang, text)
+      return extractFresh(lang, text, signal)
     const key = EvidenceCache.key(CACHE_VERSION, lang, grammarIdentity(lang), EvidenceCache.digest(text))
     const cached = await EvidenceCache.get(key, CachedSymbols)
+    signal?.throwIfAborted()
     if (cached) return cached
-    const symbols = await extractFresh(lang, text)
+    const symbols = await extractFresh(lang, text, signal)
+    signal?.throwIfAborted()
     if (symbols) await EvidenceCache.put(key, symbols)
     return symbols
   }
 
-  async function extractFresh(lang: string, text: string): Promise<Symbol[] | undefined> {
+  async function extractFresh(
+    lang: string,
+    text: string,
+    signal?: AbortSignal,
+    preferNative = true,
+  ): Promise<Symbol[] | undefined> {
     if (!supported(lang)) return undefined
     if (text.length > MAX_SOURCE_BYTES) {
       log.info("skipping syntactic extraction, source too large", { lang, size: text.length })
       return undefined
     }
-    // Keep JS/TS/bash on the WASM walkers. Native also has grammars for
-    // TypeScript/JavaScript, but those extractors do not emit signatures
-    // that the WASM path already tests.
+    if (preferNative) {
+      const inventory = await extractNativeInventory(lang, text, signal)
+      if (inventory?.symbols) return inventory.symbols
+    }
+    // Old addons retain the WASM projection for JS/TS. Bash has no native
+    // inventory grammar and always uses its existing WASM walker.
     if (lang in GRAMMARS) return extractWasm(lang, text)
+    // An async-native failure must not retry the same CPU work synchronously.
+    if (NativeAddon.parser()?.extractInventoryAsync) return undefined
     return extractNative(lang, text)
   }
 
@@ -226,18 +241,34 @@ export namespace SyntacticExtractor {
    * verbatim; resolution to repo files is the caller's job. Returns
    * undefined for unsupported languages and oversized sources.
    */
-  export async function extractImports(lang: string, text: string): Promise<ImportRef[] | undefined> {
+  export async function extractImports(
+    lang: string,
+    text: string,
+    signal?: AbortSignal,
+  ): Promise<ImportRef[] | undefined> {
+    signal?.throwIfAborted()
     if (!importsSupported(lang) || text.length > MAX_SOURCE_BYTES) return undefined
-    if (evidenceCacheMode() === "off") return extractImportsFresh(lang, text)
+    if (evidenceCacheMode() === "off") return extractImportsFresh(lang, text, signal)
     const key = EvidenceCache.key(IMPORT_CACHE_VERSION, lang, grammarIdentity(lang), EvidenceCache.digest(text))
     const cached = await EvidenceCache.get(key, CachedImports)
+    signal?.throwIfAborted()
     if (cached) return cached
-    const refs = await extractImportsFresh(lang, text)
+    const refs = await extractImportsFresh(lang, text, signal)
+    signal?.throwIfAborted()
     if (refs) await EvidenceCache.put(key, refs)
     return refs
   }
 
-  async function extractImportsFresh(lang: string, text: string): Promise<ImportRef[] | undefined> {
+  async function extractImportsFresh(
+    lang: string,
+    text: string,
+    signal?: AbortSignal,
+    preferNative = true,
+  ): Promise<ImportRef[] | undefined> {
+    if (preferNative) {
+      const inventory = await extractNativeInventory(lang, text, signal)
+      if (inventory?.imports) return inventory.imports
+    }
     const language = await loadLanguage(lang)
     if (!language) return undefined
     const { Parser } = await runtime()
@@ -256,6 +287,79 @@ export namespace SyntacticExtractor {
     } finally {
       tree?.delete()
       parser.delete?.()
+    }
+  }
+
+  export type Inventory = { symbols: Symbol[] | undefined; imports: ImportRef[] | undefined }
+
+  /** One parse for both sections; each section retains its own validated cache and fallback. */
+  export async function extractInventory(lang: string, text: string, signal?: AbortSignal): Promise<Inventory> {
+    signal?.throwIfAborted()
+    if (!supported(lang) || text.length > MAX_SOURCE_BYTES) return { symbols: undefined, imports: undefined }
+    const cache = evidenceCacheMode() !== "off"
+    const digest = cache ? EvidenceCache.digest(text) : ""
+    const symbolsKey = EvidenceCache.key(CACHE_VERSION, lang, grammarIdentity(lang), digest)
+    const importsKey = EvidenceCache.key(IMPORT_CACHE_VERSION, lang, grammarIdentity(lang), digest)
+    const [cachedSymbols, cachedImports] = cache
+      ? await Promise.all([
+          EvidenceCache.get(symbolsKey, CachedSymbols),
+          importsSupported(lang) ? EvidenceCache.get(importsKey, CachedImports) : undefined,
+        ])
+      : [undefined, undefined]
+    signal?.throwIfAborted()
+    let symbols = cachedSymbols
+    let imports = cachedImports
+    if (!symbols || (importsSupported(lang) && !imports)) {
+      const native = await extractNativeInventory(lang, text, signal)
+      symbols ??= native?.symbols ?? (await extractFresh(lang, text, signal, false))
+      if (importsSupported(lang)) imports ??= native?.imports ?? (await extractImportsFresh(lang, text, signal, false))
+    }
+    signal?.throwIfAborted()
+    if (cache) {
+      if (symbols && !cachedSymbols) await EvidenceCache.put(symbolsKey, symbols)
+      if (imports && !cachedImports) await EvidenceCache.put(importsKey, imports)
+    }
+    return { symbols, imports }
+  }
+
+  async function extractNativeInventory(
+    lang: string,
+    text: string,
+    signal?: AbortSignal,
+  ): Promise<Inventory | undefined> {
+    // N-API String conversion replaces lone surrogates; preserve them in the WASM projection.
+    if (!text.isWellFormed()) return undefined
+    const parser = NativeAddon.parser()
+    if (!parser?.extractInventoryAsync || !parser.ParserCancellation || !parser.hasGrammar(lang)) return undefined
+    try {
+      const raw = await NativePerf.runAsync("parser.extractInventory", { lang, sourceUnits: text.length }, () =>
+        runNativeScan(
+          () => new parser.ParserCancellation!(),
+          (cancellation) => parser.extractInventoryAsync!(text, lang, cancellation),
+          signal,
+        ),
+      )
+      signal?.throwIfAborted()
+      const parsed = parseJsonResult(raw)
+      if (!parsed.ok) throw parsed.error
+      const envelope = z.object({ symbols: z.unknown(), imports: z.unknown() }).parse(parsed.value)
+      const symbols = CachedSymbols.safeParse(envelope.symbols)
+      const imports = CachedImports.safeParse(envelope.imports)
+      if (!symbols.success || (importsSupported(lang) && !imports.success))
+        log.warn("native inventory section failed validation", { lang })
+      return {
+        symbols: symbols.success ? symbols.data : undefined,
+        imports: imports.success ? imports.data : undefined,
+      }
+    } catch (err) {
+      signal?.throwIfAborted()
+      if (
+        err instanceof WorkQueueFullError ||
+        (err instanceof DOMException && (err.name === "AbortError" || err.name === "TimeoutError"))
+      )
+        throw err
+      log.warn("native inventory failed; using compatible fallback", { lang, err: toErrorMessage(err) })
+      return undefined
     }
   }
 

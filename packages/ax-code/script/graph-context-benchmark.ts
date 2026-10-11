@@ -171,7 +171,7 @@ async function main() {
       },
     })
   } finally {
-    Database.close()
+    await Database.close()
     await rm(dir, { recursive: true, force: true })
   }
 }

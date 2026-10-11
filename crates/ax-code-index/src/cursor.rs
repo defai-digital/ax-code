@@ -90,4 +90,10 @@ impl IndexStore {
             Ok(())
         })
     }
+
+    /// Reload statistics written by the independent maintenance worker.
+    #[napi]
+    pub fn refresh_planner_statistics(&self) -> napi::Result<()> {
+        self.with_conn(|conn| conn.execute_batch("ANALYZE sqlite_schema;"))
+    }
 }

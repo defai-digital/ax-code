@@ -116,6 +116,7 @@ configureCodeReasonHost({
   native: {
     fs: () => NativeAddon.fs(),
     perfRun: (name, meta, fn) => NativePerf.run(name, meta, fn),
+    perfRunAsync: (name, meta, fn) => NativePerf.runAsync(name, meta, fn),
   },
   killTree: (proc, opts) => Shell.killTree(proc, opts),
   state: (init, dispose) => Instance.state(init, dispose),

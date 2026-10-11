@@ -316,7 +316,7 @@ describe("session.prompt flow", () => {
     })
 
     await Instance.disposeAll()
-    Database.close()
+    await Database.close()
 
     await Instance.provide({
       directory: tmp.path,

@@ -276,6 +276,24 @@ export namespace CodeGraphQuery {
   export type FileRow = typeof CodeFileTable.$inferSelect
   export type FileInsert = typeof CodeFileTable.$inferInsert
 
+  /** Replace the complete file graph in one store-owned transaction. */
+  export async function ingestFile(
+    projectID: ProjectID,
+    file: string,
+    nodes: NodeInsert[],
+    edges: EdgeInsert[],
+    metadata: FileInsert,
+  ): Promise<void> {
+    if (useNative) return NativeStore.ingestFileAsync(projectID, file, nodes, edges, metadata)
+    Database.transaction(() => {
+      deleteEdgesTouchingFile(projectID, file)
+      deleteNodesInFile(projectID, file)
+      for (let i = 0; i < nodes.length; i += 50) insertNodes(nodes.slice(i, i + 50))
+      for (let i = 0; i < edges.length; i += 60) insertEdges(edges.slice(i, i + 60))
+      upsertFile(metadata)
+    })
+  }
+
   export function upsertFile(row: FileInsert): void {
     if (useNative) return NativeStore.upsertFile(row)
     Database.use((db) => {
@@ -631,6 +649,19 @@ export namespace CodeGraphQuery {
       db.run(sql`ANALYZE code_node`)
       db.run(sql`ANALYZE code_edge`)
       db.run(sql`ANALYZE code_file`)
+    })
+  }
+
+  export async function optimize(): Promise<void> {
+    if (useNative) return NativeStore.optimize()
+    Database.use((db) => {
+      const previous = db.get<{ analysis_limit: number }>(sql`PRAGMA analysis_limit`)?.analysis_limit ?? 0
+      db.run(sql`PRAGMA analysis_limit=1000`)
+      try {
+        analyze()
+      } finally {
+        db.run(sql.raw(`PRAGMA analysis_limit=${previous}`))
+      }
     })
   }
 

@@ -153,6 +153,7 @@ export type DreNativePort = {
   fs(): unknown | undefined
   // Run a callable under the host's native perf sampler.
   perfRun<T>(name: string, meta: Record<string, unknown>, fn: () => T): T
+  perfRunAsync?<T>(name: string, meta: Record<string, unknown>, fn: () => Promise<T>): Promise<T>
 }
 
 // ─── Host ───────────────────────────────────────────────────────────────

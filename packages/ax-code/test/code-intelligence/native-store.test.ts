@@ -47,6 +47,6 @@ describe("code-intelligence.native-store", () => {
 
     IsolatedNativeStore.insertNodes([])
 
-    expect(() => IsolatedNativeStore.close()).not.toThrow()
+    await expect(IsolatedNativeStore.close()).resolves.toBeUndefined()
   })
 })

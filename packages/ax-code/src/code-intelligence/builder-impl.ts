@@ -1020,10 +1020,10 @@ export namespace CodeGraphBuilder {
     }
   }
 
-  function commitPreparedIndex(
+  async function commitPreparedIndex(
     projectID: ProjectID,
     prepared: Extract<PreparedIndex, { kind: "commit" }>,
-  ): IndexResult {
+  ): Promise<IndexResult> {
     const edgeInserts: Parameters<typeof CodeGraphQuery.insertEdges>[0] = []
     let completeness: IndexResult["completeness"] = prepared.completeness
 
@@ -1159,30 +1159,17 @@ export namespace CodeGraphBuilder {
     }
 
     const tTxn = performance.now()
-    Database.transaction((_tx) => {
-      CodeGraphQuery.deleteEdgesTouchingFile(projectID, prepared.absPath)
-      CodeGraphQuery.deleteNodesInFile(projectID, prepared.absPath)
-
-      for (let i = 0; i < prepared.nodeInserts.length; i += 50) {
-        CodeGraphQuery.insertNodes(prepared.nodeInserts.slice(i, i + 50))
-      }
-
-      for (let i = 0; i < edgeInserts.length; i += 60) {
-        CodeGraphQuery.insertEdges(edgeInserts.slice(i, i + 60))
-      }
-
-      CodeGraphQuery.upsertFile({
-        id: CodeFileID.ascending(),
-        project_id: projectID,
-        path: prepared.absPath,
-        sha: prepared.sha,
-        size: prepared.size,
-        lang: prepared.lang,
-        indexed_at: prepared.now,
-        completeness,
-        time_created: prepared.now,
-        time_updated: prepared.now,
-      })
+    await CodeGraphQuery.ingestFile(projectID, prepared.absPath, prepared.nodeInserts, edgeInserts, {
+      id: CodeFileID.ascending(),
+      project_id: projectID,
+      path: prepared.absPath,
+      sha: prepared.sha,
+      size: prepared.size,
+      lang: prepared.lang,
+      indexed_at: prepared.now,
+      completeness,
+      time_created: prepared.now,
+      time_updated: prepared.now,
     })
     prepared.timings.dbTransaction = performance.now() - tTxn
     prepared.timings.total = performance.now() - prepared.tStart
@@ -1375,7 +1362,7 @@ export namespace CodeGraphBuilder {
         const result = await prepareIndexFile(projectID, file, { force: opts.force })
           .then((prepared) => {
             if (prepared.kind === "final") return prepared.result
-            return withProjectLock(projectID, () => Promise.resolve(commitPreparedIndex(projectID, prepared)))
+            return withProjectLock(projectID, () => commitPreparedIndex(projectID, prepared))
           })
           .catch((err): IndexResult => {
             log.error("indexFile failed", { file, err })
@@ -1394,14 +1381,8 @@ export namespace CodeGraphBuilder {
     const totalEdges = CodeGraphQuery.countEdges(projectID)
     CodeGraphQuery.upsertCursor(projectID, null, totalNodes, totalEdges)
 
-    // Refresh SQLite planner statistics after a full indexing batch.
-    // Without this, the planner has no row counts and picks poor plans:
-    // e.g. edgesTo was using code_edge_project_kind_idx (7 distinct
-    // values) instead of code_edge_to_idx (unique per node) because it
-    // had no data to tell them apart. ANALYZE is cheap (~100ms on a
-    // 450k-edge graph) and its output persists in sqlite_stat1 across
-    // DB opens, so this one call per index pass is enough.
-    CodeGraphQuery.analyze()
+    // Bounded planner maintenance runs on a separate native WAL connection.
+    await CodeGraphQuery.optimize()
 
     return { nodes, edges, files: indexed, unchanged, skipped, failed, pruned, timings: aggregate }
   }

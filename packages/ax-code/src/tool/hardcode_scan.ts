@@ -16,9 +16,10 @@ export const HardcodeScanTool = Tool.define("hardcode_scan", {
     patterns: z.array(z.enum(PATTERN_KINDS)).optional().describe("Which detectors to run (default: all four)"),
     ...SCAN_TOOL_COMMON_PARAMETERS,
   }),
-  execute: async (args) => {
+  execute: async (args, ctx) => {
     const projectID = Instance.project.id
     const report = await DebugEngine.detectHardcodes(projectID, {
+      signal: ctx.abort,
       patterns: args.patterns,
       ...scanToolCommonDetectInput(args),
     })

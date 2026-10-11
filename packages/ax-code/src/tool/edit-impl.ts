@@ -20,7 +20,8 @@ import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
 import { parseNativeJson } from "../util/native-json"
 import { normalizeToWorkspacePath, resolveToolFilePath, withFilePathAliases } from "./file-path"
-import { toErrorMessage, errorCode } from "../util/error-message"
+import { runNativeScan } from "../native/scan"
+import { WorkQueueFullError } from "@ax-code/util/work-queue"
 import { ToolBoolean } from "./schema"
 import {
   convertToLineEnding,
@@ -160,15 +161,27 @@ export const EditTool = Tool.define("edit", {
 
       let replaced: string | undefined
       try {
-        replaced = replace(contentOld, old, next, params.replaceAll)
+        replaced = await replaceAsync(contentOld, old, next, params.replaceAll, ctx.abort)
       } catch (error) {
+        ctx.abort.throwIfAborted()
+        if (
+          error instanceof WorkQueueFullError ||
+          (error instanceof DOMException && (error.name === "AbortError" || error.name === "TimeoutError"))
+        )
+          throw error
         if (contentOld.includes(old)) throw error
         // If the converted ending doesn't match (mixed-ending file),
         // try with normalized endings on both sides.
         const normalizedContent = normalizeLineEndings(contentOld)
         const normalizedOld = normalizeLineEndings(params.oldString)
         const normalizedNext = normalizeLineEndings(params.newString)
-        const normalizedResult = replace(normalizedContent, normalizedOld, normalizedNext, params.replaceAll)
+        const normalizedResult = await replaceAsync(
+          normalizedContent,
+          normalizedOld,
+          normalizedNext,
+          params.replaceAll,
+          ctx.abort,
+        )
         replaced = spliceNormalizedReplacement({
           original: contentOld,
           normalizedResult,
@@ -773,29 +786,6 @@ export function replace(content: string, oldString: string, newString: string, r
   }
 
   const hasCRLF = content.includes("\r\n")
-  const native = hasCRLF || !content.includes(oldString) ? undefined : NativeAddon.diff()
-  if (native) {
-    try {
-      const json = NativePerf.run(
-        "diff.editReplace",
-        {
-          contentBytes: content.length,
-          oldBytes: oldString.length,
-          newBytes: newString.length,
-          replaceAll,
-        },
-        () => native.editReplace(content, oldString, newString, replaceAll ?? false),
-      )
-      const result = parseNativeEditReplaceResult(json)
-      return result.new_content
-    } catch (e: unknown) {
-      const message = toErrorMessage(e)
-      const code = errorCode(e)
-      const canRetryInJs =
-        message.includes("Could not find oldString") || message.includes("Found multiple matches for oldString")
-      if (code !== "MODULE_NOT_FOUND" && code !== "ERR_MODULE_NOT_FOUND" && !canRetryInJs) throw e
-    }
-  }
 
   if (replaceAll) {
     if (!content.includes(oldString)) {
@@ -876,4 +866,45 @@ export function replace(content: string, oldString: string, newString: string, r
     )
   }
   throw new Error("Found multiple matches for oldString. Provide more surrounding context to make the match unique.")
+}
+
+/** Offload expensive matching; simple literal edits stay on the JS fast path. */
+export async function replaceAsync(
+  content: string,
+  oldString: string,
+  newString: string,
+  replaceAll = false,
+  signal?: AbortSignal,
+): Promise<string> {
+  signal?.throwIfAborted()
+  const native = NativeAddon.diff()
+  // Measured crossover: fuzzy matching wins by 16 Ki units; CRLF/all use a conservative 64 Ki floor.
+  const expensive =
+    (!content.includes(oldString) && content.length >= 16_384) ||
+    ((replaceAll || content.includes("\r\n")) && content.length >= 65_536)
+  if (
+    !expensive ||
+    !native?.editReplaceAsync ||
+    !native.EditCancellation ||
+    !oldString ||
+    !content.isWellFormed() ||
+    !oldString.isWellFormed() ||
+    !newString.isWellFormed() ||
+    Buffer.byteLength(content) > 32 * 1024 * 1024 ||
+    Buffer.byteLength(oldString) > 2_000_000 ||
+    Buffer.byteLength(newString) > 4_000_000
+  )
+    return replace(content, oldString, newString, replaceAll)
+  const result = await NativePerf.runAsync(
+    "diff.editReplaceAsync",
+    { contentBytes: Buffer.byteLength(content), oldBytes: oldString.length, newBytes: newString.length, replaceAll },
+    () =>
+      runNativeScan(
+        () => new native.EditCancellation!(),
+        (cancel) => native.editReplaceAsync!(content, oldString, newString, replaceAll, cancel),
+        signal,
+      ),
+  )
+  signal?.throwIfAborted()
+  return result
 }

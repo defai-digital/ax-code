@@ -14,7 +14,7 @@ const dir = path.join(os.tmpdir(), "opencode-test-data-" + process.pid + "-" + M
 await fs.mkdir(dir, { recursive: true })
 afterAll(async () => {
   const { Database } = await import("../src/storage/db")
-  Database.close()
+  await Database.close()
   const transientCleanupError = (error: unknown) =>
     typeof error === "object" &&
     error !== null &&

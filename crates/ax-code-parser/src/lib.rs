@@ -5,6 +5,9 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use tree_sitter::{Language, Node, Parser};
 
+mod inventory;
+pub use inventory::*;
+
 // ─── Symbol types ──────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,12 +50,10 @@ pub struct FileSymbols {
 fn get_language(name: &str) -> Option<Language> {
     match name {
         "typescript" => Some(tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()),
-        "tsx" => Some(tree_sitter_typescript::LANGUAGE_TSX.into()),
-        "javascript" => Some(tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()),
-        // The plain TypeScript grammar doesn't understand JSX syntax; TSX
-        // is a superset that also parses plain JS/TS, so use it for "jsx"
-        // the same way it's already used for "tsx".
-        "jsx" => Some(tree_sitter_typescript::LANGUAGE_TSX.into()),
+        "tsx" | "typescriptreact" => Some(tree_sitter_typescript::LANGUAGE_TSX.into()),
+        "javascript" => Some(tree_sitter_javascript::LANGUAGE.into()),
+        // JavaScript's grammar supports JSX and matches the WASM fallback.
+        "jsx" | "javascriptreact" => Some(tree_sitter_javascript::LANGUAGE.into()),
         "python" => Some(tree_sitter_python::LANGUAGE.into()),
         "go" => Some(tree_sitter_go::LANGUAGE.into()),
         "rust" => Some(tree_sitter_rust::LANGUAGE.into()),
@@ -602,29 +603,39 @@ pub fn extract_symbols(source: String, language: String) -> napi::Result<String>
 }
 
 #[napi]
-pub fn parse_batch(files_json: String, _concurrency: u32) -> napi::Result<String> {
+pub fn parse_batch(files_json: String, concurrency: u32) -> napi::Result<String> {
     let files: Vec<FileInput> = serde_json::from_str(&files_json)
         .map_err(|e| napi::Error::from_reason(format!("invalid JSON: {e}")))?;
 
-    // Use rayon for parallel parsing — each thread gets its own Parser
-    // instance via map_init to avoid mutex contention on tree-sitter state.
-    let results: Vec<FileSymbols> = files
-        .par_iter()
-        .map_init(Parser::new, |parser, f| {
-            match extract_with_parser(parser, &f.content, &f.language) {
-                Ok(symbols) => FileSymbols {
-                    path: f.path.clone(),
-                    symbols,
-                    error: None,
-                },
-                Err(e) => FileSymbols {
-                    path: f.path.clone(),
-                    symbols: Vec::new(),
-                    error: Some(e),
-                },
-            }
-        })
-        .collect();
+    if !(1..=8).contains(&concurrency) {
+        return Err(napi::Error::from_reason(
+            "Parser concurrency must be between 1 and 8",
+        ));
+    }
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(concurrency as usize)
+        .build()
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    // Retained synchronous compatibility API, with an explicit private pool.
+    let results: Vec<FileSymbols> = pool.install(|| {
+        files
+            .par_iter()
+            .map_init(Parser::new, |parser, f| {
+                match extract_with_parser(parser, &f.content, &f.language) {
+                    Ok(symbols) => FileSymbols {
+                        path: f.path.clone(),
+                        symbols,
+                        error: None,
+                    },
+                    Err(e) => FileSymbols {
+                        path: f.path.clone(),
+                        symbols: Vec::new(),
+                        error: Some(e),
+                    },
+                }
+            })
+            .collect()
+    });
 
     serde_json::to_string(&results).map_err(|e| napi::Error::from_reason(e.to_string()))
 }

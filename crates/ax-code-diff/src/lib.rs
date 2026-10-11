@@ -2,7 +2,9 @@
 extern crate napi_derive;
 
 use serde::{Deserialize, Serialize};
+mod edit_worker;
 mod helpers;
+pub use edit_worker::*;
 use helpers::*;
 
 // ── NAPI exports ─────────────────────────────────────────────────────────────
@@ -65,7 +67,8 @@ pub fn edit_replace(
         // different indentation) for genuinely different match locations,
         // and each could independently look "unique" in `content` even
         // though the strategy actually found 2+ places old_string matches.
-        let mut locations: std::collections::BTreeMap<usize, &str> = std::collections::BTreeMap::new();
+        let mut locations: std::collections::BTreeMap<usize, &str> =
+            std::collections::BTreeMap::new();
         for search in &candidates {
             if search.is_empty() {
                 continue;

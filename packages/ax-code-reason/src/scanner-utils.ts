@@ -20,6 +20,7 @@ export type ScannerScopeControls = {
 }
 
 export type ScannerInputControls = ScannerScopeControls & {
+  signal?: AbortSignal
   include?: string[]
   // Pre-resolved file list for incremental scanning.
   files?: string[]

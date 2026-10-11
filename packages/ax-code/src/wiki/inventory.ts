@@ -78,12 +78,15 @@ export namespace WikiInventory {
     root: string,
     sources: readonly string[],
     limits: Limits = LIMITS,
+    signal?: AbortSignal,
   ): Promise<Map<string, SourceInventory>> {
+    signal?.throwIfAborted()
     const cited = new Set(sources)
     const selected = [...cited].sort().slice(0, Math.max(0, limits.maxSources))
     const inventory = new Map<string, SourceInventory>()
     let remaining = Math.max(0, limits.totalBytes)
     for (const relative of selected) {
+      signal?.throwIfAborted()
       if (remaining <= 0) break
       const lang = languageFor(relative)
       if (!lang) continue
@@ -91,18 +94,14 @@ export namespace WikiInventory {
       if (!content) continue
       remaining -= Buffer.byteLength(content)
       let symbols: SyntacticExtractor.Symbol[] | undefined
-      try {
-        symbols = await SyntacticExtractor.extract(lang, content)
-      } catch {
-        continue
-      }
       let refs: SyntacticExtractor.ImportRef[] | undefined
-      if (SyntacticExtractor.importsSupported(lang)) {
-        try {
-          refs = await SyntacticExtractor.extractImports(lang, content)
-        } catch {
-          refs = undefined
-        }
+      try {
+        const extracted = await SyntacticExtractor.extractInventory(lang, content, signal)
+        symbols = extracted.symbols
+        refs = extracted.imports
+      } catch {
+        signal?.throwIfAborted()
+        continue
       }
       const listed = (symbols ?? [])
         .slice(0, Math.max(0, limits.symbolsPerSource))
@@ -119,6 +118,7 @@ export namespace WikiInventory {
       if (listed.length === 0 && imports.length === 0) continue
       inventory.set(relative, { symbols: listed, imports })
     }
+    signal?.throwIfAborted()
     return inventory
   }
 

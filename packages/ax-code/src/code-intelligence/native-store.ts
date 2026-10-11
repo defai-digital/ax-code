@@ -9,6 +9,7 @@ import type { CodeNodeID } from "./id"
 import type { CodeNodeKind, CodeEdgeKind } from "./schema.sql"
 import type { CodeNodeTable, CodeEdgeTable, CodeFileTable, CodeIndexCursorTable } from "./schema.sql"
 import type { IndexStore } from "@ax-code/index-core"
+import { WorkQueue } from "@ax-code/util/work-queue"
 
 // Drizzle row types — the native store returns JSON that is structurally
 // identical to these row shapes (same columns, same names). The cast at
@@ -20,12 +21,67 @@ type CursorRow = typeof CodeIndexCursorTable.$inferSelect
 
 const log = Log.create({ service: "code-intelligence.native-store" })
 
+function encodeNodes(rows: unknown[]): string {
+  return JSON.stringify(
+    rows.map((row) => {
+      if (!row || typeof row !== "object" || !("metadata" in row)) return row
+      return {
+        ...row,
+        metadata:
+          row.metadata == null || typeof row.metadata === "string" ? row.metadata : JSON.stringify(row.metadata),
+      }
+    }),
+  )
+}
+
+function decodeNode(row: NodeRow): NodeRow {
+  if (typeof row.metadata !== "string") return row
+  const metadata = parseJsonPayload(row.metadata)
+  return {
+    ...row,
+    metadata:
+      metadata && typeof metadata === "object" && !Array.isArray(metadata)
+        ? (metadata as Record<string, unknown>)
+        : null,
+  }
+}
+
 let storeInstance: IndexStore | undefined
 // Once `NativeStore.close()` runs we must not lazily reopen a fresh
 // connection on the next op call — that would defeat the shutdown release
 // and resurface BUG-008. The flag stays set for the rest of the process
 // lifetime; a clean reopen requires a new process.
 let storeClosed = false
+const workerQueue = new WorkQueue(1, { maxQueued: 32, timeoutMs: 120_000, drainOnAbort: true })
+const pendingWorkers = new Set<Promise<unknown>>()
+const workerControllers = new Set<AbortController>()
+let closing: Promise<void> | undefined
+
+function worker<T>(run: (cancellation: { cancel(): void }) => Promise<T>): Promise<T> {
+  if (storeClosed) return Promise.reject(new Error("Native index store is closed"))
+  const native = NativeAddon.index()!
+  const controller = new AbortController()
+  workerControllers.add(controller)
+  const promise = workerQueue.run(async (signal) => {
+    const cancellation = new native.IndexCancellation!()
+    const cancel = () => cancellation.cancel()
+    signal.addEventListener("abort", cancel, { once: true })
+    if (signal.aborted) cancel()
+    try {
+      return await run(cancellation)
+    } finally {
+      signal.removeEventListener("abort", cancel)
+    }
+  }, controller.signal)
+  pendingWorkers.add(promise)
+  void promise
+    .finally(() => {
+      pendingWorkers.delete(promise)
+      workerControllers.delete(controller)
+    })
+    .catch(() => undefined)
+  return promise
+}
 
 function getDbPath(): string {
   return Global.Path.data + "/ax-code-index.db"
@@ -64,17 +120,25 @@ export namespace NativeStore {
    * (returning `undefined` / `[]` like the addon-not-available branch).
    * Callers don't need to special-case post-close behaviour.
    */
-  export function close(): void {
-    if (storeClosed) return
+  export function close(): Promise<void> {
+    if (closing) return closing
     storeClosed = true
     const instance = storeInstance
     storeInstance = undefined
-    if (!instance) return
-    try {
-      instance.close()
-    } catch (err) {
-      log.warn("native IndexStore close failed", { error: toErrorMessage(err) })
-    }
+    for (const controller of workerControllers) controller.abort()
+    closing = (async () => {
+      do {
+        for (const controller of workerControllers) controller.abort()
+        await Promise.allSettled([...pendingWorkers])
+      } while (pendingWorkers.size > 0)
+      if (!instance) return
+      try {
+        instance.close()
+      } catch (err) {
+        log.warn("native IndexStore close failed", { error: toErrorMessage(err) })
+      }
+    })()
+    return closing
   }
 
   // Safe JSON.parse wrapper — returns fallback on corrupted native output (BUG-005).
@@ -93,12 +157,13 @@ export namespace NativeStore {
   // ─── Node operations ──────────────────────────────────────────────
 
   export function insertNodes(rows: unknown[]): void {
-    op("insertNodes", { rows: rows.length }, (store) => store.insertNodes(JSON.stringify(rows)))
+    op("insertNodes", { rows: rows.length }, (store) => store.insertNodes(encodeNodes(rows)))
   }
 
   export function getNode(projectID: ProjectID, id: CodeNodeID): NodeRow | undefined {
     const result = op("getNode", { projectID, id }, (store) => store.getNode(projectID, id))
-    return result ? parseNativeStoreJson<NodeRow | undefined>(result, undefined) : undefined
+    const row = result ? parseNativeStoreJson<NodeRow | undefined>(result, undefined) : undefined
+    return row ? decodeNode(row) : undefined
   }
 
   export function findNodesByName(
@@ -109,7 +174,7 @@ export namespace NativeStore {
     const result = op("findNodesByName", { projectID, name, opts }, (store) =>
       store.findNodesByName(projectID, name, JSON.stringify(opts ?? {})),
     )
-    return result ? parseNativeStoreJson<NodeRow[]>(result, []) : []
+    return result ? parseNativeStoreJson<NodeRow[]>(result, []).map(decodeNode) : []
   }
 
   export function findNodesByNamePrefix(
@@ -120,12 +185,12 @@ export namespace NativeStore {
     const result = op("findNodesByPrefix", { projectID, prefix, opts }, (store) =>
       store.findNodesByPrefix(projectID, prefix, JSON.stringify(opts ?? {})),
     )
-    return result ? parseNativeStoreJson<NodeRow[]>(result, []) : []
+    return result ? parseNativeStoreJson<NodeRow[]>(result, []).map(decodeNode) : []
   }
 
   export function nodesInFile(projectID: ProjectID, file: string): NodeRow[] {
     const result = op("nodesInFile", { projectID, file }, (store) => store.nodesInFile(projectID, file))
-    return result ? parseNativeStoreJson<NodeRow[]>(result, []) : []
+    return result ? parseNativeStoreJson<NodeRow[]>(result, []).map(decodeNode) : []
   }
 
   export function countNodes(projectID: ProjectID): number {
@@ -230,6 +295,18 @@ export namespace NativeStore {
     op("analyze", undefined, (store) => store.analyze())
   }
 
+  export async function optimize(): Promise<void> {
+    const native = NativeAddon.index()
+    if (storeClosed) throw new Error("Native index store is closed")
+    const instance = store()
+    if (!instance) throw new Error("Native index store is unavailable")
+    if (!native?.optimizeIndexAsync || !native.IndexCancellation) return analyze()
+    await NativePerf.runAsync("index.optimize", undefined, () =>
+      worker((cancel) => native.optimizeIndexAsync!(getDbPath(), cancel)),
+    )
+    if (!storeClosed) instance.refreshPlannerStatistics()
+  }
+
   // ─── Atomic ingest ────���─────────────────────────────────��─────────
 
   export function ingestFile(
@@ -240,7 +317,32 @@ export namespace NativeStore {
     fileMeta: unknown,
   ): void {
     op("ingestFile", { projectID, filePath, nodes: nodes.length, edges: edges.length }, (store) =>
-      store.ingestFile(projectID, filePath, JSON.stringify(nodes), JSON.stringify(edges), JSON.stringify(fileMeta)),
+      store.ingestFile(projectID, filePath, encodeNodes(nodes), JSON.stringify(edges), JSON.stringify(fileMeta)),
+    )
+  }
+
+  /** Errors propagate: a failed worker must never retry against another database. */
+  export async function ingestFileAsync(
+    projectID: ProjectID,
+    filePath: string,
+    nodes: unknown[],
+    edges: unknown[],
+    fileMeta: unknown,
+  ): Promise<void> {
+    if (storeClosed) throw new Error("Native index store is closed")
+    if (!store()) throw new Error("Native index store is unavailable")
+    const native = NativeAddon.index()
+    if (!native?.ingestFileAsync || !native.IndexCancellation)
+      return ingestFile(projectID, filePath, nodes, edges, fileMeta)
+    const nodeJson = encodeNodes(nodes)
+    const edgeJson = JSON.stringify(edges)
+    const metaJson = JSON.stringify(fileMeta)
+    if (Buffer.byteLength(nodeJson) + Buffer.byteLength(edgeJson) + Buffer.byteLength(metaJson) > 32 * 1024 * 1024)
+      throw new RangeError("Graph ingest input limit exceeded")
+    await NativePerf.runAsync("index.ingestFile", { nodes: nodes.length, edges: edges.length }, () =>
+      worker((cancel) =>
+        native.ingestFileAsync!(getDbPath(), projectID, filePath, nodeJson, edgeJson, metaJson, cancel),
+      ),
     )
   }
 

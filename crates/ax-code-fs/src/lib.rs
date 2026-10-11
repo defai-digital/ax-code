@@ -2,12 +2,14 @@
 extern crate napi_derive;
 
 mod detect;
+mod diagnostics;
 mod embedding;
 #[cfg(feature = "evidence-cache")]
 mod evidence;
 mod scan;
 mod watcher;
 
+pub use diagnostics::*;
 pub use embedding::*;
 pub use scan::{ScanCancellation, search_content_async, walk_files_async};
 pub use watcher::*;

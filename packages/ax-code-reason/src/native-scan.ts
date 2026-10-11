@@ -3,6 +3,8 @@ import { Log } from "./internal/log"
 import { codeReasonHostMaybe } from "./host"
 import z from "zod"
 import { parseNativeJson } from "./internal/native-json"
+import { WorkQueue, WorkQueueFullError } from "@ax-code/util/work-queue"
+import type { DebugEngine } from "./index"
 
 const log = Log.create({ service: "debug-engine.native-scan" })
 
@@ -21,6 +23,106 @@ function nativePerfRun<T>(name: string, meta: Record<string, unknown>, fn: () =>
 type NativeFsAddon = {
   scanFiles(cwd: string, optionsJson: string): string
   readFilesBatch(filesJson: string): string
+  detectFilesAsync?: (inputJson: string, cancellation: { cancel(): void }) => Promise<string>
+  ScanCancellation?: new () => { cancel(): void }
+}
+
+const diagnosticQueue = new WorkQueue(2, { maxQueued: 32, timeoutMs: 120_000 })
+const severity = z.enum(["high", "medium", "low"])
+const findingBase = { file: z.string(), line: z.number().int().positive(), severity, ruleId: z.string() }
+const diagnosticSchemas: { [K in keyof DiagnosticFindings]: z.ZodType<DiagnosticFindings[K]> } = {
+  security: z.object({
+    ...findingBase,
+    pattern: z.enum(["path_traversal", "command_injection", "env_leak", "missing_validation", "ssrf"]),
+    description: z.string(),
+  }),
+  lifecycle: z.object({
+    ...findingBase,
+    resourceType: z.enum([
+      "event_listener",
+      "timer",
+      "subscription",
+      "abort_controller",
+      "child_process",
+      "map_growth",
+    ]),
+    pattern: z.enum(["no_cleanup", "unbounded_growth"]),
+    description: z.string(),
+    cleanupLocation: z.string().nullable(),
+  }),
+  hardcodes: z.object({
+    ...findingBase,
+    column: z.number().int().positive(),
+    kind: z.enum(["magic_number", "inline_url", "inline_path", "inline_secret_shape"]),
+    value: z.string(),
+    suggestion: z.string(),
+  }),
+}
+type DiagnosticFindings = {
+  security: DebugEngine.SecurityFinding
+  lifecycle: DebugEngine.LifecycleFinding
+  hardcodes: DebugEngine.HardcodeFinding
+}
+
+export function hasNativeDiagnosticWorker(): boolean {
+  const native = codeReasonHostMaybe()?.native?.fs() as NativeFsAddon | undefined
+  return nativeScanEnabled() && !!native?.detectFilesAsync && !!native.ScanCancellation
+}
+
+/** Caller-selected scope only; a failed batch falls back as a whole, aborts never do. */
+export async function nativeDetectFiles<K extends keyof DiagnosticFindings>(
+  kind: K,
+  files: string[],
+  patterns: string[],
+  maxPerFile: number,
+  signal = codeReasonHostMaybe()?.abort(),
+): Promise<DiagnosticFindings[K][] | undefined> {
+  signal?.throwIfAborted()
+  if (!hasNativeDiagnosticWorker()) return undefined
+  const native = codeReasonHostMaybe()!.native!.fs() as NativeFsAddon
+  const findings: DiagnosticFindings[K][] = []
+  try {
+    for (let i = 0; i < files.length; i += 32) {
+      const batch = files.slice(i, i + 32)
+      const run = () =>
+        diagnosticQueue.run(async (workSignal) => {
+          workSignal.throwIfAborted()
+          const cancellation = new native.ScanCancellation!()
+          const cancel = () => cancellation.cancel()
+          workSignal.addEventListener("abort", cancel, { once: true })
+          try {
+            const raw = await native.detectFilesAsync!(
+              JSON.stringify({ kind, files: batch, patterns, maxPerFile }),
+              cancellation,
+            )
+            workSignal.throwIfAborted()
+            const schema = diagnosticSchemas[kind]
+            return parseNativeJson(
+              raw,
+              z.object({ findings: z.array(schema).max(batch.length * maxPerFile) }),
+              "Invalid native diagnostic output",
+            ).findings
+          } finally {
+            workSignal.removeEventListener("abort", cancel)
+          }
+        }, signal)
+      const perf = codeReasonHostMaybe()?.native?.perfRunAsync
+      findings.push(
+        ...(await (perf ? perf(`fs.detectFiles.${kind}`, { files: batch.length, maxPerFile }, run) : run())),
+      )
+    }
+    signal?.throwIfAborted()
+    return findings
+  } catch (error) {
+    signal?.throwIfAborted()
+    if (
+      error instanceof WorkQueueFullError ||
+      (error instanceof DOMException && (error.name === "AbortError" || error.name === "TimeoutError"))
+    )
+      throw error
+    log.warn("native diagnostic worker failed; using JS rules", { kind, error })
+    return undefined
+  }
 }
 
 export interface ScanPattern {

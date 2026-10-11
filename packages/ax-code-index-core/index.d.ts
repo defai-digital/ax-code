@@ -15,6 +15,11 @@ export declare class AdvisoryLock {
   get isAcquired(): boolean
 }
 
+export declare class IndexCancellation {
+  constructor()
+  cancel(): void
+}
+
 /**
  * `Option<Connection>` rather than bare `Connection` so `close` can take the
  * connection out and run `Connection::close` (which consumes self, runs the
@@ -29,6 +34,8 @@ export declare class IndexStore {
   clearProject(projectId: string): void
   /** Run ANALYZE on graph tables to refresh query planner statistics */
   analyze(): void
+  /** Reload statistics written by the independent maintenance worker. */
+  refreshPlannerStatistics(): void
   insertEdges(json: string): void
   edgesFrom(projectId: string, fromNode: string, kind?: string | undefined | null): string
   edgesTo(projectId: string, toNode: string, kind?: string | undefined | null): string
@@ -109,3 +116,15 @@ export declare function generateId(prefix: string): string
 export declare function hashFileSha256(path: string): string
 
 export declare function hashSha256(data: Buffer): string
+
+export declare function ingestFileAsync(
+  dbPath: string,
+  projectId: string,
+  filePath: string,
+  nodesJson: string,
+  edgesJson: string,
+  fileMetaJson: string,
+  cancellation: IndexCancellation,
+): Promise<void>
+
+export declare function optimizeIndexAsync(dbPath: string, cancellation: IndexCancellation): Promise<void>

@@ -25,12 +25,20 @@ import type { EvidenceStore } from "../evidence/cache"
 // The napi-rs `.d.ts` declarations provide typed interfaces for each
 // native addon so callers get autocomplete and type checking instead
 // of opaque `any`.
-type FsBinding = Omit<typeof import("@ax-code/fs"), "openEvidenceStore"> & {
+type FsExports = typeof import("@ax-code/fs")
+type FsBinding = Omit<FsExports, "openEvidenceStore" | "detectFilesAsync"> & {
   openEvidenceStore?: (path: string) => Promise<EvidenceStore>
+  detectFilesAsync?: FsExports["detectFilesAsync"]
 }
-type DiffBinding = typeof import("@ax-code/diff")
-type IndexBinding = typeof import("@ax-code/index-core")
-type ParserBinding = typeof import("@ax-code/parser")
+type DiffExports = typeof import("@ax-code/diff")
+type DiffWorkers = "editReplaceSlim" | "editReplaceAsync" | "EditCancellation"
+type DiffBinding = Omit<DiffExports, DiffWorkers> & Partial<Pick<DiffExports, DiffWorkers>>
+type IndexExports = typeof import("@ax-code/index-core")
+type IndexWorkers = "ingestFileAsync" | "optimizeIndexAsync" | "IndexCancellation"
+type IndexBinding = Omit<IndexExports, IndexWorkers> & Partial<Pick<IndexExports, IndexWorkers>>
+type ParserExports = typeof import("@ax-code/parser")
+type ParserWorkers = "extractInventoryAsync" | "parseBatchAsync" | "ParserCancellation"
+type ParserBinding = Omit<ParserExports, ParserWorkers> & Partial<Pick<ParserExports, ParserWorkers>>
 
 const log = Log.create({ service: "native.addon" })
 const _require = createRequire(import.meta.url)
