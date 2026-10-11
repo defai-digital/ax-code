@@ -70,7 +70,7 @@ describe("CI workflow speed policy", () => {
     expect(action).toContain("workspaces: crates -> target")
   })
 
-  test("deterministic tests split across four GitHub runners without in-process shards", () => {
+  test("deterministic tests split across GitHub runners with resource limits for private repositories", () => {
     const lane = workflowJob(ci, "deterministic")
     expect(lane).toBeDefined()
     expect(lane).toContain("timeout-minutes: 20")
@@ -81,7 +81,7 @@ describe("CI workflow speed policy", () => {
     expect(lane).toContain(`name: deterministic (\${{ matrix.shard }}/${DETERMINISTIC_SHARD_COUNT})`)
     expect(lane).toContain("test:ci -- deterministic --rerun-on-fail 0")
     expect(lane).not.toContain("AX_TEST_SHARD_SIZE")
-    expect(lane).not.toContain("AX_TEST_MAX_WORKERS")
+    expect(lane).toContain("AX_TEST_MAX_WORKERS: ${{ github.event.repository.private && '2' || '6' }}")
     expect(lane).toContain("name: ax-code-deterministic-report-${{ matrix.shard }}")
   })
 

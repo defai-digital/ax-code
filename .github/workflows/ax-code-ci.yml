@@ -326,6 +326,9 @@ jobs:
       AX_CODE_DISABLE_SHARE: "true"
       AX_TEST_SHARD_INDEX: ${{ matrix.shard }}
       AX_TEST_SHARD_COUNT: "8"
+      # Private standard Linux runners have 2 CPUs / 8 GB (public: 4 / 16).
+      # Bound source-mode subprocess contention while preserving test deadlines.
+      AX_TEST_MAX_WORKERS: ${{ github.event.repository.private && '2' || '6' }}
     steps:
       - uses: actions/checkout@v7
 
