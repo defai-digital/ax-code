@@ -524,6 +524,8 @@ describe("tool.bash truncation", () => {
               // -x lays the file out under <host>/<path>; -r also owns the tree root.
               await run(`wget -q -x http://127.0.0.1:${port}/deep/tree.txt`)
               await run(`wget -q -r -l1 -nH -P sub http://127.0.0.1:${port}/deep/tree2.txt`)
+              // -nd flattens a recursive fetch into the prefix, which is then the tree root.
+              await run(`wget -q -r -l1 -nd -P sub http://127.0.0.1:${port}/flat/nd.txt`)
               // GNU long options may be abbreviated.
               await run(`wget -q --output-doc=abbrev.txt http://127.0.0.1:${port}/file.bin`)
               // A basename of "-" is a file; only `-O -` means stdout.
@@ -540,11 +542,13 @@ describe("tool.bash truncation", () => {
                   "log.txt",
                   `127.0.0.1:${port}/deep/tree.txt`,
                   ...(port6 !== undefined ? [`::1:${port6}/v6/six.txt`] : []),
+                  "sub",
                   "sub/also.txt",
                   "sub/deep",
                   "sub/deep/tree2.txt",
                   "sub/index.html",
                   "sub/mixed.txt",
+                  "sub/nd.txt",
                   "sub/payload.txt",
                   "sub/plain.txt",
                 ].sort(),

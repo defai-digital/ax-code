@@ -894,6 +894,9 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
                   await recordOutput(path.join(...(hostDir.length > 0 ? hostDir : dirs.slice(0, 1))) || ".", true)
               } else {
                 await recordOutput(basename, true)
+                // With -nd (or no layout) a recursive fetch flattens everything
+                // into the prefix itself, so that is the tree root.
+                if (isWget && recursive) await recordOutput(".", true)
               }
             }
           }
