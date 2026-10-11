@@ -263,46 +263,26 @@ export namespace MigrationLock {
     return a.dev === b.dev && a.ino === b.ino && a.mtimeMs === b.mtimeMs && a.size === b.size && a.text === b.text
   }
 
-  // The sidecar guard serializes all v7.7.8+ reclaimers; an older v7.7.7
-  // contender coordinates only through the target's atomic create. A plain
-  // check-then-unlink therefore had a window in which such a contender could
-  // replace the abandoned file with its own live lock and we would delete it.
-  // Moving the path aside first is atomic: whatever we moved is then inspected,
-  // and a live lock that is not the abandoned one is linked back into place.
+  // The sidecar guard serializes all v7.7.8+ reclaimers. Comparing the whole
+  // snapshot immediately before unlink also prevents a changed owner from
+  // being removed accidentally. Older v7.7.7 contenders still coordinate via
+  // the target's atomic create semantics, which leaves a microsecond window
+  // between this re-read and unlinkSync that POSIX offers no primitive to
+  // close: a rename-aside-then-inspect variant was tried and rejected because
+  // any failure after the rename leaves the well-known path empty while the
+  // displaced owner still believes it holds the lock, which is worse than the
+  // window it was meant to remove.
   function removeIfUnchanged(target: string, expected: Snapshot): boolean {
     const current = readSnapshot(target)
     if (!current) return true
     if (!sameSnapshot(current, expected)) return false
-    const aside = `${target}.${process.pid}.${randomUUID()}.reclaim`
     try {
-      fs.renameSync(target, aside)
+      fs.unlinkSync(target)
+      return true
     } catch (error) {
       if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return true
       throw error
     }
-    const moved = readSnapshot(aside)
-    if (moved && moved.dev === expected.dev && moved.ino === expected.ino && moved.text === expected.text) {
-      try {
-        fs.unlinkSync(aside)
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") throw error
-      }
-      return true
-    }
-    // Not the abandoned lock: a newer owner created it in the window. Restore
-    // it at the path its owner expects; if a third contender already took the
-    // path, leave the displaced file for inspection rather than clobbering.
-    try {
-      fs.linkSync(aside, target)
-      fs.unlinkSync(aside)
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException)?.code === "EEXIST") {
-        log.error("displaced a live migration lock while reclaiming; left aside for inspection", { target, aside })
-      } else {
-        throw error
-      }
-    }
-    return false
   }
 
   /** Test hook: snapshot a lock file the way the reclaimer does. */
