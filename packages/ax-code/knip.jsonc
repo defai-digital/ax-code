@@ -9,7 +9,8 @@
   // pnpm catalog: versions live in the repo-root pnpm-workspace.yaml. Knip resolves that
   // file only when this package is the workspace root, and `pnpm run knip` is not.
   "exclude": ["duplicates", "catalogReferences"],
-  "ignoreBinaries": ["scutil", "sqlite3", "setsid", "pbpaste", "mkfifo"],
+  // Host tools invoked from tests and platform helpers. They are not npm packages.
+  "ignoreBinaries": ["scutil", "sqlite3", "setsid", "pbpaste", "mkfifo", "wget"],
   "ignoreDependencies": [
     "@ax-code/script",
     // Optional platform packages selected by @parcel/watcher at runtime.
