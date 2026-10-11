@@ -636,6 +636,65 @@ describe("DebugProposeHypothesisTool", () => {
     })
   })
 
+  test("an uncited stale envelope in the same run does not downgrade a confirmation that cites fresh evidence", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const { caseId } = await emitCaseAndEvidence(session.id, tmp.path, "p", "log content")
+        const base: VerificationEnvelope = {
+          schemaVersion: 1,
+          workflow: "qa",
+          scope: { kind: "file", paths: ["src/foo.ts"] },
+          command: { runner: "typecheck", argv: [], cwd: "/tmp" },
+          result: { name: "typecheck", type: "typecheck", passed: true, status: "passed", issues: [], duration: 0 },
+          structuredFailures: [],
+          artifactRefs: [],
+          source: { tool: "verify_project", version: "4.x.x", runId: session.id },
+        }
+        const fresh: VerificationEnvelope = {
+          ...base,
+          scope: { kind: "file", paths: ["src/fresh.ts"] },
+          sourceState: await currentSourceState(tmp.path, "git"),
+        }
+        const stale: VerificationEnvelope = {
+          ...base,
+          scope: { kind: "file", paths: ["src/stale.ts"] },
+          sourceState: { available: true, commit: "0000000000000000000000000000000000000000", dirtyDigest: "stale" },
+        }
+        const freshId = computeEnvelopeId(fresh)
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id as any,
+          tool: "verify_project",
+          callID: "call-verify-mixed",
+          status: "completed",
+          metadata: { verificationEnvelopes: [fresh, stale] },
+          durationMs: 1,
+        })
+        await new Promise((resolve) => setTimeout(resolve, 30))
+
+        const tool = await DebugProposeHypothesisTool.init()
+        const result = await tool.execute(
+          { caseId, claim: "cited evidence is fresh", evidenceRefs: [freshId], status: "confirmed" },
+          fakeCtx(session.id),
+        )
+        expect(result.metadata.debugHypothesis.status).toBe("confirmed")
+        expect(result.metadata.needsVerification).toBeFalsy()
+
+        // Re-confirming the same hypothesis with stale evidence names the real cause.
+        const staleId = computeEnvelopeId(stale)
+        await expect(
+          tool.execute(
+            { caseId, claim: "cited evidence is fresh", evidenceRefs: [staleId], status: "confirmed" },
+            fakeCtx(session.id),
+          ),
+        ).rejects.toThrow(/stale evidence/)
+      },
+    })
+  })
+
   test("status confirmed with stale evidence is downgraded to active with needs_verification", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
