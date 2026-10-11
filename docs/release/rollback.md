@@ -42,8 +42,9 @@ signed assets and workflow logs are the evidence for the postmortem.
 ## 3. Revert the Homebrew tap
 
 `bash .github/scripts/update-homebrew.sh` pushed a formula commit to the shared
-`defai-digital/homebrew-tap` repository (and the legacy product tap). Revert those commits in
-both taps so `brew upgrade ax-code` serves the previous version again:
+`defai-digital/homebrew-tap` repository. Revert that commit so `brew upgrade ax-code`
+serves the previous version again. The former `defai-digital/homebrew-ax-code`
+repository contains migration metadata only; do not restore its formula:
 
 ```bash
 git -C homebrew-tap revert --no-edit <formula-commit>

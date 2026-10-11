@@ -66,6 +66,32 @@ casks, and external commands published in `defai-digital/tap`. The shared tap co
 Desktop cask, and Homebrew can load both definitions while resolving an install. Use the release installer instead if
 whole-tap trust is not acceptable.
 
+### Move an existing installation from the legacy tap
+
+`defai-digital/ax-code` is now a migration-only tap. AX Code releases update only
+`defai-digital/tap`. If you installed from the legacy tap, add the shared tap
+before updating so Homebrew can move the installed package's tap ownership:
+
+```bash
+brew tap defai-digital/tap
+brew trust --formula defai-digital/tap/ax-code
+brew update
+brew upgrade defai-digital/tap/ax-code
+brew info defai-digital/tap/ax-code
+```
+
+After confirming the installation uses the shared tap, remove the legacy tap:
+
+```bash
+brew untap defai-digital/ax-code
+```
+
+If Homebrew still reports the old tap, run
+`brew reinstall defai-digital/tap/ax-code` before untapping it. The legacy
+repository remains accessible for existing installations to discover migration.
+
+### Verify a version-pinned Unix installer
+
 For an inspected, version-pinned Unix installation, first download the installer and
 its signature from the same release. With a trusted `minisign` already available:
 

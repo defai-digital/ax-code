@@ -782,8 +782,8 @@ jobs:
     # Update the Homebrew tap automatically after a STABLE release. Beta /
     # prerelease tags (those containing a hyphen) skip the stable tap update.
     # Requires HOMEBREW_TAP_TOKEN or TAP_TOKEN to hold a PAT with write access
-    # to the shared defai-digital/homebrew-tap repository and the legacy
-    # product tap retained for upgrade compatibility.
+    # to the shared defai-digital/homebrew-tap repository only. The former
+    # product tap contains migration metadata and must not receive formulae.
     needs: [guard, publish]
     if: >-
       always() &&
@@ -802,7 +802,7 @@ jobs:
         env:
           # Read this repo's release assets with the default token. Pass both
           # tap-write secret names so the script can fall back if one is present
-          # but lacks access to one of the Homebrew tap repositories.
+          # but lacks access to the shared Homebrew tap repository.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

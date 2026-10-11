@@ -11,8 +11,8 @@
 #                         workflow_dispatch run resumes an existing release.
 #   GITHUB_REF_NAME     — fallback release tag for tag-push/manual runs
 #   GH_TOKEN        — read access to the ax-code release assets
-#   TAP_TOKEN       — legacy write token for the Homebrew tap repositories.
-#   HOMEBREW_TAP_TOKEN — preferred write token for the shared and legacy taps.
+#   TAP_TOKEN       — legacy secret name for shared Homebrew tap write access.
+#   HOMEBREW_TAP_TOKEN — preferred write token for the shared Homebrew tap.
 #                    Local manual runs may fall back to GH_TOKEN when it has
 #                    tap write access.
 set -euo pipefail
@@ -367,7 +367,6 @@ update_tap() {
   return 1
 }
 
-# Publish the canonical shared tap and keep the former product-specific tap
-# current during the migration so existing installations continue to upgrade.
+# Publish only the canonical shared tap. The former product-specific tap is a
+# migration-only repository; publishing a formula there would undo migration.
 update_tap "defai-digital/homebrew-tap" "Formula/ax-code.rb" "shared Homebrew tap"
-update_tap "defai-digital/homebrew-ax-code" "ax-code.rb" "legacy AX Code Homebrew tap"
