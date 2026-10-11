@@ -10,13 +10,14 @@ changes belong to AX Coder.
 
 ### Changed
 
-- Publish AX Code 7.24.5 with SDK 2.6.9.
+- Publish AX Code 7.24.5 with SDK 2.6.10.
 - Move admitted CPU hot paths to bounded, cancellable Rust workers while retaining permission checks and fallback behavior.
 - Keep public installation and operator documentation available independently of private source access, and include license notices in sealed runtime archives.
 - Download pinned minisign bootstrap archives from download.ax-code.com and verify the extracted executable before caching it.
 
 ### Fixed
 
+- Match native grep case sensitivity with ripgrep, retain explicit case-insensitive patterns, and reject missing search roots before backend execution.
 - Authenticate root license files in Windows runtime manifests and preserve licenses and notices through installation and rollback.
 - Preserve graph rows belonging to case-distinct sibling worktrees during orphan pruning in both native and TypeScript storage paths.
 - Accept foreign thenables during lazy initialization and retain cache recovery after failed initialization or subscription.
