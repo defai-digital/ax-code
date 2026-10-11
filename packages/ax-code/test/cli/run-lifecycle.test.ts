@@ -409,14 +409,16 @@ test("run command wires structured output flags after the event loop", async () 
 
 test("headless-run clears the idle timer before checking timeout state", async () => {
   const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/headless-run.ts"), "utf-8")
+  const shared = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/headless-shared.ts"), "utf-8")
   const runStart = src.indexOf("await runHeadlessSession({")
-  const timeoutCheck = src.indexOf("if (timedOut)", runStart)
-  const clearTimer = src.indexOf("clearTimeout(idleTimer)", runStart)
-  const callbackReset = src.indexOf("idleTimer = undefined", src.indexOf("setTimeout(() => {"))
+  const stopTimer = src.indexOf("idle.stop()", runStart)
+  const timeoutCheck = src.indexOf("if (idle.timedOut)", runStart)
+  // The timer callback clears its own handle before firing the abort.
+  const callbackReset = shared.indexOf("timer = undefined", shared.indexOf("setTimeout(() => {"))
   expect(runStart).toBeGreaterThan(-1)
   expect(callbackReset).toBeGreaterThan(-1)
-  expect(clearTimer).toBeGreaterThan(runStart)
-  expect(timeoutCheck).toBeGreaterThan(clearTimer)
+  expect(stopTimer).toBeGreaterThan(runStart)
+  expect(timeoutCheck).toBeGreaterThan(stopTimer)
 })
 
 test("non-interactive run entry points share bounded pipe input handling", async () => {
@@ -443,18 +445,18 @@ test("run registers one shared signal handler for SIGINT and SIGTERM and removes
 })
 
 test("headless-run keeps signal handlers installed until cleanup", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/headless-run.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/headless-shared.ts"), "utf-8")
 
-  expect(src).toContain('process.on("SIGINT", onSignal)')
-  expect(src).toContain('process.on("SIGTERM", onSignal)')
-  expect(src).not.toContain('process.once("SIGINT", onSignal)')
-  expect(src).not.toContain('process.once("SIGTERM", onSignal)')
-  expect(src).toContain('process.off("SIGINT", onSignal)')
-  expect(src).toContain('process.off("SIGTERM", onSignal)')
+  expect(src).toContain('process.on("SIGINT", idle.onSignal)')
+  expect(src).toContain('process.on("SIGTERM", idle.onSignal)')
+  expect(src).not.toContain('process.once("SIGINT"')
+  expect(src).not.toContain('process.once("SIGTERM"')
+  expect(src).toContain('process.off("SIGINT", idle.onSignal)')
+  expect(src).toContain('process.off("SIGTERM", idle.onSignal)')
 })
 
 test("headless-run attach mode rejects non-internal fetch targets", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/headless-run.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/headless-shared.ts"), "utf-8")
   expect(src).toContain("function assertInternalUrl(url: URL)")
   expect(src).toContain('url.protocol !== "http:" && url.protocol !== "https:"')
   expect(src).toContain("Internal fetch rejected: unsupported protocol")

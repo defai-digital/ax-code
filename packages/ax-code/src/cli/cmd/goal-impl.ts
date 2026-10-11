@@ -1,13 +1,16 @@
 import { EOL } from "os"
 import type { Argv } from "yargs"
-import path from "node:path"
 import { bootstrap, bootstrapReadonly } from "../bootstrap"
 import { cmd } from "./cmd"
 import { Filesystem } from "@/util/filesystem"
-import { internalBaseUrl } from "@/util/internal-url"
-import { buildAttachAuthHeaders } from "../attach-auth"
-import { DEFAULT_SERVER_PORT } from "@/server/constants"
-import { assertLoopbackHttpUrl } from "@/runtime/listen-security"
+import {
+  createHeadlessConsoleEventSinks,
+  createHeadlessIdleAbort,
+  headlessBackendOptions,
+  resolveHeadlessWorkdir,
+  withHeadlessBackend,
+  withHeadlessGuards,
+} from "./headless-shared"
 import type { HeadlessRuntimeCommand } from "@/runtime/headless"
 import { SessionGoal } from "../../session/goal"
 import { SessionID } from "../../session/schema"
@@ -168,66 +171,29 @@ const GoalResumeCommand = cmd({
   command: "resume",
   describe: "resume the session goal and drive it until it settles",
   builder: (yargs: Argv) =>
-    sessionFilter(yargs)
-      .option("dir", {
-        describe: "directory of the project",
-        type: "string",
-      })
-      .option("attach", {
-        describe: `attach to a running ax-code server, e.g. http://localhost:${DEFAULT_SERVER_PORT}`,
-        type: "string",
-      })
-      .option("password", {
-        describe: "basic auth password for --attach; defaults to AX_CODE_SERVER_PASSWORD",
-        type: "string",
-      })
-      .option("model", {
-        alias: ["m"],
-        describe: "model to use in provider/model format (only needed when the plan must be rewritten)",
-        type: "string",
-      })
-      .option("agent", {
-        describe: "agent to use",
-        type: "string",
-      })
-      .option("autonomous", {
-        describe: "auto-answer permission/question prompts through the headless effect policy",
-        type: "boolean",
-        default: true,
-      })
-      .option("idle-timeout-ms", {
-        describe:
-          "abort if the session emits no events for this long (inactivity timeout — a busy long run keeps resetting it); set 0 to disable",
-        type: "number",
-        default: 10 * 60 * 1000,
-      })
-      .option("event-log", {
-        describe: "also write raw headless JSONL events to this file",
-        type: "string",
-      }),
+    headlessBackendOptions(
+      sessionFilter(yargs)
+        .option("dir", {
+          describe: "directory of the project",
+          type: "string",
+        })
+        .option("model", {
+          alias: ["m"],
+          describe: "model to use in provider/model format (only needed when the plan must be rewritten)",
+          type: "string",
+        })
+        .option("agent", {
+          describe: "agent to use",
+          type: "string",
+        }),
+    ),
   async handler(args) {
-    const { createInternalFetch } = await import("./headless-run")
     const callerCwd = Filesystem.callerCwd()
-    const directory = (() => {
-      if (args.attach) return args.dir
-      if (!args.dir) return callerCwd
-      // @scan-suppress security_scan - The local CLI caller explicitly selects the working directory; arbitrary directories are supported.
-      const next = path.resolve(callerCwd, args.dir)
-      process.chdir(next)
-      return process.cwd()
-    })()
-    const target = directory ?? callerCwd
+    const { target } = resolveHeadlessWorkdir(args, callerCwd)
 
     const { Provider } = await import("@/provider/provider")
-    const {
-      createHeadlessAgentRuntime,
-      createHeadlessCompositeEventSink,
-      createHeadlessJsonlEventSink,
-      headlessSessionErrorMessage,
-      isHeadlessSessionIdleEvent,
-      runHeadlessSession,
-    } = await import("@/runtime/headless")
-    const { createHeadlessJsonlFileEventSink } = await import("@/runtime/headless/event-sink-node")
+    const { createHeadlessAgentRuntime, headlessSessionErrorMessage, isHeadlessSessionIdleEvent, runHeadlessSession } =
+      await import("@/runtime/headless")
 
     const sessionID = await bootstrapReadonly(target, () => resolveGoalSession(args.session))
     const goal = await bootstrapReadonly(target, () => SessionGoal.get(sessionID))
@@ -250,29 +216,9 @@ const GoalResumeCommand = cmd({
       },
     }
 
-    const abort = new AbortController()
-    const onSignal = () => abort.abort()
-    const idleTimeoutMs =
-      typeof args["idle-timeout-ms"] === "number" &&
-      Number.isFinite(args["idle-timeout-ms"]) &&
-      args["idle-timeout-ms"] > 0
-        ? args["idle-timeout-ms"]
-        : undefined
-    let timedOut = false
-    let idleTimer: ReturnType<typeof setTimeout> | undefined
+    const idle = createHeadlessIdleAbort(args["idle-timeout-ms"])
     let goalStatus: string | undefined
     let sessionError: string | undefined
-    const armIdleTimer = () => {
-      if (!idleTimeoutMs) return
-      if (idleTimer) clearTimeout(idleTimer)
-      idleTimer = setTimeout(() => {
-        idleTimer = undefined
-        timedOut = true
-        abort.abort()
-      }, idleTimeoutMs)
-      idleTimer.unref?.()
-    }
-    armIdleTimer()
 
     const runWithBackend = async (input: { baseUrl: string; fetch: typeof fetch }) => {
       const runtime = createHeadlessAgentRuntime({
@@ -280,29 +226,19 @@ const GoalResumeCommand = cmd({
         directory: target,
         fetch: input.fetch,
       })
-      const eventSinks = [
-        createHeadlessJsonlEventSink((line) => {
-          process.stdout.write(line)
-        }),
-      ]
-      if (args["event-log"] && args["event-log"] !== "-") {
-        eventSinks.push(await createHeadlessJsonlFileEventSink(args["event-log"], callerCwd))
-      }
-      const eventSink = createHeadlessCompositeEventSink(eventSinks)
-      process.on("SIGINT", onSignal)
-      process.on("SIGTERM", onSignal)
-      try {
+      const eventSink = await createHeadlessConsoleEventSinks(args["event-log"], callerCwd)
+      await withHeadlessGuards(idle, async () => {
         await runHeadlessSession({
           baseUrl: input.baseUrl,
           directory: target,
           fetch: input.fetch,
           runtime,
-          signal: abort.signal,
+          signal: idle.abort.signal,
           command,
           eventSink,
           autonomous: args.autonomous,
           onRawEvent(event) {
-            armIdleTimer()
+            idle.arm()
             goalStatus = goalStatusFromEvent(event, sessionID) ?? goalStatus
             sessionError = sessionError ?? headlessSessionErrorMessage(event, sessionID)
           },
@@ -310,34 +246,17 @@ const GoalResumeCommand = cmd({
             return isHeadlessSessionIdleEvent(event, sessionID)
           },
         })
-      } finally {
-        if (idleTimer) clearTimeout(idleTimer)
-        process.off("SIGINT", onSignal)
-        process.off("SIGTERM", onSignal)
-      }
-    }
-
-    if (args.attach) {
-      assertLoopbackHttpUrl(args.attach, "--attach URL")
-      const headers = buildAttachAuthHeaders(args.password)
-      const fetchFn = createInternalFetch((request) => fetch(request), headers)
-      await runWithBackend({ baseUrl: args.attach, fetch: fetchFn })
-    } else {
-      const { Server } = await import("@/server/server")
-      const { ServerRuntimeAuth } = await import("@/server/runtime-auth")
-      await bootstrap(target, async () => {
-        const fetchFn = createInternalFetch((request) => {
-          ServerRuntimeAuth.apply(request.headers)
-          return Server.Default().fetch(request)
-        })
-        await runWithBackend({ baseUrl: internalBaseUrl(), fetch: fetchFn })
       })
     }
 
-    if (timedOut) {
-      process.stderr.write(`goal resume aborted: no events for ${idleTimeoutMs}ms while waiting for session idle${EOL}`)
+    await withHeadlessBackend(args, target, runWithBackend)
+
+    if (idle.timedOut) {
+      process.stderr.write(
+        `goal resume aborted: no events for ${idle.timeoutMs}ms while waiting for session idle${EOL}`,
+      )
     }
-    const exitCode = goalResumeExitCode({ goalStatus, sessionError, timedOut })
+    const exitCode = goalResumeExitCode({ goalStatus, sessionError, timedOut: idle.timedOut })
     process.exitCode = exitCode
     if (goalStatus) {
       process.stderr.write(`Goal ${goalStatus}: ${goal.objective}${EOL}`)

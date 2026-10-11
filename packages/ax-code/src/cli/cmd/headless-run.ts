@@ -1,92 +1,51 @@
 import { cmd } from "./cmd"
-import { bootstrap } from "../bootstrap"
 import { Filesystem } from "@/util/filesystem"
-import { internalBaseUrl, isInternalHostname } from "@/util/internal-url"
-import { buildAttachAuthHeaders } from "../attach-auth"
-import { DEFAULT_SERVER_PORT } from "@/server/constants"
-import type { HeadlessEventSink, HeadlessRuntimeCommand } from "@/runtime/headless"
-import path from "node:path"
-import { assertLoopbackHttpUrl } from "@/runtime/listen-security"
+import {
+  createHeadlessConsoleEventSinks,
+  createHeadlessIdleAbort,
+  headlessBackendOptions,
+  resolveHeadlessWorkdir,
+  withHeadlessBackend,
+  withHeadlessGuards,
+} from "./headless-shared"
+import type { HeadlessRuntimeCommand } from "@/runtime/headless"
 import { readNonTtyStdin } from "@/cli/stdin"
-
-type FetchHandler = (request: Request) => Response | Promise<Response>
-
-function assertInternalUrl(url: URL) {
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new Error(`Internal fetch rejected: unsupported protocol ${url.protocol}`)
-  }
-  if (!isInternalHostname(url.hostname)) throw new Error(`Internal fetch rejected: ${url.hostname}`)
-}
-
-export function createInternalFetch(handler: FetchHandler, headers?: Record<string, string>): typeof globalThis.fetch {
-  return (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const request = new Request(input, init)
-    assertInternalUrl(new URL(request.url))
-    if (headers) {
-      for (const [key, value] of Object.entries(headers)) {
-        if (!request.headers.has(key)) request.headers.set(key, value)
-      }
-    }
-    return handler(request)
-  }) as typeof globalThis.fetch
-}
 
 export const HeadlessRunCommand = cmd({
   command: "headless-run [message..]",
   describe: false,
   builder: (yargs) =>
-    yargs
-      .positional("message", {
-        describe: "message to send",
-        type: "string",
-        array: true,
-        default: [],
-      })
-      .option("session", {
-        alias: ["s"],
-        describe: "session id to continue",
-        type: "string",
-      })
-      .option("command", {
-        describe: "slash command to run; message is passed as command arguments",
-        type: "string",
-      })
-      .option("agent", {
-        describe: "agent to use",
-        type: "string",
-      })
-      .option("model", {
-        alias: ["m"],
-        describe: "model to use in provider/model format",
-        type: "string",
-      })
-      .option("dir", {
-        describe: "directory to run in",
-        type: "string",
-      })
-      .option("attach", {
-        describe: `attach to a running ax-code server, e.g. http://localhost:${DEFAULT_SERVER_PORT}`,
-        type: "string",
-      })
-      .option("password", {
-        describe: "basic auth password for --attach; defaults to AX_CODE_SERVER_PASSWORD",
-        type: "string",
-      })
-      .option("autonomous", {
-        describe: "auto-answer permission/question prompts through the headless effect policy",
-        type: "boolean",
-        default: true,
-      })
-      .option("idle-timeout-ms", {
-        describe:
-          "abort if the headless session emits no events for this long (inactivity timeout — a busy long run keeps resetting it); set 0 to disable",
-        type: "number",
-        default: 10 * 60 * 1000,
-      })
-      .option("event-log", {
-        describe: "also write raw headless JSONL events to this file",
-        type: "string",
-      })
+    headlessBackendOptions(
+      yargs
+        .positional("message", {
+          describe: "message to send",
+          type: "string",
+          array: true,
+          default: [],
+        })
+        .option("session", {
+          alias: ["s"],
+          describe: "session id to continue",
+          type: "string",
+        })
+        .option("command", {
+          describe: "slash command to run; message is passed as command arguments",
+          type: "string",
+        })
+        .option("agent", {
+          describe: "agent to use",
+          type: "string",
+        })
+        .option("model", {
+          alias: ["m"],
+          describe: "model to use in provider/model format",
+          type: "string",
+        })
+        .option("dir", {
+          describe: "directory to run in",
+          type: "string",
+        }),
+    )
       .option("transport-smoke", {
         describe: "only verify backend subscription and event-log plumbing; does not create a session or send a prompt",
         type: "boolean",
@@ -98,26 +57,11 @@ export const HeadlessRunCommand = cmd({
         default: false,
       }),
   handler: async (args) => {
-    const { Server } = await import("@/server/server")
-    const { ServerRuntimeAuth } = await import("@/server/runtime-auth")
     const { Provider } = await import("@/provider/provider")
-    const {
-      createHeadlessAgentRuntime,
-      createHeadlessCompositeEventSink,
-      createHeadlessJsonlEventSink,
-      headlessSessionErrorMessage,
-      isHeadlessSessionIdleEvent,
-      runHeadlessSession,
-    } = await import("@/runtime/headless")
-    const { createHeadlessJsonlFileEventSink } = await import("@/runtime/headless/event-sink-node")
+    const { createHeadlessAgentRuntime, headlessSessionErrorMessage, isHeadlessSessionIdleEvent, runHeadlessSession } =
+      await import("@/runtime/headless")
     const callerCwd = Filesystem.callerCwd()
-    const directory = (() => {
-      if (args.attach) return args.dir
-      if (!args.dir) return callerCwd
-      const next = path.resolve(callerCwd, args.dir)
-      process.chdir(next)
-      return process.cwd()
-    })()
+    const { directory } = resolveHeadlessWorkdir(args, callerCwd)
 
     let message = [...args.message, ...(args["--"] || [])].join(" ")
     if (!process.stdin.isTTY) {
@@ -169,55 +113,21 @@ export const HeadlessRunCommand = cmd({
               }
       }
 
-      const abort = new AbortController()
-      const onSignal = () => abort.abort()
-      const idleTimeoutMs =
-        typeof args["idle-timeout-ms"] === "number" &&
-        Number.isFinite(args["idle-timeout-ms"]) &&
-        args["idle-timeout-ms"] > 0
-          ? args["idle-timeout-ms"]
-          : undefined
-      let timedOut = false
-      let idleTimer: ReturnType<typeof setTimeout> | undefined
-      // Inactivity timer, re-armed on every event: a productive multi-hour
-      // run (Super-Long, goals) streams events continuously and must not be
-      // killed at a fixed deadline, while a genuinely hung session (e.g. a
-      // permission ask nobody can answer) goes silent and still aborts.
-      const armIdleTimer = () => {
-        if (!idleTimeoutMs) return
-        if (idleTimer) clearTimeout(idleTimer)
-        idleTimer = setTimeout(() => {
-          idleTimer = undefined
-          timedOut = true
-          abort.abort()
-        }, idleTimeoutMs)
-        idleTimer.unref?.()
-      }
-      armIdleTimer()
-      const eventSinks: HeadlessEventSink[] = [
-        createHeadlessJsonlEventSink((line) => {
-          process.stdout.write(line)
-        }),
-      ]
-      if (args["event-log"] && args["event-log"] !== "-") {
-        eventSinks.push(await createHeadlessJsonlFileEventSink(args["event-log"], callerCwd))
-      }
-      const eventSink = createHeadlessCompositeEventSink(eventSinks)
+      const idle = createHeadlessIdleAbort(args["idle-timeout-ms"])
+      const eventSink = await createHeadlessConsoleEventSinks(args["event-log"], callerCwd)
       let sessionError: string | undefined
-      process.on("SIGINT", onSignal)
-      process.on("SIGTERM", onSignal)
-      try {
+      await withHeadlessGuards(idle, async () => {
         await runHeadlessSession({
           baseUrl: input.baseUrl,
           directory,
           fetch: input.fetch,
           runtime,
-          signal: abort.signal,
+          signal: idle.abort.signal,
           command,
           eventSink,
           autonomous: args.autonomous,
           onRawEvent(event) {
-            armIdleTimer()
+            idle.arm()
             if (sessionID) sessionError = sessionError ?? headlessSessionErrorMessage(event, sessionID)
           },
           stopWhen({ event }) {
@@ -225,41 +135,17 @@ export const HeadlessRunCommand = cmd({
             return isHeadlessSessionIdleEvent(event, sessionID)
           },
         })
-        if (idleTimer) {
-          clearTimeout(idleTimer)
-          idleTimer = undefined
-        }
-        if (timedOut) {
+        idle.stop()
+        if (idle.timedOut) {
           const target = args["transport-smoke"] || args["command-smoke"] ? "server.connected" : "session idle"
-          process.stderr.write(`headless-run aborted: no events for ${idleTimeoutMs}ms while waiting for ${target}\n`)
+          process.stderr.write(`headless-run aborted: no events for ${idle.timeoutMs}ms while waiting for ${target}\n`)
           process.exitCode = 124
         } else if (sessionError) {
           process.exitCode = 1
         }
-      } finally {
-        if (idleTimer) clearTimeout(idleTimer)
-        process.off("SIGINT", onSignal)
-        process.off("SIGTERM", onSignal)
-      }
-    }
-
-    if (args.attach) {
-      assertLoopbackHttpUrl(args.attach, "--attach URL")
-      const attachUrl = new URL(args.attach)
-      assertInternalUrl(attachUrl)
-      const headers = buildAttachAuthHeaders(args.password)
-      const fetchFn = createInternalFetch((request) => fetch(request), headers)
-      await runWithBackend({ baseUrl: args.attach, fetch: fetchFn })
-      return
-    }
-
-    await bootstrap(directory ?? callerCwd, async () => {
-      const fetchFn = createInternalFetch((request) => {
-        ServerRuntimeAuth.apply(request.headers)
-        return Server.Default().fetch(request)
       })
+    }
 
-      await runWithBackend({ baseUrl: internalBaseUrl(), fetch: fetchFn })
-    })
+    await withHeadlessBackend(args, directory ?? callerCwd, runWithBackend)
   },
 })
