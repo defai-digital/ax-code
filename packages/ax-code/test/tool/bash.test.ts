@@ -524,6 +524,8 @@ describe("tool.bash truncation", () => {
               // -x lays the file out under <host>/<path>; -r also owns the tree root.
               await run(`wget -q -x http://127.0.0.1:${port}/deep/tree.txt`)
               await run(`wget -q -r -l1 -nH -P sub http://127.0.0.1:${port}/deep/tree2.txt`)
+              // The later of -nd / -x wins.
+              await run(`wget -q -nd -x http://127.0.0.1:${port}/deep/ndx.txt`)
               // -nd flattens a recursive fetch into the prefix, which is then the tree root.
               await run(`wget -q -r -l1 -nd -P sub http://127.0.0.1:${port}/flat/nd.txt`)
               // GNU long options may be abbreviated.
@@ -541,6 +543,7 @@ describe("tool.bash truncation", () => {
                   "empty.txt",
                   "log.txt",
                   `127.0.0.1:${port}/deep/tree.txt`,
+                  `127.0.0.1:${port}/deep/ndx.txt`,
                   ...(port6 !== undefined ? [`::1:${port6}/v6/six.txt`] : []),
                   "sub",
                   "sub/also.txt",

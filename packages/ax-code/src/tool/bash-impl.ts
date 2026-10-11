@@ -750,8 +750,9 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           // names itself (`-O` and the `-o` log stay relative to the cwd).
           // Either may follow the output flag, so recording is deferred.
           let outputDir: string | undefined
-          // wget -x / -r / -m lay files out as <prefix>/<host>/<url path>;
-          // -nH drops the host directory and -nd flattens everything again.
+          // wget -x lays files out as <prefix>/<host>/<url path>, -nd flattens
+          // them again (the later flag wins), and -r / -m default to the
+          // layout unless -nd was given; -nH drops the host directory.
           let layout = false
           let recursive = false
           let noDirs = false
@@ -765,13 +766,13 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
               if ("eiBtTwQlARDIXUoOaP".includes(letter)) return
               if (letter === "n") {
                 const next = letters[k + 1]
-                if (next === "d") noDirs = true
+                if (next === "d") layout = !(noDirs = true)
                 if (next === "H") noHost = true
                 k++
                 continue
               }
               if (letter === "x") layout = true
-              if (letter === "r" || letter === "m") layout = recursive = true
+              if (letter === "r" || letter === "m") recursive = true
             }
           }
           const pending: Array<{ value: string; relocate: boolean }> = []
@@ -797,9 +798,9 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
               long &&
               ["recursive", "mirror", "force-directories", "no-directories", "no-host-directories"].includes(long.name)
             ) {
-              if (long.name === "recursive" || long.name === "mirror") layout = recursive = true
+              if (long.name === "recursive" || long.name === "mirror") recursive = true
               if (long.name === "force-directories") layout = true
-              if (long.name === "no-directories") noDirs = true
+              if (long.name === "no-directories") layout = !(noDirs = true)
               if (long.name === "no-host-directories") noHost = true
               continue
             }
@@ -879,7 +880,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
               const dirs = segments.filter(Boolean)
               const basename = last || (isWget ? "index.html" : "")
               if (!basename) continue
-              if (isWget && layout && !noDirs) {
+              if (isWget && (layout || (recursive && !noDirs))) {
                 const hostDir = noHost || !authority ? [] : [authority]
                 await recordOutput(path.join(...hostDir, ...dirs, basename), true)
                 // A recursive fetch writes whatever it discovers under the
