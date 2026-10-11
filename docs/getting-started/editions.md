@@ -72,16 +72,13 @@ not revoke the licenses of previously distributed code or relicense upstream wor
 
 ## Availability and installation
 
-Public source and download availability are separate from the license choice. As of
-2026-09-16, the original AX Code GitHub repository is private and anonymous requests for
-its release installers return 404. The public Homebrew formula also points at those
-unavailable release assets. Announcing open-source Standard does not by itself restore
-that access.
+Public source access and software licenses are separate. Runtime development source
+access is being restricted; the existing Apache-2.0, MIT and NOTICE obligations
+remain. Previously distributed copies retain their licenses. Shipped executable
+JavaScript is readable and is not a confidentiality boundary.
 
-See the [website installation guide](https://ax-code.app/en/download/) for public
-installation updates and the [runtime guide](install-runtime.md) for channel details.
-Do not treat the existing GitHub commands as usable public downloads until access is
-restored or a replacement distribution channel is verified.
-
-Computer use (CUA) is planned for v8.1. It is not part of the v8.0 launch promise;
-edition coverage and platform availability will be announced with that release.
+Signed installers, archives and updates use `download.ax-code.com`; the shared
+public Homebrew tap is `defai-digital/tap`. The public TypeScript SDK remains
+`@defai-digital/ax-code-sdk` on JSR. See the [installation guide](install-runtime.md),
+[upgrade guide](upgrade.md) and [public documentation](https://ax-code.app/en/docs/).
+Source-build instructions require an authorized checkout.

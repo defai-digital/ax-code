@@ -18,9 +18,11 @@ execution evidence remain core capabilities.
 Trust and business workflows through AutomatosX. Using Standard at work does not itself
 require a Business license. See [Standard and Business](editions.md) for details.
 
-v8.0 is upcoming. Public GitHub installers are currently inaccessible while the original
-repository remains private; check the [website guide](https://ax-code.app/en/download/)
-for installation updates. Already installed? Open a terminal in your project, run
+Signed installers and runtime archives are available anonymously from
+`download.ax-code.com`. Read the [installation guide](install-runtime.md) and
+[upgrade and recovery guide](upgrade.md). Public technical documentation is hosted
+at [ax-code.app/en/docs/](https://ax-code.app/en/docs/), independently of source access.
+Already installed? Open a terminal in your project, run
 `ax-code`, then use `/connect` inside the TUI to choose a provider. Begin with a question
 about the project, request a small change, and review the diff and project checks before
 committing. Use `ax-code doctor` if the installed runtime needs diagnosis.
@@ -72,7 +74,7 @@ The rest of the documentation maps onto those layers.
   - Bash release installer for macOS Apple Silicon and Linux: `curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" | bash`
   - Homebrew alternative for macOS CLI:
     `brew tap defai-digital/tap && brew trust defai-digital/tap && brew install defai-digital/tap/ax-code`
-  - GitHub release installer for Windows PowerShell: `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"`
+  - GitHub release installer for Windows PowerShell: `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.ax-code.com/install.ps1 | iex"`
 - The Bash installer is not the canonical Windows setup path.
 - npm packages are no longer supported install or upgrade channels. See [Installation and Runtime Channels](install-runtime.md) for platform policy, runtime labels, and the local launcher matrix.
 - Use `/connect` or `ax-code providers login` to set a model. See [Supported Providers and Models](../providers/supported-providers.md) for Cloud API providers, CLI providers, AX Engine, and model IDs. For a no-cost evaluation path, use the [Free-Tier API Quickstart](../providers/free-tier-apis.md).

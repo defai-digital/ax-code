@@ -6,13 +6,16 @@ Last reviewed: 2026-08-21
 Owner: AX Code release engineering
 
 [`ax-minisign.pub`](ax-minisign.pub) is the canonical public key for AX Code release signatures. Installers, release
-workflows, and publishing scripts read this checked-in copy; GitHub releases also publish the same key as an asset.
+workflows, and publishing scripts read this checked-in copy. The public download origin
+also publishes the same key, and the website hosts it at
+[ax-code.app/docs-assets/release/ax-minisign.pub](https://ax-code.app/docs-assets/release/ax-minisign.pub).
+No source checkout is needed to verify an artifact with the pinned key below.
 
 To verify a downloaded asset and its detached signature:
 
 ```bash
 minisign -V \
-  -p docs/release/ax-minisign.pub \
+  -P 'RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO' \
   -m ax-code-darwin-arm64.zip \
   -x ax-code-darwin-arm64.zip.minisig
 ```

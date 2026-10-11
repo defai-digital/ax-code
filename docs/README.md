@@ -5,7 +5,7 @@ Scope: public, current-state
 Last reviewed: 2026-10-09
 Owner: AX Code maintainers
 
-AX Code is an open-source coding-agent runtime for reviewable, reversible work: every session is recorded as a
+AX Code is a coding-agent runtime for reviewable, reversible work: every session is recorded as a
 structured event log with file snapshots, candidate implementations can be verified against your repository's own
 checks, and nothing merges automatically. [Why AX Code](why-ax-code.md) explains what that optimizes for, who it is
 for, and what it deliberately does not claim.
@@ -16,6 +16,10 @@ configure a workflow, understand a runtime boundary, or integrate AX Code with a
 Internal process records (PRDs, ADRs, specifications, roadmaps, implementation plans, competitive reviews, and audit
 working files) live under `.internal/`, not in this public tree — see "Documentation boundaries" below. The public
 pages are the ones linked here.
+
+Public website: [ax-code.app/en/docs/](https://ax-code.app/en/docs/).
+For existing installations, start with [Upgrade and recovery](getting-started/upgrade.md).
+Source access and public downloads are separate; see [Source access](getting-started/source-access.md).
 
 ## Choose by task
 
@@ -125,6 +129,8 @@ For standalone questions about selected files through AX Trust caching, see
 
 ## Reference
 
+- [Configuration JSON Schema](reference/config.schema.json) — generated configuration input contract.
+
 - [TypeScript Native Support](guides/typescript-native.md) — source compiler, language service, diagnostics, and compatibility.
 - [Skill and Plugin Catalog](reference/skills-and-plugins.md) — bundled skills, project skills, plugins, and evals.
 - [Isolation Policy Packs](policies/README.md) — machine-readable policy examples.
@@ -154,5 +160,8 @@ Before a release or a substantial documentation change:
 1. Verify commands, defaults, flags, provider IDs, and runtime labels against their implementation.
 2. Update the narrowest authoritative guide instead of repeating the same behavior in several front-door pages.
 3. Run `pnpm run test:scripts` to catch broken local links, orphaned pages, and missing page metadata.
-4. Keep proposals, project-development notes, release targets, and historical decision records under `.internal/`,
+4. Update the approved export manifest and run `node script/export-public-docs.mjs --website /path/to/ax-code.app`,
+   then run the website check, build and Workers smoke checks. Website builds use the committed snapshot and do not
+   require source access. New public pages and assets must be explicitly approved in the manifest.
+5. Keep proposals, project-development notes, release targets, and historical decision records under `.internal/`,
    not in the public navigation.

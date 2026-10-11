@@ -286,7 +286,7 @@ ax-code run --model qwen --file docs/spec.md -- "Summarize the attached spec"
 
 ## Machine-readable commands
 
-`ax-code run --format json` emits a newline-delimited event stream (see [JSON stream](#json-stream--format-json)); it is
+`ax-code run --format json` emits a newline-delimited event stream (see [JSON stream](#json-stream---format-json)); it is
 the only `--json` surface that streams. Every other read-only command that carries a `--json` flag follows a stricter
 contract: on success it writes exactly one JSON document to stdout, and on failure stdout stays empty while a single
 `{"error":{"code","message"}}` document goes to stderr and the exit code is 1.

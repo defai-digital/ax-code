@@ -63,7 +63,7 @@ Most aggregators (LiteLLM, one-api, new-api, free/self-hosted gateways) expose a
 
 ```jsonc
 {
-  "$schema": "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+  "$schema": "https://ax-code.app/docs-assets/schema/config.schema.json",
   "provider": {
     "my-gateway": {
       "name": "My Gateway",
@@ -115,7 +115,7 @@ Relays that expose `/v1/messages` (the Claude API shape) use the Anthropic adapt
 
 ```jsonc
 {
-  "$schema": "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+  "$schema": "https://ax-code.app/docs-assets/schema/config.schema.json",
   "provider": {
     "my-claude-gateway": {
       "name": "My Claude Gateway",

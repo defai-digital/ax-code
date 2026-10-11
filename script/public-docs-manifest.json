@@ -1,0 +1,393 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "source": "docs/README.md",
+      "page": ""
+    },
+    {
+      "source": "docs/architecture/local-engine.md",
+      "page": "architecture/local-engine"
+    },
+    {
+      "source": "docs/architecture/semantic-layer.md",
+      "page": "architecture/semantic-layer"
+    },
+    {
+      "source": "docs/architecture/stability.md",
+      "page": "architecture/stability"
+    },
+    {
+      "source": "docs/data/local-client-matrix-2026-09-19.json",
+      "asset": "data/local-client-matrix-2026-09-19.json"
+    },
+    {
+      "source": "docs/data/local-inference-2026-09-19.json",
+      "asset": "data/local-inference-2026-09-19.json"
+    },
+    {
+      "source": "docs/data/local-inference-short-request.json",
+      "asset": "data/local-inference-short-request.json"
+    },
+    {
+      "source": "docs/examples/ax-code-ecosystem.config.cjs",
+      "asset": "examples/ax-code-ecosystem.config.cjs"
+    },
+    {
+      "source": "docs/examples/ax-code.service",
+      "asset": "examples/ax-code.service"
+    },
+    {
+      "source": "docs/examples/ax-trust-deepseek-flash.json",
+      "asset": "examples/ax-trust-deepseek-flash.json"
+    },
+    {
+      "source": "docs/examples/ax-wiki-update.yml",
+      "asset": "examples/ax-wiki-update.yml"
+    },
+    {
+      "source": "docs/examples/com.axcode.server.plist",
+      "asset": "examples/com.axcode.server.plist"
+    },
+    {
+      "source": "docs/getting-started/editions.md",
+      "page": "getting-started/editions"
+    },
+    {
+      "source": "docs/getting-started/install-runtime.md",
+      "page": "getting-started/install-runtime"
+    },
+    {
+      "source": "docs/getting-started/source-access.md",
+      "page": "getting-started/source-access"
+    },
+    {
+      "source": "docs/getting-started/start-here.md",
+      "page": "getting-started/start-here"
+    },
+    {
+      "source": "docs/getting-started/upgrade.md",
+      "page": "getting-started/upgrade"
+    },
+    {
+      "source": "docs/guides/audio-notifications.md",
+      "page": "guides/audio-notifications"
+    },
+    {
+      "source": "docs/guides/auto-route.md",
+      "page": "guides/auto-route"
+    },
+    {
+      "source": "docs/guides/autonomous.md",
+      "page": "guides/autonomous"
+    },
+    {
+      "source": "docs/guides/cloud-operations.md",
+      "page": "guides/cloud-operations"
+    },
+    {
+      "source": "docs/guides/conversation-recap.md",
+      "page": "guides/conversation-recap"
+    },
+    {
+      "source": "docs/guides/current-model-reasoning.md",
+      "page": "guides/current-model-reasoning"
+    },
+    {
+      "source": "docs/guides/data/tiel-mtp-profile-2026-09-19.json",
+      "asset": "guides/data/tiel-mtp-profile-2026-09-19.json"
+    },
+    {
+      "source": "docs/guides/data/tiel-runtime-phases-2026-09-19.json",
+      "asset": "guides/data/tiel-runtime-phases-2026-09-19.json"
+    },
+    {
+      "source": "docs/guides/effort.md",
+      "page": "guides/effort"
+    },
+    {
+      "source": "docs/guides/evidence-cache.md",
+      "page": "guides/evidence-cache"
+    },
+    {
+      "source": "docs/guides/execution-evidence.md",
+      "page": "guides/execution-evidence"
+    },
+    {
+      "source": "docs/guides/fixed-context-questions.md",
+      "page": "guides/fixed-context-questions"
+    },
+    {
+      "source": "docs/guides/goal-assurance.md",
+      "page": "guides/goal-assurance"
+    },
+    {
+      "source": "docs/guides/harness-controls.md",
+      "page": "guides/harness-controls"
+    },
+    {
+      "source": "docs/guides/headless-cli.md",
+      "page": "guides/headless-cli"
+    },
+    {
+      "source": "docs/guides/hooks.md",
+      "page": "guides/hooks"
+    },
+    {
+      "source": "docs/guides/local-client-matrix-2026-09-19.md",
+      "page": "guides/local-client-matrix-2026-09-19"
+    },
+    {
+      "source": "docs/guides/local-inference-results-2026-09-19.md",
+      "page": "guides/local-inference-results-2026-09-19"
+    },
+    {
+      "source": "docs/guides/long-running-operations.md",
+      "page": "guides/long-running-operations"
+    },
+    {
+      "source": "docs/guides/loop-mode.md",
+      "page": "guides/loop-mode"
+    },
+    {
+      "source": "docs/guides/memory-usage.md",
+      "page": "guides/memory-usage"
+    },
+    {
+      "source": "docs/guides/model-recovery.md",
+      "page": "guides/model-recovery"
+    },
+    {
+      "source": "docs/guides/modes.md",
+      "page": "guides/modes"
+    },
+    {
+      "source": "docs/guides/multi-model-routing.md",
+      "page": "guides/multi-model-routing"
+    },
+    {
+      "source": "docs/guides/performance.md",
+      "page": "guides/performance"
+    },
+    {
+      "source": "docs/guides/run-report.md",
+      "page": "guides/run-report"
+    },
+    {
+      "source": "docs/guides/sandbox.md",
+      "page": "guides/sandbox"
+    },
+    {
+      "source": "docs/guides/terminal-rendering.md",
+      "page": "guides/terminal-rendering"
+    },
+    {
+      "source": "docs/guides/tiel-mtp-profile-2026-09-19.md",
+      "page": "guides/tiel-mtp-profile-2026-09-19"
+    },
+    {
+      "source": "docs/guides/tiel-peer-2026-09-20.md",
+      "page": "guides/tiel-peer-2026-09-20"
+    },
+    {
+      "source": "docs/guides/tiel-runtime-phases-2026-09-19.md",
+      "page": "guides/tiel-runtime-phases-2026-09-19"
+    },
+    {
+      "source": "docs/guides/tui-animations.md",
+      "page": "guides/tui-animations"
+    },
+    {
+      "source": "docs/guides/tui-language-and-setup.md",
+      "page": "guides/tui-language-and-setup"
+    },
+    {
+      "source": "docs/guides/tui-mcp.md",
+      "page": "guides/tui-mcp"
+    },
+    {
+      "source": "docs/guides/typescript-native.md",
+      "page": "guides/typescript-native"
+    },
+    {
+      "source": "docs/guides/verified-multi-model-change.md",
+      "page": "guides/verified-multi-model-change"
+    },
+    {
+      "source": "docs/guides/webmcp-bridge.md",
+      "page": "guides/webmcp-bridge"
+    },
+    {
+      "source": "docs/guides/wiki-visualization.md",
+      "page": "guides/wiki-visualization"
+    },
+    {
+      "source": "docs/guides/windows-runtime-integrity.md",
+      "page": "guides/windows-runtime-integrity"
+    },
+    {
+      "source": "docs/images/ax-code-components.svg",
+      "asset": "images/ax-code-components.svg"
+    },
+    {
+      "source": "docs/images/install-homebrew-ax-code.gif",
+      "asset": "images/install-homebrew-ax-code.gif"
+    },
+    {
+      "source": "docs/images/tiel-vs-mtplx-2026-09-20.svg",
+      "asset": "images/tiel-vs-mtplx-2026-09-20.svg"
+    },
+    {
+      "source": "docs/images/wiki/force.png",
+      "asset": "images/wiki/force.png"
+    },
+    {
+      "source": "docs/images/wiki/page-focus.png",
+      "asset": "images/wiki/page-focus.png"
+    },
+    {
+      "source": "docs/images/wiki/radial.png",
+      "asset": "images/wiki/radial.png"
+    },
+    {
+      "source": "docs/integrations/acp.md",
+      "page": "integrations/acp"
+    },
+    {
+      "source": "docs/integrations/mcp.md",
+      "page": "integrations/mcp"
+    },
+    {
+      "source": "docs/integrations/wiki.md",
+      "page": "integrations/wiki"
+    },
+    {
+      "source": "docs/policies/README.md",
+      "page": "policies"
+    },
+    {
+      "source": "docs/policies/file-scope-limit.json",
+      "asset": "policies/file-scope-limit.json"
+    },
+    {
+      "source": "docs/policies/no-bash.json",
+      "asset": "policies/no-bash.json"
+    },
+    {
+      "source": "docs/policies/protect-secrets.json",
+      "asset": "policies/protect-secrets.json"
+    },
+    {
+      "source": "docs/policies/read-only-audit.json",
+      "asset": "policies/read-only-audit.json"
+    },
+    {
+      "source": "docs/policies/restricted-write.json",
+      "asset": "policies/restricted-write.json"
+    },
+    {
+      "source": "docs/policies/workspace-verify.json",
+      "asset": "policies/workspace-verify.json"
+    },
+    {
+      "source": "docs/providers/ax-engine-model-selection.md",
+      "page": "providers/ax-engine-model-selection"
+    },
+    {
+      "source": "docs/providers/custom-provider.md",
+      "page": "providers/custom-provider"
+    },
+    {
+      "source": "docs/providers/free-tier-apis.md",
+      "page": "providers/free-tier-apis"
+    },
+    {
+      "source": "docs/providers/local-mlx-runtimes.md",
+      "page": "providers/local-mlx-runtimes"
+    },
+    {
+      "source": "docs/providers/supported-providers.md",
+      "page": "providers/supported-providers"
+    },
+    {
+      "source": "docs/reference/skills-and-plugins.md",
+      "page": "reference/skills-and-plugins"
+    },
+    {
+      "source": "docs/release/README.md",
+      "page": "release"
+    },
+    {
+      "source": "docs/release/ax-minisign.pub",
+      "asset": "release/ax-minisign.pub"
+    },
+    {
+      "source": "docs/release/notes-v7.2.0.md",
+      "page": "release/notes-v7.2.0"
+    },
+    {
+      "source": "docs/release/notes-v7.7.6.md",
+      "page": "release/notes-v7.7.6"
+    },
+    {
+      "source": "docs/release/rollback.md",
+      "page": "release/rollback"
+    },
+    {
+      "source": "docs/sdk/http-openapi.md",
+      "page": "sdk/http-openapi"
+    },
+    {
+      "source": "docs/sdk/native-transport.md",
+      "page": "sdk/native-transport"
+    },
+    {
+      "source": "docs/why-ax-code.md",
+      "page": "why-ax-code"
+    },
+    {
+      "source": "packages/sdk/js/README.md",
+      "page": "sdk/javascript"
+    },
+    {
+      "source": "packages/integration-vscode/README.md",
+      "page": "integrations/vscode"
+    },
+    {
+      "source": "SECURITY.md",
+      "page": "security"
+    },
+    {
+      "source": "LICENSE",
+      "asset": "LICENSE"
+    },
+    {
+      "source": "LICENSE-MIT",
+      "asset": "LICENSE-MIT"
+    },
+    {
+      "source": "NOTICE",
+      "asset": "NOTICE"
+    },
+    {
+      "source": "packages/sdk/openapi.json",
+      "asset": "sdk/openapi.json"
+    },
+    {
+      "source": "packages/sdk/proto/ax_code/v1/headless.proto",
+      "asset": "sdk/headless.proto"
+    },
+    {
+      "source": "packages/sdk/js/example/headless-app.ts",
+      "asset": "sdk/examples/headless-app.ts"
+    },
+    {
+      "source": "packages/sdk/js/example/programmatic.ts",
+      "asset": "sdk/examples/programmatic.ts"
+    },
+    {
+      "source": "docs/reference/config.schema.json",
+      "asset": "schema/config.schema.json"
+    }
+  ]
+}

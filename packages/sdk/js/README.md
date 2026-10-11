@@ -1,6 +1,6 @@
 # @defai-digital/ax-code-sdk
 
-TypeScript SDK for integrating the [AX Code](https://github.com/defai-digital/ax-code) coding-agent runtime into your own applications.
+TypeScript SDK for integrating the [AX Code](https://ax-code.app/en/docs/) coding-agent runtime into your own applications.
 
 Use it to supervise a compatible signed AX Code runtime through typed **headless** or **gRPC** boundaries, consume streaming events, project session state, and test application integrations. Source hosts that deliberately provide the private runtime package may also use the in-process `createAgent()` adapter.
 
@@ -67,7 +67,7 @@ try {
 ```
 
 Desktop hosts may pass a verified absolute path as `binary`. See
-[example/headless-app.ts](https://github.com/defai-digital/ax-code/blob/HEAD/packages/sdk/js/example/headless-app.ts)
+[example/headless-app.ts](https://ax-code.app/docs-assets/sdk/examples/headless-app.ts)
 for a projection-based app loop.
 
 ## Headless backend
@@ -134,7 +134,7 @@ try {
 - `AX_CODE_GRPC_METHOD_DESCRIPTORS` / `listAxCodeGrpcMethods()` — canonical method catalog for allowlists and proto names.
 
 `createAxCodeGrpcClientFromHttp()` is loopback-only. The proto asset is
-[packages/sdk/proto/ax_code/v1/headless.proto](https://github.com/defai-digital/ax-code/blob/HEAD/packages/sdk/proto/ax_code/v1/headless.proto)
+[packages/sdk/proto/ax_code/v1/headless.proto](https://ax-code.app/docs-assets/sdk/headless.proto)
 and is resolved at runtime with `resolveAxCodeGrpcProtoUrl()`.
 
 ## In-process agent (source hosts only)
@@ -181,7 +181,7 @@ try {
 ```
 
 More examples:
-[example/programmatic.ts](https://github.com/defai-digital/ax-code/blob/HEAD/packages/sdk/js/example/programmatic.ts).
+[example/programmatic.ts](https://ax-code.app/docs-assets/sdk/examples/programmatic.ts).
 
 ## Testing
 

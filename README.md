@@ -493,6 +493,9 @@ Everyday use:
 
 ## Documentation
 
+Public operator documentation: [ax-code.app/en/docs/](https://ax-code.app/en/docs/).
+Existing users: [upgrade and recovery](https://ax-code.app/en/docs/getting-started/upgrade/).
+
 - [Standard and Business](docs/getting-started/editions.md) — free commercial use, planned Business capabilities, and availability
 - [Why AX Code](docs/why-ax-code.md) — what it optimizes for, who it is for, and how it differs from other agents
 - [Start Here](docs/getting-started/start-here.md) — product mental model and shortest paths by use case

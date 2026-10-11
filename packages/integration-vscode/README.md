@@ -1,6 +1,6 @@
 # AX Code for VS Code
 
-The [AX Code](https://github.com/defai-digital/ax-code) coding agent inside your editor — it reads your actual workspace, explains and reviews code, and hands you changes you can insert or apply with one click. Not a chatbot: an agent wired into your editing workflow.
+The [AX Code](https://ax-code.app/en/docs/) coding agent inside your editor — it reads your actual workspace, explains and reviews code, and hands you changes you can insert or apply with one click. Not a chatbot: an agent wired into your editing workflow.
 
 ## Install
 
@@ -38,7 +38,7 @@ code --install-extension AutomatosX.ax-code-vscode
 
 ## Prerequisites
 
-Install the [AX Code CLI](https://github.com/defai-digital/ax-code) and at least one provider:
+Install the [AX Code CLI](https://ax-code.app/en/docs/) and at least one provider:
 
 ```bash
 ax-code providers login
@@ -54,4 +54,4 @@ ax-code providers login
 
 ## Issues
 
-https://github.com/defai-digital/ax-code/issues
+https://discord.gg/gf9UyPxaN2

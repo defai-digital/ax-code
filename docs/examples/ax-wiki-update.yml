@@ -20,7 +20,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install AX Code
-        run: curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/install | bash
+        run: curl -fsSL https://download.ax-code.com/install | bash
 
       - name: Update and validate AX Wiki
         env:

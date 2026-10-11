@@ -65,7 +65,7 @@ the `ax-code.json` at your project root (or merge it into your global AX Code co
 
 ```jsonc
 {
-  "$schema": "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+  "$schema": "https://ax-code.app/docs-assets/schema/config.schema.json",
   "provider": {
     "openrouter": {
       "models": {

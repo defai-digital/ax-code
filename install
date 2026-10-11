@@ -373,7 +373,7 @@ else
         http_status=$(curl -sI -o /dev/null -w "%{http_code}" "https://download.ax-code.com/releases/download/v${requested_version}/release-ready.json")
         if [ "$http_status" = "404" ]; then
             echo -e "${RED}Error: Release v${requested_version} not found${NC}"
-            echo -e "${MUTED}Available releases: https://github.com/defai-digital/ax-code/releases${NC}"
+            echo -e "${MUTED}Available releases: https://download.ax-code.com/releases.json${NC}"
             exit 1
         fi
     fi
@@ -1136,6 +1136,6 @@ echo -e ""
 echo -e "cd <project>  ${MUTED}# Open directory${NC}"
 echo -e "ax-code       ${MUTED}# Run command${NC}"
 echo -e ""
-echo -e "${MUTED}For more information visit ${NC}https://github.com/defai-digital/ax-code"
+echo -e "${MUTED}For more information visit ${NC}https://ax-code.app/en/docs/"
 echo -e ""
 echo -e ""
