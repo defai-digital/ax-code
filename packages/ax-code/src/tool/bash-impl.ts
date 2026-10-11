@@ -869,10 +869,13 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             // index.html for wget.
             for (const url of operands) {
               const full = url.includes("://") ? url : `http://${url}`
+              // wget's host directory keeps a non-default port but drops the
+              // brackets of an IPv6 literal (`::1:8080`).
               const authority = full
                 .replace(/^[a-z][a-z0-9+.-]*:\/\//i, "")
                 .split(/[/?#]/)[0]!
                 .replace(/^[^@]*@/, "")
+                .replace(/^\[([^\]]*)\]/, "$1")
               const segments = full
                 .replace(/^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i, "")
                 .split(/[?#]/)[0]!

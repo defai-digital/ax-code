@@ -491,6 +491,12 @@ describe("tool.bash truncation", () => {
     })
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
     const port = (server.address() as AddressInfo).port
+    // IPv6 loopback is optional on CI hosts.
+    const server6 = createServer((_req, res) => res.end("x".repeat(1000)))
+    const port6 = await new Promise<number | undefined>((resolve) => {
+      server6.once("error", () => resolve(undefined))
+      server6.listen(0, "::1", () => resolve((server6.address() as AddressInfo).port))
+    })
     try {
       await withAutonomous(async () => {
         const sessionID = SessionID.make("ses_bash_blast_wget")
@@ -522,6 +528,8 @@ describe("tool.bash truncation", () => {
               await run(`wget -q --output-doc=abbrev.txt http://127.0.0.1:${port}/file.bin`)
               // A basename of "-" is a file; only `-O -` means stdout.
               await run(`wget -q http://127.0.0.1:${port}/dash/-`)
+              // The host directory of an IPv6 literal has no brackets.
+              if (port6 !== undefined) await run(`wget -q -x ${shellQuote(`http://[::1]:${port6}/v6/six.txt`)}`)
               const files = [...BlastRadius.get(sessionID).files].map((file) => path.relative(tmp.path, file)).sort()
               expect(files).toEqual(
                 [
@@ -531,6 +539,7 @@ describe("tool.bash truncation", () => {
                   "empty.txt",
                   "log.txt",
                   `127.0.0.1:${port}/deep/tree.txt`,
+                  ...(port6 !== undefined ? [`::1:${port6}/v6/six.txt`] : []),
                   "sub/also.txt",
                   "sub/deep",
                   "sub/deep/tree2.txt",
@@ -548,6 +557,7 @@ describe("tool.bash truncation", () => {
       })
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()))
+      await new Promise<void>((resolve) => server6.close(() => resolve()))
     }
   })
 
