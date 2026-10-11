@@ -348,7 +348,7 @@ describe("session.llm.stream", () => {
 
   test.each([
     { providerID: "ax-engine", modelID: "tiel-coder-35b-axq-mxfp4", local: true },
-    { providerID: "ax-engine", modelID: "cyber-tiel-coder-35b-axq-mxfp4", local: true },
+    { providerID: "ax-engine", modelID: "swift-1.5-qwen3.8-27b-axq-mxfp4", local: true },
     { providerID: "local-llm", local: true },
     { providerID: "lmstudio", local: true },
     { providerID: "mtplx", local: true },

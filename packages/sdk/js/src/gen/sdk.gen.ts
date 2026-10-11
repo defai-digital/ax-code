@@ -6384,7 +6384,7 @@ export class AxEngine extends HeyApiClient {
       mtpPolicy?: "disabled" | "auto" | "required"
       modelID?:
         | "tiel-coder-35b-axq-mxfp4"
-        | "cyber-tiel-coder-35b-axq-mxfp4"
+        | "swift-1.5-qwen3.8-27b-axq-mxfp4"
         | "qwen3.8-27b-axq-6bit"
         | "ornith-35b-axq-6bit"
         | "qwen3-coder-next-axq-6bit"
@@ -6441,7 +6441,7 @@ export class AxEngine extends HeyApiClient {
       mtpPolicy?: "disabled" | "auto" | "required"
       modelID?:
         | "tiel-coder-35b-axq-mxfp4"
-        | "cyber-tiel-coder-35b-axq-mxfp4"
+        | "swift-1.5-qwen3.8-27b-axq-mxfp4"
         | "qwen3.8-27b-axq-6bit"
         | "ornith-35b-axq-6bit"
         | "qwen3-coder-next-axq-6bit"

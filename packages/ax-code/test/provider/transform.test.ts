@@ -233,12 +233,18 @@ describe("ProviderTransform sampling - Kimi / DeepSeek", () => {
   })
 
   test("keeps only exact managed Tiel aliases on the single-system contract", () => {
-    for (const id of ["tiel-coder-35b-axq-mxfp4", "cyber-tiel-coder-35b-axq-mxfp4"]) {
-      const model = { providerID: "ax-engine", id, api: { id }, family: id }
-      expect(ProviderTransform.requiresSingleLeadingSystem(model)).toBe(true)
-      expect(ProviderTransform.requiresSingleLeadingSystem({ ...model, providerID: "custom" })).toBe(false)
-      expect(ProviderTransform.requiresSingleLeadingSystem({ ...model, api: { id: `${id}-other` } })).toBe(false)
-    }
+    const id = "tiel-coder-35b-axq-mxfp4"
+    const model = { providerID: "ax-engine", id, api: { id }, family: id }
+    expect(ProviderTransform.requiresSingleLeadingSystem(model)).toBe(true)
+    expect(ProviderTransform.requiresSingleLeadingSystem({ ...model, providerID: "custom" })).toBe(false)
+    expect(ProviderTransform.requiresSingleLeadingSystem({ ...model, api: { id: `${id}-other` } })).toBe(false)
+  })
+
+  test("the managed Swift Qwen3.8 alias follows the Qwen single-system rule", () => {
+    const id = "swift-1.5-qwen3.8-27b-axq-mxfp4"
+    expect(
+      ProviderTransform.requiresSingleLeadingSystem({ providerID: "ax-engine", id, api: { id }, family: id }),
+    ).toBe(true)
   })
 
   test("collapses multiple Ornith system messages into one leading system turn", () => {

@@ -10,7 +10,7 @@ import { Filesystem } from "../../../src/util/filesystem"
 import { Process } from "../../../src/util/process"
 import {
   AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
-  AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+  AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID,
   AX_ENGINE_MODEL_DEFINITIONS,
 } from "../../../src/provider/ax-engine/constants"
 import { AX_ENGINE_LOCAL_REPOSITORIES } from "../../../src/provider/ax-engine/local-models"
@@ -61,7 +61,7 @@ describe("pinned Hub artifact lifecycle", () => {
     await fs.rm(AxEnginePaths.prepareState, { force: true })
   })
 
-  test.each([AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID, AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID] as const)(
+  test.each([AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID, AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID] as const)(
     "pinned alias %s rejects wrong revisions and missing sidecars",
     async (alias) => {
       await using tmp = await tmpdir()

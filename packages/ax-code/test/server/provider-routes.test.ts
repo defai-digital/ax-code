@@ -591,7 +591,10 @@ describe("provider routes", () => {
     const response = await Server.Default().request(`/provider/ax-engine/models?directory=${directory}`)
     expect(response.status).toBe(200)
     const body = (await response.json()) as { models: Array<{ id: string }> }
-    expect(body.models.map((model) => model.id)).toEqual(["tiel-coder-35b-axq-mxfp4", "cyber-tiel-coder-35b-axq-mxfp4"])
+    expect(body.models.map((model) => model.id)).toEqual([
+      "tiel-coder-35b-axq-mxfp4",
+      "swift-1.5-qwen3.8-27b-axq-mxfp4",
+    ])
     expect(body.models.every((model) => !model.id.startsWith("AutomatosX/"))).toBe(true)
     expect((body as { catalog?: { source?: string; modelIDs?: string[] } }).catalog).toMatchObject({
       source: "packages/ax-code/src/provider/ax-engine/constants.ts",

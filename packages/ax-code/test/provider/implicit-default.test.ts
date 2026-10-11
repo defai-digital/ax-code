@@ -92,12 +92,12 @@ describe("implicit default model selection", () => {
   test("defaults an explicitly selected AX Engine provider to Tiel regardless of catalog order", () => {
     const candidate = { tool_call: false, options: { axEngineCandidate: true } }
     const models = {
-      "cyber-tiel-coder-35b-axq-mxfp4": candidate,
+      "swift-1.5-qwen3.8-27b-axq-mxfp4": candidate,
       "tiel-coder-35b-axq-mxfp4": candidate,
     }
     expect(defaultModelIDForProvider("ax-engine", models)).toBe("tiel-coder-35b-axq-mxfp4")
     expect(pickImplicitDefaultModel([{ id: "ax-engine", models }])).toBeUndefined()
-    expect(defaultModelIDForProvider("ax-engine", { "cyber-tiel-coder-35b-axq-mxfp4": candidate })).toBeUndefined()
+    expect(defaultModelIDForProvider("ax-engine", { "swift-1.5-qwen3.8-27b-axq-mxfp4": candidate })).toBeUndefined()
     expect(
       defaultModelIDForProvider("ax-engine", {
         "tiel-coder-35b-axq-mxfp4": {

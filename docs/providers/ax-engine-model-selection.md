@@ -2,17 +2,17 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-09-20
+Last reviewed: 2026-10-11
 Owner: ax-code runtime
 
-AX Code offers only these two development packs through **AX Engine (Local)** on eligible Apple Silicon Macs. Tiel Coder is the default; Cyber-Tiel Coder is the alternative.
+AX Code offers only the models in the [AX Code collection](https://huggingface.co/collections/AutomatosX/ax-code) through **AX Engine (Local)** on eligible Apple Silicon Macs. Tiel Coder is the default. The shipped list is `packages/ax-code/src/provider/ax-engine/collection.json`; a model added to the collection appears in a release after it is listed there and given a pinned definition.
 
-| Model                              | Hugging Face repository                                                                                                                     | AX Code selection                    |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| Tiel Coder 35B A3B MXFP4 MTP       | [AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP](https://huggingface.co/AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP)             | `tiel-coder-35b-axq-mxfp4` (default) |
-| Cyber-Tiel Coder 35B A3B MXFP4 MTP | [AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP](https://huggingface.co/AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP) | `cyber-tiel-coder-35b-axq-mxfp4`     |
+| Model                           | Hugging Face repository                                                                                                               | AX Code selection                    |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| Tiel Coder 35B A3B MXFP4 MTP    | [AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP](https://huggingface.co/AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP)       | `tiel-coder-35b-axq-mxfp4` (default) |
+| Swift 1.5 Qwen3.8-27B MXFP4 MTP | [AutomatosX/AX-Swift-1.5-Qwen3.8-27B-MLX-AXQ-MXFP4-MTP](https://huggingface.co/AutomatosX/AX-Swift-1.5-Qwen3.8-27B-MLX-AXQ-MXFP4-MTP) | `swift-1.5-qwen3.8-27b-axq-mxfp4`    |
 
-The aliases pin revisions `5ab39b24bfd7f65203be9b7823b1840486f58b6d` and `fe05e871ec69ad9ae8eac01fd285555514ac7daf`, respectively. Both use the `mlx` selector, preserving the publisher's MXFP4 package. The model cards describe development requantizations with no certified quality-parity or MTP-speed claim; selecting them does not establish native execution or a speed improvement.
+The aliases pin revisions `5ab39b24bfd7f65203be9b7823b1840486f58b6d` and `13df5f8e3b42b8d78bf6f35fe71bf6b72f2863a6`, respectively. Both use the `mlx` selector, preserving the publisher's MXFP4 package. The model cards describe development requantizations with no certified quality-parity or MTP-speed claim; selecting them does not establish native execution or a speed improvement.
 
 AX Code bundles the signed [AX Engine 7.5.7 release](https://github.com/defai-digital/ax-engine/releases/tag/v7.5.7), which includes the Tiel sidecar namespace loader fix from commit `51137c71a6794964d52c32c95e275c0923ed8d0b`. Older Homebrew 7.4.0 binaries lack that fix and reject these packs with `MlxMtpRequiredButUnavailable`. Keep MTP required; explicit runtime overrides must also contain the fix. The [native prefill and decode measurements](../guides/tiel-runtime-phases-2026-09-19.md) retain their original tested build identity and do not certify performance of the newer release.
 
@@ -67,8 +67,7 @@ the model's draft gate instead of the generic `agentic` profile's 0.80 override.
 This is separate from the MTP activation policy: `auto` tuning still uses
 `required` MTP. The old dense Qwen3.8-specific experimental environment is not
 applied to these MoE packs. See the [profile comparison](../guides/tiel-mtp-profile-2026-09-19.md)
-for measured gains. Cyber-Tiel retains `agentic`; managed read-task probes failed
-with both profiles, so its task reliability remains unresolved.
+for measured gains. Swift retains `agentic` until its managed tool-use checks pass.
 The activation policy remains `required`; the engine must admit the actual drafter.
 To explicitly select a policy, set `provider.ax-engine.options.mtpPolicy` in `ax-code.json`:
 

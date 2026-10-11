@@ -200,12 +200,12 @@ Hosted MiniMax Token Plan remains available as `minimax-coding-plan` / `minimax-
 
 ## AX Engine Local Provider
 
-`ax-engine` is the built-in local inference provider. It is available only on eligible Apple Silicon Macs and offers only AutomatosX Tiel Coder and Cyber-Tiel Coder 35B A3B MXFP4 MTP development packs. Native capabilities are checked when the model starts.
+`ax-engine` is the built-in local inference provider. It is available only on eligible Apple Silicon Macs and offers only the models in the [AX Code collection](https://huggingface.co/collections/AutomatosX/ax-code): AutomatosX Tiel Coder 35B A3B and Swift 1.5 Qwen3.8-27B MXFP4 MTP development packs. Native capabilities are checked when the model starts.
 
-| Provider id | Model id                         | Selection                              | Context | Output |
-| ----------- | -------------------------------- | -------------------------------------- | ------: | -----: |
-| `ax-engine` | `tiel-coder-35b-axq-mxfp4`       | Tiel Coder 35B A3B MXFP4 MTP (default) |  65,536 |  8,192 |
-| `ax-engine` | `cyber-tiel-coder-35b-axq-mxfp4` | Cyber-Tiel Coder 35B A3B MXFP4 MTP     |  65,536 |  8,192 |
+| Provider id | Model id                          | Selection                              | Context | Output |
+| ----------- | --------------------------------- | -------------------------------------- | ------: | -----: |
+| `ax-engine` | `tiel-coder-35b-axq-mxfp4`        | Tiel Coder 35B A3B MXFP4 MTP (default) |  65,536 |  8,192 |
+| `ax-engine` | `swift-1.5-qwen3.8-27b-axq-mxfp4` | Swift 1.5 Qwen3.8-27B MXFP4 MTP        |  65,536 |  8,192 |
 
 Qwen3.8 27B, Ornith, Qwen3-Coder-Next and all other repositories are excluded from managed selection. Historical records remain readable for status and cleanup.
 
@@ -231,7 +231,7 @@ It first checks `--version` and falls back to `install.version` from `ax-engine 
 
 Managed Tiel launches use the catalog window (65,536 context tokens and 8,192 output tokens), which is larger than `ax-engine serve`'s built-in 16,384-token default so the agent prompt fits. Shrink either budget with `provider.ax-engine.options.contextTokens` and `provider.ax-engine.options.maxOutputTokens` (`outputTokens` is the same output knob). The environment names are `AX_ENGINE_CONTEXT_TOKENS` and `AX_ENGINE_MAX_OUTPUT_TOKENS` (`AX_ENGINE_OUTPUT_TOKENS` is an alias). An override can only narrow the catalog ceiling: a larger or invalid value is reported and ignored, and a Tiel or Qwen3.8 window that is not a multiple of 1,024 is snapped down so prefix-cache blocks stay 1,024 tokens. The same numbers are what the running server and the model limit use. A live `/v1/models` card can shrink that window further, and it cannot raise it. Configured options win, and AX Code warns when an environment value is ignored. The same warning is emitted when `binaryPath` ignores `AX_ENGINE_BIN`, or when `connectionMode` / `baseURL` ignores `AX_ENGINE_HOST`. A smaller window can be too small for the full agent prompt; AX Code then refuses the model instead of sending a prompt the server cannot hold.
 
-Tiel and Cyber-Tiel advertise structured tool calling. A live `/v1/models` card still overrides that advertisement once the server is running. `mtpPolicy: disabled` turns MTP off even when the binary version cannot be read; `auto` and `required` still need AX Engine 7.4.0 or newer.
+Tiel and Swift advertise structured tool calling. A live `/v1/models` card still overrides that advertisement once the server is running. `mtpPolicy: disabled` turns MTP off even when the binary version cannot be read; `auto` and `required` still need AX Engine 7.4.0 or newer.
 
 A PATH or overlay install that is missing `libmlx.dylib` / `mlx.metallib` is rejected. The bundled and overlay archives are the self-contained 7.5.7 macOS payload.
 

@@ -5,12 +5,16 @@ import {
   isAxEngineModelID,
   isAxEngineBuiltinModelID,
 } from "./constants"
+import collection from "./collection.json"
 
-/** Exact Tiel Coder MXFP4 MTP choices. Historical IDs remain valid storage identities. */
-export const AX_ENGINE_LOCAL_REPOSITORIES = [
-  "AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP",
-  "AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP",
-] as const
+/**
+ * Repositories offered for local inference: the members of the AX Code
+ * collection at https://huggingface.co/collections/AutomatosX/ax-code. Add a
+ * model to the collection by listing its repository in `collection.json` and
+ * giving it a curated definition in `constants.ts`. Historical IDs remain valid
+ * storage identities.
+ */
+export const AX_ENGINE_LOCAL_REPOSITORIES: readonly string[] = collection.models
 
 export function axEngineLocalRepository(modelID: unknown): string | undefined {
   if (!isAxEngineModelID(modelID)) return

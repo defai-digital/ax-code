@@ -18,7 +18,7 @@ import { getAxEngineDoctorCheck } from "../../src/cli/cmd/doctor"
 import { shouldShowProviderInList } from "../../src/server/routes/provider"
 import {
   AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
-  AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+  AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID,
   AX_ENGINE_ERROR,
   AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
   AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
@@ -945,15 +945,15 @@ describe("ax-engine server launch args", () => {
   test.each([
     AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
     AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID,
-    AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
-    "AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP@fe05e871ec69ad9ae8eac01fd285555514ac7daf",
+    AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID,
+    "AutomatosX/AX-Swift-1.5-Qwen3.8-27B-MLX-AXQ-MXFP4-MTP@13df5f8e3b42b8d78bf6f35fe71bf6b72f2863a6",
     "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@main",
     `AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit-MTP@${"a".repeat(40)}`,
     `Other/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@${"a".repeat(40)}`,
     "AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP@main",
-    "AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP@main",
+    "AutomatosX/AX-Swift-1.5-Qwen3.8-27B-MLX-AXQ-MXFP4-MTP@main",
     `Other/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP@${"a".repeat(40)}`,
-    `Other/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP@${"a".repeat(40)}`,
+    `Other/AX-Swift-1.5-Qwen3.8-27B-MLX-AXQ-MXFP4-MTP@${"a".repeat(40)}`,
     `AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-6bit-MTP@${"a".repeat(40)}`,
   ])("preserves the historical profile outside the exact model boundary: %s", (apiModelID) => {
     const args = axEngineServerLaunchArgs({ apiModelID })
@@ -1000,9 +1000,9 @@ describe("ax-engine server launch args", () => {
     AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
     `AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@${"a".repeat(40)}`,
     AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
-    AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+    AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID,
     `AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP@${"a".repeat(40)}`,
-    `AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP@${"a".repeat(40)}`,
+    `AutomatosX/AX-Swift-1.5-Qwen3.8-27B-MLX-AXQ-MXFP4-MTP@${"a".repeat(40)}`,
   ])("aligns managed recurrent prefix snapshots with the engine prefill grid: %s", (apiModelID) => {
     const args = axEngineServerLaunchArgs({ apiModelID, contextTokens: 65_536, binaryVersion: "7.4.0" })
     expect(args[args.indexOf("--block-size-tokens") + 1]).toBe("1024")
@@ -1023,7 +1023,7 @@ describe("ax-engine server launch args", () => {
     },
   )
 
-  test.each([AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID, AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID])(
+  test.each([AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID, AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID])(
     "preserves legacy geometry and profile boundaries for %s",
     (apiModelID) => {
       for (const binaryVersion of [undefined, "unknown", "7.3.1"]) {
@@ -1068,7 +1068,7 @@ describe("ax-engine server launch args", () => {
       // prompt + tool schema budget, so a brand-new session on the default
       // local model failed before any turn could be sent (#379 follow-up).
       [AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]: 65_536,
-      [AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]: 65_536,
+      [AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID]: 65_536,
       [AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID]: 65_536,
       [AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID]: 262_144,
       [AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID]: 32_768,
@@ -1339,9 +1339,9 @@ describe("axEngineQwen38ExactMtpEnv", () => {
 
   test.each([
     AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
-    AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+    AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID,
     "AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP@5ab39b24bfd7f65203be9b7823b1840486f58b6d",
-    "AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP@fe05e871ec69ad9ae8eac01fd285555514ac7daf",
+    "AutomatosX/AX-Swift-1.5-Qwen3.8-27B-MLX-AXQ-MXFP4-MTP@13df5f8e3b42b8d78bf6f35fe71bf6b72f2863a6",
     "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@main",
     `AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit-MTP@${"a".repeat(40)}`,
     `AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit@${"a".repeat(40)}`,
@@ -1657,7 +1657,7 @@ describe("ax-engine provider integration", () => {
     expect(provider).toBeDefined()
     expect(Object.keys(provider.models)).toEqual([
       AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
-      AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+      AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID,
     ])
     expect(Object.values(provider.models).map((model) => model.limit.context)).toEqual([65_536, 65_536])
     expect(provider.models[AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]).toMatchObject({

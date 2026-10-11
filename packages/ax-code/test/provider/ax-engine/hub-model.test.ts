@@ -9,10 +9,12 @@ import { pinnedDownloadVersionBlocker } from "../../../src/provider/ax-engine/de
 import { hubFixture, productCatalog } from "./hub-fixture"
 
 describe("AutomatosX product admission", () => {
-  test.each(["Tiel", "Cyber-Tiel"])("curates only the exact %s repository and declared source", (name) => {
-    const source = `peculiar-ragdoll/${name}-Coder-35B-A3B-MLX-oQ6e-MTP`
+  test.each([
+    ["Tiel", "AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP", "peculiar-ragdoll/Tiel-Coder-35B-A3B-MLX-oQ6e-MTP"],
+    ["Swift", "AX-Swift-1.5-Qwen3.8-27B-MLX-AXQ-MXFP4-MTP", "ukisai/Swift-1.5-Qwen3.8-27b"],
+  ])("curates only the exact %s repository and declared source", (_name, repo, source) => {
     const model = hubFixture({
-      id: `AutomatosX/AX-${name}-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP`,
+      id: `AutomatosX/${repo}`,
       cardData: { base_model: source },
     })
     expect(evaluateHubModel(model, {}).policy).toBe("eligible")

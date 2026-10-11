@@ -414,7 +414,7 @@ See [Sandbox Mode](docs/guides/sandbox.md), [Autonomous Mode](docs/guides/autono
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | Cloud API providers          | Google, DeepSeek, Meta (Muse Spark), GroqCloud, OpenRouter, Hugging Face, UnoRouter, Alibaba plans, MiniMax plans, GitHub Copilot, Z.AI     | Hosted provider model catalogs bundled with AX Code               |
 | CLI providers                | Claude Code, Codex CLI, Grok Build CLI, Muse Code                                                                                           | One model ID per CLI bridge, reusing the local vendor CLI session |
-| **AX Engine local provider** | `ax-engine` on eligible Apple Silicon Macs                                                                                                  | Tiel Coder (default) and Cyber-Tiel Coder 35B A3B AXQ MXFP4 MTP   |
+| **AX Engine local provider** | `ax-engine` on eligible Apple Silicon Macs                                                                                                  | Tiel Coder (default) and Swift 1.5 Qwen3.8-27B AXQ MXFP4 MTP      |
 | **Local LLM runtimes**       | Ollama, LM Studio, MTPLX, oMLX, AX Studio, or any OpenAI-compatible endpoint                                                                | Models discovered from the local runtime's endpoint               |
 | Private GPU cloud            | Catalog: Nebius, Fireworks AI, Together AI, Baseten, NVIDIA NIM, Deep Infra; dedicated: RunPod, SageMaker, Volcengine Ark, custom, and more | API-key catalogs or URL+token endpoints that expose `/v1/models`  |
 | AX Trust                     | Managed gateway connections (base URL + client API key)                                                                                     | Models discovered from the connected gateway                      |
@@ -433,8 +433,8 @@ discovered mid-task.
 
 The current Tiel versus MTPLX numbers, with host, metric, and caveats, are in the
 "Apple Silicon, managed local inference" section near the top of this README. Tiel uses
-model-selected `auto` tuning with MTP still required; Cyber-Tiel retains `agentic` (its managed
-read-task probes failed with both profiles, so it stays the alternate pack). These packs require
+model-selected `auto` tuning with MTP still required; other packs retain `agentic` until their managed tool-use
+checks pass. These packs require
 AX Engine 7.5.7 or newer; the Homebrew 7.4.0 binary predates the Tiel MTP loader fix and fails
 with `MlxMtpRequiredButUnavailable`. See the
 [20 September four-machine summary](docs/guides/tiel-peer-2026-09-20.md),

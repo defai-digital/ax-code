@@ -1,0 +1,8 @@
+{
+  "collection": "AutomatosX/ax-code",
+  "url": "https://huggingface.co/collections/AutomatosX/ax-code",
+  "models": [
+    "AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP",
+    "AutomatosX/AX-Swift-1.5-Qwen3.8-27B-MLX-AXQ-MXFP4-MTP"
+  ]
+}

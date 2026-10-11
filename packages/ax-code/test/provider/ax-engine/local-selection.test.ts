@@ -4,7 +4,7 @@ import { prepareAxEngine } from "../../../src/provider/ax-engine/prepare"
 import { startDownloadJob } from "../../../src/provider/ax-engine/download-job"
 import {
   AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
-  AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+  AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID,
   AX_ENGINE_DEFAULT_MODEL_ID,
   AX_ENGINE_MODEL_DEFINITIONS,
   axEngineHubReference,
@@ -17,6 +17,7 @@ import { axEngineLocalRepository, selectAxEngineLocalModels } from "../../../src
 import { axEngineHubCatalog, createHubCatalogStore } from "../../../src/provider/ax-engine/hub-catalog"
 import { HubCatalog, hubModelID } from "../../../src/provider/ax-engine/hub-model"
 import snapshot from "../../../src/provider/ax-engine/hub-catalog-snapshot.json"
+import collection from "../../../src/provider/ax-engine/collection.json"
 import { axEngineLoader } from "../../../src/provider/ax-engine/provider-loader"
 import { downloadModel } from "../../../src/provider/ax-engine/model-cache"
 import { ModelsDev } from "../../../src/provider/models"
@@ -29,9 +30,9 @@ import fs from "node:fs/promises"
 import path from "node:path"
 
 const repository = "AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP"
-const cyberRepository = "AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP"
+const swiftRepository = "AutomatosX/AX-Swift-1.5-Qwen3.8-27B-MLX-AXQ-MXFP4-MTP"
 const selectedID = AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID
-const selectedIDs = [selectedID, AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID] as const
+const selectedIDs = [selectedID, AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID] as const
 
 afterEach(async () => {
   await Instance.disposeAll()
@@ -39,9 +40,25 @@ afterEach(async () => {
   vi.unstubAllEnvs()
 })
 
-test("the managed model catalog offers only Tiel Coder and Cyber-Tiel Coder MXFP4 MTP", async () => {
+test("every collection model has a pinned curated definition and a bundled snapshot entry", () => {
+  expect(collection.collection).toBe("AutomatosX/ax-code")
+  expect(new Set(collection.models).size).toBe(collection.models.length)
+  const definitions = Object.values(AX_ENGINE_MODEL_DEFINITIONS)
+  for (const repo of collection.models) {
+    const definition = definitions.find((entry) => entry.quantizations.mlx?.hfRepo === repo)
+    expect(definition?.revision, repo).toMatch(/^[a-f0-9]{40}$/)
+    expect(
+      snapshot.models.some((model) => model.id === repo),
+      repo,
+    ).toBe(true)
+  }
+  // Retired collection members must not stay selectable through the snapshot.
+  expect(snapshot.models.some((model) => model.id.includes("Cyber-Tiel"))).toBe(false)
+})
+
+test("the managed model catalog offers only the AX Code collection models", async () => {
   const result = await getAxEngineModelsCatalog()
-  expect(result.models.map((model) => model.hfRepo)).toEqual([repository, cyberRepository])
+  expect(result.models.map((model) => model.hfRepo)).toEqual([repository, swiftRepository])
   expect(result.models).toHaveLength(2)
   expect(result.models[0]).toMatchObject({
     id: selectedID,
@@ -53,7 +70,7 @@ test("the managed model catalog offers only Tiel Coder and Cyber-Tiel Coder MXFP
   })
   expect(AX_ENGINE_DEFAULT_MODEL_ID).toBe(selectedID)
   expect(
-    result.models.every((model) => [repository, cyberRepository].includes(axEngineLocalRepository(model.id)!)),
+    result.models.every((model) => [repository, swiftRepository].includes(axEngineLocalRepository(model.id)!)),
   ).toBe(true)
   expect(result.discovery.decisions.some((entry) => entry.repoID === "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit")).toBe(
     true,
@@ -156,7 +173,7 @@ test("stale catalogs retain the selected Tiel MTP repository offline and prefer 
   expect(fetcher).not.toHaveBeenCalled()
 })
 
-test("managed provider discovery replaces stale configured models with only Tiel Coder and Cyber-Tiel Coder MXFP4 MTP", async () => {
+test("managed provider discovery replaces stale configured models with only the AX Code collection models", async () => {
   vi.spyOn(platform, "isSupportedHost").mockResolvedValue(true)
   vi.stubEnv(
     "AX_CODE_CONFIG_CONTENT",
@@ -187,7 +204,7 @@ test("managed provider discovery replaces stale configured models with only Tiel
     fn: async () => {
       await Provider.ready()
       const provider = (await Provider.list())[ProviderID.make("ax-engine")]
-      expect(Object.keys(provider.models).map(axEngineLocalRepository)).toEqual([repository, cyberRepository])
+      expect(Object.keys(provider.models).map(axEngineLocalRepository)).toEqual([repository, swiftRepository])
       expect(Object.keys(provider.models)).toEqual(selectedIDs)
       expect(Object.keys(provider.models)).not.toContain(`${repository}@${"a".repeat(40)}`)
       expect(provider.models[selectedID].options.modelID).toBe(selectedID)

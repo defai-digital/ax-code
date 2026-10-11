@@ -8,7 +8,7 @@ import {
   sameSkuOnConnectedProvider,
 } from "@/provider/model-selectability"
 import {
-  AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+  AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID,
   AX_ENGINE_MODEL_DEFINITIONS,
   AX_ENGINE_MODEL_IDS,
   AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
@@ -83,7 +83,7 @@ describe("ax-engine local MLX model list", () => {
   // aliases, not the full historical catalog — older excluded IDs (e.g.
   // Qwen3-Coder-Next) remain listed only for existing-install status and
   // cleanup and are a separate concern from new selection.
-  test.each([AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID, AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID] as const)(
+  test.each([AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID, AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID] as const)(
     "%s clears the fixed agent/tool-schema budget",
     (modelID) => {
       const def = AX_ENGINE_MODEL_DEFINITIONS[modelID]
@@ -101,7 +101,7 @@ describe("ax-engine local MLX model list", () => {
   test("Tiel packs advertise tool calling and keep a pinned revision", () => {
     for (const id of [
       AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
-      AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+      AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID,
     ] as const) {
       const definition = AX_ENGINE_MODEL_DEFINITIONS[id]
       expect(definition.toolcall).toBe(true)

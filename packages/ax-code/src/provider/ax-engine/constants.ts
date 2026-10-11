@@ -18,7 +18,7 @@ export const AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID = "qwen3.8-27b-axq-6bit"
 export const AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID = "ornith-35b-axq-6bit"
 export const AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID = "qwen3-coder-next-axq-6bit"
 export const AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID = "tiel-coder-35b-axq-mxfp4"
-export const AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID = "cyber-tiel-coder-35b-axq-mxfp4"
+export const AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID = "swift-1.5-qwen3.8-27b-axq-mxfp4"
 export const AX_ENGINE_DISPLAY_NAME = "AX Engine (Local)"
 // Keep the client default aligned with ax-engine-server. Managed lifecycle may
 // still select 31419+ when another process owns the preferred port.
@@ -179,7 +179,7 @@ export function usesAlignedPrefixCacheGeometry(modelID: string): boolean {
   const repo = axEngineHubReference(modelID)?.repoID
   return (
     repo !== undefined &&
-    ([AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID, AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID] as const).some(
+    ([AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID, AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID] as const).some(
       (id) => repo === AX_ENGINE_MODEL_DEFINITIONS[id].quantizations.mlx?.hfRepo,
     )
   )
@@ -189,7 +189,7 @@ export function axEngineSpeculationProfile(modelID: string): string {
   // These model contracts supply their own draft gate. The generic agentic
   // profile pins it to 0.80 and overrides that decision. Auto defers to the
   // engine contract without changing required MTP or applying dense Qwen env
-  // overrides to Tiel. Cyber-Tiel keeps its existing profile until managed
+  // overrides to Tiel. Other packs keep the agentic profile until managed
   // tool-use checks pass; native throughput alone does not qualify a change.
   if (usesQwen38ExactMtpProfile(modelID)) return "auto"
   if (isAxEngineModelID(modelID)) {
@@ -445,7 +445,7 @@ export const AX_ENGINE_BINARY_RELEASE: AxEngineBinaryRelease = {
 // signed or PATH-installed runtime.
 export const AX_ENGINE_MODEL_IDS = [
   AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
-  AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+  AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID,
   AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
   AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
   AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID,
@@ -475,7 +475,7 @@ export const AxEngineModelIDSchema = z.union([
 // - Qwen3-Coder-Next: 32K memory-safe coding window
 export const AX_ENGINE_MODEL_CONTEXT_TOKENS = {
   [AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]: 65_536,
-  [AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]: 65_536,
+  [AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID]: 65_536,
   [AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID]: 65_536,
   [AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID]: 262_144,
   [AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID]: 32_768,
@@ -561,28 +561,27 @@ export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineBuiltinModelID, AxEngin
       },
     },
   },
-  [AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]: {
-    id: AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
-    apiModelID: AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
-    name: "Cyber-Tiel Coder 35B A3B AXQ MXFP4 MTP (Local MLX)",
-    sourceModel: "peculiar-ragdoll/Cyber-Tiel-Coder-35B-A3B-MLX-oQ6e-MTP",
-    revision: "fe05e871ec69ad9ae8eac01fd285555514ac7daf",
+  [AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID]: {
+    id: AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID,
+    apiModelID: AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID,
+    name: "Swift 1.5 Qwen3.8-27B AXQ MXFP4 MTP (Local MLX)",
+    sourceModel: "ukisai/Swift-1.5-Qwen3.8-27b",
+    revision: "13df5f8e3b42b8d78bf6f35fe71bf6b72f2863a6",
     defaultQuantization: "mlx",
-    releaseDate: "2026-09-19",
+    releaseDate: "2026-10-11",
     reasoning: false,
     toolcall: true,
     minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
-    contextTokens: AX_ENGINE_MODEL_CONTEXT_TOKENS[AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID],
+    contextTokens: AX_ENGINE_MODEL_CONTEXT_TOKENS[AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID],
     outputTokens: 8_192,
     estimatedResources: true,
     artifactFiles: [
       "axquant_mtp_sidecar_manifest.json",
       "chat_template.jinja",
       "config.json",
-      "model-00001-of-00004.safetensors",
-      "model-00002-of-00004.safetensors",
-      "model-00003-of-00004.safetensors",
-      "model-00004-of-00004.safetensors",
+      "model-00001-of-00003.safetensors",
+      "model-00002-of-00003.safetensors",
+      "model-00003-of-00003.safetensors",
       "mtp.safetensors",
       "mtplx_runtime.json",
       "tokenizer.json",
@@ -591,12 +590,13 @@ export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineBuiltinModelID, AxEngin
     ],
     quantizations: {
       mlx: {
-        hfRepo: "AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP",
+        hfRepo: "AutomatosX/AX-Swift-1.5-Qwen3.8-27B-MLX-AXQ-MXFP4-MTP",
         downloadMode: "direct",
         packageMarker: "axquant_mtp_sidecar_manifest.json",
         directFallback: false,
         mtpSource: "Publisher-preserved MTP sidecar; native capabilities require runtime verification",
-        minDiskBytes: 32 * 1024 ** 3,
+        // ~16.2 GiB complete download plus headroom for the HF snapshot and temp files.
+        minDiskBytes: 24 * 1024 ** 3,
       },
     },
   },
