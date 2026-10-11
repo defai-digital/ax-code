@@ -2,6 +2,7 @@ import { spawn } from "child_process"
 import { Env } from "../../util/env"
 import { defer } from "../../util/defer"
 import { Log } from "../../util/log"
+import { toErrorMessage } from "../../util/error-message"
 import { Plugin } from "../../plugin"
 import { Instance } from "../../project/instance"
 import { Shell } from "@/shell/shell"
@@ -219,6 +220,9 @@ export async function executeShellCommand(
   const SHELL_TIMEOUT = shellTimeoutMs
   const SHELL_ABORT_TIMEOUT = "Shell abort timed out while waiting for process to exit"
   let timedOut = false
+  // A spawn failure (ENOENT shell, EACCES) never produces an exit code; keep
+  // its message so the part names the real cause instead of a fake exit code.
+  let startError: string | undefined
   const shellTimer = setTimeout(() => {
     // A user abort already in its kill grace window keeps its own label.
     if (!exited && !aborted) {
@@ -329,6 +333,15 @@ export async function executeShellCommand(
       } else {
         exited = true
         exitCode = 1
+        startError = toErrorMessage(error)
+        log.warn("shell command failed to start", {
+          command: "session.prompt.shell",
+          status: "error",
+          errorCode: "SHELL_SPAWN_FAILED",
+          shell,
+          args,
+          error,
+        })
       }
     }
   } finally {
@@ -348,7 +361,11 @@ export async function executeShellCommand(
   await pending
   if (part.state.status === "running") {
     const error =
-      exitSignal === null ? `Process exited with code ${exitCode}` : `Process exited with signal ${exitSignal}`
+      startError !== undefined
+        ? `Failed to start shell ${shell}: ${startError}`
+        : exitSignal === null
+          ? `Process exited with code ${exitCode}`
+          : `Process exited with signal ${exitSignal}`
     part.state =
       exitCode !== 0 && !aborted
         ? {

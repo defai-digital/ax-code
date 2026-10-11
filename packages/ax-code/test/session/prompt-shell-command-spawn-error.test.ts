@@ -31,7 +31,7 @@ afterEach(async () => {
 })
 
 describe("executeShellCommand spawn error", () => {
-  test("does not report a spawn failure as a user abort", async () => {
+  test("names the spawn failure instead of a fabricated exit code", async () => {
     await using tmp = await tmpdir({
       git: true,
       config: {
@@ -71,7 +71,9 @@ describe("executeShellCommand spawn error", () => {
         }
         expect(shellPart.state.status).toBe("error")
         expect(shellPart.state.output ?? "").not.toContain("User aborted the command")
-        expect(shellPart.state.error).toContain("Process exited with code 1")
+        expect(shellPart.state.error).toContain("Failed to start shell")
+        expect(shellPart.state.error).toContain("spawn ENOENT")
+        expect(shellPart.state.error).not.toContain("Process exited with code 1")
       },
     })
   })
