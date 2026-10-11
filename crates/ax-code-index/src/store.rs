@@ -520,6 +520,27 @@ mod tests {
     }
 
     #[test]
+    fn test_prune_scope_preserves_case_distinct_directory() {
+        let store = test_store();
+        let sep = std::path::MAIN_SEPARATOR;
+        let root = format!("{sep}work{sep}repo");
+        let inside = format!("{root}{sep}a.ts");
+        let outside = format!("{sep}work{sep}REPO{sep}b.ts");
+        for (id, path) in [("f1", &inside), ("f2", &outside)] {
+            let row = make_file(id, "proj1", path, "sha");
+            store
+                .upsert_file(serde_json::to_string(&row).unwrap())
+                .unwrap();
+        }
+        let result = store
+            .prune_orphan_files("proj1".into(), "[]".into(), root)
+            .unwrap();
+        let pruned: serde_json::Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(pruned["files"], 1, "case-distinct paths must survive");
+        assert!(store.get_file("proj1".into(), outside).unwrap().is_some());
+    }
+
+    #[test]
     fn test_prune_scope_respects_directory_boundary() {
         let store = test_store();
         let sep = std::path::MAIN_SEPARATOR;
@@ -529,14 +550,19 @@ mod tests {
         let underscore = format!("{sep}work{sep}repoX{sep}c.ts");
         for (id, path) in [("f1", &inside), ("f2", &sibling), ("f3", &underscore)] {
             let row = make_file(id, "proj1", path, "sha");
-            store.upsert_file(serde_json::to_string(&row).unwrap()).unwrap();
+            store
+                .upsert_file(serde_json::to_string(&row).unwrap())
+                .unwrap();
         }
 
         let result = store
             .prune_orphan_files("proj1".into(), "[]".into(), root.clone())
             .unwrap();
         let pruned: serde_json::Value = serde_json::from_str(&result).unwrap();
-        assert_eq!(pruned["files"], 1, "only the file under the walk root is in scope");
+        assert_eq!(
+            pruned["files"], 1,
+            "only the file under the walk root is in scope"
+        );
 
         // `_` in the scope prefix is a literal, not a LIKE wildcard.
         let wildcard = format!("{sep}work{sep}repo_");

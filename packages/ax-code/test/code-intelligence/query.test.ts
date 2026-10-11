@@ -669,6 +669,26 @@ describe("CodeGraphQuery.pruneOrphanFiles", () => {
     })
   })
 
+  test("scopePrefix preserves paths whose directory differs only in case", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeGraphQuery.clearProject(projectID)
+        seed(projectID, "/work/repo/a.ts")
+        seed(projectID, "/work/REPO/b.ts")
+
+        const result = CodeGraphQuery.pruneOrphanFiles(projectID, new Set(), "/work/repo")
+        expect(result.files).toBe(1)
+        expect(result.nodes).toBe(1)
+        expect(CodeGraphQuery.listFiles(projectID).map((file) => file.path)).toEqual(["/work/REPO/b.ts"])
+        expect(CodeGraphQuery.countNodes(projectID)).toBe(1)
+        CodeGraphQuery.clearProject(projectID)
+      },
+    })
+  })
+
   test("is a no-op when every known file is live", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

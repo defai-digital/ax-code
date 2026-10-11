@@ -387,33 +387,19 @@ export namespace CodeGraphQuery {
           .where(eq(CodeFileTable.project_id, projectID))
           .all()
       }
-      // Escape LIKE wildcards in the walk root so a path containing %/_ is
-      // treated literally. drizzle-orm's `like()` has no ESCAPE arg, so
-      // express the clause with a raw SQL fragment.
-      //
-      // A raw string prefix is not a directory-boundary check: with just
-      // `scopePrefix + "%"`, a walk rooted at "/a/b/proj1" would also match
-      // "/a/b/proj1-old/…" and "/a/b/proj10/…" — sibling directories that
-      // happen to share the same leading characters — because LIKE has no
-      // concept of a path separator. Since the same project id can appear
-      // in multiple worktrees (the exact scenario this scope prefix exists
-      // to guard, see the function comment above), that false match would
-      // treat a sibling worktree's files as in-scope, find them absent from
-      // `livePaths`, and delete their graph rows. Require the match to be
-      // the prefix itself or the prefix followed by a path separator.
-      // Escape the boundary (prefix + separator) as one unit: on Windows,
-      // path.sep is "\", the same character as the ESCAPE char below, so
-      // escaping scopePrefix alone and appending an unescaped separator
-      // would leave a bare "\" directly before the "%" wildcard, which
-      // SQLite reads as an escaped literal "%" instead of the wildcard.
-      const boundary = (scopePrefix + path.sep).replace(/([%_\\])/g, "\\$1")
+      // SQLite LIKE folds ASCII case and can select a case-distinct worktree.
+      // Compare the literal directory boundary; wildcard characters stay literal.
+      const boundary = scopePrefix + path.sep
       return db
         .select({ path: CodeFileTable.path })
         .from(CodeFileTable)
         .where(
           and(
             eq(CodeFileTable.project_id, projectID),
-            or(eq(CodeFileTable.path, scopePrefix), sql`${CodeFileTable.path} LIKE ${boundary + "%"} ESCAPE '\\'`),
+            or(
+              eq(CodeFileTable.path, scopePrefix),
+              sql`substr(${CodeFileTable.path}, 1, length(${boundary})) = ${boundary}`,
+            ),
           ),
         )
         .all()

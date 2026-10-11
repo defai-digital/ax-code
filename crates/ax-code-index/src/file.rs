@@ -22,22 +22,6 @@ fn scope_root(prefix: &str) -> &str {
     prefix.trim_end_matches(|c| c == '/' || c == std::path::MAIN_SEPARATOR)
 }
 
-/// LIKE pattern (ESCAPE '\\') matching everything under `prefix` as a directory.
-/// The boundary is escaped as one unit because on Windows the separator is the
-/// escape character itself.
-fn scope_boundary_pattern(prefix: &str) -> String {
-    let boundary = format!("{}{}", scope_root(prefix), std::path::MAIN_SEPARATOR);
-    let mut escaped = String::with_capacity(boundary.len() + 1);
-    for ch in boundary.chars() {
-        if matches!(ch, '%' | '_' | '\\') {
-            escaped.push('\\');
-        }
-        escaped.push(ch);
-    }
-    escaped.push('%');
-    escaped
-}
-
 fn row_to_file(row: &rusqlite::Row) -> rusqlite::Result<FileRow> {
     Ok(FileRow {
         id: row.get(0)?,
@@ -152,9 +136,11 @@ impl IndexStore {
         // `/work/repo` would also match `/work/repo-2/...`. Match the prefix
         // itself or the prefix plus a separator, as the Drizzle path does.
         let sql = format!(
-          "SELECT {SELECT_COLS} FROM code_file WHERE project_id = ?1 AND (path = ?2 OR path LIKE ?3 ESCAPE '\\')"
+          "SELECT {SELECT_COLS} FROM code_file WHERE project_id = ?1 AND (path = ?2 OR substr(path, 1, length(?3)) = ?3)"
         );
-        let pattern = scope_boundary_pattern(&scope_prefix);
+        // SQLite LIKE folds ASCII case, which can select another worktree.
+        // Compare the literal directory boundary with binary equality instead.
+        let boundary = format!("{}{}", scope_root(&scope_prefix), std::path::MAIN_SEPARATOR);
         let scope_root = scope_root(&scope_prefix);
         query_files(
           conn,
@@ -162,7 +148,7 @@ impl IndexStore {
           &[
             &project_id as &dyn rusqlite::types::ToSql,
             &scope_root as &dyn rusqlite::types::ToSql,
-            &pattern as &dyn rusqlite::types::ToSql,
+            &boundary as &dyn rusqlite::types::ToSql,
           ],
         )?
       };
