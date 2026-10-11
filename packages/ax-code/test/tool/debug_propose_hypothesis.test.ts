@@ -254,6 +254,48 @@ describe("DebugProposeHypothesisTool", () => {
     })
   })
 
+  test("a verification envelope id and a debug evidence id are distinct evidence and both count", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const { caseId, evidenceId } = await emitCaseAndEvidence(session.id, tmp.path, "p", "x")
+        const envelope: VerificationEnvelope = {
+          schemaVersion: 1,
+          workflow: "qa",
+          scope: { kind: "file", paths: ["src/foo.ts"] },
+          command: { runner: "typecheck", argv: [], cwd: "/tmp" },
+          result: { name: "typecheck", type: "typecheck", passed: true, status: "passed", issues: [], duration: 0 },
+          structuredFailures: [],
+          artifactRefs: [],
+          source: { tool: "verify_project", version: "4.x.x", runId: session.id },
+        }
+        const envelopeId = computeEnvelopeId(envelope)
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id as any,
+          tool: "verify_project",
+          callID: "call-verify-distinct",
+          status: "completed",
+          metadata: { verificationEnvelopes: [envelope] },
+          durationMs: 1,
+        })
+        await new Promise((resolve) => setTimeout(resolve, 30))
+        const tool = await DebugProposeHypothesisTool.init()
+        const one = await tool.execute({ caseId, claim: "one ref", evidenceRefs: [evidenceId] }, fakeCtx(session.id))
+        const both = await tool.execute(
+          { caseId, claim: "both refs", evidenceRefs: [evidenceId, envelopeId] },
+          fakeCtx(session.id),
+        )
+        // The ids name different artifacts (a captured log vs a verification
+        // run), so they are two pieces of evidence, not one cited twice.
+        expect(both.metadata.debugHypothesis.evidenceRefs).toEqual([evidenceId, envelopeId])
+        expect(both.metadata.confidence).toBeGreaterThan(one.metadata.confidence)
+      },
+    })
+  })
+
   test("confidence climbs with more evidence (capped at 0.95)", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

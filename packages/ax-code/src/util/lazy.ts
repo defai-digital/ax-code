@@ -5,7 +5,11 @@ export type Lazy<T> = (() => T) & {
 }
 
 function isThenable(value: unknown): value is PromiseLike<unknown> {
-  return typeof value === "object" && value !== null && typeof (value as PromiseLike<unknown>).then === "function"
+  return (
+    (typeof value === "object" || typeof value === "function") &&
+    value !== null &&
+    typeof (value as PromiseLike<unknown>).then === "function"
+  )
 }
 
 export function lazy<T>(fn: () => T): Lazy<T> {

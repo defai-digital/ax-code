@@ -69,6 +69,21 @@ describe("util.lazy", () => {
     expect(calls).toBe(2)
   })
 
+  test("retries a function-valued thenable after it rejects", async () => {
+    let calls = 0
+    const value = lazy(() => {
+      calls++
+      const thenable = Object.assign(() => undefined, {
+        then: (onFulfilled: (v: string) => void, onRejected: (e: unknown) => void) =>
+          calls === 1 ? onRejected?.(new Error("transient")) : onFulfilled?.("ready"),
+      })
+      return thenable
+    })
+    await expect(Promise.resolve(value())).rejects.toThrow("transient")
+    expect(value.loaded()).toBe(false)
+    await expect(Promise.resolve(value())).resolves.toBe("ready")
+  })
+
   test("should work with different return types", () => {
     const lazyString = lazy(() => "string")
     const lazyNumber = lazy(() => 123)

@@ -100,13 +100,12 @@ describe("util.timeout", () => {
   })
 
   test("a delay beyond the timer limit waits instead of firing immediately", async () => {
-    let timedOut = false
-    const pending = withTimeout(new Promise<never>(() => {}), 2 ** 40).catch(() => {
-      timedOut = true
-    })
+    const fired: string[] = []
+    void withTimeout(new Promise<never>(() => {}), 2 ** 40).catch(() => fired.push("2^40"))
+    void withTimeout(new Promise<never>(() => {}), Infinity).catch(() => fired.push("Infinity"))
+    void sleep(Number.NaN, { unref: true }).then(() => fired.push("sleep NaN"))
     await new Promise((resolve) => setTimeout(resolve, 30))
-    expect(timedOut).toBe(false)
-    void pending
+    expect(fired).toEqual([])
   })
 
   test("does not fire onTimeout when the promise settles first", async () => {

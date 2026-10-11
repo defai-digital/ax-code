@@ -30,13 +30,10 @@ export function sleep(ms: number, opts?: { unref?: boolean; signal?: AbortSignal
       clearTimeout(timer)
       reject(signal?.reason)
     }
-    const timer = setTimeout(
-      () => {
-        signal?.removeEventListener("abort", onAbort)
-        resolve()
-      },
-      Math.min(ms, 2_147_483_647),
-    )
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort)
+      resolve()
+    }, clampDelay(ms))
     if (unref) timer.unref?.()
     signal?.addEventListener("abort", onAbort, { once: true })
   })
