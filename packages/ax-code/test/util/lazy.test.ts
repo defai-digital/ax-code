@@ -120,4 +120,60 @@ describe("util.lazy", () => {
     expect(lazyNull()).toBe(null)
     expect(lazyUndefined()).toBe(undefined)
   })
+
+  test("retries initialization when inspecting a thenable throws", () => {
+    let calls = 0
+    const value = lazy(() => {
+      calls++
+      if (calls > 1) return { ready: true }
+      return Object.defineProperty({}, "then", {
+        get() {
+          throw new Error("then lookup failed")
+        },
+      })
+    })
+
+    expect(() => value()).toThrow("then lookup failed")
+    expect(value.loaded()).toBe(false)
+    expect(value.peek()).toBeUndefined()
+    expect(value()).toEqual({ ready: true })
+    expect(calls).toBe(2)
+  })
+
+  test("retries initialization when subscribing to a thenable throws", () => {
+    let calls = 0
+    const value = lazy(() => {
+      calls++
+      if (calls > 1) return "ready"
+      return {
+        then() {
+          throw new Error("then subscription failed")
+        },
+      }
+    })
+
+    expect(() => value()).toThrow("then subscription failed")
+    expect(value.loaded()).toBe(false)
+    expect(value.peek()).toBeUndefined()
+    expect(value()).toBe("ready")
+    expect(calls).toBe(2)
+  })
+
+  test("accepts foreign thenables that invoke their fulfillment callback", async () => {
+    let calls = 0
+    const thenable = {
+      then(resolve: (value: string) => void) {
+        resolve("ready")
+      },
+    }
+    const value = lazy(() => {
+      calls++
+      return thenable
+    })
+
+    expect(value()).toBe(thenable)
+    expect(value.loaded()).toBe(true)
+    await expect(Promise.resolve(value())).resolves.toBe("ready")
+    expect(calls).toBe(1)
+  })
 })

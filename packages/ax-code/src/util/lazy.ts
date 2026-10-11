@@ -32,12 +32,15 @@ export function lazy<T>(fn: () => T): Lazy<T> {
     try {
       // Reading `.then` may itself throw (a getter), so the probe stays inside.
       if (isThenable(produced)) {
-        produced.then(undefined, () => {
-          if (loaded && value === produced) {
-            loaded = false
-            value = undefined
-          }
-        })
+        produced.then(
+          () => undefined,
+          () => {
+            if (loaded && value === produced) {
+              loaded = false
+              value = undefined
+            }
+          },
+        )
       }
     } catch (error) {
       loaded = false

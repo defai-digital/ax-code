@@ -684,18 +684,17 @@ describe("DebugProposeHypothesisTool", () => {
         expect(result.metadata.needsVerification).toBeFalsy()
 
         // Re-confirming the same hypothesis with stale evidence names the real cause.
-        // The processor records tool results to the event log; replay that here
-        // so the loader sees the confirmed (terminal) hypothesis.
+        // Direct tool execution returns metadata; the runner normally records it.
         Recorder.emit({
           type: "tool.result",
-          sessionID: session.id as any,
+          sessionID: session.id,
           tool: "debug_propose_hypothesis",
-          callID: "call-hypothesis-confirmed",
+          callID: "call-confirm-fresh",
           status: "completed",
           metadata: result.metadata,
           durationMs: 1,
         })
-        await new Promise((resolve) => setTimeout(resolve, 30))
+        Recorder.flushAll()
         const staleId = computeEnvelopeId(stale)
         await expect(
           tool.execute(
