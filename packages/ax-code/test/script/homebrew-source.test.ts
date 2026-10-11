@@ -67,7 +67,9 @@ describe("distribution support guardrails", () => {
     expect(text).toContain('--repo "${SOURCE_REPO}"')
     expect(text).toContain('gh repo clone "${repo}"')
     expect(text).toContain('"defai-digital/homebrew-tap" "Formula/ax-code.rb"')
-    expect(text).toContain('"defai-digital/homebrew-ax-code" "ax-code.rb"')
+    // Recreating the legacy formula would undo Homebrew's tap migration.
+    expect(text).not.toContain("defai-digital/homebrew-ax-code")
+    expect(text.match(/^update_tap /gm)).toHaveLength(1)
     expect(text).toContain('"${tap_dir}/${formula_path}"')
     expect(text).toContain("gh auth setup-git")
     expect(text).toContain("mktemp -d")
