@@ -3,7 +3,7 @@ import type { BootstrapTask } from "./sync-bootstrap-task"
 
 export type SyncBootstrapStatus = "loading" | "partial" | "complete"
 
-export function createSyncBootstrapPhaseSequence(input: {
+export type SyncBootstrapPhaseSequenceInput = {
   blockingTasks: BootstrapTask[]
   coreTasks: BootstrapTask[]
   deferredTasks: BootstrapTask[]
@@ -19,7 +19,11 @@ export function createSyncBootstrapPhaseSequence(input: {
   logWarn: (label: string, data: { error: string }) => void
   logError: (label: string, data: { error: string }) => void
   recordStartup: (name: string, data?: Record<string, unknown>) => void
-}): BootstrapPhaseSequenceStep[] {
+}
+
+export function createSyncBootstrapPhaseSequence(
+  input: SyncBootstrapPhaseSequenceInput,
+): BootstrapPhaseSequenceStep[] {
   const hasBlockingTasks = input.blockingTasks.length > 0
 
   return [

@@ -1,5 +1,9 @@
 import type { SyncBootstrapAssemblyRequests } from "./sync-bootstrap-assembly"
-import { createSyncBootstrapPhaseSequence, type SyncBootstrapStatus } from "./sync-bootstrap-phase-plan"
+import {
+  createSyncBootstrapPhaseSequence,
+  type SyncBootstrapPhaseSequenceInput,
+  type SyncBootstrapStatus,
+} from "./sync-bootstrap-phase-plan"
 import {
   createSyncBootstrapRequests,
   type BootstrapRequestWrap,
@@ -132,23 +136,7 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
   deferredConcurrency?: number
   deferredBackground?: boolean
   now?: () => number
-  createPhaseSequence?: (input: {
-    blockingTasks: BootstrapTask[]
-    coreTasks: BootstrapTask[]
-    deferredTasks: BootstrapTask[]
-    coreConcurrency?: number
-    deferredDelayMs?: number
-    deferredConcurrency?: number
-    deferredBackground?: boolean
-    getStatus: () => SyncBootstrapStatus
-    setStatus: (status: SyncBootstrapStatus) => void
-    finishCoreSpan?: BootstrapSpan
-    finishDeferredSpan?: BootstrapSpan
-    finishStartup: () => void
-    logWarn: (label: string, data: { error: string }) => void
-    logError: (label: string, data: { error: string }) => void
-    recordStartup: (name: string, data?: Record<string, unknown>) => void
-  }) => BootstrapPhaseSequenceStep[]
+  createPhaseSequence?: (input: SyncBootstrapPhaseSequenceInput) => BootstrapPhaseSequenceStep[]
 }) {
   const now = input.now ?? Date.now
   const resolveClient = () => (typeof input.client === "function" ? (input.client as () => TClient)() : input.client)
