@@ -231,6 +231,8 @@ describe("wgetHostDirectory", () => {
     expect(wgetHostDirectory("https://Example.com:443/")).toBe("example.com")
     expect(wgetHostDirectory("ftp://host:21/f")).toBe("host")
     expect(wgetHostDirectory("example.com/no-scheme")).toBe("example.com")
+    expect(wgetHostDirectory("Example.com/f?next=http://other.example/x")).toBe("example.com")
+    expect(wgetHostDirectory("example.com/f#http://x")).toBe("example.com")
   })
 
   test("keeps a non-default port and drops IPv6 brackets", () => {

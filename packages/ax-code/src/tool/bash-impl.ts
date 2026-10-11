@@ -890,7 +890,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             // string and fragment are not part of it, and an empty path means
             // index.html for wget.
             for (const url of operands) {
-              const full = url.includes("://") ? url : `http://${url}`
+              const full = /^[a-z][a-z0-9+.-]*:\/\//i.test(url) ? url : `http://${url}`
               const authority = wgetHostDirectory(full)
               const segments = full
                 .replace(/^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i, "")

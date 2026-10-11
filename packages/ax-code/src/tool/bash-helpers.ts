@@ -48,7 +48,8 @@ const SCHEME_DEFAULT_PORTS: Record<string, string> = { http: "80", https: "443",
  * only when it is not the scheme default (`example.com`, `::1:8080`).
  */
 export function wgetHostDirectory(url: string): string {
-  const full = url.includes("://") ? url : `http://${url}`
+  // Only a leading scheme counts: a `://` inside the query is not one.
+  const full = /^[a-z][a-z0-9+.-]*:\/\//i.test(url) ? url : `http://${url}`
   const scheme = full.slice(0, full.indexOf("://")).toLowerCase()
   const authority = full
     .slice(scheme.length + 3)
