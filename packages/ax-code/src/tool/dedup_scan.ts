@@ -3,32 +3,19 @@ import { Tool } from "./tool"
 import DESCRIPTION from "./dedup_scan.txt"
 import { Instance } from "../project/instance"
 import { DebugEngine } from "@ax-code/ax-code-reason"
-import type { CodeNodeKind } from "../code-intelligence/schema.sql"
+import { CODE_NODE_KINDS } from "../code-intelligence/schema.sql"
 import { dedupCoverageNotice } from "./scan-coverage"
 import { ToolBoolean, ToolNumber } from "./schema"
 
 // Tool wrapper around DebugEngine.detectDuplicates. Read-only, no file
 // writes, no cloud calls. See PRD §4.3.1 and ADR-009.
 
-const NODE_KINDS = [
-  "function",
-  "method",
-  "class",
-  "interface",
-  "type",
-  "variable",
-  "constant",
-  "module",
-  "parameter",
-  "enum",
-] as const satisfies readonly CodeNodeKind[]
-
 const MAX_CLUSTERS_IN_OUTPUT = 25
 
 export const DedupScanTool = Tool.define("dedup_scan", {
   description: DESCRIPTION,
   parameters: z.object({
-    kinds: z.array(z.enum(NODE_KINDS)).optional().describe("Node kinds to scan (default: function, method)"),
+    kinds: z.array(z.enum(CODE_NODE_KINDS)).optional().describe("Node kinds to scan (default: function, method)"),
     minSignatureLength: ToolNumber(z.number().int().min(1))
       .optional()
       .describe("Skip signatures shorter than this (default 20)"),

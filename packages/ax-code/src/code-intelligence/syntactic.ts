@@ -7,7 +7,7 @@ import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
 import { parseJsonResult } from "@/util/json-value"
 import { NativeAddon } from "../native/addon"
-import type { CodeNodeKind } from "./schema.sql"
+import { CODE_NODE_KINDS, type CodeNodeKind } from "./schema.sql"
 
 // Syntactic fallback extraction for the code-intelligence builder.
 //
@@ -54,18 +54,7 @@ export namespace SyntacticExtractor {
 
   const SIGNATURE_MAX_CHARS = 200
 
-  const NODE_KINDS = new Set<CodeNodeKind>([
-    "function",
-    "method",
-    "class",
-    "interface",
-    "type",
-    "variable",
-    "constant",
-    "module",
-    "parameter",
-    "enum",
-  ])
+  const NODE_KINDS = new Set<CodeNodeKind>(CODE_NODE_KINDS)
 
   export type Symbol = {
     kind: CodeNodeKind
@@ -195,18 +184,7 @@ export namespace SyntacticExtractor {
   const CachedSymbols = z
     .array(
       z.object({
-        kind: z.enum([
-          "function",
-          "method",
-          "class",
-          "interface",
-          "type",
-          "variable",
-          "constant",
-          "module",
-          "parameter",
-          "enum",
-        ]),
+        kind: z.enum(CODE_NODE_KINDS),
         name: z.string(),
         qualified: z.string(),
         startLine: z.number().int().min(0),

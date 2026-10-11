@@ -6,7 +6,7 @@ import { CodeIntelligence } from "../code-intelligence"
 import { GraphContext } from "../code-intelligence/graph-context"
 import { CodeNodeID } from "../code-intelligence/id"
 import { assertSymlinkInsideProject } from "./external-directory"
-import type { CodeNodeKind } from "../code-intelligence/schema.sql"
+import { CODE_NODE_KINDS } from "../code-intelligence/schema.sql"
 import { resolveToolFilePath } from "./file-path"
 import { ToolBoolean, ToolNumber } from "./schema"
 
@@ -34,19 +34,6 @@ const operations = [
   "findCallees",
   "buildContext",
 ] as const
-
-const NODE_KINDS = [
-  "function",
-  "method",
-  "class",
-  "interface",
-  "type",
-  "variable",
-  "constant",
-  "module",
-  "parameter",
-  "enum",
-] as const satisfies readonly CodeNodeKind[]
 
 // Cap output row counts so we don't flood the model context with a
 // thousand near-identical references.
@@ -103,7 +90,7 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
       )
       .optional()
       .describe("Optional graph-context seeds: symbol id, absolute file path, or symbol name"),
-    kind: z.enum(NODE_KINDS).optional().describe("Optional kind filter for findSymbol/findSymbolByPrefix"),
+    kind: z.enum(CODE_NODE_KINDS).optional().describe("Optional kind filter for findSymbol/findSymbolByPrefix"),
     limit: ToolNumber(z.number().int().min(1).max(MAX_RESULTS))
       .optional()
       .describe(`Max results to return (default ${MAX_RESULTS})`),

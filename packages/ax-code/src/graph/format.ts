@@ -1,24 +1,6 @@
 import z from "zod"
 import type { ExecutionGraph } from "./index"
-
-const AGENT_DISPLAY: Record<string, string> = {
-  build: "Dev",
-  plan: "Planner",
-  react: "Reasoner",
-  general: "Assistant",
-  explore: "Researcher",
-  scout: "Scout",
-  security: "Security",
-  architect: "Architect",
-  debug: "Debugger",
-  perf: "Perf",
-  devops: "DevOps",
-  test: "Tester",
-}
-
-function agentDisplayName(name: string): string {
-  return AGENT_DISPLAY[name] ?? name.charAt(0).toUpperCase() + name.slice(1)
-}
+import { agentDisplay } from "../agent/display"
 
 // Summarise what a step primarily did from its tool_call children
 function stepActivity(graph: ExecutionGraph.Graph, stepId: string): string {
@@ -455,7 +437,7 @@ export namespace GraphFormat {
       if (node.type === "agent_route" && node.agent) currentAgent = node.agent
       if (node.type !== "step" || node.duration == null) continue
 
-      const section = agentDisplayName(currentAgent.split("(")[0].trim())
+      const section = agentDisplay(currentAgent.split("(")[0].trim())
       if (section !== lastSection) {
         lines.push(`  section ${section}`)
         lastSection = section
@@ -550,7 +532,7 @@ export namespace GraphFormat {
       const step = steps[i]
       const rowY = HEADER_H + i * ROW_H
       const agentKey = (stepAgent.get(step.id) ?? curAgent).split("(")[0].trim()
-      const agLabel = escSvg(agentDisplayName(agentKey))
+      const agLabel = escSvg(agentDisplay(agentKey))
 
       // Agent change separator — thin line when agent switches mid-session
       if (agentKey !== prevAgentKey && i > 0) {

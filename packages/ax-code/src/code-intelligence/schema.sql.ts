@@ -7,17 +7,19 @@ import { Timestamps } from "../storage/schema.sql"
 // Graph node: a named, locatable entity in the codebase. The union is
 // intentionally coarse — we normalize to a lowest-common-denominator kind
 // across languages. Language-specific details live in `metadata`.
-export type CodeNodeKind =
-  | "function"
-  | "method"
-  | "class"
-  | "interface"
-  | "type"
-  | "variable"
-  | "constant"
-  | "module"
-  | "parameter"
-  | "enum"
+export const CODE_NODE_KINDS = [
+  "function",
+  "method",
+  "class",
+  "interface",
+  "type",
+  "variable",
+  "constant",
+  "module",
+  "parameter",
+  "enum",
+] as const
+export type CodeNodeKind = (typeof CODE_NODE_KINDS)[number]
 
 export const CodeNodeTable = sqliteTable(
   "code_node",
