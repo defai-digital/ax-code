@@ -6,6 +6,10 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Changed
+
+- Download the pinned minisign 0.12 bootstrap archives from download.ax-code.com, and check the extracted executable again before caching it.
+
 ## [7.24.4] - 2026-10-10
 
 ### Changed

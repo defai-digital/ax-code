@@ -96,7 +96,7 @@ Both the Bash installer (`install`) and the Windows PowerShell installer (`insta
 RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO
 ```
 
-Each installer downloads the matching `.minisig` asset for the selected archive and fails closed when verification fails. If `minisign` is not already on PATH, the installers bootstrap a pinned official jedisct1 minisign release (SHA-256 verified into a local tools cache) and use it for signature checks. Set `AX_CODE_SKIP_MINISIGN_VERIFY=1` only when you intentionally accept an unverifiable release download.
+Each installer downloads the matching `.minisig` asset for the selected archive and fails closed when verification fails. If `minisign` is not already on PATH, the installers download the pinned official minisign 0.12 archives from `https://download.ax-code.com/vendor/minisign/0.12/`, check the archive SHA-256, and check the extracted executable again before caching it. A `minisign` binary already on PATH is the operator's tool and is not re-hashed. Set `AX_CODE_SKIP_MINISIGN_VERIFY=1` only when you intentionally accept an unverifiable release download.
 
 The convenience one-liner `irm …/install.ps1 | iex` does not verify the installer script before execution. For security-sensitive installs, download `install.ps1` and `install.ps1.minisig`, verify the script with minisign, then run it locally (see [Installation and Runtime Channels](docs/getting-started/install-runtime.md)).
 

@@ -1,0 +1,47 @@
+{
+  "schema": "ax-code.minisign-bootstrap.v1",
+  "version": "0.12",
+  "publicOrigin": "https://download.ax-code.com",
+  "objectPrefix": "vendor/minisign/0.12",
+  "upstreamPrefix": "https://github.com/jedisct1/minisign/releases/download/0.12",
+  "archives": [
+    {
+      "name": "minisign-0.12-macos.zip",
+      "sha256": "89000b19535765f9cffc65a65d64a820f433ef6db8020667f7570e06bf6aac63",
+      "executables": [
+        {
+          "path": "minisign",
+          "sha256": "d41cde458303d45c95b00473e2455a7f45f95b550931f1f0cc98ef1f61b2a8ff"
+        }
+      ]
+    },
+    {
+      "name": "minisign-0.12-linux.tar.gz",
+      "sha256": "9a599b48ba6eb7b1e80f12f36b94ceca7c00b7a5173c95c3efc88d9822957e73",
+      "executables": [
+        {
+          "path": "minisign-linux/x86_64/minisign",
+          "sha256": "2c74dffcc1c9a5ee55957c60971998ace2b89f22585631594ec2152c588af8db"
+        },
+        {
+          "path": "minisign-linux/aarch64/minisign",
+          "sha256": "cec9f88be8c975af76854a53b4d49c3d257feae38d916edb0d16fb55aacd3000"
+        }
+      ]
+    },
+    {
+      "name": "minisign-0.12-win64.zip",
+      "sha256": "37b600344e20c19314b2e82813db2bfdcc408b77b876f7727889dbd46d539479",
+      "executables": [
+        {
+          "path": "minisign-win64/x86_64/minisign.exe",
+          "sha256": "5535be9e4e123831ebe6ef324aafe9dde507015c176191f9e20c3ad60567f9e1"
+        },
+        {
+          "path": "minisign-win64/aarch64/minisign.exe",
+          "sha256": "f39e065e649d5ed7075675accfe0ada234175d63479df650654ec4365d7c4513"
+        }
+      ]
+    }
+  ]
+}

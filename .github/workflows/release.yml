@@ -755,6 +755,9 @@ jobs:
             pnpm exec tsx script/seal-windows-runtime.ts "$VERIFY_DIR/ax-code-windows-$arch.zip" docs/release/ax-minisign.pub
           done
 
+      - name: Verify pinned minisign bootstrap mirror
+        run: pnpm exec tsx script/publish-minisign-bootstrap.ts --check-public
+
       - name: Publish verified release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

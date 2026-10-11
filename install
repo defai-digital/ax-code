@@ -28,11 +28,16 @@ Examples:
 EOF
 }
 
-# Pinned official jedisct1 minisign release used when the host has no minisign on PATH.
-# Keep hashes in sync with https://github.com/jedisct1/minisign/releases/tag/0.12
+# Official minisign 0.12 bytes, mirrored by us. Hashes match script/minisign-bootstrap.json.
+# A minisign already on PATH is the operator's tool and is not re-hashed.
 MINISIGN_BOOTSTRAP_VERSION="0.12"
 MINISIGN_LINUX_SHA256="9a599b48ba6eb7b1e80f12f36b94ceca7c00b7a5173c95c3efc88d9822957e73"
 MINISIGN_MACOS_SHA256="89000b19535765f9cffc65a65d64a820f433ef6db8020667f7570e06bf6aac63"
+MINISIGN_MACOS_BIN_SHA256="d41cde458303d45c95b00473e2455a7f45f95b550931f1f0cc98ef1f61b2a8ff"
+MINISIGN_LINUX_X64_BIN_SHA256="2c74dffcc1c9a5ee55957c60971998ace2b89f22585631594ec2152c588af8db"
+MINISIGN_LINUX_ARM64_BIN_SHA256="cec9f88be8c975af76854a53b4d49c3d257feae38d916edb0d16fb55aacd3000"
+MINISIGN_MACOS_URL="https://download.ax-code.com/vendor/minisign/0.12/minisign-0.12-macos.zip"
+MINISIGN_LINUX_URL="https://download.ax-code.com/vendor/minisign/0.12/minisign-0.12-linux.tar.gz"
 
 print_message() {
     local level=$1
@@ -63,29 +68,42 @@ download_file() {
         --connect-timeout 15 --max-time 300 "$@"
 }
 
+minisign_executable_sha256() {
+    case "$(uname -s):$(uname -m)" in
+      Darwin*:*) printf '%s' "$MINISIGN_MACOS_BIN_SHA256" ;;
+      Linux*:x86_64|Linux*:amd64) printf '%s' "$MINISIGN_LINUX_X64_BIN_SHA256" ;;
+      Linux*:aarch64|Linux*:arm64) printf '%s' "$MINISIGN_LINUX_ARM64_BIN_SHA256" ;;
+      *) return 1 ;;
+    esac
+}
+
 ensure_minisign_available() {
+    # A minisign already on PATH is the operator's tool. This installer does not re-hash it.
     if command -v minisign >/dev/null 2>&1; then
         return 0
     fi
 
     local tools_root="${AX_CODE_CACHE_HOME}/ax-code/tools/minisign/${MINISIGN_BOOTSTRAP_VERSION}"
     local bin_path="$tools_root/minisign"
-    if [ -x "$bin_path" ]; then
+    local expected_bin=""
+    expected_bin="$(minisign_executable_sha256)" || return 1
+    if [ -x "$bin_path" ] && [ "$(sha256_file "$bin_path")" = "$expected_bin" ]; then
         export PATH="$tools_root:$PATH"
         return 0
     fi
+    rm -f "$bin_path"
 
     local url=""
     local expected=""
     local archive=""
     case "$(uname -s)" in
       Darwin*)
-        url="https://github.com/jedisct1/minisign/releases/download/${MINISIGN_BOOTSTRAP_VERSION}/minisign-0.12-macos.zip"
+        url="$MINISIGN_MACOS_URL"
         expected="$MINISIGN_MACOS_SHA256"
         archive="minisign-macos.zip"
         ;;
       Linux*)
-        url="https://github.com/jedisct1/minisign/releases/download/${MINISIGN_BOOTSTRAP_VERSION}/minisign-0.12-linux.tar.gz"
+        url="$MINISIGN_LINUX_URL"
         expected="$MINISIGN_LINUX_SHA256"
         archive="minisign-linux.tar.gz"
         ;;
@@ -151,8 +169,21 @@ ensure_minisign_available() {
         rm -rf "$tmp_dir"
         return 1
     fi
-    cp "$found" "$bin_path"
-    chmod 755 "$bin_path"
+    if [ "$(sha256_file "$found")" != "$expected_bin" ]; then
+        print_message error "minisign executable SHA-256 mismatch (expected $expected_bin)"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+    mkdir -p "$tools_root"
+    local tmp_bin="${bin_path}.partial.$$"
+    cp "$found" "$tmp_bin"
+    chmod 755 "$tmp_bin"
+    if [ "$(sha256_file "$tmp_bin")" != "$expected_bin" ]; then
+        rm -f "$tmp_bin"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+    mv -f "$tmp_bin" "$bin_path"
     rm -rf "$tmp_dir"
     export PATH="$tools_root:$PATH"
     print_message info "${MUTED}Bootstrapped minisign at ${NC}$bin_path"

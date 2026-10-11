@@ -25,11 +25,13 @@ $InstallNodeDir = Join-Path $InstallRoot "node"
 $InstallNodeModulesDir = Join-Path $InstallRoot "node_modules"
 $InstallPackageJson = Join-Path $InstallRoot "package.json"
 
-# Official jedisct1 minisign Windows release (contains x86_64 and aarch64).
-# Pin version + SHA-256 so bootstrap does not require a preinstalled minisign.
+# Official minisign 0.12 bytes, mirrored by us. Hashes match script/minisign-bootstrap.json.
+# A minisign already on PATH is the operator's tool and is not re-hashed.
 $MinisignVersion = "0.12"
-$MinisignZipUrl = "https://github.com/jedisct1/minisign/releases/download/$MinisignVersion/minisign-$MinisignVersion-win64.zip"
+$MinisignZipUrl = "https://download.ax-code.com/vendor/minisign/0.12/minisign-0.12-win64.zip"
 $MinisignZipSha256 = "37b600344e20c19314b2e82813db2bfdcc408b77b876f7727889dbd46d539479"
+$MinisignX64ExeSha256 = "5535be9e4e123831ebe6ef324aafe9dde507015c176191f9e20c3ad60567f9e1"
+$MinisignArm64ExeSha256 = "f39e065e649d5ed7075675accfe0ada234175d63479df650654ec4365d7c4513"
 $script:BootstrappedMinisignPath = $null
 
 function Show-Usage {
@@ -47,8 +49,10 @@ Options:
 
 Release downloads are verified with minisign before extraction unless
 AX_CODE_SKIP_MINISIGN_VERIFY=1 is set. If minisign is not on PATH, the
-installer bootstraps a pinned official minisign build (SHA-256 verified)
-into %LOCALAPPDATA%\ax-code\tools\minisign.
+installer downloads the pinned minisign 0.12 archive from download.ax-code.com,
+checks its SHA-256, and checks the extracted executable again before caching
+it under %LOCALAPPDATA%\ax-code\tools\minisign. A minisign already on PATH is
+used as-is.
 
 Examples:
   irm https://download.ax-code.com/install.ps1 | iex
@@ -167,10 +171,18 @@ function Get-TargetArch {
 }
 
 function Get-MinisignNativeArchDir {
-  # Layout inside minisign-0.12-win64.zip
+  # Layout inside minisign-0.12-win64.zip: minisign-win64/<arch>/minisign.exe
   switch (Get-TargetArch) {
     "arm64" { return "aarch64" }
     default { return "x86_64" }
+  }
+}
+
+function Get-MinisignExecutableSha256 {
+  switch (Get-MinisignNativeArchDir) {
+    "aarch64" { return $MinisignArm64ExeSha256 }
+    "x86_64" { return $MinisignX64ExeSha256 }
+    default { throw "Unsupported minisign bootstrap architecture" }
   }
 }
 
@@ -245,9 +257,13 @@ function Get-MinisignToolsRoot {
 
 function Get-BootstrappedMinisignPath {
   $exe = Join-Path (Get-MinisignToolsRoot) "minisign.exe"
-  if (Test-Path -LiteralPath $exe -PathType Leaf) {
+  if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
+    return $null
+  }
+  if ((Get-AxFileSha256 $exe) -eq (Get-MinisignExecutableSha256)) {
     return $exe
   }
+  Remove-Item -LiteralPath $exe -Force
   return $null
 }
 
@@ -273,9 +289,11 @@ function Get-MinisignCommand {
 function Install-MinisignBootstrap {
   $toolsRoot = Get-MinisignToolsRoot
   $targetExe = Join-Path $toolsRoot "minisign.exe"
-  if (Test-Path -LiteralPath $targetExe -PathType Leaf) {
-    $script:BootstrappedMinisignPath = $targetExe
-    return $targetExe
+  $expectedExe = Get-MinisignExecutableSha256
+  $cached = Get-BootstrappedMinisignPath
+  if ($cached) {
+    $script:BootstrappedMinisignPath = $cached
+    return $cached
   }
 
   Write-Info "minisign not found on PATH; bootstrapping pinned minisign $MinisignVersion"
@@ -300,15 +318,24 @@ function Install-MinisignBootstrap {
       Select-Object -First 1
 
     if (-not $sourceExe) {
-      # Fall back to any minisign.exe if layout changes slightly.
-      $sourceExe = Get-ChildItem -LiteralPath $tmpDir -Filter "minisign.exe" -Recurse | Select-Object -First 1
+      throw "minisign.exe for $nativeDir not found after extracting $MinisignZipUrl"
     }
-    if (-not $sourceExe) {
-      throw "minisign.exe not found after extracting $MinisignZipUrl"
+    if ((Get-AxFileSha256 $sourceExe.FullName) -ne $expectedExe) {
+      throw "minisign executable SHA-256 mismatch. expected $expectedExe"
     }
 
     New-Item -ItemType Directory -Force -Path $toolsRoot | Out-Null
-    Copy-Item -LiteralPath $sourceExe.FullName -Destination $targetExe -Force
+    $partial = Join-Path $toolsRoot ("minisign.exe." + [Guid]::NewGuid().ToString("N") + ".partial")
+    Copy-Item -LiteralPath $sourceExe.FullName -Destination $partial -Force
+    if ((Get-AxFileSha256 $partial) -ne $expectedExe) {
+      Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue
+      throw "minisign executable SHA-256 mismatch after copy. expected $expectedExe"
+    }
+    Move-Item -LiteralPath $partial -Destination $targetExe -Force
+    if ((Get-AxFileSha256 $targetExe) -ne $expectedExe) {
+      Remove-Item -LiteralPath $targetExe -Force -ErrorAction SilentlyContinue
+      throw "cached minisign executable SHA-256 mismatch. expected $expectedExe"
+    }
     $script:BootstrappedMinisignPath = $targetExe
     Write-Info "Bootstrapped minisign at $targetExe"
     return $targetExe

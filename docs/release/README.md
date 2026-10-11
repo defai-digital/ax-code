@@ -30,8 +30,9 @@ minisign -Vm ax-code-windows-arm64.zip -x ax-code-windows-arm64.zip.minisig -P $
 ```
 
 The Bash and PowerShell installers fail closed when verification fails. When `minisign` is not already on
-PATH, they bootstrap a pinned official minisign release (SHA-256 checked) into a local tools cache and use
-it for verification, unless `AX_CODE_SKIP_MINISIGN_VERIFY=1` is set intentionally.
+PATH, they download the pinned minisign 0.12 archives from `download.ax-code.com`, check the archive
+SHA-256, and check the extracted executable again before caching it, unless `AX_CODE_SKIP_MINISIGN_VERIFY=1`
+is set intentionally. A `minisign` binary already on PATH is the operator's tool and is not re-hashed.
 
 Treat a key mismatch or failed signature as a release-integrity failure. Do not replace the key without updating the
 release workflows, installer verification, and key-rotation guidance in the same change.

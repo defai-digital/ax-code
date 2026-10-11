@@ -69,6 +69,40 @@ describe("install script", () => {
     expect(text).toContain("tar --warning=no-unknown-keyword")
   })
 
+  test("bootstraps pinned minisign archives from the public download mirror", async () => {
+    const manifest = JSON.parse(await readFile(path.join(repoRoot, "script/minisign-bootstrap.json"), "utf-8")) as {
+      version: string
+      publicOrigin: string
+      objectPrefix: string
+      upstreamPrefix: string
+      archives: Array<{ name: string; sha256: string; executables: Array<{ sha256: string }> }>
+    }
+    const bash = await readFile(installScript, "utf-8")
+    const powershell = await readFile(installPowerShellScript, "utf-8")
+    const url = (name: string) => `${manifest.publicOrigin}/${manifest.objectPrefix}/${name}`
+    expect(manifest.version).toBe("0.12")
+    expect(bash).toContain(`MINISIGN_BOOTSTRAP_VERSION="${manifest.version}"`)
+    expect(powershell).toContain(`$MinisignVersion = "${manifest.version}"`)
+    expect(bash).toContain(url("minisign-0.12-macos.zip"))
+    expect(bash).toContain(url("minisign-0.12-linux.tar.gz"))
+    expect(powershell).toContain(url("minisign-0.12-win64.zip"))
+    for (const archive of manifest.archives) {
+      const script = archive.name.includes("win64") ? powershell : bash
+      expect(script).toContain(archive.sha256)
+      for (const executable of archive.executables) expect(script).toContain(executable.sha256)
+    }
+    expect(bash).not.toContain("github.com/jedisct1/minisign/releases")
+    expect(powershell).not.toContain("github.com/jedisct1/minisign/releases")
+    expect(manifest.upstreamPrefix).toContain("github.com/jedisct1/minisign/releases/download/0.12")
+    expect(bash).toContain('sha256_file "$bin_path"')
+    expect(bash).toContain('mv -f "$tmp_bin" "$bin_path"')
+    expect(bash).toContain("A minisign already on PATH is the operator's tool")
+    expect(powershell).toContain("A minisign already on PATH is the operator's tool")
+    expect(powershell).not.toContain("Fall back to any minisign.exe")
+    expect(powershell).toContain("Move-Item -LiteralPath $partial -Destination $targetExe -Force")
+    expect(powershell).toContain('throw "minisign.exe for $nativeDir not found')
+  })
+
   test("warns when the installed binary is not first on PATH", async () => {
     const text = await readFile(installScript, "utf-8")
     expect(text).toContain("warn_path_precedence")
