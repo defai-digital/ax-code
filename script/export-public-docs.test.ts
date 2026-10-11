@@ -32,6 +32,11 @@ describe("public documentation export", () => {
           /https:\/\/(?:github\.com|raw\.githubusercontent\.com)\/defai-digital\/ax-code(?:[\/#]|$)/,
         )
     }
+    const metadata = JSON.parse(files.get("src/content/docs-snapshot.json")!.toString())
+    expect(metadata.pages.find((page: { slug: string }) => page.slug === "guides/headless-cli").title).toBe(
+      "Headless CLI (ax-code run)",
+    )
+    expect(files.get("src/content/docs/architecture/stability.md")!.toString()).not.toMatch(/[ \t]+$/m)
     const hub = files.get("src/content/docs/index.md")!.toString()
     expect(hub).toContain("[`@defai-digital/ax-code-sdk`](/en/docs/sdk/javascript/)")
     expect(files.get("src/content/docs/guides/effort.md")!.toString()).not.toContain("](../../packages/ax-code/src")

@@ -143,9 +143,18 @@ export function exportSnapshot(base = root) {
         )
       )
         throw new Error(`Unresolved private source URL: ${entry.source}`)
-      const title = prose.match(/^# (.+)$/m)?.[1]
+      const title = text
+        .match(/^# (.+)$/m)?.[1]
+        ?.replace(/`([^`]+)`/g, "$1")
+        .replaceAll("**", "")
       if (!title || (prose.match(/^# /gm) || []).length !== 1)
         throw new Error(`Expected one document title: ${entry.source}`)
+      text = text
+        .split(/(^```[^\n]*\n[\s\S]*?^```\s*$)/gm)
+        .map((part) =>
+          part.startsWith("```") ? part : part.replace(/[ \t]+$/gm, (spaces) => (spaces.length >= 2 ? "\\" : "")),
+        )
+        .join("")
       const description = `${title}: AX Code operator documentation, installation, configuration and integration guidance.`
       output = Buffer.from(
         `---\ntitle: ${JSON.stringify(title)}\ndescription: ${JSON.stringify(description)}\nslug: ${JSON.stringify(entry.page)}\n---\n\n${text}`,
