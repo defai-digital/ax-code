@@ -141,6 +141,23 @@ describe("MigrationLock", () => {
     },
   )
 
+  test("reclaim removes the abandoned lock it inspected and restores a lock a newer owner wrote in between", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const target = path.join(tmp.path, "ax-code.db.migrate.lock")
+    fs.writeFileSync(target, JSON.stringify({ pid: 999999, host: "x", token: "abandoned" }))
+    const abandoned = MigrationLock.snapshotForTests(target)!
+    // Nothing changed: the abandoned lock is reclaimed.
+    expect(MigrationLock.reclaimForTests(target, abandoned)).toBe(true)
+    expect(fs.existsSync(target)).toBe(false)
+
+    // A newer owner created a different lock (new inode) before the reclaimer
+    // acted on its earlier snapshot: the live lock stays in place untouched.
+    fs.writeFileSync(target, JSON.stringify({ pid: process.pid, host: "x", token: "live-owner" }))
+    expect(MigrationLock.reclaimForTests(target, abandoned)).toBe(false)
+    expect(fs.readFileSync(target, "utf-8")).toContain("live-owner")
+    expect(fs.readdirSync(tmp.path).filter((name) => name.endsWith(".reclaim"))).toEqual([])
+  })
+
   test("release does not remove a replacement owner's lock", async () => {
     await using tmp = await tmpdir({ git: true })
     const db = path.join(tmp.path, "ax-code.db")
