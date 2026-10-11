@@ -98,6 +98,8 @@ const RISK_PERMISSIONS: ReadonlySet<string> = new Set([
   // to the web retrieval tool (network egress plus a prompt-injection vector aimed at the
   // human).
   "browser_open",
+  // Native page tools can have external effects. The desktop provider also requires interactive approval.
+  "webmcp",
   // Destructive bash gate and sandbox escalation. Both are also
   // INTERACTIVE_ONLY (permission/index.ts), so no wildcard rule can
   // pre-approve them; classifying them as RISK documents that autonomous

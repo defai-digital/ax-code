@@ -14,6 +14,7 @@ import { ProjectRoutes } from "./routes/project"
 import { SessionRoutes } from "./routes/session"
 import { PtyRoutes } from "./routes/pty"
 import { McpRoutes } from "./routes/mcp"
+import { DesktopBrowserRoutes } from "./routes/desktop-browser"
 import { FileRoutes } from "./routes/file"
 import { ConfigRoutes } from "./routes/config"
 import { ExperimentalRoutes } from "./routes/experimental"
@@ -336,6 +337,7 @@ export namespace Server {
       .route("/", FileRoutes())
       .route("/", EventRoutes())
       .route("/mcp", McpRoutes())
+      .route("/desktop/browser", DesktopBrowserRoutes())
       .route("/tui", TuiRoutes())
       .route("/", AppRoutes())
       .route("/context", AppContextRoutes())

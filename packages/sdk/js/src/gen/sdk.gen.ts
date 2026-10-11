@@ -32,6 +32,21 @@ import type {
   ConfigUpdateResponses,
   DebugEngineCorrelatedDiagnosticsResponses,
   DebugEnginePendingPlansResponses,
+  DesktopBrowserCapabilityErrors,
+  DesktopBrowserCapabilityResponses,
+  DesktopBrowserDisconnectErrors,
+  DesktopBrowserDisconnectResponses,
+  DesktopBrowserEnrollErrors,
+  DesktopBrowserEnrollResponses,
+  DesktopBrowserNextErrors,
+  DesktopBrowserNextResponses,
+  DesktopBrowserReplyErrors,
+  DesktopBrowserReplyResponses,
+  DesktopBrowserUpdateErrors,
+  DesktopBrowserUpdateResponses,
+  DesktopWebMcpEnrollment,
+  DesktopWebMcpReply,
+  DesktopWebMcpSnapshot,
   EventSubscribeResponse,
   EventSubscribeResponses,
   EventTuiCommandExecute,
@@ -7323,6 +7338,203 @@ export class Mcp extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `DesktopBrowser` (auto-generated from the OpenAPI contract). */
+export class DesktopBrowser extends HeyApiClient {
+  /**
+   * Negotiate the private desktop browser provider
+   */
+  public capability<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<
+      DesktopBrowserCapabilityResponses,
+      DesktopBrowserCapabilityErrors,
+      ThrowOnError
+    >({
+      url: "/desktop/browser/capability",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Enroll a desktop-owned browser for one coding session
+   */
+  public enroll<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      desktopWebMcpEnrollment?: DesktopWebMcpEnrollment
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { key: "desktopWebMcpEnrollment", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      DesktopBrowserEnrollResponses,
+      DesktopBrowserEnrollErrors,
+      ThrowOnError
+    >({
+      url: "/desktop/browser/provider",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Revoke a desktop browser provider
+   */
+  public disconnect<ThrowOnError extends boolean = false>(
+    parameters: {
+      providerID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "providerID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<
+      DesktopBrowserDisconnectResponses,
+      DesktopBrowserDisconnectErrors,
+      ThrowOnError
+    >({
+      url: "/desktop/browser/provider/{providerID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Invalidate changed native browser state
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters: {
+      providerID: string
+      directory?: string
+      desktopWebMcpSnapshot?: DesktopWebMcpSnapshot
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "providerID" },
+            { in: "query", key: "directory" },
+            { key: "desktopWebMcpSnapshot", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).put<
+      DesktopBrowserUpdateResponses,
+      DesktopBrowserUpdateErrors,
+      ThrowOnError
+    >({
+      url: "/desktop/browser/provider/{providerID}/state",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Poll private authorized native browser requests
+   */
+  public next<ThrowOnError extends boolean = false>(
+    parameters: {
+      providerID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "providerID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<DesktopBrowserNextResponses, DesktopBrowserNextErrors, ThrowOnError>({
+      url: "/desktop/browser/provider/{providerID}/next",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Complete a native browser observation
+   */
+  public reply<ThrowOnError extends boolean = false>(
+    parameters: {
+      providerID: string
+      directory?: string
+      desktopWebMcpReply?: DesktopWebMcpReply
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "providerID" },
+            { in: "query", key: "directory" },
+            { key: "desktopWebMcpReply", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<DesktopBrowserReplyResponses, DesktopBrowserReplyErrors, ThrowOnError>(
+      {
+        url: "/desktop/browser/provider/{providerID}/reply",
+        ...options,
+        ...params,
+        headers: {
+          "Content-Type": "application/json",
+          ...options?.headers,
+          ...params.headers,
+        },
+      },
+    )
+  }
+}
+
 /** AX Code API schema `Tui` (auto-generated from the OpenAPI contract). */
 export class Tui extends HeyApiClient {
   /**
@@ -8351,6 +8563,11 @@ export class AxCodeClient extends HeyApiClient {
   private _mcp?: Mcp
   get mcp(): Mcp {
     return (this._mcp ??= new Mcp({ client: this.client }))
+  }
+
+  private _desktopBrowser?: DesktopBrowser
+  get desktopBrowser(): DesktopBrowser {
+    return (this._desktopBrowser ??= new DesktopBrowser({ client: this.client }))
   }
 
   private _tui?: Tui

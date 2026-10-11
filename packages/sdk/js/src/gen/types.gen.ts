@@ -1051,6 +1051,75 @@ export type ContextOverflowError = {
   }
 }
 
+/** AX Code API schema `DesktopWebMcpConnection` (auto-generated from the OpenAPI contract). */
+export type DesktopWebMcpConnection = {
+  providerID: string
+  epoch: string
+  projectID: string
+  capability: "desktop.webmcp.v1"
+}
+
+/** AX Code API schema `DesktopWebMcpEnrollment` (auto-generated from the OpenAPI contract). */
+export type DesktopWebMcpEnrollment = {
+  sessionID: string
+  snapshot: DesktopWebMcpSnapshot
+}
+
+/** AX Code API schema `DesktopWebMcpPoll` (auto-generated from the OpenAPI contract). */
+export type DesktopWebMcpPoll = {
+  request: DesktopWebMcpRequest | null
+  canceled: Array<string>
+}
+
+/** AX Code API schema `DesktopWebMcpReply` (auto-generated from the OpenAPI contract). */
+export type DesktopWebMcpReply = {
+  requestID: string
+  generation: string
+  status: "Completed" | "Canceled" | "Error"
+  snapshot?: DesktopWebMcpSnapshot
+  output?: unknown
+}
+
+/** AX Code API schema `DesktopWebMcpRequest` (auto-generated from the OpenAPI contract). */
+export type DesktopWebMcpRequest = {
+  providerID: string
+  epoch: string
+  projectID: string
+  sessionID: string
+  generation: string
+  origin: string
+  frameId: string
+  requestID: string
+  operation: "list" | "invoke"
+  deadline: number
+  toolName?: string
+  digest?: string
+  input?: {
+    [key: string]: unknown
+  }
+}
+
+/** AX Code API schema `DesktopWebMcpSnapshot` (auto-generated from the OpenAPI contract). */
+export type DesktopWebMcpSnapshot = {
+  generation: string
+  origin: string | null
+  frameId: string
+  tools: Array<DesktopWebMcpToolDefinition>
+}
+
+/** AX Code API schema `DesktopWebMcpToolDefinition` (auto-generated from the OpenAPI contract). */
+export type DesktopWebMcpToolDefinition = {
+  name: string
+  description: string
+  inputSchema?: {
+    [key: string]: unknown
+  }
+  annotations?: {
+    [key: string]: unknown
+  }
+  frameId: string
+}
+
 /** AX Code API schema `Event` (auto-generated from the OpenAPI contract). */
 export type Event =
   | EventInstallationUpdated
@@ -16329,6 +16398,230 @@ export type McpDisconnectResponses = {
 
 /** Successful response payload for `POST /mcp/{name}/disconnect` — Disconnect an MCP server */
 export type McpDisconnectResponse = McpDisconnectResponses[keyof McpDisconnectResponses]
+
+/** Request payload shape for `GET /desktop/browser/capability` — Negotiate the private desktop browser provider */
+export type DesktopBrowserCapabilityData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/desktop/browser/capability"
+}
+
+/** Error response payloads for `GET /desktop/browser/capability` — Negotiate the private desktop browser provider */
+export type DesktopBrowserCapabilityErrors = {
+  /**
+   * Forbidden
+   */
+  403: AppErrorEnvelope
+}
+
+/** Error response payload for `GET /desktop/browser/capability` — Negotiate the private desktop browser provider */
+export type DesktopBrowserCapabilityError = DesktopBrowserCapabilityErrors[keyof DesktopBrowserCapabilityErrors]
+
+/** Success response payloads for `GET /desktop/browser/capability` — Negotiate the private desktop browser provider */
+export type DesktopBrowserCapabilityResponses = {
+  /**
+   * Native provider capability
+   */
+  200: {
+    capability: "desktop.webmcp.v1"
+  }
+}
+
+/** Successful response payload for `GET /desktop/browser/capability` — Negotiate the private desktop browser provider */
+export type DesktopBrowserCapabilityResponse =
+  DesktopBrowserCapabilityResponses[keyof DesktopBrowserCapabilityResponses]
+
+/** Request payload shape for `POST /desktop/browser/provider` — Enroll a desktop-owned browser for one coding session */
+export type DesktopBrowserEnrollData = {
+  body?: DesktopWebMcpEnrollment
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/desktop/browser/provider"
+}
+
+/** Error response payloads for `POST /desktop/browser/provider` — Enroll a desktop-owned browser for one coding session */
+export type DesktopBrowserEnrollErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Forbidden
+   */
+  403: AppErrorEnvelope
+}
+
+/** Error response payload for `POST /desktop/browser/provider` — Enroll a desktop-owned browser for one coding session */
+export type DesktopBrowserEnrollError = DesktopBrowserEnrollErrors[keyof DesktopBrowserEnrollErrors]
+
+/** Success response payloads for `POST /desktop/browser/provider` — Enroll a desktop-owned browser for one coding session */
+export type DesktopBrowserEnrollResponses = {
+  /**
+   * Provider connection
+   */
+  200: DesktopWebMcpConnection
+}
+
+/** Successful response payload for `POST /desktop/browser/provider` — Enroll a desktop-owned browser for one coding session */
+export type DesktopBrowserEnrollResponse = DesktopBrowserEnrollResponses[keyof DesktopBrowserEnrollResponses]
+
+/** Request payload shape for `DELETE /desktop/browser/provider/{providerID}` — Revoke a desktop browser provider */
+export type DesktopBrowserDisconnectData = {
+  body?: never
+  path: {
+    providerID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/desktop/browser/provider/{providerID}"
+}
+
+/** Error response payloads for `DELETE /desktop/browser/provider/{providerID}` — Revoke a desktop browser provider */
+export type DesktopBrowserDisconnectErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Forbidden
+   */
+  403: AppErrorEnvelope
+}
+
+/** Error response payload for `DELETE /desktop/browser/provider/{providerID}` — Revoke a desktop browser provider */
+export type DesktopBrowserDisconnectError = DesktopBrowserDisconnectErrors[keyof DesktopBrowserDisconnectErrors]
+
+/** Success response payloads for `DELETE /desktop/browser/provider/{providerID}` — Revoke a desktop browser provider */
+export type DesktopBrowserDisconnectResponses = {
+  /**
+   * Operation completed
+   */
+  200: boolean
+}
+
+/** Successful response payload for `DELETE /desktop/browser/provider/{providerID}` — Revoke a desktop browser provider */
+export type DesktopBrowserDisconnectResponse =
+  DesktopBrowserDisconnectResponses[keyof DesktopBrowserDisconnectResponses]
+
+/** Request payload shape for `PUT /desktop/browser/provider/{providerID}/state` — Invalidate changed native browser state */
+export type DesktopBrowserUpdateData = {
+  body?: DesktopWebMcpSnapshot
+  path: {
+    providerID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/desktop/browser/provider/{providerID}/state"
+}
+
+/** Error response payloads for `PUT /desktop/browser/provider/{providerID}/state` — Invalidate changed native browser state */
+export type DesktopBrowserUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Forbidden
+   */
+  403: AppErrorEnvelope
+}
+
+/** Error response payload for `PUT /desktop/browser/provider/{providerID}/state` — Invalidate changed native browser state */
+export type DesktopBrowserUpdateError = DesktopBrowserUpdateErrors[keyof DesktopBrowserUpdateErrors]
+
+/** Success response payloads for `PUT /desktop/browser/provider/{providerID}/state` — Invalidate changed native browser state */
+export type DesktopBrowserUpdateResponses = {
+  /**
+   * Operation completed
+   */
+  200: boolean
+}
+
+/** Successful response payload for `PUT /desktop/browser/provider/{providerID}/state` — Invalidate changed native browser state */
+export type DesktopBrowserUpdateResponse = DesktopBrowserUpdateResponses[keyof DesktopBrowserUpdateResponses]
+
+/** Request payload shape for `GET /desktop/browser/provider/{providerID}/next` — Poll private authorized native browser requests */
+export type DesktopBrowserNextData = {
+  body?: never
+  path: {
+    providerID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/desktop/browser/provider/{providerID}/next"
+}
+
+/** Error response payloads for `GET /desktop/browser/provider/{providerID}/next` — Poll private authorized native browser requests */
+export type DesktopBrowserNextErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Forbidden
+   */
+  403: AppErrorEnvelope
+}
+
+/** Error response payload for `GET /desktop/browser/provider/{providerID}/next` — Poll private authorized native browser requests */
+export type DesktopBrowserNextError = DesktopBrowserNextErrors[keyof DesktopBrowserNextErrors]
+
+/** Success response payloads for `GET /desktop/browser/provider/{providerID}/next` — Poll private authorized native browser requests */
+export type DesktopBrowserNextResponses = {
+  /**
+   * Private request or heartbeat
+   */
+  200: DesktopWebMcpPoll
+}
+
+/** Successful response payload for `GET /desktop/browser/provider/{providerID}/next` — Poll private authorized native browser requests */
+export type DesktopBrowserNextResponse = DesktopBrowserNextResponses[keyof DesktopBrowserNextResponses]
+
+/** Request payload shape for `POST /desktop/browser/provider/{providerID}/reply` — Complete a native browser observation */
+export type DesktopBrowserReplyData = {
+  body?: DesktopWebMcpReply
+  path: {
+    providerID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/desktop/browser/provider/{providerID}/reply"
+}
+
+/** Error response payloads for `POST /desktop/browser/provider/{providerID}/reply` — Complete a native browser observation */
+export type DesktopBrowserReplyErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Forbidden
+   */
+  403: AppErrorEnvelope
+}
+
+/** Error response payload for `POST /desktop/browser/provider/{providerID}/reply` — Complete a native browser observation */
+export type DesktopBrowserReplyError = DesktopBrowserReplyErrors[keyof DesktopBrowserReplyErrors]
+
+/** Success response payloads for `POST /desktop/browser/provider/{providerID}/reply` — Complete a native browser observation */
+export type DesktopBrowserReplyResponses = {
+  /**
+   * Operation completed
+   */
+  200: boolean
+}
+
+/** Successful response payload for `POST /desktop/browser/provider/{providerID}/reply` — Complete a native browser observation */
+export type DesktopBrowserReplyResponse = DesktopBrowserReplyResponses[keyof DesktopBrowserReplyResponses]
 
 /** Request payload shape for `POST /tui/append-prompt` — Append TUI prompt */
 export type TuiAppendPromptData = {

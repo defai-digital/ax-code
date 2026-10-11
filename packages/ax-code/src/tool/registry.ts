@@ -32,6 +32,8 @@ import { InvalidTool } from "./invalid"
 import { SkillTool } from "./skill"
 import type { Agent } from "../agent/agent"
 import { Tool } from "./tool"
+import { DesktopWebMcpTool } from "./desktop_webmcp"
+import { DesktopBrowser } from "../mcp/desktop-browser"
 import { ToolProfile } from "./profile"
 import { Config } from "../config/config"
 import path from "path"
@@ -257,6 +259,7 @@ export namespace ToolRegistry {
       // AX Engine deployments.
       return [
         InvalidTool,
+        ...(DesktopBrowser.enabled() ? [DesktopWebMcpTool] : []),
         ...(question ? [QuestionTool] : []),
         ...planExit,
         BashTool,
@@ -281,6 +284,7 @@ export namespace ToolRegistry {
 
     const builtins = [
       InvalidTool,
+      ...(DesktopBrowser.enabled() ? [DesktopWebMcpTool] : []),
       ...(question ? [QuestionTool] : []),
       BashTool,
       BashOutputTool,
