@@ -33,6 +33,9 @@ async function runInstaller(body: string) {
       "node_modules/solid-js/package.json": JSON.stringify({ type: "module", exports: "./index.js" }),
       "node_modules/solid-js/index.js": 'export const version = "9.9.9"\n',
       "package.json": JSON.stringify({ type: "module" }),
+      LICENSE: "Apache license fixture",
+      "LICENSE-MIT": "MIT license fixture",
+      NOTICE: "Attribution fixture",
     }
     for (const [relative, content] of Object.entries(files)) {
       const target = path.join(source, relative)
@@ -85,16 +88,19 @@ function Assert-InstalledBundle {
   Assert-Equal $LASTEXITCODE 0
   Assert-Equal $output "9.9.9"
   Assert-Equal (Test-Path (Join-Path $InstallNodeModulesDir "node_modules")) $false
+  foreach ($relative in @("LICENSE", "LICENSE-MIT", "NOTICE")) {
+    Assert-Equal (Get-Content -LiteralPath (Join-Path $InstallRoot $relative) -Raw) (Get-Content -LiteralPath (Join-Path $Source $relative) -Raw)
+  }
 }
 function New-PreviousInstall {
-  foreach ($relative in @("bin/ax-code.cmd", "lib/old.js", "node/bin/node.exe", "node_modules/locked-native/addon.node", "package.json", "config.json")) {
+  foreach ($relative in @("bin/ax-code.cmd", "lib/old.js", "node/bin/node.exe", "node_modules/locked-native/addon.node", "package.json", "LICENSE", "LICENSE-MIT", "NOTICE", "config.json")) {
     $target = Join-Path $InstallRoot $relative
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
     Set-Content -LiteralPath $target -Value "previous" -NoNewline
   }
 }
 function Assert-PreviousInstall {
-  foreach ($relative in @("bin/ax-code.cmd", "lib/old.js", "node/bin/node.exe", "node_modules/locked-native/addon.node", "package.json", "config.json")) {
+  foreach ($relative in @("bin/ax-code.cmd", "lib/old.js", "node/bin/node.exe", "node_modules/locked-native/addon.node", "package.json", "LICENSE", "LICENSE-MIT", "NOTICE", "config.json")) {
     Assert-Equal (Get-Content -LiteralPath (Join-Path $InstallRoot $relative) -Raw) "previous"
   }
   Assert-Equal (Test-Path (Join-Path $InstallLibDir "index-node-tui.js")) $false

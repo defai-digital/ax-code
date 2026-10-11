@@ -58,7 +58,9 @@ jobs:
           - os: windows-11-arm
             label: windows-arm64
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    # Windows PowerShell 5.1 installer regressions on Arm took 30 minutes in
+    # release qualification, before integrity tests and fresh-install smoke.
+    timeout-minutes: 60
     env:
       INPUT_VERSION: ${{ inputs.version }}
       AX_CODE_DISABLE_AUTOUPDATE: "1"

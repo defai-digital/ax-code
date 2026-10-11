@@ -207,7 +207,7 @@ function createDistributionManifest(runtimeRoot) {
       if (entry.type !== "file") throw new Error(`Windows distribution cannot contain symlinks: ${entry.path}`)
       const name = entry.path.split(path.sep).join("/")
       if (
-        !/^(?:lib\/|node\/|node_modules\/|bin\/|package(?:-lock)?\.json$)/.test(name) ||
+        !/^(?:lib\/|node\/|node_modules\/|bin\/|package(?:-lock)?\.json$|LICENSE(?:-MIT)?$|NOTICE$)/.test(name) ||
         seen.has(name.toLowerCase())
       ) {
         throw new Error(`Unsupported or duplicate Windows distribution path: ${name}`)

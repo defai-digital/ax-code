@@ -22,6 +22,9 @@ function fixture() {
     "bin/ax-code.cmd": "@echo off",
     "node_modules/@ax-code/fs/addon.node": "MZsigned native addon",
     "package.json": "{}",
+    LICENSE: "Apache license fixture",
+    "LICENSE-MIT": "MIT license fixture",
+    NOTICE: "Attribution fixture",
   })) {
     fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true })
     fs.writeFileSync(path.join(root, name), body)
@@ -47,11 +50,23 @@ describe("Windows signing audit records", () => {
 })
 
 describe("final distribution manifest", () => {
-  test("rejects files the Windows installer cannot stage", () => {
+  test("authenticates root license files and notices", () => {
     const root = fixture()
-    fs.writeFileSync(path.join(root, "unexpected.txt"), "unsupported root payload")
-    expect(() => createDistributionManifest(root)).toThrow("Unsupported or duplicate")
+    const licenses = ["LICENSE", "LICENSE-MIT", "NOTICE"]
+    for (const name of licenses) fs.writeFileSync(path.join(root, name), `Original ${name}`)
+    const before = createDistributionManifest(root)
+    for (const name of licenses) expect(before.files.map((file: { path: string }) => file.path)).toContain(name)
+    fs.appendFileSync(path.join(root, "NOTICE"), "changed")
+    expect(createDistributionManifest(root)).not.toEqual(before)
   })
+  test.each(["unexpected.txt", "LICENSE.exe", "NOTICE.js", "LICENSE-MIT.bak"])(
+    "rejects unsupported root payload %s",
+    (name) => {
+      const root = fixture()
+      fs.writeFileSync(path.join(root, name), "unsupported root payload")
+      expect(() => createDistributionManifest(root)).toThrow("Unsupported or duplicate")
+    },
+  )
   test.skipIf(process.platform === "win32" || spawnSync("minisign", ["-v"]).status !== 0)(
     "verifies an officially signed sealed ZIP and rejects modified or absent metadata",
     () => {
@@ -136,6 +151,17 @@ foreach ($statement in $ast.EndBlock.Statements) {
 $manifest = Get-Content -LiteralPath (Join-Path $env:AX_TEST_BUNDLE "runtime-integrity.json") -Raw | ConvertFrom-Json
 `
 describe.skipIf(!available)("PowerShell distribution admission", { timeout: 120_000 }, () => {
+  test("admits authenticated root licenses and rejects tampering", () => {
+    const root = fixture()
+    for (const name of ["LICENSE", "LICENSE-MIT", "NOTICE"]) fs.writeFileSync(path.join(root, name), name)
+    writeDistributionManifest(root)
+    const clean = runPowerShell(root, loadInstaller + "\nAssert-RuntimeIntegrity $env:AX_TEST_BUNDLE $manifest")
+    expect(clean.status, clean.stderr).toBe(0)
+    fs.appendFileSync(path.join(root, "LICENSE"), "tampered")
+    const result = runPowerShell(root, loadInstaller + "\nAssert-RuntimeIntegrity $env:AX_TEST_BUNDLE $manifest")
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain("Runtime integrity mismatch")
+  })
   test.each(["lib/index-node-tui.js", "node_modules/@ax-code/fs/addon.node"])("rejects changed %s", (relative) => {
     const root = fixture()
     writeDistributionManifest(root)

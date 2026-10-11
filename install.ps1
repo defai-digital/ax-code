@@ -453,7 +453,7 @@ function Assert-RuntimeIntegrity([string]$Root, $Manifest, [switch]$AllowUnliste
   $expected = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
   foreach ($entry in $Manifest.files) {
     $relative = $entry.path
-    if ($relative -isnot [string] -or $relative -notmatch '^(?:lib/|node/|node_modules/|bin/|package(?:-lock)?\.json$)' -or
+    if ($relative -isnot [string] -or $relative -notmatch '^(?:lib/|node/|node_modules/|bin/|package(?:-lock)?\.json$|LICENSE(?:-MIT)?$|NOTICE$)' -or
         $relative -match '[<>:"\\|?*\x00-\x1f]' -or $relative -match '(^|/)(\.{1,2}|[^/]*[. ])(/|$)' -or
         $relative -match '(^|/)(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.[^/]*)?(/|$)' -or
         $relative.Contains('//') -or $relative.EndsWith('/') -or -not $expected.Add($relative) -or
@@ -694,7 +694,7 @@ function Install-NodeBundleTreeUnlocked([string]$Root, [string]$ExpectedVersion 
     Copy-Item -LiteralPath $nodeDir -Destination (Join-Path $stagingRoot "node") -Recurse -Force
     Copy-Item -LiteralPath $nodeModules -Destination (Join-Path $stagingRoot "node_modules") -Recurse -Force
     Copy-Item -LiteralPath $packageJson -Destination (Join-Path $stagingRoot "package.json") -Force
-    foreach ($relative in @("package-lock.json", "bin/ax-code", "runtime-manifest.json", "runtime-integrity.json", "runtime-integrity.json.minisig")) {
+    foreach ($relative in @("package-lock.json", "LICENSE", "LICENSE-MIT", "NOTICE", "bin/ax-code", "runtime-manifest.json", "runtime-integrity.json", "runtime-integrity.json.minisig")) {
       $source = Join-Path $Root $relative
       if (Test-Path -LiteralPath $source -PathType Leaf) { Copy-Item -LiteralPath $source -Destination (Join-Path $stagingRoot $relative) -Force }
     }
@@ -715,7 +715,7 @@ function Install-NodeBundleTreeUnlocked([string]$Root, [string]$ExpectedVersion 
     # Move complete old trees aside before replacement. Windows can retain
     # loaded native files; never partially delete the active runtime or ignore
     # a failed move. User configuration and other install-root files stay put.
-    $paths = @("lib", "node", "node_modules", "package.json", "package-lock.json", "runtime-manifest.json", "runtime-integrity.json", "runtime-integrity.json.minisig", "bin\ax-code", "bin\ax-code.cmd", "bin\ax-code.exe")
+    $paths = @("lib", "node", "node_modules", "package.json", "package-lock.json", "LICENSE", "LICENSE-MIT", "NOTICE", "runtime-manifest.json", "runtime-integrity.json", "runtime-integrity.json.minisig", "bin\ax-code", "bin\ax-code.cmd", "bin\ax-code.exe")
     $backedUp = @()
     $installed = @()
     try {
