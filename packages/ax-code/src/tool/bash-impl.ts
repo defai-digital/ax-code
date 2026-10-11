@@ -886,6 +886,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             if (bare) wgetFlags(bare[1]!)
           }
           const recordOutput = async (value: string, relocate: boolean) => {
+            // @scan-suppress security_scan - recordResolvedPath checks Instance.containsPath on this path.
             const target = relocate && outputDir && !path.isAbsolute(value) ? path.join(outputDir, value) : value
             const output = await recordResolvedPath(target, decoded)
             if (output) redirectWritePaths.add(output)
@@ -918,6 +919,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
               const names = adjustExtension && !/\.html?$/i.test(basename) ? [basename, `${basename}.html`] : [basename]
               if (isWget && (layout || (recursive && !noDirs))) {
                 const hostDir = noHost || !authority ? [] : [authority]
+                // @scan-suppress security_scan - recordResolvedPath checks Instance.containsPath on these segments.
                 for (const file of names) await recordOutput(path.join(...hostDir, ...dirs, file), true)
                 // A recursive fetch writes whatever it discovers under the
                 // tree root, which cannot be enumerated statically: record the

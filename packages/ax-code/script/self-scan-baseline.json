@@ -3379,14 +3379,6 @@
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "3730c4f0cc28b123bd27151f001228aea8fbe7385db3c3498cd6a89412971e8b",
-          "file": "src/config/config-impl.ts",
-          "line": 1675,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
           "fingerprint": "e9f4e4681f9aa3843a0bc4ead96a7ee2e22c6dc3a230534942838fa5bdd9d0e1",
           "file": "src/config/config-impl.ts",
           "line": 1696,
