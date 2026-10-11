@@ -1,10 +1,9 @@
 import fs from "fs/promises"
 import path from "path"
 import z from "zod"
-import { Storage } from "../../storage/storage"
-import { QualityStorageKey } from "../storage-key"
 import { sha256Hex } from "../digest"
 import { QualityPromotionHandoffPackage } from "./promotion-handoff-package"
+import { createPromotionArtifactStore } from "./artifact-store"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "../json"
@@ -62,18 +61,26 @@ export namespace QualityPromotionPortableExport {
   })
   export type ExportRecord = z.output<typeof ExportRecord>
 
-  const encode = QualityStorageKey.encode
-  const decode = QualityStorageKey.decode
-
-  function key(source: string, exportID: string) {
-    return ["quality_model_portable_export", encode(source), exportID]
-  }
-
   const digest = sha256Hex
 
   function sortExports(exports: ExportArtifact[]) {
     return [...exports].sort((a, b) => compareStringFields(a, b, ["createdAt", "exportID"]))
   }
+
+  const store = createPromotionArtifactStore<ExportArtifact, ExportRecord>({
+    keyPrefix: "quality_model_portable_export",
+    recordKind: "ax-code-quality-promotion-portable-export-record",
+    artifactField: "export",
+    idField: "exportID",
+    noun: "Promotion portable export",
+    recordSchema: ExportRecord,
+    sort: sortExports,
+    parent: {
+      append: (exportArtifact) => QualityPromotionHandoffPackage.append(exportArtifact.handoffPackage),
+      assertPersisted: (exportArtifact) =>
+        QualityPromotionHandoffPackage.assertPersisted(exportArtifact.handoffPackage),
+    },
+  })
 
   function sortFiles(files: File[]) {
     return [...files].sort((a, b) => a.path.localeCompare(b.path))
@@ -267,59 +274,19 @@ export namespace QualityPromotionPortableExport {
   }
 
   export async function get(input: { source: string; exportID: string }) {
-    const record = await Storage.read<unknown>(key(input.source, input.exportID))
-    return ExportRecord.parse(record)
+    return store.get({ source: input.source, id: input.exportID })
   }
 
-  export async function append(exportArtifact: ExportArtifact) {
-    await QualityPromotionHandoffPackage.append(exportArtifact.handoffPackage)
-    const next = ExportRecord.parse({
-      schemaVersion: 1,
-      kind: "ax-code-quality-promotion-portable-export-record",
-      export: exportArtifact,
-    })
-    try {
-      const existing = await get({ source: exportArtifact.source, exportID: exportArtifact.exportID })
-      if (jsonEqual(existing, next)) return existing
-      throw new Error(
-        `Promotion portable export ${exportArtifact.exportID} already exists for source ${exportArtifact.source} with different content`,
-      )
-    } catch (err) {
-      if (!Storage.NotFoundError.isInstance(err)) throw err
-      await Storage.write(key(exportArtifact.source, exportArtifact.exportID), next)
-      return next
-    }
+  export function append(exportArtifact: ExportArtifact) {
+    return store.append(exportArtifact)
   }
 
-  export async function list(source?: string) {
-    const prefixes = source ? [["quality_model_portable_export", encode(source)]] : [["quality_model_portable_export"]]
-    const exports: ExportArtifact[] = []
-
-    for (const prefix of prefixes) {
-      const keys = await Storage.list(prefix)
-      for (const parts of keys) {
-        const encodedSource = parts[parts.length - 2]
-        const exportID = parts[parts.length - 1]
-        if (!encodedSource || !exportID) continue
-        const source = decode(encodedSource)
-        if (!source) continue
-        const record = await get({ source, exportID })
-        exports.push(record.export)
-      }
-    }
-
-    return sortExports(exports)
+  export function list(source?: string) {
+    return store.list(source)
   }
 
-  export async function assertPersisted(exportArtifact: ExportArtifact) {
-    await QualityPromotionHandoffPackage.assertPersisted(exportArtifact.handoffPackage)
-    const persisted = await get({ source: exportArtifact.source, exportID: exportArtifact.exportID })
-    if (!jsonEqual(persisted.export, exportArtifact)) {
-      throw new Error(
-        `Persisted promotion portable export ${exportArtifact.exportID} does not match the provided artifact`,
-      )
-    }
-    return persisted
+  export function assertPersisted(exportArtifact: ExportArtifact) {
+    return store.assertPersisted(exportArtifact)
   }
 
   export async function materialize(exportArtifact: ExportArtifact, directory: string) {

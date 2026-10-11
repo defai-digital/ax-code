@@ -1,7 +1,6 @@
 import z from "zod"
-import { Storage } from "../../storage/storage"
-import { QualityStorageKey } from "../storage-key"
 import { QualityPromotionAuditManifest } from "./promotion-audit-manifest"
+import { createPromotionArtifactStore } from "./artifact-store"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "../json"
@@ -45,16 +44,23 @@ export namespace QualityPromotionExportBundle {
   })
   export type ExportRecord = z.output<typeof ExportRecord>
 
-  const encode = QualityStorageKey.encode
-  const decode = QualityStorageKey.decode
-
-  function key(source: string, bundleID: string) {
-    return ["quality_model_export_bundle", encode(source), bundleID]
-  }
-
   function sortBundles(bundles: ExportArtifact[]) {
     return [...bundles].sort((a, b) => compareStringFields(a, b, ["createdAt", "bundleID"]))
   }
+
+  const store = createPromotionArtifactStore<ExportArtifact, ExportRecord>({
+    keyPrefix: "quality_model_export_bundle",
+    recordKind: "ax-code-quality-promotion-export-bundle-record",
+    artifactField: "bundle",
+    idField: "bundleID",
+    noun: "Promotion export bundle",
+    recordSchema: ExportRecord,
+    sort: sortBundles,
+    parent: {
+      append: (bundle) => QualityPromotionAuditManifest.append(bundle.auditManifest),
+      assertPersisted: (bundle) => QualityPromotionAuditManifest.assertPersisted(bundle.auditManifest),
+    },
+  })
 
   function matchesPromotion(promotion: QualityPromotionAuditManifest.PromotionSnapshot, bundle: ExportArtifact) {
     return (
@@ -170,57 +176,19 @@ export namespace QualityPromotionExportBundle {
   }
 
   export async function get(input: { source: string; bundleID: string }) {
-    const record = await Storage.read<unknown>(key(input.source, input.bundleID))
-    return ExportRecord.parse(record)
+    return store.get({ source: input.source, id: input.bundleID })
   }
 
-  export async function append(bundle: ExportArtifact) {
-    await QualityPromotionAuditManifest.append(bundle.auditManifest)
-    const next = ExportRecord.parse({
-      schemaVersion: 1,
-      kind: "ax-code-quality-promotion-export-bundle-record",
-      bundle,
-    })
-    try {
-      const existing = await get({ source: bundle.source, bundleID: bundle.bundleID })
-      if (jsonEqual(existing, next)) return existing
-      throw new Error(
-        `Promotion export bundle ${bundle.bundleID} already exists for source ${bundle.source} with different content`,
-      )
-    } catch (err) {
-      if (!Storage.NotFoundError.isInstance(err)) throw err
-      await Storage.write(key(bundle.source, bundle.bundleID), next)
-      return next
-    }
+  export function append(bundle: ExportArtifact) {
+    return store.append(bundle)
   }
 
-  export async function list(source?: string) {
-    const prefixes = source ? [["quality_model_export_bundle", encode(source)]] : [["quality_model_export_bundle"]]
-    const bundles: ExportArtifact[] = []
-
-    for (const prefix of prefixes) {
-      const keys = await Storage.list(prefix)
-      for (const parts of keys) {
-        const encodedSource = parts[parts.length - 2]
-        const bundleID = parts[parts.length - 1]
-        if (!encodedSource || !bundleID) continue
-        const source = decode(encodedSource)
-        if (!source) continue
-        const record = await get({ source, bundleID })
-        bundles.push(record.bundle)
-      }
-    }
-
-    return sortBundles(bundles)
+  export function list(source?: string) {
+    return store.list(source)
   }
 
-  export async function assertPersisted(bundle: ExportArtifact) {
-    await QualityPromotionAuditManifest.assertPersisted(bundle.auditManifest)
-    const persisted = await get({ source: bundle.source, bundleID: bundle.bundleID })
-    if (!jsonEqual(persisted.bundle, bundle)) {
-      throw new Error(`Persisted promotion export bundle ${bundle.bundleID} does not match the provided artifact`)
-    }
-    return persisted
+  export function assertPersisted(bundle: ExportArtifact) {
+    return store.assertPersisted(bundle)
   }
 
   export function renderReport(bundle: ExportArtifact) {

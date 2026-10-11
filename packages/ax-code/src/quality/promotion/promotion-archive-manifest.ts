@@ -1,8 +1,7 @@
 import z from "zod"
-import { Storage } from "../../storage/storage"
-import { QualityStorageKey } from "../storage-key"
 import { sha256JsonHex } from "../digest"
 import { QualityPromotionExportBundle } from "./promotion-export-bundle"
+import { createPromotionArtifactStore } from "./artifact-store"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "../json"
@@ -70,18 +69,25 @@ export namespace QualityPromotionArchiveManifest {
   })
   export type ArchiveRecord = z.output<typeof ArchiveRecord>
 
-  const encode = QualityStorageKey.encode
-  const decode = QualityStorageKey.decode
-
-  function key(source: string, archiveID: string) {
-    return ["quality_model_archive_manifest", encode(source), archiveID]
-  }
-
   const digest = sha256JsonHex
 
   function sortArchives(archives: ArchiveArtifact[]) {
     return [...archives].sort((a, b) => compareStringFields(a, b, ["createdAt", "archiveID"]))
   }
+
+  const store = createPromotionArtifactStore<ArchiveArtifact, ArchiveRecord>({
+    keyPrefix: "quality_model_archive_manifest",
+    recordKind: "ax-code-quality-promotion-archive-manifest-record",
+    artifactField: "archive",
+    idField: "archiveID",
+    noun: "Promotion archive manifest",
+    recordSchema: ArchiveRecord,
+    sort: sortArchives,
+    parent: {
+      append: (archive) => QualityPromotionExportBundle.append(archive.exportBundle),
+      assertPersisted: (archive) => QualityPromotionExportBundle.assertPersisted(archive.exportBundle),
+    },
+  })
 
   function sortInventory(items: InventoryItem[]) {
     return [...items].sort((a, b) => compareStringFields(a, b, ["createdAt", "kind", "artifactID"]))
@@ -277,59 +283,19 @@ export namespace QualityPromotionArchiveManifest {
   }
 
   export async function get(input: { source: string; archiveID: string }) {
-    const record = await Storage.read<unknown>(key(input.source, input.archiveID))
-    return ArchiveRecord.parse(record)
+    return store.get({ source: input.source, id: input.archiveID })
   }
 
-  export async function append(archive: ArchiveArtifact) {
-    await QualityPromotionExportBundle.append(archive.exportBundle)
-    const next = ArchiveRecord.parse({
-      schemaVersion: 1,
-      kind: "ax-code-quality-promotion-archive-manifest-record",
-      archive,
-    })
-    try {
-      const existing = await get({ source: archive.source, archiveID: archive.archiveID })
-      if (jsonEqual(existing, next)) return existing
-      throw new Error(
-        `Promotion archive manifest ${archive.archiveID} already exists for source ${archive.source} with different content`,
-      )
-    } catch (err) {
-      if (!Storage.NotFoundError.isInstance(err)) throw err
-      await Storage.write(key(archive.source, archive.archiveID), next)
-      return next
-    }
+  export function append(archive: ArchiveArtifact) {
+    return store.append(archive)
   }
 
-  export async function list(source?: string) {
-    const prefixes = source
-      ? [["quality_model_archive_manifest", encode(source)]]
-      : [["quality_model_archive_manifest"]]
-    const archives: ArchiveArtifact[] = []
-
-    for (const prefix of prefixes) {
-      const keys = await Storage.list(prefix)
-      for (const parts of keys) {
-        const encodedSource = parts[parts.length - 2]
-        const archiveID = parts[parts.length - 1]
-        if (!encodedSource || !archiveID) continue
-        const source = decode(encodedSource)
-        if (!source) continue
-        const record = await get({ source, archiveID })
-        archives.push(record.archive)
-      }
-    }
-
-    return sortArchives(archives)
+  export function list(source?: string) {
+    return store.list(source)
   }
 
-  export async function assertPersisted(archive: ArchiveArtifact) {
-    await QualityPromotionExportBundle.assertPersisted(archive.exportBundle)
-    const persisted = await get({ source: archive.source, archiveID: archive.archiveID })
-    if (!jsonEqual(persisted.archive, archive)) {
-      throw new Error(`Persisted promotion archive manifest ${archive.archiveID} does not match the provided artifact`)
-    }
-    return persisted
+  export function assertPersisted(archive: ArchiveArtifact) {
+    return store.assertPersisted(archive)
   }
 
   export function renderReport(archive: ArchiveArtifact) {

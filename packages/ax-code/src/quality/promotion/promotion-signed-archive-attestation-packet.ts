@@ -1,7 +1,6 @@
 import z from "zod"
-import { Storage } from "../../storage/storage"
-import { QualityStorageKey } from "../storage-key"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
+import { createPromotionArtifactStore } from "./artifact-store"
 import { QualityPromotionSignedArchiveAttestationPolicy } from "./promotion-signed-archive-attestation-policy"
 import { QualityPromotionSignedArchiveAttestationRecord } from "./promotion-signed-archive-attestation-record"
 import { QualityPromotionSignedArchiveTrust } from "./promotion-signed-archive-trust"
@@ -56,16 +55,24 @@ export namespace QualityPromotionSignedArchiveAttestationPacket {
   })
   export type PacketRecord = z.output<typeof PacketRecord>
 
-  const encode = QualityStorageKey.encode
-  const decode = QualityStorageKey.decode
-
-  function key(source: string, packetID: string) {
-    return ["quality_model_signed_archive_attestation_packet", encode(source), packetID]
-  }
-
   function sortPackets(packets: PacketArtifact[]) {
     return [...packets].sort((a, b) => compareStringFields(a, b, ["createdAt", "packetID"]))
   }
+
+  const store = createPromotionArtifactStore<PacketArtifact, PacketRecord>({
+    keyPrefix: "quality_model_signed_archive_attestation_packet",
+    recordKind: "ax-code-quality-promotion-signed-archive-attestation-packet-record",
+    artifactField: "packet",
+    idField: "packetID",
+    noun: "Signed archive attestation packet",
+    recordSchema: PacketRecord,
+    sort: sortPackets,
+    parent: {
+      append: (packet) => QualityPromotionSignedArchiveAttestationRecord.append(packet.attestationRecord),
+      assertPersisted: (packet) =>
+        QualityPromotionSignedArchiveAttestationRecord.assertPersisted(packet.attestationRecord),
+    },
+  })
 
   function evaluateSummary(
     input: {
@@ -204,59 +211,19 @@ export namespace QualityPromotionSignedArchiveAttestationPacket {
   }
 
   export async function get(input: { source: string; packetID: string }) {
-    const record = await Storage.read<unknown>(key(input.source, input.packetID))
-    return PacketRecord.parse(record)
+    return store.get({ source: input.source, id: input.packetID })
   }
 
-  export async function append(packet: PacketArtifact) {
-    await QualityPromotionSignedArchiveAttestationRecord.append(packet.attestationRecord)
-    const next = PacketRecord.parse({
-      schemaVersion: 1,
-      kind: "ax-code-quality-promotion-signed-archive-attestation-packet-record",
-      packet,
-    })
-    try {
-      const existing = await get({ source: packet.source, packetID: packet.packetID })
-      if (jsonEqual(existing, next)) return existing
-      throw new Error(
-        `Signed archive attestation packet ${packet.packetID} already exists for source ${packet.source} with different content`,
-      )
-    } catch (err) {
-      if (!Storage.NotFoundError.isInstance(err)) throw err
-      await Storage.write(key(packet.source, packet.packetID), next)
-      return next
-    }
+  export function append(packet: PacketArtifact) {
+    return store.append(packet)
   }
 
-  export async function list(source?: string) {
-    const prefixes = source
-      ? [["quality_model_signed_archive_attestation_packet", encode(source)]]
-      : [["quality_model_signed_archive_attestation_packet"]]
-    const packets: PacketArtifact[] = []
-    for (const prefix of prefixes) {
-      const keys = await Storage.list(prefix)
-      for (const parts of keys) {
-        const encodedSource = parts[parts.length - 2]
-        const packetID = parts[parts.length - 1]
-        if (!encodedSource || !packetID) continue
-        const source = decode(encodedSource)
-        if (!source) continue
-        const record = await get({ source, packetID })
-        packets.push(record.packet)
-      }
-    }
-    return sortPackets(packets)
+  export function list(source?: string) {
+    return store.list(source)
   }
 
-  export async function assertPersisted(packet: PacketArtifact) {
-    await QualityPromotionSignedArchiveAttestationRecord.assertPersisted(packet.attestationRecord)
-    const persisted = await get({ source: packet.source, packetID: packet.packetID })
-    if (!jsonEqual(persisted.packet, packet)) {
-      throw new Error(
-        `Persisted signed archive attestation packet ${packet.packetID} does not match the provided artifact`,
-      )
-    }
-    return persisted
+  export function assertPersisted(packet: PacketArtifact) {
+    return store.assertPersisted(packet)
   }
 
   export function renderReport(packet: PacketArtifact) {

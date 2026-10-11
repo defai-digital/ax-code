@@ -1,8 +1,8 @@
 import z from "zod"
-import { Storage } from "../../storage/storage"
 import { QualityStorageKey } from "../storage-key"
 import { sha256JsonHex } from "../digest"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
+import { createPromotionArtifactStore } from "./artifact-store"
 import { jsonEqual } from "../json"
 import { compareStringFields } from "../sort"
 
@@ -46,15 +46,20 @@ export namespace QualityPromotionApproval {
   export type ApprovalRecord = z.output<typeof ApprovalRecord>
 
   const encode = QualityStorageKey.encode
-  const decode = QualityStorageKey.decode
-
-  function key(source: string, approvalID: string) {
-    return ["quality_model_approval", encode(source), approvalID]
-  }
 
   function sort(artifacts: ApprovalArtifact[]) {
     return [...artifacts].sort((a, b) => compareStringFields(a, b, ["approvedAt", "approvalID"]))
   }
+
+  const store = createPromotionArtifactStore<ApprovalArtifact, ApprovalRecord>({
+    keyPrefix: "quality_model_approval",
+    recordKind: "ax-code-quality-promotion-approval-record",
+    artifactField: "approval",
+    idField: "approvalID",
+    noun: "Approval",
+    recordSchema: ApprovalRecord,
+    sort,
+  })
 
   export function digest(bundle: QualityPromotionDecisionBundle.DecisionBundle) {
     return sha256JsonHex(bundle)
@@ -158,55 +163,19 @@ export namespace QualityPromotionApproval {
   }
 
   export async function get(input: { source: string; approvalID: string }) {
-    const record = await Storage.read<unknown>(key(input.source, input.approvalID))
-    return ApprovalRecord.parse(record)
+    return store.get({ source: input.source, id: input.approvalID })
   }
 
-  export async function append(approval: ApprovalArtifact) {
-    const next = ApprovalRecord.parse({
-      schemaVersion: 1,
-      kind: "ax-code-quality-promotion-approval-record",
-      approval,
-    })
-    try {
-      const existing = await get({ source: approval.source, approvalID: approval.approvalID })
-      if (jsonEqual(existing, next)) return existing
-      throw new Error(
-        `Approval ${approval.approvalID} already exists for source ${approval.source} with different content`,
-      )
-    } catch (err) {
-      if (!Storage.NotFoundError.isInstance(err)) throw err
-      await Storage.write(key(approval.source, approval.approvalID), next)
-      return next
-    }
+  export function append(approval: ApprovalArtifact) {
+    return store.append(approval)
   }
 
-  export async function list(source?: string) {
-    const prefixes = source ? [["quality_model_approval", encode(source)]] : [["quality_model_approval"]]
-    const approvals: ApprovalArtifact[] = []
-
-    for (const prefix of prefixes) {
-      const keys = await Storage.list(prefix)
-      for (const parts of keys) {
-        const encodedSource = parts[parts.length - 2]
-        const approvalID = parts[parts.length - 1]
-        if (!encodedSource || !approvalID) continue
-        const source = decode(encodedSource)
-        if (!source) continue
-        const record = await get({ source, approvalID })
-        approvals.push(record.approval)
-      }
-    }
-
-    return sort(approvals)
+  export function list(source?: string) {
+    return store.list(source)
   }
 
-  export async function assertPersisted(approval: ApprovalArtifact) {
-    const persisted = await get({ source: approval.source, approvalID: approval.approvalID })
-    if (!jsonEqual(persisted.approval, approval)) {
-      throw new Error(`Persisted approval ${approval.approvalID} does not match the provided artifact`)
-    }
-    return persisted
+  export function assertPersisted(approval: ApprovalArtifact) {
+    return store.assertPersisted(approval)
   }
 
   export function renderReport(approval: ApprovalArtifact) {

@@ -1,8 +1,8 @@
 import z from "zod"
-import { Storage } from "../../storage/storage"
 import { QualityStorageKey } from "../storage-key"
 import { sha256JsonHex } from "../digest"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
+import { createPromotionArtifactStore } from "./artifact-store"
 import { APPROVAL_ROLE_RANK, normalizeApprovalRole } from "./promotion-approval-policy-contract"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
@@ -73,15 +73,20 @@ export namespace QualityPromotionAdoptionReview {
   export type ConsensusSummary = z.output<typeof ConsensusSummary>
 
   const encode = QualityStorageKey.encode
-  const decode = QualityStorageKey.decode
-
-  function key(source: string, reviewID: string) {
-    return ["quality_model_adoption_review", encode(source), reviewID]
-  }
 
   function sort(artifacts: ReviewArtifact[]) {
     return [...artifacts].sort((a, b) => compareStringFields(a, b, ["reviewedAt", "reviewID"]))
   }
+
+  const store = createPromotionArtifactStore<ReviewArtifact, ReviewRecord>({
+    keyPrefix: "quality_model_adoption_review",
+    recordKind: "ax-code-quality-promotion-adoption-review-record",
+    artifactField: "review",
+    idField: "reviewID",
+    noun: "Adoption review",
+    recordSchema: ReviewRecord,
+    sort,
+  })
 
   export function decisionBundleDigest(bundle: QualityPromotionDecisionBundle.DecisionBundle) {
     return sha256JsonHex(bundle)
@@ -304,55 +309,19 @@ export namespace QualityPromotionAdoptionReview {
   }
 
   export async function get(input: { source: string; reviewID: string }) {
-    const record = await Storage.read<unknown>(key(input.source, input.reviewID))
-    return ReviewRecord.parse(record)
+    return store.get({ source: input.source, id: input.reviewID })
   }
 
-  export async function append(review: ReviewArtifact) {
-    const next = ReviewRecord.parse({
-      schemaVersion: 1,
-      kind: "ax-code-quality-promotion-adoption-review-record",
-      review,
-    })
-    try {
-      const existing = await get({ source: review.source, reviewID: review.reviewID })
-      if (jsonEqual(existing, next)) return existing
-      throw new Error(
-        `Adoption review ${review.reviewID} already exists for source ${review.source} with different content`,
-      )
-    } catch (err) {
-      if (!Storage.NotFoundError.isInstance(err)) throw err
-      await Storage.write(key(review.source, review.reviewID), next)
-      return next
-    }
+  export function append(review: ReviewArtifact) {
+    return store.append(review)
   }
 
-  export async function list(source?: string) {
-    const prefixes = source ? [["quality_model_adoption_review", encode(source)]] : [["quality_model_adoption_review"]]
-    const reviews: ReviewArtifact[] = []
-
-    for (const prefix of prefixes) {
-      const keys = await Storage.list(prefix)
-      for (const parts of keys) {
-        const encodedSource = parts[parts.length - 2]
-        const reviewID = parts[parts.length - 1]
-        if (!encodedSource || !reviewID) continue
-        const source = decode(encodedSource)
-        if (!source) continue
-        const record = await get({ source, reviewID })
-        reviews.push(record.review)
-      }
-    }
-
-    return sort(reviews)
+  export function list(source?: string) {
+    return store.list(source)
   }
 
-  export async function assertPersisted(review: ReviewArtifact) {
-    const persisted = await get({ source: review.source, reviewID: review.reviewID })
-    if (!jsonEqual(persisted.review, review)) {
-      throw new Error(`Persisted adoption review ${review.reviewID} does not match the provided artifact`)
-    }
-    return persisted
+  export function assertPersisted(review: ReviewArtifact) {
+    return store.assertPersisted(review)
   }
 
   export function renderReport(review: ReviewArtifact) {

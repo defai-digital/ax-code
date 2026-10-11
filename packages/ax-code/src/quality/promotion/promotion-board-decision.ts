@@ -1,7 +1,7 @@
 import z from "zod"
-import { Storage } from "../../storage/storage"
 import { QualityStorageKey } from "../storage-key"
 import { QualityPromotionReviewDossier } from "./promotion-review-dossier"
+import { createPromotionArtifactStore } from "./artifact-store"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "../json"
 import { compareStringFields, uniqueBy } from "../sort"
@@ -53,15 +53,24 @@ export namespace QualityPromotionBoardDecision {
   export type DecisionRecord = z.output<typeof DecisionRecord>
 
   const encode = QualityStorageKey.encode
-  const decode = QualityStorageKey.decode
-
-  function key(source: string, decisionID: string) {
-    return ["quality_model_board_decision", encode(source), decisionID]
-  }
 
   function sortDecisions(decisions: DecisionArtifact[]) {
     return [...decisions].sort((a, b) => compareStringFields(a, b, ["decidedAt", "decisionID"]))
   }
+
+  const store = createPromotionArtifactStore<DecisionArtifact, DecisionRecord>({
+    keyPrefix: "quality_model_board_decision",
+    recordKind: "ax-code-quality-promotion-board-decision-record",
+    artifactField: "decision",
+    idField: "decisionID",
+    noun: "Promotion board decision",
+    recordSchema: DecisionRecord,
+    sort: sortDecisions,
+    parent: {
+      append: (decision) => QualityPromotionReviewDossier.append(decision.reviewDossier),
+      assertPersisted: (decision) => QualityPromotionReviewDossier.assertPersisted(decision.reviewDossier),
+    },
+  })
 
   function matchesDecisionBundle(
     decisionBundle: QualityPromotionReviewDossier.DossierArtifact["submissionBundle"]["decisionBundle"],
@@ -220,57 +229,19 @@ export namespace QualityPromotionBoardDecision {
   }
 
   export async function get(input: { source: string; decisionID: string }) {
-    const record = await Storage.read<unknown>(key(input.source, input.decisionID))
-    return DecisionRecord.parse(record)
+    return store.get({ source: input.source, id: input.decisionID })
   }
 
-  export async function append(decision: DecisionArtifact) {
-    await QualityPromotionReviewDossier.append(decision.reviewDossier)
-    const next = DecisionRecord.parse({
-      schemaVersion: 1,
-      kind: "ax-code-quality-promotion-board-decision-record",
-      decision,
-    })
-    try {
-      const existing = await get({ source: decision.source, decisionID: decision.decisionID })
-      if (jsonEqual(existing, next)) return existing
-      throw new Error(
-        `Promotion board decision ${decision.decisionID} already exists for source ${decision.source} with different content`,
-      )
-    } catch (err) {
-      if (!Storage.NotFoundError.isInstance(err)) throw err
-      await Storage.write(key(decision.source, decision.decisionID), next)
-      return next
-    }
+  export function append(decision: DecisionArtifact) {
+    return store.append(decision)
   }
 
-  export async function list(source?: string) {
-    const prefixes = source ? [["quality_model_board_decision", encode(source)]] : [["quality_model_board_decision"]]
-    const decisions: DecisionArtifact[] = []
-
-    for (const prefix of prefixes) {
-      const keys = await Storage.list(prefix)
-      for (const parts of keys) {
-        const encodedSource = parts[parts.length - 2]
-        const decisionID = parts[parts.length - 1]
-        if (!encodedSource || !decisionID) continue
-        const source = decode(encodedSource)
-        if (!source) continue
-        const record = await get({ source, decisionID })
-        decisions.push(record.decision)
-      }
-    }
-
-    return sortDecisions(decisions)
+  export function list(source?: string) {
+    return store.list(source)
   }
 
-  export async function assertPersisted(decision: DecisionArtifact) {
-    await QualityPromotionReviewDossier.assertPersisted(decision.reviewDossier)
-    const persisted = await get({ source: decision.source, decisionID: decision.decisionID })
-    if (!jsonEqual(persisted.decision, decision)) {
-      throw new Error(`Persisted promotion board decision ${decision.decisionID} does not match the provided artifact`)
-    }
-    return persisted
+  export function assertPersisted(decision: DecisionArtifact) {
+    return store.assertPersisted(decision)
   }
 
   export function renderReport(decision: DecisionArtifact) {

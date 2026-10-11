@@ -1,7 +1,7 @@
 import z from "zod"
-import { Storage } from "../../storage/storage"
 import { QualityStorageKey } from "../storage-key"
 import { QualityPromotionAdoptionReview } from "./promotion-adoption-review"
+import { createPromotionArtifactStore } from "./artifact-store"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
 import { APPROVAL_ROLE_RANK, normalizeApprovalRole } from "./promotion-approval-policy-contract"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
@@ -80,15 +80,20 @@ export namespace QualityPromotionAdoptionDissentSupersession {
   export type SupersessionSummary = z.output<typeof SupersessionSummary>
 
   const encode = QualityStorageKey.encode
-  const decode = QualityStorageKey.decode
-
-  function key(source: string, supersessionID: string) {
-    return ["quality_model_adoption_dissent_supersession", encode(source), supersessionID]
-  }
 
   function sort(artifacts: SupersessionArtifact[]) {
     return [...artifacts].sort((a, b) => compareStringFields(a, b, ["supersededAt", "supersessionID"]))
   }
+
+  const store = createPromotionArtifactStore<SupersessionArtifact, SupersessionRecord>({
+    keyPrefix: "quality_model_adoption_dissent_supersession",
+    recordKind: "ax-code-quality-promotion-adoption-dissent-supersession-record",
+    artifactField: "supersession",
+    idField: "supersessionID",
+    noun: "Adoption dissent supersession",
+    recordSchema: SupersessionRecord,
+    sort,
+  })
 
   function qualifiesRole(
     role: string | null | undefined,
@@ -350,59 +355,19 @@ export namespace QualityPromotionAdoptionDissentSupersession {
   }
 
   export async function get(input: { source: string; supersessionID: string }) {
-    const record = await Storage.read<unknown>(key(input.source, input.supersessionID))
-    return SupersessionRecord.parse(record)
+    return store.get({ source: input.source, id: input.supersessionID })
   }
 
-  export async function append(supersession: SupersessionArtifact) {
-    const next = SupersessionRecord.parse({
-      schemaVersion: 1,
-      kind: "ax-code-quality-promotion-adoption-dissent-supersession-record",
-      supersession,
-    })
-    try {
-      const existing = await get({ source: supersession.source, supersessionID: supersession.supersessionID })
-      if (jsonEqual(existing, next)) return existing
-      throw new Error(
-        `Adoption dissent supersession ${supersession.supersessionID} already exists for source ${supersession.source} with different content`,
-      )
-    } catch (err) {
-      if (!Storage.NotFoundError.isInstance(err)) throw err
-      await Storage.write(key(supersession.source, supersession.supersessionID), next)
-      return next
-    }
+  export function append(supersession: SupersessionArtifact) {
+    return store.append(supersession)
   }
 
-  export async function list(source?: string) {
-    const prefixes = source
-      ? [["quality_model_adoption_dissent_supersession", encode(source)]]
-      : [["quality_model_adoption_dissent_supersession"]]
-    const supersessions: SupersessionArtifact[] = []
-
-    for (const prefix of prefixes) {
-      const keys = await Storage.list(prefix)
-      for (const parts of keys) {
-        const encodedSource = parts[parts.length - 2]
-        const supersessionID = parts[parts.length - 1]
-        if (!encodedSource || !supersessionID) continue
-        const source = decode(encodedSource)
-        if (!source) continue
-        const record = await get({ source, supersessionID })
-        supersessions.push(record.supersession)
-      }
-    }
-
-    return sort(supersessions)
+  export function list(source?: string) {
+    return store.list(source)
   }
 
-  export async function assertPersisted(supersession: SupersessionArtifact) {
-    const persisted = await get({ source: supersession.source, supersessionID: supersession.supersessionID })
-    if (!jsonEqual(persisted.supersession, supersession)) {
-      throw new Error(
-        `Persisted adoption dissent supersession ${supersession.supersessionID} does not match the provided artifact`,
-      )
-    }
-    return persisted
+  export function assertPersisted(supersession: SupersessionArtifact) {
+    return store.assertPersisted(supersession)
   }
 
   export function renderReport(supersession: SupersessionArtifact) {

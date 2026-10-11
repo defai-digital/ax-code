@@ -1,7 +1,7 @@
 import z from "zod"
-import { Storage } from "../../storage/storage"
 import { QualityStorageKey } from "../storage-key"
 import { QualityPromotionAdoptionReview } from "./promotion-adoption-review"
+import { createPromotionArtifactStore } from "./artifact-store"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
 import { APPROVAL_ROLE_RANK, normalizeApprovalRole } from "./promotion-approval-policy-contract"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
@@ -75,15 +75,20 @@ export namespace QualityPromotionAdoptionDissentResolution {
   export type ResolutionSummary = z.output<typeof ResolutionSummary>
 
   const encode = QualityStorageKey.encode
-  const decode = QualityStorageKey.decode
-
-  function key(source: string, resolutionID: string) {
-    return ["quality_model_adoption_dissent_resolution", encode(source), resolutionID]
-  }
 
   function sort(artifacts: ResolutionArtifact[]) {
     return [...artifacts].sort((a, b) => compareStringFields(a, b, ["resolvedAt", "resolutionID"]))
   }
+
+  const store = createPromotionArtifactStore<ResolutionArtifact, ResolutionRecord>({
+    keyPrefix: "quality_model_adoption_dissent_resolution",
+    recordKind: "ax-code-quality-promotion-adoption-dissent-resolution-record",
+    artifactField: "resolution",
+    idField: "resolutionID",
+    noun: "Adoption dissent resolution",
+    recordSchema: ResolutionRecord,
+    sort,
+  })
 
   function qualifiesRole(
     role: string | null | undefined,
@@ -319,59 +324,19 @@ export namespace QualityPromotionAdoptionDissentResolution {
   }
 
   export async function get(input: { source: string; resolutionID: string }) {
-    const record = await Storage.read<unknown>(key(input.source, input.resolutionID))
-    return ResolutionRecord.parse(record)
+    return store.get({ source: input.source, id: input.resolutionID })
   }
 
-  export async function append(resolution: ResolutionArtifact) {
-    const next = ResolutionRecord.parse({
-      schemaVersion: 1,
-      kind: "ax-code-quality-promotion-adoption-dissent-resolution-record",
-      resolution,
-    })
-    try {
-      const existing = await get({ source: resolution.source, resolutionID: resolution.resolutionID })
-      if (jsonEqual(existing, next)) return existing
-      throw new Error(
-        `Adoption dissent resolution ${resolution.resolutionID} already exists for source ${resolution.source} with different content`,
-      )
-    } catch (err) {
-      if (!Storage.NotFoundError.isInstance(err)) throw err
-      await Storage.write(key(resolution.source, resolution.resolutionID), next)
-      return next
-    }
+  export function append(resolution: ResolutionArtifact) {
+    return store.append(resolution)
   }
 
-  export async function list(source?: string) {
-    const prefixes = source
-      ? [["quality_model_adoption_dissent_resolution", encode(source)]]
-      : [["quality_model_adoption_dissent_resolution"]]
-    const resolutions: ResolutionArtifact[] = []
-
-    for (const prefix of prefixes) {
-      const keys = await Storage.list(prefix)
-      for (const parts of keys) {
-        const encodedSource = parts[parts.length - 2]
-        const resolutionID = parts[parts.length - 1]
-        if (!encodedSource || !resolutionID) continue
-        const source = decode(encodedSource)
-        if (!source) continue
-        const record = await get({ source, resolutionID })
-        resolutions.push(record.resolution)
-      }
-    }
-
-    return sort(resolutions)
+  export function list(source?: string) {
+    return store.list(source)
   }
 
-  export async function assertPersisted(resolution: ResolutionArtifact) {
-    const persisted = await get({ source: resolution.source, resolutionID: resolution.resolutionID })
-    if (!jsonEqual(persisted.resolution, resolution)) {
-      throw new Error(
-        `Persisted adoption dissent resolution ${resolution.resolutionID} does not match the provided artifact`,
-      )
-    }
-    return persisted
+  export function assertPersisted(resolution: ResolutionArtifact) {
+    return store.assertPersisted(resolution)
   }
 
   export function renderReport(resolution: ResolutionArtifact) {

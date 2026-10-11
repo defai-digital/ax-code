@@ -1,7 +1,7 @@
 import z from "zod"
-import { Storage } from "../../storage/storage"
 import { QualityStorageKey } from "../storage-key"
 import { QualityPromotionSubmissionBundle } from "./promotion-submission-bundle"
+import { createPromotionArtifactStore } from "./artifact-store"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "../json"
 import { compareStringFields, uniqueBy } from "../sort"
@@ -55,15 +55,24 @@ export namespace QualityPromotionReviewDossier {
   export type DossierRecord = z.output<typeof DossierRecord>
 
   const encode = QualityStorageKey.encode
-  const decode = QualityStorageKey.decode
-
-  function key(source: string, dossierID: string) {
-    return ["quality_model_review_dossier", encode(source), dossierID]
-  }
 
   function sortDossiers(dossiers: DossierArtifact[]) {
     return [...dossiers].sort((a, b) => compareStringFields(a, b, ["createdAt", "dossierID"]))
   }
+
+  const store = createPromotionArtifactStore<DossierArtifact, DossierRecord>({
+    keyPrefix: "quality_model_review_dossier",
+    recordKind: "ax-code-quality-promotion-review-dossier-record",
+    artifactField: "dossier",
+    idField: "dossierID",
+    noun: "Promotion review dossier",
+    recordSchema: DossierRecord,
+    sort: sortDossiers,
+    parent: {
+      append: (dossier) => QualityPromotionSubmissionBundle.append(dossier.submissionBundle),
+      assertPersisted: (dossier) => QualityPromotionSubmissionBundle.assertPersisted(dossier.submissionBundle),
+    },
+  })
 
   function matchesDecisionBundle(
     decisionBundle: QualityPromotionSubmissionBundle.BundleArtifact["decisionBundle"],
@@ -203,57 +212,19 @@ export namespace QualityPromotionReviewDossier {
   }
 
   export async function get(input: { source: string; dossierID: string }) {
-    const record = await Storage.read<unknown>(key(input.source, input.dossierID))
-    return DossierRecord.parse(record)
+    return store.get({ source: input.source, id: input.dossierID })
   }
 
-  export async function append(dossier: DossierArtifact) {
-    await QualityPromotionSubmissionBundle.append(dossier.submissionBundle)
-    const next = DossierRecord.parse({
-      schemaVersion: 1,
-      kind: "ax-code-quality-promotion-review-dossier-record",
-      dossier,
-    })
-    try {
-      const existing = await get({ source: dossier.source, dossierID: dossier.dossierID })
-      if (jsonEqual(existing, next)) return existing
-      throw new Error(
-        `Promotion review dossier ${dossier.dossierID} already exists for source ${dossier.source} with different content`,
-      )
-    } catch (err) {
-      if (!Storage.NotFoundError.isInstance(err)) throw err
-      await Storage.write(key(dossier.source, dossier.dossierID), next)
-      return next
-    }
+  export function append(dossier: DossierArtifact) {
+    return store.append(dossier)
   }
 
-  export async function list(source?: string) {
-    const prefixes = source ? [["quality_model_review_dossier", encode(source)]] : [["quality_model_review_dossier"]]
-    const dossiers: DossierArtifact[] = []
-
-    for (const prefix of prefixes) {
-      const keys = await Storage.list(prefix)
-      for (const parts of keys) {
-        const encodedSource = parts[parts.length - 2]
-        const dossierID = parts[parts.length - 1]
-        if (!encodedSource || !dossierID) continue
-        const source = decode(encodedSource)
-        if (!source) continue
-        const record = await get({ source, dossierID })
-        dossiers.push(record.dossier)
-      }
-    }
-
-    return sortDossiers(dossiers)
+  export function list(source?: string) {
+    return store.list(source)
   }
 
-  export async function assertPersisted(dossier: DossierArtifact) {
-    await QualityPromotionSubmissionBundle.assertPersisted(dossier.submissionBundle)
-    const persisted = await get({ source: dossier.source, dossierID: dossier.dossierID })
-    if (!jsonEqual(persisted.dossier, dossier)) {
-      throw new Error(`Persisted promotion review dossier ${dossier.dossierID} does not match the provided artifact`)
-    }
-    return persisted
+  export function assertPersisted(dossier: DossierArtifact) {
+    return store.assertPersisted(dossier)
   }
 
   export function renderReport(dossier: DossierArtifact) {

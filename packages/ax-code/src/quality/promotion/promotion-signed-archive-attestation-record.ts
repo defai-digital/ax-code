@@ -1,7 +1,6 @@
 import z from "zod"
-import { Storage } from "../../storage/storage"
-import { QualityStorageKey } from "../storage-key"
 import { QualityPromotionSignedArchive } from "./promotion-signed-archive"
+import { createPromotionArtifactStore } from "./artifact-store"
 import { QualityPromotionSignedArchiveAttestationPolicy } from "./promotion-signed-archive-attestation-policy"
 import { QualityPromotionSignedArchiveTrust } from "./promotion-signed-archive-trust"
 import { summarizeOverallStatus } from "../status"
@@ -46,16 +45,23 @@ export namespace QualityPromotionSignedArchiveAttestationRecord {
   })
   export type StoredRecord = z.output<typeof StoredRecord>
 
-  const encode = QualityStorageKey.encode
-  const decode = QualityStorageKey.decode
-
-  function key(source: string, recordID: string) {
-    return ["quality_model_signed_archive_attestation_record", encode(source), recordID]
-  }
-
   function sortRecords(records: RecordArtifact[]) {
     return [...records].sort((a, b) => compareStringFields(a, b, ["createdAt", "recordID"]))
   }
+
+  const store = createPromotionArtifactStore<RecordArtifact, StoredRecord>({
+    keyPrefix: "quality_model_signed_archive_attestation_record",
+    recordKind: "ax-code-quality-promotion-signed-archive-attestation-record-record",
+    artifactField: "record",
+    idField: "recordID",
+    noun: "Signed archive attestation record",
+    recordSchema: StoredRecord,
+    sort: sortRecords,
+    parent: {
+      append: (record) => QualityPromotionSignedArchive.append(record.signedArchive),
+      assertPersisted: (record) => QualityPromotionSignedArchive.assertPersisted(record.signedArchive),
+    },
+  })
 
   function evaluateSummary(
     input: {
@@ -201,59 +207,19 @@ export namespace QualityPromotionSignedArchiveAttestationRecord {
   }
 
   export async function get(input: { source: string; recordID: string }) {
-    const record = await Storage.read<unknown>(key(input.source, input.recordID))
-    return StoredRecord.parse(record)
+    return store.get({ source: input.source, id: input.recordID })
   }
 
-  export async function append(record: RecordArtifact) {
-    await QualityPromotionSignedArchive.append(record.signedArchive)
-    const next = StoredRecord.parse({
-      schemaVersion: 1,
-      kind: "ax-code-quality-promotion-signed-archive-attestation-record-record",
-      record,
-    })
-    try {
-      const existing = await get({ source: record.source, recordID: record.recordID })
-      if (jsonEqual(existing, next)) return existing
-      throw new Error(
-        `Signed archive attestation record ${record.recordID} already exists for source ${record.source} with different content`,
-      )
-    } catch (err) {
-      if (!Storage.NotFoundError.isInstance(err)) throw err
-      await Storage.write(key(record.source, record.recordID), next)
-      return next
-    }
+  export function append(record: RecordArtifact) {
+    return store.append(record)
   }
 
-  export async function list(source?: string) {
-    const prefixes = source
-      ? [["quality_model_signed_archive_attestation_record", encode(source)]]
-      : [["quality_model_signed_archive_attestation_record"]]
-    const records: RecordArtifact[] = []
-    for (const prefix of prefixes) {
-      const keys = await Storage.list(prefix)
-      for (const parts of keys) {
-        const encodedSource = parts[parts.length - 2]
-        const recordID = parts[parts.length - 1]
-        if (!encodedSource || !recordID) continue
-        const source = decode(encodedSource)
-        if (!source) continue
-        const record = await get({ source, recordID })
-        records.push(record.record)
-      }
-    }
-    return sortRecords(records)
+  export function list(source?: string) {
+    return store.list(source)
   }
 
-  export async function assertPersisted(record: RecordArtifact) {
-    await QualityPromotionSignedArchive.assertPersisted(record.signedArchive)
-    const persisted = await get({ source: record.source, recordID: record.recordID })
-    if (!jsonEqual(persisted.record, record)) {
-      throw new Error(
-        `Persisted signed archive attestation record ${record.recordID} does not match the provided artifact`,
-      )
-    }
-    return persisted
+  export function assertPersisted(record: RecordArtifact) {
+    return store.assertPersisted(record)
   }
 
   export function renderReport(record: RecordArtifact) {

@@ -1,8 +1,7 @@
 import z from "zod"
-import { Storage } from "../../storage/storage"
-import { QualityStorageKey } from "../storage-key"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { QualityPromotionReleasePacket } from "./promotion-release-packet"
+import { createPromotionArtifactStore } from "./artifact-store"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "../json"
 import { compareStringFields, uniqueBy } from "../sort"
@@ -134,16 +133,23 @@ export namespace QualityPromotionAuditManifest {
   })
   export type ManifestRecord = z.output<typeof ManifestRecord>
 
-  const encode = QualityStorageKey.encode
-  const decode = QualityStorageKey.decode
-
-  function key(source: string, manifestID: string) {
-    return ["quality_model_audit_manifest", encode(source), manifestID]
-  }
-
   function sortManifests(manifests: ManifestArtifact[]) {
     return [...manifests].sort((a, b) => compareStringFields(a, b, ["createdAt", "manifestID"]))
   }
+
+  const store = createPromotionArtifactStore<ManifestArtifact, ManifestRecord>({
+    keyPrefix: "quality_model_audit_manifest",
+    recordKind: "ax-code-quality-promotion-audit-manifest-record",
+    artifactField: "manifest",
+    idField: "manifestID",
+    noun: "Promotion audit manifest",
+    recordSchema: ManifestRecord,
+    sort: sortManifests,
+    parent: {
+      append: (manifest) => QualityPromotionReleasePacket.append(manifest.releasePacket),
+      assertPersisted: (manifest) => QualityPromotionReleasePacket.assertPersisted(manifest.releasePacket),
+    },
+  })
 
   function matchesPromotion(promotion: PromotionSnapshot, manifest: ManifestArtifact) {
     return manifest.promotion.promotionID === promotion.promotionID && manifest.promotion.source === promotion.source
@@ -257,57 +263,19 @@ export namespace QualityPromotionAuditManifest {
   }
 
   export async function get(input: { source: string; manifestID: string }) {
-    const record = await Storage.read<unknown>(key(input.source, input.manifestID))
-    return ManifestRecord.parse(record)
+    return store.get({ source: input.source, id: input.manifestID })
   }
 
-  export async function append(manifest: ManifestArtifact) {
-    await QualityPromotionReleasePacket.append(manifest.releasePacket)
-    const next = ManifestRecord.parse({
-      schemaVersion: 1,
-      kind: "ax-code-quality-promotion-audit-manifest-record",
-      manifest,
-    })
-    try {
-      const existing = await get({ source: manifest.source, manifestID: manifest.manifestID })
-      if (jsonEqual(existing, next)) return existing
-      throw new Error(
-        `Promotion audit manifest ${manifest.manifestID} already exists for source ${manifest.source} with different content`,
-      )
-    } catch (err) {
-      if (!Storage.NotFoundError.isInstance(err)) throw err
-      await Storage.write(key(manifest.source, manifest.manifestID), next)
-      return next
-    }
+  export function append(manifest: ManifestArtifact) {
+    return store.append(manifest)
   }
 
-  export async function list(source?: string) {
-    const prefixes = source ? [["quality_model_audit_manifest", encode(source)]] : [["quality_model_audit_manifest"]]
-    const manifests: ManifestArtifact[] = []
-
-    for (const prefix of prefixes) {
-      const keys = await Storage.list(prefix)
-      for (const parts of keys) {
-        const encodedSource = parts[parts.length - 2]
-        const manifestID = parts[parts.length - 1]
-        if (!encodedSource || !manifestID) continue
-        const source = decode(encodedSource)
-        if (!source) continue
-        const record = await get({ source, manifestID })
-        manifests.push(record.manifest)
-      }
-    }
-
-    return sortManifests(manifests)
+  export function list(source?: string) {
+    return store.list(source)
   }
 
-  export async function assertPersisted(manifest: ManifestArtifact) {
-    await QualityPromotionReleasePacket.assertPersisted(manifest.releasePacket)
-    const persisted = await get({ source: manifest.source, manifestID: manifest.manifestID })
-    if (!jsonEqual(persisted.manifest, manifest)) {
-      throw new Error(`Persisted promotion audit manifest ${manifest.manifestID} does not match the provided artifact`)
-    }
-    return persisted
+  export function assertPersisted(manifest: ManifestArtifact) {
+    return store.assertPersisted(manifest)
   }
 
   export function renderReport(manifest: ManifestArtifact) {

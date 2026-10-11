@@ -2,10 +2,10 @@ import { createHmac, timingSafeEqual } from "crypto"
 import fs from "fs/promises"
 import path from "path"
 import z from "zod"
-import { Storage } from "../../storage/storage"
 import { QualityStorageKey } from "../storage-key"
 import { sha256Hex } from "../digest"
 import { QualityPromotionPackagedArchive } from "./promotion-packaged-archive"
+import { createPromotionArtifactStore } from "./artifact-store"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "../json"
@@ -89,11 +89,6 @@ export namespace QualityPromotionSignedArchive {
   }
 
   const encode = QualityStorageKey.encode
-  const decode = QualityStorageKey.decode
-
-  function key(source: string, signedArchiveID: string) {
-    return ["quality_model_signed_archive", encode(source), signedArchiveID]
-  }
 
   const digest = sha256Hex
 
@@ -104,6 +99,20 @@ export namespace QualityPromotionSignedArchive {
   function sortArchives(archives: ArchiveArtifact[]) {
     return [...archives].sort((a, b) => compareStringFields(a, b, ["createdAt", "signedArchiveID"]))
   }
+
+  const store = createPromotionArtifactStore<ArchiveArtifact, ArchiveRecord>({
+    keyPrefix: "quality_model_signed_archive",
+    recordKind: "ax-code-quality-promotion-signed-archive-record",
+    artifactField: "archive",
+    idField: "signedArchiveID",
+    noun: "Promotion signed archive",
+    recordSchema: ArchiveRecord,
+    sort: sortArchives,
+    parent: {
+      append: (archive) => QualityPromotionPackagedArchive.append(archive.packagedArchive),
+      assertPersisted: (archive) => QualityPromotionPackagedArchive.assertPersisted(archive.packagedArchive),
+    },
+  })
 
   function canonicalPayload(archive: QualityPromotionPackagedArchive.ArchiveArtifact) {
     const promotion = archive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
@@ -297,59 +306,19 @@ export namespace QualityPromotionSignedArchive {
   }
 
   export async function get(input: { source: string; signedArchiveID: string }) {
-    const record = await Storage.read<unknown>(key(input.source, input.signedArchiveID))
-    return ArchiveRecord.parse(record)
+    return store.get({ source: input.source, id: input.signedArchiveID })
   }
 
-  export async function append(archive: ArchiveArtifact) {
-    await QualityPromotionPackagedArchive.append(archive.packagedArchive)
-    const next = ArchiveRecord.parse({
-      schemaVersion: 1,
-      kind: "ax-code-quality-promotion-signed-archive-record",
-      archive,
-    })
-    try {
-      const existing = await get({ source: archive.source, signedArchiveID: archive.signedArchiveID })
-      if (jsonEqual(existing, next)) return existing
-      throw new Error(
-        `Promotion signed archive ${archive.signedArchiveID} already exists for source ${archive.source} with different content`,
-      )
-    } catch (err) {
-      if (!Storage.NotFoundError.isInstance(err)) throw err
-      await Storage.write(key(archive.source, archive.signedArchiveID), next)
-      return next
-    }
+  export function append(archive: ArchiveArtifact) {
+    return store.append(archive)
   }
 
-  export async function list(source?: string) {
-    const prefixes = source ? [["quality_model_signed_archive", encode(source)]] : [["quality_model_signed_archive"]]
-    const archives: ArchiveArtifact[] = []
-
-    for (const prefix of prefixes) {
-      const keys = await Storage.list(prefix)
-      for (const parts of keys) {
-        const encodedSource = parts[parts.length - 2]
-        const signedArchiveID = parts[parts.length - 1]
-        if (!encodedSource || !signedArchiveID) continue
-        const source = decode(encodedSource)
-        if (!source) continue
-        const record = await get({ source, signedArchiveID })
-        archives.push(record.archive)
-      }
-    }
-
-    return sortArchives(archives)
+  export function list(source?: string) {
+    return store.list(source)
   }
 
-  export async function assertPersisted(archive: ArchiveArtifact) {
-    await QualityPromotionPackagedArchive.assertPersisted(archive.packagedArchive)
-    const persisted = await get({ source: archive.source, signedArchiveID: archive.signedArchiveID })
-    if (!jsonEqual(persisted.archive, archive)) {
-      throw new Error(
-        `Persisted promotion signed archive ${archive.signedArchiveID} does not match the provided artifact`,
-      )
-    }
-    return persisted
+  export function assertPersisted(archive: ArchiveArtifact) {
+    return store.assertPersisted(archive)
   }
 
   export async function materialize(archive: ArchiveArtifact, filePath: string) {

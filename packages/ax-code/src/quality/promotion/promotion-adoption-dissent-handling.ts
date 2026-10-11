@@ -1,7 +1,7 @@
 import z from "zod"
-import { Storage } from "../../storage/storage"
 import { QualityStorageKey } from "../storage-key"
 import { QualityPromotionAdoptionDissentResolution } from "./promotion-adoption-dissent-resolution"
+import { createPromotionArtifactStore } from "./artifact-store"
 import { QualityPromotionAdoptionDissentSupersession } from "./promotion-adoption-dissent-supersession"
 import { QualityPromotionAdoptionReview } from "./promotion-adoption-review"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
@@ -77,15 +77,20 @@ export namespace QualityPromotionAdoptionDissentHandling {
   export type HandlingRecord = z.output<typeof HandlingRecord>
 
   const encode = QualityStorageKey.encode
-  const decode = QualityStorageKey.decode
-
-  function key(source: string, handlingID: string) {
-    return ["quality_model_adoption_dissent_handling", encode(source), handlingID]
-  }
 
   function sortArtifacts(artifacts: HandlingArtifact[]) {
     return [...artifacts].sort((a, b) => compareStringFields(a, b, ["handledAt", "handlingID"]))
   }
+
+  const store = createPromotionArtifactStore<HandlingArtifact, HandlingRecord>({
+    keyPrefix: "quality_model_adoption_dissent_handling",
+    recordKind: "ax-code-quality-promotion-adoption-dissent-handling-record",
+    artifactField: "handling",
+    idField: "handlingID",
+    noun: "Adoption dissent handling",
+    recordSchema: HandlingRecord,
+    sort: sortArtifacts,
+  })
 
   function qualifiesRole(
     role: string | null | undefined,
@@ -321,57 +326,19 @@ export namespace QualityPromotionAdoptionDissentHandling {
   }
 
   export async function get(input: { source: string; handlingID: string }) {
-    const record = await Storage.read<unknown>(key(input.source, input.handlingID))
-    return HandlingRecord.parse(record)
+    return store.get({ source: input.source, id: input.handlingID })
   }
 
-  export async function append(handling: HandlingArtifact) {
-    const next = HandlingRecord.parse({
-      schemaVersion: 1,
-      kind: "ax-code-quality-promotion-adoption-dissent-handling-record",
-      handling,
-    })
-    try {
-      const existing = await get({ source: handling.source, handlingID: handling.handlingID })
-      if (jsonEqual(existing, next)) return existing
-      throw new Error(
-        `Adoption dissent handling ${handling.handlingID} already exists for source ${handling.source} with different content`,
-      )
-    } catch (err) {
-      if (!Storage.NotFoundError.isInstance(err)) throw err
-      await Storage.write(key(handling.source, handling.handlingID), next)
-      return next
-    }
+  export function append(handling: HandlingArtifact) {
+    return store.append(handling)
   }
 
-  export async function list(source?: string) {
-    const prefixes = source
-      ? [["quality_model_adoption_dissent_handling", encode(source)]]
-      : [["quality_model_adoption_dissent_handling"]]
-    const handlings: HandlingArtifact[] = []
-
-    for (const prefix of prefixes) {
-      const keys = await Storage.list(prefix)
-      for (const parts of keys) {
-        const encodedSource = parts[parts.length - 2]
-        const handlingID = parts[parts.length - 1]
-        if (!encodedSource || !handlingID) continue
-        const source = decode(encodedSource)
-        if (!source) continue
-        const record = await get({ source, handlingID })
-        handlings.push(record.handling)
-      }
-    }
-
-    return sortArtifacts(handlings)
+  export function list(source?: string) {
+    return store.list(source)
   }
 
-  export async function assertPersisted(handling: HandlingArtifact) {
-    const persisted = await get({ source: handling.source, handlingID: handling.handlingID })
-    if (!jsonEqual(persisted.handling, handling)) {
-      throw new Error(`Persisted adoption dissent handling ${handling.handlingID} does not match the provided artifact`)
-    }
-    return persisted
+  export function assertPersisted(handling: HandlingArtifact) {
+    return store.assertPersisted(handling)
   }
 
   export function renderReport(handling: HandlingArtifact) {

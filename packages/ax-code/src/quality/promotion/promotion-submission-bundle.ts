@@ -1,7 +1,7 @@
 import z from "zod"
-import { Storage } from "../../storage/storage"
 import { QualityStorageKey } from "../storage-key"
 import { QualityPromotionApprovalPacket } from "./promotion-approval-packet"
+import { createPromotionArtifactStore } from "./artifact-store"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "../json"
@@ -48,15 +48,24 @@ export namespace QualityPromotionSubmissionBundle {
   export type BundleRecord = z.output<typeof BundleRecord>
 
   const encode = QualityStorageKey.encode
-  const decode = QualityStorageKey.decode
-
-  function key(source: string, submissionID: string) {
-    return ["quality_model_submission_bundle", encode(source), submissionID]
-  }
 
   function sortBundles(bundles: BundleArtifact[]) {
     return [...bundles].sort((a, b) => compareStringFields(a, b, ["createdAt", "submissionID"]))
   }
+
+  const store = createPromotionArtifactStore<BundleArtifact, BundleRecord>({
+    keyPrefix: "quality_model_submission_bundle",
+    recordKind: "ax-code-quality-promotion-submission-bundle-record",
+    artifactField: "submission",
+    idField: "submissionID",
+    noun: "Promotion submission bundle",
+    recordSchema: BundleRecord,
+    sort: sortBundles,
+    parent: {
+      append: (submission) => QualityPromotionApprovalPacket.append(submission.approvalPacket),
+      assertPersisted: (submission) => QualityPromotionApprovalPacket.assertPersisted(submission.approvalPacket),
+    },
+  })
 
   function matchesDecisionBundle(
     decisionBundle: QualityPromotionDecisionBundle.DecisionBundle,
@@ -166,61 +175,19 @@ export namespace QualityPromotionSubmissionBundle {
   }
 
   export async function get(input: { source: string; submissionID: string }) {
-    const record = await Storage.read<unknown>(key(input.source, input.submissionID))
-    return BundleRecord.parse(record)
+    return store.get({ source: input.source, id: input.submissionID })
   }
 
-  export async function append(submission: BundleArtifact) {
-    await QualityPromotionApprovalPacket.append(submission.approvalPacket)
-    const next = BundleRecord.parse({
-      schemaVersion: 1,
-      kind: "ax-code-quality-promotion-submission-bundle-record",
-      submission,
-    })
-    try {
-      const existing = await get({ source: submission.source, submissionID: submission.submissionID })
-      if (jsonEqual(existing, next)) return existing
-      throw new Error(
-        `Promotion submission bundle ${submission.submissionID} already exists for source ${submission.source} with different content`,
-      )
-    } catch (err) {
-      if (!Storage.NotFoundError.isInstance(err)) throw err
-      await Storage.write(key(submission.source, submission.submissionID), next)
-      return next
-    }
+  export function append(submission: BundleArtifact) {
+    return store.append(submission)
   }
 
-  export async function list(source?: string) {
-    const prefixes = source
-      ? [["quality_model_submission_bundle", encode(source)]]
-      : [["quality_model_submission_bundle"]]
-    const submissions: BundleArtifact[] = []
-
-    for (const prefix of prefixes) {
-      const keys = await Storage.list(prefix)
-      for (const parts of keys) {
-        const encodedSource = parts[parts.length - 2]
-        const submissionID = parts[parts.length - 1]
-        if (!encodedSource || !submissionID) continue
-        const source = decode(encodedSource)
-        if (!source) continue
-        const record = await get({ source, submissionID })
-        submissions.push(record.submission)
-      }
-    }
-
-    return sortBundles(submissions)
+  export function list(source?: string) {
+    return store.list(source)
   }
 
-  export async function assertPersisted(submission: BundleArtifact) {
-    await QualityPromotionApprovalPacket.assertPersisted(submission.approvalPacket)
-    const persisted = await get({ source: submission.source, submissionID: submission.submissionID })
-    if (!jsonEqual(persisted.submission, submission)) {
-      throw new Error(
-        `Persisted promotion submission bundle ${submission.submissionID} does not match the provided artifact`,
-      )
-    }
-    return persisted
+  export function assertPersisted(submission: BundleArtifact) {
+    return store.assertPersisted(submission)
   }
 
   export function renderReport(submission: BundleArtifact) {

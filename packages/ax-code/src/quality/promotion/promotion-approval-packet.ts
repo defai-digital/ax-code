@@ -1,7 +1,7 @@
 import z from "zod"
-import { Storage } from "../../storage/storage"
 import { QualityStorageKey } from "../storage-key"
 import { QualityPromotionAdoptionDissentHandling } from "./promotion-adoption-dissent-handling"
+import { createPromotionArtifactStore } from "./artifact-store"
 import { QualityPromotionAdoptionReview } from "./promotion-adoption-review"
 import { QualityPromotionApproval } from "./promotion-approval"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
@@ -67,15 +67,20 @@ export namespace QualityPromotionApprovalPacket {
   export type PacketRecord = z.output<typeof PacketRecord>
 
   const encode = QualityStorageKey.encode
-  const decode = QualityStorageKey.decode
-
-  function key(source: string, packetID: string) {
-    return ["quality_model_approval_packet", encode(source), packetID]
-  }
 
   function sortPackets(artifacts: PacketArtifact[]) {
     return [...artifacts].sort((a, b) => compareStringFields(a, b, ["createdAt", "packetID"]))
   }
+
+  const store = createPromotionArtifactStore<PacketArtifact, PacketRecord>({
+    keyPrefix: "quality_model_approval_packet",
+    recordKind: "ax-code-quality-promotion-approval-packet-record",
+    artifactField: "packet",
+    idField: "packetID",
+    noun: "Approval packet",
+    recordSchema: PacketRecord,
+    sort: sortPackets,
+  })
 
   function matchesBundle(bundle: QualityPromotionDecisionBundle.DecisionBundle, packet: PacketArtifact) {
     return (
@@ -379,55 +384,19 @@ export namespace QualityPromotionApprovalPacket {
   }
 
   export async function get(input: { source: string; packetID: string }) {
-    const record = await Storage.read<unknown>(key(input.source, input.packetID))
-    return PacketRecord.parse(record)
+    return store.get({ source: input.source, id: input.packetID })
   }
 
-  export async function append(packet: PacketArtifact) {
-    const next = PacketRecord.parse({
-      schemaVersion: 1,
-      kind: "ax-code-quality-promotion-approval-packet-record",
-      packet,
-    })
-    try {
-      const existing = await get({ source: packet.source, packetID: packet.packetID })
-      if (jsonEqual(existing, next)) return existing
-      throw new Error(
-        `Approval packet ${packet.packetID} already exists for source ${packet.source} with different content`,
-      )
-    } catch (err) {
-      if (!Storage.NotFoundError.isInstance(err)) throw err
-      await Storage.write(key(packet.source, packet.packetID), next)
-      return next
-    }
+  export function append(packet: PacketArtifact) {
+    return store.append(packet)
   }
 
-  export async function list(source?: string) {
-    const prefixes = source ? [["quality_model_approval_packet", encode(source)]] : [["quality_model_approval_packet"]]
-    const packets: PacketArtifact[] = []
-
-    for (const prefix of prefixes) {
-      const keys = await Storage.list(prefix)
-      for (const parts of keys) {
-        const encodedSource = parts[parts.length - 2]
-        const packetID = parts[parts.length - 1]
-        if (!encodedSource || !packetID) continue
-        const source = decode(encodedSource)
-        if (!source) continue
-        const record = await get({ source, packetID })
-        packets.push(record.packet)
-      }
-    }
-
-    return sortPackets(packets)
+  export function list(source?: string) {
+    return store.list(source)
   }
 
-  export async function assertPersisted(packet: PacketArtifact) {
-    const persisted = await get({ source: packet.source, packetID: packet.packetID })
-    if (!jsonEqual(persisted.packet, packet)) {
-      throw new Error(`Persisted approval packet ${packet.packetID} does not match the provided artifact`)
-    }
-    return persisted
+  export function assertPersisted(packet: PacketArtifact) {
+    return store.assertPersisted(packet)
   }
 
   export function renderReport(packet: PacketArtifact) {

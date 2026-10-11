@@ -1,7 +1,7 @@
 import z from "zod"
-import { Storage } from "../../storage/storage"
 import { QualityStorageKey } from "../storage-key"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
+import { createPromotionArtifactStore } from "./artifact-store"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "../json"
 import { compareStringFields, uniqueBy } from "../sort"
@@ -51,15 +51,24 @@ export namespace QualityPromotionReleasePacket {
   export type PacketRecord = z.output<typeof PacketRecord>
 
   const encode = QualityStorageKey.encode
-  const decode = QualityStorageKey.decode
-
-  function key(source: string, packetID: string) {
-    return ["quality_model_release_packet", encode(source), packetID]
-  }
 
   function sortPackets(packets: PacketArtifact[]) {
     return [...packets].sort((a, b) => compareStringFields(a, b, ["createdAt", "packetID"]))
   }
+
+  const store = createPromotionArtifactStore<PacketArtifact, PacketRecord>({
+    keyPrefix: "quality_model_release_packet",
+    recordKind: "ax-code-quality-promotion-release-packet-record",
+    artifactField: "packet",
+    idField: "packetID",
+    noun: "Promotion release packet",
+    recordSchema: PacketRecord,
+    sort: sortPackets,
+    parent: {
+      append: (packet) => QualityPromotionReleaseDecisionRecord.append(packet.releaseDecisionRecord),
+      assertPersisted: (packet) => QualityPromotionReleaseDecisionRecord.assertPersisted(packet.releaseDecisionRecord),
+    },
+  })
 
   function matchesDecisionBundle(
     decisionBundle: QualityPromotionReleaseDecisionRecord.RecordArtifact["boardDecision"]["reviewDossier"]["submissionBundle"]["decisionBundle"],
@@ -202,57 +211,19 @@ export namespace QualityPromotionReleasePacket {
   }
 
   export async function get(input: { source: string; packetID: string }) {
-    const record = await Storage.read<unknown>(key(input.source, input.packetID))
-    return PacketRecord.parse(record)
+    return store.get({ source: input.source, id: input.packetID })
   }
 
-  export async function append(packet: PacketArtifact) {
-    await QualityPromotionReleaseDecisionRecord.append(packet.releaseDecisionRecord)
-    const next = PacketRecord.parse({
-      schemaVersion: 1,
-      kind: "ax-code-quality-promotion-release-packet-record",
-      packet,
-    })
-    try {
-      const existing = await get({ source: packet.source, packetID: packet.packetID })
-      if (jsonEqual(existing, next)) return existing
-      throw new Error(
-        `Promotion release packet ${packet.packetID} already exists for source ${packet.source} with different content`,
-      )
-    } catch (err) {
-      if (!Storage.NotFoundError.isInstance(err)) throw err
-      await Storage.write(key(packet.source, packet.packetID), next)
-      return next
-    }
+  export function append(packet: PacketArtifact) {
+    return store.append(packet)
   }
 
-  export async function list(source?: string) {
-    const prefixes = source ? [["quality_model_release_packet", encode(source)]] : [["quality_model_release_packet"]]
-    const packets: PacketArtifact[] = []
-
-    for (const prefix of prefixes) {
-      const keys = await Storage.list(prefix)
-      for (const parts of keys) {
-        const encodedSource = parts[parts.length - 2]
-        const packetID = parts[parts.length - 1]
-        if (!encodedSource || !packetID) continue
-        const source = decode(encodedSource)
-        if (!source) continue
-        const record = await get({ source, packetID })
-        packets.push(record.packet)
-      }
-    }
-
-    return sortPackets(packets)
+  export function list(source?: string) {
+    return store.list(source)
   }
 
-  export async function assertPersisted(packet: PacketArtifact) {
-    await QualityPromotionReleaseDecisionRecord.assertPersisted(packet.releaseDecisionRecord)
-    const persisted = await get({ source: packet.source, packetID: packet.packetID })
-    if (!jsonEqual(persisted.packet, packet)) {
-      throw new Error(`Persisted promotion release packet ${packet.packetID} does not match the provided artifact`)
-    }
-    return persisted
+  export function assertPersisted(packet: PacketArtifact) {
+    return store.assertPersisted(packet)
   }
 
   export function renderReport(packet: PacketArtifact) {

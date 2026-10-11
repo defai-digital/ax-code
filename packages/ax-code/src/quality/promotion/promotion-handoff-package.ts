@@ -1,8 +1,7 @@
 import z from "zod"
-import { Storage } from "../../storage/storage"
-import { QualityStorageKey } from "../storage-key"
 import { sha256JsonHex } from "../digest"
 import { QualityPromotionApprovalPacket } from "./promotion-approval-packet"
+import { createPromotionArtifactStore } from "./artifact-store"
 import { QualityPromotionArchiveManifest } from "./promotion-archive-manifest"
 import { QualityPromotionAuditManifest } from "./promotion-audit-manifest"
 import { QualityPromotionBoardDecision } from "./promotion-board-decision"
@@ -85,18 +84,25 @@ export namespace QualityPromotionHandoffPackage {
   })
   export type PackageRecord = z.output<typeof PackageRecord>
 
-  const encode = QualityStorageKey.encode
-  const decode = QualityStorageKey.decode
-
-  function key(source: string, packageID: string) {
-    return ["quality_model_handoff_package", encode(source), packageID]
-  }
-
   const digest = sha256JsonHex
 
   function sortPackages(packets: PackageArtifact[]) {
     return [...packets].sort((a, b) => compareStringFields(a, b, ["createdAt", "packageID"]))
   }
+
+  const store = createPromotionArtifactStore<PackageArtifact, PackageRecord>({
+    keyPrefix: "quality_model_handoff_package",
+    recordKind: "ax-code-quality-promotion-handoff-package-record",
+    artifactField: "packet",
+    idField: "packageID",
+    noun: "Promotion handoff package",
+    recordSchema: PackageRecord,
+    sort: sortPackages,
+    parent: {
+      append: (packet) => QualityPromotionArchiveManifest.append(packet.archiveManifest),
+      assertPersisted: (packet) => QualityPromotionArchiveManifest.assertPersisted(packet.archiveManifest),
+    },
+  })
 
   function sortDocuments(documents: Document[]) {
     return [...documents].sort((a, b) => a.name.localeCompare(b.name) || a.kind.localeCompare(b.kind))
@@ -357,57 +363,19 @@ export namespace QualityPromotionHandoffPackage {
   }
 
   export async function get(input: { source: string; packageID: string }) {
-    const record = await Storage.read<unknown>(key(input.source, input.packageID))
-    return PackageRecord.parse(record)
+    return store.get({ source: input.source, id: input.packageID })
   }
 
-  export async function append(packet: PackageArtifact) {
-    await QualityPromotionArchiveManifest.append(packet.archiveManifest)
-    const next = PackageRecord.parse({
-      schemaVersion: 1,
-      kind: "ax-code-quality-promotion-handoff-package-record",
-      packet,
-    })
-    try {
-      const existing = await get({ source: packet.source, packageID: packet.packageID })
-      if (jsonEqual(existing, next)) return existing
-      throw new Error(
-        `Promotion handoff package ${packet.packageID} already exists for source ${packet.source} with different content`,
-      )
-    } catch (err) {
-      if (!Storage.NotFoundError.isInstance(err)) throw err
-      await Storage.write(key(packet.source, packet.packageID), next)
-      return next
-    }
+  export function append(packet: PackageArtifact) {
+    return store.append(packet)
   }
 
-  export async function list(source?: string) {
-    const prefixes = source ? [["quality_model_handoff_package", encode(source)]] : [["quality_model_handoff_package"]]
-    const packets: PackageArtifact[] = []
-
-    for (const prefix of prefixes) {
-      const keys = await Storage.list(prefix)
-      for (const parts of keys) {
-        const encodedSource = parts[parts.length - 2]
-        const packageID = parts[parts.length - 1]
-        if (!encodedSource || !packageID) continue
-        const source = decode(encodedSource)
-        if (!source) continue
-        const record = await get({ source, packageID })
-        packets.push(record.packet)
-      }
-    }
-
-    return sortPackages(packets)
+  export function list(source?: string) {
+    return store.list(source)
   }
 
-  export async function assertPersisted(packet: PackageArtifact) {
-    await QualityPromotionArchiveManifest.assertPersisted(packet.archiveManifest)
-    const persisted = await get({ source: packet.source, packageID: packet.packageID })
-    if (!jsonEqual(persisted.packet, packet)) {
-      throw new Error(`Persisted promotion handoff package ${packet.packageID} does not match the provided artifact`)
-    }
-    return persisted
+  export function assertPersisted(packet: PackageArtifact) {
+    return store.assertPersisted(packet)
   }
 
   export function renderReport(packet: PackageArtifact) {
