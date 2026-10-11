@@ -78,8 +78,12 @@ export const GrepTool = Tool.define("grep", {
     if (params.include?.includes("\x00")) throw new Error("Include pattern contains null byte")
 
     let searchPath = params.path ?? Instance.directory
-    const isFile = Filesystem.stat(resolveToolFilePath(searchPath, Instance.directory))?.isFile() === true
+    const searchStat = Filesystem.stat(resolveToolFilePath(searchPath, Instance.directory))
+    const isFile = searchStat?.isFile() === true
     searchPath = await fileToolGuard(ctx, searchPath, { kind: isFile ? "file" : "directory" })
+    // A missing root would otherwise read as "No files found" (native) or a bare
+    // ripgrep failure, and a mistyped path makes the model conclude the code is absent.
+    if (!searchStat) throw new Error(`Path not found: ${params.path ?? searchPath}`)
 
     await ctx.ask({
       permission: "grep",
