@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "exclude": ["dist", "src/server/routes/workspace.ts", "src/storage/db.node.ts", "test/control-plane/**/*"],
+  "exclude": ["dist", "src/storage/db.node.ts", "test/control-plane/**/*"],
   "compilerOptions": {
     "target": "ESNext",
     "module": "Preserve",

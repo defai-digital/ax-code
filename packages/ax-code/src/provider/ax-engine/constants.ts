@@ -697,8 +697,6 @@ export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineBuiltinModelID, AxEngin
 
 export const AX_ENGINE_DEFAULT_MODEL_ID: AxEngineBuiltinModelID = AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID
 
-export const AX_ENGINE_DEFAULT_QUANTIZATION: AxEngineQuantization = "mlx"
-
 export const AX_ENGINE_ERROR = {
   UnsupportedPlatform: "AX_ENGINE_UNSUPPORTED_PLATFORM",
   UnsupportedArch: "AX_ENGINE_UNSUPPORTED_ARCH",

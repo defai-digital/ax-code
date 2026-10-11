@@ -3,10 +3,6 @@ import { SessionID } from "@/session/schema"
 import { Session } from "../../session"
 import { parseSessionID, type SessionRouteContext } from "./route-params"
 
-export async function assertSessionExists(sessionID: SessionID) {
-  await Session.get(sessionID)
-}
-
 /**
  * Verify that a session belongs to the current project directory. Throws
  * HTTP 409 when the session belongs to a different project, matching the

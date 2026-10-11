@@ -17,9 +17,6 @@ export const MODEL_FORMAT_HELP = 'expected "provider/model" from `ax-code models
 /** UI suggestions only. Runtime defaultModel never traverses this list. */
 export const IMPLICIT_DEFAULT_MODEL_SKUS = recommendations.startup
 
-export const IMPLICIT_DEFAULT_UNAVAILABLE_MESSAGE =
-  "No default model is available. Connect a provider that offers deepseek-flash, glm-5.3-flash, qwen3.8-flash, MiniMax-M3, grok-4.6, claude-sonnet-5, gpt-6, gemini-3.8-flash, or qwen3.8-27b, or pass --model provider/model. AX Engine requires an explicit model ID."
-
 type SelectableProvider = {
   id: string
   models: Record<string, Parameters<typeof modelSelectableForProvider>[1]>

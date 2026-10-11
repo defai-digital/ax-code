@@ -41,7 +41,6 @@ import { LspEvent } from "@/lsp-glue"
 import { NativeAddon } from "@/native/addon"
 import { NativePerf } from "@/perf/native"
 import { Shell } from "@/shell/shell"
-import { Database } from "@/storage/db"
 import { Log } from "@/util/log"
 import { currentSourceState } from "@/quality/source-state"
 
@@ -139,10 +138,5 @@ configureCodeReasonHost({
 })
 
 // Re-export the type for callers that want to typecheck the host they
-// build (and for the abort controller, in case tool code wants to flip
-// the host signal for a coordinated cancel).
+// build.
 export type { CodeReasonHost }
-export const dreAbortController = abortController
-// `Database` import kept for jest/electron preload consumers — some
-// legacy callers reach into the storage layer through this module.
-export { Database }

@@ -183,7 +183,3 @@ export async function cancelDownloadJob(jobID: string): Promise<AxEngineModelJob
   }
   return recentJobs.find((job) => job.id === jobID)
 }
-
-export async function modelDisplayNameForJob(modelID: AxEngineModelID) {
-  return (await resolveAxEngineModelDefinition(modelID)).name
-}
