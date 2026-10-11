@@ -1125,6 +1125,31 @@ test("Config.update writes into an existing ax-code.jsonc instead of a shadowed 
   })
 })
 
+test("Config.update applies on reload when both ax-code.json and ax-code.jsonc exist", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      await fs.writeFile(path.join(dir, "ax-code.json"), JSON.stringify({ model: "json/model", username: "from-json" }))
+      await fs.writeFile(path.join(dir, "ax-code.jsonc"), '{\n  // overlay\n  "model": "jsonc/model"\n}\n')
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      expect((await Config.get()).model).toBe("jsonc/model")
+      await Config.update({ model: "updated/model" })
+      const loaded = await Config.get()
+      // The update lands in the overlay the loader applies last, so it wins;
+      // keys that live only in ax-code.json keep applying underneath it.
+      expect(loaded.model).toBe("updated/model")
+      expect(loaded.username).toBe("from-json")
+      expect(await Filesystem.readText(path.join(tmp.path, "ax-code.json"))).toContain("json/model")
+      expect(await Filesystem.readText(path.join(tmp.path, "ax-code.jsonc"))).toContain("updated/model")
+    },
+  })
+})
+
 test("gets config directories", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
