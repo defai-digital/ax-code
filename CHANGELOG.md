@@ -6,9 +6,22 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.24.5] - 2026-10-11
+
 ### Changed
 
-- Download the pinned minisign 0.12 bootstrap archives from download.ax-code.com, and check the extracted executable again before caching it.
+- Publish AX Code 7.24.5 with SDK 2.6.8.
+- Move admitted CPU hot paths to bounded, cancellable Rust workers while retaining permission checks and fallback behavior.
+- Keep public installation and operator documentation available independently of private source access, and include license notices in sealed runtime archives.
+- Download pinned minisign bootstrap archives from download.ax-code.com and verify the extracted executable before caching it.
+
+### Fixed
+
+- Preserve graph rows belonging to case-distinct sibling worktrees during orphan pruning in both native and TypeScript storage paths.
+- Accept foreign thenables during lazy initialization and retain cache recovery after failed initialization or subscription.
+- Preserve complete grep line text and hidden-file parity, reject invalid include globs, exclude Git metadata, and bound deeply nested parser traversal.
+- Re-read the clock after native identifier counter exhaustion and retain completed indexing when optional planner maintenance is canceled.
+- Harden session queue failures, shell timeout outcomes, permission path accounting, migration locking, and debug evidence regressions.
 
 ## [7.24.4] - 2026-10-10
 
