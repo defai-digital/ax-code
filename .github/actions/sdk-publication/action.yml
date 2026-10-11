@@ -69,12 +69,29 @@ runs:
     - name: Attest the verified published manifest
       if: steps.verify.outputs.needs-attestation == 'true'
       id: attest
-      uses: actions/attest@f057fd524d485ac48d9b534c235aad15b5bb303f # v3
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+      env:
+        SDK_VERSION: ${{ steps.verify.outputs.version }}
+        MANIFEST_DIGEST: ${{ steps.verify.outputs.digest }}
+        VERIFIED_PREDICATE: ${{ steps.verify.outputs.predicate }}
       with:
-        subject-name: pkg:jsr/@defai-digital/ax-code-sdk@${{ steps.verify.outputs.version }}
-        subject-digest: sha256:${{ steps.verify.outputs.digest }}
-        predicate-type: https://slsa.dev/provenance/v1
-        predicate: ${{ steps.verify.outputs.predicate }}
+        script: |
+          const fs = require('node:fs/promises')
+          const path = require('node:path')
+          const { pathToFileURL } = require('node:url')
+          const { signJsrProvenance } = await import(pathToFileURL(`${process.cwd()}/.github/scripts/sign-jsr-provenance.mjs`))
+          const token = await core.getIDToken('sigstore')
+          core.setSecret(token)
+          const bundle = await signJsrProvenance({
+            version: process.env.SDK_VERSION,
+            digest: process.env.MANIFEST_DIGEST,
+            predicate: await new Response(process.env.VERIFIED_PREDICATE).json(),
+            workflowRef: process.env.GITHUB_WORKFLOW_REF,
+            identityToken: token
+          })
+          const file = path.join(process.env.RUNNER_TEMP, 'ax-code-sdk-provenance.json')
+          await fs.writeFile(file, JSON.stringify(bundle))
+          core.setOutput('bundle-path', file)
 
     - name: Attach and verify JSR provenance
       if: steps.verify.outputs.needs-attestation == 'true'

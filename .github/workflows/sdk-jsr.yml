@@ -18,7 +18,6 @@ concurrency:
 permissions:
   contents: read
   id-token: write
-  attestations: write
 
 env:
   AX_CODE_SDK_RELEASE_TAG: ${{ inputs.tag || github.ref_name }}

@@ -1,0 +1,61 @@
+name: Qualify SDK provenance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+      - run: pnpm install --frozen-lockfile
+      - name: Sign and verify a harmless SDK provenance fixture
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const fs = require('node:fs/promises')
+            const path = require('node:path')
+            const { pathToFileURL } = require('node:url')
+            const { digest, toJsrBundle } = await import(pathToFileURL(`${process.cwd()}/.github/scripts/jsr-provenance-recovery.mjs`))
+            const { signJsrProvenance } = await import(pathToFileURL(`${process.cwd()}/.github/scripts/sign-jsr-provenance.mjs`))
+            const token = await core.getIDToken('sigstore')
+            core.setSecret(token)
+            const visibility = context.payload.repository.private ? 'private' : 'public'
+            const hash = digest(`AX Code SDK qualification fixture; run ${context.runId}; ${visibility}`)
+            const bundle = await signJsrProvenance({
+              version: '0.0.0', digest: hash, workflowRef: process.env.GITHUB_WORKFLOW_REF, identityToken: token,
+              predicate: {
+                buildDefinition: {
+                  buildType: 'https://actions.github.io/buildtypes/workflow/v1',
+                  externalParameters: { qualificationOnly: true, visibility },
+                  resolvedDependencies: [{ uri: `git+https://github.com/${process.env.GITHUB_REPOSITORY}`, digest: { gitCommit: context.sha } }]
+                },
+                runDetails: { builder: { id: `https://github.com/${process.env.GITHUB_WORKFLOW_REF}` } }
+              }
+            })
+            const legacy = await toJsrBundle(bundle, '0.0.0', hash)
+            const audience = JSON.stringify({ permissions: [{ permission: 'package/publish', scope: 'defai-digital', package: 'ax-code-sdk' }] })
+            const jsrToken = await core.getIDToken(audience)
+            core.setSecret(jsrToken)
+            const source = await new Response(await fs.readFile('packages/sdk/js/jsr.json')).json()
+            const response = await fetch(`https://jsr.io/api/scopes/defai-digital/packages/ax-code-sdk/versions/${source.version}`, {
+              headers: { authorization: `githuboidc ${jsrToken}` }, signal: AbortSignal.timeout(30000)
+            })
+            if (!response.ok) throw new Error(`JSR OIDC metadata request failed: ${response.status}`)
+            const metadata = await response.json()
+            if (metadata.version !== source.version || !metadata.rekorLogId) throw new Error('Published SDK provenance is missing')
+            await fs.writeFile(path.join(process.env.RUNNER_TEMP, 'sdk-provenance-qualification.json'), JSON.stringify({ visibility, commit: context.sha, fixtureBundle: bundle, jsrBundle: legacy, publishedVersion: source.version }, null, 2))
+            core.info(`Verified ${visibility} repository signing, exact workflow identity, Rekor inclusion, JSR bundle conversion and OIDC metadata access. No package version was published.`)
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sdk-provenance-qualification
+          path: ${{ runner.temp }}/sdk-provenance-qualification.json
+          retention-days: 7

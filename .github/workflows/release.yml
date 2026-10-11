@@ -591,6 +591,9 @@ jobs:
           shasum -a 256 packages/ax-code/dist/install > packages/ax-code/dist/install.sha256
           shasum -a 256 packages/ax-code/dist/install.ps1 > packages/ax-code/dist/install.ps1.sha256
 
+      - name: Verify runtime archive content before signing
+        run: python3 script/check-release-content.py --require-licenses packages/ax-code/dist/*.zip packages/ax-code/dist/*.tar.gz
+
       - name: Install minisign
         run: brew install minisign
 
@@ -750,6 +753,9 @@ jobs:
             test -f "$asset"
             test -f "$signature"
             minisign -V -p docs/release/ax-minisign.pub -m "$asset" -x "$signature"
+            if [[ "$asset" == *.zip || "$asset" == *.tar.gz ]]; then
+              python3 script/check-release-content.py --require-licenses "$asset"
+            fi
           done
           for arch in x64 arm64; do
             pnpm exec tsx script/seal-windows-runtime.ts "$VERIFY_DIR/ax-code-windows-$arch.zip" docs/release/ax-minisign.pub

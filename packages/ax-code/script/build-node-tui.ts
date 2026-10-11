@@ -655,6 +655,9 @@ if (release && process.platform === "win32" && !process.argv.includes("--defer-w
 // The release archive is protected by Minisign after this build completes. Keep
 // a deterministic manifest inside it so Desktop packaging can prove that the
 // non-native runtime, including lib/index-node-tui.js, survived staging unchanged.
+for (const name of ["LICENSE", "LICENSE-MIT", "NOTICE"]) {
+  fs.copyFileSync(path.resolve(dir, "../..", name), path.join(outRoot, name))
+}
 const runtimeManifest = writeRuntimeManifest(outRoot)
 console.log(`Wrote runtime manifest (${runtimeManifest.files.length} non-native entries)`)
 
@@ -689,6 +692,13 @@ if (release) {
     console.error(`failed to archive ${legacyName}`)
     process.exit(1)
   }
+  const content = spawnSync(
+    process.platform === "win32" ? "python" : "python3",
+    [path.resolve(dir, "../../script/check-release-content.py"), "--require-licenses", archive],
+    { stdio: "inherit" },
+  )
+  if (content.error) throw content.error
+  if (content.status !== 0) throw new Error("Release archive content verification failed")
   console.log(`Release archive: ${path.relative(dir, archive)}`)
 }
 

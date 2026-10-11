@@ -29,4 +29,12 @@ describe("SDK JSR release workflow", () => {
     expect(workflow).not.toMatch(/NPM_TOKEN|NODE_AUTH_TOKEN|JSR_TOKEN/)
     expect(workflow).not.toMatch(/npm (?:pack|publish)/)
   })
+
+  test("recovers provenance without paid GitHub private-repository attestations", () => {
+    const action = readFileSync(resolve(import.meta.dirname, "../.github/actions/sdk-publication/action.yml"), "utf8")
+    expect(workflow).not.toContain("attestations: write")
+    expect(action).not.toContain("uses: actions/attest@")
+    expect(action).toContain("signJsrProvenance")
+    expect(action).toContain("getIDToken('sigstore')")
+  })
 })

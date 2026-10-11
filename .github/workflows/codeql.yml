@@ -17,7 +17,10 @@ permissions:
   security-events: write
 
 jobs:
+  # Private CodeQL requires a paid Code Security entitlement. Keep the existing
+  # OSV/dependency and repository scans; enable CodeQL only when entitled.
   javascript-typescript-actions:
+    if: ${{ !github.event.repository.private || vars.AX_CODE_PRIVATE_CODEQL == 'true' }}
     name: JavaScript, TypeScript, and Actions
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -54,6 +57,7 @@ jobs:
           echo "::warning::Code scanning SARIF upload failed (often Code Security upload unavailable). Analysis itself completed successfully."
 
   rust:
+    if: ${{ !github.event.repository.private || vars.AX_CODE_PRIVATE_CODEQL == 'true' }}
     name: Rust
     runs-on: ubuntu-latest
     timeout-minutes: 45

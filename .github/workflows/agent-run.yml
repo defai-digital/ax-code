@@ -44,7 +44,7 @@ jobs:
         # Fallback: build from this monorepo for dogfood CI.
         run: |
           set -euo pipefail
-          if curl -fsI "https://github.com/defai-digital/ax-code/releases/latest" >/dev/null 2>&1; then
+          if curl -fsI "https://download.ax-code.com/releases.json" >/dev/null 2>&1; then
             bash ./install || true
           fi
           # Installer updates GITHUB_PATH for later steps only — export for this step too.
