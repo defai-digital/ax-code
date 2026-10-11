@@ -140,9 +140,4 @@ describe("ImplementArena", () => {
     expect(md).not.toContain("Worktree Cleanup")
     expect(md).not.toContain("git worktree remove")
   })
-
-  test("isolationForContestants uses worktree when N>1", () => {
-    expect(ImplementArena.isolationForContestants(1)).toBe("shared")
-    expect(ImplementArena.isolationForContestants(3)).toBe("worktree")
-  })
 })

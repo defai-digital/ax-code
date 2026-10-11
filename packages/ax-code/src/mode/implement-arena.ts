@@ -4,7 +4,6 @@
  */
 
 import { Arena } from "./arena"
-import { WorktreePolicy } from "./worktree-policy"
 
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'\\''`)}'`
@@ -160,13 +159,5 @@ export namespace ImplementArena {
     }
 
     return lines.join("\n")
-  }
-
-  /**
-   * Policy check: implement arena always needs worktree isolation for N writers.
-   * @deprecated Reserved for future use — not currently called from production code.
-   */
-  export function isolationForContestants(count: number): WorktreePolicy.IsolationMode {
-    return count > 1 ? "worktree" : "shared"
   }
 }

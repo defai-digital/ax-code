@@ -90,7 +90,3 @@ export type HeadlessRuntimeCommand =
 export type HeadlessRuntimeCommandResult =
   | { accepted: true; status: 202; body?: undefined }
   | { accepted: true; status: 200; body: unknown }
-
-export function commandAcceptsAsyncMode(command: HeadlessRuntimeCommand) {
-  return command.type === "session.prompt" || command.type === "session.command" || command.type === "session.shell"
-}
