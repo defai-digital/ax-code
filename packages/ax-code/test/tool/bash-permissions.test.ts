@@ -199,6 +199,8 @@ describe("tool.bash permissions", () => {
       (_file: string, dir: string) => `wget --directory-prefix='${dir}' https://example.invalid/x`,
     ],
     ["wget bundled -qP with glued dir", (_file: string, dir: string) => `wget -qP'${dir}' https://example.invalid/x`],
+    ["wget --output-file log", (file: string) => `wget --output-file='${file}' https://example.invalid/x`],
+    ["wget bundled -qa append log", (file: string) => `wget -qa '${file}' https://example.invalid/x`],
     [
       "wget bundled -qP with separate dir",
       (_file: string, dir: string) => `wget -qP '${dir}' https://example.invalid/x`,

@@ -735,7 +735,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             const longDir = arg.match(name === "curl" ? /^--output-dir(?:=(.*))?$/ : /^--directory-prefix(?:=(.*))?$/)
             // wget's `-P` may be bundled (`-qP DIR`, `-qPDIR`); a value-taking
             // `o`/`O` before it would own the rest of the token instead.
-            const shortDir = name === "wget" ? arg.match(/^-[a-np-zA-NP-Z0-9]*?P(.*)$/) : null
+            const shortDir = name === "wget" ? arg.match(/^-[b-np-zA-NP-Z0-9]*?P(.*)$/) : null
             if (longDir || shortDir) {
               let dir = longDir ? longDir[1] : shortDir![1]
               if (!dir) dir = args[++i]
@@ -751,7 +751,8 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             // follows, the next argument) is its value. The lazy `*?` is what
             // keeps `-ooutput.json` anchored at the first `o`, not the last.
             // Flag letters include digits and `#` (`-4`, `-6`, `-0`, `-#`).
-            const cluster = arg.match(name === "wget" ? /^-([a-zA-Z0-9#]*?)([oO])(.*)$/ : /^-([a-zA-Z0-9#]*?)(o)(.*)$/)
+            // wget's `-a` appends to a log file: a write like `-o`.
+            const cluster = arg.match(name === "wget" ? /^-([a-zA-Z0-9#]*?)([oOa])(.*)$/ : /^-([a-zA-Z0-9#]*?)(o)(.*)$/)
             // curl's `-O` may also sit inside a cluster (`curl -sO URL`); only
             // letters before the first value-taking `o` are still flags. Do not
             // stop here: `-sOofile` still carries an `-o` value to record.
@@ -761,13 +762,17 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             )
               remoteName = true
             // wget's `-O` names the document (so the URL basename is not
-            // written); its `-o` is the log file, which is still a write.
+            // written); its `-o`/`--output-file` and `-a`/`--append-output`
+            // are the log file, which is still a write.
             const namesDocument =
               name === "wget" &&
               (arg === "--output-document" || arg.startsWith("--output-document=") || cluster?.[2] === "O")
             if (namesDocument) remoteName = false
             const takesOutputValue =
-              arg === "--output" || arg === "--output-document" || (cluster !== null && cluster[3] === "")
+              arg === "--output" ||
+              arg === "--output-document" ||
+              (name === "wget" && (arg === "--output-file" || arg === "--append-output")) ||
+              (cluster !== null && cluster[3] === "")
             if (takesOutputValue) {
               const next = args[i + 1]
               if (next) pending.push({ value: stripShellQuotes(next), relocate: name === "curl" })
@@ -775,7 +780,10 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
               continue
             }
             // Short options take a glued value too: `curl -oPATH`, `wget -OPATH`.
-            const inline = arg.match(/^--(?:output|output-document)=(.+)$/)?.[1] ?? (cluster ? cluster[3] : undefined)
+            const inline =
+              arg.match(
+                name === "wget" ? /^--(?:output|output-document|output-file|append-output)=(.+)$/ : /^--output=(.+)$/,
+              )?.[1] ?? (cluster ? cluster[3] : undefined)
             if (inline) {
               pending.push({ value: stripShellQuotes(inline), relocate: name === "curl" })
               continue
