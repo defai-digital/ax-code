@@ -193,6 +193,15 @@ describe("tool.bash permissions", () => {
     ["bundled wget -qO with glued path", (file: string) => `wget -qO'${file}' https://example.invalid/x`],
     ["bundled wget -qO with separate path", (file: string) => `wget -qO '${file}' https://example.invalid/x`],
     ["bundled curl -sLo", (file: string) => `curl -sLo '${file}' https://example.invalid/x`],
+    ["wget default basename under -P", (_file: string, dir: string) => `wget -q -P '${dir}' https://example.invalid/x`],
+    [
+      "wget --directory-prefix",
+      (_file: string, dir: string) => `wget --directory-prefix='${dir}' https://example.invalid/x`,
+    ],
+    [
+      "curl -o relative under --output-dir",
+      (_file: string, dir: string) => `curl -o x.bin --output-dir '${dir}' https://example.invalid/x`,
+    ],
     ["path-qualified bash -c", (file: string) => `/bin/bash -c "cat '${file}'"`],
     ["glued git -C", (_file: string, dir: string) => `git -C'${dir}' config user.email nobody@example.invalid`],
   ])("asks for external_directory permission for %s", async (_label, build) => {

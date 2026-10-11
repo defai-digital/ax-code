@@ -406,6 +406,12 @@ describe("tool.bash truncation", () => {
     ["bundled curl -sO remote name", (src: string) => `curl -sO ${shellQuote("file://" + src)}`],
     ["curl -O with a quoted URL", (src: string) => `curl -s -O ${shellQuote("file://" + src)}`],
     ["curl -O bundled after a digit flag", (src: string) => `curl -s4O ${shellQuote("file://" + src)}`],
+    ["curl -O drops the URL fragment", (src: string) => `curl -s -O ${shellQuote("file://" + src + "#section")}`],
+    ["curl -O honours --output-dir", (src: string) => `curl -s -O --output-dir sub ${shellQuote("file://" + src)}`],
+    [
+      "curl -o honours a trailing --output-dir",
+      (src: string) => `curl -s -o out.txt --output-dir sub ${shellQuote("file://" + src)}`,
+    ],
     ["bundled wget-style value after the cluster", (src: string) => `curl -sLo out.txt ${shellQuote("file://" + src)}`],
   ])("download targets count against the autonomous blast radius: %s", async (_label, build) => {
     await using tmp = await tmpdir({ git: true })
@@ -421,6 +427,7 @@ describe("tool.bash truncation", () => {
             // The remote-name case lands at <cwd>/payload.txt, so the source
             // must live elsewhere or curl would read and truncate the same file.
             await fs.mkdir(path.join(tmp.path, "remote"))
+            await fs.mkdir(path.join(tmp.path, "sub"))
             const source = path.join(tmp.path, "remote", "payload.txt")
             await fs.writeFile(source, "x".repeat(1000))
             let caught: unknown

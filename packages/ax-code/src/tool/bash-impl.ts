@@ -719,10 +719,43 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         }
 
         if (["curl", "wget"].includes(name)) {
-          let remoteName = false
+          // wget writes the URL basename unless `-O` names the document; curl
+          // does so only with `-O` (--remote-name).
+          let remoteName = name === "wget"
+          // curl `--output-dir DIR` and wget `-P DIR` / `--directory-prefix DIR`
+          // relocate every relative output, including the remote-name target.
+          let outputDir: string | undefined
+          const isDirOption = (arg: string) =>
+            arg === "--output-dir" || arg === "--directory-prefix" || (name === "wget" && arg === "-P")
+          const inlineDir = (arg: string) =>
+            arg.match(/^--(?:output-dir|directory-prefix)=(.+)$/)?.[1] ??
+            (name === "wget" ? arg.match(/^-P(.+)$/)?.[1] : undefined)
+          // The directory option may follow the output flag, so resolve it first.
           for (let i = 0; i < args.length; i++) {
             const arg = args[i]
             if (!arg) continue
+            const glued = inlineDir(arg)
+            if (glued !== undefined) outputDir = stripShellQuotes(glued)
+            else if (isDirOption(arg)) {
+              const next = args[++i]
+              if (next) outputDir = stripShellQuotes(next)
+            }
+          }
+          const recordOutput = async (value: string) => {
+            // `-o -` / `-O -` stream to stdout: no file is written.
+            if (value === "-") return
+            const target = outputDir && !path.isAbsolute(value) ? path.join(outputDir, value) : value
+            const output = await recordResolvedPath(target, decoded)
+            if (output) redirectWritePaths.add(output)
+          }
+          for (let i = 0; i < args.length; i++) {
+            const arg = args[i]
+            if (!arg) continue
+            if (inlineDir(arg) !== undefined) continue
+            if (isDirOption(arg)) {
+              i++
+              continue
+            }
             // curl's -O is --remote-name and takes NO value: the download is
             // written to the URL basename in the cwd. Only wget's -O takes
             // an output path, so treat -O as value-taking for wget alone.
@@ -737,39 +770,38 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             // letters before the first value-taking `o` are still flags. Do not
             // stop here: `-sOofile` still carries an `-o` value to record.
             if (name === "curl" && (arg === "--remote-name" || /^-[a-np-zA-Z0-9#]*O/.test(arg))) remoteName = true
+            // wget's `-O` names the document (so the URL basename is not
+            // written); its `-o` is the log file, which is still a write.
+            const namesDocument =
+              name === "wget" &&
+              (arg === "--output-document" || arg.startsWith("--output-document=") || cluster?.[2] === "O")
+            if (namesDocument) remoteName = false
             const takesOutputValue =
               arg === "--output" || arg === "--output-document" || (cluster !== null && cluster[3] === "")
             if (takesOutputValue) {
               const next = args[i + 1]
-              // `-o -` / `-O -` stream to stdout: no file is written.
-              const output = next && next !== "-" ? await recordResolvedPath(next, decoded) : undefined
-              if (output) redirectWritePaths.add(output)
+              if (next) await recordOutput(stripShellQuotes(next))
               i++
               continue
             }
             // Short options take a glued value too: `curl -oPATH`, `wget -OPATH`.
             const inline = arg.match(/^--(?:output|output-document)=(.+)$/)?.[1] ?? (cluster ? cluster[3] : undefined)
-            if (inline && inline !== "-") {
-              const output = await recordResolvedPath(inline, decoded)
-              if (output) redirectWritePaths.add(output)
-            }
+            if (inline) await recordOutput(stripShellQuotes(inline))
           }
           if (remoteName) {
-            // Record the real download target <cwd>/<url basename> so the
+            // Record the real download target <dir>/<url basename> so the
             // blast-radius and autonomous line-budget checks see it. The URL
             // is the first arg with a scheme (falls back to the first
-            // non-flag arg); query strings are not part of the file name.
-            // Args still carry their shell quotes here (`'https://…'`), which
-            // would hide the scheme and leave a stray quote on the basename.
-            const unquoted = args.map((a) => (a ? (stripShellQuotes(a) ?? "") : ""))
+            // non-flag arg); the query string and fragment are not part of the
+            // file name. Args may still carry shell quotes (`'https://…'`),
+            // which would hide the scheme and leave a stray quote on the name.
+            const unquoted = args.map((a) => (a ? stripShellQuotes(a) : ""))
             const url =
               unquoted.find((a) => a && /^[a-z][a-z0-9+.-]*:\/\//i.test(a)) ??
               unquoted.find((a) => a && !a.startsWith("-"))
-            const basename = url?.split("/").pop()?.split("?")[0]
-            if (basename) {
-              const output = await recordResolvedPath(basename, decoded)
-              if (output) redirectWritePaths.add(output)
-            }
+            const pathPart = url?.split(/[?#]/)[0] ?? ""
+            const basename = pathPart.split("/").pop() || (name === "wget" && url ? "index.html" : "")
+            if (basename) await recordOutput(basename)
           }
           return
         }
