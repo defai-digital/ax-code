@@ -1,5 +1,8 @@
 import { describe, expect, test, vi } from "vitest"
 import fs from "fs/promises"
+import { spawnSync } from "child_process"
+import { createServer } from "http"
+import type { AddressInfo } from "net"
 import path from "path"
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
@@ -446,6 +449,79 @@ describe("tool.bash truncation", () => {
         BlastRadius.reset(sessionID)
       }
     })
+  })
+
+  test("curl --remote-name-all records every URL basename", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await withAutonomous(async () => {
+      const sessionID = SessionID.make("ses_bash_blast_download_multi")
+      BlastRadius.reset(sessionID)
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const bash = await BashTool.init()
+            await fs.mkdir(path.join(tmp.path, "remote"))
+            await fs.writeFile(path.join(tmp.path, "remote", "first.txt"), "a\n")
+            await fs.writeFile(path.join(tmp.path, "remote", "second.txt"), "b\n")
+            const url = (file: string) => shellQuote("file://" + path.join(tmp.path, "remote", file))
+            await bash.execute(
+              {
+                command: `curl -s --remote-name-all ${url("first.txt")} ${url("second.txt")}`,
+                description: "Download two",
+              },
+              { ...ctx, sessionID },
+            )
+            const files = [...BlastRadius.get(sessionID).files].map((file) => path.relative(tmp.path, file)).sort()
+            expect(files).toEqual(["first.txt", "second.txt"])
+          },
+        })
+      } finally {
+        BlastRadius.reset(sessionID)
+      }
+    })
+  })
+
+  const hasWget = spawnSync("wget", ["--version"], { stdio: "ignore" }).status === 0
+  test.skipIf(!hasWget)("wget prefixes only the files it names itself and defaults to index.html", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const server = createServer((_req, res) => {
+      res.setHeader("content-type", "text/plain")
+      res.end("x".repeat(1000))
+    })
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    const port = (server.address() as AddressInfo).port
+    try {
+      await withAutonomous(async () => {
+        const sessionID = SessionID.make("ses_bash_blast_wget")
+        BlastRadius.reset(sessionID)
+        try {
+          await Instance.provide({
+            directory: tmp.path,
+            fn: async () => {
+              const bash = await BashTool.init()
+              await fs.mkdir(path.join(tmp.path, "sub"))
+              const run = (command: string) =>
+                bash.execute({ command, description: "Download with wget" }, { ...ctx, sessionID })
+              // -P relocates the URL basename; the -o log stays beside the cwd.
+              await run(`wget -q -P sub -o log.txt http://127.0.0.1:${port}/payload.txt`)
+              // A bare host writes index.html under the prefix.
+              await run(`wget -q -P sub http://127.0.0.1:${port}`)
+              // -O names the document itself and is not relocated by -P.
+              await run(`wget -q -O doc.txt -P sub http://127.0.0.1:${port}/other.txt`)
+              // Without a scheme the operand is still the URL, not the prefix.
+              await run(`wget -q -P sub 127.0.0.1:${port}/plain.txt`)
+              const files = [...BlastRadius.get(sessionID).files].map((file) => path.relative(tmp.path, file)).sort()
+              expect(files).toEqual(["doc.txt", "log.txt", "sub/index.html", "sub/payload.txt", "sub/plain.txt"].sort())
+            },
+          })
+        } finally {
+          BlastRadius.reset(sessionID)
+        }
+      })
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
   })
 
   test("a stdout download (-o -) records no write path", async () => {

@@ -198,6 +198,11 @@ describe("tool.bash permissions", () => {
       "wget --directory-prefix",
       (_file: string, dir: string) => `wget --directory-prefix='${dir}' https://example.invalid/x`,
     ],
+    ["wget bundled -qP with glued dir", (_file: string, dir: string) => `wget -qP'${dir}' https://example.invalid/x`],
+    [
+      "wget bundled -qP with separate dir",
+      (_file: string, dir: string) => `wget -qP '${dir}' https://example.invalid/x`,
+    ],
     [
       "curl -o relative under --output-dir",
       (_file: string, dir: string) => `curl -o x.bin --output-dir '${dir}' https://example.invalid/x`,
