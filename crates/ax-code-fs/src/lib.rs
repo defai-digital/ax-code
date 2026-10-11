@@ -327,18 +327,16 @@ impl<'a> Sink for ContentSink<'a> {
 
         let line_num = mat.line_number().unwrap_or(0);
 
-        // Find the match position within the line for column info
-        let (col, match_text) = self
+        // The column locates the match; `match_text` is the whole line because the
+        // TS grep tool renders it as the line text (the ripgrep fallback reports
+        // the full line too).
+        let col = self
             .matcher
             .find(line_bytes)
             .ok()
             .flatten()
-            .map(|m| {
-                let col = m.start() as u64 + 1;
-                let text = String::from_utf8_lossy(&line_bytes[m.start()..m.end()]).to_string();
-                (col, text)
-            })
-            .unwrap_or((1, line_trimmed.to_string()));
+            .map_or(1, |m| m.start() as u64 + 1);
+        let match_text = cap_line(line_trimmed);
 
         let entry = SearchMatch {
             path: self.path.clone(),
@@ -423,6 +421,21 @@ pub fn search_content(cwd: String, pattern: String, options_json: String) -> nap
     search_content_impl(&cwd, &pattern, &options_json, &AtomicBool::new(false))
 }
 
+/// Bound what one pathological line (minified bundles, data blobs) can add to
+/// the result set. Well above the TS display clamp, so truncation stays visible.
+const MAX_REPORTED_LINE_BYTES: usize = 16 * 1024;
+
+fn cap_line(line: &str) -> String {
+    if line.len() <= MAX_REPORTED_LINE_BYTES {
+        return line.to_owned();
+    }
+    let mut end = MAX_REPORTED_LINE_BYTES;
+    while !line.is_char_boundary(end) {
+        end -= 1;
+    }
+    line[..end].to_owned()
+}
+
 fn search_content_impl(
     cwd: &str,
     pattern: &str,
@@ -448,7 +461,9 @@ fn search_content_impl(
 
     let root = PathBuf::from(&cwd);
     let mut builder = WalkBuilder::new(&root);
-    builder.hidden(true); // skip hidden by default
+    // Include hidden files like the ripgrep fallback (`--hidden`) and `walk_files`;
+    // `.git` is still skipped below.
+    builder.hidden(false);
     builder.git_ignore(true);
     builder.git_global(true);
     builder.git_exclude(true);
@@ -1483,6 +1498,52 @@ mod tests {
         let first_mtime = entries[0]["mtime"].as_u64().unwrap();
         let second_mtime = entries[1]["mtime"].as_u64().unwrap();
         assert!(first_mtime >= second_mtime);
+
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn search_content_includes_hidden_files_but_not_git() {
+        let dir = make_tmp_dir("search_hidden");
+        fs::create_dir_all(dir.join(".github")).unwrap();
+        fs::create_dir_all(dir.join(".git")).unwrap();
+        fs::write(dir.join(".github/ci.yml"), "needle: 1\n").unwrap();
+        fs::write(dir.join(".git/config"), "needle = 2\n").unwrap();
+        fs::write(dir.join("a.txt"), "needle\n").unwrap();
+
+        let json = search_content(dir.to_str().unwrap().into(), "needle".into(), "{}".into()).unwrap();
+        let rows: Vec<serde_json::Value> = serde_json::from_str(&json).unwrap();
+        let paths: Vec<String> = rows
+            .iter()
+            .map(|r| r["path"].as_str().unwrap().to_owned())
+            .collect();
+
+        assert!(paths.iter().any(|p| p.ends_with("ci.yml")), "{paths:?}");
+        assert!(paths.iter().any(|p| p.ends_with("a.txt")), "{paths:?}");
+        assert!(!paths.iter().any(|p| p.contains(".git/") || p.contains(".git\\")), "{paths:?}");
+
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn search_content_reports_the_whole_line_and_caps_huge_lines() {
+        let dir = make_tmp_dir("search_line");
+        fs::write(dir.join("a.txt"), "prefix needle suffix\n").unwrap();
+        fs::write(dir.join("b.txt"), format!("needle{}\n", "é".repeat(40_000))).unwrap();
+
+        let json = search_content(dir.to_str().unwrap().into(), "needle".into(), "{}".into()).unwrap();
+        let rows: Vec<serde_json::Value> = serde_json::from_str(&json).unwrap();
+        let text_of = |name: &str| {
+            rows.iter()
+                .find(|r| r["path"].as_str().unwrap().ends_with(name))
+                .map(|r| r["matchText"].as_str().unwrap().to_owned())
+                .unwrap()
+        };
+        assert_eq!(text_of("a.txt"), "prefix needle suffix");
+        let long = text_of("b.txt");
+        assert!(long.starts_with("needleé") && long.len() <= MAX_REPORTED_LINE_BYTES);
+        let a = rows.iter().find(|r| r["path"].as_str().unwrap().ends_with("a.txt")).unwrap();
+        assert_eq!(a["column"], 8);
 
         cleanup(&dir);
     }

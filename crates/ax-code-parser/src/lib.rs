@@ -78,8 +78,23 @@ fn node_text<'a>(node: &Node, source: &'a [u8]) -> &'a str {
 
 // ─── Recursive symbol extraction ───────────────────────────────────
 
-fn extract_from_node(node: Node, source: &[u8], parent_name: &str, lang: &str) -> Vec<Symbol> {
+/// Deepest syntax-tree level the recursive walk descends to. Real code never
+/// nests symbols this deep; a hostile or generated file with tens of thousands
+/// of nested brackets would otherwise overflow the native stack and take the
+/// whole host process down.
+const MAX_WALK_DEPTH: u32 = 1024;
+
+fn extract_from_node(
+    node: Node,
+    source: &[u8],
+    parent_name: &str,
+    lang: &str,
+    depth: u32,
+) -> Vec<Symbol> {
     let mut symbols = Vec::new();
+    if depth >= MAX_WALK_DEPTH {
+        return symbols;
+    }
 
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
@@ -87,7 +102,7 @@ fn extract_from_node(node: Node, source: &[u8], parent_name: &str, lang: &str) -
             Some(info) => info,
             None => {
                 // Recurse into non-symbol nodes to find nested symbols
-                symbols.extend(extract_from_node(child, source, parent_name, lang));
+                symbols.extend(extract_from_node(child, source, parent_name, lang, depth + 1));
                 continue;
             }
         };
@@ -104,7 +119,7 @@ fn extract_from_node(node: Node, source: &[u8], parent_name: &str, lang: &str) -
             .unwrap_or(range.clone());
         let visibility = detect_visibility(&child, source, lang);
 
-        let children = extract_from_node(child, source, &qualified, lang);
+        let children = extract_from_node(child, source, &qualified, lang, depth + 1);
 
         symbols.push(Symbol {
             name,
@@ -587,6 +602,7 @@ fn extract_with_parser(
         source.as_bytes(),
         "",
         language_name,
+        0,
     ))
 }
 
@@ -665,6 +681,14 @@ pub fn has_grammar(language: String) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_deeply_nested_source_does_not_overflow_the_stack() {
+        let depth = 50_000;
+        let source = format!("{}x{}", "(".repeat(depth), ")".repeat(depth));
+        let symbols = extract_symbols_internal(&source, "typescript").unwrap();
+        assert!(symbols.is_empty());
+    }
 
     #[test]
     fn test_typescript_symbols() {
