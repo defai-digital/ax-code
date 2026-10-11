@@ -6,40 +6,43 @@ import { Log } from "@/util/log"
 
 const log = Log.create({ service: "cli.upgrade" })
 
-export async function upgrade() {
+// Returns whether the version check actually completed. A failed probe
+// (offline, registry error) returns false so the caller can retry at the
+// next launch instead of consuming the check interval on a silent no-op.
+export async function upgrade(): Promise<boolean> {
   const config = await Config.global()
   const method = await Installation.method()
   const latest = await Installation.latest(method).catch((err) => {
     log.debug("version check failed, skipping upgrade", { method, err })
     return undefined
   })
-  if (!latest) return
+  if (!latest) return false
   const compare = Installation.compareVersions(Installation.VERSION, latest)
   if (compare === undefined) {
     log.debug("version compare failed, skipping upgrade", { current: Installation.VERSION, latest })
-    return
+    return true
   }
-  if (compare <= 0) return
+  if (compare <= 0) return true
 
   if (Flag.AX_CODE_ALWAYS_NOTIFY_UPDATE) {
     await Bus.publish(Installation.Event.UpdateAvailable, { version: latest })
-    return
+    return true
   }
 
-  if (config.autoupdate === false || Flag.AX_CODE_DISABLE_AUTOUPDATE) return
+  if (config.autoupdate === false || Flag.AX_CODE_DISABLE_AUTOUPDATE) return true
 
   const kind = Installation.getReleaseType(Installation.VERSION, latest)
 
   if (config.autoupdate === "notify" || kind !== "patch") {
     await Bus.publish(Installation.Event.UpdateAvailable, { version: latest })
-    return
+    return true
   }
 
   // Homebrew may prune a keg still used by a running agent. Let its owner
   // choose when to upgrade; unknown channels also receive notifications only.
   if (method === "unknown" || method === "brew") {
     await Bus.publish(Installation.Event.UpdateAvailable, { version: latest })
-    return
+    return true
   }
   // Log upgrade failures and publish an UpdateAvailable event so the user
   // is not silently left stuck on an outdated version — a silent
@@ -57,4 +60,5 @@ export async function upgrade() {
       log.error("upgrade failed", { method, version: latest, err })
       await Bus.publish(Installation.Event.UpdateAvailable, { version: latest })
     })
+  return true
 }

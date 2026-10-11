@@ -78,6 +78,28 @@ describe("cli upgrade", () => {
     expect(publishSpy).not.toHaveBeenCalled()
   })
 
+  test("reports false when the version probe fails so the caller does not consume the check interval", async () => {
+    configSpy = vi.spyOn(Config, "global").mockResolvedValue({} as any)
+    methodSpy = vi.spyOn(Installation, "method").mockResolvedValue("curl")
+    latestSpy = vi.spyOn(Installation, "latest").mockRejectedValue(new Error("network down"))
+    installSpy = vi.spyOn(Installation, "upgrade").mockResolvedValue(undefined as any)
+    publishSpy = vi.spyOn(Bus, "publish").mockResolvedValue(undefined as any)
+
+    expect(await upgrade()).toBe(false)
+
+    expect(installSpy).not.toHaveBeenCalled()
+    expect(publishSpy).not.toHaveBeenCalled()
+  })
+
+  test("reports true when the check completes, even with no update available", async () => {
+    setup({ latest: current })
+
+    expect(await upgrade()).toBe(true)
+
+    expect(installSpy).not.toHaveBeenCalled()
+    expect(publishSpy).not.toHaveBeenCalled()
+  })
+
   test("auto-installs patch releases and publishes the updated event", async () => {
     setup({ latest: patch })
 

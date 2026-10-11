@@ -287,15 +287,16 @@ export const rpc = {
     return { url: server.url.toString() }
   },
   async checkUpgrade(input: { directory: string }) {
-    await Instance.provide({
+    return Instance.provide({
       directory: input.directory,
       init: InstanceBootstrap,
       fn: async () => {
-        await upgrade().catch((error) => {
+        return await upgrade().catch((error) => {
           Log.Default.debug("upgrade check failed", {
             directory: input.directory,
             error,
           })
+          return false
         })
       },
     })

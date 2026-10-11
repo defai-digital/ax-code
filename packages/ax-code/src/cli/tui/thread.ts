@@ -169,19 +169,24 @@ async function shouldRunStartupUpgradeCheck() {
     })
     return false
   }
-  const shouldRun = shouldRunTuiStartupUpgradeCheck({
+  return shouldRunTuiStartupUpgradeCheck({
     state: persisted.status === "found" ? persisted.value : undefined,
     currentVersion: Installation.VERSION,
     nowMs,
     intervalMs,
   })
-  if (!shouldRun) return false
+}
 
+// Persist AFTER a completed check — the worker reports whether the version
+// probe actually ran. Writing the timestamp up front meant an offline or
+// flaky run consumed the whole interval without ever checking.
+async function recordStartupUpgradeCheck() {
+  const statePath = tuiUpgradeCheckStatePath()
   await Filesystem.writeJson(
     statePath,
     nextTuiStartupUpgradeCheckState({
       currentVersion: Installation.VERSION,
-      nowMs,
+      nowMs: Date.now(),
     }),
   ).catch((error) => {
     log.debug("failed to persist upgrade check state", {
@@ -189,7 +194,6 @@ async function shouldRunStartupUpgradeCheck() {
       error,
     })
   })
-  return true
 }
 
 export function backendProcessCommand(commandArgs = ["tui-backend", "--stdio"]) {
@@ -948,9 +952,10 @@ export const TuiThreadCommand = cmd({
           ? undefined
           : setTimeout(() => {
               shouldRunStartupUpgradeCheck()
-                .then((shouldRun) => {
+                .then(async (shouldRun) => {
                   if (!shouldRun) return
-                  return client.call("checkUpgrade", { directory: cwd })
+                  const checked = await client.call("checkUpgrade", { directory: cwd })
+                  if (checked) await recordStartupUpgradeCheck()
                 })
                 .catch((error) => {
                   log.debug("upgrade check request failed", {
