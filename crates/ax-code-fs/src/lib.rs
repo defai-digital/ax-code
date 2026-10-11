@@ -454,10 +454,16 @@ fn search_content_impl(
         .build(&pattern)
         .map_err(|e| napi::Error::from_reason(e.to_string()))?;
 
-    let glob_matcher: Option<GlobMatcher> = opts
-        .glob
-        .as_ref()
-        .and_then(|g| Glob::new(g).ok().map(|g| g.compile_matcher()));
+    // Reject a malformed include glob like the ripgrep fallback does; dropping
+    // it would silently widen the search to every file.
+    let glob_matcher: Option<GlobMatcher> = match opts.glob.as_ref() {
+        Some(g) => Some(
+            Glob::new(g)
+                .map_err(|e| napi::Error::from_reason(format!("invalid include glob: {e}")))?
+                .compile_matcher(),
+        ),
+        None => None,
+    };
 
     let root = PathBuf::from(&cwd);
     let mut builder = WalkBuilder::new(&root);
@@ -1544,6 +1550,22 @@ mod tests {
         assert!(long.starts_with("needleé") && long.len() <= MAX_REPORTED_LINE_BYTES);
         let a = rows.iter().find(|r| r["path"].as_str().unwrap().ends_with("a.txt")).unwrap();
         assert_eq!(a["column"], 8);
+
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn search_content_rejects_an_invalid_include_glob() {
+        let dir = make_tmp_dir("search_bad_glob");
+        fs::write(dir.join("a.txt"), "needle\n").unwrap();
+
+        let err = search_content(
+            dir.to_str().unwrap().into(),
+            "needle".into(),
+            r#"{"glob":"["}"#.into(),
+        )
+        .unwrap_err();
+        assert!(err.reason.contains("invalid include glob"), "{}", err.reason);
 
         cleanup(&dir);
     }

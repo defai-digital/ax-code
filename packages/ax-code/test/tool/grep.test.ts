@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import path from "path"
-import { writeFile } from "fs/promises"
+import { mkdir, writeFile } from "fs/promises"
 import { GrepTool } from "../../src/tool/grep"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
@@ -165,6 +165,23 @@ describe("tool.grep", () => {
       directory: tmp.path,
       fn: async () => {
         await expect((await GrepTool.init()).execute({ pattern: "needle", context }, ctx)).rejects.toThrow("SIGTERM")
+      },
+    })
+  })
+
+  test("ripgrep fallback searches hidden files but never .git internals", async () => {
+    await using tmp = await tmpdir({ git: true })
+    vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+    await mkdir(path.join(tmp.path, ".git", "hooks"), { recursive: true })
+    await mkdir(path.join(tmp.path, ".github"), { recursive: true })
+    await writeFile(path.join(tmp.path, ".git", "hooks", "note"), "needle in git\n")
+    await writeFile(path.join(tmp.path, ".github", "ci.yml"), "needle in workflow\n")
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await (await GrepTool.init()).execute({ pattern: "needle" }, ctx)
+        expect(result.output).toContain("ci.yml")
+        expect(result.output).not.toContain(`${path.sep}.git${path.sep}`)
       },
     })
   })
