@@ -5,6 +5,12 @@ import { ModelID, ProviderID } from "../../src/provider/schema"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
+const script = vi.hoisted(() => ({
+  // Runs when the timeout kill is requested; the default never exits (hung kill).
+  onKill: (_proc: any): Promise<void> => new Promise<void>(() => {}),
+  current: undefined as any,
+}))
+
 vi.mock("child_process", async (importOriginal) => {
   const actual = await importOriginal<typeof import("child_process")>()
   return {
@@ -18,6 +24,7 @@ vi.mock("child_process", async (importOriginal) => {
       proc.signalCode = null
       proc.pid = 4243
       proc.kill = () => true
+      script.current = proc
       return proc
     },
   }
@@ -29,7 +36,7 @@ vi.mock("../../src/shell/shell", async (importOriginal) => {
     ...actual,
     Shell: {
       ...actual.Shell,
-      killTree: () => new Promise<void>(() => {}),
+      killTree: () => script.onKill(script.current),
     },
   }
 })
@@ -37,6 +44,7 @@ vi.mock("../../src/shell/shell", async (importOriginal) => {
 const { executeShellCommand, setShellTimeoutForTests } = await import("../../src/session/prompt/prompt-shell-command")
 
 afterEach(async () => {
+  script.onKill = () => new Promise<void>(() => {})
   setShellTimeoutForTests()
   await Instance.disposeAll()
 })
@@ -72,9 +80,51 @@ describe("executeShellCommand timeout", () => {
         const elapsed = Date.now() - started
         expect(elapsed).toBeGreaterThan(4_000)
         expect(elapsed).toBeLessThan(10_000)
-        const shellPart = result!.parts[0] as { type: string; state: { status: string; output?: string } }
-        expect(shellPart.state.output).toContain("Command timed out after 0.2 seconds")
-        expect(shellPart.state.output).not.toContain("User aborted the command")
+        const shellPart = result!.parts[0] as {
+          type: string
+          state: { status: string; error?: string; metadata?: { output?: string } }
+        }
+        // A timeout is a failure even when the kill never produced an exit.
+        expect(shellPart.state.status).toBe("error")
+        expect(shellPart.state.error).toBe("Command timed out after 0.2 seconds")
+        expect(shellPart.state.metadata?.output).toContain("Command timed out after 0.2 seconds")
+        expect(shellPart.state.metadata?.output).not.toContain("User aborted the command")
+      },
+    })
+  }, 20_000)
+
+  test("a timed-out shell that traps the signal and exits 0 is still an error", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: { agent: { build: { model: "openai/gpt-5.2" } } },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        script.onKill = async (proc) => {
+          proc.emit("exit", 0, null)
+          setImmediate(() => proc.emit("close", 0, null))
+        }
+        setShellTimeoutForTests(100)
+        const result = await executeShellCommand(
+          {
+            sessionID: session.id,
+            agent: "build",
+            model: { providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5.2") },
+            command: "trap-and-exit-zero",
+          },
+          {
+            start: () => new AbortController().signal,
+            queuedCallbacks: () => [],
+            cancel: async () => {},
+            resumeLoop: async () => ({ info: session as any, parts: [] as any }),
+          },
+        )
+        const shellPart = result!.parts[0] as { type: string; state: { status: string; error?: string } }
+        expect(shellPart.state.status).toBe("error")
+        expect(shellPart.state.error).toBe("Command timed out after 0.1 seconds")
       },
     })
   }, 20_000)

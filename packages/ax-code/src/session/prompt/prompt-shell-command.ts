@@ -374,13 +374,17 @@ export async function executeShellCommand(
         ? spawned
           ? `Shell process error: ${procError}`
           : `Failed to start shell ${shell}: ${procError}`
-        : exitSignal === null
-          ? `Process exited with code ${exitCode}`
-          : `Process exited with signal ${exitSignal}`
+        : timedOut
+          ? `Command timed out after ${describeTimeout(SHELL_TIMEOUT)}`
+          : exitSignal === null
+            ? `Process exited with code ${exitCode}`
+            : `Process exited with signal ${exitSignal}`
     // A process error outranks the abort note: an aborted turn whose shell never
-    // started (or could not be killed) must not be filed as completed.
+    // started (or could not be killed) must not be filed as completed. A timeout
+    // is a failure whatever the kill produced: a hung kill or a shell that traps
+    // the signal and exits 0 would otherwise be filed as a success.
     part.state =
-      (exitCode !== 0 && !aborted) || procError !== undefined
+      (exitCode !== 0 && !aborted) || procError !== undefined || timedOut
         ? {
             status: "error",
             time: {
