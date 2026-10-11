@@ -521,9 +521,16 @@ describe("tool.bash truncation", () => {
               await run(`wget -q -P sub http://127.0.0.1:${port}/mixed.txt 127.0.0.1:${port}/also.txt`)
               // An explicit empty prefix does not swallow the URL as the prefix.
               await run(`wget -q --directory-prefix= http://127.0.0.1:${port}/empty.txt`)
-              // -x lays the file out under <host>/<path>; -r also owns the tree root.
+              // -x lays the file out under <host>/<path>; -r also owns the tree root
+              // (the host directory, or the prefix itself under -nH).
               await run(`wget -q -x http://127.0.0.1:${port}/deep/tree.txt`)
               await run(`wget -q -r -l1 -nH -P sub http://127.0.0.1:${port}/deep/tree2.txt`)
+              // -p fetches page requisites: laid out like -r, with the tree root recorded.
+              await run(`wget -q -p http://127.0.0.1:${port}/req/page.html`)
+              // -E may append .html depending on the response, so both names are recorded.
+              await run(`wget -q -E http://127.0.0.1:${port}/ext/about`)
+              // `--` ends option parsing.
+              await run(`wget -q -- http://127.0.0.1:${port}/dd/dd.txt`)
               // The later of -nd / -x wins.
               await run(`wget -q -nd -x http://127.0.0.1:${port}/deep/ndx.txt`)
               // -nd flattens a recursive fetch into the prefix, which is then the tree root.
@@ -539,6 +546,11 @@ describe("tool.bash truncation", () => {
                 [
                   "-",
                   "abbrev.txt",
+                  "about",
+                  "about.html",
+                  "dd.txt",
+                  `127.0.0.1:${port}`,
+                  `127.0.0.1:${port}/req/page.html`,
                   "doc.txt",
                   "empty.txt",
                   "log.txt",
@@ -547,7 +559,6 @@ describe("tool.bash truncation", () => {
                   ...(port6 !== undefined ? [`::1:${port6}/v6/six.txt`] : []),
                   "sub",
                   "sub/also.txt",
-                  "sub/deep",
                   "sub/deep/tree2.txt",
                   "sub/index.html",
                   "sub/mixed.txt",

@@ -734,6 +734,8 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             "force-directories",
             "no-directories",
             "no-host-directories",
+            "page-requisites",
+            "adjust-extension",
           ]
           const wgetLong = (arg: string): { name: string; value: string | undefined } | undefined => {
             if (!isWget) return undefined
@@ -754,9 +756,12 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           // them again (the later flag wins), and -r / -m default to the
           // layout unless -nd was given; -nH drops the host directory.
           let layout = false
+          // -r / -m / -p fetch files discovered on the way (the tree root is
+          // recorded for them); -E may append .html to what it saves.
           let recursive = false
           let noDirs = false
           let noHost = false
+          let adjustExtension = false
           // Boolean short flags of a wget cluster, read left to right up to the
           // first value-taking letter (which owns the rest of the token).
           const wgetFlags = (letters: string) => {
@@ -772,7 +777,8 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
                 continue
               }
               if (letter === "x") layout = true
-              if (letter === "r" || letter === "m") recursive = true
+              if (letter === "r" || letter === "m" || letter === "p") recursive = true
+              if (letter === "E") adjustExtension = true
             }
           }
           const pending: Array<{ value: string; relocate: boolean }> = []
@@ -780,6 +786,11 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           for (let i = 0; i < args.length; i++) {
             const arg = args[i]
             if (!arg) continue
+            // `--` ends option parsing: everything after it is a URL.
+            if (arg === "--") {
+              for (const rest of args.slice(i + 1)) if (rest) operands.push(stripShellQuotes(rest))
+              break
+            }
             const long = wgetLong(arg)
             const curlDir = isWget ? null : arg.match(/^--output-dir(?:=(.*))?$/)
             // wget's `-P` may be bundled (`-qP DIR`, `-qPDIR`); a value-taking
@@ -796,9 +807,18 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             }
             if (
               long &&
-              ["recursive", "mirror", "force-directories", "no-directories", "no-host-directories"].includes(long.name)
+              [
+                "recursive",
+                "mirror",
+                "page-requisites",
+                "force-directories",
+                "no-directories",
+                "no-host-directories",
+                "adjust-extension",
+              ].includes(long.name)
             ) {
-              if (long.name === "recursive" || long.name === "mirror") recursive = true
+              if (["recursive", "mirror", "page-requisites"].includes(long.name)) recursive = true
+              if (long.name === "adjust-extension") adjustExtension = true
               if (long.name === "force-directories") layout = true
               if (long.name === "no-directories") layout = !(noDirs = true)
               if (long.name === "no-host-directories") noHost = true
@@ -880,16 +900,19 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
               const dirs = segments.filter(Boolean)
               const basename = last || (isWget ? "index.html" : "")
               if (!basename) continue
+              // -E appends .html to HTML documents; whether it applies depends
+              // on the response, so record both names.
+              const names = adjustExtension && !/\.html?$/i.test(basename) ? [basename, `${basename}.html`] : [basename]
               if (isWget && (layout || (recursive && !noDirs))) {
                 const hostDir = noHost || !authority ? [] : [authority]
-                await recordOutput(path.join(...hostDir, ...dirs, basename), true)
+                for (const file of names) await recordOutput(path.join(...hostDir, ...dirs, file), true)
                 // A recursive fetch writes whatever it discovers under the
                 // tree root, which cannot be enumerated statically: record the
-                // root so the gate at least sees the directory.
-                if (recursive)
-                  await recordOutput(path.join(...(hostDir.length > 0 ? hostDir : dirs.slice(0, 1))) || ".", true)
+                // root (the host directory, or the prefix itself under -nH) so
+                // the gate at least sees the directory.
+                if (recursive) await recordOutput(hostDir[0] ?? ".", true)
               } else {
-                await recordOutput(basename, true)
+                for (const file of names) await recordOutput(file, true)
                 // With -nd (or no layout) a recursive fetch flattens everything
                 // into the prefix itself, so that is the tree root.
                 if (isWget && recursive) await recordOutput(".", true)
