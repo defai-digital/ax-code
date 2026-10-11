@@ -518,4 +518,32 @@ mod tests {
         // Idempotent: a second close on an already-closed store is a no-op.
         store.close().unwrap();
     }
+
+    #[test]
+    fn test_prune_scope_respects_directory_boundary() {
+        let store = test_store();
+        let sep = std::path::MAIN_SEPARATOR;
+        let root = format!("{sep}work{sep}repo");
+        let inside = format!("{root}{sep}a.ts");
+        let sibling = format!("{root}-2{sep}b.ts");
+        let underscore = format!("{sep}work{sep}repoX{sep}c.ts");
+        for (id, path) in [("f1", &inside), ("f2", &sibling), ("f3", &underscore)] {
+            let row = make_file(id, "proj1", path, "sha");
+            store.upsert_file(serde_json::to_string(&row).unwrap()).unwrap();
+        }
+
+        let result = store
+            .prune_orphan_files("proj1".into(), "[]".into(), root.clone())
+            .unwrap();
+        let pruned: serde_json::Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(pruned["files"], 1, "only the file under the walk root is in scope");
+
+        // `_` in the scope prefix is a literal, not a LIKE wildcard.
+        let wildcard = format!("{sep}work{sep}repo_");
+        let result = store
+            .prune_orphan_files("proj1".into(), "[]".into(), wildcard)
+            .unwrap();
+        let pruned: serde_json::Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(pruned["files"], 0);
+    }
 }

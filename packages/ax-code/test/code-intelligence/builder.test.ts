@@ -860,4 +860,25 @@ describe("builder.indexFiles batch behavior", () => {
       },
     })
   })
+  test("a failed planner optimize does not fail a completed index run", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+        const file = path.join(tmp.path, "opt.ts")
+        await writeAndSeedFile(projectID, file, "export const opt = 1\n", "full")
+
+        const spy = vi.spyOn(CodeGraphQuery, "optimize").mockRejectedValue(new Error("Native index work cancelled"))
+        try {
+          await expect(CodeGraphBuilder.indexFiles(projectID, [file], { lock: "none" })).resolves.toBeTruthy()
+          expect(spy).toHaveBeenCalled()
+        } finally {
+          spy.mockRestore()
+          CodeIntelligence.__clearProject(projectID)
+        }
+      },
+    })
+  })
 })

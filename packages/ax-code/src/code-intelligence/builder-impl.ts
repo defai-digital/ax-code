@@ -1382,7 +1382,11 @@ export namespace CodeGraphBuilder {
     CodeGraphQuery.upsertCursor(projectID, null, totalNodes, totalEdges)
 
     // Bounded planner maintenance runs on a separate native WAL connection.
-    await CodeGraphQuery.optimize()
+    // It is best-effort: every file is already committed, so a shutdown
+    // cancelling it must not turn a completed run into a failure.
+    await CodeGraphQuery.optimize().catch((err) => {
+      log.warn("planner optimize skipped", { projectID, err })
+    })
 
     return { nodes, edges, files: indexed, unchanged, skipped, failed, pruned, timings: aggregate }
   }

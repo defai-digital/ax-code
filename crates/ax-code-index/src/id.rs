@@ -66,17 +66,23 @@ fn next_state_parts(prev: u64, current: u64) -> Option<(u64, u64, u64)> {
     Some((next_ts, next_counter, next))
 }
 
-fn reserve_timestamp_counter(current: u64) -> (u64, u64) {
+fn reserve_timestamp_counter() -> (u64, u64) {
+    reserve_from(&LAST_ID_STATE, || now_ms().max(0) as u64)
+}
+
+fn reserve_from(state: &AtomicU64, mut clock: impl FnMut() -> u64) -> (u64, u64) {
     // Keep timestamp and counter in one atomic word. Updating them as separate
     // atomics can reset the counter after another caller has already incremented
     // it, which makes IDs generated in the same millisecond sort backwards.
     loop {
-        let prev = LAST_ID_STATE.load(Ordering::SeqCst);
-        let Some((next_ts, next_counter, next)) = next_state_parts(prev, current) else {
+        let prev = state.load(Ordering::SeqCst);
+        // Re-read the clock on every attempt: an exhausted counter waits for a
+        // later millisecond, which a timestamp captured once would never see.
+        let Some((next_ts, next_counter, next)) = next_state_parts(prev, clock()) else {
             std::thread::yield_now();
             continue;
         };
-        if LAST_ID_STATE
+        if state
             .compare_exchange(prev, next, Ordering::SeqCst, Ordering::SeqCst)
             .is_ok()
         {
@@ -87,7 +93,7 @@ fn reserve_timestamp_counter(current: u64) -> (u64, u64) {
 
 pub fn ascending(prefix_name: &str) -> Result<String, String> {
     let pfx = get_prefix(prefix_name).ok_or_else(|| format!("unknown prefix: {prefix_name}"))?;
-    let (ts, cnt) = reserve_timestamp_counter(now_ms().max(0) as u64);
+    let (ts, cnt) = reserve_timestamp_counter();
     let hex = encode_sort_key(ts, cnt);
     let random = random_base62(14);
 
@@ -182,6 +188,18 @@ mod tests {
             hex1,
             hex2
         );
+    }
+
+    #[test]
+    fn test_reserve_waits_for_clock_after_counter_exhaustion() {
+        let state = AtomicU64::new((1000u64 << 8) | MAX_COUNTER);
+        let mut reads = 0;
+        let (ts, counter) = reserve_from(&state, || {
+            reads += 1;
+            if reads < 3 { 1000 } else { 1001 }
+        });
+        assert_eq!((ts, counter), (1001, 0));
+        assert!(reads >= 3, "the clock must be re-read while waiting");
     }
 
     #[test]

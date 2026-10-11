@@ -17,6 +17,27 @@ pub struct FileRow {
     pub time_updated: Option<i64>,
 }
 
+/// The walk root without trailing separators, so `/src/` and `/src` scope alike.
+fn scope_root(prefix: &str) -> &str {
+    prefix.trim_end_matches(|c| c == '/' || c == std::path::MAIN_SEPARATOR)
+}
+
+/// LIKE pattern (ESCAPE '\\') matching everything under `prefix` as a directory.
+/// The boundary is escaped as one unit because on Windows the separator is the
+/// escape character itself.
+fn scope_boundary_pattern(prefix: &str) -> String {
+    let boundary = format!("{}{}", scope_root(prefix), std::path::MAIN_SEPARATOR);
+    let mut escaped = String::with_capacity(boundary.len() + 1);
+    for ch in boundary.chars() {
+        if matches!(ch, '%' | '_' | '\\') {
+            escaped.push('\\');
+        }
+        escaped.push(ch);
+    }
+    escaped.push('%');
+    escaped
+}
+
 fn row_to_file(row: &rusqlite::Row) -> rusqlite::Result<FileRow> {
     Ok(FileRow {
         id: row.get(0)?,
@@ -127,19 +148,20 @@ impl IndexStore {
         let sql = format!("SELECT {SELECT_COLS} FROM code_file WHERE project_id = ?1");
         query_files(conn, &sql, &[&project_id as &dyn rusqlite::types::ToSql])?
       } else {
+        // A bare `prefix%` is not a directory-boundary check: a walk rooted at
+        // `/work/repo` would also match `/work/repo-2/...`. Match the prefix
+        // itself or the prefix plus a separator, as the Drizzle path does.
         let sql = format!(
-          "SELECT {SELECT_COLS} FROM code_file WHERE project_id = ?1 AND path LIKE ?2 ESCAPE '\\'"
+          "SELECT {SELECT_COLS} FROM code_file WHERE project_id = ?1 AND (path = ?2 OR path LIKE ?3 ESCAPE '\\')"
         );
-        let escaped = scope_prefix
-          .replace('\\', "\\\\")
-          .replace('%', "\\%")
-          .replace('_', "\\_");
-        let pattern = format!("{escaped}%");
+        let pattern = scope_boundary_pattern(&scope_prefix);
+        let scope_root = scope_root(&scope_prefix);
         query_files(
           conn,
           &sql,
           &[
             &project_id as &dyn rusqlite::types::ToSql,
+            &scope_root as &dyn rusqlite::types::ToSql,
             &pattern as &dyn rusqlite::types::ToSql,
           ],
         )?
