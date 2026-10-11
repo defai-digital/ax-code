@@ -36,7 +36,10 @@ export function lazy<T>(fn: () => T): Lazy<T> {
       }
       return produced
     } catch (e) {
-      // Don't mark as loaded if initialization failed
+      // The thenable probe and subscription can throw after the slot is
+      // published. Treat those failures like a throwing initializer too.
+      loaded = false
+      value = undefined
       throw e
     }
   }) as Lazy<T>
