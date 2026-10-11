@@ -149,8 +149,9 @@ describe("JSR documentation score contract", () => {
     expect(readme).toContain("```ts")
     expect(readme).not.toMatch(/first public version has not been published/i)
     expect(readme).not.toMatch(/^Status:/m)
-    expect(readme).toContain(
-      "https://github.com/defai-digital/ax-code/blob/HEAD/packages/sdk/js/example/headless-app.ts",
-    )
+    expect(readme).toContain("https://ax-code.app/docs-assets/sdk/examples/headless-app.ts")
+    expect(readme).toContain("https://ax-code.app/docs-assets/sdk/examples/programmatic.ts")
+    expect(readme).toContain("https://ax-code.app/docs-assets/sdk/headless.proto")
+    expect(readme).not.toContain("https://github.com/defai-digital/ax-code")
   })
 })
