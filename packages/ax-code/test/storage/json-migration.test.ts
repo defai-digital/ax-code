@@ -308,6 +308,46 @@ describe("JSON to SQLite migration", () => {
     expect(byID.get("ses_fork_0003_orphan")!.parent_id).toBeNull()
   })
 
+  test("links a child whose id sorts before its parent (hand-written or imported ids)", async () => {
+    await writeProject(storageDir, {
+      id: "proj_fork2",
+      worktree: "/test/fork2",
+      time: { created: Date.now(), updated: Date.now() },
+      sandboxes: [],
+    })
+    await writeSession(storageDir, "proj_fork2", {
+      id: "ses_fork2_0001_child",
+      projectID: "proj_fork2",
+      parentID: "ses_fork2_0002_parent",
+      time: { created: 2, updated: 2 },
+    })
+    await writeSession(storageDir, "proj_fork2", {
+      id: "ses_fork2_0002_parent",
+      projectID: "proj_fork2",
+      time: { created: 1, updated: 1 },
+    })
+    await writeSession(storageDir, "proj_fork2", {
+      id: "ses_fork2_0003_self",
+      projectID: "proj_fork2",
+      parentID: "ses_fork2_0003_self",
+      time: { created: 3, updated: 3 },
+    })
+
+    const result = await JsonMigration.run(sqlite)
+    expect(result.errors).toEqual([])
+
+    const db = drizzle({ client: sqlite })
+    const byID = new Map(
+      db
+        .select()
+        .from(SessionTable)
+        .all()
+        .map((row) => [String(row.id), row]),
+    )
+    expect(String(byID.get("ses_fork2_0001_child")!.parent_id)).toBe("ses_fork2_0002_parent")
+    expect(byID.get("ses_fork2_0003_self")!.parent_id).toBeNull()
+  })
+
   test("session ids sort in creation order, so parent-first insertion follows the id sort", () => {
     const parent = SessionID.ascending()
     const child = SessionID.ascending()

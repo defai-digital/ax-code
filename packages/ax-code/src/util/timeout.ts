@@ -67,7 +67,11 @@ export function withTimeout<T>(
       settled = true
       let cleanupFailure: unknown
       try {
-        opts?.onTimeout?.()
+        const cleanup: unknown = opts?.onTimeout?.()
+        // An async cleanup that rejects must not become an unhandled rejection.
+        if (cleanup && typeof (cleanup as PromiseLike<unknown>).then === "function") {
+          ;(cleanup as PromiseLike<unknown>).then(undefined, () => undefined)
+        }
       } catch (e) {
         // A throw here would escape the timer callback as an uncaught exception
         // and leave the returned promise pending forever. Callers that supply
@@ -111,7 +115,10 @@ export function withTimeout<T>(
 // 1 ms, so an "effectively never" timeout would fire immediately; pin it to
 // the largest delay the timer accepts instead.
 const MAX_TIMER_DELAY_MS = 2_147_483_647
+// NaN is a programming error (a misparsed duration), not "forever": keep the
+// immediate firing Node always gave it so the fault surfaces instead of hanging.
 function clampDelay(ms: number) {
+  if (Number.isNaN(ms)) return 0
   return Number.isFinite(ms) ? Math.min(Math.max(ms, 0), MAX_TIMER_DELAY_MS) : MAX_TIMER_DELAY_MS
 }
 

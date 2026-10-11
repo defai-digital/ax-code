@@ -726,8 +726,12 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             // curl's -O is --remote-name and takes NO value: the download is
             // written to the URL basename in the cwd. Only wget's -O takes
             // an output path, so treat -O as value-taking for wget alone.
+            // Short options may be bundled (`wget -qO path`, `curl -so path`):
+            // the output flag is the LAST letter of the cluster and takes the
+            // rest of the token or, when nothing follows, the next argument.
+            const cluster = arg.match(name === "wget" ? /^-([a-zA-Z]*)([oO])(.*)$/ : /^-([a-zA-Z]*)(o)(.*)$/)
             const takesOutputValue =
-              arg === "-o" || arg === "--output" || arg === "--output-document" || (name === "wget" && arg === "-O")
+              arg === "--output" || arg === "--output-document" || (cluster !== null && cluster[3] === "")
             if (takesOutputValue) {
               const next = args[i + 1]
               const output = next ? await recordResolvedPath(next, decoded) : undefined
@@ -740,9 +744,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
               continue
             }
             // Short options take a glued value too: `curl -oPATH`, `wget -OPATH`.
-            const inline =
-              arg.match(/^--(?:output|output-document)=(.+)$/)?.[1] ??
-              arg.match(name === "wget" ? /^-[oO](.+)$/ : /^-o(.+)$/)?.[1]
+            const inline = arg.match(/^--(?:output|output-document)=(.+)$/)?.[1] ?? (cluster ? cluster[3] : undefined)
             if (inline) {
               const output = await recordResolvedPath(inline, decoded)
               if (output) redirectWritePaths.add(output)

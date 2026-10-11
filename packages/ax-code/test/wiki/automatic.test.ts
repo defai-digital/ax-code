@@ -254,6 +254,33 @@ test("losing the build lock to another process is not recorded as a durable fail
   })
 })
 
+test("a lock-busy error from a duplicate ax-wiki module instance is recognised by name", async () => {
+  await using tmp = await tmpdir({ git: true })
+  vi.spyOn(Agent, "get").mockImplementation(async (name) => ({
+    name,
+    mode: "primary",
+    native: true,
+    options: {},
+    permission: Permission.fromConfig({ "*": "allow" }),
+  }))
+  // A second copy of @ax-code/ax-wiki (bundled vs. workspace) throws its own
+  // class, so instanceof fails; the error name is the stable contract.
+  const foreign = Object.assign(new Error("AX Wiki build lock is held by another process"), {
+    name: "WikiBuildLockBusyError",
+  })
+  expect(foreign).not.toBeInstanceOf(WikiBuildLockBusyError)
+  state.build.mockRejectedValueOnce(foreign)
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await WikiAutomatic.refresh("build")
+      await waitForBuildCalls(1)
+      await waitForStatus({ phase: "failed" })
+      expect(await readWikiFailureMemory(tmp.path, ".ax-wiki")).toBeUndefined()
+    },
+  })
+})
+
 test("a preempted maintenance build is not recorded as a durable failure", async () => {
   await using tmp = await tmpdir({ git: true })
   vi.spyOn(Agent, "get").mockImplementation(async (name) => ({

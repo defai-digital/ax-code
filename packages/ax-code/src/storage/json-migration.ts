@@ -19,6 +19,7 @@ import { existsSync } from "fs"
 import { Filesystem } from "../util/filesystem"
 import { Glob } from "../util/glob"
 import { toErrorMessage } from "../util/error-message"
+import { eq } from "drizzle-orm"
 
 export namespace JsonMigration {
   const log = Log.create({ service: "json-migration" })
@@ -288,6 +289,10 @@ export namespace JsonMigration {
       )
       const sessionProjects = sessionFiles.map((file) => ProjectID.make(path.basename(path.dirname(file))))
       const sessionIds = new Set<SessionID>()
+      // Rows are inserted without parent_id and linked afterwards, so the
+      // parent -> child foreign key never depends on file order: a parent
+      // whose id sorts after its child is linked in the second pass.
+      const parentLinks: Array<{ id: SessionID; parentID: SessionID }> = []
       const sessionValues: SessionInsert[] = []
       for (let i = 0; i < sessionFiles.length; i += batchSize) {
         const end = Math.min(i + batchSize, sessionFiles.length)
@@ -303,10 +308,11 @@ export namespace JsonMigration {
             continue
           }
           sessionIds.add(id)
+          if (typeof data.parentID === "string") parentLinks.push({ id, parentID: data.parentID as SessionID })
           sessionValues.push({
             id,
             project_id: projectID,
-            parent_id: data.parentID && sessionIds.has(data.parentID as SessionID) ? data.parentID : null,
+            parent_id: null,
             slug: data.slug ?? "",
             directory: data.directory ?? "",
             title: data.title ?? "",
@@ -330,6 +336,16 @@ export namespace JsonMigration {
           "session",
         )
         step("sessions", end - i)
+      }
+      // Second pass: a parent that was skipped (orphan project) or never
+      // migrated leaves the child a root instead of failing its insert.
+      for (const link of parentLinks) {
+        if (!sessionIds.has(link.parentID) || link.parentID === link.id) continue
+        try {
+          db.update(SessionTable).set({ parent_id: link.parentID }).where(eq(SessionTable.id, link.id)).run()
+        } catch (e) {
+          errs.push(`failed to link session ${link.id} to parent ${link.parentID}: ${formatMigrationError(e)}`)
+        }
       }
       log.info("migrated sessions", { count: stats.sessions })
       if (orphans.sessions > 0) {

@@ -190,7 +190,7 @@ export const DebugProposeHypothesisTool = Tool.define("debug_propose_hypothesis"
         // Name the real cause when the stale-evidence downgrade produced the
         // rejected transition: the caller asked to re-confirm with evidence
         // that no longer matches the worktree, not to demote the hypothesis.
-        if (needsVerification) {
+        if (needsVerification && transitionHypothesis(existingHypothesis.status, args.status ?? "active").ok) {
           throw new Error(
             `Cannot re-confirm terminal hypothesis ${hypothesisId} with stale evidence (${staleEvidence.map((item) => item.envelopeId).join(", ")}). Run verify_project again and cite the fresh envelopes.`,
           )

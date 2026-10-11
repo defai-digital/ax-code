@@ -103,9 +103,16 @@ describe("util.timeout", () => {
     const fired: string[] = []
     void withTimeout(new Promise<never>(() => {}), 2 ** 40).catch(() => fired.push("2^40"))
     void withTimeout(new Promise<never>(() => {}), Infinity).catch(() => fired.push("Infinity"))
-    void sleep(Number.NaN, { unref: true }).then(() => fired.push("sleep NaN"))
     await new Promise((resolve) => setTimeout(resolve, 30))
     expect(fired).toEqual([])
+  })
+
+  test("a NaN delay is a programming error and fires promptly instead of hanging", async () => {
+    const fired: string[] = []
+    void withTimeout(new Promise<never>(() => {}), Number.NaN).catch(() => fired.push("withTimeout NaN"))
+    void sleep(Number.NaN).then(() => fired.push("sleep NaN"))
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    expect(fired.sort()).toEqual(["sleep NaN", "withTimeout NaN"])
   })
 
   test("does not fire onTimeout when the promise settles first", async () => {

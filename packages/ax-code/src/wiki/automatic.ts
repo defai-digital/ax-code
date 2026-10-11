@@ -199,7 +199,10 @@ export namespace WikiAutomatic {
             // must never climb the durable cooldown ladder. Neither is losing
             // the build lock to another process (a CLI update or a second
             // server on the same checkout): the page set was never attempted.
-            if (!signal.aborted && !(error instanceof WikiBuildLockBusyError)) {
+            const lockBusy =
+              error instanceof WikiBuildLockBusyError ||
+              (error instanceof Error && error.name === "WikiBuildLockBusyError")
+            if (!signal.aborted && !lockBusy) {
               const report = await readWikiBuildReport(root, cfg.dir)
               await recordWikiFailure(root, cfg.dir, {
                 head,

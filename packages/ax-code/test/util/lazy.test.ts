@@ -84,6 +84,29 @@ describe("util.lazy", () => {
     await expect(Promise.resolve(value())).resolves.toBe("ready")
   })
 
+  test("retries when a thenable's then itself throws", () => {
+    let calls = 0
+    const value = lazy(() => {
+      calls++
+      const attempt = calls
+      return {
+        get then() {
+          if (attempt === 1) throw new Error("broken thenable")
+          return (onFulfilled?: (v: string) => void) => onFulfilled?.("ready")
+        },
+      }
+    })
+    expect(() => value()).toThrow("broken thenable")
+    expect(value.loaded()).toBe(false)
+    expect(value.peek()).toBeUndefined()
+    const second = value() as unknown as PromiseLike<string>
+    expect(value.loaded()).toBe(true)
+    let resolved: string | undefined
+    second.then((v) => (resolved = v))
+    expect(resolved).toBe("ready")
+    expect(calls).toBe(2)
+  })
+
   test("should work with different return types", () => {
     const lazyString = lazy(() => "string")
     const lazyNumber = lazy(() => 123)

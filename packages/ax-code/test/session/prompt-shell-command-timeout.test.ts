@@ -78,4 +78,42 @@ describe("executeShellCommand timeout", () => {
       },
     })
   }, 20_000)
+
+  test("a user abort whose kill grace window outlives the shell timeout is still reported as a user abort", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: { agent: { build: { model: "openai/gpt-5.2" } } },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        setShellTimeoutForTests(300)
+        const controller = new AbortController()
+        setTimeout(() => controller.abort(), 100)
+        const started = Date.now()
+        const result = await executeShellCommand(
+          {
+            sessionID: session.id,
+            agent: "build",
+            model: { providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5.2") },
+            command: "hang-forever",
+          },
+          {
+            start: () => controller.signal,
+            queuedCallbacks: () => [],
+            cancel: async () => {},
+            resumeLoop: async () => ({ info: session as any, parts: [] as any }),
+          },
+        )
+        const elapsed = Date.now() - started
+        expect(elapsed).toBeGreaterThan(4_000)
+        expect(elapsed).toBeLessThan(10_000)
+        const shellPart = result!.parts[0] as { type: string; state: { status: string; output?: string } }
+        expect(shellPart.state.output).toContain("User aborted the command")
+        expect(shellPart.state.output).not.toContain("Command timed out")
+      },
+    })
+  }, 20_000)
 })

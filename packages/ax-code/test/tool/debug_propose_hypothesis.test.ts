@@ -703,6 +703,30 @@ describe("DebugProposeHypothesisTool", () => {
             fakeCtx(session.id),
           ),
         ).rejects.toThrow(/stale evidence/)
+
+        // A terminal hypothesis that could never be re-confirmed (unresolved
+        // only accepts unresolved) reports the illegal transition, not the
+        // stale evidence: fresh evidence would not have helped.
+        const parked = await tool.execute(
+          { caseId, claim: "parked for later", evidenceRefs: [freshId], status: "unresolved" },
+          fakeCtx(session.id),
+        )
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id as any,
+          tool: "debug_propose_hypothesis",
+          callID: "call-hypothesis-unresolved",
+          status: "completed",
+          metadata: parked.metadata,
+          durationMs: 1,
+        })
+        await new Promise((resolve) => setTimeout(resolve, 30))
+        const revive = tool.execute(
+          { caseId, claim: "parked for later", evidenceRefs: [staleId], status: "confirmed" },
+          fakeCtx(session.id),
+        )
+        await expect(revive).rejects.toThrow(/Cannot move terminal hypothesis .* from unresolved to active/)
+        await expect(revive).rejects.not.toThrow(/stale evidence/)
       },
     })
   })

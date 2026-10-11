@@ -220,7 +220,8 @@ export async function executeShellCommand(
   const SHELL_ABORT_TIMEOUT = "Shell abort timed out while waiting for process to exit"
   let timedOut = false
   const shellTimer = setTimeout(() => {
-    if (!exited) {
+    // A user abort already in its kill grace window keeps its own label.
+    if (!exited && !aborted) {
       timedOut = true
       log.warn("shell command timed out", {
         command: "session.prompt.shell",
