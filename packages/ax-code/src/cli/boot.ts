@@ -1,7 +1,6 @@
 import "../lsp-glue"
 import "../dre-glue"
 import { NamedError } from "@ax-code/util/error"
-import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
 import { AskCommand } from "./cmd/ask"
 import { AcpCommand } from "./cmd/acp"
@@ -56,16 +55,13 @@ import { ScheduleCommand } from "./cmd/schedule"
 import { GoalCommand } from "./cmd/goal-impl"
 import { fatal } from "./bootstrap/fatal"
 import { setKnownCommands } from "./tui/project-arg"
-import { init } from "./bootstrap/env"
 import { ensureWindowsUtf8Console } from "./bootstrap/windows-console"
-import { migrate } from "./bootstrap/migrate"
-import { cancelShellEnvLoad } from "../runtime/shell-env"
 import { FormatError } from "./error"
 import { UI } from "./ui"
-import { Installation } from "../installation"
 import { Log } from "../util/log"
 import { setAxCodeProcessTitle } from "../util/process-title"
-import { clearForcedExitTimer, scheduleForcedExit } from "./boot-lifecycle"
+import { clearForcedExitTimer } from "./boot-lifecycle"
+import { createAxCodeCli, runAxCodeCli } from "./boot-shared"
 
 const cmds = [
   // Core
@@ -202,63 +198,7 @@ function groupUsageCommandHelp(text: string, usage: UsageLike): string {
 export { clearForcedExitTimer, FORCED_EXIT_GRACE_MS, hooks, scheduleForcedExit } from "./boot-lifecycle"
 
 export function cli(argv = hideBin(process.argv)) {
-  const rawArgv = argv.slice()
-  let cli = yargs(argv)
-    .parserConfiguration({ "populate--": true })
-    .scriptName("ax-code")
-    .wrap(100)
-    .help("help", "show help")
-    .alias("help", "h")
-    .version("version", "show version number", Installation.VERSION)
-    .alias("version", "v")
-    .option("print-logs", {
-      describe: "print logs to stderr",
-      type: "boolean",
-    })
-    .option("log-level", {
-      describe: "log level",
-      type: "string",
-      choices: ["DEBUG", "INFO", "WARN", "ERROR"],
-    })
-    .option("sandbox", {
-      describe:
-        "isolation sandbox mode (default: full-access / sandbox off); under --attach it is also sent per request and can only tighten the server's mode",
-      type: "string",
-      choices: ["read-only", "workspace-write", "full-access"],
-    })
-    .option("debug", {
-      describe: "write local diagnostic logs to the OS temp directory",
-      type: "boolean",
-    })
-    .option("debug-dir", {
-      describe: "explicit directory for --debug diagnostic logs",
-      type: "string",
-    })
-    .option("debug-include-content", {
-      describe: "include prompt, output, and tool content in --debug logs",
-      type: "boolean",
-    })
-    .middleware(async (opts) => {
-      Object.defineProperty(opts, "__axCodeRawArgv", {
-        value: rawArgv,
-        enumerable: false,
-      })
-      await init(opts)
-      // Skip database migration for commands that never touch the DB.
-      // This avoids loading the SQLite module for --help, --version, etc.
-      const skipMigration =
-        rawArgv.some((a) => a === "--help" || a === "-h" || a === "--version" || a === "-v") ||
-        rawArgv[0] === "completion"
-      if (!skipMigration) await migrate()
-    })
-    .usage(
-      "\n" +
-        UI.logo() +
-        '\n\n  Interactive TUI:  ax-code\n  Headless task:   ax-code run --model <provider/model> -- "prompt"',
-    )
-    .completion("completion", "generate shell completion script")
-
-  for (const cmd of cmds) cli = cli.command(cmd as never)
+  const { cli, rawArgv } = createAxCodeCli(argv, cmds)
 
   {
     // Wrap the root usage renderer so `--help` lists commands under the named
@@ -276,7 +216,7 @@ export function cli(argv = hideBin(process.argv)) {
     }
   }
 
-  cli = cli
+  return cli
     .fail((msg, err) => {
       if (err) throw err
       // Stream consumers (`run --format json|jsonl|ndjson`) get one
@@ -300,8 +240,6 @@ export function cli(argv = hideBin(process.argv)) {
       process.exit(1)
     })
     .strict()
-
-  return cli
 }
 
 export async function run() {
@@ -329,26 +267,5 @@ export async function run() {
     }
     return
   }
-  const cmd = cli()
-  try {
-    await cmd.parse()
-  } catch (err) {
-    fatal(err, {
-      format: FormatError,
-      ui: UI.error,
-      file: Log.file,
-      text: NamedError.message,
-    })
-    process.exitCode = 1
-  } finally {
-    // Stop the background shell-env child so a finished one-shot command can
-    // exit immediately instead of waiting for the login shell to finish.
-    await cancelShellEnvLoad()
-    // Some subprocesses don't react properly to SIGTERM and similar signals.
-    // Most notably, some docker-container-based MCP servers don't handle such signals unless
-    // run using `docker run --init`.
-    // Allow a brief window for async cleanup (DB WAL flush, MCP disconnect)
-    // before forcing exit to avoid hanging subprocesses.
-    scheduleForcedExit()
-  }
+  await runAxCodeCli(cli())
 }
