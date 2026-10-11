@@ -737,8 +737,10 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             // `o`/`O` before it would own the rest of the token instead.
             const shortDir = name === "wget" ? arg.match(/^-[b-np-zA-NP-Z0-9]*?P(.*)$/) : null
             if (longDir || shortDir) {
+              // `--directory-prefix=` carries an (empty) value; only a bare
+              // `--directory-prefix` / `-P` takes the next argument.
               let dir = longDir ? longDir[1] : shortDir![1]
-              if (!dir) dir = args[++i]
+              if (dir === undefined || (shortDir !== null && dir === "")) dir = args[++i]
               if (dir) outputDir = stripShellQuotes(dir)
               continue
             }
@@ -801,12 +803,12 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           if (remoteName) {
             // Record the real download target <dir>/<url basename> for every
             // URL so the blast-radius and autonomous line-budget checks see it.
-            // URLs are the operands with a scheme; without one both tools
-            // assume http, so every operand is a candidate. The basename is the
-            // last path segment: the authority, query string and fragment are
-            // not part of it, and an empty path means index.html for wget.
-            const urls = operands.filter((a) => /^[a-z][a-z0-9+.-]*:\/\//i.test(a))
-            for (const url of urls.length > 0 ? urls : operands) {
+            // Every operand is a URL: without a scheme both tools assume http,
+            // so a scheme-less operand next to a schemed one is still a
+            // download. The basename is the last path segment: the authority,
+            // query string and fragment are not part of it, and an empty path
+            // means index.html for wget.
+            for (const url of operands) {
               const pathPart = (url.includes("://") ? url : `http://${url}`)
                 .replace(/^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i, "")
                 .split(/[?#]/)[0]!

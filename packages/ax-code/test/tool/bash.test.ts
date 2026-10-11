@@ -511,8 +511,23 @@ describe("tool.bash truncation", () => {
               await run(`wget -q -O doc.txt -P sub http://127.0.0.1:${port}/other.txt`)
               // Without a scheme the operand is still the URL, not the prefix.
               await run(`wget -q -P sub 127.0.0.1:${port}/plain.txt`)
+              // A scheme-less operand beside a schemed one is still a download.
+              await run(`wget -q -P sub http://127.0.0.1:${port}/mixed.txt 127.0.0.1:${port}/also.txt`)
+              // An explicit empty prefix does not swallow the URL as the prefix.
+              await run(`wget -q --directory-prefix= http://127.0.0.1:${port}/empty.txt`)
               const files = [...BlastRadius.get(sessionID).files].map((file) => path.relative(tmp.path, file)).sort()
-              expect(files).toEqual(["doc.txt", "log.txt", "sub/index.html", "sub/payload.txt", "sub/plain.txt"].sort())
+              expect(files).toEqual(
+                [
+                  "doc.txt",
+                  "empty.txt",
+                  "log.txt",
+                  "sub/also.txt",
+                  "sub/index.html",
+                  "sub/mixed.txt",
+                  "sub/payload.txt",
+                  "sub/plain.txt",
+                ].sort(),
+              )
             },
           })
         } finally {
