@@ -40,6 +40,26 @@ export function stripShellQuotes(value: string) {
   return value.replace(/^"(.*)"$|^'(.*)'$/s, "$1$2")
 }
 
+const SCHEME_DEFAULT_PORTS: Record<string, string> = { http: "80", https: "443", ftp: "21", ftps: "990" }
+
+/**
+ * The directory GNU wget creates for a URL's host under `-x` / `-r` / `-m`:
+ * userinfo removed, host lowercased, IPv6 brackets dropped, and the port kept
+ * only when it is not the scheme default (`example.com`, `::1:8080`).
+ */
+export function wgetHostDirectory(url: string): string {
+  const full = url.includes("://") ? url : `http://${url}`
+  const scheme = full.slice(0, full.indexOf("://")).toLowerCase()
+  const authority = full
+    .slice(scheme.length + 3)
+    .split(/[/?#]/)[0]!
+    .replace(/^[^@]*@/, "")
+  const bracketed = authority.match(/^\[([^\]]*)\](?::(\d+))?$/)
+  const host = (bracketed ? bracketed[1]! : authority.replace(/:\d*$/, "")).toLowerCase()
+  const port = bracketed ? bracketed[2] : authority.match(/:(\d+)$/)?.[1]
+  return port && port !== SCHEME_DEFAULT_PORTS[scheme] ? `${host}:${port}` : host
+}
+
 /** Decode one literal POSIX shell word without evaluating expansions. */
 export function decodeShellLiteral(value: string): string | undefined {
   if (!value || value.includes("\0")) return undefined

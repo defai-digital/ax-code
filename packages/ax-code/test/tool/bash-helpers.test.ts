@@ -15,6 +15,7 @@ import {
   safeUtf8SuffixLength,
   staticallyCheckablePathArgs,
   stripShellQuotes,
+  wgetHostDirectory,
   tailBashMetadata,
   truncateBashMetadata,
 } from "../../src/tool/bash-helpers"
@@ -221,5 +222,21 @@ describe("tool.bash helpers", () => {
     expect(refProcessIfAvailable({ ref: () => calls++ })).toBe(true)
     expect(refProcessIfAvailable({})).toBe(false)
     expect(calls).toBe(1)
+  })
+})
+
+describe("wgetHostDirectory", () => {
+  test("lowercases the host and drops userinfo and the scheme default port", () => {
+    expect(wgetHostDirectory("http://User:pw@Example.COM:80/a/b.txt")).toBe("example.com")
+    expect(wgetHostDirectory("https://Example.com:443/")).toBe("example.com")
+    expect(wgetHostDirectory("ftp://host:21/f")).toBe("host")
+    expect(wgetHostDirectory("example.com/no-scheme")).toBe("example.com")
+  })
+
+  test("keeps a non-default port and drops IPv6 brackets", () => {
+    expect(wgetHostDirectory("http://127.0.0.1:8080/x?y#z")).toBe("127.0.0.1:8080")
+    expect(wgetHostDirectory("http://[::1]:8080/a")).toBe("::1:8080")
+    expect(wgetHostDirectory("http://[::1]/a")).toBe("::1")
+    expect(wgetHostDirectory("https://example.com:80/a")).toBe("example.com:80")
   })
 })
