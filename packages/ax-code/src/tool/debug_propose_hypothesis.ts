@@ -166,9 +166,11 @@ export const DebugProposeHypothesisTool = Tool.define("debug_propose_hypothesis"
     let staleEvidence: { envelopeId: string; status: string; reason?: string }[] = []
     if (args.status === "confirmed") {
       const current: SourceState = await currentSourceState(Instance.worktree, Instance.project.vcs ?? "")
+      // Only the cited envelopes decide freshness: an uncited sibling in the
+      // same run must not downgrade a confirmation that cites fresh evidence.
       staleEvidence = verificationRuns
-        .filter((run) => run.envelopes.some((item) => evidenceRefs.includes(item.envelopeId)))
         .flatMap((run) => run.envelopes)
+        .filter((item) => evidenceRefs.includes(item.envelopeId))
         .map((item) => ({ envelopeId: item.envelopeId, ...classifyEnvelopeFreshness(item.envelope, current) }))
         .filter((item) => !enforceCitationFreshness(item, "authoritative").ok)
       needsVerification = staleEvidence.length > 0
@@ -185,6 +187,14 @@ export const DebugProposeHypothesisTool = Tool.define("debug_propose_hypothesis"
     if (existingHypothesis && HYPOTHESIS_TERMINAL_STATUSES.includes(existingHypothesis.status)) {
       const terminalTransition = transitionHypothesis(existingHypothesis.status, status)
       if (!terminalTransition.ok) {
+        // Name the real cause when the stale-evidence downgrade produced the
+        // rejected transition: the caller asked to re-confirm with evidence
+        // that no longer matches the worktree, not to demote the hypothesis.
+        if (needsVerification) {
+          throw new Error(
+            `Cannot re-confirm terminal hypothesis ${hypothesisId} with stale evidence (${staleEvidence.map((item) => item.envelopeId).join(", ")}). Run verify_project again and cite the fresh envelopes.`,
+          )
+        }
         throw new Error(
           `Cannot move terminal hypothesis ${hypothesisId} from ${existingHypothesis.status} to ${status} (transition rejected: ${terminalTransition.reason}). Revive it under a new hypothesis id.`,
         )
