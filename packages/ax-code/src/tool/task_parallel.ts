@@ -1,6 +1,12 @@
 import { fireSubagentStop } from "./task"
 import { taskParentConstraints } from "./task-constraints"
 import { assistantError, assistantErrorMessage, errorDetails, isAbortError } from "./task-errors"
+import {
+  subagentDescription,
+  subagentSessionPermissions,
+  subagentToolGates,
+  taskFanOutAllowed,
+} from "./task-shared"
 import { toErrorMessage } from "@/util/error-message"
 import { TaskOutputSchema } from "./task-output-schema"
 import { Tool } from "./tool"
@@ -16,7 +22,6 @@ import { SessionPrompt } from "../session/prompt"
 import { resolvePromptParts } from "../session/prompt/prompt-helpers"
 import { defer } from "@/util/defer"
 import { Config } from "../config/config"
-import { Permission } from "@/permission"
 import { Log } from "@/util/log"
 import { withTimeout } from "@/util/timeout"
 import { WriteIsolation } from "../session/write-isolation"
@@ -227,48 +232,17 @@ async function runOneTask(input: {
   onSessionCreated?: (sessionID: SessionID) => void
 }): Promise<TaskOutcome> {
   const { params, ctx, model, config, agent, constraints } = input
-  // Same fan-out gate as tool/task.ts (ADR-005 deny-by-default; ADR-057 D2):
-  // the LAST rule naming `task` decides, regardless of pattern — a scoped
-  // allow like `task: { general: "allow" }` counts, wildcard `*` rules are
-  // just rules like any other, and no task rule means deny-by-default.
-  const taskRules = agent.permission.filter((rule) => rule.permission === "task")
-  const canFanOut = taskRules.findLast(() => true)?.action === "allow"
+  const canFanOut = taskFanOutAllowed(agent)
 
   const session = await Session.create({
     parentID: ctx.sessionID,
     title: params.description + ` (@${agent.name} parallel)`,
-    permission: [
-      {
-        permission: "todowrite",
-        pattern: "*",
-        action: "deny",
-      },
-      {
-        permission: "todoread",
-        pattern: "*",
-        action: "deny",
-      },
-      {
-        permission: "task_parallel",
-        pattern: "*",
-        action: "deny",
-      },
-      ...(canFanOut
-        ? []
-        : [
-            {
-              permission: "task" as const,
-              pattern: "*" as const,
-              action: "deny" as const,
-            },
-          ]),
-      ...(config.experimental?.primary_tools?.map((t) => ({
-        pattern: "*",
-        action: "deny" as const,
-        permission: t,
-      })) ?? []),
-      ...constraints.permissionDenials,
-    ],
+    permission: subagentSessionPermissions({
+      canFanOut,
+      extraDeny: ["task_parallel"],
+      primaryTools: config.experimental?.primary_tools,
+      inherited: constraints.permissionDenials,
+    }),
   })
   input.onSessionCreated?.(session.id)
 
@@ -282,17 +256,12 @@ async function runOneTask(input: {
   ctx.abort.addEventListener("abort", cancel, { once: true })
   using _ = defer(() => ctx.abort.removeEventListener("abort", cancel))
 
-  const taskTools = {
-    ...constraints.tools,
-    todowrite: false,
-    todoread: false,
-    task_parallel: false,
-    // No fan-out means no background tasks to wait on — hide waitfor too.
-    ...(canFanOut
-      ? {}
-      : { task: false, waitfor: false, list_background_tasks: false, message_background_task: false }),
-    ...Object.fromEntries((config.experimental?.primary_tools ?? []).map((t) => [t, false])),
-  }
+  const taskTools = subagentToolGates({
+    constraints: constraints.tools,
+    canFanOut,
+    extraDeny: ["task_parallel"],
+    primaryTools: config.experimental?.primary_tools,
+  })
 
   // Caller-supplied schema, validated at the tool boundary before any child
   // session exists, mapped onto the shared structured-output turn.
@@ -435,25 +404,7 @@ async function runOneTask(input: {
 }
 
 export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
-  const agents = await Agent.list().then((x) =>
-    x.filter((a) => {
-      const tier = Agent.resolveTier(a)
-      return tier === "subagent" || tier === "specialist"
-    }),
-  )
-
-  const caller = ctx?.agent
-  const accessibleAgents = caller
-    ? agents.filter((a) => Permission.evaluate("task", a.name, caller.permission).action !== "deny")
-    : agents
-  const list = accessibleAgents.toSorted((a, b) => a.name.localeCompare(b.name))
-
-  const description = DESCRIPTION.replace(
-    "{agents}",
-    list
-      .map((a) => `- ${a.name}: ${a.description ?? "This subagent should only be called manually by the user."}`)
-      .join("\n"),
-  )
+  const description = await subagentDescription(DESCRIPTION, ctx?.agent)
 
   return {
     description,

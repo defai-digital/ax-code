@@ -1,5 +1,11 @@
 import { inheritTaskPermissionDenials, taskParentConstraints } from "./task-constraints"
 import { assistantError, assistantErrorMessage, errorDetails, isAbortError } from "./task-errors"
+import {
+  subagentDescription,
+  subagentSessionPermissions,
+  subagentToolGates,
+  taskFanOutAllowed,
+} from "./task-shared"
 import { Tool } from "./tool"
 import DESCRIPTION from "./task.txt"
 import z from "zod"
@@ -14,7 +20,6 @@ import { resolvePromptParts } from "../session/prompt/prompt-helpers"
 import { iife } from "@/util/iife"
 import { defer } from "@/util/defer"
 import { Config } from "../config/config"
-import { Permission } from "@/permission"
 import { Log } from "@/util/log"
 import { withTimeout } from "@/util/timeout"
 import { ToolBoolean } from "./schema"
@@ -238,26 +243,7 @@ async function assertBackgroundCapacity(
 }
 
 export const TaskTool = Tool.define("task", async (ctx?) => {
-  const agents = await Agent.list().then((x) =>
-    x.filter((a) => {
-      const tier = Agent.resolveTier(a)
-      return tier === "subagent" || tier === "specialist"
-    }),
-  )
-
-  // Filter agents by permissions if agent provided
-  const caller = ctx?.agent
-  const accessibleAgents = caller
-    ? agents.filter((a) => Permission.evaluate("task", a.name, caller.permission).action !== "deny")
-    : agents
-  const list = accessibleAgents.toSorted((a, b) => a.name.localeCompare(b.name))
-
-  const description = DESCRIPTION.replace(
-    "{agents}",
-    list
-      .map((a) => `- ${a.name}: ${a.description ?? "This subagent should only be called manually by the user."}`)
-      .join("\n"),
-  )
+  const description = await subagentDescription(DESCRIPTION, ctx?.agent)
   return {
     description,
     parameters,
@@ -339,15 +325,7 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
         await assertBackgroundCapacity(ctx.sessionID, TaskQueue)
       }
 
-      // Fan-out requires an EXPLICIT allow for the `task` permission
-      // (ADR-005 deny-by-default; ADR-057 D2). The LAST rule naming `task`
-      // decides, regardless of pattern: a scoped allow like
-      // `task: { general: "allow" }` counts (matching the last task rule
-      // keeps this gate consistent with Permission.evaluate's last-match
-      // semantics), wildcard `*` rules in either direction are just rules
-      // like any other, and no task rule at all means deny-by-default.
-      const taskRules = agent.permission.filter((rule) => rule.permission === "task")
-      const canFanOut = taskRules.findLast(() => true)?.action === "allow"
+      const canFanOut = taskFanOutAllowed(agent)
 
       const msg = await MessageV2.get({ sessionID: ctx.sessionID, messageID: ctx.messageID })
       ensureNotAborted()
@@ -379,33 +357,11 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
         return await Session.create({
           parentID: ctx.sessionID,
           title: params.description + ` (@${agent.name} subagent)`,
-          permission: [
-            {
-              permission: "todowrite",
-              pattern: "*",
-              action: "deny",
-            },
-            {
-              permission: "todoread",
-              pattern: "*",
-              action: "deny",
-            },
-            ...(canFanOut
-              ? []
-              : [
-                  {
-                    permission: "task" as const,
-                    pattern: "*" as const,
-                    action: "deny" as const,
-                  },
-                ]),
-            ...(config.experimental?.primary_tools?.map((t) => ({
-              pattern: "*",
-              action: "deny" as const,
-              permission: t,
-            })) ?? []),
-            ...constraints.permissionDenials,
-          ],
+          permission: subagentSessionPermissions({
+            canFanOut,
+            primaryTools: config.experimental?.primary_tools,
+            inherited: constraints.permissionDenials,
+          }),
         })
       })
       subagentSessionID = session.id
@@ -419,17 +375,11 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
         providerID: msg.info.providerID,
       }
 
-      const taskTools = {
-        ...constraints.tools,
-        todowrite: false,
-        todoread: false,
-        // Agents that cannot fan out cannot start background tasks either, so
-        // they have nothing to wait on — hide waitfor alongside task.
-        ...(canFanOut
-          ? {}
-          : { task: false, waitfor: false, list_background_tasks: false, message_background_task: false }),
-        ...Object.fromEntries((config.experimental?.primary_tools ?? []).map((t) => [t, false])),
-      }
+      const taskTools = subagentToolGates({
+        constraints: constraints.tools,
+        canFanOut,
+        primaryTools: config.experimental?.primary_tools,
+      })
       let result: Awaited<ReturnType<typeof SessionPrompt.prompt>>
       let finalizeAttempted = false
       let finalizeError: ReturnType<typeof errorDetails> | undefined
