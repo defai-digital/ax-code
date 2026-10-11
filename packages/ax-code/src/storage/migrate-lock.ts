@@ -155,8 +155,16 @@ export namespace MigrationLock {
             target,
             holder: snapshot.body,
           })
-          // A writer that keeps recreating abandoned locks must still hit the
-          // deadline instead of being reclaimed forever.
+          // The path we just freed is ours to take: try the link before any
+          // deadline check, so a waiter that reclaims at the deadline is not
+          // told it timed out on a lock nobody holds.
+          if (prepared.tryLink()) {
+            prepared.cleanup()
+            return () => releaseCompatibilityLock(target, ownText)
+          }
+          // Someone else took it first; a writer that keeps recreating
+          // abandoned locks must still hit the deadline instead of being
+          // reclaimed forever.
           if (Date.now() >= deadline) {
             throw new Error(`Timed out waiting for migration lock: ${target}`)
           }

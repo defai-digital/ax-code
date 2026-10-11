@@ -308,6 +308,13 @@ describe("JSON to SQLite migration", () => {
     expect(byID.get("ses_fork_0003_orphan")!.parent_id).toBeNull()
   })
 
+  test("session ids sort in creation order, so parent-first insertion follows the id sort", () => {
+    const parent = SessionID.ascending()
+    const child = SessionID.ascending()
+    const grandchild = SessionID.ascending()
+    expect([grandchild, child, parent].sort()).toEqual([parent, child, grandchild])
+  })
+
   test("migrates messages and parts", async () => {
     await writeProject(storageDir, {
       id: "proj_test123abc",

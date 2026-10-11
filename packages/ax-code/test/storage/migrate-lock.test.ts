@@ -157,6 +157,22 @@ describe("MigrationLock", () => {
     expect(fs.readFileSync(target, "utf-8")).toContain("live-owner")
   })
 
+  test("a reclaim at the deadline still acquires the lock it just freed", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const db = path.join(tmp.path, "ax-code.db")
+    const child = spawnSync(process.execPath, ["-e", "process.exit(0)"])
+    expect(child.status).toBe(0)
+    fs.writeFileSync(
+      db + ".migrate.lock",
+      JSON.stringify({ pid: child.pid, startedAt: Date.now() - 60_000, host: os.hostname(), token: "dead" }),
+    )
+    // A 1 ms budget is spent before the reclaim completes: the freed path must
+    // still be linked instead of reporting a timeout on a lock nobody holds.
+    const release = MigrationLock.acquire(db, { timeoutMs: 1 })
+    expect(fs.readFileSync(db + ".migrate.lock", "utf-8")).toContain(`"pid":${process.pid}`)
+    release()
+  })
+
   test("release does not remove a replacement owner's lock", async () => {
     await using tmp = await tmpdir({ git: true })
     const db = path.join(tmp.path, "ax-code.db")
