@@ -1,3 +1,4 @@
+import { blendPixel } from "./scene-art-kit"
 import {
   COLOSSEUM_BANNERS,
   COLOSSEUM_COLUMNS,
@@ -43,7 +44,6 @@ export function renderColosseumPixels(width: number, height: number, style: Colo
   const night = style === "colosseum-night"
   const c = COLOSSEUM_COLORS[style]
   const { w, h, cw, ch, X, Y } = hd
-  const px = hd.pixels
   const t = Math.max(0, elapsedMs)
   const theta = ((t % 2400) / 2400) * Math.PI * 2
   const wall = COLOSSEUM_WALL
@@ -56,14 +56,7 @@ export function renderColosseumPixels(width: number, height: number, style: Colo
   const crowd = hdHex(c.crowd)
   const coreR = Math.max(3, Math.min(cw, ch) * 0.9)
   const torchOn = colosseumTorch(t)
-  const blend = (x: number, y: number, color: RGB, alpha: number) => {
-    if (alpha <= 0 || x < 0 || y < 0 || x >= w || y >= h) return
-    const a = Math.min(1, alpha)
-    const i = (y * w + x) * 3
-    px[i] = Math.round(px[i]! + (color[0] - px[i]!) * a)
-    px[i + 1] = Math.round(px[i + 1]! + (color[1] - px[i + 1]!) * a)
-    px[i + 2] = Math.round(px[i + 2]! + (color[2] - px[i + 2]!) * a)
-  }
+  const blend = (x: number, y: number, color: RGB, alpha: number) => blendPixel(hd, x, y, color, alpha)
   const glow = (cx: number, cy: number, rx: number, ry: number, color: RGB, strength: number) => {
     const xa = Math.max(0, Math.floor(cx - rx))
     const xb = Math.min(w - 1, Math.ceil(cx + rx))

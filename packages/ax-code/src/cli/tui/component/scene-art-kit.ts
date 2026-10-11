@@ -21,6 +21,24 @@ export function blendPixel(hd: HdCanvas, x: number, y: number, color: RGB, alpha
   hd.pixels[i + 2] = Math.round(hd.pixels[i + 2]! + (color[2] - hd.pixels[i + 2]!) * a)
 }
 
+/** Blend at a precomputed pixel index (no bounds check), alpha clamped to 1. */
+export function blendPixelAt(hd: HdCanvas, index: number, color: RGB, alpha: number) {
+  if (alpha <= 0) return
+  const a = Math.min(1, alpha)
+  hd.pixels[index] = Math.round(hd.pixels[index]! + (color[0] - hd.pixels[index]!) * a)
+  hd.pixels[index + 1] = Math.round(hd.pixels[index + 1]! + (color[1] - hd.pixels[index + 1]!) * a)
+  hd.pixels[index + 2] = Math.round(hd.pixels[index + 2]! + (color[2] - hd.pixels[index + 2]!) * a)
+}
+
+/** Blend without the alpha ≤ 1 clamp — callers may overshoot the target color. */
+export function blendPixelUnclamped(hd: HdCanvas, x: number, y: number, color: RGB, alpha: number) {
+  if (x < 0 || y < 0 || x >= hd.w || y >= hd.h || alpha <= 0) return
+  const i = (y * hd.w + x) * 3
+  hd.pixels[i] = Math.round(hd.pixels[i]! + (color[0] - hd.pixels[i]!) * alpha)
+  hd.pixels[i + 1] = Math.round(hd.pixels[i + 1]! + (color[1] - hd.pixels[i + 1]!) * alpha)
+  hd.pixels[i + 2] = Math.round(hd.pixels[i + 2]! + (color[2] - hd.pixels[i + 2]!) * alpha)
+}
+
 /** Additive radial glow with quadratic falloff out to `radius`. */
 export function glow(hd: HdCanvas, cx: number, cy: number, radius: number, color: RGB, strength: number) {
   if (radius <= 0 || strength <= 0) return

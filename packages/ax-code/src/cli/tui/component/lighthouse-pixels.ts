@@ -1,3 +1,4 @@
+import { blendPixelUnclamped } from "./scene-art-kit"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
 import {
   LIGHTHOUSE_CLIFF_TOP,
@@ -61,11 +62,7 @@ export function renderLighthousePixels(
   const skyAt = (y: number): RGB => lighthouseSkyRgb(style, h <= 1 ? 0 : y / (h - 1))
   const seaTop = Y(LIGHTHOUSE_SEA_TOP)
 
-  const tint = (x: number, y: number, color: RGB, a: number) => {
-    if (x < 0 || y < 0 || x >= w || y >= h || a <= 0) return
-    const i = (y * w + x) * 3
-    for (let k = 0; k < 3; k++) hd.pixels[i + k] = Math.round(hd.pixels[i + k]! + (color[k]! - hd.pixels[i + k]!) * a)
-  }
+  const tint = (x: number, y: number, color: RGB, a: number) => blendPixelUnclamped(hd, x, y, color, a)
   const glow = (cx: number, cy: number, radius: number, color: RGB, strength: number, floor = h) => {
     const xa = Math.max(0, Math.floor(cx - radius)),
       xb = Math.min(w - 1, Math.ceil(cx + radius))

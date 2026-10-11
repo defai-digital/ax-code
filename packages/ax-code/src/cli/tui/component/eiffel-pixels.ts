@@ -1,3 +1,4 @@
+import { blendPixelUnclamped } from "./scene-art-kit"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
 import {
   EIFFEL_BASE,
@@ -56,13 +57,7 @@ export function renderEiffelPixels(width: number, height: number, style: EiffelS
   const cx = hd.X(EIFFEL_CX + 0.5)
   const horizonSky = eiffelSkyRgb(style, EIFFEL_GROUND_TOP / EIFFEL_ROWS)
 
-  const blend = (x: number, y: number, color: RGB, a: number) => {
-    if (a <= 0 || x < 0 || y < 0 || x >= w || y >= h) return
-    const i = (y * w + x) * 3
-    px[i] = Math.round(px[i]! + (color[0] - px[i]!) * a)
-    px[i + 1] = Math.round(px[i + 1]! + (color[1] - px[i + 1]!) * a)
-    px[i + 2] = Math.round(px[i + 2]! + (color[2] - px[i + 2]!) * a)
-  }
+  const blend = (x: number, y: number, color: RGB, a: number) => blendPixelUnclamped(hd, x, y, color, a)
   const glow = (gx: number, gy: number, r: number, color: RGB, peak: number) => {
     const xa = Math.max(0, Math.floor(gx - r))
     const xb = Math.min(w - 1, Math.ceil(gx + r))

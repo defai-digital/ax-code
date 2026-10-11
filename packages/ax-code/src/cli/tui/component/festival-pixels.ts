@@ -1,3 +1,4 @@
+import { blendPixelUnclamped } from "./scene-art-kit"
 import {
   FESTIVAL_BURSTS,
   FESTIVAL_BURST_BRIGHT,
@@ -53,11 +54,7 @@ export function renderFestivalPixels(width: number, height: number, style: Festi
   const X = (sx: number) => (sx + 0.5) * cw
   const Y = (sy: number) => (sy + 0.5) * ch
 
-  const tint = (x: number, y: number, color: RGB, a: number) => {
-    if (x < 0 || y < 0 || x >= w || y >= h || a <= 0) return
-    const i = (y * w + x) * 3
-    for (let k = 0; k < 3; k++) hd.pixels[i + k] = Math.round(hd.pixels[i + k]! + (color[k]! - hd.pixels[i + k]!) * a)
-  }
+  const tint = (x: number, y: number, color: RGB, a: number) => blendPixelUnclamped(hd, x, y, color, a)
   /** Soft additive radial light. */
   const glow = (cx: number, cy: number, radius: number, color: RGB, strength: number, floor = h) => {
     const xa = Math.max(0, Math.floor(cx - radius)),

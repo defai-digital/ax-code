@@ -1,4 +1,5 @@
 import { clamp01, hash, vnoise } from "./atmos-paint"
+import { blendPixelUnclamped } from "./scene-art-kit"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
 import {
   GREATWALL_BRAZIERS,
@@ -59,13 +60,7 @@ export function renderGreatwallPixels(width: number, height: number, style: Grea
   const horizon = skyAt(hd.Y(10))
   const warm: RGB = dusk ? [255, 140, 80] : [255, 220, 160]
 
-  const blend = (x: number, y: number, color: RGB, a: number) => {
-    if (a <= 0 || x < 0 || y < 0 || x >= w || y >= h) return
-    const i = (y * w + x) * 3
-    px[i] = Math.round(px[i]! + (color[0] - px[i]!) * a)
-    px[i + 1] = Math.round(px[i + 1]! + (color[1] - px[i + 1]!) * a)
-    px[i + 2] = Math.round(px[i + 2]! + (color[2] - px[i + 2]!) * a)
-  }
+  const blend = (x: number, y: number, color: RGB, a: number) => blendPixelUnclamped(hd, x, y, color, a)
   const fill = (x0: number, y0: number, x1: number, y1: number, color: RGB, a = 1) => {
     for (let y = Math.max(0, Math.floor(y0)); y < Math.min(h, Math.ceil(y1)); y++)
       for (let x = Math.max(0, Math.floor(x0)); x < Math.min(w, Math.ceil(x1)); x++) blend(x, y, color, a)

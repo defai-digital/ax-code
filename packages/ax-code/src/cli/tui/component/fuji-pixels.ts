@@ -1,3 +1,4 @@
+import { blendPixelUnclamped } from "./scene-art-kit"
 import {
   FUJI_COLORS,
   SCENE_HEIGHT,
@@ -84,11 +85,7 @@ export function renderFujiPixels(width: number, height: number, style: FujiStyle
       }
     }
   }
-  const tint = (x: number, y: number, color: RGB, a: number) => {
-    if (x < 0 || y < 0 || x >= w || y >= h || a <= 0) return
-    const i = (y * w + x) * 3
-    for (let k = 0; k < 3; k++) hd.pixels[i + k] = Math.round(hd.pixels[i + k]! + (color[k]! - hd.pixels[i + k]!) * a)
-  }
+  const tint = (x: number, y: number, color: RGB, a: number) => blendPixelUnclamped(hd, x, y, color, a)
   const get = (x: number, y: number): RGB => {
     const xi = Math.max(0, Math.min(w - 1, Math.floor(x))),
       yi = Math.max(0, Math.min(h - 1, Math.floor(y)))

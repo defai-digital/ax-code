@@ -1,3 +1,4 @@
+import { blendPixel } from "./scene-art-kit"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
 import {
   CASTLE_BANNER,
@@ -49,14 +50,7 @@ export function renderCastlePixels(width: number, height: number, style: CastleS
   const t = Math.max(0, elapsedMs)
   const phase = (t % CASTLE_CYCLE_MS) / CASTLE_CYCLE_MS
   const theta = phase * Math.PI * 2
-  const blend = (x: number, y: number, color: RGB, alpha: number) => {
-    if (alpha <= 0 || x < 0 || y < 0 || x >= w || y >= h) return
-    const a = Math.min(1, alpha)
-    const i = (y * w + x) * 3
-    px[i] = Math.round(px[i]! + (color[0] - px[i]!) * a)
-    px[i + 1] = Math.round(px[i + 1]! + (color[1] - px[i + 1]!) * a)
-    px[i + 2] = Math.round(px[i + 2]! + (color[2] - px[i + 2]!) * a)
-  }
+  const blend = (x: number, y: number, color: RGB, alpha: number) => blendPixel(hd, x, y, color, alpha)
   const glow = (cx: number, cy: number, rx: number, ry: number, color: RGB, strength: number) => {
     const xa = Math.max(0, Math.floor(cx - rx))
     const xb = Math.min(w - 1, Math.ceil(cx + rx))

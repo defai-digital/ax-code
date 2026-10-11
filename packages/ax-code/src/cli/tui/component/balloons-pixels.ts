@@ -1,3 +1,4 @@
+import { blendPixelAt } from "./scene-art-kit"
 import {
   BALLOONS_CLOUDS,
   BALLOONS_COLUMNS,
@@ -55,13 +56,7 @@ export function renderBalloonsPixels(width: number, height: number, style: Ballo
   const coreR = Math.max(3, Math.min(cw, ch) * 0.9)
   const warm: RGB = night ? [255, 196, 110] : [255, 214, 150]
 
-  const blend = (i: number, color: RGB, alpha: number) => {
-    if (alpha <= 0) return
-    const a = alpha > 1 ? 1 : alpha
-    hd.pixels[i] = Math.round(hd.pixels[i]! + (color[0] - hd.pixels[i]!) * a)
-    hd.pixels[i + 1] = Math.round(hd.pixels[i + 1]! + (color[1] - hd.pixels[i + 1]!) * a)
-    hd.pixels[i + 2] = Math.round(hd.pixels[i + 2]! + (color[2] - hd.pixels[i + 2]!) * a)
-  }
+  const blend = (i: number, color: RGB, alpha: number) => blendPixelAt(hd, i, color, alpha)
   const softBlob = (cx: number, cy: number, rx: number, ry: number, color: RGB, alpha: number) => {
     for (let y = Math.max(0, Math.floor(cy - ry)); y < Math.min(h, Math.ceil(cy + ry)); y++) {
       for (let x = Math.max(0, Math.floor(cx - rx)); x < Math.min(w, Math.ceil(cx + rx)); x++) {

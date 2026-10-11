@@ -1,3 +1,4 @@
+import { blendPixel } from "./scene-art-kit"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
 import {
   CORCOVADO_CABLE_ROW,
@@ -56,14 +57,7 @@ export function renderCorcovadoPixels(width: number, height: number, style: Corc
   const phase = (2 * Math.PI * (t % 2400)) / 2400
   const dot = Math.max(1.7, Math.min(cw, ch) * 0.4)
   const coreR = Math.max(3, Math.min(cw, ch) * 0.9)
-  const blend = (x: number, y: number, color: RGB, alpha: number) => {
-    if (alpha <= 0 || x < 0 || y < 0 || x >= w || y >= h) return
-    const a = Math.min(1, alpha)
-    const i = (y * w + x) * 3
-    px[i] = Math.round(px[i]! + (color[0] - px[i]!) * a)
-    px[i + 1] = Math.round(px[i + 1]! + (color[1] - px[i + 1]!) * a)
-    px[i + 2] = Math.round(px[i + 2]! + (color[2] - px[i + 2]!) * a)
-  }
+  const blend = (x: number, y: number, color: RGB, alpha: number) => blendPixel(hd, x, y, color, alpha)
   const glow = (cx: number, cy: number, rx: number, ry: number, color: RGB, strength: number) => {
     const xa = Math.max(0, Math.floor(cx - rx))
     const xb = Math.min(w - 1, Math.ceil(cx + rx))

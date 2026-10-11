@@ -1,4 +1,5 @@
 import { clamp01, hash, vnoise } from "./atmos-paint"
+import { blendPixelUnclamped } from "./scene-art-kit"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
 import {
   FALLS_COLORS,
@@ -53,13 +54,7 @@ export function renderFallsPixels(width: number, height: number, style: FallsSty
   const around = fallsSkyRgb(style, 0.2)
   const px = hd.pixels
 
-  const blend = (x: number, y: number, color: RGB, a: number) => {
-    if (a <= 0 || x < 0 || y < 0 || x >= w || y >= h) return
-    const i = (y * w + x) * 3
-    px[i] = Math.round(px[i]! + (color[0] - px[i]!) * a)
-    px[i + 1] = Math.round(px[i + 1]! + (color[1] - px[i + 1]!) * a)
-    px[i + 2] = Math.round(px[i + 2]! + (color[2] - px[i + 2]!) * a)
-  }
+  const blend = (x: number, y: number, color: RGB, a: number) => blendPixelUnclamped(hd, x, y, color, a)
   /** Soft round glow, alpha falls off to zero at `r`. */
   const glow = (cx: number, cy: number, r: number, color: RGB, peak: number) => {
     const xa = Math.max(0, Math.floor(cx - r))

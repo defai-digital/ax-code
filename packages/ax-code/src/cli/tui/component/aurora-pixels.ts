@@ -1,3 +1,4 @@
+import { blendPixelAt } from "./scene-art-kit"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
 import {
   AURORA_COLUMNS,
@@ -54,13 +55,7 @@ export function renderAuroraPixels(width: number, height: number, style: AuroraS
   const laneTop = hd.Y(AURORA_LAKE_TOP)
   const horizonY = hd.Y(AURORA_HORIZON)
 
-  const blend = (i: number, color: RGB, alpha: number) => {
-    if (alpha <= 0) return
-    const a = alpha > 1 ? 1 : alpha
-    hd.pixels[i] = Math.round(hd.pixels[i]! + (color[0] - hd.pixels[i]!) * a)
-    hd.pixels[i + 1] = Math.round(hd.pixels[i + 1]! + (color[1] - hd.pixels[i + 1]!) * a)
-    hd.pixels[i + 2] = Math.round(hd.pixels[i + 2]! + (color[2] - hd.pixels[i + 2]!) * a)
-  }
+  const blend = (i: number, color: RGB, alpha: number) => blendPixelAt(hd, i, color, alpha)
   const add = (i: number, color: RGB, k: number) => {
     hd.pixels[i] = Math.min(255, Math.round(hd.pixels[i]! + color[0] * k))
     hd.pixels[i + 1] = Math.min(255, Math.round(hd.pixels[i + 1]! + color[1] * k))
