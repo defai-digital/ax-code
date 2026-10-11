@@ -4,8 +4,9 @@ Usage:
 - Lookaround (including negative lookahead) and backreferences are unsupported. Use a simpler expression and inspect the bounded matches.
 - Relative path values use the current workspace directory, which may already be a package below the repository root.
 - pattern is a regular expression (ripgrep syntax): "log.*Error", "function\s+\w+".
+- Matching is case-sensitive. Prefix the pattern with (?i) for a case-insensitive search: "(?i)todo".
 - Braces are special in regex; escape a literal brace as \{ (e.g. "\{\}" matches "{}").
-- The include parameter filters files (e.g. "*.js", "*.{ts,tsx}"); path scopes the search to a file or directory. Prefer the known file or narrowest relevant directory.
+- The include parameter filters files (e.g. "*.js", "*.{ts,tsx}"); path scopes the search to an existing file or directory. Prefer the known file or narrowest relevant directory.
 - Set context (1-10 lines before/after) to inspect definitions and callers in the same call, instead of searching then reading each hit. Adjacent context is merged; matching lines are marked with `:` and surrounding lines with `-`.
 - Set limit (1-100 matching lines) to bound discovery. Defaults to 20 with context, otherwise 100. Context output also stops at 200 lines or 32 KiB and reports truncation; use Read for a complete function when needed.
 - Without context, output groups matching lines by file. Context results use scan order and retain source line order within each file.

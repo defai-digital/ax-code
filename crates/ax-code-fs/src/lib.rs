@@ -449,8 +449,9 @@ fn search_content_impl(
     let limit = opts.limit.unwrap_or(250);
     let context_lines = opts.context_lines.unwrap_or(0);
 
+    // Case-sensitive like plain `rg`, the ripgrep fallback, and the context
+    // search path; callers opt in with an inline `(?i)`.
     let matcher = RegexMatcherBuilder::new()
-        .case_smart(true)
         .build(&pattern)
         .map_err(|e| napi::Error::from_reason(e.to_string()))?;
 
@@ -1517,7 +1518,8 @@ mod tests {
         fs::write(dir.join(".git/config"), "needle = 2\n").unwrap();
         fs::write(dir.join("a.txt"), "needle\n").unwrap();
 
-        let json = search_content(dir.to_str().unwrap().into(), "needle".into(), "{}".into()).unwrap();
+        let json =
+            search_content(dir.to_str().unwrap().into(), "needle".into(), "{}".into()).unwrap();
         let rows: Vec<serde_json::Value> = serde_json::from_str(&json).unwrap();
         let paths: Vec<String> = rows
             .iter()
@@ -1526,7 +1528,12 @@ mod tests {
 
         assert!(paths.iter().any(|p| p.ends_with("ci.yml")), "{paths:?}");
         assert!(paths.iter().any(|p| p.ends_with("a.txt")), "{paths:?}");
-        assert!(!paths.iter().any(|p| p.contains(".git/") || p.contains(".git\\")), "{paths:?}");
+        assert!(
+            !paths
+                .iter()
+                .any(|p| p.contains(".git/") || p.contains(".git\\")),
+            "{paths:?}"
+        );
 
         cleanup(&dir);
     }
@@ -1537,7 +1544,8 @@ mod tests {
         fs::write(dir.join("a.txt"), "prefix needle suffix\n").unwrap();
         fs::write(dir.join("b.txt"), format!("needle{}\n", "é".repeat(40_000))).unwrap();
 
-        let json = search_content(dir.to_str().unwrap().into(), "needle".into(), "{}".into()).unwrap();
+        let json =
+            search_content(dir.to_str().unwrap().into(), "needle".into(), "{}".into()).unwrap();
         let rows: Vec<serde_json::Value> = serde_json::from_str(&json).unwrap();
         let text_of = |name: &str| {
             rows.iter()
@@ -1548,7 +1556,10 @@ mod tests {
         assert_eq!(text_of("a.txt"), "prefix needle suffix");
         let long = text_of("b.txt");
         assert!(long.starts_with("needleé") && long.len() <= MAX_REPORTED_LINE_BYTES);
-        let a = rows.iter().find(|r| r["path"].as_str().unwrap().ends_with("a.txt")).unwrap();
+        let a = rows
+            .iter()
+            .find(|r| r["path"].as_str().unwrap().ends_with("a.txt"))
+            .unwrap();
         assert_eq!(a["column"], 8);
 
         cleanup(&dir);
@@ -1565,7 +1576,30 @@ mod tests {
             r#"{"glob":"["}"#.into(),
         )
         .unwrap_err();
-        assert!(err.reason.contains("invalid include glob"), "{}", err.reason);
+        assert!(
+            err.reason.contains("invalid include glob"),
+            "{}",
+            err.reason
+        );
+
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn search_content_is_case_sensitive_unless_the_pattern_opts_in() {
+        let dir = make_tmp_dir("search_case");
+        fs::write(dir.join("a.txt"), "Needle\nneedle\n").unwrap();
+        let count = |pattern: &str| {
+            let json =
+                search_content(dir.to_str().unwrap().into(), pattern.into(), "{}".into()).unwrap();
+            serde_json::from_str::<Vec<serde_json::Value>>(&json)
+                .unwrap()
+                .len()
+        };
+
+        assert_eq!(count("needle"), 1);
+        assert_eq!(count("Needle"), 1);
+        assert_eq!(count("(?i)needle"), 2);
 
         cleanup(&dir);
     }

@@ -540,6 +540,41 @@ describe("tool.grep", () => {
     }
   })
 
+  test.each([undefined, 3])("a missing search root fails before any backend runs (context %s)", async (context) => {
+    await using tmp = await tmpdir({ git: true })
+    const searchContentAsync = vi.fn(() => "[]")
+    vi.spyOn(NativeAddon, "fs").mockReturnValue({ ScanCancellation, searchContentAsync } as any)
+    const spawn = vi.spyOn(Process, "spawn")
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const grep = await GrepTool.init()
+        await expect(grep.execute({ pattern: "needle", path: "typo/dir", context }, ctx)).rejects.toThrow(
+          "Path not found: typo/dir",
+        )
+      },
+    })
+    expect(searchContentAsync).not.toHaveBeenCalled()
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  test.each([undefined, 3])("ripgrep fallback matches case-sensitively (context %s)", async (context) => {
+    await using tmp = await tmpdir({ git: true })
+    vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+    await writeFile(path.join(tmp.path, "a.txt"), "Needle upper\nneedle lower\n")
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const grep = await GrepTool.init()
+        const exact = await grep.execute({ pattern: "needle", context }, ctx)
+        expect(exact.metadata.matches).toBe(1)
+        expect(exact.output).toContain("needle lower")
+        const folded = await grep.execute({ pattern: "(?i)needle", context }, ctx)
+        expect(folded.metadata.matches).toBe(2)
+      },
+    })
+  })
+
   test("external search paths request external directory permission before grep permission", async () => {
     await using project = await tmpdir({ git: true })
     await using outside = await tmpdir()
