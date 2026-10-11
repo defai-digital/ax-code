@@ -7,6 +7,7 @@ import { pathToFileURL } from "url"
 import { UI } from "../ui"
 import { cmd } from "./cmd"
 import { bootstrap } from "../bootstrap"
+import { withSessionContinuationOptions } from "../session-options"
 import { confirmDirectoryScope } from "../directory-scope-prompt"
 import { buildAttachAuthHeaders, buildAttachHeaders } from "../attach-auth"
 import { EOL } from "os"
@@ -668,32 +669,20 @@ export const RunCommand = cmd({
   command: "run [message..]",
   describe: "run a one-shot headless task and print the assistant reply",
   builder: (yargs: Argv) => {
-    return yargs
-      .wrap(null)
-      .positional("message", {
-        describe: "prompt text (put it after -- so flags such as --file do not consume it)",
-        type: "string",
-        array: true,
-        default: [],
-      })
-      .option("command", {
-        describe: "the command to run, use message for args",
-        type: "string",
-      })
-      .option("continue", {
-        alias: ["c"],
-        describe: "continue the last session",
-        type: "boolean",
-      })
-      .option("session", {
-        alias: ["s"],
-        describe: "session id to continue",
-        type: "string",
-      })
-      .option("fork", {
-        describe: "fork the session before continuing (requires --continue or --session)",
-        type: "boolean",
-      })
+    return withSessionContinuationOptions(
+      yargs
+        .wrap(null)
+        .positional("message", {
+          describe: "prompt text (put it after -- so flags such as --file do not consume it)",
+          type: "string",
+          array: true,
+          default: [],
+        })
+        .option("command", {
+          describe: "the command to run, use message for args",
+          type: "string",
+        }),
+    )
       .option("model", {
         type: "string",
         alias: ["m"],

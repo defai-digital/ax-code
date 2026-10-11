@@ -7,6 +7,7 @@ import { Instance } from "@/project/instance"
 import { existsSync } from "fs"
 import { buildAttachAuthHeaders } from "../attach-auth"
 import { DEFAULT_SERVER_PORT } from "@/server/constants"
+import { withSessionContinuationOptions, withTuiMcpOption } from "../session-options"
 import { createTuiCrashHandler, registerTuiCrashHandlers } from "./util/lifecycle"
 import { assertLoopbackHttpUrl } from "@/runtime/listen-security"
 
@@ -14,39 +15,23 @@ export const AttachCommand = cmd({
   command: "attach <url>",
   describe: "attach to a running ax-code server",
   builder: (yargs) =>
-    yargs
-      .positional("url", {
-        type: "string",
-        describe: `http://localhost:${DEFAULT_SERVER_PORT}`,
-        demandOption: true,
-      })
-      .option("dir", {
-        type: "string",
-        description: "directory to run in",
-      })
-      .option("tui-mcp", {
-        type: "boolean",
-        default: false,
-        describe: "Share this live TUI through experimental local MCP navigation tools (POSIX only)",
-      })
-      .option("continue", {
-        alias: ["c"],
-        describe: "continue the last session",
-        type: "boolean",
-      })
-      .option("session", {
-        alias: ["s"],
-        type: "string",
-        describe: "session id to continue",
-      })
-      .option("fork", {
-        type: "boolean",
-        describe: "fork the session when continuing (use with --continue or --session)",
-      })
-      .option("password", {
-        type: "string",
-        describe: "basic auth password (defaults to AX_CODE_SERVER_PASSWORD)",
-      }),
+    withSessionContinuationOptions(
+      withTuiMcpOption(
+        yargs
+          .positional("url", {
+            type: "string",
+            describe: `http://localhost:${DEFAULT_SERVER_PORT}`,
+            demandOption: true,
+          })
+          .option("dir", {
+            type: "string",
+            description: "directory to run in",
+          }),
+      ),
+    ).option("password", {
+      type: "string",
+      describe: "basic auth password (defaults to AX_CODE_SERVER_PASSWORD)",
+    }),
   handler: async (args) => {
     if (args.tuiMcp) assertTuiMcpPlatform()
     assertLoopbackHttpUrl(args.url, "attach URL")

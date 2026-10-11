@@ -10,6 +10,7 @@ import { UI } from "@/cli/ui"
 import { Log } from "@/util/log"
 import { withTimeout } from "@/util/timeout"
 import { withNetworkOptions, resolveNetworkOptions } from "@/cli/network"
+import { withSessionContinuationOptions, withTuiMcpOption } from "@/cli/session-options"
 import { Filesystem } from "@/util/filesystem"
 import type { Event } from "@ax-code/sdk/v2"
 import type { EventSource } from "./context/sdk"
@@ -638,36 +639,21 @@ export const TuiThreadCommand = cmd({
   command: "$0 [project]",
   describe: "start ax-code tui",
   builder: (yargs) =>
-    withNetworkOptions(yargs)
-      .positional("project", {
-        type: "string",
-        describe: "path to start ax-code in",
-      })
-      .option("model", {
-        type: "string",
-        alias: ["m"],
-        describe:
-          "model to use: provider/model from `ax-code models`, or family name deepseek, glm, qwen (Flash defaults)",
-      })
-      .option("tui-mcp", {
-        type: "boolean",
-        default: false,
-        describe: "Share this live TUI through experimental local MCP navigation tools (POSIX only)",
-      })
-      .option("continue", {
-        alias: ["c"],
-        describe: "continue the last session",
-        type: "boolean",
-      })
-      .option("session", {
-        alias: ["s"],
-        type: "string",
-        describe: "session id to continue",
-      })
-      .option("fork", {
-        type: "boolean",
-        describe: "fork the session when continuing (use with --continue or --session)",
-      })
+    withSessionContinuationOptions(
+      withTuiMcpOption(
+        withNetworkOptions(yargs)
+          .positional("project", {
+            type: "string",
+            describe: "path to start ax-code in",
+          })
+          .option("model", {
+            type: "string",
+            alias: ["m"],
+            describe:
+              "model to use: provider/model from `ax-code models`, or family name deepseek, glm, qwen (Flash defaults)",
+          }),
+      ),
+    )
       .option("prompt", {
         type: "string",
         describe: "initial TUI prompt (interactive; for scripts use ax-code run --prompt)",
