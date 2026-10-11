@@ -731,7 +731,12 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             // letter ends the flags and the rest of the token (or, when nothing
             // follows, the next argument) is its value. The lazy `*?` is what
             // keeps `-ooutput.json` anchored at the first `o`, not the last.
-            const cluster = arg.match(name === "wget" ? /^-([a-zA-Z]*?)([oO])(.*)$/ : /^-([a-zA-Z]*?)(o)(.*)$/)
+            // Flag letters include digits and `#` (`-4`, `-6`, `-0`, `-#`).
+            const cluster = arg.match(name === "wget" ? /^-([a-zA-Z0-9#]*?)([oO])(.*)$/ : /^-([a-zA-Z0-9#]*?)(o)(.*)$/)
+            // curl's `-O` may also sit inside a cluster (`curl -sO URL`); only
+            // letters before the first value-taking `o` are still flags. Do not
+            // stop here: `-sOofile` still carries an `-o` value to record.
+            if (name === "curl" && (arg === "--remote-name" || /^-[a-np-zA-Z0-9#]*O/.test(arg))) remoteName = true
             const takesOutputValue =
               arg === "--output" || arg === "--output-document" || (cluster !== null && cluster[3] === "")
             if (takesOutputValue) {
@@ -740,12 +745,6 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
               const output = next && next !== "-" ? await recordResolvedPath(next, decoded) : undefined
               if (output) redirectWritePaths.add(output)
               i++
-              continue
-            }
-            // `-O` may also sit inside a cluster (`curl -sO URL`); only letters
-            // before the first value-taking `o` are still flags.
-            if (name === "curl" && (arg === "--remote-name" || /^-[a-np-zA-Z]*O/.test(arg))) {
-              remoteName = true
               continue
             }
             // Short options take a glued value too: `curl -oPATH`, `wget -OPATH`.
