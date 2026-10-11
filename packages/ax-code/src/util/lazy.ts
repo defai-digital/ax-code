@@ -27,12 +27,15 @@ export function lazy<T>(fn: () => T): Lazy<T> {
       // initialization too, so forget it (unless the slot moved on) and let
       // the next call retry instead of replaying the same rejection forever.
       if (isThenable(produced)) {
-        produced.then(undefined, () => {
-          if (loaded && value === produced) {
-            loaded = false
-            value = undefined
-          }
-        })
+        produced.then(
+          () => undefined,
+          () => {
+            if (loaded && value === produced) {
+              loaded = false
+              value = undefined
+            }
+          },
+        )
       }
       return produced
     } catch (e) {

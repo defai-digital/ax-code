@@ -135,4 +135,22 @@ describe("util.lazy", () => {
     expect(value()).toBe("ready")
     expect(calls).toBe(2)
   })
+
+  test("accepts foreign thenables that invoke their fulfillment callback", async () => {
+    let calls = 0
+    const thenable = {
+      then(resolve: (value: string) => void) {
+        resolve("ready")
+      },
+    }
+    const value = lazy(() => {
+      calls++
+      return thenable
+    })
+
+    expect(value()).toBe(thenable)
+    expect(value.loaded()).toBe(true)
+    await expect(Promise.resolve(value())).resolves.toBe("ready")
+    expect(calls).toBe(1)
+  })
 })
