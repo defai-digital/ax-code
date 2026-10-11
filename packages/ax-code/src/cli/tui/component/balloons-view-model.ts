@@ -1,4 +1,5 @@
 import type { FujiRun } from "./fuji-view-model"
+import { createSceneGrid } from "./scene-grid"
 
 export type BalloonsStyle = "balloons-night" | "balloons-dawn"
 export function isBalloonsStyle(style: string | undefined): style is BalloonsStyle {
@@ -124,27 +125,17 @@ export function balloonsBirds(elapsedMs: number): BalloonsBird[] {
 }
 
 export function balloonsRows(columns: number, rows: number, style: BalloonsStyle, elapsedMs: number): FujiRun[][] {
-  const width = Math.max(0, Math.floor(columns)),
-    height = Math.max(0, Math.floor(rows))
   const night = style === "balloons-night"
   const colors = BALLOONS_COLORS[style]
   const flame = balloonsFlame(elapsedMs)
   const cloudDrift = balloonsCloudDrift(elapsedMs)
-  const grid: FujiRun[][] = Array.from({ length: height }, () =>
-    Array.from({ length: width }, () => ({ text: " ", color: colors.sky })),
-  )
-  const left = Math.floor((width - BALLOONS_COLUMNS) / 2),
-    top = Math.floor((height - BALLOONS_ROWS) / 2)
-  const paint = (x: number, y: number, text: string, color: string, background?: string) => {
-    const row = top + Math.round(y)
-    if (row < 0 || row >= height) return
-    for (let i = 0; i < text.length; i++) {
-      const sceneX = Math.round(x) + i
-      const column = left + sceneX
-      if (sceneX < 0 || sceneX >= BALLOONS_COLUMNS || column < 0 || column >= width) continue
-      grid[row]![column] = { text: text[i]!, color, background }
-    }
-  }
+  const { paint, merge } = createSceneGrid({
+    columns,
+    rows,
+    sceneColumns: BALLOONS_COLUMNS,
+    sceneRows: BALLOONS_ROWS,
+    sky: colors.sky,
+  })
   if (night) {
     BALLOONS_STARS.forEach((star, i) => {
       paint(star.x, star.y, (Math.floor(Math.max(0, elapsedMs) / 400) + i) % 3 === 0 ? "*" : ".", colors.sky)
@@ -211,13 +202,5 @@ export function balloonsRows(columns: number, rows: number, style: BalloonsStyle
   for (let x = 2; x < BALLOONS_COLUMNS; x += 6) {
     paint(x, BALLOONS_GROUND_TOP + 3, '"', colors.scrub, colors.ground)
   }
-  return grid.map((row) => {
-    const runs: FujiRun[] = []
-    for (const cell of row) {
-      const last = runs.at(-1)
-      if (last?.color === cell.color && last.background === cell.background) last.text += cell.text
-      else runs.push({ ...cell })
-    }
-    return runs
-  })
+  return merge()
 }

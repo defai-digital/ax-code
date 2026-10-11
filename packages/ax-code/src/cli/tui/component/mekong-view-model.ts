@@ -1,4 +1,5 @@
 import type { FujiRun } from "./fuji-view-model"
+import { createSceneGrid } from "./scene-grid"
 
 export type MekongStyle = "mekong-dawn" | "mekong-dusk"
 export function isMekongStyle(style: string | undefined): style is MekongStyle {
@@ -109,26 +110,16 @@ export function mekongEgrets(elapsedMs: number): MekongEgret[] {
 }
 
 export function mekongRows(columns: number, rows: number, style: MekongStyle, elapsedMs: number): FujiRun[][] {
-  const width = Math.max(0, Math.floor(columns)),
-    height = Math.max(0, Math.floor(rows))
   const colors = MEKONG_COLORS[style]
   const bob = mekongBob(elapsedMs)
   const shimmer = mekongShimmer(elapsedMs)
-  const grid: FujiRun[][] = Array.from({ length: height }, () =>
-    Array.from({ length: width }, () => ({ text: " ", color: colors.sky })),
-  )
-  const left = Math.floor((width - MEKONG_COLUMNS) / 2),
-    top = Math.floor((height - MEKONG_ROWS) / 2)
-  const paint = (x: number, y: number, text: string, color: string, background?: string) => {
-    const row = top + Math.round(y)
-    if (row < 0 || row >= height) return
-    for (let i = 0; i < text.length; i++) {
-      const sceneX = Math.round(x) + i
-      const column = left + sceneX
-      if (sceneX < 0 || sceneX >= MEKONG_COLUMNS || column < 0 || column >= width) continue
-      grid[row]![column] = { text: text[i]!, color, background }
-    }
-  }
+  const { paint, merge } = createSceneGrid({
+    columns,
+    rows,
+    sceneColumns: MEKONG_COLUMNS,
+    sceneRows: MEKONG_ROWS,
+    sky: colors.sky,
+  })
   paint(MEKONG_SUN.x - 2, MEKONG_SUN.y - 1, ".---.", colors.sun, colors.sunGlow)
   paint(MEKONG_SUN.x - 3, MEKONG_SUN.y, "(     )", colors.sun, colors.sunGlow)
   for (const palm of MEKONG_PALMS) {
@@ -187,13 +178,5 @@ export function mekongRows(columns: number, rows: number, style: MekongStyle, el
   for (const egret of mekongEgrets(elapsedMs)) {
     paint(egret.x, egret.y, "v", colors.egret)
   }
-  return grid.map((row) => {
-    const runs: FujiRun[] = []
-    for (const cell of row) {
-      const last = runs.at(-1)
-      if (last?.color === cell.color && last.background === cell.background) last.text += cell.text
-      else runs.push({ ...cell })
-    }
-    return runs
-  })
+  return merge()
 }

@@ -1,4 +1,5 @@
 import type { FujiRun } from "./fuji-view-model"
+import { createSceneGrid } from "./scene-grid"
 
 export type PyramidsStyle = "pyramids-day" | "pyramids-night"
 export function isPyramidsStyle(style: string | undefined): style is PyramidsStyle {
@@ -87,26 +88,16 @@ export function pyramidsCaravanX(elapsedMs: number): number {
 }
 
 export function pyramidsRows(columns: number, rows: number, style: PyramidsStyle, elapsedMs: number): FujiRun[][] {
-  const width = Math.max(0, Math.floor(columns)),
-    height = Math.max(0, Math.floor(rows))
   const night = style === "pyramids-night"
   const colors = PYRAMIDS_COLORS[style]
   const flame = pyramidsFlicker(elapsedMs)
-  const grid: FujiRun[][] = Array.from({ length: height }, () =>
-    Array.from({ length: width }, () => ({ text: " ", color: colors.sky })),
-  )
-  const left = Math.floor((width - PYRAMIDS_COLUMNS) / 2),
-    top = Math.floor((height - PYRAMIDS_ROWS) / 2)
-  const paint = (x: number, y: number, text: string, color: string, background?: string) => {
-    const row = top + Math.round(y)
-    if (row < 0 || row >= height) return
-    for (let i = 0; i < text.length; i++) {
-      const sceneX = Math.round(x) + i
-      const column = left + sceneX
-      if (sceneX < 0 || sceneX >= PYRAMIDS_COLUMNS || column < 0 || column >= width) continue
-      grid[row]![column] = { text: text[i]!, color, background }
-    }
-  }
+  const { paint, merge } = createSceneGrid({
+    columns,
+    rows,
+    sceneColumns: PYRAMIDS_COLUMNS,
+    sceneRows: PYRAMIDS_ROWS,
+    sky: colors.sky,
+  })
   if (night) {
     PYRAMIDS_STARS.forEach((star, i) => {
       paint(star.x, star.y, (Math.floor(Math.max(0, elapsedMs) / 400) + i) % 3 === 0 ? "*" : ".", colors.sky)
@@ -170,13 +161,5 @@ export function pyramidsRows(columns: number, rows: number, style: PyramidsStyle
   for (let x = 7; x < PYRAMIDS_COLUMNS; x += 13) {
     paint(x, PYRAMIDS_DUNE_TOP + 4, "~~~~~", colors.sandDark, colors.dune)
   }
-  return grid.map((row) => {
-    const runs: FujiRun[] = []
-    for (const cell of row) {
-      const last = runs.at(-1)
-      if (last?.color === cell.color && last.background === cell.background) last.text += cell.text
-      else runs.push({ ...cell })
-    }
-    return runs
-  })
+  return merge()
 }

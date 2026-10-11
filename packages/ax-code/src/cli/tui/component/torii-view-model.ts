@@ -1,4 +1,5 @@
 import type { FujiRun } from "./fuji-view-model"
+import { createSceneGrid } from "./scene-grid"
 
 export type ToriiStyle = "torii-day" | "torii-night"
 export function isToriiStyle(style: string | undefined): style is ToriiStyle {
@@ -110,26 +111,16 @@ export function toriiFlicker(elapsedMs: number): boolean {
 }
 
 export function toriiRows(columns: number, rows: number, style: ToriiStyle, elapsedMs: number): FujiRun[][] {
-  const width = Math.max(0, Math.floor(columns)),
-    height = Math.max(0, Math.floor(rows))
   const night = style === "torii-night"
   const colors = TORII_COLORS[style]
   const flame = toriiFlicker(elapsedMs)
-  const grid: FujiRun[][] = Array.from({ length: height }, () =>
-    Array.from({ length: width }, () => ({ text: " ", color: colors.sky })),
-  )
-  const left = Math.floor((width - TORII_COLUMNS) / 2),
-    top = Math.floor((height - TORII_ROWS) / 2)
-  const paint = (x: number, y: number, text: string, color: string, background?: string) => {
-    const row = top + Math.round(y)
-    if (row < 0 || row >= height) return
-    for (let i = 0; i < text.length; i++) {
-      const sceneX = Math.round(x) + i
-      const column = left + sceneX
-      if (sceneX < 0 || sceneX >= TORII_COLUMNS || column < 0 || column >= width) continue
-      grid[row]![column] = { text: text[i]!, color, background }
-    }
-  }
+  const { paint, merge, grid, width, height, left, top } = createSceneGrid({
+    columns,
+    rows,
+    sceneColumns: TORII_COLUMNS,
+    sceneRows: TORII_ROWS,
+    sky: colors.sky,
+  })
   if (night) {
     TORII_STARS.forEach((star, i) => {
       paint(star.x, star.y, (Math.floor(Math.max(0, elapsedMs) / 400) + i) % 3 === 0 ? "*" : ".", colors.sky)
@@ -215,13 +206,5 @@ export function toriiRows(columns: number, rows: number, style: ToriiStyle, elap
   for (let x = 1; x < TORII_COLUMNS; x += 6) {
     paint(x, TORII_GROUND_TOP + 3, '"', colors.tree, colors.ground)
   }
-  return grid.map((row) => {
-    const runs: FujiRun[] = []
-    for (const cell of row) {
-      const last = runs.at(-1)
-      if (last?.color === cell.color && last.background === cell.background) last.text += cell.text
-      else runs.push({ ...cell })
-    }
-    return runs
-  })
+  return merge()
 }

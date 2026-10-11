@@ -1,4 +1,5 @@
 import type { FujiRun } from "./fuji-view-model"
+import { createSceneGrid } from "./scene-grid"
 
 export type BrandenburgStyle = "brandenburg-night" | "brandenburg-dawn"
 export function isBrandenburgStyle(style: string | undefined): style is BrandenburgStyle {
@@ -194,27 +195,17 @@ export function brandenburgRows(
   style: BrandenburgStyle,
   elapsedMs: number,
 ): FujiRun[][] {
-  const width = Math.max(0, Math.floor(columns)),
-    height = Math.max(0, Math.floor(rows))
   const night = style === "brandenburg-night"
   const colors = BRANDENBURG_COLORS[style]
   const gate = BRANDENBURG_GATE
   const lit = brandenburgLights(style, elapsedMs) > 0.7
-  const grid: FujiRun[][] = Array.from({ length: height }, () =>
-    Array.from({ length: width }, () => ({ text: " ", color: colors.sky })),
-  )
-  const left = Math.floor((width - BRANDENBURG_COLUMNS) / 2),
-    top = Math.floor((height - BRANDENBURG_ROWS) / 2)
-  const paint = (x: number, y: number, text: string, color: string, background?: string) => {
-    const row = top + Math.round(y)
-    if (row < 0 || row >= height) return
-    for (let i = 0; i < text.length; i++) {
-      const sceneX = Math.round(x) + i
-      const column = left + sceneX
-      if (sceneX < 0 || sceneX >= BRANDENBURG_COLUMNS || column < 0 || column >= width) continue
-      grid[row]![column] = { text: text[i]!, color, background }
-    }
-  }
+  const { paint, merge } = createSceneGrid({
+    columns,
+    rows,
+    sceneColumns: BRANDENBURG_COLUMNS,
+    sceneRows: BRANDENBURG_ROWS,
+    sky: colors.sky,
+  })
   /** Gate-unit x to a scene column and gate-unit y to a scene row. */
   const col = (gx: number) => Math.round(BRANDENBURG_CENTER_X + gx)
   const row = (gy: number) => Math.floor(BRANDENBURG_GROUND_TOP - gy / 2)
@@ -342,13 +333,5 @@ export function brandenburgRows(
     paint(walker.x, base - 1, "o", colors.walker, walker.depth > 0 ? colors.ground : undefined)
     paint(walker.x, base, "|", colors.walker, colors.ground)
   }
-  return grid.map((line) => {
-    const runs: FujiRun[] = []
-    for (const cell of line) {
-      const last = runs.at(-1)
-      if (last?.color === cell.color && last.background === cell.background) last.text += cell.text
-      else runs.push({ ...cell })
-    }
-    return runs
-  })
+  return merge()
 }

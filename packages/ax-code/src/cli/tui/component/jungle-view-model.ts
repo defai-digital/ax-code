@@ -1,4 +1,5 @@
 import type { FujiRun } from "./fuji-view-model"
+import { createSceneGrid } from "./scene-grid"
 
 export type JungleStyle = "jungle-day" | "jungle-night"
 export function isJungleStyle(style: string | undefined): style is JungleStyle {
@@ -115,25 +116,15 @@ export function jungleSway(elapsedMs: number, vineX: number): number {
 }
 
 export function jungleRows(columns: number, rows: number, style: JungleStyle, elapsedMs: number): FujiRun[][] {
-  const width = Math.max(0, Math.floor(columns)),
-    height = Math.max(0, Math.floor(rows))
   const night = style === "jungle-night"
   const colors = JUNGLE_COLORS[style]
-  const grid: FujiRun[][] = Array.from({ length: height }, () =>
-    Array.from({ length: width }, () => ({ text: " ", color: colors.sky })),
-  )
-  const left = Math.floor((width - JUNGLE_COLUMNS) / 2),
-    top = Math.floor((height - JUNGLE_ROWS) / 2)
-  const paint = (x: number, y: number, text: string, color: string, background?: string) => {
-    const row = top + Math.round(y)
-    if (row < 0 || row >= height) return
-    for (let i = 0; i < text.length; i++) {
-      const sceneX = Math.round(x) + i
-      const column = left + sceneX
-      if (sceneX < 0 || sceneX >= JUNGLE_COLUMNS || column < 0 || column >= width) continue
-      grid[row]![column] = { text: text[i]!, color, background }
-    }
-  }
+  const { paint, merge, grid, width, height, left, top } = createSceneGrid({
+    columns,
+    rows,
+    sceneColumns: JUNGLE_COLUMNS,
+    sceneRows: JUNGLE_ROWS,
+    sky: colors.sky,
+  })
   for (let y = 0; y <= JUNGLE_CANOPY_BOTTOM; y++) {
     paint(0, y, " ".repeat(JUNGLE_COLUMNS), colors.leaf, colors.leafDark)
   }
@@ -199,13 +190,5 @@ export function jungleRows(columns: number, rows: number, style: JungleStyle, el
   for (const bloom of [6, 30, 54]) {
     paint(bloom, JUNGLE_GROUND_TOP + 2, "*", colors.flower, colors.ground)
   }
-  return grid.map((row) => {
-    const runs: FujiRun[] = []
-    for (const cell of row) {
-      const last = runs.at(-1)
-      if (last?.color === cell.color && last.background === cell.background) last.text += cell.text
-      else runs.push({ ...cell })
-    }
-    return runs
-  })
+  return merge()
 }

@@ -1,4 +1,5 @@
 import type { FujiRun } from "./fuji-view-model"
+import { createSceneGrid } from "./scene-grid"
 
 export type DomesStyle = "domes-snow" | "domes-clear"
 export function isDomesStyle(style: string | undefined): style is DomesStyle {
@@ -106,25 +107,15 @@ export function domesFlakesBig(elapsedMs: number): DomesBigFlake[] {
 }
 
 export function domesRows(columns: number, rows: number, style: DomesStyle, elapsedMs: number): FujiRun[][] {
-  const width = Math.max(0, Math.floor(columns)),
-    height = Math.max(0, Math.floor(rows))
   const snow = style === "domes-snow"
   const colors = DOMES_COLORS[style]
-  const grid: FujiRun[][] = Array.from({ length: height }, () =>
-    Array.from({ length: width }, () => ({ text: " ", color: colors.sky })),
-  )
-  const left = Math.floor((width - DOMES_COLUMNS) / 2),
-    top = Math.floor((height - DOMES_ROWS) / 2)
-  const paint = (x: number, y: number, text: string, color: string, background?: string) => {
-    const row = top + Math.round(y)
-    if (row < 0 || row >= height) return
-    for (let i = 0; i < text.length; i++) {
-      const sceneX = Math.round(x) + i
-      const column = left + sceneX
-      if (sceneX < 0 || sceneX >= DOMES_COLUMNS || column < 0 || column >= width) continue
-      grid[row]![column] = { text: text[i]!, color, background }
-    }
-  }
+  const { paint, merge, grid, width, height, left, top } = createSceneGrid({
+    columns,
+    rows,
+    sceneColumns: DOMES_COLUMNS,
+    sceneRows: DOMES_ROWS,
+    sky: colors.sky,
+  })
   // Onion domes bulging over white walls.
   DOMES_DOME.forEach((dome, domeIndex) => {
     for (let y = DOMES_BASE_TOP - dome.r - 1; y < DOMES_BASE_TOP; y++) {
@@ -202,13 +193,5 @@ export function domesRows(columns: number, rows: number, style: DomesStyle, elap
   paint(37, DOMES_GROUND_TOP, ".", colors.wallDark, colors.ground)
   paint(38, DOMES_GROUND_TOP + 1, ".", colors.wallDark, colors.ground)
   paint(37, DOMES_GROUND_TOP + 2, ".", colors.wallDark, colors.ground)
-  return grid.map((row) => {
-    const runs: FujiRun[] = []
-    for (const cell of row) {
-      const last = runs.at(-1)
-      if (last?.color === cell.color && last.background === cell.background) last.text += cell.text
-      else runs.push({ ...cell })
-    }
-    return runs
-  })
+  return merge()
 }

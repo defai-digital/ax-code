@@ -1,4 +1,5 @@
 import type { FujiRun } from "./fuji-view-model"
+import { createSceneGrid } from "./scene-grid"
 
 export type CastleStyle = "castle-day" | "castle-night"
 export function isCastleStyle(style: string | undefined): style is CastleStyle {
@@ -140,25 +141,15 @@ export function castleBirdShift(elapsedMs: number): number {
 }
 
 export function castleRows(columns: number, rows: number, style: CastleStyle, elapsedMs: number): FujiRun[][] {
-  const width = Math.max(0, Math.floor(columns)),
-    height = Math.max(0, Math.floor(rows))
   const day = style === "castle-day"
   const colors = CASTLE_COLORS[style]
-  const grid: FujiRun[][] = Array.from({ length: height }, () =>
-    Array.from({ length: width }, () => ({ text: " ", color: colors.sky })),
-  )
-  const left = Math.floor((width - CASTLE_COLUMNS) / 2),
-    top = Math.floor((height - CASTLE_ROWS) / 2)
-  const paint = (x: number, y: number, text: string, color: string, background?: string) => {
-    const row = top + Math.round(y)
-    if (row < 0 || row >= height) return
-    for (let i = 0; i < text.length; i++) {
-      const sceneX = Math.round(x) + i
-      const column = left + sceneX
-      if (sceneX < 0 || sceneX >= CASTLE_COLUMNS || column < 0 || column >= width) continue
-      grid[row]![column] = { text: text[i]!, color, background }
-    }
-  }
+  const { paint, merge } = createSceneGrid({
+    columns,
+    rows,
+    sceneColumns: CASTLE_COLUMNS,
+    sceneRows: CASTLE_ROWS,
+    sky: colors.sky,
+  })
   if (day) {
     paint(CASTLE_SUN.x - 1, CASTLE_SUN.y - 1, ".-.", colors.sun)
     paint(CASTLE_SUN.x - 2, CASTLE_SUN.y, "(   )", colors.sun)
@@ -218,13 +209,5 @@ export function castleRows(columns: number, rows: number, style: CastleStyle, el
   }
   paint(CASTLE_GATE.x, CASTLE_HILL_TOP + 1, "===", colors.path, colors.hill)
   paint(CASTLE_GATE.x - 1, CASTLE_HILL_TOP + 2, "=====", colors.path, colors.hill)
-  return grid.map((row) => {
-    const runs: FujiRun[] = []
-    for (const cell of row) {
-      const last = runs.at(-1)
-      if (last?.color === cell.color && last.background === cell.background) last.text += cell.text
-      else runs.push({ ...cell })
-    }
-    return runs
-  })
+  return merge()
 }

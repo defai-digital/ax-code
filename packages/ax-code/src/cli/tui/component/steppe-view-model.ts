@@ -1,4 +1,5 @@
 import type { FujiRun } from "./fuji-view-model"
+import { createSceneGrid } from "./scene-grid"
 
 export type SteppeStyle = "steppe-day" | "steppe-night"
 export function isSteppeStyle(style: string | undefined): style is SteppeStyle {
@@ -102,26 +103,16 @@ export function steppeHerd(elapsedMs: number): SteppeHorse[] {
 }
 
 export function steppeRows(width: number, height: number, style: SteppeStyle, elapsedMs: number): FujiRun[][] {
-  const w = Math.max(0, Math.floor(width)),
-    h = Math.max(0, Math.floor(height))
   const night = style === "steppe-night"
   const colors = STEPPE_COLORS[style]
   const tick = steppeTick(elapsedMs)
-  const grid: FujiRun[][] = Array.from({ length: h }, () =>
-    Array.from({ length: w }, () => ({ text: " ", color: colors.sky })),
-  )
-  const left = Math.floor((w - STEPPE_COLUMNS) / 2),
-    top = Math.floor((h - STEPPE_ROWS) / 2)
-  const paint = (x: number, y: number, text: string, color: string, background?: string) => {
-    const row = top + Math.round(y)
-    if (row < 0 || row >= h) return
-    for (let i = 0; i < text.length; i++) {
-      const sceneX = Math.round(x) + i
-      const column = left + sceneX
-      if (sceneX < 0 || sceneX >= STEPPE_COLUMNS || column < 0 || column >= w) continue
-      grid[row]![column] = { text: text[i]!, color, background }
-    }
-  }
+  const { paint, merge } = createSceneGrid({
+    columns: width,
+    rows: height,
+    sceneColumns: STEPPE_COLUMNS,
+    sceneRows: STEPPE_ROWS,
+    sky: colors.sky,
+  })
   if (night) {
     STEPPE_STARS.forEach((star, i) => {
       paint(star.x, star.y, (Math.floor(Math.max(0, elapsedMs) / 400) + i) % 3 === 0 ? "*" : ".", colors.sky)
@@ -158,13 +149,5 @@ export function steppeRows(width: number, height: number, style: SteppeStyle, el
     paint(horse.x, STEPPE_GROUND_TOP - 2, "o>", colors.herd)
     paint(horse.x, STEPPE_GROUND_TOP - 1, tick % 2 === 0 ? "||" : "/\\", colors.herd, colors.ground)
   }
-  return grid.map((row) => {
-    const runs: FujiRun[] = []
-    for (const cell of row) {
-      const last = runs.at(-1)
-      if (last?.color === cell.color && last.background === cell.background) last.text += cell.text
-      else runs.push({ ...cell })
-    }
-    return runs
-  })
+  return merge()
 }

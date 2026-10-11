@@ -1,4 +1,5 @@
 import type { FujiRun } from "./fuji-view-model"
+import { createSceneGrid } from "./scene-grid"
 import { hdHex, hdMix, type RGB } from "./scene-hd"
 
 export type SingaporeStyle = "singapore-day" | "singapore-night"
@@ -98,26 +99,16 @@ export function singaporeBoat(elapsedMs: number): { x: number; y: number } {
 }
 
 export function singaporeRows(columns: number, rows: number, style: SingaporeStyle, elapsedMs: number): FujiRun[][] {
-  const width = Math.max(0, Math.floor(columns)),
-    height = Math.max(0, Math.floor(rows))
   const colors = SINGAPORE_COLORS[style]
   const night = style === "singapore-night"
   const phase = singaporePhase(elapsedMs)
-  const grid: FujiRun[][] = Array.from({ length: height }, () =>
-    Array.from({ length: width }, () => ({ text: " ", color: colors.sky })),
-  )
-  const left = Math.floor((width - SINGAPORE_COLUMNS) / 2),
-    top = Math.floor((height - SINGAPORE_ROWS) / 2)
-  const paint = (x: number, y: number, text: string, color: string, background?: string) => {
-    const row = top + Math.round(y)
-    if (row < 0 || row >= height) return
-    for (let i = 0; i < text.length; i++) {
-      const sceneX = Math.round(x) + i,
-        column = left + sceneX
-      if (sceneX < 0 || sceneX >= SINGAPORE_COLUMNS || column < 0 || column >= width) continue
-      grid[row]![column] = { text: text[i]!, color, background }
-    }
-  }
+  const { paint, merge } = createSceneGrid({
+    columns,
+    rows,
+    sceneColumns: SINGAPORE_COLUMNS,
+    sceneRows: SINGAPORE_ROWS,
+    sky: colors.sky,
+  })
   if (night) {
     SINGAPORE_STARS.forEach((star, i) => paint(star.x, star.y, Math.sin(phase * 2 + i) > 0 ? "*" : ".", colors.light))
     paint(63, 2, "( )", colors.light)
@@ -170,13 +161,5 @@ export function singaporeRows(columns: number, rows: number, style: SingaporeSty
   paint(boat.x, boat.y, "_[]_", colors.light, colors.waterDeep)
   paint(boat.x - 1, boat.y + 1, "\\____/", colors.accent, colors.waterDeep)
   paint(33, 23, "SINGAPORE", colors.light, colors.waterDeep)
-  return grid.map((row) => {
-    const runs: FujiRun[] = []
-    for (const cell of row) {
-      const last = runs.at(-1)
-      if (last?.color === cell.color && last.background === cell.background) last.text += cell.text
-      else runs.push({ ...cell })
-    }
-    return runs
-  })
+  return merge()
 }

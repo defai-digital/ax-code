@@ -1,4 +1,5 @@
 import type { FujiRun } from "./fuji-view-model"
+import { createSceneGrid } from "./scene-grid"
 
 /**
  * Single-style family: both AnimationPair slots hold "taegeuk". The emblem
@@ -168,24 +169,14 @@ export function taegeukWave(elapsedMs: number): number {
 }
 
 export function taegeukRows(columns: number, rows: number, style: TaegeukStyle, elapsedMs: number): FujiRun[][] {
-  const width = Math.max(0, Math.floor(columns)),
-    height = Math.max(0, Math.floor(rows))
   const colors = TAEGEUK_COLORS[style]
-  const grid: FujiRun[][] = Array.from({ length: height }, () =>
-    Array.from({ length: width }, () => ({ text: " ", color: colors.sky })),
-  )
-  const left = Math.floor((width - TAEGEUK_COLUMNS) / 2),
-    top = Math.floor((height - TAEGEUK_ROWS) / 2)
-  const paint = (x: number, y: number, text: string, color: string, background?: string) => {
-    const row = top + Math.round(y)
-    if (row < 0 || row >= height) return
-    for (let i = 0; i < text.length; i++) {
-      const sceneX = Math.round(x) + i
-      const column = left + sceneX
-      if (sceneX < 0 || sceneX >= TAEGEUK_COLUMNS || column < 0 || column >= width) continue
-      grid[row]![column] = { text: text[i]!, color, background }
-    }
-  }
+  const { paint, merge } = createSceneGrid({
+    columns,
+    rows,
+    sceneColumns: TAEGEUK_COLUMNS,
+    sceneRows: TAEGEUK_ROWS,
+    sky: colors.sky,
+  })
   // Confetti and sparks stay behind the flag so the field is never marked.
   for (const bit of taegeukConfetti(elapsedMs)) {
     paint(bit.x, bit.y, "*", bit.red ? colors.red : colors.blue)
@@ -237,13 +228,5 @@ export function taegeukRows(columns: number, rows: number, style: TaegeukStyle, 
     paint(x, TAEGEUK_GROUND_TOP, (x + wave) % 4 === 0 ? "o" : ".", colors.crowd, colors.ground)
     paint(x, TAEGEUK_GROUND_TOP + 1, (x + wave + 2) % 4 === 0 ? "o" : ".", colors.crowd, colors.ground)
   }
-  return grid.map((row) => {
-    const runs: FujiRun[] = []
-    for (const cell of row) {
-      const last = runs.at(-1)
-      if (last?.color === cell.color && last.background === cell.background) last.text += cell.text
-      else runs.push({ ...cell })
-    }
-    return runs
-  })
+  return merge()
 }

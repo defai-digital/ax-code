@@ -1,4 +1,5 @@
 import type { FujiRun } from "./fuji-view-model"
+import { createSceneGrid } from "./scene-grid"
 
 export type ReefStyle = "reef-day" | "reef-night"
 export function isReefStyle(style: string | undefined): style is ReefStyle {
@@ -124,25 +125,15 @@ export function reefRipple(elapsedMs: number): number {
 }
 
 export function reefRows(columns: number, rows: number, style: ReefStyle, elapsedMs: number): FujiRun[][] {
-  const width = Math.max(0, Math.floor(columns)),
-    height = Math.max(0, Math.floor(rows))
   const night = style === "reef-night"
   const colors = REEF_COLORS[style]
-  const grid: FujiRun[][] = Array.from({ length: height }, () =>
-    Array.from({ length: width }, () => ({ text: " ", color: colors.sky })),
-  )
-  const left = Math.floor((width - REEF_COLUMNS) / 2),
-    top = Math.floor((height - REEF_ROWS) / 2)
-  const paint = (x: number, y: number, text: string, color: string, background?: string) => {
-    const row = top + Math.round(y)
-    if (row < 0 || row >= height) return
-    for (let i = 0; i < text.length; i++) {
-      const sceneX = Math.round(x) + i
-      const column = left + sceneX
-      if (sceneX < 0 || sceneX >= REEF_COLUMNS || column < 0 || column >= width) continue
-      grid[row]![column] = { text: text[i]!, color, background }
-    }
-  }
+  const { paint, merge, grid, width, height, left, top } = createSceneGrid({
+    columns,
+    rows,
+    sceneColumns: REEF_COLUMNS,
+    sceneRows: REEF_ROWS,
+    sky: colors.sky,
+  })
   for (let y = 0; y < REEF_SAND_TOP; y++) {
     paint(0, y, " ".repeat(REEF_COLUMNS), colors.water, colors.water)
   }
@@ -200,13 +191,5 @@ export function reefRows(columns: number, rows: number, style: ReefStyle, elapse
     paint(shell, REEF_SAND_TOP, "o", colors.shell, colors.sand)
   }
   paint(46, REEF_SAND_TOP + 1, "*", colors.shell, colors.sand)
-  return grid.map((row) => {
-    const runs: FujiRun[] = []
-    for (const cell of row) {
-      const last = runs.at(-1)
-      if (last?.color === cell.color && last.background === cell.background) last.text += cell.text
-      else runs.push({ ...cell })
-    }
-    return runs
-  })
+  return merge()
 }

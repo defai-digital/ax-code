@@ -1,4 +1,5 @@
 import type { FujiRun } from "./fuji-view-model"
+import { createSceneGrid } from "./scene-grid"
 
 export type SnowStyle = "snowfall" | "winter-night"
 export function isSnowStyle(style: string | undefined): style is SnowStyle {
@@ -136,25 +137,15 @@ export function snowShadowDX(style: SnowStyle): number {
 }
 
 export function snowRows(columns: number, rows: number, style: SnowStyle, elapsedMs: number): FujiRun[][] {
-  const width = Math.max(0, Math.floor(columns)),
-    height = Math.max(0, Math.floor(rows))
   const night = style === "winter-night"
   const colors = SNOW_COLORS[style]
-  const grid: FujiRun[][] = Array.from({ length: height }, () =>
-    Array.from({ length: width }, () => ({ text: " ", color: colors.sky })),
-  )
-  const left = Math.floor((width - SNOW_COLUMNS) / 2),
-    top = Math.floor((height - SNOW_ROWS) / 2)
-  const paint = (x: number, y: number, text: string, color: string, background?: string) => {
-    const row = top + Math.round(y)
-    if (row < 0 || row >= height) return
-    for (let i = 0; i < text.length; i++) {
-      const sceneX = Math.round(x) + i
-      const column = left + sceneX
-      if (sceneX < 0 || sceneX >= SNOW_COLUMNS || column < 0 || column >= width) continue
-      grid[row]![column] = { text: text[i]!, color, background }
-    }
-  }
+  const { paint, merge } = createSceneGrid({
+    columns,
+    rows,
+    sceneColumns: SNOW_COLUMNS,
+    sceneRows: SNOW_ROWS,
+    sky: colors.sky,
+  })
   const orb = night ? SNOW_MOON : SNOW_SUN
   if (night) {
     paint(3, 0, ".    *      .       *      .", colors.sky)
@@ -206,13 +197,5 @@ export function snowRows(columns: number, rows: number, style: SnowStyle, elapse
   for (const flake of snowFlakes(elapsedMs)) {
     paint(flake.x, flake.y, snowFlakeGlyph(flake.char, elapsedMs), colors.flake)
   }
-  return grid.map((row) => {
-    const runs: FujiRun[] = []
-    for (const cell of row) {
-      const last = runs.at(-1)
-      if (last?.color === cell.color && last.background === cell.background) last.text += cell.text
-      else runs.push({ ...cell })
-    }
-    return runs
-  })
+  return merge()
 }

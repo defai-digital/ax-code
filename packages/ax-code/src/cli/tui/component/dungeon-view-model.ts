@@ -1,4 +1,5 @@
 import type { FujiRun } from "./fuji-view-model"
+import { createSceneGrid } from "./scene-grid"
 
 export type DungeonStyle = "dungeon-descent" | "dungeon-treasure"
 export function isDungeonStyle(style: string | undefined): style is DungeonStyle {
@@ -93,26 +94,16 @@ export function dungeonDripY(elapsedMs: number, index: number): number {
 }
 
 export function dungeonRows(columns: number, rows: number, style: DungeonStyle, elapsedMs: number): FujiRun[][] {
-  const width = Math.max(0, Math.floor(columns)),
-    height = Math.max(0, Math.floor(rows))
   const descent = style === "dungeon-descent"
   const colors = DUNGEON_COLORS[style]
   const flame = dungeonFlicker(elapsedMs)
-  const grid: FujiRun[][] = Array.from({ length: height }, () =>
-    Array.from({ length: width }, () => ({ text: " ", color: colors.wall })),
-  )
-  const left = Math.floor((width - DUNGEON_COLUMNS) / 2),
-    top = Math.floor((height - DUNGEON_ROWS) / 2)
-  const paint = (x: number, y: number, text: string, color: string, background?: string) => {
-    const row = top + Math.round(y)
-    if (row < 0 || row >= height) return
-    for (let i = 0; i < text.length; i++) {
-      const sceneX = Math.round(x) + i
-      const column = left + sceneX
-      if (sceneX < 0 || sceneX >= DUNGEON_COLUMNS || column < 0 || column >= width) continue
-      grid[row]![column] = { text: text[i]!, color, background }
-    }
-  }
+  const { paint, merge } = createSceneGrid({
+    columns,
+    rows,
+    sceneColumns: DUNGEON_COLUMNS,
+    sceneRows: DUNGEON_ROWS,
+    sky: colors.wall,
+  })
   // Ceiling and side walls of the chamber.
   paint(0, 0, "#".repeat(DUNGEON_COLUMNS), colors.stoneDark)
   for (let y = 1; y < DUNGEON_FLOOR_TOP; y++) {
@@ -163,13 +154,5 @@ export function dungeonRows(columns: number, rows: number, style: DungeonStyle, 
   for (let y = DUNGEON_FLOOR_TOP; y < DUNGEON_ROWS; y++) {
     paint(0, y, " ".repeat(DUNGEON_COLUMNS), colors.floor, colors.floor)
   }
-  return grid.map((row) => {
-    const runs: FujiRun[] = []
-    for (const cell of row) {
-      const last = runs.at(-1)
-      if (last?.color === cell.color && last.background === cell.background) last.text += cell.text
-      else runs.push({ ...cell })
-    }
-    return runs
-  })
+  return merge()
 }

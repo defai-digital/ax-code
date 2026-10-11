@@ -1,4 +1,5 @@
 import type { FujiRun } from "./fuji-view-model"
+import { createSceneGrid } from "./scene-grid"
 
 export type CanyonStyle = "canyon-day" | "canyon-night"
 export function isCanyonStyle(style: string | undefined): style is CanyonStyle {
@@ -106,27 +107,17 @@ export function canyonEagle(elapsedMs: number): CanyonEagle {
 }
 
 export function canyonRows(width: number, height: number, style: CanyonStyle, elapsedMs: number): FujiRun[][] {
-  const w = Math.max(0, Math.floor(width)),
-    h = Math.max(0, Math.floor(height))
   const night = style === "canyon-night"
   const colors = CANYON_COLORS[style]
   const tick = canyonTick(elapsedMs)
   const flame = canyonFlicker(elapsedMs)
-  const grid: FujiRun[][] = Array.from({ length: h }, () =>
-    Array.from({ length: w }, () => ({ text: " ", color: colors.sky })),
-  )
-  const left = Math.floor((w - CANYON_COLUMNS) / 2),
-    top = Math.floor((h - CANYON_ROWS) / 2)
-  const paint = (x: number, y: number, text: string, color: string, background?: string) => {
-    const row = top + Math.round(y)
-    if (row < 0 || row >= h) return
-    for (let i = 0; i < text.length; i++) {
-      const sceneX = Math.round(x) + i
-      const column = left + sceneX
-      if (sceneX < 0 || sceneX >= CANYON_COLUMNS || column < 0 || column >= w) continue
-      grid[row]![column] = { text: text[i]!, color, background }
-    }
-  }
+  const { paint, merge } = createSceneGrid({
+    columns: width,
+    rows: height,
+    sceneColumns: CANYON_COLUMNS,
+    sceneRows: CANYON_ROWS,
+    sky: colors.sky,
+  })
   if (night) {
     CANYON_STARS.forEach((star, i) => {
       paint(star.x, star.y, (Math.floor(Math.max(0, elapsedMs) / 400) + i) % 3 === 0 ? "*" : ".", colors.sky)
@@ -167,13 +158,5 @@ export function canyonRows(width: number, height: number, style: CanyonStyle, el
   }
   const eagle = canyonEagle(elapsedMs)
   paint(eagle.x, eagle.y, tick % 2 === 0 ? "/v\\" : "\\v/", colors.eagle)
-  return grid.map((row) => {
-    const runs: FujiRun[] = []
-    for (const cell of row) {
-      const last = runs.at(-1)
-      if (last?.color === cell.color && last.background === cell.background) last.text += cell.text
-      else runs.push({ ...cell })
-    }
-    return runs
-  })
+  return merge()
 }

@@ -1,4 +1,5 @@
 import type { FujiRun } from "./fuji-view-model"
+import { createSceneGrid } from "./scene-grid"
 
 export type SpaceStyle = "space-launch" | "space-drift"
 export function isSpaceStyle(style: string | undefined): style is SpaceStyle {
@@ -128,25 +129,15 @@ export function spaceNebulaShift(elapsedMs: number): number {
 }
 
 export function spaceRows(columns: number, rows: number, style: SpaceStyle, elapsedMs: number): FujiRun[][] {
-  const width = Math.max(0, Math.floor(columns)),
-    height = Math.max(0, Math.floor(rows))
   const launch = style === "space-launch"
   const colors = SPACE_COLORS[style]
-  const grid: FujiRun[][] = Array.from({ length: height }, () =>
-    Array.from({ length: width }, () => ({ text: " ", color: colors.sky })),
-  )
-  const left = Math.floor((width - SPACE_COLUMNS) / 2),
-    top = Math.floor((height - SPACE_ROWS) / 2)
-  const paint = (x: number, y: number, text: string, color: string, background?: string) => {
-    const row = top + Math.round(y)
-    if (row < 0 || row >= height) return
-    for (let i = 0; i < text.length; i++) {
-      const sceneX = Math.round(x) + i
-      const column = left + sceneX
-      if (sceneX < 0 || sceneX >= SPACE_COLUMNS || column < 0 || column >= width) continue
-      grid[row]![column] = { text: text[i]!, color, background }
-    }
-  }
+  const { paint, merge } = createSceneGrid({
+    columns,
+    rows,
+    sceneColumns: SPACE_COLUMNS,
+    sceneRows: SPACE_ROWS,
+    sky: colors.sky,
+  })
   SPACE_STARS.forEach((star, i) => {
     paint(star.x, star.y, spaceTwinkle(elapsedMs, i) ? "*" : ".", colors.star)
   })
@@ -174,13 +165,5 @@ export function spaceRows(columns: number, rows: number, style: SpaceStyle, elap
   for (const crater of SPACE_CRATERS) {
     paint(crater.x, crater.y, "o", colors.crater, colors.planet)
   }
-  return grid.map((row) => {
-    const runs: FujiRun[] = []
-    for (const cell of row) {
-      const last = runs.at(-1)
-      if (last?.color === cell.color && last.background === cell.background) last.text += cell.text
-      else runs.push({ ...cell })
-    }
-    return runs
-  })
+  return merge()
 }

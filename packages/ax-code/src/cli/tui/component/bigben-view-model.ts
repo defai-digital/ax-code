@@ -1,4 +1,5 @@
 import type { FujiRun } from "./fuji-view-model"
+import { createSceneGrid } from "./scene-grid"
 
 export type BigbenStyle = "bigben-day" | "bigben-night"
 export function isBigbenStyle(style: string | undefined): style is BigbenStyle {
@@ -141,27 +142,17 @@ export function bigbenBirds(elapsedMs: number): BigbenBird[] {
 }
 
 export function bigbenRows(columns: number, rows: number, style: BigbenStyle, elapsedMs: number): FujiRun[][] {
-  const width = Math.max(0, Math.floor(columns)),
-    height = Math.max(0, Math.floor(rows))
   const night = style === "bigben-night"
   const colors = BIGBEN_COLORS[style]
   const shimmer = bigbenShimmer(elapsedMs)
   const flag = bigbenFlag(elapsedMs)
-  const grid: FujiRun[][] = Array.from({ length: height }, () =>
-    Array.from({ length: width }, () => ({ text: " ", color: colors.sky })),
-  )
-  const left = Math.floor((width - BIGBEN_COLUMNS) / 2),
-    top = Math.floor((height - BIGBEN_ROWS) / 2)
-  const paint = (x: number, y: number, text: string, color: string, background?: string) => {
-    const row = top + Math.round(y)
-    if (row < 0 || row >= height) return
-    for (let i = 0; i < text.length; i++) {
-      const sceneX = Math.round(x) + i
-      const column = left + sceneX
-      if (sceneX < 0 || sceneX >= BIGBEN_COLUMNS || column < 0 || column >= width) continue
-      grid[row]![column] = { text: text[i]!, color, background }
-    }
-  }
+  const { paint, merge } = createSceneGrid({
+    columns,
+    rows,
+    sceneColumns: BIGBEN_COLUMNS,
+    sceneRows: BIGBEN_ROWS,
+    sky: colors.sky,
+  })
   for (const cloud of bigbenClouds(elapsedMs)) {
     paint(cloud.x, cloud.y, "~~~~~", colors.cloud)
   }
@@ -263,13 +254,5 @@ export function bigbenRows(columns: number, rows: number, style: BigbenStyle, el
   }
   paint(35, BIGBEN_WATER_TOP, "~~~~~", colors.face, colors.water)
   paint(35, BIGBEN_WATER_TOP + 1, "~~~~~", colors.face, colors.water)
-  return grid.map((row) => {
-    const runs: FujiRun[] = []
-    for (const cell of row) {
-      const last = runs.at(-1)
-      if (last?.color === cell.color && last.background === cell.background) last.text += cell.text
-      else runs.push({ ...cell })
-    }
-    return runs
-  })
+  return merge()
 }
