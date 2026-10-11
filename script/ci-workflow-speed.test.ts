@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { DETERMINISTIC_SHARD_COUNT } from "./ci-release-deterministic-skip"
-import { readFileSync, readdirSync } from "node:fs"
+import { existsSync, readFileSync, readdirSync } from "node:fs"
 import path from "node:path"
 
 const toolchain = readFileSync(".github/actions/setup-ax-code-toolchain/action.yml", "utf8")
@@ -38,9 +38,6 @@ describe("CI workflow speed policy", () => {
       "node script/check-node-version.mjs",
     )
     expect(readFileSync("script/only-allow-pnpm.mjs", "utf8")).toContain("!supportsNodeVersion()")
-    const agentRun = readFileSync(".github/workflows/agent-run.yml", "utf8")
-    expect(agentRun).toContain("uses: ./.github/actions/setup-ax-code-toolchain")
-    expect(agentRun).not.toContain("corepack enable")
   })
 
   test("repository script tests run once in repo-structure, not in ax-code CI", () => {
@@ -187,6 +184,70 @@ describe("CI workflow speed policy", () => {
     expect(lane).not.toContain("windows-11-arm")
     expect(lane).not.toContain("windows-2022")
     expect(typescriptNative).toContain('cron: "47 6 * * 1"')
+  })
+
+  test("native qualification covers compiler delivery changes without rebuilding unrelated application changes", () => {
+    const pathsFor = (event: string) => {
+      const block = typescriptNative.match(new RegExp(`^  ${event}:\\n[\\s\\S]*?(?=^  \\w|^\\S)`, "m"))?.[0]
+      expect(block).toBeDefined()
+      return [...block!.matchAll(/^      - "([^"]+)"$/gm)].map((match) => match[1])
+    }
+    const push = pathsFor("push")
+    const pullRequest = pathsFor("pull_request")
+    expect(push).toEqual(pullRequest)
+    const triggers = (filename: string) => push.some((pattern) => path.matchesGlob(filename, pattern))
+    for (const filename of [
+      "packages/ax-code-intel/src/typescript-native.ts",
+      "packages/ax-code-intel/src/client.ts",
+      "packages/ax-code-intel/test/fixture/fake-lsp-server.js",
+      "packages/ax-code-intel/package.json",
+      "packages/ax-code/script/build-node-tui.ts",
+      "packages/ax-code/script/build-deps.ts",
+      "packages/ax-code/src/lsp-glue.ts",
+      "packages/ax-code/src/cli/boot-node.ts",
+      "packages/ax-code/src/cli/cmd/debug/lsp.ts",
+      "packages/ax-code/src/index-node-tui.ts",
+      "packages/ax-code/src/code-intelligence/lsp-cache.ts",
+      "packages/ax-code/src/project/bootstrap.ts",
+      "packages/ax-code/src/config/config.ts",
+      "packages/ax-code/src/bun/package-manager.ts",
+      "packages/ax-code/src/bun.ts",
+      "packages/ax-code/test/lsp/diagnostics-aggregated.test.ts",
+      "packages/util/src/work-queue.ts",
+      "packages/plugin/tsconfig.json",
+      "packages/sdk/js/package.json",
+      "packages/sdk/js/tsconfig.json",
+      "packages/ax-code/tsconfig.json",
+      "package.json",
+      "tsconfig.json",
+      "pnpm-lock.yaml",
+      "pnpm-workspace.yaml",
+      "script/verify-typescript-native.cjs",
+      "script/verify-typescript-native.test.ts",
+      "script/node-ffi-runner.mjs",
+      "script/solid-loader.mjs",
+      ".github/actions/setup-ax-code-toolchain/action.yml",
+      ".github/workflows/typescript-native.yml",
+    ]) {
+      expect(triggers(filename), filename).toBe(true)
+    }
+    for (const filename of [
+      "packages/ax-code/src/session/prompt.ts",
+      "packages/ax-code/src/provider/models-snapshot.json",
+      "packages/ax-code/src/cli/tui/routes/session/index.tsx",
+      "packages/ax-code/test/session/prompt.test.ts",
+      "packages/ax-code-intel/perf/fixtures/synthetic/python-project/main.py",
+      "packages/ax-code-intel/README.md",
+      "crates/ax-code-fs/src/lib.rs",
+      "docs/cli.md",
+    ]) {
+      expect(triggers(filename), filename).toBe(false)
+    }
+  })
+
+  test("retired diagnostic and agent workflows stay outside the active workflow directory", () => {
+    expect(existsSync(".github/workflows/agent-run.yml")).toBe(false)
+    expect(existsSync(".github/workflows/tuimcp-debug.yml")).toBe(false)
   })
 
   test("windows-11-arm runtime stays off unchanged push and pull request paths", () => {
