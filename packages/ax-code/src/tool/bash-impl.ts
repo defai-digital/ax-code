@@ -736,6 +736,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             "no-host-directories",
             "page-requisites",
             "adjust-extension",
+            "background",
           ]
           const wgetLong = (arg: string): { name: string; value: string | undefined } | undefined => {
             if (!isWget) return undefined
@@ -762,6 +763,9 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           let noDirs = false
           let noHost = false
           let adjustExtension = false
+          // -b detaches and, unless -o / -a named a log, writes `wget-log`.
+          let background = false
+          let logNamed = false
           // Boolean short flags of a wget cluster, read left to right up to the
           // first value-taking letter (which owns the rest of the token).
           const wgetFlags = (letters: string) => {
@@ -779,6 +783,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
               if (letter === "x") layout = true
               if (letter === "r" || letter === "m" || letter === "p") recursive = true
               if (letter === "E") adjustExtension = true
+              if (letter === "b") background = true
             }
           }
           const pending: Array<{ value: string; relocate: boolean }> = []
@@ -815,10 +820,12 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
                 "no-directories",
                 "no-host-directories",
                 "adjust-extension",
+                "background",
               ].includes(long.name)
             ) {
               if (["recursive", "mirror", "page-requisites"].includes(long.name)) recursive = true
               if (long.name === "adjust-extension") adjustExtension = true
+              if (long.name === "background") background = true
               if (long.name === "force-directories") layout = true
               if (long.name === "no-directories") layout = !(noDirs = true)
               if (long.name === "no-host-directories") noHost = true
@@ -849,6 +856,11 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             const curlOutput = isWget ? null : arg.match(/^--output(?:=(.*))?$/)
             const wgetOutput =
               long && ["output-document", "output-file", "append-output"].includes(long.name) ? long : undefined
+            if (
+              isWget &&
+              (cluster?.[2] === "o" || cluster?.[2] === "a" || (wgetOutput && long?.name !== "output-document"))
+            )
+              logNamed = true
             const takesOutputValue =
               (curlOutput !== null && curlOutput[1] === undefined) ||
               (wgetOutput !== undefined && wgetOutput.value === undefined) ||
@@ -882,6 +894,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             // `-o -` / `-O -` stream to stdout: no file is written.
             if (item.value !== "-") await recordOutput(item.value, item.relocate)
           }
+          if (isWget && background && !logNamed) await recordOutput("wget-log", false)
           if (remoteName) {
             // Record the real download target <dir>/<url basename> for every
             // operand: without a scheme both tools assume http, so a

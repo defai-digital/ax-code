@@ -529,6 +529,9 @@ describe("tool.bash truncation", () => {
               await run(`wget -q -p http://127.0.0.1:${port}/req/page.html`)
               // -E may append .html depending on the response, so both names are recorded.
               await run(`wget -q -E http://127.0.0.1:${port}/ext/about`)
+              // -b detaches and logs to wget-log unless -o / -a named a log.
+              await run(`wget -q -b http://127.0.0.1:${port}/bg/bg.txt`)
+              await run(`wget -q -b -o bg.log http://127.0.0.1:${port}/bg/bg2.txt`)
               // `--` ends option parsing.
               await run(`wget -q -- http://127.0.0.1:${port}/dd/dd.txt`)
               // The later of -nd / -x wins.
@@ -548,6 +551,10 @@ describe("tool.bash truncation", () => {
                   "abbrev.txt",
                   "about",
                   "about.html",
+                  "bg.txt",
+                  "bg.log",
+                  "bg2.txt",
+                  "wget-log",
                   "dd.txt",
                   `127.0.0.1:${port}`,
                   `127.0.0.1:${port}/req/page.html`,
