@@ -719,29 +719,87 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         }
 
         if (["curl", "wget"].includes(name)) {
+          const isWget = name === "wget"
+          // wget accepts any unambiguous prefix of a long option (`--output-doc`);
+          // only the options modelled here are resolved, so an abbreviation of
+          // anything else stays an unknown flag. curl requires exact names.
+          const WGET_LONG = [
+            "output-document",
+            "output-file",
+            "append-output",
+            "directory-prefix",
+            "recursive",
+            "mirror",
+            "force-directories",
+            "no-directories",
+            "no-host-directories",
+          ]
+          const wgetLong = (arg: string): { name: string; value: string | undefined } | undefined => {
+            if (!isWget) return undefined
+            const m = arg.match(/^--([a-z][a-z-]*)(?:=(.*))?$/s)
+            if (!m) return undefined
+            const hits = WGET_LONG.filter((option) => option.startsWith(m[1]!))
+            return hits.length === 1 ? { name: hits[0]!, value: m[2] } : undefined
+          }
           // wget writes the URL basename unless `-O` names the document; curl
           // does so only with `-O` (--remote-name).
-          let remoteName = name === "wget"
+          let remoteName = isWget
           // curl `--output-dir DIR` relocates every relative output; wget
           // `-P DIR` / `--directory-prefix DIR` relocates only the files it
           // names itself (`-O` and the `-o` log stay relative to the cwd).
           // Either may follow the output flag, so recording is deferred.
           let outputDir: string | undefined
+          // wget -x / -r / -m lay files out as <prefix>/<host>/<url path>;
+          // -nH drops the host directory and -nd flattens everything again.
+          let layout = false
+          let recursive = false
+          let noDirs = false
+          let noHost = false
+          // Boolean short flags of a wget cluster, read left to right up to the
+          // first value-taking letter (which owns the rest of the token).
+          const wgetFlags = (letters: string) => {
+            if (!isWget) return
+            for (let k = 0; k < letters.length; k++) {
+              const letter = letters[k]!
+              if ("eiBtTwQlARDIXUoOaP".includes(letter)) return
+              if (letter === "n") {
+                const next = letters[k + 1]
+                if (next === "d") noDirs = true
+                if (next === "H") noHost = true
+                k++
+                continue
+              }
+              if (letter === "x") layout = true
+              if (letter === "r" || letter === "m") layout = recursive = true
+            }
+          }
           const pending: Array<{ value: string; relocate: boolean }> = []
           const operands: string[] = []
           for (let i = 0; i < args.length; i++) {
             const arg = args[i]
             if (!arg) continue
-            const longDir = arg.match(name === "curl" ? /^--output-dir(?:=(.*))?$/ : /^--directory-prefix(?:=(.*))?$/)
+            const long = wgetLong(arg)
+            const curlDir = isWget ? null : arg.match(/^--output-dir(?:=(.*))?$/)
             // wget's `-P` may be bundled (`-qP DIR`, `-qPDIR`); a value-taking
-            // `o`/`O` before it would own the rest of the token instead.
-            const shortDir = name === "wget" ? arg.match(/^-[b-np-zA-NP-Z0-9]*?P(.*)$/) : null
-            if (longDir || shortDir) {
+            // `o`/`O`/`a` before it would own the rest of the token instead.
+            const shortDir = isWget ? arg.match(/^-([b-np-zA-NP-Z0-9#]*?)P(.*)$/) : null
+            if (curlDir || shortDir || long?.name === "directory-prefix") {
+              if (shortDir) wgetFlags(shortDir[1]!)
               // `--directory-prefix=` carries an (empty) value; only a bare
               // `--directory-prefix` / `-P` takes the next argument.
-              let dir = longDir ? longDir[1] : shortDir![1]
+              let dir = curlDir ? curlDir[1] : shortDir ? shortDir[2] : long!.value
               if (dir === undefined || (shortDir !== null && dir === "")) dir = args[++i]
               if (dir) outputDir = stripShellQuotes(dir)
+              continue
+            }
+            if (
+              long &&
+              ["recursive", "mirror", "force-directories", "no-directories", "no-host-directories"].includes(long.name)
+            ) {
+              if (long.name === "recursive" || long.name === "mirror") layout = recursive = true
+              if (long.name === "force-directories") layout = true
+              if (long.name === "no-directories") noDirs = true
+              if (long.name === "no-host-directories") noHost = true
               continue
             }
             // curl's -O is --remote-name and takes NO value: the download is
@@ -754,66 +812,86 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             // keeps `-ooutput.json` anchored at the first `o`, not the last.
             // Flag letters include digits and `#` (`-4`, `-6`, `-0`, `-#`).
             // wget's `-a` appends to a log file: a write like `-o`.
-            const cluster = arg.match(name === "wget" ? /^-([a-zA-Z0-9#]*?)([oOa])(.*)$/ : /^-([a-zA-Z0-9#]*?)(o)(.*)$/)
+            const cluster = arg.match(isWget ? /^-([a-zA-Z0-9#]*?)([oOa])(.*)$/ : /^-([a-zA-Z0-9#]*?)(o)(.*)$/)
+            if (cluster) wgetFlags(cluster[1]!)
             // curl's `-O` may also sit inside a cluster (`curl -sO URL`); only
             // letters before the first value-taking `o` are still flags. Do not
             // stop here: `-sOofile` still carries an `-o` value to record.
-            if (
-              name === "curl" &&
-              (arg === "--remote-name" || arg === "--remote-name-all" || /^-[a-np-zA-Z0-9#]*O/.test(arg))
-            )
+            if (!isWget && (arg === "--remote-name" || arg === "--remote-name-all" || /^-[a-np-zA-Z0-9#]*O/.test(arg)))
               remoteName = true
             // wget's `-O` names the document (so the URL basename is not
             // written); its `-o`/`--output-file` and `-a`/`--append-output`
             // are the log file, which is still a write.
-            const namesDocument =
-              name === "wget" &&
-              (arg === "--output-document" || arg.startsWith("--output-document=") || cluster?.[2] === "O")
+            const namesDocument = isWget && (long?.name === "output-document" || cluster?.[2] === "O")
             if (namesDocument) remoteName = false
+            const curlOutput = isWget ? null : arg.match(/^--output(?:=(.*))?$/)
+            const wgetOutput =
+              long && ["output-document", "output-file", "append-output"].includes(long.name) ? long : undefined
             const takesOutputValue =
-              arg === "--output" ||
-              arg === "--output-document" ||
-              (name === "wget" && (arg === "--output-file" || arg === "--append-output")) ||
+              (curlOutput !== null && curlOutput[1] === undefined) ||
+              (wgetOutput !== undefined && wgetOutput.value === undefined) ||
               (cluster !== null && cluster[3] === "")
             if (takesOutputValue) {
               const next = args[i + 1]
-              if (next) pending.push({ value: stripShellQuotes(next), relocate: name === "curl" })
+              if (next) pending.push({ value: stripShellQuotes(next), relocate: !isWget })
               i++
               continue
             }
             // Short options take a glued value too: `curl -oPATH`, `wget -OPATH`.
-            const inline =
-              arg.match(
-                name === "wget" ? /^--(?:output|output-document|output-file|append-output)=(.+)$/ : /^--output=(.+)$/,
-              )?.[1] ?? (cluster ? cluster[3] : undefined)
+            const inline = curlOutput?.[1] ?? wgetOutput?.value ?? (cluster ? cluster[3] : undefined)
             if (inline) {
-              pending.push({ value: stripShellQuotes(inline), relocate: name === "curl" })
+              pending.push({ value: stripShellQuotes(inline), relocate: !isWget })
               continue
             }
-            if (!arg.startsWith("-") || arg === "-") operands.push(stripShellQuotes(arg))
+            if (arg === "-" || !arg.startsWith("-")) {
+              operands.push(stripShellQuotes(arg))
+              continue
+            }
+            // Remaining bare wget flag clusters (`-r`, `-x`, `-nH`, `-rnH`).
+            const bare = arg.match(/^-([a-zA-Z0-9#]+)$/)
+            if (bare) wgetFlags(bare[1]!)
           }
           const recordOutput = async (value: string, relocate: boolean) => {
-            // `-o -` / `-O -` stream to stdout: no file is written.
-            if (value === "-") return
             const target = relocate && outputDir && !path.isAbsolute(value) ? path.join(outputDir, value) : value
             const output = await recordResolvedPath(target, decoded)
             if (output) redirectWritePaths.add(output)
           }
-          for (const item of pending) await recordOutput(item.value, item.relocate)
+          for (const item of pending) {
+            // `-o -` / `-O -` stream to stdout: no file is written.
+            if (item.value !== "-") await recordOutput(item.value, item.relocate)
+          }
           if (remoteName) {
             // Record the real download target <dir>/<url basename> for every
-            // URL so the blast-radius and autonomous line-budget checks see it.
-            // Every operand is a URL: without a scheme both tools assume http,
-            // so a scheme-less operand next to a schemed one is still a
-            // download. The basename is the last path segment: the authority,
-            // query string and fragment are not part of it, and an empty path
-            // means index.html for wget.
+            // operand: without a scheme both tools assume http, so a
+            // scheme-less operand beside a schemed one is still a download.
+            // The basename is the last path segment: the authority, query
+            // string and fragment are not part of it, and an empty path means
+            // index.html for wget.
             for (const url of operands) {
-              const pathPart = (url.includes("://") ? url : `http://${url}`)
+              const full = url.includes("://") ? url : `http://${url}`
+              const authority = full
+                .replace(/^[a-z][a-z0-9+.-]*:\/\//i, "")
+                .split(/[/?#]/)[0]!
+                .replace(/^[^@]*@/, "")
+              const segments = full
                 .replace(/^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i, "")
                 .split(/[?#]/)[0]!
-              const basename = pathPart.split("/").pop() || (name === "wget" ? "index.html" : "")
-              if (basename) await recordOutput(basename, true)
+                .split("/")
+              const last = segments.pop() ?? ""
+              const dirs = segments.filter(Boolean)
+              const basename = last || (isWget ? "index.html" : "")
+              if (!basename) continue
+              if (isWget && layout && !noDirs) {
+                const hostDir = noHost || !authority ? [] : [authority]
+                await recordOutput(path.join(...hostDir, ...dirs, basename), true)
+                // A recursive fetch writes whatever it discovers under the
+                // tree root, which cannot be enumerated statically: record the
+                // root so the gate at least sees the directory.
+                if (recursive)
+                  await recordOutput(path.join(...(hostDir.length > 0 ? hostDir : dirs.slice(0, 1))) || ".", true)
+              } else {
+                await recordOutput(basename, true)
+              }
             }
           }
           return

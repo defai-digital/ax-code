@@ -515,13 +515,25 @@ describe("tool.bash truncation", () => {
               await run(`wget -q -P sub http://127.0.0.1:${port}/mixed.txt 127.0.0.1:${port}/also.txt`)
               // An explicit empty prefix does not swallow the URL as the prefix.
               await run(`wget -q --directory-prefix= http://127.0.0.1:${port}/empty.txt`)
+              // -x lays the file out under <host>/<path>; -r also owns the tree root.
+              await run(`wget -q -x http://127.0.0.1:${port}/deep/tree.txt`)
+              await run(`wget -q -r -l1 -nH -P sub http://127.0.0.1:${port}/deep/tree2.txt`)
+              // GNU long options may be abbreviated.
+              await run(`wget -q --output-doc=abbrev.txt http://127.0.0.1:${port}/file.bin`)
+              // A basename of "-" is a file; only `-O -` means stdout.
+              await run(`wget -q http://127.0.0.1:${port}/dash/-`)
               const files = [...BlastRadius.get(sessionID).files].map((file) => path.relative(tmp.path, file)).sort()
               expect(files).toEqual(
                 [
+                  "-",
+                  "abbrev.txt",
                   "doc.txt",
                   "empty.txt",
                   "log.txt",
+                  `127.0.0.1:${port}/deep/tree.txt`,
                   "sub/also.txt",
+                  "sub/deep",
+                  "sub/deep/tree2.txt",
                   "sub/index.html",
                   "sub/mixed.txt",
                   "sub/payload.txt",
