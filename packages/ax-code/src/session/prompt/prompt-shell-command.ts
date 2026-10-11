@@ -202,6 +202,10 @@ export async function executeShellCommand(
   const kill = () => Shell.killTree(proc, { exited: () => exited })
 
   const abortHandler = () => {
+    // An abort that lands between `exit` and `close` (the stream drain) has
+    // nothing left to kill; recording it would replace the real exit code
+    // with a fabricated "User aborted" note and a completed status.
+    if (exited) return
     aborted = true
     void kill().catch((error) => {
       log.warn("shell abort kill failed", {
@@ -220,9 +224,14 @@ export async function executeShellCommand(
   const SHELL_TIMEOUT = shellTimeoutMs
   const SHELL_ABORT_TIMEOUT = "Shell abort timed out while waiting for process to exit"
   let timedOut = false
-  // A spawn failure (ENOENT shell, EACCES) never produces an exit code; keep
-  // its message so the part names the real cause instead of a fake exit code.
-  let startError: string | undefined
+  // A process error never produces an exit code; keep its message so the part
+  // names the real cause instead of a fake exit code. Before the `spawn` event
+  // it is a start failure (ENOENT shell, EACCES); after it, a kill that failed.
+  let spawned = false
+  let procError: string | undefined
+  proc.once("spawn", () => {
+    spawned = true
+  })
   const shellTimer = setTimeout(() => {
     // A user abort already in its kill grace window keeps its own label.
     if (!exited && !aborted) {
@@ -333,11 +342,11 @@ export async function executeShellCommand(
       } else {
         exited = true
         exitCode = 1
-        startError = toErrorMessage(error)
-        log.warn("shell command failed to start", {
+        procError = toErrorMessage(error)
+        log.warn(spawned ? "shell command process error" : "shell command failed to start", {
           command: "session.prompt.shell",
           status: "error",
-          errorCode: "SHELL_SPAWN_FAILED",
+          errorCode: spawned ? "SHELL_PROCESS_ERROR" : "SHELL_SPAWN_FAILED",
           shell,
           args,
           error,
@@ -361,13 +370,17 @@ export async function executeShellCommand(
   await pending
   if (part.state.status === "running") {
     const error =
-      startError !== undefined
-        ? `Failed to start shell ${shell}: ${startError}`
+      procError !== undefined
+        ? spawned
+          ? `Shell process error: ${procError}`
+          : `Failed to start shell ${shell}: ${procError}`
         : exitSignal === null
           ? `Process exited with code ${exitCode}`
           : `Process exited with signal ${exitSignal}`
+    // A process error outranks the abort note: an aborted turn whose shell never
+    // started (or could not be killed) must not be filed as completed.
     part.state =
-      exitCode !== 0 && !aborted
+      (exitCode !== 0 && !aborted) || procError !== undefined
         ? {
             status: "error",
             time: {
