@@ -74,7 +74,7 @@ The rest of the documentation maps onto those layers.
   - Bash release installer for macOS Apple Silicon and Linux: `curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" | bash`
   - Homebrew alternative for macOS CLI:
     `brew tap defai-digital/tap && brew trust defai-digital/tap && brew install defai-digital/tap/ax-code`
-  - GitHub release installer for Windows PowerShell: `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.ax-code.com/install.ps1 | iex"`
+  - GitHub release installer for Windows PowerShell: `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.automatosx.com/ax-code/install.ps1 | iex"`
 - The Bash installer is not the canonical Windows setup path.
 - npm packages are no longer supported install or upgrade channels. See [Installation and Runtime Channels](install-runtime.md) for platform policy, runtime labels, and the local launcher matrix.
 - Use `/connect` or `ax-code providers login` to set a model. See [Supported Providers and Models](../providers/supported-providers.md) for Cloud API providers, CLI providers, AX Engine, and model IDs. For a no-cost evaluation path, use the [Free-Tier API Quickstart](../providers/free-tier-apis.md).

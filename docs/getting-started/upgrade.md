@@ -24,13 +24,13 @@ URLs. If an upgrade returns 404 or cannot find a release, run the current public
 installer again. You do not need to uninstall AX Code or delete user data:
 
 ```bash
-curl -fsSL https://download.ax-code.com/install | bash
+curl -fsSL https://download.automatosx.com/ax-code/install | bash
 ```
 
 On Windows, use PowerShell:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.ax-code.com/install.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.automatosx.com/ax-code/install.ps1 | iex"
 ```
 
 The installers replace runtime files; do not remove your configuration, credentials,

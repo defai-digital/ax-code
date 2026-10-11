@@ -10,7 +10,7 @@ The root [README](../../README.md) keeps the primary install path. This page is 
 ## Public availability
 
 Public release installers and signed runtime archives are distributed through
-`download.ax-code.com`. Installation does not require private GitHub credentials.
+`download.ax-code.com`. The same files are also available under `download.automatosx.com/ax-code/`, which the install commands below use. Installation does not require private GitHub credentials.
 
 AX Code and the SDK support **Node.js 26 or later only**. Standalone installers bundle
 a verified Node runtime. Source checkouts and Node-based SDK applications must supply
@@ -41,19 +41,19 @@ Use a supported packaged installer unless you are developing from a checkout. Th
 ### macOS (Apple Silicon)
 
 ```bash
-curl -fsSL https://download.ax-code.com/install | bash
+curl -fsSL https://download.automatosx.com/ax-code/install | bash
 ```
 
 ### Windows
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.ax-code.com/install.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.automatosx.com/ax-code/install.ps1 | iex"
 ```
 
 ### Ubuntu 24.04+
 
 ```bash
-curl -fsSL https://download.ax-code.com/install | bash
+curl -fsSL https://download.automatosx.com/ax-code/install | bash
 ```
 
 Homebrew remains a supported alternative for the macOS CLI:
@@ -121,8 +121,8 @@ For security-sensitive environments, download the installer, verify it with mini
 ```powershell
 $AX_CODE_VERSION = "<release>"
 $AxCodeMinisignPublicKey = "RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO"
-irm https://download.ax-code.com/install.ps1 -OutFile ax-code-install.ps1
-irm https://download.ax-code.com/install.ps1.minisig -OutFile ax-code-install.ps1.minisig
+irm https://download.automatosx.com/ax-code/install.ps1 -OutFile ax-code-install.ps1
+irm https://download.automatosx.com/ax-code/install.ps1.minisig -OutFile ax-code-install.ps1.minisig
 # Optional: use a preinstalled minisign, or let install.ps1 bootstrap one when verifying the archive.
 minisign -Vm ax-code-install.ps1 -x ax-code-install.ps1.minisig -P $AxCodeMinisignPublicKey
 Get-Content .\ax-code-install.ps1
@@ -145,17 +145,17 @@ provide a Desktop installation or upgrade channel.
 
 ## Channel Matrix
 
-| Channel                              | Install or setup command                                                                                       | Expected runtime label | Support status       | Use when                                                           |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------- | ------------------------------------------------------------------ |
-| macOS bash release installer         | `curl -fsSL https://download.ax-code.com/install \| bash`                                                      | `node-bundled`         | Supported on macOS   | Primary Apple Silicon user-local install path                      |
-| Homebrew formula                     | `brew tap defai-digital/tap && brew trust defai-digital/tap && brew install defai-digital/tap/ax-code`         | `node-bundled`         | Supported            | Alternative macOS package-manager install path                     |
-| Windows PowerShell release installer | `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.ax-code.com/install.ps1 \| iex"` | `node-bundled`         | Supported on Windows | Windows user-local install path                                    |
-| Windows release assets               | Download `ax-code-windows-*.zip` from the public release index                                                 | `node-bundled`         | Manual               | Manual CLI validation or troubleshooting                           |
-| Linux bash release installer         | `curl -fsSL https://download.ax-code.com/install \| bash`                                                      | `node-bundled`         | Supported on Linux   | Ubuntu 24.04+ (glibc) amd64/arm64 user-local install path          |
-| Linux release assets                 | Download `ax-code-linux-*.tar.gz` from the public release index                                                | `node-bundled`         | Manual               | Manual CLI validation or troubleshooting                           |
-| Local bundled launcher               | `pnpm install && pnpm run setup:cli`                                                                           | `node-bundled`         | Contributor          | Contributor parity with the packaged startup path                  |
-| Local source launcher                | `pnpm run setup:cli -- --source`                                                                               | `source`               | Contributor          | Contributor-only source debugging                                  |
-| Direct checkout run                  | `pnpm cli` or `pnpm dev`                                                                                       | `source`               | Contributor          | Short-lived development runs without replacing the global launcher |
+| Channel                              | Install or setup command                                                                                                  | Expected runtime label | Support status       | Use when                                                           |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------- | ------------------------------------------------------------------ |
+| macOS bash release installer         | `curl -fsSL https://download.automatosx.com/ax-code/install \| bash`                                                      | `node-bundled`         | Supported on macOS   | Primary Apple Silicon user-local install path                      |
+| Homebrew formula                     | `brew tap defai-digital/tap && brew trust defai-digital/tap && brew install defai-digital/tap/ax-code`                    | `node-bundled`         | Supported            | Alternative macOS package-manager install path                     |
+| Windows PowerShell release installer | `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.automatosx.com/ax-code/install.ps1 \| iex"` | `node-bundled`         | Supported on Windows | Windows user-local install path                                    |
+| Windows release assets               | Download `ax-code-windows-*.zip` from the public release index                                                            | `node-bundled`         | Manual               | Manual CLI validation or troubleshooting                           |
+| Linux bash release installer         | `curl -fsSL https://download.automatosx.com/ax-code/install \| bash`                                                      | `node-bundled`         | Supported on Linux   | Ubuntu 24.04+ (glibc) amd64/arm64 user-local install path          |
+| Linux release assets                 | Download `ax-code-linux-*.tar.gz` from the public release index                                                           | `node-bundled`         | Manual               | Manual CLI validation or troubleshooting                           |
+| Local bundled launcher               | `pnpm install && pnpm run setup:cli`                                                                                      | `node-bundled`         | Contributor          | Contributor parity with the packaged startup path                  |
+| Local source launcher                | `pnpm run setup:cli -- --source`                                                                                          | `source`               | Contributor          | Contributor-only source debugging                                  |
+| Direct checkout run                  | `pnpm cli` or `pnpm dev`                                                                                                  | `source`               | Contributor          | Short-lived development runs without replacing the global launcher |
 
 `node-bundled` and `source` are runtime modes, not package-manager names. They describe which executable loads the app code:
 
@@ -199,7 +199,7 @@ irm https://download.ax-code.com/releases/download/v$env:AX_CODE_VERSION/install
 Use the release installer for a user-local CLI installation without Homebrew:
 
 ```bash
-curl -fsSL https://download.ax-code.com/install | bash
+curl -fsSL https://download.automatosx.com/ax-code/install | bash
 ```
 
 Managed Macs can use the Homebrew formula so CLI updates track the tap:
@@ -259,13 +259,13 @@ abruptly killed installer may leave that empty directory. Check for active insta
 before removing a stale lock and retrying; do not remove it while an install is running.
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.ax-code.com/install.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.automatosx.com/ax-code/install.ps1 | iex"
 ```
 
 On Windows this updates the CLI. To remove the CLI install and its user PATH entry:
 
 ```powershell
-irm https://download.ax-code.com/install.ps1 -OutFile ax-code-install.ps1
+irm https://download.automatosx.com/ax-code/install.ps1 -OutFile ax-code-install.ps1
 .\ax-code-install.ps1 -Uninstall
 ```
 

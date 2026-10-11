@@ -20,7 +20,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install AX Code
-        run: curl -fsSL https://download.ax-code.com/install | bash
+        run: curl -fsSL https://download.automatosx.com/ax-code/install | bash
 
       - name: Update and validate AX Wiki
         env:

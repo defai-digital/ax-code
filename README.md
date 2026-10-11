@@ -40,7 +40,7 @@ applications must provide Node.js 26+ themselves.
 Use the standalone release installer (recommended; Homebrew is not required):
 
 ```bash
-curl -fsSL https://download.ax-code.com/install | bash
+curl -fsSL https://download.automatosx.com/ax-code/install | bash
 ```
 
 If you already manage tools with Homebrew, it remains a supported alternative:
@@ -58,13 +58,13 @@ Use one installation channel for `ax-code`; `ax-code upgrade` follows the active
 ### Windows
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.ax-code.com/install.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.automatosx.com/ax-code/install.ps1 | iex"
 ```
 
 ### Ubuntu 24.04+
 
 ```bash
-curl -fsSL https://download.ax-code.com/install | bash
+curl -fsSL https://download.automatosx.com/ax-code/install | bash
 ```
 
 ### After install
@@ -318,7 +318,7 @@ managed activation contract, and the MTP policy.
 
 The installation blocks below are kept as a single-page reference and for change history. The
 canonical, current copy lives in the [Install](#install) section near the top of this README.
-Public release installers and signed runtime archives are served by `download.ax-code.com`.
+Public release installers and signed runtime archives are served by `download.ax-code.com`. The same files are also available under `download.automatosx.com/ax-code/`, which is the address used in the install commands below.
 AX Code and its SDK support Node.js 26 or later only; standalone releases bundle their runtime.
 
 ### macOS (Apple Silicon)
@@ -326,7 +326,7 @@ AX Code and its SDK support Node.js 26 or later only; standalone releases bundle
 Use the standalone release installer (recommended; Homebrew is not required):
 
 ```bash
-curl -fsSL https://download.ax-code.com/install | bash
+curl -fsSL https://download.automatosx.com/ax-code/install | bash
 ```
 
 If you already manage tools with Homebrew, it remains a supported alternative:
@@ -349,13 +349,13 @@ OpenAI-compatible endpoint instead, see [MTPLX and oMLX setup](docs/providers/lo
 ### Windows
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.ax-code.com/install.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.automatosx.com/ax-code/install.ps1 | iex"
 ```
 
 ### Ubuntu 24.04+
 
 ```bash
-curl -fsSL https://download.ax-code.com/install | bash
+curl -fsSL https://download.automatosx.com/ax-code/install | bash
 ```
 
 Then:
