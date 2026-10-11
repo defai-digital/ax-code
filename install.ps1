@@ -157,7 +157,7 @@ function Get-RequestedVersion {
   return ""
 }
 
-function Get-TargetArch {
+function Get-HostArch {
   $arch = $env:PROCESSOR_ARCHITEW6432
   if (-not $arch) {
     $arch = $env:PROCESSOR_ARCHITECTURE
@@ -170,9 +170,17 @@ function Get-TargetArch {
   }
 }
 
+function Get-TargetArch {
+  $arch = Get-HostArch
+  if ($arch -ne "x64") {
+    throw "Windows ARM64 is not supported from AX Code v7.24.6. Use a Windows AMD64 (x64) host. Existing installations are unchanged."
+  }
+  return "x64"
+}
+
 function Get-MinisignNativeArchDir {
   # Layout inside minisign-0.12-win64.zip: minisign-win64/<arch>/minisign.exe
-  switch (Get-TargetArch) {
+  switch (Get-HostArch) {
     "arm64" { return "aarch64" }
     default { return "x86_64" }
   }
@@ -770,6 +778,7 @@ function Install-NodeBundleTreeUnlocked([string]$Root, [string]$ExpectedVersion 
 }
 
 function Install-FromBinary([string]$Path) {
+  $null = Get-TargetArch
   if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
     throw "Binary not found at $Path"
   }
@@ -791,6 +800,7 @@ function Install-FromBinary([string]$Path) {
 }
 
 function Install-FromRelease {
+  $null = Get-TargetArch
   Assert-MinisignAvailable
 
   $release = Resolve-ReleaseDownload

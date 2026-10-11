@@ -14,28 +14,31 @@ describe("AX Code CLI winget manifest generator", () => {
     expect(() => parseArgs(["--version", "latest"])).toThrow("semantic version")
   })
 
-  test("writes only CLI manifests", async () => {
-    const output = mkdtempSync(path.join(tmpdir(), "ax-code-winget-"))
-    try {
-      const result = await generateManifests([
-        "--version",
-        "7.10.2",
-        "--package",
-        "cli",
-        "--out",
-        output,
-        "--skip-download",
-      ])
-      const installer = path.join(result.output, "DEFAI.AXCode.installer.yaml")
-      expect(result.tag).toBe("v7.10.2")
-      expect(existsSync(installer)).toBe(true)
-      expect(existsSync(path.join(output, "manifests", "d", "DEFAI", "AXCode", "Desktop"))).toBe(false)
-      const source = readFileSync(installer, "utf8")
-      expect(source).toContain("ax-code-windows-x64.zip")
-      expect(source).toContain("ax-code-windows-arm64.zip")
-      expect(source).not.toContain("AX-Code-7.10.2-win-x64.exe")
-    } finally {
-      rmSync(output, { recursive: true, force: true })
-    }
-  })
+  test.each(["7.10.2", "7.24.5", "7.24.6", "8.0.0"])(
+    "writes version-appropriate CLI manifests for %s",
+    async (version) => {
+      const output = mkdtempSync(path.join(tmpdir(), "ax-code-winget-"))
+      try {
+        const result = await generateManifests([
+          "--version",
+          version,
+          "--package",
+          "cli",
+          "--out",
+          output,
+          "--skip-download",
+        ])
+        const installer = path.join(result.output, "DEFAI.AXCode.installer.yaml")
+        expect(result.tag).toBe(`v${version}`)
+        expect(existsSync(installer)).toBe(true)
+        expect(existsSync(path.join(output, "manifests", "d", "DEFAI", "AXCode", "Desktop"))).toBe(false)
+        const source = readFileSync(installer, "utf8")
+        expect(source).toContain("ax-code-windows-x64.zip")
+        expect(source.includes("ax-code-windows-arm64.zip")).toBe(["7.10.2", "7.24.5"].includes(version))
+        expect(source).not.toContain("AX-Code-7.10.2-win-x64.exe")
+      } finally {
+        rmSync(output, { recursive: true, force: true })
+      }
+    },
+  )
 })

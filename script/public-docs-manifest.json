@@ -388,6 +388,10 @@
     {
       "source": "docs/reference/config.schema.json",
       "asset": "schema/config.schema.json"
+    },
+    {
+      "source": "docs/release/platforms.json",
+      "asset": "release/platforms.json"
     }
   ]
 }

@@ -33,6 +33,7 @@ function buildChannelForVersion(version: string) {
   return prerelease.split(".", 1)[0] || "beta"
 }
 
+if (process.platform === "win32" && arch !== "x64") throw new Error("Windows distributions require AMD64 (x64)")
 const buildVersion = (process.env.AX_CODE_VERSION ?? pkg.version).replace(/^v/, "")
 const buildChannel = process.env.AX_CODE_CHANNEL ?? buildChannelForVersion(buildVersion)
 const legacyName = `${pkg.name}-windows-${arch}`

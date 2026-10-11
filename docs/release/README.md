@@ -29,7 +29,7 @@ minisign -V -p docs/release/ax-minisign.pub -m install.ps1 -x install.ps1.minisi
 
 # Inline key form (matches what install.ps1 uses)
 $minisign = "RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO"
-minisign -Vm ax-code-windows-arm64.zip -x ax-code-windows-arm64.zip.minisig -P $minisign
+minisign -Vm ax-code-windows-x64.zip -x ax-code-windows-x64.zip.minisig -P $minisign
 ```
 
 The Bash and PowerShell installers fail closed when verification fails. When `minisign` is not already on
@@ -54,3 +54,5 @@ changes are owned by the separate AX Coder project.
 
 - [AX Code v7.7.6](notes-v7.7.6.md)
 - [AX Code v7.2.0](notes-v7.2.0.md)
+
+Windows distributions support AMD64 (x64) only starting with v7.24.6. Earlier signed Windows ARM64 artifacts remain immutable. The [release platform policy](platforms.json) defines the version boundary and required archive inventory: 15 required distribution assets from v7.24.6, compared with 17 for earlier releases. Linux arm64 and Apple Silicon macOS remain supported.

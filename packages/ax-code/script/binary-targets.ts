@@ -103,6 +103,16 @@ export function candidateBinaryTargets(
   const base = "ax-code-" + platform + "-" + arch
   const binary = platform === "windows" ? "ax-code.cmd" : "ax-code"
 
+  if (platform === "windows" && arch !== "x64") {
+    return {
+      platform,
+      arch,
+      binary,
+      names: [],
+      unsupported: "Windows requires AMD64 (x64). Windows ARM64 is not supported.",
+    }
+  }
+
   if (platform === "darwin" && arch !== "arm64") {
     return {
       platform,

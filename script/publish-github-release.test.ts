@@ -11,6 +11,7 @@ import {
   dispatchInstallSmoke,
   downloadReleaseAssets,
   expectedReleaseArchives,
+  expectedReleaseAssets,
   expectedReleaseInstallerAssets,
   expectedReleaseInstallerSignatures,
   expectedReleaseMetadataAssets,
@@ -58,8 +59,8 @@ describe("publish-github-release helpers", () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "ax-private-release-test-"))
     const options = parsePublishGithubReleaseArgs(["--version", "5.10.1", "--repo", "owner/private"])
     const names = [
-      ...expectedReleaseArchives(),
-      ...expectedReleaseSignatures(),
+      ...expectedReleaseArchives(options.version),
+      ...expectedReleaseSignatures(options.version),
       ...expectedReleaseInstallerAssets(),
       ...expectedReleaseInstallerSignatures(),
       ...expectedReleaseMetadataAssets(),
@@ -184,14 +185,12 @@ describe("publish-github-release helpers", () => {
     expect(expectedReleaseArchives()).toEqual([
       "ax-code-darwin-arm64.zip",
       "ax-code-windows-x64.zip",
-      "ax-code-windows-arm64.zip",
       "ax-code-linux-x64.tar.gz",
       "ax-code-linux-arm64.tar.gz",
     ])
     expect(expectedReleaseSignatures()).toEqual([
       "ax-code-darwin-arm64.zip.minisig",
       "ax-code-windows-x64.zip.minisig",
-      "ax-code-windows-arm64.zip.minisig",
       "ax-code-linux-x64.tar.gz.minisig",
       "ax-code-linux-arm64.tar.gz.minisig",
     ])
@@ -200,12 +199,31 @@ describe("publish-github-release helpers", () => {
     expect(expectedReleaseMetadataAssets()).toEqual(["ax-minisign.pub", "install.sha256", "install.ps1.sha256"])
   })
 
+  test("preserves the historical inventory across the Windows x64 cutover", () => {
+    for (const version of ["v7.24.4", "7.24.5", "7.24.5-beta.1"]) {
+      const assets = expectedReleaseAssets(version)
+      expect(assets).toHaveLength(17)
+      expect(expectedReleaseArchives(version)).toContain("ax-code-windows-arm64.zip")
+      expect(
+        missingReleaseAssets(
+          assets.filter((name) => !name.includes("windows-arm64")),
+          assets,
+        ),
+      ).toEqual(["ax-code-windows-arm64.zip", "ax-code-windows-arm64.zip.minisig"])
+    }
+    for (const version of ["7.24.6", "v7.24.6-beta.1", "7.25.0", "8.0.0"]) {
+      expect(expectedReleaseAssets(version)).toHaveLength(15)
+      expect(expectedReleaseArchives(version)).not.toContain("ax-code-windows-arm64.zip")
+    }
+    expect(expectedReleaseAssets()).toHaveLength(15)
+    expect(() => expectedReleaseAssets("latest")).toThrow("Invalid release version")
+  })
+
   test("reports missing release assets", () => {
     expect(
       missingReleaseAssets([
         "ax-code-darwin-arm64.zip",
         "ax-code-windows-x64.zip",
-        "ax-code-windows-arm64.zip",
         "ax-code-linux-x64.tar.gz",
         "ax-code-linux-arm64.tar.gz",
         "ax-code-darwin-arm64.zip.minisig",
@@ -213,7 +231,6 @@ describe("publish-github-release helpers", () => {
       ]),
     ).toEqual([
       "ax-code-windows-x64.zip.minisig",
-      "ax-code-windows-arm64.zip.minisig",
       "ax-code-linux-x64.tar.gz.minisig",
       "ax-code-linux-arm64.tar.gz.minisig",
       "install",

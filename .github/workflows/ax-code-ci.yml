@@ -39,8 +39,7 @@ on:
       - "packages/script/**"
       - "script/**"
   schedule:
-    # Weekly windows-11-arm qualification. Review events skip that runner
-    # unless the changed files can affect the ARM PTY runtime.
+    # Weekly qualification of supported native platforms.
     - cron: "11 7 * * 1"
   workflow_dispatch:
     inputs:
@@ -60,8 +59,7 @@ permissions:
   pull-requests: read
 
 jobs:
-  # One Ubuntu job decides. Unchanged pushes must not take five native runners,
-  # especially windows-11-arm, which the runtime lane also needs.
+  # One Ubuntu job decides. Unchanged pushes must not take four native runners.
   evidence-plan:
     name: Native evidence plan
     runs-on: ubuntu-latest
@@ -119,7 +117,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-24.04, ubuntu-24.04-arm, windows-2022, windows-11-arm]
+        os: [macos-latest, ubuntu-24.04, ubuntu-24.04-arm, windows-2022]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -132,71 +130,12 @@ jobs:
       - name: Test native evidence contracts
         run: cargo test --manifest-path crates/Cargo.toml -p ax-code-fs --lib
 
-  # One Ubuntu job decides. Unchanged reviews must not take windows-11-arm:
-  # that runner is the ax-code CI critical path, and windows-2022 still runs
-  # the same suite.
-  windows-plan:
-    name: Windows runtime plan
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      include: ${{ steps.set.outputs.include }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 1
-      - uses: ./.github/actions/setup-ax-code-toolchain
-        with:
-          checkout: "false"
-          cache: ""
-      - name: Decide Windows ARM runtime
-        id: set
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          base='[{"os":"windows-2022"}]'
-          full='[{"os":"windows-2022"},{"os":"windows-11-arm"}]'
-          event_name="${{ github.event_name }}"
-          if [ "$event_name" != "pull_request" ] && [ "$event_name" != "push" ]; then
-            echo "Qualifying windows-11-arm for ${event_name}."
-            echo "include=${full}" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          files=""
-          if [ "$event_name" = "pull_request" ]; then
-            files="$(gh api --paginate "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --jq '.[].filename' || true)"
-          else
-            before="${{ github.event.before }}"
-            if [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
-              echo "No previous commit; qualifying windows-11-arm."
-              echo "include=${full}" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            files="$(gh api --paginate "repos/${{ github.repository }}/compare/${before}...${{ github.sha }}" --jq '.files[].filename' || true)"
-          fi
-          file_count="$(printf '%s\n' "$files" | awk 'NF { n++ } END { print n+0 }')"
-          if [ "$file_count" -eq 0 ] || [ "$file_count" -ge 300 ]; then
-            echo "Could not list a complete changed-file set (${file_count} files); qualifying windows-11-arm."
-            echo "include=${full}" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if printf '%s\n' "$files" | node --experimental-strip-types script/ci-windows-arm-needed.ts; then
-            echo "Changed files can affect the Windows ARM runtime."
-            echo "include=${full}" >> "$GITHUB_OUTPUT"
-          else
-            echo "Skipping windows-11-arm; windows-2022 still runs the runtime suite."
-            echo "include=${base}" >> "$GITHUB_OUTPUT"
-          fi
-
   windows-snapshot:
     name: Windows runtime and recovery (${{ matrix.os }})
-    needs: windows-plan
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.windows-plan.outputs.include) }}
+        os: [windows-2022]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
@@ -206,7 +145,7 @@ jobs:
         with:
           checkout: "false"
           node-version: "26"
-      # Install deterministically, then qualify PTY on each native architecture.
+      # Install deterministically, then qualify the supported Windows x64 PTY runtime.
       - name: Install deps
         run: pnpm install --frozen-lockfile --ignore-scripts
       # The rebuilt tree is small. Restoring it skips a full node-gyp compile
@@ -217,7 +156,6 @@ jobs:
         with:
           path: packages/ax-code/node_modules/node-pty-prebuilt-multiarch/build
           key: ax-pty-v1-${{ runner.os }}-${{ runner.arch }}-node-26-${{ hashFiles('pnpm-lock.yaml', 'patches/node-pty-prebuilt-multiarch@0.10.1-pre.5.patch', 'script/rebuild-node-pty.mjs') }}
-      # pnpm 10.33.4's node-gyp 11.5.0 rejects Visual Studio 2026 on windows-11-arm.
       - name: Build Windows PTY native addons
         if: steps.pty-cache.outputs.cache-hit != 'true'
         run: node script/rebuild-node-pty.mjs

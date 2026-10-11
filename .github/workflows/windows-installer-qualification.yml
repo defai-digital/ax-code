@@ -55,8 +55,6 @@ jobs:
         include:
           - os: windows-2022
             label: windows-x64
-          - os: windows-11-arm
-            label: windows-arm64
     runs-on: ${{ matrix.os }}
     # Windows PowerShell 5.1 installer regressions on Arm took 30 minutes in
     # release qualification, before integrity tests and fresh-install smoke.

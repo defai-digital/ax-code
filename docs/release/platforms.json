@@ -1,0 +1,10 @@
+{
+  "windowsX64OnlyFrom": "7.24.6",
+  "archives": [
+    "ax-code-darwin-arm64.zip",
+    "ax-code-windows-x64.zip",
+    "ax-code-linux-x64.tar.gz",
+    "ax-code-linux-arm64.tar.gz"
+  ],
+  "legacyWindowsArm64Archive": "ax-code-windows-arm64.zip"
+}

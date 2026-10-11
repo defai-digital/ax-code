@@ -40,7 +40,7 @@ has been implemented or qualified.
 
 ## Local models and company data
 
-AX Code targets Apple Silicon macOS, Windows x64/ARM64, and Ubuntu 24.04+ amd64/arm64.
+AX Code targets Apple Silicon macOS, Windows AMD64 (x64), and Ubuntu 24.04+ amd64/arm64.
 AX Engine's native local inference path is specific to supported Apple Silicon Macs.
 The model and runtime determine hardware needs and tool compatibility.
 

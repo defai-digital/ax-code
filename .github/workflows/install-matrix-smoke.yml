@@ -8,7 +8,7 @@ name: Install Matrix Smoke
 # Supported smoke channels:
 #   - macos    (bash install script on Apple Silicon)
 #   - homebrew (macOS Apple Silicon)
-#   - windows  (PowerShell install.ps1 on x64 + arm64)
+#   - windows  (PowerShell install.ps1 on AMD64 (x64))
 #   - linux    (bash install script on Ubuntu 24.04 x64 + arm64)
 #
 # Triggers:
@@ -294,8 +294,6 @@ jobs:
         include:
           - os: windows-2022
             label: windows-x64
-          - os: windows-11-arm
-            label: windows-arm64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     # See the macos job above for why these are routed through env instead

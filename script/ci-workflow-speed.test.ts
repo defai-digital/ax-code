@@ -175,7 +175,7 @@ describe("CI workflow speed policy", () => {
     expect(lane).toBeDefined()
     expect(plan).toContain('"${{ github.event_name }}" = "schedule"')
     expect(plan).toContain('"${{ github.event_name }}" = "workflow_dispatch"')
-    expect(plan).toContain("windows-11-arm")
+    expect(plan).not.toContain("windows-11-arm")
     expect(plan).toContain("windows-2022")
     const pushInclude = plan?.match(/include='(\[[^\]]+\])'/)?.[1] ?? ""
     expect(pushInclude).not.toContain("windows-")
@@ -250,20 +250,13 @@ describe("CI workflow speed policy", () => {
     expect(existsSync(".github/workflows/tuimcp-debug.yml")).toBe(false)
   })
 
-  test("windows-11-arm runtime stays off unchanged push and pull request paths", () => {
-    const plan = workflowJob(ci, "windows-plan")
+  test("Windows x64 runtime keeps PTY cache reuse without an ARM planning job", () => {
     const lane = workflowJob(ci, "windows-snapshot")
-    expect(plan).toBeDefined()
-    expect(lane).toBeDefined()
-    expect(plan).toContain("script/ci-windows-arm-needed.ts")
-    expect(plan).toContain("windows-11-arm")
-    expect(plan).toContain("windows-2022")
-    expect(plan).toContain('cache: ""')
-    expect(lane).toContain("needs: windows-plan")
-    expect(lane).toContain("fromJSON(needs.windows-plan.outputs.include)")
-    expect(lane).not.toContain("os: [windows-2022, windows-11-arm]")
+    expect(workflowJob(ci, "windows-plan")).toBeUndefined()
+    expect(lane).toContain("os: [windows-2022]")
     expect(lane).toContain("actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9")
     expect(lane).toContain("steps.pty-cache.outputs.cache-hit != 'true'")
+    expect(ci).not.toContain("windows-11-arm")
     expect(ci).toContain('cron: "11 7 * * 1"')
   })
 })

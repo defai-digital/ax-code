@@ -61,6 +61,8 @@ async function runInstaller(body: string) {
       script,
       `
 $ErrorActionPreference = "Stop"
+$env:PROCESSOR_ARCHITECTURE = "AMD64"
+$env:PROCESSOR_ARCHITEW6432 = ""
 $parseErrors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:AX_TEST_INSTALLER, [ref]$null, [ref]$parseErrors)
 if ($parseErrors) { throw ($parseErrors | Out-String) }
@@ -131,6 +133,26 @@ ${body}
 }
 
 describe.skipIf(!available)("PowerShell runtime installation", { timeout: 120_000 }, () => {
+  test("selects AMD64 and rejects ARM before downloads or mutation, including an emulated shell", async () => {
+    await runInstaller(`
+Assert-Equal (Get-TargetArch) "x64"
+New-PreviousInstall
+function Assert-MinisignAvailable { throw "Unexpected bootstrap download" }
+foreach ($arch in @("ARM64", "emulated")) {
+  $env:PROCESSOR_ARCHITECTURE = if ($arch -eq "ARM64") { "ARM64" } else { "AMD64" }
+  $env:PROCESSOR_ARCHITEW6432 = if ($arch -eq "emulated") { "ARM64" } else { "" }
+  foreach ($operation in @("release", "binary")) {
+    $message = ""
+    try {
+      if ($operation -eq "release") { Install-FromRelease } else { Install-FromBinary (Join-Path $Source "bin/ax-code.cmd") }
+    } catch { $message = $_.Exception.Message }
+    if ($message -notlike "*Windows ARM64 is not supported*") { throw "Unexpected rejection: $message" }
+    Assert-PreviousInstall
+  }
+}
+`)
+  })
+
   test.skipIf(process.platform !== "win32").each([0, 23])(
     "keeps a running launcher session alive with exit code %s",
     async (exitCode) => {

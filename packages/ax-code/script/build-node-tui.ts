@@ -60,6 +60,7 @@ const solidWebClientEntry = require.resolve("solid-js/web/dist/web.js")
 const archFlagIndex = process.argv.indexOf("--arch")
 const arch = (archFlagIndex >= 0 ? process.argv[archFlagIndex + 1] : process.arch) as "x64" | "arm64"
 if (arch !== "x64" && arch !== "arm64") throw new Error(`Unsupported Node TUI distribution architecture: ${arch}`)
+if (process.platform === "win32" && arch !== "x64") throw new Error("Windows distributions require AMD64 (x64)")
 const platform = process.platform === "win32" ? "windows" : process.platform
 const release = process.argv.includes("--release")
 const legacyName = `${pkg.name}-${platform}-${arch}`

@@ -75,12 +75,12 @@ export function resolveTags(options: ResignOptions): string[] {
   return options.tags
 }
 
-export function archivePaths(assetDir: string): string[] {
-  return expectedReleaseArchives().map((name) => path.join(assetDir, name))
+export function archivePaths(assetDir: string, version?: string): string[] {
+  return expectedReleaseArchives(version).map((name) => path.join(assetDir, name))
 }
 
-export function signaturePaths(assetDir: string): string[] {
-  return archivePaths(assetDir).map(signaturePath)
+export function signaturePaths(assetDir: string, version?: string): string[] {
+  return archivePaths(assetDir, version).map(signaturePath)
 }
 
 export function resignPlan(options: ResignOptions, tags: string[]): string[] {
@@ -256,14 +256,14 @@ function downloadArchives(tag: string, options: ResignOptions, assetDir: string)
     { dryRun: options.dryRun },
   )
   if (options.dryRun) return
-  const missing = archivePaths(assetDir).filter((file) => !fs.existsSync(file))
+  const missing = archivePaths(assetDir, tag).filter((file) => !fs.existsSync(file))
   if (missing.length > 0) {
     throw new Error(`${tag} is missing expected archives: ${missing.map((file) => path.basename(file)).join(", ")}`)
   }
 }
 
 function signArchives(tag: string, options: ResignOptions, assetDir: string) {
-  const archives = archivePaths(assetDir)
+  const archives = archivePaths(assetDir, tag)
   const sign = signReleaseAssetsCommand([
     "--secret-key",
     options.secretKey,
@@ -280,13 +280,13 @@ function uploadSignatures(tag: string, options: ResignOptions, assetDir: string)
     console.log(`Skipping .minisig upload for ${tag}`)
     return
   }
-  const sigs = signaturePaths(assetDir)
+  const sigs = signaturePaths(assetDir, tag)
   run("gh", ["release", "upload", tag, "--repo", options.repo, "--clobber", ...sigs], { dryRun: options.dryRun })
 }
 
 function verifyRemoteAssets(tag: string, options: ResignOptions) {
   if (options.dryRun) return
-  const expected = [...expectedReleaseArchives(), ...expectedReleaseSignatures()]
+  const expected = [...expectedReleaseArchives(tag), ...expectedReleaseSignatures(tag)]
   const missing = missingReleaseAssets(listReleaseAssetNames(tag, options.repo), expected)
   if (missing.length > 0) {
     throw new Error(`${tag} is still missing assets after re-sign: ${missing.join(", ")}`)

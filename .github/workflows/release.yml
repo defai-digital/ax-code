@@ -67,6 +67,24 @@ jobs:
           fi
           echo "Release channel $CHANNEL validated for $TAG"
 
+      - uses: actions/checkout@v7
+
+      - name: Validate platform policy cutover
+        if: ${{ !inputs.postpublish_only }}
+        env:
+          TAG: ${{ env.AX_CODE_RELEASE_TAG }}
+        run: |
+          python3 - <<'PYPLATFORM'
+          import json
+          import os
+          from pathlib import Path
+          policy = json.loads(Path("docs/release/platforms.json").read_text())
+          version = tuple(map(int, os.environ["TAG"].removeprefix("v").split("-", 1)[0].split(".")))
+          cutoff = tuple(map(int, policy["windowsX64OnlyFrom"].split(".")))
+          if version < cutoff:
+              raise SystemExit("Use the original release checkout for pre-cutover builds; this workflow publishes Windows x64 only.")
+          PYPLATFORM
+
   validate:
     needs: guard
     if: ${{ !inputs.postpublish_only }}
@@ -250,12 +268,6 @@ jobs:
             build-script: script/build-node-tui.ts
             build-args: --release --arch x64 --defer-windows-signing
             smoke-bin: dist/ax-code-windows-x64/bin/ax-code.cmd
-            smoke-runtime: node-bundled
-          - os: windows-11-arm
-            targets: win32-arm64
-            build-script: script/build-node-tui.ts
-            build-args: --release --arch arm64 --defer-windows-signing
-            smoke-bin: dist/ax-code-windows-arm64/bin/ax-code.cmd
             smoke-runtime: node-bundled
           # Ubuntu 24.04 LTS glibc baseline for Desktop/server hosts (amd64).
           - os: ubuntu-24.04
@@ -459,7 +471,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         env:
-          AX_WINDOWS_TARGET: ${{ matrix.targets == 'win32-x64' && 'windows-x64' || 'windows-arm64' }}
+          AX_WINDOWS_TARGET: windows-x64
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -484,7 +496,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Verify relocated native TypeScript runtime
-        run: node script/verify-typescript-native.cjs packages/ax-code/dist/ax-code-${{ matrix.targets == 'win32-x64' && 'windows-x64' || matrix.targets == 'win32-arm64' && 'windows-arm64' || matrix.targets }}
+        run: node script/verify-typescript-native.cjs packages/ax-code/dist/ax-code-${{ matrix.targets == 'win32-x64' && 'windows-x64' || matrix.targets }}
 
       - name: Smoke — release runtime
         working-directory: packages/ax-code
@@ -706,8 +718,6 @@ jobs:
             packages/ax-code/dist/ax-code-darwin-arm64.zip.minisig
             packages/ax-code/dist/ax-code-windows-x64.zip
             packages/ax-code/dist/ax-code-windows-x64.zip.minisig
-            packages/ax-code/dist/ax-code-windows-arm64.zip
-            packages/ax-code/dist/ax-code-windows-arm64.zip.minisig
             packages/ax-code/dist/ax-code-linux-x64.tar.gz
             packages/ax-code/dist/ax-code-linux-x64.tar.gz.minisig
             packages/ax-code/dist/ax-code-linux-arm64.tar.gz
@@ -744,7 +754,6 @@ jobs:
             "$VERIFY_DIR/install.ps1"
             "$VERIFY_DIR/ax-code-darwin-arm64.zip"
             "$VERIFY_DIR/ax-code-windows-x64.zip"
-            "$VERIFY_DIR/ax-code-windows-arm64.zip"
             "$VERIFY_DIR/ax-code-linux-x64.tar.gz"
             "$VERIFY_DIR/ax-code-linux-arm64.tar.gz"
           )
@@ -757,7 +766,7 @@ jobs:
               python3 script/check-release-content.py --require-licenses "$asset"
             fi
           done
-          for arch in x64 arm64; do
+          for arch in x64; do
             pnpm exec tsx script/seal-windows-runtime.ts "$VERIFY_DIR/ax-code-windows-$arch.zip" docs/release/ax-minisign.pub
           done
 

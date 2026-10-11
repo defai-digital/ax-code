@@ -52,7 +52,8 @@ describe("install script", () => {
     expect(text).toContain('while [ -L "$script" ]; do')
     // Linux archives are tar.gz; macOS remains zip.
     expect(text).toContain('archive_ext=".tar.gz"')
-    expect(text).toContain("linux-x64|linux-arm64|darwin-arm64|windows-x64|windows-arm64")
+    expect(text).toContain("linux-x64|linux-arm64|darwin-arm64|windows-x64)")
+    expect(text).toContain("Windows ARM64 is not supported")
     // Node-bundled releases are glibc-only; do not rewrite to unpublished suffixes.
     expect(text).not.toContain('target="$target-baseline"')
     expect(text).not.toContain('target="$target-musl"')

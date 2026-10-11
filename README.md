@@ -17,7 +17,7 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 
 [![Release v7.24.5](https://img.shields.io/badge/Release-v7.24.5-2F6FED)](https://github.com/defai-digital/ax-code/releases/tag/v7.24.5)
 [![macOS Apple Silicon](https://img.shields.io/badge/macOS-Apple%20Silicon-000000?logo=apple&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
-[![Windows x64/ARM64](https://img.shields.io/badge/Windows-x64%20%2B%20ARM64-0078D4?logo=windows&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
+[![Windows AMD64](<https://img.shields.io/badge/Windows-AMD64%20(x64)-0078D4?logo=windows&logoColor=white>)](https://github.com/defai-digital/ax-code/releases)
 [![Ubuntu 24.04+ amd64/arm64](https://img.shields.io/badge/Ubuntu%2024.04%2B-amd64%20%2B%20arm64-E95420?logo=ubuntu&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/gf9UyPxaN2)
@@ -284,7 +284,7 @@ Choose hardware for the repository tools as well as AX Code. These are capacity-
 | Large TypeScript/Rust repositories, concurrent builds or several agents/sessions     | Start from the 16 GB cloud target; 8 GB is not a suitable planning baseline                | 32 GB or more RAM; size for your actual language servers and builds                                                                                                                   |
 | Local inference                                                                      | The selected model/runtime requirements, plus RAM for AX Code, repository tools and the OS | For the default 35B AX Engine pack, an Apple Silicon M4 Pro with 48 GB+ unified memory (e.g. Mac Mini M4 Pro 48 GB); budget weights, KV cache/context and runtime overhead separately |
 
-Supported packaged CPU/OS targets are Apple Silicon macOS, Windows x64/ARM64 and Ubuntu 24.04+ amd64/arm64. Cloud inference does not require a local GPU. Reserve SSD space for the runtime, repository, dependencies, session history and temporary command output; 10 GB of free space is a starting headroom target, not a disk-usage cap. Large builds and local model downloads need substantially more.
+Supported packaged CPU/OS targets are Apple Silicon macOS, Windows AMD64 (x64) and Ubuntu 24.04+ amd64/arm64. Cloud inference does not require a local GPU. Reserve SSD space for the runtime, repository, dependencies, session history and temporary command output; 10 GB of free space is a starting headroom target, not a disk-usage cap. Large builds and local model downloads need substantially more.
 
 AX Code automatically selects the `low` memory profile on hosts reporting at most 8 GiB of physical RAM. It skips speculative language-server prewarming, limits concurrent analysis work and stops idle language servers; analysis still starts on demand and may take longer. It does not impose a machine-wide RAM limit. A language server, compiler, browser or local model can still exhaust an 8 GB system. Hosts below 8 GB are not recommended for interactive coding.
 

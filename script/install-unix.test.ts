@@ -283,3 +283,45 @@ describe.skipIf(process.platform === "win32")("Unix runtime installation", () =>
     )
   })
 })
+
+test.skipIf(process.platform === "win32")(
+  "Windows ARM Bash entrypoint rejects before downloads or install mutation",
+  async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "ax-windows-arm-installer-"))
+    try {
+      const mockBin = path.join(root, "mock-bin")
+      const home = path.join(root, "home")
+      await mkdir(mockBin)
+      await mkdir(path.join(home, ".ax-code", "bin"), { recursive: true })
+      const active = path.join(home, ".ax-code", "bin", "ax-code")
+      const config = path.join(home, ".ax-code", "config.json")
+      await writeFile(active, "previous runtime")
+      await writeFile(config, "user configuration")
+      await writeFile(
+        path.join(mockBin, "uname"),
+        '#!/bin/sh\nif [ "$1" = "-s" ]; then echo MINGW64_NT; else echo x86_64; fi\n',
+      )
+      await chmod(path.join(mockBin, "uname"), 0o755)
+      for (const args of [[], ["--binary", active]]) {
+        const result = spawnSync("bash", [installer, ...args], {
+          encoding: "utf8",
+          timeout: 10000,
+          env: {
+            ...process.env,
+            HOME: home,
+            PATH: `${mockBin}:${process.env.PATH}`,
+            PROCESSOR_ARCHITECTURE: "AMD64",
+            PROCESSOR_ARCHITEW6432: "ARM64",
+          },
+        })
+        expect(result.status, result.stderr).toBe(1)
+        expect(result.stdout).toContain("Windows ARM64 is not supported")
+        expect(await readFile(active, "utf8")).toBe("previous runtime")
+        expect(await readFile(config, "utf8")).toBe("user configuration")
+        expect(await readdir(path.join(home, ".ax-code"))).toEqual(["bin", "config.json"])
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  },
+)

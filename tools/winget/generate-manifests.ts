@@ -1,4 +1,5 @@
 #!/usr/bin/env tsx
+import { supportsLegacyWindowsArm64 } from "../../script/release-platform-policy"
 /** Generate Windows Package Manager manifests for the AX Code CLI release. */
 import { createHash } from "node:crypto"
 import { mkdirSync, writeFileSync } from "node:fs"
@@ -68,7 +69,7 @@ export async function generateManifests(argv = process.argv.slice(2)) {
   const base = `https://download.ax-code.com/releases/download/${args.tag}`
   const assets = [
     { arch: "x64", file: "ax-code-windows-x64.zip" },
-    { arch: "arm64", file: "ax-code-windows-arm64.zip" },
+    ...(supportsLegacyWindowsArm64(args.version) ? [{ arch: "arm64", file: "ax-code-windows-arm64.zip" }] : []),
   ]
   const hashes = new Map<string, string>()
   for (const asset of assets) {

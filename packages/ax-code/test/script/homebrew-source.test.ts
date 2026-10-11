@@ -18,7 +18,6 @@ const axCodeCiWorkflow = path.join(repoRoot, ".github/workflows/ax-code-ci.yml")
 const releaseArchives = [
   "ax-code-darwin-arm64.zip",
   "ax-code-windows-x64.zip",
-  "ax-code-windows-arm64.zip",
   "ax-code-linux-x64.tar.gz",
   "ax-code-linux-arm64.tar.gz",
 ]
@@ -423,7 +422,7 @@ describe("distribution support guardrails", () => {
     expect(text).toContain("expected installer-linked ax-code")
     expect(text).toContain('"$Base/install.ps1"')
     expect(text).toContain("windows-2022")
-    expect(text).toContain("windows-11-arm")
+    expect(text).not.toContain("windows-11-arm")
     expect(text).toContain('bash .github/scripts/assert-ax-code-version.sh "$VERSION"')
     expect(text).toContain("Smoke - installed backend stdio handshake")
     expect(text).toContain("tui-backend --stdio")

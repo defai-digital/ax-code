@@ -53,8 +53,28 @@ describe("release asset workflow", () => {
     expect(build).toContain("Release requires")
     expect(build).toContain("Bundled evidence cache verification failed")
     expect(ci).toContain("uses: ./.github/actions/build-evidence-cache")
-    for (const runner of ["macos-latest", "ubuntu-24.04", "ubuntu-24.04-arm", "windows-2022", "windows-11-arm"])
+    for (const runner of ["macos-latest", "ubuntu-24.04", "ubuntu-24.04-arm", "windows-2022"])
       expect(ci.slice(ci.indexOf("  evidence-native:"), ci.indexOf("  windows-snapshot:"))).toContain(runner)
+  })
+
+  test("active platform matrices retain x64 Windows and Unix ARM without Windows ARM", () => {
+    for (const file of [
+      "release.yml",
+      "ax-code-ci.yml",
+      "typescript-native.yml",
+      "windows-installer-qualification.yml",
+      "install-matrix-smoke.yml",
+    ]) {
+      const content = readFileSync(`.github/workflows/${file}`, "utf8")
+      expect(content).toContain("windows-2022")
+      expect(content).not.toContain("windows-11-arm")
+      expect(content).not.toContain("win32-arm64")
+      expect(content).not.toContain("windows-arm64")
+    }
+    expect(workflow).toContain("Validate platform policy cutover")
+    expect(workflow).toContain('Path("docs/release/platforms.json")')
+    expect(workflow).toContain("linux-arm64")
+    expect(workflow).toContain("darwin-arm64")
   })
 
   test("blocks release builds on dependency vulnerabilities even when main CI runs separately", () => {

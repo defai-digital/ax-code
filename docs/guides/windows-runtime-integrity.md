@@ -46,7 +46,7 @@ verifying downloaded updates.
 
 ## Antivirus qualification
 
-The Windows Installer Qualification workflow tests x64 and ARM64 installation
+The Windows Installer Qualification workflow tests AMD64 (x64) installation
 and rollback. Its manual `defender_scan` input additionally requires enabled
 Defender protection, scans the installed runtime without scan-triggered
 remediation, and records engine/database versions, file hashes, and scanner

@@ -9,6 +9,8 @@ import { AX_CODE_MINISIGN_PUBLIC_KEY_FILE, expandHome } from "./sign-release-ass
 import { unapprovedTrackedInternalPaths } from "./repository-policy"
 import { downloadVerifiedReleaseAssets, parseReleaseDownloadAssets } from "./download-release-assets"
 
+import { releaseArchives, releasePlatformPolicy, supportsLegacyWindowsArm64 } from "./release-platform-policy"
+
 export const ROOT = path.resolve(import.meta.dirname, "..")
 
 export type PublishGithubReleaseOptions = {
@@ -53,18 +55,12 @@ export function defaultInstallChannel(version: string): "all" | "windows" {
   return isPrerelease(version) ? "windows" : "all"
 }
 
-export function expectedReleaseArchives() {
-  return [
-    "ax-code-darwin-arm64.zip",
-    "ax-code-windows-x64.zip",
-    "ax-code-windows-arm64.zip",
-    "ax-code-linux-x64.tar.gz",
-    "ax-code-linux-arm64.tar.gz",
-  ]
+export function expectedReleaseArchives(version?: string) {
+  return releaseArchives(version)
 }
 
-export function expectedReleaseSignatures() {
-  return expectedReleaseArchives().map((asset) => `${asset}.minisig`)
+export function expectedReleaseSignatures(version?: string) {
+  return expectedReleaseArchives(version).map((asset) => `${asset}.minisig`)
 }
 
 export function expectedReleaseInstallerAssets() {
@@ -79,16 +75,17 @@ export function expectedReleaseMetadataAssets() {
   return ["ax-minisign.pub", "install.sha256", "install.ps1.sha256"]
 }
 
-export function missingReleaseAssets(
-  actual: Iterable<string>,
-  expected = [
-    ...expectedReleaseArchives(),
-    ...expectedReleaseSignatures(),
+export function expectedReleaseAssets(version?: string) {
+  return [
+    ...expectedReleaseArchives(version),
+    ...expectedReleaseSignatures(version),
     ...expectedReleaseInstallerAssets(),
     ...expectedReleaseInstallerSignatures(),
     ...expectedReleaseMetadataAssets(),
-  ],
-) {
+  ]
+}
+
+export function missingReleaseAssets(actual: Iterable<string>, expected = expectedReleaseAssets()) {
   const found = new Set(actual)
   return expected.filter((asset) => !found.has(asset))
 }
@@ -257,6 +254,12 @@ function ensurePreflight(options: PublishGithubReleaseOptions) {
     throw new Error(`Version mismatch: packages/ax-code is ${packageVersion}, requested ${options.version}`)
   }
 
+  if (!options.existingTag && supportsLegacyWindowsArm64(options.version)) {
+    throw new Error(
+      `New release builds require ${releasePlatformPolicy.windowsX64OnlyFrom} or later. Use the original release checkout for older versions.`,
+    )
+  }
+
   assertNoTrackedInternalFiles()
 
   if (!options.allowDirty) {
@@ -408,12 +411,14 @@ function listReleaseAssetNames(options: PublishGithubReleaseOptions) {
 
 function requireReleaseAssets(options: PublishGithubReleaseOptions) {
   if (options.dryRun) return
-  const missing = missingReleaseAssets(listReleaseAssetNames(options))
+  const missing = missingReleaseAssets(listReleaseAssetNames(options), expectedReleaseAssets(options.version))
   if (missing.length > 0) throw new Error(`GitHub release ${options.tag} is missing assets: ${missing.join(", ")}`)
 }
 
-function signableAssetPaths(assetDir: string) {
-  return [...expectedReleaseArchives(), ...expectedReleaseInstallerAssets()].map((name) => path.join(assetDir, name))
+function signableAssetPaths(assetDir: string, version: string) {
+  return [...expectedReleaseArchives(version), ...expectedReleaseInstallerAssets()].map((name) =>
+    path.join(assetDir, name),
+  )
 }
 
 export async function downloadReleaseAssets(options: PublishGithubReleaseOptions, assetDir: string) {
@@ -423,7 +428,10 @@ export async function downloadReleaseAssets(options: PublishGithubReleaseOptions
   })
   if (options.dryRun) return
   const assets = parseReleaseDownloadAssets(metadata, options.tag)
-  const missingMetadata = missingReleaseAssets(assets.map((asset) => asset.name))
+  const missingMetadata = missingReleaseAssets(
+    assets.map((asset) => asset.name),
+    expectedReleaseAssets(options.version),
+  )
   if (missingMetadata.length > 0)
     throw new Error(`GitHub release ${options.tag} is missing assets: ${missingMetadata.join(", ")}`)
   const privateRepo = run("gh", ["api", `repos/${options.repo}`, "--jq", ".private"], { capture: true })
@@ -436,7 +444,7 @@ export async function downloadReleaseAssets(options: PublishGithubReleaseOptions
   } else {
     await downloadVerifiedReleaseAssets(assets, assetDir)
   }
-  const missing = missingReleaseAssets(fs.readdirSync(assetDir))
+  const missing = missingReleaseAssets(fs.readdirSync(assetDir), expectedReleaseAssets(options.version))
   if (missing.length > 0) throw new Error(`Downloaded release is missing expected assets: ${missing.join(", ")}`)
 }
 
@@ -461,7 +469,7 @@ function verifyDownloadedReleaseAssets(options: PublishGithubReleaseOptions, ass
     throw new Error(`Downloaded ax-minisign.pub does not match ${AX_CODE_MINISIGN_PUBLIC_KEY_FILE}`)
   }
   verifyInstallerDigest(assetDir)
-  for (const asset of signableAssetPaths(assetDir)) {
+  for (const asset of signableAssetPaths(assetDir, options.version)) {
     run("minisign", ["-V", "-p", committedPublicKey, "-m", asset, "-x", `${asset}.minisig`])
   }
 }

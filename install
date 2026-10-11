@@ -248,6 +248,22 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Reject Windows ARM hosts before creating directories or accepting a local binary.
+# A shell running under emulation may report x64; inspect the host environment too.
+raw_host_os=$(uname -s)
+case "$raw_host_os" in
+  MINGW*|MSYS*|CYGWIN*)
+    windows_host_arch=${PROCESSOR_ARCHITEW6432:-${PROCESSOR_ARCHITECTURE:-$(uname -m)}}
+    case "$windows_host_arch" in
+      AMD64|amd64|x86_64|x64) ;;
+      *)
+        echo -e "${RED}Windows requires AMD64 (x64). Windows ARM64 is not supported from AX Code v7.24.6.${NC}"
+        exit 1
+        ;;
+    esac
+    ;;
+esac
+
 INSTALL_DIR=$HOME/.ax-code/bin
 INSTALL_ROOT=$(dirname "$INSTALL_DIR")
 mkdir -p "$INSTALL_DIR"
@@ -285,11 +301,15 @@ else
 
     combo="$os-$arch"
     # Keep in sync with GitHub release assets from .github/workflows/release.yml
-    # (darwin-arm64, windows-x64, windows-arm64, linux-x64, linux-arm64). Intel
+    # (darwin-arm64, windows-x64, linux-x64, linux-arm64). Intel
     # macOS Desktop/CLI packages are not published; use Apple Silicon or a
     # supported Windows/Linux (Ubuntu 24.04+ glibc) host.
     case "$combo" in
-      linux-x64|linux-arm64|darwin-arm64|windows-x64|windows-arm64)
+      linux-x64|linux-arm64|darwin-arm64|windows-x64)
+        ;;
+      windows-arm64)
+        echo -e "${RED}Windows ARM64 is not supported from AX Code v7.24.6. Use a Windows AMD64 (x64) host.${NC}"
+        exit 1
         ;;
       darwin-x64)
         echo -e "${RED}Unsupported OS/Arch: $os/$arch${NC}"
