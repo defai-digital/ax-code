@@ -47,6 +47,9 @@ export namespace WorkflowTaskQueue {
     const child = detail.children.find((candidate) => candidate.id === payload.workflow.childID)
     if (!child || child.phaseID !== payload.workflow.phaseID) return detail
     if (child.taskQueueID && child.taskQueueID !== item.id) return detail
+    // Explicit cancellation is authoritative. Late queue notifications must
+    // not reinterpret completed + cancelled phases as a failed/live run.
+    if (detail.status === "cancelled") return detail
 
     const childStatus = childStatusFromQueueStatus(item.status)
     const childChanged = child.status !== childStatus || child.error !== item.error
@@ -237,7 +240,9 @@ function aggregateCriticPhaseStatus(children: WorkflowChildRecord[]): WorkflowRu
   const completed = children.filter((child) => child.status === "completed").length
   if (children.every((child) => child.status === "cancelled")) return "cancelled"
   if (critic?.status === "completed" && completed > children.length / 2) return "completed"
-  if (critic && WorkflowRun.isTerminalChildStatus(critic.status)) return "failed"
+  // A successful critic can finish before the worker majority. Only an
+  // unsuccessful critic makes that merge condition impossible immediately.
+  if (critic?.status === "failed" || critic?.status === "cancelled") return "failed"
 
   const failedOrCancelled = children.filter((child) => child.status === "failed" || child.status === "cancelled").length
   if (failedOrCancelled > children.length / 2) return "failed"
