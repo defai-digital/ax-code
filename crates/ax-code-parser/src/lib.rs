@@ -231,11 +231,8 @@ fn classify_ts<'a>(
                 Some(name_node),
             ))
         }
-        "export_statement" => {
-            // Delegate to the declaration inside the export
-            let decl = find_child_by_field(node, "declaration")?;
-            classify_ts(&decl, source, decl.kind())
-        }
+        // `export_statement` is deliberately not a symbol: the walk reaches its
+        // declaration, which reports the export as `public` through its parent.
         "arrow_function" => {
             // Arrow functions need a parent variable_declarator for naming
             None // handled via lexical_declaration
@@ -268,12 +265,8 @@ fn classify_python<'a>(
                 Some(name_node),
             ))
         }
-        "decorated_definition" => {
-            // Look inside for the actual definition
-            let def = find_child_by_kind(node, "function_definition")
-                .or_else(|| find_child_by_kind(node, "class_definition"))?;
-            classify_python(&def, source, def.kind())
-        }
+        // `decorated_definition` is deliberately not a symbol: the walk reaches the
+        // wrapped definition, so a decorated def is reported once, not nested in itself.
         _ => None,
     }
 }
@@ -302,24 +295,44 @@ fn classify_go<'a>(
                 Some(name_node),
             ))
         }
-        "type_declaration" => {
+        // A grouped `type ( A ...; B ... )` declaration reports each spec itself;
+        // a single-spec declaration is reported as one symbol below.
+        "type_spec" if node.parent().is_some_and(|p| go_spec_count(&p) > 1) => {
+            go_type_symbol(node, source)
+        }
+        "type_declaration" if go_spec_count(node) == 1 => {
             let spec = find_child_by_kind(node, "type_spec")?;
-            let name_node = find_child_by_field(&spec, "name")?;
-            let type_kind = if find_child_by_kind(&spec, "struct_type").is_some() {
-                "class"
-            } else if find_child_by_kind(&spec, "interface_type").is_some() {
-                "interface"
-            } else {
-                "type"
-            };
-            Some((
-                node_text(&name_node, source).to_string(),
-                type_kind.into(),
-                Some(name_node),
-            ))
+            go_type_symbol(&spec, source)
         }
         _ => None,
     }
+}
+
+fn go_spec_count(declaration: &Node) -> usize {
+    let mut cursor = declaration.walk();
+    declaration
+        .children(&mut cursor)
+        .filter(|c| c.kind() == "type_spec")
+        .count()
+}
+
+fn go_type_symbol<'a>(
+    spec: &Node<'a>,
+    source: &[u8],
+) -> Option<(String, String, Option<Node<'a>>)> {
+    let name_node = find_child_by_field(spec, "name")?;
+    let type_kind = if find_child_by_kind(spec, "struct_type").is_some() {
+        "class"
+    } else if find_child_by_kind(spec, "interface_type").is_some() {
+        "interface"
+    } else {
+        "type"
+    };
+    Some((
+        node_text(&name_node, source).to_string(),
+        type_kind.into(),
+        Some(name_node),
+    ))
 }
 
 // ─── Rust classifier ───────────────────────────────────────────────
@@ -526,7 +539,8 @@ fn detect_visibility(node: &Node, source: &[u8], lang: &str) -> Option<String> {
         }
         "go" => {
             // Go convention: uppercase first letter = exported
-            let name_node = find_child_by_field(node, "name")?;
+            let name_node = find_child_by_field(node, "name")
+                .or_else(|| find_child_by_kind(node, "type_spec").and_then(|s| find_child_by_field(&s, "name")))?;
             let name = node_text(&name_node, source);
             if name
                 .chars()
@@ -688,6 +702,55 @@ mod tests {
         let source = format!("{}x{}", "(".repeat(depth), ")".repeat(depth));
         let symbols = extract_symbols_internal(&source, "typescript").unwrap();
         assert!(symbols.is_empty());
+    }
+
+
+    fn flatten(symbols: &[Symbol], out: &mut Vec<(String, Option<String>)>) {
+        for s in symbols {
+            out.push((s.qualified_name.clone(), s.visibility.clone()));
+            flatten(&s.children, out);
+        }
+    }
+
+    #[test]
+    fn test_decorated_python_definitions_are_reported_once() {
+        let source = "@dec\ndef foo():\n    pass\n\nclass A:\n    @property\n    def x(self):\n        return 1\n";
+        let symbols = extract_symbols_internal(source, "python").unwrap();
+        let mut flat = Vec::new();
+        flatten(&symbols, &mut flat);
+        assert_eq!(
+            flat,
+            vec![
+                ("foo".to_string(), Some("public".to_string())),
+                ("A".to_string(), Some("public".to_string())),
+                ("A::x".to_string(), Some("public".to_string())),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_go_grouped_types_and_type_visibility() {
+        let source = "package main\ntype Animal struct {}\ntype hidden int\ntype (\n  A struct{}\n  b interface{}\n)\n";
+        let symbols = extract_symbols_internal(source, "go").unwrap();
+        let mut flat = Vec::new();
+        flatten(&symbols, &mut flat);
+        assert_eq!(
+            flat,
+            vec![
+                ("Animal".to_string(), Some("public".to_string())),
+                ("hidden".to_string(), Some("private".to_string())),
+                ("A".to_string(), Some("public".to_string())),
+                ("b".to_string(), Some("private".to_string())),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_exported_typescript_declaration_is_reported_once() {
+        let symbols = extract_symbols_internal("export function greet() {}\n", "typescript").unwrap();
+        let mut flat = Vec::new();
+        flatten(&symbols, &mut flat);
+        assert_eq!(flat, vec![("greet".to_string(), Some("public".to_string()))]);
     }
 
     #[test]
