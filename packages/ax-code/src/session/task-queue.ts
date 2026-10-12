@@ -643,7 +643,7 @@ export namespace TaskQueue {
     resultEmpty?: boolean
   }): Promise<{ item: Info; claim?: ResultDeliveryClaim; claimed: boolean; accepted: boolean }> {
     const now = Date.now()
-    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
       const currentRow = readRow(db, input.id)
       const current = fromRow(currentRow)
       const status = DeliveryStatus.safeParse(current.payload["deliveryStatus"])
@@ -685,7 +685,7 @@ export namespace TaskQueue {
     resultEmpty?: boolean
   }): Promise<{ item: Info; completed: boolean }> {
     const now = Date.now()
-    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
       const currentRow = readRow(db, input.id)
       const current = fromRow(currentRow)
       const existing = resultDeliveryClaim(current)
@@ -734,7 +734,7 @@ export namespace TaskQueue {
     error: string
   }): Promise<{ item: Info; blocked: boolean }> {
     const now = Date.now()
-    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
       const currentRow = readRow(db, input.id)
       const current = fromRow(currentRow)
       const existing = resultDeliveryClaim(current)
@@ -763,7 +763,7 @@ export namespace TaskQueue {
     claim: Extract<ResultDeliveryClaim, { owner: "waitfor" }>
   }): Promise<{ item: Info; released: boolean }> {
     const now = Date.now()
-    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
       const currentRow = readRow(db, input.id)
       const current = fromRow(currentRow)
       const existing = resultDeliveryClaim(current)
@@ -792,11 +792,12 @@ export namespace TaskQueue {
     resultEmpty?: boolean
   }): Promise<Info> {
     const now = Date.now()
-    // Read-modify-write inside one synchronous critical section: with a
-    // separate awaited get() above the write, two concurrent payload writers
-    // (result handoff vs the control-message ledger) can each read a stale
-    // snapshot and the later write clobbers the earlier one's keys.
-    const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+    // Read-modify-write inside one immediate transaction: a separate awaited
+    // get() above the write let two payload writers (result handoff vs the
+    // control-message ledger) each read a stale snapshot and clobber the
+    // other's keys, and the previous in-process synchronous section still left
+    // a foreign process's committed payload edit exposed to the same clobber.
+    const item = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
       const currentRow = readRow(db, input.id)
       const current = fromRow(currentRow)
       const payload: Payload = {
@@ -858,11 +859,11 @@ export namespace TaskQueue {
     status: ControlDeliveryStatus
   }): Promise<Info> {
     const now = Date.now()
-    // Same synchronous-critical-section rule as setDelivery: the pending →
-    // delivered ledger flip must not interleave with a concurrent payload
-    // writer, or a redelivery after crash allocates fresh message/part ids
-    // and the child sees the control message twice (ADR-057 exactly-once).
-    const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+    // Same transactional rule as setDelivery: the pending → delivered ledger
+    // flip must not interleave with a concurrent payload writer, or a
+    // redelivery after crash allocates fresh message/part ids and the child
+    // sees the control message twice (ADR-057 exactly-once).
+    const item = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
       const currentRow = readRow(db, input.id)
       const current = fromRow(currentRow)
       const entries = controlDeliveries(current).filter((entry) => entry.messageID !== input.messageID)
@@ -890,9 +891,9 @@ export namespace TaskQueue {
    * pending entry with the same text already exists, it is returned unchanged
    * (`claimed: false`) so a crash-redelivery — or a concurrent duplicate call
    * — reuses its message/part ids instead of allocating fresh ones. The
-   * check-and-append happens in one synchronous critical section, so two
-   * concurrent callers cannot both miss the other's entry (ADR-057
-   * exactly-once).
+   * check-and-append happens in one immediate transaction, so two concurrent
+   * callers in the same process or a foreign one cannot both miss the other's
+   * entry (ADR-057 exactly-once).
    */
   export async function claimControlDelivery(input: {
     id: TaskQueueID
@@ -901,7 +902,7 @@ export namespace TaskQueue {
     text: string
   }): Promise<{ item: Info; entry: ControlDelivery; claimed: boolean }> {
     const now = Date.now()
-    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
       const currentRow = readRow(db, input.id)
       const current = fromRow(currentRow)
       const existing = controlDeliveries(current)
@@ -932,15 +933,17 @@ export namespace TaskQueue {
 
   export async function claimForExecution(id: TaskQueueID): Promise<Info | undefined> {
     const now = Date.now()
-    // Read-modify-write inside one synchronous critical section (same
-    // pattern as setDelivery/claimResultDelivery below): the previous
-    // implementation read the row via a separate awaited get() before this
-    // write, so a concurrent edit() landing in that gap would commit its
-    // payload change first, and this write would then stamp the executor
-    // owner onto the pre-edit snapshot it captured earlier — silently
-    // reverting the edit the instant execution claims the row. Reading and
-    // writing here in the same callback closes that gap.
-    const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+    // Read-modify-write inside one immediate transaction (same pattern as
+    // setDelivery/claimResultDelivery below): an earlier implementation read
+    // the row via a separate awaited get(), so a concurrent edit() landing in
+    // that gap committed its payload change first and this write then stamped
+    // the executor owner onto the pre-edit snapshot — silently reverting the
+    // edit. Moving the read into the callback closed the same-tick gap, but a
+    // foreign process's edit could still commit between the plain SELECT and
+    // the guarded UPDATE (the status guard does not cover the payload), so the
+    // claim now runs in a BEGIN IMMEDIATE transaction that serializes the
+    // whole read-modify-write across processes.
+    const item = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
       const currentRow = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get()
       if (!currentRow) return undefined
       const current = fromRow(currentRow)

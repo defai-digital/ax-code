@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process"
 import fs from "node:fs"
+import path from "node:path"
+import { Flag } from "../../src/flag/flag"
 import { ForegroundOwnership } from "../../src/session/foreground-ownership"
 import { Bus } from "../../src/bus"
 import { Permission } from "../../src/permission"
@@ -18,6 +21,7 @@ import { SessionShard } from "../../src/session/shard"
 import { TaskQueue } from "../../src/session/task-queue"
 import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
 import { Database, eq } from "../../src/storage/db"
+import { Shard } from "../../src/storage/shard"
 import { WorkflowFixtureSpecs, WorkflowRun, parseWorkflowSpecV1 } from "../../src/workflow"
 import { tmpdir } from "../fixture/fixture"
 
@@ -32,6 +36,36 @@ afterEach(async () => {
 async function restartInstance(directory: string) {
   await Instance.disposeAll()
   return Instance.provide({ directory, fn: async () => TaskQueue.recoverInterrupted() })
+}
+
+function waitForChildLine(child: ChildProcessWithoutNullStreams, expected: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let buffer = ""
+    const onData = (chunk: Buffer) => {
+      buffer += chunk.toString()
+      if (!buffer.includes(expected + "\n")) return
+      cleanup()
+      resolve()
+    }
+    const onExit = (code: number | null) => {
+      cleanup()
+      reject(new Error(`child exited before "${expected}" (code ${code}): ${buffer}`))
+    }
+    const cleanup = () => {
+      child.stdout.off("data", onData)
+      child.off("exit", onExit)
+    }
+    child.stdout.on("data", onData)
+    child.on("exit", onExit)
+  })
+}
+
+function waitForExit(child: ChildProcessWithoutNullStreams): Promise<number | null> {
+  if (child.exitCode !== null) return Promise.resolve(child.exitCode)
+  return new Promise((resolve, reject) => {
+    child.once("exit", resolve)
+    child.once("error", reject)
+  })
 }
 
 describe("TaskQueue", () => {
@@ -2555,6 +2589,46 @@ describe("TaskQueue", () => {
           // The lost race must not have shifted the sibling's position either.
           expect((await TaskQueue.get(first.id)).position).toBe(0)
           expect((await TaskQueue.get(second.id)).status).toBe("running")
+        },
+      })
+    })
+
+    test("a foreign process edit committed mid-claim is not clobbered", async () => {
+      await using tmp = await tmpdir({ git: true })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({})
+          const item = await TaskQueue.enqueue({
+            sessionID: session.id,
+            kind: "followup",
+            title: "Follow up",
+            payload: { text: "original text" },
+          })
+
+          // A second OS process commits a payload edit while this process is
+          // claiming the row. The claim's read-modify-write must serialize
+          // behind that commit (BEGIN IMMEDIATE), not overwrite it with the
+          // pre-edit snapshot plus the executor owner.
+          const dbPath = Flag.AX_CODE_SHARD_SESSIONS ? Shard.pathFor(Instance.project.id) : Database.Path
+          const edited = JSON.stringify({ ...item.payload, text: "edited while claiming" })
+          const holder = path.join(import.meta.dirname, "../fixture/queue-claim-edit-holder.ts")
+          const child = spawn(process.execPath, ["--import", "tsx", holder, dbPath, item.id, edited, "1500"], {
+            cwd: path.join(import.meta.dirname, "../.."),
+            stdio: ["ignore", "pipe", "pipe"],
+          })
+          try {
+            await waitForChildLine(child, "locked")
+            const claimed = await TaskQueue.claimForExecution(item.id)
+            expect(claimed?.status).toBe("running")
+          } finally {
+            if (child.exitCode === null) child.kill()
+            await waitForExit(child)
+          }
+
+          const after = await TaskQueue.get(item.id)
+          expect(after.payload["text"]).toBe("edited while claiming")
         },
       })
     })
