@@ -239,6 +239,9 @@ impl IndexStore {
         if nodes
             .iter()
             .any(|n| n.project_id != project_id || n.file != file_path)
+            // An edge's file is the call/reference site, which legitimately
+            // differs from the ingested file for cross-file callers; only the
+            // project scope applies here.
             || edges.iter().any(|e| e.project_id != project_id)
             || file_meta.project_id != project_id
             || file_meta.path != file_path

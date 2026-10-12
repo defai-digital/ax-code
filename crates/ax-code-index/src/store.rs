@@ -449,6 +449,38 @@ mod tests {
     }
 
     #[test]
+    fn test_ingest_file_scopes_edges_by_project_not_by_file() {
+        let store = test_store();
+        let nodes = vec![make_node("n1", "proj1", "keep", "/app.ts")];
+        // A cross-file edge (the call site lives in /other.ts) is legitimate and
+        // must be accepted; only the project scope applies to edges.
+        let cross_file = vec![make_edge("e1", "proj1", "n1", "n1", "/other.ts")];
+        let file_meta = make_file("fm1", "proj1", "/app.ts", "sha");
+        store
+            .ingest_file(
+                "proj1".into(),
+                "/app.ts".into(),
+                serde_json::to_string(&nodes).unwrap(),
+                serde_json::to_string(&cross_file).unwrap(),
+                serde_json::to_string(&file_meta).unwrap(),
+            )
+            .unwrap();
+
+        let foreign = vec![make_edge("e2", "proj2", "n1", "n1", "/app.ts")];
+        let result = store.ingest_file(
+            "proj1".into(),
+            "/app.ts".into(),
+            serde_json::to_string(&nodes).unwrap(),
+            serde_json::to_string(&foreign).unwrap(),
+            serde_json::to_string(&file_meta).unwrap(),
+        );
+
+        assert!(result.is_err());
+        // The rejected ingest wrote nothing and removed nothing.
+        assert_eq!(store.count_nodes("proj1".into()).unwrap(), 1);
+    }
+
+    #[test]
     fn test_cursor_upsert_and_get() {
         let store = test_store();
 
