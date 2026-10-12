@@ -112,7 +112,14 @@ export const ReadTool = Tool.define("read", {
     const filepath = resolveToolFilePath(params.filePath, Instance.directory)
     const title = normalizeToWorkspacePath(filepath, Instance.worktree)
     try {
-      const stat = Filesystem.stat(filepath)
+      // Async stat: every read paid a synchronous statSync here just to tell a
+      // directory from a file. A missing path still yields undefined; only real
+      // errors (EACCES, ELOOP, …) propagate, matching Filesystem.stat's
+      // throwIfNoEntry behavior for ENOENT/ENOTDIR.
+      const stat = await fs.stat(filepath).catch((error: NodeJS.ErrnoException) => {
+        if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return undefined
+        throw error
+      })
 
       await assertExternalDirectory(ctx, filepath, {
         bypass: Boolean(ctx.extra?.["bypassCwdCheck"]),

@@ -1,5 +1,6 @@
 import z from "zod"
 import path from "path"
+import * as fs from "fs/promises"
 import { Tool } from "./tool"
 import { Filesystem } from "../util/filesystem"
 import DESCRIPTION from "./glob.txt"
@@ -110,7 +111,10 @@ export const GlobTool = Tool.define("glob", {
       signal: ctx.abort,
     })) {
       const full = path.resolve(search, file)
-      const stats = Filesystem.stat(full)?.mtime?.getTime() ?? 0
+      // Stat asynchronously: this fallback path visits every match, so a
+      // synchronous statSync here blocked the event loop once per file. A
+      // missing entry keeps mtime 0 so it still sorts last, as before.
+      const stats = (await fs.stat(full).catch(() => undefined))?.mtime?.getTime() ?? 0
       files.push({
         path: full,
         mtime: stats,
