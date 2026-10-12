@@ -7,8 +7,8 @@ minor before reporting a vulnerability against an older line.
 
 | Version | Supported |
 | ------- | --------- |
-| 7.24.x  | Yes       |
-| < 7.24  | No        |
+| 7.25.x  | Yes       |
+| < 7.25  | No        |
 
 ## Reporting a Vulnerability
 

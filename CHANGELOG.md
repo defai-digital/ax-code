@@ -6,6 +6,22 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.25.0] - 2026-10-12
+
+### Changed
+
+- Publish AX Code 7.25.0 with SDK 2.6.11.
+- Support Windows packaged runtimes on AMD64 (x64) only; retain historical signed ARM64 releases.
+
+### Fixed
+
+- Wait for the worker majority when a successful critic completes first in critic-confirmation workflows.
+- Preserve settled sibling outcomes during queue-stop races and avoid reporting cancellation after a real stop failure.
+- Preserve explicit workflow cancellation and budget-failed child outcomes across late queue notifications, and stop remaining queued children after budget failure.
+- Serialize task queue claims and MCP trust-store updates across processes, and record scheduled workflow outcomes once.
+- Propagate filesystem errors during migration and path resolution instead of silently losing data or reusing stale security checks.
+- Preserve UTF-8 hook output across chunk boundaries and harden search cancellation, pattern validation, and Git metadata exclusions.
+
 ## [7.24.5] - 2026-10-11
 
 ### Changed
