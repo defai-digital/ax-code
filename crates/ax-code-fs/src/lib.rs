@@ -117,6 +117,17 @@ pub fn walk_files(cwd: String, options_json: String) -> napi::Result<Vec<String>
     walk_files_impl(&cwd, &options_json, &AtomicBool::new(false))
 }
 
+fn compile_include_globs(patterns: &[String]) -> napi::Result<Vec<GlobMatcher>> {
+    patterns
+        .iter()
+        .map(|p| {
+            Glob::new(p)
+                .map(|g| g.compile_matcher())
+                .map_err(|e| napi::Error::from_reason(format!("invalid include glob: {e}")))
+        })
+        .collect()
+}
+
 fn walk_files_impl(
     cwd: &str,
     options_json: &str,
@@ -145,12 +156,9 @@ fn walk_files_impl(
     }
 
     // Build glob matchers from options
-    let globs: Vec<GlobMatcher> = opts
-        .glob
-        .unwrap_or_default()
-        .iter()
-        .filter_map(|p| Glob::new(p).ok().map(|g| g.compile_matcher()))
-        .collect();
+    // Reject a malformed glob like the ripgrep fallback does; dropping it would
+    // silently widen the walk to every file.
+    let globs = compile_include_globs(&opts.glob.unwrap_or_default())?;
 
     // A limit of 0 is treated as "no limit" so callers can pass through an
     // unbounded default without a sentinel.
@@ -796,11 +804,7 @@ pub fn scan_files(cwd: String, config_json: String) -> napi::Result<String> {
     }
 
     // Build include glob matchers
-    let include_matchers: Vec<GlobMatcher> = config
-        .include
-        .iter()
-        .filter_map(|p| Glob::new(p).ok().map(|g| g.compile_matcher()))
-        .collect();
+    let include_matchers = compile_include_globs(&config.include)?;
 
     // Walk and collect files
     let root = PathBuf::from(&cwd);
@@ -1561,6 +1565,17 @@ mod tests {
             .find(|r| r["path"].as_str().unwrap().ends_with("a.txt"))
             .unwrap();
         assert_eq!(a["column"], 8);
+
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn walk_files_rejects_an_invalid_glob() {
+        let dir = make_tmp_dir("walk_bad_glob");
+        fs::write(dir.join("a.txt"), "x\n").unwrap();
+
+        let err = walk_files(dir.to_str().unwrap().into(), r#"{"glob":["["]}"#.into()).unwrap_err();
+        assert!(err.reason.contains("invalid include glob"), "{}", err.reason);
 
         cleanup(&dir);
     }
