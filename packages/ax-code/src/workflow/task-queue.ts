@@ -71,12 +71,21 @@ export namespace WorkflowTaskQueue {
 
     const afterMerge = phaseStatus === "completed" ? await WorkflowRun.getDetail(payload.workflow.runID) : refreshed
     const latestPhase = afterMerge.phases.find((candidate) => candidate.id === payload.workflow.phaseID)
-    const phaseChanged = latestPhase !== undefined && latestPhase.status !== phaseStatus
+    // A phase the budget enforcement failed is a deliberate stop. A later
+    // sibling completion must not recompute it back to completed (first-success
+    // / majority), which would flip the run back to running and start the next
+    // phase — spending tokens the budget already refused.
+    const phaseBudgetStopped =
+      latestPhase?.status === "failed" &&
+      phaseStatus !== "failed" &&
+      WorkflowRun.isBudgetExceeded(payload.workflow.runID, latestPhase.id)
+    const effectivePhaseStatus = phaseBudgetStopped ? "failed" : phaseStatus
+    const phaseChanged = latestPhase !== undefined && latestPhase.status !== effectivePhaseStatus
     if (phaseChanged) {
       await WorkflowRun.setPhaseStatus({
         id: latestPhase.id,
-        status: phaseStatus,
-        error: phaseStatus === "failed" || phaseStatus === "blocked" ? item.error : undefined,
+        status: effectivePhaseStatus,
+        error: effectivePhaseStatus === "failed" || effectivePhaseStatus === "blocked" ? item.error : undefined,
       })
     }
 
@@ -84,13 +93,18 @@ export namespace WorkflowTaskQueue {
     // was read; a no-op sync keeps using `afterMerge` instead of rebuilding it.
     const latest = phaseChanged ? await WorkflowRun.getDetail(payload.workflow.runID) : afterMerge
     const runStatus = aggregateRunStatus(latest.phases)
+    // Same deliberate-stop rule at the run level: a budget-failed run stays
+    // failed even when the aggregate would call it running or completed again.
+    const runBudgetStopped =
+      latest.status === "failed" && runStatus !== "failed" && WorkflowRun.isBudgetExceeded(payload.workflow.runID)
+    const effectiveRunStatus = runBudgetStopped ? "failed" : runStatus
     const run =
-      latest.status === runStatus
+      latest.status === effectiveRunStatus
         ? latest
         : await WorkflowRun.setStatus({
             id: latest.id,
-            status: runStatus,
-            error: runStatus === "failed" || runStatus === "blocked" ? item.error : undefined,
+            status: effectiveRunStatus,
+            error: effectiveRunStatus === "failed" || effectiveRunStatus === "blocked" ? item.error : undefined,
           })
     if (run.status === "completed") await WorkflowRun.ensureFinalReportArtifact(latest.id)
     if (run.status === "completed" || run.status === "failed" || run.status === "cancelled") {
@@ -101,7 +115,7 @@ export namespace WorkflowTaskQueue {
       }
     }
 
-    if (phaseStatus === "completed" && runStatus === "running") {
+    if (effectivePhaseStatus === "completed" && effectiveRunStatus === "running") {
       return WorkflowScheduler.start(latest.id, payload.workflow.startOptions)
     }
 

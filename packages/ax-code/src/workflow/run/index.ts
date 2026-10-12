@@ -24,7 +24,7 @@ import {
   WorkflowPhaseTable,
   WorkflowRunTable,
 } from "../workflow.sql"
-import { appendBudgetUsage } from "./budget"
+import { appendBudgetUsage, isBudgetExceeded } from "./budget"
 import { ensureFinalReportArtifact, WORKFLOW_FINAL_REPORT_SPEC_ARTIFACT_ID } from "./final-report"
 import {
   assertChildBelongsToRun,
@@ -57,7 +57,7 @@ import {
 } from "./internal"
 
 export { WORKFLOW_FINAL_REPORT_SPEC_ARTIFACT_ID }
-export { appendBudgetUsage }
+export { appendBudgetUsage, isBudgetExceeded }
 
 const log = Log.create({ service: "workflow.run" })
 
@@ -464,6 +464,7 @@ export const WorkflowRun = {
   attachChildTaskQueueID,
   appendArtifact,
   appendBudgetUsage,
+  isBudgetExceeded,
   attachVerificationEnvelopeIDs,
   ensureFinalReportArtifact,
   recoverInterrupted,

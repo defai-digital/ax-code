@@ -1,14 +1,16 @@
 import { Instance } from "../../project/instance"
 import { SessionShard } from "../../session/shard"
-import { NotFoundError, eq } from "../../storage/db"
+import { NotFoundError, and, eq } from "../../storage/db"
 import { addWorkflowBudgetUsage, evaluateWorkflowBudget, evaluateWorkflowChildBudget } from "../budget"
 import {
   EmptyWorkflowBudgetUsage,
   WorkflowBudgetLedgerEntry,
   WorkflowBudgetLedgerID,
   WorkflowChildRecord,
+  WorkflowPhaseID,
   WorkflowPhaseRecord,
   WorkflowRun as WorkflowRunState,
+  WorkflowRunID,
 } from "../state"
 import { WorkflowBudgetLedgerTable, WorkflowChildTable, WorkflowPhaseTable, WorkflowRunTable } from "../workflow.sql"
 import {
@@ -212,4 +214,28 @@ export async function appendBudgetUsage(
   if (changed.failedPhase) publishPhaseUpdated(changed.failedPhase, changed.failedPhasePreviousStatus)
   if (changed.failedRun) publishUpdated(changed.failedRun, changed.failedRunPreviousStatus)
   return changed.entry
+}
+
+/**
+ * True when a budget-exceeded entry was recorded for the run (optionally for
+ * one phase). Budget enforcement is a deliberate stop: the workflow sync must
+ * not recompute the failed row back to a live status on a later sibling
+ * completion, or the run would keep spending tokens after the budget failed it.
+ */
+export function isBudgetExceeded(runID: WorkflowRunID, phaseID?: WorkflowPhaseID): boolean {
+  return SessionShard.storeForProject(Instance.project.id).use((db) => {
+    const row = db
+      .select({ id: WorkflowBudgetLedgerTable.id })
+      .from(WorkflowBudgetLedgerTable)
+      .where(
+        and(
+          eq(WorkflowBudgetLedgerTable.run_id, runID),
+          eq(WorkflowBudgetLedgerTable.kind, "exceeded"),
+          ...(phaseID ? [eq(WorkflowBudgetLedgerTable.phase_id, phaseID)] : []),
+        ),
+      )
+      .limit(1)
+      .get()
+    return row !== undefined
+  })
 }
