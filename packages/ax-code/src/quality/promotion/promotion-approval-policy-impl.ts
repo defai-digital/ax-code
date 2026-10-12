@@ -1,4 +1,4 @@
-import { overallStatusFromGates } from "./promotion-summary"
+import { overallStatusFromGates, pushGateLines } from "./promotion-summary"
 import * as QualityPromotionApprovalPolicyContract from "./promotion-approval-policy-contract"
 
 export namespace QualityPromotionApprovalPolicy {
@@ -1156,9 +1156,7 @@ export namespace QualityPromotionApprovalPolicy {
     lines.push(`- distinct qualified approvers: ${summary.distinctQualifiedApprovers}`)
     lines.push("")
     lines.push("Gates:")
-    for (const gate of summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, summary.gates)
     if (summary.acceptedApprovals.length > 0) {
       lines.push("")
       lines.push("Accepted Approvals:")

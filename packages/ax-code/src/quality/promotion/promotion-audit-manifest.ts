@@ -2,7 +2,7 @@ import z from "zod"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { QualityPromotionReleasePacket } from "./promotion-release-packet"
 import { createPromotionArtifactStore } from "./artifact-store"
-import { overallStatusFromGates } from "./promotion-summary"
+import { overallStatusFromGates, pushGateLines } from "./promotion-summary"
 import { jsonEqual } from "../json"
 import { compareStringFields, uniqueBy } from "../sort"
 import { signedArchiveEvidenceShape } from "./promotion-signed-archive-evidence"
@@ -308,9 +308,7 @@ export namespace QualityPromotionAuditManifest {
       )
     }
     lines.push("")
-    for (const gate of manifest.summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, manifest.summary.gates)
     lines.push("")
     return lines.join("\n")
   }
@@ -329,9 +327,7 @@ export namespace QualityPromotionAuditManifest {
     lines.push(`- release decision record status: ${summary.releaseDecisionRecordStatus}`)
     lines.push(`- previous active source: ${summary.previousActiveSource ?? "n/a"}`)
     lines.push("")
-    for (const gate of summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, summary.gates)
     lines.push("")
     return lines.join("\n")
   }

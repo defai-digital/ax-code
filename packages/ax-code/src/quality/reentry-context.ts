@@ -4,6 +4,7 @@ import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionReleasePolicy } from "./promotion/promotion-release-policy"
 import { jsonEqual } from "./json"
 import { compareStringFields } from "./sort"
+import { pushGateLines } from "./promotion/promotion-summary"
 
 export namespace QualityReentryContext {
   export const ContextArtifact = z.object({
@@ -189,9 +190,7 @@ export namespace QualityReentryContext {
     lines.push(`- recent rollback count: ${context.stability.recentRollbackCount}`)
     lines.push("")
     lines.push("Watch Gates:")
-    for (const gate of context.watch.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, context.watch.gates)
     lines.push("")
     return lines.join("\n")
   }

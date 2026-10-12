@@ -11,7 +11,7 @@ import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decis
 import { QualityPromotionReleasePacket } from "./promotion-release-packet"
 import { QualityPromotionReviewDossier } from "./promotion-review-dossier"
 import { QualityPromotionSubmissionBundle } from "./promotion-submission-bundle"
-import { overallStatusFromGates } from "./promotion-summary"
+import { overallStatusFromGates, pushGateLines } from "./promotion-summary"
 import { jsonEqual } from "../json"
 import { compareStringFields, uniqueBy } from "../sort"
 
@@ -402,9 +402,7 @@ export namespace QualityPromotionHandoffPackage {
       )
     }
     lines.push("")
-    for (const gate of packet.summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, packet.summary.gates)
     lines.push("")
     return lines.join("\n")
   }
@@ -426,9 +424,7 @@ export namespace QualityPromotionHandoffPackage {
     lines.push(`- inventory count: ${summary.inventoryCount}`)
     lines.push(`- previous active source: ${summary.previousActiveSource ?? "n/a"}`)
     lines.push("")
-    for (const gate of summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, summary.gates)
     lines.push("")
     return lines.join("\n")
   }

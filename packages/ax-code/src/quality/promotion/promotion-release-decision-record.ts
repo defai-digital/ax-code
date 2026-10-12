@@ -2,7 +2,7 @@ import z from "zod"
 import { QualityStorageKey } from "../storage-key"
 import { QualityPromotionBoardDecision } from "./promotion-board-decision"
 import { createPromotionArtifactStore } from "./artifact-store"
-import { overallStatusFromGates } from "./promotion-summary"
+import { overallStatusFromGates, pushGateLines } from "./promotion-summary"
 import { jsonEqual } from "../json"
 import { compareStringFields, uniqueBy } from "../sort"
 
@@ -229,9 +229,7 @@ export namespace QualityPromotionReleaseDecisionRecord {
     lines.push(`- promotion mode: ${record.summary.promotionMode}`)
     lines.push(`- overall status: ${record.summary.overallStatus}`)
     lines.push("")
-    for (const gate of record.summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, record.summary.gates)
     lines.push("")
     return lines.join("\n")
   }
@@ -249,9 +247,7 @@ export namespace QualityPromotionReleaseDecisionRecord {
     lines.push(`- authorized promotion: ${summary.authorizedPromotion}`)
     lines.push(`- promotion mode: ${summary.promotionMode}`)
     lines.push("")
-    for (const gate of summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, summary.gates)
     lines.push("")
     return lines.join("\n")
   }

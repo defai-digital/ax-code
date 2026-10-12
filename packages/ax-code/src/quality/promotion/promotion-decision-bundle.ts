@@ -4,6 +4,7 @@ import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
 import { QualityPromotionEligibility } from "./promotion-eligibility"
 import { QualityPromotionReleasePolicy } from "./promotion-release-policy"
 import { QualityStabilityGuard } from "../stability-guard"
+import { pushGateLines } from "./promotion-summary"
 
 export namespace QualityPromotionDecisionBundle {
   const APPROVAL_POLICY_SUGGESTION_EPSILON = 1e-9
@@ -475,9 +476,7 @@ export namespace QualityPromotionDecisionBundle {
     lines.push(`- prior rollbacks: ${bundle.snapshot.priorRollbacks}`)
     lines.push("")
     lines.push("Eligibility:")
-    for (const gate of bundle.eligibility.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, bundle.eligibility.gates)
     if (bundle.approvalPolicySuggestion) {
       lines.push("")
       lines.push("Approval policy adoption:")

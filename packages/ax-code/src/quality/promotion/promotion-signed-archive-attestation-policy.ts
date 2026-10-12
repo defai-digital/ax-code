@@ -2,6 +2,7 @@ import z from "zod"
 import { sha256JsonHex } from "../digest"
 import { QualityPromotionSignedArchiveTrust } from "./promotion-signed-archive-trust"
 import { summarizeOverallStatus } from "../status"
+import { pushGateLines } from "./promotion-summary"
 
 export namespace QualityPromotionSignedArchiveAttestationPolicy {
   export const MinimumTrustScope = z.enum(["global", "project"])
@@ -165,9 +166,7 @@ export namespace QualityPromotionSignedArchiveAttestationPolicy {
     lines.push(`- overall status: ${summary.overallStatus}`)
     lines.push(`- accepted by policy: ${summary.acceptedByPolicy}`)
     lines.push("")
-    for (const gate of summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, summary.gates)
     lines.push("")
     return lines.join("\n")
   }

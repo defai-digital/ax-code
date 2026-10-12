@@ -3,7 +3,7 @@ import { QualityStorageKey } from "../storage-key"
 import { QualityPromotionApprovalPacket } from "./promotion-approval-packet"
 import { createPromotionArtifactStore } from "./artifact-store"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
-import { overallStatusFromGates } from "./promotion-summary"
+import { overallStatusFromGates, pushGateLines } from "./promotion-summary"
 import { jsonEqual } from "../json"
 import { compareStringFields, uniqueBy } from "../sort"
 
@@ -208,9 +208,7 @@ export namespace QualityPromotionSubmissionBundle {
     lines.push(`- dissent handling included: ${submission.summary.hasDissentHandling}`)
     lines.push(`- overall status: ${submission.summary.overallStatus}`)
     lines.push("")
-    for (const gate of submission.summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, submission.summary.gates)
     lines.push("")
     return lines.join("\n")
   }
@@ -229,9 +227,7 @@ export namespace QualityPromotionSubmissionBundle {
     lines.push(`- adoption review count: ${summary.adoptionReviewCount}`)
     lines.push(`- dissent handling included: ${summary.hasDissentHandling}`)
     lines.push("")
-    for (const gate of summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, summary.gates)
     lines.push("")
     return lines.join("\n")
   }

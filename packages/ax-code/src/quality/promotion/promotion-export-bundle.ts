@@ -2,7 +2,7 @@ import z from "zod"
 import { QualityPromotionAuditManifest } from "./promotion-audit-manifest"
 import { createPromotionArtifactStore } from "./artifact-store"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
-import { overallStatusFromGates } from "./promotion-summary"
+import { overallStatusFromGates, pushGateLines } from "./promotion-summary"
 import { jsonEqual } from "../json"
 import { compareStringFields, uniqueBy } from "../sort"
 
@@ -206,9 +206,7 @@ export namespace QualityPromotionExportBundle {
     lines.push(`- authorized promotion: ${bundle.summary.authorizedPromotion}`)
     lines.push(`- overall status: ${bundle.summary.overallStatus}`)
     lines.push("")
-    for (const gate of bundle.summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, bundle.summary.gates)
     lines.push("")
     return lines.join("\n")
   }
@@ -226,9 +224,7 @@ export namespace QualityPromotionExportBundle {
     lines.push(`- authorized promotion: ${summary.authorizedPromotion}`)
     lines.push(`- previous active source: ${summary.previousActiveSource ?? "n/a"}`)
     lines.push("")
-    for (const gate of summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, summary.gates)
     lines.push("")
     return lines.join("\n")
   }

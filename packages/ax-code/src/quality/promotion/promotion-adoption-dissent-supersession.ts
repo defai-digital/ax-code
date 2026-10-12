@@ -5,7 +5,7 @@ import { createPromotionArtifactStore } from "./artifact-store"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
 import { APPROVAL_ROLE_RANK, normalizeApprovalRole } from "./promotion-approval-policy-contract"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
-import { overallStatusFromGates } from "./promotion-summary"
+import { overallStatusFromGates, pushGateLines } from "./promotion-summary"
 import { jsonEqual } from "../json"
 import { compareStringFields, uniqueBy } from "../sort"
 
@@ -410,9 +410,7 @@ export namespace QualityPromotionAdoptionDissentSupersession {
     lines.push(`- covered by reviewer re-review: ${summary.coveredByReviewerRereview}`)
     lines.push(`- covered by evidence supersession: ${summary.coveredByEvidenceSupersession}`)
     lines.push("")
-    for (const gate of summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, summary.gates)
     lines.push("")
     return lines.join("\n")
   }

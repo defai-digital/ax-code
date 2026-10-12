@@ -6,6 +6,7 @@ import { QualityPromotionSignedArchiveTrust } from "./promotion-signed-archive-t
 import { summarizeOverallStatus } from "../status"
 import { jsonEqual } from "../json"
 import { compareStringFields, uniqueBy } from "../sort"
+import { pushGateLines } from "./promotion-summary"
 
 export namespace QualityPromotionSignedArchiveReviewDossier {
   export const DossierSummary = z.object({
@@ -295,9 +296,7 @@ export namespace QualityPromotionSignedArchiveReviewDossier {
     lines.push(`- document count: ${dossier.summary.documentCount}`)
     lines.push(`- inventory count: ${dossier.summary.inventoryCount}`)
     lines.push("")
-    for (const gate of dossier.summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, dossier.summary.gates)
     lines.push("")
     return lines.join("\n")
   }

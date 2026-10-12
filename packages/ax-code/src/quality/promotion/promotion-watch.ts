@@ -1,6 +1,7 @@
 import z from "zod"
 import { ProbabilisticRollout } from "../probabilistic-rollout"
 import { QualityPromotionReleasePolicy } from "./promotion-release-policy"
+import { pushGateLines } from "./promotion-summary"
 
 export namespace QualityPromotionWatch {
   export const WatchGate = z.object({
@@ -234,9 +235,7 @@ export namespace QualityPromotionWatch {
     lines.push(`- max abs confidence delta: ${summary.shadow.maxAbsConfidenceDelta ?? "n/a"}`)
     lines.push("")
     lines.push("Gates:")
-    for (const gate of summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, summary.gates)
     lines.push("")
     return lines.join("\n")
   }

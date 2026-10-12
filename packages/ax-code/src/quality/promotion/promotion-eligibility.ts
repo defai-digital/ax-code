@@ -4,6 +4,7 @@ import { QualityReentryContext } from "../reentry-context"
 import { QualityReentryRemediation } from "../reentry-remediation"
 import { QualityStabilityGuard } from "../stability-guard"
 import { uniqueSortedStrings } from "../../util/string-list"
+import { pushGateLines } from "./promotion-summary"
 
 export namespace QualityPromotionEligibility {
   export const ReviewerCarryoverEntry = z.object({
@@ -326,9 +327,7 @@ export namespace QualityPromotionEligibility {
     lines.push(`- escalation required: ${summary.history.escalationRequired}`)
     lines.push("")
     lines.push("Gates:")
-    for (const gate of summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, summary.gates)
     lines.push("")
     return lines.join("\n")
   }

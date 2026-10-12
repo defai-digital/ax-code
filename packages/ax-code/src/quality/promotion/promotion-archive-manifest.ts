@@ -3,7 +3,7 @@ import { sha256JsonHex } from "../digest"
 import { QualityPromotionExportBundle } from "./promotion-export-bundle"
 import { createPromotionArtifactStore } from "./artifact-store"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
-import { overallStatusFromGates } from "./promotion-summary"
+import { overallStatusFromGates, pushGateLines } from "./promotion-summary"
 import { jsonEqual } from "../json"
 import { compareStringFields, uniqueBy } from "../sort"
 
@@ -319,9 +319,7 @@ export namespace QualityPromotionArchiveManifest {
       lines.push(`- ${item.kind}: ${item.artifactID} · ${item.createdAt} · digest=${item.digest}`)
     }
     lines.push("")
-    for (const gate of archive.summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, archive.summary.gates)
     lines.push("")
     return lines.join("\n")
   }
@@ -341,9 +339,7 @@ export namespace QualityPromotionArchiveManifest {
     lines.push(`- inventory count: ${summary.inventoryCount}`)
     lines.push(`- previous active source: ${summary.previousActiveSource ?? "n/a"}`)
     lines.push("")
-    for (const gate of summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, summary.gates)
     lines.push("")
     return lines.join("\n")
   }

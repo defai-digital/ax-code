@@ -7,6 +7,7 @@ import { QualityPromotionSignedArchiveTrust } from "./promotion-signed-archive-t
 import { summarizeOverallStatus } from "../status"
 import { jsonEqual } from "../json"
 import { compareStringFields } from "../sort"
+import { pushGateLines } from "./promotion-summary"
 
 export namespace QualityPromotionSignedArchiveAttestationPacket {
   export const PromotionReference = z.object({
@@ -245,9 +246,7 @@ export namespace QualityPromotionSignedArchiveAttestationPacket {
     lines.push(`- policy project id: ${packet.summary.policyProjectID ?? "n/a"}`)
     lines.push(`- overall status: ${packet.summary.overallStatus}`)
     lines.push("")
-    for (const gate of packet.summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, packet.summary.gates)
     lines.push("")
     return lines.join("\n")
   }

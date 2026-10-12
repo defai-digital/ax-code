@@ -6,6 +6,7 @@ import { QualityPromotionSignedArchive } from "./promotion-signed-archive"
 import { summarizeOverallStatus } from "../status"
 import { jsonEqual } from "../json"
 import { compareStringFields, uniqueBy } from "../sort"
+import { pushGateLines } from "./promotion-summary"
 
 export namespace QualityPromotionSignedArchiveTrust {
   export const Scope = z.enum(["global", "project"])
@@ -399,9 +400,7 @@ export namespace QualityPromotionSignedArchiveTrust {
     lines.push(`- trust scope: ${summary.resolution.scope ?? "unresolved"}`)
     lines.push(`- trust id: ${summary.resolution.trustID ?? "n/a"}`)
     lines.push("")
-    for (const gate of summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, summary.gates)
     lines.push("")
     return lines.join("\n")
   }

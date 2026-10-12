@@ -6,6 +6,7 @@ import type {
   Workflow,
 } from "./probabilistic-rollout-schema"
 import { summarizeOverallStatus } from "../status"
+import { pushGateLines } from "../promotion/promotion-summary"
 
 type ReadinessCountSummary = Pick<
   ReplayReadinessSummary,
@@ -187,9 +188,7 @@ export function renderReplayReadinessReport(summary: ReplayReadinessSummary) {
   lines.push(`- ready for benchmark: ${summary.readyForBenchmark}`)
   lines.push(`- next action: ${readinessNextActionLabel(summary) ?? "none"}`)
   lines.push("")
-  for (const gate of summary.gates) {
-    lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-  }
+  pushGateLines(lines, summary.gates)
   lines.push("")
   return lines.join("\n")
 }

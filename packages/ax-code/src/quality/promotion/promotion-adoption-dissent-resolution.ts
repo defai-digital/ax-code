@@ -5,7 +5,7 @@ import { createPromotionArtifactStore } from "./artifact-store"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
 import { APPROVAL_ROLE_RANK, normalizeApprovalRole } from "./promotion-approval-policy-contract"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
-import { overallStatusFromGates } from "./promotion-summary"
+import { overallStatusFromGates, pushGateLines } from "./promotion-summary"
 import { jsonEqual } from "../json"
 import { compareStringFields, uniqueBy } from "../sort"
 
@@ -377,9 +377,7 @@ export namespace QualityPromotionAdoptionDissentResolution {
     lines.push(`- unresolved qualified rejecting reviews: ${summary.unresolvedQualifiedRejectingReviews}`)
     lines.push(`- distinct qualified rejecting reviewers: ${summary.distinctQualifiedRejectingReviewers}`)
     lines.push("")
-    for (const gate of summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, summary.gates)
     lines.push("")
     return lines.join("\n")
   }

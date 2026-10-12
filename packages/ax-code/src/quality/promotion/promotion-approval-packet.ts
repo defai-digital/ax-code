@@ -6,7 +6,7 @@ import { QualityPromotionAdoptionReview } from "./promotion-adoption-review"
 import { QualityPromotionApproval } from "./promotion-approval"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
-import { overallStatusFromGates } from "./promotion-summary"
+import { overallStatusFromGates, pushGateLines } from "./promotion-summary"
 import { jsonEqual } from "../json"
 import { compareStringFields, uniqueBy } from "../sort"
 
@@ -416,9 +416,7 @@ export namespace QualityPromotionApprovalPacket {
     lines.push(`- dissent handling bundle: ${packet.dissentHandling?.handlingID ?? "none"}`)
     lines.push(`- readiness: ${packet.readiness.overallStatus}`)
     lines.push("")
-    for (const gate of packet.readiness.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, packet.readiness.gates)
     lines.push("")
     return lines.join("\n")
   }
@@ -437,9 +435,7 @@ export namespace QualityPromotionApprovalPacket {
     lines.push(`- qualified rejecting reviews: ${summary.qualifiedRejectingReviews}`)
     lines.push(`- covered qualified rejecting reviews: ${summary.coveredQualifiedRejectingReviews}`)
     lines.push("")
-    for (const gate of summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, summary.gates)
     lines.push("")
     return lines.join("\n")
   }

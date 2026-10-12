@@ -7,7 +7,7 @@ import { sha256Hex } from "../digest"
 import { QualityPromotionPackagedArchive } from "./promotion-packaged-archive"
 import { createPromotionArtifactStore } from "./artifact-store"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
-import { overallStatusFromGates } from "./promotion-summary"
+import { overallStatusFromGates, pushGateLines } from "./promotion-summary"
 import { jsonEqual } from "../json"
 import { compareStringFields, uniqueBy } from "../sort"
 
@@ -364,9 +364,7 @@ export namespace QualityPromotionSignedArchive {
       lines.push(`- signature verification: fail`)
     }
     lines.push("")
-    for (const gate of archive.summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, archive.summary.gates)
     if (signatureReasons.length > 0 && !(signatureReasons.length === 1 && signatureReasons[0] === "__signature_ok__")) {
       lines.push("")
       lines.push("### Signature Verification")
@@ -402,9 +400,7 @@ export namespace QualityPromotionSignedArchive {
     lines.push(`- file count: ${summary.fileCount}`)
     lines.push(`- previous active source: ${summary.previousActiveSource ?? "n/a"}`)
     lines.push("")
-    for (const gate of summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, summary.gates)
     lines.push("")
     return lines.join("\n")
   }

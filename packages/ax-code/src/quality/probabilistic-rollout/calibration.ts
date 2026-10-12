@@ -21,6 +21,7 @@ import {
   predictionMap,
   ratio,
 } from "./helpers"
+import { pushGateLines } from "../promotion/promotion-summary"
 
 export function calibrationRecords(
   items: ReplayItem[],
@@ -355,9 +356,7 @@ export function renderCalibrationComparisonReport(comparison: CalibrationCompari
   }
   lines.push("")
   lines.push("Gates:")
-  for (const gate of comparison.gates) {
-    lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-  }
+  pushGateLines(lines, comparison.gates)
   lines.push("")
   return lines.join("\n")
 }

@@ -6,6 +6,7 @@ import { QualityPromotionSignedArchiveTrust } from "./promotion-signed-archive-t
 import { summarizeOverallStatus } from "../status"
 import { jsonEqual } from "../json"
 import { compareStringFields } from "../sort"
+import { pushGateLines } from "./promotion-summary"
 
 export namespace QualityPromotionSignedArchiveAttestationRecord {
   export const RecordSummary = z.object({
@@ -242,9 +243,7 @@ export namespace QualityPromotionSignedArchiveAttestationRecord {
     lines.push(`- effective trust lifecycle: ${record.summary.effectiveTrustLifecycle ?? "n/a"}`)
     lines.push(`- overall status: ${record.summary.overallStatus}`)
     lines.push("")
-    for (const gate of record.summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, record.summary.gates)
     lines.push("")
     return lines.join("\n")
   }

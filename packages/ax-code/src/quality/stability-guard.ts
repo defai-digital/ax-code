@@ -1,4 +1,5 @@
 import z from "zod"
+import { pushGateLines } from "./promotion/promotion-summary"
 
 export namespace QualityStabilityGuard {
   export const DEFAULT_COOLDOWN_HOURS = 24
@@ -176,9 +177,7 @@ export namespace QualityStabilityGuard {
     lines.push(`- escalation required: ${summary.escalationRequired}`)
     lines.push("")
     lines.push("Gates:")
-    for (const gate of summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, summary.gates)
     lines.push("")
     return lines.join("\n")
   }

@@ -5,7 +5,7 @@ import { sha256Hex } from "../digest"
 import { QualityPromotionHandoffPackage } from "./promotion-handoff-package"
 import { createPromotionArtifactStore } from "./artifact-store"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
-import { overallStatusFromGates } from "./promotion-summary"
+import { overallStatusFromGates, pushGateLines } from "./promotion-summary"
 import { jsonEqual } from "../json"
 import { compareStringFields, uniqueBy } from "../sort"
 
@@ -330,9 +330,7 @@ export namespace QualityPromotionPortableExport {
       lines.push(`- ${file.path}: ${file.format} · digest=${file.contentDigest}`)
     }
     lines.push("")
-    for (const gate of exportArtifact.summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, exportArtifact.summary.gates)
     lines.push("")
     return lines.join("\n")
   }
@@ -355,9 +353,7 @@ export namespace QualityPromotionPortableExport {
     lines.push(`- document count: ${summary.documentCount}`)
     lines.push(`- previous active source: ${summary.previousActiveSource ?? "n/a"}`)
     lines.push("")
-    for (const gate of summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
+    pushGateLines(lines, summary.gates)
     lines.push("")
     return lines.join("\n")
   }
