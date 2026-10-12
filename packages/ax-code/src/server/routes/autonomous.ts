@@ -45,7 +45,11 @@ export const AutonomousRoutes = lazy(() =>
         // stale env reading short-circuit the config read.
         const state = await readProjectConfigFeatureState({
           featureFlag: "AX_CODE_AUTONOMOUS",
-          read: (config) => config?.autonomous !== false,
+          // A silent project file (config?.autonomous === undefined) must fall
+          // back to the current scoped/env state, not to a hard `true`:
+          // defaulting to true here re-enabled autonomous mode that an env or
+          // global-config off had disabled, on every UI poll of this route.
+          read: (config) => config?.autonomous ?? ScopedFlag.autonomous(),
         })
         return c.json(state)
       },
