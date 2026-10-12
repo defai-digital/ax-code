@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process"
+import { spawn, type ChildProcessByStdio } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
+import type { Readable } from "node:stream"
 import { Flag } from "../../src/flag/flag"
 import { ForegroundOwnership } from "../../src/session/foreground-ownership"
 import { Bus } from "../../src/bus"
@@ -38,7 +39,7 @@ async function restartInstance(directory: string) {
   return Instance.provide({ directory, fn: async () => TaskQueue.recoverInterrupted() })
 }
 
-function waitForChildLine(child: ChildProcessWithoutNullStreams, expected: string): Promise<void> {
+function waitForChildLine(child: ChildProcessByStdio<null, Readable, Readable>, expected: string): Promise<void> {
   return new Promise((resolve, reject) => {
     let buffer = ""
     const onData = (chunk: Buffer) => {
@@ -60,7 +61,7 @@ function waitForChildLine(child: ChildProcessWithoutNullStreams, expected: strin
   })
 }
 
-function waitForExit(child: ChildProcessWithoutNullStreams): Promise<number | null> {
+function waitForExit(child: ChildProcessByStdio<null, Readable, Readable>): Promise<number | null> {
   if (child.exitCode !== null) return Promise.resolve(child.exitCode)
   return new Promise((resolve, reject) => {
     child.once("exit", resolve)

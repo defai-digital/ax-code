@@ -5,7 +5,7 @@ import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Instance } from "@/project/instance"
 import { ProjectID } from "@/project/schema"
-import { NotFoundError, and, asc, desc, eq, gt, lte, notInArray, sql } from "@/storage/db"
+import { NotFoundError, and, asc, desc, eq, gt, like, lte, notInArray, sql } from "@/storage/db"
 import type { Database } from "@/storage/db"
 import { NotificationEvent } from "@/notification/events"
 import { toErrorMessage } from "@/util/error-message"
@@ -1360,21 +1360,47 @@ export namespace ScheduledTask {
     return task
   }
 
-  // Transition the task's single open (`running`) run row to a terminal state.
-  // Overlap protection guarantees at most one open row per task, so keying by the
-  // task (rather than a queue id) is safe. Used by workflow outcomes, which are
-  // reported by the workflow bridge and carry no queue-item id. Idempotent: a row
-  // already terminal is left untouched and undefined is returned.
-  function completeOpenRun(taskID: ScheduledTaskID, status: RunStatus, error?: string): RunInfo | undefined {
+  // Claim the terminal transition for a workflow outcome. Returns the run row
+  // only when this call is the first to record the current run's outcome:
+  // either the open `running` row (the run inserted at claim/dispatch), or the
+  // row the orphan sweep finalized. reconcileOrphanRuns deliberately does not
+  // apply the failure policy, so a real outcome arriving after it still owes
+  // the task summary and retry policy — but an outcome already recorded here
+  // must leave the row untouched, because the workflow bridge re-reports a
+  // terminal run on every later sibling sync and each repeat would push
+  // next_run_at further out under the failure policy.
+  function claimWorkflowOutcomeRun(taskID: ScheduledTaskID, status: RunStatus, error?: string): RunInfo | undefined {
     const now = Date.now()
     return SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
-      const row = db
+      const open = db
         .update(ScheduledTaskRunTable)
         .set({ status, error, time_completed: now, time_updated: now })
         .where(and(eq(ScheduledTaskRunTable.task_id, taskID), eq(ScheduledTaskRunTable.status, "running")))
         .returning()
         .get()
-      return row ? runFromRow(row) : undefined
+      if (open) return runFromRow(open)
+
+      const latest = db
+        .select({ id: ScheduledTaskRunTable.id })
+        .from(ScheduledTaskRunTable)
+        .where(eq(ScheduledTaskRunTable.task_id, taskID))
+        .orderBy(desc(ScheduledTaskRunTable.time_created), desc(ScheduledTaskRunTable.id))
+        .limit(1)
+        .get()
+      if (!latest) return undefined
+      const adopted = db
+        .update(ScheduledTaskRunTable)
+        .set({ status, error, time_updated: now })
+        .where(
+          and(
+            eq(ScheduledTaskRunTable.id, latest.id),
+            eq(ScheduledTaskRunTable.status, "failed"),
+            like(ScheduledTaskRunTable.error, `${ORPHAN_RUN_ERROR_PREFIX}%`),
+          ),
+        )
+        .returning()
+        .get()
+      return adopted ? runFromRow(adopted) : undefined
     })
   }
 
@@ -1388,8 +1414,12 @@ export namespace ScheduledTask {
     const errorMessage = status === "completed" ? undefined : toErrorMessage(error ?? fallback)
     // Without this the run row inserted at claim/dispatch would stay `running`
     // until orphan reconciliation mislabeled a finished workflow as failed.
-    const run = completeOpenRun(id, runStatus, errorMessage)
-    if (run) emitRunEvents(id, runStatus, run, errorMessage)
+    const run = claimWorkflowOutcomeRun(id, runStatus, errorMessage)
+    // No run owed this outcome: it was already recorded (or the task never
+    // dispatched one), so a repeated report is a no-op rather than another
+    // failure-policy application.
+    if (!run) return get(id)
+    emitRunEvents(id, runStatus, run, errorMessage)
     return recordQueueOutcome(id, status === "completed" ? "completed" : "failed", error ?? fallback)
   }
 
