@@ -78,6 +78,46 @@ describe("LifecycleHooks matcher and run", () => {
     expect(result.outputs[0]?.stdout).toBe(String(64 * 1024))
   })
 
+  test("captures multi-byte output that straddles a pipe chunk boundary without loss", async () => {
+    // 30,000 x U+4F60 (3 UTF-8 bytes each) = 90,000 bytes, so a 64 KiB pipe
+    // chunk boundary lands mid-character (65536 % 3 != 0).
+    const result = await LifecycleHooks.runHooks(
+      [
+        {
+          event: "PreToolUse",
+          command: `node -e "process.stdout.write('\\u4f60'.repeat(30000))"`,
+        },
+      ],
+      {
+        event: "PreToolUse",
+        args: { command: "echo hi" },
+      },
+    )
+
+    expect(result.outputs).toHaveLength(1)
+    expect(result.outputs[0]?.exit).toBe(0)
+    expect(result.outputs[0]?.stdout).toBe("\u4f60".repeat(30000))
+  })
+
+  test("a stray invalid UTF-8 byte does not wedge the captured stream", async () => {
+    const result = await LifecycleHooks.runHooks(
+      [
+        {
+          event: "PreToolUse",
+          command: `node -e "process.stdout.write(Buffer.concat([Buffer.from([0xff]), Buffer.from('after')]))"`,
+        },
+      ],
+      {
+        event: "PreToolUse",
+        args: { command: "echo hi" },
+      },
+    )
+
+    expect(result.outputs).toHaveLength(1)
+    expect(result.outputs[0]?.exit).toBe(0)
+    expect(result.outputs[0]?.stdout).toContain("after")
+  })
+
   test("sanitizes inherited secrets while preserving hook protocol and platform variables", async () => {
     vi.stubEnv("AX_TEST_SECRET_KEY", "top-secret")
     vi.stubEnv("AX_TEST_SAFE", "visible")

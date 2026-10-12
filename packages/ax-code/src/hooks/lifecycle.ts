@@ -59,7 +59,8 @@ import { Env } from "@/util/env"
 import { Global } from "@/global"
 import { Instance } from "@/project/instance"
 import { ProjectConfigTrust } from "@/config/project-config-trust"
-import { safeUtf8PrefixLength } from "@/tool/bash-helpers"
+import { truncateUtf8Bytes } from "@/tool/bash-helpers"
+import { StringDecoder } from "node:string_decoder"
 
 const log = Log.create({ service: "hooks.lifecycle" })
 
@@ -398,11 +399,33 @@ export namespace LifecycleHooks {
     return [...fromConfigPacks, ...fromProject, ...(input.extra ?? [])]
   }
 
-  function appendCaptured(current: string, chunk: Buffer | string) {
-    if (Buffer.byteLength(current) >= MAX_CAPTURE_BYTES) return current
-    const remaining = MAX_CAPTURE_BYTES - Buffer.byteLength(current)
-    const bytes = Buffer.from(chunk)
-    return current + bytes.subarray(0, safeUtf8PrefixLength(bytes, remaining)).toString("utf8")
+  // Decode the stream incrementally: a StringDecoder carries a multi-byte
+  // UTF-8 sequence split across pipe chunks and replaces genuinely invalid
+  // bytes, so neither a split character nor a stray byte can wedge or drop the
+  // rest of the capture. The byte cap is applied to the decoded text.
+  function createCapture() {
+    const decoder = new StringDecoder("utf8")
+    let text = ""
+    let full = false
+    return {
+      append(chunk: Buffer | string) {
+        if (full) return
+        text += typeof chunk === "string" ? chunk : decoder.write(chunk)
+        if (Buffer.byteLength(text) > MAX_CAPTURE_BYTES) {
+          text = truncateUtf8Bytes(text, MAX_CAPTURE_BYTES)
+          full = true
+        }
+      },
+      value() {
+        // Once the cap cut the stream the decoder's leftover belongs to the
+        // dropped tail; flushing it would exceed the cap with a stray U+FFFD.
+        if (full) return text
+        const tail = decoder.end()
+        if (!tail) return text
+        const combined = text + tail
+        return Buffer.byteLength(combined) > MAX_CAPTURE_BYTES ? truncateUtf8Bytes(combined, MAX_CAPTURE_BYTES) : combined
+      },
+    }
   }
 
   function hookProcessEnv(): NodeJS.ProcessEnv {
@@ -438,15 +461,15 @@ export namespace LifecycleHooks {
       detached,
       stdio: ["pipe", "pipe", "pipe"],
     })
-    let stdout = ""
-    let stderr = ""
+    const stdout = createCapture()
+    const stderr = createCapture()
     let timedOut = false
     let settled = false
     child.stdout.on("data", (chunk) => {
-      stdout = appendCaptured(stdout, chunk)
+      stdout.append(chunk)
     })
     child.stderr.on("data", (chunk) => {
-      stderr = appendCaptured(stderr, chunk)
+      stderr.append(chunk)
     })
     // A hook may exit before consuming its input. EPIPE is part of normal
     // process teardown and must not become an uncaught exception.
@@ -474,13 +497,13 @@ export namespace LifecycleHooks {
       }, HOOK_TIMEOUT_MS)
       timer.unref?.()
       child.once("error", (error) => {
-        stderr = appendCaptured(stderr, error instanceof Error ? error.message : String(error))
+        stderr.append(error instanceof Error ? error.message : String(error))
         finish(1)
       })
       child.once("close", (code, signal) => finish(timedOut ? 124 : (code ?? (signal ? 1 : 0))))
     })
 
-    return { command: hook.command, exit, stdout, stderr }
+    return { command: hook.command, exit, stdout: stdout.value(), stderr: stderr.value() }
   }
 
   async function runHook(hook: HookCommand, input: RunInput): Promise<RunResult["outputs"][number]> {
