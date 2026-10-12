@@ -18,6 +18,7 @@ import {
   wgetHostDirectory,
   tailBashMetadata,
   truncateBashMetadata,
+  truncateUtf8Bytes,
 } from "../../src/tool/bash-helpers"
 
 describe("decodeShellLiteral", () => {
@@ -189,6 +190,17 @@ describe("tool.bash helpers", () => {
     expect(tailBashMetadata("0123456789", 4)).toBe("...\n\n6789")
     expect(tailBashMetadata("你你", 5)).toBe("...\n\n你")
     expect(tailBashMetadata("你你", 5)).not.toContain("\uFFFD")
+  })
+
+  test("truncateUtf8Bytes never invents U+FFFD when the cap cuts an astral pair", () => {
+    // "a😀" is 3 UTF-16 units / 5 UTF-8 bytes, so a 4-byte cap keeps only "a"
+    // and must not leave a decoder-invented replacement character behind.
+    const result = truncateUtf8Bytes("a\u{1F600}", 4)
+    expect(result).toBe("a")
+    expect(result).not.toContain("\uFFFD")
+    expect(truncateUtf8Bytes("a\u{1F600}", 5)).toBe("a\u{1F600}")
+    expect(truncateUtf8Bytes("\u{1F600}\u{1F600}", 4)).toBe("\u{1F600}")
+    expect(truncateUtf8Bytes("plain", 100)).toBe("plain")
   })
 
   test("counts the longest UTF-8 suffix without splitting a character", () => {

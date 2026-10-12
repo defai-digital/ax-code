@@ -30,7 +30,7 @@ import { Isolation } from "@/isolation"
 import { Config } from "@/config/config"
 import { Instance } from "../../project/instance"
 import { Truncate } from "@/tool/truncate"
-import { safeUtf8PrefixLength } from "@/tool/bash-helpers"
+import { truncateUtf8Bytes } from "@/tool/bash-helpers"
 import { uniqueStrings } from "@/util/string-list"
 import { parseJsonResult } from "@/util/json-value"
 import { isRecord } from "@/util/record"
@@ -412,19 +412,6 @@ const MIME_PATTERN = /^[A-Za-z0-9!#$&^_.+-]+\/[A-Za-z0-9!#$&^_.+-]+$/
 
 function validMcpMimeType(value: unknown, fallback: string): string {
   return typeof value === "string" && value.length <= 128 && MIME_PATTERN.test(value) ? value : fallback
-}
-
-/**
- * Byte-precise truncation with bounded transient allocation. The char slice
- * over-approximates (one UTF-16 unit encodes to at most 3 UTF-8 bytes), so
- * the temporary buffer stays within ~3x the limit instead of the input size.
- * The end backtracks to a UTF-8 character boundary, so the result holds only
- * complete characters and never a decoder-invented U+FFFD fragment.
- */
-function truncateUtf8Bytes(text: string, maxBytes: number): string {
-  if (Buffer.byteLength(text, "utf8") <= maxBytes) return text
-  const buf = Buffer.from(text.slice(0, maxBytes), "utf8")
-  return buf.subarray(0, safeUtf8PrefixLength(buf, maxBytes)).toString("utf8")
 }
 
 type McpImageKind = "png" | "jpeg" | "gif" | "webp"

@@ -202,17 +202,22 @@ export function absolutePathLiterals(value: string) {
   return Array.from(value.matchAll(/["'](\/[^"']+)["']/g), (match) => match[1]).filter(Boolean)
 }
 
-function truncateUtf8ByBytes(input: string, maxBytes: number): string {
-  const bytes = Buffer.from(input, "utf8")
-  if (bytes.byteLength <= maxBytes) return input
-
-  const end = safeUtf8PrefixLength(bytes, maxBytes)
-  return bytes.subarray(0, end).toString("utf8")
+/**
+ * Byte-precise truncation to the longest UTF-8 prefix within `maxBytes`.
+ * The char slice over-approximates (one UTF-16 unit encodes to at most 3
+ * UTF-8 bytes), so the temporary buffer stays within ~3x the limit instead of
+ * the whole input size; the prefix walk then backs the end up to a character
+ * boundary so the result never splits a multi-byte sequence.
+ */
+export function truncateUtf8Bytes(input: string, maxBytes: number): string {
+  if (Buffer.byteLength(input, "utf8") <= maxBytes) return input
+  const bytes = Buffer.from(input.slice(0, maxBytes), "utf8")
+  return bytes.subarray(0, safeUtf8PrefixLength(bytes, maxBytes)).toString("utf8")
 }
 
 export function truncateBashMetadata(input: string, maxBytes: number): string {
   if (Buffer.byteLength(input, "utf8") <= maxBytes) return input
-  return truncateUtf8ByBytes(input, maxBytes) + "\n\n..."
+  return truncateUtf8Bytes(input, maxBytes) + "\n\n..."
 }
 
 /**
