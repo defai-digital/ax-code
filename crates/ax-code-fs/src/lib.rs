@@ -781,18 +781,20 @@ pub fn scan_files(cwd: String, config_json: String) -> napi::Result<String> {
     let config: ScanConfig = serde_json::from_str(&config_json)
         .map_err(|e| napi::Error::from_reason(format!("invalid scan config: {e}")))?;
 
-    // Pre-compile all regex patterns
+    // Pre-compile all regex patterns. Reject a malformed pattern like
+    // search_content does; dropping it would silently disable that detection
+    // and report a false-clean scan.
     let compiled: Vec<(String, String, grep_regex::RegexMatcher)> = config
         .patterns
         .iter()
-        .filter_map(|p| {
+        .map(|p| {
             RegexMatcherBuilder::new()
                 .case_smart(true)
                 .build(&p.regex)
-                .ok()
                 .map(|m| (p.label.clone(), p.id.clone(), m))
+                .map_err(|e| napi::Error::from_reason(format!("invalid scan pattern {:?}: {e}", p.id)))
         })
-        .collect();
+        .collect::<napi::Result<Vec<_>>>()?;
 
     if compiled.is_empty() {
         let result = ScanResult {
@@ -1576,6 +1578,21 @@ mod tests {
 
         let err = walk_files(dir.to_str().unwrap().into(), r#"{"glob":["["]}"#.into()).unwrap_err();
         assert!(err.reason.contains("invalid include glob"), "{}", err.reason);
+
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn scan_files_rejects_an_invalid_pattern() {
+        let dir = make_tmp_dir("scan_bad_pattern");
+        fs::write(dir.join("a.txt"), "x\n").unwrap();
+
+        let err = scan_files(
+            dir.to_str().unwrap().into(),
+            r#"{"include":[],"patterns":[{"id":"p1","label":"l","regex":"foo(?=bar)"}]}"#.into(),
+        )
+        .unwrap_err();
+        assert!(err.reason.contains("invalid scan pattern"), "{}", err.reason);
 
         cleanup(&dir);
     }
