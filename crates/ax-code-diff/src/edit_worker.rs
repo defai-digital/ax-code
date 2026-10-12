@@ -58,6 +58,10 @@ fn normalize(s: &str) -> String {
     result
 }
 fn distance(a: &str, b: &str, cancel: &AtomicBool) -> Result<usize> {
+    // Identical strings are distance 0 even above the length cap below.
+    if a == b {
+        return Ok(0);
+    }
     // JS counts UTF-16 code units, including astral characters, in both distance and denominator.
     let a: Vec<u16> = a.encode_utf16().collect();
     let b: Vec<u16> = b.encode_utf16().collect();
@@ -534,6 +538,13 @@ pub fn edit_replace_slim(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn identical_long_lines_have_zero_distance() {
+        let line = "x".repeat(2_001);
+        let cancel = AtomicBool::new(false);
+        assert_eq!(distance(&line, &line, &cancel).unwrap(), 0);
+        assert_eq!(distance(&line, "y", &cancel).unwrap(), 2_001);
+    }
     #[test]
     fn canonical_bounds_and_cancellation() {
         let cancelled = AtomicBool::new(true);

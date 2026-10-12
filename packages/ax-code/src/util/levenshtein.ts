@@ -1,4 +1,6 @@
 export function levenshtein(a: string, b: string): number {
+  // Identical strings are distance 0 even above the length cap below.
+  if (a === b) return 0
   const MAX_LENGTH = 2_000
   if (a.length > MAX_LENGTH || b.length > MAX_LENGTH) {
     return Math.max(a.length, b.length)

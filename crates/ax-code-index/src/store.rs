@@ -426,6 +426,29 @@ mod tests {
     }
 
     #[test]
+    fn test_ingest_file_rejects_rows_outside_the_target_scope() {
+        let store = test_store();
+        let kept = vec![make_node("kept", "proj1", "keep", "/app.ts")];
+        store
+            .insert_nodes(serde_json::to_string(&kept).unwrap())
+            .unwrap();
+
+        let foreign = vec![make_node("foreign", "proj2", "other", "/other.ts")];
+        let file_meta = make_file("fm1", "proj2", "/other.ts", "sha");
+        let result = store.ingest_file(
+            "proj1".into(),
+            "/app.ts".into(),
+            serde_json::to_string(&foreign).unwrap(),
+            "[]".into(),
+            serde_json::to_string(&file_meta).unwrap(),
+        );
+
+        assert!(result.is_err());
+        assert_eq!(store.count_nodes("proj1".into()).unwrap(), 1);
+        assert_eq!(store.count_nodes("proj2".into()).unwrap(), 0);
+    }
+
+    #[test]
     fn test_cursor_upsert_and_get() {
         let store = test_store();
 

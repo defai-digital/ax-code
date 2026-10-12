@@ -236,13 +236,12 @@ impl IndexStore {
         let file_meta: FileRow = serde_json::from_str(&file_meta_json)
             .map_err(|e| napi::Error::from_reason(format!("invalid file meta JSON: {e}")))?;
 
-        if cancelled.is_some()
-            && (nodes
-                .iter()
-                .any(|n| n.project_id != project_id || n.file != file_path)
-                || edges.iter().any(|e| e.project_id != project_id)
-                || file_meta.project_id != project_id
-                || file_meta.path != file_path)
+        if nodes
+            .iter()
+            .any(|n| n.project_id != project_id || n.file != file_path)
+            || edges.iter().any(|e| e.project_id != project_id)
+            || file_meta.project_id != project_id
+            || file_meta.path != file_path
         {
             return Err(napi::Error::from_reason("Invalid graph ingest scope"));
         }
