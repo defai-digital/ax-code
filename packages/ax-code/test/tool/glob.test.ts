@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import path from "path"
-import { mkdir, writeFile } from "fs/promises"
+import { mkdir, symlink, writeFile } from "fs/promises"
 import { GlobTool } from "../../src/tool/glob"
 import { NativeAddon } from "../../src/native/addon"
 import { Instance } from "../../src/project/instance"
-import { Filesystem } from "../../src/util/filesystem"
+import { Ripgrep } from "../../src/file/ripgrep"
 import { tmpdir } from "../fixture/fixture"
 
 const ctx = {
@@ -46,18 +46,13 @@ describe("tool.glob", () => {
   })
 
   test("JS fallback keeps vanished matches with mtime 0", async () => {
-    await using tmp = await tmpdir({
-      init: async (dir) => {
-        await writeFile(path.join(dir, "gone.txt"), "content")
-      },
-    })
+    await using tmp = await tmpdir()
 
     const target = path.join(tmp.path, "gone.txt")
-    const realStat = Filesystem.stat
     const nativeFs = vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
-    const stat = vi.spyOn(Filesystem, "stat").mockImplementation((file) => {
-      if (file === target) return undefined
-      return realStat(file)
+    // The match vanished between the ripgrep listing and the per-file stat.
+    const files = vi.spyOn(Ripgrep, "files").mockImplementation(async function* () {
+      yield "gone.txt"
     })
 
     try {
@@ -67,13 +62,43 @@ describe("tool.glob", () => {
           const glob = await GlobTool.init()
           const result = await glob.execute({ pattern: "gone.txt" }, ctx)
 
+          expect(files).toHaveBeenCalled()
           expect(result.output).toContain(target)
           expect(result.metadata.count).toBe(1)
         },
       })
     } finally {
       nativeFs.mockRestore()
-      stat.mockRestore()
+      files.mockRestore()
+    }
+  })
+
+  test("JS fallback propagates real stat errors instead of mis-ordering results", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        // rg --files never lists symlinks, so a real self-loop surfaces only when
+        // a listed match is replaced by one; stat then fails with ELOOP, a real
+        // error the fallback must not swallow into mtime 0.
+        await symlink(path.join(dir, "loop.txt"), path.join(dir, "loop.txt"))
+      },
+    })
+
+    const nativeFs = vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+    const files = vi.spyOn(Ripgrep, "files").mockImplementation(async function* () {
+      yield "loop.txt"
+    })
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const glob = await GlobTool.init()
+          await expect(glob.execute({ pattern: "loop.txt" }, ctx)).rejects.toThrow()
+        },
+      })
+    } finally {
+      nativeFs.mockRestore()
+      files.mockRestore()
     }
   })
 

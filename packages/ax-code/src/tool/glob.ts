@@ -113,8 +113,14 @@ export const GlobTool = Tool.define("glob", {
       const full = path.resolve(search, file)
       // Stat asynchronously: this fallback path visits every match, so a
       // synchronous statSync here blocked the event loop once per file. A
-      // missing entry keeps mtime 0 so it still sorts last, as before.
-      const stats = (await fs.stat(full).catch(() => undefined))?.mtime?.getTime() ?? 0
+      // missing entry keeps mtime 0 so it still sorts last, as before; real
+      // errors (EACCES, ELOOP, …) propagate like the read tool's stat.
+      const stats = (
+        await fs.stat(full).catch((error: NodeJS.ErrnoException) => {
+          if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return undefined
+          throw error
+        })
+      )?.mtime?.getTime() ?? 0
       files.push({
         path: full,
         mtime: stats,
