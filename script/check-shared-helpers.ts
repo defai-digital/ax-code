@@ -76,6 +76,11 @@ const CONSOLIDATED: Consolidated[] = [
       "packages/ax-code-reason/src/internal/record.ts",
     ],
   },
+  {
+    slug: "native-json",
+    symbols: ["decodeNativeJsonValue", "parseNativeJson", "parseNativeJsonArray"],
+    shims: ["packages/ax-code/src/util/native-json.ts", "packages/ax-code-reason/src/internal/native-json.ts"],
+  },
 ]
 
 const reExport = (slug: string) => new RegExp(`export\\s+\\*\\s+from\\s+["']@ax-code/util/${slug}["']`)

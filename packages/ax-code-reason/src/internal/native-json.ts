@@ -1,12 +1,4 @@
-import z from "zod"
-import { parseJsonStrict } from "./json-value"
-
-function decodeNativeJsonValue<T>(value: unknown, schema: z.ZodType<T>, errorMessage: string): T {
-  const decoded = schema.safeParse(value)
-  if (!decoded.success) throw new SyntaxError(errorMessage)
-  return decoded.data
-}
-
-export function parseNativeJson<T>(json: string, schema: z.ZodType<T>, errorMessage: string): T {
-  return decodeNativeJsonValue(parseJsonStrict(json), schema, errorMessage)
-}
+// Consolidated into @ax-code/util so core and reason share one
+// implementation. This shim keeps the package-local `./internal/native-json`
+// import path stable for existing call sites.
+export * from "@ax-code/util/native-json"
