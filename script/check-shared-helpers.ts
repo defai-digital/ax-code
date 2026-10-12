@@ -6,14 +6,14 @@
  * The check fails when:
  *   - the canonical packages/util/src/<slug>.ts implementation is missing an
  *     expected export,
- *   - an intel/reason `src/internal/*` shim is no longer a thin
+ *   - a listed shim (core, intel or reason) is no longer a thin
  *     `export * from "@ax-code/util/<slug>"` re-export, or
  *   - a second `export function` implementation of a moved helper reappears
- *     anywhere under the consolidated packages' `src`.
+ *     anywhere under intel/reason `src`.
  *
- * Byte-identical duplicates live in `packages/ax-code/src/util/*` too, but that
- * package is out of this refactor's scope and its `timeout.ts` intentionally has
- * different (ref'd) timer semantics, so it is not scanned here.
+ * `packages/ax-code/src/util/*` shims are checked for shape when a slug lists
+ * them, but core is not scanned for re-implementations: its `timeout.ts`
+ * intentionally has different (ref'd) timer semantics.
  *
  * Run:  tsx script/check-shared-helpers.ts
  */
@@ -48,6 +48,33 @@ const CONSOLIDATED: Consolidated[] = [
     // ax-code-reason dropped its shim once its last call site went away;
     // the guard still blocks a second implementation reappearing there.
     shims: ["packages/ax-code-intel/src/internal/timeout.ts"],
+  },
+  {
+    slug: "error-message",
+    symbols: ["toErrorMessage", "toError", "errorCode"],
+    shims: [
+      "packages/ax-code/src/util/error-message.ts",
+      "packages/ax-code-intel/src/internal/error-message.ts",
+      "packages/ax-code-reason/src/internal/error-message.ts",
+    ],
+  },
+  {
+    slug: "json-value",
+    symbols: ["parseJsonResult", "parseJsonStrict", "parseJsonPayload"],
+    shims: [
+      "packages/ax-code/src/util/json-value.ts",
+      "packages/ax-code-intel/src/internal/json-value.ts",
+      "packages/ax-code-reason/src/internal/json-value.ts",
+    ],
+  },
+  {
+    slug: "record",
+    symbols: ["isRecord", "asRecord", "asRecordOrUndefined", "isNonEmptyRecord", "recordCount"],
+    shims: [
+      "packages/ax-code/src/util/record.ts",
+      "packages/ax-code-intel/src/internal/record.ts",
+      "packages/ax-code-reason/src/internal/record.ts",
+    ],
   },
 ]
 

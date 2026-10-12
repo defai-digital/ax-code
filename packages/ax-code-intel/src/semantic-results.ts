@@ -16,6 +16,7 @@ import type {
   SymbolInformation,
   WorkspaceSymbol,
 } from "vscode-languageserver-types"
+import { isRecord } from "./internal/record"
 
 export type {
   CallHierarchyIncomingCall,
@@ -33,10 +34,6 @@ export type NavigationLocation = Location | LocationLink
 export type CallHierarchyCall = CallHierarchyIncomingCall | CallHierarchyOutgoingCall
 export type ResolvedWorkspaceSymbol = WorkspaceSymbol & { location: Location }
 export type DocumentSymbolResult = DocumentSymbol | SymbolInformation
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-}
 
 function resultItems(value: unknown): unknown[] {
   if (value === null || value === undefined) return []

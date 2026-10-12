@@ -1,25 +1,3 @@
-export type UnknownRecord = Record<string, unknown>
-
-export function isRecord(value: unknown): value is UnknownRecord {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-}
-
-function recordKeyCount(value: unknown): number {
-  return isRecord(value) ? Object.keys(value).length : 0
-}
-
-export function asRecord(value: unknown): Record<string, unknown> {
-  return isRecord(value) ? value : {}
-}
-
-export function asRecordOrUndefined(value: unknown): Record<string, unknown> | undefined {
-  return isRecord(value) ? value : undefined
-}
-
-export function isNonEmptyRecord(value: unknown): boolean {
-  return recordKeyCount(value) > 0
-}
-
-export function recordCount(value: unknown): number {
-  return recordKeyCount(value)
-}
+// Consolidated into @ax-code/util so core, intel and reason share one
+// implementation. This shim keeps the `@/util/record` import path stable.
+export * from "@ax-code/util/record"

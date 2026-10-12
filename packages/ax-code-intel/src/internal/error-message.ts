@@ -1,8 +1,4 @@
-export function toErrorMessage(error: unknown, fallback = "Unknown error"): string {
-  if (error instanceof Error) return error.message
-  try {
-    return String(error)
-  } catch {
-    return fallback
-  }
-}
+// Consolidated into @ax-code/util so intel and reason share one
+// implementation. This shim keeps the package-local `./internal/error-message`
+// import path stable for existing call sites.
+export * from "@ax-code/util/error-message"

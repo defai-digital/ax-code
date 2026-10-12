@@ -1,46 +1,12 @@
-import { toErrorMessage } from "./error-message"
+import { parseJsonResult } from "@ax-code/util/json-value"
 
-export type JsonParseResult =
-  | {
-      ok: true
-      value: unknown
-    }
-  | {
-      ok: false
-      error: unknown
-    }
-
-export function parseJsonResult(text: string): JsonParseResult {
-  try {
-    return { ok: true, value: JSON.parse(text) }
-  } catch (error) {
-    return { ok: false, error }
-  }
-}
-
-export function parseJsonStrict(text: string): unknown {
-  const parsed = parseJsonResult(text)
-  if (!parsed.ok) {
-    const { error } = parsed
-    if (error instanceof Error) throw error
-    throw new SyntaxError(toErrorMessage(error))
-  }
-  return parsed.value
-}
-
-export function parseJsonPayload(raw: string | undefined): unknown | undefined {
-  const text = raw?.trim()
-  if (!text) return undefined
-  const parsed = parseJsonResult(text)
-  if (!parsed.ok) {
-    return undefined
-  }
-  return parsed.value
-}
+// Consolidated into @ax-code/util so core, intel and reason share one
+// implementation. This shim keeps the `@/util/json-value` import path stable.
+export * from "@ax-code/util/json-value"
 
 // Extract a JSON value from raw model text: accept the bare text, a fenced
 // ```json block, or the outermost {...} span. Returns undefined when nothing
-// parses.
+// parses. This stays in core — it is a model-output policy, not a shared parse.
 export function parseJsonFromText(text: string): unknown {
   const candidates: string[] = [text.trim()]
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)
