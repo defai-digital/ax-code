@@ -39,7 +39,7 @@ describe("workflow queue terminal status", () => {
               ],
             })
             const run = await WorkflowRun.create({ spec })
-            await WorkflowScheduler.start(run.id)
+            await WorkflowScheduler.start(run.id, { autoStartChildren: false })
 
             const queue = await TaskQueue.list()
             const detail = await WorkflowRun.getDetail(run.id)
@@ -96,7 +96,7 @@ describe("workflow queue terminal status", () => {
             ],
           })
           const run = await WorkflowRun.create({ spec })
-          await WorkflowScheduler.start(run.id)
+          await WorkflowScheduler.start(run.id, { autoStartChildren: false })
 
           const queue = await TaskQueue.list()
           const detail = await WorkflowRun.getDetail(run.id)
@@ -129,4 +129,64 @@ describe("workflow queue terminal status", () => {
       else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
     }
   })
+  test.each(["completed", "failed", "stop-failure"] as const)(
+    "a sibling %s outcome survives stop admission",
+    async (outcome) => {
+      await using tmp = await tmpdir({ git: true })
+      const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+      process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const spec = parseWorkflowSpecV1({
+              schemaVersion: 1,
+              id: "critic-first",
+              name: "Critic First",
+              description: "A successful critic must wait for the worker majority.",
+              budget: { maxConcurrentAgents: 3, maxTotalAgents: 4 },
+              phases: [
+                {
+                  id: "race",
+                  name: "Race",
+                  kind: "fanout",
+                  inputs: ["a", "b", "critic"],
+                  maxParallel: 3,
+                  mergeStrategy: "first-success",
+                },
+                { id: "summarize", name: "Summarize", kind: "synthesis", dependsOn: ["race"] },
+              ],
+            })
+            const run = await WorkflowRun.create({ spec })
+            await WorkflowScheduler.start(run.id, { autoStartChildren: false })
+
+            const queue = await TaskQueue.list()
+            const detail = await WorkflowRun.getDetail(run.id)
+            const phase = detail.phases.find((candidate) => candidate.specPhaseID === "race")!
+            const children = detail.children.filter((candidate) => candidate.phaseID === phase.id)
+            expect(children).toHaveLength(3)
+            const workflowOf = (candidate: TaskQueue.Info) =>
+              candidate.payload["workflow"] as { childID?: string; specPhaseID?: string } | undefined
+            const itemFor = (childID: string) => queue.find((candidate) => workflowOf(candidate)?.childID === childID)!
+
+            const sibling = itemFor(children[1]!.id)
+            vi.spyOn(TaskQueue, "stop").mockImplementationOnce(async (id) => {
+              expect(id).toBe(sibling.id)
+              if (outcome !== "stop-failure") await TaskQueue.setStatus({ id, status: outcome })
+              throw new Error("Stop admission raced a queue update or failed before cancellation.")
+            })
+            await TaskQueue.setStatus({ id: itemFor(children[0]!.id).id, status: "completed" })
+            const after = await WorkflowRun.getDetail(run.id)
+            const settledSibling = after.children.find((candidate) => candidate.id === children[1]!.id)!
+            expect((await TaskQueue.get(sibling.id)).status).toBe(outcome === "stop-failure" ? "queued" : outcome)
+            expect(settledSibling.status).toBe(outcome === "stop-failure" ? "queued" : outcome)
+            expect(settledSibling.error).toBeUndefined()
+          },
+        })
+      } finally {
+        if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+        else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+      }
+    },
+  )
 })

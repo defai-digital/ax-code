@@ -208,22 +208,32 @@ async function cancelSupersededPhaseChildren(
   error = "Workflow phase merge strategy already satisfied.",
 ) {
   const { TaskQueue } = await import("../session/task-queue")
-  for (const child of children) {
+  for (const snapshot of children) {
+    // Stopping one queue item awaits a recursive sync that can settle the
+    // remaining siblings. Re-read before acting on the next snapshot.
+    const child = (await WorkflowRun.getDetail(snapshot.runID)).children.find(
+      (candidate) => candidate.id === snapshot.id,
+    )
+    if (!child) continue
     if (child.status === "completed" || child.status === "failed" || child.status === "cancelled") continue
-    let cancelledQueue = false
-    if (child.taskQueueID) {
+    const taskQueueID = child.taskQueueID
+    if (taskQueueID) {
       // stop() rather than a bare setStatus: a superseded item that is already
       // running owns a live session, and setStatus would only flip the durable
       // status — leaving the subagent executing (spending tokens, running tools,
       // mutating the workspace) after the merge strategy was already satisfied.
       // stop() interrupts running/blocked sessions and cancels everything else.
-      await TaskQueue.stop(child.taskQueueID)
-        .then(() => {
-          cancelledQueue = true
-        })
-        .catch(() => undefined)
-    }
-    if (!cancelledQueue) {
+      await TaskQueue.stop(taskQueueID).catch(async (stopError) => {
+        // A queue item may settle between the child read and stop admission.
+        // Preserve that outcome; a real stop failure must not claim a live
+        // session was cancelled merely by changing its workflow row.
+        const settled = await TaskQueue.get(taskQueueID)
+        if (settled.status !== "completed" && settled.status !== "failed" && settled.status !== "cancelled") {
+          throw stopError
+        }
+        await WorkflowTaskQueue.syncItem(settled)
+      })
+    } else {
       await WorkflowRun.setChildStatus({
         id: child.id,
         status: "cancelled",
