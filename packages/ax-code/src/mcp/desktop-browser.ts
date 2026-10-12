@@ -40,6 +40,9 @@ export namespace DesktopBrowser {
     })
     .strict()
     .refine((value) => bytes(value) <= 262144, "Catalog exceeds 256 KiB")
+    // canonical() refuses to serialize values nested deeper than 32; reject them at
+    // parse time so admission (enroll/update) and use (digest/compare) agree.
+    .refine((value) => withinTransportDepth(value), "JSON nesting exceeds the transport limit")
     .refine(
       (value) => new Set(value.tools.map((tool) => tool.name)).size === value.tools.length,
       "Duplicate tool names are ambiguous",
@@ -139,6 +142,19 @@ export namespace DesktopBrowser {
     } catch {
       return Number.POSITIVE_INFINITY
     }
+  }
+  function withinTransportDepth(value: unknown): boolean {
+    const stack: [unknown, number][] = [[value, 0]]
+    while (stack.length) {
+      const [item, level] = stack.pop()!
+      if (level > 32) return false
+      if (Array.isArray(item)) {
+        for (const child of item) stack.push([child, level + 1])
+      } else if (item && typeof item === "object") {
+        for (const child of Object.values(item)) stack.push([child, level + 1])
+      }
+    }
+    return true
   }
   function canonical(value: unknown, depth = 0): string {
     if (depth > 32) return fail("JSON nesting exceeds the transport limit")

@@ -177,6 +177,24 @@ describe("private desktop WebMCP provider", () => {
       DesktopBrowser.disconnect(connection.providerID)
     })
   })
+  test("enrollment rejects a catalog nested beyond the transport depth limit", async () => {
+    await fixture(async (session, state) => {
+      const nested = (depth: number) => {
+        let value: unknown = "x"
+        for (let i = 0; i < depth; i++) value = { a: value }
+        return value as Record<string, unknown>
+      }
+      const catalog = (depth: number): DesktopBrowser.Snapshot => ({
+        ...state,
+        tools: [{ ...state.tools[0]!, inputSchema: nested(depth) }],
+      })
+      const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: catalog(29) })
+      DesktopBrowser.disconnect(connection.providerID)
+      await expect(DesktopBrowser.enroll({ sessionID: session.id, snapshot: catalog(30) })).rejects.toThrow(
+        "JSON nesting exceeds the transport limit",
+      )
+    })
+  })
   test("abort reaches the private native cancellation lane and rejects late results", async () => {
     await fixture(async (session, state) => {
       const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: state })
