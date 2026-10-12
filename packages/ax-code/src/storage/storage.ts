@@ -20,6 +20,23 @@ export namespace Storage {
 
   type Migration = (dir: string) => Promise<void>
 
+  // Read one legacy JSON file for the copy and summary migrations. A source
+  // file that cannot be parsed, or vanished between the scan and the read, is
+  // skipped with a warning: it can never be migrated, and letting it fail the
+  // run would trap every future startup. A read that fails with a real errno
+  // (EACCES, EIO, ...) is rethrown so the migration fails and is retried,
+  // instead of silently advancing the marker past an unmigrated file.
+  async function readLegacyJson<T>(file: string, message: string): Promise<T | undefined> {
+    try {
+      return await Filesystem.readJson<T>(file)
+    } catch (error) {
+      const code = Filesystem.errnoCode(error)
+      if (code !== undefined && code !== "ENOENT" && code !== "ENOTDIR") throw error
+      log.warn(message, { file, error })
+      return undefined
+    }
+  }
+
   export const NotFoundError = NamedError.create(
     "NotFoundError",
     z.object({
@@ -129,51 +146,42 @@ export namespace Storage {
 
           log.info(`migrating sessions for project ${projectID}`)
           for (const sessionFile of legacySessionFiles) {
-            try {
-              const dest = path.join(dir, "session", projectID, path.basename(sessionFile))
+            const session = await readLegacyJson<any>(sessionFile, "skipping unreadable session file during migration")
+            if (!session) continue
+            const dest = path.join(dir, "session", projectID, path.basename(sessionFile))
+            log.info("copying", {
+              sessionFile,
+              dest,
+            })
+            await Filesystem.writeJson(dest, session)
+            log.info(`migrating messages for session ${session.id}`)
+            for (const msgFile of await Glob.scan(`storage/session/message/${session.id}/*.json`, {
+              cwd: fullProjectDir,
+              absolute: true,
+            })) {
+              const message = await readLegacyJson<any>(msgFile, "skipping unreadable message file during migration")
+              if (!message) continue
+              const dest = path.join(dir, "message", session.id, path.basename(msgFile))
               log.info("copying", {
-                sessionFile,
+                msgFile,
                 dest,
               })
-              const session = await Filesystem.readJson<any>(sessionFile)
-              await Filesystem.writeJson(dest, session)
-              log.info(`migrating messages for session ${session.id}`)
-              for (const msgFile of await Glob.scan(`storage/session/message/${session.id}/*.json`, {
+              await Filesystem.writeJson(dest, message)
+
+              log.info(`migrating parts for message ${message.id}`)
+              for (const partFile of await Glob.scan(`storage/session/part/${session.id}/${message.id}/*.json`, {
                 cwd: fullProjectDir,
                 absolute: true,
               })) {
-                try {
-                  const dest = path.join(dir, "message", session.id, path.basename(msgFile))
-                  log.info("copying", {
-                    msgFile,
-                    dest,
-                  })
-                  const message = await Filesystem.readJson<any>(msgFile)
-                  await Filesystem.writeJson(dest, message)
-
-                  log.info(`migrating parts for message ${message.id}`)
-                  for (const partFile of await Glob.scan(`storage/session/part/${session.id}/${message.id}/*.json`, {
-                    cwd: fullProjectDir,
-                    absolute: true,
-                  })) {
-                    try {
-                      const dest = path.join(dir, "part", message.id, path.basename(partFile))
-                      const part = await Filesystem.readJson(partFile)
-                      log.info("copying", {
-                        partFile,
-                        dest,
-                      })
-                      await Filesystem.writeJson(dest, part)
-                    } catch (error) {
-                      log.warn("skipping corrupted part file during migration", { file: partFile, error })
-                    }
-                  }
-                } catch (error) {
-                  log.warn("skipping corrupted message file during migration", { file: msgFile, error })
-                }
+                const part = await readLegacyJson(partFile, "skipping unreadable part file during migration")
+                if (!part) continue
+                const dest = path.join(dir, "part", message.id, path.basename(partFile))
+                log.info("copying", {
+                  partFile,
+                  dest,
+                })
+                await Filesystem.writeJson(dest, part)
               }
-            } catch (error) {
-              log.warn("skipping corrupted session file during migration", { file: sessionFile, error })
             }
           }
         }
@@ -184,31 +192,22 @@ export namespace Storage {
         cwd: dir,
         absolute: true,
       })) {
-        try {
-          const session = await Filesystem.readJson<any>(item)
-          if (!session.projectID) continue
-          if (!session.summary?.diffs) continue
-          const { diffs } = session.summary
-          await Filesystem.write(path.join(dir, "session_diff", session.id + ".json"), JSON.stringify(diffs))
-          await Filesystem.writeJson(path.join(dir, "session", session.projectID, session.id + ".json"), {
-            ...session,
-            summary: {
-              additions: diffs.reduce(
-                (sum: number, x: { additions: number; deletions: number }) => sum + x.additions,
-                0,
-              ),
-              deletions: diffs.reduce(
-                (sum: number, x: { additions: number; deletions: number }) => sum + x.deletions,
-                0,
-              ),
-            },
-          })
-        } catch (error) {
-          // One partial/corrupt legacy JSON file must not trap every future
-          // startup in the same migration. Preserve the source file for
-          // manual recovery and continue migrating the remaining sessions.
-          log.warn("skipping corrupted session file during summary migration", { file: item, error })
-        }
+        // One partial/corrupt legacy JSON file must not trap every future
+        // startup in the same migration. Preserve the source file for
+        // manual recovery and continue migrating the remaining sessions.
+        const session = await readLegacyJson<any>(item, "skipping unreadable session file during summary migration")
+        if (!session) continue
+        if (!session.projectID) continue
+        if (!session.summary?.diffs) continue
+        const { diffs } = session.summary
+        await Filesystem.write(path.join(dir, "session_diff", session.id + ".json"), JSON.stringify(diffs))
+        await Filesystem.writeJson(path.join(dir, "session", session.projectID, session.id + ".json"), {
+          ...session,
+          summary: {
+            additions: diffs.reduce((sum: number, x: { additions: number; deletions: number }) => sum + x.additions, 0),
+            deletions: diffs.reduce((sum: number, x: { additions: number; deletions: number }) => sum + x.deletions, 0),
+          },
+        })
       }
     },
   ]
