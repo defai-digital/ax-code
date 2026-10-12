@@ -319,7 +319,6 @@ export namespace WebMcpProfile {
   const readTools = new Set<string>(READ_TOOLS)
   const readScopeTools = new Set<string>(READ_SCOPE_TOOLS)
   const interactTools = new Set<string>(INTERACT_TOOLS)
-  const grantCoveredTools = new Set<string>(GRANT_COVERED_TOOLS)
   const perActionTools = new Set<string>(PER_ACTION_TOOLS)
   const Origin = z.string().max(240).refine(exactOrigin, "Use an exact HTTPS origin or HTTP loopback origin")
   const uniqueOrigins = (origins: string[]) => new Set(origins).size === origins.length
@@ -1093,16 +1092,6 @@ export namespace WebMcpProfile {
   /** Whether a tool is a T2 interact tool (admitted or not). */
   export function isInteractTool(name: string): boolean {
     return interactTools.has(name)
-  }
-
-  /** Whether a T2 tool is always approved per action (never grant-covered). */
-  export function isPerActionTool(name: string): boolean {
-    return perActionTools.has(name)
-  }
-
-  /** Whether a T2 tool runs under the interact grant when not escalated. */
-  export function isGrantCoveredTool(name: string): boolean {
-    return grantCoveredTools.has(name)
   }
 
   const pageId = z

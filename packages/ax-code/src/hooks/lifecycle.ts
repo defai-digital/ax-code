@@ -56,7 +56,6 @@ import z from "zod"
 import { Log } from "@/util/log"
 import { parseJsonResult, parseJsonPayload } from "@/util/json-value"
 import { Env } from "@/util/env"
-import { Global } from "@/global"
 import { Instance } from "@/project/instance"
 import { ProjectConfigTrust } from "@/config/project-config-trust"
 import { truncateUtf8Bytes } from "@/tool/bash-helpers"
@@ -423,7 +422,9 @@ export namespace LifecycleHooks {
         const tail = decoder.end()
         if (!tail) return text
         const combined = text + tail
-        return Buffer.byteLength(combined) > MAX_CAPTURE_BYTES ? truncateUtf8Bytes(combined, MAX_CAPTURE_BYTES) : combined
+        return Buffer.byteLength(combined) > MAX_CAPTURE_BYTES
+          ? truncateUtf8Bytes(combined, MAX_CAPTURE_BYTES)
+          : combined
       },
     }
   }
@@ -605,9 +606,5 @@ export namespace LifecycleHooks {
       "",
     ]
     return lines.join("\n")
-  }
-
-  export function globalHooksDir(): string {
-    return path.join(Global.Path.config, "hooks")
   }
 }

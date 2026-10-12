@@ -2,6 +2,7 @@ import { fireSubagentStop } from "./task"
 import { taskParentConstraints } from "./task-constraints"
 import { assistantError, assistantErrorMessage, errorDetails, isAbortError } from "./task-errors"
 import {
+  assertSubagentDepth,
   subagentDescription,
   subagentSessionPermissions,
   subagentToolGates,
@@ -14,7 +15,6 @@ import DESCRIPTION from "./task_parallel.txt"
 import z from "zod"
 import { Session } from "../session"
 import { SessionID, MessageID } from "../session/schema"
-import { NotFoundError } from "../storage/db"
 import { MessageV2 } from "../session/message-v2"
 import { agentModel } from "../session/prompt/prompt-command-selection"
 import { Agent } from "../agent/agent"
@@ -28,7 +28,6 @@ import { WriteIsolation } from "../session/write-isolation"
 import { EnsemblePreflight } from "../mode/preflight"
 import type { ModelID, ProviderID } from "../provider/schema"
 
-const MAX_DEPTH = 5
 /**
  * Members a single swarm call may carry. Raised from 8 once the batch deadline
  * below existed: the worst case is now bounded by that deadline rather than by
@@ -186,29 +185,16 @@ export function expandTaskParallelInput(input: {
 
 /** Human label for one item member: first line, bounded, never empty. */
 function swarmMemberDescription(item: string) {
-  const firstLine = item.split("\n").find((line) => line.trim().length > 0)?.trim() ?? item.trim()
+  const firstLine =
+    item
+      .split("\n")
+      .find((line) => line.trim().length > 0)
+      ?.trim() ?? item.trim()
   const bounded = firstLine.length > 60 ? `${firstLine.slice(0, 57)}...` : firstLine
   return bounded.length > 0 ? bounded : "swarm member"
 }
 
 type TaskItemInput = z.infer<typeof TaskItem>
-
-async function assertDepth(sessionID: SessionID) {
-  let depth = 0
-  let parent: SessionID | undefined = sessionID
-  while (parent) {
-    const current: Awaited<ReturnType<typeof Session.get>> | undefined = await Session.get(parent).catch((e) => {
-      if (NotFoundError.isInstance(e)) return undefined
-      throw e
-    })
-    if (!current?.parentID) break
-    depth++
-    if (depth >= MAX_DEPTH) {
-      throw new Error(`Maximum subagent nesting depth (${MAX_DEPTH}) exceeded`)
-    }
-    parent = current.parentID
-  }
-}
 
 type TaskOutcome = {
   description: string
@@ -410,7 +396,7 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
     description,
     parameters,
     async execute(params: z.infer<typeof parameters>, toolCtx) {
-      await assertDepth(toolCtx.sessionID)
+      await assertSubagentDepth(toolCtx.sessionID)
 
       // Hard gate: multi-provider ensemble requests must not open parallel digs first.
       // Observed failure mode: /council → task_parallel ×4 explores → never calls council.
@@ -612,7 +598,9 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
               : report.status === "deadline_cancelled"
                 ? `not started before the call's ${Math.round(SWARM_DEADLINE_MS / 60_000)}-minute deadline; run it as its own swarm or task`
                 : "not started"
-          return [header, `status: ${report.status}`, `task_id: -`, "", "<task_result>", reason, "</task_result>"].join("\n")
+          return [header, `status: ${report.status}`, `task_id: -`, "", "<task_result>", reason, "</task_result>"].join(
+            "\n",
+          )
         }
         const full = result.ok ? result.text : [result.error, result.text].filter(Boolean).join("\n") || "No output"
         // Bound what one member contributes to the parent's context. The full

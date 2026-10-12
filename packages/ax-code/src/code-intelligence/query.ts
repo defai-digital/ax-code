@@ -883,10 +883,6 @@ export namespace CodeGraphQuery {
     )
   }
 
-  export function clearSymbolNotes(projectID: ProjectID): void {
-    Database.use((db) => db.delete(CodeSymbolNoteTable).where(eq(CodeSymbolNoteTable.project_id, projectID)).run())
-  }
-
   // Evict notes beyond the newest `keep` for a single (project, symbol, origin).
   // Used by the partitioned cap: auto notes evict auto notes first.
   export function deleteOldestNotesByOrigin(
@@ -1001,10 +997,6 @@ export namespace CodeGraphQuery {
           .returning({ qualified_name: CodeSymbolSignalTable.qualified_name })
           .all().length,
     )
-  }
-
-  export function clearSignals(projectID: ProjectID): void {
-    Database.use((db) => db.delete(CodeSymbolSignalTable).where(eq(CodeSymbolSignalTable.project_id, projectID)).run())
   }
 
   // ─── Note identity lookup (ADR-056 Phase 3 rename re-anchoring) ─────

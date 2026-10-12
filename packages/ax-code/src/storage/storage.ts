@@ -36,11 +36,10 @@ export namespace Storage {
         include: "all",
       })
       for (const projectDir of projectDirs) {
-        const fullPath = path.join(project, projectDir)
-        if (!(await Filesystem.isDir(fullPath))) continue
+        const fullProjectDir = path.join(project, projectDir)
+        if (!(await Filesystem.isDir(fullProjectDir))) continue
         log.info(`migrating project ${projectDir}`)
         let projectID = projectDir
-        const fullProjectDir = path.join(project, projectDir)
         let worktree: string | undefined
 
         if (projectID !== "global") {
@@ -49,7 +48,7 @@ export namespace Storage {
             absolute: true,
           })
           for (const msgFile of await Glob.scan("storage/session/message/*/*.json", {
-            cwd: path.join(project, projectDir),
+            cwd: fullProjectDir,
             absolute: true,
           })) {
             try {
@@ -231,7 +230,7 @@ export namespace Storage {
     if (!/^\d+$/.test(trimmed)) return { value: 0, status: "not_numeric" }
 
     const parsed = Number(trimmed)
-    if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > max) {
+    if (!Number.isSafeInteger(parsed) || parsed > max) {
       return {
         value: Math.max(0, Math.min(Number.isFinite(parsed) ? parsed : max, max)),
         status: "out_of_range",

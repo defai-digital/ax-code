@@ -189,8 +189,7 @@ export function resolveMcpToolPermissionKeys(items: readonly McpToolIdentity[]):
   const reserved = new Set<string>()
   for (const [base, group] of groups) {
     if (group.size !== 1) continue
-    const identity = group.keys().next().value
-    if (identity === undefined) continue
+    const identity = group.keys().next().value!
     resolved.set(identity, base)
     reserved.add(base)
   }
@@ -246,11 +245,12 @@ export async function convertMcpTool(
   if (schemaBytes > MAX_TOOL_SCHEMA_BYTES) {
     throw new Error(`MCP tool schema too large: ${mcpTool.name}`)
   }
-  const baseDescription =
-    (mcpTool.description ?? "").length > MAX_TOOL_DESCRIPTION
-      ? `${(mcpTool.description ?? "").slice(0, MAX_TOOL_DESCRIPTION)}...`
-      : (mcpTool.description ?? "")
-  const description = webmcp ? WebMcpProfile.toolDescription(webmcp.toolName, webmcp.profile) : baseDescription
+  const rawDescription = mcpTool.description ?? ""
+  const description = webmcp
+    ? WebMcpProfile.toolDescription(webmcp.toolName, webmcp.profile)
+    : rawDescription.length > MAX_TOOL_DESCRIPTION
+      ? `${rawDescription.slice(0, MAX_TOOL_DESCRIPTION)}...`
+      : rawDescription
 
   const tool = dynamicTool({
     description,
@@ -284,20 +284,26 @@ export async function convertMcpTool(
         if (remaining <= 0) throw new Error("WebMCP dispatch exceeded its timeout; do not retry automatically")
         return remaining
       }
-      // ADR-171 preflight: the read grant is checked against the page's origin
-      // resolved through the bridge (never the page-controlled title), before
-      // the bridge is asked for any page content.
-      let readOrigin: string | undefined
-      if (readTier && webmcp) {
+      // Resolve the page's URL and origin through the bridge before the call
+      // reads or acts; an unlocatable page fails without a retry.
+      const locatePage = async (when: "reading" | "acting") => {
         const pageId = (input as Record<string, unknown>).pageId
         const before =
           typeof pageId === "number" ? await webmcpPageUrl(client, pageId, budget(), opts.abortSignal) : undefined
         const origin = WebMcpProfile.pageOriginOf(before)
         if (!origin)
           throw new Error(
-            WebMcpProfile.unlocatedPageMessage(before, "could not be located before reading") +
+            WebMcpProfile.unlocatedPageMessage(before, `could not be located before ${when}`) +
               " Do not retry automatically.",
           )
+        return { before, origin }
+      }
+      // ADR-171 preflight: the read grant is checked against the page's origin
+      // resolved through the bridge (never the page-controlled title), before
+      // the bridge is asked for any page content.
+      let readOrigin: string | undefined
+      if (readTier && webmcp) {
+        const { origin } = await locatePage("reading")
         await WebMcpApprovals.checkReadContinuation(args as object, origin)
         if (!(webmcp.readGrants?.() ?? NO_READ_GRANTS).has(origin) && !(await webmcp.persistentReadAllowed?.(origin)))
           throw new WebMcpProfile.ReadNotGrantedError(origin)
@@ -314,15 +320,7 @@ export async function convertMcpTool(
       let callAccepted = false
       let pageObserved = false
       if (interactTier && webmcp) {
-        const pageId = (input as Record<string, unknown>).pageId
-        const before =
-          typeof pageId === "number" ? await webmcpPageUrl(client, pageId, budget(), opts.abortSignal) : undefined
-        const origin = WebMcpProfile.pageOriginOf(before)
-        if (!origin)
-          throw new Error(
-            WebMcpProfile.unlocatedPageMessage(before, "could not be located before acting") +
-              " Do not retry automatically.",
-          )
+        const { before, origin } = await locatePage("acting")
         const interactPolicy =
           webmcp.toolName === "wait_for" && (await webmcp.persistentReadAllowed?.(origin))
             ? { ...webmcp, readGrants: () => new Set([...(webmcp.readGrants?.() ?? []), origin]) }

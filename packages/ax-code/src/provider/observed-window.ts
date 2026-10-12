@@ -495,11 +495,6 @@ export namespace ObservedWindow {
     return created
   }
 
-  /** Test-only: drop every cached store. */
-  export function _resetStoreForTests(): void {
-    singletons.clear()
-  }
-
   /**
    * Overflow calibration entry point. Fires only for the `context_overflow`
    * error class — `request_too_large` (byte limits) and bare-400 fallbacks

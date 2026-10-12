@@ -1,5 +1,8 @@
 import { Agent } from "../agent/agent"
 import { Permission } from "@/permission"
+import { Session } from "../session"
+import type { SessionID } from "../session/schema"
+import { NotFoundError } from "../storage/db"
 
 // Shared boundary pieces for the task / task_parallel tools: the subagent
 // list rendered into both tool descriptions and the fan-out gates applied
@@ -71,5 +74,30 @@ export function subagentToolGates(input: {
       ? {}
       : { task: false, waitfor: false, list_background_tasks: false, message_background_task: false }),
     ...Object.fromEntries((input.primaryTools ?? []).map((tool) => [tool, false])),
+  }
+}
+
+export const MAX_SUBAGENT_DEPTH = 5
+
+/**
+ * Reject a spawn once the parent chain reaches the nesting limit. `checkpoint`
+ * runs before and after each session lookup so a caller can bail out on abort.
+ */
+export async function assertSubagentDepth(sessionID: SessionID, checkpoint?: () => void) {
+  let depth = 0
+  let parent: SessionID | undefined = sessionID
+  while (parent) {
+    checkpoint?.()
+    const current: Awaited<ReturnType<typeof Session.get>> | undefined = await Session.get(parent).catch((e) => {
+      if (NotFoundError.isInstance(e)) return undefined
+      throw e
+    })
+    checkpoint?.()
+    if (!current?.parentID) return
+    depth++
+    if (depth >= MAX_SUBAGENT_DEPTH) {
+      throw new Error(`Maximum subagent nesting depth (${MAX_SUBAGENT_DEPTH}) exceeded`)
+    }
+    parent = current.parentID
   }
 }

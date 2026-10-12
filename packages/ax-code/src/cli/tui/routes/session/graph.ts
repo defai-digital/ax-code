@@ -224,10 +224,4 @@ export namespace SessionGraph {
     if (!graph) return []
     return entries(graph)
   }
-
-  export function loadAscii(sessionID: Parameters<typeof EventQuery.bySession>[0]) {
-    const graph = loadGraph(sessionID)
-    if (!graph) return []
-    return ascii(graph)
-  }
 }

@@ -1,6 +1,7 @@
 import { inheritTaskPermissionDenials, taskParentConstraints } from "./task-constraints"
 import { assistantError, assistantErrorMessage, errorDetails, isAbortError } from "./task-errors"
 import {
+  assertSubagentDepth,
   subagentDescription,
   subagentSessionPermissions,
   subagentToolGates,
@@ -25,7 +26,6 @@ import { withTimeout } from "@/util/timeout"
 import { ToolBoolean } from "./schema"
 import { TaskOutputSchema } from "./task-output-schema"
 
-const MAX_DEPTH = 5
 export const MAX_BACKGROUND_SUBAGENTS = 8
 
 export class BackgroundCapacityError extends Error {
@@ -257,8 +257,6 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
         )
       }
       const structuredFormat = params.output_schema ? TaskOutputSchema.toFormat(params.output_schema) : undefined
-      let depth = 0
-      let parent: SessionID | undefined = ctx.sessionID
       let aborted = false
 
       const markAborted = () => {
@@ -288,20 +286,7 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
 
       const config = await Config.get()
       ensureNotAborted()
-      while (parent) {
-        ensureNotAborted()
-        const current: Awaited<ReturnType<typeof Session.get>> | undefined = await Session.get(parent).catch((e) => {
-          if (NotFoundError.isInstance(e)) return undefined
-          throw e
-        })
-        ensureNotAborted()
-        if (!current?.parentID) break
-        depth++
-        if (depth >= MAX_DEPTH) {
-          throw new Error(`Maximum subagent nesting depth (${MAX_DEPTH}) exceeded`)
-        }
-        parent = current.parentID
-      }
+      await assertSubagentDepth(ctx.sessionID, ensureNotAborted)
 
       // Skip permission check when user explicitly invoked via @ or command subtask
       if (!ctx.extra?.bypassAgentCheck) {

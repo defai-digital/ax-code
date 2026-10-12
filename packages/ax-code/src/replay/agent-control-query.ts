@@ -1,7 +1,5 @@
 import { AgentControlSummary } from "@/control-plane/agent-control-summary"
-import type { SessionID } from "@/session/schema"
 import type { ReplayEvent } from "./event"
-import { EventQuery } from "./query"
 import { ToolCallReplayQuery } from "./tool-call-query"
 import { asRecord } from "../util/record"
 
@@ -90,16 +88,6 @@ export namespace AgentControlReplayQuery {
     return !!normalizeAgentControlEvent(event)
   }
 
-  export function summaryBySession(sessionID: SessionID) {
-    const rows = EventQuery.bySessionWithTimestamp(sessionID)
-    return summaryFromRows(rows)
-  }
-
-  export function readModelBySession(sessionID: SessionID): ReadModel {
-    const rows = EventQuery.bySessionWithTimestamp(sessionID)
-    return readModelFromRows(rows, sessionID)
-  }
-
   export function readModelFromRows(rows: readonly TimelineRow[], idPrefix = "event"): ReadModel {
     return {
       summary: summaryFromRows(rows),
@@ -122,11 +110,6 @@ export namespace AgentControlReplayQuery {
 
   export function summaryFromEvents(events: readonly unknown[]) {
     return AgentControlSummary.fromEvents(events.map(normalizeAgentControlEvent).filter(isDefined))
-  }
-
-  export function timelineBySession(sessionID: SessionID) {
-    const rows = EventQuery.bySessionWithTimestamp(sessionID)
-    return timelineFromRows(rows, sessionID)
   }
 
   export function timelineFromRows(rows: readonly TimelineRow[], idPrefix = "event") {

@@ -13,7 +13,6 @@ import {
   RELEASE_INDEX_URL,
   RELEASE_DOWNLOAD_ORIGIN,
 } from "@/constants/project"
-import { Flag } from "../flag/flag"
 import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
 import { Process } from "../util/process"
@@ -91,11 +90,6 @@ export namespace Installation {
     }
   })()
   export const CHANNEL = typeof AX_CODE_CHANNEL === "string" ? AX_CODE_CHANNEL : "local"
-  export const USER_AGENT = `ax-code/${CHANNEL}/${VERSION}/${Flag.AX_CODE_CLIENT}`
-
-  export function isPreview() {
-    return CHANNEL !== "latest"
-  }
 
   export function isLocal() {
     return CHANNEL === "local"

@@ -309,7 +309,6 @@ export namespace File {
   function shouldEncode(mimeType: string) {
     const type = mimeType.toLowerCase()
     log.debug("shouldEncode", { type })
-    if (!type) return false
     if (type.startsWith("text/")) return false
     if (type.includes("charset=")) return false
     const top = type.split("/", 2)[0]
@@ -342,17 +341,11 @@ export namespace File {
 
   async function readIgnoreContext(base: string): Promise<IgnoreContext | undefined> {
     const ig = ignore()
-    const gitignore = path.join(base, ".gitignore")
     let hasPatterns = false
-    const gitignoreText = await readIgnoreFile(gitignore)
-    if (gitignoreText !== undefined) {
-      ig.add(gitignoreText)
-      hasPatterns = true
-    }
-    const ignoreFile = path.join(base, ".ignore")
-    const ignoreText = await readIgnoreFile(ignoreFile)
-    if (ignoreText !== undefined) {
-      ig.add(ignoreText)
+    for (const name of [".gitignore", ".ignore"]) {
+      const text = await readIgnoreFile(path.join(base, name))
+      if (text === undefined) continue
+      ig.add(text)
       hasPatterns = true
     }
     if (!hasPatterns) return undefined
@@ -465,7 +458,8 @@ export namespace File {
           if (dir === current) break
           current = dir
           const key = `${dir}/`
-          if (seen.has(key)) continue
+          // Every ancestor of a seen directory was added with it.
+          if (seen.has(key)) break
           seen.add(key)
           next.dirs.push(key)
         }
@@ -576,6 +570,7 @@ export namespace File {
       // status bar (BUG-102).
       const UNTRACKED_CONCURRENCY = 32
       const queue = [...untrackedFiles]
+      let cursor = 0
       const untrackedResults: (File.Info | null)[] = []
       const readOne = async (file: string): Promise<File.Info | null> => {
         try {
@@ -593,10 +588,8 @@ export namespace File {
       }
       await Promise.all(
         Array.from({ length: Math.min(UNTRACKED_CONCURRENCY, queue.length) }, async () => {
-          while (queue.length > 0) {
-            const file = queue.shift()
-            if (file === undefined) return
-            untrackedResults.push(await readOne(file))
+          while (cursor < queue.length) {
+            untrackedResults.push(await readOne(queue[cursor++]!))
           }
         }),
       )

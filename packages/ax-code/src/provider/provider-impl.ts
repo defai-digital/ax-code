@@ -40,7 +40,6 @@ import {
 import { ModelID, ProviderID } from "./schema"
 import { levenshtein } from "@/util/levenshtein"
 import { isModelSupportedForProvider } from "./model-support"
-import { modelSelectableForProvider } from "./model-selectability"
 import { defaultModelIDForProvider, MODEL_FORMAT_HELP, modelFamilyDefault } from "./implicit-default"
 import {
   CUSTOM_LOADERS,
@@ -1432,22 +1431,6 @@ export namespace Provider {
 
   export function sort<T extends { id: string; providerID?: string }>(models: T[]) {
     return sortBy(models, [(model) => (isGenericCliFallbackModel(model) ? 1 : 0), "asc"], [(model) => model.id, "desc"])
-  }
-
-  // Whether a pinned model (config `model`, `agent.<name>.model`) can be
-  // used right now: its provider is connected and not disabled, and the model
-  // is selectable for the agent loop. Availability never authorizes relocation
-  // of an exact pin to another provider or model.
-  export async function isModelAvailable(model: { providerID: ProviderID; modelID: ModelID }) {
-    const check = async () => {
-      const provider = (await list())[model.providerID]
-      return provider !== undefined && modelSelectableForProvider(model.providerID, provider.models[model.modelID])
-    }
-    if (await check()) return true
-    // Discovery-populated providers (CLI probes, local model lists) may not
-    // have their models yet; wait once before deciding.
-    await ready()
-    return check()
   }
 
   /** Preserve exact user intent; availability is checked by getModel at dispatch. */

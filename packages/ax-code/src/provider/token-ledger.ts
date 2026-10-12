@@ -388,20 +388,6 @@ export namespace TokenLedger {
     }
   }
 
-  /** Convenience: usage shape from the session-normalized step tokens. */
-  export function anchorUsageFrom(input: {
-    input: number
-    cache: { read: number; write: number }
-    source: UsageSource
-  }): AnchorUsage {
-    return {
-      input: input.input,
-      cacheRead: input.cache.read,
-      cacheWrite: input.cache.write,
-      source: input.source,
-    }
-  }
-
   /** Convenience: exact-only guard matching the anchoring rule. */
   export function isAnchorable(usage: unknown): boolean {
     return usageSource(usage) === "exact"
