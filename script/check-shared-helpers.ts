@@ -86,6 +86,15 @@ const CONSOLIDATED: Consolidated[] = [
     symbols: ["Lock"],
     shims: ["packages/ax-code/src/util/lock.ts", "packages/ax-code-intel/src/internal/lock.ts"],
   },
+  {
+    slug: "env",
+    symbols: ["Env"],
+    shims: [
+      "packages/ax-code/src/util/env.ts",
+      "packages/ax-code-intel/src/internal/env.ts",
+      "packages/ax-code-reason/src/internal/env.ts",
+    ],
+  },
 ]
 
 const reExport = (slug: string) => new RegExp(`export\\s+\\*\\s+from\\s+["']@ax-code/util/${slug}["']`)

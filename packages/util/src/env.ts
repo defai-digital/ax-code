@@ -1,0 +1,777 @@
+export namespace Env {
+  // Strip secrets from a process environment before forwarding to child
+  // processes. An LLM prompt that instructs a spawned shell to run
+  // `env` or `echo $OPENAI_API_KEY` could otherwise exfiltrate provider
+  // tokens, passwords, and other credentials held by the parent
+  // process. Defaults to a strict keyword match so non-standard secret-like
+  // names are filtered too (for example OPENAI_APIKEY or AWS_ACCESSKEY).
+  const SECRET_PATTERN = /KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|AUTH/i
+  // "PAT" as a whole word: catches AZURE_DEVOPS_EXT_PAT and GH_PAT without
+  // matching PATH/PATHEXT (which contain PAT only as a substring).
+  const PAT_NAME = /(^|_)PAT(_|$)/i
+  // Webhook URLs are write credentials regardless of host.
+  const WEBHOOK_NAME = /WEBHOOK/i
+  const CREDENTIAL_URL_NAME = /(?:DATABASE|REDIS|AMQP|MONGODB|POSTGRES|MYSQL|ELASTIC|BROKER)_?(?:URL|URI)/i
+  // Paths to files that themselves hold credentials.
+  const CREDENTIAL_FILE_NAMES = new Set(["KUBECONFIG", "PGPASSFILE"])
+  const CREDENTIAL_HELPER_NAMES = new Set(["SSH_AUTH_SOCK", "GIT_ASKPASS", "SUDO_ASKPASS", "SSH_ASKPASS"])
+  // Variables that rewrite process startup/load behavior. Never forward these
+  // to untrusted child processes (MCP servers, shells, formatters, etc.).
+  const PROCESS_INJECTION_NAMES = new Set([
+    "LD_PRELOAD",
+    "LD_AUDIT",
+    "LD_LIBRARY_PATH",
+    "DYLD_INSERT_LIBRARIES",
+    "DYLD_LIBRARY_PATH",
+    "NODE_OPTIONS",
+    "NODE_PATH",
+    "NODE_EXTRA_CA_CERTS",
+    "ELECTRON_RUN_AS_NODE",
+    "PYTHONPATH",
+    "PYTHONHOME",
+    "PYTHONSTARTUP",
+    "RUBYOPT",
+    "RUBYLIB",
+    "BASH_ENV",
+    "PERL5OPT",
+    "PERL5LIB",
+    "JAVA_TOOL_OPTIONS",
+    "JAVA_OPTIONS",
+    "CLASSPATH",
+  ])
+  const SAFE_ALLOWLIST = new Set([
+    "PYTHON_KEYRING_BACKEND",
+    "XAUTHORITY",
+    "DOTNET_CLI_TELEMETRY_SESSION_TOKEN",
+    // COMPOSER_AUTH removed — contains credentials that match SECRET_PATTERN
+    "GPG_AGENT_INFO",
+    "DBUS_SESSION_BUS_ADDRESS",
+  ])
+
+  // Provider API keys CLI subprocesses (claude-code, codex-cli, etc.) need
+  // forwarded. Kept out of SAFE_ALLOWLIST so pty user env and untrusted
+  // {env:} config substitution still strip them — only the CLI provider
+  // spawn path opts into forwarding via `withCliProviderKeys`.
+  const CLI_PROVIDER_KEYS: Record<string, readonly string[]> = {
+    "codex-cli": ["OPENAI_API_KEY"],
+    "claude-code": ["ANTHROPIC_API_KEY"],
+    "grok-build-cli": ["XAI_API_KEY"],
+    "muse-cli": ["META_API_KEY", "MODEL_API_KEY", "META_MODEL_API_KEY"],
+  }
+
+  export function withCliProviderKeys(
+    env: Record<string, string | undefined>,
+    providerID: string | undefined,
+  ): Record<string, string | undefined> {
+    const out = { ...env }
+    for (const key of (providerID && CLI_PROVIDER_KEYS[providerID]) ?? []) {
+      const value = process.env[key]
+      if (value !== undefined) out[key] = value
+    }
+    return out
+  }
+
+  export function sanitize(env: NodeJS.ProcessEnv = process.env): Record<string, string | undefined> {
+    const out: Record<string, string | undefined> = {}
+    for (const [k, v] of Object.entries(env)) {
+      if (SAFE_ALLOWLIST.has(k)) {
+        out[k] = v
+        continue
+      }
+      const normalized = k.toUpperCase()
+      if (
+        PROCESS_INJECTION_NAMES.has(normalized) ||
+        CREDENTIAL_HELPER_NAMES.has(normalized) ||
+        CREDENTIAL_FILE_NAMES.has(normalized) ||
+        isSensitiveName(k) ||
+        PAT_NAME.test(k) ||
+        WEBHOOK_NAME.test(k) ||
+        CREDENTIAL_URL_NAME.test(k) ||
+        (v !== undefined && CONNECTION_FIELD.test(v)) ||
+        containsUrlCredential(v)
+      ) {
+        continue
+      }
+      out[k] = v
+    }
+    return out
+  }
+
+  /**
+   * Strip process-injection / load-time hijack variables from an env map.
+   * Unlike `sanitize`, this preserves secrets so callers that intentionally
+   * forward credentials (e.g. MCP `environment`) can still do so safely.
+   */
+  export function stripProcessInjection(
+    env: Record<string, string | undefined> | undefined,
+  ): Record<string, string | undefined> {
+    if (!env) return {}
+    const out: Record<string, string | undefined> = {}
+    for (const [k, v] of Object.entries(env)) {
+      if (isProcessInjectionName(k)) continue
+      out[k] = v
+    }
+    return out
+  }
+
+  export function isSensitiveName(name: string): boolean {
+    // MySQL and MariaDB use PWD for their password alias; plain PWD is a public
+    // directory, so only the exact client aliases count.
+    return SECRET_PATTERN.test(name) || PWD_PASSWORD_ALIASES.has(name.toUpperCase())
+  }
+  const PWD_PASSWORD_ALIASES = new Set(["MYSQL_PWD", "MARIADB_PWD"])
+
+  /**
+   * Credential key names, normalized. A credential term must end the entire
+   * field name: `keyboard`, `tokenCount` and `monkey` are not credentials,
+   * and over-redacting makes records useless while looking safe. `auth`,
+   * `bearer` and `cookie` are here because a header dump names them exactly that
+   * way, and the `token`/`key`-suffixed spellings are what OAuth clients emit.
+   * ASCII prefixes (DB_PASSWORD, my_private_key, secretAccessKey) retain the
+   * credential meaning; public suffixes such as token_count remain public.
+   * The short PAT abbreviation needs a separator so compat stays public.
+   */
+  const CREDENTIAL_KEY_NAMES =
+    "(?:[a-z0-9_.-]*(?:token|secret|password|passwd|credential|credentials|authorization|auth|bearer|cookie|webhook|(?:secret|auth|token)[_.-]?key|api[_.-]?key|x[_.-]?api[_.-]?key|private[_.-]?key|access[_.-]?key|access[_.-]?token|refresh[_.-]?token|id[_.-]?token|client[_.-]?secret)|(?:[a-z0-9_.-]*[_.-])?pat)"
+  const CREDENTIAL_KEY_NAME = new RegExp(`^(?:${CREDENTIAL_KEY_NAMES})$`, "i")
+  // Semicolon-delimited connection-string fields (ADO.NET `;Pwd=`, JDBC
+  // properties like `;password=`) never parse as URL userinfo or query
+  // parameters, so the env value scan needs its own shape. Bare `pwd` is safe
+  // here: the field must follow a `;` inside a value, which a public `PWD=`
+  // shell assignment never does.
+  const CONNECTION_FIELD = new RegExp(`;\\s*(?:${CREDENTIAL_KEY_NAMES}|pwd)\\s*=`, "i")
+  const QUOTED_CREDENTIAL_FIELD = new RegExp(String.raw`(["'])(${CREDENTIAL_KEY_NAMES})\1\s*:\s*`, "gi")
+  const INLINE_CREDENTIAL_PREFIX = String.raw`(?<![a-z0-9_.-])(?!(?:(?:set-)?cookie|(?:proxy-)?authorization)\s*:)(${CREDENTIAL_KEY_NAMES})(?![a-z0-9_.-])\s*(?:=|:)\s*(?:(?:bearer|basic)\s+)?`
+  const INLINE_QUOTED_VALUE = String.raw`"(?:[^"\\\r\n]|\\.)*"|'(?:[^'\\\r\n]|\\.)*'`
+  // URL parameters stop at &, while an ordinary bare credential can contain
+  // ampersands. Match query prefixes first so public sibling parameters survive.
+  const INLINE_CREDENTIAL_VALUE = new RegExp(
+    String.raw`(?:([?&#])${INLINE_CREDENTIAL_PREFIX}(?:${INLINE_QUOTED_VALUE}|\[redacted\][^\s,;}\]&#]*|[^\s,;}\]&#]*)|${INLINE_CREDENTIAL_PREFIX}(?:${INLINE_QUOTED_VALUE}|\[redacted\][^\s,;}\]]*|[^\s,;}\]]+))`,
+    "gi",
+  )
+
+  /**
+   * True when a structured key names a credential, so the whole value behind it
+   * must be hidden. Shared by the log sink (`util/log.ts`) and the persisted
+   * tool-input redactor (`session/processor-impl.ts`) so both layers hide the
+   * same keys.
+   */
+  export function isCredentialKeyName(name: string): boolean {
+    return CREDENTIAL_KEY_NAME.test(name)
+  }
+
+  export function isProcessInjectionName(name: string): boolean {
+    // Windows environment names are case-insensitive; hosts and MCP config
+    // maps can retain mixed casing before they reach the child process.
+    return PROCESS_INJECTION_NAMES.has(name.toUpperCase())
+  }
+
+  // URL signatures are bearer credentials (unlike public signature fields).
+  // All other query credentials share the complete field-name policy above.
+  const CREDENTIAL_URL_SIGNATURE = /^[a-z0-9_.-]*signature$/i
+  // Scan raw parameter names as well as values so percent-encoded names use
+  // the same decoded credential policy as URLSearchParams in the env filter.
+  const CREDENTIAL_QUERY_PREFIX = /([?&#])([^?&#\s"'<>]*?)=/g
+
+  function isCredentialQueryName(name: string): boolean {
+    return CREDENTIAL_URL_SIGNATURE.test(name) || isCredentialKeyName(name)
+  }
+
+  function decodedQueryName(name: string): string {
+    try {
+      return decodeURIComponent(name.replace(/\+/g, " "))
+    } catch {
+      // Malformed escapes retain their literal credential-name checks.
+      return name
+    }
+  }
+
+  function containsCredentialQuery(value: string): boolean {
+    for (const match of value.matchAll(CREDENTIAL_QUERY_PREFIX)) {
+      if (isCredentialQueryName(decodedQueryName(match[2]!))) return true
+    }
+    return false
+  }
+
+  function redactCredentialQueries(value: string): string {
+    const parts: string[] = []
+    let copied = 0
+    for (const match of value.matchAll(CREDENTIAL_QUERY_PREFIX)) {
+      if (match.index < copied) continue
+      if (!isCredentialQueryName(decodedQueryName(match[2]!))) continue
+      const start = match.index + match[0].length
+      let end = start
+      while (end < value.length && !/[&#\s"'<>]/.test(value[end]!)) end++
+      parts.push(value.slice(copied, start), "[redacted]")
+      copied = end
+    }
+    return parts.length === 0 ? value : parts.join("") + value.slice(copied)
+  }
+
+  const COOKIE_ATTRIBUTES = new Set([
+    "comment",
+    "domain",
+    "expires",
+    "httponly",
+    "max-age",
+    "partitioned",
+    "path",
+    "priority",
+    "samesite",
+    "secure",
+    "version",
+  ])
+
+  function advanceQuoteState(value: string, start: number, end: number, initial?: "'" | '"'): "'" | '"' | undefined {
+    let quote = initial
+    for (let index = start; index < end; index++) {
+      const char = value[index]
+      if (quote) {
+        if (char === "\\") {
+          index++
+          continue
+        }
+        if (char === quote) quote = undefined
+        continue
+      }
+      if (char === "'" || char === '"') quote = char
+      else if (char === "\\") index++
+    }
+    return quote
+  }
+
+  function closingQuote(value: string, start: number, quote: "'" | '"'): number {
+    for (let index = start; index < value.length; index++) {
+      const char = value[index]
+      if (char === "\\") {
+        index++
+        continue
+      }
+      if (char === quote) return index
+    }
+    return value.length
+  }
+
+  // End of a header value on one logical line. An obs-fold continuation (a CRLF
+  // followed by whitespace) still belongs to the same header, so keep scanning
+  // past it; otherwise a folded Cookie header's continuation is copied verbatim
+  // and its credential leaks.
+  function headerValueEnd(value: string, from: number): number {
+    let end = from
+    for (;;) {
+      const search = value.slice(end).search(/[\r\n]/)
+      if (search < 0) return value.length
+      const newline = end + search
+      let next = newline
+      while (next < value.length && (value[next] === "\r" || value[next] === "\n")) next++
+      if (value[next] === " " || value[next] === "\t") {
+        end = next
+        continue
+      }
+      return newline
+    }
+  }
+
+  // HTTP authentication schemes are extensible, and Digest uses multiple
+  // quoted parameters. Hide the whole logical header rather than one word.
+  // Enclosing record/shell quotes delimit it; parameter quotes do not.
+  function redactAuthorizationHeaders(value: string): string {
+    const header = /(?<![a-z0-9_.-])((?:proxy-)?authorization)\b[ \t]*:[ \t]*/gi
+    const parts: string[] = []
+    let cursor = 0
+    let quoteCursor = 0
+    let quoteState: "'" | '"' | undefined
+    let lineEnd = 0
+    for (const match of value.matchAll(header)) {
+      if (match.index < cursor) continue
+      quoteState = advanceQuoteState(value, quoteCursor, match.index, quoteState)
+      const start = match.index + match[0].length
+      // Reuse a logical line boundary across multiple shell-quoted headers,
+      // so repeated headers cannot rescan the same long suffix quadratically.
+      if (start >= lineEnd) lineEnd = headerValueEnd(value, start)
+      let end = lineEnd
+      if (quoteState) {
+        let previous = ""
+        for (let index = start; index < lineEnd; index++) {
+          const char = value[index]!
+          if (char === "\\") {
+            index++
+            continue
+          }
+          // An HTTP auth-param quoted value belongs to the credential even
+          // when its quotes match the enclosing log/shell quote, or contain
+          // an apostrophe. Skip the complete parameter before seeking a close.
+          if (char === '"' && previous === "=") {
+            index = Math.min(closingQuote(value, index + 1, '"'), lineEnd)
+            previous = '"'
+            continue
+          }
+          if (char === quoteState) {
+            end = index
+            break
+          }
+          if (char !== " " && char !== "\t") previous = char
+        }
+      }
+      parts.push(value.slice(cursor, match.index), `${match[1]}: [redacted]`)
+      cursor = end
+      quoteCursor = end
+    }
+    return parts.length === 0 ? value : parts.join("") + value.slice(cursor)
+  }
+
+  function redactCookiePairs(value: string, setCookie: boolean): string {
+    const segments: string[] = []
+    const separators: string[] = []
+    // A comma followed by another pair begins a combined cookie. The comma
+    // inside an Expires date is followed by a date, so it remains an attribute.
+    // A repeated header name (`Set-Cookie: a=1, Set-Cookie: b=2`) also begins a
+    // new pair: some log sinks join repeated headers with ", ", and without the
+    // optional header the combined segment is misread as one attribute and the
+    // second cookie's value is copied verbatim.
+    const nextPair = /[ \t]*(?:(?:set-cookie|cookie)\b[ \t]*:[ \t]*)?[!#$%&'*+\-.^_`|~0-9A-Za-z]+[ \t]*=/iy
+    let quote: "'" | '"' | undefined
+    let start = 0
+    for (let index = 0; index < value.length; index++) {
+      const char = value[index]
+      if (quote) {
+        if (char === "\\") {
+          index++
+          continue
+        }
+        if (char === quote) quote = undefined
+        continue
+      }
+      if (char === "'" || char === '"') {
+        quote = char
+        continue
+      }
+      // An obs-fold continuation (CRLF followed by whitespace) continues the
+      // same header; treat it like a separator so a folded cookie keeps its
+      // pairs instead of collapsing into one segment that drops them.
+      if (char === "\r" || char === "\n") {
+        let next = index
+        while (next < value.length && (value[next] === "\r" || value[next] === "\n")) next++
+        if (value[next] === " " || value[next] === "\t") {
+          segments.push(value.slice(start, index))
+          separators.push(value.slice(index, next))
+          start = next
+          index = next - 1
+        }
+        continue
+      }
+      nextPair.lastIndex = index + 1
+      if (char === ";" || (char === "," && nextPair.test(value))) {
+        segments.push(value.slice(start, index))
+        separators.push(char)
+        start = index + 1
+      }
+    }
+    segments.push(value.slice(start))
+
+    return segments
+      .map((segment, index) => {
+        const leading = segment.match(/^\s*/)?.[0] ?? ""
+        const trailing = segment.match(/\s*$/)?.[0] ?? ""
+        const body = segment.slice(leading.length, segment.length - trailing.length)
+        const firstPair = index === 0 || separators[index - 1] === ","
+        const equals = body.indexOf("=")
+        if (equals < 0) {
+          if (!body || (setCookie && !firstPair && COOKIE_ATTRIBUTES.has(body.toLowerCase()))) return segment
+          return leading + "[redacted]" + trailing
+        }
+        const name = body.slice(0, equals).trim()
+        if (!name) return leading + "[redacted]" + trailing
+        if (setCookie && !firstPair && COOKIE_ATTRIBUTES.has(name.toLowerCase())) return segment
+        return leading + name + "=[redacted]" + trailing
+      })
+      .map((segment, index) => (index === 0 ? segment : separators[index - 1] + segment))
+      .join("")
+  }
+
+  // Content that follows a closed quote on the same line is only continued as
+  // cookie pairs when it opens with a pair shape (`name=`): shell-wrapped
+  // commands routinely continue with prose or a URL that is not part of the
+  // header value and must survive verbatim.
+  const PAIR_TAIL = /^[ \t;,"']*[!#$%&'*+\-.^_`|~0-9A-Za-z]+[ \t]*=/
+
+  // A `;`/`,`-separated pair later on the line proves a quote the value scanner
+  // stopped at was not the enclosing close but part of a nested quoted value
+  // (`Cookie: messages="a$b"; sid=SECRET` inside `msg="…"`, or an apostrophe in
+  // `O'Brien`). The value then runs to the end of the line, so the remainder
+  // must be redacted as pairs instead of copied verbatim.
+  const PAIR_CONTINUATION = /[;,][ \t]*[!#$%&'*+\-.^_`|~0-9A-Za-z]+[ \t]*=/
+
+  function redactPairTail(text: string, setCookie: boolean): string {
+    if (!PAIR_TAIL.test(text)) return text
+    return redactCookiePairs(text, setCookie)
+  }
+
+  function redactCookieHeaders(value: string): string {
+    const header = /\b(set-cookie|cookie)\b\s*:/gi
+    let result = ""
+    let cursor = 0
+    let quoteCursor = 0
+    let quoteState: "'" | '"' | undefined
+    // Reuse a logical line boundary across headers sharing one line, so
+    // comma-joined repeated headers cannot rescan the same suffix per match.
+    let lineEnd = 0
+    for (const match of value.matchAll(header)) {
+      const index = match.index
+      if (index === undefined || index < cursor) continue
+      quoteState = advanceQuoteState(value, quoteCursor, index, quoteState)
+      const afterColon = index + match[0].length
+      let valueStart = afterColon
+      while (valueStart < value.length && (value[valueStart] === " " || value[valueStart] === "\t")) valueStart++
+      if (valueStart >= value.length || value[valueStart] === "\r" || value[valueStart] === "\n") {
+        quoteCursor = afterColon
+        continue
+      }
+
+      const setCookie = match[1]?.toLowerCase() === "set-cookie"
+      const localQuote: "'" | '"' | undefined =
+        value[valueStart] === "'" ? "'" : value[valueStart] === '"' ? '"' : undefined
+      const localQuoteEnd = localQuote ? closingQuote(value, valueStart + 1, localQuote) : undefined
+      const firstQuoteEnd = quoteState ? closingQuote(value, valueStart, quoteState) : undefined
+      if (valueStart >= lineEnd) lineEnd = headerValueEnd(value, valueStart)
+      // A quote followed by more cookie pairs is a nested quoted value (or an
+      // apostrophe in the value), not the enclosing close: the value runs to
+      // the next matching quote when one closes on this line.
+      let shellQuoteEnd = firstQuoteEnd
+      if (
+        firstQuoteEnd !== undefined &&
+        firstQuoteEnd < lineEnd &&
+        PAIR_CONTINUATION.test(value.slice(firstQuoteEnd, lineEnd))
+      ) {
+        const nextQuoteEnd = closingQuote(value, firstQuoteEnd + 1, quoteState!)
+        if (nextQuoteEnd < lineEnd) shellQuoteEnd = nextQuoteEnd
+      }
+      // The value ends at the enclosing shell quote when it closes on this
+      // line, and at the line end otherwise.
+      const shellOnLine = shellQuoteEnd !== undefined && shellQuoteEnd < lineEnd
+      const spanEnd = shellOnLine ? shellQuoteEnd! : lineEnd
+      // A quoted first pair (`Set-Cookie: "a=1"; sid=x`) can end before the
+      // value does: redact the quoted run, keep its quotes, and keep redacting
+      // the remaining pairs after it instead of copying them verbatim.
+      // A quoted name followed by '=' is part of the pair, rather than a
+      // complete quoted header value. Treating it as a value leaves the actual
+      // credential and every later pair outside the redacted span.
+      const useLocalQuote =
+        localQuote !== undefined &&
+        localQuoteEnd! < spanEnd &&
+        !/^[ \t]*=/.test(value.slice(localQuoteEnd! + 1, spanEnd))
+
+      const contentStart = useLocalQuote ? valueStart + 1 : valueStart
+      let redacted: string
+      if (useLocalQuote) {
+        redacted = redactCookiePairs(value.slice(contentStart, localQuoteEnd), setCookie)
+        if (localQuoteEnd! < value.length) redacted += localQuote
+        redacted += redactPairTail(value.slice(localQuoteEnd! + 1, spanEnd), setCookie)
+      } else {
+        redacted = redactCookiePairs(value.slice(contentStart, spanEnd), setCookie)
+      }
+      result += value.slice(cursor, contentStart)
+      result += redacted
+      cursor = spanEnd
+      if (shellOnLine && quoteState) {
+        result += quoteState
+        quoteState = undefined
+        cursor++
+        // Whatever follows the closed shell quote on the same line is still
+        // part of the record: keep redacting it when it opens with another
+        // pair, so a stray quote in prose cannot truncate the redaction.
+        const trailing = value.slice(cursor, lineEnd)
+        if (PAIR_TAIL.test(trailing)) {
+          result += redactCookiePairs(trailing, setCookie)
+          cursor = lineEnd
+        }
+        // Leave non-pair tails for the next header match (or final copy), so
+        // another shell-quoted Cookie header on this line is still scanned.
+      }
+      quoteCursor = cursor
+    }
+    return cursor === 0 ? value : result + value.slice(cursor)
+  }
+
+  // Short options accept an attached argument. Scan one complete shell word
+  // rather than a quote-delimited regex so concatenated quotes and escaped
+  // quotes cannot leave a cookie credential's suffix in the persisted copy.
+  // Arguments without '=' are cookie filenames and remain unchanged.
+  const CURL_COOKIE_FLAG = /(^|[\s;|&(])(?:--cookie(?:[ \t]*=[ \t]*|[ \t]+)|-b[ \t]*)/gi
+
+  function redactCookieFlagValues(value: string): string {
+    const parts: string[] = []
+    let copied = 0
+    let scanned = 0
+    for (const match of value.matchAll(CURL_COOKIE_FLAG)) {
+      if (match.index < scanned) continue
+      const start = match.index + match[0].length
+      const word = inlineEnvWord(value, start, true)
+      scanned = word.end
+      if (!word.literal.includes("=") && !value.slice(start, word.end).includes("=")) continue
+      const first = value[start]
+      const quote =
+        (first === '"' || first === "'") && closingQuote(value, start + 1, first) === word.end - 1 ? first : ""
+      const redacted = word.literal ? redactCookiePairs(word.literal, false) : "[redacted]"
+      parts.push(value.slice(copied, start), quote, redacted, quote)
+      copied = word.end
+    }
+    return parts.length === 0 ? value : parts.join("") + value.slice(copied)
+  }
+
+  function containsUrlCredential(value: string | undefined): boolean {
+    if (!value || !value.includes("://")) return false
+    // Nested schemes (for example JDBC) hide userinfo in URL.pathname.
+    if (URL_USERINFO_VALUE.test(value)) return true
+    try {
+      const parsed = new URL(value)
+      if (parsed.username.length > 0 || parsed.password.length > 0) return true
+      if (containsCredentialQuery(parsed.search) || containsCredentialQuery(parsed.hash)) return true
+      for (const params of [parsed.searchParams, new URLSearchParams(parsed.hash.slice(1))]) {
+        for (const [name] of params) if (isCredentialQueryName(name)) return true
+      }
+      return false
+    } catch {
+      return false
+    }
+  }
+
+  // Scan complete JSON-style values without parsing untrusted records or
+  // recursing. A missing quote/bracket consumes the remainder conservatively.
+  function credentialValueEnd(value: string, start: number): number {
+    const first = value[start]
+    const closers: string[] = []
+    let quote: string | undefined
+    if (first === '"' || first === "'") quote = first
+    else if (first === "{" || first === "[") closers.push(first === "{" ? "}" : "]")
+    else {
+      let end = start
+      while (end < value.length && !/[,}\]\r\n]/.test(value[end]!)) end++
+      return end
+    }
+    for (let i = start + 1; i < value.length; i++) {
+      const char = value[i]!
+      if (quote) {
+        if (char === "\\") i++
+        else if (char === quote) {
+          quote = undefined
+          if (closers.length === 0) return i + 1
+        }
+      } else if (char === '"' || char === "'") quote = char
+      else if (char === "{" || char === "[") {
+        if (closers.length >= 128) return value.length
+        closers.push(char === "{" ? "}" : "]")
+      } else if (char === "}" || char === "]") {
+        if (char !== closers.pop()) return value.length
+        if (closers.length === 0) return i + 1
+      }
+    }
+    return value.length
+  }
+
+  function redactQuotedCredentialFields(value: string): string {
+    const parts: string[] = []
+    let copied = 0
+    for (const match of value.matchAll(QUOTED_CREDENTIAL_FIELD)) {
+      if (match.index < copied) continue
+      const start = match.index + match[0].length
+      const end = credentialValueEnd(value, start)
+      const quote = value[start] === "'" ? "'" : '"'
+      parts.push(value.slice(copied, match.index), `${match[1]}${match[2]}${match[1]}:${quote}[redacted]${quote}`)
+      copied = end
+    }
+    return parts.length === 0 ? value : parts.join("") + value.slice(copied)
+  }
+
+  /**
+   * Redact key/value, authorization, cookie, URI-credential spellings and bare
+   * credential *value* shapes (`sk-…`, a JWT, a private-key block) from a
+   * string. Shared by the log sink and (through `redactForRecord`) every
+   * durable record, so a secret is hidden in the same way wherever it lands.
+   */
+  export function redactSecrets(value: string): string {
+    const jsonRedacted = redactQuotedCredentialFields(value)
+    const fieldsRedacted = jsonRedacted.replace(
+      // Basic alongside bearer: Authorization: Basic <base64> left the encoded
+      // credential behind. Cookie headers use the dedicated pair parser below
+      // so every pair is redacted while Set-Cookie attributes remain available
+      // for diagnostics. cookie=... fields still use this pass.
+      //
+      // The value alternation consumes an existing `[redacted]` placeholder as
+      // one unit before falling back to a bare word. Without it a second pass
+      // matches only `[redacted` (the run stops at `]`) and re-emits the
+      // placeholder with the bracket still there — `--password=[redacted]]`.
+      // Redaction has to survive re-application: the log sink re-redacts values
+      // that callers already redacted (`mcp/impl.ts` MCP stderr) and session
+      // evidence re-redacts persisted tool output, so a nested application is a
+      // production path, not a hypothetical one.
+      //
+      // Quoted values are consumed with their quotes: a bare run stops at the
+      // first space, so `--password="hunter2 extra"` used to leave ` extra"`
+      // behind — the tail of a quoted credential stayed in the record.
+      INLINE_CREDENTIAL_VALUE,
+      (_match, query: string | undefined, queryKey: string | undefined, key: string | undefined) =>
+        `${query ?? ""}${queryKey ?? key}=[redacted]`,
+    )
+    // Any RFC 3986 scheme, not just http(s): connection strings such as
+    // `postgres://`, `redis://`, `mongodb+srv://`, and `amqp://` carry
+    // `user:password@` userinfo too, and a free-text log message has no `KEY=`
+    // assignment for `redactInlineEnvAssignments` to catch. The username may be
+    // empty (`redis://:password@host` is a documented form). The sibling
+    // `URL_USERINFO_VALUE` already accepts every scheme for assignments.
+    // Require the start of a scheme token, so a long hyphenated public word
+    // cannot trigger another suffix scan at every word boundary.
+    const textRedacted = redactCookieFlagValues(redactCookieHeaders(redactAuthorizationHeaders(fieldsRedacted)))
+      .replace(
+        /(?<![a-z0-9+.-])([a-z][a-z0-9+.-]*:\/\/)([^\s/:@]*):([^\s/@]+)@/gi,
+        (_match, scheme: string, username: string) => `${scheme}${username}:[redacted]@`,
+      )
+      .replace(/(?<![a-z0-9+.-])([a-z][a-z0-9+.-]*:\/\/)([^\s/:@?#]+)@/gi, (match, scheme: string) =>
+        /^(?:ssh|git\+ssh):\/\/$/i.test(scheme) ? match : `${scheme}[redacted]@`,
+      )
+      // ADO.NET-style `;Pwd=` connection-string fields carry passwords, but the
+      // bare PWD alias is a public shell variable, so only the
+      // semicolon-delimited form redacts.
+      .replace(/(;\s*pwd\s*=)[^\s;]*/gi, "$1[redacted]")
+    return redactPrivateKeys(redactCredentialQueries(textRedacted)).replace(SECRET_VALUE, "[redacted secret]")
+  }
+
+  /**
+   * Credential *value* shapes: the same set the pre-commit hook refuses to
+   * commit, plus a JWT. No key name can catch these — a provider echoes a key as
+   * bare prose ("Incorrect API key provided: sk-…") with no `key=` anywhere, and
+   * a command can carry one with no assignment or header around it. They are
+   * redacted here rather than in the log sink so every durable record (persisted
+   * tool input, session evidence, goal check output) loses them too.
+   */
+  const PRIVATE_KEY_BEGIN = /-----BEGIN[^-]*PRIVATE KEY-----/g
+  const PRIVATE_KEY_END = /-----END[^-]*PRIVATE KEY-----/g
+
+  function redactPrivateKeys(value: string): string {
+    const parts: string[] = []
+    let copied = 0
+    for (const match of value.matchAll(PRIVATE_KEY_BEGIN)) {
+      // A fused footer/header can share its dashes and straddle the
+      // consumed boundary. Skip only headers hidden in their entirety.
+      if (match.index + match[0].length <= copied) continue
+      PRIVATE_KEY_END.lastIndex = match.index + match[0].length
+      const end = PRIVATE_KEY_END.exec(value)
+      parts.push(value.slice(copied, match.index), "[redacted private key]")
+      // No END marker: hide the remainder once, rather than retrying a paired
+      // regex at every later BEGIN marker and rescanning the same suffix.
+      if (!end) return parts.join("")
+      copied = end.index + end[0].length
+    }
+    return parts.length === 0 ? value : parts.join("") + value.slice(copied)
+  }
+
+  // A credential value must start at a token boundary: without the left
+  // lookbehind, an identifier such as a task id with a twenty-character
+  // alphanumeric suffix matches the `sk-` alternative mid-word and legitimate
+  // records get corrupted.
+  const SECRET_VALUE =
+    /(?<![A-Za-z0-9_-])(?:sk-[a-zA-Z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{20,}|xoxb-[0-9]{10,}-[a-zA-Z0-9]{24,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})/g
+
+  /**
+   * Full redaction for a string that will be persisted, shown, or recorded:
+   * URI/header/flag credentials (`redactSecrets`) plus shell `KEY=VALUE`
+   * assignments (`redactInlineEnvAssignments`). The order is fixed here on
+   * purpose — running the assignment pass first re-matches its own `[redacted]`
+   * placeholder for a keyword-named key and emits `API_KEY=[redacted]]`, so
+   * callers must not compose the two passes themselves. Use this everywhere a
+   * redacted copy is stored (log sinks, session evidence, persisted tool input,
+   * tool descriptions).
+   */
+  export function redactForRecord(value: string): string {
+    return redactInlineEnvAssignments(redactSecrets(value))
+  }
+
+  // Assignment starts after shell separators. A flag's `-` is deliberately
+  // not a boundary, so spellings like `--env=production` stay unchanged.
+  const INLINE_ENV_ASSIGNMENT = /(^|[\s;|&(])([A-Za-z_][A-Za-z0-9_]*=)/g
+  // Any assigned value carrying credentials as URL userinfo
+  // (scheme://user:pass@…) is redacted even when the variable name looks
+  // innocuous (e.g. FOO=postgres://u:pw@host/db).
+  const URL_USERINFO_VALUE = /(?<![a-z0-9+.-])[a-z][a-z0-9+.-]*:\/\/[^/\s?#]*@/i
+
+  // Read one literal shell word, including concatenated quoted segments and
+  // escaped separators. This does not evaluate shell expansions. Unclosed
+  // quotes conservatively consume the remainder of the persisted copy.
+  function inlineEnvWord(value: string, start: number, sensitiveName: boolean): { end: number; literal: string } {
+    let quote: "'" | '"' | undefined
+    let literal = ""
+    let end = start
+    for (; end < value.length; end++) {
+      const char = value[end]!
+      const next = value[end + 1]
+      if (char === "\\" && quote !== "'" && next !== undefined && (quote === undefined || /[$`"\\\n]/.test(next))) {
+        if (next !== "\n") literal += next
+        end++
+        continue
+      }
+      if (
+        sensitiveName &&
+        quote !== "'" &&
+        (char === "`" ||
+          (char === "$" && (next === "(" || next === "{")) ||
+          (quote === undefined && (char === "(" || ((char === "<" || char === ">") && next === "("))))
+      ) {
+        // Nested expansions and arrays need a full shell grammar to locate
+        // their end. Hide the remaining persisted command instead of leaking
+        // a literal suffix. Safe assignments keep scanning for later secrets.
+        return { end: value.length, literal: "" }
+      }
+      if (quote !== undefined) {
+        if (char === quote) quote = undefined
+        else literal += char
+        continue
+      }
+      if (char === '"' || char === "'") {
+        quote = char
+        continue
+      }
+      if (/[\s;|&()<>]/.test(char)) break
+      literal += char
+    }
+    return { end, literal }
+  }
+
+  /**
+   * Redact inline `KEY=VALUE` credential assignments from a shell command
+   * before it is persisted (event log, message parts, doom-loop
+   * fingerprints). Callers must keep executing the original string — this
+   * copy is for durable records only.
+   */
+  export function redactInlineEnvAssignments(value: string): string {
+    const parts: string[] = []
+    let copied = 0
+    let scanned = 0
+    for (const match of value.matchAll(INLINE_ENV_ASSIGNMENT)) {
+      if (match.index < scanned) continue
+      const start = match.index + match[0].length
+      const name = match[2]!.slice(0, -1)
+      const sensitiveName =
+        isSensitiveName(name) || PAT_NAME.test(name) || WEBHOOK_NAME.test(name) || CREDENTIAL_URL_NAME.test(name)
+      const word = inlineEnvWord(value, start, sensitiveName)
+      scanned = word.end
+      if (word.end === start || (!sensitiveName && !URL_USERINFO_VALUE.test(word.literal))) continue
+      parts.push(value.slice(copied, start), "[redacted]")
+      copied = word.end
+    }
+    return parts.length === 0 ? value : parts.join("") + value.slice(copied)
+  }
+
+  // Interpret an environment-variable string as a tri-state boolean.
+  // Truthy: "true"/"1"/"yes"/"on"; falsy: "false"/"0"/"no"/"off"; anything
+  // else (incl. unset) → undefined so callers can distinguish "explicitly
+  // set" from "default". The yes/on/no/off forms match the prior Effect
+  // `Config.boolean` semantics that flags such as AX_CODE_DISABLE_FILETIME_CHECK
+  // relied on before the Effect removal.
+  export function parseBoolean(value: string | undefined): boolean | undefined {
+    if (!value) return undefined
+    const normalized = value.trim().toLowerCase()
+    if (normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on") return true
+    if (normalized === "false" || normalized === "0" || normalized === "no" || normalized === "off") return false
+    return undefined
+  }
+}
