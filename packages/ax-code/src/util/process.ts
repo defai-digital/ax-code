@@ -4,24 +4,6 @@ import launch from "cross-spawn"
 import { Shell } from "../shell/shell"
 import { toErrorMessage } from "./error-message"
 
-// Drain a child stream tolerantly. The strict `node:stream/consumers` buffer()
-// rejects with ERR_STREAM_PREMATURE_CLOSE when the stream is destroy()ed (which
-// `spawn` does on exit to unblock pipes held open by background children) before
-// it reaches a natural EOF — a race that surfaces under concurrent spawns. Node
-// still emits all buffered `data` events before `close`, so collecting via raw
-// events and resolving on end/close/error returns the full output without the
-// spurious rejection.
-function drain(stream: Readable): Promise<Buffer> {
-  return new Promise((resolve) => {
-    const chunks: Buffer[] = []
-    stream.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)))
-    const finish = () => resolve(Buffer.concat(chunks))
-    stream.once("end", finish)
-    stream.once("close", finish)
-    stream.once("error", finish)
-  })
-}
-
 export namespace Process {
   export type Stdio = "inherit" | "pipe" | "ignore" | number
   export type Shell = boolean
@@ -239,6 +221,24 @@ export namespace Process {
       })
     if (out.code === 0 || opts.nothrow) return out
     throw new RunFailedError(cmd, out.code, out.stdout, out.stderr)
+  }
+
+  // Drain a child stream tolerantly. The strict `node:stream/consumers` buffer()
+  // rejects with ERR_STREAM_PREMATURE_CLOSE when the stream is destroy()ed (which
+  // `spawn` does on exit to unblock pipes held open by background children) before
+  // it reaches a natural EOF — a race that surfaces under concurrent spawns. Node
+  // still emits all buffered `data` events before `close`, so collecting via raw
+  // events and resolving on end/close/error returns the full output without the
+  // spurious rejection.
+  export function drain(stream: Readable): Promise<Buffer> {
+    return new Promise((resolve) => {
+      const chunks: Buffer[] = []
+      stream.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)))
+      const finish = () => resolve(Buffer.concat(chunks))
+      stream.once("end", finish)
+      stream.once("close", finish)
+      stream.once("error", finish)
+    })
   }
 
   export async function stop(proc: ChildProcess) {

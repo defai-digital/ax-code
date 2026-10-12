@@ -10,7 +10,7 @@ import { lazy } from "../util/lazy"
 import { Filesystem } from "../util/filesystem"
 import { Process } from "../util/process"
 import { which } from "../util/which"
-import { text } from "node:stream/consumers"
+import { StringDecoder } from "node:string_decoder"
 
 import { ZipReader, BlobReader, BlobWriter } from "@zip.js/zip.js"
 import { Log } from "@/util/log"
@@ -162,7 +162,9 @@ export namespace Ripgrep {
   )
 
   async function fetchReleaseAsset(url: string) {
-    const response = await Ssrf.pinnedFetch(url, { label: "ripgrep" })
+    // Bounded like the tar extraction below: a stalled GitHub connection must
+    // not wedge the lazy filepath singleton for the process lifetime.
+    const response = await Ssrf.pinnedFetch(url, { label: "ripgrep", signal: AbortSignal.timeout(120_000) })
     if (!response.ok) throw new DownloadFailedError({ url, status: response.status })
     return Buffer.from(await response.arrayBuffer())
   }
@@ -219,7 +221,7 @@ export namespace Ripgrep {
           const hasExited = () => proc.exitCode !== null || proc.signalCode !== null
           try {
             const [stderr, exit] = await Promise.all([
-              proc.stderr ? text(proc.stderr) : Promise.resolve(""),
+              proc.stderr ? Process.drain(proc.stderr).then((buffer) => buffer.toString("utf8")) : Promise.resolve(""),
               proc.exited,
             ])
             if (exit === 124) {
@@ -274,9 +276,10 @@ export namespace Ripgrep {
           try {
             await zipFileReader.close()
           } catch {}
+          // Remove the downloaded archive on every outcome, like the tar path.
+          await fs.unlink(archivePath).catch(() => {})
         }
       }
-      if (config.extension !== "tar.gz") await fs.unlink(archivePath)
       if (!platformKey.endsWith("-win32")) await fs.chmod(filepath, 0o755)
     }
 
@@ -350,7 +353,7 @@ export namespace Ripgrep {
       }
     }
 
-    const args = [await filepath(), "--files", "--glob=!.git/*"]
+    const args = [await filepath(), "--files"]
     if (input.follow) args.push("--follow")
     if (input.hidden !== false) args.push("--hidden")
     if (input.maxDepth !== undefined) args.push(`--max-depth=${input.maxDepth}`)
@@ -359,6 +362,9 @@ export namespace Ripgrep {
         args.push(`--glob=${g}`)
       }
     }
+    // Appended after caller globs: ripgrep's last matching glob wins, so an
+    // earlier exclusion could be re-included by a broad caller pattern.
+    args.push("--glob=!.git")
 
     // Guard against invalid cwd to provide a consistent ENOENT error.
     const cwdStat = await fs.stat(input.cwd).catch((error: NodeJS.ErrnoException) => {
@@ -392,11 +398,14 @@ export namespace Ripgrep {
     try {
       let buffer = ""
       let yielded = 0
+      // Pipe chunks can split a multi-byte UTF-8 filename; a StringDecoder
+      // carries the partial sequence instead of emitting U+FFFD garbage.
+      const decoder = new StringDecoder("utf8")
       const stream = proc.stdout as AsyncIterable<Buffer | string>
       for await (const chunk of stream) {
         input.signal?.throwIfAborted()
 
-        buffer += typeof chunk === "string" ? chunk : chunk.toString()
+        buffer += typeof chunk === "string" ? chunk : decoder.write(chunk)
         // Handle both Unix (\n) and Windows (\r\n) line endings
         const lines = buffer.split(/\r?\n/)
         buffer = lines.pop() || ""
@@ -410,6 +419,7 @@ export namespace Ripgrep {
         }
       }
 
+      buffer += decoder.end()
       if (buffer && !(limit !== undefined && yielded >= limit)) yield buffer
       await proc.exited
 
@@ -437,8 +447,10 @@ export namespace Ripgrep {
 
     const root: Node = { name: "", children: new Map() }
     for (const file of files) {
-      if (file.includes(".ax-code")) continue
       const parts = file.split(path.sep)
+      // Only the tool-state directory itself is excluded; a substring test would
+      // also drop legitimate paths like `docs/x.ax-code.json`.
+      if (parts.includes(".ax-code")) continue
       if (parts.length < 2) continue
       let node = root
       for (const part of parts.slice(0, -1)) {
@@ -486,7 +498,7 @@ export namespace Ripgrep {
   }) {
     const limit = normalizeLimit(input.limit)
     if (limit === 0) return []
-    const args = [`${await filepath()}`, "--json", "--hidden", "--glob=!.git/*"]
+    const args = [`${await filepath()}`, "--json", "--hidden"]
     if (input.follow) args.push("--follow")
 
     if (input.glob) {
@@ -494,6 +506,8 @@ export namespace Ripgrep {
         args.push(`--glob=${g}`)
       }
     }
+    // Appended after caller globs: ripgrep's last matching glob wins.
+    args.push("--glob=!.git")
 
     if (limit !== undefined) {
       args.push(`--max-count=${limit}`)
@@ -507,10 +521,10 @@ export namespace Ripgrep {
       nothrow: true,
     })
     if (result.code === 2) {
+      // Exit 2 marks partial errors (an unreadable file, a vanished directory);
+      // stdout still carries every match already found, so keep parsing it.
       log.warn("ripgrep error", { code: result.code, stderr: result.stderr })
-      return []
-    }
-    if (result.code !== 0) {
+    } else if (result.code !== 0) {
       return []
     }
 
