@@ -43,5 +43,8 @@ describe("permission/question prompt reply SDK error routing", () => {
     expect(throwIndex).toBeGreaterThanOrEqual(0)
     expect(removeIndex).toBeGreaterThan(throwIndex)
     expect(src).toContain('import { replyError } from "../../util/error-message"')
+    // A failed reply must log the captured request id, not the live
+    // `props.request`, which may already point at the next queued ask.
+    expect(src).toContain("log.warn(failureLabel, { error, requestID: id })")
   })
 })

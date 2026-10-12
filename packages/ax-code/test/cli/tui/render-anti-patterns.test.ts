@@ -358,7 +358,7 @@ describe("AX Code TUI stability guardrails", () => {
 
     expect(question).toContain("function submitQuestionRequest(")
     expect(question).toContain("void Promise.resolve()")
-    expect(question).toContain("log.warn(failureLabel, { error, requestID: props.request.id })")
+    expect(question).toContain("log.warn(failureLabel, { error, requestID: id })")
     expect(question).toContain('"question prompt reply failed"')
     expect(question).toContain('"question prompt reject failed"')
     expect(question).toContain('"Failed to submit question response"')

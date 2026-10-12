@@ -121,7 +121,7 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
         // The prompt stays mounted on failure, so the user can retry. See
         // #255, #341.
         setStore("submitting", false)
-        log.warn(failureLabel, { error, requestID: props.request.id })
+        log.warn(failureLabel, { error, requestID: id })
         toast.show({
           message: error instanceof Error ? error.message : failureMessage,
           variant: "error",
