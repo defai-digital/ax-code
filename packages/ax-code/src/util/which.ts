@@ -1,4 +1,5 @@
 import whichPkg from "which"
+import { existsSync } from "fs"
 import path from "path"
 import { Global } from "../global"
 
@@ -24,7 +25,10 @@ export function which(cmd: string, env?: NodeJS.ProcessEnv) {
   if (!env) {
     const cached = whichCache.get(cmd)
     if (cached && Date.now() - cached.timestamp < WHICH_CACHE_TTL_MS) {
-      return cached.result
+      // An upgrade or uninstall can remove the binary while the entry is still
+      // fresh; handing back a dead path would fail the spawn that follows.
+      if (existsSync(cached.result)) return cached.result
+      whichCache.delete(cmd)
     }
   }
 

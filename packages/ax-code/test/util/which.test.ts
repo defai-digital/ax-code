@@ -62,6 +62,25 @@ describe("util.which", () => {
     }
   })
 
+  test("drops a cached lookup once the binary is removed", async () => {
+    await using tmp = await tmpdir()
+    const original = process.env.AX_CODE_TEST_HOME
+    const name = `ax-code-removed-${Math.random().toString(36).slice(2)}`
+    process.env.AX_CODE_TEST_HOME = tmp.path
+    try {
+      const bin = path.join(tmp.path, ".grok", "bin")
+      await fs.mkdir(bin, { recursive: true })
+      const file = await cmd(bin, name)
+
+      same(which(name), file)
+      await fs.rm(file)
+      expect(which(name)).toBeNull()
+    } finally {
+      if (original === undefined) delete process.env.AX_CODE_TEST_HOME
+      else process.env.AX_CODE_TEST_HOME = original
+    }
+  })
+
   test("finds a command from PATH override", async () => {
     await using tmp = await tmpdir()
     const bin = path.join(tmp.path, "bin")

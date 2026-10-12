@@ -528,34 +528,22 @@ export namespace File {
 
     // Keep literal paths relative to the same directory as File.read().
     // Deleted paths are collected separately and must not also appear modified.
-    const diffOutput = (
-      await git(
-        [
-          "-c",
-          "core.fsmonitor=false",
-          "-c",
-          "core.quotepath=false",
-          "diff",
-          "--relative",
-          "--no-renames",
-          "--numstat",
-          "--diff-filter=d",
-          "HEAD",
-        ],
-        { cwd: Instance.directory },
-      )
-    ).text()
+    // The three git queries are independent, so they run concurrently.
+    // --no-optional-locks keeps this background poll from taking index.lock
+    // away from the user's own git commands (or from its sibling queries).
+    const gitText = async (args: string[]) =>
+      (
+        await git(["--no-optional-locks", "-c", "core.fsmonitor=false", "-c", "core.quotepath=false", ...args], {
+          cwd: Instance.directory,
+        })
+      ).text()
+    const [diffOutput, untrackedOutput, deletedNumstat] = await Promise.all([
+      gitText(["diff", "--relative", "--no-renames", "--numstat", "--diff-filter=d", "HEAD"]),
+      gitText(["ls-files", "--others", "--exclude-standard"]),
+      gitText(["diff", "--relative", "--no-renames", "--numstat", "--diff-filter=D", "HEAD"]),
+    ])
 
     const changed: File.Info[] = parseModifiedNumstat(diffOutput)
-
-    const untrackedOutput = (
-      await git(
-        ["-c", "core.fsmonitor=false", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard"],
-        {
-          cwd: Instance.directory,
-        },
-      )
-    ).text()
 
     if (untrackedOutput) {
       const untrackedFiles = untrackedOutput
@@ -597,26 +585,6 @@ export namespace File {
         if (result) changed.push(result)
       }
     }
-
-    const deletedNumstat = (
-      await git(
-        [
-          "-c",
-          "core.fsmonitor=false",
-          "-c",
-          "core.quotepath=false",
-          "diff",
-          "--relative",
-          "--no-renames",
-          "--numstat",
-          "--diff-filter=D",
-          "HEAD",
-        ],
-        {
-          cwd: Instance.directory,
-        },
-      )
-    ).text()
 
     if (deletedNumstat) {
       for (const line of deletedNumstat.split("\n")) {
