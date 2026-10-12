@@ -86,6 +86,9 @@ describe("workflow budget stop", () => {
             (await TaskQueue.list()).filter((candidate) => workflowOf(candidate)?.specPhaseID === "summarize"),
           ).toHaveLength(0)
           expect(after.error).toContain("budget")
+          if (completionIndex === 0) {
+            expect((await TaskQueue.get(itemFor(children[1]!.id).id)).status).toBe("cancelled")
+          }
         },
       })
     } finally {

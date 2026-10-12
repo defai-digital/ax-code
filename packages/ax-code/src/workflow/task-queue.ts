@@ -112,6 +112,9 @@ export namespace WorkflowTaskQueue {
             status: effectiveRunStatus,
             error: effectiveRunStatus === "failed" || effectiveRunStatus === "blocked" ? item.error : undefined,
           })
+    if (run.status === "failed" && WorkflowRun.isBudgetExceeded(run.id)) {
+      await cancelSupersededPhaseChildren(latest.children, "Workflow budget exceeded.")
+    }
     if (run.status === "completed") await WorkflowRun.ensureFinalReportArtifact(latest.id)
     if (run.status === "completed" || run.status === "failed" || run.status === "cancelled") {
       const sourceTaskID = run.sourceTaskID
@@ -200,7 +203,10 @@ function aggregatePhaseStatus(
   return "running"
 }
 
-async function cancelSupersededPhaseChildren(children: WorkflowChildRecord[]) {
+async function cancelSupersededPhaseChildren(
+  children: WorkflowChildRecord[],
+  error = "Workflow phase merge strategy already satisfied.",
+) {
   const { TaskQueue } = await import("../session/task-queue")
   for (const child of children) {
     if (child.status === "completed" || child.status === "failed" || child.status === "cancelled") continue
@@ -221,7 +227,7 @@ async function cancelSupersededPhaseChildren(children: WorkflowChildRecord[]) {
       await WorkflowRun.setChildStatus({
         id: child.id,
         status: "cancelled",
-        error: "Workflow phase merge strategy already satisfied.",
+        error,
       })
     }
   }
