@@ -5,7 +5,7 @@ import { createPromotionArtifactStore } from "./artifact-store"
 import { QualityPromotionAdoptionDissentSupersession } from "./promotion-adoption-dissent-supersession"
 import { QualityPromotionAdoptionReview } from "./promotion-adoption-review"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
-import { APPROVAL_ROLE_RANK, normalizeApprovalRole } from "./promotion-approval-policy-contract"
+import { qualifiesApprovalRole } from "./promotion-approval-policy-contract"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates, pushGateLines } from "./promotion-summary"
 import { jsonEqual } from "../json"
@@ -92,16 +92,6 @@ export namespace QualityPromotionAdoptionDissentHandling {
     sort: sortArtifacts,
   })
 
-  function qualifiesRole(
-    role: string | null | undefined,
-    minimumRole: QualityPromotionApprovalPolicy.ApprovalRole | null,
-  ) {
-    if (!minimumRole) return true
-    const normalized = normalizeApprovalRole(role)
-    if (!normalized) return false
-    return APPROVAL_ROLE_RANK[normalized] >= APPROVAL_ROLE_RANK[minimumRole]
-  }
-
   function matchesBundle(bundle: QualityPromotionDecisionBundle.DecisionBundle, handling: HandlingArtifact) {
     return (
       handling.decisionBundle.digest === QualityPromotionAdoptionReview.decisionBundleDigest(bundle) &&
@@ -117,7 +107,8 @@ export namespace QualityPromotionAdoptionDissentHandling {
     const consensus = QualityPromotionAdoptionReview.evaluate(bundle, reviews)
     return [...reviews]
       .filter(
-        (review) => review.disposition === "rejected" && qualifiesRole(review.role, consensus.requirement.minimumRole),
+        (review) =>
+          review.disposition === "rejected" && qualifiesApprovalRole(review.role, consensus.requirement.minimumRole),
       )
       .map((review) =>
         QualifiedRejectingReview.parse({

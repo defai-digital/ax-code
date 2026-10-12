@@ -30,6 +30,17 @@ export function normalizeApprovalRole(role: string | null | undefined): Approval
   return parsed.success ? parsed.data : null
 }
 
+/**
+ * True when `role` ranks at or above `minimumRole`. A missing minimum always
+ * qualifies; an unparseable role never does.
+ */
+export function qualifiesApprovalRole(role: string | null | undefined, minimumRole: ApprovalRole | null): boolean {
+  if (!minimumRole) return true
+  const normalized = normalizeApprovalRole(role)
+  if (!normalized) return false
+  return APPROVAL_ROLE_RANK[normalized] >= APPROVAL_ROLE_RANK[minimumRole]
+}
+
 export function normalizeApprovalTeam(team: string | null | undefined) {
   const normalized = team?.trim().toLowerCase()
   return normalized ? normalized : null

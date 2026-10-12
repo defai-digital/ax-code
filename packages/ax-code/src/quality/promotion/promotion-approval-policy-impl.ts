@@ -136,13 +136,6 @@ export namespace QualityPromotionApprovalPolicy {
   const ROLE_RANK = QualityPromotionApprovalPolicyContract.APPROVAL_ROLE_RANK
   const normalizeRole = QualityPromotionApprovalPolicyContract.normalizeApprovalRole
 
-  function qualifiesRole(role: string | null | undefined, minimumRole: ApprovalRole | null) {
-    if (!minimumRole) return true
-    const normalized = normalizeRole(role)
-    if (!normalized) return false
-    return ROLE_RANK[normalized] >= ROLE_RANK[minimumRole]
-  }
-
   function stricterRole(a: ApprovalRole | null, b: ApprovalRole | null) {
     if (!a) return b
     if (!b) return a
@@ -521,7 +514,7 @@ export namespace QualityPromotionApprovalPolicy {
     const matchingArtifacts = verified.filter((item) => item.reasons.length === 0)
     const approvedArtifacts = matchingArtifacts.filter((item) => item.approved)
     const qualifiedApprovals = approvedArtifacts.filter((item) =>
-      qualifiesRole(item.approval.role, requirement.minimumRole),
+      QualityPromotionApprovalPolicyContract.qualifiesApprovalRole(item.approval.role, requirement.minimumRole),
     )
     const distinctQualifiedApprovers = new Set(qualifiedApprovals.map((item) => item.approval.approver)).size
     const independentQualifiedApprovals =

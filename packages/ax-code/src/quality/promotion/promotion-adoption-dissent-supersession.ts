@@ -3,10 +3,9 @@ import { QualityStorageKey } from "../storage-key"
 import { QualityPromotionAdoptionReview } from "./promotion-adoption-review"
 import { createPromotionArtifactStore } from "./artifact-store"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
-import { APPROVAL_ROLE_RANK, normalizeApprovalRole } from "./promotion-approval-policy-contract"
+import { qualifiesApprovalRole } from "./promotion-approval-policy-contract"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates, pushGateLines } from "./promotion-summary"
-import { jsonEqual } from "../json"
 import { compareStringFields, uniqueBy } from "../sort"
 
 export namespace QualityPromotionAdoptionDissentSupersession {
@@ -94,16 +93,6 @@ export namespace QualityPromotionAdoptionDissentSupersession {
     recordSchema: SupersessionRecord,
     sort,
   })
-
-  function qualifiesRole(
-    role: string | null | undefined,
-    minimumRole: QualityPromotionApprovalPolicy.ApprovalRole | null,
-  ) {
-    if (!minimumRole) return true
-    const normalized = normalizeApprovalRole(role)
-    if (!normalized) return false
-    return APPROVAL_ROLE_RANK[normalized] >= APPROVAL_ROLE_RANK[minimumRole]
-  }
 
   function matchesBundle(bundle: QualityPromotionDecisionBundle.DecisionBundle, supersession: SupersessionArtifact) {
     return (
@@ -264,7 +253,8 @@ export namespace QualityPromotionAdoptionDissentSupersession {
   ) {
     const consensus = QualityPromotionAdoptionReview.evaluate(bundle, reviews)
     const qualifiedRejectingReviews = reviews.filter(
-      (review) => review.disposition === "rejected" && qualifiesRole(review.role, consensus.requirement.minimumRole),
+      (review) =>
+        review.disposition === "rejected" && qualifiesApprovalRole(review.role, consensus.requirement.minimumRole),
     )
     const qualifiedRejectingReviewIDSet = new Set(qualifiedRejectingReviews.map((review) => review.reviewID))
     const coveredByReviewerRereview = new Set<string>()
@@ -278,7 +268,7 @@ export namespace QualityPromotionAdoptionDissentSupersession {
       if (targetQualifiedRejectingReviewIDs.length === 0) continue
 
       if (supersession.disposition === "superseded_by_new_evidence") {
-        if (!qualifiesRole(supersession.role, consensus.requirement.minimumRole)) continue
+        if (!qualifiesApprovalRole(supersession.role, consensus.requirement.minimumRole)) continue
         const targetRejectingReviewers = new Set(supersession.targetReviews.map((review) => review.reviewer))
         if (targetRejectingReviewers.has(supersession.superseder)) continue
         qualifyingSupersessions.push(supersession)

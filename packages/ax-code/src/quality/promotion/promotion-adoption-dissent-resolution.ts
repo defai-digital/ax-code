@@ -3,10 +3,9 @@ import { QualityStorageKey } from "../storage-key"
 import { QualityPromotionAdoptionReview } from "./promotion-adoption-review"
 import { createPromotionArtifactStore } from "./artifact-store"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
-import { APPROVAL_ROLE_RANK, normalizeApprovalRole } from "./promotion-approval-policy-contract"
+import { qualifiesApprovalRole } from "./promotion-approval-policy-contract"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates, pushGateLines } from "./promotion-summary"
-import { jsonEqual } from "../json"
 import { compareStringFields, uniqueBy } from "../sort"
 
 export namespace QualityPromotionAdoptionDissentResolution {
@@ -89,16 +88,6 @@ export namespace QualityPromotionAdoptionDissentResolution {
     recordSchema: ResolutionRecord,
     sort,
   })
-
-  function qualifiesRole(
-    role: string | null | undefined,
-    minimumRole: QualityPromotionApprovalPolicy.ApprovalRole | null,
-  ) {
-    if (!minimumRole) return true
-    const normalized = normalizeApprovalRole(role)
-    if (!normalized) return false
-    return APPROVAL_ROLE_RANK[normalized] >= APPROVAL_ROLE_RANK[minimumRole]
-  }
 
   function matchesBundle(bundle: QualityPromotionDecisionBundle.DecisionBundle, resolution: ResolutionArtifact) {
     return (
@@ -236,12 +225,13 @@ export namespace QualityPromotionAdoptionDissentResolution {
   ) {
     const consensus = QualityPromotionAdoptionReview.evaluate(bundle, reviews)
     const qualifiedRejectingReviews = reviews.filter(
-      (review) => review.disposition === "rejected" && qualifiesRole(review.role, consensus.requirement.minimumRole),
+      (review) =>
+        review.disposition === "rejected" && qualifiesApprovalRole(review.role, consensus.requirement.minimumRole),
     )
     const qualifiedRejectingReviewers = new Set(qualifiedRejectingReviews.map((review) => review.reviewer))
     const qualifyingResolutions = resolutions.filter(
       (resolution) =>
-        qualifiesRole(resolution.role, consensus.requirement.minimumRole) &&
+        qualifiesApprovalRole(resolution.role, consensus.requirement.minimumRole) &&
         !qualifiedRejectingReviewers.has(resolution.resolver),
     )
     const coveredQualifiedRejectingReviewIDs = new Set<string>()

@@ -3,10 +3,9 @@ import { QualityStorageKey } from "../storage-key"
 import { sha256JsonHex } from "../digest"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
 import { createPromotionArtifactStore } from "./artifact-store"
-import { APPROVAL_ROLE_RANK, normalizeApprovalRole } from "./promotion-approval-policy-contract"
+import { qualifiesApprovalRole } from "./promotion-approval-policy-contract"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates, pushGateLines } from "./promotion-summary"
-import { jsonEqual } from "../json"
 import { compareStringFields, uniqueBy } from "../sort"
 
 export namespace QualityPromotionAdoptionReview {
@@ -104,16 +103,6 @@ export namespace QualityPromotionAdoptionReview {
       review.decisionBundle.createdAt === bundle.createdAt &&
       review.suggestion.digest === suggestionDigest(bundle)
     )
-  }
-
-  function qualifiesRole(
-    role: string | null | undefined,
-    minimumRole: QualityPromotionApprovalPolicy.ApprovalRole | null,
-  ) {
-    if (!minimumRole) return true
-    const normalized = normalizeApprovalRole(role)
-    if (!normalized) return false
-    return APPROVAL_ROLE_RANK[normalized] >= APPROVAL_ROLE_RANK[minimumRole]
   }
 
   export function defaultRequirement(
@@ -253,11 +242,12 @@ export namespace QualityPromotionAdoptionReview {
       ...requirementOverride,
     })
     const qualifyingReviews = reviews.filter(
-      (review) => review.disposition === qualifyingDisposition && qualifiesRole(review.role, requirement.minimumRole),
+      (review) =>
+        review.disposition === qualifyingDisposition && qualifiesApprovalRole(review.role, requirement.minimumRole),
     )
     const distinctQualifiedReviewers = new Set(qualifyingReviews.map((review) => review.reviewer)).size
     const qualifiedRejectingReviews = reviews.filter(
-      (review) => review.disposition === "rejected" && qualifiesRole(review.role, requirement.minimumRole),
+      (review) => review.disposition === "rejected" && qualifiesApprovalRole(review.role, requirement.minimumRole),
     )
     const distinctQualifiedRejectingReviewers = new Set(qualifiedRejectingReviews.map((review) => review.reviewer)).size
     const meetsCount = qualifyingReviews.length >= requirement.minimumReviews
