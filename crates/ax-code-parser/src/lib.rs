@@ -171,7 +171,7 @@ fn classify_ts<'a>(
     kind: &str,
 ) -> Option<(String, String, Option<Node<'a>>)> {
     match kind {
-        "function_declaration" => {
+        "function_declaration" | "generator_function_declaration" => {
             let name_node = find_child_by_field(node, "name")?;
             Some((
                 node_text(&name_node, source).to_string(),
@@ -179,7 +179,7 @@ fn classify_ts<'a>(
                 Some(name_node),
             ))
         }
-        "class_declaration" => {
+        "class_declaration" | "abstract_class_declaration" => {
             let name_node = find_child_by_field(node, "name")?;
             Some((
                 node_text(&name_node, source).to_string(),
@@ -219,11 +219,14 @@ fn classify_ts<'a>(
                 Some(name_node),
             ))
         }
-        "lexical_declaration" | "variable_declaration" => {
-            let declarator = find_child_by_kind(node, "variable_declarator")?;
-            let name_node = find_child_by_field(&declarator, "name")?;
-            // Check if const (constant) or let/var (variable)
-            let is_const = find_child_by_kind(node, "const").is_some();
+        // Each declarator in `const a = 1, b = 2` is its own symbol; the
+        // declaration itself is none, so every bound name is reported once.
+        "variable_declarator" => {
+            let name_node = find_child_by_field(node, "name")?;
+            // Check if const (constant) or let/var (variable) on the parent
+            let is_const = node
+                .parent()
+                .is_some_and(|p| find_child_by_kind(&p, "const").is_some());
             let sym_kind = if is_const { "constant" } else { "variable" };
             Some((
                 node_text(&name_node, source).to_string(),
@@ -504,19 +507,41 @@ fn classify_ruby<'a>(
 fn detect_visibility(node: &Node, source: &[u8], lang: &str) -> Option<String> {
     match lang {
         "typescript" | "tsx" | "javascript" | "jsx" => {
+            // The export wraps the declaration; for a variable symbol the node
+            // is the declarator, so climb the declaration chain first.
+            let mut owner = *node;
+            while let Some(p) = owner.parent() {
+                if matches!(
+                    p.kind(),
+                    "variable_declarator" | "lexical_declaration" | "variable_declaration"
+                ) {
+                    owner = p;
+                } else {
+                    break;
+                }
+            }
             // Check for export keyword
-            if node
+            if owner
                 .parent()
                 .map(|p| p.kind() == "export_statement")
                 .unwrap_or(false)
             {
                 return Some("public".into());
             }
-            // Check for accessibility modifier in class methods
+            // `class C { #m() {} }` — the name is a private property identifier
+            if find_child_by_field(node, "name")
+                .is_some_and(|n| matches!(n.kind(), "private_property_identifier" | "private_identifier"))
+            {
+                return Some("private".into());
+            }
+            // Check for an accessibility modifier in class members. Match the
+            // modifier node kind so a method *named* `public` is not one.
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
-                let text = node_text(&child, source);
-                match text {
+                if child.kind() != "accessibility_modifier" {
+                    continue;
+                }
+                match node_text(&child, source) {
                     "public" => return Some("public".into()),
                     "private" => return Some("private".into()),
                     "protected" => return Some("protected".into()),
@@ -529,7 +554,10 @@ fn detect_visibility(node: &Node, source: &[u8], lang: &str) -> Option<String> {
             // Python convention: _ prefix = private, __ prefix = strongly private
             let name_node = find_child_by_field(node, "name")?;
             let name = node_text(&name_node, source);
-            if name.starts_with("__") && !name.ends_with("__") {
+            if name.starts_with("__") && name.ends_with("__") && name.len() > 4 {
+                // Dunder methods are the public protocol surface
+                Some("public".into())
+            } else if name.starts_with("__") && !name.ends_with("__") {
                 Some("private".into())
             } else if name.starts_with("_") {
                 Some("protected".into())
@@ -751,6 +779,63 @@ mod tests {
         let mut flat = Vec::new();
         flatten(&symbols, &mut flat);
         assert_eq!(flat, vec![("greet".to_string(), Some("public".to_string()))]);
+    }
+
+    #[test]
+    fn test_typescript_generators_and_abstract_classes_are_classified() {
+        let symbols =
+            extract_symbols_internal("function* gen() {}\nasync function* agen() {}\nabstract class Abs {}\n", "typescript")
+                .unwrap();
+        let names: Vec<&str> = symbols.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, vec!["gen", "agen", "Abs"]);
+    }
+
+    #[test]
+    fn test_typescript_reports_every_declarator_in_a_declaration() {
+        let symbols = extract_symbols_internal("const a = 1, b = 2\nexport const c = 3, d = 4\n", "typescript").unwrap();
+        let mut flat = Vec::new();
+        flatten(&symbols, &mut flat);
+        assert_eq!(
+            flat,
+            vec![
+                ("a".to_string(), None),
+                ("b".to_string(), None),
+                ("c".to_string(), Some("public".to_string())),
+                ("d".to_string(), Some("public".to_string())),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_python_dunder_methods_are_public() {
+        let source = "class A:\n    def __init__(self):\n        pass\n    def _x(self):\n        pass\n    def __y(self):\n        pass\n";
+        let symbols = extract_symbols_internal(source, "python").unwrap();
+        let mut flat = Vec::new();
+        flatten(&symbols, &mut flat);
+        assert_eq!(
+            flat,
+            vec![
+                ("A".to_string(), Some("public".to_string())),
+                ("A::__init__".to_string(), Some("public".to_string())),
+                ("A::_x".to_string(), Some("protected".to_string())),
+                ("A::__y".to_string(), Some("private".to_string())),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_javascript_method_names_are_not_accessibility_modifiers() {
+        let symbols = extract_symbols_internal("class C { public() {} #hidden() {} }\n", "javascript").unwrap();
+        let mut flat = Vec::new();
+        flatten(&symbols, &mut flat);
+        assert_eq!(
+            flat,
+            vec![
+                ("C".to_string(), None),
+                ("C::public".to_string(), None),
+                ("C::#hidden".to_string(), Some("private".to_string())),
+            ]
+        );
     }
 
     #[test]
