@@ -1,5 +1,7 @@
 import { describe, expect, test } from "vitest"
 import type { Context } from "hono"
+import fs from "fs/promises"
+import path from "path"
 import { isDangerousRoot, requestDirectory } from "../../src/server/request-directory"
 import { tmpdir } from "../fixture/fixture"
 
@@ -65,5 +67,28 @@ describe("requestDirectory", () => {
     await using tmp = await tmpdir()
     const result = requestDirectory(fakeContext(tmp.path))
     expect(typeof result).toBe("string")
+  })
+
+  test("rejects a sensitive home directory and re-resolves when HOME changes", async () => {
+    const original = process.env.HOME
+    try {
+      await using first = await tmpdir()
+      await using second = await tmpdir()
+      await fs.mkdir(path.join(first.path, ".ssh"))
+      await fs.mkdir(path.join(second.path, ".ssh"))
+
+      process.env.HOME = first.path
+      expect(requestDirectory(fakeContext(path.join(first.path, ".ssh")))).toBeInstanceOf(Response)
+
+      // The memo is keyed on the raw homedir, so a changed HOME must be picked
+      // up rather than answering from the first resolution.
+      process.env.HOME = second.path
+      const other = requestDirectory(fakeContext(path.join(second.path, ".ssh")))
+      expect(other).toBeInstanceOf(Response)
+      expect((await (other as Response).json()).message).toBe("Directory is not allowed")
+    } finally {
+      if (original === undefined) delete process.env.HOME
+      else process.env.HOME = original
+    }
   })
 })

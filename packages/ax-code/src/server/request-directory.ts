@@ -40,6 +40,22 @@ export function isDangerousRoot(directory: string): boolean {
 
 const SENSITIVE_HOME_DIRECTORIES = [".ssh", ".gnupg", ".aws", ".azure", ".config/gcloud", ".docker", ".kube", ".npm"]
 
+// Resolving home (a realpath syscall) and rebuilding the sensitive-entry list
+// ran on every request, though both are constant for a given homedir. Memoize
+// on the raw homedir string so a process whose HOME changes still gets a fresh
+// list.
+let cachedHome: string | undefined
+let cachedSensitiveHomeDirectories: string[] = []
+function sensitiveHomeDirectories(): string[] {
+  const home = os.homedir()
+  if (home !== cachedHome) {
+    cachedHome = home
+    const resolved = Filesystem.resolve(home)
+    cachedSensitiveHomeDirectories = SENSITIVE_HOME_DIRECTORIES.map((entry) => path.join(resolved, entry))
+  }
+  return cachedSensitiveHomeDirectories
+}
+
 export function requestDirectory(c: Context): string | Response {
   const queryDirectory = c.req.query("directory")
   const headerDirectory = c.req.header(AX_CODE_DIRECTORY_HEADER) || c.req.header(LEGACY_OPENCODE_DIRECTORY_HEADER)
@@ -70,9 +86,7 @@ export function requestDirectory(c: Context): string | Response {
   })()
   if (!stat?.isDirectory()) return invalidRequest(c, { message: "Directory does not exist or is not a directory" })
 
-  const home = Filesystem.resolve(os.homedir())
-  const sensitiveHomeDirectories = SENSITIVE_HOME_DIRECTORIES.map((entry) => path.join(home, entry))
-  const isSensitiveHomeDirectory = sensitiveHomeDirectories.some(
+  const isSensitiveHomeDirectory = sensitiveHomeDirectories().some(
     (blocked) => directory === blocked || Filesystem.contains(blocked, directory),
   )
   if (isDangerousRoot(directory) || isSensitiveHomeDirectory) {
