@@ -122,6 +122,10 @@ describe("workflow queue terminal status", () => {
           expect(after.status).toBe("cancelled")
           expect(after.time.completed).toBe(cancelled.time.completed)
           expect(start).not.toHaveBeenCalled()
+          const synthesisPhase = after.phases.find((candidate) => candidate.specPhaseID === "summarize")!
+          const retried = await WorkflowScheduler.retryPhase(run.id, synthesisPhase.id)
+          expect(retried.status).toBe("running")
+          expect(retried.phases.find((candidate) => candidate.id === synthesisPhase.id)?.status).toBe("running")
         },
       })
     } finally {

@@ -465,6 +465,10 @@ async function retryChildren(runID: WorkflowRunID, phaseID?: WorkflowPhaseID) {
   })
   if (retryBudget.exceeded.length > 0) return WorkflowRun.getDetail(runID)
 
+  // An explicit, budget-admitted retry reopens cancellation before queue
+  // notifications arrive. Ordinary late notifications remain ignored.
+  if (detail.status === "cancelled") await WorkflowRun.setStatus({ id: runID, status: "running" })
+
   for (const child of retryableChildren) {
     if (child.taskQueueID) {
       const item = await TaskQueue.get(child.taskQueueID).catch(() => undefined)
