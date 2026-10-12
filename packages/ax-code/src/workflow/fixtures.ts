@@ -357,7 +357,6 @@ export const InvalidWorkflowFixtureSpecs = {
 } satisfies Record<string, unknown>
 
 export type WorkflowFixtureName = keyof typeof WorkflowFixtureSpecs
-export type InvalidWorkflowFixtureName = keyof typeof InvalidWorkflowFixtureSpecs
 
 export function getParsedWorkflowFixtureSpec(name: WorkflowFixtureName): WorkflowSpecV1 {
   return WorkflowSpecV1Schema.parse(WorkflowFixtureSpecs[name])
