@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest"
 import { AsyncQueue } from "../../src/util/queue"
-import { encodeSsePayload, pushSseFrame, SSE_HARD_MAX, SSE_WARN_THRESHOLD } from "../../src/server/sse-queue"
+import { encodeSsePayload, pushSseFrame, SSE_HARD_MAX, SSE_WARN_THRESHOLD } from "../../src/util/sse-queue"
 
-describe("server/sse-queue", () => {
+describe("util/sse-queue", () => {
   test("enqueues frames while under the hard limit", () => {
     const q = new AsyncQueue<string | null>()
 
