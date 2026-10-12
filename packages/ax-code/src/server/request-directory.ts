@@ -49,9 +49,13 @@ let cachedSensitiveHomeDirectories: string[] = []
 function sensitiveHomeDirectories(): string[] {
   const home = os.homedir()
   if (home !== cachedHome) {
-    cachedHome = home
+    // Build the list BEFORE recording the key: a resolve that throws
+    // (EACCES/EIO/ELOOP — Filesystem.resolve only falls back on ENOENT) must
+    // not leave the new homedir memoized against the previous home's list,
+    // which would fail the denylist open for every later request.
     const resolved = Filesystem.resolve(home)
     cachedSensitiveHomeDirectories = SENSITIVE_HOME_DIRECTORIES.map((entry) => path.join(resolved, entry))
+    cachedHome = home
   }
   return cachedSensitiveHomeDirectories
 }

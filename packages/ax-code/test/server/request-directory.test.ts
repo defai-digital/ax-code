@@ -1,8 +1,9 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import type { Context } from "hono"
 import fs from "fs/promises"
 import path from "path"
 import { isDangerousRoot, requestDirectory } from "../../src/server/request-directory"
+import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
 
 // Minimal Hono context: requestDirectory only reads query/header and (on
@@ -86,6 +87,34 @@ describe("requestDirectory", () => {
       const other = requestDirectory(fakeContext(path.join(second.path, ".ssh")))
       expect(other).toBeInstanceOf(Response)
       expect((await (other as Response).json()).message).toBe("Directory is not allowed")
+    } finally {
+      if (original === undefined) delete process.env.HOME
+      else process.env.HOME = original
+    }
+  })
+
+  test("does not cache a home whose resolution failed", async () => {
+    const original = process.env.HOME
+    const originalResolve = Filesystem.resolve
+    try {
+      await using home = await tmpdir()
+      await fs.mkdir(path.join(home.path, ".ssh"))
+      process.env.HOME = home.path
+      const ssh = path.join(home.path, ".ssh")
+
+      // A realpath failure that is not ENOENT (EACCES/EIO/ELOOP) would leave
+      // the denylist answering from the previous home's entries if the failed
+      // resolution were memoized — allowing the new home's sensitive dirs.
+      const resolve = vi.spyOn(Filesystem, "resolve").mockImplementation((p) => {
+        if (p === home.path) throw Object.assign(new Error("simulated EIO"), { code: "EIO" })
+        return originalResolve(p)
+      })
+      try {
+        expect(() => requestDirectory(fakeContext(ssh))).toThrow()
+        expect(() => requestDirectory(fakeContext(ssh))).toThrow()
+      } finally {
+        resolve.mockRestore()
+      }
     } finally {
       if (original === undefined) delete process.env.HOME
       else process.env.HOME = original
