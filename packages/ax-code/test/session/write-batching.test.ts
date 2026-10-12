@@ -7,6 +7,7 @@ import { MessageV2 } from "../../src/session/message-v2"
 import { MessageID, PartID } from "../../src/session/schema"
 import { Database, eq } from "../../src/storage/db"
 import { MessageTable, PartTable } from "../../src/session/session.sql"
+import { SessionShard } from "../../src/session/shard"
 
 function userMessage(sessionID: string): MessageV2.Info {
   return {
@@ -113,6 +114,50 @@ describe("SessionGoal.addUsage write reduction", () => {
         expect(updated?.status).toBe("active")
         // The row was read, not written: time_updated is unchanged.
         expect(updated?.time.updated).toBe(before?.time.updated)
+      },
+    })
+  })
+})
+
+describe("session synchronous writers", () => {
+  test("updatePartSync throws inside a transaction so the batch rolls back", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const messageID = MessageID.ascending()
+        await Session.updateMessage({ ...userMessage(session.id), id: messageID } as unknown as MessageV2.Info)
+
+        const part = (sessionID: string) =>
+          ({
+            id: PartID.ascending(),
+            messageID,
+            sessionID,
+            type: "text",
+            text: "part",
+          }) as unknown as MessageV2.Part
+
+        // Second write targets a session that does not exist: the shard lookup
+        // throws inside the callback, which must roll back the first write too.
+        const good = part(session.id)
+        const bad = part("ses_missing")
+
+        expect(() =>
+          SessionShard.storeFor(session.id, { write: true }).transaction(() => {
+            Session.updatePartSync(good)
+            Session.updatePartSync(bad)
+          }),
+        ).toThrow()
+
+        const rows = Database.use((db) => db.select().from(PartTable).where(eq(PartTable.message_id, messageID)).all())
+        expect(rows).toHaveLength(0)
+
+        // The async form defers the same failure to a rejected promise, which is
+        // why an open transaction must use the synchronous writer.
+        const pending = Session.updatePart.force(bad)
+        expect(pending).toBeInstanceOf(Promise)
+        await expect(pending).rejects.toThrow()
       },
     })
   })

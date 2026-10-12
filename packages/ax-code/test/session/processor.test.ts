@@ -601,8 +601,10 @@ describe("session.processor", () => {
     // persistFinalizedInFlightParts was removed — part finalization is now
     // inlined into the single final DB transaction (BUG-5).
     expect(src).not.toContain("persistFinalizedInFlightParts")
-    // The final transaction must write finalized parts alongside other cleanup.
-    expect(src).toContain("for (const p of finalizedParts) Session.updatePart.force(p)")
+    // The final transaction must write finalized parts alongside other cleanup,
+    // using the synchronous writers so a failed row write throws and rolls the
+    // batch back instead of rejecting in the background after it commits.
+    expect(src).toContain("for (const p of finalizedParts) Session.updatePartSync(p)")
   })
 
   test("resets short-lived tool loop state across compaction", async () => {

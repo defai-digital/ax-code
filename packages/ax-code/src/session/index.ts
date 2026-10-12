@@ -1113,20 +1113,28 @@ export namespace Session {
     return pruned
   }
 
-  export const updateMessage = fn(MessageV2.Info, async (msg) => {
+  // Synchronous, transaction-safe writer. `updateMessage` is async, so calling
+  // it (even via `.force`) inside a synchronous `store.transaction` callback
+  // discards the returned promise: a failed row write rejects in the background
+  // while the transaction still commits. Callers that already hold a write
+  // transaction use this so a failure throws and rolls the batch back.
+  export function updateMessageSync(msg: MessageV2.Info): MessageV2.Info {
     const execution = SessionExecutionContext.stamp(msg.sessionID)
     const time_updated = Date.now()
     const store = SessionShard.storeFor(msg.sessionID, { write: true })
+    let updated = msg
     store.transaction((db) => {
-      msg = MessageWrite.message(db, msg, time_updated, execution)
+      updated = MessageWrite.message(db, updated, time_updated, execution)
       store.effect(() =>
         Bus.publishDetached(MessageV2.Event.Updated, {
-          info: msg,
+          info: updated,
         }),
       )
     })
-    return msg
-  })
+    return updated
+  }
+
+  export const updateMessage = fn(MessageV2.Info, async (msg) => updateMessageSync(msg))
 
   export const removeMessage = fn(
     z.object({
@@ -1190,7 +1198,10 @@ export namespace Session {
 
   const UpdatePartInput = MessageV2.Part
 
-  export const updatePart = fn(UpdatePartInput, async (part) => {
+  // See `updateMessageSync`: callers inside an open synchronous transaction use
+  // this sync form so a write failure throws and rolls the transaction back
+  // instead of rejecting in the background.
+  export function updatePartSync(part: MessageV2.Part): MessageV2.Part {
     SessionExecutionContext.assertWritable()
     const time = Date.now()
     const store = SessionShard.storeFor(part.sessionID, { write: true })
@@ -1203,7 +1214,9 @@ export namespace Session {
       )
     })
     return part
-  })
+  }
+
+  export const updatePart = fn(UpdatePartInput, async (part) => updatePartSync(part))
 
   export const WriteScopeError = MessageWrite.ScopeError
 

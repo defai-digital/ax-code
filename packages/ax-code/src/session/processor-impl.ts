@@ -1441,11 +1441,13 @@ export namespace SessionProcessor {
                   // these rows: when session sharding is on, updatePart/updateMessage
                   // route to the project's shard DB (a separate connection/context
                   // from the registry `Database`), so a `Database.transaction` here
-                  // would wrap the wrong connection and each `.force()` call below
-                  // would silently auto-commit on its own — losing the atomicity
-                  // this batch exists for.
+                  // would wrap the wrong connection and each write below would
+                  // silently auto-commit on its own — losing the atomicity this
+                  // batch exists for. The sync writers are used (not the async
+                  // `.force()` forms) so a failed row write throws here and rolls
+                  // the batch back instead of rejecting in the background.
                   SessionShard.storeFor(input.sessionID, { write: true }).transaction(() => {
-                    Session.updatePart.force({
+                    Session.updatePartSync({
                       id: PartID.ascending(),
                       reason: usedTools ? "tool-calls" : finishReason,
                       snapshot: stepSnapshot,
@@ -1454,10 +1456,10 @@ export namespace SessionProcessor {
                       type: "step-finish",
                       tokens: usage.tokens,
                     })
-                    Session.updateMessage.force(input.assistantMessage)
+                    Session.updateMessageSync(input.assistantMessage)
                     if (patchData) {
                       const externalFiles = computeExternalFiles(patchData.files)
-                      Session.updatePart.force({
+                      Session.updatePartSync({
                         ...partBase(),
                         type: "patch",
                         hash: patchData.hash,
@@ -1931,10 +1933,10 @@ export namespace SessionProcessor {
           // writes below resolve to, not unconditionally on the registry `Database`.
           input.assistantMessage.time.completed = Date.now()
           SessionShard.storeFor(input.sessionID, { write: true }).transaction(() => {
-            for (const p of finalizedParts) Session.updatePart.force(p)
+            for (const p of finalizedParts) Session.updatePartSync(p)
             if (finalPatch) {
               const externalFiles = computeExternalFiles(finalPatch.files)
-              Session.updatePart.force({
+              Session.updatePartSync({
                 id: PartID.ascending(),
                 messageID: input.assistantMessage.id,
                 sessionID: input.sessionID,
@@ -1947,7 +1949,7 @@ export namespace SessionProcessor {
             // Use local toolcalls record instead of DB query to find incomplete tools
             for (const part of Object.values(toolcalls)) {
               if (part.type === "tool" && part.state.status !== "completed" && part.state.status !== "error") {
-                Session.updatePart.force({
+                Session.updatePartSync({
                   ...part,
                   state: {
                     ...part.state,
@@ -1962,7 +1964,7 @@ export namespace SessionProcessor {
                 })
               }
             }
-            Session.updateMessage.force(input.assistantMessage)
+            Session.updateMessageSync(input.assistantMessage)
           })
           // Compaction can rewrite this message immediately after return, so
           // all detached deltas must be delivered first.
