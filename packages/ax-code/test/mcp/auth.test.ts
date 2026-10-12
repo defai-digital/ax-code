@@ -6,8 +6,10 @@ import { McpAuth } from "../../src/mcp/auth"
 
 const authFile = path.join(Global.Path.data, "mcp-auth.json")
 
-async function flushMicrotasks(count = 3) {
-  for (let i = 0; i < count; i++) await Promise.resolve()
+// withLock guards a file: it takes a cross-process FileLock as well as the
+// in-process Lock, so its key must be a real path, not a synthetic label.
+function lockKey() {
+  return path.join(Global.Path.data, `mcp-auth-lock-${Math.random().toString(36).slice(2)}.json`)
 }
 
 async function resetAuthFile() {
@@ -19,12 +21,15 @@ afterEach(resetAuthFile)
 
 describe("McpAuth.withLock", () => {
   test("releases idle key entries after queued work drains", async () => {
-    const key = `mcp-auth:${Math.random().toString(36).slice(2)}`
+    const key = lockKey()
     const order: string[] = []
     let releaseFirst!: () => void
+    let firstStarted!: () => void
+    const started = new Promise<void>((resolve) => (firstStarted = resolve))
 
     const first = McpAuth.withLock(key, async () => {
       order.push("first:start")
+      firstStarted()
       await new Promise<void>((resolve) => {
         releaseFirst = resolve
       })
@@ -35,7 +40,7 @@ describe("McpAuth.withLock", () => {
       order.push("second")
     })
 
-    await flushMicrotasks()
+    await started
     expect(order).toEqual(["first:start"])
 
     releaseFirst()
@@ -45,12 +50,15 @@ describe("McpAuth.withLock", () => {
   })
 
   test("continues queued work and cleans up after a failure", async () => {
-    const key = `mcp-auth:${Math.random().toString(36).slice(2)}`
+    const key = lockKey()
     const order: string[] = []
     let releaseFirst!: () => void
+    let firstStarted!: () => void
+    const started = new Promise<void>((resolve) => (firstStarted = resolve))
 
     const first = McpAuth.withLock(key, async () => {
       order.push("first")
+      firstStarted()
       await new Promise<void>((resolve) => {
         releaseFirst = resolve
       })
@@ -62,7 +70,7 @@ describe("McpAuth.withLock", () => {
       return "ok"
     })
 
-    await flushMicrotasks()
+    await started
     expect(order).toEqual(["first"])
 
     releaseFirst()

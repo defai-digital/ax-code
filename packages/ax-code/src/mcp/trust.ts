@@ -6,6 +6,7 @@ import { Global } from "../global"
 import { Instance } from "../project/instance"
 import { Filesystem } from "../util/filesystem"
 import { Env } from "../util/env"
+import { FileLock } from "../util/filelock"
 import { Lock } from "../util/lock"
 
 export namespace McpTrust {
@@ -146,6 +147,7 @@ export namespace McpTrust {
     const currentScope = scope()
     const now = Date.now()
     using _lock = await Lock.write(filepath)
+    using _fileLock = await FileLock.acquire(filepath)
     const store = await read()
     store.records[key({ name, scope: currentScope, fingerprint: fp })] = {
       name,
@@ -165,6 +167,7 @@ export namespace McpTrust {
     const fp = fingerprint(name, config)
     const currentScope = scope()
     using _lock = await Lock.write(filepath)
+    using _fileLock = await FileLock.acquire(filepath)
     const store = await read()
     delete store.records[key({ name, scope: currentScope, fingerprint: fp })]
     await write(store)

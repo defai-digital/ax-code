@@ -3,6 +3,7 @@ import z from "zod"
 import { Global } from "../global"
 import { Filesystem } from "../util/filesystem"
 import { encryptField, decryptField } from "../auth/encryption"
+import { FileLock } from "../util/filelock"
 import { Lock } from "../util/lock"
 import { isRecord } from "../util/record"
 
@@ -44,7 +45,11 @@ export namespace McpAuth {
   }
 
   export async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    // In-process + cross-process: the TUI and the server are separate
+    // processes, so the in-process Lock alone lets one overwrite the other's
+    // write to the shared auth store.
     using _lock = await Lock.write(key)
+    using _fileLock = await FileLock.acquire(key)
     return await fn()
   }
 
