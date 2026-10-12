@@ -1,5 +1,6 @@
 import path from "node:path"
 import { Env } from "@/util/env"
+import { Filesystem } from "@/util/filesystem"
 import { isRecord } from "@/util/record"
 
 type DeriveOptions = {
@@ -41,10 +42,6 @@ function normalizeUrl(value: string): string | undefined {
   }
 }
 
-function isOutsideRelativePath(relative: string) {
-  return relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)
-}
-
 function normalizePath(value: string, worktree?: string): Candidate {
   // A leading tilde is not inside the worktree even though it is not an
   // absolute path here; the server expands it to the home directory.
@@ -57,7 +54,7 @@ function normalizePath(value: string, worktree?: string): Candidate {
   // `path.relative(worktree, worktree)` is "" — the worktree root itself is
   // the most inside-project path there is, so it must not fall through to the
   // external bucket (which is non-durable and forces re-approval).
-  if (!isOutsideRelativePath(relative)) {
+  if (!Filesystem.isOutsideRelative(relative)) {
     return { pattern: `path:${cap(relative || ".")}`, durable: true }
   }
 

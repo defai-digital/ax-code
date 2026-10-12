@@ -340,9 +340,6 @@ export namespace File {
 
   type IgnoreContext = { base: string; matcher: ReturnType<typeof ignore> }
 
-  const isOutsideRelativePath = (relative: string) =>
-    relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)
-
   async function readIgnoreContext(base: string): Promise<IgnoreContext | undefined> {
     const ig = ignore()
     const gitignore = path.join(base, ".gitignore")
@@ -373,7 +370,7 @@ export namespace File {
     if (Instance.project.vcs !== "git") return [] as IgnoreContext[]
     const bases: string[] = []
     const relativeFromWorktree = path.relative(Instance.project.worktree, directory)
-    if (!isOutsideRelativePath(relativeFromWorktree)) {
+    if (!Filesystem.isOutsideRelative(relativeFromWorktree)) {
       let current = Instance.project.worktree
       bases.push(current)
       for (const segment of relativeFromWorktree.split(path.sep).filter(Boolean)) {
@@ -390,7 +387,7 @@ export namespace File {
   function isIgnoredByContexts(absolute: string, type: "file" | "directory", contexts: IgnoreContext[]) {
     for (const context of contexts) {
       const relative = path.relative(context.base, absolute)
-      if (!relative || isOutsideRelativePath(relative)) continue
+      if (!relative || Filesystem.isOutsideRelative(relative)) continue
       const candidate = relative.split(path.sep).join("/") + (type === "directory" ? "/" : "")
       if (context.matcher.ignores(candidate)) return true
     }

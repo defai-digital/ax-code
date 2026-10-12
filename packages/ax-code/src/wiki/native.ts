@@ -42,6 +42,7 @@ import { isRecord } from "../util/record"
 import { AX_ENGINE_PROVIDER_ID } from "../provider/ax-engine/constants"
 import { isDedicatedPrivateGpuProviderID } from "../provider/private-gpu/presets"
 import { Provider } from "../provider/provider"
+import { Filesystem } from "../util/filesystem"
 import { parseJsonResult } from "../util/json-value"
 import { Log } from "../util/log"
 import { ProviderTransform } from "../provider/transform"
@@ -492,7 +493,7 @@ function renderTypedEvidence(request: WikiPageGenerationRequest): string | undef
 
 function repoRelative(file: string): string {
   const relative = path.relative(Instance.directory, file)
-  if (!relative || relative.startsWith("..")) return file.split(Instance.directory).join(".")
+  if (!relative || Filesystem.isOutsideRelative(relative)) return file.split(Instance.directory).join(".")
   return relative.split(path.sep).join("/")
 }
 

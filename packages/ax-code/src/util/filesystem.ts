@@ -219,6 +219,16 @@ export namespace Filesystem {
     return contains(a, b) || contains(b, a)
   }
 
+  /**
+   * True when a `path.relative` result escapes its base: an absolute path
+   * (e.g. a different Windows drive), the parent itself, or a `..` hop. The
+   * separator is required, so a sibling directory whose *name* merely starts
+   * with dots (for example `..cache`) is treated as inside.
+   */
+  export function isOutsideRelative(rel: string): boolean {
+    return isAbsolute(rel) || rel.startsWith("/") || rel === ".." || rel.startsWith(`..${sep}`)
+  }
+
   export function contains(parent: string, child: string) {
     // Resolve both paths before comparison so redundant segments
     // (`//`, `./`, `../` anywhere in the input) don't cause false
@@ -227,8 +237,7 @@ export namespace Filesystem {
     // yet still escape the parent. Note: this stays synchronous and
     // does NOT resolve symlinks — callers that need the stronger
     // guarantee must realpath() first.
-    const rel = relative(pathResolve(parent), pathResolve(child))
-    return !isAbsolute(rel) && rel !== ".." && !rel.startsWith(`..${sep}`) && !rel.startsWith("/")
+    return !isOutsideRelative(relative(pathResolve(parent), pathResolve(child)))
   }
 
   /** Replace a containing home-directory prefix with `~` for display. */

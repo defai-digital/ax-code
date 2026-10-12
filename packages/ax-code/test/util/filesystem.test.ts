@@ -430,6 +430,26 @@ describe("filesystem", () => {
     })
   })
 
+  describe("isOutsideRelative()", () => {
+    test("treats the base itself and nested paths as inside", () => {
+      expect(Filesystem.isOutsideRelative("")).toBe(false)
+      expect(Filesystem.isOutsideRelative("a/b")).toBe(false)
+    })
+
+    test("treats a sibling name that merely starts with dots as inside", () => {
+      expect(Filesystem.isOutsideRelative("..cache/x")).toBe(false)
+    })
+
+    test("treats a parent hop as outside", () => {
+      expect(Filesystem.isOutsideRelative("..")).toBe(true)
+      expect(Filesystem.isOutsideRelative("../x")).toBe(true)
+    })
+
+    test("treats an absolute path as outside", () => {
+      expect(Filesystem.isOutsideRelative("/abs")).toBe(true)
+    })
+  })
+
   describe("shortenHome()", () => {
     test("shortens the home path and its descendants", () => {
       expect(Filesystem.shortenHome("/Users/demo", "/Users/demo")).toBe("~")

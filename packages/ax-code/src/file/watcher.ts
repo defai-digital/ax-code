@@ -12,6 +12,7 @@ import { Flag } from "@/flag/flag"
 import { NativeAddon } from "@/native/addon"
 import { NativePerf } from "@/perf/native"
 import { Instance } from "@/project/instance"
+import { Filesystem } from "@/util/filesystem"
 import { git } from "@/util/git"
 import { lazy } from "@/util/lazy"
 import { withTimeout } from "@/util/timeout"
@@ -86,7 +87,7 @@ export namespace FileWatcher {
   function protecteds(dir: string) {
     return Protected.paths().filter((item) => {
       const rel = relativeToDir(dir, item)
-      return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel)
+      return rel !== "" && !Filesystem.isOutsideRelative(rel)
     })
   }
 
