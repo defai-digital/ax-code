@@ -1,8 +1,8 @@
-import { fireSubagentStop } from "./task"
 import { taskParentConstraints } from "./task-constraints"
 import { assistantError, assistantErrorMessage, errorDetails, isAbortError } from "./task-errors"
 import {
   assertSubagentDepth,
+  fireSubagentStop,
   subagentDescription,
   subagentSessionPermissions,
   subagentToolGates,

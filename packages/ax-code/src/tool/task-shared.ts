@@ -1,12 +1,16 @@
 import { Agent } from "../agent/agent"
 import { Permission } from "@/permission"
+import { Log } from "@/util/log"
 import { Session } from "../session"
 import type { SessionID } from "../session/schema"
 import { NotFoundError } from "../storage/db"
 
 // Shared boundary pieces for the task / task_parallel tools: the subagent
-// list rendered into both tool descriptions and the fan-out gates applied
-// to every child session.
+// list rendered into both tool descriptions, the fan-out gates applied to
+// every child session, the nesting-depth guard and the SubagentStop hook.
+// Neither tool imports the other; both depend on this module.
+
+const log = Log.create({ service: "task-tool" })
 
 /** Subagents visible to the caller, rendered into the tool description template. */
 export async function subagentDescription(template: string, caller: Agent.Info | undefined): Promise<string> {
@@ -99,5 +103,20 @@ export async function assertSubagentDepth(sessionID: SessionID, checkpoint?: () 
       throw new Error(`Maximum subagent nesting depth (${MAX_SUBAGENT_DEPTH}) exceeded`)
     }
     parent = current.parentID
+  }
+}
+
+// User lifecycle hooks (SubagentStop) — observational only; hook failures
+// never affect the task result.
+export async function fireSubagentStop(input: { sessionID: string; agent: string; status: "completed" | "failed" }) {
+  try {
+    const { LifecycleHooks } = await import("@/hooks/lifecycle")
+    await LifecycleHooks.runForWorkspace({
+      event: "SubagentStop",
+      sessionID: input.sessionID,
+      args: { agent: input.agent, status: input.status },
+    })
+  } catch (error) {
+    log.warn("SubagentStop lifecycle hooks failed", { sessionID: input.sessionID, error })
   }
 }

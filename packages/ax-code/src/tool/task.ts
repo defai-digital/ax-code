@@ -2,6 +2,7 @@ import { inheritTaskPermissionDenials, taskParentConstraints } from "./task-cons
 import { assistantError, assistantErrorMessage, errorDetails, isAbortError } from "./task-errors"
 import {
   assertSubagentDepth,
+  fireSubagentStop,
   subagentDescription,
   subagentSessionPermissions,
   subagentToolGates,
@@ -44,21 +45,6 @@ export class BackgroundCapacityError extends Error {
 const SUBAGENT_TIMEOUT_MS = 10 * 60 * 1000
 const SUBAGENT_FINALIZE_TIMEOUT_MS = 2 * 60 * 1000
 const log = Log.create({ service: "task-tool" })
-
-// User lifecycle hooks (SubagentStop) — observational only; hook failures
-// never affect the task result.
-export async function fireSubagentStop(input: { sessionID: string; agent: string; status: "completed" | "failed" }) {
-  try {
-    const { LifecycleHooks } = await import("@/hooks/lifecycle")
-    await LifecycleHooks.runForWorkspace({
-      event: "SubagentStop",
-      sessionID: input.sessionID,
-      args: { agent: input.agent, status: input.status },
-    })
-  } catch (error) {
-    log.warn("SubagentStop lifecycle hooks failed", { sessionID: input.sessionID, error })
-  }
-}
 
 function needsRecoveredResultReview(text: string) {
   return /\b(?:incomplete|unresolved|insufficient|no usable|not enough evidence|unable to determine|could not verify|needs? validation|requires? validation)\b/i.test(
