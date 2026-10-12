@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import { MUTATION_TOOLS } from "@/tool/mutation-tools"
 import type { AutonomousCompletionGate } from "@/control-plane/autonomous-completion-gate"
+import { toolCycleSignature } from "../tool-cycle-ring"
 
 const EMPTY_MODEL_TURN_INCOMPLETE_MESSAGE =
   `Autonomous mode received an empty model turn: the provider returned finish=other with zero input, ` +
@@ -309,7 +310,7 @@ export function toolSignaturesFromParts(parts: readonly ToolActivityPart[] | und
   const signatures: string[] = []
   for (const part of parts) {
     if (part.type !== "tool" || !part.tool) continue
-    signatures.push(`${part.tool}:${canonicalizePartInput(part.state?.input)}`)
+    signatures.push(toolCycleSignature(part.tool, part.state?.input))
   }
   return signatures
 }
@@ -367,17 +368,6 @@ export function hasFailedMutationAttempt(parts: readonly ToolActivityPart[] | un
   return parts.some(
     (part) => part.type === "tool" && MUTATING_PROGRESS_TOOLS.has(part.tool ?? "") && part.state?.status === "error",
   )
-}
-
-function canonicalizePartInput(input: unknown): string {
-  if (typeof input === "string") return input.length > 4096 ? input.slice(0, 4096) : input
-  try {
-    const serialized = JSON.stringify(input)
-    if (serialized === undefined) return String(input)
-    return serialized.length > 4096 ? serialized.slice(0, 4096) : serialized
-  } catch {
-    return "[unprintable]"
-  }
 }
 
 export function isReadOnlyExplorationTurn(parts: readonly ToolActivityPart[] | undefined): boolean {
@@ -448,12 +438,7 @@ type ReadOnlyExplorationDecision =
  * re-enable tools for the ax-engine read-only trap — not response-only /
  * goal-complete / truncated recovery paths that intentionally stay tool-free.
  */
-export type ForceTextReason =
-  | "ax_engine_read_only"
-  | "response_only"
-  | "goal_complete"
-  | "tool_only_breaker"
-  | "other"
+export type ForceTextReason = "ax_engine_read_only" | "response_only" | "goal_complete" | "tool_only_breaker" | "other"
 
 /**
  * Local-engine read-only convergence. Offer tools-enabled synthesis before
