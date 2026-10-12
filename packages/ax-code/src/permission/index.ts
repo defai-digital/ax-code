@@ -911,18 +911,12 @@ export namespace Permission {
       }
       return restrictions
     } catch (e) {
-      const code = errnoCode(e)
+      const code = Filesystem.errnoCode(e)
       if (code === "ENOENT") return []
       if (code !== undefined) throw e
       log.warn("policy file malformed — all rules ignored until fixed", { path: filepath, error: e })
       return []
     }
-  }
-
-  function errnoCode(error: unknown) {
-    if (typeof error !== "object" || error === null) return undefined
-    const code = (error as { code?: unknown }).code
-    return typeof code === "string" ? code : undefined
   }
 
   const EDIT_TOOLS = ["edit", "write", "apply_patch", "multiedit", "refactor_apply"]

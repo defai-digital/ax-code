@@ -170,15 +170,9 @@ export namespace AuditExport {
         },
       }
     } catch (error) {
-      const code = errnoCode(error)
+      const code = Filesystem.errnoCode(error)
       if (code !== undefined && code !== "ENOENT") throw error
       return {}
     }
-  }
-
-  function errnoCode(error: unknown) {
-    if (typeof error !== "object" || error === null) return undefined
-    const code = (error as { code?: unknown }).code
-    return typeof code === "string" ? code : undefined
   }
 }
