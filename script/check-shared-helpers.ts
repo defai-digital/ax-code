@@ -81,10 +81,18 @@ const CONSOLIDATED: Consolidated[] = [
     symbols: ["decodeNativeJsonValue", "parseNativeJson", "parseNativeJsonArray"],
     shims: ["packages/ax-code/src/util/native-json.ts", "packages/ax-code-reason/src/internal/native-json.ts"],
   },
+  {
+    slug: "lock",
+    symbols: ["Lock"],
+    shims: ["packages/ax-code/src/util/lock.ts", "packages/ax-code-intel/src/internal/lock.ts"],
+  },
 ]
 
 const reExport = (slug: string) => new RegExp(`export\\s+\\*\\s+from\\s+["']@ax-code/util/${slug}["']`)
-const reImplement = (symbol: string) => new RegExp(`export\\s+(?:async\\s+)?function\\s+${symbol}\\b`)
+// A moved helper can be a function, a namespace or a const; the guard must
+// recognise each shape so a shim cannot quietly re-implement a namespace.
+const reImplement = (symbol: string) =>
+  new RegExp(`export\\s+(?:async\\s+)?(?:function|namespace|const|class)\\s+${symbol}\\b`)
 
 async function read(rel: string): Promise<string | null> {
   try {
