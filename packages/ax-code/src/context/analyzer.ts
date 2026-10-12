@@ -9,6 +9,7 @@ import path from "path"
 import fs from "fs"
 import { readFile } from "node:fs/promises"
 import { toErrorMessage } from "../util/error-message"
+import { Filesystem } from "../util/filesystem"
 import { Log } from "../util/log"
 import { isNonEmptyRecord } from "../util/record"
 import { decodePackageJsonObject, packageJsonStringMap, parsePackageJsonObject } from "../util/package-json"
@@ -412,11 +413,6 @@ const SOURCE_FILE_EXTENSIONS = new Set([
   "hpp",
 ])
 
-function containsPath(parent: string, child: string): boolean {
-  const relative = path.relative(path.resolve(parent), path.resolve(child))
-  return relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)
-}
-
 // Recursive source-file walker. Unlike the Glob shim it prunes ignored
 // directories (node_modules, .git, dist, ...) instead of descending into
 // them, which keeps the project-root fallback scan safe.
@@ -430,7 +426,7 @@ async function* scanSourceFiles(cwd: string): AsyncGenerator<string> {
       if (entry.name.startsWith(".")) continue
       if (entry.isSymbolicLink()) continue
       const full = path.join(current, entry.name)
-      if (!containsPath(cwd, full)) continue
+      if (!Filesystem.contains(cwd, full)) continue
       const relative = path.relative(cwd, full).split(path.sep).join("/")
       if (entry.isDirectory()) {
         if (!FileIgnore.match(relative)) stack.push(full)
@@ -456,7 +452,7 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
   // back to scanning the project root itself so flat or scripts-only
   // projects are still measured.
   const scanDir = info.directories.source ? path.join(root, info.directories.source) : root
-  if (!containsPath(root, scanDir)) throw new Error(`Complexity scan directory escapes project root: ${scanDir}`)
+  if (!Filesystem.contains(root, scanDir)) throw new Error(`Complexity scan directory escapes project root: ${scanDir}`)
   try {
     const batch: string[] = []
     for await (const file of scanSourceFiles(scanDir)) {
@@ -466,7 +462,7 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
         const results = await Promise.all(
           batchToRead.map((f) => {
             const sourceFile = path.join(scanDir, f)
-            if (!containsPath(scanDir, sourceFile)) return ""
+            if (!Filesystem.contains(scanDir, sourceFile)) return ""
             return readFile(sourceFile, "utf-8").catch(() => "")
           }),
         )
@@ -483,7 +479,7 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
       const results = await Promise.all(
         batchToRead.map((f) => {
           const sourceFile = path.join(scanDir, f)
-          if (!containsPath(scanDir, sourceFile)) return ""
+          if (!Filesystem.contains(scanDir, sourceFile)) return ""
           return readFile(sourceFile, "utf-8").catch(() => "")
         }),
       )

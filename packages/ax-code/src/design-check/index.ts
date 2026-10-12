@@ -12,6 +12,7 @@ import fs from "fs/promises"
 import path from "path"
 import { ALL_RULES } from "./rules"
 import { Glob } from "../util/glob"
+import { Filesystem } from "../util/filesystem"
 import type { DesignCheckConfig, CheckResult, FileResult, Violation } from "./types"
 
 const DEFAULT_CONFIG: DesignCheckConfig = {
@@ -66,22 +67,17 @@ function included(relative: string, patterns: string[]): boolean {
   return patterns.some((pattern) => Glob.match(pattern, relative))
 }
 
-function containsPath(parent: string, child: string): boolean {
-  const relative = path.relative(path.resolve(parent), path.resolve(child))
-  return relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)
-}
-
 async function findFiles(dir: string, ignore: string[], include: string[]): Promise<string[]> {
   const results: string[] = []
   const root = path.resolve(dir)
 
   async function walk(current: string) {
-    if (!containsPath(root, current)) throw new Error(`Design-check path escapes scan root: ${current}`)
+    if (!Filesystem.contains(root, current)) throw new Error(`Design-check path escapes scan root: ${current}`)
     const entries = await fs.readdir(current, { withFileTypes: true })
     for (const entry of entries) {
       if (entry.isSymbolicLink()) continue
       const fullPath = path.resolve(current, entry.name)
-      if (!containsPath(root, fullPath)) continue
+      if (!Filesystem.contains(root, fullPath)) continue
       const relative = path.relative(root, fullPath).split(path.sep).join("/")
       const parts = relative.split("/")
       if (ignored(relative, parts, ignore)) continue
