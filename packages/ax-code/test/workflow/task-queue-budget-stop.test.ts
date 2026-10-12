@@ -15,7 +15,7 @@ describe("workflow budget stop", () => {
     await Instance.disposeAll()
   })
 
-  test("a budget-failed first-success phase is not resurrected by a sibling completion", async () => {
+  test.each([0, 1])("a budget-failed phase stays failed when child %s later completes", async (completionIndex) => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
     process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
@@ -71,12 +71,14 @@ describe("workflow budget stop", () => {
           // budget-failed phase and run failed and must not start the next
           // phase.
           const start = vi.spyOn(WorkflowScheduler, "start")
-          const sibling = itemFor(children[1]!.id)
+          const sibling = itemFor(children[completionIndex]!.id)
           await TaskQueue.setStatus({ id: sibling.id, status: "completed" })
           await WorkflowTaskQueue.syncItem(await TaskQueue.get(sibling.id))
 
           const after = await WorkflowRun.getDetail(run.id)
           expect(after.status).toBe("failed")
+          expect(after.children.find((candidate) => candidate.id === children[0]!.id)?.status).toBe("failed")
+          expect(after.children.find((candidate) => candidate.id === children[0]!.id)?.error).toContain("budget")
           expect(after.phases.find((candidate) => candidate.id === phase.id)?.status).toBe("failed")
           expect(after.phases.find((candidate) => candidate.specPhaseID === "summarize")?.status).toBe("queued")
           expect(start).not.toHaveBeenCalled()

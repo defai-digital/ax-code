@@ -52,7 +52,10 @@ export namespace WorkflowTaskQueue {
     if (detail.status === "cancelled") return detail
 
     const childStatus = childStatusFromQueueStatus(item.status)
-    const childChanged = child.status !== childStatus || child.error !== item.error
+    const childBudgetStopped =
+      child.status === "failed" &&
+      detail.budgetLedger.some((entry) => entry.kind === "exceeded" && entry.childID === child.id)
+    const childChanged = !childBudgetStopped && (child.status !== childStatus || child.error !== item.error)
     if (childChanged) {
       await WorkflowRun.setChildStatus({
         id: child.id,
