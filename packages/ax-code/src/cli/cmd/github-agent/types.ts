@@ -174,3 +174,13 @@ export function formatPromptTooLargeError(files: { filename: string; content: st
       : ""
   return `PROMPT_TOO_LARGE: The prompt exceeds the model's context limit.${fileDetails}`
 }
+
+/**
+ * Read and normalize the OIDC base URL for the GitHub App integration.
+ * Trailing slashes are stripped so `url/path` composition stays single-slash.
+ */
+export function requireOidcBaseUrl(): string {
+  const value = process.env["OIDC_BASE_URL"]
+  if (!value) throw new Error("OIDC_BASE_URL environment variable is required for GitHub App integration")
+  return value.replace(/\/+$/, "")
+}

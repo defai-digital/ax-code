@@ -26,7 +26,7 @@ import { isNonEmptyRecord } from "../../../util/record"
 import { parseJsonResult } from "../../../util/json-value"
 import { Process } from "../../../util/process"
 import { UI } from "../../ui"
-import { SUPPORTED_EVENTS, USER_EVENTS, REPO_EVENTS } from "./types"
+import { SUPPORTED_EVENTS, USER_EVENTS, REPO_EVENTS, requireOidcBaseUrl } from "./types"
 import type { UserEvent, RepoEvent } from "./types"
 import { extractResponseText, formatPromptTooLargeError } from "./types"
 import {
@@ -55,12 +55,6 @@ import {
 } from "./github-api"
 import { getUserPrompt, buildPromptDataForIssue, buildPromptDataForPR, fetchIssueData, fetchPRData } from "./prompts"
 import type { PromptFile } from "./prompts"
-
-function requireOidcBaseUrl(): string {
-  const value = process.env["OIDC_BASE_URL"]
-  if (!value) throw new Error("OIDC_BASE_URL environment variable is required for GitHub App integration")
-  return value.replace(/\/+$/, "")
-}
 
 export function formatGitHubAgentToolTitle(input: { title?: unknown; input?: unknown }): string {
   if (typeof input.title === "string" && input.title.length > 0) return input.title

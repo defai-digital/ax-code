@@ -10,13 +10,7 @@ import { ModelsDev } from "../../../provider/models"
 import { Instance } from "../../../project/instance"
 import { git } from "../../../util/git"
 import { setTimeout as sleep } from "node:timers/promises"
-import { parseGitHubRemote, WORKFLOW_FILE } from "./types"
-
-function requireOidcBaseUrl(): string {
-  const value = process.env["OIDC_BASE_URL"]
-  if (!value) throw new Error("OIDC_BASE_URL environment variable is required for GitHub App integration")
-  return value.replace(/\/+$/, "")
-}
+import { parseGitHubRemote, WORKFLOW_FILE, requireOidcBaseUrl } from "./types"
 
 function browserOpenCommand(url: string): { command: string; args: string[] } {
   if (process.platform === "win32") return { command: "start", args: ["", url] }
