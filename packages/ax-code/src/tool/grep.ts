@@ -211,11 +211,14 @@ export const GrepTool = Tool.define("grep", {
     // Preserve source line boundaries: binary conversion can replace NUL with
     // newlines when ripgrep searches an explicitly named file.
     if (isFile) args.push("--text")
-    // `--hidden` would otherwise descend into .git; the native search and
-    // Ripgrep.search both skip it.
-    else args.push("--glob", "!.git")
     if (params.include) {
       args.push("--glob", params.include)
+    }
+    if (!isFile) {
+      // `--hidden` would otherwise descend into .git; the native search and
+      // Ripgrep.search both skip it. Appended after the include glob because
+      // ripgrep's last matching glob wins.
+      args.push("--glob", "!.git")
     }
     args.push("--", searchPath)
     const commandTimeoutMs = 120_000

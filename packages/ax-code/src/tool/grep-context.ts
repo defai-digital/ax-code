@@ -28,18 +28,11 @@ export async function searchWithContext(
   abort: AbortSignal,
 ) {
   abort.throwIfAborted()
-  const args = [
-    "--json",
-    "--hidden",
-    "--glob",
-    "!.git",
-    "--context",
-    String(params.context),
-    "--regexp",
-    params.pattern,
-  ]
+  const args = ["--json", "--hidden", "--context", String(params.context), "--regexp", params.pattern]
   if (params.isFile) args.push("--text")
   if (params.include) args.push("--glob", params.include)
+  // Appended after any include glob: ripgrep's last matching glob wins.
+  args.push("--glob", "!.git")
   args.push("--", params.path)
   const proc = Process.spawn([await Ripgrep.filepath(), ...args], {
     stdout: "pipe",
