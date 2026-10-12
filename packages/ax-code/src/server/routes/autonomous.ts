@@ -49,7 +49,13 @@ export const AutonomousRoutes = lazy(() =>
           // back to the current scoped/env state, not to a hard `true`:
           // defaulting to true here re-enabled autonomous mode that an env or
           // global-config off had disabled, on every UI poll of this route.
-          read: (config) => config?.autonomous ?? ScopedFlag.autonomous(),
+          // The env-derived fallback is reported as not configured so it does
+          // not pin this directory for every other silent directory (see
+          // readProjectConfigFeatureState).
+          read: (config) =>
+            config?.autonomous === undefined
+              ? { enabled: ScopedFlag.autonomous(), configured: false }
+              : { enabled: config.autonomous, configured: true },
         })
         return c.json(state)
       },

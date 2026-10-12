@@ -72,6 +72,16 @@ export namespace ScopedFlag {
     return managed.has(name)
   }
 
+  /**
+   * Test seam: forget every recorded directory and managed marker. The state
+   * above is module-global for the life of the process, so tests that exercise
+   * silent-directory env fallbacks would otherwise depend on test order.
+   */
+  export function resetForTests() {
+    managed.clear()
+    valuesByDirectory.clear()
+  }
+
   /** Scoped value for the current instance directory, if one was recorded. */
   export function peek(name: ScopedFlagName): boolean | undefined {
     const directory = resolveDirectory?.()

@@ -77,12 +77,16 @@ export function persistProjectConfigBooleanFeatureResponse(
 
 export async function readProjectConfigFeatureState(options: {
   featureFlag: string
-  read: (config: Config.Info | undefined) => boolean
+  read: (config: Config.Info | undefined) => { enabled: boolean; configured: boolean }
 }) {
   const config = await readProjectConfig()
-  const enabled = options.read(config)
+  const { enabled, configured } = options.read(config)
   FeatureFlag.set(options.featureFlag, enabled)
-  if (isScopedFlagName(options.featureFlag)) {
+  // Only a value that came from the project config pins this directory.
+  // Recording an env-derived fallback marked the flag "managed", after which
+  // the next silent directory resolved to the feature default instead of the
+  // pristine env the user set — re-enabling a mode the env had disabled.
+  if (configured && isScopedFlagName(options.featureFlag)) {
     ScopedFlag.recordCurrent(options.featureFlag, enabled)
   }
   return { enabled }

@@ -36,7 +36,13 @@ export const SmartLlmRoutes = lazy(() =>
       async (c) => {
         const state = await readProjectConfigFeatureState({
           featureFlag: "AX_CODE_SMART_LLM",
-          read: (config) => config?.routing?.llm ?? ScopedFlag.smartLlm(),
+          // Same contract as the autonomous route: an env-derived fallback is
+          // not recorded, so a silent directory cannot pin the flag for every
+          // other silent directory (see readProjectConfigFeatureState).
+          read: (config) =>
+            config?.routing?.llm === undefined
+              ? { enabled: ScopedFlag.smartLlm(), configured: false }
+              : { enabled: config.routing.llm, configured: true },
         })
         return c.json(state)
       },
