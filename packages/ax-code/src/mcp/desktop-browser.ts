@@ -193,7 +193,9 @@ export namespace DesktopBrowser {
     if (policy?.allow === false) return fail("WebMCP is disabled by managed policy")
     const providers = state()
     for (const old of providers.values()) {
-      if (old.sessionID === input.sessionID) {
+      // Providers that stopped polling are only evicted lazily by provider(); sweep them here so
+      // dead connections cannot fill the table and block every later enrollment.
+      if (old.sessionID === input.sessionID || Date.now() - old.touched > 45000) {
         retire(old)
         providers.delete(old.id)
       }
@@ -313,6 +315,11 @@ export namespace DesktopBrowser {
     await checkPolicy(binding)
     if (signal.aborted) return fail("Browser request was aborted")
     const entry = bound(binding)
+    // The catalog can change within the same document while the policy check was awaited.
+    if (operation === "invoke") {
+      const tool = entry.snapshot.tools.find((item) => item.name === extra.toolName)
+      if (!tool || digest(tool) !== extra.digest) return fail("Tool definition changed; list tools and authorize again")
+    }
     if (entry.pending.size !== 0) return fail("Another browser invocation is in progress")
     const request: Request = { ...binding, ...extra, requestID: randomUUID(), operation, deadline: Date.now() + 30000 }
     return new Promise<Reply>((resolve, reject) => {

@@ -13,6 +13,7 @@ import { Instance } from "@/project/instance"
 import { Session } from "@/session"
 import { Permission } from "@/permission"
 import { Bus } from "@/bus"
+import { Config } from "@/config/config"
 import { MessageID } from "@/session/schema"
 import type { Tool } from "@/tool/tool"
 import { tmpdir } from "../fixture/fixture"
@@ -136,6 +137,44 @@ describe("private desktop WebMCP provider", () => {
       expect((await DesktopBrowser.poll(connection.providerID, new AbortController().signal)).canceled).toContain(
         batch.request!.requestID,
       )
+    })
+  })
+  test("a catalog change while the policy check is awaited rejects the stale invocation", async () => {
+    await fixture(async (session, state) => {
+      const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: state })
+      const binding = DesktopBrowser.forSession(session.id)
+      const original = Config.get
+      vi.spyOn(Config, "get").mockImplementation(async (...args) => {
+        DesktopBrowser.update(connection.providerID, {
+          ...state,
+          tools: [{ ...state.tools[0]!, description: "Changed" }],
+        })
+        return original(...args)
+      })
+      await expect(
+        DesktopBrowser.invoke(
+          binding,
+          "echo",
+          DesktopBrowser.digest(state.tools[0]!),
+          {},
+          new AbortController().signal,
+        ),
+      ).rejects.toMatchObject({ data: { reason: expect.stringContaining("Tool definition changed") } })
+      DesktopBrowser.disconnect(connection.providerID)
+    })
+  })
+  test("enrollment evicts providers that stopped polling instead of hitting the provider limit", async () => {
+    await fixture(async (session, state) => {
+      for (let i = 0; i < 8; i++) {
+        const other = await Session.create({})
+        await DesktopBrowser.enroll({ sessionID: other.id, snapshot: state })
+      }
+      await expect(DesktopBrowser.enroll({ sessionID: session.id, snapshot: state })).rejects.toThrow()
+      const now = Date.now()
+      vi.spyOn(Date, "now").mockReturnValue(now + 46000)
+      const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: state })
+      expect(connection.providerID).toBeTruthy()
+      DesktopBrowser.disconnect(connection.providerID)
     })
   })
   test("abort reaches the private native cancellation lane and rejects late results", async () => {
