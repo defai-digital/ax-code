@@ -128,10 +128,26 @@ describe("mcp list --json", () => {
     expect(resolveMcpStatus({ status: "connected" })).toEqual({ status: "connected", enabled: true })
     expect(resolveMcpStatus({ status: "disabled" })).toEqual({ status: "disabled", enabled: false })
     expect(resolveMcpStatus({ status: "needs_auth" })).toEqual({ status: "needs authentication", enabled: true })
+    expect(resolveMcpStatus({ status: "needs_trust", fingerprint: "fp", source: { kind: "project" } })).toEqual({
+      status: "needs trust",
+      enabled: true,
+    })
+    expect(resolveMcpStatus({ status: "needs_client_registration", error: "register me" })).toEqual({
+      status: "needs client registration",
+      enabled: true,
+      error: "register me",
+    })
     expect(resolveMcpStatus({ status: "failed", error: "boom" })).toEqual({
       status: "failed",
       enabled: true,
       error: "boom",
+    })
+    // A managed-policy denial is terminal: the text view must not report it as
+    // "failed" (it fell through to the failed branch before this was covered).
+    expect(resolveMcpStatus({ status: "blocked", reason: "managed_policy", error: "denied by policy" })).toEqual({
+      status: "blocked",
+      enabled: false,
+      error: "denied by policy",
     })
   })
 

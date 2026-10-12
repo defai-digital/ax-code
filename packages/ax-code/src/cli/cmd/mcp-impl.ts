@@ -291,36 +291,31 @@ export const McpListCommand = cmd({
           const hasOAuth = isMcpRemote(serverConfig) && !!serverConfig.oauth
           const hasStoredTokens = await MCP.hasStoredTokens(name)
 
+          // Take the label from the shared resolver the JSON view also uses, so
+          // a status this text view forgets (blocked was one) cannot be
+          // rendered as the wrong label. Only the icon and hint vary per status.
+          const statusText = resolveMcpStatus(status).status
           let statusIcon: string
-          let statusText: string
           let hint = ""
 
           if (!status) {
             statusIcon = "○"
-            statusText = "not initialized"
           } else if (status.status === "connected") {
             statusIcon = "✓"
-            statusText = "connected"
             if (hasOAuth && hasStoredTokens) {
               hint = " (OAuth)"
             }
           } else if (status.status === "disabled") {
             statusIcon = "○"
-            statusText = "disabled"
           } else if (status.status === "needs_auth") {
             statusIcon = "⚠"
-            statusText = "needs authentication"
           } else if (status.status === "needs_trust") {
             statusIcon = "⚠"
-            statusText = "needs trust"
             hint = `\n    Source: ${status.source.kind}. Run: ax-code mcp trust ${name}`
-          } else if (status.status === "needs_client_registration") {
-            statusIcon = "✗"
-            statusText = "needs client registration"
-            hint = "\n    " + status.error
           } else {
+            // failed, needs_client_registration and blocked all surface the
+            // recorded error.
             statusIcon = "✗"
-            statusText = "failed"
             hint = "\n    " + status.error
           }
 
