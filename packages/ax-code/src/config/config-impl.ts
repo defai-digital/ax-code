@@ -1700,7 +1700,7 @@ export namespace Config {
   // Project files load .json before .jsonc, so the .jsonc wins when both
   // exist: writing a project that uses ax-code.jsonc into a fresh ax-code.json
   // would be silently shadowed on reload. Prefer the file that is live.
-  function projectConfigFile() {
+  export function projectConfigFile() {
     // @scan-suppress security_scan - file is the fixed leaf ax-code.jsonc or ax-code.json under the instance directory.
     const candidates = ["ax-code.jsonc", "ax-code.json"].map((file) => path.join(Instance.directory, file))
     for (const file of candidates) {

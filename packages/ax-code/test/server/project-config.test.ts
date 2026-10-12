@@ -174,4 +174,27 @@ describe("project config route decoding", () => {
     expect(updated).toContain('"mode": "full-access"')
     expect(updated).toContain('"network": true')
   })
+
+  test("patches the live ax-code.jsonc instead of creating a shadowed ax-code.json", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const jsonc = path.join(tmp.path, "ax-code.jsonc")
+    await fs.writeFile(jsonc, `{\n  // keep this comment\n  "model": "openai/gpt-5"\n}\n`)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await updateProjectConfig((config) => {
+          config.super_long = true
+        })
+        // The read path must resolve the same live file the write used.
+        expect(await readProjectConfig()).toMatchObject({ super_long: true })
+      },
+    })
+
+    const updated = await fs.readFile(jsonc, "utf-8")
+    expect(updated).toContain("// keep this comment")
+    expect(updated).toContain('"super_long": true')
+    // The shadowed .json must not be created behind the .jsonc.
+    await expect(fs.access(path.join(tmp.path, "ax-code.json"))).rejects.toMatchObject({ code: "ENOENT" })
+  })
 })

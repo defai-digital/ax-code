@@ -1,4 +1,3 @@
-import path from "path"
 import z from "zod"
 import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
@@ -90,7 +89,10 @@ export async function readProjectConfigFeatureState(options: {
 }
 
 function filepath() {
-  return path.join(Instance.directory, "ax-code.json")
+  // Patch the file that actually takes effect: project config loads .json
+  // before .jsonc, so ax-code.jsonc wins when both exist and writing a fresh
+  // ax-code.json would be silently shadowed on reload.
+  return Config.projectConfigFile()
 }
 
 async function readProjectConfigTextForUpdate(file: string) {
