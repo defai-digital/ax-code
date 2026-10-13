@@ -15,7 +15,8 @@ import { ScheduledTaskID, ScheduledTaskRunID, TaskQueueID, type SessionID } from
 import { ScheduledTaskTable, ScheduledTaskRunTable } from "./session.sql"
 import { SessionShard } from "./shard"
 import { TaskQueue } from "./task-queue"
-import { WorkflowRun as WorkflowRunState, type WorkflowRunDetail } from "@/workflow/state"
+import { WorkflowRun as WorkflowRunState, type WorkflowRunDetail, type WorkflowRunID } from "@/workflow/state"
+import { WorkflowRunTable } from "@/workflow/workflow.sql"
 
 type WorkflowTemplateID = import("@/workflow/template").WorkflowTemplate.ID
 type WorkflowStartOptions = import("@/workflow/scheduler").WorkflowScheduler.StartOptions
@@ -1120,31 +1121,49 @@ export namespace ScheduledTask {
   // run-now and a scheduler tick double-fire the same occurrence.
   function hasOpenRunIn(db: Database.TxOrDb, taskID: ScheduledTaskID, now: number, deadlineMs: number): boolean {
     const staleBefore = now - (deadlineMs + ORPHAN_GRACE_MS)
-    const row = db
-      .select({ id: ScheduledTaskRunTable.id })
+    const rows = db
+      .select({
+        id: ScheduledTaskRunTable.id,
+        timeStarted: ScheduledTaskRunTable.time_started,
+        workflowRunID: ScheduledTaskRunTable.workflow_run_id,
+      })
       .from(ScheduledTaskRunTable)
-      .where(
-        and(
-          eq(ScheduledTaskRunTable.task_id, taskID),
-          eq(ScheduledTaskRunTable.status, "running"),
-          gt(ScheduledTaskRunTable.time_started, staleBefore),
-        ),
-      )
-      .limit(1)
+      .where(and(eq(ScheduledTaskRunTable.task_id, taskID), eq(ScheduledTaskRunTable.status, "running")))
+      .all()
+    for (const row of rows) {
+      if (row.timeStarted !== null && row.timeStarted > staleBefore) return true
+      // A workflow dispatch row stays `running` for the workflow's whole
+      // lifetime; the queue-path deadline cannot bound it. While the workflow
+      // is still executing the row stays open even past deadline+grace —
+      // otherwise the next occurrence would double-fire and the live
+      // workflow's outcome would find no row.
+      if (row.workflowRunID && isWorkflowRunLive(db, row.workflowRunID)) return true
+    }
+    return false
+  }
+
+  // Mirrors isTerminalRunStatus (workflow/run/internal.ts, which imports the
+  // session module and cannot be imported back): only a workflow that is gone
+  // or terminal leaves its dispatch row a genuine orphan.
+  function isTerminalWorkflowRunStatus(status: WorkflowRunState.Status): boolean {
+    return status === "completed" || status === "failed" || status === "cancelled"
+  }
+
+  function isWorkflowRunLive(db: Database.TxOrDb, workflowRunID: string): boolean {
+    const workflowRun = db
+      .select({ status: WorkflowRunTable.status })
+      .from(WorkflowRunTable)
+      .where(eq(WorkflowRunTable.id, workflowRunID as WorkflowRunID))
       .get()
-    return row !== undefined
+    return workflowRun !== undefined && !isTerminalWorkflowRunStatus(workflowRun.status)
   }
 
   function reconcileOrphanRuns(taskID: ScheduledTaskID, now: number, deadlineMs: number): void {
     const staleBefore = now - (deadlineMs + ORPHAN_GRACE_MS)
     SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
-      db.update(ScheduledTaskRunTable)
-        .set({
-          status: "failed",
-          error: `${ORPHAN_RUN_ERROR_PREFIX} no outcome was recorded (backend likely restarted)`,
-          time_completed: now,
-          time_updated: now,
-        })
+      const candidates = db
+        .select({ id: ScheduledTaskRunTable.id, workflowRunID: ScheduledTaskRunTable.workflow_run_id })
+        .from(ScheduledTaskRunTable)
         .where(
           and(
             eq(ScheduledTaskRunTable.task_id, taskID),
@@ -1152,7 +1171,24 @@ export namespace ScheduledTask {
             lte(ScheduledTaskRunTable.time_started, staleBefore),
           ),
         )
-        .run()
+        .all()
+      for (const candidate of candidates) {
+        // A workflow dispatch keeps the run row `running` for the workflow's
+        // whole lifetime, so an old row is an orphan only when its workflow is
+        // gone or terminal. Failing a row whose workflow is still executing
+        // would mislabel a live execution as orphaned, and the late outcome
+        // would lose its row.
+        if (candidate.workflowRunID && isWorkflowRunLive(db, candidate.workflowRunID)) continue
+        db.update(ScheduledTaskRunTable)
+          .set({
+            status: "failed",
+            error: `${ORPHAN_RUN_ERROR_PREFIX} no outcome was recorded (backend likely restarted)`,
+            time_completed: now,
+            time_updated: now,
+          })
+          .where(eq(ScheduledTaskRunTable.id, candidate.id))
+          .run()
+      }
     })
   }
 
