@@ -89,12 +89,14 @@ export namespace SessionProcessor {
   const CREDENTIAL_URL_FIELD_NAMES = new Set(["url", "uri", "href", "endpoint", "base_url", "baseurl", "webhook"])
   // Redaction must reach arbitrarily deep nested inputs — MCP and custom tools
   // put credentials at paths like request.options.transport.headers.Authorization
-  // — so it is bounded by budget, not by a shallow depth cap: a hard depth bound
-  // for pathological nesting, plus a per-input node budget for visited
-  // objects/arrays. When the budget runs out the remaining subtree is returned
-  // untouched while the walk continues over its siblings.
+  // — so it is bounded by budget, not by a shallow depth cap. The hard depth
+  // bound covers pathological nesting; the bulk budget caps how many array
+  // elements a single top-level field may visit. A credential lives on a
+  // *named* object key, so plain-object descent always completes and a wide
+  // array can never starve a sibling field. Only array elements past a field's
+  // budget are returned untouched.
   const TOOL_INPUT_REDACTION_DEPTH = 32
-  const TOOL_INPUT_REDACTION_NODE_BUDGET = 2_000
+  const TOOL_INPUT_REDACTION_BULK_BUDGET = 2_000
 
   interface ToolInputRedactionBudget {
     remaining: number
@@ -105,9 +107,9 @@ export namespace SessionProcessor {
    * nothing in it is a credential. Copy-on-write keeps the common case — a tool
    * input with no credential field, including a large document payload — free of
    * allocations on the per-tool-call path. Traversal is bounded by a depth of
-   * `TOOL_INPUT_REDACTION_DEPTH` and a per-input budget of
-   * `TOOL_INPUT_REDACTION_NODE_BUDGET` visited objects/arrays; a subtree past
-   * either bound is returned untouched and its siblings still get walked.
+   * `TOOL_INPUT_REDACTION_DEPTH`, and by a per-field budget of
+   * `TOOL_INPUT_REDACTION_BULK_BUDGET` visited array elements; objects past the
+   * depth bound and array elements past the budget are returned untouched.
    */
   function redactToolInputValue(key: string, value: unknown, depth: number, budget: ToolInputRedactionBudget): unknown {
     if (Env.isCredentialKeyName(key)) return "[redacted]"
@@ -117,13 +119,15 @@ export namespace SessionProcessor {
       return redacted === value ? value : redacted
     }
     if (value === null || typeof value !== "object" || depth >= TOOL_INPUT_REDACTION_DEPTH) return value
-    if (budget.remaining <= 0) return value
-    budget.remaining--
     // Array elements inherit the parent key: a URL field can hold a list, and
     // the element index is not a field name of its own.
     if (Array.isArray(value)) {
       let next: unknown[] | undefined
       for (let index = 0; index < value.length; index++) {
+        // Bulk arrays are the only traversal the budget caps. Breaking here
+        // skips the rest of this array; every later field still gets its own.
+        if (budget.remaining <= 0) break
+        budget.remaining--
         const item = value[index]
         const redacted = redactToolInputValue(key, item, depth + 1, budget)
         if (redacted === item) continue
@@ -144,8 +148,10 @@ export namespace SessionProcessor {
 
   function redactToolInputFields(input: Record<string, unknown>): Record<string, unknown> {
     let next: Record<string, unknown> | undefined
-    const budget: ToolInputRedactionBudget = { remaining: TOOL_INPUT_REDACTION_NODE_BUDGET }
     for (const [key, value] of Object.entries(input)) {
+      // One budget per top-level field: exhausting it on a bulk array must not
+      // leave a later field's credentials in clear text.
+      const budget: ToolInputRedactionBudget = { remaining: TOOL_INPUT_REDACTION_BULK_BUDGET }
       const redacted = redactToolInputValue(key, value, 0, budget)
       if (redacted === value) continue
       next ??= { ...input }

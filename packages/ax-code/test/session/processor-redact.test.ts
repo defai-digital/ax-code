@@ -207,3 +207,17 @@ test("keeps the traversal budget bounded on huge credential-free inputs", () => 
   }
   expect(SessionProcessor.redactPersistedToolInput("mcp__server__bulk", input)).toBe(input)
 })
+
+test("a wide sibling array cannot starve a later credential field", () => {
+  // The bulk array spends the whole traversal budget first. Redaction must
+  // still walk the plain-object path where named credentials live, so the
+  // bearer token is hidden instead of persisted in clear text.
+  const redacted = SessionProcessor.redactPersistedToolInput("mcp__server__bulk", {
+    files: Array.from({ length: 5_000 }, (_, index) => ({ index, label: `item-${index}` })),
+    request: { options: { transport: { headers: { Authorization: "Bearer placeholder-token-value" } } } },
+  })
+  expect(redacted).toEqual({
+    files: Array.from({ length: 5_000 }, (_, index) => ({ index, label: `item-${index}` })),
+    request: { options: { transport: { headers: { Authorization: "[redacted]" } } } },
+  })
+})
