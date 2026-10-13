@@ -299,4 +299,94 @@ describe("provider error decoding", () => {
     expect(() => ProviderError.parseStreamError(body)).not.toThrow()
     expect(ProviderError.parseStreamError(body)).toBeUndefined()
   })
+
+  test("api errors keep only operational response headers and a redacted body", () => {
+    const parsed = ProviderError.parseAPICallError({
+      providerID: ProviderID.make("openai"),
+      error: new APICallError({
+        message: "Bad Request",
+        url: "https://example.com",
+        requestBodyValues: {},
+        statusCode: 400,
+        responseHeaders: {
+          "Set-Cookie": "session=abc123; Path=/; HttpOnly",
+          Authorization: "Bearer sk-live-abc123",
+          "Retry-After": "7",
+          "X-Request-Id": "req_891",
+        },
+        responseBody: JSON.stringify({
+          error: { type: "invalid_request_error", message: "Invalid API key provided", api_key: "sk-live-abc123" },
+        }),
+        isRetryable: false,
+      }),
+    })
+
+    if (parsed.type !== "api_error") throw new Error(`expected api_error, got ${parsed.type}`)
+    expect(parsed.responseHeaders).toEqual({ "Retry-After": "7", "X-Request-Id": "req_891" })
+    expect(parsed.responseBody).toBeDefined()
+    expect(parsed.responseBody).not.toContain("sk-live-abc123")
+    expect(parsed.responseBody).toContain('"api_key":"[redacted]"')
+    expect(parsed.responseBody).toContain("Invalid API key provided")
+    // The human-readable message is still derived from the raw body.
+    expect(parsed.message).toBe("Bad Request: Invalid API key provided")
+  })
+
+  test("api errors retain retry guidance headers including retry-after-ms and x-ratelimit variants", () => {
+    const parsed = ProviderError.parseAPICallError({
+      providerID: ProviderID.make("openai"),
+      error: new APICallError({
+        message: "Too Many Requests",
+        url: "https://example.com",
+        requestBodyValues: {},
+        statusCode: 429,
+        responseHeaders: {
+          "retry-after-ms": "1200",
+          "x-ratelimit-remaining-requests": "17",
+          "X-RateLimit-Limit-Tokens": "10000",
+          "x-amzn-requestid": "amzn-req-1",
+          "CF-RAY": "8f4a9b2c1d",
+          date: "Mon, 12 Oct 2026 00:00:00 GMT",
+          "content-type": "application/json",
+          server: "cloudfly",
+          "set-cookie": "sid=1",
+        },
+        isRetryable: false,
+      }),
+    })
+
+    if (parsed.type !== "api_error") throw new Error(`expected api_error, got ${parsed.type}`)
+    expect(parsed.responseHeaders).toEqual({
+      "retry-after-ms": "1200",
+      "x-ratelimit-remaining-requests": "17",
+      "X-RateLimit-Limit-Tokens": "10000",
+      "x-amzn-requestid": "amzn-req-1",
+      "CF-RAY": "8f4a9b2c1d",
+      date: "Mon, 12 Oct 2026 00:00:00 GMT",
+      "content-type": "application/json",
+    })
+  })
+
+  test("upstream permission errors also drop unsafe headers and redact the body", () => {
+    const parsed = ProviderError.parseAPICallError({
+      providerID: ProviderID.make("ax-trust"),
+      error: new APICallError({
+        message: "upstream denied the request",
+        url: "https://gateway.example.com/v1/chat/completions",
+        requestBodyValues: {},
+        statusCode: 403,
+        responseHeaders: { "Set-Cookie": "sid=xyz", "X-Request-Id": "req_77" },
+        responseBody: JSON.stringify({
+          error: { type: "api_error", code: "upstream_permission_error", api_key: "sk-live-abc123" },
+        }),
+        isRetryable: true,
+      }),
+    })
+
+    if (parsed.type !== "api_error") throw new Error(`expected api_error, got ${parsed.type}`)
+    expect(parsed.responseHeaders).toEqual({ "X-Request-Id": "req_77" })
+    expect(parsed.responseBody).toBeDefined()
+    expect(parsed.responseBody).not.toContain("sk-live-abc123")
+    expect(parsed.responseBody).toContain('"api_key":"[redacted]"')
+    expect(parsed.metadata).toMatchObject({ errorCode: "upstream_permission_error", requestID: "req_77" })
+  })
 })

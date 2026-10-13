@@ -1,5 +1,6 @@
 import { APICallError } from "ai"
 import { STATUS_CODES } from "http"
+import { Env } from "@/util/env"
 import { iife } from "@/util/iife"
 import { isRecord } from "@/util/record"
 import { parseJsonRecord as parseJsonRecordUtil } from "@/util/json-record"
@@ -303,6 +304,38 @@ export namespace ProviderError {
     }
   }
 
+  // Operational response headers safe to keep on a durable APIError. Everything
+  // else (Set-Cookie, Authorization, gateway cookies) is dropped rather than
+  // masked: the persisted record only needs retry guidance and request
+  // correlation, and any retained header value is one read away from being
+  // echoed into model context or session storage. Comparison is
+  // case-insensitive; the original key spelling is preserved so downstream
+  // readers keyed on a specific casing keep working.
+  const SAFE_RESPONSE_HEADERS = new Set([
+    "retry-after",
+    "retry-after-ms",
+    "x-request-id",
+    "request-id",
+    "x-amzn-requestid",
+    "cf-ray",
+    "content-type",
+    "date",
+  ])
+
+  function sanitizeResponseHeaders(headers: Record<string, string> | undefined) {
+    if (!headers) return headers
+    const safe: Record<string, string> = {}
+    for (const [name, value] of Object.entries(headers)) {
+      const lower = name.toLowerCase()
+      if (SAFE_RESPONSE_HEADERS.has(lower) || lower.startsWith("x-ratelimit-")) safe[name] = value
+    }
+    return safe
+  }
+
+  function sanitizeResponseBody(body: string | undefined) {
+    return body === undefined ? body : Env.redactForRecord(body)
+  }
+
   export type ParsedAPICallError =
     | {
         type: "context_overflow"
@@ -370,8 +403,8 @@ export namespace ProviderError {
         message: `HTTP 403: ${upstreamPermissionMessage(requestID)}`,
         statusCode: input.error.statusCode,
         isRetryable: false,
-        responseHeaders: input.error.responseHeaders,
-        responseBody: input.error.responseBody,
+        responseHeaders: sanitizeResponseHeaders(input.error.responseHeaders),
+        responseBody: sanitizeResponseBody(input.error.responseBody),
         metadata: {
           ...metadata,
           errorCode: "upstream_permission_error",
@@ -386,8 +419,8 @@ export namespace ProviderError {
         message: alibabaShortWindowQuotaMessage(),
         statusCode: input.error.statusCode,
         isRetryable: true,
-        responseHeaders: input.error.responseHeaders,
-        responseBody: input.error.responseBody,
+        responseHeaders: sanitizeResponseHeaders(input.error.responseHeaders),
+        responseBody: sanitizeResponseBody(input.error.responseBody),
         metadata: {
           ...(metadata ?? {}),
           // Keep historical error-code value so any downstream telemetry that
@@ -405,8 +438,8 @@ export namespace ProviderError {
       message: m,
       statusCode: input.error.statusCode,
       isRetryable,
-      responseHeaders: input.error.responseHeaders,
-      responseBody: input.error.responseBody,
+      responseHeaders: sanitizeResponseHeaders(input.error.responseHeaders),
+      responseBody: sanitizeResponseBody(input.error.responseBody),
       metadata,
     }
   }
