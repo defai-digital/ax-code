@@ -3,10 +3,19 @@ import { realpathSync } from "node:fs"
 import { basename, dirname, join } from "node:path"
 import { isRecord } from "@/util/record"
 import { Log } from "@/util/log"
+import { sleep } from "@/util/timeout"
 import type { IpcErrorMessage, IpcMessage, IpcRequestMessage } from "./ipc-protocol"
 import { IpcFrameTooLargeError, readIpcMessages, writeIpcMessage } from "./ipc-protocol"
 
 const log = Log.create({ service: "ipc-server" })
+
+/**
+ * How long the refusal reply may hold the teardown of an oversized-frame
+ * connection. A peer that stopped reading never drains its receive buffer, so
+ * the socket write callback never fires; the connection must still be aborted
+ * and destroyed rather than held open by a courtesy message.
+ */
+const FRAME_TOO_LARGE_REPLY_DEADLINE_MS = 250
 
 export type IpcServerHandle = {
   socketPath: string
@@ -80,7 +89,7 @@ export async function listenIpc(opts: IpcServerOptions): Promise<IpcServerHandle
   }
 }
 
-class IpcConnection {
+export class IpcConnection {
   private abortController = new AbortController()
   private static readonly EVENT_RETRY_BASE_MS = 250
   private static readonly EVENT_RETRY_MAX_MS = 5_000
@@ -122,7 +131,15 @@ class IpcConnection {
           code: "IPC_FRAME_TOO_LARGE",
           message: error.message,
         }
-        await writeIpcMessage(this.socket, reply).catch(() => undefined)
+        // Best-effort: a peer that stopped reading never drains its receive
+        // buffer, so this write would never call back and the teardown below
+        // would never run — leaving the connection and its event subscription
+        // queueing writes into unbounded memory, which is what the frame cap
+        // exists to prevent.
+        await Promise.race([
+          writeIpcMessage(this.socket, reply).catch(() => undefined),
+          sleep(FRAME_TOO_LARGE_REPLY_DEADLINE_MS),
+        ])
       } else {
         log.debug("ipc connection ended", { error })
       }

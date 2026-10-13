@@ -6,7 +6,7 @@ import { join } from "node:path"
 import { rm } from "node:fs/promises"
 import { connect, type Socket } from "node:net"
 import { createIpcTransport } from "@ax-code/sdk/headless-ipc"
-import { listenIpc, resolveIpcSocketPath } from "../../src/server/ipc-transport"
+import { listenIpc, resolveIpcSocketPath, IpcConnection } from "../../src/server/ipc-transport"
 import {
   IPC_MAX_FRAME_BYTES,
   IpcFrameTooLargeError,
@@ -315,3 +315,25 @@ async function nextIpcMessage(iterator: AsyncIterator<IpcMessage>): Promise<IpcM
   if (result.done) throw new Error("IPC stream ended before the next message")
   return result.value
 }
+
+test("an oversized frame tears the connection down even when the refusal reply cannot be written", async () => {
+  // A peer that stopped reading never drains its receive buffer, so the socket
+  // write callback never fires. Teardown must not wait on the courtesy reply.
+  const socket = {
+    destroyed: false,
+    write: () => false,
+    destroy() {
+      socket.destroyed = true
+    },
+    async *[Symbol.asyncIterator](): AsyncGenerator<Buffer> {
+      throw new IpcFrameTooLargeError(IPC_MAX_FRAME_BYTES + 1, IPC_MAX_FRAME_BYTES)
+    },
+  }
+  const connection = new IpcConnection(async () => new Response(null, { status: 404 }), socket as unknown as Socket)
+  const outcome = await Promise.race([
+    connection.handle().then(() => "handled"),
+    new Promise<string>((resolve) => setTimeout(() => resolve("stalled"), 2_000)),
+  ])
+  expect(outcome).toBe("handled")
+  expect(socket.destroyed).toBe(true)
+})
