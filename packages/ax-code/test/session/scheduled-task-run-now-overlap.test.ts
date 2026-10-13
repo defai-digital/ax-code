@@ -3,6 +3,7 @@ import { Instance } from "../../src/project/instance"
 import { ScheduledTask } from "../../src/session/scheduled-task"
 import { TaskQueue } from "../../src/session/task-queue"
 import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
+import { WorkflowRun, WorkflowScheduler, WorkflowTemplate } from "../../src/workflow"
 import { tmpdir } from "../fixture/fixture"
 
 // 2026-09-14: run-now overlap protection. The cheap hasOpenRun pre-check in
@@ -139,6 +140,54 @@ describe("ScheduledTask run-now overlap protection", () => {
         runs = await ScheduledTask.listRuns({ taskID: task.id })
         expect(runs.filter((run) => run.status === "skipped_overlap")).toHaveLength(1)
         expect(runs.filter((run) => run.status === "running")).toHaveLength(1)
+      },
+    })
+  })
+
+  test("a workflow run-now that loses the claim race cancels its pre-created run instead of leaking it", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+        process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+        try {
+          // The winning claim must not start a real workflow; the losing
+          // claim's pre-created run is the assertion target.
+          vi.spyOn(WorkflowScheduler, "start").mockResolvedValue({ status: "running" } as never)
+          // Barrier on createRun: runNow's open-run pre-check runs before the
+          // workflow run is created, so without the barrier one caller can
+          // finish its claim before the other even pre-checks, skipping the
+          // racing window this test exercises.
+          const realCreateRun = WorkflowTemplate.createRun.bind(WorkflowTemplate)
+          const arrivals: (() => void)[] = []
+          vi.spyOn(WorkflowTemplate, "createRun").mockImplementation(async (input) => {
+            if (arrivals.length === 0) await new Promise<void>((resolve) => arrivals.push(resolve))
+            else arrivals.forEach((resolve) => resolve())
+            return realCreateRun(input)
+          })
+          const task = await ScheduledTask.create({
+            title: "Workflow race probe",
+            prompt: "Run the workflow once.",
+            schedule: { type: "cron", expression: "* * * * *" },
+            workflowTemplateID: "builtin:noop-dry-run",
+          })
+
+          const settled = await Promise.allSettled([ScheduledTask.runNow(task.id), ScheduledTask.runNow(task.id)])
+          expect(settled.filter((r) => r.status === "fulfilled")).toHaveLength(1)
+          const rejected = settled.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined
+          expect(rejected?.reason).toMatchObject({ status: 409 })
+
+          // Both attempts pre-created a run (create-first-claim-second keeps the
+          // open-run guard authoritative). The losing claim must cancel its own
+          // instead of leaving a never-started queued run behind.
+          const runs = await WorkflowRun.list()
+          expect(runs).toHaveLength(2)
+          expect(runs.filter((run) => run.status === "cancelled")).toHaveLength(1)
+        } finally {
+          if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+          else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+        }
       },
     })
   })

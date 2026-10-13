@@ -764,8 +764,9 @@ export namespace ScheduledTask {
     })
     const now = Date.now()
     const deadlineMs = current.maxRunDurationMs ?? DEFAULT_RUN_DEADLINE_MS
-    const { task, run: runRow } = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction(
-      (db) => {
+    let claimed: { task: Info; run: RunInfo }
+    try {
+      claimed = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
         if (hasOpenRunIn(db, current.id, now, deadlineMs)) throw new RunNowOverlapAborted()
         const runRow = insertRunRow(db, {
           taskID: current.id,
@@ -789,8 +790,21 @@ export namespace ScheduledTask {
           .get()
         if (!row) throw new NotFoundError({ message: `Scheduled task not found: ${current.id}` })
         return { task: fromRow(row), run: runRow }
-      },
-    )
+      })
+    } catch (error) {
+      // The claim rolled back, so the pre-created run can never start: cancel
+      // it instead of leaving a never-started queued run behind (same cleanup
+      // the dispatch timeout path applies to a pre-created run).
+      await WorkflowScheduler.cancel(run.id).catch((cancelError) => {
+        log.warn("failed to cancel a run-now workflow run after an aborted claim", {
+          taskID: current.id,
+          runID: run.id,
+          error: cancelError,
+        })
+      })
+      throw error
+    }
+    const { task, run: runRow } = claimed
     publishUpdated(task)
     publishFired(task, runRow)
     try {
