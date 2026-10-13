@@ -5,6 +5,7 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import { parseJsonStrict } from "../../src/util/json-value"
 import {
   buildFixedContextRequest,
+  FixedContextError,
   generateFixedContext,
   MAX_CONTEXT_BYTES,
   readFixedContextFiles,
@@ -103,6 +104,29 @@ describe("fresh context file admission", () => {
       await expect(readFixedContextFiles(input)).rejects.toThrow()
     }
   })
+  test("maps a mid-read deletion to a stable-files domain error instead of a raw ENOENT", async () => {
+    await using tmp = await tmpdir()
+    await fs.writeFile(path.join(tmp.path, "code"), "safe")
+    const canonical = await fs.realpath(path.join(tmp.path, "code"))
+    const input = { directory: tmp.path, files: ["code"], allowRead: () => true }
+
+    // The fd read survives the unlink; the path-based revalidation is what
+    // rejects. Force that window by failing the canonical-path stat.
+    const realStat = fs.stat
+    vi.spyOn(fs, "stat").mockImplementation(async (...args: Parameters<typeof fs.stat>) => {
+      if (String(args[0]) === canonical) throw Object.assign(new Error("simulated ENOENT"), { code: "ENOENT" })
+      return realStat(...args)
+    })
+
+    const error = await readFixedContextFiles(input).then(
+      () => undefined,
+      (failure) => failure,
+    )
+    expect(FixedContextError.isInstance(error)).toBe(true)
+    expect(error.message).toContain("A selected file changed while reading")
+    expect(error.message).not.toContain("ENOENT")
+  })
+
   test("rejects external paths, symlink escapes and cancellation", async () => {
     await using tmp = await tmpdir()
     await using external = await tmpdir()

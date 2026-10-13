@@ -19,6 +19,14 @@ const INSTRUCTION =
 function fail(message: string): never {
   throw new FixedContextError({ message })
 }
+// The post-read revalidation re-walks the path after the fd read; a file (or
+// a path component) deleted in that window rejects with a raw ENOENT/ENOTDIR
+// that would surface as a 500 instead of the domain 400.
+function revalidateFailed(error: NodeJS.ErrnoException): never {
+  if (error.code === "ENOENT" || error.code === "ENOTDIR")
+    fail("A selected file changed while reading; retry with stable files.")
+  throw error
+}
 function throwIfCancelled(signal?: AbortSignal) {
   if (signal?.aborted) fail("The fixed-context question was cancelled or timed out.")
 }
@@ -81,7 +89,7 @@ export async function readFixedContextFiles(input: {
         length += bytesRead
       }
       const after = await handle.stat({ bigint: true })
-      const current = await fs.stat(canonical, { bigint: true })
+      const current = await fs.stat(canonical, { bigint: true }).catch(revalidateFailed)
       if (
         length > remaining ||
         BigInt(length) !== before.size ||
@@ -90,8 +98,8 @@ export async function readFixedContextFiles(input: {
         before.ctimeNs !== after.ctimeNs ||
         current.ino !== after.ino ||
         current.dev !== after.dev ||
-        (await fs.realpath(lexical)) !== canonical ||
-        (await fs.realpath(canonical)) !== canonical
+        (await fs.realpath(lexical).catch(revalidateFailed)) !== canonical ||
+        (await fs.realpath(canonical).catch(revalidateFailed)) !== canonical
       ) {
         fail("A selected file changed while reading; retry with stable files.")
       }
