@@ -542,21 +542,6 @@ if (release && shippedNative !== NATIVE_ADDON_PACKAGES.length) {
   )
 }
 
-// A release must contain functioning persistent evidence support, not just a
-// package directory whose native loader silently falls back at runtime.
-if (release) {
-  const evidenceCheck = spawnSync(
-    ptyCheckNode,
-    [path.join(dir, "..", "..", "script", "verify-evidence-cache.cjs"), path.join(axScope, "fs")],
-    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 25_000 },
-  )
-  if (evidenceCheck.status !== 0)
-    throw new Error(
-      `Bundled evidence cache verification failed: ${evidenceCheck.error?.message || evidenceCheck.stderr.trim() || evidenceCheck.status}`,
-    )
-  console.log(`Bundled evidence cache verified: ${evidenceCheck.stdout.trim()}`)
-}
-
 pruneParserDistribution(path.join(outRoot, "node_modules"))
 
 // Darwin-arm64 releases ship a self-contained AX Engine sidecar so a clean Mac
@@ -639,10 +624,10 @@ if (release && process.platform === "win32" && !deferWindowsSigning) {
 // Application control can reject freshly compiled ConPTY before it is signed.
 // Deferred builds must prove PTY behavior in the mandatory post-sign release
 // qualification, keeping signing credentials outside the compilation phase.
+const ptyCheckNode = bundledNodeRuntime ? path.join(bundledNodeDir, "bin", bundledNodeName) : process.execPath
 if (!deferWindowsSigning) {
   // Windows loads ConPTY lazily at spawn, so require() alone cannot establish
   // that the shipped terminal works. Check existing builds as well as rebuilds.
-  const ptyCheckNode = bundledNodeRuntime ? path.join(bundledNodeDir, "bin", bundledNodeName) : process.execPath
   const ptyCheck = spawnSync(ptyCheckNode, [path.join(dir, "..", "..", "script", "verify-pty.cjs"), ptyDir], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
@@ -657,8 +642,22 @@ if (!deferWindowsSigning) {
   } else {
     console.log(`Bundled PTY input/output/exit verified: ${ptyCheck.stdout.trim()}`)
   }
+  // A release must contain functioning persistent evidence support, not just a
+  // package directory whose native loader silently falls back at runtime.
+  if (release) {
+    const evidenceCheck = spawnSync(
+      ptyCheckNode,
+      [path.join(dir, "..", "..", "script", "verify-evidence-cache.cjs"), path.join(axScope, "fs")],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 25_000 },
+    )
+    if (evidenceCheck.status !== 0)
+      throw new Error(
+        `Bundled evidence cache verification failed: ${evidenceCheck.error?.message || evidenceCheck.stderr.trim() || evidenceCheck.status}`,
+      )
+    console.log(`Bundled evidence cache verified: ${evidenceCheck.stdout.trim()}`)
+  }
 } else {
-  console.log("Windows PTY verification deferred until signed runtime qualification")
+  console.log("Windows native runtime verification deferred until signed runtime qualification")
 }
 
 // The release archive is protected by Minisign after this build completes. Keep

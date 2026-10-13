@@ -46,6 +46,7 @@ describe("release asset workflow", () => {
     const probe = build.indexOf("const ptyCheck = spawnSync(")
     expect(signing).toBeGreaterThan(-1)
     expect(probe).toBeGreaterThan(signing)
+    expect(build.indexOf("const evidenceCheck = spawnSync(")).toBeGreaterThan(signing)
     expect(build.slice(signing, probe)).toContain("if (!deferWindowsSigning)")
     const postSignProbe = workflow.indexOf("- name: Verify signed Windows PTY")
     expect(postSignProbe).toBeGreaterThan(workflow.indexOf("- name: Sign and repackage Windows runtime"))

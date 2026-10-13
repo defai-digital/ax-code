@@ -502,6 +502,8 @@ jobs:
           $Root = 'packages/ax-code/dist/ax-code-windows-x64'
           & "$Root/node/bin/node.exe" script/verify-pty.cjs "$Root/node_modules/node-pty-prebuilt-multiarch"
           if ($LASTEXITCODE -ne 0) { throw 'Signed Windows PTY verification failed' }
+          & "$Root/node/bin/node.exe" script/verify-evidence-cache.cjs "$Root/node_modules/@ax-code/fs"
+          if ($LASTEXITCODE -ne 0) { throw 'Signed Windows evidence verification failed' }
 
       - name: Verify relocated native TypeScript runtime
         run: node script/verify-typescript-native.cjs packages/ax-code/dist/ax-code-${{ matrix.targets == 'win32-x64' && 'windows-x64' || matrix.targets }}
