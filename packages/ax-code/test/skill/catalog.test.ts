@@ -53,6 +53,28 @@ describe("skill metadata budgets", () => {
     )
   })
 
+  test("project skills outrank built-ins when the page overflows, in stable name order", () => {
+    const builtins = skills(60).map((skill) => ({ ...skill, builtin: true }))
+    const project = ["alpha-skill", "middle-skill", "zeta-skill"].map((name) => ({
+      name,
+      description: "Project skill.",
+      location: `/workspace/.ax-code/skill/${name}/SKILL.md`,
+      content: "PRIVATE",
+    }))
+    const input = [...builtins, ...project].toSorted((a, b) => a.name.localeCompare(b.name))
+    const page = SkillCatalog.page(input, { verbose: true })
+    expect(page.omitted).toBeGreaterThan(0)
+    expect(page.names.slice(0, 3)).toEqual(["alpha-skill", "middle-skill", "zeta-skill"])
+    // A recommendation still comes first, then the project skills.
+    const recommended = new Set([builtins[59].name])
+    expect(SkillCatalog.page(input, { verbose: true, recommended }).names.slice(0, 4)).toEqual([
+      builtins[59].name,
+      "alpha-skill",
+      "middle-skill",
+      "zeta-skill",
+    ])
+  })
+
   test("budgets escaped expansion and skips oversized entries without preventing continuation", () => {
     const input = skills(8)
     input[0].name = "x".repeat(9000)

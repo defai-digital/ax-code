@@ -362,6 +362,42 @@ A compatible agent can then discover `read_heading` on that page. OpenAI's
 same idea from the Codex and ChatGPT Work side, including how their built-in
 browser lists the tools a site provides.
 
+## Skills for WebMCP
+
+Two built-in skills cover bridge work. `webmcp` verifies a web app through
+the connected bridge, authors and checks page tools, and runs the structured
+observation and diagnosis workflows. `browser-troubleshooting` diagnoses
+bridge enable, launch, connection, policy and grant failures and reports the
+blocker and remedy. Load it instead of retrying when the chip, a bridge
+tool, or a browser approval fails.
+
+Project skills load from `.ax-code/skills/`, `.agents/skills/`,
+`.claude/skills/` and `.opencode/skills/`. See the
+[skill catalog](../reference/skills-and-plugins.md).
+
+Third-party skills below are reading and authoring material only; AX Code
+has not tested them and does not certify them for this bridge.
+
+- Google's `build-webmcp-tools` skill
+  ([GoogleChromeLabs/webmcp-tools](https://github.com/GoogleChromeLabs/webmcp-tools),
+  Apache-2.0) installs with
+  `npx skills add GoogleChromeLabs/webmcp-tools --path webmcp-skills`, or by
+  copying `skills/build-webmcp-tools` into `.agents/skills/`. It designs and
+  audits page tools and writes `schema.json` / `evals.json` for
+  `npx webmcp-evals`. Note: its instructions name Chrome DevTools MCP tools
+  such as `evaluate_script` that this bridge does not admit; the agent must
+  use the admitted snapshot and `browser_workflow` actions instead.
+- Google's Modern Web Guidance skill pack
+  (`npx modern-web-guidance@latest install`; guides CC-BY 4.0, see the
+  [docs](https://developer.chrome.com/docs/modern-web-guidance)) includes
+  the WebMCP guides `agentic-forms` and `agentic-javascript-tools`.
+- The upstream `chrome-devtools-mcp` repository ships skills
+  (`a11y-debugging`, `debug-optimize-lcp`, `memory-leak-debugging`,
+  `troubleshooting`; see
+  [skills](https://github.com/ChromeDevTools/chrome-devtools-mcp/tree/main/skills)).
+  They assume `evaluate_script` and Lighthouse, which this profile does not
+  expose, so use them as reading material, not as runnable recipes.
+
 ## Limits
 
 No scripts, uploads, downloads, cookies, request bodies, coordinates or

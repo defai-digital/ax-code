@@ -68,12 +68,18 @@ export namespace SkillCatalog {
       descriptionLimit = 160
       all = input.map((entry) => render(entry, opts, descriptionLimit))
     }
-    if (
-      !opts.paginate &&
-      opts.recommended?.size &&
-      all.join("\n").length + prefix.length + suffix.length + 282 > limit
-    ) {
-      list = input.toSorted((a, b) => Number(opts.recommended!.has(b.name)) - Number(opts.recommended!.has(a.name)))
+    if (!opts.paginate && all.join("\n").length + prefix.length + suffix.length + 282 > limit) {
+      // Still over budget with short descriptions, so some entries will be
+      // omitted. Keep the ones the user is most likely to need: recommended
+      // first, then the project's and user's own skills, built-ins last. The
+      // sort is stable, so name order survives inside each group and a
+      // growing built-in set never pushes a project skill off the page.
+      list = input.toSorted((a, b) => {
+        const recommended =
+          Number(opts.recommended?.has(b.name) ?? false) - Number(opts.recommended?.has(a.name) ?? false)
+        if (recommended !== 0) return recommended
+        return Number(a.builtin === true) - Number(b.builtin === true)
+      })
     }
     const offset = opts.offset ?? 0
     if (!Number.isSafeInteger(offset) || offset < 0) throw new Error("Invalid skill catalog offset")
