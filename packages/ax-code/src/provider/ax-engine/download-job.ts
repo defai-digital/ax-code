@@ -4,7 +4,7 @@ import type { AxEngineModelID, AxEngineQuantization } from "./constants"
 import { getDependencyStatus } from "./dependency"
 import { resolveAxEngineModelDefinition } from "./hub-catalog"
 import { completeProgress, indeterminateProgress, type AxEngineDownloadProgress } from "./download-progress"
-import { downloadModel, getDiskStatus, normalizeQuantization } from "./model-cache"
+import { downloadModel, getDiskStatus, getModelStatus, normalizeQuantization } from "./model-cache"
 import { requirePlatformEligibility } from "./platform"
 import { requireAxEngineLocalModel } from "./local-models"
 
@@ -37,6 +37,7 @@ export type AxEngineDownloadJobRuntime = {
   getDependencyStatus?: typeof getDependencyStatus
   getDiskStatus?: typeof getDiskStatus
   downloadModel?: typeof downloadModel
+  getModelStatus?: typeof getModelStatus
 }
 
 const jobs = new Map<string, AxEngineDownloadJob>()
@@ -70,6 +71,7 @@ export async function startDownloadJob(
   const dependencyStatus = runtime.getDependencyStatus ?? getDependencyStatus
   const diskStatus = runtime.getDiskStatus ?? getDiskStatus
   const download = runtime.downloadModel ?? downloadModel
+  const modelStatus = runtime.getModelStatus ?? getModelStatus
 
   if (!isAxEngineModelID(input.modelID)) {
     throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: unknown AX Engine model`)
@@ -92,6 +94,20 @@ export async function startDownloadJob(
   }
   const run = async (): Promise<AxEngineModelJobSummary> => {
     try {
+      // Weights already on disk (a stale picker offer, a second client, or a
+      // manual download) must not go through the Hub: that path needs a Python
+      // with huggingface_hub and fails on hosts that only have the snapshot.
+      const local = await modelStatus({ modelID: input.modelID, quantization })
+      controller.signal.throwIfAborted()
+      if (local.present && local.complete) {
+        job.status = "complete"
+        job.startedAt = Date.now()
+        job.finishedAt = job.startedAt
+        job.path = local.path
+        job.revision = local.revision
+        job.progress = completeProgress(job.progress)
+        return summarize(job)
+      }
       const eligibility = await requireEligibility()
       controller.signal.throwIfAborted()
       const definition = await resolveAxEngineModelDefinition(input.modelID, {

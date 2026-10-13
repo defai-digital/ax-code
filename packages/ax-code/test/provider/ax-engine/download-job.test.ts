@@ -44,6 +44,13 @@ function runtimeWith(download: typeof downloadModel): AxEngineDownloadJobRuntime
       ok: true,
       blockers: [],
     }),
+    getModelStatus: async () => ({
+      present: false,
+      modelID: MODEL_ID,
+      quantization: "mlx" as const,
+      complete: false,
+      blockers: [],
+    }),
     downloadModel: download,
   }
 }
@@ -202,5 +209,29 @@ describe("ax-engine download jobs", () => {
     await vi.waitFor(async () => expect(await activeJobs()).toEqual([]))
     const jobs = await listDownloadJobs()
     expect(jobs.find((job) => job.id === second.id)?.status).toBe("complete")
+  })
+})
+
+describe("download job for weights already on disk", () => {
+  test("completes without invoking the Hub download", async () => {
+    const download = vi.fn()
+    const runtime: AxEngineDownloadJobRuntime = {
+      ...runtimeWith(download as unknown as typeof downloadModel),
+      getModelStatus: async () => ({
+        present: true,
+        modelID: MODEL_ID,
+        quantization: "mlx" as const,
+        path: "/models/present",
+        revision: "pinned",
+        complete: true,
+        blockers: [],
+      }),
+    }
+    await startDownloadJob({ modelID: MODEL_ID }, runtime)
+    await vi.waitFor(async () => {
+      const job = (await listDownloadJobs()).find((item) => item.path === "/models/present")
+      expect(job).toMatchObject({ status: "complete", revision: "pinned" })
+    })
+    expect(download).not.toHaveBeenCalled()
   })
 })
