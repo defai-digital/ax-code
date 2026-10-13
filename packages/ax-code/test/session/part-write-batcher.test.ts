@@ -208,4 +208,241 @@ describe("createPartWriteBatcher", () => {
       process.off("unhandledRejection", onUnhandled)
     }
   })
+
+  test("windowFor sets the arming delay and a later snapshot of the same part does not re-arm", async () => {
+    const writes: string[] = []
+    const delays: number[] = []
+    const seen: string[] = []
+    let fire: (() => void) | undefined
+    const batcher = createPartWriteBatcher<{ id: string; text: string }>({
+      write: async (part) => {
+        writes.push(part.text)
+      },
+      windowFor: (part) => {
+        seen.push(part.text)
+        return part.text.length * 100
+      },
+      schedule: (fn, ms) => {
+        delays.push(ms)
+        fire = fn
+        return { clear: () => undefined }
+      },
+    })
+
+    batcher.schedule({ id: "p1", text: "abcd" })
+    expect(seen[0]).toBe("abcd")
+    expect(delays).toEqual([400])
+    batcher.schedule({ id: "p1", text: "abcdefghij" })
+    expect(delays).toEqual([400])
+    expect(writes).toEqual([])
+    fire!()
+    await batcher.flush()
+    expect(writes).toEqual(["abcdefghij"])
+  })
+
+  test("without windowFor the delay is 250 or the provided windowMs", () => {
+    const delays: number[] = []
+    const schedule = (_fn: () => void, ms: number) => {
+      delays.push(ms)
+      return { clear: () => undefined }
+    }
+    createPartWriteBatcher<{ id: string }>({
+      write: () => undefined,
+      schedule,
+    }).schedule({ id: "a" })
+    createPartWriteBatcher<{ id: string }>({
+      write: () => undefined,
+      windowMs: 80,
+      schedule,
+    }).schedule({ id: "b" })
+    expect(delays).toEqual([250, 80])
+  })
+
+  test("windowFor throw, NaN, or a short result falls back to windowMs and a long result clamps to 2000", () => {
+    const delays: number[] = []
+    const arm = (windowFor: () => number, windowMs?: number) => {
+      createPartWriteBatcher<{ id: string }>({
+        write: () => undefined,
+        windowMs,
+        windowFor,
+        schedule: (_fn, ms) => {
+          delays.push(ms)
+          return { clear: () => undefined }
+        },
+      }).schedule({ id: "p" })
+    }
+    arm(() => {
+      throw new Error("boom")
+    })
+    arm(() => Number.NaN)
+    arm(() => 1)
+    arm(() => 1, 100)
+    arm(() => 9000)
+    expect(delays).toEqual([250, 250, 250, 100, 2000])
+  })
+
+  test("forceImmediate during a long window writes immediately and the timer does not rewrite a stale snapshot", async () => {
+    const writes: string[] = []
+    let fire: (() => void) | undefined
+    const batcher = createPartWriteBatcher<{ id: string; text: string }>({
+      write: async (part) => {
+        writes.push(part.text)
+      },
+      windowFor: () => 2000,
+      schedule: (fn) => {
+        fire = fn
+        return { clear: () => undefined }
+      },
+    })
+    batcher.schedule({ id: "p1", text: "growing" })
+    await batcher.forceImmediate({ id: "p1", text: "final" })
+    expect(writes).toEqual(["final"])
+    fire!()
+    await batcher.flush()
+    expect(writes).toEqual(["final"])
+  })
+
+  test("a shorter cross-part window re-arms the shared timer and a longer window does not", async () => {
+    let now = 0
+    const writes: string[] = []
+    const delays: number[] = []
+    let clearCount = 0
+    let fire: (() => void) | undefined
+    const large = "x".repeat(20)
+    const batcher = createPartWriteBatcher<{ id: string; text: string }>({
+      write: async (part) => {
+        writes.push(`${part.id}:${part.text}`)
+      },
+      now: () => now,
+      windowFor: (part) => (part.text.length > 10 ? 2000 : 250),
+      schedule: (fn, ms) => {
+        delays.push(ms)
+        fire = fn
+        return {
+          clear: () => {
+            clearCount++
+          },
+        }
+      },
+    })
+
+    batcher.schedule({ id: "large", text: large })
+    expect(delays).toEqual([2000])
+    now += 100
+    batcher.schedule({ id: "small", text: "y" })
+    expect(clearCount).toBe(1)
+    expect(delays).toEqual([2000, 250])
+    expect(delays[1]).toBeLessThanOrEqual(250)
+    fire!()
+    await batcher.flush()
+    expect(writes.sort()).toEqual([`large:${large}`, "small:y"])
+
+    writes.length = 0
+    delays.length = 0
+    clearCount = 0
+    now = 0
+    batcher.schedule({ id: "small", text: "y" })
+    expect(delays).toEqual([250])
+    now += 10
+    batcher.schedule({ id: "large", text: large })
+    expect(delays).toEqual([250])
+    expect(clearCount).toBe(0)
+  })
+
+  test("a 1 MiB text stream stays under the size-aware write budget", async () => {
+    const chunk = "x".repeat(524)
+    // Same rule as processor-impl: 1 ms per 1,024 UTF-16 units, floor 250 ms.
+    const processorWindow = (part: { type: string; text: string }) => {
+      if (part.type === "text" || part.type === "reasoning") return Math.max(250, part.text.length / 1024)
+      return 250
+    }
+
+    const run = async (windowFor?: (part: { id: string; type: "text"; text: string }) => number) => {
+      type Timer = { at: number; fn: () => void; cleared: boolean }
+      const timers: Timer[] = []
+      let now = 0
+      const advance = (ms: number) => {
+        now += ms
+        for (;;) {
+          let next: Timer | undefined
+          for (const timer of timers) {
+            if (timer.cleared || timer.at > now) continue
+            if (!next || timer.at < next.at) next = timer
+          }
+          if (!next) break
+          next.cleared = true
+          next.fn()
+        }
+      }
+      let flushes = 0
+      let bytes = 0
+      const batcher = createPartWriteBatcher<{ id: string; type: "text"; text: string }>({
+        write: (part) => {
+          flushes += 1
+          bytes += JSON.stringify(part).length
+        },
+        windowFor,
+        now: () => now,
+        schedule: (fn, ms) => {
+          const timer: Timer = { at: now + ms, fn, cleared: false }
+          timers.push(timer)
+          return {
+            clear: () => {
+              timer.cleared = true
+            },
+          }
+        },
+      })
+      let text = ""
+      for (let i = 0; i < 2000; i++) {
+        text += chunk
+        batcher.schedule({ id: "p1", type: "text", text })
+        advance(25)
+      }
+      await batcher.flush()
+      return { flushes, bytes }
+    }
+
+    const sized = await run(processorWindow)
+    // max(250, length/1024) on this 0→1 MiB ramp flushes about 117 times and
+    // writes about 43 MiB. The fixed 250 ms window is about 201 flushes / 101 MiB.
+    expect(sized.flushes).toBeLessThan(140)
+    expect(sized.bytes).toBeLessThan(48 * 1024 * 1024)
+
+    const fixed = await run(undefined)
+    expect(fixed.flushes).toBeGreaterThanOrEqual(150)
+  })
+
+  test("forceImmediate that empties the queue releases the long timer so the next part arms its own window", async () => {
+    const delays: number[] = []
+    let clearCount = 0
+    const batcher = createPartWriteBatcher<{ id: string; text: string }>({
+      write: () => undefined,
+      windowFor: (part) => (part.text.length > 10 ? 2000 : 250),
+      schedule: (_fn, ms) => {
+        delays.push(ms)
+        return {
+          clear: () => {
+            clearCount++
+          },
+        }
+      },
+    })
+
+    batcher.schedule({ id: "large", text: "x".repeat(20) })
+    expect(delays).toEqual([2000])
+    await batcher.forceImmediate({ id: "large", text: "final" })
+    expect(clearCount).toBe(1)
+    expect(batcher.pendingCount()).toBe(0)
+
+    // A fresh small part must not wait out the remainder of the 2000 ms window.
+    batcher.schedule({ id: "small", text: "y" })
+    expect(delays).toEqual([2000, 250])
+
+    // With another id still pending, the timer stays armed for it.
+    batcher.schedule({ id: "other", text: "z" })
+    await batcher.forceImmediate({ id: "small", text: "done" })
+    expect(clearCount).toBe(1)
+    expect(batcher.pendingCount()).toBe(1)
+  })
 })

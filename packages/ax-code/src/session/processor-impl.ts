@@ -462,9 +462,21 @@ export namespace SessionProcessor {
     })
     // Mid-stream progress snapshots for text/reasoning (PERF-05). State
     // transitions still use forceImmediate so tool/text start-end stay ordered.
+    // Size-aware window: a part streamed from 0 to 1 MiB over 50 s rewrote
+    // 200 upserts / 101 MB at a fixed 250 ms; ~1 ms per 1,024 UTF-16 units
+    // (floor 250 ms) measured 117 upserts / 43 MiB on the same ramp, and a part
+    // that is already large settles near 1 MiB/s of rewrite bandwidth. The
+    // batcher clamps this to 2,000 ms. src/sdk/programmatic-impl.ts derives SDK
+    // text events from these snapshots, so very large parts stream to
+    // programmatic consumers in chunks up to 2 s apart. The TUI uses the 16 ms
+    // message.part.delta channel and is unaffected.
     const partWriteBatcher = createPartWriteBatcher<MessageV2.Part>({
       write: (part) => Session.updatePart.force(part),
       onError: (error, partID) => log.warn("part write batch failed", { error, partID }),
+      windowFor: (part) => {
+        if (part.type === "text" || part.type === "reasoning") return Math.max(250, part.text.length / 1024)
+        return 250
+      },
     })
     const partBase = () => ({
       id: PartID.ascending(),

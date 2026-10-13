@@ -109,4 +109,51 @@ describe("util/sse-queue", () => {
       },
     })
   })
+
+  test("encodes nested acyclic payloads identically to JSON.stringify", () => {
+    const payload = {
+      type: "tool.result",
+      properties: { items: [{ id: 1 }, { id: 2 }], nested: { flag: true, count: 3 } },
+    }
+
+    expect(encodeSsePayload(payload)).toBe(JSON.stringify(payload))
+  })
+
+  test("replaces cycles with a placeholder while keeping the rest intact", () => {
+    const payload: Record<string, unknown> = { type: "tool.result", count: 42 }
+    payload.self = payload
+
+    const encoded = encodeSsePayload(payload)
+
+    expect(encoded).toContain('"[Circular]"')
+    expect(JSON.parse(encoded)).toEqual({ type: "tool.result", count: 42, self: "[Circular]" })
+  })
+
+  test("encodes bigint values as decimal strings", () => {
+    const encoded = encodeSsePayload({ type: "tool.result", properties: { sequence: 9007199254740993n } })
+
+    expect(JSON.parse(encoded)).toEqual({ type: "tool.result", properties: { sequence: "9007199254740993" } })
+  })
+
+  test("returns a serialization error frame when toJSON throws on both passes", () => {
+    const encoded = encodeSsePayload({
+      type: "tool.result",
+      properties: {
+        toJSON() {
+          throw new Error("boom")
+        },
+      },
+    })
+
+    expect(JSON.parse(encoded)).toEqual({
+      type: "server.serialization_error",
+      properties: {
+        error: "boom",
+      },
+    })
+  })
+
+  test("encodes undefined as null", () => {
+    expect(encodeSsePayload(undefined)).toBe("null")
+  })
 })

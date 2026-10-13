@@ -41,7 +41,18 @@ export function pushSseFrame(
   return "queued"
 }
 
+/**
+ * Encodes an SSE payload in two tiers: the fast path tries plain JSON.stringify first and only falls back to the
+ * replacer path when that throws (circular structure, BigInt, or a throwing toJSON). The output is byte-identical
+ * because the replacer only transforms values that make the fast path throw, so any payload the fast path accepts
+ * passes through the replacer untouched.
+ */
 export function encodeSsePayload(payload: unknown): string {
+  try {
+    return JSON.stringify(payload) ?? "null"
+  } catch {
+    // Fall through to the replacer path below.
+  }
   const ancestors: object[] = []
   try {
     return (
