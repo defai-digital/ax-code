@@ -85,8 +85,15 @@ export namespace Truncate {
       .sort((a, b) => a.mtimeMs - b.mtimeMs || a.name.localeCompare(b.name))
   }
 
-  async function removeQuietly(filepath: string) {
-    await fs.rm(filepath, { force: true }).catch(() => undefined)
+  /** Remove a file, never throwing into the tool call. Returns true on success. */
+  async function removeQuietly(filepath: string): Promise<boolean> {
+    return fs.rm(filepath, { force: true }).then(
+      () => true,
+      (error) => {
+        log.warn("failed to remove truncated output", { file: filepath, error })
+        return false
+      },
+    )
   }
 
   export async function cleanup(now = Date.now()) {
@@ -107,8 +114,11 @@ export namespace Truncate {
 
     for (const entry of remaining) {
       if (totalSize <= MAX_DIR_BYTES) break
-      await removeQuietly(entry.path)
-      totalSize -= entry.size
+      // Only credit the freed space when the removal actually succeeded;
+      // otherwise a failed delete would let the cap stay exceeded while
+      // cleanup reports progress.
+      const removed = await removeQuietly(entry.path)
+      if (removed) totalSize -= entry.size
     }
   }
 

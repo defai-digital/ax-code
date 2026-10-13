@@ -1,10 +1,17 @@
-import { describe, test, expect } from "vitest"
+import { describe, test, expect, vi } from "vitest"
 import fs from "node:fs/promises"
 import { Truncate } from "../../src/tool/truncate"
 import { Identifier } from "../../src/id/id"
 import { Process } from "../../src/util/process"
 import { Filesystem } from "../../src/util/filesystem"
 import path from "path"
+
+// Node freezes builtin module namespaces; re-export through a vi.mock factory so
+// vi.spyOn(fs, "rm") can install a spy without mutating the real builtin.
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>()
+  return { ...actual, default: { ...(actual as any).default } }
+})
 
 const FIXTURES_DIR = path.join(import.meta.dirname, "fixtures")
 const ROOT = path.resolve(import.meta.dirname, "..", "..")
@@ -221,6 +228,50 @@ describe("Truncate", () => {
       } finally {
         await fs.rm(old, { force: true }).catch(() => undefined)
         await fs.rm(recent, { force: true }).catch(() => undefined)
+      }
+    })
+
+    test("does not count a failed deletion as freed space", async () => {
+      const now = Date.now()
+      await fs.mkdir(Truncate.DIR, { recursive: true })
+      const names = [
+        Identifier.create("tool", false, now - 3 * DAY_MS),
+        Identifier.create("tool", false, now - 2 * DAY_MS),
+        Identifier.create("tool", false, now - 1 * DAY_MS),
+      ]
+      const files = names.map((name) => path.join(Truncate.DIR, name))
+      const SIZE = 100 * 1024 * 1024 // 3 x 100 MiB exceeds the 200 MiB cap
+      try {
+        // Sparse truncation gives realistic sizes without writing 300 MiB.
+        for (const [index, file] of files.entries()) {
+          await fs.writeFile(file, "")
+          await fs.truncate(file, SIZE)
+          const time = new Date(now - (3 - index) * DAY_MS)
+          await fs.utimes(file, time, time)
+        }
+
+        const realRm = fs.rm
+        const rmSpy = vi.spyOn(fs, "rm").mockImplementation(async (target, options) => {
+          if (String(target) === files[0]) throw new Error("rm blocked")
+          return realRm(target as any, options as any)
+        })
+
+        try {
+          await Truncate.cleanup(now)
+        } finally {
+          rmSpy.mockRestore()
+        }
+
+        // The failed removal must not be credited. Crediting it would put the
+        // directory at 200 MiB after the second entry and stop there; refusing
+        // to credit it keeps the pass going until the third entry is gone too.
+        // Spill files left by earlier tests in this worker only add a little
+        // to the total and cannot flip that outcome.
+        expect(await exists(files[0])).toBe(true)
+        expect(await exists(files[1])).toBe(false)
+        expect(await exists(files[2])).toBe(false)
+      } finally {
+        for (const file of files) await fs.rm(file, { force: true }).catch(() => undefined)
       }
     })
   })
