@@ -697,7 +697,12 @@ describe("TaskQueue", () => {
             .set({ payload: { executorOwner: { pid: process.pid, boot: "disposed-boot", time: now } } })
             .where(eq(TaskQueueTable.id, deadBoot.id))
             .run()
-          db.update(TaskQueueTable).set({ payload: {} }).where(eq(TaskQueueTable.id, legacy.id)).run()
+          // setStatus uses monotonically increasing timestamps; pin the legacy
+          // heartbeat to the simulated clock before checking its expiry.
+          db.update(TaskQueueTable)
+            .set({ payload: {}, time_updated: now })
+            .where(eq(TaskQueueTable.id, legacy.id))
+            .run()
         })
 
         // Fresh heartbeats do not protect rows whose owner is verifiably gone;
