@@ -684,4 +684,38 @@ describe("provider routes", () => {
     expect((redacted.options as Record<string, unknown>).accessToken).toBe("[redacted]")
     expect((redacted.options as Record<string, unknown>).baseURL).toBe("https://example.test/v1")
   })
+
+  test("redactProviderInfo masks nested secret options under objects and arrays", () => {
+    const redacted = redactProviderInfo({
+      id: "custom-gateway",
+      name: "Custom Gateway",
+      env: [],
+      source: "config",
+      key: "sk-top-secret",
+      options: {
+        baseURL: "https://gateway.example/v1",
+        headers: { Authorization: "Bearer gw-secret", "X-Static": "keep" },
+        fetchOptions: { headers: { "x-api-key": "nested-secret" } },
+        extra: [{ token: "array-secret", note: "keep-note" }],
+      },
+      models: {},
+    } as any)
+
+    const options = redacted.options as {
+      baseURL: string
+      headers: Record<string, string>
+      fetchOptions: { headers: Record<string, string> }
+      extra: Array<{ token: string; note: string }>
+    }
+    expect(redacted.key).toBeUndefined()
+    expect(options.baseURL).toBe("https://gateway.example/v1")
+    // options.headers.Authorization — one object level below the top.
+    expect(options.headers.Authorization).toBe("[redacted]")
+    expect(options.headers["X-Static"]).toBe("keep")
+    // options.fetchOptions.headers["x-api-key"] — three levels deep.
+    expect(options.fetchOptions.headers["x-api-key"]).toBe("[redacted]")
+    // Array items are recursed like plain objects.
+    expect(options.extra[0]!.token).toBe("[redacted]")
+    expect(options.extra[0]!.note).toBe("keep-note")
+  })
 })

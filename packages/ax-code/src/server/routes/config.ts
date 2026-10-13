@@ -8,6 +8,7 @@ import { mapValues } from "remeda"
 import { errors } from "../error"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
+import { isRecord } from "../../util/record"
 
 const log = Log.create({ service: "server" })
 
@@ -20,20 +21,77 @@ function stripRedactedRecord(record: Record<string, string> | undefined) {
   return Object.fromEntries(Object.entries(record).filter(([, value]) => value !== REDACTED))
 }
 
-function stripRedactedProviderOptions(options: Record<string, unknown> | undefined) {
-  if (!options) return options
-  return Object.fromEntries(
-    Object.entries(options).filter(([key, value]) => value !== REDACTED || !SECRET_OPTION_PATTERN.test(key)),
-  )
+// Credential-bearing options can sit below the top level
+// (options.headers.Authorization, options.fetchOptions.headers["x-api-key"],
+// arrays of option objects), so both the redaction pass and the PATCH strip
+// pass recurse over plain objects and arrays with a shared depth bound.
+// Copy-on-write: subtrees with nothing to change are returned by reference.
+const MAX_REDACT_DEPTH = 8
+
+function redactProviderOptionsDeep(value: unknown, depth: number): unknown {
+  if (depth >= MAX_REDACT_DEPTH) return value
+  if (Array.isArray(value)) {
+    let changed = false
+    const next = value.map((item) => {
+      const redacted = redactProviderOptionsDeep(item, depth + 1)
+      if (redacted !== item) changed = true
+      return redacted
+    })
+    return changed ? next : value
+  }
+  if (!isRecord(value)) return value
+  let changed = false
+  const entries: [string, unknown][] = []
+  for (const [key, item] of Object.entries(value)) {
+    // A secret-looking key with a non-null value is masked whole, exactly as
+    // the previous top-level-only pass did — never recursed into.
+    if (item != null && SECRET_OPTION_PATTERN.test(key)) {
+      if (item !== REDACTED) changed = true
+      entries.push([key, REDACTED])
+      continue
+    }
+    const redacted = redactProviderOptionsDeep(item, depth + 1)
+    if (redacted !== item) changed = true
+    entries.push([key, redacted])
+  }
+  return changed ? Object.fromEntries(entries) : value
 }
 
 function redactProviderOptions(options: Record<string, unknown>) {
-  return Object.fromEntries(
-    Object.entries(options).map(([key, value]) => [
-      key,
-      value != null && SECRET_OPTION_PATTERN.test(key) ? REDACTED : value,
-    ]),
-  )
+  return redactProviderOptionsDeep(options, 0) as Record<string, unknown>
+}
+
+function stripRedactedProviderOptionsDeep(value: unknown, depth: number): unknown {
+  if (depth >= MAX_REDACT_DEPTH) return value
+  if (Array.isArray(value)) {
+    let changed = false
+    const next = value.map((item) => {
+      const stripped = stripRedactedProviderOptionsDeep(item, depth + 1)
+      if (stripped !== item) changed = true
+      return stripped
+    })
+    return changed ? next : value
+  }
+  if (!isRecord(value)) return value
+  let changed = false
+  const entries: [string, unknown][] = []
+  for (const [key, item] of Object.entries(value)) {
+    // Drop a redaction sentinel only when it sits on a secret-looking key: a
+    // literal "[redacted]" value on a public key is user data, not an echo.
+    if (item === REDACTED && SECRET_OPTION_PATTERN.test(key)) {
+      changed = true
+      continue
+    }
+    const stripped = stripRedactedProviderOptionsDeep(item, depth + 1)
+    if (stripped !== item) changed = true
+    entries.push([key, stripped])
+  }
+  return changed ? Object.fromEntries(entries) : value
+}
+
+function stripRedactedProviderOptions(options: Record<string, unknown> | undefined) {
+  if (!options) return options
+  return stripRedactedProviderOptionsDeep(options, 0) as Record<string, unknown>
 }
 
 export function stripRedactedConfig(config: Config.Info): Config.Info {

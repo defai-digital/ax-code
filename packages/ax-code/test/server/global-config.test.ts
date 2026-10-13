@@ -201,6 +201,80 @@ describe("/global/config redaction", () => {
     }
   })
 
+  test("patch strips nested redacted sentinels instead of persisting them", async () => {
+    const previousConfigPath = Global.Path.config
+    await using tmp = await tmpdir()
+
+    try {
+      ;(Global.Path as { config: string }).config = tmp.path
+      Config.global.reset()
+
+      await fs.mkdir(tmp.path, { recursive: true })
+      const configPath = path.join(tmp.path, "ax-code.json")
+      await Filesystem.write(
+        configPath,
+        JSON.stringify({
+          provider: {
+            "custom-gateway": {
+              options: {
+                baseURL: "https://gateway.example/v1",
+                headers: { Authorization: "Bearer gw-secret" },
+                fetchOptions: { headers: { "x-api-key": "nested-secret" } },
+              },
+            },
+          },
+        }),
+      )
+
+      // A client echoes the GET body back: nested secret values arrive as
+      // the [redacted] sentinel and must be dropped, not written to disk.
+      const response = await Server.Default().request("/global/config", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          provider: {
+            "custom-gateway": {
+              options: {
+                baseURL: "https://gateway.example/v1",
+                headers: { Authorization: "[redacted]" },
+                fetchOptions: { headers: { "x-api-key": "[redacted]" } },
+              },
+            },
+          },
+        }),
+      })
+      expect(response.status).toBe(200)
+
+      const payload = (await response.json()) as {
+        provider?: Record<string, { options?: Record<string, unknown> }>
+      }
+      const responseOptions = payload.provider?.["custom-gateway"]?.options as {
+        headers?: Record<string, string>
+        fetchOptions?: { headers?: Record<string, string> }
+      }
+      // The response stays redacted at every depth.
+      expect(responseOptions?.headers?.Authorization).toBe("[redacted]")
+      expect(responseOptions?.fetchOptions?.headers?.["x-api-key"]).toBe("[redacted]")
+
+      const stored = JSON.parse(await Filesystem.readText(configPath)) as {
+        provider?: Record<string, { options?: Record<string, unknown> }>
+      }
+      const storedOptions = stored.provider?.["custom-gateway"]?.options as {
+        baseURL?: string
+        headers?: Record<string, string>
+        fetchOptions?: { headers?: Record<string, string> }
+      }
+      // The stored file keeps the original secrets: echoed sentinels were
+      // stripped from the patch instead of persisting "[redacted]" values.
+      expect(storedOptions?.baseURL).toBe("https://gateway.example/v1")
+      expect(storedOptions?.headers?.Authorization).toBe("Bearer gw-secret")
+      expect(storedOptions?.fetchOptions?.headers?.["x-api-key"]).toBe("nested-secret")
+    } finally {
+      ;(Global.Path as { config: string }).config = previousConfigPath
+      Config.global.reset()
+    }
+  })
+
   test("partial enablement patch keeps provider and mcp sections", async () => {
     const previousConfigPath = Global.Path.config
     await using tmp = await tmpdir()
