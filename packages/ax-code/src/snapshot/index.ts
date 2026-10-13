@@ -473,6 +473,18 @@ export namespace Snapshot {
       // Pin those objects again before GC; a failed pin must not permit pruning.
       for (const hash of retained) {
         if (existing.has(hash)) continue
+        // A retained hash whose object is already gone (never written, or
+        // pruned by an earlier gc) can never be pinned, and leaving it unpinned
+        // cannot lose anything. Skip it and keep going: returning here would
+        // let one stale reference disable pruning for every other ref, so the
+        // snapshot store would grow without bound.
+        const object = await runGit([...core, ...args(current, ["cat-file", "-e", hash])], {
+          cwd: current.directory,
+        })
+        if (object.code !== 0) {
+          log.warn("retained snapshot object is missing; skipping pin", { hash })
+          continue
+        }
         const pin = await runGit([...core, ...args(current, ["update-ref", snapshotRef(hash), hash])], {
           cwd: current.directory,
         })

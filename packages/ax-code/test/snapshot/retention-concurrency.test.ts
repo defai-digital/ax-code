@@ -156,6 +156,33 @@ test("cleanup skips destructive work if retained references cannot be read (#456
   })
 }, 60_000)
 
+test("cleanup keeps pruning when a retained snapshot object is already gone (#456)", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const file = path.join(tmp.path, "state.txt")
+      await fs.writeFile(file, "expired")
+      const expired = (await Snapshot.track())!
+      await fs.writeFile(file, "current")
+      // The newest snapshot is retained as the instance's previous hash, so the
+      // older one is the only ref the deletion pass may remove.
+      await Snapshot.track()
+      const gitdir = path.join(Global.Path.data, "snapshot", Instance.project.id)
+      const stale = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000)
+      await fs.writeFile(path.join(gitdir, "ax-code", "snapshots", expired), String(stale.getTime()))
+      // A session still references a hash whose object does not exist — never
+      // written, or pruned by an earlier gc. It can never be pinned.
+      vi.spyOn(Retention, "retainedSnapshotHashes").mockImplementation(() => new Set(["a".repeat(40)]))
+      await Snapshot.cleanup()
+      // Pre-fix the unpinnable hash ended the pass before this expired ref was
+      // considered, so every snapshot ref was kept forever.
+      const refs = await Git.git(["--git-dir", gitdir, "for-each-ref", "refs/snapshots"], { cwd: tmp.path })
+      expect(refs.text()).not.toContain(expired)
+    },
+  })
+}, 60_000)
+
 test("a failed operation releases the shared queue for another directory (#458)", async () => {
   await using tmp = await tmpdir({ git: true })
   const b = path.join(tmp.path, "b")
