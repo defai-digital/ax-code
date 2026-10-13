@@ -6,7 +6,12 @@ import { join } from "node:path"
 import { rm } from "node:fs/promises"
 import { HeadlessRequestError } from "../src/headless.js"
 import { createIpcTransport } from "../src/headless/ipc-transport.js"
-import { readIpcMessages, writeIpcMessage } from "../src/headless/ipc-protocol.js"
+import {
+  IPC_MAX_FRAME_BYTES,
+  IpcFrameTooLargeError,
+  readIpcMessages,
+  writeIpcMessage,
+} from "../src/headless/ipc-protocol.js"
 import { applyHeadlessProjectionEvent, createHeadlessProjectionState } from "../src/headless/projection.js"
 import type { IpcRequestMessage } from "../src/headless/ipc-protocol.js"
 
@@ -526,6 +531,43 @@ describe("ipc transport client", () => {
         query: { a: 1, b: undefined, c: "x" },
       })
       expect(lastRequest?.query).toEqual({ a: 1, c: "x" })
+    } finally {
+      await transport.close?.()
+    }
+  })
+
+  test("fails a pending request and tears down the socket on an oversized frame header", async () => {
+    const transport = createIpcTransport({ socketPath })
+    try {
+      // Trigger the connection handshake so the reader is actively consuming
+      // the socket before we inject the malicious frame.
+      await transport.requestJson<{ healthy: boolean }>({ path: "/global/health", method: "GET" })
+
+      // Send a stalled request that the server will never reply to, so the
+      // pending promise stays open while we inject the oversized header.
+      const pending = transport.requestJson<unknown>({ path: "/stalled", method: "GET" })
+      await vi.waitFor(() => expect(stalledRequests).toHaveLength(1))
+
+      // The fake server writes a raw 4-byte header advertising a frame larger
+      // than the cap, followed by a few body bytes. The decoder must reject
+      // this without buffering the full body.
+      for (const socket of sockets) {
+        const oversized = Buffer.alloc(4 + 8)
+        oversized.writeUInt32BE(IPC_MAX_FRAME_BYTES + 1, 0)
+        oversized.writeUInt32BE(0xdeadbeef, 4)
+        socket.write(oversized)
+      }
+
+      // The pending request must be rejected with the frame-too-large error
+      // surfaced verbatim, not a generic "IPC transport closed" error.
+      const error = await pending.catch((reason: unknown) => reason)
+      expect(error).toBeInstanceOf(IpcFrameTooLargeError)
+      expect((error as IpcFrameTooLargeError).length).toBe(IPC_MAX_FRAME_BYTES + 1)
+      expect((error as IpcFrameTooLargeError).max).toBe(IPC_MAX_FRAME_BYTES)
+
+      // The reader destroyed the socket, so subsequent requests cannot reuse
+      // the (now-closed) transport.
+      await expect(transport.close?.()).resolves.toBeUndefined()
     } finally {
       await transport.close?.()
     }

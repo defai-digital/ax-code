@@ -42,12 +42,37 @@ export type IpcEventMessage = {
 /** Length-prefixed msgpack frame (`Uint8Array`). */
 export type IpcFrame = Uint8Array
 
+// Upper bound on one framed IPC message; a larger advertised frame is rejected
+// before any body bytes are buffered.
+export const IPC_MAX_FRAME_BYTES: number = 64 * 1024 * 1024
+
+/**
+ * Error thrown when an IPC frame's length header or encoded body exceeds
+ * {@link IPC_MAX_FRAME_BYTES}. Carries the offending length and the cap so
+ * callers can surface the misconfiguration without re-deriving it.
+ */
+export class IpcFrameTooLargeError extends Error {
+  readonly length: number
+  readonly max: number
+
+  constructor(length: number, max: number) {
+    super(`IPC frame of ${length} bytes exceeds the maximum of ${max} bytes`)
+    this.name = "IpcFrameTooLargeError"
+    this.length = length
+    this.max = max
+  }
+}
+
 /**
  * Encode an IPC message as a length-prefixed msgpack frame.
  * Frame layout: [4-byte big-endian length][msgpack bytes].
+ *
+ * @throws {IpcFrameTooLargeError} when the encoded payload exceeds
+ * {@link IPC_MAX_FRAME_BYTES}.
  */
 export function encodeIpcMessage(message: IpcMessage): IpcFrame {
   const bytes = encode(message)
+  if (bytes.length > IPC_MAX_FRAME_BYTES) throw new IpcFrameTooLargeError(bytes.length, IPC_MAX_FRAME_BYTES)
   const frame = Buffer.allocUnsafe(4 + bytes.length)
   frame.writeUInt32BE(bytes.length, 0)
   frame.set(bytes, 4)
@@ -57,6 +82,9 @@ export function encodeIpcMessage(message: IpcMessage): IpcFrame {
 /**
  * Decode all complete frames present in `buffer`, returning the parsed messages
  * and the unconsumed tail. The tail must be prepended to the next chunk.
+ *
+ * @throws {IpcFrameTooLargeError} as soon as a decoded length header exceeds
+ * {@link IPC_MAX_FRAME_BYTES}, before any body bytes are buffered.
  */
 export function decodeIpcFrames(buffer: Buffer): {
   messages: IpcMessage[]
@@ -66,6 +94,7 @@ export function decodeIpcFrames(buffer: Buffer): {
   let offset = 0
   while (offset + 4 <= buffer.length) {
     const length = buffer.readUInt32BE(offset)
+    if (length > IPC_MAX_FRAME_BYTES) throw new IpcFrameTooLargeError(length, IPC_MAX_FRAME_BYTES)
     const frameEnd = offset + 4 + length
     if (frameEnd > buffer.length) break
     messages.push(decode(buffer.subarray(offset + 4, frameEnd)) as IpcMessage)

@@ -13,6 +13,8 @@ export {
   decodeIpcFrames,
   readIpcMessages,
   writeIpcMessage,
+  IpcFrameTooLargeError,
+  IPC_MAX_FRAME_BYTES,
   type IpcMessage,
   type IpcRequestMessage,
   type IpcResponseMessage,

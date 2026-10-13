@@ -165,6 +165,10 @@ export function createIpcTransport(options: IpcTransportOptions): HeadlessTransp
           handleMessage(message)
         }
       } catch (error) {
+        // The reader failed (for example, an oversized frame header). Tear the
+        // socket down so the kernel buffer cannot keep feeding bytes we will
+        // never accept, then fail every pending caller with the original error.
+        conn.socket.destroy()
         failAllPending(error instanceof Error ? error : new Error(String(error)))
       } finally {
         closed = true
