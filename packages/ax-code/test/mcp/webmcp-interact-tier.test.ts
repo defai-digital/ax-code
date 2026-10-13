@@ -204,7 +204,7 @@ describe("WebMCP T2 admission and schemas", () => {
       ["sk-", "proj-abcdefghijklmnopqrstuvwxyz0123"].join(""),
       "please use sk_live_abcdefghijklmnop1234 here",
       ["AKIA", "ABCDEFGHIJKLMNOP"].join(""),
-      "ASIAABCDEFGHIJKLMNOP",
+      ["ASIA", "ABCDEFGHIJKLMNOP"].join(""),
       `ghp_${"a".repeat(30)}`,
       `github_pat_${"a".repeat(30)}`,
       "xoxb-123456789012-abcdefghij",

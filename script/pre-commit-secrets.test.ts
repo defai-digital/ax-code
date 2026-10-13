@@ -30,4 +30,10 @@ describe.skipIf(process.platform === "win32")("staged provider credential protec
   test("admits ordinary source text", () => {
     expect(checkStaged("const provider = 'example';").status).toBe(0)
   })
+  test("blocks an AWS temporary access key id", () => {
+    const value = "ASIA" + "A".repeat(16)
+    const result = checkStaged(value)
+    expect(result.status).toBe(1)
+    expect(result.stdout).toContain("Possible secret detected")
+  })
 })
