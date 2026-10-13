@@ -54,6 +54,8 @@ import {
   resolveAxEngineApiKey,
   resolveAxEngineMaxConcurrentRequests,
   resolveAxEngineServingLimits,
+  clampAxEngineMultimodalInput,
+  AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
   axEngineEffectiveLimit,
   axEngineServingLimitShadowWarnings,
   AX_ENGINE_OUTPUT_TOKENS_ENV,
@@ -970,7 +972,7 @@ describe("ax-engine server launch args", () => {
       "8192",
       "--disable-ngram-acceleration",
       "--max-concurrent-requests",
-      "1",
+      "3",
       "--mlx-mtp-disable-ngram-stacking",
     ])
   })
@@ -987,7 +989,7 @@ describe("ax-engine server launch args", () => {
       "8192",
       "--disable-ngram-acceleration",
       "--max-concurrent-requests",
-      "1",
+      "3",
       "--mlx-mtp-disable-ngram-stacking",
       "--block-size-tokens",
       "16",
@@ -1097,7 +1099,7 @@ describe("ax-engine server launch args", () => {
       "4096",
       "--disable-ngram-acceleration",
       "--max-concurrent-requests",
-      "1",
+      "3",
       "--mlx-mtp-disable-ngram-stacking",
     ])
   })
@@ -1120,7 +1122,7 @@ describe("ax-engine server launch args", () => {
       "4096",
       "--disable-ngram-acceleration",
       "--max-concurrent-requests",
-      "1",
+      "3",
       "--mlx-mtp-disable-ngram-stacking",
     ])
   })
@@ -1148,7 +1150,7 @@ describe("ax-engine server launch args", () => {
       "8192",
       "--disable-ngram-acceleration",
       "--max-concurrent-requests",
-      "1",
+      "3",
       "--mlx-mtp-disable-ngram-stacking",
       "--block-size-tokens",
       "16",
@@ -1170,14 +1172,21 @@ describe("resolveAxEngineMaxConcurrentRequests", () => {
     expect(resolveAxEngineMaxConcurrentRequests({ maxConcurrentRequests: 4 })).toBe(4)
   })
 
-  test("falls back to 1 for missing or invalid values", () => {
+  test("drops image and video input when the prompt window exceeds the batch width", () => {
+    const input = { text: true, audio: false, image: true, video: true, pdf: false }
+    // A 27k-token agent prompt cannot prefill in one 8192-token scheduler step.
+    expect(clampAxEngineMultimodalInput(input, 32_768)).toEqual({ ...input, image: false, video: false })
+    expect(clampAxEngineMultimodalInput(input, AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS)).toBe(input)
+  })
+
+  test("falls back to the default for missing or invalid values", () => {
     const previous = process.env.AX_ENGINE_MAX_CONCURRENT_REQUESTS
     delete process.env.AX_ENGINE_MAX_CONCURRENT_REQUESTS
     try {
-      expect(resolveAxEngineMaxConcurrentRequests()).toBe(1)
-      expect(resolveAxEngineMaxConcurrentRequests({ maxConcurrentRequests: 0 })).toBe(1)
-      expect(resolveAxEngineMaxConcurrentRequests({ maxConcurrentRequests: 1.5 })).toBe(1)
-      expect(resolveAxEngineMaxConcurrentRequests({ maxConcurrentRequests: "nope" })).toBe(1)
+      expect(resolveAxEngineMaxConcurrentRequests()).toBe(3)
+      expect(resolveAxEngineMaxConcurrentRequests({ maxConcurrentRequests: 0 })).toBe(3)
+      expect(resolveAxEngineMaxConcurrentRequests({ maxConcurrentRequests: 1.5 })).toBe(3)
+      expect(resolveAxEngineMaxConcurrentRequests({ maxConcurrentRequests: "nope" })).toBe(3)
     } finally {
       if (previous === undefined) delete process.env.AX_ENGINE_MAX_CONCURRENT_REQUESTS
       else process.env.AX_ENGINE_MAX_CONCURRENT_REQUESTS = previous

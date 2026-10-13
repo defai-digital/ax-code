@@ -53,13 +53,13 @@ export const AX_ENGINE_RECOMMENDED_MEMORY_BYTES = 64 * 1024 ** 3
 export const AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES = AX_ENGINE_RECOMMENDED_MEMORY_BYTES
 export const AX_ENGINE_CODING_MODEL_MIN_MEMORY_BYTES = 96 * 1024 ** 3
 
-// Managed servers default to one in-flight request: AX Code owns a single
-// foreground agent stream, and serializing engine jobs keeps a cancelled stream
-// from racing a retry against shared prefix/speculation state. Power users on
-// high-memory hosts can opt into more via provider options
-// (`provider.ax-engine.options.maxConcurrentRequests` in ax-code.json) or the
-// AX_ENGINE_MAX_CONCURRENT_REQUESTS env var.
-export const AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS = 1
+// Managed servers default to three in-flight requests: one foreground agent
+// stream plus background callers (title, recap, compaction, wiki) that would
+// otherwise be rejected with 429 concurrency_limit while the stream is busy.
+// Lower it to 1 (`provider.ax-engine.options.maxConcurrentRequests` in
+// ax-code.json, or the AX_ENGINE_MAX_CONCURRENT_REQUESTS env var) to fully
+// serialize engine jobs on hosts where concurrent prefill exhausts the KV pool.
+export const AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS = 3
 export const AX_ENGINE_MAX_CONCURRENT_REQUESTS_ENV = "AX_ENGINE_MAX_CONCURRENT_REQUESTS"
 // ax-engine serve's built-in KV window when --total-blocks is omitted (1024 x 16).
 // Catalog launches are larger so the agent prompt fits; either override can shrink it.
@@ -221,6 +221,25 @@ export function qwen38ExactMtpProfileFingerprint(modelID: string, env: NodeJS.Di
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, value]) => `${key}=${value}`)
     .join("\n")
+}
+
+// The server launches with --max-batch-tokens fixed at the default output
+// budget and rejects any multimodal request whose whole prompt (system prompt,
+// tools and history included, not just the media) exceeds that scheduler width
+// ("multimodal prompt is N tokens but max_batch_tokens is 8192"). An agent
+// prompt on a larger context window always exceeds it, so image and video
+// input must not be advertised for such a model; unsupported media then
+// becomes a text note instead of a failed request.
+export function axEngineMultimodalFitsBatch(contextTokens: number, batchTokens = AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS) {
+  return contextTokens <= batchTokens
+}
+
+export function clampAxEngineMultimodalInput<T extends { image: boolean; video: boolean }>(
+  input: T,
+  contextTokens: number,
+): T {
+  if (axEngineMultimodalFitsBatch(contextTokens)) return input
+  return { ...input, image: false, video: false }
 }
 
 export function resolveAxEngineMaxConcurrentRequests(options: Record<string, unknown> = {}) {

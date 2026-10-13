@@ -12,6 +12,7 @@ import {
   isAxEngineBuiltinModelID,
   axEngineEffectiveLimit,
   noteAxEngineOnce,
+  clampAxEngineMultimodalInput,
   resolveAxEngineApiKey,
   resolveAxEngineMaxConcurrentRequests,
   resolveAxEngineServingLimits,
@@ -115,7 +116,7 @@ function applyLiveContract(model: Provider.Model, contract: AxEngineLiveModelCon
     reasoning: contract.capabilities.reasoning ?? model.capabilities.reasoning,
     toolcall: contract.toolcall,
     attachment: contract.attachment,
-    input: contract.capabilities.input ?? model.capabilities.input,
+    input: clampAxEngineMultimodalInput(contract.capabilities.input ?? model.capabilities.input, model.limit.context),
     output: contract.capabilities.output ?? model.capabilities.output,
     interleaved: contract.capabilities.interleaved ?? model.capabilities.interleaved,
   }

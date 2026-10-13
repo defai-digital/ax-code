@@ -138,6 +138,8 @@ export type AxEngineServerOptions = {
 // the model's declared contextTokens so the server window matches what the
 // prompt budgeter assumes.
 const AX_ENGINE_SERVER_BLOCK_SIZE_TOKENS = 16
+// Servers whose state file has no maxConcurrentRequests were launched with a cap of 1.
+const LEGACY_MAX_CONCURRENT_REQUESTS = 1
 
 function prefixGeometry(input: { apiModelID: string; contextTokens?: number; binaryVersion?: string }) {
   const version = input.binaryVersion ? semver.coerce(input.binaryVersion) : undefined
@@ -744,10 +746,11 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   const maxOutputTokensFlagMatches = (existing?.maxOutputTokensFlag ?? false) === maxOutputTokensFlag
   // The concurrency cap is fixed at launch (--max-concurrent-requests), so a
   // running server started with a different value must be relaunched, not
-  // reused. State files predating this field were launched at the default.
+  // reused. State files predating this field were launched at 1 (the default
+  // then), not at the current default.
   const maxConcurrentRequests = options.maxConcurrentRequests ?? AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS
   const maxConcurrentRequestsMatches =
-    (existing?.maxConcurrentRequests ?? AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS) === maxConcurrentRequests
+    (existing?.maxConcurrentRequests ?? LEGACY_MAX_CONCURRENT_REQUESTS) === maxConcurrentRequests
   const speculationProfile = options.speculationProfile ?? axEngineSpeculationProfile(options.apiModelID)
   const mtpMode = options.mtpMode ?? AX_ENGINE_MTP_MODE
   const mtpPolicy = axEngineMtpLaunchPolicy(options.mtpPolicy, options.binaryVersion)
@@ -840,7 +843,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
             !maxOutputTokensMatches ? `maxOutputTokens: ${existing.maxOutputTokens} -> ${maxOutputTokens}` : undefined,
             !maxOutputTokensFlagMatches ? "maxOutputTokensFlag changed" : undefined,
             !maxConcurrentRequestsMatches
-              ? `maxConcurrentRequests: ${existing.maxConcurrentRequests ?? AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS} -> ${maxConcurrentRequests}`
+              ? `maxConcurrentRequests: ${existing.maxConcurrentRequests ?? LEGACY_MAX_CONCURRENT_REQUESTS} -> ${maxConcurrentRequests}`
               : undefined,
             !speculationMatches
               ? `speculationProfile: ${existing.speculationProfile} -> ${speculationProfile}`

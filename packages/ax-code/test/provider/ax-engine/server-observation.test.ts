@@ -5,6 +5,7 @@ import { tmpdir } from "../../fixture/fixture"
 import { Process } from "../../../src/util/process"
 import { FileLock } from "../../../src/util/filelock"
 import {
+  AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS,
   AX_ENGINE_DEFAULT_MODEL_ID,
   axEngineSpeculationProfile,
   qwen38ExactMtpProfileFingerprint,
@@ -77,6 +78,7 @@ async function isolate(dir: string) {
     binaryPath,
     binaryIdentity: await axEngineBinaryIdentity({ binaryPath }),
     startedAt: 1,
+    maxConcurrentRequests: AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS,
   }
   await fs.writeFile(AxEnginePaths.serverState, JSON.stringify(state))
   return state
