@@ -75,11 +75,11 @@ changes what is sent to the agent.
 
 ## What the agent can do
 
-| Tier     | Tools                                                                                                          | Approval                                                   |
-| -------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| Pages    | list, open, navigate, reload, close pages; run tools a page registers through WebMCP                           | each call unless a supported scope was saved               |
-| Read     | page snapshot, screenshot, console (with stack traces on request), one console message by id, request metadata | one grant per origin per session, or a saved read approval |
-| Interact | click, hover, wait, fill, fill form, press key, answer dialogs                                                 | see below                                                  |
+| Tier     | Tools                                                                                                                                                   | Approval                                                   |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Pages    | list, open, navigate, reload, close pages; run tools a page registers through WebMCP                                                                    | each call unless a supported scope was saved               |
+| Read     | page snapshot, screenshot, console (with stack traces on request), one console message by id, request metadata, one request's headers, viewport presets | one grant per origin per session, or a saved read approval |
+| Interact | click, hover, wait, fill, fill form, press key, answer dialogs                                                                                          | see below                                                  |
 
 Page content is untrusted: a page can try to steer the agent. Output is
 labeled with its origin and size-limited.
@@ -101,6 +101,22 @@ Console messages can include stack traces (`includeStackTraces`), and one
 message can be fetched by its `msgid` with `get_console_message`. Local file
 paths in frames are redacted before the model sees them; page URLs keep
 their path but lose secret-looking query values.
+
+### Request headers and viewport presets
+
+`get_network_request` takes the `reqid` from `list_network_requests` and
+returns that request's status, request and response headers and redirect
+chain, for CORS, cache, redirect and 4xx questions. Request and response
+bodies are never returned (the placeholder says so), credential headers such
+as `cookie`, `set-cookie` and `authorization` are redacted twice (by the
+bridge's allowlist and by AX Code), and nothing is written to disk.
+
+`resize_page` sets the viewport to one of four presets: 375x812 (phone),
+768x1024 (tablet), 1280x800 (laptop) and 1440x900 (desktop). Other sizes are
+refused. A resize invalidates the page's snapshot uids, so the agent snapshots
+again before it acts. Both tools run under the page origin's read grant. The
+`responsive-check`, `a11y-check` and `webmcp-audit` skills build on these
+reads (see "Skills for WebMCP").
 
 ### Auto mode and Sandbox
 
@@ -589,9 +605,10 @@ Narrow console reads with `types` and `pageSize`; narrow network metadata with
 `resourceTypes` and `pageSize`. Workflow receipts retain pre-action baselines
 and bounded deltas so errors introduced by the reproduction are easier to find.
 Network bodies and arbitrary evaluation remain outside the bridge's granted
-surface. Performance traces, emulation, Lighthouse, screencasts, memory and
-extension tools in upstream DevTools MCP are separate capabilities and are not
-exposed by this profile.
+surface. Performance traces, device emulation (`emulate`), Lighthouse,
+screencasts, memory and extension tools in upstream DevTools MCP are separate
+capabilities and are not exposed by this profile; `resize_page` is admitted
+only for the four viewport presets.
 
 See Chrome's [WebMCP debugging guide](https://developer.chrome.com/docs/devtools/agents/webmcp-debugging)
 and the upstream [DevTools MCP tool reference](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/main/docs/tool-reference.md).

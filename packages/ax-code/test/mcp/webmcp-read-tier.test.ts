@@ -98,11 +98,9 @@ describe("WebMCP T1 read tier profile", () => {
       "click",
       "fill",
       "upload_file",
-      "get_network_request",
       "wait_for",
       "handle_dialog",
       "select_page",
-      "resize_page",
       "stay",
     ]) {
       expect(WebMcpProfile.allows(name, profile)).toBe(false)
@@ -111,6 +109,11 @@ describe("WebMCP T1 read tier profile", () => {
     // get_console_message joined the read scope in ADR-192: admitted with read on, rejected without it.
     expect(WebMcpProfile.allows("get_console_message", profile)).toBe(true)
     expect(WebMcpProfile.allows("get_console_message", plainProfile())).toBe(false)
+    // resize_page (ADR-193) and get_network_request (ADR-194) join the same grant.
+    expect(WebMcpProfile.allows("resize_page", profile)).toBe(true)
+    expect(WebMcpProfile.allows("resize_page", plainProfile())).toBe(false)
+    expect(WebMcpProfile.allows("get_network_request", profile)).toBe(true)
+    expect(WebMcpProfile.allows("get_network_request", plainProfile())).toBe(false)
   })
 
   test("T1 schemas are strict: filePath and unknown keys are rejected, pageId is required", () => {
@@ -451,7 +454,7 @@ describe("WebMCP read grants and bounded output (ADR-171)", () => {
 describe("WebMCP network metadata admission (ADR-172)", () => {
   // Every tool the pinned chrome-devtools-mcp@1.8.0 registers (extracted from
   // its vendored tools/*.js). The admission contract pins exactly the six T0
-  // tools plus the four read-scope tools: a regression in allows() must fail
+  // tools plus the read-scope tools: a regression in allows() must fail
   // here rather than silently widen the surface that reaches the model.
   const UPSTREAM_TOOLS = [
     "click",

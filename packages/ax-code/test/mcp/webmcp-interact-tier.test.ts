@@ -10,7 +10,7 @@ const readOnly = () => WebMcpProfile.config({ allowedOrigins: [], read: true }, 
 const interactOnly = () => WebMcpProfile.config({ allowedOrigins: [], interact: true }, true).webmcp
 const full = () => WebMcpProfile.config({ allowedOrigins: [], read: true, interact: true }, true).webmcp
 
-const NEVER_ADMITTED = ["click_at", "type_text", "drag", "upload_file", "select_page", "resize_page", "evaluate_script"]
+const NEVER_ADMITTED = ["click_at", "type_text", "drag", "upload_file", "select_page", "emulate", "evaluate_script"]
 
 /** A structured snapshot like the pinned bridge returns with --experimental-structured-content. */
 function snapshotResult(extra: Record<string, unknown>[] = []) {
@@ -94,14 +94,14 @@ async function tool(name: string, profile: WebMcpProfile.Configuration, client: 
 }
 
 describe("WebMCP T2 admission and schemas", () => {
-  test("interact off rejects every T2 tool; interact on admits 6 + 5 + 7 and nothing else", () => {
+  test("interact off rejects every T2 tool; interact on admits 6 + 7 + 7 and nothing else", () => {
     for (const name of WebMcpProfile.INTERACT_TOOLS) {
       expect(WebMcpProfile.allows(name)).toBe(false)
       expect(WebMcpProfile.allows(name, readOnly())).toBe(false)
       expect(() => WebMcpProfile.callSchema(name, readOnly())).toThrow("not admitted")
     }
     const admitted = [...WebMcpProfile.TOOLS, ...WebMcpProfile.READ_SCOPE_TOOLS, ...WebMcpProfile.INTERACT_TOOLS]
-    expect(admitted).toHaveLength(18)
+    expect(admitted).toHaveLength(20)
     for (const name of admitted) expect(WebMcpProfile.allows(name, full())).toBe(true)
     for (const name of NEVER_ADMITTED) {
       expect(WebMcpProfile.allows(name, full())).toBe(false)

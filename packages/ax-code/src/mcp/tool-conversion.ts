@@ -465,6 +465,11 @@ export async function convertMcpTool(
               throw new Error("WebMCP page navigated during the read; the read output is discarded")
             }
             WebMcpProfile.boundReadResult(webmcp.toolName, result, readOrigin)
+            // The layout changed, so every uid recorded before the resize
+            // may now point elsewhere.
+            if (webmcp.toolName === "resize_page") {
+              WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
+            }
             // ADR-174 rule 5: the structured snapshot becomes the uid map
             // for later actions, bound to the URL resolved right after it.
             if (webmcp.toolName === "take_snapshot") {
@@ -549,6 +554,11 @@ export async function convertMcpTool(
         // mixed success-plus-Unable payload, a landing off the allowlist). The
         // same-URL check in verifyTarget cannot see that, so the map and the
         // listing baseline go either way.
+        if (webmcp?.toolName === "resize_page" && WebMcpProfile.wasDispatched(args)) {
+          // The viewport may have changed even when the read checks failed afterwards.
+          const pageId = (input as Record<string, unknown>).pageId
+          if (typeof pageId === "number") WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
+        }
         if (webmcp?.toolName === "navigate_page" && WebMcpProfile.wasDispatched(args)) {
           const pageId = (input as Record<string, unknown>).pageId
           if (typeof pageId === "number") {
