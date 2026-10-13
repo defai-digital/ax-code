@@ -1908,6 +1908,12 @@ export namespace MCP {
             if (s.status[clientName]?.status !== "connected") {
               return []
             }
+            // A server implements only the capabilities it declares; listing
+            // prompts on a tools-only server fails with JSON-RPC -32601 on
+            // every catalog refresh (chrome-devtools-mcp declares logging only).
+            if (!client.getServerCapabilities()?.prompts) {
+              return []
+            }
 
             return Object.entries(
               (await fetchItemsForClient<PromptInfo>(
@@ -1936,6 +1942,11 @@ export namespace MCP {
         await Promise.all(
           Object.entries(clientsSnapshot).map(async ([clientName, client]) => {
             if (s.status[clientName]?.status !== "connected") {
+              return []
+            }
+            // Same capability gate as prompts(): a server without the
+            // resources capability answers resources/list with -32601.
+            if (!client.getServerCapabilities()?.resources) {
               return []
             }
 
