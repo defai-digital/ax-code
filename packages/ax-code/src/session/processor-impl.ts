@@ -637,8 +637,14 @@ export namespace SessionProcessor {
               | { type: "tool_call"; callID: string; tool: string; input: Record<string, unknown> }
             > = []
             lastStreamError = undefined
+            // A setup the caller started ahead of time belongs to the first
+            // attempt only: a retry must set up again rather than replay a
+            // rejected or stale promise.
+            const preparedSetup = activeStreamInput.setup
+            activeStreamInput = { ...activeStreamInput, setup: undefined }
             const stream = await deps.stream({
               ...activeStreamInput,
+              setup: preparedSetup,
               replay: {
                 messageID: input.assistantMessage.id,
                 stepIndex: attempt,

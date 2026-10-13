@@ -2,12 +2,13 @@ import { ModelID, ProviderID } from "../../src/provider/schema"
 import { Config } from "../../src/config/config"
 import { MessageV2 } from "../../src/session/message-v2"
 import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
-import { APICallError } from "ai"
+import { APICallError, jsonSchema } from "ai"
 import path from "path"
 import { access, writeFile } from "node:fs/promises"
 import { Instance } from "../../src/project/instance"
 import { Permission } from "../../src/permission"
 import { Provider } from "../../src/provider/provider"
+import { MCP } from "../../src/mcp"
 import { Session } from "../../src/session"
 import type { SessionID } from "../../src/session/schema"
 import { LLM } from "../../src/session/llm"
@@ -679,6 +680,125 @@ describe("session.prompt flow", () => {
         await Session.remove(session.id)
       },
     })
+  })
+
+  test("finishes local engine setup before building the tool list so a bridge that connects meanwhile is included", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const localModel = { ...model, providerID: "ax-engine" as any, limit: { context: 65_536, output: 8_192 } }
+    let bridgeConnected = false
+    const order: string[] = []
+    const toolsSeen: string[][] = []
+
+    modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(localModel)
+    summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+    const prepareSpy = vi.spyOn(LLM, "prepareSetup").mockImplementation((() => {
+      order.push("setup:start")
+      return (async () => {
+        // Engine launch takes a while; the bridge connects during it.
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        bridgeConnected = true
+        order.push("setup:done")
+        return [{}, {}, {}] as any
+      })()
+    }) as any)
+    const mcpSpy = vi.spyOn(MCP, "tools").mockImplementation((async () => {
+      order.push(bridgeConnected ? "tools:connected" : "tools:before-connect")
+      return bridgeConnected
+        ? {
+            late_bridge_tool: {
+              description: "added by a bridge that connected during setup",
+              inputSchema: jsonSchema({ type: "object", properties: {} }),
+              execute: async () => ({}),
+            },
+          }
+        : {}
+    }) as any)
+    streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async (input) => {
+      toolsSeen.push(Object.keys(input.tools))
+      expect(input.setup).toBeDefined()
+      return {
+        fullStream: (async function* () {
+          yield { type: "start" }
+          yield { type: "start-step" }
+          yield { type: "text-start", id: "text_1" }
+          yield { type: "text-delta", id: "text_1", text: "done" }
+          yield { type: "text-end", id: "text_1" }
+          yield {
+            type: "finish-step",
+            finishReason: "stop",
+            usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12 },
+          }
+          yield { type: "finish" }
+        })(),
+      } as any
+    })
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({ title: "Setup before tools" })
+          await SessionPrompt.prompt({
+            model: { providerID: localModel.providerID, modelID: localModel.id },
+            sessionID: session.id,
+            agent: "build",
+            parts: [{ type: "text", text: "hello" }],
+          })
+          expect(order.indexOf("setup:done")).toBeGreaterThanOrEqual(0)
+          expect(order.indexOf("tools:before-connect")).toBe(-1)
+          expect(toolsSeen[0]).toContain("late_bridge_tool")
+          await Session.remove(session.id)
+        },
+      })
+    } finally {
+      prepareSpy.mockRestore()
+      mcpSpy.mockRestore()
+    }
+  })
+
+  test("does not start provider setup ahead of the request for other providers", async () => {
+    await using tmp = await tmpdir({ git: true })
+    modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+    summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+    const prepareSpy = vi.spyOn(LLM, "prepareSetup")
+    let setupPassed: unknown = "unset"
+    streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async (input) => {
+      setupPassed = input.setup
+      return {
+        fullStream: (async function* () {
+          yield { type: "start" }
+          yield { type: "start-step" }
+          yield { type: "text-start", id: "text_1" }
+          yield { type: "text-delta", id: "text_1", text: "ok" }
+          yield { type: "text-end", id: "text_1" }
+          yield {
+            type: "finish-step",
+            finishReason: "stop",
+            usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12 },
+          }
+          yield { type: "finish" }
+        })(),
+      } as any
+    })
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({ title: "Other provider setup" })
+          await SessionPrompt.prompt({
+            model: { providerID: model.providerID, modelID: model.id },
+            sessionID: session.id,
+            agent: "build",
+            parts: [{ type: "text", text: "hello" }],
+          })
+          expect(prepareSpy).not.toHaveBeenCalled()
+          expect(setupPassed).toBeUndefined()
+          await Session.remove(session.id)
+        },
+      })
+    } finally {
+      prepareSpy.mockRestore()
+    }
   })
 
   test("defers automatic indexing until after the prompt completes", async () => {

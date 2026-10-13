@@ -102,6 +102,12 @@ export namespace LLM {
     toolChoice?: "auto" | "required" | "none"
     config?: Awaited<ReturnType<typeof Config.get>>
     /**
+     * Provider setup the caller already started with `prepareSetup`. It is
+     * awaited instead of starting a second setup, so a failure surfaces here
+     * exactly as it would have, and nothing is retried or timed twice.
+     */
+    setup?: ProviderSetup
+    /**
      * Optional hard ceiling for this request only. Used for local-engine
      * truncated-turn recovery so soft "keep it short" instructions cannot burn
      * multi-minute full max_tokens windows when the model ignores them.
@@ -145,6 +151,44 @@ export namespace LLM {
     return undefined
   }
 
+  export type ProviderSetup = Promise<
+    [
+      Awaited<ReturnType<typeof Provider.getLanguage>>,
+      Awaited<ReturnType<typeof Config.get>>,
+      Awaited<ReturnType<typeof Provider.getProvider>>,
+    ]
+  >
+
+  /**
+   * Resolve the language model, config and provider for a request. Local
+   * ax-engine may launch its server here, which takes seconds to minutes, so a
+   * caller that builds the system prompt and tool list around the request can
+   * start this first and build them afterwards, then hand the same promise to
+   * `stream` as `setup`.
+   */
+  export function prepareSetup(input: {
+    model: Provider.Model
+    abort: AbortSignal
+    config?: Awaited<ReturnType<typeof Config.get>>
+  }): ProviderSetup {
+    // getLanguage() may call getSDK() with its own 60s install timeout. Local
+    // ax-engine gets a wider envelope because startup can queue behind a
+    // cross-process model load before it can report its own error.
+    const loadSetup = (signal: AbortSignal) =>
+      Promise.all([
+        Provider.getLanguage(input.model, { signal }),
+        input.config ?? Config.get(),
+        Provider.getProvider(input.model.providerID),
+      ])
+    return input.model.providerID === AX_ENGINE_PROVIDER_ID
+      ? resolveAxEngineSetup({ modelID: input.model.id, signal: input.abort }, loadSetup)
+      : withTimeout(
+          loadSetup(input.abort),
+          DEFAULT_SETUP_TIMEOUT_MS,
+          `LLM setup timed out for ${input.model.providerID}/${input.model.id} — provider may be unreachable`,
+        )
+  }
+
   export async function stream(input: StreamInput) {
     await Provider.assertLocalRoute(input.user.model.providerID, input.model.providerID)
     const timing = RequestTiming.create()
@@ -166,23 +210,8 @@ export namespace LLM {
     if (input.abort?.aborted) {
       throw new DOMException("Aborted", "AbortError")
     }
-    // 90s default: getLanguage() may call getSDK() with its own 60s install
-    // timeout. Local ax-engine gets a wider envelope because startup can queue
-    // behind a cross-process model load before it can report its own error.
-    const loadSetup = (signal: AbortSignal) =>
-      Promise.all([
-        Provider.getLanguage(input.model, { signal }),
-        input.config ?? Config.get(),
-        Provider.getProvider(input.model.providerID),
-      ])
-    const [language, cfg, provider] =
-      input.model.providerID === AX_ENGINE_PROVIDER_ID
-        ? await resolveAxEngineSetup({ modelID: input.model.id, signal: input.abort }, loadSetup)
-        : await withTimeout(
-            loadSetup(input.abort),
-            DEFAULT_SETUP_TIMEOUT_MS,
-            `LLM setup timed out for ${input.model.providerID}/${input.model.id} — provider may be unreachable`,
-          )
+    const [language, cfg, provider] = await (input.setup ??
+      prepareSetup({ model: input.model, abort: input.abort, config: input.config }))
 
     const localInference = isLocalInferenceConnection({
       providerID: input.model.providerID,

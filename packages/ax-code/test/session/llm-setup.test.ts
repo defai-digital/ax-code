@@ -163,3 +163,35 @@ test("pre-cancelled setup never enters its loader", async () => {
   await expect(resolveAxEngineSetup({ modelID: "test", signal: AbortSignal.abort(reason) }, load)).rejects.toBe(reason)
   expect(load).not.toHaveBeenCalled()
 })
+
+test("a prepared setup replaces a second setup and surfaces its failure unchanged", async () => {
+  const providerID = ProviderID.make("ax-engine")
+  const modelID = ModelID.make("qwen3.8-27b-axq-6bit")
+  const getLanguage = vi.spyOn(Provider, "getLanguage")
+  const failure = new Error("Prepared setup failed")
+  const prepared = Promise.reject(failure)
+  prepared.catch(() => undefined)
+  const caller = new AbortController()
+  const sessionID = SessionID.descending()
+  const result = await LLM.stream({
+    sessionID,
+    model: { id: modelID, providerID } as Provider.Model,
+    user: {
+      id: MessageID.ascending(),
+      sessionID,
+      role: "user",
+      time: { created: Date.now() },
+      agent: "test",
+      model: { providerID, modelID },
+    },
+    agent: { name: "test", mode: "primary", options: {}, permission: [] },
+    config: {},
+    system: [],
+    messages: [],
+    tools: {},
+    abort: caller.signal,
+    setup: prepared,
+  }).catch((error: unknown) => error)
+  expect(result).toBe(failure)
+  expect(getLanguage).not.toHaveBeenCalled()
+})

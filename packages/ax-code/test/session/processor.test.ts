@@ -2183,3 +2183,31 @@ test("partial output locks automatic replay even when the API error is transient
     },
   })
 })
+
+test("a setup prepared by the caller is used for the first attempt only", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const setups: unknown[] = []
+      const stream = vi.fn(async (input: LLM.StreamInput) => {
+        setups.push(input.setup)
+        if (setups.length === 1) {
+          throw new MessageV2.APIError({ message: "Service Unavailable", statusCode: 503, isRetryable: true })
+        }
+        return successfulTextStream("recovered") as unknown as Awaited<ReturnType<typeof LLM.stream>>
+      })
+      const sleep = vi.fn(async () => {})
+      const { processor, streamInput } = await createProcessorFixture(
+        tmp.path,
+        processorDependencies({ stream, sleep }),
+      )
+      const prepared = Promise.resolve([{}, {}, {}] as unknown as Awaited<LLM.ProviderSetup>)
+      await processor.process({ ...streamInput, setup: prepared })
+      expect(stream).toHaveBeenCalledTimes(2)
+      expect(setups[0]).toBe(prepared)
+      // A retry sets up again instead of replaying a possibly rejected promise.
+      expect(setups[1]).toBeUndefined()
+    },
+  })
+})

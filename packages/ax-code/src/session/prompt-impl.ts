@@ -137,6 +137,7 @@ import {
   promptLoopLimits,
 } from "./prompt/prompt-loop-config"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
+import { LLM } from "./llm"
 import { clearSessionToolCycleRing, sessionToolCycleSignatures } from "./tool-cycle-ring"
 import { GOAL_CEILING_CONVERGENCE_STEPS, ORDINARY_RUN_CEILING_CONVERGENCE_STEPS } from "@/constants/session"
 import {
@@ -1256,6 +1257,15 @@ export namespace SessionPrompt {
         scheduleFirstTurnSummary({ sessionID, messageID: lastUser.id, messages: msgs })
       }
 
+      // Local engine startup can take tens of seconds. Start it before the
+      // system prompt and tool list are built so a WebMCP bridge that connects
+      // meanwhile is part of this request, instead of a tool-set change on the
+      // next step that discards the prompt cache. The same promise is handed to
+      // the stream, so a failure surfaces there exactly as before.
+      const providerSetup =
+        model.providerID === AX_ENGINE_PROVIDER_ID ? LLM.prepareSetup({ model, abort, config: cfg }) : undefined
+      await providerSetup?.catch(() => undefined)
+
       const request = await preparePromptRequest({
         sessionID,
         messages: msgs,
@@ -1462,6 +1472,7 @@ export namespace SessionPrompt {
             toolChoice,
             small: promptPolicy.fastReasoning,
             config: cfg,
+            setup: providerSetup,
             maxOutputTokens: maxOutputTokensForRequest,
           },
           {
