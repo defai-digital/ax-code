@@ -38,6 +38,8 @@ Observation IDs are session-owned, bounded and expire after 30 minutes. A change
 
 Prefer semantic snapshots for text, locators and assertions. Use screenshots for layout, canvas or image-only questions when model vision is available. Narrow console/network reads around the action when investigating a failure.
 
+For breakpoint checks load the `responsive-check` skill, for accessibility the `a11y-check` skill, and for reviewing an app's own page tools the `webmcp-audit` skill.
+
 | Action                   | Required context                                                                                                                        |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `click`, `hover`, `fill` | Fresh snapshot of this page; pass its element `uid`.                                                                                    |

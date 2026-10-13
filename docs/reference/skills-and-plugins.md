@@ -11,32 +11,35 @@ The default `/` menu is a control plane (`/plan`, `/review`, `/debug`, `/status`
 
 ## Built-in skills (shipped under `packages/ax-code/skills/`)
 
-| Skill                     | Purpose                                                                    | Slash                     |
-| ------------------------- | -------------------------------------------------------------------------- | ------------------------- |
-| `debug-n-fix`             | Debug then fix with verification                                           | Use `/debug`              |
-| `debug-only`              | Investigation without code changes                                         | Agent-only                |
-| `improve-overall`         | Broad quality improvements                                                 | Agent-only                |
-| `improve-security`        | Security-focused improvements                                              | Agent-only                |
-| `mcp`                     | MCP setup guidance                                                         | Use `/mcp`                |
-| `run`                     | Launch and observe the app                                                 | Agent-only                |
-| `simplify`                | Tighten recently changed code                                              | Agent-only                |
-| `verify`                  | Runtime verification report                                                | Agent-only                |
-| `verified-change`         | Edit only after a failing signal, then re-run the same check               | `/verified-change`        |
-| `safe-db-migration`       | Expand/backfill/contract schema changes with rollback notes                | `/safe-db-migration`      |
-| `api-contract`            | Additive-first public API / schema evolution                               | `/api-contract`           |
-| `incident-observability`  | Evidence-first incident diagnosis before a patch                           | `/incident-observability` |
-| `auth-boundaries`         | Authn/authz, tenant isolation, negative tests                              | `/auth-boundaries`        |
-| `queue-worker`            | Idempotent queue/worker changes and duplicate delivery                     | `/queue-worker`           |
-| `ruby-on-rails`           | Rails conventions without booting the Rails process                        | Agent-only                |
-| `webmcp`                  | Verify a web app or run a page's WebMCP tools through the connected bridge | Use `/webmcp`             |
-| `browser-troubleshooting` | Diagnose WebMCP bridge enable, launch, policy and grant failures           | Agent-only                |
-| `cloud-ops-aws`           | Operate AWS resources with inventory-first reversible changes              | Agent-only                |
-| `cloud-ops-gcp`           | Operate GCP resources with inventory-first reversible changes              | Agent-only                |
-| `cloud-ops-cloudflare`    | Operate Cloudflare resources via wrangler with rollback                    | Agent-only                |
-| `cloud-ops-digitalocean`  | Operate DigitalOcean resources via doctl with snapshots                    | Agent-only                |
-| `cloud-ops-runpod`        | Operate RunPod resources with inventory-first discipline                   | Agent-only                |
-| `vyos-firewall`           | Administer VyOS routers over SSH with commit-confirm                       | Agent-only                |
-| `junos-firewall`          | Administer Junos firewalls over SSH with commit confirmed                  | Agent-only                |
+| Skill                     | Purpose                                                                             | Slash                     |
+| ------------------------- | ----------------------------------------------------------------------------------- | ------------------------- |
+| `debug-n-fix`             | Debug then fix with verification                                                    | Use `/debug`              |
+| `debug-only`              | Investigation without code changes                                                  | Agent-only                |
+| `improve-overall`         | Broad quality improvements                                                          | Agent-only                |
+| `improve-security`        | Security-focused improvements                                                       | Agent-only                |
+| `mcp`                     | MCP setup guidance                                                                  | Use `/mcp`                |
+| `run`                     | Launch and observe the app                                                          | Agent-only                |
+| `simplify`                | Tighten recently changed code                                                       | Agent-only                |
+| `verify`                  | Runtime verification report                                                         | Agent-only                |
+| `verified-change`         | Edit only after a failing signal, then re-run the same check                        | `/verified-change`        |
+| `safe-db-migration`       | Expand/backfill/contract schema changes with rollback notes                         | `/safe-db-migration`      |
+| `api-contract`            | Additive-first public API / schema evolution                                        | `/api-contract`           |
+| `incident-observability`  | Evidence-first incident diagnosis before a patch                                    | `/incident-observability` |
+| `auth-boundaries`         | Authn/authz, tenant isolation, negative tests                                       | `/auth-boundaries`        |
+| `queue-worker`            | Idempotent queue/worker changes and duplicate delivery                              | `/queue-worker`           |
+| `ruby-on-rails`           | Rails conventions without booting the Rails process                                 | Agent-only                |
+| `webmcp`                  | Verify a web app or run a page's WebMCP tools through the connected bridge          | Use `/webmcp`             |
+| `browser-troubleshooting` | Diagnose WebMCP bridge enable, launch, policy and grant failures                    | Agent-only                |
+| `responsive-check`        | Viewport-preset layout pass through the WebMCP bridge                               | Agent-only                |
+| `a11y-check`              | Snapshot and keyboard accessibility pass through the WebMCP bridge                  | Agent-only                |
+| `webmcp-audit`            | Audit an app's registered WebMCP tools with inventory, contracts and selection eval | Agent-only                |
+| `cloud-ops-aws`           | Operate AWS resources with inventory-first reversible changes                       | Agent-only                |
+| `cloud-ops-gcp`           | Operate GCP resources with inventory-first reversible changes                       | Agent-only                |
+| `cloud-ops-cloudflare`    | Operate Cloudflare resources via wrangler with rollback                             | Agent-only                |
+| `cloud-ops-digitalocean`  | Operate DigitalOcean resources via doctl with snapshots                             | Agent-only                |
+| `cloud-ops-runpod`        | Operate RunPod resources with inventory-first discipline                            | Agent-only                |
+| `vyos-firewall`           | Administer VyOS routers over SSH with commit-confirm                                | Agent-only                |
+| `junos-firewall`          | Administer Junos firewalls over SSH with commit confirmed                           | Agent-only                |
 
 Skills use `SKILL.md` with YAML frontmatter (`name`, `description`, optional `paths`, `allowed-tools`).
 

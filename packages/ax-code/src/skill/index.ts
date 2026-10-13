@@ -202,6 +202,9 @@ export namespace Skill {
   export const BUILTIN_NAMES = new Set([
     "webmcp",
     "browser-troubleshooting",
+    "responsive-check",
+    "a11y-check",
+    "webmcp-audit",
     "debug-only",
     "debug-n-fix",
     "improve-overall",
