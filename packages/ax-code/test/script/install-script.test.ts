@@ -341,3 +341,158 @@ printf '%s' '{"tag_name": "v7.8.1"}' | extract
     expect(text).not.toContain("-baseline")
   })
 })
+
+describe("install script ax-engine offer", () => {
+  type Scenario = {
+    choice?: "yes" | "no" | ""
+    uname?: string
+    machine?: string
+    memsize?: number
+    prior?: boolean
+    stamp?: boolean
+    answer?: string
+    env?: Record<string, string>
+    binaryPath?: string
+    enginePresent?: boolean
+  }
+
+  async function run(scenario: Scenario) {
+    await using tmp = await tmpdir()
+    const text = await readFile(installScript, "utf-8")
+    const start = text.indexOf("# AX_ENGINE_OFFER_START")
+    const end = text.indexOf("# AX_ENGINE_OFFER_END")
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    const bin = path.join(tmp.path, "stubs")
+    const home = path.join(tmp.path, "home")
+    const installDir = path.join(home, ".ax-code", "bin")
+    const calls = path.join(tmp.path, "calls.log")
+    const tty = path.join(tmp.path, "tty")
+    await Bun_mkdirs([bin, installDir])
+    await writeFile(
+      path.join(bin, "uname"),
+      `#!/bin/sh\nif [ "$1" = "-m" ]; then echo ${scenario.machine ?? "arm64"}; else echo ${scenario.uname ?? "Darwin"}; fi\n`,
+    )
+    await writeFile(
+      path.join(bin, "sysctl"),
+      `#!/bin/sh\ncase "$*" in *hw.memsize*) echo ${scenario.memsize ?? 128 * 1024 ** 3};; *) echo 0;; esac\n`,
+    )
+    if (scenario.enginePresent) await writeFile(path.join(bin, "ax-engine"), "#!/bin/sh\n")
+    await writeFile(path.join(installDir, "ax-code"), `#!/bin/sh\necho "$@" >> "${calls}"\n`)
+    await writeFile(tty, scenario.answer === undefined ? "" : `${scenario.answer}\n`)
+    for (const file of [...["uname", "sysctl"], ...(scenario.enginePresent ? ["ax-engine"] : [])]) {
+      await chmod(path.join(bin, file), 0o755)
+    }
+    await chmod(path.join(installDir, "ax-code"), 0o755)
+    if (scenario.stamp) {
+      await Bun_mkdirs([path.join(home, ".ax-code", "state")])
+      await writeFile(path.join(home, ".ax-code", "state", "engine-prompted"), "answer=no\n")
+    }
+    const driver = [
+      "set -euo pipefail",
+      'APP=ax-code; NC=""; RED=""',
+      'print_message() { echo "$2"; }',
+      text.slice(start, end),
+      `INSTALL_DIR='${installDir}'; INSTALL_ROOT='${path.join(home, ".ax-code")}'`,
+      `engine_choice='${scenario.choice ?? ""}'; prior_install=${scenario.prior ? "true" : "false"}; binary_path='${scenario.binaryPath ?? ""}'`,
+      "ax_engine_offer",
+    ].join("\n")
+    const env = {
+      PATH: `${bin}:/usr/bin:/bin`,
+      HOME: home,
+      TERM: "xterm-256color",
+      AX_CODE_INSTALL_TTY: tty,
+      AX_CODE_INSTALL_ENGINE_DIRS: path.join(tmp.path, "no-engine-here"),
+      ...scenario.env,
+    }
+    let output = ""
+    try {
+      output = execFileSync("/bin/bash", ["-c", driver], { env, encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"] })
+    } catch (error) {
+      throw new Error(`driver failed: ${String((error as { stderr?: string }).stderr)}`)
+    }
+    const called = await readFile(calls, "utf-8").catch(() => "")
+    const stampPath = path.join(home, ".ax-code", "state", "engine-prompted")
+    const stampText = await readFile(stampPath, "utf-8").catch(() => undefined)
+    return { output, called, stampText }
+  }
+
+  async function Bun_mkdirs(dirs: string[]) {
+    const { mkdir } = await import("node:fs/promises")
+    for (const dir of dirs) await mkdir(dir, { recursive: true })
+  }
+
+  const INSTALL_CALL = "providers ax-engine install"
+
+  test("--no-engine never asks or installs", async () => {
+    const result = await run({ choice: "no", answer: "y" })
+    expect(result.called).toBe("")
+    expect(result.output).toBe("")
+  })
+
+  test("--with-engine installs through the fresh launcher without asking", async () => {
+    const result = await run({ choice: "yes" })
+    expect(result.called.trim()).toBe(INSTALL_CALL)
+    expect(result.stampText).toBeUndefined()
+  })
+
+  test("--with-engine on a non-Apple-Silicon host warns and continues", async () => {
+    const result = await run({ choice: "yes", uname: "Linux", machine: "x86_64" })
+    expect(result.called).toBe("")
+    expect(result.output).toContain("Apple Silicon")
+  })
+
+  test("a first install on an eligible Mac asks and honours yes", async () => {
+    const result = await run({ answer: "y" })
+    expect(result.called.trim()).toBe(INSTALL_CALL)
+    expect(result.stampText).toBe("answer=yes\n")
+  })
+
+  test("the default answer is no and is remembered", async () => {
+    const result = await run({ answer: "" })
+    expect(result.called).toBe("")
+    expect(result.stampText).toBe("answer=no\n")
+    expect(result.output).toContain("ax-code providers ax-engine install")
+  })
+
+  test.each([
+    ["an upgrade", { prior: true }],
+    ["a remembered answer", { stamp: true }],
+    ["a Mac below 64 GB", { memsize: 32 * 1024 ** 3 }],
+    ["a host that is not a Mac", { uname: "Linux", machine: "x86_64" }],
+    ["an Intel Mac", { machine: "x86_64" }],
+    ["an engine that is already installed", { enginePresent: true }],
+    ["a local binary install", { binaryPath: "/tmp/ax-code" }],
+  ] as [string, Scenario][])("stays silent for %s", async (_name, scenario) => {
+    const result = await run({ answer: "y", ...scenario })
+    expect(result.called).toBe("")
+    expect(result.output).toBe("")
+  })
+
+  test.each([["CI"], ["NONINTERACTIVE"], ["GITHUB_ACTIONS"]])("%s prints a hint instead of prompting", async (name) => {
+    const result = await run({ answer: "y", env: { [name]: "1" } })
+    expect(result.called).toBe("")
+    expect(result.stampText).toBeUndefined()
+    expect(result.output).toContain("ax-code providers ax-engine install")
+  })
+
+  test("a dumb terminal prints the hint instead of prompting", async () => {
+    const result = await run({ answer: "y", env: { TERM: "dumb" } })
+    expect(result.called).toBe("")
+    expect(result.output).toContain("ax-code providers ax-engine install")
+  })
+
+  test("without a terminal it prints the hint and does not read stdin", async () => {
+    const result = await run({ answer: "y", env: { AX_CODE_INSTALL_TTY: "/nonexistent/tty" } })
+    expect(result.called).toBe("")
+    expect(result.output).toContain("ax-code providers ax-engine install")
+  })
+
+  test("the installer wires the flags, the env switch and the offer", async () => {
+    const text = await readFile(installScript, "utf-8")
+    expect(text).toContain("--with-engine)")
+    expect(text).toContain("--no-engine|--without-engine)")
+    expect(text).toContain("AX_CODE_INSTALL_ENGINE")
+    expect(text).toContain("ax_engine_offer || true")
+  })
+})

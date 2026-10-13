@@ -212,6 +212,26 @@ Use the release installer for a user-local CLI installation without Homebrew:
 curl -fsSL https://download.automatosx.com/ax-code/install | bash
 ```
 
+#### Optional local-model runtime (ax-engine)
+
+AX Code does not ship the ax-engine local-model runtime. On an Apple Silicon Mac with at least 64 GB of
+unified memory, a first interactive install asks once whether to install it (default: no). The installer
+never asks in CI, non-interactive shells, upgrades, or when ax-engine is already installed, and it never
+downloads model weights. The answer is remembered in `~/.ax-code/state/engine-prompted`.
+
+```bash
+# install it without being asked
+curl -fsSL https://download.automatosx.com/ax-code/install | bash -s -- --with-engine
+# never ask
+curl -fsSL https://download.automatosx.com/ax-code/install | bash -s -- --no-engine
+# environment form (flags win): AX_CODE_INSTALL_ENGINE=1 or 0
+```
+
+The installer runs `ax-code providers ax-engine install`, which verifies the download. A failed engine step
+does not fail the AX Code installation. To install it later, run that command, use
+`brew install defai-digital/tap/ax-engine`, or download a release from
+[github.com/defai-digital/ax-engine](https://github.com/defai-digital/ax-engine/releases).
+
 Managed Macs can use the Homebrew formula so CLI updates track the tap:
 
 ```bash

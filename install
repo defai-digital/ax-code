@@ -20,6 +20,11 @@ Options:
     -v, --version <version> Install a specific version (e.g., 1.0.180)
     -b, --binary <path>     Install from a local binary instead of downloading
         --no-modify-path    Don't modify shell config files (.zshrc, .bashrc, etc.)
+        --with-engine       Also install the optional ax-engine local-model runtime (Apple Silicon macOS)
+        --no-engine         Never install or ask about ax-engine (alias: --without-engine)
+
+Environment:
+    AX_CODE_INSTALL_ENGINE=1|0   Same as --with-engine / --no-engine (flags win)
 
 Examples:
     curl -fsSL https://download.ax-code.com/install | bash
@@ -209,9 +214,109 @@ latest_cli_version() {
     printf '%s' "$tag" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | sed -n 's/^v//p'
 }
 
+# AX_ENGINE_OFFER_START
+# Optional ax-engine (local models). AX Code does not bundle it (ADR-190). The
+# installer never reimplements the download: it runs the freshly installed
+# `ax-code providers ax-engine install`, which verifies sha256, Team ID and
+# quarantine. The step can never fail the installation.
+ax_engine_host_is_apple_silicon_mac() {
+    [ "$(uname -s)" = "Darwin" ] || return 1
+    [ "$(uname -m)" = "arm64" ] && return 0
+    [ "$(sysctl -n sysctl.proc_translated 2>/dev/null || echo 0)" = "1" ]
+}
+
+ax_engine_already_present() {
+    local dir
+    command -v ax-engine >/dev/null 2>&1 && return 0
+    # Homebrew prefixes are often missing from PATH during a curl | bash run.
+    local IFS=:
+    for dir in ${AX_CODE_INSTALL_ENGINE_DIRS:-/opt/homebrew/bin:/usr/local/bin}; do
+        [ -x "$dir/ax-engine" ] && return 0
+    done
+    return 1
+}
+
+ax_engine_install_now() {
+    local launcher="$INSTALL_DIR/$APP"
+    if [ ! -x "$launcher" ]; then
+        print_message warning "Skipping ax-engine: $launcher is not installed."
+        return 0
+    fi
+    print_message info "Installing ax-engine (this does not download model weights)..."
+    if ! "$launcher" providers ax-engine install; then
+        print_message warning "ax-engine was not installed. Retry later with: ax-code providers ax-engine install"
+    fi
+    return 0
+}
+
+ax_engine_offer() {
+    local stamp="$INSTALL_ROOT/state/engine-prompted"
+    local tty_device="${AX_CODE_INSTALL_TTY:-/dev/tty}"
+    local min_bytes=68719476736
+    local memsize answer=""
+
+    [ "$engine_choice" = "no" ] && return 0
+
+    if [ "$engine_choice" = "yes" ]; then
+        if ! ax_engine_host_is_apple_silicon_mac; then
+            print_message warning "Skipping ax-engine: it needs Apple Silicon macOS."
+            return 0
+        fi
+        ax_engine_install_now
+        return 0
+    fi
+
+    # Nothing below applies to upgrades, local-binary installs or hosts that
+    # cannot run the engine, so most installs stay silent and non-interactive.
+    [ "$prior_install" = "true" ] && return 0
+    [ -z "$binary_path" ] || return 0
+    ax_engine_host_is_apple_silicon_mac || return 0
+    memsize=$(sysctl -n hw.memsize 2>/dev/null || echo 0)
+    [ "$memsize" -ge "$min_bytes" ] 2>/dev/null || return 0
+    ax_engine_already_present && return 0
+    [ -e "$stamp" ] && return 0
+
+    local hint="Optional: local models need ax-engine (~82 MB, no model weights). Install later with: ax-code providers ax-engine install"
+
+    # Never prompt where nobody can answer: CI, NONINTERACTIVE, dumb terminals,
+    # or no controlling terminal. Read the terminal, never stdin (curl | bash).
+    if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ] || [ -n "${NONINTERACTIVE:-}" ] || [ "${TERM:-}" = "dumb" ] \
+        || ! { : <"$tty_device"; } 2>/dev/null || [ ! -w "$tty_device" ]; then
+        print_message info "$hint"
+        return 0
+    fi
+
+    {
+        echo ""
+        echo "This Mac can run local models with ax-engine (~82 MB; it does NOT download model weights, which are tens of GB)."
+        printf "Install ax-engine now? [y/N] (default N, 20s timeout): "
+    } >>"$tty_device"
+    read -r -t 20 answer <"$tty_device" || answer=""
+    echo "" >>"$tty_device"
+
+    mkdir -p "$(dirname "$stamp")" 2>/dev/null || true
+    case "$answer" in
+        y|Y|yes|YES|Yes)
+            printf 'answer=yes\n' >"$stamp" 2>/dev/null || true
+            ax_engine_install_now
+            ;;
+        *)
+            printf 'answer=no\n' >"$stamp" 2>/dev/null || true
+            print_message info "Skipped ax-engine. Install later with: ax-code providers ax-engine install"
+            ;;
+    esac
+    return 0
+}
+# AX_ENGINE_OFFER_END
+
 requested_version=${VERSION:-}
 no_modify_path=false
 binary_path=""
+engine_choice=""
+case "${AX_CODE_INSTALL_ENGINE:-}" in
+    1|yes|true|on) engine_choice="yes" ;;
+    0|no|false|off) engine_choice="no" ;;
+esac
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -241,6 +346,14 @@ while [[ $# -gt 0 ]]; do
             no_modify_path=true
             shift
             ;;
+        --with-engine)
+            engine_choice="yes"
+            shift
+            ;;
+        --no-engine|--without-engine)
+            engine_choice="no"
+            shift
+            ;;
         *)
             echo -e "${ORANGE}Warning: Unknown option '$1'${NC}" >&2
             shift
@@ -266,6 +379,12 @@ esac
 
 INSTALL_DIR=$HOME/.ax-code/bin
 INSTALL_ROOT=$(dirname "$INSTALL_DIR")
+# An existing launcher means this run is an upgrade; the optional ax-engine
+# question is only asked on a first install.
+prior_install=false
+if [ -e "$INSTALL_DIR/$APP" ]; then
+    prior_install=true
+fi
 mkdir -p "$INSTALL_DIR"
 
 # If --binary is provided, skip all download/detection logic
@@ -1141,6 +1260,8 @@ fi
 
 warn_path_precedence
 warn_if_not_on_current_path
+
+ax_engine_offer || true
 
 echo -e ""
 # AX_CODE_LOGO_START
