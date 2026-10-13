@@ -7,7 +7,7 @@ import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
 import type { ScheduledTaskID } from "../../src/session/schema"
 import { ScheduledTaskTable } from "../../src/session/session.sql"
 import { SessionShard } from "../../src/session/shard"
-import { eq } from "../../src/storage/db"
+import { NotFoundError, eq } from "../../src/storage/db"
 import { tmpdir } from "../fixture/fixture"
 
 type Toast = {
@@ -380,8 +380,16 @@ describe("ScheduledTask one-shot lifecycle", () => {
         const after = await ScheduledTask.get(task.id)
         expect(after.status).toBe("disabled")
         expect(after.nextRunAt).toBeUndefined()
+        expect(after.lastRunAt).toBeDefined()
         const runs = await ScheduledTask.listRuns({ taskID: task.id })
         expect(runs.some((run) => run.status === "missed_skip")).toBe(true)
+
+        // The disabled row stamped last_run_at, so the retention sweep
+        // reclaims it once the one-shot retention window passes. Without the
+        // stamp the NULL last_run_at never satisfies the lte cutoff and the
+        // row would leak past every sweep.
+        expect(ScheduledTask.pruneFinishedOneShots(now + 91 * 24 * 60 * 60 * 1_000)).toBe(1)
+        await expect(ScheduledTask.get(task.id)).rejects.toThrow(NotFoundError)
       },
     })
   })

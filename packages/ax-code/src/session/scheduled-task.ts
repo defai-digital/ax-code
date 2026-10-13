@@ -983,16 +983,20 @@ export namespace ScheduledTask {
         .set({
           // A one-time occurrence skipped by the catch-up policy (missed_skip)
           // is done: disable it rather than leave an active row with a null
-          // next_run_at (a zombie that never fires). An overlap skip only means
-          // another run is currently delivering the task, so re-arm the next
-          // poll instead — if that run fails, the failure policy still applies
-          // (PRD-2026-09-12).
+          // next_run_at (a zombie that never fires). Stamp last_run_at so the
+          // finished row stays inside pruneFinishedOneShots' retention clock
+          // (a null last_run_at is never lte the cutoff and would leak).
+          // An overlap skip only means another run is currently delivering the
+          // task, so re-arm the next poll instead — if that run fails, the
+          // failure policy still applies (PRD-2026-09-12).
           next_run_at:
             task.schedule.type === "once" && status === "skipped_overlap"
               ? now + ONESHOT_OVERLAP_RETRY_MS
               : (next ?? null),
           time_updated: now,
-          ...(task.schedule.type === "once" && status === "missed_skip" ? { status: "disabled" as const } : {}),
+          ...(task.schedule.type === "once" && status === "missed_skip"
+            ? { status: "disabled" as const, last_run_at: now }
+            : {}),
         })
         .where(
           and(
