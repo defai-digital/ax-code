@@ -108,7 +108,13 @@ test("project MCP local command stays disconnected until explicitly trusted", as
       const trusted = await MCP.trust("local")
       expect(trusted.local?.status).toBe("connected")
       expect(localTransports).toHaveLength(1)
-      expect(localTransports[0]).toMatchObject({ command: "node", args: ["server.js"] })
+      // The configured launcher is resolved to its absolute path before the
+      // transport spawns it (see resolveLocalCommand), so a child that never
+      // inherited the user's PATH can still exec it; args stay as configured.
+      const launched = localTransports[0]!
+      expect(path.isAbsolute(launched.command)).toBe(true)
+      expect(path.basename(launched.command).replace(/\.(cmd|exe)$/i, "")).toBe("node")
+      expect(launched.args).toEqual(["server.js"])
       expect(connectCalls).toBe(1)
     },
   })

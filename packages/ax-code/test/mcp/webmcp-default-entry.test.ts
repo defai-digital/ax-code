@@ -9,11 +9,14 @@ const bridge = vi.hoisted(() => ({
   names: [] as string[],
   launch: vi.fn(),
   call: vi.fn(),
+  connectError: undefined as Error | undefined,
 }))
 
 vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
   Client: class {
-    async connect() {}
+    async connect() {
+      if (bridge.connectError) throw bridge.connectError
+    }
     async close() {}
     async listTools() {
       return {
@@ -80,6 +83,7 @@ afterEach(async () => {
   await Instance.disposeAll()
   if (managedDir) await fs.rm(managedDir, { recursive: true, force: true })
   bridge.names = []
+  bridge.connectError = undefined
   vi.resetAllMocks()
 })
 
@@ -270,5 +274,58 @@ test("the injected default navigates any https origin with approval only (no gra
         expect(bridge.launch).toHaveBeenCalledTimes(1)
       },
     })
+  })
+})
+
+test("resolves a bare local launcher before spawning instead of trusting the child PATH", async () => {
+  await using binTmp = await tmpdir()
+  const launcher = process.platform === "win32" ? "npx.cmd" : "npx"
+  const launcherPath = path.join(binTmp.path, launcher)
+  await fs.writeFile(launcherPath, process.platform === "win32" ? "@echo off\r\n" : "#!/bin/sh\nexit 0\n")
+  await fs.chmod(launcherPath, 0o755)
+
+  await withIsolatedGlobalConfig(async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const previousPath = process.env.PATH
+        process.env.PATH = binTmp.path
+        try {
+          await MCP.connect("webmcp")
+        } finally {
+          process.env.PATH = previousPath
+        }
+        expect((await MCP.status()).webmcp).toMatchObject({ status: "connected" })
+        const options = bridge.launch.mock.calls[0]![0] as { command: string; args: string[] }
+        // The launcher reaches the transport as the resolved absolute path, not
+        // as the bare `npx` that a PATH-less child would fail to exec.
+        expect(options.command).toBe(launcherPath)
+        expect(options.args).toContain(WebMcpProfile.PACKAGE)
+      },
+    })
+  })
+})
+
+test("a missing local launcher reports the command instead of a bare ENOENT", async () => {
+  bridge.connectError = Object.assign(new Error("spawn ax-code-missing-launcher ENOENT"), { code: "ENOENT" })
+  await using tmp = await tmpdir({
+    git: true,
+    config: {
+      username: "test",
+      mcp: { broken: { type: "local", command: ["ax-code-missing-launcher"], enabled: true } },
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await MCP.trust("broken")
+      await MCP.connect("broken")
+      const status = (await MCP.status()).broken as { status: string; error?: string }
+      expect(status.status).toBe("failed")
+      // The raw message stays greppable; the remedy is named after it.
+      expect(status.error).toContain("spawn ax-code-missing-launcher ENOENT")
+      expect(status.error).toContain("not found on PATH")
+    },
   })
 })

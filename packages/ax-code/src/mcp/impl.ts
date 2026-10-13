@@ -27,6 +27,7 @@ import { McpAuth } from "./auth"
 import { McpTrust } from "./trust"
 import { WebMcpProfile } from "./webmcp-profile"
 import { Global } from "@/global"
+import { which } from "@/util/which"
 import { BusEvent } from "../bus/bus-event"
 import { Bus } from "@/bus"
 import { NotificationEvent } from "@/notification/events"
@@ -663,6 +664,34 @@ export namespace MCP {
     return note
   }
 
+  // A local MCP server is spawned under the name in its config (`npx`, a
+  // provider CLI) with `shell: false`, so the child resolves that bare name
+  // against the PATH it receives. Every other external binary this runtime
+  // starts is resolved first through `which()`, which searches that same PATH
+  // plus the managed and user-local bin directories; an MCP server started
+  // without the user's shell PATH (a GUI-launched or managed runtime) otherwise
+  // dies with Node's opaque `spawn npx ENOENT`. `env` is the sanitized
+  // environment handed to the child, so the lookup sees what the child would.
+  function resolveLocalCommand(cmd: string, env: Record<string, string | undefined>): string {
+    if (!isBareCommand(cmd)) return cmd
+    return which(cmd, env) ?? cmd
+  }
+
+  // Only a name with no separator is a PATH lookup; a relative or absolute
+  // path is resolved by the OS against the child's working directory.
+  function isBareCommand(cmd: string): boolean {
+    return !cmd.includes("/") && !cmd.includes("\\")
+  }
+
+  // A child process reports a missing executable and a missing working
+  // directory with the same opaque `spawn <cmd> ENOENT`. Name the launcher and
+  // the remedy, keeping the raw message so the log stays greppable.
+  function localStartupError(cmd: string, error: unknown): string {
+    const message = NamedError.message(error)
+    if (!isBareCommand(cmd) || (error as NodeJS.ErrnoException | undefined)?.code !== "ENOENT") return message
+    return `${message} ("${cmd}" not found on PATH; install it or use an absolute command path)`
+  }
+
   // Generic helper for prompts-resources: fetch the array, log on
   // failure, key each item by `clientName:itemName`. Used by both
   // prompts() and resources() — the only thing that varies per call
@@ -1075,12 +1104,10 @@ export namespace MCP {
       // secrets can still be passed explicitly via `mcp.environment`, but
       // process-injection variables (LD_PRELOAD, NODE_OPTIONS, …) are
       // always stripped from that overlay.
-      const transport = new StdioClientTransport({
-        stderr: "pipe",
-        command: cmd,
-        args,
-        cwd,
-        env: {
+      // `Env.sanitize` preserves the source map's optional entries; spawn takes
+      // string values, so undefined entries are dropped rather than forwarded.
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries({
           ...Env.sanitize(process.env),
           ...(cmd === "ax-code" ? { BUN_BE_BUN: "1" } : {}),
           ...Env.stripProcessInjection(mcp.environment),
@@ -1088,7 +1115,14 @@ export namespace MCP {
           // dependency lifecycle scripts so a registry-side postinstall cannot
           // run during the install, and mute audit/funding chatter.
           ...(webmcp ? { npm_config_ignore_scripts: "true", npm_config_audit: "false", npm_config_fund: "false" } : {}),
-        },
+        }).filter((entry): entry is [string, string] => entry[1] !== undefined),
+      )
+      const transport = new StdioClientTransport({
+        stderr: "pipe",
+        command: resolveLocalCommand(cmd, env),
+        args,
+        cwd,
+        env,
       })
       const onStderr = (chunk: Buffer) => {
         const line = Env.redactForRecord(chunk.toString().trimEnd()).slice(0, MAX_STDERR_LINE)
@@ -1144,7 +1178,7 @@ export namespace MCP {
         await closeIfPossible(transport, key, "local mcp connect failed")
         status = {
           status: "failed" as const,
-          error: NamedError.message(error),
+          error: localStartupError(cmd, error),
         }
       }
     }
