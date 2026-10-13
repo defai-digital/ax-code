@@ -14,7 +14,8 @@ import {
   AxEngineStartBody,
   shouldShowProviderInList,
 } from "../../src/server/routes/provider"
-import { AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID } from "../../src/provider/ax-engine"
+import { AX_ENGINE_MODEL_IDS, AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID } from "../../src/provider/ax-engine"
+import { selectAxEngineLocalModels } from "../../src/provider/ax-engine/local-models"
 import { AxEnginePaths } from "../../src/provider/ax-engine/paths"
 import { Log } from "../../src/util/log"
 import { Provider } from "../../src/provider/provider"
@@ -591,10 +592,11 @@ describe("provider routes", () => {
     const response = await Server.Default().request(`/provider/ax-engine/models?directory=${directory}`)
     expect(response.status).toBe(200)
     const body = (await response.json()) as { models: Array<{ id: string }> }
-    expect(body.models.map((model) => model.id)).toEqual([
-      "tiel-coder-35b-axq-mxfp4",
-      "swift-1.5-qwen3.8-27b-axq-mxfp4",
-    ])
+    // The route serves the built-in catalog narrowed to the AX Code collection (see
+    // local-selection.test.ts for the selection contract), not a hard-coded pair.
+    const selected = selectAxEngineLocalModels([...AX_ENGINE_MODEL_IDS], (id) => id)
+    expect(selected.length).toBeGreaterThan(2)
+    expect(body.models.map((model) => model.id)).toEqual(selected)
     expect(body.models.every((model) => !model.id.startsWith("AutomatosX/"))).toBe(true)
     expect((body as { catalog?: { source?: string; modelIDs?: string[] } }).catalog).toMatchObject({
       source: "packages/ax-code/src/provider/ax-engine/constants.ts",
