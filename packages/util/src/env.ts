@@ -222,6 +222,21 @@ export namespace Env {
     "version",
   ])
 
+  // A Set-Cookie pair later in the header keeps its value only when the value
+  // has the attribute's shape: the name alone cannot tell an attribute from an
+  // application cookie named `path`/`domain`, and skipping by name alone leaked
+  // such a cookie's value verbatim.
+  const COOKIE_ATTRIBUTE_SHAPES: Record<string, (value: string) => boolean> = {
+    comment: () => false, // arbitrary free text — no shape to trust
+    domain: (value) => /^\.?[0-9A-Za-z][0-9A-Za-z.-]*$/.test(value.trim()),
+    expires: (value) => /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,/.test(value.trim()),
+    "max-age": (value) => /^-?[0-9]+$/.test(value.trim()),
+    path: (value) => value.startsWith("/"),
+    priority: (value) => ["low", "medium", "high"].includes(value.trim().toLowerCase()),
+    samesite: (value) => ["strict", "lax", "none"].includes(value.trim().toLowerCase()),
+    version: (value) => /^[0-9]+$/.test(value.trim()),
+  }
+
   function advanceQuoteState(value: string, start: number, end: number, initial?: "'" | '"'): "'" | '"' | undefined {
     let quote = initial
     for (let index = start; index < end; index++) {
@@ -382,7 +397,10 @@ export namespace Env {
         }
         const name = body.slice(0, equals).trim()
         if (!name) return leading + "[redacted]" + trailing
-        if (setCookie && !firstPair && COOKIE_ATTRIBUTES.has(name.toLowerCase())) return segment
+        if (setCookie && !firstPair) {
+          const shape = COOKIE_ATTRIBUTE_SHAPES[name.toLowerCase()]
+          if (shape?.(body.slice(equals + 1))) return segment
+        }
         return leading + name + "=[redacted]" + trailing
       })
       .map((segment, index) => (index === 0 ? segment : separators[index - 1] + segment))

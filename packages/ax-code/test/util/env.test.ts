@@ -325,6 +325,20 @@ describe("Env.sanitize", () => {
     expect(Env.redactSecrets(redacted)).toBe(redacted)
   })
 
+  test("redacts an application cookie whose name collides with a Set-Cookie attribute", () => {
+    // The diagnostics keep for attributes is value-shape aware: an application
+    // cookie named `path`/`domain` with a non-attribute value leaks without it.
+    expect(Env.redactSecrets("Set-Cookie: zz=SECRET123; path=SECRET456")).toBe(
+      "Set-Cookie: zz=[redacted]; path=[redacted]",
+    )
+    expect(Env.redactSecrets("Set-Cookie: zz=SECRET123; Path=/app; Max-Age=SECRET")).toBe(
+      "Set-Cookie: zz=[redacted]; Path=/app; Max-Age=[redacted]",
+    )
+    expect(Env.redactSecrets("Set-Cookie: zz=SECRET123; samesite=SECRET; SameSite=None")).toBe(
+      "Set-Cookie: zz=[redacted]; samesite=[redacted]; SameSite=None",
+    )
+  })
+
   test("redacts combined Set-Cookie headers and malformed cookie values", () => {
     const combined = "Set-Cookie: sid=abc123; Path=/, pref=xyz789; Expires=Wed, 21 Oct 2030 07:28:00 GMT; Secure"
     const redacted =
