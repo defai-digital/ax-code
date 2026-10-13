@@ -199,6 +199,48 @@ async function patchGeneratedSseClient(outputPath: string) {
     source = next
   }
 
+  const helperPath = path.relative(path.dirname(file), path.join(dir, "src/sse.js")).replaceAll("\\", "/")
+  source = source.replace(
+    'import type { Config } from "./types.gen.js"',
+    `import type { Config } from "./types.gen.js"\nimport { SseParser, SseFrameLimitError, sleepSse } from "${helperPath}"`,
+  )
+  const framing = /            buffer \+= value[\s\S]*?              let data: unknown/
+  const next = source.replace(
+    framing,
+    `            for (const block of parser.feed(value)) {
+              const dataLines = block.data
+              const eventName = block.event
+              if (block.id !== undefined) lastEventId = block.id
+              if (block.retry !== undefined) retryDelay = block.retry
+
+              let data: unknown`,
+  )
+  if (next === source) throw new Error(`Generated SSE framing changed shape: ${file}`)
+  source = next
+    .replace('        let buffer = ""', "        const parser = new SseParser(sseMaxEventCharacters)")
+    .replace("  const sleep = sseSleepFn ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)))", "")
+    .replace("  sseIdleTimeout,", "  sseIdleTimeout,\n  sseMaxEventCharacters,")
+    .replace(
+      "    sseIdleTimeout?: number",
+      `    sseIdleTimeout?: number
+    /** Maximum buffered UTF-16 units per event, including fields and separators. Default: 16777216. */
+    sseMaxEventCharacters?: number`,
+    )
+    .replace(
+      "        onSseError?.(error)",
+      "        onSseError?.(error)\n        if (error instanceof SseFrameLimitError) throw error",
+    )
+    .replace("        await sleep(backoff)", "        await sleepSse(backoff, signal, sseSleepFn)")
+    .replace(
+      "  let lastEventId: string | undefined",
+      "  new SseParser(sseMaxEventCharacters) // validate before opening a connection\n  let lastEventId: string | undefined",
+    )
+    .replace(
+      /      const headers =[\s\S]*?      if \(lastEventId !== undefined\)/,
+      "      const headers = new Headers(options.headers)\n\n      if (lastEventId !== undefined)",
+    )
+    .replace("            reader.cancel()", "            void reader.cancel().catch(() => undefined)")
+
   await fs.writeFile(file, source)
 }
 

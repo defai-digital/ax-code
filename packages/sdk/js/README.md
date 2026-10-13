@@ -256,6 +256,8 @@ if (state.generation) {
 
 HTTP and IPC cancellation stop the local wait. A dispatched mutation can still execute; reconcile session/queue state before taking further action. Neither transport retries mutations. Deadlines raise `TimeoutError`; caller aborts preserve the signal's reason. Non-success HTTP and IPC responses raise `HeadlessRequestError` with `status`, `body`, `method`, and `path`; IPC protocol error frames retain `IpcTransportError`.
 
+Generated HTTP SSE subscriptions preserve events across fragmented CRLF and UTF-8 input. Their retry waits stop when the subscription signal aborts. Each event is limited to 16,777,216 buffered UTF-16 units by default; set `sseMaxEventCharacters` on the generated subscription options for a different positive limit. An oversized frame reports an error and terminates that subscription instead of repeatedly reconnecting to the same oversized event.
+
 ## Runtime compatibility and upgrading from SDK 2.5
 
 | Check                                             | What it establishes                                                                        |
