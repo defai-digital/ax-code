@@ -7,7 +7,7 @@ import type { Event } from "../v2/index.js"
 import type { HeadlessRuntimeCommand, HeadlessRuntimeCommandResult } from "./command.js"
 import type { HeadlessTransport, HeadlessTransportRequest, HeadlessTransportSubscribeOptions } from "./transport.js"
 import {
-  decodeIpcFrames,
+  readIpcMessages,
   type IpcErrorMessage,
   type IpcMessage,
   type IpcRequestMessage,
@@ -65,7 +65,7 @@ export async function connectIpcTransport(options: IpcTransportOptions): Promise
 
     const socket = connect(options.socketPath, () => {
       cleanup()
-      resolve({ socket, messages: readMessages(socket) })
+      resolve({ socket, messages: readIpcMessages(socket) })
     })
 
     const onError = (err: Error) => {
@@ -87,34 +87,6 @@ export async function connectIpcTransport(options: IpcTransportOptions): Promise
     socket.once("error", onError)
     options.signal?.addEventListener("abort", onAbort, { once: true })
   })
-}
-
-async function* readMessages(socket: Socket): AsyncGenerator<IpcMessage> {
-  const chunks: Buffer[] = []
-  let totalLength = 0
-  try {
-    for await (const chunk of socket) {
-      const buf = chunk as Buffer
-      chunks.push(buf)
-      totalLength += buf.length
-      // Only concatenate when we have at least a 4-byte length header.
-      if (totalLength < 4) continue
-      const buffer = Buffer.concat(chunks, totalLength)
-      chunks.length = 0
-      totalLength = 0
-      const { messages, remaining } = decodeIpcFrames(buffer)
-      if (remaining.length > 0) {
-        chunks.push(remaining)
-        totalLength = remaining.length
-      }
-      for (const message of messages) {
-        yield message
-      }
-    }
-  } catch (error) {
-    // Socket errors surface as thrown chunks; rethrow so consumers can handle.
-    throw error
-  }
 }
 
 /** Create a headless transport that talks to a local Unix-domain IPC socket. */

@@ -107,26 +107,40 @@ export function decodeIpcFrames(buffer: Buffer): {
  * Async iterator that yields framed IPC messages from a Node net Socket.
  */
 export async function* readIpcMessages(socket: Socket): AsyncGenerator<IpcMessage> {
-  const chunks: Buffer[] = []
-  let totalLength = 0
+  const header = Buffer.allocUnsafe(4)
+  let headerLength = 0
+  let body: Buffer | undefined
+  let bodyLength = 0
   for await (const chunk of socket) {
-    const buf = chunk as Buffer
-    chunks.push(buf)
-    totalLength += buf.length
-    // Only concatenate when we have at least a 4-byte length header.
-    if (totalLength < 4) continue
-    const buffer = Buffer.concat(chunks, totalLength)
-    chunks.length = 0
-    totalLength = 0
-    const { messages, remaining } = decodeIpcFrames(buffer)
-    if (remaining.length > 0) {
-      chunks.push(remaining)
-      totalLength = remaining.length
-    }
-    for (const message of messages) {
+    const buffer = chunk as Buffer
+    let offset = 0
+    while (offset < buffer.length) {
+      if (!body) {
+        const count = Math.min(4 - headerLength, buffer.length - offset)
+        buffer.copy(header, headerLength, offset, offset + count)
+        headerLength += count
+        offset += count
+        if (headerLength < 4) continue
+        const length = header.readUInt32BE(0)
+        if (length > IPC_MAX_FRAME_BYTES) throw new IpcFrameTooLargeError(length, IPC_MAX_FRAME_BYTES)
+        // Own one bounded body buffer. Each incoming byte is copied once,
+        // and a tiny partial frame never retains a large coalesced chunk.
+        body = Buffer.allocUnsafe(length)
+      }
+      const count = Math.min(body.length - bodyLength, buffer.length - offset)
+      buffer.copy(body, bodyLength, offset, offset + count)
+      bodyLength += count
+      offset += count
+      if (bodyLength < body.length) continue
+      const message = decode(body) as IpcMessage
+      body = undefined
+      bodyLength = 0
+      headerLength = 0
+      // Deliver prior complete frames even if a later frame is malformed.
       yield message
     }
   }
+  if (headerLength > 0) throw new Error("Truncated IPC frame")
 }
 
 /**
