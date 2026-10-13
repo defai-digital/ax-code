@@ -16,6 +16,13 @@ function installVersionFromDoctorText(text: string) {
   const direct = parseJsonResult(trimmed)
   const directVersion = direct.ok ? installVersion(direct.value) : undefined
   if (directVersion) return directVersion
+  // Recover compact doctor payloads independently of malformed diagnostic
+  // braces or quotes on preceding lines. Each line is visited only once.
+  for (const line of trimmed.split(/\r?\n/)) {
+    const parsed = parseJsonResult(line)
+    const version = parsed.ok ? installVersion(parsed.value) : undefined
+    if (version) return version
+  }
   // Scan complete objects once; diagnostic braces must not poison the payload.
   let start = -1
   let depth = 0
@@ -48,18 +55,19 @@ function installVersionFromDoctorText(text: string) {
 }
 
 function directVersion(text: string) {
-  for (const line of text.split(/\r?\n/)) {
-    const label = line.trim()
-    const value = label.replace(/^ax-engine\s+/i, "")
-    if (semver.valid(value)) return label
+  const lines = text.split(/\r?\n/).map((line) => line.trim())
+  // A branded engine banner outranks unrelated bare toolchain versions.
+  for (const label of lines) {
+    if (/^ax-engine\s+/i.test(label) && semver.valid(label.replace(/^ax-engine\s+/i, ""))) return label
   }
+  return lines.find((label) => semver.valid(label))
   return undefined
 }
 
 export async function probeVersion(binaryPath: string) {
   const direct = await Process.text([binaryPath, "--version"], { timeout: 3000, nothrow: true }).catch(() => undefined)
   if (direct?.code === 0) {
-    const detected = directVersion(direct.text) ?? directVersion(direct.stderr.toString())
+    const detected = directVersion(`${direct.text}\n${direct.stderr.toString()}`)
     if (detected) return detected
   }
 

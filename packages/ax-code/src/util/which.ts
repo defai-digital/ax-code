@@ -1,5 +1,4 @@
 import whichPkg from "which"
-import { existsSync } from "fs"
 import path from "path"
 import { Global } from "../global"
 
@@ -17,31 +16,43 @@ function searchPath(base: string) {
 // executable is deliberately not cached: users commonly install a provider
 // CLI while AX Code is already running, and the next provider selection must
 // see the new binary immediately.
-const whichCache = new Map<string, { result: string; timestamp: number }>()
+const whichCache = new Map<
+  string,
+  { result: string; timestamp: number; searchPath: string; pathExt?: string; cwd: string }
+>()
 const WHICH_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
 export function which(cmd: string, env?: NodeJS.ProcessEnv) {
+  const base = env?.PATH ?? env?.Path ?? process.env.PATH ?? process.env.Path ?? ""
+  const lookupPath = searchPath(base)
+  const cwd = process.cwd()
+  const pathExt = env?.PATHEXT ?? env?.PathExt ?? process.env.PATHEXT ?? process.env.PathExt
   // Only use cache when no custom env is provided (most common case)
   if (!env) {
     const cached = whichCache.get(cmd)
-    if (cached && Date.now() - cached.timestamp < WHICH_CACHE_TTL_MS) {
-      // An upgrade or uninstall can remove the binary while the entry is still
-      // fresh; handing back a dead path would fail the spawn that follows.
-      if (existsSync(cached.result)) return cached.result
+    if (
+      cached &&
+      cached.searchPath === lookupPath &&
+      cached.cwd === cwd &&
+      cached.pathExt === pathExt &&
+      Date.now() - cached.timestamp < WHICH_CACHE_TTL_MS
+    ) {
+      // Recheck execution eligibility, including permissions and Windows suffixes.
+      // A present but unusable cached binary must not hide the next PATH match.
+      if (whichPkg.sync(cached.result, { nothrow: true, pathExt }) === cached.result) return cached.result
       whichCache.delete(cmd)
     }
   }
 
-  const base = env?.PATH ?? env?.Path ?? process.env.PATH ?? process.env.Path ?? ""
   const result = whichPkg.sync(cmd, {
     nothrow: true,
-    path: searchPath(base),
-    pathExt: env?.PATHEXT ?? env?.PathExt ?? process.env.PATHEXT ?? process.env.PathExt,
+    path: lookupPath,
+    pathExt,
   })
   const resolved = typeof result === "string" ? result : null
 
   if (!env && resolved) {
-    whichCache.set(cmd, { result: resolved, timestamp: Date.now() })
+    whichCache.set(cmd, { result: resolved, timestamp: Date.now(), searchPath: lookupPath, pathExt, cwd })
   }
 
   return resolved

@@ -55,3 +55,22 @@ test.each([
   )
   expect(await probeVersion("ax-engine")).toBe("7.7.0")
 })
+
+test.each([
+  ["99.0.0\nax-engine 7.7.0\n", ""],
+  ["0.0.1\nax-engine 7.7.0\n", ""],
+  ["99.0.0\n", "ax-engine 7.7.0\n"],
+])("prefers the engine banner over unrelated bare versions: %s / %s", async (text, stderr) => {
+  vi.spyOn(Process, "text").mockResolvedValue(response(text, stderr))
+  expect(await probeVersion("ax-engine")).toBe("ax-engine 7.7.0")
+})
+
+test.each(['note { pending\n{"install":{"version":"7.7.0"}}', '{"msg": "say "hi"}\n{"install":{"version":"7.7.0"}}'])(
+  "reads a complete doctor JSON line after malformed diagnostic braces: %s",
+  async (text) => {
+    vi.spyOn(Process, "text").mockImplementation(async (args) =>
+      args[1] === "--version" ? response("", "", 2) : response(text),
+    )
+    expect(await probeVersion("ax-engine")).toBe("7.7.0")
+  },
+)

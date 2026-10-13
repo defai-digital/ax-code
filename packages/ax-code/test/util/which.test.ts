@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { which } from "../../src/util/which"
@@ -38,7 +38,77 @@ function same(a: string | null, b: string) {
   expect(a).toBe(b)
 }
 
+afterEach(() => vi.unstubAllEnvs())
+
 describe("util.which", () => {
+  test("resolves a new first match immediately after PATH changes", async () => {
+    await using tmp = await tmpdir()
+    const a = path.join(tmp.path, "a")
+    const b = path.join(tmp.path, "b")
+    await fs.mkdir(a)
+    await fs.mkdir(b)
+    const name = `ax-code-path-change-${Math.random().toString(36).slice(2)}`
+    const first = await cmd(a, name)
+    const second = await cmd(b, name)
+    vi.stubEnv("PATH", a)
+    same(which(name), first)
+    vi.stubEnv("PATH", [b, a].join(path.delimiter))
+    same(which(name), second)
+  })
+
+  test("does not reuse a CLI from another home directory", async () => {
+    await using tmp = await tmpdir()
+    const name = `ax-code-home-change-${Math.random().toString(36).slice(2)}`
+    const a = path.join(tmp.path, "a")
+    const b = path.join(tmp.path, "b")
+    const binA = path.join(a, ".grok", "bin")
+    const binB = path.join(b, ".grok", "bin")
+    await fs.mkdir(binA, { recursive: true })
+    await fs.mkdir(binB, { recursive: true })
+    const first = await cmd(binA, name)
+    const second = await cmd(binB, name)
+    vi.stubEnv("AX_CODE_TEST_HOME", a)
+    same(which(name), first)
+    vi.stubEnv("AX_CODE_TEST_HOME", b)
+    same(which(name), second)
+  })
+
+  test("drops a cached command that loses executable permission", async () => {
+    if (process.platform === "win32") return
+    await using tmp = await tmpdir()
+    const a = path.join(tmp.path, "a")
+    const b = path.join(tmp.path, "b")
+    await fs.mkdir(a)
+    await fs.mkdir(b)
+    const name = `ax-code-permission-change-${Math.random().toString(36).slice(2)}`
+    const first = await cmd(a, name)
+    const second = await cmd(b, name)
+    vi.stubEnv("PATH", [a, b].join(path.delimiter))
+    same(which(name), first)
+    await fs.chmod(first, 0o644)
+    same(which(name), second)
+  })
+  test("reevaluates relative PATH precedence after a directory change", async () => {
+    await using tmp = await tmpdir()
+    const original = process.cwd()
+    const name = `ax-code-cwd-change-${Math.random().toString(36).slice(2)}`
+    for (const root of ["one", "two"]) {
+      for (const bin of ["a", "b"]) await fs.mkdir(path.join(tmp.path, root, bin), { recursive: true })
+    }
+    await cmd(path.join(tmp.path, "one", "b"), name)
+    await cmd(path.join(tmp.path, "two", "a"), name)
+    await cmd(path.join(tmp.path, "two", "b"), name)
+    vi.stubEnv("PATH", ["a", "b"].join(path.delimiter))
+    try {
+      process.chdir(path.join(tmp.path, "one"))
+      same(which(name), path.join("b", name + (process.platform === "win32" ? ".cmd" : "")))
+      process.chdir(path.join(tmp.path, "two"))
+      same(which(name), path.join("a", name + (process.platform === "win32" ? ".cmd" : "")))
+    } finally {
+      process.chdir(original)
+    }
+  })
+
   test("returns null when command is missing", () => {
     expect(which("opencode-missing-command-for-test")).toBeNull()
   })
