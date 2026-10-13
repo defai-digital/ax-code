@@ -36,8 +36,24 @@ export type IpcEventMessage = {
 
 export type IpcFrame = Uint8Array
 
+// Upper bound on one framed IPC message. Tool output and SSE events are capped
+// far below this, so a larger advertised frame is a misbehaving or hostile peer
+// and must not be buffered.
+export const IPC_MAX_FRAME_BYTES = 64 * 1024 * 1024
+
+export class IpcFrameTooLargeError extends Error {
+  constructor(
+    readonly length: number,
+    readonly max: number,
+  ) {
+    super(`IPC frame of ${length} bytes exceeds the maximum of ${max} bytes`)
+    this.name = "IpcFrameTooLargeError"
+  }
+}
+
 export function encodeIpcMessage(message: IpcMessage): IpcFrame {
   const bytes = encode(message)
+  if (bytes.length > IPC_MAX_FRAME_BYTES) throw new IpcFrameTooLargeError(bytes.length, IPC_MAX_FRAME_BYTES)
   const frame = Buffer.allocUnsafe(4 + bytes.length)
   frame.writeUInt32BE(bytes.length, 0)
   frame.set(bytes, 4)
@@ -52,6 +68,9 @@ export function decodeIpcFrames(buffer: Buffer): {
   let offset = 0
   while (offset + 4 <= buffer.length) {
     const length = buffer.readUInt32BE(offset)
+    // Reject the oversized header now, before buffering a body that will never
+    // be accepted.
+    if (length > IPC_MAX_FRAME_BYTES) throw new IpcFrameTooLargeError(length, IPC_MAX_FRAME_BYTES)
     const frameEnd = offset + 4 + length
     if (frameEnd > buffer.length) break
     messages.push(decode(buffer.subarray(offset + 4, frameEnd)) as IpcMessage)

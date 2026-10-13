@@ -4,7 +4,7 @@ import { basename, dirname, join } from "node:path"
 import { isRecord } from "@/util/record"
 import { Log } from "@/util/log"
 import type { IpcErrorMessage, IpcMessage, IpcRequestMessage } from "./ipc-protocol"
-import { readIpcMessages, writeIpcMessage } from "./ipc-protocol"
+import { IpcFrameTooLargeError, readIpcMessages, writeIpcMessage } from "./ipc-protocol"
 
 const log = Log.create({ service: "ipc-server" })
 
@@ -111,7 +111,21 @@ class IpcConnection {
         }
       }
     } catch (error) {
-      log.debug("ipc connection ended", { error })
+      if (error instanceof IpcFrameTooLargeError) {
+        // A peer advertised a frame larger than the cap. Refuse it: log the
+        // reason, tell the client if the write path still works, then tear the
+        // connection down instead of buffering the oversized body.
+        log.warn("ipc frame too large, closing connection", { length: error.length, max: error.max })
+        const reply: IpcErrorMessage = {
+          type: "error",
+          id: "",
+          code: "IPC_FRAME_TOO_LARGE",
+          message: error.message,
+        }
+        await writeIpcMessage(this.socket, reply).catch(() => undefined)
+      } else {
+        log.debug("ipc connection ended", { error })
+      }
     } finally {
       this.abortController.abort()
       this.socket.destroy()

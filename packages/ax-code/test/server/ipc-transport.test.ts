@@ -7,7 +7,15 @@ import { rm } from "node:fs/promises"
 import { connect, type Socket } from "node:net"
 import { createIpcTransport } from "@ax-code/sdk/headless-ipc"
 import { listenIpc, resolveIpcSocketPath } from "../../src/server/ipc-transport"
-import { readIpcMessages, writeIpcMessage, type IpcMessage } from "../../src/server/ipc-protocol"
+import {
+  IPC_MAX_FRAME_BYTES,
+  IpcFrameTooLargeError,
+  decodeIpcFrames,
+  encodeIpcMessage,
+  readIpcMessages,
+  writeIpcMessage,
+  type IpcMessage,
+} from "../../src/server/ipc-protocol"
 
 describe("ipc server transport", () => {
   let socketPath: string
@@ -225,6 +233,59 @@ describe("ipc server transport", () => {
     } finally {
       socket.destroy()
     }
+  })
+
+  test("closes the connection when a frame header exceeds the maximum size", async () => {
+    const app = new Hono()
+    const routedPaths: string[] = []
+    app.get("/global/health", (c: any) => {
+      routedPaths.push(new URL(c.req.url).pathname)
+      return c.json({ healthy: true })
+    })
+    server = await listenIpc({ socketPath, fetch: app.fetch })
+
+    const socket = await connectSocket(socketPath)
+    try {
+      const header = Buffer.alloc(4)
+      header.writeUInt32BE(IPC_MAX_FRAME_BYTES + 1, 0)
+      socket.write(header)
+
+      const closed = await new Promise<boolean>((resolve) => {
+        socket.once("close", () => resolve(true))
+        setTimeout(() => resolve(false), 2_000)
+      })
+
+      expect(closed).toBe(true)
+      // The oversized frame must never reach the router.
+      expect(routedPaths).toEqual([])
+    } finally {
+      socket.destroy()
+    }
+  })
+})
+
+describe("ipc protocol frame cap", () => {
+  test("decodeIpcFrames rejects a header above IPC_MAX_FRAME_BYTES", () => {
+    const header = Buffer.alloc(4)
+    header.writeUInt32BE(IPC_MAX_FRAME_BYTES + 1, 0)
+    const buffer = Buffer.concat([header, Buffer.from([0x01, 0x02, 0x03])])
+
+    expect(() => decodeIpcFrames(buffer)).toThrow(IpcFrameTooLargeError)
+  })
+
+  test("encode/decode round-trips a normal message", () => {
+    const message: IpcMessage = {
+      type: "request",
+      id: "round-trip",
+      method: "GET",
+      path: "/global/health",
+    }
+
+    const frame = encodeIpcMessage(message)
+    const { messages, remaining } = decodeIpcFrames(Buffer.from(frame))
+
+    expect(messages).toEqual([message])
+    expect(remaining.length).toBe(0)
   })
 })
 
