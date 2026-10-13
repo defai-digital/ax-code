@@ -6,6 +6,21 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.25.1] - 2026-10-13
+
+### Changed
+
+- Publish AX Code 7.25.1 with SDK 2.6.12.
+
+### Fixed
+
+- Bound fragmented IPC frame copying, reject truncated frames, and preserve complete replies before a later malformed frame in both the runtime and SDK.
+- Reject oversized IPC frames before buffering, bound refusal replies, and sanitize provider errors and nested tool credentials before persistence.
+- Preserve redacted provider array settings and resolve local MCP launcher paths before spawning.
+- Cap snapshot staging file sizes, prune stranded snapshot objects, and preserve cleanup when retained objects are already missing.
+- Use bounded native workers for glob scans, large diff previews, and patch matching; propagate case-only rename errors and count active background tasks from durable queue state.
+- Keep the restart-recovery test heartbeat aligned with its simulated clock.
+
 ## [7.25.0] - 2026-10-12
 
 ### Changed
