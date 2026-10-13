@@ -34,7 +34,7 @@ export const AX_ENGINE_API_KEY = "local"
 // the opencode/Claude Code agentic default).
 export const AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS = 8_192
 // Lowest AX Engine release AX Code will run. Configured binaryPath, AX_ENGINE_BIN,
-// PATH, managed overlays, and the bundled sidecar must report this version or newer.
+// PATH, and managed overlays (and a legacy bundled sidecar) must report this version or newer.
 export const AX_ENGINE_MIN_VERSION = "7.7.0"
 // First released tag containing the validated repository@revision downloader.
 export const AX_ENGINE_PINNED_DOWNLOAD_MIN_VERSION = "6.13.1"
@@ -443,10 +443,10 @@ export type AxEngineBinaryRelease = {
 const AX_ENGINE_RELEASE_ORIGIN = "https://github.com"
 const AX_ENGINE_BINARY_RELEASE_URL = `${AX_ENGINE_RELEASE_ORIGIN}/defai-digital/ax-engine/releases/download/v7.7.0/ax-engine-v7.7.0-macos-arm64.tar.gz`
 
-// Pinned self-contained macOS archive (binaries + MLX dylibs + metallib).
-// Darwin-arm64 AX Code releases stage this under engine/<version>/ as the
-// default floor. The same pin is the managed overlay/updater. Homebrew is an
-// alternative, not the required clean-Mac path. AX_ENGINE_INSTALL_* overrides
+// Pinned self-contained macOS archive (binaries + MLX dylibs + metallib) that
+// `ax-code providers ax-engine install` downloads and verifies. AX Code
+// releases no longer bundle it (ADR-190); Homebrew and a manual GitHub download
+// are equivalent ways to provide the binary. AX_ENGINE_INSTALL_* overrides
 // remain for validating a different artifact.
 export const AX_ENGINE_BINARY_RELEASE: AxEngineBinaryRelease = {
   version: "7.7.0",

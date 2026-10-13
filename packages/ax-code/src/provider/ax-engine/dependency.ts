@@ -106,6 +106,28 @@ export function pinnedDownloadVersionBlocker(detected: string | undefined) {
   return `${AX_ENGINE_ERROR.VersionUnsupported}: pinned Hub artifacts require a verified AX Engine ${AX_ENGINE_PINNED_DOWNLOAD_MIN_VERSION} or later`
 }
 
+export const AX_ENGINE_RELEASES_URL = "https://github.com/defai-digital/ax-engine/releases"
+
+// AX Code does not ship ax-engine (ADR-190). The message is shown only when a
+// local model is selected or `providers ax-engine status` runs, so cloud-only
+// users never see it.
+export function axEngineMissingBlocker(installable: boolean) {
+  const prefix = `${AX_ENGINE_ERROR.BinaryMissing}:`
+  if (!installable) {
+    return [
+      `${prefix} ax-engine is only available on Apple Silicon macOS.`,
+      "Use a cloud provider, or point provider.ax-engine.options.baseURL at an external OpenAI-compatible server.",
+    ].join("\n")
+  }
+  return [
+    `${prefix} ax-engine was not found. It is only needed for local models; cloud providers work without it.`,
+    "Install it with `brew install defai-digital/tap/ax-engine` or `ax-code providers ax-engine install`,",
+    `or download a release (${AX_ENGINE_MIN_VERSION} or later) from ${AX_ENGINE_RELEASES_URL}`,
+    "and set provider.ax-engine.options.binaryPath (or AX_ENGINE_BIN) to it.",
+    "Check with `ax-code providers ax-engine status`.",
+  ].join("\n")
+}
+
 export async function getDependencyStatus(options: AxEngineDependencyOptions = {}): Promise<AxEngineDependencyStatus> {
   const configured =
     typeof options.binaryPath === "string" && options.binaryPath.trim() ? options.binaryPath.trim() : undefined
@@ -195,6 +217,8 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
     )
   }
 
+  // Legacy: runtimes built before ADR-190 carry engine/<version>/. New releases
+  // do not bundle ax-engine, so this only matches an older pinned runtime.
   const bundled = await getBundledBinary({ entryPath: options.entryPath })
   if (bundled) {
     const detectedVersion = await version(bundled.path)
@@ -221,11 +245,7 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
     available: false,
     mode: "missing",
     installable,
-    blockers: [
-      installable
-        ? `${AX_ENGINE_ERROR.BinaryMissing}: ax-engine is not installed — Mac releases include it, or run \`ax-code providers ax-engine install\``
-        : `${AX_ENGINE_ERROR.BinaryMissing}: install AX Engine from AX Code, or configure provider.ax-engine.options.binaryPath`,
-    ],
+    blockers: [axEngineMissingBlocker(installable)],
     warnings,
   }
 }

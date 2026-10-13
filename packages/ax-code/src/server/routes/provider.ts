@@ -748,7 +748,7 @@ export const ProviderRoutes = lazy(() =>
       describeRoute({
         summary: "Install a configured self-contained ax-engine binary",
         description:
-          "Download and verify the pinned self-contained AX Engine archive. Darwin-arm64 AX Code releases already include this sidecar; this route is the overlay/updater and recovery path.",
+          "Download and verify the pinned self-contained AX Engine archive. AX Code releases do not bundle the engine; this route is the in-app install, update and recovery path.",
         operationId: "provider.axEngine.install",
         responses: {
           200: {

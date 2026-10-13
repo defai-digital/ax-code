@@ -6,7 +6,11 @@ import { Process } from "../../../src/util/process"
 import * as Which from "../../../src/util/which"
 import * as Install from "../../../src/provider/ax-engine/install"
 import * as Bundled from "../../../src/provider/ax-engine/bundled"
-import { getDependencyStatus } from "../../../src/provider/ax-engine/dependency"
+import {
+  AX_ENGINE_RELEASES_URL,
+  axEngineMissingBlocker,
+  getDependencyStatus,
+} from "../../../src/provider/ax-engine/dependency"
 
 const response = (text: string, code = 0): Process.TextResult => ({
   code,
@@ -384,4 +388,27 @@ test("rejects a successful version probe if the executable changed while it ran"
   const status = await getDependencyStatus({ binaryPath })
   expect(status.available).toBe(false)
   expect(status.version).toBeUndefined()
+})
+
+test("a missing ax-engine points at the install routes without claiming it is bundled", async () => {
+  vi.stubEnv("AX_ENGINE_BIN", "")
+  vi.spyOn(Which, "which").mockReturnValue(null as never)
+  vi.spyOn(Install, "getManagedBinary").mockResolvedValue(undefined)
+  vi.spyOn(Bundled, "getBundledBinary").mockResolvedValue(undefined)
+  vi.spyOn(Install, "isAxEngineInstallable").mockReturnValue(true)
+  const status = await getDependencyStatus()
+  expect(status).toMatchObject({ available: false, mode: "missing", installable: true })
+  const message = status.blockers.join("\n")
+  expect(message).toContain("AX_ENGINE_BINARY_MISSING")
+  expect(message).toContain("brew install defai-digital/tap/ax-engine")
+  expect(message).toContain("ax-code providers ax-engine install")
+  expect(message).toContain(AX_ENGINE_RELEASES_URL)
+  expect(message).toContain("provider.ax-engine.options.binaryPath")
+  expect(message).not.toMatch(/releases? include/i)
+})
+
+test("an unsupported host is told ax-engine is Apple Silicon only", () => {
+  const message = axEngineMissingBlocker(false)
+  expect(message).toContain("Apple Silicon macOS")
+  expect(message).not.toContain(AX_ENGINE_RELEASES_URL)
 })

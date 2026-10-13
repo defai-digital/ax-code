@@ -11,17 +11,12 @@ import {
 const workflow = readFileSync(".github/workflows/release.yml", "utf8")
 
 describe("release asset workflow", () => {
-  test("fetches and smoke-tests the same engine archive as managed installation", () => {
-    const constants = readFileSync("packages/ax-code/src/provider/ax-engine/constants.ts", "utf8")
-    const release = constants.slice(constants.indexOf("export const AX_ENGINE_BINARY_RELEASE:"))
-    const version = release.match(/version: "([^"]+)"/)?.[1]
-    const sha256 = release.match(/sha256: "([a-f0-9]{64})"/)?.[1]
-    expect(version).toBeDefined()
-    expect(sha256).toBeDefined()
-    expect(workflow).toContain(`VERSION="${version}"`)
-    expect(workflow).toContain(`EXPECTED="${sha256}"`)
-    expect(workflow).toContain(`ENGINE_BIN="$SMOKE_ROOT/engine/${version}/ax-engine"`)
-    expect(workflow).toContain(`data.install?.version !== "${version}"`)
+  test("does not bundle AX Engine into any runtime archive (ADR-190)", () => {
+    const build = readFileSync("packages/ax-code/script/build-node-tui.ts", "utf8")
+    expect(workflow).not.toContain("AX_ENGINE_BUNDLE_ARCHIVE")
+    expect(workflow).not.toContain("Fetch AX Engine sidecar")
+    expect(workflow).not.toContain("/engine/")
+    expect(build).not.toContain("stageAxEngineRuntime")
   })
 
   test("signs Windows payloads before archival and keeps vault credentials out of compilation", () => {

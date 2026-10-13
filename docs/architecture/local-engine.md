@@ -65,13 +65,13 @@ Cancelling the request preserves the existing process.
 
 ## Why sidecar
 
-| Factor         | Sidecar choice                                                   |
-| -------------- | ---------------------------------------------------------------- |
-| Host language  | Node/Bun agent runtime with an explicit native-process boundary  |
-| Isolation      | Multi-GB models and native crashes stay out of the agent process |
-| Upgrade        | Version-gated bundled floor plus optional managed overlay, without rebuilding ax-code |
-| Provider model | Same OpenAI-compatible path as other local/cloud providers       |
-| Multi-client   | One server can be health-checked and stopped via `server.json`   |
+| Factor         | Sidecar choice                                                            |
+| -------------- | ------------------------------------------------------------------------- |
+| Host language  | Node/Bun agent runtime with an explicit native-process boundary           |
+| Isolation      | Multi-GB models and native crashes stay out of the agent process          |
+| Upgrade        | Version-gated PATH or managed overlay install, without rebuilding ax-code |
+| Provider model | Same OpenAI-compatible path as other local/cloud providers                |
+| Multi-client   | One server can be health-checked and stopped via `server.json`            |
 
 ## Lifecycle phases
 
@@ -91,19 +91,22 @@ Severity order matches ax-engine `docs/LOCAL-ENGINE-CLIENTS.md`.
 
 ## Related code
 
-| Area                               | Path                                                                    |
-| ---------------------------------- | ----------------------------------------------------------------------- |
-| Server spawn / health              | `packages/ax-code/src/provider/ax-engine/server.ts`                     |
-| Provider loader (managed + attach) | `packages/ax-code/src/provider/ax-engine/provider-loader.ts`            |
-| TUI local runtime                  | `packages/ax-code/src/cli/tui/component/dialog-provider.tsx`        |
-| Local action helpers               | `packages/ax-code/src/cli/tui/component/dialog-provider-options.ts` |
-| Aggregate status                   | `packages/ax-code/src/provider/ax-engine/status.ts`                     |
-| Phase mapping                      | `packages/ax-code/src/provider/ax-engine/lifecycle.ts`                  |
-| Model policy                       | [AX Engine Model Selection](../providers/ax-engine-model-selection.md)  |
+| Area                               | Path                                                                   |
+| ---------------------------------- | ---------------------------------------------------------------------- |
+| Server spawn / health              | `packages/ax-code/src/provider/ax-engine/server.ts`                    |
+| Provider loader (managed + attach) | `packages/ax-code/src/provider/ax-engine/provider-loader.ts`           |
+| TUI local runtime                  | `packages/ax-code/src/cli/tui/component/dialog-provider.tsx`           |
+| Local action helpers               | `packages/ax-code/src/cli/tui/component/dialog-provider-options.ts`    |
+| Aggregate status                   | `packages/ax-code/src/provider/ax-engine/status.ts`                    |
+| Phase mapping                      | `packages/ax-code/src/provider/ax-engine/lifecycle.ts`                 |
+| Model policy                       | [AX Engine Model Selection](../providers/ax-engine-model-selection.md) |
 
-Managed provisioning of a pinned sidecar is not in-process embedding. Darwin-arm64
-releases stage `engine/<version>/` beside the CLI; `ax-code providers ax-engine install`
-is the overlay/updater when a newer pin is published.
+Managed provisioning of a pinned sidecar is not in-process embedding. AX Code
+releases do not bundle the engine (ADR-190): users install it from Homebrew
+(`defai-digital/tap/ax-engine`), from a GitHub release, or with
+`ax-code providers ax-engine install`, which downloads and verifies the pinned
+archive. When no engine is found AX Code reports where to get it, only once a
+local model is selected or `providers ax-engine status` runs.
 
 ## Non-goals
 

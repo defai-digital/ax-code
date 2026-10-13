@@ -840,7 +840,8 @@ install_node_bundle_tree() (
     chmod 755 "$staging_root/runtime/node/bin/node" || exit 1
     cp -R "$node_modules_dir" "$staging_root/runtime/node_modules" || exit 1
     cp "$package_json" "$staging_root/runtime/package.json" || exit 1
-    # Optional: darwin-arm64 releases include a self-contained AX Engine sidecar.
+    # Legacy: darwin-arm64 archives before ADR-190 carried an AX Engine sidecar.
+    # Current releases omit it, so this is a no-op for them.
     if [ -d "$bundle_root/engine" ]; then
       cp -R "$bundle_root/engine" "$staging_root/runtime/engine" || exit 1
       find "$staging_root/runtime/engine" -type f \( -name ax-engine -o -name ax-engine-server -o -name ax-engine-bench \) -exec chmod 755 {} \;
