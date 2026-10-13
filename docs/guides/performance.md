@@ -4,7 +4,7 @@ Status: Active
 
 Scope: current-state
 
-Last reviewed: 2026-09-13
+Last reviewed: 2026-10-13
 
 Owner: ax-code runtime
 
@@ -85,9 +85,18 @@ New `llm.request` events in `ax-code session replay YOUR_SESSION_ID --mode expor
 | `messages`        | The complete assembled message array, including system messages                         |
 | `toolDefinitions` | Active tool names, descriptions and resolved input schemas                              |
 
-`system` is already represented within `messages`; do not add them together. Array framing is included. Binary values use the existing digest representation, so these sizes are neither network payload sizes nor resident-memory measurements. They are not token counts: provider token usage and cache counters remain the source for model input accounting. A context-pack summary covers a narrower stage and is not total model input. Legacy events omit this field; failed provenance remains explicitly unavailable.
+`system` is already represented within `messages`; do not add them together. To estimate the prompt you send before history grows, add `system` and `toolDefinitions` (for example, `system` 160 KB plus `toolDefinitions` 82 KB is about 242 KB, not 402 KB); add `messages` only to compare history growth between turns, and subtract `system` from it when you want the non-system part. Array framing is included. Binary values use the existing digest representation, so these sizes are neither network payload sizes nor resident-memory measurements. They are not token counts: provider token usage and cache counters remain the source for model input accounting. A context-pack summary covers a narrower stage and is not total model input. Legacy events omit this field; failed provenance remains explicitly unavailable.
 
 Only sizes and the existing hashes/metadata are recorded by this diagnostic. No additional prompt bodies or credentials are saved. It reuses the canonical serialization needed for each hash rather than tokenizing the request. Compare sizes at matching turns when deciding whether system instructions, tool definitions, or growing history need attention. The coding profile above can reduce tool definitions without changing reasoning effort; full remains available for the capabilities it adds.
+
+## Fit a small context window
+
+A model with a small context window can reject the first request when the fixed prompt is too large. The fixed prompt is the system instructions, project and global memory, `AGENTS.md`, the skill catalog, and tool definitions. Two behaviors keep this recoverable:
+
+- **Memory budget.** Injected memory (`.ax-code/memory.json` and `~/.ax-code/memory.json`) is limited to 10% of the model's context window, with a floor of 2,000 tokens. Global entries use at most half of that budget, and unused budget carries over to project entries and then to scanned sections such as the directory structure. Whole entries are dropped rather than cut, ordered by confidence and recency within each section; a scanned section is truncated at a line boundary. When anything is left out, the memory block ends with a note giving the number of omitted items. If the model does not report a context window, memory is not limited.
+- **No empty compaction.** When a request overflows the context window and there is no earlier conversation to summarize, for example on the first message of a session, AX Code stops with an explanatory error instead of scheduling a compaction that cannot shrink the request. Compaction summarizes the history before the latest user message, so it helps only when such history exists.
+
+If you still hit the error, reduce what is injected: trim entries with `ax-code memory list`, shorten `AGENTS.md`, use the coding tool profile above, or choose a model with a larger window. Compare `requestBytes.system` and `requestBytes.toolDefinitions` in a replay export to see which part dominates.
 
 ## Avoid redundant exploration
 

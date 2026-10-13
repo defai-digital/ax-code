@@ -374,12 +374,26 @@ export function providerFallbackSwitchState(input: {
   }
 }
 
+/**
+ * Whether overflow compaction has anything to summarize: it works on the
+ * messages before the latest real user turn, which it replays unchanged.
+ */
+export function hasCompactableHistory(messages: MessageV2.WithParts[]): boolean {
+  const latestUser = messages.findLastIndex(
+    (m) => m.info.role === "user" && !m.parts.some((p) => p.type === "compaction"),
+  )
+  if (latestUser <= 0) return false
+  return messages.slice(0, latestUser).some((m) => m.parts.some((p) => p.type !== "compaction"))
+}
+
 export function processorLoopDecision(input: {
   result: SessionProcessor.Result
   messageFinish: string | undefined
   hasError: boolean
   priorContextOverflowCompactions?: number
   priorRequestTooLargeCompactions?: number
+  /** False when compaction would have no earlier history to summarize. */
+  hasCompactableHistory?: boolean
 }): ProcessorLoopDecision {
   if (input.result === "stop") {
     return { action: "stop", reason: input.hasError ? "error" : "completed" }
@@ -402,6 +416,19 @@ export function processorLoopDecision(input: {
   }
   if (input.result !== "compact") return { action: "continue" }
   const overflow = !input.messageFinish
+  if (overflow && input.hasCompactableHistory === false) {
+    // Overflow compaction summarizes everything before the latest user turn.
+    // With nothing earlier, it cannot shrink the request, so scheduling it only
+    // adds an empty summary turn before the same failure.
+    return {
+      action: "stop",
+      reason: "error",
+      message:
+        "The request exceeds the model context window before any conversation history exists, so compaction cannot help. " +
+        "The fixed prompt (project memory, AGENTS.md instructions, skills) and tool schemas are too large for the selected model. " +
+        "Try a model with a larger context window, trim project memory or AGENTS.md, or reduce the tool surface.",
+    }
+  }
   if (overflow && (input.priorContextOverflowCompactions ?? 0) > 0) {
     return {
       action: "stop",

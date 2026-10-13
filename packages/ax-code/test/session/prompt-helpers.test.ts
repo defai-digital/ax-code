@@ -27,6 +27,7 @@ import {
   providerFallbackLookupDecision,
   providerFallbackNotice,
   providerFallbackSwitchState,
+  hasCompactableHistory,
   processorLoopDecision,
   readToolCallText,
   remindQueuedMessages,
@@ -833,6 +834,54 @@ describe("session.prompt helpers", () => {
         "request body as too large after media stripping and compaction",
       )
     }
+  })
+
+  test("stops instead of compacting when an overflow has no earlier history to summarize", () => {
+    const stopped = processorLoopDecision({
+      result: "compact",
+      messageFinish: undefined,
+      hasError: false,
+      hasCompactableHistory: false,
+    })
+    expect(stopped).toMatchObject({ action: "stop", reason: "error" })
+    if (stopped.action === "stop") expect(stopped.message).toContain("compaction cannot help")
+    expect(
+      processorLoopDecision({
+        result: "compact",
+        messageFinish: undefined,
+        hasError: false,
+        hasCompactableHistory: true,
+      }),
+    ).toEqual({ action: "compact", overflow: true, triggerReason: "context_overflow_error" })
+    // Usage-triggered compaction is proactive and unaffected by this guard.
+    expect(
+      processorLoopDecision({
+        result: "compact",
+        messageFinish: "stop",
+        hasError: false,
+        hasCompactableHistory: false,
+      }),
+    ).toEqual({ action: "compact", overflow: false, triggerReason: "provider_usage" })
+  })
+
+  test("reports compactable history only when content precedes the latest real user turn", () => {
+    const message = (role: "user" | "assistant", parts: string[]) =>
+      ({ info: { role }, parts: parts.map((type) => ({ type })) }) as any
+    expect(hasCompactableHistory([])).toBe(false)
+    expect(hasCompactableHistory([message("user", ["text"])])).toBe(false)
+    expect(hasCompactableHistory([message("user", ["text"]), message("assistant", [])])).toBe(false)
+    expect(hasCompactableHistory([message("user", ["text"]), message("user", ["compaction"])])).toBe(false)
+    expect(
+      hasCompactableHistory([message("user", ["text"]), message("assistant", ["text"]), message("user", ["text"])]),
+    ).toBe(true)
+    expect(
+      hasCompactableHistory([
+        message("user", ["text"]),
+        message("assistant", ["text"]),
+        message("user", ["text"]),
+        message("user", ["compaction"]),
+      ]),
+    ).toBe(true)
   })
 
   test("detects whether an assistant response belongs after the current user turn", () => {

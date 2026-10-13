@@ -28,7 +28,7 @@ import { Config } from "@/config/config"
 import { fn } from "@/util/fn"
 import { assertWorkSessionSendable } from "./work-session"
 import { agentInfo, modelInfo } from "./prompt/prompt-agent-model-info"
-import { processorLoopDecision, providerFallbackNotice } from "./prompt/prompt-loop-decisions"
+import { hasCompactableHistory, processorLoopDecision, providerFallbackNotice } from "./prompt/prompt-loop-decisions"
 import {
   maybeSchedulePreflightCompaction,
   maybeScheduleUsageCompaction,
@@ -2552,6 +2552,7 @@ export namespace SessionPrompt {
         hasError: false,
         priorContextOverflowCompactions: compactionRetries.contextOverflow,
         priorRequestTooLargeCompactions: compactionRetries.requestTooLarge,
+        hasCompactableHistory: hasCompactableHistory(msgs),
       })
       if (processorDecision.action === "stop") {
         if (processorDecision.message) {

@@ -17,6 +17,7 @@ export {
   assistantLoopExitDecision,
   assistantRespondedAfterUser,
   consecutiveErrorDecision,
+  hasCompactableHistory,
   pendingCompactionDecision,
   processorLoopDecision,
   providerFallbackLookupDecision,
