@@ -222,13 +222,13 @@ test("native result schema rejects malformed and cross-project projections", () 
 test.each(["caller", "shutdown"])(
   "reader %s cancellation drains underlying work before closing the store",
   async (mode) => {
-    let finish!: (json: string) => void
+    let fail!: (error: Error) => void
     const cancel = vi.fn(),
       close = vi.fn()
     const call = vi.fn(
       () =>
-        new Promise<string>((resolve) => {
-          finish = resolve
+        new Promise<string>((_resolve, reject) => {
+          fail = reject
         }),
     )
     class FakeStore {
@@ -263,8 +263,9 @@ test.each(["caller", "shutdown"])(
     expect(cancel).toHaveBeenCalledTimes(1)
     expect(closed).toBe(false)
     expect(close).not.toHaveBeenCalled()
-    finish("[]")
+    fail(new Error("native cancelled"))
     await rejection
+    if (mode === "caller") await expect(pending).rejects.toBe(controller.signal.reason)
     await (closing ?? NativeStore.close())
     expect(close).toHaveBeenCalledTimes(1)
     await expect(NativeStore.callNeighborsAsync(project as ProjectID, CodeNodeID.make("root"), true)).rejects.toThrow(

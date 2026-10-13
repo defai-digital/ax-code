@@ -79,6 +79,9 @@ function worker<T>(
     if (signal.aborted) cancel()
     try {
       return await run(cancellation)
+    } catch (error) {
+      signal.throwIfAborted()
+      throw error
     } finally {
       signal.removeEventListener("abort", cancel)
     }
