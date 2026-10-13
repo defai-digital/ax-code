@@ -1,6 +1,7 @@
 import z from "zod"
 import { Tool } from "./tool"
 import { DesktopBrowser } from "../mcp/desktop-browser"
+import { WebMcpAutoApproval } from "../mcp/webmcp-auto-approval"
 import DESCRIPTION from "./desktop_webmcp.txt"
 
 export const DesktopWebMcpTool = Tool.define("desktop_webmcp", {
@@ -27,20 +28,31 @@ export const DesktopWebMcpTool = Tool.define("desktop_webmcp", {
       params.action === "invoke"
         ? DesktopBrowser.prepareInvocation(binding, params.toolName!, params.digest!, params.input ?? {})
         : undefined
+    const metadata = {
+      requireInteractive: params.action === "invoke",
+      desktopProvider: true,
+      origin: binding.origin,
+      operation: params.action,
+      toolName: params.toolName,
+      providerID: binding.providerID,
+      generation: binding.generation,
+      definitionDigest: params.digest,
+    }
+    if (params.action === "list") {
+      WebMcpAutoApproval.bindDesktopListing(
+        metadata,
+        { permission: "webmcp", patterns: [binding.origin] },
+        async () => {
+          await DesktopBrowser.checkPolicy(binding)
+          return true
+        },
+      )
+    }
     await ctx.ask({
       permission: "webmcp",
       patterns: [binding.origin],
       always: [],
-      metadata: {
-        requireInteractive: true,
-        desktopProvider: true,
-        origin: binding.origin,
-        operation: params.action,
-        toolName: params.toolName,
-        providerID: binding.providerID,
-        generation: binding.generation,
-        definitionDigest: params.digest,
-      },
+      metadata,
     })
     const result =
       params.action === "list"

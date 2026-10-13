@@ -84,6 +84,26 @@ changes what is sent to the agent.
 Page content is untrusted: a page can try to steer the agent. Output is
 labeled with its origin and size-limited.
 
+### Auto mode with Sandbox enabled
+
+With **Auto** and **Sandbox** on, an enabled, connected WebMCP browser runs
+ordinary browsing without an **Allow once** prompt: list pages, open or navigate
+within the existing origin policy, discover page tools, read page content, and
+grant bounded ordinary interaction. Read and interaction grants remain temporary;
+ordinary clicks, hover and waits still use the existing interaction budget.
+The native Desktop browser also lists its page tools without a prompt.
+
+Closing pages, expanding an origin allowlist, typing, key presses, dialogs,
+links, double clicks, consequential-looking clicks and page-defined tool
+invocations keep their existing approval requirements. Page declarations of
+"read-only" do not qualify an invocation for automatic approval. Sandbox limits
+local operations; website actions can still change external accounts and data.
+
+Explicit deny rules, administrator policy and browser identity/origin checks
+remain enforced. Automatic browsing does not save persistent approvals.
+With Auto off, the existing approval flow applies. With Sandbox off, the existing
+15-second Auto countdown applies to eligible pending permissions.
+
 ## Save an approval
 
 Eligible prompts offer **Add to WebMCP allowlist** with a red background.

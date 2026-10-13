@@ -26,6 +26,7 @@ import { Isolation } from "@/isolation"
 import { ProjectConfigTrust } from "@/config/project-config-trust"
 import { MCP } from "@/mcp"
 import { WebMcpApprovals } from "@/mcp/webmcp-approvals"
+import { WebMcpAutoApproval } from "@/mcp/webmcp-auto-approval"
 import { FileLock } from "@/util/filelock"
 
 // Permissions the opt-in semantic guardian evaluates. The highest-risk RISK
@@ -248,7 +249,8 @@ export namespace Permission {
 
   // Permissions that always reach a per-call decision instead of wildcard
   // approval. The server may answer once after the mode-driven countdown;
-  // clients cannot bypass that countdown or persist generic always grants.
+  // Runtime-bound ordinary WebMCP browsing also admits sandboxed Auto mode
+  // (ADR-188). Clients cannot grant that authority or persist generic always grants.
   export const INTERACTIVE_ONLY = INTERACTIVE_ONLY_PERMISSIONS
 
   export const EXACT_GRANT_ONLY_PERMISSIONS: ReadonlySet<string> = EXACT_GRANT_ONLY
@@ -466,6 +468,40 @@ export namespace Permission {
       }
       if (rule.action === "allow" && !isInteractiveOnly(request.permission, request.metadata)) continue
       needsAsk = true
+    }
+
+    const automatic = WebMcpAutoApproval.get(request.metadata, request.permission, request.patterns)
+    const canAutoApproveWebMcp = () => {
+      const config = Config.peek()
+      if (!config || !ScopedFlag.autonomous() || request.metadata.requireInteractive === true) return false
+      const mode = Flag.AX_CODE_ISOLATION_MODE ?? config.isolation?.mode ?? Isolation.DEFAULT_MODE
+      if (mode !== "read-only" && mode !== "workspace-write") return false
+      if (config.webmcp?.allow === false) return false
+      if (automatic?.tier === "read" && config.webmcp?.allowRead === false) return false
+      if (automatic?.tier === "interact" && config.webmcp?.allowInteract === false) return false
+      return true
+    }
+    if (automatic && canAutoApproveWebMcp()) {
+      await checkDenials(input)
+      // Validation may await connection or policy state. Re-read mode and
+      // current deny rules synchronously afterwards, before immediate admission.
+      if ((await automatic.valid()) && canAutoApproveWebMcp()) {
+        const current = fromConfig(Config.peek()!.permission ?? {})
+        for (const pattern of request.patterns) {
+          if (
+            evaluate(request.permission, pattern, ruleset).action === "deny" ||
+            evaluate(request.permission, pattern, ruleset, approved).action === "deny" ||
+            evaluate(request.permission, pattern, current).action === "deny"
+          )
+            throw new DeniedError({ ruleset, agent: input.agent })
+        }
+        if (options?.signal?.aborted) throw abortError(options.signal)
+        log.info("autonomous auto-approve (WebMCP, sandbox enabled)", {
+          permission: request.permission,
+          tier: automatic.tier,
+        })
+        return
+      }
     }
 
     const candidate = WebMcpApprovals.candidate(request.metadata)

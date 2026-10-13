@@ -20,6 +20,7 @@ import { tmpdir } from "../fixture/fixture"
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
 })
 const snapshot = (): DesktopBrowser.Snapshot => ({
   generation: randomUUID(),
@@ -41,6 +42,55 @@ async function fixture(
 }
 
 describe("private desktop WebMCP provider", () => {
+  test("sandboxed Auto lists a live native catalog without asking, but page invocation still asks", async () => {
+    vi.stubEnv("AX_CODE_AUTONOMOUS", "1")
+    vi.stubEnv("AX_CODE_ISOLATION_MODE", "workspace-write")
+    await fixture(async (session, state) => {
+      state.tools[0]!.annotations = { readOnly: true }
+      const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: state })
+      const tool = await DesktopWebMcpTool.init()
+      const asked: Permission.Request[] = []
+      const stop = Bus.subscribe(Permission.Event.Asked, (event) => {
+        asked.push(event.properties)
+        void Permission.reply({ requestID: event.properties.id, reply: "reject" })
+      })
+      const ctx: Tool.Context = {
+        sessionID: session.id,
+        messageID: MessageID.ascending(),
+        agent: "build",
+        abort: new AbortController().signal,
+        messages: [],
+        metadata: () => {},
+        ask: (input) => Permission.ask({ ...input, sessionID: session.id, ruleset: [] }),
+      }
+      try {
+        const listing = tool.execute({ action: "list" }, ctx)
+        const batch = await DesktopBrowser.poll(connection.providerID, ctx.abort)
+        expect(batch.request?.operation).toBe("list")
+        DesktopBrowser.respond(connection.providerID, {
+          requestID: batch.request!.requestID,
+          generation: state.generation,
+          status: "Completed",
+          snapshot: state,
+        })
+        expect((await listing).output).toContain("echo")
+        expect(asked).toEqual([])
+        await expect(
+          tool.execute(
+            { action: "invoke", toolName: "echo", digest: DesktopBrowser.digest(state.tools[0]!), input: {} },
+            ctx,
+          ),
+        ).rejects.toThrow("rejected")
+        expect(asked).toHaveLength(1)
+        expect(asked[0]!.metadata.requireInteractive).toBe(true)
+        expect(asked[0]!.autoOnceAt).toBeUndefined()
+      } finally {
+        stop()
+        DesktopBrowser.disconnect(connection.providerID)
+      }
+    })
+  })
+
   test("requires the launcher secret even for capability reads and rejects browser-origin requests", async () => {
     await fixture(async () => {
       const app = new Hono().route("/desktop/browser", DesktopBrowserRoutes())
@@ -83,7 +133,7 @@ describe("private desktop WebMCP provider", () => {
       const tool = await DesktopWebMcpTool.init()
       const poll = vi.spyOn(DesktopBrowser, "list")
       const unsubscribe = Bus.subscribe(Permission.Event.Asked, (event) => {
-        expect(event.properties.metadata.requireInteractive).toBe(true)
+        expect(event.properties.metadata.requireInteractive).toBe(false)
         void Permission.reply({ requestID: event.properties.id, reply: "reject" })
       })
       const ctx: Tool.Context = {
