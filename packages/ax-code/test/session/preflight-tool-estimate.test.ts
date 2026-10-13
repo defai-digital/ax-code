@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
+import { afterAll, afterEach, beforeAll, describe, expect, test, vi, type MockInstance } from "vitest"
 import { jsonSchema } from "ai"
 import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"
@@ -30,6 +30,15 @@ const model: Provider.Model = {
 }
 
 let mcpSpy: MockInstance | undefined
+// Tool descriptions embed the working directory, so every estimate in a test
+// must share one directory or path-length differences shift the counts.
+let project: Awaited<ReturnType<typeof tmpdir>>
+beforeAll(async () => {
+  project = await tmpdir({ git: true })
+})
+afterAll(async () => {
+  await project[Symbol.asyncDispose]()
+})
 afterEach(() => {
   mcpSpy?.mockRestore()
   mcpSpy = undefined
@@ -47,9 +56,8 @@ function mcpTool(description: string, webmcp?: object) {
 async function estimate(tools: Record<string, unknown>, options: { tools?: Record<string, boolean> } = {}) {
   mcpSpy?.mockRestore()
   mcpSpy = vi.spyOn(MCP, "tools").mockResolvedValue(tools as any)
-  await using tmp = await tmpdir({ git: true })
   return Instance.provide({
-    directory: tmp.path,
+    directory: project.path,
     fn: async () => estimateRegistryToolSchemaTokens({ agent: (await Agent.get("build"))!, model, ...options }),
   })
 }
@@ -83,9 +91,8 @@ describe("preflight tool schema estimate", () => {
     const base = await estimate({})
     mcpSpy?.mockRestore()
     mcpSpy = vi.spyOn(MCP, "tools").mockRejectedValue(new Error("mcp unavailable"))
-    await using tmp = await tmpdir({ git: true })
     const fallback = await Instance.provide({
-      directory: tmp.path,
+      directory: project.path,
       fn: async () => estimateRegistryToolSchemaTokens({ agent: (await Agent.get("build"))!, model }),
     })
     expect(fallback).toBe(base)
