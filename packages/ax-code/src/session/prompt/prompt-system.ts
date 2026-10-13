@@ -20,7 +20,7 @@ type SystemCache = {
 
 export async function systemPrompt(input: {
   agent: Agent.Info
-  model: { providerID: ProviderID; api: { id: string } }
+  model: { providerID: ProviderID; api: { id: string }; limit?: { context?: number } }
   format: { type: string }
   cache: SystemCache
   messages?: MessageV2.WithParts[]
@@ -82,7 +82,7 @@ export async function systemPrompt(input: {
   // invisible to the agent until session restart, breaking the
   // user-curated entry contract.
   const memoryFn = input.memory ?? SystemPrompt.memory
-  const memory = await memoryFn(input.agent, input.messages)
+  const memory = await memoryFn(input.agent, input.messages, input.model)
   const assuranceWorkflow = SystemPrompt.assuranceWorkflow(input.agent, input.model)
 
   // SystemPrompt.environment() also reads the live, runtime-mutable

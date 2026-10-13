@@ -20,7 +20,7 @@ import { ProviderTransform } from "@/provider/transform"
 import type { Agent } from "@/agent/agent"
 import { Permission } from "@/permission"
 import { Skill } from "@/skill"
-import { getContext as getMemoryContext } from "../memory/injector"
+import { budgetForContext, getContext as getMemoryContext } from "../memory/injector"
 import type { MessageV2 } from "./message-v2"
 import { DecisionHints } from "./decision-hints"
 import { EventQuery } from "@/replay/query"
@@ -340,9 +340,16 @@ export namespace SystemPrompt {
    * `undefined` when no memory is cached or when nothing applies, so callers
    * can skip the section cleanly.
    */
-  export async function memory(agent: Agent.Info, messages?: MessageV2.WithParts[]): Promise<string | undefined> {
+  export async function memory(
+    agent: Agent.Info,
+    messages?: MessageV2.WithParts[],
+    model?: { limit?: { context?: number } },
+  ): Promise<string | undefined> {
     const paths = messages ? extractFilePaths(messages) : undefined
-    const ctx = await getMemoryContext(Instance.directory, { agent: agent.name, paths })
+    // Bound injected memory by the model's window so a small-context model is
+    // not filled before the first user message; unknown windows stay unbounded.
+    const maxTokens = budgetForContext(model?.limit?.context)
+    const ctx = await getMemoryContext(Instance.directory, { agent: agent.name, paths, maxTokens })
     return ctx ? ctx : undefined
   }
 

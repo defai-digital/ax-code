@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test, vi } from "vitest"
 import path from "node:path"
 import { mkdir, readFile, symlink } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
-import { getContext } from "../../src/memory/injector"
+import { budgetForContext, buildContext, getContext } from "../../src/memory/injector"
 import * as store from "../../src/memory/store"
 import type { ProjectMemory } from "../../src/memory/types"
 
@@ -138,5 +138,84 @@ describe("memory injection source identity", () => {
     expect(context).not.toContain("Rust scoped instruction")
     expect(context).toContain("Scanned structure stays available")
     expect(context).toContain("over 30 days old")
+  })
+})
+
+describe("memory injection budget", () => {
+  const entry = (name: string, body: string, savedAt = "2026-09-21") => ({ name, body, savedAt })
+
+  function large(): ProjectMemory {
+    return {
+      ...memory("/repo"),
+      sections: {
+        feedback: {
+          tokens: 0,
+          entries: [entry("keep-rule", "k".repeat(400)), entry("older-rule", "o".repeat(400), "2026-01-01")],
+        },
+        decisions: { tokens: 0, entries: [entry("decision", "d".repeat(400))] },
+        structure: { content: Array.from({ length: 400 }, (_, i) => `dir/file-${i}.ts`).join("\n"), tokens: 0 },
+      },
+    }
+  }
+
+  test("is unbounded when no budget is given", () => {
+    const context = buildContext(large())
+    expect(context).toContain("keep-rule")
+    expect(context).toContain("older-rule")
+    expect(context).toContain("dir/file-399.ts")
+    expect(context).not.toContain("omitted")
+  })
+
+  test("drops scanned sections before curated entries and never cuts an entry", () => {
+    const context = buildContext(large(), { maxTokens: 400 })
+    expect(context).toContain("keep-rule")
+    expect(context).toContain("k".repeat(400))
+    expect(context).not.toContain("dir/file-399.ts")
+    expect(context).toMatch(/omitted to fit this model's context budget/)
+  })
+
+  test("keeps the newest entry when the budget fits only one of equal confidence", () => {
+    const context = buildContext(large(), { maxTokens: 120 })
+    expect(context).toContain("keep-rule")
+    expect(context).not.toContain("older-rule")
+    expect(context).not.toContain("decision")
+  })
+
+  test("truncates a scanned section at a line boundary", () => {
+    const context = buildContext(large(), { maxTokens: 1000 })
+    expect(context).toContain("## Directory Structure")
+    expect(context).toContain("dir/file-0.ts")
+    expect(context).not.toContain("dir/file-399.ts")
+    for (const line of context.split("\n").filter((l) => l.startsWith("dir/")))
+      expect(line).toMatch(/^dir\/file-\d+\.ts$/)
+  })
+
+  test("caps global entries at half the budget so project rules still fit", () => {
+    const global = {
+      ...memory("/global"),
+      sections: {
+        feedback: {
+          tokens: 0,
+          entries: ["a", "b", "c"].map((id) => entry(`global-${id}`, id.repeat(400))),
+        },
+      },
+    }
+    const context = buildContext(large(), { global, maxTokens: 300 })
+    expect(context.match(/- global-/g)).toHaveLength(1)
+    expect(context).toContain("keep-rule")
+  })
+
+  test("returns the unused global share to project entries", () => {
+    const context = buildContext(large(), { global: memory("/global"), maxTokens: 400 })
+    expect(context).toContain("keep-rule")
+    expect(context).toContain("decision")
+  })
+
+  test("derives the budget from the context window with a floor and an unknown fallback", () => {
+    expect(budgetForContext(65536)).toBe(6553)
+    expect(budgetForContext(8192)).toBe(2000)
+    expect(budgetForContext(1_000_000)).toBe(100_000)
+    expect(budgetForContext(undefined)).toBeUndefined()
+    expect(budgetForContext(0)).toBeUndefined()
   })
 })

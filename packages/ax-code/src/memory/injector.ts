@@ -43,17 +43,99 @@ function orderEntriesForPrompt(entries: MemoryEntry[]): MemoryEntry[] {
   })
 }
 
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4)
+}
+
+/** Share of the model context window that injected memory may occupy. */
+const CONTEXT_BUDGET_SHARE = 0.1
+/** Memory is never squeezed below this, however small the window reports. */
+const MIN_BUDGET_TOKENS = 2000
+/** Largest share of the budget that global entries may use before project entries. */
+const GLOBAL_BUDGET_SHARE = 0.5
+/** A truncated scanned section smaller than this is dropped instead of shown. */
+const MIN_TRUNCATED_SECTION_TOKENS = 200
+
+/**
+ * Token budget for injected memory on a model with the given context window.
+ * Returns undefined (unbounded) when the window is unknown so callers keep the
+ * historical behavior rather than guessing.
+ */
+export function budgetForContext(contextWindow: number | undefined): number | undefined {
+  if (!contextWindow || !Number.isFinite(contextWindow) || contextWindow <= 0) return undefined
+  return Math.max(MIN_BUDGET_TOKENS, Math.floor(contextWindow * CONTEXT_BUDGET_SHARE))
+}
+
+/** Tracks the remaining token budget and how many entries were left out. */
+class Budget {
+  omitted = 0
+  private remaining: number
+  constructor(limit: number | undefined) {
+    this.remaining = limit ?? Number.POSITIVE_INFINITY
+  }
+  /**
+   * Run `fill` against at most `share` of what is left, so one scope cannot
+   * starve the next. Whatever it does not spend stays in this budget.
+   */
+  capped<T>(share: number, fill: (child: Budget) => T): T {
+    const child = new Budget(Number.isFinite(this.remaining) ? Math.floor(this.remaining * share) : undefined)
+    const before = child.remaining
+    const result = fill(child)
+    this.remaining -= before - child.remaining
+    this.omitted += child.omitted
+    return result
+  }
+  /** Reserve room for `text`; false (and a recorded omission) when it does not fit. */
+  take(text: string): boolean {
+    const cost = estimateTokens(text)
+    if (cost > this.remaining) {
+      this.omitted++
+      return false
+    }
+    this.remaining -= cost
+    return true
+  }
+  /** Take as many whole lines of a scanned section as fit. */
+  takeLines(text: string): string | undefined {
+    if (estimateTokens(text) <= this.remaining) {
+      this.remaining -= estimateTokens(text)
+      return text
+    }
+    if (this.remaining < MIN_TRUNCATED_SECTION_TOKENS) {
+      this.omitted++
+      return undefined
+    }
+    const kept: string[] = []
+    let used = 0
+    for (const line of text.split("\n")) {
+      const cost = estimateTokens(line) + 1
+      if (used + cost > this.remaining) break
+      kept.push(line)
+      used += cost
+    }
+    if (kept.length === 0) {
+      this.omitted++
+      return undefined
+    }
+    this.remaining -= used
+    this.omitted++
+    return kept.join("\n")
+  }
+}
+
 function pushEntries(
   parts: string[],
   title: string,
   section: EntrySection | undefined,
   opts: { agent?: string; paths?: string[]; projectRoot: string },
+  budget: Budget,
 ) {
   if (!section || section.entries.length === 0) return
   const applicable = orderEntriesForPrompt(section.entries.filter((e) => entryApplies(e, opts)))
-  if (applicable.length === 0) return
+  const rendered = applicable.map(renderEntry).filter((text) => budget.take(text))
+  if (rendered.length === 0) return
   parts.push(`## ${title}`)
-  for (const entry of applicable) parts.push(renderEntry(entry))
+  parts.push(...rendered)
   parts.push("")
 }
 
@@ -82,10 +164,20 @@ export interface BuildContextOptions {
   paths?: string[]
   /** Pre-loaded global memory to merge into context. When absent, no global section is emitted. */
   global?: ProjectMemory | null
+  /**
+   * Approximate token budget for the rendered context. Sections are filled in
+   * injection order and whole entries are dropped (never cut mid-entry) once
+   * the budget is spent, so the most actionable memory survives. Absent means
+   * unbounded.
+   */
+  maxTokens?: number
 }
 
 /**
  * Build context string from project + optional global memory.
+ *
+ * With `maxTokens`, global entries use at most half the budget and unspent
+ * budget carries on to project entries and scanned sections, in this order.
  *
  * Injection order (highest actionability first):
  *   1. Global Settings (cross-project feedback, prefs, decisions, references)
@@ -100,21 +192,28 @@ export function buildContext(memory: ProjectMemory, opts: BuildContextOptions = 
   const parts: string[] = []
   const agent = opts.agent
   const paths = opts.paths
+  const budget = new Budget(opts.maxTokens)
 
   // Global entries appear first — they apply everywhere and set the baseline.
   // Rendered flat under a single "## Global Settings" heading to avoid
   // duplicate ## headings colliding with project-level section headers.
   const global = opts.global
   if (global) {
-    const globalEntries: string[] = []
-    for (const kind of ["feedback", "userPrefs", "decisions", "reference"] as const) {
-      const section = global.sections[kind]
-      if (!section) continue
-      for (const entry of orderEntriesForPrompt(section.entries)) {
-        if (entryApplies(entry, { agent, paths, projectRoot: memory.projectRoot }))
-          globalEntries.push(renderEntry(entry))
+    // Global memory takes at most half the budget so project rules still fit.
+    const globalEntries = budget.capped(GLOBAL_BUDGET_SHARE, (scoped) => {
+      const rendered: string[] = []
+      for (const kind of ["feedback", "userPrefs", "decisions", "reference"] as const) {
+        const section = global.sections[kind]
+        if (!section) continue
+        for (const entry of orderEntriesForPrompt(section.entries)) {
+          if (entryApplies(entry, { agent, paths, projectRoot: memory.projectRoot })) {
+            const text = renderEntry(entry)
+            if (scoped.take(text)) rendered.push(text)
+          }
+        }
       }
-    }
+      return rendered
+    })
     if (globalEntries.length > 0) {
       parts.push("## Global Settings")
       parts.push(...globalEntries)
@@ -128,39 +227,48 @@ export function buildContext(memory: ProjectMemory, opts: BuildContextOptions = 
   // Keep its global precedence, without repeating the same curated entries.
   // Equal content from distinct stores must retain its separate scope.
   if (global !== memory) {
-    pushEntries(parts, "Feedback Rules", memory.sections.feedback, entryOpts)
-    pushEntries(parts, "User Preferences", memory.sections.userPrefs, entryOpts)
-    pushEntries(parts, "Project Decisions", memory.sections.decisions, entryOpts)
-    pushEntries(parts, "References", memory.sections.reference, entryOpts)
+    pushEntries(parts, "Feedback Rules", memory.sections.feedback, entryOpts, budget)
+    pushEntries(parts, "User Preferences", memory.sections.userPrefs, entryOpts, budget)
+    pushEntries(parts, "Project Decisions", memory.sections.decisions, entryOpts, budget)
+    pushEntries(parts, "References", memory.sections.reference, entryOpts, budget)
   }
 
-  if (memory.sections.patterns?.content) {
+  const patternsContent = memory.sections.patterns?.content && budget.takeLines(memory.sections.patterns.content)
+  if (patternsContent) {
     parts.push("## Tech Stack")
-    parts.push(memory.sections.patterns.content)
+    parts.push(patternsContent)
     parts.push("")
   }
 
-  if (memory.sections.config?.content) {
+  const configContent = memory.sections.config?.content && budget.takeLines(memory.sections.config.content)
+  if (configContent) {
     parts.push("## Project Config")
-    parts.push(memory.sections.config.content)
+    parts.push(configContent)
     parts.push("")
   }
 
-  if (memory.sections.structure?.content) {
+  const structureContent = memory.sections.structure?.content && budget.takeLines(memory.sections.structure.content)
+  if (structureContent) {
     parts.push("## Directory Structure")
-    parts.push(memory.sections.structure.content)
+    parts.push(structureContent)
     parts.push("")
   }
 
-  if (memory.sections.readme?.content) {
+  const readmeContent = memory.sections.readme?.content && budget.takeLines(memory.sections.readme.content)
+  if (readmeContent) {
     parts.push("## README Summary")
-    parts.push(memory.sections.readme.content)
+    parts.push(readmeContent)
     parts.push("")
   }
 
   const notice = stalenessNotice(memory.sections)
   if (notice) {
     parts.push(notice)
+    parts.push("")
+  }
+
+  if (budget.omitted > 0 && parts.length > 0) {
+    parts.push(`> Note: ${budget.omitted} memory item(s) were omitted to fit this model's context budget.`)
     parts.push("")
   }
 
