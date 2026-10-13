@@ -263,6 +263,56 @@ describe("tool.apply_patch freeform", () => {
     })
   })
 
+  test("a failed case-only rename rejects instead of reporting success", async () => {
+    await using fixture = await tmpdir()
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const source = path.join(fixture.path, "readme.md")
+        const dest = path.join(fixture.path, "README.md")
+        await writeAndTrack(source, "old content\n")
+        // Case-insensitive volumes (macOS default, Windows) resolve both names
+        // to the same file; case-sensitive ones see a normal move.
+        const insensitive = await fs
+          .stat(dest)
+          .then(() => true)
+          .catch(() => false)
+
+        const realRename = fs.rename
+        const renameSpy = vi
+          .spyOn(fs, "rename")
+          .mockImplementation(async (from: string | Buffer | URL, to: string | Buffer | URL) => {
+            // Fail only the case-only rename the move path performs; leave every
+            // other rename (including atomic-write temporaries) untouched.
+            if (String(from) === source && String(to) === dest) {
+              const error = new Error("rename denied") as NodeJS.ErrnoException
+              error.code = "EACCES"
+              throw error
+            }
+            return realRename(from as any, to as any)
+          })
+
+        const patchText =
+          "*** Begin Patch\n*** Update File: readme.md\n*** Move to: README.md\n@@\n-old content\n+new content\n*** End Patch"
+
+        try {
+          if (insensitive) {
+            await expect(execute({ patchText }, ctx)).rejects.toThrow("rename denied")
+          } else {
+            // On a case-sensitive volume this is a normal move: the rename spy
+            // must not interfere and the move must still succeed.
+            await expect(execute({ patchText }, ctx)).resolves.toBeDefined()
+            expect(await fs.readFile(dest, "utf-8")).toBe("new content\n")
+          }
+        } finally {
+          renameSpy.mockRestore()
+        }
+      },
+    })
+  })
+
   test("applies multiple hunks to one file", async () => {
     await using fixture = await tmpdir()
     const { ctx } = makeCtx()

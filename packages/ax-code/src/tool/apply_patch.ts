@@ -44,8 +44,10 @@ async function finishMove(source: string, dest: string) {
   if (dest === source) return
   if (await sameFile(source, dest)) {
     // Case-only rename on a case-insensitive filesystem: the content is
-    // already in place; only the directory entry's case needs to change.
-    await fs.rename(source, dest).catch(() => undefined)
+    // already in place; only the directory entry's case needs to change. Let a
+    // failure propagate so the tool cannot report success when the directory
+    // entry was not actually renamed.
+    await fs.rename(source, dest)
     return
   }
   await fs.unlink(source).catch((error: unknown) => {
