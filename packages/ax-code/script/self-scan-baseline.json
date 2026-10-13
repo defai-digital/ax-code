@@ -1969,7 +1969,7 @@
       ]
     },
     "security_scan": {
-      "count": 496,
+      "count": 505,
       "findings": [
         {
           "fingerprint": "437e1d0157fc1965a429fe7f0e9474576f6c0db625ea27bb6ce1b57af9e2cd9f",
@@ -5239,6 +5239,78 @@
           "fingerprint": "abcf586367fdc04391a8330fd74a7b6789a0c0d16d8f05881c7a9218a595a388",
           "file": "src/snapshot/index.ts",
           "line": 1133,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "e76ca7631c7de748f1cb496522b2ca2d4a7c3abb20e41d7a2d2954c908335272",
+          "file": "src/snapshot/stores.ts",
+          "line": 44,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "5b592c5cd83403d72adf7137a9c6246bf480ec363132e2aa0a782332d76d9701",
+          "file": "src/snapshot/stores.ts",
+          "line": 54,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "c23c9a36e878f0fc907fca828387a60f8b7ae26a2aa29934cd94e26c0e989beb",
+          "file": "src/snapshot/stores.ts",
+          "line": 72,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "377d76a95c5e140adf1639b914189a08055e914b5e9a53ed309d99dd86853dde",
+          "file": "src/snapshot/stores.ts",
+          "line": 78,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "909c317a9a46aee925e17ce9ed81941dc81543aa5889f71663eb0cdef2f8432f",
+          "file": "src/snapshot/stores.ts",
+          "line": 79,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "404bee6d6dc11ed19e9c081c99bde8b6c7342762bf5a84393740498aecd967e4",
+          "file": "src/snapshot/stores.ts",
+          "line": 136,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "807805cdaaca21fb94bcc996805ea544c75d4a017969fc3d9185741567390c6e",
+          "file": "src/snapshot/stores.ts",
+          "line": 137,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "328cf957801acbec66626fd64f4985073aef11ea3cad03d3af50eaa1b41b1ca5",
+          "file": "src/snapshot/stores.ts",
+          "line": 138,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "5efaf39d0e24112999182e4f966e66cc3347e37fee700f62e5327c5a8b23347d",
+          "file": "src/snapshot/stores.ts",
+          "line": 139,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
