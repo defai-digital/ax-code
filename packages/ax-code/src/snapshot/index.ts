@@ -3,6 +3,7 @@ import path from "path"
 import z from "zod"
 import { Config } from "../config/config"
 import { DirectoryScope } from "../file/directory-scope"
+import { Flag } from "../flag/flag"
 import { Global } from "../global"
 import type { Shape } from "../project/instance"
 import { Instance } from "../project/instance"
@@ -52,6 +53,12 @@ export namespace Snapshot {
   const prune = "7.days"
   const pruneMs = 7 * 24 * 60 * 60 * 1000
   const maxFileSize = 1024 * 1024
+  // Files above this size are left out of staging. Git streams anything past
+  // core.bigFileThreshold (512 MB) into objects/pack/tmp_pack_*, and an
+  // interrupted add strands that file at full size in the store.
+  const defaultMaxStageBytes = 32 * 1024 * 1024
+  // Snapshot stores are small, so repack long before git's 6700-loose default.
+  const gcAutoThreshold = "gc.auto=1000"
   // Snapshot git subprocesses sit on the per-turn critical path; a hung git
   // (stalled mount, credential prompt, lock not matched by LOCK_CONTENTION)
   // must surface as a bounded error instead of freezing the whole session.
@@ -93,6 +100,12 @@ export namespace Snapshot {
     cleanupInterval?: ReturnType<typeof setInterval>
     disposed?: boolean
     warnedWindowsPaths?: string
+    warnedOversized?: string
+  }
+
+  function maxStageBytes() {
+    const mb = Flag.AX_CODE_SNAPSHOT_MAX_FILE_MB
+    return mb === undefined ? defaultMaxStageBytes : Math.floor(mb * 1024 * 1024)
   }
 
   function valid(hash: string) {
@@ -351,8 +364,9 @@ export namespace Snapshot {
     })
   }
 
-  async function windowsExclusions(current: State): Promise<string[]> {
-    if (!WindowsSnapshotPaths.enabled()) return []
+  /** Paths to leave out for Windows, plus the untracked listing when it was already scanned. */
+  async function windowsExclusions(current: State): Promise<{ paths: string[]; untracked?: string[] }> {
+    if (!WindowsSnapshotPaths.enabled()) return { paths: [] }
     // Inspect indexed and untracked paths together without discarding historical entries.
     const result = await runGit(
       [...cfg, ...args(current, ["ls-files", "--cached", "--others", "--exclude-standard", "-t", "-z"])],
@@ -389,14 +403,86 @@ export namespace Snapshot {
       })
     }
     current.warnedWindowsPaths = signature
-    return paths
+    return { paths, untracked }
+  }
+
+  /**
+   * Files that `git add` would stage (untracked, or tracked and modified) and
+   * that exceed the size cap. Paths are worktree-relative. Symlinks are
+   * measured with lstat because Git stores the link, not its target.
+   */
+  async function oversizedFiles(current: State, scanned?: string[]): Promise<{ path: string; size: number }[]> {
+    const limit = maxStageBytes()
+    // Reuse the untracked listing when the Windows path check already made it:
+    // a snapshot pass performs a single `--others` scan of the worktree.
+    const [untracked, modified] = await Promise.all([
+      scanned
+        ? undefined
+        : runGit([...cfg, ...args(current, ["ls-files", "--others", "--exclude-standard", "-z", "--", "."])], {
+            cwd: current.worktree,
+          }),
+      runGit([...cfg, ...args(current, ["diff-files", "--name-only", "-z", "--", "."])], { cwd: current.worktree }),
+    ])
+    if ((untracked && untracked.code !== 0) || modified.code !== 0) {
+      log.error("failed to list snapshot candidates", {
+        cwd: current.worktree,
+        untrackedCode: untracked?.code,
+        modifiedCode: modified.code,
+        stderr: untracked?.stderr || modified.stderr,
+      })
+      throw new Error("Snapshot staging failed: could not list files for the size check")
+    }
+    const names = [
+      ...new Set([...(scanned ?? untracked!.text.split("\0")), ...modified.text.split("\0")].filter(Boolean)),
+    ]
+    const found: { path: string; size: number }[] = []
+    for (let offset = 0; offset < names.length; offset += 64) {
+      const stats = await Promise.all(
+        names.slice(offset, offset + 64).map((name) =>
+          // A file deleted between listing and stat is not a staging candidate.
+          fs.lstat(path.join(current.worktree, name)).then(
+            (stat) => ({ name, size: stat.isFile() ? stat.size : 0 }),
+            () => ({ name, size: 0 }),
+          ),
+        ),
+      )
+      for (const stat of stats) if (stat.size > limit) found.push({ path: stat.name, size: stat.size })
+    }
+    return found
+  }
+
+  function reportOversized(current: State, files: { path: string; size: number }[]) {
+    const signature = JSON.stringify(files.map((file) => file.path))
+    if (signature === current.warnedOversized) return
+    current.warnedOversized = signature
+    if (!files.length) return
+    const limitMb = Math.round(maxStageBytes() / (1024 * 1024))
+    log.warn("large files excluded from snapshot; rollback cannot restore these files", {
+      limitMb,
+      files: files.slice(0, 50),
+      count: files.length,
+    })
+    const names = files
+      .slice(0, 3)
+      .map((file) => `${file.path} (${Math.round(file.size / (1024 * 1024))} MB)`)
+      .join(", ")
+    Bus.publishDetached(NotificationEvent.ToastShow, {
+      title: "Partial snapshot coverage",
+      message: `Snapshot skips ${files.length} file(s) larger than ${limitMb} MB: ${names}${files.length > 3 ? ", …" : ""}. Rollback cannot restore these files. Set AX_CODE_SNAPSHOT_MAX_FILE_MB to raise the limit.`,
+      variant: "warning",
+      duration: 20_000,
+    })
   }
 
   async function add(current: State, options?: { excludesSynced: boolean }) {
     if (!options?.excludesSynced) await syncExclude(current)
+    const windows = await windowsExclusions(current)
+    const oversized = await oversizedFiles(current, windows.untracked)
+    reportOversized(current, oversized)
     const excluded = [
-      ...(await windowsExclusions(current)),
+      ...windows.paths,
       ...(await DirectoryScope.nestedGitChildren(current.worktree, { includeDotDirs: true })),
+      ...oversized.map((file) => file.path),
     ]
     // Stage the whole worktree, not just `current.directory` — a session's
     // working directory can be a subdirectory of the git worktree (e.g. a
@@ -442,6 +528,7 @@ export namespace Snapshot {
     if (!(await enabled())) return
     if (!(await exists(current.gitdir))) return
     const cutoff = Date.now() - pruneMs
+    let deletedRefs = 0
     const refs = await runGit(
       [...core, ...args(current, ["for-each-ref", "--format=%(refname) %(objectname)", "refs/snapshots"])],
       {
@@ -494,7 +581,6 @@ export namespace Snapshot {
         }
         await writeSnapshotMeta(current, hash)
       }
-      let deletedRefs = 0
       for (const line of refs.text.trim().split("\n")) {
         if (!line) continue
         const [ref, hash] = line.trim().split(/\s+/, 2)
@@ -516,14 +602,31 @@ export namespace Snapshot {
       }
       if (deletedRefs > 0) log.info("deleted expired snapshot refs", { deletedRefs, prune })
     }
-    // The scheduled path uses `gc --auto` so the hourly timer only repacks
-    // when git's own thresholds are exceeded; an unconditional full repack
-    // can hold the shared serial operation queue (and therefore the next
-    // turn's track()/patch()) for seconds to minutes on large stores.
-    const result = await runGit(args(current, ["gc", ...(options?.auto ? ["--auto"] : []), `--prune=${prune}`]), {
+    // `gc --auto` returns without pruning while git's loose-object and pack
+    // thresholds are unmet, so it alone never removes stranded tmp_pack_* files
+    // or expired unreachable objects. Prune explicitly; it neither repacks nor
+    // touches anything newer than the retention window.
+    const pruned = await runGit(args(current, ["prune", `--expire=${prune}`]), {
       cwd: current.directory,
       timeout: gcTimeoutMs,
     })
+    if (pruned.code !== 0) {
+      log.warn("snapshot prune failed", { exitCode: pruned.code, stderr: pruned.stderr })
+    }
+    // The scheduled path uses `gc --auto` so the hourly timer only repacks
+    // when git's own thresholds are exceeded; an unconditional full repack
+    // can hold the shared serial operation queue (and therefore the next
+    // turn's track()/patch()) for seconds to minutes on large stores. Expiring
+    // refs is the one event that makes a full repack worthwhile, because the
+    // objects they pinned become reclaimable.
+    const full = !options?.auto || deletedRefs > 0
+    const result = await runGit(
+      ["-c", gcAutoThreshold, ...args(current, ["gc", ...(full ? [] : ["--auto"]), `--prune=${prune}`])],
+      {
+        cwd: current.directory,
+        timeout: gcTimeoutMs,
+      },
+    )
     if (result.code !== 0) {
       log.warn("cleanup failed", {
         exitCode: result.code,
@@ -544,7 +647,9 @@ export namespace Snapshot {
 
     // Snapshot identifiers have a persisted 40-character SHA-1 contract,
     // independent of the user's default object format for new repositories.
-    const initialized = await runGit(["init", "--object-format=sha1"], {
+    // An empty template skips the ~64 KB of sample hooks Git copies into
+    // every new store; a user's init.templateDir would otherwise do the same.
+    const initialized = await runGit(["init", "--object-format=sha1", "--template="], {
       cwd: current.worktree,
       env: { GIT_DIR: current.gitdir, GIT_WORK_TREE: current.worktree },
     })

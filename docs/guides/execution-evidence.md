@@ -101,6 +101,12 @@ for older turns that never captured a baseline, it can only undo messages; file
 edits remain on disk. Enabling snapshots now cannot reconstruct earlier file
 contents. A captured turn with no file changes also has nothing to restore.
 
+Snapshots skip any single file larger than 32 MB so a dataset or build artifact
+cannot fill the snapshot store; AX Code shows a "Partial snapshot coverage"
+notice and Revert cannot restore those files. Set `AX_CODE_SNAPSHOT_MAX_FILE_MB`
+to change the limit. Snapshot data older than seven days is pruned automatically
+from `~/.local/share/ax-code/snapshot`.
+
 ```bash
 ax-code session rollback <sessionID> --list      # show recoverable points
 ax-code session rollback <sessionID> --dry-run   # show what would change

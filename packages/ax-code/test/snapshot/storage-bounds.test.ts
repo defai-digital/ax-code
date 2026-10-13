@@ -1,0 +1,160 @@
+import { afterEach, expect, test, vi } from "vitest"
+import fs from "node:fs/promises"
+import path from "node:path"
+import { Snapshot } from "../../src/snapshot"
+import { Instance } from "../../src/project/instance"
+import { Global } from "../../src/global"
+import * as Git from "../../src/util/git"
+import { tmpdir } from "../fixture/fixture"
+
+afterEach(async () => {
+  vi.restoreAllMocks()
+  await Instance.disposeAll()
+  vi.unstubAllEnvs()
+})
+
+const gitdirFor = () => path.join(Global.Path.data, "snapshot", Instance.project.id)
+
+async function tree(gitdir: string, hash: string, cwd: string) {
+  const result = await Git.git(["--git-dir", gitdir, "ls-tree", "-r", "--name-only", hash], { cwd })
+  expect(result.exitCode).toBe(0)
+  return result.text().split("\n").filter(Boolean)
+}
+
+test("staging leaves files above the size cap out of the snapshot", async () => {
+  // 0.001 MB is ~1 KB; keeps the fixture tiny while exercising the real cap.
+  vi.stubEnv("AX_CODE_SNAPSHOT_MAX_FILE_MB", "0.001")
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await fs.writeFile(path.join(tmp.path, "small.txt"), "small")
+      await fs.writeFile(path.join(tmp.path, "big.bin"), Buffer.alloc(8 * 1024, 1))
+      await fs.writeFile(path.join(tmp.path, "odd name 'q'.bin"), Buffer.alloc(8 * 1024, 2))
+      const hash = (await Snapshot.track())!
+      expect(hash).toBeTruthy()
+      const files = await tree(gitdirFor(), hash, tmp.path)
+      expect(files).toContain("small.txt")
+      expect(files).not.toContain("big.bin")
+      expect(files).not.toContain("odd name 'q'.bin")
+    },
+  })
+})
+
+test("a tracked file that grows past the cap keeps its last snapshotted content", async () => {
+  vi.stubEnv("AX_CODE_SNAPSHOT_MAX_FILE_MB", "0.001")
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const file = path.join(tmp.path, "grow.txt")
+      await fs.writeFile(file, "small")
+      const first = (await Snapshot.track())!
+      await fs.writeFile(file, "x".repeat(8 * 1024))
+      await fs.writeFile(path.join(tmp.path, "other.txt"), "other")
+      const second = (await Snapshot.track())!
+      expect(second).toBeTruthy()
+      const blob = await Git.git(["--git-dir", gitdirFor(), "cat-file", "blob", `${second}:grow.txt`], {
+        cwd: tmp.path,
+      })
+      expect(blob.text()).toBe("small")
+      expect(await tree(gitdirFor(), second, tmp.path)).toContain("other.txt")
+      // Rolling back to the first snapshot still restores the original content.
+      await Snapshot.revert([{ hash: first, files: [file] }])
+      expect(await fs.readFile(file, "utf8")).toBe("small")
+    },
+  })
+})
+
+test("files under the default cap are still snapshotted", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await fs.writeFile(path.join(tmp.path, "medium.bin"), Buffer.alloc(2 * 1024 * 1024, 3))
+      const hash = (await Snapshot.track())!
+      expect(await tree(gitdirFor(), hash, tmp.path)).toContain("medium.bin")
+    },
+  })
+})
+
+test("scheduled cleanup removes stale stranded pack temporaries but keeps fresh ones", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Snapshot.track()
+      const pack = path.join(gitdirFor(), "objects", "pack")
+      await fs.mkdir(pack, { recursive: true })
+      const stale = path.join(pack, "tmp_pack_stale1")
+      const fresh = path.join(pack, "tmp_pack_fresh1")
+      await fs.writeFile(stale, "stranded")
+      await fs.writeFile(fresh, "in progress")
+      const old = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000)
+      await fs.utimes(stale, old, old)
+      await Snapshot.cleanupScheduled()
+      await expect(fs.stat(stale)).rejects.toMatchObject({ code: "ENOENT" })
+      await expect(fs.stat(fresh)).resolves.toBeTruthy()
+    },
+  })
+}, 60_000)
+
+test("scheduled cleanup repacks when snapshot refs expire", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const file = path.join(tmp.path, "state.txt")
+      await fs.writeFile(file, "one")
+      const expired = (await Snapshot.track())!
+      await fs.writeFile(file, "two")
+      await Snapshot.track()
+      const gitdir = gitdirFor()
+      const stale = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000)
+      await fs.writeFile(path.join(gitdir, "ax-code", "snapshots", expired), String(stale.getTime()))
+      const original = Git.git
+      const commands: string[][] = []
+      vi.spyOn(Git, "git").mockImplementation(async (args, opts) => {
+        commands.push(args)
+        return original(args, opts)
+      })
+      await Snapshot.cleanupScheduled()
+      const gc = commands.find((args) => args.includes("gc"))
+      expect(gc).toBeTruthy()
+      // An expired ref makes its objects reclaimable, so the full gc runs.
+      expect(gc).not.toContain("--auto")
+      expect(commands.some((args) => args.includes("prune"))).toBe(true)
+    },
+  })
+}, 60_000)
+
+test("scheduled cleanup stays on gc --auto when nothing expired", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Snapshot.track()
+      const original = Git.git
+      const commands: string[][] = []
+      vi.spyOn(Git, "git").mockImplementation(async (args, opts) => {
+        commands.push(args)
+        return original(args, opts)
+      })
+      await Snapshot.cleanupScheduled()
+      const gc = commands.find((args) => args.includes("gc"))
+      expect(gc).toContain("--auto")
+      expect(gc).toContain("gc.auto=1000")
+    },
+  })
+}, 60_000)
+
+test("a new snapshot store carries no sample hooks", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Snapshot.track()
+      await expect(fs.stat(path.join(gitdirFor(), "hooks"))).rejects.toMatchObject({ code: "ENOENT" })
+    },
+  })
+})
