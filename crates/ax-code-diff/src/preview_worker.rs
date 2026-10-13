@@ -47,7 +47,7 @@ const MAX_OUTPUT: usize = 16 * 1024 * 1024;
 
 #[napi]
 pub struct DiffCancellation {
-    cancelled: Arc<AtomicBool>,
+    pub(crate) cancelled: Arc<AtomicBool>,
 }
 #[napi]
 impl DiffCancellation {

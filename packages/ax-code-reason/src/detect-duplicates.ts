@@ -1,3 +1,4 @@
+import { compareDuplicateGroups } from "./duplicate-groups"
 import { createHash } from "crypto"
 import { codeReasonHost, type Graph } from "./host"
 
@@ -118,6 +119,11 @@ function dropParamNames(inner: string): string {
         i = k + 1
         continue
       }
+      // A run without a colon is copied unchanged. Re-scanning its suffix
+      // at every character made long identifiers quadratic.
+      out += inner.slice(i, j)
+      i = j
+      continue
     }
     out += ch
     i++
@@ -155,19 +161,11 @@ function hashNormalized(sig: string): string {
 }
 
 // Tokenize for Jaccard similarity: break on non-identifier boundaries,
-// lowercase, drop 1-char tokens. Operates on the normalized signature
-// so parameter names are already gone.
+// lowercase, drop 1-char tokens. Preserve raw-signature tokenization here;
+// normalized signatures are used only for the exact/structural buckets.
 function tokenize(sig: string): Set<string> {
   const tokens = sig.toLowerCase().split(/[^a-z0-9_]+/)
   return new Set(tokens.filter((t) => t.length > 1))
-}
-
-function jaccard(a: Set<string>, b: Set<string>): number {
-  if (a.size === 0 && b.size === 0) return 1
-  let intersection = 0
-  for (const t of a) if (b.has(t)) intersection++
-  const union = a.size + b.size - intersection
-  return union === 0 ? 0 : intersection / union
 }
 
 // Longest common prefix over a list of absolute file paths. Used to
@@ -227,8 +225,15 @@ function collectDuplicateCandidatePool(
     for (const hit of hits) {
       if (input.excludeTests && isTestFile(hit.file)) continue
       if (!hit.signature || hit.signature.length < input.minSigLen) continue
-      pool.push(hit)
-      ciExplains.push(hit.explain)
+      // The comparison yields to workers. Keep the admitted graph facts stable
+      // even when an embedding host reuses mutable symbol objects.
+      const snapshot = {
+        ...hit,
+        range: { start: { ...hit.range.start }, end: { ...hit.range.end } },
+        explain: { ...hit.explain },
+      }
+      pool.push(snapshot)
+      ciExplains.push(snapshot.explain)
       if (pool.length >= input.maxCandidates) {
         truncated = true
         break
@@ -243,7 +248,9 @@ function collectDuplicateCandidatePool(
 export async function detectDuplicatesImpl(
   projectID: ProjectID,
   input: DetectDuplicatesInput,
+  signal = codeReasonHost().abort(),
 ): Promise<DebugEngine.DuplicateReport> {
+  signal.throwIfAborted()
   const scope: "worktree" | "none" = input.scope ?? "worktree"
   const kinds = input.kinds ?? DEFAULT_KINDS
   const minSigLen = input.minSignatureLength ?? DEFAULT_MIN_SIG_LEN
@@ -271,6 +278,15 @@ export async function detectDuplicatesImpl(
     minSigLen,
   })
   const { pool, truncated } = candidatePool
+  signal.throwIfAborted()
+  if (pool.length > 10_000) throw new Error("Duplicate comparison resource limit exceeded; reduce maxCandidates")
+  let signatureBytes = 0
+  for (const symbol of pool) {
+    const bytes = Buffer.byteLength(symbol.signature ?? "")
+    signatureBytes += bytes
+    if (bytes > 1024 * 1024 || signatureBytes > 16 * 1024 * 1024)
+      throw new Error("Duplicate signature resource limit exceeded; reduce maxCandidates")
+  }
   ciExplains.push(...candidatePool.ciExplains)
 
   heuristics.push(`pool-size=${pool.length}`)
@@ -280,7 +296,9 @@ export async function detectDuplicatesImpl(
   // signature string) also fall into the same bucket since
   // normalization is idempotent.
   const buckets = new Map<string, { norm: string; members: Graph.Symbol[] }>()
+  let preparedUnits = 0
   for (const sym of pool) {
+    signal.throwIfAborted()
     // Skip symbols without a signature (incomplete LSP indexing,
     // minified code). Feeding undefined into normalizeSignature
     // crashes `tokenize(undefined)`. See also the singleton branch
@@ -291,6 +309,12 @@ export async function detectDuplicatesImpl(
     const bucket = buckets.get(hash)
     if (bucket) bucket.members.push(sym)
     else buckets.set(hash, { norm, members: [sym] })
+    preparedUnits += sym.signature.length
+    if (preparedUnits >= 32_768) {
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      signal.throwIfAborted()
+      preparedUnits = 0
+    }
   }
 
   const clusters: DebugEngine.DuplicateCluster[] = []
@@ -331,34 +355,24 @@ export async function detectDuplicatesImpl(
   // tier's deterministic stand-in for Phase 1. Pure pairwise comparison
   // is O(n²); with the maxCandidates cap this is bounded.
   heuristics.push("jaccard-near-match")
-  const paired = new Set<number>()
-  for (let i = 0; i < singletons.length; i++) {
-    if (paired.has(i)) continue
-    const group = [singletons[i].sym]
-    const representativeNorm = singletons[i].norm
-    let minScore = 1
-    for (let j = i + 1; j < singletons.length; j++) {
-      if (paired.has(j)) continue
-      const score = jaccard(singletons[i].tokens, singletons[j].tokens)
-      if (score >= threshold) {
-        group.push(singletons[j].sym)
-        paired.add(j)
-        if (score < minScore) minScore = score
-      }
-    }
-    if (group.length >= 2) {
-      paired.add(i)
-      clusters.push({
-        id: `cluster_${clusters.length}`,
-        members: group,
-        similarityScore: minScore,
-        sharedLines: computeSharedLines(group),
-        suggestedExtractionTarget: commonDirectory(group.map((m) => m.file)),
-        pattern: representativeNorm.slice(0, 80),
-        tier: "semantic",
-        ruleId: duplicatesRuleId("semantic"),
-      })
-    }
+  const groups = await compareDuplicateGroups(
+    singletons.map((item) => item.tokens),
+    threshold,
+    signal,
+  )
+  signal.throwIfAborted()
+  for (const { indices, score } of groups) {
+    const members = indices.map((index) => singletons[index].sym)
+    clusters.push({
+      id: `cluster_${clusters.length}`,
+      members,
+      similarityScore: score,
+      sharedLines: computeSharedLines(members),
+      suggestedExtractionTarget: commonDirectory(members.map((member) => member.file)),
+      pattern: singletons[indices[0]].norm.slice(0, 80),
+      tier: "semantic",
+      ruleId: duplicatesRuleId("semantic"),
+    })
   }
 
   // Rank clusters by size × shared-lines × cross-file-spread. A cluster

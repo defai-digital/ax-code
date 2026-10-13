@@ -406,9 +406,13 @@ export namespace DebugEngine {
     return analyzeBugImpl(projectID, input)
   }
 
-  export async function detectDuplicates(projectID: ProjectID, input: DetectDuplicatesInput): Promise<DuplicateReport> {
+  export async function detectDuplicates(
+    projectID: ProjectID,
+    input: DetectDuplicatesInput,
+    signal?: AbortSignal,
+  ): Promise<DuplicateReport> {
     log.info("detectDuplicates", { projectID, scope: input.scope })
-    return detectDuplicatesImpl(projectID, input)
+    return detectDuplicatesImpl(projectID, input, signal)
   }
 
   export async function planRefactor(projectID: ProjectID, input: PlanRefactorInput): Promise<RefactorPlan> {

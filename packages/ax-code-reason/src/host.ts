@@ -151,6 +151,8 @@ export type DreEventsPort = {
 export type DreNativePort = {
   // The native filesystem addon API, or undefined when unavailable.
   fs(): unknown | undefined
+  // Optional pure comparison addon; old hosts retain the JS kernel.
+  diff?(): unknown | undefined
   // Run a callable under the host's native perf sampler.
   perfRun<T>(name: string, meta: Record<string, unknown>, fn: () => T): T
   perfRunAsync?<T>(name: string, meta: Record<string, unknown>, fn: () => Promise<T>): Promise<T>

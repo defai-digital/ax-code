@@ -115,6 +115,7 @@ configureCodeReasonHost({
   },
   native: {
     fs: () => NativeAddon.fs(),
+    diff: () => NativeAddon.diff(),
     perfRun: (name, meta, fn) => NativePerf.run(name, meta, fn),
     perfRunAsync: (name, meta, fn) => NativePerf.runAsync(name, meta, fn),
   },

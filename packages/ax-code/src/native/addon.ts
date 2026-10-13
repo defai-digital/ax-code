@@ -33,6 +33,7 @@ type FsBinding = Omit<FsExports, "openEvidenceStore" | "detectFilesAsync" | "glo
 }
 type DiffExports = typeof import("@ax-code/diff")
 type DiffWorkers =
+  | "duplicateGroupsAsync"
   | "applyPatchContentAsync"
   | "PatchCancellation"
   | "editReplaceSlim"

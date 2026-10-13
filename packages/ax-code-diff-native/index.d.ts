@@ -44,6 +44,12 @@ export declare function diffPreviewAsync(
  */
 export declare function diffStats(oldContent: string, newContent: string): string
 
+export declare function duplicateGroupsAsync(
+  tokensJson: string,
+  threshold: number,
+  cancellation: DiffCancellation,
+): Promise<string>
+
 /**
  * Core edit tool function. Tries 9 replacer strategies in order.
  *

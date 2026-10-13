@@ -27,16 +27,20 @@ export const DedupScanTool = Tool.define("dedup_scan", {
       .optional()
       .describe("Hard cap on candidate pool (default 2000)"),
   }),
-  execute: async (args) => {
+  execute: async (args, ctx) => {
     const projectID = Instance.project.id
-    const report = await DebugEngine.detectDuplicates(projectID, {
-      kinds: args.kinds,
-      minSignatureLength: args.minSignatureLength,
-      similarityThreshold: args.similarityThreshold,
-      excludeTests: args.excludeTests,
-      maxCandidates: args.maxCandidates,
-      scope: "worktree",
-    })
+    const report = await DebugEngine.detectDuplicates(
+      projectID,
+      {
+        kinds: args.kinds,
+        minSignatureLength: args.minSignatureLength,
+        similarityThreshold: args.similarityThreshold,
+        excludeTests: args.excludeTests,
+        maxCandidates: args.maxCandidates,
+        scope: "worktree",
+      },
+      ctx.abort,
+    )
 
     const lines: string[] = []
     lines.push(`Found ${report.clusters.length} duplicate cluster${report.clusters.length === 1 ? "" : "s"}`)
