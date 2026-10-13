@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-08-25
+Last reviewed: 2026-10-12
 Owner: AX Code maintainers
 
 Most coding agents optimize the moment of writing code. AX Code optimizes the moment after: deciding whether to keep what the agent produced.
@@ -69,7 +69,8 @@ Positioning is only useful if it survives contact with the product. Explicitly:
 
 AX Code began on the MIT-licensed OpenCode codebase. That is preserved in [NOTICE](../NOTICE) and stated in the README rather than buried.
 
-What DEFAI built on that foundation is the subject of this page: the execution-evidence layer, the deterministic debug and refactor engine with shadow-worktree verification, the code-intelligence graph and impact analysis, council and arena execution modes, the AX Wiki compiler, OS-level sandboxing, and AX Code Desktop.
+What DEFAI built on that foundation is the subject of this page: the execution-evidence layer, the deterministic debug and refactor engine with shadow-worktree verification, the code-intelligence graph and impact analysis, council and arena execution modes, the AX Wiki compiler, and OS-level sandboxing. The desktop application is
+developed as a separate product and is not part of this runtime.
 
 **Integrating with a project is not deriving from it.** The provenance section of the README, and [NOTICE](../NOTICE), exist to carry license obligations under Apache-2.0 Section 4(d) — they list only upstreams whose code AX Code actually copies and redistributes. Projects that AX Code merely talks to are not listed there, however closely they were studied while building the bridge. The CLI providers are the clearest case: Claude Code, Codex CLI, Grok Build CLI, and Muse Code CLI are named in the provider tables because AX Code invokes those local binaries and reuses their login sessions, not because any of their code ships here. Model-ID patterns, capability tables, and vendor-specific parsing in `packages/ax-code/src/provider/` are AX Code's own interoperability logic. Files that genuinely are verbatim derivations carry a one-line provenance header naming the upstream, so an audit can tell deliberate reuse from a missed cleanup.
 

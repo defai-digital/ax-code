@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-08-23
+Last reviewed: 2026-10-12
 Owner: ax-code runtime
 
 AX Code includes a built-in execution sandbox that can restrict what the AI agent does on your system. By default, AX Code starts in **full-access** with the sandbox off, so filesystem writes and network access are unrestricted. Enable `workspace-write` or `read-only` before working with untrusted repositories or running unattended tasks.

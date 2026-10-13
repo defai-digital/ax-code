@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-09-22
+Last reviewed: 2026-10-12
 Owner: AX Code runtime maintainers
 
 `ax-code run` is the one-shot, non-interactive entry point for AI coding agents and scripts. It submits a single
@@ -137,7 +137,8 @@ document. Events include `step_start`, `text`, `tool_use`, `reasoning` (only wit
 }
 ```
 
-`status` is `completed`, `blocked`, or `error`. `usage` carries token counts only — `input`, `output`, `reasoning`,
+`status` is `completed`, `blocked`, `error`, `timeout`, or `cancelled`; the last two pair with exit codes 124 and
+130 in the table below. `usage` carries token counts only — `input`, `output`, `reasoning`,
 `cacheRead`, `cacheWrite` — and is omitted entirely when the counts are unknown; there is no cost field. When a run
 fails before submitting (bad flag, unknown model, etc.), the stream format prints one line before exiting:
 
