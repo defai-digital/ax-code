@@ -66,7 +66,12 @@ export function axEngineDownloadEnv(
 ): NodeJS.ProcessEnv {
   const python = resolveAxEnginePython(env, home)
   const sanitized = Env.sanitize(env)
-  if (!python) return sanitized
+  if (!python) {
+    // Resolution already rejected this override; do not reintroduce it into
+    // the child environment and prevent the engine's own Python fallback.
+    delete sanitized.AX_ENGINE_PYTHON
+    return sanitized
+  }
   return {
     ...sanitized,
     AX_ENGINE_PYTHON: python,
@@ -75,7 +80,9 @@ export function axEngineDownloadEnv(
 
 function isExecutablePython(candidate: string): boolean {
   try {
-    fs.accessSync(candidate, fs.constants.F_OK)
+    // Windows does not expose POSIX executable bits; Unix candidates must
+    // actually be executable so a disabled preferred venv cannot hide a usable one.
+    fs.accessSync(candidate, process.platform === "win32" ? fs.constants.F_OK : fs.constants.X_OK)
     // Follow symlinks (e.g. venv/bin/python -> python3.14) and require a real file.
     const stat = fs.statSync(candidate)
     return stat.isFile()

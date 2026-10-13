@@ -74,8 +74,50 @@ describe("resolveAxEnginePython", () => {
     expect(resolveAxEnginePython({ AX_ENGINE_PYTHON: path.join(home, "missing") }, home)).toBe(python)
   })
 
+  test("skips a non-executable explicit interpreter", async () => {
+    if (process.platform === "win32") return
+    const { home, python } = await makeHomeWithVenvPython()
+    const explicit = path.join(home, "disabled-python")
+    await fs.writeFile(explicit, "#!/bin/sh\n", { mode: 0o644 })
+    expect(resolveAxEnginePython({ AX_ENGINE_PYTHON: explicit }, home)).toBe(python)
+    expect(axEngineDownloadEnv({ AX_ENGINE_PYTHON: explicit }, home).AX_ENGINE_PYTHON).toBe(python)
+  })
+
+  test("skips a non-executable documented interpreter and uses the legacy environment", async () => {
+    if (process.platform === "win32") return
+    const { home, python } = await makeHomeWithVenvPython()
+    const bin = path.join(home, ".local", "share", "ax-engine", "download-env", "bin")
+    await fs.mkdir(bin, { recursive: true })
+    await fs.writeFile(path.join(bin, "python"), "#!/bin/sh\n", { mode: 0o644 })
+    expect(resolveAxEnginePython({}, home)).toBe(python)
+  })
+
+  test("does not select a managed interpreter that lost executable permission", async () => {
+    if (process.platform === "win32") return
+    const { home, python } = await makeHomeWithVenvPython()
+    await fs.chmod(python, 0o644)
+    expect(resolveAxEnginePython({}, home)).toBeUndefined()
+  })
+
   test("returns undefined when no python is available", () => {
     expect(resolveAxEnginePython({}, path.join(os.tmpdir(), "ax-engine-no-home-" + process.pid))).toBeUndefined()
+  })
+
+  test("does not forward a missing explicit interpreter when no fallback exists", async () => {
+    const { home, python } = await makeHomeWithVenvPython()
+    await fs.rm(python)
+    const env = { AX_ENGINE_PYTHON: path.join(home, "missing-python"), PATH: "/usr/bin" }
+    const download = axEngineDownloadEnv(env, home)
+    expect(download.AX_ENGINE_PYTHON).toBeUndefined()
+    expect(download.PATH).toBe(env.PATH)
+    expect(env.AX_ENGINE_PYTHON).toBe(path.join(home, "missing-python"))
+  })
+
+  test("does not forward a disabled explicit interpreter when no fallback exists", async () => {
+    if (process.platform === "win32") return
+    const { home, python } = await makeHomeWithVenvPython()
+    await fs.chmod(python, 0o644)
+    expect(axEngineDownloadEnv({ AX_ENGINE_PYTHON: python }, home).AX_ENGINE_PYTHON).toBeUndefined()
   })
 
   test("axEngineDownloadEnv injects AX_ENGINE_PYTHON", async () => {
