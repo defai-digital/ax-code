@@ -54,8 +54,17 @@ export const AX_ENGINE_MAX_OUTPUT_TOKENS_FLAG_MIN_VERSION = "7.1.0"
 export const AX_ENGINE_BUNDLED_MIN_VERSION = AX_ENGINE_MIN_VERSION
 export const AX_ENGINE_SPECULATION_PROFILE = "agentic"
 export const AX_ENGINE_MTP_MODE = "pure"
-export const AX_ENGINE_RECOMMENDED_MEMORY_BYTES = 64 * 1024 ** 3
-export const AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES = AX_ENGINE_RECOMMENDED_MEMORY_BYTES
+// Smallest unified memory any managed pack runs on; below it the host is only
+// warned, and each model enforces its own floor through minMemoryBytes.
+export const AX_ENGINE_RECOMMENDED_MEMORY_BYTES = 32 * 1024 ** 3
+// Per-pack floors follow the published weight sizes plus runtime headroom, and
+// the engine's own guidance (32 GB+ runs 27B/35B-class packs, 64 GB is
+// comfortable): Swift 1.5 Qwen3.8-27B MXFP4 is 16.25 GiB of weights, Tiel Coder
+// 35B-A3B MXFP4 is 20.54 GiB. A 64 GiB figure is the full-context planning
+// budget for larger packs, not a floor for these two.
+export const AX_ENGINE_SWIFT_MIN_MEMORY_BYTES = 32 * 1024 ** 3
+export const AX_ENGINE_TIEL_MIN_MEMORY_BYTES = 48 * 1024 ** 3
+export const AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES = 64 * 1024 ** 3
 export const AX_ENGINE_CODING_MODEL_MIN_MEMORY_BYTES = 96 * 1024 ** 3
 
 // Managed servers default to three in-flight requests: one foreground agent
@@ -566,7 +575,7 @@ export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineBuiltinModelID, AxEngin
     releaseDate: "2026-09-19",
     reasoning: false,
     toolcall: true,
-    minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
+    minMemoryBytes: AX_ENGINE_TIEL_MIN_MEMORY_BYTES,
     contextTokens: AX_ENGINE_MODEL_CONTEXT_TOKENS[AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID],
     outputTokens: 8_192,
     estimatedResources: true,
@@ -605,7 +614,7 @@ export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineBuiltinModelID, AxEngin
     releaseDate: "2026-10-11",
     reasoning: false,
     toolcall: true,
-    minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
+    minMemoryBytes: AX_ENGINE_SWIFT_MIN_MEMORY_BYTES,
     contextTokens: AX_ENGINE_MODEL_CONTEXT_TOKENS[AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID],
     outputTokens: 8_192,
     estimatedResources: true,

@@ -252,7 +252,8 @@ ax_engine_install_now() {
 ax_engine_offer() {
     local stamp="$INSTALL_ROOT/state/engine-prompted"
     local tty_device="${AX_CODE_INSTALL_TTY:-/dev/tty}"
-    local min_bytes=68719476736
+    # 32 GiB: the smallest managed pack (Swift 27B MXFP4, 16 GiB of weights) fits there.
+    local min_bytes=34359738368
     local memsize answer=""
 
     [ "$engine_choice" = "no" ] && return 0

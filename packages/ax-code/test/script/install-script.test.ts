@@ -448,6 +448,11 @@ describe("install script ax-engine offer", () => {
     expect(result.stampText).toBe("answer=yes\n")
   })
 
+  test("a 32 GB Mac is eligible for the offer", async () => {
+    const result = await run({ memsize: 32 * 1024 ** 3, answer: "y" })
+    expect(result.called.trim()).toBe(INSTALL_CALL)
+  })
+
   test("the default answer is no and is remembered", async () => {
     const result = await run({ answer: "" })
     expect(result.called).toBe("")
@@ -458,7 +463,7 @@ describe("install script ax-engine offer", () => {
   test.each([
     ["an upgrade", { prior: true }],
     ["a remembered answer", { stamp: true }],
-    ["a Mac below 64 GB", { memsize: 32 * 1024 ** 3 }],
+    ["a Mac below 32 GB", { memsize: 16 * 1024 ** 3 }],
     ["a host that is not a Mac", { uname: "Linux", machine: "x86_64" }],
     ["an Intel Mac", { machine: "x86_64" }],
     ["an engine that is already installed", { enginePresent: true }],

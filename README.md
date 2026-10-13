@@ -122,8 +122,8 @@ that class of machine the
 [Tiel Coder 35B A3B MXFP4 MTP](docs/providers/ax-engine-model-selection.md) pack runs in its
 native MXFP4 quantization without quantization-to-fit compromises, and AX Engine manages the
 process end to end: model selection, download, MTP policy enforcement, live text-and-tool contract
-verification, and managed start/shutdown. The catalog budgets roughly 64 GiB as a conservative
-full-context (64K) planning figure — weights, KV cache, buffers, and host reserve — so confirm the
+verification, and managed start/shutdown. The catalog enforces a 48 GB floor for Tiel (20.5 GiB of weights) and a 32 GB floor for the
+Swift 27B pack (16.3 GiB), including KV cache, buffers, and host reserve — so confirm the
 live catalog fit result for your machine rather than sizing to the model file alone.
 
 Speed is hardware-bound. AX Code does not impose a tokens-per-second ceiling; faster hardware
@@ -306,8 +306,8 @@ Use `auto` (default) to restore detection or `normal` for normal cache and concu
 AX Code's 8 GB baseline covers the agent runtime and cloud/API inference; it is not a local
 inference floor. To run the default 35B-class MXFP4 MTP pack through managed AX Engine, we
 recommend an Apple Silicon M4 Pro with 48 GB of unified memory or above (for example a Mac Mini
-M4 Pro 48 GB). The catalog's ~64 GiB figure is a conservative full-context planning estimate
-(weights, KV cache, buffers, and host reserve); use the live catalog fit result for your machine.
+M4 Pro 48 GB). The catalog floors are 48 GB for Tiel and 32 GB for the Swift 27B pack (weights, KV cache,
+buffers, and host reserve); use the live catalog fit result for your machine.
 Smaller Macs can still use AX Code with cloud/API models or connect to lighter local runtimes via
 the [MTPLX / oMLX presets](docs/providers/local-mlx-runtimes.md). AX Engine 7.5.7 or newer is
 required; releases before 7.5.0 fail with `MlxMtpRequiredButUnavailable`. See

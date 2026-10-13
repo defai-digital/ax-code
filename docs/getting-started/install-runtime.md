@@ -214,8 +214,8 @@ curl -fsSL https://download.automatosx.com/ax-code/install | bash
 
 #### Optional local-model runtime (ax-engine)
 
-AX Code does not ship the ax-engine local-model runtime. On an Apple Silicon Mac with at least 64 GB of
-unified memory, a first interactive install asks once whether to install it (default: no). The installer
+AX Code does not ship the ax-engine local-model runtime. On an Apple Silicon Mac with at least 32 GB of
+unified memory (the smallest managed model, Swift 27B, needs 32 GB; Tiel Coder 35B needs 48 GB), a first interactive install asks once whether to install it (default: no). The installer
 never asks in CI, non-interactive shells, upgrades, or when ax-engine is already installed, and it never
 downloads model weights. The answer is remembered in `~/.ax-code/state/engine-prompted`.
 

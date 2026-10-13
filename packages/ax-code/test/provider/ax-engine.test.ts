@@ -31,7 +31,8 @@ import {
   AX_ENGINE_MODEL_CONTEXT_TOKENS,
   AX_ENGINE_MODEL_DEFINITIONS,
   AX_ENGINE_PROVIDER_ID,
-  AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
+  AX_ENGINE_SWIFT_MIN_MEMORY_BYTES,
+  AX_ENGINE_TIEL_MIN_MEMORY_BYTES,
   axEngineLoader,
   axEngineServerLaunchArgs,
   commandLooksLikeAxEngineServer,
@@ -1693,7 +1694,7 @@ describe("ax-engine provider integration", () => {
       options: {
         modelID: AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
         quantization: "mlx",
-        minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
+        minMemoryBytes: AX_ENGINE_TIEL_MIN_MEMORY_BYTES,
       },
       status: "beta",
       experimental: { localRuntime: "ax-engine" },
@@ -1702,22 +1703,17 @@ describe("ax-engine provider integration", () => {
     expect(provider.models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID]).toBeUndefined()
   })
 
-  test("the default Tiel Coder alias retains its 64GB memory gate", async () => {
+  test("managed packs are gated by their own memory floor, not a blanket 64 GB", async () => {
     const provider = (await Provider.fromModelsDevProvider((await ModelsDev.get())[AX_ENGINE_PROVIDER_ID]))!
-    expect(
-      modelMemoryBlockReason(
-        AX_ENGINE_PROVIDER_ID,
-        provider.models[AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID],
-        32 * 1024 ** 3,
-      ),
-    ).toBe("requires 64GB unified memory")
-    expect(
-      modelMemoryBlockReason(
-        AX_ENGINE_PROVIDER_ID,
-        provider.models[AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID],
-        64 * 1024 ** 3,
-      ),
-    ).toBeUndefined()
+    const tiel = provider.models[AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]
+    const swift = provider.models[AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID]
+    expect(tiel.options.minMemoryBytes).toBe(AX_ENGINE_TIEL_MIN_MEMORY_BYTES)
+    expect(swift.options.minMemoryBytes).toBe(AX_ENGINE_SWIFT_MIN_MEMORY_BYTES)
+    // Tiel (20.5 GiB of weights) runs on a 48 GB Mac, Swift (16.3 GiB) on a 32 GB Mac.
+    expect(modelMemoryBlockReason(AX_ENGINE_PROVIDER_ID, tiel, 32 * 1024 ** 3)).toBe("requires 48GB unified memory")
+    expect(modelMemoryBlockReason(AX_ENGINE_PROVIDER_ID, tiel, 48 * 1024 ** 3)).toBeUndefined()
+    expect(modelMemoryBlockReason(AX_ENGINE_PROVIDER_ID, swift, 24 * 1024 ** 3)).toBe("requires 32GB unified memory")
+    expect(modelMemoryBlockReason(AX_ENGINE_PROVIDER_ID, swift, 32 * 1024 ** 3)).toBeUndefined()
   })
 
   test("provider is not connected until the user configures ax-engine", async () => {

@@ -82,10 +82,10 @@ export function evaluatePlatformEligibility(input: AxEnginePlatformProbeInput): 
   if (input.memoryBytes === undefined) {
     warnings.push(`${AX_ENGINE_ERROR.InsufficientMemory}: unable to determine system memory`)
   } else if (input.memoryBytes < AX_ENGINE_MIN_MEMORY_BYTES) {
-    blockers.push(`${AX_ENGINE_ERROR.InsufficientMemory}: 64 GB unified memory or more is required`)
+    blockers.push(`${AX_ENGINE_ERROR.InsufficientMemory}: 32 GB unified memory or more is required`)
   } else if (input.memoryBytes < AX_ENGINE_RECOMMENDED_MEMORY_BYTES) {
     warnings.push(
-      `${AX_ENGINE_ERROR.InsufficientMemory}: less than 64 GB unified memory; managed local models need 64 GB or more`,
+      `${AX_ENGINE_ERROR.InsufficientMemory}: less than 32 GB unified memory; the smallest managed local model needs 32 GB or more`,
     )
   }
 

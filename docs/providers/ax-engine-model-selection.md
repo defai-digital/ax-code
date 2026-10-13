@@ -42,14 +42,15 @@ Excluded models fail new prepare, download, and managed activation requests befo
 
 ## Memory and runtime verification
 
-Both selected aliases use a 65,536-token context, 8,192-token output limit, estimated 64 GiB memory requirement and 32 GiB download disk budget. These are AX Code serving limits, not the upstream maximum context. (Raised from an initial 32,768-token context: that left only 24,576 usable input tokens after the output reserve, less than the fixed AX Code agent system prompt and tool schemas require, so a brand-new session could never send a first turn.)
+Both selected aliases use a 65,536-token context, 8,192-token output limit, a 32 GiB download disk budget, and a per-pack memory floor (Swift 1.5 Qwen3.8-27B MXFP4: 32 GB unified memory, 16.3 GiB of weights; Tiel Coder 35B-A3B MXFP4: 48 GB, 20.5 GiB of weights). These are AX Code serving limits, not the upstream maximum context. (Raised from an initial 32,768-token context: that left only 24,576 usable input tokens after the output reserve, less than the fixed AX Code agent system prompt and tool schemas require, so a brand-new session could never send a first turn.)
 
 Each memory estimate includes weights, sidecars, KV cache, buffers, and host reserve. Use the live catalog's fit result for the current machine. These estimates are not hardware or model-quality certification.
 
-The 64 GiB figure is a conservative full-context (64K) planning budget, not a hard floor. For a
-comfortable managed local-inference machine, we recommend an Apple Silicon M4 Pro with 48 GB of
-unified memory or above (for example a Mac Mini M4 Pro 48 GB); smaller Apple Silicon Macs can
-still run AX Code itself from 8 GB with cloud/API models or lighter local runtimes.
+Larger packs keep a 64 GB floor (the 64 GiB figure is a conservative full-context planning budget for them). For a
+comfortable managed local-inference machine we recommend an Apple Silicon M4 Pro with 48 GB of unified memory or
+above (for example a Mac Mini M4 Pro 48 GB); a 32 GB M4 runs the Swift pack. The engine itself needs macOS 26 or later
+on an M2 or newer Mac. Smaller Apple Silicon Macs can still run AX Code itself from 8 GB with cloud/API models or
+lighter local runtimes.
 
 Before managed activation, AX Code checks the active AX Engine model's text and structured tool contract. A `verification-required` state means preparation is complete but that live contract has not been established. Repository names or MTP sidecars alone do not prove reasoning, vision, MTP acceleration, or multi-turn coding quality.
 
