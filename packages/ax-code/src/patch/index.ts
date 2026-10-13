@@ -1,4 +1,5 @@
 import z from "zod"
+import { patchContent, patchBudget, patchLimit, PATCH_MAX_OUTPUT } from "./content-worker"
 import { diffPreviewSync } from "../tool/diff-preview"
 import * as path from "path"
 import * as fs from "fs/promises"
@@ -366,6 +367,69 @@ export namespace Patch {
     filePath: string,
     chunks: UpdateFileChunk[],
   ): string {
+    return deriveContent(originalContent, filePath, chunks)
+  }
+
+  /** Compute only from the caller's snapshot; approval and writes remain in the tool. */
+  export async function deriveContentFromChunksAsync(
+    originalContent: string,
+    filePath: string,
+    chunks: UpdateFileChunk[],
+    signal?: AbortSignal,
+  ): Promise<string> {
+    return patchContent(
+      originalContent,
+      filePath,
+      chunks,
+      (snapshot, workSignal, nativeWhitespace) => {
+        const tick = patchBudget(workSignal)
+        const seek = (lines: string[], pattern: string[], start: number, eof = false) => {
+          const passes: Comparator[] = []
+          if (nativeWhitespace) {
+            const trimEnd = (s: string) => s.replace(/\p{White_Space}+$/u, "")
+            const trim = (s: string) => s.replace(/^\p{White_Space}+|\p{White_Space}+$/gu, "")
+            passes.push(
+              (a, b) => a === b,
+              (a, b) => trimEnd(a) === trimEnd(b),
+              (a, b) => trim(a) === trim(b),
+              (a, b) => normalizeUnicode(trim(a)) === normalizeUnicode(trim(b)),
+            )
+          }
+          passes.push(
+            (a, b) => a === b,
+            (a, b) => a.trimEnd() === b.trimEnd(),
+            (a, b) => a.trim() === b.trim(),
+            (a, b) => normalizeUnicode(a.trim()) === normalizeUnicode(b.trim()),
+          )
+          if (!pattern.length) return -1
+          for (const compare of passes) {
+            const found = tryMatch(
+              lines,
+              pattern,
+              start,
+              (a, b) => {
+                tick(a, b)
+                return compare(a, b)
+              },
+              eof,
+            )
+            if (found !== -1) return found
+          }
+          return -1
+        }
+        return deriveContent(originalContent, filePath, snapshot, seek, PATCH_MAX_OUTPUT)
+      },
+      signal,
+    )
+  }
+
+  function deriveContent(
+    originalContent: string,
+    filePath: string,
+    chunks: UpdateFileChunk[],
+    seek = seekSequence,
+    maxOutput = Infinity,
+  ): string {
     // The patch's own old_lines/new_lines are already normalized to LF-only
     // (parsePatch splits on /\r?\n/), so match against LF-normalized target
     // content too — otherwise a CRLF file's lines carry a trailing \r that
@@ -380,8 +444,16 @@ export namespace Patch {
       originalLines.pop()
     }
 
-    const replacements = computeReplacements(originalLines, filePath, chunks)
+    const replacements = computeReplacements(originalLines, filePath, chunks, seek)
     let newLines = applyReplacements(originalLines, replacements)
+    let bytes = 0
+    for (const line of newLines) {
+      bytes += Buffer.byteLength(line) + originalEnding.length
+      if (originalEnding === "\r\n") {
+        for (let at = line.indexOf("\n"); at !== -1; at = line.indexOf("\n", at + 1)) bytes++
+      }
+      if (bytes > maxOutput) throw patchLimit()
+    }
 
     // Ensure trailing newline: unconditionally undo the leading pop from
     // decoding, even when the file's last real line is itself blank (2+
@@ -396,6 +468,7 @@ export namespace Patch {
     originalLines: string[],
     filePath: string,
     chunks: UpdateFileChunk[],
+    seek = seekSequence,
   ): Array<[number, number, string[]]> {
     const replacements: Array<[number, number, string[]]> = []
     let lineIndex = 0
@@ -403,7 +476,7 @@ export namespace Patch {
     for (const chunk of chunks) {
       // Handle context-based seeking
       if (chunk.change_context) {
-        const contextIdx = seekSequence(originalLines, [chunk.change_context], lineIndex)
+        const contextIdx = seek(originalLines, [chunk.change_context], lineIndex)
         if (contextIdx === -1) {
           throw new Error(`Failed to find context '${chunk.change_context}' in ${filePath}`)
         }
@@ -424,7 +497,7 @@ export namespace Patch {
       // Try to match old lines in the file
       let pattern = chunk.old_lines
       let newSlice = chunk.new_lines
-      let found = seekSequence(originalLines, pattern, lineIndex, chunk.is_end_of_file)
+      let found = seek(originalLines, pattern, lineIndex, chunk.is_end_of_file)
 
       // Retry without trailing empty line if not found
       if (found === -1 && pattern.length > 0 && pattern[pattern.length - 1] === "") {
@@ -432,7 +505,7 @@ export namespace Patch {
         if (newSlice.length > 0 && newSlice[newSlice.length - 1] === "") {
           newSlice = newSlice.slice(0, -1)
         }
-        found = seekSequence(originalLines, pattern, lineIndex, chunk.is_end_of_file)
+        found = seek(originalLines, pattern, lineIndex, chunk.is_end_of_file)
       }
 
       if (found !== -1) {
@@ -457,21 +530,15 @@ export namespace Patch {
   }
 
   function applyReplacements(lines: string[], replacements: Array<[number, number, string[]]>): string[] {
-    // Apply replacements in reverse order to avoid index shifting
-    const result = [...lines]
-
-    for (let i = replacements.length - 1; i >= 0; i--) {
-      const [startIdx, oldLen, newSegment] = replacements[i]
-
-      // Remove old lines
-      result.splice(startIdx, oldLen)
-
-      // Insert new lines
-      for (let j = 0; j < newSegment.length; j++) {
-        result.splice(startIdx + j, 0, newSegment[j])
-      }
+    // Assemble once: per-line splice repeatedly shifts the untouched suffix.
+    const result: string[] = []
+    let cursor = 0
+    for (const [start, removed, added] of replacements) {
+      for (; cursor < start; cursor++) result.push(lines[cursor])
+      for (const line of added) result.push(line)
+      cursor = start + removed
     }
-
+    for (; cursor < lines.length; cursor++) result.push(lines[cursor])
     return result
   }
 

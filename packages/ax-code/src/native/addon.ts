@@ -32,7 +32,14 @@ type FsBinding = Omit<FsExports, "openEvidenceStore" | "detectFilesAsync" | "glo
   globFilesAsync?: FsExports["globFilesAsync"]
 }
 type DiffExports = typeof import("@ax-code/diff")
-type DiffWorkers = "editReplaceSlim" | "editReplaceAsync" | "EditCancellation" | "diffPreviewAsync" | "DiffCancellation"
+type DiffWorkers =
+  | "applyPatchContentAsync"
+  | "PatchCancellation"
+  | "editReplaceSlim"
+  | "editReplaceAsync"
+  | "EditCancellation"
+  | "diffPreviewAsync"
+  | "DiffCancellation"
 type DiffBinding = Omit<DiffExports, DiffWorkers> & Partial<Pick<DiffExports, DiffWorkers>>
 type IndexExports = typeof import("@ax-code/index-core")
 type IndexWorkers = "ingestFileAsync" | "optimizeIndexAsync" | "IndexCancellation"

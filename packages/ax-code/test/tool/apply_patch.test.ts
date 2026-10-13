@@ -11,6 +11,7 @@ vi.mock("fs/promises", async (importOriginal) => {
   return { ...actual, default: { ...(actual as any).default } }
 })
 import { LSP } from "@ax-code/ax-code-intel"
+import { NativeAddon } from "../../src/native/addon"
 import { ApplyPatchTool } from "../../src/tool/apply_patch"
 import { Instance } from "../../src/project/instance"
 import { FileTime } from "../../src/file/time"
@@ -1128,5 +1129,108 @@ test("preserves a source path recreated before post-transaction LSP cleanup", as
         close.mockRestore()
       }
     },
+  })
+})
+
+describe("patch content worker authority", () => {
+  test("large worker result is approved against the original snapshot before writing", async () => {
+    await using fixture = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const target = path.join(fixture.path, "large.txt")
+        const original = "anchor\r\n" + "unchanged\r\n".repeat(10_000) + "\r\n"
+        await writeAndTrack(target, original)
+        const { ctx, calls } = makeCtx()
+        const ask = ctx.ask
+        ctx.ask = async (input) => {
+          expect(await fs.readFile(target, "utf8")).toBe(original)
+          await ask(input)
+        }
+        await execute(
+          { patchText: "*** Begin Patch\n*** Update File: large.txt\n@@ anchor\n+inserted😀\n*** End Patch" },
+          ctx,
+        )
+        const expected = original.replace("anchor\r\n", "anchor\r\ninserted😀\r\n")
+        expect(calls).toHaveLength(1)
+        expect(calls[0].metadata.files[0].before).toBe(original)
+        expect(calls[0].metadata.files[0].after).toBe(expected)
+        expect(await fs.readFile(target, "utf8")).toBe(expected)
+      },
+    })
+  })
+
+  test("rejects an update changed while its worker was running", async () => {
+    await using fixture = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const target = path.join(fixture.path, "large.txt")
+        const original = "old\n" + "unchanged\n".repeat(10_000)
+        await writeAndTrack(target, original)
+        const native = NativeAddon.diff()!
+        const spy = vi.spyOn(NativeAddon, "diff").mockReturnValue({
+          ...native,
+          PatchCancellation: class {
+            cancel() {}
+          },
+          applyPatchContentAsync: async (_file, admitted) => {
+            expect(admitted).toBe(original)
+            await fs.writeFile(target, "concurrent update\n", "utf8")
+            return original.replace("old", "new")
+          },
+        })
+        try {
+          const { ctx } = makeCtx()
+          await expect(
+            execute({ patchText: "*** Begin Patch\n*** Update File: large.txt\n@@\n-old\n+new\n*** End Patch" }, ctx),
+          ).rejects.toThrow("modified between verification and write")
+          expect(await fs.readFile(target, "utf8")).toBe("concurrent update\n")
+        } finally {
+          spy.mockRestore()
+        }
+      },
+    })
+  })
+
+  test.each(["failure", "abort"])("worker %s never prompts or writes", async (mode) => {
+    await using fixture = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const target = path.join(fixture.path, "large.txt")
+        const original = "old\n" + "unchanged\n".repeat(10_000)
+        await writeAndTrack(target, original)
+        const controller = new AbortController()
+        const cancel = vi.fn()
+        const native = NativeAddon.diff()!
+        const spy = vi.spyOn(NativeAddon, "diff").mockReturnValue({
+          ...native,
+          PatchCancellation: class {
+            cancel = cancel
+          },
+          applyPatchContentAsync: async () => {
+            if (mode === "failure") throw new Error("worker failed")
+            controller.abort(new Error("worker aborted"))
+            return original.replace("old", "new")
+          },
+        })
+        try {
+          const { ctx, calls } = makeCtx()
+          ctx.abort = controller.signal
+          const result = execute(
+            { patchText: "*** Begin Patch\n*** Update File: large.txt\n@@\n-old\n+new\n*** End Patch" },
+            ctx,
+          )
+          await expect(result).rejects.toThrow(mode === "failure" ? "worker failed" : "worker aborted")
+          if (mode === "abort") await expect(result).rejects.toBe(controller.signal.reason)
+          expect(calls).toHaveLength(0)
+          expect(await fs.readFile(target, "utf8")).toBe(original)
+          if (mode === "abort") expect(cancel).toHaveBeenCalledTimes(1)
+        } finally {
+          spy.mockRestore()
+        }
+      },
+    })
   })
 })

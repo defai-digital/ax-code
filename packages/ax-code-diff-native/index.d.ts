@@ -10,6 +10,11 @@ export declare class EditCancellation {
   cancel(): void
 }
 
+export declare class PatchCancellation {
+  constructor()
+  cancel(): void
+}
+
 /**
  * Apply patch chunks to file content.
  *
@@ -18,6 +23,13 @@ export declare class EditCancellation {
  * Returns JSON: `{ new_content, unified_diff, additions, deletions }`
  */
 export declare function applyChunks(filePath: string, fileContent: string, chunksJson: string): string
+
+export declare function applyPatchContentAsync(
+  file: string,
+  original: string,
+  chunks: string,
+  cancellation: PatchCancellation,
+): Promise<string>
 
 export declare function diffPreviewAsync(
   before: string,
