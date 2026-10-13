@@ -17,6 +17,7 @@ changes belong to AX Coder.
 - Refresh CLI lookups when PATH, executable suffixes, home directories or working directories change, and reject cached binaries that lose execution eligibility.
 - Prefer branded AX Engine version banners over unrelated bare toolchain versions.
 - Recover compact doctor JSON after malformed diagnostic braces or quotes.
+- Sign Windows payloads before ConPTY loading; deferred builds require the real PTY probe after signing.
 - Preserve signed AX Engine payloads through Homebrew linkage repair.
 - Apply the integrated full-access Auto-mode WebMCP approval fixes.
 

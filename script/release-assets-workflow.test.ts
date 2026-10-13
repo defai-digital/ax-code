@@ -40,6 +40,21 @@ describe("release asset workflow", () => {
     expect(gate).not.toContain("continue-on-error")
   })
 
+  test("loads ConPTY only after signing and requires a post-sign probe for deferred Windows builds", () => {
+    const build = readFileSync("packages/ax-code/script/build-node-tui.ts", "utf8")
+    const signing = build.indexOf('path.resolve(dir, "../../script/sign-windows-runtime.ps1")')
+    const probe = build.indexOf("const ptyCheck = spawnSync(")
+    expect(signing).toBeGreaterThan(-1)
+    expect(probe).toBeGreaterThan(signing)
+    expect(build.slice(signing, probe)).toContain("if (!deferWindowsSigning)")
+    const postSignProbe = workflow.indexOf("- name: Verify signed Windows PTY")
+    expect(postSignProbe).toBeGreaterThan(workflow.indexOf("- name: Sign and repackage Windows runtime"))
+    expect(postSignProbe).toBeLessThan(workflow.indexOf("- name: Upload build artifacts"))
+    expect(workflow.slice(postSignProbe, workflow.indexOf("- name: Smoke — release runtime"))).toContain(
+      "script/verify-pty.cjs",
+    )
+  })
+
   test("builds default evidence support and verifies the packaged storage capability", () => {
     const action = readFileSync(".github/actions/build-evidence-cache/action.yml", "utf8")
     const build = readFileSync("packages/ax-code/script/build-node-tui.ts", "utf8")

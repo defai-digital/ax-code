@@ -501,24 +501,6 @@ if (fs.existsSync(ptyDir) && !fs.existsSync(path.join(ptyDir, "build", "Release"
     console.warn(message)
   }
 }
-// Windows loads ConPTY lazily at spawn, so require() alone cannot establish
-// that the shipped terminal works. Check existing builds as well as rebuilds.
-const ptyCheckNode = bundledNodeRuntime ? path.join(bundledNodeDir, "bin", bundledNodeName) : process.execPath
-const ptyCheck = spawnSync(ptyCheckNode, [path.join(dir, "..", "..", "script", "verify-pty.cjs"), ptyDir], {
-  encoding: "utf8",
-  stdio: ["ignore", "pipe", "pipe"],
-  timeout: 25_000,
-})
-if (ptyCheck.status !== 0) {
-  const detail =
-    ptyCheck.error?.message || ptyCheck.stderr.trim() || `exit=${ptyCheck.status}, signal=${ptyCheck.signal}`
-  const message = `Bundled PTY verification failed: ${detail}`
-  if (release) throw new Error(message)
-  console.warn(message)
-} else {
-  console.log(`Bundled PTY input/output/exit verified: ${ptyCheck.stdout.trim()}`)
-}
-
 // Ship the @ax-code napi addons (workspace packages, not on npm) + their .node.
 const axScope = path.join(outRoot, "node_modules", "@ax-code")
 fs.mkdirSync(axScope, { recursive: true })
@@ -636,7 +618,8 @@ if (process.platform === "darwin") {
   )
 }
 
-if (release && process.platform === "win32" && !process.argv.includes("--defer-windows-signing")) {
+const deferWindowsSigning = release && process.platform === "win32" && process.argv.includes("--defer-windows-signing")
+if (release && process.platform === "win32" && !deferWindowsSigning) {
   const signed = spawnSync(
     "powershell.exe",
     [
@@ -651,6 +634,31 @@ if (release && process.platform === "win32" && !process.argv.includes("--defer-w
   )
   if (signed.error) throw signed.error
   if (signed.status !== 0) throw new Error("Windows runtime signing and audit failed")
+}
+
+// Application control can reject freshly compiled ConPTY before it is signed.
+// Deferred builds must prove PTY behavior in the mandatory post-sign release
+// qualification, keeping signing credentials outside the compilation phase.
+if (!deferWindowsSigning) {
+  // Windows loads ConPTY lazily at spawn, so require() alone cannot establish
+  // that the shipped terminal works. Check existing builds as well as rebuilds.
+  const ptyCheckNode = bundledNodeRuntime ? path.join(bundledNodeDir, "bin", bundledNodeName) : process.execPath
+  const ptyCheck = spawnSync(ptyCheckNode, [path.join(dir, "..", "..", "script", "verify-pty.cjs"), ptyDir], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: 25_000,
+  })
+  if (ptyCheck.status !== 0) {
+    const detail =
+      ptyCheck.error?.message || ptyCheck.stderr.trim() || `exit=${ptyCheck.status}, signal=${ptyCheck.signal}`
+    const message = `Bundled PTY verification failed: ${detail}`
+    if (release) throw new Error(message)
+    console.warn(message)
+  } else {
+    console.log(`Bundled PTY input/output/exit verified: ${ptyCheck.stdout.trim()}`)
+  }
+} else {
+  console.log("Windows PTY verification deferred until signed runtime qualification")
 }
 
 // The release archive is protected by Minisign after this build completes. Keep
