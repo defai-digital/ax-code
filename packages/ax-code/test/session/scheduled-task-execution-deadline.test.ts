@@ -105,6 +105,11 @@ describe("ScheduledTask execution deadline", () => {
           const first = await ScheduledTask.runNow(task.id)
           expect(first.workflowRun).toBeDefined()
 
+          // Mark the workflow as executing: a queued-forever run is
+          // abandoned, not live (restart recovery only sweeps running runs).
+          const [createdRun] = await WorkflowRun.list()
+          await WorkflowRun.setStatus({ id: createdRun!.id, status: "running" })
+
           // Backdate the dispatch row instead of waiting out the real clock.
           const staleAt = now - (deadline + grace + 1)
           SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
@@ -125,6 +130,50 @@ describe("ScheduledTask execution deadline", () => {
           await WorkflowRun.setStatus({ id: workflowRuns[0]!.id, status: "cancelled" })
           await expect(ScheduledTask.runNow(task.id)).resolves.toBeDefined()
           expect(await WorkflowRun.list()).toHaveLength(2)
+        } finally {
+          if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+          else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+        }
+      },
+    })
+  })
+
+  test("a queued-forever workflow run is abandoned, so the sweep still wedges nothing", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+        process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+        try {
+          // start is mocked away: the workflow run stays `queued` — the state
+          // left behind when the backend dies between createRun and start.
+          vi.spyOn(WorkflowScheduler, "start").mockResolvedValue({ status: "running" } as never)
+          const deadline = 1_000
+          const grace = 10 * 60 * 1_000
+          const now = Date.now()
+          const task = await ScheduledTask.create({
+            title: "Abandoned workflow",
+            prompt: "Run the workflow.",
+            schedule: { type: "cron", expression: "*/5 * * * *" },
+            workflowTemplateID: "builtin:noop-dry-run",
+            maxRunDurationMs: deadline,
+          })
+          await ScheduledTask.runNow(task.id)
+
+          const staleAt = now - (deadline + grace + 1)
+          SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+            db.update(ScheduledTaskRunTable)
+              .set({ time_started: staleAt, time_updated: staleAt })
+              .where(eq(ScheduledTaskRunTable.task_id, task.id))
+              .run()
+          })
+
+          // The abandoned dispatch row is orphaned and the next run-now fires.
+          await expect(ScheduledTask.runNow(task.id)).resolves.toBeDefined()
+          const runs = await ScheduledTask.listRuns({ taskID: task.id })
+          expect(runs.some((run) => run.status === "failed" && (run.error ?? "").startsWith("orphaned:"))).toBe(true)
+          expect(runs.filter((run) => run.status === "running")).toHaveLength(1)
         } finally {
           if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
           else process.env.AX_CODE_WORKFLOW_RUNTIME = previous

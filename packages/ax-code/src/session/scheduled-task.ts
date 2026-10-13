@@ -1142,20 +1142,21 @@ export namespace ScheduledTask {
     return false
   }
 
-  // Mirrors isTerminalRunStatus (workflow/run/internal.ts, which imports the
-  // session module and cannot be imported back): only a workflow that is gone
-  // or terminal leaves its dispatch row a genuine orphan.
-  function isTerminalWorkflowRunStatus(status: WorkflowRunState.Status): boolean {
-    return status === "completed" || status === "failed" || status === "cancelled"
-  }
-
+  // A dispatch row is backed by a live workflow while the workflow is
+  // executing (running / blocked / paused). A gone or terminal workflow is a
+  // genuine orphan; a `queued` run stale past deadline+grace is abandoned too
+  // (the scheduler never started it — restart recovery only sweeps running
+  // runs), so it must not hold the task's overlap lock forever.
   function isWorkflowRunLive(db: Database.TxOrDb, workflowRunID: string): boolean {
     const workflowRun = db
       .select({ status: WorkflowRunTable.status })
       .from(WorkflowRunTable)
       .where(eq(WorkflowRunTable.id, workflowRunID as WorkflowRunID))
       .get()
-    return workflowRun !== undefined && !isTerminalWorkflowRunStatus(workflowRun.status)
+    return (
+      workflowRun !== undefined &&
+      (workflowRun.status === "running" || workflowRun.status === "blocked" || workflowRun.status === "paused")
+    )
   }
 
   function reconcileOrphanRuns(taskID: ScheduledTaskID, now: number, deadlineMs: number): void {
@@ -1186,7 +1187,16 @@ export namespace ScheduledTask {
             time_completed: now,
             time_updated: now,
           })
-          .where(eq(ScheduledTaskRunTable.id, candidate.id))
+          .where(
+            and(
+              eq(ScheduledTaskRunTable.id, candidate.id),
+              // The candidate selection is not a transaction with this write:
+              // an outcome landing in the gap must not be overwritten. Keep
+              // the atomic filter the pre-loop single UPDATE had.
+              eq(ScheduledTaskRunTable.status, "running"),
+              lte(ScheduledTaskRunTable.time_started, staleBefore),
+            ),
+          )
           .run()
       }
     })
