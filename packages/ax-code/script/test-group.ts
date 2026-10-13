@@ -149,6 +149,7 @@ export async function list() {
 
 export function pick(all: string[], name: string) {
   if (name === "runtime-contract") return all.filter((file) => runtimeContract.has(file))
+  if (name === "quarantine") return all.filter((file) => quarantined.has(file))
   if (name === "live") return all.filter((file) => live.has(file))
   if (name === "e2e") return all.filter((file) => e2e.has(file))
   if (name === "recovery") return all.filter((file) => recovery.has(file))

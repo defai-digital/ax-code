@@ -357,6 +357,38 @@ jobs:
           path: .internal/reports/testing/runtime-contract/*.xml
           if-no-files-found: error
 
+  # Heavy or timing-sensitive integration suites excluded from the
+  # deterministic shards (`quarantined` in script/test-group.ts). Runs on
+  # every CI event so regressions are visible, but does not block merges
+  # until its flake rate on this runner is known.
+  quarantine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    env:
+      AX_TEST_MAX_WORKERS: "2"
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+          node-version: "26"
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+      - name: Compile SDK
+        run: pnpm --dir packages/sdk/js exec tsc
+      - name: Run quarantined integration suites
+        run: pnpm --dir packages/ax-code run test:ci -- quarantine --rerun-on-fail 1 --dir ../../.internal/reports/testing/quarantine
+      - name: Upload quarantine reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          retention-days: 14
+          name: ax-code-quarantine-report
+          path: .internal/reports/testing/quarantine/*.xml
+          if-no-files-found: error
+
   live:
     if: github.event_name == 'workflow_dispatch' && inputs.live
     runs-on: ubuntu-latest
