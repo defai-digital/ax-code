@@ -1,4 +1,5 @@
 import { NativePerf } from "@/perf/native"
+import { createHash } from "node:crypto"
 import { MessageV2 } from "./message-v2"
 import path from "path"
 import { Log } from "@/util/log"
@@ -86,15 +87,29 @@ export namespace SessionProcessor {
   // has no other field to be recognized by, and the whole string is what the
   // record and the audit report render.
   const CREDENTIAL_URL_FIELD_NAMES = new Set(["url", "uri", "href", "endpoint", "base_url", "baseurl", "webhook"])
-  const TOOL_INPUT_REDACTION_DEPTH = 3
+  // Redaction must reach arbitrarily deep nested inputs — MCP and custom tools
+  // put credentials at paths like request.options.transport.headers.Authorization
+  // — so it is bounded by budget, not by a shallow depth cap: a hard depth bound
+  // for pathological nesting, plus a per-input node budget for visited
+  // objects/arrays. When the budget runs out the remaining subtree is returned
+  // untouched while the walk continues over its siblings.
+  const TOOL_INPUT_REDACTION_DEPTH = 32
+  const TOOL_INPUT_REDACTION_NODE_BUDGET = 2_000
+
+  interface ToolInputRedactionBudget {
+    remaining: number
+  }
 
   /**
    * Redact one persisted tool-input value, returning the original reference when
    * nothing in it is a credential. Copy-on-write keeps the common case — a tool
    * input with no credential field, including a large document payload — free of
-   * allocations on the per-tool-call path.
+   * allocations on the per-tool-call path. Traversal is bounded by a depth of
+   * `TOOL_INPUT_REDACTION_DEPTH` and a per-input budget of
+   * `TOOL_INPUT_REDACTION_NODE_BUDGET` visited objects/arrays; a subtree past
+   * either bound is returned untouched and its siblings still get walked.
    */
-  function redactToolInputValue(key: string, value: unknown, depth: number): unknown {
+  function redactToolInputValue(key: string, value: unknown, depth: number, budget: ToolInputRedactionBudget): unknown {
     if (Env.isCredentialKeyName(key)) return "[redacted]"
     if (typeof value === "string") {
       if (!CREDENTIAL_URL_FIELD_NAMES.has(key.toLowerCase())) return value
@@ -102,13 +117,15 @@ export namespace SessionProcessor {
       return redacted === value ? value : redacted
     }
     if (value === null || typeof value !== "object" || depth >= TOOL_INPUT_REDACTION_DEPTH) return value
+    if (budget.remaining <= 0) return value
+    budget.remaining--
     // Array elements inherit the parent key: a URL field can hold a list, and
     // the element index is not a field name of its own.
     if (Array.isArray(value)) {
       let next: unknown[] | undefined
       for (let index = 0; index < value.length; index++) {
         const item = value[index]
-        const redacted = redactToolInputValue(key, item, depth + 1)
+        const redacted = redactToolInputValue(key, item, depth + 1, budget)
         if (redacted === item) continue
         next ??= [...value]
         next[index] = redacted
@@ -117,7 +134,7 @@ export namespace SessionProcessor {
     }
     let next: Record<string, unknown> | undefined
     for (const [nestedKey, nestedValue] of Object.entries(value as Record<string, unknown>)) {
-      const redacted = redactToolInputValue(nestedKey, nestedValue, depth + 1)
+      const redacted = redactToolInputValue(nestedKey, nestedValue, depth + 1, budget)
       if (redacted === nestedValue) continue
       next ??= { ...(value as Record<string, unknown>) }
       next[nestedKey] = redacted
@@ -127,8 +144,9 @@ export namespace SessionProcessor {
 
   function redactToolInputFields(input: Record<string, unknown>): Record<string, unknown> {
     let next: Record<string, unknown> | undefined
+    const budget: ToolInputRedactionBudget = { remaining: TOOL_INPUT_REDACTION_NODE_BUDGET }
     for (const [key, value] of Object.entries(input)) {
-      const redacted = redactToolInputValue(key, value, 0)
+      const redacted = redactToolInputValue(key, value, 0, budget)
       if (redacted === value) continue
       next ??= { ...input }
       next[key] = redacted
@@ -178,6 +196,59 @@ export namespace SessionProcessor {
     return redactToolInputFields(input)
   }
 
+  function safeString(value: unknown): string {
+    try {
+      return String(value)
+    } catch {
+      return "[unprintable]"
+    }
+  }
+
+  function safeStringify(value: unknown): string {
+    try {
+      const serialized = JSON.stringify(value)
+      if (serialized === undefined) return safeString(value)
+      return serialized
+    } catch {
+      return safeString(value)
+    }
+  }
+
+  // Cap fingerprint length to avoid O(n log n) cost on megabyte-scale tool
+  // inputs (e.g. write tool with full file content). Doom-loop detection only
+  // needs a fingerprint, not the full serialized payload (PERF-09b). The cap
+  // alone made any two inputs sharing the capped prefix collide — two large
+  // `write` inputs differing only after 4 KB would fingerprint identically and
+  // raise a false doom-loop warning — so an oversized canonical form keeps the
+  // capped prefix and appends "#" plus the SHA-256 hex of the WHOLE string.
+  // Inputs at or under the cap return the canonical string itself, byte-identical
+  // to the historical behavior.
+  const MAX_CANONICAL_LENGTH = 4096
+
+  export function toolInputFingerprint(obj: unknown): string {
+    const seen = new WeakSet<object>()
+    const visit = (value: unknown, depth: number): string => {
+      if (depth > 50) return safeStringify(value)
+      if (value === null || typeof value !== "object") return safeStringify(value)
+      if (seen.has(value)) return '"[circular]"'
+      seen.add(value)
+      if (Array.isArray(value)) {
+        return "[" + value.map((entry) => visit(entry, depth + 1)).join(",") + "]"
+      }
+      return (
+        "{" +
+        Object.keys(value as Record<string, unknown>)
+          .sort()
+          .map((key) => JSON.stringify(key) + ":" + visit((value as Record<string, unknown>)[key], depth + 1))
+          .join(",") +
+        "}"
+      )
+    }
+    const result = visit(obj, 0)
+    if (result.length <= MAX_CANONICAL_LENGTH) return result
+    return result.slice(0, MAX_CANONICAL_LENGTH) + "#" + createHash("sha256").update(result).digest("hex")
+  }
+
   export type Info = Awaited<ReturnType<typeof create>>
   export type Result = Awaited<ReturnType<Info["process"]>>
   export type MediaRecovery = {
@@ -200,22 +271,6 @@ export namespace SessionProcessor {
   ) {
     const toolcalls: Record<string, MessageV2.ToolPart> = {}
     const toolInputCache: Record<string, string> = {}
-    const safeString = (value: unknown): string => {
-      try {
-        return String(value)
-      } catch {
-        return "[unprintable]"
-      }
-    }
-    const safeStringify = (value: unknown): string => {
-      try {
-        const serialized = JSON.stringify(value)
-        if (serialized === undefined) return safeString(value)
-        return serialized
-      } catch {
-        return safeString(value)
-      }
-    }
     const jsonSafeInput = (value: unknown): Record<string, any> => {
       const seen = new WeakSet<object>()
       try {
@@ -234,32 +289,7 @@ export namespace SessionProcessor {
         return { serialization_error: safeString(error) }
       }
     }
-    const canonicalize = (obj: unknown): string => {
-      const seen = new WeakSet<object>()
-      // Cap output length to avoid O(n log n) cost on megabyte-scale tool
-      // inputs (e.g. write tool with full file content). Doom-loop detection
-      // only needs a fingerprint, not the full serialized payload (PERF-09b).
-      const MAX_CANONICAL_LENGTH = 4096
-      const visit = (value: unknown, depth: number): string => {
-        if (depth > 50) return safeStringify(value)
-        if (value === null || typeof value !== "object") return safeStringify(value)
-        if (seen.has(value)) return '"[circular]"'
-        seen.add(value)
-        if (Array.isArray(value)) {
-          return "[" + value.map((entry) => visit(entry, depth + 1)).join(",") + "]"
-        }
-        return (
-          "{" +
-          Object.keys(value as Record<string, unknown>)
-            .sort()
-            .map((key) => JSON.stringify(key) + ":" + visit((value as Record<string, unknown>)[key], depth + 1))
-            .join(",") +
-          "}"
-        )
-      }
-      const result = visit(obj, 0)
-      return result.length > MAX_CANONICAL_LENGTH ? result.slice(0, MAX_CANONICAL_LENGTH) : result
-    }
+    const canonicalize = (obj: unknown): string => toolInputFingerprint(obj)
     const recentToolRing: RingEntry[] = ensureSessionToolCycleRing(input.sessionID)
     const doomLoopWarnings: Record<string, string> = {}
     // Per-turn count of autonomous doom-loop detections per tool. The first

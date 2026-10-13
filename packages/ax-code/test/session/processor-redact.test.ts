@@ -153,3 +153,57 @@ test("redacts nested credential-named fields without touching siblings", () => {
     options: { headers: { Authorization: "[redacted]" }, format: "text" },
   })
 })
+
+test("redacts a credential nested four object levels deep", () => {
+  const redacted = SessionProcessor.redactPersistedToolInput("mcp__server__request", {
+    request: { options: { transport: { headers: { Authorization: "Bearer placeholder-token-value" } } } },
+  })
+  expect(redacted).toEqual({
+    request: { options: { transport: { headers: { Authorization: "[redacted]" } } } },
+  })
+})
+
+test("redacts a credential nested five levels deep with an array inside the chain", () => {
+  const redacted = SessionProcessor.redactPersistedToolInput("mcp__server__request", {
+    request: {
+      options: {
+        transports: [{ kind: "http", settings: { headers: { Authorization: "Bearer placeholder-token-value" } } }],
+      },
+    },
+  })
+  expect(redacted).toEqual({
+    request: {
+      options: {
+        transports: [{ kind: "http", settings: { headers: { Authorization: "[redacted]" } } }],
+      },
+    },
+  })
+})
+
+test("returns a credential-free sibling subtree as the same reference", () => {
+  // Copy-on-write must survive deep redaction: only the branch that hides a
+  // credential is rebuilt, the document payload keeps its reference.
+  const document = {
+    pages: [
+      { title: "p1", body: "a".repeat(512) },
+      { title: "p2", body: "b".repeat(512) },
+    ],
+  }
+  const input = {
+    document,
+    request: { options: { transport: { headers: { Authorization: "Bearer placeholder-token-value" } } } },
+  }
+  const redacted = SessionProcessor.redactPersistedToolInput("mcp__server__request", input)
+  expect(redacted.request).toEqual({ options: { transport: { headers: { Authorization: "[redacted]" } } } })
+  expect(redacted.document).toBe(document)
+})
+
+test("keeps the traversal budget bounded on huge credential-free inputs", () => {
+  // 5,000 small nested objects with no credential anywhere: the node budget
+  // runs out partway, untouched subtrees are returned as-is, and the whole
+  // input keeps its original reference. The walk must also simply complete.
+  const input = {
+    payload: Array.from({ length: 5_000 }, (_, index) => ({ index, label: `item-${index}` })),
+  }
+  expect(SessionProcessor.redactPersistedToolInput("mcp__server__bulk", input)).toBe(input)
+})
