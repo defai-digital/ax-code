@@ -6,6 +6,15 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.25.2] - 2026-10-13
+
+### Changed
+
+- Preserve snapshot stores when metadata is missing or retention, activity, or worktree availability changes after inspection.
+- Keep stale pack-file cleanup inside validated snapshot directories and reject symlinked ancestors.
+- Parse quoted and relative Git worktree configuration correctly.
+- Publish SDK 2.6.13 with bounded incremental SSE framing and abortable retry waits.
+
 ## [7.25.1] - 2026-10-13
 
 ### Changed
