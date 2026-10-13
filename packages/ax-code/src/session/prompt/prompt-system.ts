@@ -7,6 +7,9 @@ import { MCP } from "../../mcp"
 import type { MessageV2 } from "../message-v2"
 import { SystemPrompt } from "../system"
 
+/** Approximate token cap on project memory for a compact (tool-less) turn. */
+export const COMPACT_MEMORY_TOKENS = 1500
+
 type SystemCache = {
   environment?: string[]
   environmentModelKey?: string
@@ -27,6 +30,12 @@ export async function systemPrompt(input: {
   skills?: typeof SystemPrompt.skills
   environment?: typeof SystemPrompt.environment
   environmentOverride?: string[]
+  /**
+   * Compact turn (tools omitted): the skill list only instructs the model to
+   * call the `skill` tool, so it is dropped, and project memory keeps only its
+   * most actionable entries. Required instructions are never trimmed.
+   */
+  compact?: boolean
   instructions?: typeof InstructionPrompt.system
   memory?: typeof SystemPrompt.memory
   structuredPrompt?: string
@@ -66,14 +75,16 @@ export async function systemPrompt(input: {
     else recompute = SystemPrompt.hasFileToolCall(messages.slice(sinceIdx + 1))
   }
 
-  if (recompute) {
+  if (recompute && !input.compact) {
     input.cache.skills = await skillsFn(input.agent, input.messages)
     input.cache.skillsAgentKey = input.agent.name
     input.cache.skillsFn = skillsFn
   }
-  input.cache.skillsLastMsgID = lastMsgID
-  input.cache.skillsMsgCount = messages.length
-  const skills = input.cache.skills
+  if (!input.compact) {
+    input.cache.skillsLastMsgID = lastMsgID
+    input.cache.skillsMsgCount = messages.length
+  }
+  const skills = input.compact ? undefined : input.cache.skills
 
   // Project memory is intentionally not cached. The loader is a single
   // file read + JSON.parse + string concat (sub-millisecond on typical
@@ -82,7 +93,12 @@ export async function systemPrompt(input: {
   // invisible to the agent until session restart, breaking the
   // user-curated entry contract.
   const memoryFn = input.memory ?? SystemPrompt.memory
-  const memory = await memoryFn(input.agent, input.messages, input.model)
+  const memory = await memoryFn(
+    input.agent,
+    input.messages,
+    input.model,
+    input.compact ? { maxTokens: COMPACT_MEMORY_TOKENS } : undefined,
+  )
   const assuranceWorkflow = SystemPrompt.assuranceWorkflow(input.agent, input.model)
 
   // SystemPrompt.environment() also reads the live, runtime-mutable

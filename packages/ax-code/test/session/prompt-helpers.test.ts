@@ -38,6 +38,7 @@ import {
   shouldScheduleUsageCompaction,
   syntheticTextPart,
   systemPrompt,
+  COMPACT_MEMORY_TOKENS,
   textPart,
   titleContextMessages,
   zeroTokenUsage,
@@ -1119,6 +1120,33 @@ describe("session.prompt helpers", () => {
       memory: async () => "<project-memory>...</project-memory>",
     })
     expect(result).toEqual(["env", "<project-memory>...</project-memory>", "skills", "rules"])
+  })
+
+  test("a compact turn drops the skill list, caps memory and keeps required instructions", async () => {
+    const cache = {}
+    const memory = vi.fn(async (..._args: unknown[]) => "<project-memory>capped</project-memory>")
+    const skills = vi.fn(async () => "skills")
+    const base = {
+      agent: { name: "build" } as any,
+      model: { providerID: ProviderID.make("ax-engine"), api: { id: "swift" } } as any,
+      format: { type: "text" } as const,
+      cache,
+      skills,
+      environment: async () => ["env"],
+      instructions: async () => ["rules"],
+      memory,
+    }
+    const compact = await systemPrompt({ ...base, environmentOverride: ["compact"], compact: true })
+    expect(compact).toEqual(["compact", "<project-memory>capped</project-memory>", "rules"])
+    expect(skills).not.toHaveBeenCalled()
+    expect(memory.mock.calls[0]?.[3]).toEqual({ maxTokens: COMPACT_MEMORY_TOKENS })
+
+    // The compact turn must not poison the cache: the next normal turn still
+    // computes and includes the skill list, with uncapped memory.
+    const normal = await systemPrompt(base)
+    expect(normal).toEqual(["env", "<project-memory>capped</project-memory>", "skills", "rules"])
+    expect(skills).toHaveBeenCalledTimes(1)
+    expect(memory.mock.calls[1]?.[3]).toBeUndefined()
   })
 
   test("injects the assurance workflow when structured review tools are enabled", async () => {

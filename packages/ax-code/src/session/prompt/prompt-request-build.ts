@@ -30,6 +30,7 @@ export async function preparePromptRequest(input: {
   structuredPrompt: string
   requestMessagesSource?: MessageV2.WithParts[]
   environmentOverride?: string[]
+  compactTurn?: boolean
   turnInstruction?: string
   mediaProjection?: MediaProjection.Mode
 }) {
@@ -131,6 +132,7 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
       structuredPrompt: input.structuredPrompt,
       // A turn may replace environment scaffolding, never required instructions.
       environmentOverride: input.environmentOverride,
+      compact: input.compactTurn,
     }),
     convertMessages(mediaProjection),
   ])

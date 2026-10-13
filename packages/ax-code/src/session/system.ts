@@ -344,11 +344,19 @@ export namespace SystemPrompt {
     agent: Agent.Info,
     messages?: MessageV2.WithParts[],
     model?: { limit?: { context?: number } },
+    opts?: { maxTokens?: number },
   ): Promise<string | undefined> {
     const paths = messages ? extractFilePaths(messages) : undefined
     // Bound injected memory by the model's window so a small-context model is
     // not filled before the first user message; unknown windows stay unbounded.
-    const maxTokens = budgetForContext(model?.limit?.context)
+    // A caller-supplied cap can only tighten that bound.
+    const windowBudget = budgetForContext(model?.limit?.context)
+    const maxTokens =
+      opts?.maxTokens === undefined
+        ? windowBudget
+        : windowBudget === undefined
+          ? opts.maxTokens
+          : Math.min(windowBudget, opts.maxTokens)
     const ctx = await getMemoryContext(Instance.directory, { agent: agent.name, paths, maxTokens })
     return ctx ? ctx : undefined
   }

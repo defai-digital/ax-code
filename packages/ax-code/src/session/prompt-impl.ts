@@ -1279,6 +1279,7 @@ export namespace SessionPrompt {
         structuredPrompt: STRUCTURED_OUTPUT_SYSTEM_PROMPT,
         requestMessagesSource: promptPolicy.requestMessagesSource,
         environmentOverride: promptPolicy.environmentOverride,
+        compactTurn: promptPolicy.omitTools,
         turnInstruction: pendingInstructionForRequest,
         mediaProjection,
       })
