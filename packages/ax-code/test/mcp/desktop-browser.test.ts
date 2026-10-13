@@ -82,8 +82,74 @@ describe("private desktop WebMCP provider", () => {
           ),
         ).rejects.toThrow("rejected")
         expect(asked).toHaveLength(1)
-        expect(asked[0]!.metadata.requireInteractive).toBe(true)
+        expect(asked[0]!.metadata.requireInteractive).toBe(false)
         expect(asked[0]!.autoOnceAt).toBeUndefined()
+      } finally {
+        stop()
+        DesktopBrowser.disconnect(connection.providerID)
+      }
+    })
+  })
+
+  test("full-access Auto lists and invokes a bound native tool repeatedly without prompting", async () => {
+    vi.stubEnv("AX_CODE_AUTONOMOUS", "1")
+    vi.stubEnv("AX_CODE_ISOLATION_MODE", "full-access")
+    await fixture(async (session, state) => {
+      const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: state })
+      const tool = await DesktopWebMcpTool.init()
+      const asked = vi.fn((event: { properties: Permission.Request }) => {
+        void Permission.reply({ requestID: event.properties.id, reply: "reject" })
+      })
+      const stop = Bus.subscribe(Permission.Event.Asked, asked)
+      const ctx: Tool.Context = {
+        sessionID: session.id,
+        messageID: MessageID.ascending(),
+        agent: "build",
+        abort: new AbortController().signal,
+        messages: [],
+        metadata: () => {},
+        ask: (input) => Permission.ask({ ...input, sessionID: session.id, ruleset: [] }),
+      }
+      try {
+        for (const action of ["list", "invoke", "invoke"] as const) {
+          const execution = tool.execute(
+            action === "list"
+              ? { action }
+              : {
+                  action,
+                  toolName: "echo",
+                  digest: DesktopBrowser.digest(state.tools[0]!),
+                  input: { text: "fixture" },
+                },
+            ctx,
+          )
+          const batch = await DesktopBrowser.poll(connection.providerID, ctx.abort)
+          expect(batch.request?.operation).toBe(action)
+          DesktopBrowser.respond(connection.providerID, {
+            requestID: batch.request!.requestID,
+            generation: state.generation,
+            status: "Completed",
+            ...(action === "list" ? { snapshot: state } : { output: "fixture" }),
+          })
+          expect((await execution).output).toContain(action === "list" ? "echo" : "fixture")
+        }
+        expect(asked).not.toHaveBeenCalled()
+        expect(await Permission.list()).toEqual([])
+        await expect(
+          tool.execute({ action: "invoke", toolName: "echo", digest: "0".repeat(64), input: {} }, ctx),
+        ).rejects.toThrow()
+        await expect(
+          tool.execute(
+            {
+              action: "invoke",
+              toolName: "echo",
+              digest: DesktopBrowser.digest(state.tools[0]!),
+              input: { password: "fixture" },
+            },
+            ctx,
+          ),
+        ).rejects.toThrow()
+        expect(asked).not.toHaveBeenCalled()
       } finally {
         stop()
         DesktopBrowser.disconnect(connection.providerID)
@@ -128,6 +194,7 @@ describe("private desktop WebMCP provider", () => {
     })
   })
   test("denial uses the existing permission engine and never dispatches", async () => {
+    vi.stubEnv("AX_CODE_AUTONOMOUS", "0")
     await fixture(async (session, state) => {
       const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: state })
       const tool = await DesktopWebMcpTool.init()

@@ -475,7 +475,8 @@ export namespace Permission {
       const config = Config.peek()
       if (!config || !ScopedFlag.autonomous() || request.metadata.requireInteractive === true) return false
       const mode = Flag.AX_CODE_ISOLATION_MODE ?? config.isolation?.mode ?? Isolation.DEFAULT_MODE
-      if (mode !== "read-only" && mode !== "workspace-write") return false
+      if (mode !== "read-only" && mode !== "workspace-write" && mode !== "full-access") return false
+      if (automatic?.fullAccessOnly && mode !== "full-access") return false
       if (config.webmcp?.allow === false) return false
       if (automatic?.tier === "read" && config.webmcp?.allowRead === false) return false
       if (automatic?.tier === "interact" && config.webmcp?.allowInteract === false) return false
@@ -496,7 +497,7 @@ export namespace Permission {
             throw new DeniedError({ ruleset, agent: input.agent })
         }
         if (options?.signal?.aborted) throw abortError(options.signal)
-        log.info("autonomous auto-approve (WebMCP, sandbox enabled)", {
+        log.info("autonomous auto-approve (WebMCP, runtime-bound)", {
           permission: request.permission,
           tier: automatic.tier,
         })

@@ -1,6 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { WebMcpApprovals } from "../../src/mcp/webmcp-approvals"
 import { Config } from "../../src/config/config"
 import { Permission } from "../../src/permission"
@@ -54,11 +54,17 @@ async function writeManaged(settings: unknown) {
   await fs.writeFile(path.join(managedDir, "ax-code.json"), JSON.stringify(settings))
 }
 
+beforeEach(() => {
+  // Approval lifecycle fixtures must select Supervised rather than inherit Auto.
+  vi.stubEnv("AX_CODE_AUTONOMOUS", "0")
+})
+
 afterEach(async () => {
   await Instance.disposeAll()
   await fs.rm(managedDir, { recursive: true, force: true })
   bridge.names = []
   vi.resetAllMocks()
+  vi.unstubAllEnvs()
 })
 
 const plainProfile = () => WebMcpProfile.config({ allowedOrigins: origins }).webmcp
@@ -183,10 +189,10 @@ describe("WebMCP T1 read tier profile", () => {
     }
   })
 
-  test("the T0 note is unchanged read off; the read note replaces it read on", () => {
-    expect(WebMcpProfile.limitsNote(plainProfile())).toBe(WebMcpProfile.LIMITS_NOTE)
+  test("limits guidance preserves the admitted tier and explains runtime Auto approval", () => {
+    expect(WebMcpProfile.limitsNote(plainProfile())).toContain(WebMcpProfile.LIMITS_NOTE)
     expect(WebMcpProfile.LIMITS_NOTE).toContain("cannot read page text or the DOM")
-    expect(WebMcpProfile.limitsNote(readProfile())).toBe(WebMcpProfile.READ_LIMITS_NOTE)
+    expect(WebMcpProfile.limitsNote(readProfile())).toContain(WebMcpProfile.READ_LIMITS_NOTE)
     expect(WebMcpProfile.READ_LIMITS_NOTE).toContain("Interaction is still impossible")
   })
 

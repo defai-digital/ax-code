@@ -84,7 +84,7 @@ changes what is sent to the agent.
 Page content is untrusted: a page can try to steer the agent. Output is
 labeled with its origin and size-limited.
 
-### Auto mode with Sandbox enabled
+### Auto mode and Sandbox
 
 With **Auto** and **Sandbox** on, an enabled, connected WebMCP browser runs
 ordinary browsing without an **Allow once** prompt: list pages, open or navigate
@@ -93,7 +93,14 @@ grant bounded ordinary interaction. Read and interaction grants remain temporary
 ordinary clicks, hover and waits still use the existing interaction budget.
 The native Desktop browser also lists its page tools without a prompt.
 
-Closing pages, expanding an origin allowlist, typing, key presses, dialogs,
+With **Sandbox off**, Auto also admits typing (`fill` and `fill_form`), key
+presses, dialogs, links, double clicks, consequential-looking clicks, closing
+pages and registered page-tool invocations immediately. This applies to the
+live AX Code bridge and to bound native Desktop listing and invocation. Initial
+read and interaction grants also proceed without a countdown. Repeated actions
+do not create persistent approvals.
+
+With **Sandbox on**, closing pages, expanding an origin allowlist, typing, key presses, dialogs,
 links, double clicks, consequential-looking clicks and page-defined tool
 invocations keep their existing approval requirements. Page declarations of
 "read-only" do not qualify an invocation for automatic approval. Sandbox limits
@@ -101,8 +108,11 @@ local operations; website actions can still change external accounts and data.
 
 Explicit deny rules, administrator policy and browser identity/origin checks
 remain enforced. Automatic browsing does not save persistent approvals.
-With Auto off, the existing approval flow applies. With Sandbox off, the existing
-15-second Auto countdown applies to eligible pending permissions.
+With Auto off, the existing approval flow applies. Origin allowlist expansion
+and explicitly interactive requests keep their approval requirements in every
+mode. Unsupported tools, credential-shaped inputs and invalid or stale targets
+remain rejected. Requests without live runtime authority retain the existing
+approval flow, including the eligible full-access Auto countdown.
 
 ## Save an approval
 
@@ -125,9 +135,9 @@ after checking the page again. A page or bridge change stops the call and
 requires a fresh read. It does not replay a failed browser operation.
 
 Navigation restrictions and administrator policy still apply. Saving an
-approval does not edit `allowedOrigins`. Typing, consequential clicks,
-dialogs and page-registered tools keep their existing
-approvals. **Allow once** remains temporary; the countdown never saves a
+approval does not edit `allowedOrigins`. Saved approvals do not authorize
+typing, consequential clicks, dialogs or page-registered tools; their admission
+follows the Auto/Sandbox rules above. **Allow once** remains temporary; the countdown never saves a
 persistent approval.
 
 Select the **WebMCP allowlist** link beside the WebMCP chip (session

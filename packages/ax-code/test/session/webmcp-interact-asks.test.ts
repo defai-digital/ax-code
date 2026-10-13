@@ -33,6 +33,7 @@ function snapshotNodes() {
           { id: "1_1", role: "button", name: "Save draft" },
           { id: "1_2", role: "link", name: "Settings" },
           { id: "1_5", role: "textbox", name: "Full name", focused: true },
+          { id: "1_6", role: "button", name: "Submit" },
         ],
       },
     },
@@ -58,7 +59,13 @@ function fakeClient() {
         }
       }
       if (request.name === "list_webmcp_tools") {
-        return { content: [], structuredContent: { webmcpTools: [] } }
+        return { content: [], structuredContent: { webmcpTools: [{ name: "echo", inputSchema: { type: "object" } }] } }
+      }
+      if (request.name === "execute_webmcp_tool") {
+        return {
+          content: [],
+          structuredContent: { message: JSON.stringify({ status: "Completed", output: "fixture" }) },
+        }
       }
       return { content: [{ type: "text", text: "Successfully acted" }], structuredContent: {} }
     }),
@@ -84,12 +91,24 @@ async function bridgeTools(
     },
   })
   const entries = await Promise.all(
-    ["click", "fill", "wait_for", "list_pages", "new_page", "navigate_page", "list_webmcp_tools", "take_snapshot"].map(
-      async (name) => [
-        `bridge_${name}`,
-        await convertMcpTool({ name, inputSchema: { type: "object" } } as never, client as never, 5000, policy(name)),
-      ],
-    ),
+    [
+      "click",
+      "fill",
+      "fill_form",
+      "press_key",
+      "handle_dialog",
+      "close_page",
+      "execute_webmcp_tool",
+      "wait_for",
+      "list_pages",
+      "new_page",
+      "navigate_page",
+      "list_webmcp_tools",
+      "take_snapshot",
+    ].map(async (name) => [
+      `bridge_${name}`,
+      await convertMcpTool({ name, inputSchema: { type: "object" } } as never, client as never, 5000, policy(name)),
+    ]),
   )
   return Object.fromEntries(entries)
 }
@@ -119,39 +138,113 @@ afterEach(async () => {
 })
 
 describe("WebMCP T2 asks through the session layer", () => {
-  test("sandboxed Auto browsing admits both actual permission layers without a popup", async () => {
+  test.each(["workspace-write", "full-access"])(
+    "%s Auto browsing admits both actual permission layers without a popup",
+    async (mode) => {
+      vi.stubEnv("AX_CODE_AUTONOMOUS", "1")
+      vi.stubEnv("AX_CODE_ISOLATION_MODE", mode)
+      await using tmp = await tmpdir()
+      const profile = WebMcpProfile.config({ allowedOrigins: [], read: true, interact: true }, true).webmcp
+      const grants: GrantState = { read: new Set(), interact: new Map() }
+      const client = fakeClient()
+      vi.spyOn(ToolRegistry, "tools").mockResolvedValue([])
+      vi.spyOn(MCP, "tools").mockResolvedValue(await bridgeTools(profile, grants, client))
+      vi.spyOn(MCP, "matchesWebMcpProfile").mockResolvedValue(true)
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const input = resolveInput("msg_auto_browse")
+          input.agent = { name: "build", permission: [{ permission: "*", pattern: "*", action: "ask" }] } as never
+          const asked: Permission.Request[] = []
+          const stop = Bus.subscribe(Permission.Event.Asked, (event) => {
+            asked.push(event.properties)
+            void Permission.reply({ requestID: event.properties.id, reply: "reject" })
+          })
+          try {
+            const tools = await resolveTools(input)
+            for (const [name, args] of [
+              ["list_pages", {}],
+              ["new_page", { url: PAGE }],
+              ["navigate_page", { pageId: 1, type: "url", url: PAGE }],
+              ["list_webmcp_tools", { pageId: 1 }],
+            ] as const) {
+              await tools[`bridge_${name}`]!.execute!(args, execOptions())
+              expect(client.calls).toContain(name)
+            }
+            expect(asked).toEqual([])
+            expect(await Permission.list()).toEqual([])
+          } finally {
+            stop()
+          }
+        },
+      })
+    },
+  )
+
+  test("full-access Auto runs repeated form actions and page invocations without pending approvals", async () => {
     vi.stubEnv("AX_CODE_AUTONOMOUS", "1")
-    vi.stubEnv("AX_CODE_ISOLATION_MODE", "workspace-write")
+    vi.stubEnv("AX_CODE_ISOLATION_MODE", "full-access")
     await using tmp = await tmpdir()
     const profile = WebMcpProfile.config({ allowedOrigins: [], read: true, interact: true }, true).webmcp
+    WebMcpProfile.recordSnapshot(profile, 1, snapshotNodes(), PAGE)
     const grants: GrantState = { read: new Set(), interact: new Map() }
     const client = fakeClient()
     vi.spyOn(ToolRegistry, "tools").mockResolvedValue([])
     vi.spyOn(MCP, "tools").mockResolvedValue(await bridgeTools(profile, grants, client))
     vi.spyOn(MCP, "matchesWebMcpProfile").mockResolvedValue(true)
+    vi.spyOn(MCP, "checkWebMcpInteractGrant").mockResolvedValue({ ok: true })
+    vi.spyOn(MCP, "grantWebMcpInteractOrigin").mockImplementation(async (_server, origin) => {
+      grants.interact.set(origin, WebMcpProfile.INTERACT_BUDGET)
+      return { ok: true }
+    })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const input = resolveInput("msg_auto_browse")
-        input.agent = { name: "build", permission: [{ permission: "*", pattern: "*", action: "ask" }] } as never
-        const asked: Permission.Request[] = []
-        const stop = Bus.subscribe(Permission.Event.Asked, (event) => {
-          asked.push(event.properties)
+        const asked = vi.fn((event: { properties: Permission.Request }) => {
           void Permission.reply({ requestID: event.properties.id, reply: "reject" })
         })
+        const stop = Bus.subscribe(Permission.Event.Asked, asked)
         try {
+          const input = resolveInput("msg_full_access_actions")
+          input.agent = { name: "build", permission: [{ permission: "*", pattern: "*", action: "ask" }] } as never
           const tools = await resolveTools(input)
+          for (const value of ["Jane", "Jane Doe"]) {
+            await tools.bridge_fill!.execute!({ pageId: 1, uid: "1_5", value }, execOptions())
+          }
+          const fillsBeforeInvalid = client.calls.filter((name) => name === "fill").length
+          await expect(
+            tools.bridge_fill!.execute!({ pageId: 1, uid: "1_5", value: "sk-proj-" + "x".repeat(24) }, execOptions()),
+          ).rejects.toThrow("credential")
+          await expect(
+            tools.bridge_fill!.execute!({ pageId: 1, uid: "9_9", value: "fixture" }, execOptions()),
+          ).rejects.toThrow("snapshot")
+          WebMcpProfile.recordSnapshot(profile, 1, snapshotNodes(), PAGE + "/stale")
+          await expect(
+            tools.bridge_fill!.execute!({ pageId: 1, uid: "1_5", value: "fixture" }, execOptions()),
+          ).rejects.toThrow("snapshot")
+          WebMcpProfile.recordSnapshot(profile, 1, snapshotNodes(), PAGE)
+          expect(client.calls.filter((name) => name === "fill")).toHaveLength(fillsBeforeInvalid)
+          expect(grants.interact.get(ORIGIN)).toBe(20)
           for (const [name, args] of [
-            ["list_pages", {}],
-            ["new_page", { url: PAGE }],
-            ["navigate_page", { pageId: 1, type: "url", url: PAGE }],
+            ["fill_form", { pageId: 1, elements: [{ uid: "1_5", value: "Jane" }] }],
+            ["press_key", { pageId: 1, key: "Enter" }],
+            ["click", { pageId: 1, uid: "1_2" }],
+            ["click", { pageId: 1, uid: "1_1", dblClick: true }],
+            ["click", { pageId: 1, uid: "1_6" }],
+            ["handle_dialog", { pageId: 1, action: "accept" }],
             ["list_webmcp_tools", { pageId: 1 }],
+            ["execute_webmcp_tool", { pageId: 1, toolName: "echo", input: "{}" }],
+            ["close_page", { pageId: 1 }],
           ] as const) {
+            WebMcpProfile.recordDialog(profile, 1, {
+              structuredContent: { dialog: { type: "confirm", message: "Continue?" } },
+            })
             await tools[`bridge_${name}`]!.execute!(args, execOptions())
             expect(client.calls).toContain(name)
           }
-          expect(asked).toEqual([])
+          expect(asked).not.toHaveBeenCalled()
           expect(await Permission.list()).toEqual([])
+          expect(client.calls.filter((name) => name === "fill")).toHaveLength(2)
         } finally {
           stop()
         }

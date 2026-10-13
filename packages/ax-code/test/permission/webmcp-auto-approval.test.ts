@@ -55,8 +55,8 @@ async function rejectPending(input: ReturnType<typeof request>, options?: { sign
   }
 }
 
-describe("runtime-bound WebMCP approval in sandboxed Auto mode", () => {
-  test.each(["workspace-write", "read-only"])(
+describe("runtime-bound WebMCP approval in Auto mode", () => {
+  test.each(["workspace-write", "read-only", "full-access"])(
     "%s admits both permission layers without a pending event",
     async (mode) => {
       autoEnv(mode)
@@ -109,7 +109,7 @@ describe("runtime-bound WebMCP approval in sandboxed Auto mode", () => {
   test.each([
     ["workspace-write", false],
     ["read-only", false],
-    ["full-access", true],
+    ["full-access", false],
   ] as const)("mode %s with Auto=%s retains existing prompts", async (mode, auto) => {
     autoEnv(mode, auto)
     await using tmp = await tmpdir({ git: true })
@@ -123,7 +123,7 @@ describe("runtime-bound WebMCP approval in sandboxed Auto mode", () => {
     })
   })
 
-  test.each(["close_page", "execute_webmcp_tool", "fill", "press_key", "handle_dialog"])(
+  test.each(["close_page", "execute_webmcp_tool", "fill", "fill_form", "press_key", "handle_dialog", "click"])(
     "%s cannot be auto-approved using page read-only annotations",
     async (tool) => {
       autoEnv()
@@ -131,7 +131,11 @@ describe("runtime-bound WebMCP approval in sandboxed Auto mode", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          const input = request("webmcp", { tool, annotations: { readOnly: true, consequential: false } })
+          const input = request("webmcp", {
+            tool,
+            ...(WebMcpProfile.isInteractTool(tool) ? { interactAction: true } : {}),
+            annotations: { readOnly: true, consequential: false },
+          })
           bind(input, async () => true, tool)
           expect((await rejectPending(input)).autoOnceAt).toBeUndefined()
         },
@@ -154,6 +158,175 @@ describe("runtime-bound WebMCP approval in sandboxed Auto mode", () => {
       })
     },
   )
+
+  test.each(["fill", "fill_form", "press_key", "handle_dialog", "click", "close_page", "execute_webmcp_tool"])(
+    "full-access Auto admits repeated runtime-bound %s at both permission layers",
+    async (tool) => {
+      autoEnv("full-access")
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const asked = vi.fn()
+          const stop = Bus.subscribe(Permission.Event.Asked, asked)
+          try {
+            for (let repeat = 0; repeat < 2; repeat++) {
+              for (const permission of [`bridge_${tool}`, "webmcp"]) {
+                const input = request(permission, {
+                  server: "bridge",
+                  tool,
+                  ...(WebMcpProfile.isInteractTool(tool) ? { interactAction: true } : {}),
+                })
+                input.patterns = [`bridge_${tool}`]
+                bind(input, async () => true, tool)
+                await Permission.ask(input)
+              }
+            }
+            expect(asked).not.toHaveBeenCalled()
+            expect(await Permission.list()).toEqual([])
+          } finally {
+            stop()
+          }
+        },
+      })
+    },
+  )
+
+  test.each([
+    ["read-only", true],
+    ["workspace-write", true],
+    ["full-access", false],
+  ] as const)("protected operations retain prompts in %s with Auto=%s", async (mode, auto) => {
+    autoEnv(mode, auto)
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        for (const tool of [
+          "fill",
+          "fill_form",
+          "press_key",
+          "handle_dialog",
+          "click",
+          "close_page",
+          "execute_webmcp_tool",
+        ]) {
+          const input = request("webmcp", {
+            server: "bridge",
+            tool,
+            ...(WebMcpProfile.isInteractTool(tool) ? { interactAction: true } : {}),
+          })
+          bind(input, async () => true, tool)
+          const pending = await rejectPending(input)
+          expect(pending.autoOnceAt).toBeUndefined()
+        }
+      },
+    })
+  })
+
+  test.each(["read-only", "workspace-write", "full-access"])(
+    "%s cannot grant authority to unsupported tools or explicit interactive markers",
+    async (mode) => {
+      autoEnv(mode)
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          for (const tool of ["evaluate_script", "upload_file", "type_text"]) {
+            const input = request("webmcp", { server: "bridge", tool, interactAction: true })
+            bind(input, async () => true, tool)
+            await rejectPending(input)
+          }
+          for (const extra of [{ requireInteractive: true }, { originGrant: true }]) {
+            const input = request("webmcp", { server: "bridge", tool: "fill", interactAction: true, ...extra })
+            bind(input, async () => true, "fill")
+            await rejectPending(input)
+          }
+        },
+      })
+    },
+  )
+
+  test.each(["forged", "identity", "disconnect", "supervised", "sandbox", "deny", "abort", "ceiling"])(
+    "full-access action authority cannot bypass %s",
+    async (change) => {
+      autoEnv("full-access")
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const input = request("webmcp", { server: "bridge", tool: "fill", interactAction: true })
+          const controller = new AbortController()
+          bind(
+            input,
+            async () => {
+              if (change === "disconnect") return false
+              if (change === "supervised") vi.stubEnv("AX_CODE_AUTONOMOUS", "0")
+              if (change === "sandbox") vi.stubEnv("AX_CODE_ISOLATION_MODE", "workspace-write")
+              if (change === "deny") {
+                await Config.update({ permission: { webmcp: "deny" } })
+                await Config.get()
+              }
+              if (change === "abort") controller.abort(new Error("Canceled action"))
+              if (change === "ceiling") {
+                const current = Config.peek()!
+                vi.spyOn(Config, "peek").mockReturnValue({ ...current, webmcp: { allowInteract: false } })
+              }
+              return true
+            },
+            "fill",
+          )
+          if (change === "forged") await rejectPending({ ...input, metadata: { ...input.metadata } })
+          else if (change === "identity") await rejectPending({ ...input, patterns: ["bridge_click"] })
+          else if (change === "deny") await expect(Permission.ask(input)).rejects.toBeInstanceOf(Permission.DeniedError)
+          else if (change === "abort")
+            await expect(Permission.ask(input, { signal: controller.signal })).rejects.toThrow("Canceled action")
+          else await rejectPending(input)
+        },
+      })
+    },
+  )
+
+  test.each([
+    ["execute_webmcp_tool", { readGrant: true }],
+    ["execute_webmcp_tool", { interactGrant: true }],
+    ["navigate_page", { interactAction: true }],
+    ["fill", { readGrant: true }],
+    ["click", { interactGrant: true, interactAction: true }],
+  ] as const)("mismatched markers cannot downgrade %s authority", async (tool, extra) => {
+    autoEnv("full-access")
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const input = request("webmcp", { server: "bridge", tool, ...extra })
+        bind(input, async () => true, tool)
+        await rejectPending(input)
+      },
+    })
+  })
+
+  test("rejecting a rebound metadata object retires its earlier runtime authority", async () => {
+    autoEnv("full-access")
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const input = request()
+        bind(input)
+        input.metadata.originGrant = true
+        const profile = WebMcpProfile.config({ allowedOrigins: [], read: true, interact: true }, true).webmcp
+        WebMcpAutoApproval.bindBridge(
+          input.metadata,
+          { server: "bridge", profile, toolName: "list_pages" },
+          input,
+          async () => true,
+          { tool: "list_pages" },
+        )
+        await rejectPending(input)
+      },
+    })
+  })
 
   test("serialized metadata and changed permission or pattern identities cannot reuse runtime authority", async () => {
     autoEnv()

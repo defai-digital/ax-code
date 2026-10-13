@@ -1,10 +1,11 @@
-import type { WebMcpProfile } from "./webmcp-profile"
+import { WebMcpProfile } from "./webmcp-profile"
 
 /** Runtime-owned authority; page annotations and serialized metadata cannot grant it. */
 export namespace WebMcpAutoApproval {
   type Admission = { permission: string; patterns: readonly string[] }
   type Binding = Admission & {
-    tier: "pages" | "read" | "interact" | "desktop"
+    tier: "pages" | "read" | "interact" | "invoke" | "desktop"
+    fullAccessOnly: boolean
     valid: () => Promise<boolean>
   }
   const bindings = new WeakMap<object, Binding>()
@@ -17,18 +18,44 @@ export namespace WebMcpAutoApproval {
     valid: () => Promise<boolean>,
     operation: Record<string, unknown> = metadata,
   ) {
-    if (operation.requireInteractive === true || operation.originGrant === true || operation.interactAction === true)
+    bindings.delete(metadata)
+    if (
+      metadata.requireInteractive === true ||
+      metadata.originGrant === true ||
+      operation.requireInteractive === true ||
+      operation.originGrant === true ||
+      !WebMcpProfile.allows(policy.toolName, policy.profile)
+    )
       return
-    const tier =
-      operation.readGrant === true && policy.profile.read
-        ? "read"
-        : operation.interactGrant === true && policy.profile.interact
-          ? "interact"
-          : PAGE_TOOLS.has(policy.toolName)
+    const readGrant = operation.readGrant === true
+    const interactGrant = operation.interactGrant === true
+    const interactAction = operation.interactAction === true
+    // Grant markers must describe a supported operation of that same tier.
+    // In particular, a page invocation can never downgrade itself to a read.
+    if (Number(readGrant) + Number(interactGrant) + Number(interactAction) > 1) return
+    if (
+      readGrant &&
+      (!policy.profile.read ||
+        (!WebMcpProfile.READ_SCOPE_TOOLS.some((name) => name === policy.toolName) && policy.toolName !== "wait_for"))
+    )
+      return
+    if ((interactGrant || interactAction) && !WebMcpProfile.isInteractTool(policy.toolName)) return
+    // ADR-189: classify the actual runtime tool, not page annotations. The
+    // broader action set requires the user's full-access Auto selection.
+    const tier: Binding["tier"] | undefined = readGrant
+      ? "read"
+      : interactGrant || interactAction
+        ? "interact"
+        : PAGE_TOOLS.has(policy.toolName)
+          ? "pages"
+          : policy.toolName === "close_page"
             ? "pages"
-            : undefined
+            : policy.toolName === "execute_webmcp_tool"
+              ? "invoke"
+              : undefined
     if (!tier) return
-    bindings.set(metadata, { ...admission, patterns: [...admission.patterns], tier, valid })
+    const fullAccessOnly = interactAction || policy.toolName === "close_page" || tier === "invoke"
+    bindings.set(metadata, { ...admission, patterns: [...admission.patterns], tier, fullAccessOnly, valid })
   }
 
   export function bindDesktopListing(
@@ -36,7 +63,24 @@ export namespace WebMcpAutoApproval {
     admission: Admission,
     valid: () => Promise<boolean>,
   ) {
-    bindings.set(metadata, { ...admission, patterns: [...admission.patterns], tier: "desktop", valid })
+    bindDesktop(metadata, admission, valid, "list")
+  }
+
+  export function bindDesktop(
+    metadata: Record<string, unknown>,
+    admission: Admission,
+    valid: () => Promise<boolean>,
+    operation: "list" | "invoke",
+  ) {
+    bindings.delete(metadata)
+    if (metadata.requireInteractive === true || metadata.originGrant === true) return
+    bindings.set(metadata, {
+      ...admission,
+      patterns: [...admission.patterns],
+      tier: "desktop",
+      fullAccessOnly: operation === "invoke",
+      valid,
+    })
   }
 
   export function get(metadata: Record<string, unknown>, permission: string, patterns: readonly string[]) {

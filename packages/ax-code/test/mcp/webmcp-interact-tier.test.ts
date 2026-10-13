@@ -107,8 +107,9 @@ describe("WebMCP T2 admission and schemas", () => {
       expect(WebMcpProfile.allows(name, full())).toBe(false)
       expect(() => WebMcpProfile.callSchema(name, full())).toThrow("not admitted")
     }
-    expect(WebMcpProfile.limitsNote(full())).toBe(WebMcpProfile.INTERACT_LIMITS_NOTE)
-    expect(WebMcpProfile.INTERACT_LIMITS_NOTE).toContain("confirmed by the user each time")
+    expect(WebMcpProfile.limitsNote(full())).toContain(WebMcpProfile.INTERACT_LIMITS_NOTE)
+    expect(WebMcpProfile.limitsNote(full())).toContain("Auto with Sandbox off")
+    expect(WebMcpProfile.INTERACT_LIMITS_NOTE).toContain("per-action runtime permissions")
   })
 
   test("wait_for needs both read and interact; managed gates force each tier off", () => {

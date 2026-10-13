@@ -207,12 +207,13 @@ export namespace WebMcpProfile {
   export const INTERACT_LIMITS_NOTE =
     "Limits: use only this bridge's exposed read tools (snapshot, screenshot, console, request metadata) and action tools (click, hover, wait_for, fill, fill_form, press_key, handle_dialog) on allowed origins. " +
     "For interaction, only click, hover, fill and fill_form elements take snapshot uids; wait_for, press_key and handle_dialog do not accept uid. " +
-    "Hovering and ordinary clicks run under a per-origin interaction grant, while typing, key presses, dialogs, links and consequential-looking clicks are confirmed by the user each time. " +
+    "Hovering and ordinary clicks run under a per-origin interaction grant; typing, key presses, dialogs, links and consequential-looking clicks use per-action runtime permissions. " +
     "It still cannot run scripts, upload files, drag, click coordinates, or read network bodies."
   /** The T0 note by default, the read-tier note with read on, the interact note with interact on. */
   export function limitsNote(profile: Configuration): string {
-    if (profile.interact === true) return INTERACT_LIMITS_NOTE
-    return profile.read === true ? READ_LIMITS_NOTE : LIMITS_NOTE
+    const limits =
+      profile.interact === true ? INTERACT_LIMITS_NOTE : profile.read === true ? READ_LIMITS_NOTE : LIMITS_NOTE
+    return `${limits} Approval is controlled by the runtime: Auto with Sandbox off immediately admits supported live browser operations; other modes may request confirmation. Origin policy, explicit denies and credential restrictions always apply.`
   }
 
   // Describe the locally admitted interface, not upstream options that our

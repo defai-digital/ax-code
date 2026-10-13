@@ -29,7 +29,7 @@ export const DesktopWebMcpTool = Tool.define("desktop_webmcp", {
         ? DesktopBrowser.prepareInvocation(binding, params.toolName!, params.digest!, params.input ?? {})
         : undefined
     const metadata = {
-      requireInteractive: params.action === "invoke",
+      requireInteractive: false,
       desktopProvider: true,
       origin: binding.origin,
       operation: params.action,
@@ -38,16 +38,17 @@ export const DesktopWebMcpTool = Tool.define("desktop_webmcp", {
       generation: binding.generation,
       definitionDigest: params.digest,
     }
-    if (params.action === "list") {
-      WebMcpAutoApproval.bindDesktopListing(
-        metadata,
-        { permission: "webmcp", patterns: [binding.origin] },
-        async () => {
-          await DesktopBrowser.checkPolicy(binding)
-          return true
-        },
-      )
-    }
+    WebMcpAutoApproval.bindDesktop(
+      metadata,
+      { permission: "webmcp", patterns: [binding.origin] },
+      async () => {
+        await DesktopBrowser.checkPolicy(binding)
+        if (invocation)
+          DesktopBrowser.prepareInvocation(binding, invocation.toolName, invocation.digest, invocation.input)
+        return true
+      },
+      params.action,
+    )
     await ctx.ask({
       permission: "webmcp",
       patterns: [binding.origin],
