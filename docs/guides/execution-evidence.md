@@ -107,6 +107,13 @@ notice and Revert cannot restore those files. Set `AX_CODE_SNAPSHOT_MAX_FILE_MB`
 to change the limit. Snapshot data older than seven days is pruned automatically
 from `~/.local/share/ax-code/snapshot`.
 
+Run `ax-code snapshot status` to see how much disk the per-project snapshot stores
+use and which are reclaimable. `ax-code snapshot prune --dry-run` previews cleanup;
+it always clears stranded temporary pack files older than seven days. Add
+`--orphaned` to remove stores whose project directory is gone, and `--idle` to
+remove stores with no activity for seven days. Stores that a session still
+references for Revert are never removed.
+
 ```bash
 ax-code session rollback <sessionID> --list      # show recoverable points
 ax-code session rollback <sessionID> --dry-run   # show what would change

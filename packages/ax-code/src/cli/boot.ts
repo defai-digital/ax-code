@@ -10,6 +10,7 @@ import { ConsoleCommand } from "./cmd/account"
 import { AttachCommand } from "./tui/attach"
 import { ContextCommand } from "./cmd/context"
 import { DbCommand } from "./cmd/db"
+import { SnapshotCommand } from "./cmd/snapshot"
 import { DebugCommand } from "./cmd/debug"
 import { DesignCheckCommand } from "./cmd/design-check"
 import { DoctorCommand } from "./cmd/doctor"
@@ -102,6 +103,7 @@ const cmds = [
   TaskCommand,
   ScheduleCommand,
   DbCommand,
+  SnapshotCommand,
   DoctorCommand,
   DebugCommand,
   UpgradeCommand,

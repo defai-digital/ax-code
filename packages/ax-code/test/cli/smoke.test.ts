@@ -174,6 +174,16 @@ describe("cli smoke", () => {
     expect(text).toBe(Database.Path)
   }, 20000)
 
+  test("runs snapshot status and a dry-run prune through the real entrypoint", async () => {
+    const status = await Process.run(cmd("snapshot", "status", "--json"), { cwd: ROOT })
+    expect(status.code).toBe(0)
+    const parsed = JSON.parse(status.stdout.toString().trim())
+    expect(parsed).toMatchObject({ stores: expect.any(Number), bytes: expect.any(Number) })
+
+    const prune = await Process.run(cmd("snapshot", "prune", "--orphaned", "--idle", "--dry-run"), { cwd: ROOT })
+    expect(prune.code).toBe(0)
+  }, 60000)
+
   test("run --file resolves relative paths from AX_CODE_ORIGINAL_CWD", async () => {
     await using tmp = await tmpdir()
     await writeFile(path.join(tmp.path, "testfile.txt"), "hello")
