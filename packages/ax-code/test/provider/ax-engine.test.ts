@@ -1982,6 +1982,42 @@ describe("ax-engine provider integration", () => {
     expect(caller.capabilities.toolcall).toBe(true)
   })
 
+  test.each([
+    { context: 65_536, image: false },
+    { context: 8_192, image: true },
+  ])("advertised image input is $image through the loader at a $context-token window", async ({ context, image }) => {
+    const provider = {
+      id: AX_ENGINE_PROVIDER_ID,
+      name: "AX Engine",
+      source: "config",
+      env: [],
+      options: { baseURL: "http://127.0.0.1:31418/v1", contextTokens: context },
+      models: {},
+    } as any
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          data: [
+            liveCard(AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID, {
+              limit: { context, output: 8_192 },
+              capabilities: {
+                toolcall: true,
+                input: { text: true, audio: false, image: true, video: true, pdf: false },
+              },
+            }),
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      )) as typeof fetch
+    const loader = await axEngineLoader()(provider)
+    const discovered = await loader.discoverModels!(provider)
+    const model = discovered[AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]
+    expect(model.limit.context).toBe(context)
+    expect(model.capabilities.input.image).toBe(image)
+    expect(model.capabilities.input.video).toBe(image)
+    expect(model.capabilities.input.text).toBe(true)
+  })
+
   test("discovered Coder-Next AXQ preserves the public model id for loader resolution", async () => {
     globalThis.fetch = (async () =>
       new Response(
