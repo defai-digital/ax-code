@@ -6,6 +6,15 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.25.3] - 2026-10-13
+
+### Changed
+
+- Bundle and require AX Engine 7.7.0, with the signed macOS ARM64 archive pinned by SHA-256.
+- Reject version results observed while an AX Engine executable is being replaced.
+- Validate doctor semantic versions and parse doctor JSON surrounded by brace-containing diagnostics.
+- Publish SDK 2.6.14 with the integrated browser entrypoint routing contract.
+
 ## [7.25.2] - 2026-10-13
 
 ### Changed
