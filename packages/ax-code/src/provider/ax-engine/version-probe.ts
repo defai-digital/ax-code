@@ -7,7 +7,7 @@ function installVersion(payload: unknown) {
   const install = (payload as Record<string, unknown>).install
   if (!install || typeof install !== "object") return undefined
   const value = (install as Record<string, unknown>).version
-  return typeof value === "string" && value.trim() ? value.trim() : undefined
+  return typeof value === "string" && semver.valid(value.trim()) ? value.trim() : undefined
 }
 
 function installVersionFromDoctorText(text: string) {
@@ -16,11 +16,35 @@ function installVersionFromDoctorText(text: string) {
   const direct = parseJsonResult(trimmed)
   const directVersion = direct.ok ? installVersion(direct.value) : undefined
   if (directVersion) return directVersion
-  const start = trimmed.indexOf("{")
-  const end = trimmed.lastIndexOf("}")
-  if (start < 0 || end <= start) return undefined
-  const embedded = parseJsonResult(trimmed.slice(start, end + 1))
-  return embedded.ok ? installVersion(embedded.value) : undefined
+  // Scan complete objects once; diagnostic braces must not poison the payload.
+  let start = -1
+  let depth = 0
+  let quoted = false
+  let escaped = false
+  for (let i = 0; i < trimmed.length; i++) {
+    const char = trimmed[i]
+    if (start < 0) {
+      if (char !== "{") continue
+      start = i
+      depth = 1
+      continue
+    }
+    if (quoted) {
+      if (escaped) escaped = false
+      else if (char === "\\") escaped = true
+      else if (char === '"') quoted = false
+      continue
+    }
+    if (char === '"') quoted = true
+    else if (char === "{") depth++
+    else if (char === "}" && --depth === 0) {
+      const embedded = parseJsonResult(trimmed.slice(start, i + 1))
+      const version = embedded.ok ? installVersion(embedded.value) : undefined
+      if (version) return version
+      start = -1
+    }
+  }
+  return undefined
 }
 
 function directVersion(text: string) {

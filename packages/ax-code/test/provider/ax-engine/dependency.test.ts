@@ -29,7 +29,7 @@ async function launcher(dir: string) {
 function doctor() {
   return vi.spyOn(Process, "text").mockImplementation(async (args) => {
     if (args[1] === "--version") return response("", 2)
-    return response(JSON.stringify({ install: { version: "7.5.7" } }))
+    return response(JSON.stringify({ install: { version: "7.7.0" } }))
   })
 }
 
@@ -38,8 +38,8 @@ test("coalesces concurrent wrapper probes and reuses a successful doctor version
   const binaryPath = await launcher(dir.path)
   const probe = doctor()
   const results = await Promise.all(Array.from({ length: 8 }, () => getDependencyStatus({ binaryPath })))
-  for (const status of results) expect(status.version).toBe("7.5.7")
-  expect((await getDependencyStatus({ binaryPath })).version).toBe("7.5.7")
+  for (const status of results) expect(status.version).toBe("7.7.0")
+  expect((await getDependencyStatus({ binaryPath })).version).toBe("7.7.0")
   expect(probe).toHaveBeenCalledTimes(2)
   // Availability must still be checked even with a cached version.
   await fs.rm(binaryPath)
@@ -98,10 +98,10 @@ test("reads doctor install.version when the host is not ready", async () => {
   const binaryPath = await launcher(dir.path)
   vi.spyOn(Process, "text").mockImplementation(async (args) => {
     if (args[1] === "--version") return response("", 2)
-    return response('doctor: not ready\n{"result":"not_ready","install":{"version":"7.5.7"}}', 1)
+    return response('doctor: not ready\n{"result":"not_ready","install":{"version":"7.7.0"}}', 1)
   })
   const status = await getDependencyStatus({ binaryPath })
-  expect(status.version).toBe("7.5.7")
+  expect(status.version).toBe("7.7.0")
   expect(status.available).toBe(true)
 })
 
@@ -162,7 +162,7 @@ test("does not cache a version observed during an executable replacement", async
       return response("ax-engine 7.4.0")
     })
     .mockResolvedValue(response("ax-engine 7.5.1"))
-  expect((await getDependencyStatus({ binaryPath })).version).toBe("ax-engine 7.4.0")
+  expect((await getDependencyStatus({ binaryPath })).version).toBeUndefined()
   expect((await getDependencyStatus({ binaryPath })).version).toBe("ax-engine 7.5.1")
   expect(probe).toHaveBeenCalledTimes(2)
 })
@@ -212,37 +212,37 @@ test.each(["path", "managed"] as const)("skips an older %s runtime in favor of t
   vi.spyOn(Install, "getManagedBinary").mockResolvedValue(
     source === "managed" ? { path: old, version: "7.4.0" } : undefined,
   )
-  vi.spyOn(Bundled, "getBundledBinary").mockResolvedValue({ path: bundled, version: "7.5.7" })
+  vi.spyOn(Bundled, "getBundledBinary").mockResolvedValue({ path: bundled, version: "7.7.0" })
   vi.spyOn(Process, "text").mockImplementation(async (args) =>
-    response(`ax-engine ${args[0] === old ? "7.5.6" : "7.5.7"}`),
+    response(`ax-engine ${args[0] === old ? "7.5.6" : "7.7.0"}`),
   )
   const status = await getDependencyStatus()
-  expect(status).toMatchObject({ available: true, mode: "bundled", binaryPath: bundled, version: "ax-engine 7.5.7" })
+  expect(status).toMatchObject({ available: true, mode: "bundled", binaryPath: bundled, version: "ax-engine 7.7.0" })
   expect(status.warnings.join(" ")).toContain("7.5.6")
 })
 
-test("keeps a 7.5.7 PATH engine and rejects an older explicit override", async () => {
+test("keeps a 7.7.0 PATH engine and rejects an older explicit override", async () => {
   await using dir = await tmpdir()
   const binaryPath = await launcher(dir.path)
   vi.spyOn(Which, "which").mockReturnValue(binaryPath)
-  const probe = vi.spyOn(Process, "text").mockResolvedValue(response("ax-engine 7.5.7"))
+  const probe = vi.spyOn(Process, "text").mockResolvedValue(response("ax-engine 7.7.0"))
   expect(await getDependencyStatus()).toMatchObject({ available: true, mode: "path", binaryPath })
   await fs.writeFile(binaryPath, "explicit older launcher")
   probe.mockResolvedValue(response("ax-engine 7.5.6"))
   const older = await getDependencyStatus({ binaryPath })
   expect(older).toMatchObject({ available: false, mode: "configured", binaryPath })
-  expect(older.blockers.join(" ")).toContain("7.5.7")
+  expect(older.blockers.join(" ")).toContain("7.7.0")
 })
 
-test.each(["7.5.7-rc.1", "ax-engine 7.5.7-rc.1"])(
-  "rejects a prerelease that sorts below the 7.5.7 floor: %s",
+test.each(["7.7.0-rc.1", "ax-engine 7.7.0-rc.1"])(
+  "rejects a prerelease that sorts below the 7.7.0 floor: %s",
   async (detected) => {
     await using dir = await tmpdir()
     const binaryPath = await launcher(dir.path)
     vi.spyOn(Process, "text").mockResolvedValue(response(detected))
     const status = await getDependencyStatus({ binaryPath })
     expect(status.available).toBe(false)
-    expect(status.version).toContain("7.5.7-rc.1")
+    expect(status.version).toContain("7.7.0-rc.1")
     expect(status.blockers.join(" ")).toContain("AX_ENGINE_VERSION_UNSUPPORTED")
   },
 )
@@ -256,9 +256,9 @@ test.each([undefined, "dev"])(
     await fs.writeFile(bundled, "bundled launcher", { mode: 0o755 })
     vi.spyOn(Which, "which").mockReturnValue(old)
     vi.spyOn(Install, "getManagedBinary").mockResolvedValue(undefined)
-    vi.spyOn(Bundled, "getBundledBinary").mockResolvedValue({ path: bundled, version: "7.5.7" })
+    vi.spyOn(Bundled, "getBundledBinary").mockResolvedValue({ path: bundled, version: "7.7.0" })
     vi.spyOn(Process, "text").mockImplementation(async (args) =>
-      args[0] === bundled ? response("ax-engine 7.5.7") : response(detected ?? "", detected ? 0 : 2),
+      args[0] === bundled ? response("ax-engine 7.7.0") : response(detected ?? "", detected ? 0 : 2),
     )
     expect(await getDependencyStatus()).toMatchObject({ available: true, mode: "bundled", binaryPath: bundled })
   },
@@ -319,7 +319,7 @@ test.each(["dev", "ax-engine 7.4.0", "ax-engine 7.5.4", "ax-engine 7.5.5", "ax-e
     const binaryPath = await launcher(dir.path)
     vi.spyOn(Which, "which").mockReturnValue(null)
     vi.spyOn(Install, "getManagedBinary").mockResolvedValue(undefined)
-    vi.spyOn(Bundled, "getBundledBinary").mockResolvedValue({ path: binaryPath, version: "7.5.7" })
+    vi.spyOn(Bundled, "getBundledBinary").mockResolvedValue({ path: binaryPath, version: "7.7.0" })
     vi.spyOn(Process, "text").mockResolvedValue(response(detected))
     expect((await getDependencyStatus()).available).toBe(false)
   },
@@ -332,9 +332,9 @@ test("falls back to the bundled engine when a managed executable fails to start"
   await fs.writeFile(bundled, "launcher", { mode: 0o755 })
   vi.spyOn(Which, "which").mockReturnValue(null)
   vi.spyOn(Install, "getManagedBinary").mockResolvedValue({ path: broken, version: "7.5.3" })
-  vi.spyOn(Bundled, "getBundledBinary").mockResolvedValue({ path: bundled, version: "7.5.7" })
+  vi.spyOn(Bundled, "getBundledBinary").mockResolvedValue({ path: bundled, version: "7.7.0" })
   vi.spyOn(Process, "text").mockImplementation(async (args) =>
-    args[0] === bundled ? response("ax-engine 7.5.7") : response("", 2),
+    args[0] === bundled ? response("ax-engine 7.7.0") : response("", 2),
   )
   expect(await getDependencyStatus()).toMatchObject({ available: true, mode: "bundled", binaryPath: bundled })
 })
@@ -358,7 +358,7 @@ test("does not cache an unparseable doctor version", async () => {
     .mockImplementation(async (args) =>
       args[1] === "--version" ? response("", 2) : response(JSON.stringify({ install: { version: "dev" } })),
     )
-  expect((await getDependencyStatus({ binaryPath })).version).toBe("dev")
+  expect((await getDependencyStatus({ binaryPath })).version).toBeUndefined()
   probe.mockResolvedValue(response("ax-engine 7.5.3"))
   expect((await getDependencyStatus({ binaryPath })).version).toBe("ax-engine 7.5.3")
 })
@@ -371,5 +371,17 @@ test.each([undefined, "dev"])("rejects an explicit runtime without a verified ve
   )
   const status = await getDependencyStatus({ binaryPath })
   expect(status).toMatchObject({ available: false, mode: "configured" })
-  expect(status.blockers.join(" ")).toContain("verified AX Engine 7.5.7")
+  expect(status.blockers.join(" ")).toContain("verified AX Engine 7.7.0")
+})
+
+test("rejects a successful version probe if the executable changed while it ran", async () => {
+  await using dir = await tmpdir()
+  const binaryPath = await launcher(dir.path)
+  vi.spyOn(Process, "text").mockImplementationOnce(async () => {
+    await fs.writeFile(binaryPath, "replaced with an older runtime during the probe")
+    return response("ax-engine 99.0.0")
+  })
+  const status = await getDependencyStatus({ binaryPath })
+  expect(status.available).toBe(false)
+  expect(status.version).toBeUndefined()
 })

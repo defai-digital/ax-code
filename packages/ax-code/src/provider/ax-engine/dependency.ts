@@ -55,7 +55,12 @@ async function version(binaryPath: string): Promise<string | undefined> {
     try {
       const detected = await probeVersion(binaryPath)
       const after = await axEngineBinaryIdentity({ binaryPath }).catch(() => undefined)
-      if (detected && semver.coerce(detected) && after === identity) {
+      // A version belongs to the observed executable, never to its replacement.
+      if (after !== identity) {
+        if (versionCache.get(key) === entry) versionCache.delete(key)
+        return undefined
+      }
+      if (detected && semver.coerce(detected)) {
         entry.expires = performance.now() + VERSION_CACHE_TTL_MS
       } else if (versionCache.get(key) === entry) {
         versionCache.delete(key)

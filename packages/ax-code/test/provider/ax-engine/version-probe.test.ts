@@ -34,3 +34,24 @@ test("does not infer an engine version from an unrelated tool banner", async () 
   vi.spyOn(Process, "text").mockResolvedValue(response("Python 3.14.0"))
   expect(await probeVersion("ax-engine")).toBeUndefined()
 })
+
+test.each(["release 99.0.0", "99.0.0 invalid", "Python 99.0.0"])(
+  "rejects malformed doctor install.version: %s",
+  async (version) => {
+    vi.spyOn(Process, "text").mockImplementation(async (args) =>
+      args[1] === "--version" ? response("", "", 2) : response(JSON.stringify({ install: { version } })),
+    )
+    expect(await probeVersion("ax-engine")).toBeUndefined()
+  },
+)
+
+test.each([
+  'WARN {cache miss}\n{"install":{"version":"7.7.0"}}',
+  '{\n"install": {"version":"7.7.0"}\n} done {ok}',
+  'WARN {cache miss}\n{"warning":"braces { and } inside strings","install":{"version":"7.7.0"}}',
+])("reads doctor versions surrounded by brace-containing diagnostics: %s", async (text) => {
+  vi.spyOn(Process, "text").mockImplementation(async (args) =>
+    args[1] === "--version" ? response("", "", 2) : response(text),
+  )
+  expect(await probeVersion("ax-engine")).toBe("7.7.0")
+})
