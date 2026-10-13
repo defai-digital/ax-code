@@ -57,6 +57,9 @@ export namespace Snapshot {
   // core.bigFileThreshold (512 MB) into objects/pack/tmp_pack_*, and an
   // interrupted add strands that file at full size in the store.
   const defaultMaxStageBytes = 32 * 1024 * 1024
+  // The per-file cap does not bound a directory of many mid-size files, so one
+  // staging pass also stops admitting new content past this total.
+  const defaultMaxAddBytes = 512 * 1024 * 1024
   // Snapshot stores are small, so repack long before git's 6700-loose default.
   const gcAutoThreshold = "gc.auto=1000"
   // Snapshot git subprocesses sit on the per-turn critical path; a hung git
@@ -106,6 +109,11 @@ export namespace Snapshot {
   function maxStageBytes() {
     const mb = Flag.AX_CODE_SNAPSHOT_MAX_FILE_MB
     return mb === undefined ? defaultMaxStageBytes : Math.floor(mb * 1024 * 1024)
+  }
+
+  function maxAddBytes() {
+    const mb = Flag.AX_CODE_SNAPSHOT_MAX_ADD_MB
+    return mb === undefined ? defaultMaxAddBytes : Math.floor(mb * 1024 * 1024)
   }
 
   function valid(hash: string) {
@@ -280,7 +288,10 @@ export namespace Snapshot {
     const size = parseLsTreeSize(line)
     if (size === undefined) return
     const separator = line.indexOf("\t")
-    const object = line.slice(0, separator < 0 ? line.length : separator).trim().split(/\s+/)[2]
+    const object = line
+      .slice(0, separator < 0 ? line.length : separator)
+      .trim()
+      .split(/\s+/)[2]
     if (!object || !/^[0-9a-f]{40,64}$/i.test(object)) {
       throw new Error("Snapshot content failed: ls-tree returned an invalid blob id")
     }
@@ -406,13 +417,18 @@ export namespace Snapshot {
     return { paths, untracked }
   }
 
+  type Skipped = { path: string; size: number; reason: "size" | "budget" }
+
   /**
-   * Files that `git add` would stage (untracked, or tracked and modified) and
-   * that exceed the size cap. Paths are worktree-relative. Symlinks are
-   * measured with lstat because Git stores the link, not its target.
+   * Files that `git add` would stage (untracked, or tracked and modified) but
+   * that must be left out: above the per-file cap, or past the total budget for
+   * one pass (smallest files are admitted first, so source wins over artifacts;
+   * the rest are retried by the next pass). Paths are worktree-relative.
+   * Symlinks are measured with lstat because Git stores the link, not its target.
    */
-  async function oversizedFiles(current: State, scanned?: string[]): Promise<{ path: string; size: number }[]> {
+  async function oversizedFiles(current: State, scanned?: string[]): Promise<Skipped[]> {
     const limit = maxStageBytes()
+    const budget = maxAddBytes()
     // Reuse the untracked listing when the Windows path check already made it:
     // a snapshot pass performs a single `--others` scan of the worktree.
     const [untracked, modified] = await Promise.all([
@@ -435,7 +451,8 @@ export namespace Snapshot {
     const names = [
       ...new Set([...(scanned ?? untracked!.text.split("\0")), ...modified.text.split("\0")].filter(Boolean)),
     ]
-    const found: { path: string; size: number }[] = []
+    const found: Skipped[] = []
+    const admitted: { path: string; size: number }[] = []
     for (let offset = 0; offset < names.length; offset += 64) {
       const stats = await Promise.all(
         names.slice(offset, offset + 64).map((name) =>
@@ -446,19 +463,31 @@ export namespace Snapshot {
           ),
         ),
       )
-      for (const stat of stats) if (stat.size > limit) found.push({ path: stat.name, size: stat.size })
+      for (const stat of stats) {
+        if (stat.size > limit) found.push({ path: stat.name, size: stat.size, reason: "size" })
+        else if (stat.size > 0) admitted.push({ path: stat.name, size: stat.size })
+      }
+    }
+    let total = 0
+    for (const file of admitted.sort((a, b) => a.size - b.size)) {
+      total += file.size
+      if (total > budget) found.push({ ...file, reason: "budget" })
     }
     return found
   }
 
-  function reportOversized(current: State, files: { path: string; size: number }[]) {
+  function reportOversized(current: State, files: Skipped[]) {
     const signature = JSON.stringify(files.map((file) => file.path))
     if (signature === current.warnedOversized) return
     current.warnedOversized = signature
     if (!files.length) return
     const limitMb = Math.round(maxStageBytes() / (1024 * 1024))
-    log.warn("large files excluded from snapshot; rollback cannot restore these files", {
+    const budgetMb = Math.round(maxAddBytes() / (1024 * 1024))
+    const large = files.filter((file) => file.reason === "size")
+    const deferred = files.length - large.length
+    log.warn("files excluded from snapshot; rollback cannot restore these files", {
       limitMb,
+      budgetMb,
       files: files.slice(0, 50),
       count: files.length,
     })
@@ -466,9 +495,15 @@ export namespace Snapshot {
       .slice(0, 3)
       .map((file) => `${file.path} (${Math.round(file.size / (1024 * 1024))} MB)`)
       .join(", ")
+    const why = [
+      large.length ? `${large.length} file(s) larger than ${limitMb} MB` : "",
+      deferred ? `${deferred} file(s) past the ${budgetMb} MB per-pass budget` : "",
+    ]
+      .filter(Boolean)
+      .join(" and ")
     Bus.publishDetached(NotificationEvent.ToastShow, {
       title: "Partial snapshot coverage",
-      message: `Snapshot skips ${files.length} file(s) larger than ${limitMb} MB: ${names}${files.length > 3 ? ", …" : ""}. Rollback cannot restore these files. Set AX_CODE_SNAPSHOT_MAX_FILE_MB to raise the limit.`,
+      message: `Snapshot skips ${why}: ${names}${files.length > 3 ? ", …" : ""}. Rollback cannot restore these files. Set AX_CODE_SNAPSHOT_MAX_FILE_MB or AX_CODE_SNAPSHOT_MAX_ADD_MB to raise the limits.`,
       variant: "warning",
       duration: 20_000,
     })
@@ -524,9 +559,21 @@ export namespace Snapshot {
     })
   }
 
+  // Stores created before `--template=` carry about 64 KB of sample hooks that
+  // Git never runs. Only a hooks directory made of `*.sample` files is removed.
+  async function dropSampleHooks(current: State) {
+    const dir = path.join(current.gitdir, "hooks")
+    const names = await fs.readdir(dir).catch(() => undefined)
+    if (!names?.length || !names.every((name) => name.endsWith(".sample"))) return
+    await fs.rm(dir, { recursive: true, force: true }).catch((error) => {
+      log.warn("failed to remove sample hooks from snapshot store", { error })
+    })
+  }
+
   async function cleanupFor(current: State, options?: { auto?: boolean }) {
     if (!(await enabled())) return
     if (!(await exists(current.gitdir))) return
+    await dropSampleHooks(current)
     const cutoff = Date.now() - pruneMs
     let deletedRefs = 0
     const refs = await runGit(

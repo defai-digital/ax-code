@@ -150,6 +150,8 @@ export namespace Flag {
   export declare const AX_CODE_PERMISSION_IDLE_ONCE_MS: number | undefined
   /** Per-file size cap in MiB for snapshot staging; larger files are left out of undo coverage. */
   export declare const AX_CODE_SNAPSHOT_MAX_FILE_MB: number | undefined
+  /** Total new-content cap in MiB for one snapshot staging pass; the rest is deferred to the next pass. */
+  export declare const AX_CODE_SNAPSHOT_MAX_ADD_MB: number | undefined
 
   // Native Rust addons — default ON (opt-out with =0 or =false).
   // These dispatch CPU-bound operations to Rust native addons via NAPI-RS.
@@ -496,6 +498,16 @@ Object.defineProperty(Flag, "AX_CODE_PERMISSION_IDLE_ONCE_MS", {
 Object.defineProperty(Flag, "AX_CODE_SNAPSHOT_MAX_FILE_MB", {
   get() {
     const v = Number(process.env["AX_CODE_SNAPSHOT_MAX_FILE_MB"])
+    if (!Number.isFinite(v) || v <= 0) return undefined
+    return v
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+Object.defineProperty(Flag, "AX_CODE_SNAPSHOT_MAX_ADD_MB", {
+  get() {
+    const v = Number(process.env["AX_CODE_SNAPSHOT_MAX_ADD_MB"])
     if (!Number.isFinite(v) || v <= 0) return undefined
     return v
   },

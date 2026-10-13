@@ -104,7 +104,9 @@ contents. A captured turn with no file changes also has nothing to restore.
 Snapshots skip any single file larger than 32 MB so a dataset or build artifact
 cannot fill the snapshot store; AX Code shows a "Partial snapshot coverage"
 notice and Revert cannot restore those files. Set `AX_CODE_SNAPSHOT_MAX_FILE_MB`
-to change the limit. Snapshot data older than seven days is pruned automatically
+to change the limit. A single snapshot pass also admits at most 512 MB of new or
+changed content, smallest files first; the remainder is picked up by the next
+pass. Set `AX_CODE_SNAPSHOT_MAX_ADD_MB` to change that budget. Snapshot data older than seven days is pruned automatically
 from `~/.local/share/ax-code/snapshot`.
 
 Run `ax-code snapshot status` to see how much disk the per-project snapshot stores

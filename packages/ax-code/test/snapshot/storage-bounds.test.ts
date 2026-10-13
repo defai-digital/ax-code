@@ -158,3 +158,46 @@ test("a new snapshot store carries no sample hooks", async () => {
     },
   })
 })
+
+test("one staging pass admits the smallest files first and defers the rest to the next pass", async () => {
+  // 0.003 MB is ~3 KB: room for the two 1 KB files, not the 2 KB one.
+  vi.stubEnv("AX_CODE_SNAPSHOT_MAX_ADD_MB", "0.003")
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await fs.writeFile(path.join(tmp.path, "a.txt"), Buffer.alloc(1024, 1))
+      await fs.writeFile(path.join(tmp.path, "b.txt"), Buffer.alloc(1024, 2))
+      await fs.writeFile(path.join(tmp.path, "c.txt"), Buffer.alloc(2048, 3))
+      const first = (await Snapshot.track())!
+      const files = await tree(gitdirFor(), first, tmp.path)
+      expect(files).toContain("a.txt")
+      expect(files).toContain("b.txt")
+      expect(files).not.toContain("c.txt")
+      // Already staged files no longer count, so the deferred file is admitted next.
+      const second = (await Snapshot.track())!
+      expect(await tree(gitdirFor(), second, tmp.path)).toContain("c.txt")
+    },
+  })
+})
+
+test("cleanup removes sample hooks from older stores but keeps a hooks directory with real hooks", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Snapshot.track()
+      const hooks = path.join(gitdirFor(), "hooks")
+      await fs.mkdir(hooks, { recursive: true })
+      await fs.writeFile(path.join(hooks, "pre-commit.sample"), "#!/bin/sh\n")
+      await Snapshot.cleanupScheduled()
+      await expect(fs.stat(hooks)).rejects.toMatchObject({ code: "ENOENT" })
+
+      await fs.mkdir(hooks, { recursive: true })
+      await fs.writeFile(path.join(hooks, "pre-commit.sample"), "#!/bin/sh\n")
+      await fs.writeFile(path.join(hooks, "post-commit"), "#!/bin/sh\n")
+      await Snapshot.cleanupScheduled()
+      await expect(fs.stat(path.join(hooks, "post-commit"))).resolves.toBeTruthy()
+    },
+  })
+}, 60_000)
