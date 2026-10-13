@@ -48,6 +48,26 @@ describe("resolveAxEnginePython", () => {
     expect(resolveAxEnginePython({}, home)).toBe(python)
   })
 
+  test("finds the documented ~/.local/share/ax-engine/download-env venv and prefers it over the legacy one", async () => {
+    const { home, python: legacy } = await makeHomeWithVenvPython()
+    const bin = path.join(
+      home,
+      ".local",
+      "share",
+      "ax-engine",
+      "download-env",
+      process.platform === "win32" ? "Scripts" : "bin",
+    )
+    await fs.mkdir(bin, { recursive: true })
+    const documented = path.join(bin, process.platform === "win32" ? "python.exe" : "python")
+    await fs.writeFile(documented, "#!/bin/sh\n")
+    await fs.chmod(documented, 0o755).catch(() => undefined)
+    expect(resolveAxEnginePython({}, home)).toBe(documented)
+    expect(legacy).not.toBe(documented)
+    await fs.rm(path.join(home, ".local"), { recursive: true, force: true })
+    expect(resolveAxEnginePython({}, home)).toBe(legacy)
+  })
+
   test("ignores blank or missing explicit paths and uses the venv", async () => {
     const { home, python } = await makeHomeWithVenvPython()
     expect(resolveAxEnginePython({ AX_ENGINE_PYTHON: "   " }, home)).toBe(python)

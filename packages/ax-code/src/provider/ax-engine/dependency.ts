@@ -121,7 +121,8 @@ export function axEngineMissingBlocker(installable: boolean) {
   }
   return [
     `${prefix} ax-engine was not found. It is only needed for local models; cloud providers work without it.`,
-    "Install it with `brew install defai-digital/tap/ax-engine` or `ax-code providers ax-engine install`,",
+    "Install it with `brew install defai-digital/tap/ax-engine`, `ax-code providers ax-engine install`,",
+    `or \`pip install "ax-engine[download]>=${AX_ENGINE_MIN_VERSION},<8"\` in a Python 3.12-3.14 virtualenv (this also provides the model download helpers),`,
     `or download a release (${AX_ENGINE_MIN_VERSION} or later) from ${AX_ENGINE_RELEASES_URL}`,
     "and set provider.ax-engine.options.binaryPath (or AX_ENGINE_BIN) to it.",
     "Check with `ax-code providers ax-engine status`.",

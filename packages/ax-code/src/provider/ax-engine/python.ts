@@ -5,9 +5,22 @@ import { Filesystem } from "@/util/filesystem"
 import { Env } from "@/util/env"
 
 /**
+ * Helper-environment locations, in preference order, relative to $HOME.
+ * `.local/share/ax-engine/download-env` is the venv the AX Engine docs tell
+ * users to create (docs/GETTING-STARTED.md, "Model download helpers"), so a
+ * user who followed them works even when the launching app (a GUI or an MDM
+ * shell) never exported AX_ENGINE_PYTHON. `.ax-engine/venv` is AX Code's
+ * earlier convention and is kept as a fallback.
+ */
+const MANAGED_PYTHON_ROOTS = [
+  [".local", "share", "ax-engine", "download-env"],
+  [".ax-engine", "venv"],
+] as const
+
+/**
  * Resolve the Python interpreter ax-engine should use for Hugging Face Hub
  * downloads (`huggingface_hub`). Prefer an explicit `AX_ENGINE_PYTHON`, then
- * the conventional managed venv at `~/.ax-engine/venv`.
+ * the documented download environment, then the legacy managed venv.
  *
  * Desktop/dev launchers also inject this env, but CLI/server download paths
  * must resolve it themselves so downloads work even when the parent process
@@ -20,20 +33,21 @@ export function resolveAxEnginePython(
   const explicit = typeof env.AX_ENGINE_PYTHON === "string" ? env.AX_ENGINE_PYTHON.trim() : ""
   if (explicit && isExecutablePython(explicit)) return explicit
 
-  // Resolve under $HOME only — containment check keeps managed venv paths
-  // from escaping home even if home resolution is unexpected.
-  const managedRoot = path.resolve(home, ".ax-engine", "venv")
-  if (!Filesystem.contains(home, managedRoot)) return undefined
-
   const relativeBins =
     process.platform === "win32"
       ? (["Scripts/python.exe", "Scripts/python"] as const)
       : (["bin/python", "bin/python3"] as const)
 
-  for (const rel of relativeBins) {
-    const candidate = path.resolve(managedRoot, rel)
-    if (!Filesystem.contains(managedRoot, candidate)) continue
-    if (isExecutablePython(candidate)) return candidate
+  for (const segments of MANAGED_PYTHON_ROOTS) {
+    // Resolve under $HOME only — containment check keeps managed venv paths
+    // from escaping home even if home resolution is unexpected.
+    const managedRoot = path.resolve(home, ...segments)
+    if (!Filesystem.contains(home, managedRoot)) continue
+    for (const rel of relativeBins) {
+      const candidate = path.resolve(managedRoot, rel)
+      if (!Filesystem.contains(managedRoot, candidate)) continue
+      if (isExecutablePython(candidate)) return candidate
+    }
   }
   return undefined
 }

@@ -240,6 +240,8 @@ Collection entries are development packs, and selection does not certify native 
 
 A PATH or overlay install that is missing `libmlx.dylib` / `mlx.metallib` is rejected. The release and overlay archives are the self-contained 7.7.0 macOS payload.
 
+Model downloads use a Python helper that needs `huggingface_hub` (public repositories need no Hugging Face account). AX Code picks the interpreter from `AX_ENGINE_PYTHON`, then `~/.local/share/ax-engine/download-env` (the venv the AX Engine docs create), then `~/.ax-engine/venv`. Create it with `python3.13 -m venv ~/.local/share/ax-engine/download-env && ~/.local/share/ax-engine/download-env/bin/python -m pip install huggingface-hub`, or install the engine with `pip install "ax-engine[download]>=7.7.0,<8"`. The system `python3` on macOS is 3.9 and does not work. Without Hugging Face access, register weights you already have with `ax-code providers ax-engine prepare --model-path <dir>`. The engine itself needs macOS 26 or later on an M2 or newer Apple Silicon Mac; AX Code additionally enforces a per-model floor: 32 GB of unified memory for Swift 27B and 48 GB for Tiel Coder 35B.
+
 Installing the engine does not download a model. Pick and download a model afterward from the Desktop **Models** page or with `ax-code providers ax-engine prepare`. A complete compatible base snapshot already in the Hugging Face cache is accepted for direct decode; `prepare --download` uses the catalog's preferred MTP package when available.
 
 Use `/connect` -> **AX-Engine runtime** -> **Select a model**. AX Code configures
