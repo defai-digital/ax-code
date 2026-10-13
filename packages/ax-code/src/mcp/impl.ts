@@ -70,6 +70,8 @@ export namespace MCP {
   const NO_INTERACT_GRANTS: ReadonlyMap<string, number> = new Map()
   const DEFAULT_TIMEOUT = MCP_DEFAULT_TIMEOUT_MS
   const MAX_STDERR_LINE = 2_000
+  /** Pages read per prompts/resources listing; bounds a server that repeats one cursor. */
+  export const MAX_CATALOG_PAGES = 10
   const isErrnoException = (error: unknown): error is NodeJS.ErrnoException =>
     error instanceof Error && "code" in error && typeof (error as NodeJS.ErrnoException).code === "string"
 
@@ -699,7 +701,7 @@ export namespace MCP {
     return `${message} ("${cmd}" not found on PATH; install it or use an absolute command path)`
   }
 
-  // Generic helper for prompts-resources: fetch the array, log on
+  // Generic helper for prompts-resources: fetch every page, log on
   // failure, key each item by `clientName:itemName`. Used by both
   // prompts() and resources() — the only thing that varies per call
   // site is the SDK fetcher and the label for the error log.
@@ -711,22 +713,36 @@ export namespace MCP {
   async function fetchItemsForClient<T extends { name: string }>(
     clientName: string,
     label: string,
-    fetcher: () => Promise<T[]>,
+    fetcher: (cursor?: string) => Promise<{ items: T[]; nextCursor?: string }>,
     timeout: number,
   ): Promise<Record<string, T & { client: string }> | undefined> {
-    const items = await withTimeout(
-      fetcher(),
-      timeout,
-      `listing ${label} timed out for MCP server ${clientName}`,
-    ).catch((e) => {
-      log.error(`failed to get ${label}`, { clientName, error: NamedError.message(e) })
-      return undefined
-    })
-    if (!items) return
     const result: Record<string, T & { client: string }> = {}
-    for (const item of items) {
-      const key = mcpItemKey(clientName, item.name)
-      result[key] = { ...item, client: clientName }
+    let cursor: string | undefined
+    // A server may answer with a partial list plus a cursor. Keep asking until
+    // it hands out none; MAX_CATALOG_PAGES bounds a server that repeats one.
+    // Pages share one deadline so the listing keeps the single-call latency
+    // budget it had before paging.
+    const deadline = Date.now() + timeout
+    for (let page = 0; page < MAX_CATALOG_PAGES; page++) {
+      const remaining = deadline - Date.now()
+      if (remaining <= 0) return page === 0 ? undefined : result
+      const next = await withTimeout(
+        fetcher(cursor),
+        remaining,
+        `listing ${label} timed out for MCP server ${clientName}`,
+      ).catch((e) => {
+        log.error(`failed to get ${label}`, { clientName, error: NamedError.message(e) })
+        return undefined
+      })
+      // Nothing at all: keep the previous "client failed" shape. A later page
+      // failing keeps the pages already listed.
+      if (!next) return page === 0 ? undefined : result
+      for (const item of next.items) {
+        const key = mcpItemKey(clientName, item.name)
+        result[key] = { ...item, client: clientName }
+      }
+      cursor = next.nextCursor
+      if (!cursor) break
     }
     return result
   }
@@ -1919,7 +1935,10 @@ export namespace MCP {
               (await fetchItemsForClient<PromptInfo>(
                 clientName,
                 "prompts",
-                async () => (await client.listPrompts()).prompts,
+                async (cursor) => {
+                  const page = await client.listPrompts(cursor === undefined ? undefined : { cursor })
+                  return { items: page.prompts, nextCursor: page.nextCursor }
+                },
                 requestTimeout(cfg, config[clientName]),
               )) ?? {},
             )
@@ -1954,7 +1973,10 @@ export namespace MCP {
               (await fetchItemsForClient<ResourceInfo>(
                 clientName,
                 "resources",
-                async () => (await client.listResources()).resources,
+                async (cursor) => {
+                  const page = await client.listResources(cursor === undefined ? undefined : { cursor })
+                  return { items: page.resources, nextCursor: page.nextCursor }
+                },
                 requestTimeout(cfg, config[clientName]),
               )) ?? {},
             )
