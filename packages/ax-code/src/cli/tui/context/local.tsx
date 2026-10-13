@@ -474,8 +474,9 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
               save()
               return
             }
-            // `--model deepseek/…` and a stored native pin must follow the SKU
-            // onto a connected gateway, the same way `ax-code run --model` does.
+            // Model recovery is exact-only here: unlike `ax-code run --model`,
+            // a stored pin is not relocated onto a same-SKU gateway (the
+            // d519ded01 policy; test/cli/tui/local.test.ts pins it).
             const resolved = isModelValid(model) ? model : resolvePin(model)
             if (!resolved) {
               toast.show({
