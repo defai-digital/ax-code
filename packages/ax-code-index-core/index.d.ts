@@ -51,6 +51,7 @@ export declare class IndexStore {
   pruneOrphanFiles(projectId: string, livePathsJson: string, scopePrefix: string): string
   /** Atomic ingest: delete old data for a file and insert new nodes/edges/file metadata. */
   ingestFile(projectId: string, filePath: string, nodesJson: string, edgesJson: string, fileMetaJson: string): void
+  callNeighbors(project: string, symbol: string, callers: boolean): string
   insertNodes(json: string): void
   getNode(projectId: string, id: string): string | null
   findNodesByName(projectId: string, name: string, optsJson: string): string
@@ -110,6 +111,14 @@ export declare class IntervalTree {
   len(): number
   isEmpty(): boolean
 }
+
+export declare function callNeighborsAsync(
+  dbPath: string,
+  project: string,
+  symbol: string,
+  callers: boolean,
+  cancellation: IndexCancellation,
+): Promise<string>
 
 export declare function generateId(prefix: string): string
 

@@ -176,7 +176,12 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
       }
       if (args.operation === "findCallers") {
         if (!args.symbolID) throw new Error("findCallers requires `symbolID`")
-        const callers = CodeIntelligence.findCallers(projectID, CodeNodeID.make(args.symbolID), { scope })
+        const callers = await CodeIntelligence.findCallersAsync(
+          projectID,
+          CodeNodeID.make(args.symbolID),
+          { scope },
+          ctx.abort,
+        )
         const clipped = callers.slice(0, limit)
         const envelope = CodeIntelligence.graphEnvelope(projectID, clipped)
         return {
@@ -187,7 +192,12 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
       }
       if (args.operation === "findCallees") {
         if (!args.symbolID) throw new Error("findCallees requires `symbolID`")
-        const callees = CodeIntelligence.findCallees(projectID, CodeNodeID.make(args.symbolID), { scope })
+        const callees = await CodeIntelligence.findCalleesAsync(
+          projectID,
+          CodeNodeID.make(args.symbolID),
+          { scope },
+          ctx.abort,
+        )
         const clipped = callees.slice(0, limit)
         const envelope = CodeIntelligence.graphEnvelope(projectID, clipped)
         return {
@@ -214,16 +224,20 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
             await assertSymlinkInsideProject(seed.value)
           }
         }
-        const pack = await GraphContext.build(projectID, {
-          query: args.query,
-          seeds,
-          maxSymbols: args.maxSymbols ?? args.limit,
-          maxSnippets: args.maxSnippets,
-          maxDepth: args.maxDepth,
-          includeImpact: args.includeImpact,
-          freshness: args.freshness,
-          scope,
-        })
+        const pack = await GraphContext.build(
+          projectID,
+          {
+            query: args.query,
+            seeds,
+            maxSymbols: args.maxSymbols ?? args.limit,
+            maxSnippets: args.maxSnippets,
+            maxDepth: args.maxDepth,
+            includeImpact: args.includeImpact,
+            freshness: args.freshness,
+            scope,
+          },
+          ctx.abort,
+        )
         return {
           title: `buildContext ${args.query}`,
           output: pack.output,

@@ -1,3 +1,5 @@
+import { admitCallQuery, decodeCallNeighbors } from "./call-neighbors"
+import { mkdirSync } from "node:fs"
 import { Log } from "../util/log"
 import { Global } from "../global"
 import { NativePerf } from "../perf/native"
@@ -53,16 +55,24 @@ let storeInstance: IndexStore | undefined
 // lifetime; a clean reopen requires a new process.
 let storeClosed = false
 const workerQueue = new WorkQueue(1, { maxQueued: 32, timeoutMs: 120_000, drainOnAbort: true })
+const readerQueue = new WorkQueue(2, { maxQueued: 32, timeoutMs: 30_000, drainOnAbort: true })
 const pendingWorkers = new Set<Promise<unknown>>()
 const workerControllers = new Set<AbortController>()
 let closing: Promise<void> | undefined
 
-function worker<T>(run: (cancellation: { cancel(): void }) => Promise<T>): Promise<T> {
+function worker<T>(
+  run: (cancellation: { cancel(): void }) => Promise<T>,
+  callerSignal?: AbortSignal,
+  queue = workerQueue,
+): Promise<T> {
+  callerSignal?.throwIfAborted()
   if (storeClosed) return Promise.reject(new Error("Native index store is closed"))
   const native = NativeAddon.index()!
   const controller = new AbortController()
   workerControllers.add(controller)
-  const promise = workerQueue.run(async (signal) => {
+  const abort = () => controller.abort(callerSignal?.reason)
+  callerSignal?.addEventListener("abort", abort, { once: true })
+  const promise = queue.run(async (signal) => {
     const cancellation = new native.IndexCancellation!()
     const cancel = () => cancellation.cancel()
     signal.addEventListener("abort", cancel, { once: true })
@@ -78,6 +88,7 @@ function worker<T>(run: (cancellation: { cancel(): void }) => Promise<T>): Promi
     .finally(() => {
       pendingWorkers.delete(promise)
       workerControllers.delete(controller)
+      callerSignal?.removeEventListener("abort", abort)
     })
     .catch(() => undefined)
   return promise
@@ -93,6 +104,9 @@ function store(): IndexStore | undefined {
   const native = NativeAddon.index()
   if (!native) return undefined
   try {
+    // Global's directory preparation is asynchronous. First synchronous graph
+    // writes must not race it and silently fall through without a database.
+    mkdirSync(Global.Path.data, { recursive: true })
     storeInstance = new native.IndexStore(getDbPath())
   } catch (err) {
     log.warn("failed to initialize native IndexStore", { error: toErrorMessage(err) })
@@ -152,6 +166,42 @@ export namespace NativeStore {
       return fallback
     }
     return parsed as T
+  }
+
+  /** Undefined means an old binding; real query/validation failures propagate. */
+  export function callNeighbors(project: ProjectID, symbol: CodeNodeID, callers: boolean) {
+    admitCallQuery(project, symbol)
+    const current = store() as
+      | (IndexStore & { callNeighbors?: (p: string, s: string, callers: boolean) => string })
+      | undefined
+    if (!current?.callNeighbors) return undefined
+    return decodeCallNeighbors(
+      NativePerf.run("index.callNeighbors", { callers }, () => current.callNeighbors!(project, symbol, callers)),
+      project,
+    )
+  }
+
+  export async function callNeighborsAsync(
+    project: ProjectID,
+    symbol: CodeNodeID,
+    callers: boolean,
+    signal?: AbortSignal,
+  ) {
+    signal?.throwIfAborted()
+    admitCallQuery(project, symbol)
+    const native = NativeAddon.index()
+    if (!native?.callNeighborsAsync || !native.IndexCancellation) return undefined
+    if (storeClosed) throw new Error("Native index store is closed")
+    if (!store()) throw new Error("Native index store could not be initialized")
+    const json = await NativePerf.runAsync("index.callNeighborsAsync", { callers }, () =>
+      worker(
+        (cancel) => native.callNeighborsAsync!(getDbPath(), project, symbol, callers, cancel),
+        signal,
+        readerQueue,
+      ),
+    )
+    signal?.throwIfAborted()
+    return decodeCallNeighbors(json, project)
   }
 
   // ─── Node operations ──────────────────────────────────────────────

@@ -1,3 +1,4 @@
+import type { CallNeighborRow, SymbolRow } from "./call-neighbors"
 import { Log } from "../util/log"
 import { Instance } from "../project/instance"
 import { CodeGraphQuery } from "./query"
@@ -116,9 +117,10 @@ export namespace CodeIntelligence {
   }
 
   function nodeRowToSymbol(
-    row: ReturnType<typeof CodeGraphQuery.getNode> & {},
+    row: SymbolRow,
     projectID: ProjectID,
     queryId: string,
+    explain = buildExplain(row.file, projectID, queryId),
   ): Symbol {
     return {
       id: row.id,
@@ -132,7 +134,7 @@ export namespace CodeIntelligence {
       },
       signature: row.signature ?? undefined,
       visibility: row.visibility ?? undefined,
-      explain: buildExplain(row.file, projectID, queryId),
+      explain,
     }
   }
 
@@ -234,38 +236,53 @@ export namespace CodeIntelligence {
       }))
   }
 
-  export function findCallers(projectID: ProjectID, symbolId: CodeNodeID, opts?: { scope?: Scope }): CallChainNode[] {
+  function callChain(project: ProjectID, rows: CallNeighborRow[], scope: Scope): CallChainNode[] {
     const queryId = nextQueryId()
-    const scope = opts?.scope ?? "none"
-    const edges = CodeGraphQuery.edgesTo(projectID, symbolId, "calls")
-    const callers: CallChainNode[] = []
-    for (const edge of edges) {
-      const callerRow = CodeGraphQuery.getNode(projectID, edge.from_node)
-      if (!callerRow) continue
-      if (!inScope(callerRow.file, scope)) continue
-      callers.push({
-        symbol: nodeRowToSymbol(callerRow, projectID, queryId),
+    return rows
+      .filter((row) => inScope(row.file, scope))
+      .map((row) => ({
+        symbol: nodeRowToSymbol(row, project, queryId, {
+          source: "code-graph",
+          indexedAt: row.indexed_at ?? 0,
+          completeness: normalizeCompleteness(row.completeness ?? undefined),
+          queryId,
+        }),
         depth: 1,
-      })
-    }
-    return callers
+      }))
+  }
+
+  export function findCallers(projectID: ProjectID, symbolId: CodeNodeID, opts?: { scope?: Scope }): CallChainNode[] {
+    return callChain(projectID, CodeGraphQuery.callNeighbors(projectID, symbolId, true), opts?.scope ?? "none")
   }
 
   export function findCallees(projectID: ProjectID, symbolId: CodeNodeID, opts?: { scope?: Scope }): CallChainNode[] {
-    const queryId = nextQueryId()
-    const scope = opts?.scope ?? "none"
-    const edges = CodeGraphQuery.edgesFrom(projectID, symbolId, "calls")
-    const callees: CallChainNode[] = []
-    for (const edge of edges) {
-      const calleeRow = CodeGraphQuery.getNode(projectID, edge.to_node)
-      if (!calleeRow) continue
-      if (!inScope(calleeRow.file, scope)) continue
-      callees.push({
-        symbol: nodeRowToSymbol(calleeRow, projectID, queryId),
-        depth: 1,
-      })
-    }
-    return callees
+    return callChain(projectID, CodeGraphQuery.callNeighbors(projectID, symbolId, false), opts?.scope ?? "none")
+  }
+
+  export async function findCallersAsync(
+    project: ProjectID,
+    symbol: CodeNodeID,
+    opts?: { scope?: Scope },
+    signal?: AbortSignal,
+  ) {
+    return callChain(
+      project,
+      await CodeGraphQuery.callNeighborsAsync(project, symbol, true, signal),
+      opts?.scope ?? "none",
+    )
+  }
+
+  export async function findCalleesAsync(
+    project: ProjectID,
+    symbol: CodeNodeID,
+    opts?: { scope?: Scope },
+    signal?: AbortSignal,
+  ) {
+    return callChain(
+      project,
+      await CodeGraphQuery.callNeighborsAsync(project, symbol, false, signal),
+      opts?.scope ?? "none",
+    )
   }
 
   // ─── File-level dependencies ────────────────────────────────────────

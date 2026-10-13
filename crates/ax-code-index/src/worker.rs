@@ -7,7 +7,7 @@ use std::sync::{
 
 #[napi]
 pub struct IndexCancellation {
-    cancelled: Arc<AtomicBool>,
+    pub(crate) cancelled: Arc<AtomicBool>,
 }
 #[napi]
 impl IndexCancellation {

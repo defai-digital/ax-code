@@ -573,7 +573,12 @@ export namespace GraphContext {
   export type Options = BuildContextOptions
   export type Pack = GraphContextPack
 
-  export async function build(projectID: ProjectID, opts: BuildContextOptions): Promise<GraphContextPack> {
+  export async function build(
+    projectID: ProjectID,
+    opts: BuildContextOptions,
+    signal?: AbortSignal,
+  ): Promise<GraphContextPack> {
+    signal?.throwIfAborted()
     const scope = opts.scope ?? "worktree"
     const maxSymbols = Math.min(Math.max(opts.maxSymbols ?? DEFAULT_MAX_SYMBOLS, 1), 20)
     const maxSnippets = Math.min(Math.max(opts.maxSnippets ?? DEFAULT_MAX_SNIPPETS, 0), 12)
@@ -616,11 +621,11 @@ export namespace GraphContext {
     let totalRelationships = 0
 
     for (const symbol of symbols) {
-      const callers = CodeIntelligence.findCallers(projectID, symbol.id, { scope }).slice(
+      const callers = (await CodeIntelligence.findCallersAsync(projectID, symbol.id, { scope }, signal)).slice(
         0,
         MAX_RELATIONSHIPS_PER_SYMBOL,
       )
-      const callees = CodeIntelligence.findCallees(projectID, symbol.id, { scope }).slice(
+      const callees = (await CodeIntelligence.findCalleesAsync(projectID, symbol.id, { scope }, signal)).slice(
         0,
         MAX_RELATIONSHIPS_PER_SYMBOL,
       )

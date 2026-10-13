@@ -1,4 +1,6 @@
 import path from "path"
+import { admitCallQuery, CALL_NEIGHBOR_LIMIT, CALL_NEIGHBOR_BYTES } from "./call-neighbors"
+import type { CallNeighborRow } from "./call-neighbors"
 import { Database, eq, and, or, inArray, desc, lt, gte, ne, sql } from "../storage/db"
 import {
   CodeNodeTable,
@@ -191,6 +193,90 @@ export namespace CodeGraphQuery {
         .where(and(...filters))
         .all(),
     )
+  }
+
+  export function callNeighbors(project: ProjectID, symbol: CodeNodeID, callers: boolean): CallNeighborRow[] {
+    admitCallQuery(project, symbol)
+    if (useNative) {
+      const joined = NativeStore.callNeighbors(project, symbol, callers)
+      if (joined !== undefined) return joined
+      // Old bindings still own a separate index DB: never switch to the core DB.
+      const edges = callers ? edgesTo(project, symbol, "calls") : edgesFrom(project, symbol, "calls")
+      if (edges.length > CALL_NEIGHBOR_LIMIT) throw new Error("Graph query row limit exceeded")
+      const result: CallNeighborRow[] = []
+      for (const edge of edges) {
+        const node = getNode(project, callers ? edge.from_node : edge.to_node)
+        if (!node) continue
+        const file = getFile(project, node.file)
+        result.push({
+          id: node.id,
+          project_id: node.project_id,
+          kind: node.kind,
+          name: node.name,
+          qualified_name: node.qualified_name,
+          file: node.file,
+          range_start_line: node.range_start_line,
+          range_start_char: node.range_start_char,
+          range_end_line: node.range_end_line,
+          range_end_char: node.range_end_char,
+          signature: node.signature,
+          visibility: node.visibility,
+          indexed_at: file?.indexed_at ?? null,
+          completeness: file?.completeness ?? null,
+        })
+      }
+      if (Buffer.byteLength(JSON.stringify(result)) > CALL_NEIGHBOR_BYTES)
+        throw new Error("Graph query output limit exceeded")
+      return result
+    }
+    const e = CodeEdgeTable,
+      n = CodeNodeTable,
+      f = CodeFileTable
+    const rows = Database.use((db) =>
+      db
+        .select({
+          id: n.id,
+          project_id: n.project_id,
+          kind: n.kind,
+          name: n.name,
+          qualified_name: n.qualified_name,
+          file: n.file,
+          range_start_line: n.range_start_line,
+          range_start_char: n.range_start_char,
+          range_end_line: n.range_end_line,
+          range_end_char: n.range_end_char,
+          signature: n.signature,
+          visibility: n.visibility,
+          indexed_at: f.indexed_at,
+          completeness: f.completeness,
+        })
+        .from(e)
+        .innerJoin(n, and(eq(n.project_id, e.project_id), eq(n.id, callers ? e.from_node : e.to_node)))
+        .leftJoin(f, and(eq(f.project_id, n.project_id), eq(f.path, n.file)))
+        .where(and(eq(e.project_id, project), eq(callers ? e.to_node : e.from_node, symbol), eq(e.kind, "calls")))
+        .orderBy(sql`${e}.rowid`)
+        .limit(CALL_NEIGHBOR_LIMIT + 1)
+        .all(),
+    )
+    if (rows.length > CALL_NEIGHBOR_LIMIT) throw new Error("Graph query row limit exceeded")
+    if (Buffer.byteLength(JSON.stringify(rows)) > CALL_NEIGHBOR_BYTES)
+      throw new Error("Graph query output limit exceeded")
+    return rows
+  }
+
+  export async function callNeighborsAsync(
+    project: ProjectID,
+    symbol: CodeNodeID,
+    callers: boolean,
+    signal?: AbortSignal,
+  ) {
+    signal?.throwIfAborted()
+    if (useNative) {
+      const result = await NativeStore.callNeighborsAsync(project, symbol, callers, signal)
+      if (result !== undefined) return result
+    }
+    signal?.throwIfAborted()
+    return callNeighbors(project, symbol, callers)
   }
 
   export function edgesTo(projectID: ProjectID, toNode: CodeNodeID, kind?: CodeEdgeKind): EdgeRow[] {
