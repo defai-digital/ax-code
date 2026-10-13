@@ -388,6 +388,32 @@ test("discovers global skills from ~/.claude/skills/ directory", async () => {
   }
 })
 
+test("a session rooted at the home directory discovers global skills once", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  const originalHome = process.env.AX_CODE_TEST_HOME
+  process.env.AX_CODE_TEST_HOME = tmp.path
+
+  try {
+    await createGlobalSkill(tmp.path)
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const skill = (await Skill.all()).find((s) => s.name === "global-test-skill")
+        expect(skill).toBeDefined()
+        // The project walk from the session directory also reaches
+        // <home>/.claude, so the same file would be scanned a second time and
+        // re-tag the user-scope skill as project scope while reporting a
+        // phantom name collision.
+        expect(skill!.scope).toBe("user")
+        expect(await Skill.duplicateNames()).not.toContain("global-test-skill")
+      },
+    })
+  } finally {
+    process.env.AX_CODE_TEST_HOME = originalHome
+  }
+})
+
 test("returns empty array when no skills exist", async () => {
   await using tmp = await tmpdir({ git: true })
 

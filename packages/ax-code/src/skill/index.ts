@@ -51,6 +51,8 @@ export namespace Skill {
   type State = {
     skills: Record<string, Info>
     dirs: Set<string>
+    /** `<realpath of root>\0<pattern>` already scanned in this instance. */
+    scannedRoots: Set<string>
     /**
      * Names that collided during discovery: a later scan overwrote an earlier
      * skill sharing the same `name`. `skills` is a Record keyed by name, so
@@ -162,6 +164,14 @@ export namespace Skill {
     pattern: string,
     opts?: { dot?: boolean; scope?: string; sourceTool?: Info["sourceTool"]; skillScope?: Info["scope"] },
   ) {
+    // The global roots and the walk up from the session directory can name the
+    // same physical directory: a session rooted at home finds <home>/.claude
+    // in both passes. Scanning it once per (root, pattern) keeps the second
+    // pass from re-tagging user-scope skills as project scope and from
+    // reporting a file as its own duplicate.
+    const key = `${await realpathOrResolved(root)}\0${pattern}`
+    if (state.scannedRoots.has(key)) return
+    state.scannedRoots.add(key)
     const matches = await Glob.scan(pattern, {
       cwd: root,
       absolute: true,
@@ -316,6 +326,7 @@ export namespace Skill {
     const s: State = {
       skills: Object.create(null),
       dirs: new Set<string>(),
+      scannedRoots: new Set<string>(),
       duplicateNames: new Set<string>(),
     }
 
