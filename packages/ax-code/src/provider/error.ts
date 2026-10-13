@@ -247,7 +247,11 @@ export namespace ProviderError {
     if (!body) return
     const bodyError = isRecord(body.error) ? body.error : undefined
 
-    const responseBody = stringifyResponseBody(body)
+    // Sanitize the persisted copy once here: every branch below returns the
+    // same redacted string, while classification (isContextOverflow /
+    // isRequestTooLarge) and message derivation keep reading the raw parsed
+    // record above so overflow markers survive redaction.
+    const responseBody = sanitizeResponseBody(stringifyResponseBody(body))
     if (body.type !== "error") return
 
     switch (bodyError?.code) {
@@ -332,6 +336,11 @@ export namespace ProviderError {
     return safe
   }
 
+  // Overloads keep the optional-in / optional-out contract for
+  // APICallError.responseBody while letting the stream path pass a definite
+  // string through without widening ParsedStreamError.responseBody.
+  function sanitizeResponseBody(body: string): string
+  function sanitizeResponseBody(body: string | undefined): string | undefined
   function sanitizeResponseBody(body: string | undefined) {
     return body === undefined ? body : Env.redactForRecord(body)
   }
@@ -378,7 +387,7 @@ export namespace ProviderError {
       return {
         type: "context_overflow",
         message: m,
-        responseBody: input.error.responseBody,
+        responseBody: sanitizeResponseBody(input.error.responseBody),
       }
     }
     if (input.error.statusCode === 413 || isRequestTooLargeMessage(m)) {
@@ -386,7 +395,7 @@ export namespace ProviderError {
         type: "request_too_large",
         message: m,
         statusCode: input.error.statusCode,
-        responseBody: input.error.responseBody,
+        responseBody: sanitizeResponseBody(input.error.responseBody),
       }
     }
 

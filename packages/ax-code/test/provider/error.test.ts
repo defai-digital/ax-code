@@ -389,4 +389,89 @@ describe("provider error decoding", () => {
     expect(parsed.responseBody).toContain('"api_key":"[redacted]"')
     expect(parsed.metadata).toMatchObject({ errorCode: "upstream_permission_error", requestID: "req_77" })
   })
+
+  test("context overflow api errors persist a redacted response body", () => {
+    const parsed = ProviderError.parseAPICallError({
+      providerID: ProviderID.make("openai"),
+      error: new APICallError({
+        message: "Input exceeds the context window of this model",
+        url: "https://example.com",
+        requestBodyValues: {},
+        statusCode: 400,
+        responseHeaders: {},
+        responseBody: JSON.stringify({
+          error: {
+            type: "invalid_request_error",
+            message: "Input exceeds the context window of this model",
+            api_key: "sk-live-abc123",
+          },
+        }),
+        isRetryable: false,
+      }),
+    })
+
+    if (parsed.type !== "context_overflow") throw new Error(`expected context_overflow, got ${parsed.type}`)
+    expect(parsed.responseBody).toBeDefined()
+    expect(parsed.responseBody).not.toContain("sk-live-abc123")
+    expect(parsed.responseBody).toContain('"api_key":"[redacted]"')
+    // Classification and the message still read the raw body.
+    expect(parsed.message).toBe("Input exceeds the context window of this model")
+  })
+
+  test("request too large api errors persist a redacted response body", () => {
+    const parsed = ProviderError.parseAPICallError({
+      providerID: ProviderID.make("openai"),
+      error: new APICallError({
+        message: "Request Entity Too Large",
+        url: "https://example.com",
+        requestBodyValues: {},
+        statusCode: 413,
+        responseHeaders: {},
+        responseBody: JSON.stringify({
+          error: { code: "request_entity_too_large", message: "Request body too large", api_key: "sk-live-abc123" },
+        }),
+        isRetryable: false,
+      }),
+    })
+
+    if (parsed.type !== "request_too_large") throw new Error(`expected request_too_large, got ${parsed.type}`)
+    expect(parsed.statusCode).toBe(413)
+    expect(parsed.responseBody).toBeDefined()
+    expect(parsed.responseBody).not.toContain("sk-live-abc123")
+    expect(parsed.responseBody).toContain('"api_key":"[redacted]"')
+  })
+
+  test("stream quota errors persist a redacted response body", () => {
+    const parsed = ProviderError.parseStreamError({
+      type: "error",
+      error: { code: "insufficient_quota", message: "Quota exceeded", api_key: "sk-live-abc123" },
+    })
+
+    if (!parsed || parsed.type !== "api_error") throw new Error(`expected api_error, got ${parsed?.type}`)
+    expect(parsed.message).toBe("Quota exceeded. Check your plan and billing details.")
+    expect(parsed.isRetryable).toBe(false)
+    expect(parsed.responseBody).not.toContain("sk-live-abc123")
+    expect(parsed.responseBody).toContain('"api_key":"[redacted]"')
+    expect(parsed.responseBody).toContain("Quota exceeded")
+  })
+
+  test("stream context overflow errors redact nested authorization values", () => {
+    const parsed = ProviderError.parseStreamError({
+      type: "error",
+      error: {
+        code: "context_length_exceeded",
+        message: "Input exceeds the context window of this model",
+        Authorization: "Bearer sk-live-abc123",
+      },
+    })
+
+    if (!parsed || parsed.type !== "context_overflow") {
+      throw new Error(`expected context_overflow, got ${parsed?.type}`)
+    }
+    expect(parsed.message).toBe("Input exceeds context window of this model")
+    expect(parsed.responseBody).not.toContain("sk-live-abc123")
+    expect(parsed.responseBody).not.toContain("Bearer")
+    expect(parsed.responseBody).toContain('"Authorization":"[redacted]"')
+    expect(parsed.responseBody).toContain("context_length_exceeded")
+  })
 })
