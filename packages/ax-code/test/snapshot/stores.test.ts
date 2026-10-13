@@ -169,3 +169,131 @@ test("prune refuses to delete a store directory that is a symlink or outside the
   expect(result.removed).toEqual([])
   await expect(fs.readFile(path.join(outside, "keep.txt"), "utf8")).resolves.toBe("keep")
 })
+
+for (const linkedDirectory of ["objects", "objects/pack"]) {
+  test(`prune keeps pack temporaries behind a symlinked ${linkedDirectory} directory`, async () => {
+    await using tmp = await tmpdir()
+    const root = path.join(tmp.path, "snapshot")
+    const dir = await makeStore(root, sha(1), { idleDays: 30 })
+    const outside = path.join(tmp.path, "outside")
+    const pack = linkedDirectory === "objects" ? path.join(outside, "pack") : outside
+    await fs.mkdir(pack, { recursive: true })
+    const target = path.join(pack, "tmp_external")
+    await fs.writeFile(target, "keep")
+    const old = new Date(now - 30 * DAY)
+    await fs.utimes(target, old, old)
+    const link = path.join(dir, linkedDirectory)
+    await fs.rm(link, { recursive: true })
+    await fs.symlink(outside, link, "junction")
+    const stores = await SnapshotStores.inspect({ root, now, retained: () => new Set([sha(99)]) })
+    // Supply a previously measured garbage size, as if the directory changed after inspection.
+    stores[0].garbageBytes = 4
+    const result = await SnapshotStores.prune({ root, stores, orphaned: false, idle: false, dryRun: false, now })
+    expect(result.garbageFiles).toBe(0)
+    await expect(fs.readFile(target, "utf8")).resolves.toBe("keep")
+  })
+}
+
+test("prune rejects out-of-root rows before clearing pack temporaries", async () => {
+  await using tmp = await tmpdir()
+  const root = path.join(tmp.path, "snapshot")
+  const outside = await makeStore(tmp.path, sha(1), {
+    tmp: [{ name: "tmp_external", bytes: 4, ageDays: 30 }],
+  })
+  const row: SnapshotStores.Store = {
+    id: sha(1),
+    dir: outside,
+    worktreeExists: false,
+    bytes: 4,
+    garbageBytes: 4,
+    refs: 0,
+    lastActivity: 0,
+    state: "referenced",
+  }
+  const result = await SnapshotStores.prune({ root, stores: [row], orphaned: false, idle: false, dryRun: false, now })
+  expect(result.freedBytes).toBe(0)
+  await expect(fs.readFile(path.join(outside, "objects", "pack", "tmp_external"))).resolves.toHaveLength(4)
+})
+
+test("inspection preserves stores with missing activity metadata or worktree configuration", async () => {
+  await using tmp = await tmpdir()
+  const root = path.join(tmp.path, "snapshot")
+  const live = path.join(tmp.path, "live")
+  await fs.mkdir(live)
+  const fresh = await makeStore(root, sha(1), { worktree: live })
+  for (const entry of ["index", "refs/snapshots", "ax-code/snapshots"]) {
+    await fs.rm(path.join(fresh, entry), { recursive: true })
+  }
+  await makeStore(root, sha(2), { idleDays: 30 })
+  const stores = await SnapshotStores.inspect({ root, now, retained: () => new Set() })
+  expect(stores.map((store) => store.state)).toEqual(["unknown", "unknown"])
+  const result = await SnapshotStores.prune({ root, stores, orphaned: true, idle: true, dryRun: false, now })
+  expect(result.removed).toEqual([])
+  await expect(fs.stat(fresh)).resolves.toBeTruthy()
+})
+
+test("inspection resolves relative Git worktrees against their store directory", async () => {
+  await using tmp = await tmpdir()
+  const root = path.join(tmp.path, "snapshot")
+  const live = path.join(tmp.path, "live")
+  await fs.mkdir(live)
+  const dir = await makeStore(root, sha(1), { worktree: "../../live", idleDays: 30 })
+  const stores = await SnapshotStores.inspect({ root, now, retained: () => new Set() })
+  expect(stores[0]).toMatchObject({ worktree: live, worktreeExists: true, state: "idle" })
+  expect(
+    (await SnapshotStores.prune({ root, stores, orphaned: true, idle: false, dryRun: false, now })).removed,
+  ).toEqual([])
+  await expect(fs.stat(dir)).resolves.toBeTruthy()
+})
+
+test("inspection decodes quoted Git worktree paths and ignores other sections", async () => {
+  await using tmp = await tmpdir()
+  const root = path.join(tmp.path, "snapshot")
+  const live = path.join(tmp.path, "live#project")
+  await fs.mkdir(live)
+  const dir = await makeStore(root, sha(1), { idleDays: 30 })
+  await fs.writeFile(path.join(dir, "config"), `[other]\nworktree = /missing\n[core]\nworktree = "${live}"\n`)
+  const stores = await SnapshotStores.inspect({ root, now, retained: () => new Set() })
+  expect(stores[0]).toMatchObject({ worktree: live, worktreeExists: true, state: "idle" })
+})
+
+test("prune preserves a store that acquired a retained snapshot after inspection", async () => {
+  await using tmp = await tmpdir()
+  const root = path.join(tmp.path, "snapshot")
+  const dir = await makeStore(root, sha(1), { worktree: path.join(tmp.path, "gone"), idleDays: 30 })
+  const stores = await SnapshotStores.inspect({ root, now, retained: () => new Set() })
+  const result = await SnapshotStores.prune({
+    root,
+    stores,
+    orphaned: true,
+    idle: true,
+    dryRun: false,
+    now,
+    retained: () => new Set([sha(99)]),
+  })
+  expect(result.removed).toEqual([])
+  await expect(fs.stat(dir)).resolves.toBeTruthy()
+})
+
+test("prune rechecks activity and remounted worktrees before whole-store deletion", async () => {
+  await using tmp = await tmpdir()
+  const root = path.join(tmp.path, "snapshot")
+  const live = path.join(tmp.path, "live")
+  const active = await makeStore(root, sha(1), { worktree: live, idleDays: 30 })
+  const remounted = await makeStore(root, sha(2), { worktree: live, idleDays: 30 })
+  const stores = await SnapshotStores.inspect({ root, now, retained: () => new Set() })
+  await fs.utimes(path.join(active, "index"), new Date(now), new Date(now))
+  await fs.mkdir(live)
+  const result = await SnapshotStores.prune({
+    root,
+    stores,
+    orphaned: true,
+    idle: false,
+    dryRun: false,
+    now,
+    retained: () => new Set(),
+  })
+  expect(result.removed).toEqual([])
+  await expect(fs.stat(active)).resolves.toBeTruthy()
+  await expect(fs.stat(remounted)).resolves.toBeTruthy()
+})
