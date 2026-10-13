@@ -113,6 +113,50 @@ pub fn walk_files_async(
     })
 }
 
+pub struct GlobTask {
+    cwd: String,
+    pattern: String,
+    limit: u32,
+    cancelled: Arc<AtomicBool>,
+}
+
+impl Task for GlobTask {
+    type Output = String;
+    type JsValue = String;
+    fn compute(&mut self) -> Result<String> {
+        check(&self.cancelled)?;
+        if self.limit > 10_000 || self.pattern.len() > 16_384 || self.cwd.len() > 16_384 {
+            return Err(napi::Error::from_reason("Native glob input limit exceeded"));
+        }
+        let output = crate::glob_files_impl(&self.cwd, &self.pattern, self.limit, &self.cancelled)?;
+        if output.len() > 16 * 1024 * 1024 {
+            return Err(napi::Error::from_reason(
+                "Native glob output limit exceeded",
+            ));
+        }
+        Ok(output)
+    }
+    fn resolve(&mut self, _: Env, output: String) -> Result<String> {
+        check(&self.cancelled)?;
+        Ok(output)
+    }
+}
+
+#[napi(ts_return_type = "Promise<string>")]
+pub fn glob_files_async(
+    cwd: String,
+    pattern: String,
+    limit: u32,
+    cancellation: &ScanCancellation,
+) -> AsyncTask<GlobTask> {
+    AsyncTask::new(GlobTask {
+        cwd,
+        pattern,
+        limit,
+        cancelled: cancellation.cancelled.clone(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

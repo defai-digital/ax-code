@@ -6,7 +6,7 @@
 import z from "zod"
 import * as fs from "fs/promises"
 import { Tool } from "./tool"
-import { createTwoFilesPatch, diffLines } from "diff"
+import { diffPreview } from "./diff-preview"
 import DESCRIPTION from "./edit.txt"
 import { FileTime } from "../file/time"
 import { Filesystem } from "../util/filesystem"
@@ -66,6 +66,8 @@ export const EditTool = Tool.define("edit", {
     BlastRadius.assertWritable(ctx.sessionID, relativePath)
 
     let diff = ""
+    let additions = 0
+    let deletions = 0
     let contentOld = ""
     let contentNew = ""
     await FileTime.withLock(filePath, async () => {
@@ -96,7 +98,10 @@ export const EditTool = Tool.define("edit", {
           contentOld = await Filesystem.readText(filePath)
         }
         contentNew = params.newString
-        diff = trimDiff(createTwoFilesPatch(filePath, filePath, contentOld, contentNew))
+        const preview = await diffPreview(filePath, contentOld, contentNew, ctx.abort)
+        diff = trimDiff(preview.diff)
+        additions = preview.additions
+        deletions = preview.deletions
         await ctx.ask({
           permission: "edit",
           patterns: [relativePath],
@@ -106,6 +111,7 @@ export const EditTool = Tool.define("edit", {
             diff,
           },
         })
+        ctx.abort.throwIfAborted()
         if (existed) {
           await assertUnchangedBeforeWrite(contentOld)
         } else if (await Filesystem.exists(filePath)) {
@@ -113,6 +119,7 @@ export const EditTool = Tool.define("edit", {
             `File ${filePath} was created while edit approval was pending. Read the file again and retry the edit.`,
           )
         }
+        ctx.abort.throwIfAborted()
         await Filesystem.write(filePath, params.newString)
         await notifyFileEdited(filePath, existed ? "change" : "add")
         await FileTime.read(ctx.sessionID, filePath)
@@ -190,9 +197,10 @@ export const EditTool = Tool.define("edit", {
       }
       contentNew = replaced
 
-      diff = trimDiff(
-        createTwoFilesPatch(filePath, filePath, normalizeLineEndings(contentOld), normalizeLineEndings(contentNew)),
-      )
+      const preview = await diffPreview(filePath, contentOld, contentNew, ctx.abort, true)
+      diff = trimDiff(preview.diff)
+      additions = preview.additions
+      deletions = preview.deletions
       await ctx.ask({
         permission: "edit",
         patterns: [relativePath],
@@ -203,7 +211,9 @@ export const EditTool = Tool.define("edit", {
         },
       })
 
+      ctx.abort.throwIfAborted()
       await assertUnchangedBeforeWrite(contentOld)
+      ctx.abort.throwIfAborted()
       await Filesystem.write(filePath, contentNew)
       await notifyFileEdited(filePath, "change")
       // The diff above was already computed from the same `contentOld`
@@ -216,12 +226,8 @@ export const EditTool = Tool.define("edit", {
       file: filePath,
       before: contentOld,
       after: contentNew,
-      additions: 0,
-      deletions: 0,
-    }
-    for (const change of diffLines(contentOld, contentNew)) {
-      if (change.added) filediff.additions += change.count || 0
-      if (change.removed) filediff.deletions += change.count || 0
+      additions,
+      deletions,
     }
     await BlastRadius.recordWriteAndAssert(ctx.sessionID, filePath, filediff.additions + filediff.deletions)
 

@@ -77,6 +77,13 @@ export declare function estimateTokens(content: string): number
 
 export declare function globFiles(cwd: string, pattern: string, limit: number): string
 
+export declare function globFilesAsync(
+  cwd: string,
+  pattern: string,
+  limit: number,
+  cancellation: ScanCancellation,
+): Promise<string>
+
 export declare function isIgnored(path: string, extraPatternsJson: string): boolean
 
 /** Normalize text for embedding: collapse whitespace, strip comments, normalize unicode. */

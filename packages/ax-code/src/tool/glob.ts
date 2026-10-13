@@ -8,6 +8,7 @@ import { Ripgrep } from "../file/ripgrep"
 import { Instance } from "../project/instance"
 import { fileToolGuard } from "./external-directory"
 import { NativePerf } from "../perf/native"
+import { runNativeScan } from "../native/scan"
 import { NativeAddon } from "../native/addon"
 import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 import { parseNativeJsonArray } from "../util/native-json"
@@ -63,10 +64,18 @@ export const GlobTool = Tool.define("glob", {
 
     // Native fast-path: in-process glob via Rust addon
     const native = NativeAddon.fs()
-    if (native) {
+    ctx.abort.throwIfAborted()
+    if (native?.globFilesAsync && native.ScanCancellation) {
       try {
-        const json = NativePerf.run("fs.globFiles", { search, pattern: params.pattern, limit: NATIVE_SCAN_LIMIT }, () =>
-          native.globFiles(search, params.pattern, NATIVE_SCAN_LIMIT),
+        const json = await NativePerf.runAsync(
+          "fs.globFiles",
+          { search, pattern: params.pattern, limit: NATIVE_SCAN_LIMIT },
+          () =>
+            runNativeScan(
+              () => new native.ScanCancellation(),
+              (cancel) => native.globFilesAsync!(search, params.pattern, NATIVE_SCAN_LIMIT, cancel),
+              ctx.abort,
+            ),
         )
         const entries = parseNativeGlobEntries(json)
           .map((item) => ({ ...item, path: path.resolve(search, item.path) }))
@@ -98,6 +107,7 @@ export const GlobTool = Tool.define("glob", {
           output: output.join("\n"),
         }
       } catch (e: unknown) {
+        ctx.abort.throwIfAborted()
         const code = errorCode(e)
         if (code !== "MODULE_NOT_FOUND" && code !== "ERR_MODULE_NOT_FOUND" && !(e instanceof SyntaxError)) throw e
       }
@@ -115,12 +125,13 @@ export const GlobTool = Tool.define("glob", {
       // synchronous statSync here blocked the event loop once per file. A
       // missing entry keeps mtime 0 so it still sorts last, as before; real
       // errors (EACCES, ELOOP, …) propagate like the read tool's stat.
-      const stats = (
-        await fs.stat(full).catch((error: NodeJS.ErrnoException) => {
-          if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return undefined
-          throw error
-        })
-      )?.mtime?.getTime() ?? 0
+      const stats =
+        (
+          await fs.stat(full).catch((error: NodeJS.ErrnoException) => {
+            if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return undefined
+            throw error
+          })
+        )?.mtime?.getTime() ?? 0
       files.push({
         path: full,
         mtime: stats,

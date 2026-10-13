@@ -1,4 +1,5 @@
 import z from "zod"
+import { diffPreviewSync } from "../tool/diff-preview"
 import * as path from "path"
 import * as fs from "fs/promises"
 import { readFileSync } from "fs"
@@ -355,6 +356,16 @@ export namespace Patch {
       throw new Error(`Failed to read file ${filePath}: ${msg}`, { cause: error })
     }
 
+    const content = deriveContentFromChunks(originalContent, filePath, chunks)
+    return { content, unified_diff: generateUnifiedDiff(originalContent, content) }
+  }
+
+  /** Derive from the caller's admitted snapshot without rereading or computing a discarded preview. */
+  export function deriveContentFromChunks(
+    originalContent: string,
+    filePath: string,
+    chunks: UpdateFileChunk[],
+  ): string {
     // The patch's own old_lines/new_lines are already normalized to LF-only
     // (parsePatch splits on /\r?\n/), so match against LF-normalized target
     // content too — otherwise a CRLF file's lines carry a trailing \r that
@@ -376,18 +387,9 @@ export namespace Patch {
     // decoding, even when the file's last real line is itself blank (2+
     // trailing newlines) — conditioning this on the last line's content
     // silently dropped the trailing blank line in that case.
-    const newContent = convertToLineEnding(
-      newLines.length === 0 ? "" : newLines.join("\n") + "\n",
-      originalEnding,
-    )
+    const newContent = convertToLineEnding(newLines.length === 0 ? "" : newLines.join("\n") + "\n", originalEnding)
 
-    // Generate unified diff
-    const unifiedDiff = generateUnifiedDiff(originalContent, newContent)
-
-    return {
-      unified_diff: unifiedDiff,
-      content: newContent,
-    }
+    return newContent
   }
 
   function computeReplacements(
@@ -557,65 +559,7 @@ export namespace Patch {
   }
 
   function generateUnifiedDiff(oldContent: string, newContent: string): string {
-    const native = NativeAddon.diff()
-    if (native) {
-      try {
-        return NativePerf.run("diff.unifiedDiff", { oldBytes: oldContent.length, newBytes: newContent.length }, () =>
-          native.unifiedDiff("file", oldContent, newContent),
-        )
-      } catch (e) {
-        log.warn("native diff unifiedDiff failed, using JS fallback", { error: e })
-      }
-    }
-
-    const oldLines = oldContent.split("\n")
-    const newLines = newContent.split("\n")
-    const n = oldLines.length
-    const m = newLines.length
-
-    const dp = Array.from({ length: n + 1 }, () => new Int32Array(m + 1))
-    for (let i = 1; i <= n; i++) {
-      for (let j = 1; j <= m; j++) {
-        if (oldLines[i - 1] === newLines[j - 1]) {
-          dp[i][j] = dp[i - 1][j - 1] + 1
-        } else {
-          dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1])
-        }
-      }
-    }
-
-    type Edit = { type: "equal" | "delete" | "insert"; value: string }
-    const edits: Edit[] = []
-    let i = n
-    let j = m
-    while (i > 0 || j > 0) {
-      if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
-        edits.push({ type: "equal", value: oldLines[i - 1] ?? "" })
-        i--
-        j--
-        continue
-      }
-
-      if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-        edits.push({ type: "insert", value: newLines[j - 1] ?? "" })
-        j--
-        continue
-      }
-
-      edits.push({ type: "delete", value: oldLines[i - 1] ?? "" })
-      i--
-    }
-
-    edits.reverse()
-    const diffBody = edits
-      .map((edit) =>
-        edit.type === "equal" ? ` ${edit.value}` : edit.type === "delete" ? `-${edit.value}` : `+${edit.value}`,
-      )
-      .join("\n")
-
-    if (!edits.some((edit) => edit.type !== "equal")) return ""
-
-    return `@@ -1,${n} +1,${m} @@\n${diffBody}\n`
+    return diffPreviewSync("file", oldContent, newContent).diff
   }
 
   // Apply hunks to filesystem

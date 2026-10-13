@@ -11,7 +11,7 @@ mod watcher;
 
 pub use diagnostics::*;
 pub use embedding::*;
-pub use scan::{ScanCancellation, search_content_async, walk_files_async};
+pub use scan::{ScanCancellation, glob_files_async, search_content_async, walk_files_async};
 pub use watcher::*;
 
 use std::collections::{HashSet, VecDeque};
@@ -226,70 +226,75 @@ fn walk_files_impl(
 
 #[napi]
 pub fn glob_files(cwd: String, pattern: String, limit: u32) -> napi::Result<String> {
-    let root = PathBuf::from(&cwd);
-    let matcher = Glob::new(&pattern)
+    glob_files_impl(&cwd, &pattern, limit, &AtomicBool::new(false))
+}
+
+pub(crate) fn glob_files_impl(
+    cwd: &str,
+    pattern: &str,
+    limit: u32,
+    cancelled: &AtomicBool,
+) -> napi::Result<String> {
+    use std::cmp::Reverse;
+    use std::collections::BinaryHeap;
+    scan::check(cancelled)?;
+    let root = PathBuf::from(cwd);
+    let matcher = Glob::new(pattern)
         .map_err(|e| napi::Error::from_reason(e.to_string()))?
         .compile_matcher();
-
+    if limit == 0 {
+        return Ok("[]".into());
+    }
     let mut builder = WalkBuilder::new(&root);
-    builder.hidden(false); // show hidden files for glob matching
-    builder.git_ignore(true);
-    builder.git_global(true);
-    builder.git_exclude(true);
-
-    let mut entries: Vec<GlobEntry> = Vec::new();
-
-    for entry in builder.build().flatten() {
+    builder
+        .hidden(false)
+        .git_ignore(true)
+        .git_global(true)
+        .git_exclude(true);
+    // The worst retained entry is at the root. Encounter order breaks mtime
+    // ties exactly like the legacy stable sort; never stop after K matches.
+    let mut entries = BinaryHeap::new();
+    for (order, entry) in builder.build().enumerate() {
+        scan::check(cancelled)?;
+        let Ok(entry) = entry else { continue };
         if !entry.file_type().is_some_and(|ft| ft.is_file()) {
             continue;
         }
-
         let full = entry.path();
-        let rel = match full.strip_prefix(&root) {
-            Ok(p) => p,
-            Err(_) => continue,
+        let Ok(rel) = full.strip_prefix(&root) else {
+            continue;
         };
-
-        let rel_str = match rel.to_str() {
-            Some(s) => s,
-            None => continue,
+        let Some(rel_str) = rel.to_str() else {
+            continue;
         };
-
-        // Skip .git directory contents
-        if rel.components().any(|c| c.as_os_str() == ".git") {
+        if rel.components().any(|c| c.as_os_str() == ".git") || !matcher.is_match(rel_str) {
             continue;
         }
-
-        if !matcher.is_match(rel_str) {
+        let Ok(meta) = std::fs::metadata(full) else {
             continue;
-        }
-
-        // Stat the file for mtime and size
-        let meta = match std::fs::metadata(full) {
-            Ok(m) => m,
-            Err(_) => continue,
         };
-
         let mtime = meta
             .modified()
             .ok()
             .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
             .map_or(0, |d| d.as_millis() as u64);
-
-        entries.push(GlobEntry {
-            path: rel_str.to_string(),
-            mtime,
-            size: meta.len(),
-        });
+        let candidate = (Reverse(mtime), order, rel_str.to_owned(), meta.len());
+        if entries.len() < limit as usize {
+            entries.push(candidate);
+        } else if entries.peek().is_some_and(|worst| &candidate < worst) {
+            *entries.peek_mut().unwrap() = candidate;
+        }
     }
-
-    // Sort by mtime descending
-    entries.sort_by_key(|entry| std::cmp::Reverse(entry.mtime));
-
-    // Cap at limit
-    entries.truncate(limit as usize);
-
-    serde_json::to_string(&entries).map_err(|e| napi::Error::from_reason(e.to_string()))
+    scan::check(cancelled)?;
+    let output: Vec<_> = entries
+        .into_sorted_vec()
+        .into_iter()
+        .map(|(Reverse(mtime), _, path, size)| GlobEntry { path, mtime, size })
+        .collect();
+    let json =
+        serde_json::to_string(&output).map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    scan::check(cancelled)?;
+    Ok(json)
 }
 
 // ---------------------------------------------------------------------------
@@ -792,7 +797,9 @@ pub fn scan_files(cwd: String, config_json: String) -> napi::Result<String> {
                 .case_smart(true)
                 .build(&p.regex)
                 .map(|m| (p.label.clone(), p.id.clone(), m))
-                .map_err(|e| napi::Error::from_reason(format!("invalid scan pattern {:?}: {e}", p.id)))
+                .map_err(|e| {
+                    napi::Error::from_reason(format!("invalid scan pattern {:?}: {e}", p.id))
+                })
         })
         .collect::<napi::Result<Vec<_>>>()?;
 
@@ -1577,7 +1584,11 @@ mod tests {
         fs::write(dir.join("a.txt"), "x\n").unwrap();
 
         let err = walk_files(dir.to_str().unwrap().into(), r#"{"glob":["["]}"#.into()).unwrap_err();
-        assert!(err.reason.contains("invalid include glob"), "{}", err.reason);
+        assert!(
+            err.reason.contains("invalid include glob"),
+            "{}",
+            err.reason
+        );
 
         cleanup(&dir);
     }
@@ -1592,7 +1603,11 @@ mod tests {
             r#"{"include":[],"patterns":[{"id":"p1","label":"l","regex":"foo(?=bar)"}]}"#.into(),
         )
         .unwrap_err();
-        assert!(err.reason.contains("invalid scan pattern"), "{}", err.reason);
+        assert!(
+            err.reason.contains("invalid scan pattern"),
+            "{}",
+            err.reason
+        );
 
         cleanup(&dir);
     }

@@ -6,6 +6,7 @@ import { NativeAddon } from "../../src/native/addon"
 import { Instance } from "../../src/project/instance"
 import { Ripgrep } from "../../src/file/ripgrep"
 import { tmpdir } from "../fixture/fixture"
+import { parseJsonStrict } from "@ax-code/util/json-value"
 
 const ctx = {
   abort: AbortSignal.any([]),
@@ -15,7 +16,90 @@ const ctx = {
 class StopAfterAsk extends Error {}
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await Instance.disposeAll()
+})
+
+const nativeBinding = NativeAddon.fs()
+test.skipIf(!nativeBinding?.globFilesAsync)(
+  "native glob worker keeps newest entries and stable ties with bounded selection",
+  async () => {
+    const { utimes } = await import("node:fs/promises")
+    await using tmp = await tmpdir({ git: true })
+    await writeFile(path.join(tmp.path, ".gitignore"), "ignored.txt\n")
+    for (let i = 0; i < 150; i++) {
+      const file = path.join(tmp.path, `file-${i}.txt`)
+      await writeFile(file, "test")
+      await utimes(file, 1000, i > 130 ? 2000 : 1000)
+    }
+    await writeFile(path.join(tmp.path, "ignored.txt"), "ignore")
+    await writeFile(path.join(tmp.path, ".hidden.txt"), "hidden")
+    const full = parseJsonStrict(nativeBinding!.globFiles(tmp.path, "**/*.txt", 1000)) as unknown[]
+    const async = parseJsonStrict(
+      await nativeBinding!.globFilesAsync!(tmp.path, "**/*.txt", 101, new nativeBinding!.ScanCancellation()),
+    )
+    expect(async).toEqual(full.slice(0, 101))
+    expect(JSON.stringify(async)).not.toContain("ignored.txt")
+    expect(JSON.stringify(full)).toContain(".hidden.txt")
+    const cancel = new nativeBinding!.ScanCancellation()
+    cancel.cancel()
+    await expect(nativeBinding!.globFilesAsync!(tmp.path, "*", 101, cancel)).rejects.toThrow("cancelled")
+    await expect(
+      nativeBinding!.globFilesAsync!(tmp.path, "*", 10001, new nativeBinding!.ScanCancellation()),
+    ).rejects.toThrow("input limit")
+  },
+)
+
+test("old native glob capability falls back without invoking its synchronous export", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await writeFile(path.join(tmp.path, "file.ts"), "export {}")
+  const sync = vi.fn()
+  vi.spyOn(NativeAddon, "fs").mockReturnValue({ globFiles: sync } as unknown as ReturnType<typeof NativeAddon.fs>)
+  const files = vi.spyOn(Ripgrep, "files").mockImplementation(async function* () {
+    yield "file.ts"
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const result = await (await GlobTool.init()).execute({ pattern: "*.ts" }, ctx)
+      expect(result.data).toEqual({ paths: [path.join(tmp.path, "file.ts")], truncated: false })
+    },
+  })
+  expect(sync).not.toHaveBeenCalled()
+  expect(files).toHaveBeenCalledTimes(1)
+})
+
+test("glob abort cancels the worker and never falls back or publishes a late result", async () => {
+  await using tmp = await tmpdir({ git: true })
+  let complete!: (value: string) => void
+  const cancel = vi.fn()
+  const started = Promise.withResolvers<void>()
+  const worker = vi.fn(() => {
+    started.resolve()
+    return new Promise<string>((resolve) => {
+      complete = resolve
+    })
+  })
+  vi.spyOn(NativeAddon, "fs").mockReturnValue({
+    globFilesAsync: worker,
+    ScanCancellation: class {
+      cancel = cancel
+    },
+  } as unknown as ReturnType<typeof NativeAddon.fs>)
+  const fallback = vi.spyOn(Ripgrep, "files")
+  const controller = new AbortController()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const promise = (await GlobTool.init()).execute({ pattern: "*.ts" }, { ...ctx, abort: controller.signal })
+      await started.promise
+      controller.abort()
+      await expect(promise).rejects.toThrow()
+      expect(cancel).toHaveBeenCalledTimes(1)
+      complete("[]")
+    },
+  })
+  expect(fallback).not.toHaveBeenCalled()
 })
 
 describe("tool.glob", () => {
@@ -26,7 +110,10 @@ describe("tool.glob", () => {
     const target = path.join(search, "found.ts")
     await writeFile(target, "export {}")
     const nativeFs = vi.spyOn(NativeAddon, "fs").mockReturnValue({
-      globFiles: vi.fn(() => JSON.stringify([{ path: "found.ts", mtime: 1, size: 9 }])),
+      ScanCancellation: class {
+        cancel() {}
+      },
+      globFilesAsync: vi.fn(async () => JSON.stringify([{ path: "found.ts", mtime: 1, size: 9 }])),
     } as any)
 
     try {
@@ -110,7 +197,10 @@ describe("tool.glob", () => {
       size: 1,
     }))
     const nativeFs = vi.spyOn(NativeAddon, "fs").mockReturnValue({
-      globFiles: vi.fn(() => JSON.stringify(entries)),
+      ScanCancellation: class {
+        cancel() {}
+      },
+      globFilesAsync: vi.fn(async () => JSON.stringify(entries)),
     } as any)
 
     try {
@@ -138,7 +228,12 @@ describe("tool.glob", () => {
       size: 1,
     }))
     const globFiles = vi.fn(() => JSON.stringify(entries))
-    const nativeFs = vi.spyOn(NativeAddon, "fs").mockReturnValue({ globFiles } as any)
+    const nativeFs = vi.spyOn(NativeAddon, "fs").mockReturnValue({
+      globFilesAsync: globFiles,
+      ScanCancellation: class {
+        cancel() {}
+      },
+    } as any)
 
     try {
       await Instance.provide({
@@ -147,7 +242,12 @@ describe("tool.glob", () => {
           const glob = await GlobTool.init()
           const result = await glob.execute({ pattern: "*.ts" }, ctx)
 
-          expect(globFiles).toHaveBeenCalledWith(tmp.path, "*.ts", 101)
+          expect(globFiles).toHaveBeenCalledWith(
+            tmp.path,
+            "*.ts",
+            101,
+            expect.objectContaining({ cancel: expect.any(Function) }),
+          )
           expect(result.metadata.count).toBe(100)
           expect(result.metadata.truncated).toBe(true)
           expect(result.output).toContain("file-099.ts")

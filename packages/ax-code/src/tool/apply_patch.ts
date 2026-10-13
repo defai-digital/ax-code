@@ -8,7 +8,7 @@ import { File } from "../file"
 import { FileWatcher } from "../file/watcher"
 import { Instance } from "../project/instance"
 import { Patch } from "../patch"
-import { createTwoFilesPatch, diffLines } from "diff"
+import { diffPreview } from "./diff-preview"
 import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
 import { trimDiff } from "./edit"
 import { Isolation } from "@/isolation"
@@ -161,14 +161,9 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
           }
           const newContent =
             hunk.contents.length === 0 || hunk.contents.endsWith("\n") ? hunk.contents : `${hunk.contents}\n`
-          const diff = trimDiff(createTwoFilesPatch(filePath, filePath, oldContent, newContent))
-
-          let additions = 0
-          let deletions = 0
-          for (const change of diffLines(oldContent, newContent)) {
-            if (change.added) additions += change.count || 0
-            if (change.removed) deletions += change.count || 0
-          }
+          const preview = await diffPreview(filePath, oldContent, newContent, ctx.abort)
+          const diff = trimDiff(preview.diff)
+          const { additions, deletions } = preview
 
           fileChanges.push({
             filePath,
@@ -198,20 +193,15 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
 
           // Apply the update chunks to get new content
           try {
-            newContent = Patch.deriveNewContentsFromChunks(filePath, hunk.chunks).content
+            newContent = Patch.deriveContentFromChunks(oldContent, filePath, hunk.chunks)
           } catch (error) {
             const msg = toErrorMessage(error)
             throw new Error(`apply_patch verification failed: ${msg}`, { cause: error })
           }
 
-          const diff = trimDiff(createTwoFilesPatch(filePath, filePath, oldContent, newContent))
-
-          let additions = 0
-          let deletions = 0
-          for (const change of diffLines(oldContent, newContent)) {
-            if (change.added) additions += change.count || 0
-            if (change.removed) deletions += change.count || 0
-          }
+          const preview = await diffPreview(filePath, oldContent, newContent, ctx.abort)
+          const diff = trimDiff(preview.diff)
+          const { additions, deletions } = preview
 
           const movePath = hunk.move_path ? resolvePatchPath(hunk.move_path) : undefined
           await assertExternalDirectory(ctx, movePath)
@@ -275,7 +265,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             const msg = toErrorMessage(error)
             throw new Error(`apply_patch verification failed: ${msg}`, { cause: error })
           })
-          const deleteDiff = trimDiff(createTwoFilesPatch(filePath, filePath, contentToDelete, ""))
+          const deleteDiff = trimDiff((await diffPreview(filePath, contentToDelete, "", ctx.abort)).diff)
 
           // Count actual lines, not `split("\n").length`. For content
           // "hello\nworld\n", split yields ["hello", "world", ""]
@@ -329,6 +319,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
         ),
       ),
     ]
+    ctx.abort.throwIfAborted()
     await ctx.ask({
       permission: "edit",
       patterns: relativePaths,

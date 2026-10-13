@@ -3,6 +3,8 @@ extern crate napi_derive;
 
 use serde::{Deserialize, Serialize};
 mod edit_worker;
+mod preview_worker;
+pub use preview_worker::*;
 mod helpers;
 pub use edit_worker::*;
 use helpers::*;
