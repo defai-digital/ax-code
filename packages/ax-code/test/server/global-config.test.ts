@@ -275,6 +275,62 @@ describe("/global/config redaction", () => {
     }
   })
 
+  test("patch of a redacted array keeps the stored element secrets", async () => {
+    const previousConfigPath = Global.Path.config
+    await using tmp = await tmpdir()
+
+    try {
+      ;(Global.Path as { config: string }).config = tmp.path
+      Config.global.reset()
+
+      await fs.mkdir(tmp.path, { recursive: true })
+      const configPath = path.join(tmp.path, "ax-code.json")
+      await Filesystem.write(
+        configPath,
+        JSON.stringify({
+          provider: {
+            "custom-gateway": {
+              options: {
+                baseURL: "https://gateway.example/v1",
+                endpoints: [{ url: "https://a.example/v1", apiKey: "endpoint-secret" }],
+              },
+            },
+          },
+        }),
+      )
+
+      // The echoed GET body carries the sentinel inside an array element.
+      const response = await Server.Default().request("/global/config", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          provider: {
+            "custom-gateway": {
+              options: {
+                baseURL: "https://gateway.example/v1",
+                endpoints: [{ url: "https://a.example/v1", apiKey: "[redacted]" }],
+              },
+            },
+          },
+        }),
+      })
+      expect(response.status).toBe(200)
+
+      const stored = JSON.parse(await Filesystem.readText(configPath)) as {
+        provider?: Record<string, { options?: Record<string, unknown> }>
+      }
+      const endpoints = (stored.provider?.["custom-gateway"]?.options as { endpoints?: unknown[] } | undefined)
+        ?.endpoints
+      // `mergeDeep` replaces arrays wholesale, so dropping the sentinel inside
+      // an element would erase the stored credential rather than preserve it
+      // the way an omitted object key does.
+      expect(endpoints).toEqual([{ url: "https://a.example/v1", apiKey: "endpoint-secret" }])
+    } finally {
+      ;(Global.Path as { config: string }).config = previousConfigPath
+      Config.global.reset()
+    }
+  })
+
   test("partial enablement patch keeps provider and mcp sections", async () => {
     const previousConfigPath = Global.Path.config
     await using tmp = await tmpdir()

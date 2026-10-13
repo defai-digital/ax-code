@@ -61,17 +61,25 @@ function redactProviderOptions(options: Record<string, unknown>) {
   return redactProviderOptionsDeep(options, 0) as Record<string, unknown>
 }
 
+// A redaction sentinel anywhere inside an array makes the whole array
+// unrepresentable as a patch: `mergeDeep` replaces arrays wholesale
+// (see mergeConfigConcatArrays), so returning a partially stripped array would
+// overwrite the stored one and lose every value dropped from it. The parent
+// drops such a key instead and the stored array stands — the same outcome an
+// omitted object key gets.
+function holdsRedactedSecret(value: unknown, depth: number): boolean {
+  if (depth >= MAX_REDACT_DEPTH) return false
+  if (Array.isArray(value)) return value.some((item) => holdsRedactedSecret(item, depth + 1))
+  if (!isRecord(value)) return false
+  for (const [key, item] of Object.entries(value)) {
+    if (item === REDACTED && SECRET_OPTION_PATTERN.test(key)) return true
+    if (holdsRedactedSecret(item, depth + 1)) return true
+  }
+  return false
+}
+
 function stripRedactedProviderOptionsDeep(value: unknown, depth: number): unknown {
   if (depth >= MAX_REDACT_DEPTH) return value
-  if (Array.isArray(value)) {
-    let changed = false
-    const next = value.map((item) => {
-      const stripped = stripRedactedProviderOptionsDeep(item, depth + 1)
-      if (stripped !== item) changed = true
-      return stripped
-    })
-    return changed ? next : value
-  }
   if (!isRecord(value)) return value
   let changed = false
   const entries: [string, unknown][] = []
@@ -80,6 +88,14 @@ function stripRedactedProviderOptionsDeep(value: unknown, depth: number): unknow
     // literal "[redacted]" value on a public key is user data, not an echo.
     if (item === REDACTED && SECRET_OPTION_PATTERN.test(key)) {
       changed = true
+      continue
+    }
+    if (Array.isArray(item)) {
+      if (holdsRedactedSecret(item, depth + 1)) {
+        changed = true
+        continue
+      }
+      entries.push([key, item])
       continue
     }
     const stripped = stripRedactedProviderOptionsDeep(item, depth + 1)
