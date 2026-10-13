@@ -3,6 +3,7 @@ import {
   cancelDownloadJob,
   listDownloadJobs,
   startDownloadJob,
+  withOfflineAlternative,
   type AxEngineDownloadJobRuntime,
 } from "../../../src/provider/ax-engine/download-job"
 import { AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID } from "../../../src/provider/ax-engine/constants"
@@ -233,5 +234,21 @@ describe("download job for weights already on disk", () => {
       expect(job).toMatchObject({ status: "complete", revision: "pinned" })
     })
     expect(download).not.toHaveBeenCalled()
+  })
+})
+
+describe("withOfflineAlternative", () => {
+  test("adds the model-path alternative when huggingface_hub is missing", () => {
+    const message = "AX_ENGINE_DOWNLOAD_FAILED: huggingface_hub is required for Hugging Face Hub downloads."
+    const result = withOfflineAlternative(message)
+    expect(result).toContain(message)
+    expect(result).toContain("ax-code providers ax-engine prepare --model-path <dir>")
+    expect(withOfflineAlternative(result)).toBe(result)
+  })
+
+  test("leaves unrelated failures untouched", () => {
+    expect(withOfflineAlternative("AX_ENGINE_DOWNLOAD_FAILED: network unreachable")).toBe(
+      "AX_ENGINE_DOWNLOAD_FAILED: network unreachable",
+    )
   })
 })

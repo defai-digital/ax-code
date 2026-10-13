@@ -43,6 +43,18 @@ export type AxEngineDownloadJobRuntime = {
 const jobs = new Map<string, AxEngineDownloadJob>()
 const recentJobs: AxEngineModelJobSummary[] = []
 
+// The engine's Hub downloader needs a Python with huggingface_hub. Point at the
+// path that works without one: weights fetched by any other means.
+const HUB_UNAVAILABLE = /huggingface_hub is required/i
+const OFFLINE_ALTERNATIVE =
+  "Without Hugging Face Hub access, download the model directory by other means and register it with: ax-code providers ax-engine prepare --model-path <dir>"
+
+export function withOfflineAlternative(message: string): string {
+  return HUB_UNAVAILABLE.test(message) && !message.includes("--model-path")
+    ? `${message}\n${OFFLINE_ALTERNATIVE}`
+    : message
+}
+
 function jobKey(modelID: AxEngineModelID, quantization: AxEngineQuantization) {
   return `${modelID}:${quantization}`
 }
@@ -172,7 +184,9 @@ export async function startDownloadJob(
         job.error = "Download cancelled"
       } else {
         job.status = "failed"
-        job.error = error instanceof Error ? error.message : `${AX_ENGINE_ERROR.DownloadFailed}: download failed`
+        job.error = withOfflineAlternative(
+          error instanceof Error ? error.message : `${AX_ENGINE_ERROR.DownloadFailed}: download failed`,
+        )
       }
       return summarize(job)
     } finally {
