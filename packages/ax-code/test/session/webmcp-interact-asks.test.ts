@@ -7,6 +7,7 @@ import { ToolRegistry } from "../../src/tool/registry"
 import { WebMcpProfile } from "../../src/mcp/webmcp-profile"
 import { convertMcpTool } from "../../src/mcp/tool-conversion"
 import { resolveTools } from "../../src/session/prompt/prompt-tools"
+import { Bus } from "../../src/bus"
 
 /**
  * ADR-174 session-layer wiring: which T2 calls ask, which run under the
@@ -47,6 +48,18 @@ function fakeClient() {
       if (request.name === "list_pages") {
         return { content: [], structuredContent: { pages: [{ id: 1, url: PAGE, selected: true }] } }
       }
+      if (request.name === "new_page" || request.name === "navigate_page") {
+        return {
+          content: [],
+          structuredContent: {
+            message: `Successfully navigated to ${PAGE}`,
+            pages: [{ id: 1, url: PAGE, selected: true }],
+          },
+        }
+      }
+      if (request.name === "list_webmcp_tools") {
+        return { content: [], structuredContent: { webmcpTools: [] } }
+      }
       return { content: [{ type: "text", text: "Successfully acted" }], structuredContent: {} }
     }),
   }
@@ -71,10 +84,12 @@ async function bridgeTools(
     },
   })
   const entries = await Promise.all(
-    ["click", "fill", "wait_for"].map(async (name) => [
-      `bridge_${name}`,
-      await convertMcpTool({ name, inputSchema: { type: "object" } } as never, client as never, 5000, policy(name)),
-    ]),
+    ["click", "fill", "wait_for", "list_pages", "new_page", "navigate_page", "list_webmcp_tools", "take_snapshot"].map(
+      async (name) => [
+        `bridge_${name}`,
+        await convertMcpTool({ name, inputSchema: { type: "object" } } as never, client as never, 5000, policy(name)),
+      ],
+    ),
   )
   return Object.fromEntries(entries)
 }
@@ -94,14 +109,149 @@ function resolveInput(turn: string) {
 const execOptions = () => ({
   toolCallId: `call_${Math.random().toString(36).slice(2)}`,
   abortSignal: new AbortController().signal,
+  messages: [],
 })
 
 afterEach(async () => {
   await Instance.disposeAll()
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
 })
 
 describe("WebMCP T2 asks through the session layer", () => {
+  test("sandboxed Auto browsing admits both actual permission layers without a popup", async () => {
+    vi.stubEnv("AX_CODE_AUTONOMOUS", "1")
+    vi.stubEnv("AX_CODE_ISOLATION_MODE", "workspace-write")
+    await using tmp = await tmpdir()
+    const profile = WebMcpProfile.config({ allowedOrigins: [], read: true, interact: true }, true).webmcp
+    const grants: GrantState = { read: new Set(), interact: new Map() }
+    const client = fakeClient()
+    vi.spyOn(ToolRegistry, "tools").mockResolvedValue([])
+    vi.spyOn(MCP, "tools").mockResolvedValue(await bridgeTools(profile, grants, client))
+    vi.spyOn(MCP, "matchesWebMcpProfile").mockResolvedValue(true)
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const input = resolveInput("msg_auto_browse")
+        input.agent = { name: "build", permission: [{ permission: "*", pattern: "*", action: "ask" }] } as never
+        const asked: Permission.Request[] = []
+        const stop = Bus.subscribe(Permission.Event.Asked, (event) => {
+          asked.push(event.properties)
+          void Permission.reply({ requestID: event.properties.id, reply: "reject" })
+        })
+        try {
+          const tools = await resolveTools(input)
+          for (const [name, args] of [
+            ["list_pages", {}],
+            ["new_page", { url: PAGE }],
+            ["navigate_page", { pageId: 1, type: "url", url: PAGE }],
+            ["list_webmcp_tools", { pageId: 1 }],
+          ] as const) {
+            await tools[`bridge_${name}`]!.execute!(args, execOptions())
+            expect(client.calls).toContain(name)
+          }
+          expect(asked).toEqual([])
+          expect(await Permission.list()).toEqual([])
+        } finally {
+          stop()
+        }
+      },
+    })
+  })
+
+  test("sandboxed Auto grants first read and ordinary interaction through the real permission engine", async () => {
+    vi.stubEnv("AX_CODE_AUTONOMOUS", "1")
+    vi.stubEnv("AX_CODE_ISOLATION_MODE", "workspace-write")
+    await using tmp = await tmpdir()
+    const profile = WebMcpProfile.config({ allowedOrigins: [], read: true, interact: true }, true).webmcp
+    WebMcpProfile.recordSnapshot(profile, 1, snapshotNodes(), PAGE)
+    const grants: GrantState = { read: new Set<string>(), interact: new Map<string, number>() }
+    const client = fakeClient()
+    vi.spyOn(ToolRegistry, "tools").mockResolvedValue([])
+    vi.spyOn(MCP, "tools").mockResolvedValue(await bridgeTools(profile, grants, client))
+    vi.spyOn(MCP, "matchesWebMcpProfile").mockResolvedValue(true)
+    vi.spyOn(MCP, "checkWebMcpReadGrant").mockResolvedValue({ ok: true })
+    vi.spyOn(MCP, "checkWebMcpInteractGrant").mockResolvedValue({ ok: true })
+    vi.spyOn(MCP, "grantWebMcpReadOrigin").mockImplementation(async (_server, origin) => {
+      grants.read.add(origin)
+      return { ok: true }
+    })
+    vi.spyOn(MCP, "grantWebMcpInteractOrigin").mockImplementation(async (_server, origin) => {
+      grants.interact.set(origin, WebMcpProfile.INTERACT_BUDGET)
+      return { ok: true }
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const asked = vi.fn((event: { properties: Permission.Request }) => {
+          void Permission.reply({ requestID: event.properties.id, reply: "reject" })
+        })
+        const stop = Bus.subscribe(Permission.Event.Asked, asked)
+        try {
+          const tools = await resolveTools(resolveInput("msg_auto_grants"))
+          await tools.bridge_take_snapshot!.execute!({ pageId: 1 }, execOptions())
+          expect(grants.read.has(ORIGIN)).toBe(true)
+          expect(client.calls.filter((name) => name === "take_snapshot")).toHaveLength(1)
+          // A successful read replaces the snapshot; bind the fixture's target again.
+          WebMcpProfile.recordSnapshot(profile, 1, snapshotNodes(), PAGE)
+          await expect(tools.bridge_click!.execute!({ pageId: 1, uid: "1_1" }, execOptions())).rejects.toThrow(
+            "allowed for this session",
+          )
+          expect(client.calls).not.toContain("click")
+          expect(grants.interact.get(ORIGIN)).toBe(20)
+          await tools.bridge_click!.execute!({ pageId: 1, uid: "1_1" }, execOptions())
+          expect(grants.interact.get(ORIGIN)).toBe(19)
+          expect(asked).not.toHaveBeenCalled()
+        } finally {
+          stop()
+        }
+      },
+    })
+  })
+
+  test("sandboxed Auto still requires a per-action decision before typing or a consequential click", async () => {
+    vi.stubEnv("AX_CODE_AUTONOMOUS", "1")
+    vi.stubEnv("AX_CODE_ISOLATION_MODE", "workspace-write")
+    await using tmp = await tmpdir()
+    const profile = WebMcpProfile.config({ allowedOrigins: [], read: true, interact: true }, true).webmcp
+    WebMcpProfile.recordSnapshot(profile, 1, snapshotNodes(), PAGE)
+    const grants: GrantState = { read: new Set([ORIGIN]), interact: new Map([[ORIGIN, 20]]) }
+    const client = fakeClient()
+    vi.spyOn(ToolRegistry, "tools").mockResolvedValue([])
+    vi.spyOn(MCP, "tools").mockResolvedValue(await bridgeTools(profile, grants, client))
+    vi.spyOn(MCP, "matchesWebMcpProfile").mockResolvedValue(true)
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const asked: Permission.Request[] = []
+        const stop = Bus.subscribe(Permission.Event.Asked, (event) => {
+          asked.push(event.properties)
+          void Permission.reply({ requestID: event.properties.id, reply: "reject" })
+        })
+        try {
+          const tools = await resolveTools(resolveInput("msg_auto_protected"))
+          await expect(
+            tools.bridge_fill!.execute!({ pageId: 1, uid: "1_5", value: "Jane" }, execOptions()),
+          ).rejects.toThrow("rejected")
+          await expect(tools.bridge_click!.execute!({ pageId: 1, uid: "1_2" }, execOptions())).rejects.toThrow(
+            "rejected",
+          )
+          expect(asked).toHaveLength(2)
+          expect(
+            asked.every(
+              (item) =>
+                item.permission === "webmcp" && item.metadata.interactAction === true && item.autoOnceAt === undefined,
+            ),
+          ).toBe(true)
+          expect(client.calls).not.toContain("fill")
+          expect(client.calls).not.toContain("click")
+        } finally {
+          stop()
+        }
+      },
+    })
+  })
+
   test("a grant-covered click asks nothing and spends the budget; a per-action fill asks twice", async () => {
     await using tmp = await tmpdir()
     const profile = WebMcpProfile.config({ allowedOrigins: [], read: true, interact: true }, true).webmcp

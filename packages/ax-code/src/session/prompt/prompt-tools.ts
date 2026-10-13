@@ -20,6 +20,7 @@ import { MCP } from "../../mcp"
 import { ToolDiscovery } from "../tool-discovery"
 import { McpPermissionPattern } from "../../mcp/permission-pattern"
 import { WebMcpApprovals } from "../../mcp/webmcp-approvals"
+import { WebMcpAutoApproval } from "../../mcp/webmcp-auto-approval"
 import { WebMcpProfile } from "../../mcp/webmcp-profile"
 import { BrowserWorkflow } from "../../browser-workflow/service"
 import { BrowserSelection } from "../../browser-workflow/selection"
@@ -1494,6 +1495,9 @@ export async function resolveTools(input: ResolveToolsInput) {
             const allowed = await MCP.checkWebMcpReadGrant(readPolicy.server, error.origin)
             if (!allowed.ok) throw new Error(allowed.error)
             const metadata = { readGrant: true, server: readPolicy.server, origin: error.origin, experimental: true }
+            WebMcpAutoApproval.bindBridge(metadata, readPolicy, { permission: "webmcp", patterns: [key] }, () =>
+              MCP.matchesWebMcpProfile(readPolicy.server, readPolicy.profile),
+            )
             const candidate = await WebMcpApprovals.capture(readPolicy, { capability: "read", origin: error.origin })
             WebMcpApprovals.bind(metadata, candidate, {
               permission: key,
@@ -1551,19 +1555,23 @@ export async function resolveTools(input: ResolveToolsInput) {
           ): Promise<void> => {
             const allowed = await MCP.checkWebMcpInteractGrant(interactPolicy.server, error.origin)
             if (!allowed.ok) throw new Error(allowed.error)
+            const metadata = {
+              interactGrant: true,
+              renewal: error.renewal,
+              budget: WebMcpProfile.INTERACT_BUDGET,
+              server: interactPolicy.server,
+              origin: error.origin,
+              experimental: true,
+            }
+            WebMcpAutoApproval.bindBridge(metadata, interactPolicy, { permission: "webmcp", patterns: [key] }, () =>
+              MCP.matchesWebMcpProfile(interactPolicy.server, interactPolicy.profile),
+            )
             try {
               await ctx.ask({
                 permission: "webmcp",
                 patterns: [key],
                 always: [],
-                metadata: {
-                  interactGrant: true,
-                  renewal: error.renewal,
-                  budget: WebMcpProfile.INTERACT_BUDGET,
-                  server: interactPolicy.server,
-                  origin: error.origin,
-                  experimental: true,
-                },
+                metadata,
               })
             } catch (refusal) {
               if (
@@ -1743,6 +1751,17 @@ export async function resolveTools(input: ResolveToolsInput) {
                 permission: key,
                 patterns: permissionPattern.patterns,
               })
+              if (policy) {
+                const valid = () => MCP.matchesWebMcpProfile(policy.server, policy.profile)
+                WebMcpAutoApproval.bindBridge(webmcp, policy, { permission: "webmcp", patterns: [key] }, valid)
+                WebMcpAutoApproval.bindBridge(
+                  mcpMetadata,
+                  policy,
+                  { permission: key, patterns: permissionPattern.patterns },
+                  valid,
+                  webmcp,
+                )
+              }
             }
             try {
               if (!skipPerCall) {
