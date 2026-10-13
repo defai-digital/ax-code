@@ -4,6 +4,7 @@ import { Filesystem } from "../util/filesystem"
 import { Global } from "../global"
 import { retainedSnapshotHashes } from "./retention"
 import { ProjectID } from "../project/schema"
+import { git } from "../util/git"
 
 /**
  * Offline inspection and pruning of the per-project snapshot stores under
@@ -69,9 +70,17 @@ export namespace SnapshotStores {
   }
 
   async function worktreeOf(dir: string) {
-    const config = await fs.readFile(path.join(dir, "config"), "utf8").catch(() => "")
-    // core.worktree is the only `worktree` key written into a snapshot store config.
-    return /^\s*worktree\s*=\s*(.+?)\s*$/m.exec(config)?.[1]
+    // Let Git decode quoting and select the correct section without following includes.
+    const config = await git(
+      ["config", "--no-includes", "--file", path.join(dir, "config"), "--get", "core.worktree"],
+      {
+        cwd: dir,
+        timeout: 5000,
+      },
+    )
+    if (config.exitCode !== 0) return undefined
+    const value = config.text().replace(/\r?\n$/, "")
+    return value ? path.resolve(dir, value) : undefined
   }
 
   async function refCount(dir: string) {
@@ -88,9 +97,29 @@ export namespace SnapshotStores {
   ): State {
     if (retained === undefined) return "unknown"
     if (retained) return "referenced"
+    if (!Number.isFinite(store.lastActivity) || store.lastActivity <= 0) return "unknown"
     if (!store.worktreeExists) return input.now - store.lastActivity >= orphanGraceMs ? "orphaned" : "active"
     if (input.now - store.lastActivity >= input.idleMs) return "idle"
     return "active"
+  }
+
+  function readRetained(projectID: string): Set<string> | undefined {
+    try {
+      return retainedSnapshotHashes(ProjectID.make(projectID))
+    } catch {
+      return undefined
+    }
+  }
+
+  async function activity(dir: string) {
+    return Math.max(
+      ...(await Promise.all([
+        mtime(path.join(dir, "index")),
+        mtime(path.join(dir, "packed-refs")),
+        mtime(path.join(dir, "refs", "snapshots")),
+        mtime(path.join(dir, "ax-code", "snapshots")),
+      ])),
+    )
   }
 
   export async function inspect(input?: {
@@ -103,15 +132,7 @@ export namespace SnapshotStores {
     const base = input?.root ?? root()
     const now = input?.now ?? Date.now()
     const idleMs = input?.idleMs ?? retentionMs
-    const retained =
-      input?.retained ??
-      ((projectID: string) => {
-        try {
-          return retainedSnapshotHashes(ProjectID.make(projectID))
-        } catch {
-          return undefined
-        }
-      })
+    const retained = input?.retained ?? readRetained
     const names = (await fs.readdir(base, { withFileTypes: true }).catch(() => []))
       .filter((entry) => entry.isDirectory() && idPattern.test(entry.name))
       .map((entry) => entry.name)
@@ -131,14 +152,7 @@ export namespace SnapshotStores {
           })
           const worktree = await worktreeOf(dir)
           const worktreeExists = worktree ? await Filesystem.isDir(worktree) : false
-          const lastActivity = Math.max(
-            ...(await Promise.all([
-              mtime(path.join(dir, "index")),
-              mtime(path.join(dir, "packed-refs")),
-              mtime(path.join(dir, "refs", "snapshots")),
-              mtime(path.join(dir, "ax-code", "snapshots")),
-            ])),
-          )
+          const lastActivity = await activity(dir)
           const hashes = retained(id)
           return {
             id,
@@ -149,10 +163,14 @@ export namespace SnapshotStores {
             garbageBytes,
             refs: await refCount(dir),
             lastActivity,
-            state: classify({ worktreeExists, lastActivity }, hashes === undefined ? undefined : hashes.size > 0, {
-              now,
-              idleMs,
-            }),
+            state: classify(
+              { worktreeExists, lastActivity },
+              hashes === undefined || !worktree ? undefined : hashes.size > 0,
+              {
+                now,
+                idleMs,
+              },
+            ),
           }
         }),
       )
@@ -169,6 +187,8 @@ export namespace SnapshotStores {
     idle: boolean
     dryRun: boolean
     now?: number
+    /** Re-read retained hashes at deletion time; unreadable retention prevents removal. */
+    retained?: (projectID: string) => Set<string> | undefined
   }
 
   export type PruneResult = {
@@ -181,7 +201,8 @@ export namespace SnapshotStores {
 
   /** Whole-store removal is limited to direct children that look like snapshot stores. */
   async function removable(base: string, store: Store) {
-    if (path.dirname(store.dir) !== base || !idPattern.test(path.basename(store.dir))) return false
+    if (path.dirname(store.dir) !== base || store.id !== path.basename(store.dir) || !idPattern.test(store.id))
+      return false
     const stat = await fs.lstat(store.dir).catch(() => undefined)
     return Boolean(stat?.isDirectory() && !stat.isSymbolicLink())
   }
@@ -191,8 +212,22 @@ export namespace SnapshotStores {
     const now = input.now ?? Date.now()
     const result: PruneResult = { garbageFiles: 0, garbageBytes: 0, removed: [], freedBytes: 0 }
     for (const store of input.stores) {
+      // Apply the store boundary to both whole-store and temporary-file removal.
+      if (!(await removable(base, store))) continue
       const doomed = (store.state === "orphaned" && input.orphaned) || (store.state === "idle" && input.idle)
-      if (doomed && (await removable(base, store))) {
+      if (doomed) {
+        // Inspection may predate new sessions, snapshot writes or a remount.
+        const hashes = (input.retained ?? readRetained)(store.id)
+        const worktree = await worktreeOf(store.dir)
+        const current = classify(
+          {
+            worktreeExists: worktree ? await Filesystem.isDir(worktree) : false,
+            lastActivity: await activity(store.dir),
+          },
+          hashes === undefined || !worktree ? undefined : hashes.size > 0,
+          { now, idleMs: retentionMs },
+        )
+        if (!((current === "orphaned" && input.orphaned) || (current === "idle" && input.idle))) continue
         if (!input.dryRun) await fs.rm(store.dir, { recursive: true, force: true })
         result.removed.push(store)
         result.freedBytes += store.bytes
@@ -201,7 +236,11 @@ export namespace SnapshotStores {
       if (!store.garbageBytes) continue
       // Same rule as `git prune --expire=7.days`: a recent temporary may belong
       // to a Git process that is still writing it.
-      const pack = path.join(store.dir, "objects", "pack")
+      const objects = path.join(store.dir, "objects")
+      const pack = path.join(objects, "pack")
+      // A symlinked ancestor would make file removal escape the snapshot store.
+      const parents = await Promise.all([objects, pack].map((dir) => fs.lstat(dir).catch(() => undefined)))
+      if (parents.some((stat) => !stat?.isDirectory() || stat.isSymbolicLink())) continue
       for (const name of await fs.readdir(pack).catch(() => [])) {
         if (!name.startsWith("tmp_")) continue
         const file = path.join(pack, name)

@@ -623,9 +623,9 @@
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "7d29679f787302d9d8843ebd852af85bde28f5f118773173513ad01b4a18835b",
+          "fingerprint": "8d579be543b1d55103af1700d67311de176358a79a0614c5b24c5974560725b6",
           "file": "../ax-code-reason/src/detect-duplicates.ts",
-          "line": 293,
+          "line": 311,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1521,7 +1521,7 @@
         {
           "fingerprint": "93a833f728ff5dc2833adc59e032e4a4aa2bd669ede1765b3989d1a63a9d8fef",
           "file": "src/native/addon.ts",
-          "line": 82,
+          "line": 83,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1969,7 +1969,7 @@
       ]
     },
     "security_scan": {
-      "count": 505,
+      "count": 508,
       "findings": [
         {
           "fingerprint": "437e1d0157fc1965a429fe7f0e9474576f6c0db625ea27bb6ce1b57af9e2cd9f",
@@ -5166,7 +5166,7 @@
         {
           "fingerprint": "cc74fcbf3a532f19876778088a9154e4a44cbe52a9ae1081d2d97bb3b676fca7",
           "file": "src/skill/index.ts",
-          "line": 279,
+          "line": 289,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5174,7 +5174,7 @@
         {
           "fingerprint": "3cabfaa0039b836a9ea50af78b9382f1e8360fc5d0b25174eb4002cf5c87ab5a",
           "file": "src/skill/index.ts",
-          "line": 328,
+          "line": 339,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5182,7 +5182,7 @@
         {
           "fingerprint": "1824bacdcc58548fe07f7ce7dc4406be31bc47b600b1df8f1211992f1fd9ae24",
           "file": "src/snapshot/index.ts",
-          "line": 147,
+          "line": 155,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5190,7 +5190,7 @@
         {
           "fingerprint": "aa14427af62987f219cfb8b841478765e5fff7aab9fef2c9f8bb007bd44d0671",
           "file": "src/snapshot/index.ts",
-          "line": 259,
+          "line": 267,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5198,7 +5198,7 @@
         {
           "fingerprint": "3d238073810c7ec357955a6dc4d0a85a8d8e146b274d1f05f563cac31a46d919",
           "file": "src/snapshot/index.ts",
-          "line": 342,
+          "line": 353,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5206,7 +5206,7 @@
         {
           "fingerprint": "923668e559a709819a78a0b6f3e9d426023991a871cee700b77c9a61d7c51284",
           "file": "src/snapshot/index.ts",
-          "line": 343,
+          "line": 354,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5214,7 +5214,15 @@
         {
           "fingerprint": "fc7275934344761d2f9ce141598a1115704153149855c72814bfa3700f2f9f1f",
           "file": "src/snapshot/index.ts",
-          "line": 443,
+          "line": 460,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "95cc155dddacd4bac704547934340edb4b7fa9f9df51fc4ff56e6fb1237684d2",
+          "file": "src/snapshot/index.ts",
+          "line": 565,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5222,7 +5230,7 @@
         {
           "fingerprint": "67882b5867e0210953b3170b2915482cafe54b7bf024ddd7d89dabdd10d68f29",
           "file": "src/snapshot/index.ts",
-          "line": 833,
+          "line": 880,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5230,7 +5238,7 @@
         {
           "fingerprint": "455ebdf2051e691e4ce957c9f858ae4b252ec57fd4dbbc1cf3483c3612d8b7de",
           "file": "src/snapshot/index.ts",
-          "line": 950,
+          "line": 997,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5238,7 +5246,7 @@
         {
           "fingerprint": "abcf586367fdc04391a8330fd74a7b6789a0c0d16d8f05881c7a9218a595a388",
           "file": "src/snapshot/index.ts",
-          "line": 1133,
+          "line": 1180,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5246,7 +5254,7 @@
         {
           "fingerprint": "e76ca7631c7de748f1cb496522b2ca2d4a7c3abb20e41d7a2d2954c908335272",
           "file": "src/snapshot/stores.ts",
-          "line": 44,
+          "line": 45,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5254,15 +5262,23 @@
         {
           "fingerprint": "5b592c5cd83403d72adf7137a9c6246bf480ec363132e2aa0a782332d76d9701",
           "file": "src/snapshot/stores.ts",
-          "line": 54,
+          "line": 55,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "c23c9a36e878f0fc907fca828387a60f8b7ae26a2aa29934cd94e26c0e989beb",
+          "fingerprint": "656e65917888e10e7013bc6ec4452ef0719bd5709bf5e9b74019ca1d5295eebc",
           "file": "src/snapshot/stores.ts",
-          "line": 72,
+          "line": 75,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "39097ef0c8ef89d33af21e363e718041a8f1a3e61ff9dd23cc02f8513d5fafc9",
+          "file": "src/snapshot/stores.ts",
+          "line": 83,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5270,7 +5286,7 @@
         {
           "fingerprint": "377d76a95c5e140adf1639b914189a08055e914b5e9a53ed309d99dd86853dde",
           "file": "src/snapshot/stores.ts",
-          "line": 78,
+          "line": 87,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5278,7 +5294,7 @@
         {
           "fingerprint": "909c317a9a46aee925e17ce9ed81941dc81543aa5889f71663eb0cdef2f8432f",
           "file": "src/snapshot/stores.ts",
-          "line": 79,
+          "line": 88,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5286,7 +5302,7 @@
         {
           "fingerprint": "404bee6d6dc11ed19e9c081c99bde8b6c7342762bf5a84393740498aecd967e4",
           "file": "src/snapshot/stores.ts",
-          "line": 136,
+          "line": 117,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5294,7 +5310,7 @@
         {
           "fingerprint": "807805cdaaca21fb94bcc996805ea544c75d4a017969fc3d9185741567390c6e",
           "file": "src/snapshot/stores.ts",
-          "line": 137,
+          "line": 118,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5302,7 +5318,7 @@
         {
           "fingerprint": "328cf957801acbec66626fd64f4985073aef11ea3cad03d3af50eaa1b41b1ca5",
           "file": "src/snapshot/stores.ts",
-          "line": 138,
+          "line": 119,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5310,7 +5326,15 @@
         {
           "fingerprint": "5efaf39d0e24112999182e4f966e66cc3347e37fee700f62e5327c5a8b23347d",
           "file": "src/snapshot/stores.ts",
-          "line": 139,
+          "line": 120,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "36947f215f426e092274a38dfb1285398360b0bdd7dbbca98899b408ef90c446",
+          "file": "src/snapshot/stores.ts",
+          "line": 239,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
