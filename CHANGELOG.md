@@ -6,6 +6,20 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.25.4] - 2026-10-13
+
+### Changed
+
+- Publish paired SDK 2.6.15 and retain the latest stable AX Engine 7.7.0.
+
+### Fixed
+
+- Refresh CLI lookups when PATH, executable suffixes, home directories or working directories change, and reject cached binaries that lose execution eligibility.
+- Prefer branded AX Engine version banners over unrelated bare toolchain versions.
+- Recover compact doctor JSON after malformed diagnostic braces or quotes.
+- Preserve signed AX Engine payloads through Homebrew linkage repair.
+- Apply the integrated full-access Auto-mode WebMCP approval fixes.
+
 ## [7.25.3] - 2026-10-13
 
 ### Changed
