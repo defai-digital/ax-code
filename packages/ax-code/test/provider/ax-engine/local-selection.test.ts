@@ -4,9 +4,9 @@ import { prepareAxEngine } from "../../../src/provider/ax-engine/prepare"
 import { startDownloadJob } from "../../../src/provider/ax-engine/download-job"
 import {
   AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
-  AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID,
   AX_ENGINE_DEFAULT_MODEL_ID,
   AX_ENGINE_MODEL_DEFINITIONS,
+  AX_ENGINE_MODEL_IDS,
   axEngineHubReference,
   AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
   AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID,
@@ -15,7 +15,7 @@ import {
 import type { AxEngineModelID } from "../../../src/provider/ax-engine/constants"
 import { axEngineLocalRepository, selectAxEngineLocalModels } from "../../../src/provider/ax-engine/local-models"
 import { axEngineHubCatalog, createHubCatalogStore } from "../../../src/provider/ax-engine/hub-catalog"
-import { HubCatalog, hubModelID } from "../../../src/provider/ax-engine/hub-model"
+import { HubCatalog, hubModelID, evaluateHubModel } from "../../../src/provider/ax-engine/hub-model"
 import snapshot from "../../../src/provider/ax-engine/hub-catalog-snapshot.json"
 import collection from "../../../src/provider/ax-engine/collection.json"
 import { axEngineLoader } from "../../../src/provider/ax-engine/provider-loader"
@@ -30,9 +30,8 @@ import fs from "node:fs/promises"
 import path from "node:path"
 
 const repository = "AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP"
-const swiftRepository = "AutomatosX/AX-Swift-1.5-Qwen3.8-27B-MLX-AXQ-MXFP4-MTP"
 const selectedID = AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID
-const selectedIDs = [selectedID, AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID] as const
+const selectedIDs = AX_ENGINE_MODEL_IDS.filter((id) => axEngineLocalRepository(id))
 
 afterEach(async () => {
   await Instance.disposeAll()
@@ -52,14 +51,29 @@ test("every collection model has a pinned curated definition and a bundled snaps
       repo,
     ).toBe(true)
   }
-  // Retired collection members must not stay selectable through the snapshot.
-  expect(snapshot.models.some((model) => model.id.includes("Cyber-Tiel"))).toBe(false)
+  expect(collection.models).toHaveLength(7)
+})
+
+test.each(collection.models)("collection pack %s retains source admission and exact pinned metadata", (repo) => {
+  const definition = Object.values(AX_ENGINE_MODEL_DEFINITIONS).find(
+    (entry) => entry.quantizations.mlx?.hfRepo === repo,
+  )!
+  const model = HubCatalog.parse(snapshot).models.find(
+    (entry) => entry.id === repo && entry.sha === definition.revision,
+  )!
+  expect(model, repo).toBeDefined()
+  expect(evaluateHubModel(model, {}).policy).toBe("eligible")
+  expect(evaluateHubModel({ ...model, provenanceBase: "other-owner/model" }, {}).policy).toBe("unknown")
+  expect(evaluateHubModel({ ...model, cardData: { base_model: "other-owner/model" } }, {}).policy).toBe("unknown")
+  expect(model.siblings.filter((file) => file.rfilename.endsWith(".safetensors")).every((file) => file.size! > 0)).toBe(
+    true,
+  )
 })
 
 test("the managed model catalog offers only the AX Code collection models", async () => {
   const result = await getAxEngineModelsCatalog()
-  expect(result.models.map((model) => model.hfRepo)).toEqual([repository, swiftRepository])
-  expect(result.models).toHaveLength(2)
+  expect(result.models.map((model) => model.hfRepo)).toEqual(collection.models)
+  expect(result.models).toHaveLength(collection.models.length)
   expect(result.models[0]).toMatchObject({
     id: selectedID,
     quantization: "mlx",
@@ -69,9 +83,7 @@ test("the managed model catalog offers only the AX Code collection models", asyn
     verification: "unverified",
   })
   expect(AX_ENGINE_DEFAULT_MODEL_ID).toBe(selectedID)
-  expect(
-    result.models.every((model) => [repository, swiftRepository].includes(axEngineLocalRepository(model.id)!)),
-  ).toBe(true)
+  expect(result.models.every((model) => collection.models.includes(axEngineLocalRepository(model.id)!))).toBe(true)
   expect(result.discovery.decisions.some((entry) => entry.repoID === "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit")).toBe(
     true,
   )
@@ -204,7 +216,7 @@ test("managed provider discovery replaces stale configured models with only the 
     fn: async () => {
       await Provider.ready()
       const provider = (await Provider.list())[ProviderID.make("ax-engine")]
-      expect(Object.keys(provider.models).map(axEngineLocalRepository)).toEqual([repository, swiftRepository])
+      expect(Object.keys(provider.models).map(axEngineLocalRepository)).toEqual(collection.models)
       expect(Object.keys(provider.models)).toEqual(selectedIDs)
       expect(Object.keys(provider.models)).not.toContain(`${repository}@${"a".repeat(40)}`)
       expect(provider.models[selectedID].options.modelID).toBe(selectedID)

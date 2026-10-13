@@ -19,6 +19,11 @@ import { shouldShowProviderInList } from "../../src/server/routes/provider"
 import {
   AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
   AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID,
+  AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP8_MODEL_ID,
+  AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP8_MODEL_ID,
+  AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+  AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP8_MODEL_ID,
+  AX_ENGINE_QWEN38_FLASH_NEXT_AXQ_MXFP4_MODEL_ID,
   AX_ENGINE_ERROR,
   AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
   AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
@@ -1074,6 +1079,11 @@ describe("ax-engine server launch args", () => {
       [AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID]: 65_536,
       [AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID]: 262_144,
       [AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID]: 32_768,
+      [AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP8_MODEL_ID]: 65_536,
+      [AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP8_MODEL_ID]: 65_536,
+      [AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]: 65_536,
+      [AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP8_MODEL_ID]: 65_536,
+      [AX_ENGINE_QWEN38_FLASH_NEXT_AXQ_MXFP4_MODEL_ID]: 65_536,
     })
 
     for (const [modelID, contextTokens] of Object.entries(AX_ENGINE_MODEL_CONTEXT_TOKENS)) {
@@ -1666,9 +1676,16 @@ describe("ax-engine provider integration", () => {
     expect(provider).toBeDefined()
     expect(Object.keys(provider.models)).toEqual([
       AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+      AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP8_MODEL_ID,
       AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP4_MODEL_ID,
+      AX_ENGINE_SWIFT_QWEN38_27B_AXQ_MXFP8_MODEL_ID,
+      AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+      AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP8_MODEL_ID,
+      AX_ENGINE_QWEN38_FLASH_NEXT_AXQ_MXFP4_MODEL_ID,
     ])
-    expect(Object.values(provider.models).map((model) => model.limit.context)).toEqual([65_536, 65_536])
+    expect(Object.values(provider.models).map((model) => model.limit.context)).toEqual([
+      65_536, 65_536, 65_536, 65_536, 65_536, 65_536, 65_536,
+    ])
     expect(provider.models[AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]).toMatchObject({
       name: "Tiel Coder 35B A3B AXQ MXFP4 MTP (Local MLX)",
       tool_call: true,

@@ -1,8 +1,38 @@
 import { fileURLToPath } from "node:url"
+import z from "zod"
+import collection from "../src/provider/ax-engine/collection.json"
+import { readBoundedBody } from "../src/util/http-body"
+import { parseJsonStrict } from "../src/util/json-value"
 import { Filesystem } from "../src/util/filesystem"
 import { HubCatalog, hubArtifactMetadata, evaluateHubModel, hubModelID } from "../src/provider/ax-engine/hub-model"
 import { ModelsDev } from "../src/provider/models"
 import { axEngineHubCatalog } from "../src/provider/ax-engine/hub-catalog"
+
+// Selection is a reviewed snapshot of the publisher collection. Detect drift
+// before refreshing metadata rather than silently retaining an incomplete menu.
+const response = await fetch("https://huggingface.co/api/collections/AutomatosX/ax-code", {
+  signal: AbortSignal.timeout(15_000),
+  redirect: "error",
+  headers: { accept: "application/json" },
+})
+if (!response.ok) {
+  await response.body?.cancel()
+  throw new Error(`AX Code collection request failed with HTTP ${response.status}`)
+}
+const remote = z
+  .object({ items: z.array(z.object({ type: z.string(), id: z.string().max(256) })).max(2_000) })
+  .parse(parseJsonStrict(Buffer.from(await readBoundedBody(response, 2 * 1024 ** 2)).toString("utf8")))
+const repositories = remote.items.filter((item) => item.type === "model").map((item) => item.id)
+if (
+  repositories.length !== collection.models.length ||
+  repositories.some((repo, index) => repo !== collection.models[index])
+) {
+  throw new Error("AX Code collection changed; update collection.json, curated definitions and selection tests first")
+}
+if (process.argv.includes("--check-collection")) {
+  console.log(`AX Code collection matches all ${repositories.length} selected repositories`)
+  process.exit(0)
+}
 
 const result = await axEngineHubCatalog.refresh()
 if (result.source !== "remote" || result.warnings.length) {
