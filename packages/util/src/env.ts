@@ -228,8 +228,11 @@ export namespace Env {
   // such a cookie's value verbatim.
   const COOKIE_ATTRIBUTE_SHAPES: Record<string, (value: string) => boolean> = {
     comment: () => false, // arbitrary free text — no shape to trust
-    domain: (value) => /^\.?[0-9A-Za-z][0-9A-Za-z.-]*$/.test(value.trim()),
-    expires: (value) => /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,/.test(value.trim()),
+    domain: (value) => /^\.?[0-9A-Za-z][0-9A-Za-z.-]*\.[0-9A-Za-z]+$/.test(value.trim()),
+    expires: (value) =>
+      /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*, [0-9]{2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* [0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2} GMT$/i.test(
+        value.trim(),
+      ),
     "max-age": (value) => /^-?[0-9]+$/.test(value.trim()),
     path: (value) => value.startsWith("/"),
     priority: (value) => ["low", "medium", "high"].includes(value.trim().toLowerCase()),

@@ -337,6 +337,10 @@ describe("Env.sanitize", () => {
     expect(Env.redactSecrets("Set-Cookie: zz=SECRET123; samesite=SECRET; SameSite=None")).toBe(
       "Set-Cookie: zz=[redacted]; samesite=[redacted]; SameSite=None",
     )
+    // Adversarial collisions that imitate a shape prefix still redact.
+    expect(Env.redactSecrets("Set-Cookie: zz=SECRET123; expires=Sat,my-api-key; domain=supersecret")).toBe(
+      "Set-Cookie: zz=[redacted]; expires=[redacted]; domain=[redacted]",
+    )
   })
 
   test("redacts combined Set-Cookie headers and malformed cookie values", () => {
