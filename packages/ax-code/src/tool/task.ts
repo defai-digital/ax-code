@@ -203,23 +203,25 @@ async function startBackgroundSubagent(input: {
   )
 }
 
+// Terminal queue statuses (the same set TaskQueue.setStatus treats as
+// terminal): rows in these states no longer count against background
+// capacity. Kept as a plain string set so it can be checked against the
+// wider Status union without importing the task-queue namespace statically.
+const TERMINAL_TASK_STATUSES: ReadonlySet<string> = new Set(["completed", "failed", "cancelled"])
+
 async function assertBackgroundCapacity(
   parentSessionID: SessionID,
   TaskQueue: typeof import("../session/task-queue").TaskQueue,
 ) {
+  // Query only non-terminal rows: listing the first N rows of any status let
+  // 100+ terminal rows shadow a later active subagent row and over-admit past
+  // MAX_BACKGROUND_SUBAGENTS. limit: 500 is the ListInput schema maximum.
+  const statuses = TaskQueue.Status.options.filter((status) => !TERMINAL_TASK_STATUSES.has(status))
   const children = await Session.children(parentSessionID)
   let active = 0
   for (const child of children) {
-    const items = await TaskQueue.list({ sessionID: child.id, limit: 100 })
-    if (
-      items.some(
-        (item) =>
-          item.kind === "subagent" &&
-          item.status !== "completed" &&
-          item.status !== "failed" &&
-          item.status !== "cancelled",
-      )
-    ) {
+    const items = await TaskQueue.list({ sessionID: child.id, statuses, limit: 500 })
+    if (items.some((item) => item.kind === "subagent")) {
       active++
     }
   }

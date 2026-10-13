@@ -54,7 +54,9 @@ afterEach(async () => {
 
 describe("background subagent control", () => {
   test("aborting the parent cancels busy children and their queue rows", async () => {
-    await using tmp = await tmpdir({ git: true })
+    // `username` in the project config keeps this test runnable in sandboxes
+    // where the passwd lookup behind os.userInfo() is denied.
+    await using tmp = await tmpdir({ git: true, config: { username: "testuser" } })
 
     modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
     summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
@@ -110,7 +112,9 @@ describe("background subagent control", () => {
   })
 
   test("rejects a new background spawn when the parent already has the max active children", async () => {
-    await using tmp = await tmpdir({ git: true })
+    // `username` in the project config keeps this test runnable in sandboxes
+    // where the passwd lookup behind os.userInfo() is denied.
+    await using tmp = await tmpdir({ git: true, config: { username: "testuser" } })
 
     await Instance.provide({
       directory: tmp.path,
@@ -174,6 +178,96 @@ describe("background subagent control", () => {
           // have a wide swarm alongside its background tasks.
           /Maximum concurrent background subagents.*counts background tasks only/s,
         )
+      },
+    })
+  })
+
+  test("counts an active subagent row buried behind more than 100 terminal rows", async () => {
+    // `username` in the project config keeps this test runnable in sandboxes
+    // where the passwd lookup behind os.userInfo() is denied.
+    await using tmp = await tmpdir({ git: true, config: { username: "testuser" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ title: "Parent" })
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: parent.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: "test" as any, modelID: "test-model" as any },
+        } as any)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: parent.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          modelID: "test-model",
+          providerID: "test",
+          time: { created: Date.now() },
+        } as MessageV2.Assistant)
+
+        // Seven children each hold one plainly visible active subagent row.
+        for (let index = 0; index < MAX_BACKGROUND_SUBAGENTS - 1; index++) {
+          const child = await Session.create({ parentID: parent.id, title: `Child ${index}` })
+          const item = await TaskQueue.enqueue({
+            sessionID: child.id,
+            kind: "subagent",
+            title: `Active ${index}`,
+            payload: { source: "task", resumeOnRestart: true },
+          })
+          await TaskQueue.setStatus({ id: item.id, status: "running" })
+        }
+
+        // The eighth child buries its active row behind 101 terminal rows: the
+        // first 100 rows of an unfiltered listing are all terminal, so a
+        // page-limited any-status query misses the active row and would
+        // over-admit past the background limit.
+        const buried = await Session.create({ parentID: parent.id, title: "Child buried" })
+        for (let index = 0; index < 101; index++) {
+          const item = await TaskQueue.enqueue({
+            sessionID: buried.id,
+            kind: "subagent",
+            title: `Done ${index}`,
+            payload: { source: "task", resumeOnRestart: true },
+          })
+          await TaskQueue.setStatus({ id: item.id, status: "completed" })
+        }
+        const buriedActive = await TaskQueue.enqueue({
+          sessionID: buried.id,
+          kind: "subagent",
+          title: "Buried active",
+          payload: { source: "task", resumeOnRestart: true },
+        })
+        await TaskQueue.setStatus({ id: buriedActive.id, status: "running" })
+
+        await expect(
+          (await TaskTool.init()).execute(
+            {
+              description: "One more",
+              prompt: "do more work",
+              subagent_type: "explore",
+              background: true,
+            },
+            {
+              sessionID: parent.id,
+              messageID: assistant.id,
+              callID: "",
+              agent: "build",
+              abort: AbortSignal.any([]),
+              messages: [],
+              metadata: () => {},
+              ask: async () => {},
+              extra: {},
+            } as any,
+          ),
+        ).rejects.toThrow(/Maximum concurrent background subagents/s)
       },
     })
   })
