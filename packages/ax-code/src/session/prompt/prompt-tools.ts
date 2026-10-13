@@ -1073,15 +1073,55 @@ export async function estimateRegistryToolSchemaTokens(input: {
     registryTools.map((item) => item.id),
     ruleset,
   )
-  return estimateToolDefinitionTokens(
-    registryTools
-      .filter((item) => input.tools?.[item.id] !== false && !disabledRegistryTools.has(item.id))
-      .map((item) => ({
-        id: item.id,
-        description: item.description,
-        inputSchema: ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters)),
-      })),
-  )
+  const definitions: Array<{ id: string; description?: string; inputSchema: unknown }> = registryTools
+    .filter((item) => input.tools?.[item.id] !== false && !disabledRegistryTools.has(item.id))
+    .map((item) => ({
+      id: item.id,
+      description: item.description,
+      inputSchema: ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters)),
+    }))
+
+  // resolveTools also sends connected MCP tools and, when a WebMCP bridge is
+  // among them, the browser_workflow tool. Neither comes from the registry, so
+  // leaving them out under-counted a bridged session's tool schemas by roughly
+  // 45 KB and let an oversized first request pass preflight. Mirror the same
+  // admission rules; fail soft to the registry-only count if MCP is unavailable.
+  const mcpTools = await MCP.tools().catch((error) => {
+    log.warn("mcp tools unavailable for preflight estimate", { error })
+    return {} as Awaited<ReturnType<typeof MCP.tools>>
+  })
+  const disabledMcpTools = Permission.disabled(Object.keys(mcpTools), ruleset)
+  const modelIdentity = schemaFingerprint({
+    id: input.model.id,
+    providerID: input.model.providerID,
+    apiID: input.model.api.id,
+    npm: input.model.api.npm,
+    url: input.model.api.url,
+  })
+  for (const [key, item] of Object.entries(mcpTools)) {
+    if (input.tools?.[key] === false || disabledMcpTools.has(key) || !item.execute) continue
+    definitions.push({
+      id: key,
+      description: item.description,
+      inputSchema: await transformMcpInputSchema({
+        cacheKey: `mcp:${key}:${modelIdentity}`,
+        model: input.model,
+        inputSchema: item.inputSchema,
+      }),
+    })
+  }
+  if (
+    Object.values(mcpTools).some((item) => item.webmcp) &&
+    input.tools?.browser_workflow !== false &&
+    !Permission.disabled(["browser_workflow"], ruleset).has("browser_workflow")
+  ) {
+    definitions.push({
+      id: "browser_workflow",
+      description: BrowserWorkflow.description,
+      inputSchema: ProviderTransform.schema(input.model, z.toJSONSchema(BrowserWorkflow.Parameters)),
+    })
+  }
+  return estimateToolDefinitionTokens(definitions)
 }
 
 /**

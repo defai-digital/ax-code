@@ -16,9 +16,16 @@ const hostToken = process.env.AX_CODE_DESKTOP_BROWSER_TOKEN
 export namespace DesktopBrowser {
   export const CAPABILITY = "desktop.webmcp.v1"
   export const HEADER = "x-ax-desktop-browser-token"
-  export const Failure = NamedError.create("DesktopBrowserUnavailable", z.object({ reason: z.string() }))
+  // `message` mirrors `reason` so the model-facing tool error, the log line and the recorded
+  // event all carry the actionable sentence instead of the bare error name (NamedError only
+  // promotes `data.message`). Every construction goes through `failure` to keep them in sync.
+  export const Failure = NamedError.create(
+    "DesktopBrowserUnavailable",
+    z.object({ reason: z.string(), message: z.string() }),
+  )
+  const failure = (reason: string) => new Failure({ reason, message: reason })
   const fail = (reason: string): never => {
-    throw new Failure({ reason })
+    throw failure(reason)
   }
   export const ID = z.string().uuid()
   export const ToolDefinition = z
@@ -186,7 +193,7 @@ export namespace DesktopBrowser {
     for (const pending of [...provider.pending.values()]) {
       provider.canceled.push(pending.request.requestID)
       pending.cleanup()
-      pending.reject(new Failure({ reason: "Browser connection or document changed; completion is unconfirmed" }))
+      pending.reject(failure("Browser connection or document changed; completion is unconfirmed"))
     }
     provider.queue.length = 0
     provider.canceled = provider.canceled.slice(-8)
@@ -199,7 +206,9 @@ export namespace DesktopBrowser {
         retire(found)
         state().delete(id)
       }
-      return fail("Desktop browser is disconnected")
+      return fail(
+        "The project browser is disconnected, for example because its window was hidden, minimized or closed. Ask the user to reopen the project browser and enable agent access again; do not retry automatically",
+      )
     }
     return found
   }
@@ -283,17 +292,20 @@ export namespace DesktopBrowser {
     const result = Reply.parse(reply)
     pending.cleanup()
     if (result.status !== "Completed")
-      pending.reject(
-        new Failure({ reason: "Native invocation did not confirm completion; do not retry automatically" }),
-      )
+      pending.reject(failure("Native invocation did not confirm completion; do not retry automatically"))
     else pending.resolve(result)
   }
   export function forSession(sessionID: SessionID) {
     const entries = [...state().values()].filter((entry) => entry.sessionID === sessionID)
-    if (entries.length !== 1) return fail("Enable the project browser for this coding session first")
+    if (entries.length !== 1)
+      return fail(
+        "No project browser is enrolled for this coding session. Ask the user to enable agent access in the project browser pane; this tool cannot enable it or open pages",
+      )
     const entry = provider(entries[0]!.id)
     if (!entry.snapshot.origin || !entry.snapshot.frameId)
-      return fail("Navigate the browser to an HTTPS or loopback page first")
+      return fail(
+        "The project browser is enrolled but no page can be granted to the agent. Ask the user to open the exact https:// or loopback http:// URL in the project browser pane; this tool cannot open pages. Do not retry until they confirm",
+      )
     return Binding.parse({
       providerID: entry.id,
       epoch: entry.epoch,
@@ -348,7 +360,7 @@ export namespace DesktopBrowser {
         entry.canceled.push(request.requestID)
         entry.canceled = entry.canceled.slice(-8)
         entry.wake?.()
-        reject(new Failure({ reason: "Browser request canceled or timed out; completion is unconfirmed" }))
+        reject(failure("Browser request canceled or timed out; completion is unconfirmed"))
       }
       const timer = setTimeout(cancel, 30000)
       const cleanup = () => {

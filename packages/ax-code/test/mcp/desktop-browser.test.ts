@@ -17,6 +17,7 @@ import { Config } from "@/config/config"
 import { MessageID } from "@/session/schema"
 import type { Tool } from "@/tool/tool"
 import { tmpdir } from "../fixture/fixture"
+import { NamedError } from "@ax-code/util/error"
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -399,6 +400,111 @@ describe("private desktop WebMCP provider", () => {
       await DesktopBrowser.enroll({ sessionID: session.id, snapshot: state })
       await expect(DesktopBrowser.list(binding, new AbortController().signal)).rejects.toThrow()
       await expect(DesktopBrowser.poll(old.providerID, new AbortController().signal)).rejects.toThrow()
+    })
+  })
+})
+
+describe("desktop WebMCP failure messages", () => {
+  const ctxFor = (session: Awaited<ReturnType<typeof Session.create>>, ask: Tool.Context["ask"]): Tool.Context => ({
+    sessionID: session.id,
+    messageID: MessageID.ascending(),
+    agent: "build",
+    abort: new AbortController().signal,
+    messages: [],
+    metadata: () => {},
+    ask,
+  })
+  type Failure = InstanceType<typeof DesktopBrowser.Failure>
+  const caught = (fn: () => unknown) => {
+    try {
+      fn()
+    } catch (error) {
+      return error as Failure
+    }
+    throw new Error("expected a DesktopBrowserUnavailable failure")
+  }
+  // Error.message is not enumerable, so matchers that walk own properties would skip it.
+  const rejection = (promise: Promise<unknown>) =>
+    promise.then(
+      () => {
+        throw new Error("expected a DesktopBrowserUnavailable rejection")
+      },
+      (error: unknown) => error as Failure,
+    )
+
+  test("tells the model that only the user can enable the project browser, before any approval", async () => {
+    await fixture(async (session) => {
+      const tool = await DesktopWebMcpTool.init()
+      expect(tool.description).toContain("This tool cannot open pages")
+      expect(tool.description).toContain("an empty catalog is a normal result")
+      const ask = vi.fn(async () => {})
+      const error = await rejection(tool.execute({ action: "list" }, ctxFor(session, ask)))
+      expect(DesktopBrowser.Failure.isInstance(error)).toBe(true)
+      expect(error.message).toContain("Ask the user to enable agent access")
+      expect(error.message).toContain("this tool cannot enable it or open pages")
+      expect(ask).not.toHaveBeenCalled()
+    })
+  })
+
+  test("a blank enrolled page asks the user for a URL and keeps the reason in the payload", async () => {
+    await fixture(async (session) => {
+      const connection = await DesktopBrowser.enroll({
+        sessionID: session.id,
+        snapshot: { generation: randomUUID(), origin: null, frameId: "top", tools: [] },
+      })
+      const error = caught(() => DesktopBrowser.forSession(session.id))
+      expect(DesktopBrowser.Failure.isInstance(error)).toBe(true)
+      expect(error.message).toBe(error.data.reason)
+      expect(error.message).toContain("open the exact https:// or loopback http:// URL")
+      expect(error.message).toContain("this tool cannot open pages")
+      // The recorded body round-trips the sentence, so event readers never see the bare name.
+      expect(NamedError.message(error.toObject())).toBe(error.message)
+      expect(DesktopBrowser.Failure.Schema.parse(error.toObject()).data.message).toBe(error.message)
+      DesktopBrowser.disconnect(connection.providerID)
+    })
+  })
+
+  test("an enrolled page without registered tools lists an empty catalog", async () => {
+    await fixture(async (session, state) => {
+      const empty = { ...state, tools: [] }
+      const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: empty })
+      const abort = new AbortController().signal
+      const listing = DesktopBrowser.list(DesktopBrowser.forSession(session.id), abort)
+      const batch = await DesktopBrowser.poll(connection.providerID, abort)
+      DesktopBrowser.respond(connection.providerID, {
+        requestID: batch.request!.requestID,
+        generation: empty.generation,
+        status: "Completed",
+        snapshot: empty,
+      })
+      await expect(listing).resolves.toEqual([])
+      DesktopBrowser.disconnect(connection.providerID)
+    })
+  })
+
+  test("unconfirmed completions, disconnects and credential rejections carry their reason as the message", async () => {
+    await fixture(async (session, state) => {
+      const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: state })
+      const binding = DesktopBrowser.forSession(session.id)
+      const credential = caught(() =>
+        DesktopBrowser.prepareInvocation(binding, "echo", DesktopBrowser.digest(state.tools[0]!), {
+          password: "hunter2",
+        }),
+      )
+      expect(credential.message).toBe("Credential fields are not accepted in agent input")
+      expect(credential.message).not.toContain("hunter2")
+      const abort = new AbortController().signal
+      const pending = rejection(DesktopBrowser.list(binding, abort))
+      // Wait until the request is queued so the disconnect retires an in-flight call.
+      const batch = await DesktopBrowser.poll(connection.providerID, abort)
+      expect(batch.request?.operation).toBe("list")
+      DesktopBrowser.disconnect(connection.providerID)
+      const unconfirmed = await pending
+      expect(DesktopBrowser.Failure.isInstance(unconfirmed)).toBe(true)
+      expect(unconfirmed.message).toBe(unconfirmed.data.reason)
+      expect(unconfirmed.message).toContain("completion is unconfirmed")
+      const gone = caught(() => DesktopBrowser.forSession(session.id))
+      expect(gone.message).toContain("Ask the user to enable agent access")
     })
   })
 })

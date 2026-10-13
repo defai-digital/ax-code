@@ -5,7 +5,16 @@ agent: build
 argument-hint: <page or app and expected behavior>
 ---
 
-Use the connected browser bridge for the task in $ARGUMENTS. Establish the expected outcome and the user-authorized page before acting.
+Use the browser capability this session actually exposes for the task in $ARGUMENTS. Establish the expected outcome and the user-authorized page before acting.
+
+## Desktop project browser (embedded mode)
+
+When `desktop_webmcp` is the only browser tool, this session runs inside the AX Coder desktop app. The bridge tools described below (`list_pages`, `new_page`, `navigate_page`, `list_webmcp_tools`, `execute_webmcp_tool`, `browser_workflow`) do not exist there; do not search for them.
+
+- Only the user can open or navigate pages in the project browser pane. `desktop_webmcp` cannot open pages, take snapshots, click, or read page content. It lists and invokes the tools the open page registered through native WebMCP, and its `input` is a JSON object, not a string.
+- Call `desktop_webmcp` with `action: "list"` on the page the user already opened. When the runtime reports that no project browser is enrolled or that no page can be granted, stop and ask the user to open the page in the project browser pane; when they named a site without a scheme, suggest one `https://` candidate. Do not retry until they confirm.
+- An empty catalog on an ordinary website is a normal result: that page registered no tools. Report it and use `webfetch` for public content instead of retrying.
+- Invoke only with the exact `toolName` and `digest` from a fresh listing. Approvals, descriptor drift, and the untrusted-data rules below apply unchanged.
 
 ## Choose the available capability
 
