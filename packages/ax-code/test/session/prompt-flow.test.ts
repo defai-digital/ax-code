@@ -558,6 +558,9 @@ describe("session.prompt flow", () => {
   test("stops repeated context overflow after compaction instead of looping", async () => {
     await using tmp = await tmpdir({ git: true })
     const agents: string[] = []
+    // Compaction needs earlier history to summarize, so the overflow starts on
+    // the second turn; the first turn answers normally.
+    let overflowing = false
     const contextOverflow = new APICallError({
       message: "request requires 30144 tokens (28096 prompt + 2048 max output), exceeding model context length 16384",
       url: "https://example.com/v1/chat/completions",
@@ -579,7 +582,7 @@ describe("session.prompt flow", () => {
     summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
     streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async (input) => {
       agents.push(input.agent.name)
-      if (input.agent.name !== "compaction") throw contextOverflow
+      if (overflowing && input.agent.name !== "compaction") throw contextOverflow
       return {
         fullStream: (async function* () {
           yield { type: "start" }
@@ -605,6 +608,14 @@ describe("session.prompt flow", () => {
           model: { providerID: model.providerID, modelID: model.id },
           sessionID: session.id,
           agent: "build",
+          parts: [{ type: "text", text: "plan a website" }],
+        })
+        overflowing = true
+        agents.length = 0
+        await SessionPrompt.prompt({
+          model: { providerID: model.providerID, modelID: model.id },
+          sessionID: session.id,
+          agent: "build",
           parts: [{ type: "text", text: "create a website" }],
         })
 
@@ -616,6 +627,55 @@ describe("session.prompt flow", () => {
         expect(lastAssistant?.info.error?.data.message).toContain(
           "still exceeds the model context window after compaction",
         )
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("stops without compacting when the first request already overflows the context window", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const agents: string[] = []
+    const contextOverflow = new APICallError({
+      message: "request requires 30144 tokens (28096 prompt + 2048 max output), exceeding model context length 16384",
+      url: "https://example.com/v1/chat/completions",
+      requestBodyValues: {},
+      statusCode: 400,
+      responseHeaders: { "content-type": "application/json" },
+      responseBody: JSON.stringify({
+        error: {
+          message:
+            "request requires 30144 tokens (28096 prompt + 2048 max output), exceeding model context length 16384",
+          type: "invalid_request_error",
+          code: "context_length_exceeded",
+        },
+      }),
+      isRetryable: false,
+    })
+
+    modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+    summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+    streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async (input) => {
+      agents.push(input.agent.name)
+      throw contextOverflow
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "First Request Overflow Test" })
+        await SessionPrompt.prompt({
+          model: { providerID: model.providerID, modelID: model.id },
+          sessionID: session.id,
+          agent: "build",
+          parts: [{ type: "text", text: "create a website" }],
+        })
+
+        expect(agents).toEqual(["build"])
+        const messages = await Session.messages({ sessionID: session.id })
+        expect(messages.some((message) => message.parts.some((part) => part.type === "compaction"))).toBe(false)
+        const lastAssistant = messages.findLast((message) => message.info.role === "assistant")
+        if (!lastAssistant || lastAssistant.info.role !== "assistant") throw new Error("missing assistant message")
+        expect(lastAssistant.info.error?.data.message).toContain("compaction cannot help")
         await Session.remove(session.id)
       },
     })
