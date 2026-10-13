@@ -1,5 +1,5 @@
 /**
- * Browser runtime adapter (ADR-047).
+ * Browser runtime adapter (experimental Playwright tools, ADR-052 Work track; frozen until v8 per ADR-061).
  *
  * Manages the Playwright browser instance lifecycle. The instance
  * persists for the session lifetime (not individual tool calls)

@@ -278,10 +278,12 @@ export namespace Flag {
   // slice 0 is inert with the flag on OR off — no call sites route to shards
   // yet. Later slices gate shard routing on this flag for staged rollout.
   export declare const AX_CODE_SHARD_SESSIONS: boolean
-  // Visual Browser Agent (ADR-047): snapshot-first browser automation for
-  // local web UI review and repair. Gated behind feature flag until the
-  // Playwright runtime dependency and permission model are stable.
-  export const AX_CODE_EXPERIMENTAL_BROWSER_AGENT = AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_BROWSER_AGENT")
+  // Experimental Playwright browser tools from the 2026-07 Work/vision track
+  // (ADR-052), frozen with computer use until v8 (ADR-061). Deliberately not
+  // part of the AX_CODE_EXPERIMENTAL umbrella: the set registers
+  // browser_evaluate, which runs arbitrary page JavaScript outside the WebMCP
+  // bridge policy (ADR-169), so it turns on only by its own explicit flag.
+  export const AX_CODE_EXPERIMENTAL_BROWSER_AGENT = truthy("AX_CODE_EXPERIMENTAL_BROWSER_AGENT")
   // Visual artifact storage: enables `.ax-code/visual-runs/` directory
   // for screenshot, DOM, console, and network evidence from visual runs.
   export const AX_CODE_EXPERIMENTAL_VISUAL_ARTIFACTS =

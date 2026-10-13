@@ -213,7 +213,7 @@ export namespace SystemPrompt {
           `  IMPORTANT: Do NOT run \`open\`, \`xdg-open\`, \`start\`, or \`sensible-browser\` commands to verify your output.`,
           `  After applying changes, report: "Changes applied — refresh your browser to see the update."`,
           `  Avoid double-quoted CSS values such as url("data:image/...") inside double-quoted style attributes; verify rendered DOM when visual output matters.`,
-          `  If the playwright MCP server is connected (and no <webmcp_bridge> block is present), use browser_screenshot to verify rendering without opening a new window.`,
+          `  If an @playwright/mcp server is connected (and no <webmcp_bridge> block is present), use its browser_take_screenshot tool to verify rendering without opening a new window.`,
           `  Only open the browser when the user explicitly asks you to.`,
           `</html_dev_workflow>`,
         ]
