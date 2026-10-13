@@ -415,7 +415,7 @@ export async function convertMcpTool(
         )
         if (webmcp) {
           try {
-            WebMcpProfile.validateResult(webmcp.toolName, result)
+            WebMcpProfile.validateResult(webmcp.toolName, result, (input ?? {}) as Record<string, unknown>)
             WebMcpProfile.validateLanding(
               webmcp.profile,
               webmcp.toolName,
@@ -440,6 +440,18 @@ export async function convertMcpTool(
             throw error
           }
           callAccepted = true
+          // ADR-192: every confirmed navigation (url, reload, back, forward)
+          // produces a new document. A reload keeps the URL, so the same-URL
+          // check in verifyTarget would let a stale uid map stand in for the
+          // rebuilt page; drop the map and the listing baseline explicitly.
+          if (webmcp.toolName === "navigate_page") {
+            // validateCall guarantees a numeric pageId; the guard keeps the
+            // clear from silently no-op'ing on a shape nobody validated.
+            const pageId = (input as Record<string, unknown>).pageId
+            if (typeof pageId !== "number") throw new Error("WebMCP navigation confirmed for an unidentified page")
+            WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
+            WebMcpProfile.invalidateListing(webmcp.profile, pageId)
+          }
           if (readTier && webmcp && readOrigin) {
             // Re-resolve the page after the call: a page that navigated to
             // another origin mid-read discards its output (ADR-171).
@@ -531,6 +543,18 @@ export async function convertMcpTool(
         // map: the page was not observed to change and the result says so.
         if (webmcp && (readOrigin !== undefined || interactOrigin !== undefined) && callAccepted && !pageObserved) {
           WebMcpProfile.clearSnapshot(webmcp.profile, (input as Record<string, unknown>).pageId as number)
+        }
+        // ADR-192: a navigation that reached the bridge and then failed its
+        // result or landing checks may still have replaced the document (a
+        // mixed success-plus-Unable payload, a landing off the allowlist). The
+        // same-URL check in verifyTarget cannot see that, so the map and the
+        // listing baseline go either way.
+        if (webmcp?.toolName === "navigate_page" && WebMcpProfile.wasDispatched(args)) {
+          const pageId = (input as Record<string, unknown>).pageId
+          if (typeof pageId === "number") {
+            WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
+            WebMcpProfile.invalidateListing(webmcp.profile, pageId)
+          }
         }
         log.error("MCP tool call failed", { tool: mcpTool.name, error: toErrorMessage(e) })
         throw e

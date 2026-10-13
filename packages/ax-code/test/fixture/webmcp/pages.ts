@@ -10,6 +10,9 @@ export const PAGES: Record<string, string> = {
     <form onsubmit="return false"><label>Full name <input name="n"></label>
     <label>Password <input type="password" name="p"></label>
     <button type="submit">Continue</button></form>`,
+  // A Traditional Chinese login form with a password field and a verification-code field.
+  "/login-zh": `<!doctype html><title>Login</title>
+    <form onsubmit="return false"><label>\u5BC6\u78BC <input type="password" name="p"></label><label>\u9A57\u8B49\u78BC <input name="otp"></label><button type="submit">\u767B\u5165</button></form>`,
   // A link whose accessible name hides its destination.
   "/link": `<!doctype html><title>Link</title><a href="https://other.example.test/approve">Learn more</a>`,
   // A button named "Continue" that actually submits a form.

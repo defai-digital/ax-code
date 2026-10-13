@@ -18,6 +18,8 @@ describe("WebMCP profile", () => {
         "--no-performance-crux",
         "--category-experimental-webmcp",
         "--experimental-structured-content",
+        "--screenshot-max-width=1600",
+        "--screenshot-max-height=1600",
         "--chrome-arg=--enable-features=WebMCP",
         "--allowed-url-pattern=https://example.test/*",
         "--allowed-url-pattern=http://127.0.0.1:3000/*",
@@ -390,6 +392,16 @@ describe("WebMcpProfile.argvMismatch", () => {
     expect(drifted).toContain("extra --no-category-network")
     expect(WebMcpProfile.argvMismatch(server(expected.slice(0, -1)))).toContain("missing")
     expect(WebMcpProfile.argvMismatch({ type: "local", command: ["x"] } as never)).toBeUndefined()
+  })
+
+  test("a stored command without the screenshot caps is reported as drifted", () => {
+    const config = WebMcpProfile.config({ allowedOrigins: origins })
+    const command = config.command.filter(
+      (arg) => arg !== "--screenshot-max-width=1600" && arg !== "--screenshot-max-height=1600",
+    )
+    // ADR-173: the connect path regenerates the argv from the profile, so the
+    // drift is reported, not executed.
+    expect(WebMcpProfile.argvMismatch({ ...config, command })).toContain("missing --screenshot-max-width=1600")
   })
 })
 

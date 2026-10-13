@@ -94,14 +94,14 @@ async function tool(name: string, profile: WebMcpProfile.Configuration, client: 
 }
 
 describe("WebMCP T2 admission and schemas", () => {
-  test("interact off rejects every T2 tool; interact on admits 6 + 4 + 7 and nothing else", () => {
+  test("interact off rejects every T2 tool; interact on admits 6 + 5 + 7 and nothing else", () => {
     for (const name of WebMcpProfile.INTERACT_TOOLS) {
       expect(WebMcpProfile.allows(name)).toBe(false)
       expect(WebMcpProfile.allows(name, readOnly())).toBe(false)
       expect(() => WebMcpProfile.callSchema(name, readOnly())).toThrow("not admitted")
     }
     const admitted = [...WebMcpProfile.TOOLS, ...WebMcpProfile.READ_SCOPE_TOOLS, ...WebMcpProfile.INTERACT_TOOLS]
-    expect(admitted).toHaveLength(17)
+    expect(admitted).toHaveLength(18)
     for (const name of admitted) expect(WebMcpProfile.allows(name, full())).toBe(true)
     for (const name of NEVER_ADMITTED) {
       expect(WebMcpProfile.allows(name, full())).toBe(false)
@@ -327,6 +327,29 @@ describe("WebMCP T2 snapshot binding and escalation", () => {
     expect(WebMcpProfile.perActionCall(profile, "click", { pageId: 1, uid: "1_2" })).toBe(true)
     expect(WebMcpProfile.perActionCall(profile, "fill", { pageId: 1, uid: "1_5", value: "x" })).toBe(true)
     expect(WebMcpProfile.perActionCall(profile, "press_key", { pageId: 1, key: "Enter" })).toBe(true)
+  })
+
+  test("localized sensitive labels are classified without the English regex", () => {
+    const node = (name: string): WebMcpProfile.SnapshotNode => ({
+      uid: "x",
+      role: "textbox",
+      name,
+      focused: false,
+      attributes: {},
+    })
+    for (const name of [
+      "\u5BC6\u78BC",
+      "\u30D1\u30B9\u30EF\u30FC\u30C9",
+      "\uBE44\uBC00\uBC88\uD638",
+      "Passwort",
+      "mot de passe",
+      "contrase\u00F1a",
+    ]) {
+      expect(WebMcpProfile.sensitiveTarget(node(name))).toBe(true)
+    }
+    for (const name of ["\u59D3\u540D", "Vorname", "nom", "spinach", "opinion", "shipping"]) {
+      expect(WebMcpProfile.sensitiveTarget(node(name))).toBe(false)
+    }
   })
 
   test("the circuit breaker trips on three refusals or three fail-closed checks and resets on approval", () => {

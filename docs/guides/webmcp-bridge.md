@@ -75,14 +75,32 @@ changes what is sent to the agent.
 
 ## What the agent can do
 
-| Tier     | Tools                                                                        | Approval                                                   |
-| -------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| Pages    | list, open, navigate, close pages; run tools a page registers through WebMCP | each call unless a supported scope was saved               |
-| Read     | page snapshot, screenshot, console, request metadata                         | one grant per origin per session, or a saved read approval |
-| Interact | click, hover, wait, fill, fill form, press key, answer dialogs               | see below                                                  |
+| Tier     | Tools                                                                                                          | Approval                                                   |
+| -------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Pages    | list, open, navigate, reload, close pages; run tools a page registers through WebMCP                           | each call unless a supported scope was saved               |
+| Read     | page snapshot, screenshot, console (with stack traces on request), one console message by id, request metadata | one grant per origin per session, or a saved read approval |
+| Interact | click, hover, wait, fill, fill form, press key, answer dialogs                                                 | see below                                                  |
 
 Page content is untrusted: a page can try to steer the agent. Output is
 labeled with its origin and size-limited.
+
+### Reload, back and forward
+
+`navigate_page` takes `type: reload` (with `ignoreCache` for a hard reload)
+so the agent can refresh a page after a code change, and `type: back` or
+`forward` to move through the page's history. Every navigation discards the
+page's snapshot uids and tool listing; the agent snapshots again before it
+acts. Reload follows the same approval as navigating to the page's origin.
+Back and forward have no destination to check before the browser moves, so
+they ask you each time, are never saved and never run automatically, and are
+refused on a bridge whose origin list is narrowed: navigate by URL there. The
+landing origin is checked after the move. Unsaved page state can be lost by
+any of these, exactly as when you reload by hand.
+
+Console messages can include stack traces (`includeStackTraces`), and one
+message can be fetched by its `msgid` with `get_console_message`. Local file
+paths in frames are redacted before the model sees them; page URLs keep
+their path but lose secret-looking query values.
 
 ### Auto mode and Sandbox
 
@@ -95,7 +113,9 @@ The native Desktop browser also lists its page tools without a prompt.
 
 With **Sandbox off**, Auto also admits typing (`fill` and `fill_form`), key
 presses, dialogs, links, double clicks, consequential-looking clicks, closing
-pages and registered page-tool invocations immediately. This applies to the
+pages and registered page-tool invocations immediately. A page tool whose
+listing declares it consequential keeps its prompt in every mode, and history
+navigation (back, forward) always asks. This applies to the
 live AX Code bridge and to bound native Desktop listing and invocation. Initial
 read and interaction grants also proceed without a countdown. Repeated actions
 do not create persistent approvals.

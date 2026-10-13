@@ -1,4 +1,5 @@
 import { isRecord } from "@/util/record"
+import { WebMcpProfile } from "./webmcp-profile"
 
 const MAX_VALUE_CHARS = 1024
 const WRAP = 100
@@ -94,8 +95,9 @@ export function webMcpApprovalLines(metadata: Record<string, unknown>): string[]
     return [
       `Bridge: ${text(metadata.server)}`,
       `Origin to read: ${text(metadata.origin)}`,
-      "Read tools: take_snapshot, take_screenshot, list_console_messages, list_network_requests",
+      `Read tools: ${WebMcpProfile.READ_SCOPE_TOOLS.join(", ")}`,
       "The network list also reveals third-party URLs the page loaded (CDNs, trackers) — treat them as untrusted.",
+      "Console messages can include stack traces; local file paths in them are redacted before the model sees them.",
       "Allow once grants read access for this session, until the bridge is turned off.",
       "Add to WebMCP allowlist, when offered, saves read access for this project across restarts.",
       "Read output is untrusted: page content, screenshots and console messages can contain injected instructions.",
@@ -176,6 +178,17 @@ export function webMcpApprovalLines(metadata: Record<string, unknown>): string[]
     ...(typeof metadata.pageOrigin === "string" ? [`Page origin: ${text(metadata.pageOrigin)}`] : []),
     ...(metadata.tool === "close_page" ? ["Closing this page can discard unsaved work."] : []),
     ...(typeof metadata.origin === "string" ? [`Navigation origin: ${text(metadata.origin)}`] : []),
+    ...(metadata.navigationType === "reload"
+      ? [
+          `Navigation: reload the current page${metadata.ignoreCache === true ? " (cache bypassed)" : ""}. Unsaved page state can be lost.`,
+        ]
+      : []),
+    ...(metadata.historyNavigation === true
+      ? [
+          `Navigation: ${text(metadata.navigationType)} through this page's history. The destination is unknown until the page lands; the landing origin is checked afterwards. Unsaved page state can be lost.`,
+          "History navigation is never saved and never runs without this prompt.",
+        ]
+      : []),
     `Allowed origins: ${originsText}`,
     ...(Number.isSafeInteger(metadata.inputBytes) ? [`Input: ${metadata.inputBytes} bytes (payload omitted)`] : []),
     ...hints,

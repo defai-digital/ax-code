@@ -99,7 +99,6 @@ describe("WebMCP T1 read tier profile", () => {
       "fill",
       "upload_file",
       "get_network_request",
-      "get_console_message",
       "wait_for",
       "handle_dialog",
       "select_page",
@@ -109,6 +108,9 @@ describe("WebMCP T1 read tier profile", () => {
       expect(WebMcpProfile.allows(name, profile)).toBe(false)
       expect(() => WebMcpProfile.callSchema(name, profile)).toThrow("not admitted")
     }
+    // get_console_message joined the read scope in ADR-192: admitted with read on, rejected without it.
+    expect(WebMcpProfile.allows("get_console_message", profile)).toBe(true)
+    expect(WebMcpProfile.allows("get_console_message", plainProfile())).toBe(false)
   })
 
   test("T1 schemas are strict: filePath and unknown keys are rejected, pageId is required", () => {
@@ -180,13 +182,17 @@ describe("WebMCP T1 read tier profile", () => {
     expect(() =>
       WebMcpProfile.validateCall(profile, "list_console_messages", { pageId: 1, types: ["x".repeat(33)] }),
     ).toThrow()
-    for (const extra of [
-      { includeStackTraces: true },
-      { includePreservedMessages: true },
-      { serviceWorkerId: "sw-1" },
-    ]) {
+    // includeStackTraces is admitted since ADR-192; preserved messages span
+    // navigations and service-worker targets are not pages, so both stay out.
+    for (const extra of [{ includePreservedMessages: true }, { serviceWorkerId: "sw-1" }]) {
       expect(() => WebMcpProfile.validateCall(profile, "list_console_messages", { pageId: 1, ...extra })).toThrow()
     }
+    expect(
+      WebMcpProfile.validateCall(profile, "list_console_messages", { pageId: 1, includeStackTraces: true }),
+    ).toEqual({
+      pageId: 1,
+      includeStackTraces: true,
+    })
   })
 
   test("limits guidance preserves the admitted tier and explains runtime Auto approval", () => {

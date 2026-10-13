@@ -1,3 +1,4 @@
+import { isRecord } from "@/util/record"
 import { WebMcpProfile } from "./webmcp-profile"
 
 /** Runtime-owned authority; page annotations and serialized metadata cannot grant it. */
@@ -24,6 +25,12 @@ export namespace WebMcpAutoApproval {
       metadata.originGrant === true ||
       operation.requireInteractive === true ||
       operation.originGrant === true ||
+      // ADR-192: a history move has no destination before dispatch, so there is
+      // nothing the runtime could have checked; it stays an interactive prompt.
+      // Read from both records like originGrant, so a binder that passes the
+      // approval metadata as either argument sees the marker.
+      metadata.historyNavigation === true ||
+      operation.historyNavigation === true ||
       !WebMcpProfile.allows(policy.toolName, policy.profile)
     )
       return
@@ -54,6 +61,16 @@ export namespace WebMcpAutoApproval {
               ? "invoke"
               : undefined
     if (!tier) return
+    // ADR-189 amendment (ADR-192): a page tool the page itself declares
+    // consequential keeps its prompt even in full-access Auto. Tightening only:
+    // the normalised flag must be exactly true; a missing or false annotation
+    // changes nothing, because annotations are page-authored and cannot grant.
+    // The flag was recorded at listing time and the dispatch re-lists and fails
+    // closed on descriptor drift, so a page cannot flip it after approval.
+    if (tier === "invoke") {
+      const annotations = operation.annotations
+      if (isRecord(annotations) && annotations.consequential === true) return
+    }
     const fullAccessOnly = interactAction || policy.toolName === "close_page" || tier === "invoke"
     bindings.set(metadata, { ...admission, patterns: [...admission.patterns], tier, fullAccessOnly, valid })
   }
