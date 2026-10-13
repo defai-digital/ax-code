@@ -58,7 +58,7 @@ describe("private desktop WebMCP provider", () => {
         ).toBe(403)
       }
       const response = await app.request("/desktop/browser/capability", { headers: { [DesktopBrowser.HEADER]: token } })
-      expect(await response.json()).toEqual({ capability: "desktop.webmcp.v1" })
+      expect(await response.json()).toEqual({ capability: "desktop.webmcp.v1", browserMode: "embedded" })
     })
   })
   test("routes native inventory privately and returns definition digests", async () => {

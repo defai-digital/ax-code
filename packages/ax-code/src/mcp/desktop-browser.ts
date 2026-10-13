@@ -8,6 +8,7 @@ import { Config } from "../config/config"
 import { exactOrigin } from "./webmcp-origin"
 import { WebMcpProfile } from "./webmcp-profile"
 import { parseJsonStrict } from "../util/json-value"
+import { BrowserRouting } from "./browser-routing"
 
 // Captured from the trusted launcher once, never from project configuration.
 const hostToken = process.env.AX_CODE_DESKTOP_BROWSER_TOKEN
@@ -171,7 +172,9 @@ export namespace DesktopBrowser {
     return createHash("sha256").update(canonical(tool)).digest("hex")
   }
   export function enabled() {
-    return typeof hostToken === "string" && /^[A-Za-z0-9_-]{43}$/.test(hostToken)
+    return (
+      BrowserRouting.mode() === "embedded" && typeof hostToken === "string" && /^[A-Za-z0-9_-]{43}$/.test(hostToken)
+    )
   }
   export function hostAuthorized(value: string | undefined) {
     if (!enabled() || !value) return false

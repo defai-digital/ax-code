@@ -26,6 +26,7 @@ import { McpOAuthCallback } from "./oauth-callback"
 import { McpAuth } from "./auth"
 import { McpTrust } from "./trust"
 import { WebMcpProfile } from "./webmcp-profile"
+import { BrowserRouting } from "./browser-routing"
 import { Global } from "@/global"
 import { which } from "@/util/which"
 import { BusEvent } from "../bus/bus-event"
@@ -285,7 +286,13 @@ export namespace MCP {
       z
         .object({
           status: z.literal("blocked"),
-          reason: z.enum(["managed_policy", "managed_origins", "persistent_profile", "vendored"]),
+          reason: z.enum([
+            "managed_policy",
+            "managed_origins",
+            "persistent_profile",
+            "vendored",
+            "embedded-browser-only",
+          ]),
           error: z.string(),
         })
         .meta({
@@ -854,6 +861,17 @@ export namespace MCP {
   }
 
   async function create(key: string, mcp: Config.Mcp, owner: McpState) {
+    if (BrowserRouting.externalBridgeBlocked(mcp)) {
+      return {
+        mcpClient: undefined,
+        status: {
+          status: "blocked" as const,
+          reason: "embedded-browser-only" as const,
+          error:
+            "This Desktop runtime uses the embedded browser. External Chrome bridges are unavailable; enable agent access in the project browser.",
+        },
+      }
+    }
     if (WebMcpProfile.disabled(mcp)) {
       log.info("mcp server disabled", { key })
       return {

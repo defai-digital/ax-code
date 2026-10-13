@@ -34,14 +34,16 @@ export const DesktopBrowserRoutes = lazy(() => {
               description: "Native provider capability",
               content: {
                 "application/json": {
-                  schema: resolver(z.object({ capability: z.literal(DesktopBrowser.CAPABILITY) })),
+                  schema: resolver(
+                    z.object({ capability: z.literal(DesktopBrowser.CAPABILITY), browserMode: z.literal("embedded") }),
+                  ),
                 },
               },
             },
             ...errors(403),
           },
         }),
-        (c) => c.json({ capability: DesktopBrowser.CAPABILITY }),
+        (c) => c.json({ capability: DesktopBrowser.CAPABILITY, browserMode: "embedded" as const }),
       )
       .post(
         "/provider",

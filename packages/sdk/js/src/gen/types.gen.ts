@@ -2853,7 +2853,7 @@ export type McpStatus =
 /** AX Code API schema `McpStatusBlocked` (auto-generated from the OpenAPI contract). */
 export type McpStatusBlocked = {
   status: "blocked"
-  reason: "managed_policy" | "managed_origins" | "persistent_profile" | "vendored"
+  reason: "managed_policy" | "managed_origins" | "persistent_profile" | "vendored" | "embedded-browser-only"
   error: string
 }
 
@@ -16427,6 +16427,7 @@ export type DesktopBrowserCapabilityResponses = {
    */
   200: {
     capability: "desktop.webmcp.v1"
+    browserMode: "embedded"
   }
 }
 

@@ -34683,10 +34683,15 @@
                     "capability": {
                       "type": "string",
                       "const": "desktop.webmcp.v1"
+                    },
+                    "browserMode": {
+                      "type": "string",
+                      "const": "embedded"
                     }
                   },
                   "required": [
-                    "capability"
+                    "capability",
+                    "browserMode"
                   ]
                 }
               }
@@ -45663,7 +45668,8 @@
               "managed_policy",
               "managed_origins",
               "persistent_profile",
-              "vendored"
+              "vendored",
+              "embedded-browser-only"
             ]
           },
           "error": {
