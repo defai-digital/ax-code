@@ -114,10 +114,13 @@ export const ListTool = Tool.define("list", {
   concurrencySafe: () => true,
   async execute(params, ctx) {
     const searchPath = await fileToolGuard(ctx, params.path ?? Instance.directory, { kind: "directory" })
+    // Rules and policies name directories workspace-relatively, so the ask
+    // uses that domain too; the absolute path stays in metadata for display.
+    const permissionPath = normalizeToWorkspacePath(searchPath, Instance.worktree) || searchPath
 
     await ctx.ask({
       permission: "list",
-      patterns: [searchPath],
+      patterns: [permissionPath],
       always: ["*"],
       metadata: {
         path: searchPath,

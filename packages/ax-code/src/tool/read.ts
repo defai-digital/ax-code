@@ -139,9 +139,13 @@ export const ReadTool = Tool.define("read", {
         })
       }
 
+      // Permission rules and policies name files workspace-relatively
+      // (`src/**`, `.env`, `*.key`), so the ask has to use the same domain as
+      // the write and edit tools. An absolute pattern never matches those
+      // anchored rules, which left a deny or ask rule silently unenforced.
       await ctx.ask({
         permission: "read",
-        patterns: [filepath],
+        patterns: [title || filepath],
         always: ["*"],
         metadata: {},
       })
