@@ -860,6 +860,11 @@ export const SessionRoutes = lazy(() =>
 
         let session = await Session.get(sessionID)
         if (updates.title !== undefined) {
+          // Session.setTitle requires a non-empty title; without this the
+          // domain ZodError would surface as a 500 instead of the declared 400.
+          if (updates.title.length === 0) {
+            throw new HTTPException(400, { message: "Title must not be empty" })
+          }
           session = await Session.setTitle({ sessionID, title: updates.title })
         }
         if (updates.time?.archived !== undefined) {

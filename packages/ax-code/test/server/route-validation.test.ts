@@ -413,6 +413,26 @@ describe("server route validation", () => {
     })
   })
 
+  test("session update route rejects an empty title with a 400 instead of a 500", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const session = await Session.create({})
+        try {
+          const res = await Server.Default().request(`/session/${session.id}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ title: "" }),
+          })
+          expect(res.status).toBe(400)
+          expect(await res.json()).toMatchObject({ name: "InvalidRequestError", status: 400 })
+        } finally {
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
   test("session update route restores an archived session when archived is null", async () => {
     await Instance.provide({
       directory: root,
