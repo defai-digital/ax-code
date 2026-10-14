@@ -163,4 +163,31 @@ describe("ScheduledTask workflow outcome recording", () => {
       },
     })
   })
+
+  test("a run-now on a runtime-disabled workflow still cancels the pre-created run", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+        delete process.env.AX_CODE_WORKFLOW_RUNTIME
+        try {
+          const task = await createWorkflowTask()
+          await expect(ScheduledTask.runNow(task.id)).rejects.toThrow()
+
+          // The start failed BECAUSE the spec is runtime-disabled, so cancel()
+          // re-runs the same enablement gate and throws the same error. The
+          // cleanup must not depend on it, or the pre-created run stays `queued`
+          // with no sweep to repair it (recoverInterrupted only looks at
+          // `running` rows).
+          const runs = await WorkflowRun.list()
+          expect(runs).toHaveLength(1)
+          expect(runs[0]!.status).toBe("cancelled")
+        } finally {
+          if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+          else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+        }
+      },
+    })
+  })
 })

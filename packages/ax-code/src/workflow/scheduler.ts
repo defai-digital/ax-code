@@ -210,6 +210,21 @@ export namespace WorkflowScheduler {
   export async function cancel(runID: WorkflowRunID) {
     const detail = await WorkflowRun.getDetail(runID)
     await assertEnabledForSpec(detail.spec.id)
+    return terminateRun(runID, detail)
+  }
+
+  /**
+   * Terminate a run that never started, without the enablement gate `cancel`
+   * asserts. A dispatch that failed BECAUSE the spec is runtime-disabled must
+   * still be cleaned up: `cancel` would re-run the same assert, throw the same
+   * error, and leave the pre-created row `queued` forever — `recoverInterrupted`
+   * sweeps only `running` rows and there is no run retention.
+   */
+  export async function cancelUnstarted(runID: WorkflowRunID) {
+    return terminateRun(runID, await WorkflowRun.getDetail(runID))
+  }
+
+  async function terminateRun(runID: WorkflowRunID, detail: Awaited<ReturnType<typeof WorkflowRun.getDetail>>) {
     for (const child of detail.children) {
       if (child.taskQueueID) {
         await cancelWorkflowQueueItem(child.taskQueueID).catch(() => undefined)

@@ -801,7 +801,7 @@ export namespace ScheduledTask {
       // The claim rolled back, so the pre-created run can never start: cancel
       // it instead of leaving a never-started queued run behind (same cleanup
       // the dispatch timeout path applies to a pre-created run).
-      await WorkflowScheduler.cancel(run.id).catch((cancelError) => {
+      await WorkflowScheduler.cancelUnstarted(run.id).catch((cancelError) => {
         log.warn("failed to cancel a run-now workflow run after an aborted claim", {
           taskID: current.id,
           runID: run.id,
@@ -822,7 +822,7 @@ export namespace ScheduledTask {
       // then `queued` and nothing will ever start it, so cancel it — the same
       // cleanup the aborted-claim branch above does. Otherwise the run list
       // keeps a phantom attempt that no sweep repairs.
-      await WorkflowScheduler.cancel(run.id).catch((cancelError) => {
+      await WorkflowScheduler.cancelUnstarted(run.id).catch((cancelError) => {
         log.warn("failed to cancel a scheduled workflow run after a start failure", {
           taskID: current.id,
           runID: run.id,

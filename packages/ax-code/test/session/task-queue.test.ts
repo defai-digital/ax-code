@@ -1519,7 +1519,7 @@ describe("TaskQueue", () => {
           return { id: "wfr_timeout_scheduled" } as never
         })
         const start = vi.spyOn(WorkflowScheduler, "start").mockResolvedValue({ status: "completed" } as never)
-        const cancel = vi.spyOn(WorkflowScheduler, "cancel").mockResolvedValue(undefined as never)
+        const cancel = vi.spyOn(WorkflowScheduler, "cancelUnstarted").mockResolvedValue(undefined as never)
         try {
           const item = await TaskQueue.enqueue({
             kind: "automation",
@@ -1560,7 +1560,7 @@ describe("TaskQueue", () => {
         // start() throws before flipping the run to `running` (runtime-disabled
         // guard or unsupported merge strategy).
         const start = vi.spyOn(WorkflowScheduler, "start").mockRejectedValue(new Error("start failed"))
-        const cancel = vi.spyOn(WorkflowScheduler, "cancel").mockResolvedValue(undefined as never)
+        const cancel = vi.spyOn(WorkflowScheduler, "cancelUnstarted").mockResolvedValue(undefined as never)
         try {
           const scheduled = await ScheduledTask.create({
             title: "Start failure workflow",

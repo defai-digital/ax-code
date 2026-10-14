@@ -874,7 +874,7 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
           try {
             await requireActiveQueueItem(item.id)
           } catch (error) {
-            await WorkflowScheduler.cancel(run.id).catch((cancelError) => {
+            await WorkflowScheduler.cancelUnstarted(run.id).catch((cancelError) => {
               log.warn("failed to cancel timed-out scheduled workflow run", {
                 taskID: item.id,
                 runID: run.id,
@@ -889,7 +889,7 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
             async (error) => {
               // start() can throw before it flips the run to `running`; cancel the
               // never-started run so it does not linger `queued` and unrecoverable.
-              await WorkflowScheduler.cancel(run.id).catch((cancelError) => {
+              await WorkflowScheduler.cancelUnstarted(run.id).catch((cancelError) => {
                 log.warn("failed to cancel scheduled workflow run after a start failure", {
                   taskID: item.id,
                   runID: run.id,
