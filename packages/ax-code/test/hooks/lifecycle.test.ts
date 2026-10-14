@@ -392,6 +392,29 @@ describe("LifecycleHooks claude-code wire protocol", () => {
     expect(result.blockReason).toBe("prompt rejected")
   })
 
+  test("exit 0 with deny and an ill-typed sibling field still blocks", async () => {
+    // A type-invalid optional field (e.g. a serialized absent reason) must not
+    // discard a valid deny verdict — that turned the hook fail-open.
+    const cases = [
+      `{permissionDecision:'deny',reason:42}`,
+      `{permissionDecision:'deny',reason:null}`,
+      `{permissionDecision:'deny',hookSpecificOutput:null}`,
+    ]
+    for (const objectLiteral of cases) {
+      const result = await LifecycleHooks.runHooks(
+        [
+          {
+            event: "PreToolUse",
+            protocol: "claude-code",
+            command: `node -e "console.log(JSON.stringify(${objectLiteral}))"`,
+          },
+        ],
+        { event: "PreToolUse", tool: "bash", args: {}, cwd: process.cwd() },
+      )
+      expect(result.blocked).toBe(true)
+    }
+  })
+
   test("permissionDecision ask is surfaced for interactive confirmation instead of blocking", async () => {
     const result = await LifecycleHooks.runHooks(
       [

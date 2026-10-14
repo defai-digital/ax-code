@@ -134,17 +134,22 @@ export namespace LifecycleHooks {
    */
   const ClaudeCodeDecisionSchema = z
     .object({
-      permissionDecision: z.enum(["allow", "deny", "ask"]).optional(),
-      reason: z.string().optional(),
-      decision: z.enum(["approve", "block"]).optional(),
+      // Each field is read independently, so a wrong-typed sibling (e.g. a
+      // serialized `reason: null`) must not discard an otherwise valid verdict
+      // — that turned a `deny` into an allow (fail-open). Coerce an individual
+      // field to undefined on a type mismatch instead of failing the object.
+      permissionDecision: z.enum(["allow", "deny", "ask"]).optional().catch(undefined),
+      reason: z.string().optional().catch(undefined),
+      decision: z.enum(["approve", "block"]).optional().catch(undefined),
       hookSpecificOutput: z
         .object({
-          permissionDecision: z.enum(["allow", "deny", "ask"]).optional(),
-          permissionDecisionReason: z.string().optional(),
-          additionalContext: z.string().optional(),
+          permissionDecision: z.enum(["allow", "deny", "ask"]).optional().catch(undefined),
+          permissionDecisionReason: z.string().optional().catch(undefined),
+          additionalContext: z.string().optional().catch(undefined),
         })
         .partial()
-        .optional(),
+        .optional()
+        .catch(undefined),
     })
     .partial()
 
