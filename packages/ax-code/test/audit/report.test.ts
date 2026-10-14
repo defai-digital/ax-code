@@ -128,6 +128,62 @@ describe("AuditReport.generate", () => {
     })
   })
 
+  test("orders the action log by when each tool call started", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "Audit report action order" })
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "tool.call",
+          sessionID: session.id,
+          tool: "read",
+          callID: "call-a",
+          input: { filePath: "a.ts" },
+        })
+        // A distinct start time for the second call, so a result-order list is
+        // visibly different from a start-order one.
+        await new Promise((resolve) => setTimeout(resolve, 5))
+        Recorder.emit({
+          type: "tool.call",
+          sessionID: session.id,
+          tool: "read",
+          callID: "call-b",
+          input: { filePath: "b.ts" },
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "read",
+          callID: "call-b",
+          status: "completed",
+          output: "B",
+          durationMs: 1,
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "read",
+          callID: "call-a",
+          status: "completed",
+          output: "A",
+          durationMs: 20,
+        })
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const report = await AuditReport.generate(session.id)
+        const rows = report.split("\n").filter((line) => line.includes(".ts"))
+        expect(rows).toHaveLength(2)
+        expect(rows[0]).toContain("a.ts")
+        expect(rows[1]).toContain("b.ts")
+        expect(rows[0]!.startsWith("| 1 |")).toBe(true)
+        expect(rows[1]!.startsWith("| 2 |")).toBe(true)
+      },
+    })
+  })
+
   test("does not infer validation pass or fail from raw bash status", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

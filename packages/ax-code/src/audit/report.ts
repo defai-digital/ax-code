@@ -212,7 +212,6 @@ export namespace AuditReport {
       conf: number
       matched: string[]
     }> = []
-    let seq = 0
 
     for (const row of rows) {
       const event = row.event_data as ReplayEvent
@@ -244,9 +243,8 @@ export namespace AuditReport {
         case "tool.result": {
           const call = pending.get(event.callID)
           if (call) {
-            seq++
             actions.push({
-              seq,
+              seq: 0,
               time: call.time,
               tool: call.tool,
               target: call.target,
@@ -269,9 +267,8 @@ export namespace AuditReport {
 
     // Handle interrupted calls (no matching result)
     for (const [, call] of pending) {
-      seq++
       actions.push({
-        seq,
+        seq: 0,
         time: call.time,
         tool: call.tool,
         target: call.target,
@@ -332,6 +329,12 @@ export namespace AuditReport {
     }
 
     // Action Log
+    // Rows are appended when a result arrives, but each row shows the call's
+    // start time: order them by that time and number them in that order, so a
+    // call that started first is not listed (and numbered) after one that
+    // started later.
+    actions.sort((a, b) => a.time - b.time)
+    for (let index = 0; index < actions.length; index++) actions[index]!.seq = index + 1
     lines.push("## Action Log")
     lines.push("")
     if (actions.length === 0) {
