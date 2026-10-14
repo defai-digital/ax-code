@@ -433,9 +433,10 @@ export namespace Risk {
         const call = validationMap.get((e.callID as string) ?? "")
         if (tool === "bash" && call) {
           const output = (e.output as string) ?? ""
+          const exit = typeof metadata.exit === "number" ? metadata.exit : undefined
           runs.push({
             command: call,
-            failed: validationFailed({ command: call, status: e.status as "completed" | "error", output }),
+            failed: validationFailed({ command: call, status: e.status as "completed" | "error", output, exit }),
           })
           validationMap.delete((e.callID as string) ?? "")
         }
@@ -545,8 +546,17 @@ export namespace Risk {
     ].some((pat) => pat.test(input))
   }
 
-  function validationFailed(input: { command: string; status: "completed" | "error"; output: string }) {
+  function validationFailed(input: {
+    command: string
+    status: "completed" | "error"
+    output: string
+    exit?: number
+  }) {
     if (input.status === "error") return true
+    // A nonzero exit is recorded as a completed bash result (the tool only
+    // throws on a spawn failure), so the code must be consulted: a failing
+    // typecheck/build/lint prints no test-runner failure text to scan for.
+    if (input.exit !== undefined && input.exit !== 0) return true
     if (!testCommand(input.command)) return false
     const txt = input.output.toLowerCase()
     if (/\b0\s+fail(?:ed|ures?)?\b/.test(txt) || /\b0\s+errors?\b/.test(txt)) return false

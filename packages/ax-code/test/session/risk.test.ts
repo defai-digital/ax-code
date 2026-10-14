@@ -926,4 +926,57 @@ describe("session.risk", () => {
       },
     })
   })
+
+  test("a build/typecheck that exits nonzero is a validation failure, not a pass", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+
+        try {
+          Recorder.begin(sid)
+          Recorder.emit({
+            type: "session.start",
+            sessionID: sid,
+            agent: "build",
+            model: "test/model",
+            directory: tmp.path,
+          })
+          Recorder.emit({
+            type: "tool.call",
+            sessionID: sid,
+            tool: "bash",
+            callID: "call_typecheck",
+            input: { command: "pnpm run build" },
+          } as any)
+          // A nonzero exit arrives as a completed bash result with metadata.exit,
+          // not as a tool error, and a typecheck prints no test-runner failure
+          // text to scan for.
+          Recorder.emit({
+            type: "tool.result",
+            sessionID: sid,
+            tool: "bash",
+            callID: "call_typecheck",
+            status: "completed",
+            output: "src/a.ts(1,1): error TS2322: Type 'string' is not assignable to type 'number'.",
+            metadata: { exit: 1 },
+            durationMs: 100,
+          } as any)
+          Recorder.emit({ type: "session.end", sessionID: sid, reason: "completed", totalSteps: 2 })
+          Recorder.end(sid)
+
+          await new Promise((resolve) => setTimeout(resolve, 50))
+
+          const assessment = Risk.fromSession(sid)
+          expect(assessment.readiness).toBe("blocked")
+          expect(assessment.summary).toContain("validation failed")
+        } finally {
+          await Session.remove(sid)
+        }
+      },
+    })
+  })
 })
