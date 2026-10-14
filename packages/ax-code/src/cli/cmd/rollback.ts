@@ -1,4 +1,5 @@
 import { cmd } from "./cmd"
+import { UI } from "../ui"
 import { Instance } from "../../project/instance"
 import { Session } from "../../session"
 import { SessionID } from "../../session/schema"
@@ -132,6 +133,14 @@ export const RollbackCommand = cmd({
         }
 
         if (!args.force) {
+          // Non-interactive stdin (CI, /dev/null, a kept-open pipe) either hangs
+          // on rl.question forever or dies with an unsettled top-level await.
+          // Refuse like the sibling confirmations instead.
+          if (!process.stdin.isTTY) {
+            UI.error("Confirmation required but stdin is not interactive; re-run with --force to proceed")
+            process.exitCode = 1
+            return
+          }
           const readline = await import("readline")
           const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
           const answer = await new Promise<string>((resolve) => {
