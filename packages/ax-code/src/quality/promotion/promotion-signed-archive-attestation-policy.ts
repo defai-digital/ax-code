@@ -86,16 +86,21 @@ export namespace QualityPromotionSignedArchiveAttestationPolicy {
       },
     ]
 
+    // A project-scoped minimum means THIS project's trust. A trust entry
+    // resolved for another project carries the same scope value, so the scope
+    // gate must compare the resolved project id too or one project's key would
+    // satisfy another project's attestation policy.
+    const policyProjectID = input.policyProjectID?.trim() || null
     const minimumScopePass =
       input.policy.minimumTrustScope === "global"
         ? input.trust.resolution.matched
-        : input.trust.resolution.scope === "project"
+        : input.trust.resolution.scope === "project" && input.trust.resolution.projectID === policyProjectID
     gates.push({
       name: "minimum-trust-scope",
       status: minimumScopePass ? "pass" : "fail",
       detail: minimumScopePass
         ? `effective trust scope ${input.trust.resolution.scope} satisfies minimum scope ${input.policy.minimumTrustScope}`
-        : `effective trust scope ${input.trust.resolution.scope ?? "none"} does not satisfy minimum scope ${input.policy.minimumTrustScope}`,
+        : `effective trust scope ${input.trust.resolution.scope ?? "none"}${input.trust.resolution.projectID ? ` (project ${input.trust.resolution.projectID})` : ""} does not satisfy minimum scope ${input.policy.minimumTrustScope}${policyProjectID ? ` for project ${policyProjectID}` : ""}`,
     })
 
     let lifecyclePolicyStatus: QualityPromotionSignedArchiveTrust.Gate["status"] = "pass"
@@ -134,7 +139,7 @@ export namespace QualityPromotionSignedArchiveAttestationPolicy {
       promotionID: input.trust.promotionID,
       evaluatedAt: new Date().toISOString(),
       policySource: input.policySource,
-      policyProjectID: input.policyProjectID?.trim() || null,
+      policyProjectID,
       policyDigest: digest(input.policy),
       trustStatus: input.trust.overallStatus,
       minimumScopeStatus: minimumScopePass ? "pass" : "fail",

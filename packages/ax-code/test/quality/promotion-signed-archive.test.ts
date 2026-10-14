@@ -1020,6 +1020,45 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
     ).toBe(true)
   })
 
+  test("a project minimum trust scope is bound to the policy's own project", async () => {
+    const { packagedArchive } = buildPackagedArchive()
+    const signing = {
+      attestedBy: "release-integrity-bot",
+      keyID: "archive-key-v1",
+      keySource: "env" as const,
+      keyLocator: "AX_CODE_QUALITY_ARCHIVE_KEY",
+      keyMaterial: "quality-archive-secret-v1",
+    }
+    const signedArchive = QualityPromotionSignedArchive.create({ packagedArchive, signing })
+    const trustFor = (projectID: string) =>
+      QualityPromotionSignedArchiveTrust.evaluate({
+        archive: signedArchive,
+        keyMaterial: signing.keyMaterial,
+        trusts: [QualityPromotionSignedArchiveTrust.create({ scope: "project", projectID, signing })],
+        projectID,
+      })
+    const policy = QualityPromotionSignedArchiveAttestationPolicy.defaults({ minimumTrustScope: "project" })
+
+    // Another project's trust entry carries the same scope value, and must not
+    // satisfy this project's policy.
+    const foreign = QualityPromotionSignedArchiveAttestationPolicy.evaluate({
+      trust: await trustFor("signed-archive-project-b"),
+      policy,
+      policySource: "project",
+      policyProjectID: "signed-archive-project-a",
+    })
+    expect(foreign.minimumScopeStatus).toBe("fail")
+    expect(foreign.acceptedByPolicy).toBe(false)
+
+    const own = QualityPromotionSignedArchiveAttestationPolicy.evaluate({
+      trust: await trustFor("signed-archive-project-a"),
+      policy,
+      policySource: "project",
+      policyProjectID: "signed-archive-project-a",
+    })
+    expect(own.minimumScopeStatus).toBe("pass")
+  })
+
   test("rejects explicit attestation packets that do not match the promotion provenance", async () => {
     const { packagedArchive } = buildPackagedArchive()
     await clearSignedArchives()
