@@ -54,6 +54,15 @@ export namespace Skill {
     /** `<realpath of root>\0<pattern>` already scanned in this instance. */
     scannedRoots: Set<string>
     /**
+     * Realpaths of skill files already added. Two discovery passes can name the
+     * same file with different (root, pattern) pairs — the home `.claude` root
+     * scans its `skills/` subtree, and a `skills.paths` entry of
+     * `<home>/.claude/skills` scans the same files — so an unseen pair would
+     * re-add the file, overwrite its scope/sourceTool, and report its own
+     * duplicate.
+     */
+    scannedFiles: Set<string>
+    /**
      * Names that collided during discovery: a later scan overwrote an earlier
      * skill sharing the same `name`. `skills` is a Record keyed by name, so
      * the losing entry is gone by the time any consumer (e.g. `all()`) reads
@@ -68,6 +77,11 @@ export namespace Skill {
     match: string,
     source?: { sourceTool?: Info["sourceTool"]; scope?: Info["scope"] },
   ) {
+    // The same file can be reached by more than one (root, pattern) pass; add it
+    // once so a later pass cannot re-tag its scope or flag its own duplicate.
+    const file = await realpathOrResolved(match)
+    if (state.scannedFiles.has(file)) return
+    state.scannedFiles.add(file)
     const md = await ConfigMarkdown.parse(match).catch(async (err) => {
       const message = ConfigMarkdown.FrontmatterError.isInstance(err)
         ? err.data.message
@@ -331,6 +345,7 @@ export namespace Skill {
       skills: Object.create(null),
       dirs: new Set<string>(),
       scannedRoots: new Set<string>(),
+      scannedFiles: new Set<string>(),
       duplicateNames: new Set<string>(),
     }
 

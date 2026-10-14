@@ -414,6 +414,38 @@ test("a session rooted at the home directory discovers global skills once", asyn
   }
 })
 
+test("a skills.paths entry overlapping a discovered directory does not re-add the same file", async () => {
+  // Project `skills` needs the explicit trust opt-in; without it the loader
+  // strips the key and the paths scan never runs.
+  await using tmp = await tmpdir({ git: true, config: { skills: { paths: [".claude/skills"] } } })
+
+  const originalHome = process.env.AX_CODE_TEST_HOME
+  const originalTrust = process.env.AX_CODE_TRUST_PROJECT_CONFIG
+  process.env.AX_CODE_TEST_HOME = tmp.path
+  process.env.AX_CODE_TRUST_PROJECT_CONFIG = "1"
+
+  try {
+    await createGlobalSkill(tmp.path)
+    // A different (root, pattern) pair reaches the same SKILL.md the global pass
+    // already added: the home `.claude` root scans its skills/ subtree, and the
+    // skills.paths entry <.claude>/skills scans the same files.
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const skill = (await Skill.all()).find((s) => s.name === "global-test-skill")
+        expect(skill).toBeDefined()
+        expect(skill!.scope).toBe("user")
+        expect(await Skill.duplicateNames()).not.toContain("global-test-skill")
+      },
+    })
+  } finally {
+    if (originalHome === undefined) delete process.env.AX_CODE_TEST_HOME
+    else process.env.AX_CODE_TEST_HOME = originalHome
+    if (originalTrust === undefined) delete process.env.AX_CODE_TRUST_PROJECT_CONFIG
+    else process.env.AX_CODE_TRUST_PROJECT_CONFIG = originalTrust
+  }
+})
+
 test("returns empty array when no skills exist", async () => {
   await using tmp = await tmpdir({ git: true })
 
