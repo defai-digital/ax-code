@@ -119,6 +119,81 @@ describe("AgentControlSummary", () => {
     expect(allowed.completionGate).toMatchObject({ status: "allow", reason: "none" })
   })
 
+  test("a completion-gate allow clears the block the gate itself imposed", () => {
+    const summary = AgentControlSummary.fromEvents([
+      AgentControlEvents.phaseChanged({
+        sessionID: "ses_123",
+        phase: "execute",
+        reason: "plan_approved",
+      }),
+      AgentControlEvents.completionGateDecided({
+        sessionID: "ses_123",
+        status: "blocked",
+        reason: "empty_subagent_result",
+        message: "Subagent returned no usable final response.",
+      }),
+      AgentControlEvents.completionGateDecided({
+        sessionID: "ses_123",
+        status: "allow",
+        reason: "none",
+      }),
+    ])
+
+    expect(summary.phase).toBe("execute")
+    expect(summary.blockedReason).toBeUndefined()
+    expect(summary.completionGate).toMatchObject({ status: "allow", reason: "none" })
+    expect(AgentControlSummary.statusLine(summary)).not.toContain("blocked")
+  })
+
+  test("a completion-gate allow does not clear an independent agent block", () => {
+    const summary = AgentControlSummary.fromEvents([
+      AgentControlEvents.phaseChanged({
+        sessionID: "ses_123",
+        phase: "execute",
+        reason: "plan_approved",
+      }),
+      AgentControlEvents.blocked({
+        sessionID: "ses_123",
+        phase: "execute",
+        reason: "unrecoverable_failure",
+        recoverable: false,
+      }),
+      AgentControlEvents.completionGateDecided({
+        sessionID: "ses_123",
+        status: "allow",
+        reason: "none",
+      }),
+    ])
+
+    expect(summary.phase).toBe("blocked")
+    expect(summary.blockedReason).toBe("unrecoverable_failure")
+  })
+
+  test("a completion-gate block is overwritten by a later explicit block", () => {
+    const summary = AgentControlSummary.fromEvents([
+      AgentControlEvents.completionGateDecided({
+        sessionID: "ses_123",
+        status: "blocked",
+        reason: "unfinished_todos",
+        message: "2 todos remain unfinished.",
+      }),
+      AgentControlEvents.blocked({
+        sessionID: "ses_123",
+        phase: "execute",
+        reason: "unrecoverable_failure",
+        recoverable: false,
+      }),
+      AgentControlEvents.completionGateDecided({
+        sessionID: "ses_123",
+        status: "allow",
+        reason: "none",
+      }),
+    ])
+
+    expect(summary.phase).toBe("blocked")
+    expect(summary.blockedReason).toBe("unrecoverable_failure")
+  })
+
   test("renders compact status lines", () => {
     expect(
       AgentControlSummary.statusLine(

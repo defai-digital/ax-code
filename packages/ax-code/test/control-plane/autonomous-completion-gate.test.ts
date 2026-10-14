@@ -494,6 +494,55 @@ describe("AutonomousCompletionGate", () => {
     expect(decision).toEqual({ status: "allow" })
   })
 
+  test("blocks a background handoff whose recovered result still needs review", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "tool",
+              tool: "task",
+              callID: "call_bg_review",
+              state: {
+                status: "completed",
+                output: "state: running",
+                metadata: { emptyResult: false, sessionId: "ses_bg_review", background: true },
+              },
+            },
+          ],
+        },
+        {
+          info: { role: "user" },
+          parts: [
+            {
+              type: "text",
+              synthetic: true,
+              text: [
+                '<task id="ses_bg_review" state="completed" empty="false" needs_review="true">',
+                "<summary>Background task completed: Explore the repo</summary>",
+                "<task_result>",
+                "The migration path is incomplete and requires validation before merging.",
+                "</task_result>",
+                "</task>",
+              ].join("\n"),
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toMatchObject({
+      status: "blocked",
+      reason: "empty_subagent_result",
+      emptyResult: {
+        taskID: "ses_bg_review",
+        recoveredResultNeedsReview: true,
+      },
+    })
+  })
+
   test("blocks recovered subagent results that still need review", () => {
     const decision = AutonomousCompletionGate.evaluate({
       pendingTodos: [],

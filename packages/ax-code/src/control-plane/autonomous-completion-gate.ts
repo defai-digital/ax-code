@@ -319,7 +319,10 @@ export namespace AutonomousCompletionGate {
   ) {
     for (const handoff of parseBackgroundTaskHandoffs(text)) {
       const key = `task:${handoff.taskID}`
-      if (handoff.empty || handoff.failed) {
+      // A recovered-but-unreviewed result is as blocking as an empty one
+      // (mirrors the foreground path below): keep it unresolved until the
+      // parent explicitly resolves it, instead of clearing the handoff.
+      if (handoff.empty || handoff.failed || handoff.recoveredResultNeedsReview) {
         unresolved.delete(key)
         unresolved.set(key, {
           taskID: handoff.taskID,

@@ -40,11 +40,18 @@ export namespace AgentControlSummary {
       },
     }
 
+    // A block the completion gate imposed is owned by the gate: a later
+    // "allow" decision must undo it. A block from `agent.blocked` (or a
+    // phase change) is not the gate's to clear.
+    let gateBlockReason: string | undefined
+    let phaseBeforeGateBlock: AgentControl.Phase | undefined
+
     for (const event of events) {
       switch (event.type) {
         case "agent.phase.changed":
           summary.phase = event.phase
           summary.phaseReason = event.reason
+          gateBlockReason = undefined
           break
         case "agent.reasoning.selected":
           summary.reasoningDepth = event.depth
@@ -65,6 +72,7 @@ export namespace AgentControlSummary {
         case "agent.blocked":
           summary.phase = "blocked"
           summary.blockedReason = event.reason
+          gateBlockReason = undefined
           break
         case "agent.completion_gate.decided":
           summary.completionGate = {
@@ -73,14 +81,22 @@ export namespace AgentControlSummary {
             message: event.message,
           }
           if (event.status === "blocked") {
+            if (gateBlockReason === undefined) phaseBeforeGateBlock = summary.phase
+            gateBlockReason = event.reason ?? event.message
             summary.phase = "blocked"
-            summary.blockedReason = event.reason ?? event.message
+            summary.blockedReason = gateBlockReason
+          } else if (gateBlockReason !== undefined && summary.blockedReason === gateBlockReason) {
+            // The gate now allows: undo exactly the phase/block it imposed.
+            summary.phase = phaseBeforeGateBlock
+            summary.blockedReason = undefined
+            gateBlockReason = undefined
           }
           break
         case "agent.completed":
           summary.phase = "complete"
           summary.validationStatus = event.validationStatus
           summary.completed = true
+          gateBlockReason = undefined
           break
         case "agent.safety.decided":
           if (event.shadow) summary.safety.shadow++
