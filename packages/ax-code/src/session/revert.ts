@@ -484,6 +484,13 @@ export namespace SessionRevert {
     const store = SessionShard.storeFor(sessionID, { write: true })
     store.transaction((db) => {
       for (const msg of remove) {
+        // The shard "part" table carries no foreign key, so its parts are not
+        // cascaded from the message row; delete them explicitly (mirrors
+        // Session.removeMessage) or they linger and later reverts/snapshot
+        // plans pick them up as if they still belonged to a visible turn.
+        db.delete(PartTable)
+          .where(and(eq(PartTable.message_id, msg.info.id), eq(PartTable.session_id, sessionID)))
+          .run()
         db.delete(MessageTable).where(eq(MessageTable.id, msg.info.id)).run()
       }
       for (const part of removedParts) {
