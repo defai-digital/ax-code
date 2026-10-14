@@ -571,9 +571,20 @@ export namespace LSP {
     }
   }
 
+  /**
+   * The key a server's `extensions` list is matched against: a lowercased
+   * extension, else the basename (kept as written — server defs list basenames
+   * like "Dockerfile"). A mixed-case extension otherwise matches no server, and
+   * the workspace probe must fall back to the basename, not the whole path.
+   */
+  export function fileExtensionKey(file: string): string {
+    const extension = path.parse(file).ext
+    return extension ? extension.toLowerCase() : path.basename(file)
+  }
+
   async function getClientsDetailed(file: string, opts: ClientOptions = {}): Promise<ClientSelection> {
     const s = await state()
-    const extension = path.parse(file).ext || path.basename(file)
+    const extension = fileExtensionKey(file)
     const request = resolveClientRequest(opts)
     const result: LSPClient.Info[] = []
     let freshSpawnCount = 0
@@ -623,7 +634,7 @@ export namespace LSP {
       limit: WORKSPACE_PROBE_SCAN_LIMIT,
     })) {
       const probe = path.join(codeIntelHost().projectRoot(), rel)
-      const extension = path.parse(probe).ext || probe
+      const extension = fileExtensionKey(probe)
       for (const server of eligibleServers) {
         if (probeByServer.has(server.id)) continue
         if (!serverSupportsFileExtension(server, extension)) continue
@@ -655,7 +666,7 @@ export namespace LSP {
     matchesServer?: (server: LSPServer.Info) => boolean,
   ) {
     const s = await state()
-    const extension = path.parse(file).ext || path.basename(file)
+    const extension = fileExtensionKey(file)
     const request = resolveClientRequest(opts)
     for (const server of Object.values(s.servers)) {
       if (!serverMatchesClientRequest(server, request)) continue
@@ -723,7 +734,7 @@ export namespace LSP {
 
         for (const file of uniqueFiles) {
           opts.signal?.throwIfAborted()
-          const extension = path.parse(file).ext || path.basename(file)
+          const extension = fileExtensionKey(file)
           for (const server of Object.values(s.servers)) {
             if (!serverMatchesClientRequest(server, request)) continue
             if (!clientPrewarmMatchesServer(server)) continue
