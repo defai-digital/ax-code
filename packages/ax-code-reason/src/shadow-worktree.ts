@@ -41,9 +41,10 @@ const concurrencyGates = new Map<
   {
     inFlight: number
     waiters: Array<() => void>
-    // planIds currently holding a slot. Consulted by cleanupOrphans so it
-    // never removes a shadow that is still in use.
-    activePlanIds: Set<string>
+    // planIds currently holding a slot, with a holder count so a second
+    // concurrent open for the same planId is detectable. Consulted by
+    // cleanupOrphans so it never removes a shadow that is still in use.
+    activePlanIds: Map<string, number>
   }
 >()
 
@@ -51,25 +52,35 @@ async function acquireSlot(projectID: ProjectID, planId: string): Promise<() => 
   const key = projectID as unknown as string
   let gate = concurrencyGates.get(key)
   if (!gate) {
-    gate = { inFlight: 0, waiters: [], activePlanIds: new Set() }
+    gate = { inFlight: 0, waiters: [], activePlanIds: new Map() }
     concurrencyGates.set(key, gate)
   }
   if (gate.inFlight < MAX_CONCURRENT_PER_PROJECT) {
     gate.inFlight++
-    gate.activePlanIds.add(planId)
+    holdPlanId(gate, planId)
     return () => releaseSlot(projectID, planId)
   }
   await new Promise<void>((resolve) => gate!.waiters.push(resolve))
   // Slot ownership transferred from releaser — don't increment
-  gate.activePlanIds.add(planId)
+  holdPlanId(gate, planId)
   return () => releaseSlot(projectID, planId)
+}
+
+function holdPlanId(gate: { activePlanIds: Map<string, number> }, planId: string): void {
+  gate.activePlanIds.set(planId, (gate.activePlanIds.get(planId) ?? 0) + 1)
+}
+
+function activePlanCount(projectID: ProjectID, planId: string): number {
+  return concurrencyGates.get(projectID as unknown as string)?.activePlanIds.get(planId) ?? 0
 }
 
 function releaseSlot(projectID: ProjectID, planId: string): void {
   const key = projectID as unknown as string
   const gate = concurrencyGates.get(key)
   if (!gate) return
-  gate.activePlanIds.delete(planId)
+  const held = (gate.activePlanIds.get(planId) ?? 0) - 1
+  if (held <= 0) gate.activePlanIds.delete(planId)
+  else gate.activePlanIds.set(planId, held)
   const waiter = gate.waiters.shift()
   if (waiter) {
     // Transfer slot ownership directly to waiter — no decrement/increment
@@ -164,6 +175,19 @@ export namespace ShadowWorktree {
       await fs.mkdir(shadowBase, { recursive: true })
       const shadowPath = path.join(shadowBase, params.planId)
       const branch = `ax-code/dre/shadow/${params.planId}`
+
+      // A second concurrent open for the same planId targets the same path
+      // and branch as the one already live. Refuse before touching the
+      // directory: the stale-directory cleanup below would otherwise delete
+      // a worktree another caller is still using.
+      if (activePlanCount(projectID, params.planId) > 1) {
+        release()
+        return {
+          ok: false,
+          reason: "create-failed",
+          detail: `a shadow worktree for plan ${params.planId} is already open`,
+        }
+      }
 
       // If a previous run left a stale directory, clear it before git
       // worktree add complains. This is safe because the shadow base

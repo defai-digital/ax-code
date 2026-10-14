@@ -74,6 +74,11 @@ describe("shouldFallbackToFull", () => {
       shouldFallbackToFull(ctx("r1", fresh), ctx("r1", { available: false, commit: null, dirtyDigest: null })),
     ).toBe(true)
   })
+
+  test("source unavailable on both sides still falls back", () => {
+    const unavailable: SourceState = { available: false, commit: null, dirtyDigest: null }
+    expect(shouldFallbackToFull(ctx("r1", unavailable), ctx("r1", unavailable))).toBe(true)
+  })
 })
 
 describe("computeObsoleteFindings", () => {

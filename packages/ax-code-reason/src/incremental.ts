@@ -178,7 +178,10 @@ export function shouldFallbackToFull(prev: IncrementalContext, next: Incremental
   const p = prev.source
   const n = next.source
   if (p === null || n === null) return true
-  if (p.available !== n.available) return true
+  // Unavailable on both sides (e.g. worktree fingerprinting failed twice) is
+  // still an unverifiable continuity: the doc above requires a fallback for
+  // any missing/unavailable source, not only a change in availability.
+  if (!p.available || !n.available) return true
   if (p.commit !== n.commit) return true
   if (p.dirtyDigest !== n.dirtyDigest) return true
   return false

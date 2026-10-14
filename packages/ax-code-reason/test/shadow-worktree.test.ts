@@ -165,6 +165,29 @@ describe("ShadowWorktree", () => {
     await second.handle[Symbol.asyncDispose]()
   })
 
+  test("a concurrent open for the same planId is refused without touching the live shadow", async () => {
+    const first = await ShadowWorktree.open({ planId: "plan-dup" })
+    expect(first.ok).toBe(true)
+    if (!first.ok) return
+
+    const second = await ShadowWorktree.open({ planId: "plan-dup" })
+    expect(second.ok).toBe(false)
+    if (second.ok) return
+    expect(second.reason).toBe("create-failed")
+
+    // The first handle's worktree and branch must survive the refused open.
+    expect(await pathExists(path.join(first.handle.path, "file.txt"))).toBe(true)
+    expect(await branchExists(ctx, first.handle.branch)).toBe(true)
+
+    await first.handle[Symbol.asyncDispose]()
+    expect(await pathExists(first.handle.path)).toBe(false)
+
+    // Once released, the planId can be opened again.
+    const third = await ShadowWorktree.open({ planId: "plan-dup" })
+    expect(third.ok).toBe(true)
+    if (third.ok) await third.handle[Symbol.asyncDispose]()
+  })
+
   test("open reports not-git without burning a concurrency slot", async () => {
     installTestHost({ projectRoot: ctx.instanceDir, worktreeRoot: ctx.repo, vcs: "none" })
     expect(await ShadowWorktree.open({ planId: "plan-x" })).toEqual({ ok: false, reason: "not-git" })
