@@ -324,7 +324,11 @@ export namespace ConfigPaths {
   /** Parse JSONC text, throwing JsonError with a caret-annotated excerpt on syntax errors. */
   export function parseJsoncOrThrow(text: string, filepath: string) {
     const errors: JsoncParseError[] = []
-    const data = parseJsonc(text, errors, { allowTrailingComma: true })
+    // A whitespace- or comment-only file has no value; without allowEmptyContent
+    // jsonc-parser reports ValueExpected and the whole config load fails, even
+    // though a truly empty (0-byte) file already parses to {}. Treat it as an
+    // empty config so a "nothing configured yet" file is not fatal.
+    const data = parseJsonc(text, errors, { allowTrailingComma: true, allowEmptyContent: true })
     if (errors.length) {
       const lines = text.split("\n")
       const errorDetails = errors
@@ -347,6 +351,8 @@ export namespace ConfigPaths {
       })
     }
 
-    return data
+    // allowEmptyContent makes a value-less document parse without error but
+    // return undefined; a config file is an object, so an empty one is {}.
+    return data === undefined ? {} : data
   }
 }

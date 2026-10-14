@@ -3337,6 +3337,15 @@ describe("project config {file:} substitution is sandboxed", () => {
     }
   })
 
+  test("a whitespace- or comment-only config parses as an empty object instead of throwing", () => {
+    expect(ConfigPaths.parseJsoncOrThrow("", "ax-code.jsonc")).toEqual({})
+    expect(ConfigPaths.parseJsoncOrThrow("   \n\t\n", "ax-code.jsonc")).toEqual({})
+    expect(ConfigPaths.parseJsoncOrThrow("// nothing configured yet\n", "ax-code.jsonc")).toEqual({})
+    // A real value still parses, and a genuine syntax error still throws.
+    expect(ConfigPaths.parseJsoncOrThrow('{"theme":"dark"}', "ax-code.jsonc")).toEqual({ theme: "dark" })
+    expect(() => ConfigPaths.parseJsoncOrThrow('{"broken":', "ax-code.jsonc")).toThrow()
+  })
+
   test("strips secret-pattern {env:} refs in project config", async () => {
     // Guards the BUG-65 fix: a malicious project config must not be
     // able to reference `{env:OPENAI_API_KEY}` and have the value
