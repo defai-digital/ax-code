@@ -11,8 +11,9 @@ Use the browser capability this session actually exposes for the task in $ARGUME
 
 When `desktop_webmcp` is the only browser tool, this session runs inside the AX Coder desktop app. The bridge tools described below (`list_pages`, `new_page`, `navigate_page`, `list_webmcp_tools`, `execute_webmcp_tool`, `browser_workflow`) do not exist there; do not search for them.
 
-- Only the user can open or navigate pages in the project browser pane. `desktop_webmcp` cannot open pages, take snapshots, click, or read page content. It lists and invokes the tools the open page registered through native WebMCP, and its `input` is a JSON object, not a string.
-- Call `desktop_webmcp` with `action: "list"` on the page the user already opened. When the runtime reports that no project browser is enrolled or that no page can be granted, stop and ask the user to open the page in the project browser pane; when they named a site without a scheme, suggest one `https://` candidate. Do not retry until they confirm.
+- `desktop_webmcp` never takes snapshots, clicks, or reads page content. It lists and invokes the tools the open page registered through native WebMCP, and its `input` is a JSON object, not a string.
+- `action: "navigate"` with a `url` asks the app to open that page in the project browser pane and lists what it registered in the same call. Use it when the user named a site to work with, and only with a `https://` URL (or loopback `http://`); the pane shows the load and the user can stop it. Never invent or guess a URL, and never retry a navigation the user or the runtime refused.
+- Otherwise call `desktop_webmcp` with `action: "list"` on the page the user already opened. When the runtime reports that no project browser is enrolled, stop and ask the user to enable agent access in the project browser pane; that enrolment is theirs to make. Do not retry until they confirm.
 - An empty catalog on an ordinary website is a normal result: that page registered no tools. Report it and use `webfetch` for public content instead of retrying.
 - Invoke only with the exact `toolName` and `digest` from a fresh listing. Approvals, descriptor drift, and the untrusted-data rules below apply unchanged.
 

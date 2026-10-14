@@ -92,6 +92,122 @@ describe("private desktop WebMCP provider", () => {
     })
   })
 
+  test("opens a page for the agent when the pane is blank and lists what it registered", async () => {
+    // Workspace-write (sandboxed) Auto: listing and navigation are admitted live,
+    // invocation still asks. Navigation itself must ask on the first use.
+    vi.stubEnv("AX_CODE_AUTONOMOUS", "1")
+    vi.stubEnv("AX_CODE_ISOLATION_MODE", "workspace-write")
+    await fixture(async (session) => {
+      // A blank enrolled pane: no origin and no frame, which is exactly the state
+      // the agent used to be stuck in.
+      const blank = { generation: randomUUID(), origin: null, frameId: "", tools: [] }
+      const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: blank })
+      const tool = await DesktopWebMcpTool.init()
+      const asked: Permission.Request[] = []
+      const stop = Bus.subscribe(Permission.Event.Asked, (event) => {
+        asked.push(event.properties)
+        void Permission.reply({ requestID: event.properties.id, reply: "once" })
+      })
+      const ctx: Tool.Context = {
+        sessionID: session.id,
+        messageID: MessageID.ascending(),
+        agent: "build",
+        abort: new AbortController().signal,
+        messages: [],
+        metadata: () => {},
+        ask: (input) => Permission.ask({ ...input, sessionID: session.id, ruleset: [] }),
+      }
+      try {
+        const execution = tool.execute({ action: "navigate", url: "https://flights.example.com/search" }, ctx)
+
+        const navigation = await DesktopBrowser.poll(connection.providerID, ctx.abort)
+        expect(navigation.request?.operation).toBe("navigate")
+        expect(navigation.request).toMatchObject({ url: "https://flights.example.com/search" })
+
+        // The pane grants the page: it pushes the new snapshot, then replies with
+        // the generation of the document it actually ended up on.
+        const opened = { ...snapshot(), origin: "https://flights.example.com" }
+        DesktopBrowser.update(connection.providerID, opened)
+        DesktopBrowser.respond(connection.providerID, {
+          requestID: navigation.request!.requestID,
+          generation: opened.generation,
+          status: "Completed",
+          snapshot: opened,
+        })
+
+        // The same call then lists the freshly opened page.
+        const listing = await DesktopBrowser.poll(connection.providerID, ctx.abort)
+        expect(listing.request?.operation).toBe("list")
+        DesktopBrowser.respond(connection.providerID, {
+          requestID: listing.request!.requestID,
+          generation: opened.generation,
+          status: "Completed",
+          snapshot: opened,
+        })
+
+        const result = await execution
+        expect(result.output).toContain("echo")
+        expect(result.output).toContain("https://flights.example.com")
+
+        // The user sees the URL they are being asked to open.
+        expect(asked).toHaveLength(1)
+        expect(asked[0]!.patterns).toEqual(["https://flights.example.com"])
+      } finally {
+        stop()
+        DesktopBrowser.disconnect(connection.providerID)
+      }
+    })
+  })
+
+  test("refuses a URL the pane cannot open before any request reaches it", async () => {
+    await fixture(async (session) => {
+      const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: snapshot() })
+      const tool = await DesktopWebMcpTool.init()
+      const ctx: Tool.Context = {
+        sessionID: session.id,
+        messageID: MessageID.ascending(),
+        agent: "build",
+        abort: new AbortController().signal,
+        messages: [],
+        metadata: () => {},
+        ask: (input) => Permission.ask({ ...input, sessionID: session.id, ruleset: [] }),
+      }
+      try {
+        await expect(tool.execute({ action: "navigate", url: "file:///etc/passwd" }, ctx)).rejects.toThrow(
+          /Only https:\/\/ URLs, or http:\/\/ on loopback/,
+        )
+        await expect(tool.execute({ action: "navigate", url: "http://example.com" }, ctx)).rejects.toThrow(
+          /Only https:\/\/ URLs, or http:\/\/ on loopback/,
+        )
+
+        // Nothing was queued for the pane.
+        const pending = await DesktopBrowser.poll(connection.providerID, AbortSignal.timeout(1500)).catch(() => null)
+        expect(pending?.request ?? null).toBeNull()
+      } finally {
+        DesktopBrowser.disconnect(connection.providerID)
+      }
+    })
+  })
+
+  test("navigation needs an enrolled browser and reports that instead of guessing", async () => {
+    await fixture(async (session) => {
+      const tool = await DesktopWebMcpTool.init()
+      const ctx: Tool.Context = {
+        sessionID: session.id,
+        messageID: MessageID.ascending(),
+        agent: "build",
+        abort: new AbortController().signal,
+        messages: [],
+        metadata: () => {},
+        ask: (input) => Permission.ask({ ...input, sessionID: session.id, ruleset: [] }),
+      }
+
+      await expect(tool.execute({ action: "navigate", url: "https://example.com" }, ctx)).rejects.toThrow(
+        /No project browser is enrolled/,
+      )
+    })
+  })
+
   test("full-access Auto lists and invokes a bound native tool repeatedly without prompting", async () => {
     vi.stubEnv("AX_CODE_AUTONOMOUS", "1")
     vi.stubEnv("AX_CODE_ISOLATION_MODE", "full-access")
@@ -435,13 +551,14 @@ describe("desktop WebMCP failure messages", () => {
   test("tells the model that only the user can enable the project browser, before any approval", async () => {
     await fixture(async (session) => {
       const tool = await DesktopWebMcpTool.init()
-      expect(tool.description).toContain("This tool cannot open pages")
+      expect(tool.description).toContain('action=navigate')
+      expect(tool.description).toContain("never invent a URL")
       expect(tool.description).toContain("an empty catalog is a normal result")
       const ask = vi.fn(async () => {})
       const error = await rejection(tool.execute({ action: "list" }, ctxFor(session, ask)))
       expect(DesktopBrowser.Failure.isInstance(error)).toBe(true)
       expect(error.message).toContain("Ask the user to enable agent access")
-      expect(error.message).toContain("this tool cannot enable it or open pages")
+      expect(error.message).toContain("this tool cannot enable it")
       expect(ask).not.toHaveBeenCalled()
     })
   })
@@ -456,7 +573,7 @@ describe("desktop WebMCP failure messages", () => {
       expect(DesktopBrowser.Failure.isInstance(error)).toBe(true)
       expect(error.message).toBe(error.data.reason)
       expect(error.message).toContain("open the exact https:// or loopback http:// URL")
-      expect(error.message).toContain("this tool cannot open pages")
+      expect(error.message).toContain("action=navigate")
       // The recorded body round-trips the sentence, so event readers never see the bare name.
       expect(NamedError.message(error.toObject())).toBe(error.message)
       expect(DesktopBrowser.Failure.Schema.parse(error.toObject()).data.message).toBe(error.message)

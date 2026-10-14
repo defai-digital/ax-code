@@ -87,7 +87,7 @@ export namespace WebMcpAutoApproval {
     metadata: Record<string, unknown>,
     admission: Admission,
     valid: () => Promise<boolean>,
-    operation: "list" | "invoke",
+    operation: "list" | "invoke" | "navigate",
   ) {
     bindings.delete(metadata)
     if (metadata.requireInteractive === true || metadata.originGrant === true) return
@@ -95,7 +95,9 @@ export namespace WebMcpAutoApproval {
       ...admission,
       patterns: [...admission.patterns],
       tier: "desktop",
-      fullAccessOnly: operation === "invoke",
+      // Opening a page the agent chose has effects comparable to invoking one of
+      // its tools, so it needs the same full-access admission as an invocation.
+      fullAccessOnly: operation !== "list",
       valid,
     })
   }

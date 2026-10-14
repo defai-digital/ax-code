@@ -80,7 +80,7 @@ export namespace DesktopBrowser {
     .strict()
     .meta({ ref: "DesktopWebMcpBinding" })
   export type Binding = z.infer<typeof Binding>
-  export const Request = Binding.extend({
+  export const BoundRequest = Binding.extend({
     requestID: ID,
     operation: z.enum(["list", "invoke"]),
     deadline: z.number().int(),
@@ -92,6 +92,30 @@ export namespace DesktopBrowser {
     input: z.record(z.string(), z.unknown()).optional(),
   })
     .strict()
+    .meta({ ref: "DesktopWebMcpBoundRequest" })
+  /**
+   * Navigation is requested before any page can be granted (a blank pane has no
+   * origin or frame), so it carries the identity and the target URL only. The
+   * provider replies after the new document is granted and its snapshot pushed.
+   */
+  export const NavigateRequest = z
+    .object({
+      providerID: ID,
+      epoch: ID,
+      projectID: z.string().min(1).max(256),
+      sessionID: SessionID.zod,
+      generation: ID,
+      origin: z.string().nullable(),
+      frameId: z.string().max(256),
+      requestID: ID,
+      operation: z.literal("navigate"),
+      deadline: z.number().int(),
+      url: z.string().max(2048),
+    })
+    .strict()
+    .meta({ ref: "DesktopWebMcpNavigateRequest" })
+  export const Request = z
+    .union([BoundRequest, NavigateRequest])
     .meta({ ref: "DesktopWebMcpRequest" })
   export type Request = z.infer<typeof Request>
   export const Reply = z
@@ -144,6 +168,26 @@ export namespace DesktopBrowser {
     },
   )
 
+  /**
+   * Navigation targets: https anywhere, plus loopback http (the local dev server
+   * case). Everything else — file:, data:, other schemes, non-loopback http — is
+   * refused before any request reaches the shell, whose own allowlist is the
+   * same shape.
+   */
+  export function navigableUrl(raw: string): URL {
+    let target: URL
+    try {
+      target = new URL(raw.trim())
+    } catch {
+      return fail(`"${raw.slice(0, 200)}" is not a valid URL`)
+    }
+    const loopback = target.hostname === "127.0.0.1" || target.hostname === "localhost" || target.hostname === "[::1]"
+    if (target.protocol !== "https:" && !(target.protocol === "http:" && loopback))
+      return fail("Only https:// URLs, or http:// on loopback, can be opened in the project browser")
+    if (target.username || target.password) return fail("Credentials in a URL are not accepted")
+    return target
+  }
+
   export function bytes(value: unknown) {
     try {
       return Buffer.byteLength(JSON.stringify(value) ?? "", "utf8")
@@ -189,13 +233,20 @@ export namespace DesktopBrowser {
     const actual = Buffer.from(value)
     return expected.length === actual.length && timingSafeEqual(expected, actual)
   }
-  function retire(provider: Provider) {
+  function retire(provider: Provider, { keepNavigate = false } = {}) {
     for (const pending of [...provider.pending.values()]) {
+      // A document change is the *result* a navigation request is waiting for, so
+      // it must survive the retire that the new snapshot triggers. Any other
+      // change still retires it (the navigate request was made against the old
+      // page state).
+      if (keepNavigate && pending.request.operation === "navigate") continue
       provider.canceled.push(pending.request.requestID)
       pending.cleanup()
       pending.reject(failure("Browser connection or document changed; completion is unconfirmed"))
     }
-    provider.queue.length = 0
+    provider.queue = keepNavigate
+      ? provider.queue.filter((request) => request.operation === "navigate")
+      : []
     provider.canceled = provider.canceled.slice(-8)
     provider.wake?.()
   }
@@ -252,8 +303,9 @@ export namespace DesktopBrowser {
   export function update(id: string, snapshot: Snapshot) {
     const entry = provider(id)
     const next = Snapshot.parse(snapshot)
-    // Catalog changes retire already-approved calls even within the same document.
-    if (canonical(next) !== canonical(entry.snapshot)) retire(entry)
+    // Catalog changes retire already-approved calls even within the same document,
+    // except a navigation that is waiting for exactly this document.
+    if (canonical(next) !== canonical(entry.snapshot)) retire(entry, { keepNavigate: true })
     entry.snapshot = next
     entry.touched = Date.now()
   }
@@ -286,7 +338,13 @@ export namespace DesktopBrowser {
   export function respond(id: string, reply: Reply) {
     const entry = provider(id)
     const pending = entry.pending.get(reply.requestID)
-    if (!pending || pending.request.generation !== reply.generation || entry.snapshot.generation !== reply.generation) {
+    // A navigate request is bound to the page BEFORE the load, so only the pushed
+    // snapshot (the document the shell actually ended up on) must match the reply.
+    const generationMatches =
+      pending?.request.operation === "navigate"
+        ? entry.snapshot.generation === reply.generation
+        : pending?.request.generation === reply.generation && entry.snapshot.generation === reply.generation
+    if (!pending || !generationMatches) {
       return fail("Response belongs to an expired browser request")
     }
     const result = Reply.parse(reply)
@@ -295,6 +353,16 @@ export namespace DesktopBrowser {
       pending.reject(failure("Native invocation did not confirm completion; do not retry automatically"))
     else pending.resolve(result)
   }
+  /** The single browser enrolled for this session, whether or not a page is granted. */
+  function enrolled(sessionID: SessionID) {
+    const entries = [...state().values()].filter((entry) => entry.sessionID === sessionID)
+    if (entries.length !== 1)
+      return fail(
+        "No project browser is enrolled for this coding session. Ask the user to enable agent access in the project browser pane; this tool cannot enable it",
+      )
+    return provider(entries[0]!.id)
+  }
+
   export function forSession(sessionID: SessionID) {
     const entries = [...state().values()].filter((entry) => entry.sessionID === sessionID)
     if (entries.length !== 1)
@@ -304,7 +372,7 @@ export namespace DesktopBrowser {
     const entry = provider(entries[0]!.id)
     if (!entry.snapshot.origin || !entry.snapshot.frameId)
       return fail(
-        "The project browser is enrolled but no page can be granted to the agent. Ask the user to open the exact https:// or loopback http:// URL in the project browser pane; this tool cannot open pages. Do not retry until they confirm",
+        "The project browser is enrolled but no page can be granted to the agent. Ask the user to open the exact https:// or loopback http:// URL in the project browser pane, or call this tool with action=navigate to open it in that pane",
       )
     return Binding.parse({
       providerID: entry.id,
@@ -337,11 +405,18 @@ export namespace DesktopBrowser {
     }
     bound(binding)
   }
+  async function checkPolicyForOrigin(rawOrigin: string) {
+    const policy = (await Config.get()).webmcp
+    if (policy?.allow === false) return fail("WebMCP is disabled by managed policy")
+    if (policy?.allowedOrigins && !policy.allowedOrigins.includes(rawOrigin))
+      return fail("The browser origin is excluded by managed WebMCP policy")
+  }
+
   async function dispatch(
     binding: Binding,
-    operation: Request["operation"],
+    operation: "list" | "invoke",
     signal: AbortSignal,
-    extra: Pick<Request, "toolName" | "digest" | "input"> = {},
+    extra: { toolName?: string; digest?: string; input?: Record<string, unknown> } = {},
   ) {
     await checkPolicy(binding)
     if (signal.aborted) return fail("Browser request was aborted")
@@ -352,7 +427,15 @@ export namespace DesktopBrowser {
       if (!tool || digest(tool) !== extra.digest) return fail("Tool definition changed; list tools and authorize again")
     }
     if (entry.pending.size !== 0) return fail("Another browser invocation is in progress")
-    const request: Request = { ...binding, ...extra, requestID: randomUUID(), operation, deadline: Date.now() + 30000 }
+    return enqueue(
+      entry,
+      BoundRequest.parse({ ...binding, ...extra, requestID: randomUUID(), operation, deadline: Date.now() + 30000 }),
+      signal,
+    )
+  }
+
+  /** Queue one request for the provider stream and await its reply. */
+  function enqueue(entry: Provider, request: Request, signal: AbortSignal) {
     return new Promise<Reply>((resolve, reject) => {
       const cancel = () => {
         cleanup()
@@ -374,6 +457,36 @@ export namespace DesktopBrowser {
       entry.queue.push(request)
       entry.wake?.()
     })
+  }
+
+  /**
+   * Ask the shell to open a URL in the project browser, then list what that page
+   * registered. This is the only way a page can reach the agent without the user
+   * typing the address themselves; the pane shows the load and the user keeps the
+   * ability to interrupt it.
+   */
+  export async function navigate(sessionID: SessionID, rawUrl: string, signal: AbortSignal) {
+    const entry = enrolled(sessionID)
+    const target = navigableUrl(rawUrl)
+    await checkPolicyForOrigin(target.origin)
+    if (signal.aborted) return fail("Browser request was aborted")
+    if (entry.pending.size !== 0) return fail("Another browser invocation is in progress")
+    const request: Request = {
+      providerID: entry.id,
+      epoch: entry.epoch,
+      projectID: Instance.project.id,
+      sessionID,
+      generation: entry.snapshot.generation,
+      origin: entry.snapshot.origin,
+      frameId: entry.snapshot.frameId,
+      requestID: randomUUID(),
+      operation: "navigate",
+      deadline: Date.now() + 30000,
+      url: target.toString(),
+    }
+    const reply = await enqueue(entry, NavigateRequest.parse(request), signal)
+    if (reply.status !== "Completed") return fail("The project browser could not open that page")
+    return { url: target.toString(), origin: target.origin }
   }
   export async function list(binding: Binding, signal: AbortSignal) {
     const reply = await dispatch(binding, "list", signal)
