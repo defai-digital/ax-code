@@ -364,6 +364,28 @@ describe("tui local model preferences", () => {
     })
     expect(result.changed).toBe(true)
   })
+
+  test("pruneModelPreferences keeps variants for models that are temporarily unavailable", () => {
+    // Mirrors the TUI wiring: a provider absent from the loaded catalog maps to
+    // "unknown" so the model pick survives discovery, and the variant check must
+    // not then eat the variant the user stored for that same pick.
+    const absent = { providerID: "deepseek", modelID: "deepseek-v4-pro" }
+    const providers = [{ id: "openai", models: { "gpt-5": { capabilities: { toolcall: true } } } }]
+    const result = pruneModelPreferences(
+      {
+        model: { build: absent },
+        recent: [absent],
+        favorite: [absent],
+        variant: { "deepseek/deepseek-v4-pro": "high" },
+      },
+      (item) => (modelPreferenceStatus(providers, item) === "valid" ? "valid" : "unknown"),
+      () => "invalid",
+    )
+
+    expect(result.model).toEqual({ build: absent })
+    expect(result.variant).toEqual({ "deepseek/deepseek-v4-pro": "high" })
+    expect(result.changed).toBe(false)
+  })
 })
 
 describe("pruneModelPreferences migration", () => {

@@ -344,7 +344,10 @@ export function pruneModelPreferences(
     const stored = parseProviderModelKey(key)
     if (!stored) continue
     const kept = keepOrMigrate(stored, modelStatus, migrate)
-    if (!kept || variantStatus(kept, value) === "invalid") continue
+    // Judge the variant only against a model we can actually resolve. A model
+    // that is merely "unknown" — its provider is temporarily undiscovered —
+    // keeps its stored variant, exactly as the model pick survives this prune.
+    if (!kept || (modelStatus(kept) === "valid" && variantStatus(kept, value) === "invalid")) continue
     const nextKey = providerModelKey(kept)
     if (!Object.hasOwn(variant, nextKey)) variant[nextKey] = value
   }
