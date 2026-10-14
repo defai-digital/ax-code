@@ -102,7 +102,7 @@ describe("visual_critique tool", () => {
     }
   })
 
-  test("ignores a summary artifact path that is a symlink out of the run directory", async () => {
+  test.each([true, false])("ignores a symlink out of the run directory (summary: %s)", async (withSummary) => {
     const fs = await import("fs/promises")
     const path = await import("path")
     const os = await import("os")
@@ -119,10 +119,12 @@ describe("visual_critique tool", () => {
       await fs.writeFile(secret, "do not attach")
       const link = path.join(runDir, "linked.png")
       await fs.symlink(secret, link)
-      await fs.writeFile(
-        path.join(runDir, "visual-run.json"),
-        JSON.stringify({ artifacts: [{ kind: "screenshot", path: link, label: "x" }] }),
-      )
+      if (withSummary) {
+        await fs.writeFile(
+          path.join(runDir, "visual-run.json"),
+          JSON.stringify({ artifacts: [{ kind: "screenshot", path: link, label: "x" }] }),
+        )
+      }
 
       const { VisualCritiqueTool } = await import("../../src/tool/visual/critique")
       const tool = await VisualCritiqueTool.init()
@@ -140,6 +142,51 @@ describe("visual_critique tool", () => {
           },
         ),
       ).rejects.toThrow(/No screenshots found/)
+    } finally {
+      ;(Instance as { directory: string }).directory = restore
+      await fs.rm(projectDir, { recursive: true, force: true })
+    }
+  })
+  test.each([true, false])("attaches a confined screenshot (summary: %s)", async (withSummary) => {
+    const fs = await import("fs/promises")
+    const path = await import("path")
+    const os = await import("os")
+    const { VisualArtifactStore } = await import("../../src/visual/artifact")
+    const { Instance } = await import("@/project/instance")
+    const projectDir = await fs.mkdtemp(path.join(os.tmpdir(), "visual-critique-confined-"))
+    const restore = (Instance as { directory: string }).directory
+    try {
+      ;(Instance as { directory: string }).directory = projectDir
+      const runDir = VisualArtifactStore.runDir(projectDir, "run_valid")
+      await fs.mkdir(runDir, { recursive: true })
+      const screenshot = path.join(runDir, "valid.png")
+      await fs.writeFile(screenshot, "confined screenshot")
+      if (withSummary) {
+        await fs.writeFile(
+          path.join(runDir, "visual-run.json"),
+          JSON.stringify({
+            artifacts: [{ kind: "screenshot", id: "valid", path: screenshot, label: "valid" }],
+          }),
+        )
+      }
+      const { VisualCritiqueTool } = await import("../../src/tool/visual/critique")
+      const tool = await VisualCritiqueTool.init()
+      const result = await tool.execute(
+        { runID: "run_valid" },
+        {
+          sessionID: "ses_test" as never,
+          messageID: "msg_test" as never,
+          agent: "test",
+          abort: new AbortController().signal,
+          messages: [],
+          metadata: vi.fn(),
+          ask: vi.fn(),
+        },
+      )
+      expect(result.attachments).toHaveLength(1)
+      expect(result.attachments?.[0].url).toBe(
+        `data:image/png;base64,${Buffer.from("confined screenshot").toString("base64")}`,
+      )
     } finally {
       ;(Instance as { directory: string }).directory = restore
       await fs.rm(projectDir, { recursive: true, force: true })
