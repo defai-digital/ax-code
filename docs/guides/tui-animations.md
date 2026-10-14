@@ -8,7 +8,7 @@ Owner: AX Code TUI maintainers
 See [Terminal rendering](terminal-rendering.md) for automatic terminal profiles,
 manual overrides, and the difference between pixel graphics and text rendering.
 
-Each TUI launch randomly selects one of thirty-six animation pairs with equal probability (1/36 each):
+Each TUI launch randomly selects one of thirty-seven animation pairs with equal probability (1/37 each):
 
 - Digital Code: purple/blue falling code for the opening, reverse code for the ending.
 - Foliage: classic autumn leaves for the opening, golden leaves for the ending.
@@ -46,6 +46,7 @@ Each TUI launch randomly selects one of thirty-six animation pairs with equal pr
 - Steppe: daytime for the opening, night for the ending.
 - Canyon: daytime for the opening, night for the ending.
 - Singapore: Marina Bay daytime for the opening, illuminated bay for the ending.
+- Sanguozhi: a walled city at dawn with cavalry mustering for the opening, lantern-lit walls and campfires at dusk for the ending. Preview with `/sanguozhi` and `/sanguozhi-ending`, or search `Sanguozhi` in the command palette.
 
 Fuji Mountain includes a snow-capped mountain, a reflective lake, cherry blossoms,
 falling petals, and a Shinkansen travelling across the foreground. The 74-column,
