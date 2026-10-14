@@ -791,6 +791,14 @@ export function replace(content: string, oldString: string, newString: string, r
     throw new Error("No changes to apply: oldString and newString are identical.")
   }
 
+  // An empty search matches at every offset. `replaceAll` would splice the
+  // replacement between every character, and the single-match pipeline would
+  // insert it at an arbitrary index — reporting success either way. The native
+  // worker rejects this outright; the JS path has to agree.
+  if (oldString === "") {
+    throw new Error("oldString must not be empty.")
+  }
+
   const hasCRLF = content.includes("\r\n")
 
   if (replaceAll) {

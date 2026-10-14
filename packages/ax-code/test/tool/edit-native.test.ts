@@ -12,6 +12,7 @@ const fixtures: Array<[string, string, string, boolean?]> = [
   ["head\nwrong\nend\nlet longVariable = 1;\nend", "head\nlet longVariable = 2;\nend", "new"],
   ["foo", "missing", "bar"],
   ["foo", "foo", "foo"],
+  ["abc\n", "", "X"],
   ["😀 intro\n  target  \nend", "target", "changed"],
   ["a\r\n  target\nend\r\n", "target", "new\nlines"],
   ["😀 a\r\nb\nc\r\n", "😀 a\nb", "😁 changed\nnew"],
@@ -90,6 +91,16 @@ describe.skipIf(!enabled)("slim native edit parity", () => {
     controller.abort()
     await expect(promise).rejects.toThrow()
   })
+})
+
+test("an empty oldString is rejected instead of matching every offset", () => {
+  // `multiedit` passes the model's oldString straight through, so this is
+  // reachable. Without the guard, `replaceAll` spliced the replacement between
+  // every character and the single-match pipeline hung in
+  // MultiOccurrenceReplacer (indexOf("", 0) never advances). The native worker
+  // already rejects an empty search; the JS path has to agree.
+  expect(() => replace("a b c\n", "", "X")).toThrow("oldString must not be empty.")
+  expect(() => replace("a b c\n", "", "X", true)).toThrow("oldString must not be empty.")
 })
 
 test("missing and old addons, small literal edits and ill-formed UTF-16 retain JS behavior", async () => {
