@@ -153,27 +153,63 @@ export const OpsApplyTool = Tool.define("ops_apply", {
     }
 
     // (b) Optional read-only snapshot of the external state before mutation.
-    const beforeSnapshotRef = params.snapshot_command
-      ? await snapshotRef({ command: params.snapshot_command, abort: ctx.abort })
-      : null
-    ctx.abort.throwIfAborted()
-
-    // (c) Execute the mutation.
-    const result = await OpsExec.run({
-      command: params.command,
-      cwd: params.cwd,
-      timeoutSeconds: params.timeout_seconds,
-      abort: ctx.abort,
-    })
-    const combined = result.stdout + (result.stderr ? `\n${result.stderr}` : "")
-    const excerpt = combined.slice(0, EXCERPT_MAX_CHARS)
-
-    // (d) The same snapshot command after the mutation, so the journal entry
-    // binds before/after state regardless of the mutation's exit code.
-    const afterSnapshotRef =
-      params.snapshot_command && !result.aborted
+    // (c) Execute the mutation. (d) The same snapshot command after the
+    // mutation, so the journal entry binds before/after state regardless of
+    // the mutation's exit code.
+    //
+    // The token was consumed above and is single-use. Anything that fails
+    // before step (e) — a command that cannot spawn because its cwd vanished,
+    // a mid-flight abort — would otherwise burn the capability with no durable
+    // record. Journal a failed entry for that path, then rethrow.
+    let beforeSnapshotRef: string | null = null
+    let afterSnapshotRef: string | null = null
+    let result: Awaited<ReturnType<typeof OpsExec.run>>
+    let combined = ""
+    let excerpt = ""
+    try {
+      beforeSnapshotRef = params.snapshot_command
         ? await snapshotRef({ command: params.snapshot_command, abort: ctx.abort })
         : null
+      ctx.abort.throwIfAborted()
+
+      result = await OpsExec.run({
+        command: params.command,
+        cwd: params.cwd,
+        timeoutSeconds: params.timeout_seconds,
+        abort: ctx.abort,
+      })
+      combined = result.stdout + (result.stderr ? `\n${result.stderr}` : "")
+      excerpt = combined.slice(0, EXCERPT_MAX_CHARS)
+
+      afterSnapshotRef =
+        params.snapshot_command && !result.aborted
+          ? await snapshotRef({ command: params.snapshot_command, abort: ctx.abort })
+          : null
+    } catch (error) {
+      try {
+        appendPlanJournal({
+          plan,
+          projectID,
+          actor: "agent",
+          status: "failed",
+          payload: {
+            command: params.command,
+            exit_code: null,
+            aborted: ctx.abort.aborted,
+            output_excerpt: NamedError.message(error).slice(0, EXCERPT_MAX_CHARS),
+            approval_token_hash: Hash.fast(params.approval_token),
+            snapshot_command: params.snapshot_command,
+          },
+          sessionID: ctx.sessionID,
+        })
+      } catch (journalError) {
+        log.warn("failed to journal a consumed ops_apply approval token", {
+          planID: plan.id,
+          error: NamedError.message(journalError),
+        })
+      }
+      throw error
+    }
 
     // (e) Journal the outcome. The raw token never enters durable records —
     // only its sha256, per the no-raw-credentials rule.

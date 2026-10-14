@@ -361,6 +361,34 @@ describe("ops_apply", () => {
   )
 
   test(
+    "journals a failed entry when a consumed token cannot spawn the command",
+    withProject(async (ctx) => {
+      const missingCwd = path.join(Instance.directory, "gone-directory")
+      const { planID } = await createPlan(ctx, { ...PLAN_INPUT, cwd: missingCwd })
+      const { token } = await approvePlan(ctx, planID)
+
+      const tool = await OpsApplyTool.init()
+      await expect(
+        tool.execute(
+          { approval_token: token, plan_id: planID, command: "echo ok", cwd: missingCwd, timeout_seconds: 600 },
+          ctx,
+        ),
+      ).rejects.toThrow(/ENOENT/)
+
+      // The single-use token stays spent — a partial apply must not be
+      // replayable — but the burned capability is accounted for in the journal.
+      expect(OperationToken.consume({ token })).toEqual({ ok: false, reason: "already_consumed" })
+      const entries = OperationJournal.list(planID as any)
+      expect(entries).toHaveLength(3)
+      const entry = OperationJournal.latestEntry(planID as any)!
+      expect(entry).toMatchObject({ status: "failed" })
+      expect(entry.payload_json).toMatchObject({ approval_token_hash: Hash.fast(token), exit_code: null })
+      expect(JSON.stringify(entry.payload_json)).not.toContain(token)
+      expect(OperationJournal.verifyChain(planID as any)).toEqual({ ok: true })
+    }),
+  )
+
+  test(
     "snapshot_command captures before/after refs that differ when state changes",
     withProject(async (ctx) => {
       const { planID } = await createPlan(ctx, {
