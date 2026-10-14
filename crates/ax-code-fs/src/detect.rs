@@ -12,6 +12,19 @@ use std::path::PathBuf;
 use std::sync::LazyLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+/// Public columns are 1-based UTF-16 code units (JS string indices), matching
+/// the TypeScript twin (`detect-hardcodes.ts`). The byte offset is measured in
+/// `scan_line` (the comment-stripped line, which preserves byte length), but the
+/// count must walk the ORIGINAL `line`: stripped non-ASCII bytes became several
+/// spaces, so counting in `scan_line` would still over-count past them.
+fn column_of(line: &str, byte: usize) -> usize {
+    line.get(..byte)
+        .map(|prefix| prefix.encode_utf16().count())
+        .unwrap_or(byte)
+        + 1
+}
+
+
 // ─── Shared types ──────────────────────────────────────────────────
 
 #[derive(Serialize)]
@@ -800,7 +813,7 @@ fn scan_hardcodes(
                 findings.push(HardcodeFinding {
                     file: file.to_string(),
                     line: i + 1,
-                    column: mat.start() + 1,
+                    column: column_of(line, mat.start()),
                     kind: "magic_number".into(),
                     value: val.to_string(),
                     suggestion: "Extract to a named constant".into(),
@@ -827,7 +840,7 @@ fn scan_hardcodes(
                 findings.push(HardcodeFinding {
                     file: file.to_string(),
                     line: i + 1,
-                    column: mat.start() + 1,
+                    column: column_of(line, mat.start()),
                     kind: "inline_url".into(),
                     value: truncate_with_ellipsis(val, 120),
                     suggestion: "Move URL to configuration or environment variable".into(),
@@ -849,7 +862,7 @@ fn scan_hardcodes(
                 findings.push(HardcodeFinding {
                     file: file.to_string(),
                     line: i + 1,
-                    column: caps.get(0).unwrap().start() + 1,
+                    column: column_of(line, caps.get(0).unwrap().start()),
                     kind: "inline_path".into(),
                     value: truncate_with_ellipsis(val, 120),
                     suggestion: "Use path.join() with a configurable base directory".into(),
@@ -905,7 +918,7 @@ fn scan_hardcodes(
                 findings.push(HardcodeFinding {
                     file: file.to_string(),
                     line: i + 1,
-                    column: caps.get(0).unwrap().start() + 1,
+                    column: column_of(line, caps.get(0).unwrap().start()),
                     kind: "inline_secret_shape".into(),
                     value: truncate_with_ellipsis(val, 120),
                     suggestion: "Move to environment variable or secrets manager".into(),
@@ -1222,6 +1235,28 @@ mod tests {
         assert_eq!(findings.len(), 1);
         assert!(findings[0].value.ends_with("..."));
         assert!(findings[0].value.is_char_boundary(findings[0].value.len()));
+    }
+
+    #[test]
+    fn hardcode_columns_are_utf16_units_of_the_original_line() {
+        // The emoji is 4 bytes but 2 UTF-16 units; a byte-based column would
+        // report 17 (and 21) instead of the JS twin's 15 (and 19).
+        let findings = scan_hardcodes(
+            "/* \u{1F600} */ call(42, -12)\n",
+            "src/app.ts",
+            &enabled(&["magic_number"]),
+            10,
+        );
+        let magic = findings
+            .iter()
+            .find(|finding| finding.value == "42")
+            .expect("42 finding");
+        assert_eq!(magic.column, 15);
+        let negative = findings
+            .iter()
+            .find(|finding| finding.value == "-12")
+            .expect("-12 finding");
+        assert_eq!(negative.column, 19);
     }
 
     #[test]
