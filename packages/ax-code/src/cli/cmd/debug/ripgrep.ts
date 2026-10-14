@@ -44,11 +44,13 @@ const FilesCommand = cmd({
       }),
   async handler(args) {
     await bootstrap(process.cwd(), async () => {
+      const query = args.query?.toLowerCase()
       const files: string[] = []
       for await (const file of Ripgrep.files({
         cwd: Instance.directory,
         glob: args.glob ? [args.glob] : undefined,
       })) {
+        if (query && !file.toLowerCase().includes(query)) continue
         files.push(file)
         if (args.limit && files.length >= args.limit) break
       }
