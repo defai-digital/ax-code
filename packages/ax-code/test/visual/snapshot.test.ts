@@ -149,6 +149,7 @@ describe("visual.snapshot", () => {
     vi.doMock("@/tool/browser/runtime", () => ({
       BrowserRuntime: {
         get: () => ({ open, screenshot, closePage }),
+        forSession: () => ({ open, screenshot, closePage }),
       },
     }))
 

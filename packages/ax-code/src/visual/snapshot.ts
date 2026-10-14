@@ -86,7 +86,9 @@ export async function captureSnapshot(
     } else {
       // Capture from URL using Playwright browser runtime
       const { BrowserRuntime } = await import("@/tool/browser/runtime")
-      const runtime = BrowserRuntime.get()
+      // Per-session runtime so a capture cannot reuse the process-global one
+      // (which, in CDP attach mode, drives the user's real browser).
+      const runtime = BrowserRuntime.forSession(sessionID)
 
       // Open the URL in a new page with default desktop viewport
       const page = await runtime.open(source.url, { width: 1440, height: 900 })

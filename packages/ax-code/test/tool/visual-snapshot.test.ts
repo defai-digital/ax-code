@@ -9,6 +9,22 @@ vi.mock("@/project/instance", () => ({
   Instance: { directory: "/tmp/test-project" },
 }))
 
+vi.mock("@/visual/snapshot", () => ({
+  captureSnapshot: vi.fn(async () => {
+    throw new Error("reached captureSnapshot")
+  }),
+}))
+
+const ctx = () => ({
+  sessionID: "ses_test" as never,
+  messageID: "msg_test" as never,
+  agent: "test",
+  abort: new AbortController().signal,
+  messages: [],
+  metadata: vi.fn(),
+  ask: vi.fn(),
+})
+
 describe("visual_snapshot tool", () => {
   afterEach(() => {
     vi.restoreAllMocks()
@@ -45,5 +61,26 @@ describe("visual_snapshot tool", () => {
 
     await expect(VisualSnapshotTool.init()).resolves.toBeDefined()
     // The Zod refine validator ensures at least one is provided
+  })
+
+  test("blocks a non-http(s) url before reaching the browser", async () => {
+    const { VisualSnapshotTool } = await import("../../src/tool/visual/snapshot")
+    const tool = await VisualSnapshotTool.init()
+
+    await expect(tool.execute({ url: "file:///etc/passwd" }, ctx())).rejects.toThrow(
+      /Only http:\/\/ and https:\/\/ are supported/,
+    )
+  })
+
+  test("asks for read permission before attaching a local file", async () => {
+    const { VisualSnapshotTool } = await import("../../src/tool/visual/snapshot")
+    const tool = await VisualSnapshotTool.init()
+    const ask = vi.fn()
+
+    await tool.execute({ filePath: "/tmp/missing-snapshot.png" }, { ...ctx(), ask }).catch(() => undefined)
+
+    expect(ask).toHaveBeenCalledWith(
+      expect.objectContaining({ permission: "read", patterns: ["/tmp/missing-snapshot.png"] }),
+    )
   })
 })

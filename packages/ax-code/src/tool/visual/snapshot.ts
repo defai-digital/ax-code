@@ -5,6 +5,7 @@ import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { captureSnapshot } from "@/visual/snapshot"
 import { checkVisualRouting, sessionModelFromMessages } from "@/visual/router"
+import { BrowserPermission } from "@/visual/permission"
 
 const log = Log.create({ service: "tool.visual_snapshot" })
 
@@ -46,6 +47,25 @@ export const VisualSnapshotTool = Tool.define("visual_snapshot", {
     }
 
     const projectDir = Instance.directory
+
+    // A URL capture drives a real browser, so it needs the same gate as
+    // browser_open: reject file:/data: and ask for network egress. Without it a
+    // prompt could screenshot file:///… and attach local file bytes.
+    if (params.url) {
+      const validation = BrowserPermission.validateUrl(params.url)
+      if (!validation.valid) throw new Error(validation.reason)
+      await ctx.ask({
+        permission: "browser_open",
+        patterns: [params.url],
+        always: BrowserPermission.permissionPatterns(params.url),
+        metadata: { url: params.url },
+      })
+    }
+    // A file capture reads a model-supplied path off disk; gate it like `read`.
+    if (params.filePath) {
+      await ctx.ask({ permission: "read", patterns: [params.filePath], always: ["*"], metadata: {} })
+    }
+
     const source = params.url
       ? { type: "url" as const, url: params.url }
       : params.filePath
