@@ -316,6 +316,9 @@ export namespace BrowserRunner {
     } catch {
       receipt.status = "unknown"
     }
+    // A run cancelled (or timed out) during cleanup produced its steps but is
+    // not trustworthy evidence: never seal a passing receipt for it.
+    if (signal.aborted && receipt.status === "pass") receipt.status = "unknown"
     if (!receipt.cleanup || !receipt.diagnostics.complete) receipt.status = "unknown"
     issued.set(receipt, BrowserScenario.digest(receipt))
     return receipt

@@ -224,6 +224,20 @@ describe("frozen browser scenarios", () => {
     ).toBe("unknown")
     expect(port.calls).toEqual(["stop"])
   })
+
+  test("an abort during cleanup never seals a passing receipt", async () => {
+    const controller = new AbortController()
+    const port = fakePort()
+    const stop = port.stop
+    port.stop = async () => {
+      // The abort fires after the steps completed (the receipt already holds a
+      // passing status) but before the run is sealed.
+      controller.abort()
+      await stop()
+    }
+    const receipt = await BrowserRunner.run(BrowserScenario.freeze(manifest(), identity), port, controller.signal)
+    expect(receipt.status).toBe("unknown")
+  })
   test("runtime store rejects edited artifacts, scopes sessions and requires a failing control plus two fresh passes", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
