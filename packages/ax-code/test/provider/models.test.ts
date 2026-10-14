@@ -51,6 +51,17 @@ test("falls back to bundled snapshot when custom models file has invalid schema"
   expect(data["broken"]).toBeUndefined()
 })
 
+test("ax-engine takes its credential from AX_ENGINE_API_KEY, not the endpoint URL var", async () => {
+  ModelsDev.Data.reset()
+  const data = await ModelsDev.get()
+  const provider = data["ax-engine"]
+  expect(provider).toBeDefined()
+  // AX_ENGINE_HOST is an attach endpoint URL; listing it as a credential made
+  // the URL the bearer key and shadowed the real key.
+  expect(provider!.env).toContain("AX_ENGINE_API_KEY")
+  expect(provider!.env).not.toContain("AX_ENGINE_HOST")
+})
+
 test("loads custom models file from the active project directory", async () => {
   await using tmp = await tmpdir({ git: true })
   const file = path.join(tmp.path, "models.json")

@@ -132,7 +132,10 @@ export namespace ModelsDev {
 
   const BUILTIN_AX_ENGINE_PROVIDER: Provider = {
     id: AX_ENGINE_PROVIDER_ID,
-    env: ["AX_ENGINE_HOST"],
+    // AX_ENGINE_HOST is the attach endpoint URL, not a credential; listing it
+    // here made the URL the provider's bearer key (and shadow the real key).
+    // The loader reads AX_ENGINE_API_KEY for the credential.
+    env: ["AX_ENGINE_API_KEY"],
     npm: "@ai-sdk/openai-compatible",
     api: `http://127.0.0.1:${AX_ENGINE_DEFAULT_PORT}/v1`,
     name: AX_ENGINE_DISPLAY_NAME,
