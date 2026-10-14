@@ -252,4 +252,47 @@ describe("lsp tool audit trail (S3)", () => {
       },
     })
   })
+
+  test("a sync-mode audit insert failure is logged and does not break the tool call", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "audit-insert-failure-test" })
+
+        workspaceEnvelopeSpy = vi.spyOn(LSP, "workspaceSymbolEnvelope").mockResolvedValue({
+          symbols: [],
+          source: "lsp",
+          completeness: "empty",
+          timestamp: 1_700_000_000_002,
+          serverIDs: [],
+        } as any)
+
+        const insertSpy = vi.spyOn(AuditQuery, "insert").mockImplementation(() => {
+          throw new Error("audit sink unavailable")
+        })
+        const warnSpy = vi.spyOn(Log.create({ service: "tool.lsp" }), "warn")
+        try {
+          const tool = await LspTool.init()
+          const result = await tool.execute({ operation: "workspaceSymbol", query: "DemoSymbol" }, {
+            sessionID: session.id,
+            messageID: MessageID.make(""),
+            callID: "",
+            agent: "build",
+            abort: AbortSignal.any([]),
+            messages: [],
+            metadata: () => {},
+            ask: async () => {},
+          } as any)
+
+          expect(result).toBeDefined()
+          expect(warnSpy).toHaveBeenCalled()
+          expect(String(warnSpy.mock.calls[0]?.[0])).toContain("audit")
+        } finally {
+          insertSpy.mockRestore()
+          warnSpy.mockRestore()
+        }
+      },
+    })
+  })
 })

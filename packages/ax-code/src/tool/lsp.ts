@@ -10,6 +10,9 @@ import { AuditSemanticCall } from "../audit/semantic-call"
 import type { LSPServer } from "@ax-code/ax-code-intel/server"
 import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 import { ToolNumber } from "./schema"
+import { Log } from "../util/log"
+
+const log = Log.create({ service: "tool.lsp" })
 
 // Synthesize a minimal envelope for operations that don't yet have an
 // envelope-returning LSP variant. Lets us audit every tool call
@@ -108,7 +111,12 @@ export const LspTool = Tool.define("lsp", {
         // Audit write failure must not break the tool call. Queue
         // mode's flush errors are logged at the writer level; this
         // try/catch only fires if sync mode's insert rejects.
-        // Caller still gets the real result.
+        // Caller still gets the real result, but the dropped row is
+        // surfaced so a broken audit sink is not silently invisible.
+        log.warn("failed to record lsp audit row", {
+          operation: input.operation,
+          error: err instanceof Error ? err.message : String(err),
+        })
       }
     }
     if (args.operation === "workspaceSymbol") {
