@@ -1040,9 +1040,12 @@ export namespace Snapshot {
           },
         )
         if (result.code !== 0) {
-          const tree = await runGit([...core, ...args(current, ["ls-tree", target.hash, "--", rel])], {
-            cwd: current.worktree,
-          })
+          const tree = await runGit(
+            [...core, "--literal-pathspecs", ...args(current, ["ls-tree", target.hash, "--", rel])],
+            {
+              cwd: current.worktree,
+            },
+          )
           if (tree.code !== 0) {
             log.error("failed to inspect file in snapshot", {
               file: target.file,
@@ -1133,9 +1136,12 @@ export namespace Snapshot {
         } else {
           for (const target of applied) {
             const rel = path.relative(current.worktree, target.file)
-            const tree = await runGit([...core, ...args(current, ["ls-tree", rollbackTree, "--", rel])], {
-              cwd: current.worktree,
-            })
+            const tree = await runGit(
+              [...core, "--literal-pathspecs", ...args(current, ["ls-tree", rollbackTree, "--", rel])],
+              {
+                cwd: current.worktree,
+              },
+            )
             if (tree.code !== 0) {
               log.error("failed to inspect file while rolling back snapshot revert", {
                 file: target.file,

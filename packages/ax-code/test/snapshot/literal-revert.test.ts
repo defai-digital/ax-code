@@ -115,6 +115,40 @@ test("a mixed patch restores existing literal paths and removes added paths with
   })
 })
 
+test.skipIf(process.platform === "win32").each([":(glob)*.txt", ":(top)b.txt"])(
+  "the per-file revert fallback inspects %s with --literal-pathspecs",
+  async (name) => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const target = path.join(tmp.path, name)
+        await fs.writeFile(target, "target before\n")
+        const baseline = await Snapshot.track()
+        expect(baseline).toBeDefined()
+
+        // Remove the file and make the worktree root read-only so the batched
+        // checkout fails, forcing the per-file applyTarget fallback. Without
+        // --literal-pathspecs the fallback's ls-tree treats the name as
+        // pathspec magic (wrong path, or a fatal exit).
+        await fs.rm(target)
+        await fs.chmod(tmp.path, 0o500)
+
+        const git = vi.spyOn(Git, "git")
+        try {
+          await Snapshot.revert([{ hash: baseline!, files: [target] }]).catch(() => undefined)
+        } finally {
+          await fs.chmod(tmp.path, 0o700)
+        }
+
+        const lsTrees = git.mock.calls.filter(([args]) => args.includes("ls-tree"))
+        expect(lsTrees.length).toBeGreaterThan(0)
+        for (const [args] of lsTrees) expect(args.includes("--literal-pathspecs")).toBe(true)
+      },
+    })
+  },
+)
+
 test("reverting many files uses one checkout per snapshot hash", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
