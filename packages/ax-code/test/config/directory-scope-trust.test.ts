@@ -50,6 +50,14 @@ describe("DirectoryScopeTrust", () => {
       expect(await DirectoryScopeTrust.isTrusted("/two")).toBe(true)
     }))
 
+  test("concurrent trust() calls do not lose a directory", () =>
+    withBackup(async () => {
+      await fs.rm(statePath, { force: true })
+      await Promise.all([DirectoryScopeTrust.trust("/concurrent-a"), DirectoryScopeTrust.trust("/concurrent-b")])
+      expect(await DirectoryScopeTrust.isTrusted("/concurrent-a")).toBe(true)
+      expect(await DirectoryScopeTrust.isTrusted("/concurrent-b")).toBe(true)
+    }))
+
   // Regression: isTrusted() runs on nearly every CLI startup. A corrupted
   // cache file must degrade to "not trusted", never throw — a thrown error
   // here would break every ax-code invocation, not just broad-directory ones.

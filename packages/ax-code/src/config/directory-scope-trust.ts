@@ -2,6 +2,8 @@ import path from "path"
 import { Global } from "../global"
 import { Filesystem } from "../util/filesystem"
 import { Log } from "../util/log"
+import { FileLock } from "../util/filelock"
+import { Lock } from "../util/lock"
 
 const log = Log.create({ service: "config.directory-scope-trust" })
 
@@ -35,13 +37,24 @@ export namespace DirectoryScopeTrust {
   }
 
   export async function trust(resolvedDir: string): Promise<void> {
-    const trusted = await load()
-    trusted[resolvedDir] = true
-    await Filesystem.writeJson(file, trusted).catch((error) => {
+    // Serialize the read-modify-write. Two prompts answered at once — or two
+    // ax-code processes starting together — would otherwise each read the
+    // pre-write snapshot and the last write would drop the other directory, so
+    // the user is asked to confirm a directory they already approved. Use the
+    // same in-process Lock + cross-process FileLock pair as the other state
+    // writers (e.g. storage). Everything stays fail-soft: a lock timeout or a
+    // write error must never break a CLI start.
+    try {
+      using _lock = await Lock.write(file)
+      using _fileLock = await FileLock.acquire(file)
+      const trusted = await load()
+      trusted[resolvedDir] = true
+      await Filesystem.writeJson(file, trusted)
+    } catch (error) {
       log.warn("failed to persist directory-scope trust; continuing without remembering this directory", {
         file,
         error,
       })
-    })
+    }
   }
 }
