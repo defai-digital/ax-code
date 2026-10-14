@@ -5,7 +5,7 @@ import { ScheduledTaskRunID, type ScheduledTaskID } from "../../src/session/sche
 import { ScheduledTaskRunTable } from "../../src/session/session.sql"
 import { SessionShard } from "../../src/session/shard"
 import { and, eq } from "../../src/storage/db"
-import { WorkflowScheduler, WorkflowTemplate } from "../../src/workflow"
+import { WorkflowRun, WorkflowScheduler, WorkflowTemplate } from "../../src/workflow"
 import { tmpdir } from "../fixture/fixture"
 
 // The workflow bridge re-reports a terminal run's outcome on every later
@@ -127,6 +127,38 @@ describe("ScheduledTask workflow outcome recording", () => {
         } finally {
           createRun.mockRestore()
           start.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("a run-now whose workflow start fails cancels the pre-created run", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+        process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+        // A real createRun persists the queued run; only start fails, as it does
+        // for the runtime-disabled guard or an unsupported merge strategy.
+        const start = vi.spyOn(WorkflowScheduler, "start").mockRejectedValue(new Error("start failed"))
+        try {
+          const task = await createWorkflowTask()
+          await expect(ScheduledTask.runNow(task.id)).rejects.toThrow()
+
+          // The pre-created run never started. It must be cancelled rather than
+          // left `queued` forever — recoverInterrupted only sweeps `running` rows
+          // and there is no workflow-run retention.
+          const runs = await WorkflowRun.list()
+          expect(runs).toHaveLength(1)
+          expect(runs[0]!.status).toBe("cancelled")
+
+          const taskRuns = await ScheduledTask.listRuns({ taskID: task.id })
+          expect(taskRuns.some((run) => run.status === "failed")).toBe(true)
+        } finally {
+          start.mockRestore()
+          if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+          else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
         }
       },
     })

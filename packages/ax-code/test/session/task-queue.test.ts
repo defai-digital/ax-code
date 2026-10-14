@@ -1547,6 +1547,49 @@ describe("TaskQueue", () => {
     })
   })
 
+  test("cancels the pre-created workflow run when a scheduled workflow start fails", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { WorkflowTemplate } = await import("../../src/workflow/template")
+        const { WorkflowScheduler } = await import("../../src/workflow/scheduler")
+        const createRun = vi
+          .spyOn(WorkflowTemplate, "createRun")
+          .mockResolvedValue({ id: "wfr_start_fail_scheduled" } as never)
+        // start() throws before flipping the run to `running` (runtime-disabled
+        // guard or unsupported merge strategy).
+        const start = vi.spyOn(WorkflowScheduler, "start").mockRejectedValue(new Error("start failed"))
+        const cancel = vi.spyOn(WorkflowScheduler, "cancel").mockResolvedValue(undefined as never)
+        try {
+          const scheduled = await ScheduledTask.create({
+            title: "Start failure workflow",
+            prompt: "Run the workflow.",
+            schedule: { type: "cron", expression: "0 0 1 1 *" },
+            workflowTemplateID: "builtin:noop-dry-run",
+          })
+          const item = await TaskQueue.enqueue({
+            kind: "automation",
+            title: "Start failure workflow",
+            sourceTaskID: scheduled.id,
+            payload: {
+              scheduledTaskID: scheduled.id,
+              workflowTemplateID: "builtin:noop-dry-run",
+            },
+          })
+          await TaskQueueExecutor.start(item)
+          await waitForQueueStatus(item.id, "failed")
+          // The never-started run must be cancelled, not left `queued` forever.
+          expect(cancel).toHaveBeenCalledWith("wfr_start_fail_scheduled")
+        } finally {
+          createRun.mockRestore()
+          start.mockRestore()
+          cancel.mockRestore()
+        }
+      },
+    })
+  })
+
   test("fails sessionless scheduled automation when the assistant result has an error", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

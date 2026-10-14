@@ -812,6 +812,18 @@ export namespace ScheduledTask {
       const workflowRun = await WorkflowScheduler.start(run.id, startOptions)
       return { task, workflowRun }
     } catch (error) {
+      // start() can throw before it flips the run to `running` (the runtime
+      // disabled guard, an unsupported merge strategy). The pre-created run is
+      // then `queued` and nothing will ever start it, so cancel it — the same
+      // cleanup the aborted-claim branch above does. Otherwise the run list
+      // keeps a phantom attempt that no sweep repairs.
+      await WorkflowScheduler.cancel(run.id).catch((cancelError) => {
+        log.warn("failed to cancel a scheduled workflow run after a start failure", {
+          taskID: current.id,
+          runID: run.id,
+          error: cancelError,
+        })
+      })
       // The run row is claimed and `running`: finalize it through the
       // workflow outcome path so a start failure cannot wedge overlap
       // protection until orphan reconciliation or bypass the failure policy.
