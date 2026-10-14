@@ -69,6 +69,9 @@ export class SseParser {
       if (this.skipLF) {
         this.skipLF = false
         if (char === 10) {
+          // Both bytes of a CRLF pair belong to this frame. Counting only the
+          // CR let a CRLF-terminated stream hold twice the configured budget.
+          if (++this.units > this.maxUnits) throw new SseFrameLimitError()
           start = i + 1
           continue
         }

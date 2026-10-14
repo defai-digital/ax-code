@@ -80,6 +80,10 @@ test("recognizes profiled and legacy bridges while preserving unrelated MCP serv
     }),
   ).toBe(true)
   expect(BrowserRouting.externalBridgeBlocked({ type: "local", command: ["node", "/tools/unrelated.js"] })).toBe(false)
+  // Windows resolves command names and suffixes case-insensitively.
+  expect(BrowserRouting.externalBridgeBlocked({ type: "local", command: ["C:\\Tools\\CHROME-DEVTOOLS-MCP.CMD"] })).toBe(
+    true,
+  )
 })
 
 test("startup, explicit reconnect and dynamic add cannot launch Chrome in embedded mode", async () => {

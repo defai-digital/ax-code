@@ -230,6 +230,18 @@ describe.each(clients)("generated SSE client %s", (_name, createSseClient) => {
     await stream.return(undefined)
   })
 
+  test("counts both bytes of a CRLF pair toward the frame budget", async () => {
+    const { stream } = createSseClient({
+      url: "http://localhost/events",
+      sseIdleTimeout: 0,
+      sseMaxEventCharacters: 8,
+      // "data:x\r\n\r\n" is 10 characters; skipping the LF counted only 8, so
+      // a CRLF-terminated stream could hold more than the configured budget.
+      fetch: async () => new Response("data:x\r\n\r\n"),
+    })
+    await expect(stream.next()).rejects.toThrow("SSE event exceeds")
+  })
+
   test("aborting a long retry wait settles immediately without another request", async () => {
     vi.useFakeTimers()
     try {

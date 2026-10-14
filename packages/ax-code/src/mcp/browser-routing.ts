@@ -29,7 +29,10 @@ export namespace BrowserRouting {
       (server.type === "local" &&
         Boolean(
           server.command?.some((arg) =>
-            /(?:^|[/\\\s"'=])chrome-devtools-mcp(?:@[^/\\\s"']+)?(?:\.(?:m?js|cjs|cmd|exe))?(?:[/\\\s"']|$)/.test(arg),
+            // Case-insensitive: Windows resolves command names and suffixes
+            // without regard to case, so an uppercase spelling must be blocked
+            // too (`CHROME-DEVTOOLS-MCP.CMD`).
+            /(?:^|[/\\\s"'=])chrome-devtools-mcp(?:@[^/\\\s"']+)?(?:\.(?:m?js|cjs|cmd|exe))?(?:[/\\\s"']|$)/i.test(arg),
           ),
         ))
     )
