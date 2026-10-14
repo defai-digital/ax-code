@@ -947,6 +947,23 @@ describe("tool.edit", () => {
     test("rejects two exact matches on the same line instead of replacing the first", () => {
       expect(() => replace("keep foo and foo here", "foo", "bar")).toThrow("Found multiple matches")
     })
+
+    test("does not delete interior lines when the anchors span a different block length", () => {
+      // Both anchors match, but the file block has an extra interior line the
+      // caller never named. Accepting the span would silently delete it.
+      expect(() => replace("start\nX\nEXTRA\nend\n", "start\nX\nend", "replacement")).toThrow(
+        "Could not find oldString",
+      )
+      expect(() => replace("start\nX\nE1\nE2\nend\n", "start\nX\nend", "replacement")).toThrow(
+        "Could not find oldString",
+      )
+    })
+
+    test("still applies a same-length block-anchor match with drifted interior lines", () => {
+      expect(replace("start\n  const value = abcAAA\nend\n", "start\n  const value = abcAAB\nend", "REPL")).toBe(
+        "REPL\n",
+      )
+    })
   })
 
   describe("concurrent editing", () => {

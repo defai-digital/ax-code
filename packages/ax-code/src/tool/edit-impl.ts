@@ -372,10 +372,14 @@ const BlockAnchorReplacer: Replacer = function* (content, find) {
     // the line immediately after the anchor, making 2-line searches
     // unfindable even though the guards above permit them.
     for (let j = i + 1; j < originalLines.length; j++) {
-      if (originalLines[j].trim() === lastLineSearch) {
-        candidates.push({ startLine: i, endLine: j })
-        break // Only match the first occurrence of the last line
-      }
+      if (originalLines[j].trim() !== lastLineSearch) continue
+      // Both anchors matched but the interior is a different number of
+      // lines. Accepting that span would replace (delete) lines the caller
+      // never named, so require the same block length. Mirrors
+      // ContextAwareReplacer's length guard.
+      if (j - i + 1 !== searchBlockSize) continue
+      candidates.push({ startLine: i, endLine: j })
+      break // Only match the first occurrence of the last line
     }
   }
 
