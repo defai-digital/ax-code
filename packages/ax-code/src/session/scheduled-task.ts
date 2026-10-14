@@ -12,7 +12,7 @@ import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
 import { JsonBoolean, JsonNumber } from "@/util/schema"
 import { ScheduledTaskID, ScheduledTaskRunID, TaskQueueID, type SessionID } from "./schema"
-import { ScheduledTaskTable, ScheduledTaskRunTable } from "./session.sql"
+import { ScheduledTaskTable, ScheduledTaskRunTable, TaskQueueTable } from "./session.sql"
 import { SessionShard } from "./shard"
 import { TaskQueue } from "./task-queue"
 import { WorkflowRun as WorkflowRunState, type WorkflowRunDetail, type WorkflowRunID } from "@/workflow/state"
@@ -1137,6 +1137,7 @@ export namespace ScheduledTask {
       .select({
         id: ScheduledTaskRunTable.id,
         timeStarted: ScheduledTaskRunTable.time_started,
+        queueID: ScheduledTaskRunTable.queue_id,
         workflowRunID: ScheduledTaskRunTable.workflow_run_id,
       })
       .from(ScheduledTaskRunTable)
@@ -1144,6 +1145,11 @@ export namespace ScheduledTask {
       .all()
     for (const row of rows) {
       if (row.timeStarted !== null && row.timeStarted > staleBefore) return true
+      // The execution deadline starts when the queue executor claims an item,
+      // not when the scheduler enqueues it. A stale run can therefore still
+      // have work waiting in the durable queue; keep overlap protection until
+      // that queue item reaches a terminal state.
+      if (isTaskQueueRunLive(db, row.queueID)) return true
       // A workflow dispatch row stays `running` for the workflow's whole
       // lifetime; the queue-path deadline cannot bound it. While the workflow
       // is still executing the row stays open even past deadline+grace —
@@ -1171,11 +1177,26 @@ export namespace ScheduledTask {
     )
   }
 
+  function isTaskQueueRunLive(db: Database.TxOrDb, queueID: string | null | undefined): boolean {
+    if (!queueID) return false
+    const row = db
+      .select({ status: TaskQueueTable.status })
+      .from(TaskQueueTable)
+      .where(eq(TaskQueueTable.id, queueID as TaskQueueID))
+      .get()
+    const status = TaskQueue.Status.safeParse(row?.status)
+    return status.success && !["failed", "completed", "cancelled"].includes(status.data)
+  }
+
   function reconcileOrphanRuns(taskID: ScheduledTaskID, now: number, deadlineMs: number): void {
     const staleBefore = now - (deadlineMs + ORPHAN_GRACE_MS)
     SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const candidates = db
-        .select({ id: ScheduledTaskRunTable.id, workflowRunID: ScheduledTaskRunTable.workflow_run_id })
+        .select({
+          id: ScheduledTaskRunTable.id,
+          queueID: ScheduledTaskRunTable.queue_id,
+          workflowRunID: ScheduledTaskRunTable.workflow_run_id,
+        })
         .from(ScheduledTaskRunTable)
         .where(
           and(
@@ -1186,6 +1207,7 @@ export namespace ScheduledTask {
         )
         .all()
       for (const candidate of candidates) {
+        if (isTaskQueueRunLive(db, candidate.queueID)) continue
         // A workflow dispatch keeps the run row `running` for the workflow's
         // whole lifetime, so an old row is an orphan only when its workflow is
         // gone or terminal. Failing a row whose workflow is still executing

@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { ScheduledTask } from "../../src/session/scheduled-task"
+import { TaskQueueID } from "../../src/session/schema"
 import { ScheduledTaskRunTable } from "../../src/session/session.sql"
 import { SessionShard } from "../../src/session/shard"
 import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
+import { TaskQueue } from "../../src/session/task-queue"
 import { eq } from "../../src/storage/db"
 import { WorkflowRun, WorkflowScheduler, WorkflowTemplate } from "../../src/workflow"
 import { tmpdir } from "../fixture/fixture"
@@ -245,6 +247,48 @@ describe("ScheduledTask execution deadline", () => {
           if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
           else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
         }
+      },
+    })
+  })
+
+  test("a queued task past deadline+grace is not orphaned or dispatched twice", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const deadline = 1_000
+        const grace = 10 * 60 * 1_000
+        const task = await ScheduledTask.create({
+          title: "Queued task",
+          prompt: "Run the scheduled task.",
+          schedule: { type: "cron", expression: "* * * * *" },
+          maxRunDurationMs: deadline,
+        })
+        const firstDueAt = (task.nextRunAt ?? Date.now()) + 6 * 60 * 1_000
+        const first = await ScheduledTask.runDue(firstDueAt)
+        expect(first).toHaveLength(1)
+
+        const [firstRun] = await ScheduledTask.listRuns({ taskID: task.id })
+        expect(firstRun?.queueID).toBeDefined()
+        const queueItem = await TaskQueue.get(TaskQueueID.make(firstRun!.queueID!))
+        expect(queueItem.status).toBe("queued")
+
+        const next = await ScheduledTask.get(task.id)
+        const secondDueAt = (next.nextRunAt ?? firstDueAt) + 6 * 60 * 1_000
+        const staleAt = secondDueAt - (deadline + grace + 1)
+        SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+          db.update(ScheduledTaskRunTable)
+            .set({ time_started: staleAt, time_updated: staleAt })
+            .where(eq(ScheduledTaskRunTable.queue_id, queueItem!.id))
+            .run()
+        })
+        const second = await ScheduledTask.runDue(secondDueAt)
+        expect(second).toHaveLength(0)
+        const runs = await ScheduledTask.listRuns({ taskID: task.id })
+        expect(runs.filter((run) => run.status === "running")).toHaveLength(1)
+        expect(runs.some((run) => run.status === "failed" && (run.error ?? "").startsWith("orphaned:"))).toBe(false)
+        expect(runs.some((run) => run.status === "skipped_overlap")).toBe(true)
       },
     })
   })
