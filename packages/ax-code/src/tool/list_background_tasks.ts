@@ -24,7 +24,9 @@ export const ListBackgroundTasksTool = Tool.define("list_background_tasks", {
     const children = await Session.children(ctx.sessionID)
     const tasks: TaskQueue.Info[] = []
     for (const child of children) {
-      const items = await TaskQueue.list({ sessionID: child.id, limit: 100 })
+      // Newest-first: the default queue order is oldest-first, so limit:100 would
+      // keep the oldest rows of a busy child and hide the running task.
+      const items = await TaskQueue.list({ sessionID: child.id, limit: 100, descending: true })
       for (const item of items) {
         if (isLiveTaskSubagent(item)) tasks.push(item)
       }

@@ -96,6 +96,12 @@ export namespace TaskQueue {
     status: Status.optional(),
     statuses: z.array(Status).optional(),
     limit: z.number().int().positive().max(500).optional(),
+    /**
+     * Order newest-first instead of the default queue order (oldest-first by
+     * `position`). A bounded reader that wants a task's current row must set
+     * this, or the limit keeps the oldest rows and drops the live one.
+     */
+    descending: z.boolean().optional(),
   })
   export type ListInput = z.infer<typeof ListInput>
 
@@ -348,7 +354,13 @@ export namespace TaskQueue {
         .select()
         .from(TaskQueueTable)
         .where(and(...conditions))
-        .orderBy(asc(TaskQueueTable.position), desc(TaskQueueTable.time_created), desc(TaskQueueTable.id))
+        .orderBy(
+          parsed.descending
+            ? desc(TaskQueueTable.position)
+            : asc(TaskQueueTable.position),
+          desc(TaskQueueTable.time_created),
+          desc(TaskQueueTable.id),
+        )
         .$dynamic()
       if (parsed.limit) query = query.limit(parsed.limit)
       return query.all().flatMap((row) => {

@@ -151,6 +151,44 @@ describe("tool.list_background_tasks", () => {
       },
     })
   })
+
+  test("lists a live task buried behind more than 100 terminal rows on its child", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const child = await Session.create({ parentID: parent.id, title: "busy child" })
+        // The queue lists oldest-first, so limit:100 without descending keeps
+        // these terminal rows and hides the running one that follows.
+        for (let index = 0; index < 101; index++) {
+          const item = await TaskQueue.enqueue({
+            sessionID: child.id,
+            kind: "subagent",
+            title: `done ${index}`,
+            agent: "general",
+            model: { providerID: "test", modelID: "test-model" },
+            payload: { source: "task", resumeOnRestart: true, parentSessionID: parent.id },
+          })
+          await TaskQueue.setStatus({ id: item.id, status: "completed" })
+        }
+        const live = await TaskQueue.enqueue({
+          sessionID: child.id,
+          kind: "subagent",
+          title: "still running",
+          agent: "general",
+          model: { providerID: "test", modelID: "test-model" },
+          payload: { source: "task", resumeOnRestart: true, parentSessionID: parent.id },
+        })
+        await TaskQueue.setStatus({ id: live.id, status: "running" })
+
+        const result = await (await ListBackgroundTasksTool.init()).execute({}, toolContext(parent.id))
+        expect(result.metadata.tasks.some((task: any) => task.queueID === live.id)).toBe(true)
+        expect(result.output).toContain("still running")
+      },
+    })
+  })
 })
 
 describe("tool.message_background_task", () => {

@@ -50,7 +50,9 @@ export async function resolveTarget(taskID: string): Promise<TaskQueue.Info | un
     })
   }
   if (taskID.startsWith("ses_")) {
-    const items = await TaskQueue.list({ sessionID: SessionID.make(taskID), limit: 100 }).catch((e) => {
+    // Newest-first: the default queue order is oldest-first, so a bounded limit
+    // would keep the oldest rows and drop the live one for a busy child session.
+    const items = await TaskQueue.list({ sessionID: SessionID.make(taskID), limit: 100, descending: true }).catch((e) => {
       if (NotFoundError.isInstance(e)) return [] as TaskQueue.Info[]
       throw e
     })

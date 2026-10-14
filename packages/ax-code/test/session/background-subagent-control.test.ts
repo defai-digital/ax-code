@@ -10,6 +10,7 @@ import { TaskQueue } from "../../src/session/task-queue"
 import { MessageID } from "../../src/session/schema"
 import { MessageV2 } from "../../src/session/message-v2"
 import { MAX_BACKGROUND_SUBAGENTS, TaskTool } from "../../src/tool/task"
+import { resolveTarget } from "../../src/tool/waitfor"
 import { tmpdir } from "../fixture/fixture"
 
 const model: Provider.Model = {
@@ -268,6 +269,37 @@ describe("background subagent control", () => {
             } as any,
           ),
         ).rejects.toThrow(/Maximum concurrent background subagents/s)
+      },
+    })
+  })
+
+  test("resolveTarget returns a live row buried behind 100 terminal rows", async () => {
+    await using tmp = await tmpdir({ git: true, config: { username: "testuser" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const buried = await Session.create({ title: "Child buried" })
+        for (let index = 0; index < 101; index++) {
+          const item = await TaskQueue.enqueue({
+            sessionID: buried.id,
+            kind: "subagent",
+            title: `Done ${index}`,
+            payload: { source: "task", resumeOnRestart: true },
+          })
+          await TaskQueue.setStatus({ id: item.id, status: "completed" })
+        }
+        const live = await TaskQueue.enqueue({
+          sessionID: buried.id,
+          kind: "subagent",
+          title: "Buried active",
+          payload: { source: "task", resumeOnRestart: true },
+        })
+        await TaskQueue.setStatus({ id: live.id, status: "running" })
+
+        // An oldest-first page would return only the 100 completed rows and
+        // report a stale outcome for a task that is still running.
+        expect((await resolveTarget(buried.id))?.id).toBe(live.id)
       },
     })
   })
