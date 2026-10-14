@@ -221,6 +221,14 @@ describe("isolation.assertBashNetwork", () => {
     expect(() => Isolation.assertBashNetwork(state, ["/usr/bin/curl"])).toThrow("Network access is disabled")
   })
 
+  test("normalizes case and Windows suffixes before the allow-list check", () => {
+    const state = Isolation.resolve({ mode: "workspace-write", network: false }, root)
+    expect(() => Isolation.assertBashNetwork(state, ["CURL"])).toThrow("Network access is disabled")
+    expect(() => Isolation.assertBashNetwork(state, ["curl.exe"])).toThrow("Network access is disabled")
+    expect(() => Isolation.assertBashNetwork(state, ["WGET.CMD"])).toThrow("Network access is disabled")
+    expect(() => Isolation.assertBashNetwork(state, ["/usr/bin/NSLOOKUP.EXE"])).toThrow("Network access is disabled")
+  })
+
   test("allows non-network commands when network is disabled", () => {
     const state = Isolation.resolve({ mode: "workspace-write", network: false }, root)
     expect(() => Isolation.assertBashNetwork(state, ["echo", "ls", "git", "npm"])).not.toThrow()

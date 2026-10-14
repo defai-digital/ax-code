@@ -260,11 +260,16 @@ export namespace Isolation {
     }
     for (const name of commandNames) {
       if (!name) continue
-      const base = name.split(/[\\/]/).pop() ?? name
+      const raw = name.split(/[\\/]/).pop() ?? name
+      // Command resolution is case-insensitive and appends a Windows suffix, so
+      // normalize both before the allow-list lookup — otherwise `CURL` or
+      // `curl.exe` slips past the check (fail-open on Windows, which has no OS
+      // sandbox). Mirrors bash-impl's executable normalization.
+      const base = raw.replace(/\.(?:exe|cmd|bat)$/i, "").toLowerCase()
       if (NETWORK_COMMANDS.has(base)) {
         throw new DeniedError(
           "network",
-          `Network access is disabled by isolation policy (mode: ${state.mode}). The command "${base}" requires network access. Set isolation.network to true or use full-access mode.`,
+          `Network access is disabled by isolation policy (mode: ${state.mode}). The command "${raw}" requires network access. Set isolation.network to true or use full-access mode.`,
         )
       }
     }
