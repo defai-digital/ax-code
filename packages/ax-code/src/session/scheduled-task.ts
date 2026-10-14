@@ -1411,6 +1411,17 @@ export namespace ScheduledTask {
   export async function recordWorkflowRun(id: ScheduledTaskID, workflowRunID: string): Promise<Info> {
     const now = Date.now()
     const task = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+      // A scheduler tick stamps its dispatch row at claim time, before the
+      // workflow exists, so that row carries no workflow id. Link it here, where
+      // the executor reports the run it just created. hasOpenRunIn and
+      // reconcileOrphanRuns read the ROW (not the task) to keep a still-executing
+      // workflow open past deadline+grace; without the link the next occurrence
+      // double-fires and the live outcome loses its row. A manual run-now stamps
+      // the row at claim and never reaches this path.
+      db.update(ScheduledTaskRunTable)
+        .set({ workflow_run_id: workflowRunID, time_updated: now })
+        .where(and(eq(ScheduledTaskRunTable.task_id, id), eq(ScheduledTaskRunTable.status, "running")))
+        .run()
       const row = db
         .update(ScheduledTaskTable)
         .set({ last_workflow_run_id: workflowRunID, time_updated: now })

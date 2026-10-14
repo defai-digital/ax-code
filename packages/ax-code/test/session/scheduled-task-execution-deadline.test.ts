@@ -5,7 +5,7 @@ import { ScheduledTaskRunTable } from "../../src/session/session.sql"
 import { SessionShard } from "../../src/session/shard"
 import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
 import { eq } from "../../src/storage/db"
-import { WorkflowRun, WorkflowScheduler } from "../../src/workflow"
+import { WorkflowRun, WorkflowScheduler, WorkflowTemplate } from "../../src/workflow"
 import { tmpdir } from "../fixture/fixture"
 
 // 2026-09-20: the queue item for a scheduled run must carry the same
@@ -174,6 +174,73 @@ describe("ScheduledTask execution deadline", () => {
           const runs = await ScheduledTask.listRuns({ taskID: task.id })
           expect(runs.some((run) => run.status === "failed" && (run.error ?? "").startsWith("orphaned:"))).toBe(true)
           expect(runs.filter((run) => run.status === "running")).toHaveLength(1)
+        } finally {
+          if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+          else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+        }
+      },
+    })
+  })
+
+  // The tests above drive run-now, which stamps the dispatch row's workflow id
+  // at claim time. A scheduler tick instead creates the row at claim and only
+  // learns the workflow id later, when the executor reports it through
+  // recordWorkflowRun. hasOpenRunIn and reconcileOrphanRuns read the ROW, so
+  // without that link a tick-dispatched workflow older than deadline+grace was
+  // orphaned and the next occurrence double-fired.
+  test("a tick-dispatched workflow keeps its run row open past deadline+grace", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+        process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+        try {
+          // The executor's queue dispatch is stubbed, so the workflow run is
+          // reported explicitly below the way that path reports it.
+          vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+          const deadline = 1_000
+          const grace = 10 * 60 * 1_000
+          const task = await ScheduledTask.create({
+            title: "Tick workflow",
+            prompt: "Run the workflow.",
+            schedule: { type: "cron", expression: "* * * * *" },
+            workflowTemplateID: "builtin:noop-dry-run",
+            maxRunDurationMs: deadline,
+          })
+          // Fire past the missed-run grace so the anti-herd jitter does not
+          // defer the occurrence; catchUpPolicy run_once still runs it.
+          const firstDueAt = (task.nextRunAt ?? Date.now()) + 6 * 60 * 1_000
+          const first = await ScheduledTask.runDue(firstDueAt)
+          expect(first.some((result) => result.task.id === task.id)).toBe(true)
+
+          const workflowRun = await WorkflowTemplate.createRun({
+            templateID: "builtin:noop-dry-run",
+            sourceTaskID: task.id,
+          })
+          await WorkflowRun.setStatus({ id: workflowRun.id, status: "running" })
+          await ScheduledTask.recordWorkflowRun(task.id, workflowRun.id)
+
+          // Backdate the dispatch row past deadline+grace instead of waiting.
+          const next = await ScheduledTask.get(task.id)
+          const secondDueAt = (next.nextRunAt ?? firstDueAt) + 6 * 60 * 1_000
+          const staleAt = secondDueAt - (deadline + grace + 1)
+          SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+            db.update(ScheduledTaskRunTable)
+              .set({ time_started: staleAt, time_updated: staleAt })
+              .where(eq(ScheduledTaskRunTable.task_id, task.id))
+              .run()
+          })
+
+          // The live workflow keeps the row open: this occurrence is skipped as
+          // an overlap, not dispatched a second time, and the row is not
+          // orphaned.
+          const second = await ScheduledTask.runDue(secondDueAt)
+          expect(second.some((result) => result.task.id === task.id)).toBe(false)
+          const runs = await ScheduledTask.listRuns({ taskID: task.id })
+          expect(runs.filter((run) => run.status === "running")).toHaveLength(1)
+          expect(runs.some((run) => (run.error ?? "").startsWith("orphaned:"))).toBe(false)
+          expect(await WorkflowRun.list()).toHaveLength(1)
         } finally {
           if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
           else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
