@@ -96,6 +96,20 @@ describe("visual.native", () => {
     await expect(captureNativeSnapshot({ type: "terminal" })).rejects.toThrow(/not a recognized terminal/)
   })
 
+  test("resolves a bare window source through the frontmost process instead of crashing", async () => {
+    setPlatform("darwin")
+    const { captureNativeSnapshot } = await import("../../src/visual/native")
+
+    const result = await captureNativeSnapshot({ type: "window" })
+
+    expect(textMock).toHaveBeenCalledWith(expect.arrayContaining(["osascript"]), { timeout: 10_000 })
+    expect(runMock).toHaveBeenCalledWith(expect.arrayContaining(["screencapture", "-x", "-R", "10,20,300,200"]), {
+      timeout: 20_000,
+    })
+    expect(result.target).toMatchObject({ type: "desktop-window", appID: "Terminal" })
+    expect(result.label).toBe("Native window: Terminal - zsh")
+  })
+
   test("stores native terminal snapshots as computer visual runs", async () => {
     setPlatform("darwin")
     const { captureSnapshot } = await import("../../src/visual/snapshot")

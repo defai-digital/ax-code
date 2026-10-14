@@ -90,7 +90,13 @@ async function macWindowBounds(
   source: Extract<NativeSnapshotSource, { type: "frontmost-window" | "window" | "terminal" }>,
 ) {
   const lines: string[] = ['tell application "System Events"']
-  if (source.type === "frontmost-window" || (!source.appName && source.type === "terminal")) {
+  // A window/terminal source without an explicit app name resolves the
+  // frontmost process, like frontmost-window; otherwise the else branch would
+  // dereference source.appName (undefined) and crash.
+  if (
+    source.type === "frontmost-window" ||
+    (!source.appName && (source.type === "terminal" || source.type === "window"))
+  ) {
     lines.push("set targetProcess to first application process whose frontmost is true")
   } else {
     lines.push(`set targetProcess to first application process whose name is ${appleScriptString(source.appName!)}`)
