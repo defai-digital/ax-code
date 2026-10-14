@@ -17,6 +17,10 @@ changes belong to AX Coder.
 - Retain admitted keyed-queue work across registry resets so draining cannot release resources while detached jobs still run.
 - Capture the admitted-work snapshot when draining starts so later submissions cannot indefinitely extend the wait.
 - Keep regenerated SDK JSDoc blank lines identical to formatted sources, preventing false release drift.
+- Enforce visual file boundaries across symlinks and redact diagnostic reasons and Windows user paths.
+- Cancel never-started scheduled workflow runs even when their specification is disabled.
+- Report the current ACP context window from the latest step and count CRLF bytes in SDK SSE frame limits.
+- Recognize Windows-cased browser bridges and incomplete validation exits in runtime guards.
 
 ## [7.25.5] - 2026-10-14
 
