@@ -293,6 +293,12 @@ test("an apply the transaction aborts leaves no applied stamp", async () => {
       })
       const held = (await TaskQueue.list({ sessionID: session.id }))[0]!
 
+      // Keep the recovered follow-up at its handoff: without a model configured,
+      // a fast executor can fail the next turn before this rollback assertion.
+      // The transaction test owns restoration; execution has separate coverage.
+      const { TaskQueueExecutor } = await import("../../src/session/task-queue-executor")
+      const start = vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+
       // End the generation inside the transaction: beforeCommit throws, so the
       // message roll back and the stamp must roll back with it. Recovery still
       // owns the text.
@@ -304,7 +310,11 @@ test("an apply the transaction aborts leaves no applied stamp", async () => {
       const row = await TaskQueue.get(held.id)
       expect(row.payload["steeredAppliedAt"]).toBeUndefined()
       const recovered = await waitForRow(held.id, (candidate) => candidate.status !== "cancelled")
-      expect(["queued", "waiting_for_idle", "running"]).toContain(recovered.status)
+      expect(recovered.status).toBe("queued")
+      expect(recovered.payload["steeredInto"]).toBeUndefined()
+      await vi.waitFor(() =>
+        expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: held.id, status: "queued" })),
+      )
     },
   })
 })
