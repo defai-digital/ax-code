@@ -57,6 +57,25 @@ describe("computeIncrementalChanges", () => {
     expect(result!.length).toBeGreaterThanOrEqual(2)
   })
 
+  test("multi-hunk ranges are relative to the document after earlier hunks", () => {
+    const oldText = "1\n2\n3\n4\n"
+    const newText = "1\n1.5\n2\n3\nTHREE\n4\n"
+    const result = computeIncrementalChanges(oldText, newText)
+    expect(result).not.toBeNull()
+
+    // LSP applies a notification's contentChanges in order against the
+    // evolving document, so simulate that and require an exact reconstruction.
+    const apply = (doc: string, change: { range: { start: { line: number }; end: { line: number } }; text: string }) => {
+      const lines = doc.split("\n")
+      const inserted = change.text === "" ? [] : change.text.split("\n")
+      if (inserted.length > 0 && inserted[inserted.length - 1] === "") inserted.pop()
+      return [...lines.slice(0, change.range.start.line), ...inserted, ...lines.slice(change.range.end.line)].join("\n")
+    }
+    let doc = oldText
+    for (const change of result!) doc = apply(doc, change)
+    expect(doc).toBe(newText)
+  })
+
   test("returns null for pathological diffs with too many hunks", () => {
     // Interleave enough changes to exceed the internal hunk budget without
     // coupling this test to the exact cap.

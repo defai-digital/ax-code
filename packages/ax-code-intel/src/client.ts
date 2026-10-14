@@ -88,6 +88,10 @@ export function computeIncrementalChanges(oldText: string, newText: string): Lsp
   const oldEndsWithNewline = oldText.endsWith("\n")
 
   let oldLine = 0
+  // Net lines inserted by the hunks already emitted. LSP applies a
+  // notification's contentChanges sequentially, so each hunk's range is
+  // relative to the document after the previous ones — not the original.
+  let lineDelta = 0
   let i = 0
   while (i < parts.length) {
     const part = parts[i]
@@ -99,8 +103,9 @@ export function computeIncrementalChanges(oldText: string, newText: string): Lsp
       continue
     }
 
-    const hunkStartLine = oldLine
+    const hunkStartLine = oldLine + lineDelta
     let removedLines = 0
+    let addedLines = 0
     let removedText = ""
     let addedText = ""
     while (i < parts.length && (parts[i].added || parts[i].removed)) {
@@ -109,7 +114,10 @@ export function computeIncrementalChanges(oldText: string, newText: string): Lsp
         removedLines += p.count ?? 0
         removedText += p.value
       }
-      if (p.added) addedText += p.value
+      if (p.added) {
+        addedLines += p.count ?? 0
+        addedText += p.value
+      }
       i++
     }
     let hunkEndLine = hunkStartLine + removedLines
@@ -133,7 +141,8 @@ export function computeIncrementalChanges(oldText: string, newText: string): Lsp
       },
       text: addedText,
     })
-    oldLine = hunkEndLine
+    oldLine += removedLines
+    lineDelta += addedLines - removedLines
 
     if (changes.length > MAX_INCREMENTAL_HUNKS) return null
   }
