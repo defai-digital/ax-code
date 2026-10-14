@@ -286,6 +286,32 @@ describe("VerifyProjectTool", () => {
     })
   })
 
+  test("surfaces an abort that lands after the test step instead of returning a result", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const controller = new AbortController()
+        const tool = await VerifyProjectTool.init()
+        // The test command outlives the abort so the turn is cancelled while it
+        // runs; the tool must not return a normal verification result.
+        const timer = setTimeout(() => controller.abort(), 60)
+
+        try {
+          await expect(
+            tool.execute(
+              { commands: { typecheck: null, lint: null, test: `node -e "setTimeout(() => {}, 400)"` } },
+              { ...ctx(), abort: controller.signal },
+            ),
+          ).rejects.toThrow(/abort/i)
+        } finally {
+          clearTimeout(timer)
+        }
+      },
+    })
+  })
+
   test("debug workflow does not inherit review or qa required_checks", async () => {
     await using tmp = await tmpdir({ git: true })
     await writeFile(tmp.path, ".ax-code/review.md", "REVIEW_POLICY_TOKEN")

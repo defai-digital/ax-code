@@ -329,15 +329,19 @@ export const VerifyProjectTool = Tool.define("verify_project", {
     // "this verification passed against this source state".
     const sourceState = await currentSourceState(Instance.worktree, Instance.project.vcs ?? "")
 
-    const typecheck: Timed<TimedCheckResult> = await timed(() => runCheck("typecheck", commands.typecheck, cwd))
+    const typecheck: Timed<TimedCheckResult> = await timed(() =>
+      runCheck("typecheck", commands.typecheck, cwd, { signal: ctx.abort }),
+    )
     if (ctx.abort.aborted) throw new DOMException("verify_project aborted", "AbortError")
 
-    const lint: Timed<TimedCheckResult> = await timed(() => runCheck("lint", commands.lint, cwd))
+    const lint: Timed<TimedCheckResult> = await timed(() => runCheck("lint", commands.lint, cwd, { signal: ctx.abort }))
     if (ctx.abort.aborted) throw new DOMException("verify_project aborted", "AbortError")
 
     const tests: Timed<TimedTestResult> = await timed(() =>
-      runTests(commands.test, cwd, paths, Instance.project.id, "worktree"),
+      runTests(commands.test, cwd, paths, Instance.project.id, "worktree", { signal: ctx.abort }),
     )
+    // Abort after the last command must surface too, not return a normal result.
+    if (ctx.abort.aborted) throw new DOMException("verify_project aborted", "AbortError")
 
     const rawVerificationEnvelopes = fromVerificationCommandResult({
       workflow,
