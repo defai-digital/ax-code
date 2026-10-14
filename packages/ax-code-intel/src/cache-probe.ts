@@ -148,7 +148,11 @@ export async function run<T>(input: {
     : executed
 
   LSPPerf.recordSample(input.liveMetric, 0, true)
-  if (store && contentHash) {
+  // The content hash was taken before this request was queued. An edit in
+  // between (the caller re-syncs the document before the RPC runs) would
+  // otherwise file this answer under the pre-edit content, and every later
+  // query for that content would be served it.
+  if (store && contentHash && (await scopedContentHash(store, input.operation, input.filePath)) === contentHash) {
     store.write({
       operation: input.operation,
       filePath: input.filePath,
