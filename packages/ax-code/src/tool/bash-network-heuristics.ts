@@ -20,16 +20,57 @@
  */
 export namespace BashNetworkHeuristics {
   /** interpreter family (matched on the base name) → flags whose argument is inline code */
-  const INLINE_CODE_INTERPRETERS: ReadonlyArray<{ family: string; match: RegExp; flags: readonly string[] }> = [
+  const INLINE_CODE_INTERPRETERS: ReadonlyArray<{
+    family: string
+    match: RegExp
+    flags: readonly string[]
+    /** flags whose next argument (or `=value`) is a value, never inline code */
+    valueFlags: readonly string[]
+  }> = [
     // Versioned and distro-specific names execute the same inline code:
     // python3.12, pypy3, nodejs (Debian), perl5.36, ruby3.3, php8.3.
-    { family: "python", match: /^(?:python|pypy)(?:\d+(?:\.\d+)?t?)?(?:\.exe)?$/i, flags: ["-c"] },
-    { family: "node", match: /^(?:node|nodejs)(?:\d+)?(?:\.exe)?$/i, flags: ["-e", "-p", "--eval", "--print"] },
-    { family: "bun", match: /^bun(?:\.exe)?$/i, flags: ["-e", "--eval", "--print", "-p"] },
-    { family: "deno", match: /^deno(?:\.exe)?$/i, flags: ["eval"] },
-    { family: "perl", match: /^perl(?:\d+(?:\.\d+)*)?(?:\.exe)?$/i, flags: ["-e", "-E"] },
-    { family: "ruby", match: /^ruby(?:\d+(?:\.\d+)*)?(?:\.exe)?$/i, flags: ["-e"] },
-    { family: "php", match: /^php(?:\d+(?:\.\d+)*)?(?:\.exe)?$/i, flags: ["-r"] },
+    {
+      family: "python",
+      match: /^(?:python|pypy)(?:\d+(?:\.\d+)?t?)?(?:\.exe)?$/i,
+      flags: ["-c"],
+      valueFlags: ["-W", "-X"],
+    },
+    {
+      family: "node",
+      match: /^(?:node|nodejs)(?:\d+)?(?:\.exe)?$/i,
+      flags: ["-e", "-p", "--eval", "--print"],
+      valueFlags: ["-r", "--require"],
+    },
+    {
+      family: "bun",
+      match: /^bun(?:\.exe)?$/i,
+      flags: ["-e", "--eval", "--print", "-p"],
+      valueFlags: ["-r", "--require"],
+    },
+    {
+      family: "deno",
+      match: /^deno(?:\.exe)?$/i,
+      flags: ["eval"],
+      valueFlags: ["--config", "--import-map", "--lock", "--env-file"],
+    },
+    {
+      family: "perl",
+      match: /^perl(?:\d+(?:\.\d+)*)?(?:\.exe)?$/i,
+      flags: ["-e", "-E"],
+      valueFlags: ["-I", "-M", "-m"],
+    },
+    {
+      family: "ruby",
+      match: /^ruby(?:\d+(?:\.\d+)*)?(?:\.exe)?$/i,
+      flags: ["-e"],
+      valueFlags: ["-r", "-I"],
+    },
+    {
+      family: "php",
+      match: /^php(?:\d+(?:\.\d+)*)?(?:\.exe)?$/i,
+      flags: ["-r"],
+      valueFlags: ["-d", "-f", "-c"],
+    },
   ]
 
   /** substrings/regexes that suggest inline code opens network sockets */
@@ -109,11 +150,18 @@ export namespace BashNetworkHeuristics {
    * Every inline-code argument for the interpreter: `-c code`, `-ccode`,
    * `-e'code'` (the shell hands `-ecode` to us), `--eval=code`, bundled short
    * flags such as `-Bc code`, and repeated `-e` (perl/ruby run all of them).
+   * A value-taking flag (`valueFlags`: python `-W`/`-X`, node `-r`, perl
+   * `-I`/`-M`, …) consumes its argument, which must not be mistaken for the
+   * first operand: `python3 -W ignore -c '…'` still runs the inline code.
    * Scanning stops at `--` or at the first operand (a script filename), so a
    * script's own `-c` argument is not mistaken for inline code. `undefined`
    * means a code flag was present but its code is missing (opaque).
    */
-  function inlineCodeFor(flags: readonly string[], args: readonly string[]): { codes: string[]; opaque: boolean } {
+  function inlineCodeFor(
+    flags: readonly string[],
+    args: readonly string[],
+    valueFlags: readonly string[] = [],
+  ): { codes: string[]; opaque: boolean } {
     const codes: string[] = []
     let opaque = false
     const longFlags = flags.filter((flag) => flag.startsWith("--"))
@@ -122,6 +170,11 @@ export namespace BashNetworkHeuristics {
     for (let i = 0; i < args.length; i++) {
       const arg = args[i]!
       if (arg === "--") break
+      if (valueFlags.includes(arg)) {
+        i++
+        continue
+      }
+      if (valueFlags.some((flag) => arg.startsWith(`${flag}=`))) continue
       if (wordFlags.includes(arg)) {
         const next = args[i + 1]
         if (next === undefined) opaque = true
@@ -223,7 +276,7 @@ export namespace BashNetworkHeuristics {
 
     const interpreter = interpreterFor(base)
     if (interpreter) {
-      const { codes, opaque } = inlineCodeFor(interpreter.flags, args)
+      const { codes, opaque } = inlineCodeFor(interpreter.flags, args, interpreter.valueFlags)
       // Missing code after the flag is opaque — treat it as suspect rather
       // than as harmless.
       if (opaque || codes.some(looksNetworked)) result.inlineCodeNetworkSuspect = true

@@ -29,6 +29,29 @@ describe("bash network heuristics (busybox, interpreters, containers)", () => {
     })
   })
 
+  test("a value-taking flag does not hide the inline code behind it", () => {
+    // Without value-flag handling the flag's argument looked like the first
+    // operand and the scan stopped before the code flag.
+    expect(
+      BashNetworkHeuristics.inspect("python3", [
+        "-W",
+        "ignore",
+        "-c",
+        "import socket; socket.create_connection(('x',1))",
+      ]),
+    ).toMatchObject({ inlineCodeNetworkSuspect: true })
+    expect(BashNetworkHeuristics.inspect("node", ["-r", "preload.js", "-e", 'fetch("http://x")'])).toMatchObject({
+      inlineCodeNetworkSuspect: true,
+    })
+    expect(BashNetworkHeuristics.inspect("perl", ["-I", "lib", "-e", "use LWP::Simple"])).toMatchObject({
+      inlineCodeNetworkSuspect: true,
+    })
+    // The value itself is still never treated as code.
+    expect(BashNetworkHeuristics.inspect("python3", ["-W", "ignore", "script.py"])).toMatchObject({
+      inlineCodeNetworkSuspect: false,
+    })
+  })
+
   test("interpreter inline code with network indicators is suspect", () => {
     expect(
       BashNetworkHeuristics.inspect("python", ["-c", "import urllib.request; urllib.request.urlopen('http://x')"]),
