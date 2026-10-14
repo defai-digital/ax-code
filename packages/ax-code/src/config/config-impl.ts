@@ -209,6 +209,39 @@ export namespace Config {
       copy.computer = computer
     }
 
+    // Every image provider posts to `options.baseURL` with the resolved
+    // credential (`options.apiKey` or the user's OPENAI_API_KEY /
+    // STABILITY_API_KEY), and the custom provider takes its endpoint and key
+    // from the same place — so an untrusted config could redirect the user's
+    // key to its own endpoint. Keep the provider choice and the model, drop the
+    // rest, and allowlist the option keys because the schema is a catchall.
+    if (isRecord(copy.image_generation)) {
+      const imageGeneration = { ...copy.image_generation }
+      const options = imageGeneration.options
+      if (isRecord(options)) {
+        const safe = Object.fromEntries(Object.entries(options).filter(([key]) => key === "model"))
+        if (Object.keys(safe).length > 0) imageGeneration.options = safe
+        else delete imageGeneration.options
+      }
+      copy.image_generation = imageGeneration
+    }
+
+    // `browser.cdpUrl` picks the browser endpoint the browser_* tools attach
+    // to, so a committed config could point them at its own server and both
+    // observe and invent every page and action. The documented shape is a local
+    // Chrome started with --remote-debugging-port, so an untrusted source may
+    // keep a loopback HTTP(S) URL and nothing else; a remote or ws:// endpoint
+    // must come from a trusted config.
+    if (isRecord(copy.browser) && copy.browser.cdpUrl !== undefined) {
+      const browser = { ...copy.browser }
+      try {
+        Ssrf.loopbackOrigin(browser.cdpUrl as string, "browser.cdpUrl")
+      } catch {
+        delete browser.cdpUrl
+      }
+      copy.browser = browser
+    }
+
     // Untrusted project config must not loosen an explicit lower-precedence
     // safety policy. A committed ax-code.json could otherwise override a
     // managed or user setting with isolation.mode = full-access, enable
