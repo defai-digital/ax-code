@@ -5,7 +5,7 @@ import path from "node:path"
  * Injects JSDoc comments into the hey-api generated sources under `src/gen`
  * and `src/v2/gen`. The generator does not document its output, which used to
  * leave the published JSR package with ~1% symbol documentation. This pass
- * runs after code generation and patching, before Prettier and tsc, and is
+ * runs after code generation, patching and Prettier, before tsc, and is
  * deterministic so regeneration always yields the same docs.
  *
  * Doc sources, in priority order per symbol:
@@ -112,7 +112,7 @@ function hasLeadingDoc(lines: string[], index: number): boolean {
 
 function blockComment(lines: string[], indent = ""): string[] {
   if (lines.length === 1) return [`${indent}/** ${lines[0]} */`]
-  return [`${indent}/**`, ...lines.map((line) => `${indent} * ${line}`), `${indent} */`]
+  return [`${indent}/**`, ...lines.map((line) => (line ? `${indent} * ${line}` : `${indent} *`)), `${indent} */`]
 }
 
 const STABLE_DOCS: Record<string, string> = {
