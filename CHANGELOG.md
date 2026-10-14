@@ -6,6 +6,18 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.25.6] - 2026-10-14
+
+### Changed
+
+- Publish paired SDK 2.6.17 with stable generated documentation formatting.
+
+### Fixed
+
+- Retain admitted keyed-queue work across registry resets so draining cannot release resources while detached jobs still run.
+- Capture the admitted-work snapshot when draining starts so later submissions cannot indefinitely extend the wait.
+- Keep regenerated SDK JSDoc blank lines identical to formatted sources, preventing false release drift.
+
 ## [7.25.5] - 2026-10-14
 
 ### Changed
