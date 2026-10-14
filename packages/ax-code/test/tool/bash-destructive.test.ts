@@ -47,6 +47,19 @@ describe("classifyDestructiveCommand", () => {
     expect(classifyDestructiveCommand(["git", "commit", "-m", "msg"])).toBeUndefined()
   })
 
+  test("treats a forced git clean as destructive unless it is a preview", () => {
+    expect(classifyDestructiveCommand(["git", "clean", "-f"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["git", "clean", "-ndf"])).toBeUndefined()
+    expect(classifyDestructiveCommand(["git", "clean", "--dry-run", "-f"])).toBeUndefined()
+  })
+
+  test("flags kubectl delete --dry-run=none, which deletes for real", () => {
+    expect(classifyDestructiveCommand(["kubectl", "delete", "namespace", "production", "--dry-run=none"])).toBeTruthy()
+    expect(
+      classifyDestructiveCommand(["kubectl", "delete", "namespace", "production", "--dry-run=client"]),
+    ).toBeUndefined()
+  })
+
   test("looks through wrapper commands", () => {
     expect(classifyDestructiveCommand(["sudo", "rm", "-rf", "/var/data"])).toBeTruthy()
     expect(classifyDestructiveCommand(["sudo", "-u", "root", "rm", "-rf", "/var/data"])).toBeTruthy()

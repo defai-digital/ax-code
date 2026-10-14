@@ -316,7 +316,14 @@ function classifyGit(args: string[]): string | undefined {
   if (subcommand === "reset" && hasLongFlag(rest, "--hard")) {
     return "git reset --hard discards uncommitted work"
   }
-  if (subcommand === "clean" && (hasShortFlag(rest, "f") || hasLongFlag(rest, "--force"))) {
+  // `-n`/`--dry-run` makes git clean print what it would remove and delete
+  // nothing, so a preview must not be reported as a destructive operation.
+  if (
+    subcommand === "clean" &&
+    !hasShortFlag(rest, "n") &&
+    !hasLongFlag(rest, "--dry-run") &&
+    (hasShortFlag(rest, "f") || hasLongFlag(rest, "--force"))
+  ) {
     return "git clean -f permanently deletes untracked files"
   }
   if (
@@ -410,11 +417,20 @@ function classifyGcloudAzDoctl(args: string[], valueFlags: ReadonlySet<string>, 
   return undefined
 }
 
+/**
+ * A dry-run flag that really only prints what would change. kubectl spells
+ * "no dry run" as `--dry-run=none`, which deletes for real, so any
+ * `--dry-run=…` must not be treated as safe.
+ */
+function hasEffectiveDryRun(args: string[]): boolean {
+  return args.some((arg) => arg === "--dry-run" || (arg.startsWith("--dry-run=") && arg !== "--dry-run=none"))
+}
+
 function classifyKubectl(args: string[]): string | undefined {
   const positionals = skipValueFlagArgs(args, KUBECTL_VALUE_FLAGS)
   const operation = positionals[0]
   if (operation === "delete") {
-    if (hasLongFlag(args, "--dry-run")) return undefined
+    if (hasEffectiveDryRun(args)) return undefined
     return "kubectl delete removes cluster objects"
   }
   if (operation === "apply" && hasLongFlag(args, "--prune")) {
