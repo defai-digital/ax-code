@@ -186,6 +186,46 @@ describe("tool.bash permissions", () => {
     })
   })
 
+  test("asks when a bare variable argument can name a dynamic path", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        // A bare `$OUTSIDE` is a simple_expansion node; it must reach the
+        // dynamic-path scan exactly like the quoted form does.
+        const command = "cat $OUTSIDE"
+        const requests = await collectPermissionRequests(
+          (testCtx) => bash.execute({ command, description: "dynamic path" }, testCtx),
+          (req) => req.permission === "external_directory",
+        )
+        const extDirReq = requests.find((r) => r.permission === "external_directory")
+        expect(extDirReq).toBeDefined()
+        expect(extDirReq!.patterns).toContain(command)
+      },
+    })
+  })
+
+  test("asks for a redirected cd that writes a file", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        // `cd . > notes.txt` writes a file; the cd skip must not swallow the
+        // bash ask, or a deny-by-default ruleset is never consulted.
+        const command = "cd . > notes.txt"
+        const requests = await collectPermissionRequests(
+          (testCtx) => bash.execute({ command, description: "redirected cd" }, testCtx),
+          (req) => req.permission === "bash",
+        )
+        const bashAsk = requests.find((r) => r.permission === "bash")
+        expect(bashAsk).toBeDefined()
+        expect(bashAsk!.patterns).toContain(command)
+      },
+    })
+  })
+
   test.each([
     ["tee after --", (file: string) => `tee -- '${file}'`],
     ["glued curl -o", (file: string) => `curl -o'${file}' https://example.invalid/x`],

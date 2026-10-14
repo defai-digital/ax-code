@@ -250,6 +250,21 @@ const BROWSER_INTENT_PASSTHROUGH_RE = /(?:callback|oauth|auth|token|run-report|m
 const BROWSER_OPEN_ARG_RE = /"[^"]*"|'[^']*'|[^\s]+/g
 const WRITE_REDIRECT_OPERATORS = new Set([">", ">>", ">|", "&>", "&>>", "<>"])
 
+// tree-sitter node types that are a command's words. Expansions and
+// substitutions are included so a bare `$VAR` / `$(cmd)` argument reaches the
+// dynamic-path scan; a quoted form arrives as `string`/`concatenation`.
+const COMMAND_WORD_NODE_TYPES = new Set([
+  "command_name",
+  "word",
+  "string",
+  "raw_string",
+  "concatenation",
+  "simple_expansion",
+  "expansion",
+  "command_substitution",
+  "process_substitution",
+])
+
 /**
  * Returns the target argument if the command is a browser-open call targeting
  * a local HTML file or localhost URL that should be intercepted. Returns null
@@ -1111,15 +1126,11 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         for (let i = 0; i < node.childCount; i++) {
           const child = node.child(i)
           if (!child) continue
-          if (
-            child.type !== "command_name" &&
-            child.type !== "word" &&
-            child.type !== "string" &&
-            child.type !== "raw_string" &&
-            child.type !== "concatenation"
-          ) {
-            continue
-          }
+          // Bare expansions and substitutions are real arguments too. Dropping
+          // them hid a dynamic path from the isolation / external_directory
+          // scan, while the quoted form (`"$F"`, a `string` node) was kept and
+          // the redirect scan already treats these types as dynamic.
+          if (!COMMAND_WORD_NODE_TYPES.has(child.type)) continue
           command.push(child.text)
         }
 
@@ -1277,10 +1288,17 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         }
 
         // cd covered by above check; track that we found a command
-        // so the fallback below doesn't re-add skipped commands.
+        // so the fallback below doesn't re-add skipped commands. A redirected
+        // `cd` (e.g. `cd . > file`) writes a file, so it must still be
+        // evaluated as a bash pattern — its durable option is the exact
+        // command, not `cd *`, which would allow any later redirected cd.
+        const redirectedStatement = node.parent?.type === "redirected_statement"
         if (command.length && command[0] !== "cd") {
           patterns.add(commandText)
           always.add(BashArity.prefix(command).join(" ") + " *")
+        } else if (command.length && command[0] === "cd" && redirectedStatement) {
+          patterns.add(commandText)
+          always.add(commandText)
         }
         if (command.length) foundCommands = true
       }
