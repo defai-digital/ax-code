@@ -701,9 +701,16 @@ export namespace MCP {
   // A child process reports a missing executable and a missing working
   // directory with the same opaque `spawn <cmd> ENOENT`. Name the launcher and
   // the remedy, keeping the raw message so the log stays greppable.
-  function localStartupError(cmd: string, error: unknown): string {
+  function localStartupError(cmd: string, resolved: string, error: unknown): string {
     const message = NamedError.message(error)
     if (!isBareCommand(cmd) || (error as NodeJS.ErrnoException | undefined)?.code !== "ENOENT") return message
+    // `which()` already resolved the bare name, so this ENOENT came from the
+    // resolved executable itself — a missing shebang interpreter, or a working
+    // directory that does not exist — not from PATH. Pointing at the PATH
+    // remedy there would tell the user to install a command they already have.
+    if (resolved !== cmd) {
+      return `${message} ("${cmd}" resolved to ${resolved}, which could not be started; check its interpreter and the working directory)`
+    }
     return `${message} ("${cmd}" not found on PATH; install it or use an absolute command path)`
   }
 
@@ -1159,9 +1166,12 @@ export namespace MCP {
           ...(webmcp ? { npm_config_ignore_scripts: "true", npm_config_audit: "false", npm_config_fund: "false" } : {}),
         }).filter((entry): entry is [string, string] => entry[1] !== undefined),
       )
+      // Resolve the bare launcher once: the spawn uses the resolved path, and a
+      // failure message must know whether the PATH lookup already succeeded.
+      const resolvedCommand = resolveLocalCommand(cmd, env)
       const transport = new StdioClientTransport({
         stderr: "pipe",
-        command: resolveLocalCommand(cmd, env),
+        command: resolvedCommand,
         args,
         cwd,
         env,
@@ -1220,7 +1230,7 @@ export namespace MCP {
         await closeIfPossible(transport, key, "local mcp connect failed")
         status = {
           status: "failed" as const,
-          error: localStartupError(cmd, error),
+          error: localStartupError(cmd, resolvedCommand, error),
         }
       }
     }

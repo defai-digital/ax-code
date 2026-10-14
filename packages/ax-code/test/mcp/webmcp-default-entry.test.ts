@@ -324,3 +324,39 @@ test("a missing local launcher reports the command instead of a bare ENOENT", as
     },
   })
 })
+
+test("a launcher that resolves but cannot start is not reported as missing from PATH", async () => {
+  await using binTmp = await tmpdir()
+  const launcher = process.platform === "win32" ? "ax-code-broken-launcher.cmd" : "ax-code-broken-launcher"
+  const launcherPath = path.join(binTmp.path, launcher)
+  await fs.writeFile(launcherPath, process.platform === "win32" ? "@echo off\r\n" : "#!/bin/sh\nexit 0\n")
+  await fs.chmod(launcherPath, 0o755)
+
+  // The launcher IS on PATH, so an ENOENT comes from starting it — a missing
+  // shebang interpreter — and the remedy must not say the command is missing.
+  bridge.connectError = Object.assign(new Error(`spawn ${launcherPath} ENOENT`), { code: "ENOENT" })
+  await using tmp = await tmpdir({
+    git: true,
+    config: {
+      username: "test",
+      mcp: { broken: { type: "local", command: [launcher], enabled: true } },
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const previousPath = process.env.PATH
+      process.env.PATH = binTmp.path
+      try {
+        await MCP.trust("broken")
+        await MCP.connect("broken")
+      } finally {
+        process.env.PATH = previousPath
+      }
+      const status = (await MCP.status()).broken as { status: string; error?: string }
+      expect(status.status).toBe("failed")
+      expect(status.error).toContain("resolved to")
+      expect(status.error).not.toContain("not found on PATH")
+    },
+  })
+})
