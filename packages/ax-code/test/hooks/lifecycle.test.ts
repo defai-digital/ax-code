@@ -257,6 +257,33 @@ describe("LifecycleHooks matcher and run", () => {
     }
   })
 
+  test("a hook that cannot be spawned is a failed run, not a broken gate", async () => {
+    // A NUL byte in the command makes spawn throw synchronously. It must be
+    // reported as the failed run it is: the tool gate swallows a *thrown* hook
+    // failure, so letting it escape would drop the confirmation the previous
+    // hook already asked for and let the tool through.
+    const confirming = {
+      event: "PreToolUse",
+      matcher: "bash",
+      protocol: "claude-code",
+      command: `printf '%s' '{"permissionDecision":"ask","reason":"confirm the push"}'`,
+    } as const
+
+    const soft = await LifecycleHooks.runHooks(
+      [confirming, { event: "PreToolUse", matcher: "bash", command: "exit 2\u0000" }],
+      { event: "PreToolUse", tool: "bash", args: { command: "git push origin main" }, cwd: process.cwd() },
+    )
+    expect(soft.blocked).toBe(false)
+    expect(soft.ask).toMatchObject({ reason: "confirm the push" })
+    expect(soft.outputs.at(-1)?.exit).not.toBe(0)
+
+    const hard = await LifecycleHooks.runHooks(
+      [confirming, { event: "PreToolUse", matcher: "bash", blockOnFailure: true, command: "exit 2\u0000" }],
+      { event: "PreToolUse", tool: "bash", args: { command: "git push origin main" }, cwd: process.cwd() },
+    )
+    expect(hard.blocked).toBe(true)
+  })
+
   test("accepts new lifecycle events in project hooks.json", async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "ax-hooks-events-"))
     await fs.mkdir(path.join(dir, ".ax-code"), { recursive: true })

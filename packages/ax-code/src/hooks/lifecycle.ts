@@ -545,7 +545,21 @@ export namespace LifecycleHooks {
     const feedback: string[] = []
     let feedbackChars = 0
     for (const hook of selected) {
-      const result = await runHook(hook, input)
+      let result: RunResult["outputs"][number]
+      try {
+        result = await runHook(hook, input)
+      } catch (error) {
+        // A hook that cannot even be spawned (an invalid command string, a
+        // missing cwd) must not take the whole gate down: the tool gate
+        // swallows a *thrown* hook failure, so letting it escape would discard
+        // every block/ask already collected in this run and let the tool
+        // through. Report it as the failed run it is — `blockOnFailure` and the
+        // protocol decoder then see the same non-zero result they see for any
+        // other failing hook.
+        const message = error instanceof Error ? error.message : String(error)
+        log.warn("lifecycle hook failed to run", { event: input.event, tool: input.tool, error: message })
+        result = { command: hook.command, exit: 1, stdout: "", stderr: message }
+      }
       outputs.push(result)
       if (input.event === "PostToolUse") {
         const text = decodePostToolUseFeedback(hook, result)
