@@ -85,6 +85,15 @@ describe("visual.snapshot", () => {
         }),
       ).rejects.toThrow()
     })
+
+    test("rejects an image format the artifact store cannot label correctly", async () => {
+      const imagePath = path.join(tmpDir, "shot.webp")
+      await fs.promises.writeFile(imagePath, Buffer.from([1, 2, 3]))
+
+      await expect(
+        captureSnapshot(tmpDir, "session-webp", { type: "file", filePath: imagePath }),
+      ).rejects.toThrow(/Unsupported snapshot image format/)
+    })
   })
 
   describe("pruneSnapshots", () => {

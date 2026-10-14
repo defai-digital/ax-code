@@ -62,8 +62,16 @@ export async function captureSnapshot(
   if (source.type === "file") {
     // Read an existing image file
     const absPath = path.resolve(source.filePath)
-    screenshotData = await fs.promises.readFile(absPath)
     const ext = path.extname(absPath).toLowerCase()
+    // The artifact store only names PNG and JPEG screenshots, so a WebP/GIF/…
+    // input would be attached as image/png with mismatched bytes. Reject it
+    // instead of silently relabeling.
+    if (ext !== ".png" && ext !== ".jpg" && ext !== ".jpeg") {
+      throw new Error(
+        `Unsupported snapshot image format "${ext || "(no extension)"}": only PNG and JPEG files are supported.`,
+      )
+    }
+    screenshotData = await fs.promises.readFile(absPath)
     format = ext === ".jpg" || ext === ".jpeg" ? "jpeg" : "png"
     label = `Snapshot: ${path.basename(source.filePath)}`
   } else {
