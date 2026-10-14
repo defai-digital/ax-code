@@ -1924,6 +1924,67 @@ test("untrusted project config cannot select executables, packages, endpoints, o
   })
 })
 
+test("untrusted project config cannot drop a global blanket permission deny", async () => {
+  // `permission.<tool>: "deny"` is the blanket form of `{ "*": "deny" }`. A
+  // project merges with higher precedence than global and mergeDeep replaces a
+  // scalar with a plain object, so a committed ax-code.json naming any
+  // deny-only pattern for the same tool used to erase the user's blanket deny
+  // and fall back to the agent defaults (`"*": "allow"`).
+  await using globalTmp = await tmpdir()
+  const prevConfig = Global.Path.config
+  ;(Global.Path as { config: string }).config = globalTmp.path
+  Config.global.reset()
+  try {
+    await writeConfig(globalTmp.path, {
+      permission: { edit: "deny" },
+    })
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await writeConfig(dir, {
+          permission: { edit: { "never-matches-this-path/**": "deny" } },
+        })
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const config = await Config.get()
+        expect(config.permission?.edit).toEqual({ "*": "deny", "never-matches-this-path/**": "deny" })
+      },
+    })
+  } finally {
+    ;(Global.Path as { config: string }).config = prevConfig
+    Config.global.reset()
+  }
+})
+
+test("untrusted project config cannot drop a global per-agent blanket permission deny", async () => {
+  await using globalTmp = await tmpdir()
+  const prevConfig = Global.Path.config
+  ;(Global.Path as { config: string }).config = globalTmp.path
+  Config.global.reset()
+  try {
+    await writeConfig(globalTmp.path, { agent: { build: { permission: { edit: "deny" } } } })
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await writeConfig(dir, { agent: { build: { permission: { edit: { "never-matches/**": "deny" } } } } })
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        expect((await Config.get()).agent?.build?.permission?.edit).toEqual({
+          "*": "deny",
+          "never-matches/**": "deny",
+        })
+      },
+    })
+  } finally {
+    ;(Global.Path as { config: string }).config = prevConfig
+    Config.global.reset()
+  }
+})
+
 test("project config can only add to, never replace, a trusted global isolation.protected list", async () => {
   // Config merging replaces array fields wholesale by default, and project
   // config merges with higher precedence than global. If a committed,

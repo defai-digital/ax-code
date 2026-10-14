@@ -350,9 +350,46 @@ export namespace Config {
     return target && source ? uniqueStrings([...target, ...source]) : undefined
   }
 
+  /**
+   * `permission.<tool>: "deny"` is the blanket form of `{ "*": "deny" }`, and
+   * mergeDeep replaces that scalar when a later source names the same tool with
+   * a pattern map. A committed project ax-code.json could then erase a user's
+   * blanket deny by adding one deny-only pattern that never matches, falling
+   * back to the agent defaults (`"*": "allow"`). Keep the blanket entry and
+   * append the later patterns in the order evaluate() reads them (last match
+   * wins), so a source may still narrow the tool by pattern — an explicit `"*"`
+   * from the later source still wins.
+   */
+  function foldBlanketDenies(target: unknown, merged: unknown) {
+    if (!isRecord(target) || !isRecord(merged)) return
+    for (const [tool, value] of Object.entries(target)) {
+      if (value !== "deny") continue
+      const incoming = merged[tool]
+      if (!isRecord(incoming) || "*" in incoming) continue
+      merged[tool] = { "*": "deny", ...incoming }
+    }
+  }
+
+  /** Same floor for the per-agent / per-mode permission surfaces. */
+  function foldNestedBlanketDenies(target: Info, merged: Info) {
+    foldBlanketDenies(target.permission, merged.permission)
+    for (const container of ["agent", "mode"] as const) {
+      const targetEntries = target[container] as unknown
+      const mergedEntries = merged[container] as unknown
+      if (!isRecord(targetEntries) || !isRecord(mergedEntries)) continue
+      for (const [name, entry] of Object.entries(targetEntries)) {
+        if (!isRecord(entry)) continue
+        const mergedEntry = mergedEntries[name]
+        if (!isRecord(mergedEntry)) continue
+        foldBlanketDenies(entry["permission"], mergedEntry["permission"])
+      }
+    }
+  }
+
   // Custom merge function that concatenates array fields instead of replacing them
   function mergeConfigConcatArrays(target: Info, source: Info): Info {
     const merged = mergeDeep(target, source)
+    foldNestedBlanketDenies(target, merged)
     const plugin = mergeUniqueStrings(target.plugin, source.plugin)
     if (plugin) {
       merged.plugin = plugin
