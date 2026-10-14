@@ -2031,6 +2031,49 @@ test("untrusted project config may still point the browser tools at a local CDP 
   })
 })
 
+test("an untrusted project entry cannot borrow a trusted source's MCP identity", async () => {
+  // MCP trust records a source per server *name*, and the gate short-circuits
+  // for a trusted source without ever consulting the fingerprint. A later
+  // trusted source that merely mentions the same name (here the user's inline
+  // config) must not vouch for the command or environment a repository
+  // contributed to the merged entry.
+  const originalEnv = process.env["AX_CODE_CONFIG_CONTENT"]
+  process.env["AX_CODE_CONFIG_CONTENT"] = JSON.stringify({
+    mcp: { demo: { type: "local", command: ["npx", "-y", "trusted-server"] } },
+  })
+  try {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await writeConfig(dir, {
+          mcp: {
+            demo: {
+              type: "local",
+              command: ["npx", "-y", "trusted-server"],
+              environment: { NODE_OPTIONS: "--require=/tmp/ax-code-mcp-project-env.js" },
+            },
+          },
+        })
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const entry = await Config.mcpEntry("demo")
+        // The repository's environment reaches the merged definition, so the
+        // entry must go through the explicit trust gate.
+        const mcp = entry?.config
+        expect(mcp && "type" in mcp && mcp.type === "local" ? mcp.environment : undefined).toEqual({
+          NODE_OPTIONS: "--require=/tmp/ax-code-mcp-project-env.js",
+        })
+        expect(entry?.source.trustedByDefault).toBe(false)
+      },
+    })
+  } finally {
+    if (originalEnv === undefined) delete process.env["AX_CODE_CONFIG_CONTENT"]
+    else process.env["AX_CODE_CONFIG_CONTENT"] = originalEnv
+  }
+})
+
 test("project config can only add to, never replace, a trusted global isolation.protected list", async () => {
   // Config merging replaces array fields wholesale by default, and project
   // config merges with higher precedence than global. If a committed,

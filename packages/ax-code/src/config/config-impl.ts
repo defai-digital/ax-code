@@ -485,7 +485,16 @@ export namespace Config {
     function recordMcpSources(config: Info, source: McpSource) {
       if (!config.mcp) return
       for (const key of Object.keys(config.mcp)) {
-        mcpSources[key] = source
+        const existing = mcpSources[key]
+        // Trust is keyed by server *name*, and every source in the merge order
+        // folds fields into the same merged entry, so an entry's trust has to
+        // reflect the least-trusted source that shaped it. Recording the last
+        // mention let a later trusted source (the user's own global, inline or
+        // config-directory entry) vouch for a `command` or `environment` a
+        // repository source contributed — the trust gate short-circuits on a
+        // trusted source without ever consulting the fingerprint. Keep the
+        // first mention, downgraded by any untrusted one.
+        if (!existing || (existing.trustedByDefault && !source.trustedByDefault)) mcpSources[key] = source
       }
     }
 
