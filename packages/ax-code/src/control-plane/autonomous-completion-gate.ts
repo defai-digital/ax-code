@@ -204,7 +204,14 @@ export namespace AutonomousCompletionGate {
         if (!record) continue
 
         if (record["type"] === "text" && typeof record["text"] === "string") {
-          applyBackgroundHandoffs(unresolved, substantiveCallsAfter, record["text"])
+          // Only the control plane's delivered handoff may rewrite unresolved
+          // subagent state (session/background-subagent-delivery.ts writes a
+          // synthetic user part). The model's own assistant text can carry the
+          // same `<task …>` markup, and honoring it let a fabricated completion
+          // clear a real failure.
+          if (record["synthetic"] === true && !isAssistantMessage(message)) {
+            applyBackgroundHandoffs(unresolved, substantiveCallsAfter, record["text"])
+          }
           // Skip system-injected ("synthetic") or filtered-out ("ignored")
           // text parts — TextPart marks these via boolean flags
           // (session/message-v2.ts). They are not the model's authentic
