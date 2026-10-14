@@ -12,6 +12,18 @@ export namespace FileTime {
     readonly mtime: number | undefined
     readonly ctime: number | undefined
     readonly size: number | string | undefined
+    /**
+     * What actually identifies the bytes the model was shown. `mtime`/`ctime`
+     * are integer milliseconds, so a rewrite of equal length inside the same
+     * millisecond keeps the stamp matching, and a swapped symlink target or
+     * hard link keeps the path identical. A recorded field is compared; an
+     * absent one counts as unknown, never as a change, so a caller that only
+     * has a millisecond stat keeps working.
+     */
+    readonly mtimeNs?: string
+    readonly ctimeNs?: string
+    readonly dev?: string
+    readonly ino?: string
   }
 
   interface State {
@@ -44,7 +56,19 @@ export namespace FileTime {
       mtime: stat ? Number(stat.mtimeMs) : undefined,
       ctime: stat ? Number(stat.ctimeMs) : undefined,
       size,
+      // Nanoseconds and the file identity: `sameReadSource` (tool/read-text)
+      // already treats these as what "same source" means for the read cache,
+      // and milliseconds alone cannot separate two writes in one millisecond.
+      mtimeNs: stat?.mtimeNs.toString(),
+      ctimeNs: stat?.ctimeNs.toString(),
+      dev: stat?.dev.toString(),
+      ino: stat?.ino.toString(),
     }
+  }
+
+  /** True only when both sides recorded the field and they disagree. */
+  function identified(left: string | undefined, right: string | undefined) {
+    return left !== undefined && right !== undefined && left !== right
   }
 
   function session(reads: Map<SessionID, Map<string, Stamp>>, sessionID: SessionID) {
@@ -73,7 +97,14 @@ export namespace FileTime {
     if (!time) throw new Error(`You must read file ${filepath} before overwriting it. Use the Read tool first`)
 
     const next = await stamp(filepath)
-    const changed = next.mtime !== time.mtime || next.ctime !== time.ctime || next.size !== time.size
+    const changed =
+      next.mtime !== time.mtime ||
+      next.ctime !== time.ctime ||
+      next.size !== time.size ||
+      identified(next.mtimeNs, time.mtimeNs) ||
+      identified(next.ctimeNs, time.ctimeNs) ||
+      identified(next.dev, time.dev) ||
+      identified(next.ino, time.ino)
     if (!changed) return
 
     throw new Error(

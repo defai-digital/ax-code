@@ -288,6 +288,12 @@ export const ReadTool = Tool.define("read", {
         mtime: Number(observed.mtimeMs),
         ctime: Number(observed.ctimeMs),
         size: Number(observed.size),
+        // `observed` is the BigIntStats the read itself validated, so the
+        // nanosecond times and file identity are exact.
+        mtimeNs: observed.mtimeNs.toString(),
+        ctimeNs: observed.ctimeNs.toString(),
+        dev: observed.dev.toString(),
+        ino: observed.ino.toString(),
       })
       const { preview, truncated } = rendered
       let output = rendered.output

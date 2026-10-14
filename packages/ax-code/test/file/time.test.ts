@@ -160,16 +160,71 @@ describe("file/time", () => {
     test("detects unsafe bigint size changes without rounding", async () => {
       await using tmp = await tmpdir()
       const filepath = path.join(tmp.path, "huge.bin")
+      const identity = { mtimeNs: 1_000_000_000n, ctimeNs: 1_000_000_000n, dev: 1n, ino: 2n }
       const statSpy = vi
         .spyOn(nodeFs.promises, "stat")
-        .mockResolvedValueOnce({ mtimeMs: 1000n, ctimeMs: 1000n, size: 9_007_199_254_740_992n } as any)
-        .mockResolvedValueOnce({ mtimeMs: 1000n, ctimeMs: 1000n, size: 9_007_199_254_740_993n } as any)
+        .mockResolvedValueOnce({ ...identity, mtimeMs: 1000n, ctimeMs: 1000n, size: 9_007_199_254_740_992n } as any)
+        .mockResolvedValueOnce({ ...identity, mtimeMs: 1000n, ctimeMs: 1000n, size: 9_007_199_254_740_993n } as any)
 
       try {
         await Instance.provide({
           directory: tmp.path,
           fn: async () => {
             await FileTime.read(sessionID, filepath)
+            await expect(FileTime.assert(sessionID, filepath)).rejects.toThrow("modified since it was last read")
+          },
+        })
+      } finally {
+        statSpy.mockRestore()
+      }
+    })
+
+    test("detects a same-millisecond rewrite of equal length", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "same-ms.txt")
+      const base = { mtimeMs: 1000n, ctimeMs: 1000n, size: 3n, dev: 1n, ino: 2n }
+      const statSpy = vi
+        .spyOn(nodeFs.promises, "stat")
+        .mockResolvedValueOnce({ ...base, mtimeNs: 1_000_000_100n, ctimeNs: 1_000_000_100n } as any)
+        .mockResolvedValueOnce({ ...base, mtimeNs: 1_000_900_000n, ctimeNs: 1_000_900_000n } as any)
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            await FileTime.read(sessionID, filepath)
+            // Milliseconds alone cannot separate two writes in one
+            // millisecond: the file the model read is gone.
+            await expect(FileTime.assert(sessionID, filepath)).rejects.toThrow("modified since it was last read")
+          },
+        })
+      } finally {
+        statSpy.mockRestore()
+      }
+    })
+
+    test("detects a replaced file whose size and millisecond times match", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "swapped.txt")
+      const times = {
+        mtimeMs: 1000n,
+        ctimeMs: 1000n,
+        mtimeNs: 1_000_000_000n,
+        ctimeNs: 1_000_000_000n,
+        size: 3n,
+        dev: 1n,
+      }
+      const statSpy = vi
+        .spyOn(nodeFs.promises, "stat")
+        .mockResolvedValueOnce({ ...times, ino: 7n } as any)
+        .mockResolvedValueOnce({ ...times, ino: 9n } as any)
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            await FileTime.read(sessionID, filepath)
+            // Another file now sits at the path (a swapped symlink target or
+            // hard-link replacement): the read authorises a file the model
+            // never saw, so the identity has to be part of the stamp.
             await expect(FileTime.assert(sessionID, filepath)).rejects.toThrow("modified since it was last read")
           },
         })
@@ -187,6 +242,10 @@ describe("file/time", () => {
         ctimeMs: milliseconds,
         mtime: new Date(Number(milliseconds) + 1),
         ctime: new Date(Number(milliseconds) + 1),
+        mtimeNs: milliseconds * 1_000_000n,
+        ctimeNs: milliseconds * 1_000_000n,
+        dev: 1n,
+        ino: 2n,
         size: 3n,
       } as any)
       try {
