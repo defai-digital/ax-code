@@ -1086,8 +1086,15 @@ export namespace Provider {
           const combined = signals.length === 0 ? null : signals.length === 1 ? signals[0] : AbortSignal.any(signals)
           if (combined) opts.signal = combined
 
-          const res = await fetchFn(input, opts)
-          if (firstByteTimer) clearTimeout(firstByteTimer)
+          let res: Response
+          try {
+            res = await fetchFn(input, opts)
+          } finally {
+            // Clear on the failure path too: a rejected fetch (connection
+            // refused, aborted) would otherwise leave the watchdog timer live
+            // to abort a controller nothing is waiting on.
+            if (firstByteTimer) clearTimeout(firstByteTimer)
+          }
 
           if (!chunkAbortCtl) return res
           return wrapSSE(res, chunkTimeout, chunkAbortCtl, (opts.signal as AbortSignal) ?? undefined)
