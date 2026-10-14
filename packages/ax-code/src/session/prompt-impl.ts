@@ -2040,10 +2040,13 @@ export namespace SessionPrompt {
         }
 
         const remainingAgentSteps = Number.isFinite(maxSteps) ? Math.max(0, maxSteps - step) : Infinity
+        // Use THIS step's input tokens: the message total accumulates across
+        // steps of the turn, so a multi-step turn would trip the "large
+        // context" continuation while the real window is small.
         const todoConvergence = handlePromptLoopTodoConvergence({
           sessionID,
           pendingTodos,
-          inputTokens: processor.message.tokens.input,
+          inputTokens: (processor.lastStepUsage ?? processor.message.tokens).input,
           modelFinished: Boolean(modelFinished),
           remainingAgentSteps,
           maxSteps,

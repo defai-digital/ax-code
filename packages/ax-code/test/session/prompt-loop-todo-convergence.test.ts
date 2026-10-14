@@ -1,4 +1,6 @@
 import { describe, expect, test } from "vitest"
+import path from "path"
+import { readFile } from "fs/promises"
 import { handlePromptLoopTodoConvergence } from "../../src/session/prompt/prompt-loop-todo-convergence"
 import { pendingTodoSignature, type PromptTodo } from "../../src/session/prompt/prompt-todo-continuation"
 import { SessionID } from "../../src/session/schema"
@@ -130,4 +132,9 @@ describe("prompt loop todo convergence", () => {
       },
     ])
   })
+})
+
+test("todo convergence reads the per-step input tokens, not the turn total", async () => {
+  const src = await readFile(path.join(import.meta.dirname, "../../src/session/prompt-impl.ts"), "utf-8")
+  expect(src).toContain("inputTokens: (processor.lastStepUsage ?? processor.message.tokens).input")
 })
