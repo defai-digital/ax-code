@@ -42,7 +42,7 @@ impl NativeWatcher {
         let extra: Vec<String> = serde_json::from_str(&ignore_patterns_json).unwrap_or_default();
         let extra_matchers: Vec<globset::GlobMatcher> = extra
             .iter()
-            .filter_map(|p| globset::Glob::new(p).ok().map(|g| g.compile_matcher()))
+            .filter_map(|p| crate::compile_glob(p).ok())
             .collect();
 
         let (tx, rx) = mpsc::channel();

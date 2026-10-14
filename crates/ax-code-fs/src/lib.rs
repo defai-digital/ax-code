@@ -20,13 +20,30 @@ use std::sync::LazyLock;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::UNIX_EPOCH;
 
-use globset::{Glob, GlobMatcher};
+use globset::{GlobBuilder, GlobMatcher};
 use grep_matcher::Matcher;
 use grep_regex::RegexMatcherBuilder;
 use grep_searcher::{SearcherBuilder, Sink, SinkContext, SinkContextKind, SinkMatch};
 use ignore::WalkBuilder;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
+
+/// Compile a glob with ripgrep `-g` semantics: `*` never crosses `/`, and a
+/// pattern with no `/` matches the basename at any depth (it is `**/`-prefixed).
+/// globset's default `literal_separator = false` let `*` match `/`, so a native
+/// `sub/*.ts` also matched `sub/deep/c.ts` while the ripgrep fallback returned
+/// only `sub/b.ts`. The hardcoded ignore patterns already carry `**/`.
+pub(crate) fn compile_glob(pattern: &str) -> Result<GlobMatcher, globset::Error> {
+    let normalized = if pattern.contains('/') {
+        pattern.to_string()
+    } else {
+        format!("**/{pattern}")
+    };
+    GlobBuilder::new(&normalized)
+        .literal_separator(true)
+        .build()
+        .map(|glob| glob.compile_matcher())
+}
 
 // ---------------------------------------------------------------------------
 // Options structs (deserialized from JSON)
@@ -104,7 +121,7 @@ static IGNORE_FILE_MATCHERS: LazyLock<Vec<GlobMatcher>> = LazyLock::new(|| {
     IGNORE_PATTERNS
         .files
         .iter()
-        .filter_map(|pat| Glob::new(pat).ok().map(|g| g.compile_matcher()))
+        .filter_map(|pat| compile_glob(pat).ok())
         .collect()
 });
 
@@ -121,8 +138,7 @@ fn compile_include_globs(patterns: &[String]) -> napi::Result<Vec<GlobMatcher>> 
     patterns
         .iter()
         .map(|p| {
-            Glob::new(p)
-                .map(|g| g.compile_matcher())
+            compile_glob(p)
                 .map_err(|e| napi::Error::from_reason(format!("invalid include glob: {e}")))
         })
         .collect()
@@ -239,9 +255,7 @@ pub(crate) fn glob_files_impl(
     use std::collections::BinaryHeap;
     scan::check(cancelled)?;
     let root = PathBuf::from(cwd);
-    let matcher = Glob::new(pattern)
-        .map_err(|e| napi::Error::from_reason(e.to_string()))?
-        .compile_matcher();
+    let matcher = compile_glob(pattern).map_err(|e| napi::Error::from_reason(e.to_string()))?;
     if limit == 0 {
         return Ok("[]".into());
     }
@@ -472,9 +486,7 @@ fn search_content_impl(
     // it would silently widen the search to every file.
     let glob_matcher: Option<GlobMatcher> = match opts.glob.as_ref() {
         Some(g) => Some(
-            Glob::new(g)
-                .map_err(|e| napi::Error::from_reason(format!("invalid include glob: {e}")))?
-                .compile_matcher(),
+            compile_glob(g).map_err(|e| napi::Error::from_reason(format!("invalid include glob: {e}")))?,
         ),
         None => None,
     };
@@ -603,8 +615,8 @@ pub fn is_ignored(path: String, extra_patterns_json: String) -> napi::Result<boo
 
     // Caller-supplied patterns still compile per call (they vary).
     for pat in extra {
-        if let Ok(g) = Glob::new(&pat) {
-            if g.compile_matcher().is_match(&path) {
+        if let Ok(g) = compile_glob(&pat) {
+            if g.is_match(&path) {
                 return Ok(true);
             }
         }
@@ -1030,8 +1042,8 @@ impl FileTreeInner {
     }
 
     fn glob_cached(&self, pattern: &str, limit: usize) -> Vec<&FileMeta> {
-        let matcher = match Glob::new(pattern) {
-            Ok(g) => g.compile_matcher(),
+        let matcher = match compile_glob(pattern) {
+            Ok(g) => g,
             Err(_) => return Vec::new(),
         };
 

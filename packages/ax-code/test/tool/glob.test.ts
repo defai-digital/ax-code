@@ -50,6 +50,28 @@ test.skipIf(!nativeBinding?.globFilesAsync)(
   },
 )
 
+test.skipIf(!nativeBinding?.globFiles)(
+  "native glob does not let * cross /, matching the ripgrep fallback",
+  async () => {
+    await using tmp = await tmpdir({ git: true })
+    await mkdir(path.join(tmp.path, "sub", "deep"), { recursive: true })
+    await writeFile(path.join(tmp.path, "sub", "b.ts"), "")
+    await writeFile(path.join(tmp.path, "sub", "deep", "c.ts"), "")
+    const shallow = (
+      parseJsonStrict(nativeBinding!.globFiles(tmp.path, "sub/*.ts", 10)) as { path: string }[]
+    ).map((m) => m.path)
+    // `rg --files -g 'sub/*.ts'` returns only the direct child.
+    expect(shallow).toEqual(["sub/b.ts"])
+    // A slash-less pattern still matches at any depth (ripgrep basename rule).
+    const anyDepth = (
+      parseJsonStrict(nativeBinding!.globFiles(tmp.path, "*.ts", 10)) as { path: string }[]
+    )
+      .map((m) => m.path)
+      .sort()
+    expect(anyDepth).toEqual(["sub/b.ts", "sub/deep/c.ts"])
+  },
+)
+
 test("old native glob capability falls back without invoking its synchronous export", async () => {
   await using tmp = await tmpdir({ git: true })
   await writeFile(path.join(tmp.path, "file.ts"), "export {}")

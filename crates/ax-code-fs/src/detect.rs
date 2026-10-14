@@ -1152,7 +1152,7 @@ fn collect_scan_files(
     let root = PathBuf::from(cwd);
     let globs: Vec<globset::GlobMatcher> = include
         .iter()
-        .filter_map(|p| globset::Glob::new(p).ok().map(|g| g.compile_matcher()))
+        .filter_map(|p| crate::compile_glob(p).ok())
         .collect();
 
     let mut builder = ignore::WalkBuilder::new(&root);
