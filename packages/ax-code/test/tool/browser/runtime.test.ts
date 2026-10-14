@@ -34,10 +34,14 @@ function createMockLocator() {
 
 function createMockPage() {
   const locator = createMockLocator()
+  let currentUrl = ""
   return {
     locator: vi.fn().mockReturnValue(locator),
     _locator: locator,
-    goto: vi.fn().mockResolvedValue(undefined),
+    goto: vi.fn(async (url: string) => {
+      currentUrl = url
+    }),
+    url: vi.fn(() => currentUrl),
     title: vi.fn().mockResolvedValue("Test Page"),
     viewportSize: vi.fn().mockReturnValue({ width: 1440, height: 900 }),
     evaluate: vi.fn().mockResolvedValue([]),
@@ -698,7 +702,7 @@ describe("browser runtime", () => {
 
   // -- evaluate no-args passes string directly --
 
-  test("evaluate without args passes string directly to page.evaluate", async () => {
+  test("evaluate without args reconstructs and invokes the function string", async () => {
     const page = createMockPage()
     const ctx = createMockContext()
     injectPage(runtime, "page_1", page, ctx)
@@ -706,8 +710,11 @@ describe("browser runtime", () => {
     page.evaluate.mockResolvedValueOnce("result")
     const result = await runtime.evaluate("latest", "() => document.title")
     expect(result).toBe("result")
-    // Should pass the string directly, not a parsed function
-    expect(page.evaluate).toHaveBeenCalledWith("() => document.title")
+    // A string pageFunction is an expression to Playwright (isFunction=false),
+    // so the source must be reconstructed and invoked inside the page rather
+    // than passed as a bare string.
+    expect(typeof page.evaluate.mock.calls[0]![0]).toBe("function")
+    expect(page.evaluate.mock.calls[0]![1]).toBe("() => document.title")
   })
 
   test("forSession isolates snapshot IDs across sessions", async () => {

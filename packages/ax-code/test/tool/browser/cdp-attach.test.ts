@@ -14,6 +14,7 @@ import { tmpdir } from "../../fixture/fixture"
 function createMockPage() {
   return {
     goto: vi.fn().mockResolvedValue(undefined),
+    url: vi.fn().mockReturnValue("https://example.com"),
     title: vi.fn().mockResolvedValue("Example"),
     on: vi.fn(),
     close: vi.fn().mockResolvedValue(undefined),
@@ -84,6 +85,26 @@ describe("browser runtime CDP attach mode", () => {
         expect(getInternals(rt).attached).toBe(true)
         expect(opened.pageID).toBe("page_1")
         expect(page.goto).toHaveBeenCalledWith("https://example.com", { waitUntil: "domcontentloaded" })
+      },
+    })
+  })
+
+  test("open reports the page URL after redirects, not the requested URL", async () => {
+    await using tmp = await tmpdir({ config: { browser: { cdpUrl: "http://localhost:9222" } } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const page = createMockPage()
+        page.url = vi.fn().mockReturnValue("https://example.com/final")
+        const context = createMockContext(page)
+        const browser = createMockBrowser([context])
+        const pw = createMockPlaywright(browser)
+        _setPlaywrightForTest(pw as never)
+
+        const rt = BrowserRuntime.forSession("ses_redirect")
+        const opened = await rt.open("https://example.com", { width: 1440, height: 900 })
+
+        expect(opened.url).toBe("https://example.com/final")
       },
     })
   })

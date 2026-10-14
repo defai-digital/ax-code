@@ -382,8 +382,12 @@ export class BrowserRuntime {
     })
 
     let title: string
+    let finalUrl = url
     try {
       await pwPage.goto(url, { waitUntil: "domcontentloaded" })
+      // goto follows redirects, so report the page's actual URL rather than the
+      // requested one (the tool documents "the page's URL").
+      finalUrl = pwPage.url() || url
       title = await pwPage.title()
     } catch (err) {
       // The page is not registered in this.pages yet, so close() and
@@ -405,16 +409,16 @@ export class BrowserRuntime {
       pwPage,
       context,
       ownsContext,
-      url,
+      url: finalUrl,
       title,
       viewport,
     }
     this.pages.set(pageID, entry)
     this.latestPageID = pageID
 
-    log.info("page opened", { pageID, url, viewport })
+    log.info("page opened", { pageID, url: finalUrl, viewport })
 
-    return { pageID, url, title, viewport }
+    return { pageID, url: finalUrl, title, viewport }
   }
 
   async snapshot(pageID: string, verbose: boolean): Promise<BrowserSnapshot> {
@@ -563,12 +567,12 @@ export class BrowserRuntime {
         const navUrl = params.url as string
         if (!navUrl) throw new Error('Action "navigate" requires a url or type parameter.')
         await pwPage.goto(navUrl, { waitUntil: "domcontentloaded" })
-        entry.url = navUrl
+        entry.url = pwPage.url() || navUrl
         entry.title = await pwPage.title()
         for (const [uid, ref] of this.uidRegistry) {
           if (ref.pageID === entry.pageID) this.uidRegistry.delete(uid)
         }
-        return `Navigated to ${navUrl}`
+        return `Navigated to ${entry.url}`
       }
       case "waitFor": {
         const text = params.text as string | undefined
@@ -735,8 +739,18 @@ export class BrowserRuntime {
       }
     }
 
-    // No-args: pass string directly to page.evaluate (runs in browser sandbox, not Node.js)
-    return entry.pwPage.evaluate(fn)
+    // No-args: a string pageFunction is evaluated as an EXPRESSION (Playwright
+    // sets isFunction=false), so "() => document.title" yields the function
+    // object, which serializes to undefined. Reconstruct and invoke it inside
+    // the page so the documented function-string form returns its result.
+    return entry.pwPage.evaluate(
+      (source: string) => {
+        // eslint-disable-next-line @typescript-eslint/no-implied-eval
+        const f = new Function(`return (${source})`)() as () => unknown
+        return f()
+      },
+      fn,
+    )
   }
 
   async close(): Promise<void> {

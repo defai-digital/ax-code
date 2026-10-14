@@ -5,6 +5,8 @@ import { VisualArtifactStore } from "@/visual/artifact"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { checkVisualRouting, sessionModelFromMessages } from "@/visual/router"
+import { Filesystem } from "@/util/filesystem"
+import path from "path"
 
 const log = Log.create({ service: "tool.visual_critique" })
 
@@ -36,9 +38,17 @@ export const VisualCritiqueTool = Tool.define("visual_critique", {
     try {
       const summaryContent = await fs.promises.readFile(summaryPath, "utf-8")
       const run = JSON.parse(summaryContent)
-      screenshotArtifacts = (run.artifacts ?? []).filter(
-        (a: { kind: string; path?: string }) => a.kind === "screenshot" && a.path,
-      )
+      // The run summary is untrusted (a cloned repo or a prompt-injected write
+      // can ship a crafted .ax-code/ tree), so confine screenshot reads to the
+      // run directory instead of attaching an arbitrary file to the model.
+      screenshotArtifacts = (run.artifacts ?? []).filter((a: { kind: string; path?: string }) => {
+        if (a.kind !== "screenshot" || !a.path) return false
+        if (!Filesystem.contains(runDir, path.resolve(a.path))) {
+          log.warn("ignoring visual artifact outside its run directory", { runID: params.runID, path: a.path })
+          return false
+        }
+        return true
+      })
     } catch {
       // If no summary exists, try scanning the directory
       try {
