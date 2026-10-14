@@ -22,6 +22,9 @@ const INTERACTIVE_ONLY_PERMISSIONS: ReadonlySet<string> = new Set([
 ])
 const NEVER_AUTONOMOUS_AUTOAPPROVE_PERMISSIONS: ReadonlySet<string> = new Set(["computer"])
 const DEFAULT_MAX_SESSION_MESSAGES = 100
+// Task-queue rows are retained newest-first up to this cap, mirroring the
+// runtime's projection so a long-lived stream cannot grow without bound.
+const MAX_PROJECTED_TASK_QUEUE_ITEMS = 500
 const pendingPartDeltaText = new WeakMap<object, Map<string, Map<string, string>>>()
 
 /** Projected app state folded from headless runtime events (sessions, messages, permissions, ...). */
@@ -147,7 +150,7 @@ export function applyHeadlessProjectionEvent<
         effects.push({ type: "permission.auto_reply", requestID: event.properties.id })
         return { handled: true, effects }
       }
-      appendRequest(state.permission, event.properties)
+      appendRequest(state.permission, event.properties, true)
       return { handled: true, effects }
 
     case "permission.replied":
@@ -195,7 +198,10 @@ export function applyHeadlessProjectionEvent<
 
     case "task.queue.created":
     case "task.queue.updated":
-      upsertByID(state.task_queue, event.properties.item)
+      upsertByID(state.task_queue, event.properties.item, true)
+      if (state.task_queue.length > MAX_PROJECTED_TASK_QUEUE_ITEMS) {
+        state.task_queue.splice(0, state.task_queue.length - MAX_PROJECTED_TASK_QUEUE_ITEMS)
+      }
       return { handled: true, effects }
 
     case "task.queue.deleted":
@@ -209,7 +215,7 @@ export function applyHeadlessProjectionEvent<
 
     case "session.created":
     case "session.updated":
-      upsertByID(state.session, event.properties.info)
+      upsertByID(state.session, event.properties.info, true)
       return { handled: true, effects }
 
     case "session.deleted":
@@ -341,9 +347,10 @@ export function runtimeProbeKeysForEvent(event: HeadlessRuntimeStatusEvent): Hea
 function appendRequest<TRequest extends { id: string; sessionID: string }>(
   target: Record<string, TRequest[]>,
   request: TRequest,
+  complete = false,
 ) {
   const list = target[request.sessionID] ?? []
-  upsertByID(list, request)
+  upsertByID(list, request, complete)
   target[request.sessionID] = list
 }
 
@@ -355,16 +362,24 @@ function removeRequest<TRequest extends { id: string }>(
   target[sessionID] = (target[sessionID] ?? []).filter((request) => request.id !== requestID)
 }
 
-function upsertByID<T extends { id: string }>(list: T[], item: T) {
+function upsertByID<T extends { id: string }>(list: T[], item: T, complete = false) {
   const result = binarySearch(list, item.id, (entry) => entry.id)
   if (result.found) {
-    mergeSnapshotInPlace(list[result.index], item)
+    mergeSnapshotInPlace(list[result.index], item, complete)
     return
   }
   list.splice(result.index, 0, item)
 }
 
-function mergeSnapshotInPlace<T extends { id: string }>(existing: T, incoming: T) {
+// A complete snapshot omits cleared optional fields (`JSON.stringify` drops
+// `undefined`), so a key absent from `incoming` must be deleted or the cleared
+// value lingers forever. Mirrors the runtime's projection reducer.
+function mergeSnapshotInPlace<T extends { id: string }>(existing: T, incoming: T, complete = false) {
+  if (complete) {
+    for (const key of Object.keys(existing) as Array<keyof T>) {
+      if (!Object.prototype.hasOwnProperty.call(incoming, key)) delete existing[key]
+    }
+  }
   for (const key of Object.keys(incoming) as Array<keyof T>) {
     existing[key] = incoming[key]
   }
@@ -419,7 +434,7 @@ function upsertMessage<
   maxSessionMessages = DEFAULT_MAX_SESSION_MESSAGES,
 ) {
   const list = state.message[message.sessionID] ?? []
-  upsertByID(list, message)
+  upsertByID(list, message, true)
   for (const removed of shiftOverflow(list, maxSessionMessages)) {
     delete state.part[removed.id]
     clearPendingMessageDeltaText(state, removed.id)
