@@ -594,6 +594,11 @@ export namespace ScheduledTask {
       updates.next_run_at = nextRunAt(nextSchedule, now) ?? null
     }
     if (parsed.status !== undefined) updates.status = parsed.status
+    if (parsed.status === "active" && current.status !== "active") {
+      // Resume clears the failure that paused the task (SPEC §7) so the UI stops
+      // showing a recovered task as failed until its next claim.
+      updates.error = null
+    }
     if (Object.hasOwn(parsed, "agent")) updates.agent = parsed.agent
     if (Object.hasOwn(parsed, "model")) updates.model = parsed.model
     if (Object.hasOwn(parsed, "workflowTemplateID")) updates.workflow_template_id = parsed.workflowTemplateID

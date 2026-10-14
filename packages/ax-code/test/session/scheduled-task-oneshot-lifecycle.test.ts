@@ -220,6 +220,39 @@ describe("ScheduledTask one-shot lifecycle", () => {
     })
   })
 
+  test("resuming an auto-paused recurring task clears the failure error", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const task = await ScheduledTask.create({
+          title: "Always failing cron",
+          prompt: "Fail forever.",
+          schedule: { type: "cron", expression: "0 * * * *" },
+        })
+
+        let dueAt = (await ScheduledTask.get(task.id)).nextRunAt! + 4 * 60_000
+        for (let failure = 1; failure <= ScheduledTask.MAX_CONSECUTIVE_FAILURES; failure++) {
+          const claimed = await claimOnce(task.id, dueAt)
+          await ScheduledTask.recordQueueOutcome(task.id, "failed", new Error(`boom ${failure}`), claimed.queueItem!.id)
+          const current = await ScheduledTask.get(task.id)
+          if (failure < ScheduledTask.MAX_CONSECUTIVE_FAILURES) dueAt = current.nextRunAt! + 4 * 60_000
+        }
+
+        const paused = await ScheduledTask.get(task.id)
+        expect(paused.status).toBe("paused")
+        expect(paused.error).toContain("auto-paused")
+
+        // Resume clears the failure (SPEC §7) so the UI stops showing a
+        // recovered task as failed until its next claim.
+        const resumed = await ScheduledTask.resume(task.id)
+        expect(resumed.status).toBe("active")
+        expect(resumed.error).toBeUndefined()
+      },
+    })
+  })
+
   test("orphaned runs do not count toward the consecutive-failure auto-pause", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
