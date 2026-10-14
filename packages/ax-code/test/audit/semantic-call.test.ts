@@ -6,6 +6,7 @@ import { AuditSemanticCall } from "../../src/audit/semantic-call"
 import { AuditQuery } from "../../src/audit/query"
 import { Flag } from "../../src/flag/flag"
 import { Log } from "../../src/util/log"
+import { SessionID } from "../../src/session/schema"
 
 Log.init({ print: false })
 
@@ -25,6 +26,38 @@ afterEach(() => {
 })
 
 describe("AuditSemanticCall (queue mode)", () => {
+  test("keeps the writable rows when one row in the batch cannot be stored", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        setSyncMode(false)
+        const session = await Session.create({ title: "audit-batch-fallback" })
+
+        const good = AuditSemanticCall.record({
+          sessionID: session.id,
+          tool: "lsp",
+          operation: "hover",
+          args: {},
+          envelope: {},
+        })
+        // A session that does not exist violates the audit table's foreign key.
+        AuditSemanticCall.record({
+          sessionID: SessionID.make("ses_00000000000000000000000000") as never,
+          tool: "lsp",
+          operation: "hover",
+          args: {},
+          envelope: {},
+        })
+        AuditSemanticCall.flushNow()
+
+        // The bad row must not take the good one with it: every id was already
+        // returned to a caller that cannot tell nothing was stored.
+        expect(AuditQuery.getById(good)).toBeDefined()
+      },
+    })
+  })
+
   test("does not persist credentials from the call's args or envelope", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

@@ -91,10 +91,26 @@ export namespace AuditSemanticCall {
     try {
       AuditQuery.insertMany(batch)
     } catch (err) {
-      log.warn("flush failed; dropping batch", {
+      // One unwritable row (for example a session id that no longer exists,
+      // which trips the foreign key) must not take the rest of the batch with
+      // it — the caller already has ids for every row and cannot tell that
+      // none of them were stored. Fall back to per-row inserts, the same shape
+      // the replay recorder's flush uses.
+      log.warn("batched audit insert failed, falling back to per-row", {
         size: batch.length,
         err: toErrorMessage(err),
       })
+      for (const row of batch) {
+        try {
+          AuditQuery.insert(row)
+        } catch (perRowError) {
+          log.warn("failed to persist audit row", {
+            sessionID: row.session_id,
+            tool: row.tool,
+            err: toErrorMessage(perRowError),
+          })
+        }
+      }
     }
   }
 
