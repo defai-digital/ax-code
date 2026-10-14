@@ -18,6 +18,7 @@ export namespace AgentControlReplayQuery {
   ])
   const REASONING_DEPTHS = new Set(["fast", "standard", "deep", "xdeep"])
   const VALIDATION_STATUSES = new Set(["not_required", "pending", "passed", "failed"])
+  const GATE_STATUSES = new Set(["allow", "blocked"])
   const SAFETY_ACTIONS = new Set(["allow", "ask", "deny", "allow_with_checkpoint"])
   const SAFETY_RISKS = new Set(["safe", "low", "medium", "high", "blocked"])
 
@@ -68,6 +69,8 @@ export namespace AgentControlReplayQuery {
         return isKnown(VALIDATION_STATUSES, normalized.status) ? (normalized as ReplayEvent) : undefined
       case "agent.blocked":
         return asString(normalized.reason) ? (normalized as ReplayEvent) : undefined
+      case "agent.completion_gate.decided":
+        return isKnown(GATE_STATUSES, normalized.status) ? (normalized as ReplayEvent) : undefined
       case "agent.completed":
         return asString(normalized.validationStatus) === "not_required" ||
           asString(normalized.validationStatus) === "passed"
@@ -208,6 +211,21 @@ export namespace AgentControlReplayQuery {
           status: "blocked",
           tone: "warning",
           detail: properties.recoverable === true && reason ? `${reason}${DETAIL_SEPARATOR}recoverable` : reason,
+        }
+      }
+      case "agent.completion_gate.decided": {
+        const status = asString(properties.status) ?? "unknown"
+        const blocked = status === "blocked"
+        return {
+          id,
+          eventType,
+          kind: "blocked",
+          title: blocked ? "Completion gate blocked" : "Completion gate allowed",
+          status,
+          tone: blocked ? "warning" : "success",
+          detail:
+            [asString(properties.reason), asString(properties.message)].filter(Boolean).join(DETAIL_SEPARATOR) ||
+            undefined,
         }
       }
       case "agent.completed": {

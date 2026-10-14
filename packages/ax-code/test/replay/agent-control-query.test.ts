@@ -433,4 +433,27 @@ describe("AgentControlReplayQuery", () => {
       }),
     ).toBe(true)
   })
+
+  test("normalizes and renders an agent.completion_gate.decided decision", () => {
+    const event = {
+      type: "agent.completion_gate.decided",
+      status: "blocked",
+      reason: "unfinished_todos",
+      message: "Todo list still has open items.",
+    }
+
+    expect(AgentControlReplayQuery.isAgentControlEvent(event)).toBe(true)
+
+    const summary = AgentControlReplayQuery.summaryFromEvents([event])
+    expect(summary.completionGate).toEqual({
+      status: "blocked",
+      reason: "unfinished_todos",
+      message: "Todo list still has open items.",
+    })
+    expect(summary.phase).toBe("blocked")
+
+    const item = AgentControlReplayQuery.timelineItemFromEvent(event, "event-gate")
+    expect(item?.kind).toBe("blocked")
+    expect(item?.title).toBe("Completion gate blocked")
+  })
 })
