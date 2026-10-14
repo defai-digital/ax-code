@@ -393,6 +393,16 @@ export namespace SessionPrompt {
       })
     }
 
+    // Loop bookkeeping the `await using` disposers below read. Declared before
+    // the first disposer: beginPromptLoopRecording / Provider.warmup() can
+    // throw, and disposal would otherwise read these in the temporal dead zone
+    // (ReferenceError), skipping finishPromptLoopQueue and leaving the session
+    // busy forever.
+    let sessionStarted = false
+    let totalSteps = 0
+    let reason: PromptLoopEndReason = "error"
+    let stopCode: SessionStop.Code | undefined
+
     const loopTimer = log.time("loop", {
       sessionID,
       resumeExisting: isResumingActiveLoop,
@@ -420,7 +430,6 @@ export namespace SessionPrompt {
         },
       })
     })
-    let sessionStarted = false
     await using _recorder = defer(async () => {
       await finishPromptLoopRecording({
         sessionID,
@@ -438,7 +447,6 @@ export namespace SessionPrompt {
     Provider.warmup()
 
     let step = 0
-    let totalSteps = 0
     let lastProducedAssistantID: string | undefined
     // Bookkeeping for the durable Super-Long step counter: how many of
     // `totalSteps` have already been reported to the runtime store, and the
@@ -447,11 +455,6 @@ export namespace SessionPrompt {
     // long run a fresh step budget.
     let reportedSuperLongSteps = 0
     let durableSuperLongSteps = 0
-    // IMPORTANT: every break path inside the loop MUST set `reason` first.
-    // The default "error" is the correct catch-all for unexpected throws,
-    // but a break without a prior assignment will misreport a completed session.
-    let reason: PromptLoopEndReason = "error"
-    let stopCode: SessionStop.Code | undefined
     let consecutiveErrors = 0
     let continuations = 0
     // Budget wrap-up state for the session goal. Seeded from the DURABLE
