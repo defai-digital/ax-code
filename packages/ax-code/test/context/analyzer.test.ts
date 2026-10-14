@@ -116,3 +116,29 @@ describe("context analyzer complexity scan", () => {
     expect(info.complexity?.linesOfCode).toBe(2)
   })
 })
+
+describe("context analyzer conventions", () => {
+  test("detects TypeScript strict mode from tsconfig", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "tsconfig.json"),
+      `{
+  // strict mode, with a trailing comma
+  "compilerOptions": { "strict": true },
+}`,
+    )
+
+    const info = await analyze(tmp.path)
+
+    expect(info.conventions.strict).toBe(true)
+  })
+
+  test("leaves strict unset when tsconfig does not enable it", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(path.join(tmp.path, "tsconfig.json"), `{"compilerOptions": {"target": "es2022"}}`)
+
+    const info = await analyze(tmp.path)
+
+    expect(info.conventions.strict).toBeUndefined()
+  })
+})

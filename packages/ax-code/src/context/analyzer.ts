@@ -11,7 +11,8 @@ import { readFile } from "node:fs/promises"
 import { toErrorMessage } from "../util/error-message"
 import { Filesystem } from "../util/filesystem"
 import { Log } from "../util/log"
-import { isNonEmptyRecord } from "../util/record"
+import { isNonEmptyRecord, isRecord } from "../util/record"
+import { parseJsoncResult } from "../util/jsonc"
 import { decodePackageJsonObject, packageJsonStringMap, parsePackageJsonObject } from "../util/package-json"
 import { uniqueStrings } from "../util/string-list"
 import { FileIgnore } from "../file/ignore"
@@ -311,7 +312,23 @@ function detectConventions(root: string, pkg: PackageJson | null): CodeConventio
     conventions.linter = "biome"
   }
 
+  if (detectStrictMode(root)) {
+    conventions.strict = true
+  }
+
   return conventions
+}
+
+function detectStrictMode(root: string): boolean {
+  if (!pathExists(root, "tsconfig.json")) return false
+  try {
+    const parsed = parseJsoncResult(fs.readFileSync(path.join(root, "tsconfig.json"), "utf-8"))
+    if (!parsed.ok || !isRecord(parsed.value)) return false
+    const options = parsed.value.compilerOptions
+    return isRecord(options) && options.strict === true
+  } catch {
+    return false
+  }
 }
 
 function detectScripts(pkg: PackageJson | null): ProjectScripts {
