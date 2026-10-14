@@ -368,6 +368,12 @@ describe("console stack traces and get_console_message (ADR-192)", () => {
       expect(text).toContain("file://[local path redacted]")
       expect(text).toContain("~/project/node_modules/react/index.js")
     }
+    const relativeRoutes = { content: [{ type: "text", text: 'see /users/alice/settings and "/users/alice"' }] }
+    WebMcpProfile.boundReadResult("get_console_message", relativeRoutes, ORIGIN)
+    expect(relativeRoutes.content.map((part) => part.text).join("\n")).toContain(
+      'see /users/alice/settings and "/users/alice"',
+    )
+
     // A /home/ or /Users/ segment inside an http(s) URL is the page's route, not a local path (Grok review).
     const routes = {
       content: [

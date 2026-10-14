@@ -7,6 +7,7 @@ import { Log } from "@/util/log"
 import { checkVisualRouting, sessionModelFromMessages } from "@/visual/router"
 import { Filesystem } from "@/util/filesystem"
 import path from "path"
+import { parseJsonStrict } from "@/util/json-value"
 
 const log = Log.create({ service: "tool.visual_critique" })
 
@@ -37,26 +38,23 @@ export const VisualCritiqueTool = Tool.define("visual_critique", {
 
     try {
       const summaryContent = await fs.promises.readFile(summaryPath, "utf-8")
-      const run = JSON.parse(summaryContent)
-      // The run summary is untrusted (a prompt-injected write can ship a crafted
-      // .ax-code/ tree), so confine screenshot reads to the run directory instead
-      // of attaching an arbitrary file to the model. `Filesystem.contains` is
-      // lexical — it does not resolve symlinks — so the canonical path is checked
-      // as well: a link inside the run directory would otherwise dereference an
-      // outside file.
-      const runRoot = path.resolve(runDir)
-      const runRootReal = await fs.promises.realpath(runRoot).catch(() => runRoot)
-      for (const artifact of run.artifacts ?? []) {
-        const candidate = artifact as { kind?: string; path?: string }
-        if (candidate.kind !== "screenshot" || !candidate.path) continue
-        const resolved = path.resolve(candidate.path)
-        const real = await fs.promises.realpath(resolved).catch(() => undefined)
-        if (!Filesystem.contains(runRoot, resolved) || !real || !Filesystem.contains(runRootReal, real)) {
-          log.warn("ignoring visual artifact outside its run directory", { runID: params.runID, path: candidate.path })
-          continue
-        }
-        screenshotArtifacts.push(artifact)
-      }
+      const run = z
+        .object({
+          artifacts: z
+            .array(
+              z.object({
+                kind: z.string(),
+                id: z.string().default(""),
+                path: z.string().default(""),
+                label: z.string().default(""),
+                width: z.number().optional(),
+                height: z.number().optional(),
+              }),
+            )
+            .default([]),
+        })
+        .parse(parseJsonStrict(summaryContent))
+      screenshotArtifacts = run.artifacts.filter((artifact) => artifact.kind === "screenshot" && artifact.path)
     } catch {
       // If no summary exists, try scanning the directory
       try {
@@ -74,6 +72,29 @@ export const VisualCritiqueTool = Tool.define("visual_critique", {
         )
       }
     }
+
+    // Apply the same boundary to manifest entries and directory-scan fallback.
+    // A missing or malformed summary must not let a symlink attach an outside file.
+    const runRootReal = await fs.promises.realpath(runDir).catch(() => undefined)
+    const projectRootReal = await fs.promises.realpath(projectDir).catch(() => undefined)
+    const confinedArtifacts: typeof screenshotArtifacts = []
+    for (const artifact of screenshotArtifacts) {
+      const resolved = path.resolve(artifact.path)
+      const real = await fs.promises.realpath(resolved).catch(() => undefined)
+      if (
+        !runRootReal ||
+        !projectRootReal ||
+        !Filesystem.contains(projectRootReal, runRootReal) ||
+        !Filesystem.contains(runDir, resolved) ||
+        !real ||
+        !Filesystem.contains(runRootReal, real)
+      ) {
+        log.warn("ignoring visual artifact outside its run directory", { runID: params.runID })
+        continue
+      }
+      confinedArtifacts.push({ ...artifact, path: real })
+    }
+    screenshotArtifacts = confinedArtifacts
 
     if (screenshotArtifacts.length === 0) {
       throw new Error(

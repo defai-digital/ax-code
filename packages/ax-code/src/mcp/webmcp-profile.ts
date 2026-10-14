@@ -2108,7 +2108,7 @@ export namespace WebMcpProfile {
   // A home prefix counts only at the start of a path token (line start,
   // whitespace, an opening parenthesis or a quote): `/home/` or `/Users/` inside
   // an http(s) URL path is the page's own route and stays intact.
-  const HOME_PREFIX = /(?<![^\s("'])(?:(?:\/Users|\/home)\/[^/\s'"]+|[A-Za-z]:\\Users\\[^\\\s'"]+)/gi
+  const HOME_PREFIX = /(?<![^\s("'])(?:(?:\/Users|\/home)\/[^/\s'"]+|[A-Za-z]:\\[Uu][Ss][Ee][Rr][Ss]\\[^\\\s'"]+)/g
 
   function redactLocalPaths(text: string): string {
     return text.replace(LOCAL_FILE_URL, "file://[local path redacted]").replace(HOME_PREFIX, "~")
