@@ -177,6 +177,14 @@ export namespace QualityPromotionSignedArchiveAttestationRecord {
 
   export function verify(record: RecordArtifact) {
     const reasons: string[] = []
+    // The record id is derived from the signed archive it attests, and it is the
+    // store's write-once key. A verifier that ignores it accepts a re-identified
+    // copy of an already-accepted record as a new artifact.
+    if (record.recordID !== `${record.signedArchive.signedArchiveID}-attestation-record`) {
+      reasons.push(
+        `signed archive attestation record id ${record.recordID} does not match signed archive ${record.signedArchive.signedArchiveID}`,
+      )
+    }
     if (record.source !== record.signedArchive.source) {
       reasons.push(
         `signed archive attestation record source mismatch: ${record.source} vs ${record.signedArchive.source}`,

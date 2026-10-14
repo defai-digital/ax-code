@@ -996,6 +996,28 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
 
     const reasons = QualityPromotionSignedArchiveAttestationPacket.verify(tampered)
     expect(reasons.some((reason) => reason.includes("attestation packet summary mismatch"))).toBe(true)
+
+    // The packet and record ids are derived from what they cover, and each id is
+    // the store's write-once key. A re-identified copy of an accepted artifact
+    // must not verify as a distinct one.
+    const reidentifiedPacket = QualityPromotionSignedArchiveAttestationPacket.PacketArtifact.parse({
+      ...packet,
+      packetID: "replayed-packet",
+    })
+    expect(
+      QualityPromotionSignedArchiveAttestationPacket.verify(reidentifiedPacket).some((reason) =>
+        reason.includes("packet id replayed-packet does not match"),
+      ),
+    ).toBe(true)
+    const reidentifiedRecord = QualityPromotionSignedArchiveAttestationRecord.RecordArtifact.parse({
+      ...record,
+      recordID: "replayed-record",
+    })
+    expect(
+      QualityPromotionSignedArchiveAttestationRecord.verify(reidentifiedRecord).some((reason) =>
+        reason.includes("record id replayed-record does not match"),
+      ),
+    ).toBe(true)
   })
 
   test("rejects explicit attestation packets that do not match the promotion provenance", async () => {

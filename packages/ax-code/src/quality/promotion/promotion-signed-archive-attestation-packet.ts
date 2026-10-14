@@ -182,6 +182,14 @@ export namespace QualityPromotionSignedArchiveAttestationPacket {
 
   export function verify(packet: PacketArtifact) {
     const reasons: string[] = []
+    // The packet id is derived from the attestation record it packages, and it is
+    // the store's write-once key. A verifier that ignores it accepts a
+    // re-identified copy of an already-accepted packet as a new artifact.
+    if (packet.packetID !== `${packet.attestationRecord.recordID}-packet`) {
+      reasons.push(
+        `signed archive attestation packet id ${packet.packetID} does not match its attestation record ${packet.attestationRecord.recordID}`,
+      )
+    }
     if (packet.source !== packet.attestationRecord.source) {
       reasons.push(
         `signed archive attestation packet source mismatch: ${packet.source} vs ${packet.attestationRecord.source}`,
