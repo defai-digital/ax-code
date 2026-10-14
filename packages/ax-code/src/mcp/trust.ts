@@ -92,7 +92,11 @@ export namespace McpTrust {
         version: fingerprintVersion,
         name,
         type: config.type,
-        command: config.command,
+        // A webmcp-profiled entry never executes its stored command (ADR-173):
+        // the launch argv is regenerated from the profile, so a pin bump or an
+        // entry written by another ax-code version must not drop a trust grant
+        // (ADR-197). The profile below is what the grant covers.
+        ...(config.webmcp === undefined ? { command: config.command } : {}),
         environment: recordFingerprintShape(config.environment),
         webmcp: config.webmcp,
       })

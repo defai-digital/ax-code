@@ -758,10 +758,38 @@ export namespace WebMcpProfile {
   }
 
   /**
-   * Why a webmcp-profiled entry does not carry the reviewed launch argv for its
-   * validated profile, or undefined when it does (ADR-173). The entry is then
-   * trusted on an explicit connect; any other entry falls to the normal trust
-   * gate, which says nothing about a drifted `command`, so name the difference.
+   * Why a webmcp-profiled entry cannot skip the config-source trust gate on an
+   * explicit connect, or undefined when it can (ADR-197). The stored command is
+   * never executed (ADR-173), so it plays no part: an entry written by another
+   * ax-code version connects on the gesture. What the gesture cannot vouch for
+   * is a launch option that reaches past the regenerated argv: a custom Chrome
+   * executable is run as-is (version preflight, then the browser), a persistent
+   * profile holds real cookies, and a vendored install runs from a local cache.
+   * Those need an explicit trust grant from an untrusted source.
+   */
+  export function trustGateReason(server: Server): string | undefined {
+    if (server.type !== "local" || server.webmcp === undefined) return undefined
+    let profile: Configuration | undefined
+    try {
+      profile = validateLaunch(server)
+    } catch (error) {
+      return `webmcp profile is invalid: ${error instanceof Error ? error.message : String(error)}`
+    }
+    if (!profile) return undefined
+    const options = [
+      ...(profile.executablePath ? ["executablePath"] : []),
+      ...(profile.persistentProfile ? ["persistentProfile"] : []),
+      ...(profile.vendored ? ["vendored"] : []),
+    ]
+    if (options.length === 0) return undefined
+    return `webmcp profile sets ${options.join(", ")}; an untrusted config source needs an explicit MCP trust grant`
+  }
+
+  /**
+   * How a webmcp-profiled entry's stored command differs from the reviewed
+   * launch argv for its validated profile, or undefined when it matches. The
+   * stored command is ignored either way (ADR-173); this only names the drift
+   * for diagnostics.
    */
   export function argvMismatch(server: Server): string | undefined {
     if (server.type !== "local" || server.webmcp === undefined) return undefined

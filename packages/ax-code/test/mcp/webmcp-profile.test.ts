@@ -405,6 +405,39 @@ describe("WebMcpProfile.argvMismatch", () => {
   })
 })
 
+describe("WebMcpProfile.trustGateReason", () => {
+  test("ignores the stored command and gates only launch options past the regenerated argv", () => {
+    const plain = WebMcpProfile.config({ allowedOrigins: [], read: true })
+    expect(WebMcpProfile.trustGateReason(plain)).toBeUndefined()
+    expect(WebMcpProfile.trustGateReason({ ...plain, command: ["npx", "-y", "chrome-devtools-mcp@1.8.0"] })).toBe(
+      undefined,
+    )
+    expect(WebMcpProfile.trustGateReason({ type: "local", command: ["x"] } as never)).toBeUndefined()
+    expect(
+      WebMcpProfile.trustGateReason(
+        WebMcpProfile.config({ allowedOrigins: [], executablePath: "/opt/chrome/chrome", persistentProfile: true }),
+      ),
+    ).toContain("executablePath, persistentProfile")
+    expect(WebMcpProfile.trustGateReason(WebMcpProfile.config({ allowedOrigins: [], vendored: true }))).toContain(
+      "vendored",
+    )
+    expect(WebMcpProfile.trustGateReason({ ...plain, environment: { PROXY: "x" } })).toContain("invalid")
+  })
+
+  test("a webmcp trust fingerprint covers the profile, not the stored command", () => {
+    const plain = WebMcpProfile.config({ allowedOrigins: [], read: true })
+    const before = McpTrust.fingerprint("bridge", plain)
+    expect(McpTrust.fingerprint("bridge", { ...plain, command: ["npx", "-y", "chrome-devtools-mcp@1.8.0"] })).toBe(
+      before,
+    )
+    expect(McpTrust.fingerprint("bridge", { ...plain, webmcp: { ...plain.webmcp, read: false } })).not.toBe(before)
+    const local = { type: "local" as const, command: ["node", "server.js"] }
+    expect(McpTrust.fingerprint("other", local)).not.toBe(
+      McpTrust.fingerprint("other", { ...local, command: ["node", "evil.js"] }),
+    )
+  })
+})
+
 test.each([
   ["Navigation timeout of 10000 ms exceeded at https://secret.invalid/token", "timeout"],
   ["net::ERR_NAME_NOT_RESOLVED at https://secret.invalid/token", "network error"],

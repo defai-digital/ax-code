@@ -195,7 +195,7 @@ test("the chip gesture persists to user-level config and survives a restart", as
   })
 })
 
-test("a drifted launch command is trust-gated, then self-heals on connect (ADR-173)", async () => {
+test("a drifted launch command self-heals on the connect gesture (ADR-173, ADR-197)", async () => {
   const fresh = WebMcpProfile.config({ allowedOrigins: ["https://example.test"] }, true)
   const drifted = { ...fresh, command: [...fresh.command, "--no-category-network"] }
   bridge.names = [...WebMcpProfile.TOOLS]
@@ -203,14 +203,9 @@ test("a drifted launch command is trust-gated, then self-heals on connect (ADR-1
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      // A drifted project entry is not trust-exempt (the ADR-173 exemption
-      // requires the current reviewed argv), so the gesture alone stays gated.
-      await MCP.connect("bridge")
-      expect((await MCP.status()).bridge).toMatchObject({ status: "needs_trust" })
-      expect(bridge.launch).not.toHaveBeenCalled()
-      // The trust gesture clears the gate; the launch regenerates from the
-      // validated profile instead of executing the drifted stored command.
-      await MCP.trust("bridge")
+      // The stored command is never executed, so drift does not cost the
+      // explicit-connect exemption (ADR-197): the gesture alone connects and
+      // the launch regenerates from the validated profile.
       await MCP.connect("bridge")
       expect((await MCP.status()).bridge).toMatchObject({ status: "connected" })
       const argv = launchArgv(bridge.launch.mock.calls[0]![0])

@@ -657,16 +657,16 @@ export namespace MCP {
 
   // A webmcp-profiled entry is exempt from the config-source trust gate on an
   // explicit connect: the connect call (chip click, `mcp connect`) is itself
-  // the user gesture. The exemption requires the entry to carry the current
-  // reviewed argv for its validated profile (ADR-173): the launch argv is
-  // regenerated from the profile, so a hostile command is discarded rather
-  // than executed, but a drifted, optioned (executablePath), or hand-edited
-  // entry goes through the normal trust gate instead of inheriting the
-  // gesture. The startup bulk connect keeps the gate: a cloned repo must not
-  // launch a browser without any gesture.
+  // the user gesture. The stored command plays no part (ADR-197): it is never
+  // executed (ADR-173), so an entry written by an older or newer ax-code
+  // connects on the gesture. A profile with a launch option the regenerated
+  // argv cannot contain (executablePath, persistentProfile, vendored) or an
+  // invalid profile goes through the normal trust gate instead of inheriting
+  // the gesture. The startup bulk connect keeps the gate: a cloned repo must
+  // not launch a browser without any gesture.
   function webmcpTrustExempt(mcp: Config.Mcp): boolean {
     if (mcp.type !== "local" || mcp.webmcp === undefined) return false
-    return WebMcpProfile.argvMismatch(mcp) === undefined
+    return WebMcpProfile.trustGateReason(mcp) === undefined
   }
 
   // The reason a webmcp entry fell to the trust gate instead of the explicit
@@ -674,9 +674,8 @@ export namespace MCP {
   // rather than a bare "server is not trusted".
   function webmcpTrustNote(key: string, mcp: Config.Mcp): string | undefined {
     if (mcp.type !== "local" || mcp.webmcp === undefined) return undefined
-    const note = WebMcpProfile.argvMismatch(mcp)
-    if (note)
-      log.warn("webmcp entry does not match its reviewed launch argv; update or remove its command", { key, note })
+    const note = WebMcpProfile.trustGateReason(mcp)
+    if (note) log.warn("webmcp entry needs an explicit trust grant", { key, note })
     return note
   }
 
@@ -946,6 +945,8 @@ export namespace MCP {
     const effective = webmcp ?? validated
     const launchCommand =
       effective && configured ? WebMcpProfile.command(effective, configured) : mcp.type === "local" ? mcp.command : []
+    const drift = configured ? WebMcpProfile.argvMismatch(mcp) : undefined
+    if (drift) log.info("webmcp stored command is ignored; launching the regenerated argv", { key, drift })
     if (webmcp?.executablePath) {
       const chrome = await WebMcpProfile.verifyChromeVersion(webmcp.executablePath)
       if (!chrome.ok) {
@@ -1202,7 +1203,7 @@ export namespace MCP {
       } catch (error) {
         log.error("local mcp startup failed", {
           key,
-          command: mcp.command,
+          command: launchCommand,
           cwd,
           error: NamedError.message(error),
         })

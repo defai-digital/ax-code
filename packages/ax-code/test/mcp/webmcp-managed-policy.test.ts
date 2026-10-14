@@ -150,7 +150,8 @@ test("a project-sourced webmcp entry connects on an explicit gesture without a t
   })
 })
 
-test("a webmcp entry with a tampered command stays trust-gated", async () => {
+test("a webmcp entry with a tampered command connects but never runs that command", async () => {
+  bridge.names = [...WebMcpProfile.TOOLS]
   await using tmp = await tmpdir({
     git: true,
     config: {
@@ -166,8 +167,78 @@ test("a webmcp entry with a tampered command stays trust-gated", async () => {
     directory: tmp.path,
     fn: async () => {
       await MCP.connect("bridge")
+      // ADR-173/197: the stored command is discarded, so the gesture launches
+      // the regenerated argv and the tampered arguments never reach a process.
+      expect((await MCP.status()).bridge).toMatchObject({ status: "connected" })
+      const options = bridge.launch.mock.calls[0]?.[0] as { command: string; args: string[] }
+      expect(options.args).toContain(WebMcpProfile.PACKAGE)
+      expect(options.args).not.toContain("-e")
+      expect(options.args).not.toContain("process.exit(1)")
+    },
+  })
+})
+
+test("a project-sourced webmcp entry with a custom executablePath stays trust-gated on an explicit connect", async () => {
+  bridge.names = [...WebMcpProfile.TOOLS]
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      const chrome = path.join(dir, "chrome")
+      // Records any execution: the version preflight runs this binary before
+      // the bridge launch, so it must never run without a trust grant.
+      await fs.writeFile(chrome, `#!/bin/sh\ntouch "${dir}/ran"\necho 'Google Chrome 154.0.0.0'\n`, { mode: 0o755 })
+      await fs.writeFile(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          mcp: { bridge: WebMcpProfile.config({ allowedOrigins: ["https://example.test"], executablePath: chrome }) },
+        }),
+      )
+      return dir
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await MCP.connect("bridge")
       expect(bridge.launch).not.toHaveBeenCalled()
+      await expect(fs.access(path.join(tmp.extra, "ran"))).rejects.toThrow()
+      const status = (await MCP.status()).bridge
+      expect(status).toMatchObject({ status: "needs_trust" })
+      expect(status && "error" in status ? status.error : undefined).toContain("executablePath")
+    },
+  })
+})
+
+test("a project-sourced webmcp entry with a stale command connects on an explicit gesture with the regenerated argv", async () => {
+  bridge.names = [...WebMcpProfile.TOOLS]
+  // The shape an older ax-code wrote: an earlier pin and a retired flag set.
+  const stale = [
+    "npx",
+    "-y",
+    "chrome-devtools-mcp@1.8.0",
+    "--isolated",
+    "--no-usage-statistics",
+    "--no-performance-crux",
+    "--no-category-emulation",
+    "--no-category-performance",
+    "--category-experimental-webmcp",
+    "--experimental-structured-content",
+    "--chrome-arg=--enable-features=WebMCP",
+  ]
+  await using tmp = await tmpdir({
+    git: true,
+    config: { mcp: { bridge: { ...profile(), command: stale } } },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
       expect((await MCP.status()).bridge).toMatchObject({ status: "needs_trust" })
+      await MCP.connect("bridge")
+      expect((await MCP.status()).bridge).toMatchObject({ status: "connected" })
+      const options = bridge.launch.mock.calls[0]?.[0] as { args: string[] }
+      expect(options.args).toContain(WebMcpProfile.PACKAGE)
+      expect(options.args).not.toContain("chrome-devtools-mcp@1.8.0")
+      expect(options.args).not.toContain("--no-category-emulation")
     },
   })
 })
