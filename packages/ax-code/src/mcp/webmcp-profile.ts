@@ -387,7 +387,7 @@ export namespace WebMcpProfile {
     const lines = [
       `<webmcp_bridge>`,
       `  A browser bridge is connected. Use it only to verify the UI or behavior of a web app the user named (usually http://localhost), or to work with a page the user named. For a public static page with no JS state, use webfetch. Otherwise do not open pages, and never open an origin the user did not name.`,
-      `  This block overrides <html_dev_workflow>: when the bridge tools are in your tool list, use them instead of playwright browser_screenshot or asking the user to refresh.`,
+      `  This block overrides <html_dev_workflow>: when the bridge tools are in your tool list, use them instead of playwright browser_take_screenshot or asking the user to refresh.`,
       `  This guidance covers the highest connected tier, not every bridge. Use each bridge's actual exposed tool names, schemas and descriptions; a connection or tool listing does not grant permission. If tools are deferred and tool_search is available, discover the relevant bridge tools first, then use their returned schemas. Do not guess tool names or borrow capabilities from another bridge.`,
       `  list_webmcp_tools shows tools the page registered itself; run them with execute_webmcp_tool. If the page registered none, ${
         tier === "page"
