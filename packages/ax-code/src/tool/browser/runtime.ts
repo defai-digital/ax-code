@@ -741,13 +741,15 @@ export class BrowserRuntime {
 
     // No-args: a string pageFunction is evaluated as an EXPRESSION (Playwright
     // sets isFunction=false), so "() => document.title" yields the function
-    // object, which serializes to undefined. Reconstruct and invoke it inside
-    // the page so the documented function-string form returns its result.
+    // object, which serializes to undefined. Reconstruct it inside the page and
+    // invoke the documented function-string form; a bare expression string
+    // ("document.title") still evaluates to its value the way it always did, so
+    // only an actual function is called.
     return entry.pwPage.evaluate(
       (source: string) => {
         // eslint-disable-next-line @typescript-eslint/no-implied-eval
-        const f = new Function(`return (${source})`)() as () => unknown
-        return f()
+        const value = new Function(`return (${source})`)() as unknown
+        return typeof value === "function" ? (value as () => unknown)() : value
       },
       fn,
     )

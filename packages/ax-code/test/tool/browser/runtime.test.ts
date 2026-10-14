@@ -717,6 +717,19 @@ describe("browser runtime", () => {
     expect(page.evaluate.mock.calls[0]![1]).toBe("() => document.title")
   })
 
+  test("evaluate without args still returns the value of a bare expression string", async () => {
+    const page = createMockPage()
+    const ctx = createMockContext()
+    injectPage(runtime, "page_1", page, ctx)
+
+    // Run the in-page wrapper in Node: it only uses plain JS, so an expression
+    // string keeps returning its value instead of calling a non-function.
+    page.evaluate.mockImplementation(async (fn: unknown, arg: unknown) => (fn as (a: unknown) => unknown)(arg))
+
+    await expect(runtime.evaluate("latest", "1 + 1")).resolves.toBe(2)
+    await expect(runtime.evaluate("latest", "() => 42")).resolves.toBe(42)
+  })
+
   test("forSession isolates snapshot IDs across sessions", async () => {
     const a = BrowserRuntime.forSession("ses_a")
     const b = BrowserRuntime.forSession("ses_b")
