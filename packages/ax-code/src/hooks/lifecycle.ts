@@ -556,6 +556,15 @@ export namespace LifecycleHooks {
           break
         }
         if (decoded.ask) {
+          // Only PreToolUse has an interactive permission channel where the
+          // caller can honour `ask`; every other blockable event
+          // (UserPromptSubmit) has none, so an `ask` must veto it here instead
+          // of being dropped (docs/guides/hooks.md: ask still blocks there).
+          if (input.event !== "PreToolUse") {
+            blocked = true
+            blockReason = decoded.reason ?? "hook requested user confirmation"
+            break
+          }
           // Keep evaluating: a later hook may still deny, and deny wins.
           ask = ask ?? { reason: decoded.reason ?? "hook requested user confirmation" }
         }

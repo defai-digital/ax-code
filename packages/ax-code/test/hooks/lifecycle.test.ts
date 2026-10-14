@@ -408,6 +408,22 @@ describe("LifecycleHooks claude-code wire protocol", () => {
     expect(result.ask).toEqual({ reason: "hook requested user confirmation" })
   })
 
+  test("UserPromptSubmit ask blocks because the event has no permission channel", async () => {
+    const result = await LifecycleHooks.runHooks(
+      [
+        {
+          event: "UserPromptSubmit",
+          protocol: "claude-code",
+          command: `node -e "console.log(JSON.stringify({permissionDecision:'ask', reason:'confirm prompt'}))"`,
+        },
+      ],
+      { event: "UserPromptSubmit", args: { prompt: "hi" }, cwd: process.cwd() },
+    )
+    expect(result.blocked).toBe(true)
+    expect(result.blockReason).toBe("confirm prompt")
+    expect(result.ask).toBeUndefined()
+  })
+
   test("a later deny wins over an earlier ask", async () => {
     const result = await LifecycleHooks.runHooks(
       [
