@@ -855,6 +855,45 @@ describe("tool.apply_patch freeform", () => {
     })
   })
 
+  test("an indented end marker terminates the add-file content", async () => {
+    await using fixture = await tmpdir()
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const target = path.join(fixture.path, "indented_end.txt")
+        // The envelope accepts a trimmed "*** End Patch" marker, so the content
+        // parser must stop there too. It used to run to the end of the input and
+        // write the marker plus everything after it into the new file.
+        const patchText = "*** Begin Patch\n*** Add File: indented_end.txt\n+ok\n *** End Patch\n+outside\n"
+
+        await execute({ patchText }, ctx)
+        expect(await fs.readFile(target, "utf-8")).toBe("ok\n")
+      },
+    })
+  })
+
+  test("an indented end marker terminates the update chunks", async () => {
+    await using fixture = await tmpdir()
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const target = path.join(fixture.path, "indented_update.txt")
+        await writeAndTrack(target, "old\ntail\n")
+        // Reading past the closing marker used to fold it and the trailing text
+        // into the chunk as context and added lines.
+        const patchText =
+          "*** Begin Patch\n*** Update File: indented_update.txt\n@@\n-old\n+new\n *** End Patch\n+outside\n"
+
+        await execute({ patchText }, ctx)
+        expect(await fs.readFile(target, "utf-8")).toBe("new\ntail\n")
+      },
+    })
+  })
+
   test("rejects missing second chunk context", async () => {
     await using fixture = await tmpdir()
     const { ctx } = makeCtx()

@@ -125,11 +125,19 @@ export namespace Patch {
     return null
   }
 
-  function parseUpdateFileChunks(lines: string[], startIdx: number): { chunks: UpdateFileChunk[]; nextIdx: number } {
+  // `endIdx` is the envelope's closing marker. The envelope accepts a marker
+  // line that is only trimmed-equal to "*** End Patch", so the body parsers
+  // must be bounded by it: reading to the end of the input would take the
+  // marker and any trailing text as file content.
+  function parseUpdateFileChunks(
+    lines: string[],
+    startIdx: number,
+    endIdx: number,
+  ): { chunks: UpdateFileChunk[]; nextIdx: number } {
     const chunks: UpdateFileChunk[] = []
     let i = startIdx
 
-    while (i < lines.length && !lines[i].startsWith("***")) {
+    while (i < endIdx && !lines[i].startsWith("***")) {
       // A chunk opens at an explicit "@@" marker, or — when a model omits it
       // (the format's most common slip) — implicitly at the first body line
       // that carries a " "/"-"/"+" prefix. Without the implicit chunk those
@@ -149,7 +157,7 @@ export namespace Patch {
 
       // Parse change lines
       while (
-        i < lines.length &&
+        i < endIdx &&
         !lines[i].startsWith("@@") &&
         // *** End of File is a chunk-level anchor, not a file header, so it
         // must reach the body below to set is_end_of_file. Other *** lines
@@ -199,11 +207,15 @@ export namespace Patch {
     return { chunks, nextIdx: i }
   }
 
-  function parseAddFileContent(lines: string[], startIdx: number): { content: string; nextIdx: number } {
+  function parseAddFileContent(
+    lines: string[],
+    startIdx: number,
+    endIdx: number,
+  ): { content: string; nextIdx: number } {
     let content = ""
     let i = startIdx
 
-    while (i < lines.length && !lines[i].startsWith("***")) {
+    while (i < endIdx && !lines[i].startsWith("***")) {
       // A line with no "+" prefix is most often a blank line a model emitted
       // without the leading "+" — keep it as literal content instead of
       // silently dropping it (mirrors parseUpdateFileChunks's handling of
@@ -266,7 +278,7 @@ export namespace Patch {
       }
 
       if (lines[i].startsWith("*** Add File:")) {
-        const { content, nextIdx } = parseAddFileContent(lines, header.nextIdx)
+        const { content, nextIdx } = parseAddFileContent(lines, header.nextIdx, endIdx)
         hunks.push({
           type: "add",
           path: header.filePath,
@@ -280,7 +292,7 @@ export namespace Patch {
         })
         i = header.nextIdx
       } else if (lines[i].startsWith("*** Update File:")) {
-        const { chunks, nextIdx } = parseUpdateFileChunks(lines, header.nextIdx)
+        const { chunks, nextIdx } = parseUpdateFileChunks(lines, header.nextIdx, endIdx)
         // A move-only update legitimately carries no chunks; anything else with
         // no chunks has no effect and must fail loudly rather than report a
         // silent success for an edit that never landed.
