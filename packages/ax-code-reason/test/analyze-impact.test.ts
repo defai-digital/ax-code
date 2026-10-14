@@ -160,4 +160,99 @@ describe("analyzeImpactImpl", () => {
     expect(medium.riskLabel).toBe("medium")
     expect(medium.apiBoundariesHit).toBe(4)
   })
+
+  test("wide fan-out with a bounded budget matches a shift()-dequeue reference BFS", async () => {
+    // One seed with >= 2,500 transitive callers across several levels. Each
+    // level-L node points back at level-(L-1) so BFS reaches every node, and
+    // the caller adjacency order (insertion order) is what fixes visit order.
+    const seed = "seed"
+    const levels = 6
+    const perLevel = 500
+    const callerOf: Record<string, string[]> = {}
+    type RefEntry = { distance: number; parent: string | null }
+    const refVisited = new Map<string, RefEntry>()
+
+    testHost.graph.addSymbol({ id: seed, name: "fn_seed" })
+    refVisited.set(seed, { distance: 0, parent: null })
+    const queue: { id: string; distance: number }[] = [{ id: seed, distance: 0 }]
+
+    const budget = 2_000
+    let prevLevel: string[] = [seed]
+    let produced = 1 // the seed counts toward the budget
+    for (let level = 1; level <= levels; level++) {
+      const thisLevel: string[] = []
+      for (let i = 0; i < perLevel; i++) {
+        const id = `n${level}_${i}`
+        testHost.graph.addSymbol({ id, name: `fn_${id}` })
+        const parent = prevLevel[i % prevLevel.length]
+        testHost.graph.addCallerEdge(parent, id)
+        callerOf[parent] = [...(callerOf[parent] ?? []), id]
+        thisLevel.push(id)
+        produced++
+      }
+      prevLevel = thisLevel
+    }
+    expect(produced).toBeGreaterThanOrEqual(2_500)
+
+    // Inline reference BFS over the same fake graph, using shift()-dequeue.
+    let refTruncated = false
+    while (queue.length > 0 && !refTruncated) {
+      const { id, distance } = queue.shift()!
+      if (distance >= levels) continue
+      for (const child of callerOf[id] ?? []) {
+        if (refVisited.has(child)) continue
+        refVisited.set(child, { distance: distance + 1, parent: id })
+        if (refVisited.size >= budget) {
+          refTruncated = true
+          break
+        }
+        queue.push({ id: child, distance: distance + 1 })
+      }
+    }
+
+    const report = await analyzeImpactImpl("test-project", {
+      changes: [{ kind: "symbol", id: seed }],
+      depth: levels,
+      maxVisited: budget,
+    })
+    expect(report.truncated).toBe(true)
+    expect(refTruncated).toBe(true)
+    // The reference BFS visited exactly `budget` nodes; the engine must too.
+    expect(refVisited.size).toBe(budget)
+    const affected = report.affectedSymbols
+    expect(affected.length).toBe(budget - 1)
+    expect(report.affectedSymbols.map((s) => s.symbol.id).sort()).toEqual(
+      [...refVisited.keys()].filter((id) => id !== seed).sort(),
+    )
+    for (const entry of affected) {
+      const ref = refVisited.get(entry.symbol.id)!
+      expect(ref).toBeDefined()
+      expect(entry.distance).toBe(ref.distance)
+      // Parent chains must match the reference exactly (seed-first).
+      const chain = entry.path
+      expect(chain[chain.length - 1]).toBe(entry.symbol.id)
+      expect(chain[chain.length - 2] ?? null).toBe(ref.parent)
+    }
+    expect(report.explain.heuristicsApplied).toContain("budget-exhausted")
+  })
+
+  test("diamond graph keeps the first-arrival parent at distance 2", async () => {
+    // A <- B, A <- C, B <- D, C <- D. findCallers(A) yields [B, C].
+    for (const id of ["a", "b", "c", "d"]) testHost.graph.addSymbol({ id, name: `fn_${id}` })
+    testHost.graph.addCallerEdge("a", "b")
+    testHost.graph.addCallerEdge("a", "c")
+    testHost.graph.addCallerEdge("b", "d")
+    testHost.graph.addCallerEdge("c", "d")
+
+    const report = await analyzeImpactImpl("test-project", {
+      changes: [{ kind: "symbol", id: "a" }],
+      depth: 3,
+    })
+    const d = report.affectedSymbols.find((s) => s.symbol.id === "d")!
+    expect(d.distance).toBe(2)
+    // D is reached from B first (B is enqueued before C and both sit at
+    // distance 1), so the parent is B and the chain is seed-first.
+    expect(d.path).toEqual(["a", "b", "d"])
+    expect(report.truncated).toBe(false)
+  })
 })

@@ -189,8 +189,14 @@ function bfsUpstream(
   }
 
   let truncated = false
-  while (queue.length > 0) {
-    const { id, distance } = queue.shift()!
+  // Head-index dequeue: advancing `head` instead of `queue.shift()` keeps
+  // dequeue O(1) and avoids the O(n) element moves shift() performs when the
+  // visit budget is large (MAX_VISIT_BUDGET = 10000). Traversal order, the
+  // visited map and its insertion order, parent links, distances, the
+  // truncation flag, and ciExplains order are all unchanged.
+  let head = 0
+  while (head < queue.length) {
+    const { id, distance } = queue[head++]
     if (distance >= depth) continue
 
     const callers = codeReasonHost().graph.findCallers(projectID, id, { scope })
