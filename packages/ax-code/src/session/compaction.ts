@@ -731,6 +731,23 @@ When constructing the summary, try to stick to this template:
             canStartWith: (group) => group.modelMessages[0]?.role === "user",
           })
           selectedGroups = trimmed.messages
+          // Every history group was dropped, so the summary request would carry
+          // only the instructions — and the history is truncated at the
+          // compaction marker afterwards regardless, so a "successful"
+          // compaction here would replace the conversation with an empty
+          // summary. Fail loudly, like the sibling cases where this model
+          // cannot compact this history.
+          if (selectedGroups.length === 0 && historyGroups.some((group) => group.modelMessages.length > 0)) {
+            log.warn("compaction fits no conversation history", {
+              sessionID: input.sessionID,
+              groups: historyGroups.length,
+              budgetUsable: tokenBudget.usable,
+            })
+            return stopForContextOverflow(
+              "Compaction could not fit any conversation history into this model's context window. " +
+                "Switch to a model with a larger context window, or start a new session.",
+            )
+          }
           if (trimmed.omitted > 0) {
             log.info("trimmed oldest messages so compaction fits the model window", {
               sessionID: input.sessionID,

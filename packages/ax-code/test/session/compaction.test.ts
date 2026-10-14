@@ -898,6 +898,70 @@ describe("session.compaction PostCompact hook", () => {
   })
 })
 
+describe("session.compaction summary input", () => {
+  test("refuses to summarize an empty history instead of storing an empty summary", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        // A window wide enough for the compaction instructions, far too small
+        // for the single 60k-character user turn.
+        const modelSpy = vi
+          .spyOn(Provider, "getSmallModel")
+          .mockResolvedValue(createModel({ context: 6_000, output: 512 }))
+        const { SessionProcessor } = await import("../../src/session/processor")
+        const processSpy = vi.fn(async () => "continue" as const)
+        const createSpy = vi.spyOn(SessionProcessor, "create").mockImplementation(
+          (args) =>
+            ({
+              message: args.assistantMessage,
+              sessionID: args.sessionID,
+              process: processSpy,
+            }) as unknown as ReturnType<typeof SessionProcessor.create>,
+        )
+        try {
+          const session = await Session.create({})
+          const user = await Session.updateMessage({
+            id: MessageID.ascending(),
+            sessionID: session.id,
+            role: "user",
+            time: { created: Date.now() },
+            agent: "build",
+            model: { providerID: ProviderID.make("test"), modelID: ModelID.make("test-model") },
+            tools: {},
+            mode: "build",
+          } as MessageV2.User)
+          await Session.updatePart({
+            id: PartID.ascending(),
+            messageID: user.id,
+            sessionID: session.id,
+            type: "text",
+            text: "x".repeat(60_000),
+            time: { start: Date.now(), end: Date.now() },
+          })
+
+          const result = await SessionCompaction.process({
+            parentID: user.id,
+            messages: await Session.messages({ sessionID: session.id }),
+            sessionID: session.id,
+            abort: new AbortController().signal,
+            auto: true,
+          })
+
+          expect(result).toBe("stop")
+          // The summary request must never be attempted with nothing to
+          // summarize: it would "succeed" with an empty summary while the
+          // history is truncated at the compaction marker either way.
+          expect(processSpy).not.toHaveBeenCalled()
+        } finally {
+          modelSpy.mockRestore()
+          createSpy.mockRestore()
+        }
+      },
+    })
+  })
+})
+
 describe("session.compaction observability", () => {
   test("logs compaction trigger reason without prompt content", async () => {
     const lines: string[] = []
