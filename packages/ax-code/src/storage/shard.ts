@@ -45,6 +45,24 @@ export namespace Shard {
   // every project it has touched.
   const cache = new Map<string, ShardClient>()
 
+  // Projects with an in-flight `use`/`transaction` callback. Recency is not
+  // liveness: a callback that opens other projects pushes its own handle to
+  // the front of the eviction queue while it is still running, and closing
+  // that connection mid-callback leaves the caller (and the ambient context
+  // it published) holding a dead client.
+  const inUse = new Map<string, number>()
+
+  function withInUse<T>(key: string, fn: () => T): T {
+    inUse.set(key, (inUse.get(key) ?? 0) + 1)
+    try {
+      return fn()
+    } finally {
+      const remaining = (inUse.get(key) ?? 1) - 1
+      if (remaining > 0) inUse.set(key, remaining)
+      else inUse.delete(key)
+    }
+  }
+
   // A separate context from the registry's "database" context (db.ts). Sharing
   // one would let a shard `use` leak its tx into a registry write (or vice
   // versa) when a shard callback nests a registry operation. See db.ts:222.
@@ -420,7 +438,9 @@ export namespace Shard {
 
     cache.set(key, db)
     while (cache.size > MAX_OPEN) {
-      const oldestKey = cache.keys().next().value
+      // Skip handles a callback is still using — the cache may briefly exceed
+      // MAX_OPEN rather than tear a connection out from under its caller.
+      const oldestKey = [...cache.keys()].find((candidate) => !inUse.has(candidate))
       if (oldestKey === undefined) break
       const evicted = cache.get(oldestKey)!
       cache.delete(oldestKey)
@@ -477,12 +497,14 @@ export namespace Shard {
         if (current && current.projectID === key) {
           return requireSync(callback(current.tx))
         }
-        const effects: Effect[] = []
-        const result = shardCtx.provide({ effects, tx: open(projectID), inTransaction: false, projectID: key }, () =>
-          callback(open(projectID)),
-        )
-        runEffects(effects)
-        return result
+        return withInUse(key, () => {
+          const effects: Effect[] = []
+          const result = shardCtx.provide({ effects, tx: open(projectID), inTransaction: false, projectID: key }, () =>
+            callback(open(projectID)),
+          )
+          runEffects(effects)
+          return result
+        })
       },
       transaction<T>(callback: (tx: TxOrDb) => T): SyncTransactionResult<T> {
         const current = shardCtx.peek()
@@ -494,21 +516,23 @@ export namespace Shard {
         if (current && current.projectID === key && current.inTransaction) {
           return requireSync(callback(current.tx)) as SyncTransactionResult<T>
         }
-        const effects: Effect[] = []
-        // BEGIN IMMEDIATE, matching Database.transaction (db.ts) so shard
-        // write transactions acquire the RESERVED lock up front.
-        const result = open(projectID).transaction<T>(
-          (tx) => {
-            return requireSync(
-              shardCtx.provide({ tx, effects, inTransaction: true, projectID: key }, () =>
-                callback(tx),
-              ) as SyncTransactionResult<T>,
-            ) as SyncTransactionResult<T>
-          },
-          { behavior: "immediate" },
-        ) as SyncTransactionResult<T>
-        runEffects(effects)
-        return result
+        return withInUse(key, () => {
+          const effects: Effect[] = []
+          // BEGIN IMMEDIATE, matching Database.transaction (db.ts) so shard
+          // write transactions acquire the RESERVED lock up front.
+          const result = open(projectID).transaction<T>(
+            (tx) => {
+              return requireSync(
+                shardCtx.provide({ tx, effects, inTransaction: true, projectID: key }, () =>
+                  callback(tx),
+                ) as SyncTransactionResult<T>,
+              ) as SyncTransactionResult<T>
+            },
+            { behavior: "immediate" },
+          ) as SyncTransactionResult<T>
+          runEffects(effects)
+          return result
+        })
       },
       effect<F extends () => unknown>(fn: F & SyncEffect<F>) {
         const current = shardCtx.peek()

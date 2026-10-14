@@ -78,6 +78,26 @@ describe("Shard LRU eviction", () => {
     // The most-recently-used entries remain open.
     expect(Shard.peek(ids[ids.length - 1])).toBeDefined()
   })
+
+  test("does not evict a handle that is still inside its use callback", () => {
+    const held = pid("project-held")
+    const result = Shard.handle(held).use((db) => {
+      db.run("CREATE TABLE IF NOT EXISTS held_probe (id INTEGER PRIMARY KEY)")
+      // Fill the cache past MAX_OPEN from *inside* the callback. Recency puts
+      // `held` first, so the naive LRU would close the connection this
+      // callback is still using.
+      for (let i = 0; i < Shard.MAX_OPEN + 2; i++) {
+        Shard.handle(pid(`project-evict-${i}`)).use((other) => {
+          other.run("CREATE TABLE IF NOT EXISTS probe (id INTEGER PRIMARY KEY)")
+        })
+      }
+      db.run("INSERT INTO held_probe (id) VALUES (1)")
+      return "ok"
+    })
+
+    expect(result).toBe("ok")
+    expect(Shard.peek(held)).toBeDefined()
+  })
 })
 
 describe("Database project resolver", () => {
