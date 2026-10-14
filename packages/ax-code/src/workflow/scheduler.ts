@@ -295,6 +295,16 @@ export namespace WorkflowScheduler {
           }
           continue
         }
+        // The turn can also finish inside the pause's cancel window: the item
+        // then settles to completed while the pause still parked the child.
+        // Re-sync the child from that item instead of queueing it — a queued
+        // child whose item is already terminal has no execution carrier, and
+        // the run then never leaves "running".
+        if (item?.status === "completed") {
+          const WorkflowTaskQueue = await loadWorkflowTaskQueue()
+          await WorkflowTaskQueue.syncItem(item)
+          continue
+        }
       }
       await WorkflowRun.setChildStatus({ id: child.id, status: "queued" })
     }
@@ -568,6 +578,10 @@ async function loadTaskQueue() {
 
 async function loadTaskQueueExecutor() {
   return (await import("../session/task-queue-executor")).TaskQueueExecutor
+}
+
+async function loadWorkflowTaskQueue() {
+  return (await import("./task-queue")).WorkflowTaskQueue
 }
 
 function shouldAutoStartWorkflowQueueItem(item: TaskQueue.Info) {

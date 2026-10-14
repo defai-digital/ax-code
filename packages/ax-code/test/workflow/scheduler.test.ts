@@ -1673,6 +1673,52 @@ describe("WorkflowScheduler", () => {
     }
   })
 
+  test("resume re-syncs a child whose queue item completed during the pause", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
+          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true, autoStartChildren: false })
+
+          const { TaskQueue } = await import("../../src/session/task-queue")
+          const { SessionPrompt } = await import("../../src/session/prompt")
+          const child = (await WorkflowRun.getDetail(run.id)).children[0]!
+          const item = await TaskQueue.get(child.taskQueueID!)
+          await TaskQueue.setStatus({ id: item.id, status: "running" })
+
+          // The child's turn finishes inside the cancel window, so its item
+          // settles to completed and the workflow sync marks the child
+          // completed before the pause parks it.
+          const cancel = vi.spyOn(SessionPrompt, "cancel").mockImplementation(async () => {
+            await TaskQueue.setStatus({ id: item.id, status: "completed" })
+          })
+          try {
+            await WorkflowScheduler.pause(run.id)
+          } finally {
+            cancel.mockRestore()
+          }
+          const parked = (await WorkflowRun.getDetail(run.id)).children.find((row) => row.id === child.id)!
+          expect(parked.status).toBe("paused")
+          expect((await TaskQueue.get(item.id)).status).toBe("completed")
+
+          const resumed = await WorkflowScheduler.resume(run.id)
+          const synced = resumed.children.find((row) => row.id === child.id)!
+          // Queueing the child would leave it without an execution carrier
+          // (its item is already terminal) and strand the run in "running".
+          expect(synced.status).toBe("completed")
+          expect((await TaskQueue.get(item.id)).status).toBe("completed")
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
   test("resume leaves a cancelled workflow run cancelled when nothing was paused", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
