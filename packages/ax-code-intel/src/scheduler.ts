@@ -1,4 +1,5 @@
 import { Log } from "./internal/log"
+import { codeIntelHostMaybe } from "./host"
 
 // Scheduler primitives for the LSP semantic layer (Semantic Trust v2 §S1+S2).
 //
@@ -121,25 +122,36 @@ export namespace LspScheduler {
     const slots = new Map<string, Slot>()
     const overrides = new Map<string, number>()
 
-    function getSlot(serverID: string): Slot {
-      let slot = slots.get(serverID)
+    // The cap follows the project, not the server name alone: one process can
+    // serve several projects (the core wires the host's projectRoot to the
+    // ambient Instance), and two of them configuring the same server id would
+    // otherwise share one in-flight counter and overwrite each other's budget.
+    // The scoped key is captured by `acquire` and passed to its release, so a
+    // release never resolves against another project's slot.
+    function scopedKey(serverID: string): string {
+      const root = codeIntelHostMaybe()?.projectRoot?.()
+      return root ? `${root}\u0000${serverID}` : serverID
+    }
+
+    function getSlot(key: string): Slot {
+      let slot = slots.get(key)
       if (!slot) {
         slot = {
-          budget: overrides.get(serverID) ?? DEFAULT_BUDGET,
+          budget: overrides.get(key) ?? DEFAULT_BUDGET,
           inUse: 0,
           waiters: [],
         }
-        slots.set(serverID, slot)
+        slots.set(key, slot)
       }
       return slot
     }
 
-    function makeRelease(serverID: string): () => void {
+    function makeRelease(key: string): () => void {
       let released = false
       return () => {
         if (released) return
         released = true
-        const slot = slots.get(serverID)
+        const slot = slots.get(key)
         if (!slot) return
         slot.inUse--
         // Wake one waiter FIFO. Skip waiters that already settled via
@@ -153,7 +165,7 @@ export namespace LspScheduler {
           next.settled = true
           clearTimeout(next.timer)
           slot.inUse++
-          next.resolve(makeRelease(serverID))
+          next.resolve(makeRelease(key))
           return
         }
       }
@@ -164,10 +176,11 @@ export namespace LspScheduler {
     // If the server is at cap, blocks until a slot frees or 30s
     // elapses (rejects with Error on timeout).
     export function acquire(serverID: string): Promise<() => void> {
-      const slot = getSlot(serverID)
+      const key = scopedKey(serverID)
+      const slot = getSlot(key)
       if (slot.inUse < slot.budget) {
         slot.inUse++
-        return Promise.resolve(makeRelease(serverID))
+        return Promise.resolve(makeRelease(key))
       }
       return new Promise((resolve, reject) => {
         const waiter = { resolve, reject, timer: null as any, settled: false }
@@ -198,21 +211,22 @@ export namespace LspScheduler {
     // queued waiters — only new acquires see the new cap; document
     // this limit at call sites that might reconfigure mid-run.
     export function setBudget(serverID: string, budget?: number): void {
+      const key = scopedKey(serverID)
       if (budget === undefined) {
-        overrides.delete(serverID)
-        const slot = slots.get(serverID)
+        overrides.delete(key)
+        const slot = slots.get(key)
         if (slot) slot.budget = DEFAULT_BUDGET
         return
       }
 
-      overrides.set(serverID, Math.max(1, budget))
-      const slot = slots.get(serverID)
+      overrides.set(key, Math.max(1, budget))
+      const slot = slots.get(key)
       if (slot) slot.budget = Math.max(1, budget)
     }
 
     // Exported for tests and diagnostics.
     export function inUse(serverID: string): number {
-      return slots.get(serverID)?.inUse ?? 0
+      return slots.get(scopedKey(serverID))?.inUse ?? 0
     }
 
     export function resetForTest(): void {
