@@ -1,5 +1,6 @@
 import { AsyncQueue } from "@/util/queue"
 import { toErrorMessage } from "@/util/error-message"
+import { stringifyTolerant } from "@/util/json-tolerant"
 
 /**
  * Hard maximum number of frames that can be queued before the connection
@@ -42,33 +43,15 @@ export function pushSseFrame(
 }
 
 /**
- * Encodes an SSE payload in two tiers: the fast path tries plain JSON.stringify first and only falls back to the
- * replacer path when that throws (circular structure, BigInt, or a throwing toJSON). The output is byte-identical
- * because the replacer only transforms values that make the fast path throw, so any payload the fast path accepts
- * passes through the replacer untouched.
+ * Encodes an SSE payload with `stringifyTolerant` (two tiers: plain
+ * JSON.stringify first, tolerant replacer only when that throws — see
+ * util/json-tolerant.ts for why the fast path is safe). On total failure
+ * it emits a `server.serialization_error` frame instead of throwing, so
+ * one bad payload cannot break the event stream.
  */
 export function encodeSsePayload(payload: unknown): string {
   try {
-    return JSON.stringify(payload) ?? "null"
-  } catch {
-    // Fall through to the replacer path below.
-  }
-  const ancestors: object[] = []
-  try {
-    return (
-      JSON.stringify(payload, function (this: unknown, _key, value) {
-        if (typeof value === "bigint") return value.toString()
-        if (typeof value === "object" && value !== null) {
-          // JSON.stringify revisits shared DAG nodes legitimately. Keep only
-          // the active ancestor chain so a repeated sibling reference is
-          // serialized normally and only a true cycle is replaced.
-          while (ancestors.length > 0 && ancestors.at(-1) !== this) ancestors.pop()
-          if (ancestors.includes(value)) return "[Circular]"
-          ancestors.push(value)
-        }
-        return value
-      }) ?? "null"
-    )
+    return stringifyTolerant(payload)
   } catch (error) {
     return JSON.stringify({
       type: "server.serialization_error",

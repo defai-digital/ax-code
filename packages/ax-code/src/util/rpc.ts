@@ -1,4 +1,5 @@
 import { toErrorMessage } from "./error-message"
+import { stringifyTolerant } from "./json-tolerant"
 import { parseJsonPayload } from "./json-value"
 
 export namespace Rpc {
@@ -96,17 +97,19 @@ export namespace Rpc {
     }
   }
 
+  /**
+   * Two-tier event serialization via `stringifyTolerant`: plain
+   * JSON.stringify on the fast path, and only when that throws a
+   * replacer that converts BigInt to strings and replaces true cycles.
+   * This runs on every `emit` (including whole `message.part.updated`
+   * parts), so the replacer-free fast path matters. The previous
+   * WeakSet-based replacer ran unconditionally, disabled V8's fast
+   * JSON.stringify path, and silently replaced ANY object reached twice
+   * — including shared non-cyclic references — with "[Circular]".
+   */
   function stringifyEventMessage(message: unknown): string {
-    const seen = new WeakSet<object>()
     try {
-      return JSON.stringify(message, (_key, value) => {
-        if (typeof value === "bigint") return value.toString()
-        if (typeof value === "object" && value !== null) {
-          if (seen.has(value)) return "[Circular]"
-          seen.add(value)
-        }
-        return value
-      })
+      return stringifyTolerant(message)
     } catch (error) {
       return JSON.stringify({
         type: "rpc.event",

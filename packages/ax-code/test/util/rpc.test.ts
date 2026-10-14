@@ -457,4 +457,94 @@ describe("Rpc", () => {
     })
     expect(parsed).toContainEqual({ type: "rpc.result", result: "ok", id: 8 })
   })
+
+  test("emit delivers shared non-cyclic references in full", async () => {
+    const stdin = new EventEmitter() as EventEmitter & { setEncoding: (encoding: BufferEncoding) => typeof stdin }
+    stdin.setEncoding = () => stdin
+    const writes: string[] = []
+    const stdout = {
+      write(line: string) {
+        writes.push(line)
+        return true
+      },
+      on() {
+        return stdout
+      },
+    }
+
+    const shared = { patterns: ["/tmp/outside/*"] }
+    const done = Rpc.listenStdio(
+      {
+        async emitShared() {
+          Rpc.emit("shared", { first: shared, second: shared })
+          return "ok"
+        },
+      },
+      {
+        stdin: stdin as unknown as Pick<NodeJS.ReadStream, "on" | "setEncoding">,
+        stdout: stdout as unknown as Pick<NodeJS.WriteStream, "write" | "on">,
+      },
+    )
+
+    stdin.emit("data", JSON.stringify({ type: "rpc.request", method: "emitShared", id: 9 }) + "\n")
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    stdin.emit("close")
+    await done
+
+    // The old WeakSet replacer collapsed `second` to "[Circular]"; the
+    // two-tier stringify keeps both copies intact.
+    const parsed = writes.map((line) => JSON.parse(line))
+    expect(parsed).toContainEqual({
+      type: "rpc.event",
+      event: "shared",
+      data: {
+        first: { patterns: ["/tmp/outside/*"] },
+        second: { patterns: ["/tmp/outside/*"] },
+      },
+    })
+    expect(parsed).toContainEqual({ type: "rpc.result", result: "ok", id: 9 })
+  })
+
+  test("emit still emits when the payload contains a true cycle", async () => {
+    const stdin = new EventEmitter() as EventEmitter & { setEncoding: (encoding: BufferEncoding) => typeof stdin }
+    stdin.setEncoding = () => stdin
+    const writes: string[] = []
+    const stdout = {
+      write(line: string) {
+        writes.push(line)
+        return true
+      },
+      on() {
+        return stdout
+      },
+    }
+
+    const done = Rpc.listenStdio(
+      {
+        async emitCyclic() {
+          const data: Record<string, unknown> = { count: 7 }
+          data.self = data
+          Rpc.emit("cyclic", data)
+          return "ok"
+        },
+      },
+      {
+        stdin: stdin as unknown as Pick<NodeJS.ReadStream, "on" | "setEncoding">,
+        stdout: stdout as unknown as Pick<NodeJS.WriteStream, "write" | "on">,
+      },
+    )
+
+    stdin.emit("data", JSON.stringify({ type: "rpc.request", method: "emitCyclic", id: 10 }) + "\n")
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    stdin.emit("close")
+    await done
+
+    const parsed = writes.map((line) => JSON.parse(line))
+    expect(parsed).toContainEqual({
+      type: "rpc.event",
+      event: "cyclic",
+      data: { count: 7, self: "[Circular]" },
+    })
+    expect(parsed).toContainEqual({ type: "rpc.result", result: "ok", id: 10 })
+  })
 })
