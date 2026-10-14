@@ -984,6 +984,11 @@ export namespace LSPClient {
             }
             wait?.start()
             files[normalized] = 0
+            // The server has never seen this document, so its content is
+            // workspace state it lacked: with no file watcher subscribed, this
+            // is the only channel that tells the references cache its answers
+            // may have changed.
+            noteWorkspaceChange()
             invalidateDiagnostics()
             setLastContent(normalized, text)
             if (input.waitForDiagnostics) await refreshDiagnostics(normalized)

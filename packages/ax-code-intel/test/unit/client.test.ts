@@ -9,6 +9,7 @@ import { Instance, Log, tmpdir } from "../harness"
 import { LSPClient } from "../../src/client"
 import { LSPServer } from "../../src/server"
 import { Filesystem } from "../../src/internal/filesystem"
+import * as LSPCacheContext from "../../src/cache-context"
 
 // Minimal fake LSP server that speaks JSON-RPC over stdio
 function spawnFakeServer(env?: Record<string, string>) {
@@ -139,6 +140,33 @@ describe("LSPClient interop", () => {
 
         await client.notify.open(input)
         expect(input.path).toBe(file)
+
+        await client.shutdown()
+      },
+    })
+  })
+
+  test("opening a document bumps the references cache generation", async () => {
+    await using tmp = await tmpdir()
+    const file = "file.ts"
+    await fs.writeFile(path.join(tmp.path, file), "export const x = 1\n")
+    const handle = spawnFakeServer() as any
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const client = await LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: tmp.path,
+        })
+
+        const before = await LSPCacheContext.contextFor("references")
+        await client.notify.open({ path: file })
+        // A document the server had never seen is workspace content it lacked:
+        // with no file watcher running, this is the only channel that can tell
+        // the references cache its answers may have changed.
+        expect(await LSPCacheContext.contextFor("references")).not.toBe(before)
 
         await client.shutdown()
       },
