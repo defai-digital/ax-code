@@ -662,6 +662,12 @@ export class CliLanguageModel implements LanguageModelV3 {
         const finishSuccess = () => {
           // Wait for stderr too so empty-output failures can include stderr detail.
           if (!stdoutEnded || !stderrEnded || exitCode === undefined || exitCode !== 0 || closed()) return
+          // The caller cancelled: a CLI that traps the signal and exits 0 must
+          // not be reported as a completed model turn.
+          if (abort.isAborted) {
+            fail(abort.abortError)
+            return
+          }
           if (!output.join("").trim()) {
             fail(new Error(formatCliNoOutput(Buffer.from(raw.join("")), Buffer.concat(stderrRaw))))
             return

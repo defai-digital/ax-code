@@ -313,6 +313,65 @@ describe("CliLanguageModel", () => {
     }
   })
 
+  test("doStream reports abort, not a successful finish, when a cancelled CLI exits 0", async () => {
+    const outer = new AbortController()
+    const stdout = new PassThrough()
+    const stderr = new PassThrough()
+    let resolveExit!: (code: number) => void
+    const exited = new Promise<number>((resolve) => {
+      resolveExit = resolve
+    })
+    const spawn = vi.spyOn(Process, "spawn").mockReturnValue({
+      stdout,
+      stderr,
+      exited,
+      exitCode: null,
+      signalCode: null,
+      kill: () => true,
+      pid: 4242,
+      stdin: null,
+    } as any)
+    const shellKill = vi.spyOn(Shell, "killTree").mockResolvedValue(undefined as never)
+
+    try {
+      const model = makeModel({
+        binary: "echo",
+        args: [],
+        parser: { parseComplete: () => ({ text: "" }), parseStreamLine: (line: string) => line.trim() || null },
+      })
+      const { stream } = await model.doStream({
+        prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+        abortSignal: outer.signal,
+      })
+
+      // The caller cancels while the CLI is still finishing; the CLI then
+      // traps the signal and exits cleanly with code 0.
+      outer.abort()
+      stdout.write("partial output\n")
+      stdout.end()
+      stderr.end()
+      resolveExit(0)
+
+      const parts: any[] = []
+      const reader = stream.getReader()
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        parts.push(value)
+      }
+
+      expect(parts.some((part) => part.type === "finish")).toBe(false)
+      const errorPart = parts.find((part) => part.type === "error")
+      expect(errorPart).toBeDefined()
+      expect((errorPart.error as Error).name).toBe("AbortError")
+    } finally {
+      spawn.mockRestore()
+      shellKill.mockRestore()
+      stdout.destroy()
+      stderr.destroy()
+    }
+  })
+
   test("doGenerate throws on non-zero exit with no output", async () => {
     const model = makeModel({
       binary: "false",
