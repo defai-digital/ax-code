@@ -5,6 +5,7 @@ import { Log } from "./log"
 import { sleep } from "./timeout"
 import {
   createProcessLockBody,
+  isSameProcessLockBody,
   isSameProcessLockHost,
   parseProcessLockBody,
   type ProcessLockBody,
@@ -39,7 +40,7 @@ const POLL_INTERVAL_MS = 50
 const EMPTY_LOCK_GRACE_MS = 60 * 1000
 
 export namespace FileLock {
-  async function writeLockFile(target: string): Promise<void> {
+  async function writeLockFile(target: string): Promise<ProcessLockBody> {
     const body: ProcessLockBody = createProcessLockBody()
     const handle = await fs.open(target, "wx")
     try {
@@ -55,6 +56,7 @@ export namespace FileLock {
     } finally {
       await handle.close()
     }
+    return body
   }
 
   async function readLockBody(target: string): Promise<ProcessLockBody | undefined> {
@@ -132,24 +134,20 @@ export namespace FileLock {
   // process holds it.
   async function attempt(target: string, staleMs: number, signal?: AbortSignal): Promise<Disposable | undefined> {
     signal?.throwIfAborted()
-    const created = await writeLockFile(target)
-      .then(() => true)
-      .catch((err: NodeJS.ErrnoException) => {
-        if (err?.code === "EEXIST") return false
-        throw err
-      })
-    if (created) return acquired(target, signal)
+    const created = await writeLockFile(target).catch((err: NodeJS.ErrnoException) => {
+      if (err?.code === "EEXIST") return undefined
+      throw err
+    })
+    if (created) return acquired(target, created, signal)
 
     signal?.throwIfAborted()
     const stolen = await maybeSteal(target, staleMs)
     if (!stolen) return undefined
-    const retry = await writeLockFile(target)
-      .then(() => true)
-      .catch((err: NodeJS.ErrnoException) => {
-        if (err?.code === "EEXIST") return false
-        throw err
-      })
-    return retry ? acquired(target, signal) : undefined
+    const retry = await writeLockFile(target).catch((err: NodeJS.ErrnoException) => {
+      if (err?.code === "EEXIST") return undefined
+      throw err
+    })
+    return retry ? acquired(target, retry, signal) : undefined
   }
 
   /**
@@ -199,8 +197,8 @@ export namespace FileLock {
     }
   }
 
-  function acquired(target: string, signal?: AbortSignal): Disposable {
-    const lock = makeDisposable(target)
+  function acquired(target: string, owner: ProcessLockBody, signal?: AbortSignal): Disposable {
+    const lock = makeDisposable(target, owner)
     if (signal?.aborted) {
       lock[Symbol.dispose]()
       signal.throwIfAborted()
@@ -208,7 +206,7 @@ export namespace FileLock {
     return lock
   }
 
-  function makeDisposable(target: string): Disposable {
+  function makeDisposable(target: string, owner: ProcessLockBody): Disposable {
     let disposed = false
     return {
       // Symbol.dispose is a synchronous protocol — using fs.unlink (async)
@@ -221,7 +219,12 @@ export namespace FileLock {
         disposed = true
         try {
           const body = readLockBodySync(target)
-          if (body?.pid === process.pid && isSameProcessLockHost(body)) {
+          // Compare with the body this acquisition wrote, not with the ambient
+          // host name: a hostname change while the lock is held would
+          // otherwise skip the unlink, and `disposed` is already set so the
+          // release can never be retried — the path then stays blocked for the
+          // whole stale window.
+          if (body && isSameProcessLockBody(body, owner)) {
             unlinkSync(target)
           } else {
             log.warn("skipping file lock release after ownership changed", { target, ownerPid: body?.pid })

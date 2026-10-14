@@ -33,6 +33,16 @@ export function isSameProcessLockHost(body: Pick<ProcessLockBody, "host">): bool
   return body.host === currentLockHost()
 }
 
+/**
+ * Identity of one acquisition. The recorded host is part of it: a lock body
+ * rewritten with a different `startedAt` is a different owner even from the
+ * same pid, so a release must compare against the body it wrote rather than
+ * against the ambient host name (which can change while the lock is held).
+ */
+export function isSameProcessLockBody(a: ProcessLockBody, b: ProcessLockBody): boolean {
+  return a.pid === b.pid && a.host === b.host && a.startedAt === b.startedAt
+}
+
 export function createProcessLockBody(): ProcessLockBody {
   return {
     pid: process.pid,

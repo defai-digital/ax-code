@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from "vitest"
 import path from "path"
+import os from "node:os"
 import fs from "fs/promises"
 import { FileLock } from "../../src/util/filelock"
 import { currentLockHost } from "../../src/util/process-lock"
@@ -44,6 +45,31 @@ describe("util.filelock", () => {
 
     const lock = await FileLock.acquire(filepath)
     lock[Symbol.dispose]()
+
+    expect(
+      await fs.access(lockpath).then(
+        () => true,
+        () => false,
+      ),
+    ).toBe(false)
+  })
+
+  test("releases the lock after the host name changes mid-hold", async () => {
+    await using tmp = await tmpdir()
+    const filepath = path.join(tmp.path, "state.json")
+    const lockpath = filepath + ".lock"
+    const lock = await FileLock.acquire(filepath)
+
+    // The released body is unchanged, so the lock is still ours; comparing the
+    // recorded host against the *current* host name would skip the unlink and
+    // leave the path blocked for the whole stale window (8h for the index
+    // lock), with `disposed` already set so it can never be retried.
+    const hostSpy = vi.spyOn(os, "hostname").mockReturnValue("renamed-host")
+    try {
+      lock[Symbol.dispose]()
+    } finally {
+      hostSpy.mockRestore()
+    }
 
     expect(
       await fs.access(lockpath).then(
