@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { writeFile, readFile } from "node:fs/promises"
+import { writeFile, readFile, chmod } from "node:fs/promises"
 import path from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
 import { tmpdir } from "../fixture/fixture"
@@ -347,5 +347,27 @@ describe("Format", () => {
         await expect(Format.status()).resolves.toEqual(expect.any(Array))
       },
     })
+  })
+
+  test.skipIf(process.platform === "win32")("status() tolerates an unreadable ruff config instead of rejecting", async () => {
+    await using tmp = await tmpdir()
+    // ruff.enabled() reads pyproject.toml to look for [tool.ruff]; an
+    // unreadable file used to throw out of enabled() and reject status().
+    const config = path.join(tmp.path, "pyproject.toml")
+    await writeFile(config, "[tool.ruff]\n")
+    await chmod(config, 0)
+    const whichSpy = vi.spyOn(Which, "which").mockReturnValue("/usr/local/bin/ruff")
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await expect(Format.status()).resolves.toEqual(expect.any(Array))
+        },
+      })
+    } finally {
+      whichSpy.mockRestore()
+      await chmod(config, 0o600).catch(() => undefined)
+    }
   })
 })

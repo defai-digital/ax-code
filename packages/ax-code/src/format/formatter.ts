@@ -26,6 +26,18 @@ async function readManifest<T extends object>(file: string): Promise<Partial<T>>
   return value && typeof value === "object" ? (value as Partial<T>) : {}
 }
 
+/**
+ * Read a text file for formatter detection, treating an unreadable one (e.g.
+ * EACCES) as empty. Like readManifest, this keeps one bad file from throwing
+ * out of `enabled()` and 500ing Format.status().
+ */
+async function readTextForDetection(file: string): Promise<string> {
+  return Filesystem.readText(file).catch((error) => {
+    log.warn("failed to read file for formatter detection", { file, error })
+    return ""
+  })
+}
+
 // Run a registry-published formatter by name: `bun x <tool>` on a Bun runtime,
 // `npx --yes <tool>` on the Node runtime (where BunProc.which() would resolve
 // to `node`, making `node x <tool>` meaningless).
@@ -249,7 +261,7 @@ export const ruff: Info = {
       const found = await Filesystem.findUp(config, Instance.directory, Instance.worktree)
       if (found.length > 0) {
         if (config === "pyproject.toml") {
-          const content = await Filesystem.readText(found[0])
+          const content = await readTextForDetection(found[0])
           if (content.includes("[tool.ruff]")) return true
         } else {
           return true
@@ -260,7 +272,7 @@ export const ruff: Info = {
     for (const dep of deps) {
       const found = await Filesystem.findUp(dep, Instance.directory, Instance.worktree)
       if (found.length > 0) {
-        const content = await Filesystem.readText(found[0])
+        const content = await readTextForDetection(found[0])
         if (content.includes("ruff")) return true
       }
     }
