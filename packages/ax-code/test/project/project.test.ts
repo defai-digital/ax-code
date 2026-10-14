@@ -145,6 +145,20 @@ describe("Project.fromDirectory", () => {
     expect(project.id).not.toBe("")
   })
 
+  test("ignores a cached project ID containing path traversal", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const escaping = "../../../../escaped-worktree"
+    await fs.writeFile(path.join(tmp.path, ".git", "ax-code"), escaping)
+
+    const { project } = await Project.fromDirectory(tmp.path)
+
+    // The cached file is attacker-influenced; a path-like id would escape the
+    // data directory when joined into snapshot/worktree paths, so it is ignored
+    // in favor of the derived root-commit id.
+    expect(project.id).not.toBe(escaping)
+    expect(project.id).toMatch(/^[0-9a-f]{40}$/)
+  })
+
   test("propagates error when startup persistence is read-only", async () => {
     await using tmp = await tmpdir({ git: true })
     const originalUse = Database.use

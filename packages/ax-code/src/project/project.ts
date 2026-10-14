@@ -132,6 +132,17 @@ export namespace Project {
     return ProjectID.make(`dir-${hash}`)
   }
 
+  /**
+   * A derived project id is `global`, `dir-<sha1>`, or a root commit sha. The
+   * cached `.git/ax-code` id is attacker-influenced (an archived/committed
+   * .git or an agent write), so it must be a bare token: an id with a path
+   * separator or a leading dot escapes the data directory once joined into the
+   * snapshot/worktree paths.
+   */
+  function isSafeProjectId(id: string) {
+    return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id)
+  }
+
   function shouldClaimGlobalSessionDirectory(worktree: string, directory: string) {
     if (!directory) return false
     return Filesystem.contains(worktree, directory)
@@ -174,7 +185,12 @@ export namespace Project {
     return Filesystem.readText(path.join(dir, "ax-code"))
       .then((text) => {
         const id = text.trim()
-        return id ? ProjectID.make(id) : undefined
+        if (!id) return undefined
+        if (!isSafeProjectId(id)) {
+          log.warn("ignoring unsafe cached project id", { dir })
+          return undefined
+        }
+        return ProjectID.make(id)
       })
       .catch(() => undefined)
   }
