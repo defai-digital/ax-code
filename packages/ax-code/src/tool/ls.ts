@@ -170,7 +170,13 @@ export const ListTool = Tool.define("list", {
       return output
     }
 
-    const output = `${searchPath}/\n` + renderDir(".", 0)
+    const listing = `${searchPath}/\n` + renderDir(".", 0)
+    // The model sees only the returned `output`, not `metadata`, so the cap
+    // must be named here: otherwise a >LIMIT directory looks complete and a
+    // missing entry is read as nonexistent. Matches glob/grep's notice.
+    const output = truncated
+      ? `${listing}(Listing truncated: showing first ${LIMIT} entries. Narrow the path or pass ignore glob patterns.)\n`
+      : listing
 
     const title = normalizeToWorkspacePath(searchPath, Instance.worktree)
 

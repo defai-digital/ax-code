@@ -112,4 +112,29 @@ describe("tool.list", () => {
       },
     })
   })
+
+  test("names the entry cap in the model-visible output", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Promise.all(
+          Array.from({ length: 150 }, (_, i) =>
+            fs.writeFile(path.join(dir, `file-${String(i).padStart(3, "0")}.txt`), "x"),
+          ),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const list = await ListTool.init()
+        const result = await list.execute({}, ctx)
+
+        expect(result.metadata.truncated).toBe(true)
+        // The model sees only `output`, not `metadata`, so an unnamed cap would
+        // read as a complete listing.
+        expect(result.output).toContain("Listing truncated: showing first 100 entries")
+      },
+    })
+  })
 })
