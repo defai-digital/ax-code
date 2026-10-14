@@ -6,8 +6,25 @@ import { Filesystem } from "../util/filesystem"
 import { Process } from "../util/process"
 import { which } from "../util/which"
 import { Flag } from "@/flag/flag"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "format.formatter" })
 
 const HELP_CHECK_TIMEOUT_MS = 5_000
+
+/**
+ * Read a manifest for formatter detection, skipping an unreadable or malformed
+ * one (including a JSON `null` body). A single broken package.json/composer.json
+ * must not throw out of `enabled()`, which would abort the whole formatter set —
+ * `Format.status()` would 500 and format-on-save would silently stop.
+ */
+async function readManifest<T extends object>(file: string): Promise<Partial<T>> {
+  const value = await Filesystem.readJson<unknown>(file).catch((error) => {
+    log.warn("failed to read manifest for formatter detection", { file, error })
+    return undefined
+  })
+  return value && typeof value === "object" ? (value as Partial<T>) : {}
+}
 
 // Run a registry-published formatter by name: `bun x <tool>` on a Bun runtime,
 // `npx --yes <tool>` on the Node runtime (where BunProc.which() would resolve
@@ -118,7 +135,7 @@ export const prettier: Info = {
   async enabled() {
     const items = await Filesystem.findUp("package.json", Instance.directory, Instance.worktree)
     for (const item of items) {
-      const json = await Filesystem.readJson<{
+      const json = await readManifest<{
         dependencies?: Record<string, string>
         devDependencies?: Record<string, string>
       }>(item)
@@ -138,7 +155,7 @@ export const oxfmt: Info = {
     if (!Flag.AX_CODE_EXPERIMENTAL_OXFMT) return false
     const items = await Filesystem.findUp("package.json", Instance.directory, Instance.worktree)
     for (const item of items) {
-      const json = await Filesystem.readJson<{
+      const json = await readManifest<{
         dependencies?: Record<string, string>
         devDependencies?: Record<string, string>
       }>(item)
@@ -398,7 +415,7 @@ export const pint: Info = {
   async enabled() {
     const items = await Filesystem.findUp("composer.json", Instance.directory, Instance.worktree)
     for (const item of items) {
-      const json = await Filesystem.readJson<{
+      const json = await readManifest<{
         require?: Record<string, string>
         "require-dev"?: Record<string, string>
       }>(item)

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { writeFile, readFile } from "node:fs/promises"
+import path from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
 import { tmpdir } from "../fixture/fixture"
 import { Bus } from "../../src/bus"
@@ -332,5 +333,19 @@ describe("Format", () => {
       killProcessTreeSpy.mockRestore()
       globalThis.setTimeout = originalSetTimeout
     }
+  })
+
+  test("status() tolerates a malformed package.json instead of rejecting", async () => {
+    await using tmp = await tmpdir()
+    // prettier.enabled() findUps package.json; an unparseable one used to throw
+    // out of enabled(), so status() rejected (500) and format-on-save stopped.
+    await writeFile(path.join(tmp.path, "package.json"), "{ not valid json")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(Format.status()).resolves.toEqual(expect.any(Array))
+      },
+    })
   })
 })
