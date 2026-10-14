@@ -188,4 +188,30 @@ describe("util.filelock", () => {
       nowSpy.mockRestore()
     }
   })
+
+  test("does not leave an empty lockfile behind when the owner body cannot be written", async () => {
+    await using tmp = await tmpdir()
+    const filepath = path.join(tmp.path, "state.json")
+
+    const openSpy = vi.spyOn(fs, "open").mockImplementationOnce(async (...args: Parameters<typeof fs.open>) => {
+      const handle = await fs.open(...args)
+      handle.writeFile = async () => {
+        throw Object.assign(new Error("no space left on device"), { code: "ENOSPC" })
+      }
+      return handle
+    })
+    try {
+      await expect(FileLock.acquire(filepath, { timeoutMs: 200 })).rejects.toThrow("no space left on device")
+    } finally {
+      openSpy.mockRestore()
+    }
+
+    // The exclusive create already reserved the path. Nothing ever wrote an
+    // owner body, and an empty lockfile may not be stolen for
+    // EMPTY_LOCK_GRACE_MS, so the failed create must not block the next
+    // acquirer for a minute.
+    const lock = await FileLock.tryAcquire(filepath)
+    expect(lock).toBeDefined()
+    lock?.[Symbol.dispose]()
+  })
 })

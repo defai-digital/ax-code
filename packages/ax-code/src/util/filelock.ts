@@ -44,6 +44,14 @@ export namespace FileLock {
     const handle = await fs.open(target, "wx")
     try {
       await handle.writeFile(JSON.stringify(body))
+    } catch (error) {
+      // The exclusive create already reserved the path. A body write that
+      // fails (ENOSPC, EIO) would otherwise leave an empty lockfile that no
+      // other process may steal for EMPTY_LOCK_GRACE_MS, blocking the path
+      // long after the failure. The file is still empty, so nobody else can
+      // have taken ownership in between.
+      await fs.unlink(target).catch(() => undefined)
+      throw error
     } finally {
       await handle.close()
     }
