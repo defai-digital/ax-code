@@ -1,7 +1,7 @@
 import { Hono } from "hono"
 import { describeRoute, resolver } from "hono-openapi"
 import { validator } from "../validation"
-import { NamedError } from "@ax-code/util/error"
+import { HTTPException } from "hono/http-exception"
 import { Filesystem } from "@/util/filesystem"
 import { InstructionPrompt } from "@/session/instruction"
 import * as MemoryStore from "@/memory/store"
@@ -105,9 +105,10 @@ export const AppContextRoutes = lazy(() =>
         const key = c.req.valid("json").key
         const item = contextTemplates({ root, dir }).find((template) => template.key === key)
         if (!item) {
-          throw new NamedError.Unknown({
-            message: `Unknown project context template: ${key}`,
-          })
+          // The request enum accepts every template key, but "dir-rules" only
+          // exists when dir differs from root. Report a client error instead of
+          // an internal 500 for a key that is valid but not available here.
+          throw new HTTPException(400, { message: `Unknown project context template: ${key}` })
         }
 
         if (!(await Filesystem.exists(item.path))) {

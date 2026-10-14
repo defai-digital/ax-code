@@ -95,6 +95,23 @@ test("context checks surface unreadable Makefiles", async () => {
   }
 })
 
+test("POST /context/template returns 400 for dir-rules when the directory is the root", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  // "dir-rules" is in the request enum but only available when the active
+  // directory differs from the root; the unavailable key is a client error,
+  // not an internal 500.
+  const response = await Server.Default().request(directoryUrl("/context/template", tmp.path), {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ key: "dir-rules" }),
+  })
+  expect(response.status).toBe(400)
+  expect(await response.json()).toMatchObject({ name: "InvalidRequestError", status: 400 })
+})
+
 test("POST /context/template creates the requested context template", async () => {
   await using tmp = await tmpdir({ git: true })
 
