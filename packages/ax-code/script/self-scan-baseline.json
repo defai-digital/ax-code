@@ -26,8 +26,8 @@
         {
           "fingerprint": "49cf239d908d2e0b51d0366e5950eba42705206cb278f7c16cb0e1a0e34d141c",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 691,
-          "endLine": 698,
+          "line": 693,
+          "endLine": 700,
           "severity": "high",
           "kind": "toctou",
           "summary": "toctou"
@@ -276,7 +276,7 @@
         {
           "fingerprint": "79a049536518c129ca72f6e362f69a678348f00f3957474dfe0735a96962c096",
           "file": "src/tuimcp/mcp-server.ts",
-          "line": 68,
+          "line": 77,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -284,7 +284,7 @@
         {
           "fingerprint": "62d86296155c99bd5eeefe1932976422e568077ce76876dfba0931ecf6d754ae",
           "file": "src/tuimcp/mcp-server.ts",
-          "line": 69,
+          "line": 78,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -292,7 +292,7 @@
         {
           "fingerprint": "21d064c27afff97754d365d79dcf45fd56b9dcf1304570dbafa033d1ceb480f7",
           "file": "src/tuimcp/mcp-server.ts",
-          "line": 70,
+          "line": 79,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -300,7 +300,7 @@
         {
           "fingerprint": "7b5f8dfdf4cb78e9312e8166d868190f5824c05c6decdd3934d68fb751565bc4",
           "file": "src/tuimcp/mcp-server.ts",
-          "line": 71,
+          "line": 80,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -316,7 +316,7 @@
       ]
     },
     "lifecycle_scan": {
-      "count": 206,
+      "count": 210,
       "findings": [
         {
           "fingerprint": "a7c13622ba7e0d28b7440aa5beab525b97481bf7e13bbae3815fdbbbd7e01e47",
@@ -489,7 +489,7 @@
         {
           "fingerprint": "d59deefdfb2a0775af8aa7e7fbc8e74e490a80b77680ad2a113b24afbffbf8a7",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 532,
+          "line": 534,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -497,7 +497,7 @@
         {
           "fingerprint": "205ae80d3cc4e55b0beadb36e9dcbe9cf42c44a6063964169019dfc79874e990",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 916,
+          "line": 919,
           "severity": "high",
           "kind": "child_process:no_cleanup",
           "summary": "child_process:no_cleanup"
@@ -857,7 +857,7 @@
         {
           "fingerprint": "f7f85228f73227b399ef131defab79db4ffdd962f88f84db03c17bc071db9687",
           "file": "src/cli/tui/app-commands.ts",
-          "line": 1042,
+          "line": 1048,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -865,15 +865,15 @@
         {
           "fingerprint": "cf98cf181c84105cf20e87ee19624adb1c6ffae08067b9d82bafacb1ccf10e75",
           "file": "src/cli/tui/component/atmos-paint.ts",
-          "line": 63,
+          "line": 75,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "c17ed0779237dc66ea414b84fd6bccf056a94957f8f7d166e18a93ef7b3c8356",
-          "file": "src/cli/tui/component/aurora-pixels.ts",
-          "line": 162,
+          "fingerprint": "46a4ad48fa1460ffd7cf90bba49321b2fea01909f025cbf6148462b778ee5084",
+          "file": "src/cli/tui/component/aurora-view-model.ts",
+          "line": 82,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -881,7 +881,7 @@
         {
           "fingerprint": "9b2ac8f1d47f701317b7746f67871415f3d8651a284d494bd88917153a73bc26",
           "file": "src/cli/tui/component/balloons-pixels.ts",
-          "line": 121,
+          "line": 172,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -889,7 +889,7 @@
         {
           "fingerprint": "0ca75cae24a6f6fa368fdc0c2277dc23a7ccfca60d72dd05d9bd615943ec231d",
           "file": "src/cli/tui/component/bench-pixels.ts",
-          "line": 111,
+          "line": 209,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -897,7 +897,7 @@
         {
           "fingerprint": "0f23503f24005253b0d1c1d4c230ac07839b4436d156af46f8543928f4f2af8a",
           "file": "src/cli/tui/component/bigben-pixels.ts",
-          "line": 143,
+          "line": 142,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -905,7 +905,15 @@
         {
           "fingerprint": "64152cb312a2ab05d6edd705e13ddec3a26a06f3a10e6fd7b143c3226a4231ec",
           "file": "src/cli/tui/component/borobudur-pixels.ts",
-          "line": 102,
+          "line": 115,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "f8c15fc363e5014bcb285cbffd826b6fad97e00597f59daa651378b999fcd9d5",
+          "file": "src/cli/tui/component/borobudur-view-model.ts",
+          "line": 88,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -921,7 +929,7 @@
         {
           "fingerprint": "b8d6c8745acd4b20b40339d574bbced269c50e956ddf9d89f4669cf60282e407",
           "file": "src/cli/tui/component/canyon-pixels.ts",
-          "line": 174,
+          "line": 220,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -954,6 +962,14 @@
           "fingerprint": "3d67ddbd8bc373d277b1f39f3536f9bb35bf438e38e84344ff1cbb8ffbfc81d1",
           "file": "src/cli/tui/component/corcovado-pixels.ts",
           "line": 149,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "0b3867c036df70fb1e0fa8362ec3116786efebbe8411ec1b4f76975730044bed",
+          "file": "src/cli/tui/component/corcovado-view-model.ts",
+          "line": 81,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1033,7 +1049,7 @@
         {
           "fingerprint": "a28bcb3cf6e870e81d9623773eb28344f8d781dc5849027421e2be23ebaea7d1",
           "file": "src/cli/tui/component/eiffel-pixels.ts",
-          "line": 85,
+          "line": 103,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1041,7 +1057,7 @@
         {
           "fingerprint": "c0e62212f0f94bfb8136b5cce321c9210737b32b0efc626156f95d529d0d2934",
           "file": "src/cli/tui/component/falls-pixels.ts",
-          "line": 334,
+          "line": 430,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1057,7 +1073,15 @@
         {
           "fingerprint": "edb7a46bb1dc1e4ef663744c6126937ca190357e58561f3148b6b4e33bd5461f",
           "file": "src/cli/tui/component/fuji-pixels.ts",
-          "line": 116,
+          "line": 111,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "27c7d9fbae936723f07deade56404f91d7d17dfb31dc672d6dadb120da620d29",
+          "file": "src/cli/tui/component/greatwall-view-model.ts",
+          "line": 86,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1065,15 +1089,7 @@
         {
           "fingerprint": "70d0b68c29313f6fec7c878040298847c15d77203cd072724298211af6b6d8bd",
           "file": "src/cli/tui/component/islands-pixels.ts",
-          "line": 115,
-          "severity": "medium",
-          "kind": "map_growth:unbounded_growth",
-          "summary": "map_growth:unbounded_growth"
-        },
-        {
-          "fingerprint": "0ad1738a81b19c3caaf935529ec3aebc2d3231d082a066d85f150e49d9a4bcc2",
-          "file": "src/cli/tui/component/jungle-pixels.ts",
-          "line": 113,
+          "line": 133,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1089,7 +1105,7 @@
         {
           "fingerprint": "6c1dace550e0f054b606a62e95dc884586cc3cf0e332b427dc03244d5e7f0cff",
           "file": "src/cli/tui/component/mahjong-pixels.ts",
-          "line": 404,
+          "line": 449,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1119,17 +1135,9 @@
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "7487e89892f22fc72c8e1676b3002bf3588bb7cbb36d440d2878b114fd8f9f2d",
-          "file": "src/cli/tui/component/pyramids-pixels.ts",
-          "line": 170,
-          "severity": "medium",
-          "kind": "map_growth:unbounded_growth",
-          "summary": "map_growth:unbounded_growth"
-        },
-        {
           "fingerprint": "5670e171852db071020a989ab8dd6b26d52d3ca7c3d96641585a2c808874892c",
           "file": "src/cli/tui/component/reef-pixels.ts",
-          "line": 127,
+          "line": 348,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1143,17 +1151,41 @@
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "03e38e2faa4214e4264817d61f02007e01c08f5d4ae77f242aaae39d2f04ef11",
-          "file": "src/cli/tui/component/scene-art-kit.ts",
-          "line": 127,
+          "fingerprint": "cd5389a01d40bf922c4d59cbcde7ff7c3890734b152e4c055fb8934fd398ed1c",
+          "file": "src/cli/tui/component/sanguozhi-pixels.ts",
+          "line": 190,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "410bc0b4837e476f3b1b8edc7cad962bf08c095540290613aaff95a062a2fdaa",
+          "fingerprint": "6aaf85f3ea5aa3727ac8d198d66772f755fdfe649281f6417ed7e84c79bfe4ea",
+          "file": "src/cli/tui/component/sanguozhi-pixels.ts",
+          "line": 375,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "bbd91ca3bf3d562eb510612627d80137e0448a853d25d610e7f386d8ab9bcf40",
+          "file": "src/cli/tui/component/sanguozhi-pixels.ts",
+          "line": 571,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "03e38e2faa4214e4264817d61f02007e01c08f5d4ae77f242aaae39d2f04ef11",
+          "file": "src/cli/tui/component/scene-art-kit.ts",
+          "line": 137,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "4506b0fbc8c97c8e915a7ccf746dcc34c1292206ecca1028c3d7410f7d173e74",
           "file": "src/cli/tui/component/snow-pixels.ts",
-          "line": 148,
+          "line": 263,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1161,7 +1193,7 @@
         {
           "fingerprint": "b5e472fcb9e7679d11024945fa32a6c54212132d606d565eee23cada25234adc",
           "file": "src/cli/tui/component/space-pixels.ts",
-          "line": 97,
+          "line": 136,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1169,7 +1201,7 @@
         {
           "fingerprint": "7976d527c35a1fd28e5b5ec8017382bf7f31f484cd93cd4ac0a8d0242f66a8dc",
           "file": "src/cli/tui/component/steppe-pixels.ts",
-          "line": 34,
+          "line": 35,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1191,17 +1223,17 @@
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "4a3fd413a005717d87e0f86a72c38e2bc40b982194661d6f23f0121bd07e9cc6",
+          "fingerprint": "f24fd4da46c3903ba33a8f28d23912812c554d4931dab4847ef78de44645f2f3",
           "file": "src/cli/tui/component/torii-pixels.ts",
-          "line": 131,
+          "line": 280,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "431198840a8e319c9f02f78ddda01908d2c20f33a7f9d3301dc3175e245f019f",
+          "fingerprint": "29af89e4da9846258c005c393abf40cfa35c216132a939093637bed1a3eb2e4c",
           "file": "src/cli/tui/component/volcano-pixels.ts",
-          "line": 93,
+          "line": 232,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1481,7 +1513,7 @@
         {
           "fingerprint": "beaf502ea19ee215d0e8b1bd0929e0da07da9f4bc46cd1fe1ca4faeaca0d94e4",
           "file": "src/mcp/tool-conversion.ts",
-          "line": 185,
+          "line": 190,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1489,7 +1521,7 @@
         {
           "fingerprint": "77a2cfd9744fa4c7654abdc1667c12c1334fd6937679a9a701d4faf01d161966",
           "file": "src/mcp/tool-conversion.ts",
-          "line": 193,
+          "line": 198,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1577,7 +1609,7 @@
         {
           "fingerprint": "18bd52525aeee67ce476a8823018f783c5f85cbaebc7cb383290c834024810e7",
           "file": "src/provider/ax-engine/provider-loader.ts",
-          "line": 227,
+          "line": 228,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1585,7 +1617,7 @@
         {
           "fingerprint": "db39b64c07a2e452b6401b50891ab5f75a5cad589180e0efa1b9e2e2b90c1f7c",
           "file": "src/provider/ax-engine/provider-loader.ts",
-          "line": 347,
+          "line": 348,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1593,7 +1625,7 @@
         {
           "fingerprint": "4c29ce91f7286aafd67c68bb387b6bbc2bd074bdc25fe9550f9c396396aaaa2f",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 533,
+          "line": 535,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
@@ -1601,7 +1633,7 @@
         {
           "fingerprint": "7ada331ee17778c0dab3645d5874ede6160825e83f85f9fca4689093097c4f48",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 537,
+          "line": 539,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
@@ -1609,7 +1641,7 @@
         {
           "fingerprint": "c55c1157f2035311ffa452b6a22cd25297aed2f60dd5f2884f0520dcc9fe4cbe",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 540,
+          "line": 542,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
@@ -1980,9 +2012,9 @@
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "13117af79930b916bc4f612447693db707ccf17773d45dc67473a64e6c55dc44",
+          "fingerprint": "c00614f93d0b1ef7ede9f5f1bdbdde7cb6025fc558f3dbc70c8baeb03bd2691e",
           "file": "../ax-code-intel/src/index-impl.ts",
-          "line": 625,
+          "line": 636,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -1990,7 +2022,7 @@
         {
           "fingerprint": "53bdc931f33adc5a27d27f0fdc5da05733825d68d04011997bb1346ecba15fd3",
           "file": "../ax-code-intel/src/index-impl.ts",
-          "line": 815,
+          "line": 826,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -1998,7 +2030,7 @@
         {
           "fingerprint": "504bedf3ed7717dfe092c237e7fc0a71fd004fac5f7f0f12c991bc11c7d4b3fe",
           "file": "../ax-code-intel/src/index-impl.ts",
-          "line": 816,
+          "line": 827,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -2006,7 +2038,7 @@
         {
           "fingerprint": "ff3e6f510a89cd59425567a5d53d4ae7775fb0d76fae84163d38bf62ba21b9b8",
           "file": "../ax-code-intel/src/index-impl.ts",
-          "line": 817,
+          "line": 828,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -2014,7 +2046,7 @@
         {
           "fingerprint": "0676e100dad0cff305cf75b6814ad3376f9fae7b6bf93b9ab4e5368c324f64b5",
           "file": "../ax-code-intel/src/index-impl.ts",
-          "line": 852,
+          "line": 863,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -2022,7 +2054,7 @@
         {
           "fingerprint": "c65ca0c2907d67fba1979894817c3608b8730a65860512cfcedfa6b702eabe3a",
           "file": "../ax-code-intel/src/index-impl.ts",
-          "line": 919,
+          "line": 930,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -2302,7 +2334,7 @@
         {
           "fingerprint": "2d3e651dd5562d35afa42cd641c42e9550d96be1f650e3f2e50a8adbf7db53ee",
           "file": "../ax-code-reason/src/analyze-impact.ts",
-          "line": 88,
+          "line": 100,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3110,7 +3142,7 @@
         {
           "fingerprint": "90c120f1e12f25423a3c67d1115058cce70ef34a3b2f6c78183082fbf48e0fd3",
           "file": "src/cli/tui/context/local.tsx",
-          "line": 589,
+          "line": 597,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3374,7 +3406,7 @@
         {
           "fingerprint": "2cacc37008241c5145ba57953a4085fdf39469d9e1afaa209278d974e44f7c56",
           "file": "src/config/directory-scope-trust.ts",
-          "line": 16,
+          "line": 18,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3894,7 +3926,7 @@
         {
           "fingerprint": "0f34b735601b940b0117e883d3ba87e044e1946f4ae15ddcf1bf28830fa8fdcb",
           "file": "src/hooks/lifecycle.ts",
-          "line": 367,
+          "line": 373,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -4078,7 +4110,7 @@
         {
           "fingerprint": "9d262cb4652b0cebf072451dff8ff7504e5ea35f82e1aca2103f18f5d559d180",
           "file": "src/mcp/auth.ts",
-          "line": 36,
+          "line": 44,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -4126,7 +4158,7 @@
         {
           "fingerprint": "e8be0812465c83e5a3809fd76e307004d8af2aa512735b22313eda502454e2c1",
           "file": "src/mcp/impl.ts",
-          "line": 800,
+          "line": 829,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -4142,7 +4174,7 @@
         {
           "fingerprint": "4d24394b9043929cfad5e4830620f97fd3fdee7c920db1fbe9b85b81eb73ba1d",
           "file": "src/mcp/webmcp-profile.ts",
-          "line": 462,
+          "line": 566,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -4150,7 +4182,7 @@
         {
           "fingerprint": "185b25696478992166f092dc5f40ecc9f5abddeff2f61722ea5ae8bd4b6a9852",
           "file": "src/mcp/webmcp-profile.ts",
-          "line": 473,
+          "line": 578,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -4158,7 +4190,7 @@
         {
           "fingerprint": "9459a1fac1c35c001b3d4e74cc9ec0391bebb51730fb068db4f71ef1afb53ab8",
           "file": "src/mcp/webmcp-profile.ts",
-          "line": 537,
+          "line": 642,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -4166,7 +4198,7 @@
         {
           "fingerprint": "e6f6eb32d91a36a14dc7d1a91e061deacb39863ebd1a47eaf28074b7a966f0f0",
           "file": "src/mcp/webmcp-profile.ts",
-          "line": 565,
+          "line": 670,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -4294,7 +4326,7 @@
         {
           "fingerprint": "17bdbbe91ebdb778415b1d217b696070f4ca47236959d1847d5cb7c4900c3e65",
           "file": "src/permission/index.ts",
-          "line": 894,
+          "line": 931,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -4574,7 +4606,7 @@
         {
           "fingerprint": "c7b9557139894bee5629220979eb301ace44f8246ef6f504e3724d4fe767bf1f",
           "file": "src/provider/ax-engine/provider-loader.ts",
-          "line": 356,
+          "line": 357,
           "severity": "high",
           "kind": "ssrf",
           "summary": "ssrf"
@@ -5166,7 +5198,7 @@
         {
           "fingerprint": "cc74fcbf3a532f19876778088a9154e4a44cbe52a9ae1081d2d97bb3b676fca7",
           "file": "src/skill/index.ts",
-          "line": 289,
+          "line": 293,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5174,7 +5206,7 @@
         {
           "fingerprint": "3cabfaa0039b836a9ea50af78b9382f1e8360fc5d0b25174eb4002cf5c87ab5a",
           "file": "src/skill/index.ts",
-          "line": 339,
+          "line": 343,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5766,7 +5798,7 @@
         {
           "fingerprint": "cad229f1c4eadbf8d4600f2dc1ac2c8b9733fdfcb3bd3d853511297b023e8403",
           "file": "src/util/which.ts",
-          "line": 9,
+          "line": 8,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5774,7 +5806,7 @@
         {
           "fingerprint": "47e62be90155b2d7ff56de53907469b40ab752a8321cbca911766dd212ab02d8",
           "file": "src/util/which.ts",
-          "line": 10,
+          "line": 9,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5782,7 +5814,7 @@
         {
           "fingerprint": "16de4f30d33e8fdba7a5e7fef591aa287e783f044fa3b621a224700e41a17c57",
           "file": "src/util/which.ts",
-          "line": 11,
+          "line": 10,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -6049,9 +6081,9 @@
           "summary": "inline_secret_shape"
         },
         {
-          "fingerprint": "0cc60002f1ad71f4ca924a98e6f5c7afe33ffe261256682b776d9fc64164c452",
+          "fingerprint": "adb6d1c8a1725a36d3561221cbfc2bd6443d0763f57e5c3081920e5ea0a95bc6",
           "file": "src/mcp/webmcp-profile.ts",
-          "line": 468,
+          "line": 573,
           "severity": "high",
           "kind": "inline_secret_shape",
           "summary": "inline_secret_shape"
@@ -6059,7 +6091,7 @@
         {
           "fingerprint": "d8414493baab11c7df4bbaa1ed836a1d6549a0906c539b80a3324632c4a9c89d",
           "file": "src/mcp/webmcp-profile.ts",
-          "line": 599,
+          "line": 716,
           "severity": "high",
           "kind": "inline_secret_shape",
           "summary": "inline_secret_shape"
@@ -6147,7 +6179,7 @@
         {
           "fingerprint": "d82b0606d7f119dcdf2141ee24f640700a03fd573b69e538d6843a6c5346193d",
           "file": "src/graph/format.ts",
-          "line": 467,
+          "line": 470,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6155,7 +6187,7 @@
         {
           "fingerprint": "b9c26ea4f12eebb2d2a5615644a1cf5f3659cc3185152df875e73d16ec86ef41",
           "file": "src/graph/format.ts",
-          "line": 497,
+          "line": 500,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6187,7 +6219,7 @@
         {
           "fingerprint": "9f55825b3776c802f5a9db3603af1eb3a201fc2b62148981aa1b40596afa5d5d",
           "file": "src/mcp/impl.ts",
-          "line": 841,
+          "line": 870,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
