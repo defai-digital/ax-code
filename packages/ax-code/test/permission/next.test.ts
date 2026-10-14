@@ -506,6 +506,51 @@ test("reply - concurrent always and reject serialize instead of interleaving", a
   })
 })
 
+test("a persisted always grant cannot hide a current deny in the ruleset", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const sessionID = SessionID.make("ses_grant_vs_deny")
+      const ask = (ruleset: Permission.Ruleset) =>
+        Permission.ask({
+          sessionID,
+          permission: "bash",
+          patterns: ["git push origin main"],
+          metadata: {},
+          always: [],
+          ruleset,
+        })
+
+      // The user clicks "Always" on a git push prompt, persisting an allow rule.
+      const grant = Permission.ask({
+        sessionID,
+        permission: "bash",
+        patterns: ["git push origin main"],
+        metadata: {},
+        always: ["git push *"],
+        ruleset: [],
+      })
+      const [request] = await waitForPending(1)
+      await Permission.reply({ requestID: request.id, reply: "always" })
+      await grant
+      expect(
+        Database.use((db) =>
+          db.select().from(PermissionTable).where(eq(PermissionTable.project_id, Instance.project.id)).get(),
+        )?.data,
+      ).toContainEqual({ permission: "bash", pattern: "git push *", action: "allow" })
+
+      // The grant still auto-approves a later matching call...
+      await ask([])
+
+      // ...but a deny in the current ruleset always wins.
+      await expect(ask([{ permission: "bash", pattern: "git push *", action: "deny" }])).rejects.toBeInstanceOf(
+        Permission.DeniedError,
+      )
+    },
+  })
+})
+
 test("loadPolicy - malformed policy returns empty ruleset and does not block tools", async () => {
   // A parse error in policy.json means the restrictions are unknown, not
   // that everything should be denied. Returning [] (no policy) keeps the

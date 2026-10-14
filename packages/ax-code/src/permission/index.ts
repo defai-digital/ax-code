@@ -460,7 +460,11 @@ export namespace Permission {
     for (const pattern of request.patterns) {
       const rule = evaluate(request.permission, pattern, ruleset, approved)
       log.info("evaluated", { permission: request.permission, pattern, action: rule })
-      if (rule.action === "deny") {
+      // A persisted "Always" grant is appended after the caller ruleset, and
+      // evaluate() takes the last match, so it must never shadow a deny the
+      // current ruleset imposes (config, session, subagent constraints). A deny
+      // always wins — mirrors checkDenials below.
+      if (rule.action === "deny" || evaluate(request.permission, pattern, ruleset).action === "deny") {
         throw new DeniedError({
           ruleset: ruleset.filter((rule) => Wildcard.match(request.permission, rule.permission)),
           agent: input.agent,
