@@ -1,4 +1,5 @@
 import { blendPx, clamp01, glow, hash2, vrect } from "./atmos-paint"
+import { artLine, softDisk } from "./scene-art-kit"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type HdCanvas, type RGB } from "./scene-hd"
 import {
   STEPPE_COLORS,
@@ -263,75 +264,80 @@ export function renderSteppePixels(width: number, height: number, style: SteppeS
   const herd = steppeHerd(elapsed)
   herd.forEach((horse, hi) => {
     const hx = hd.X(horse.x + 1.0)
-    const y = hd.Y(STEPPE_GROUND_TOP - 1.4)
-    const L = Math.max(4, hd.cw * 2.3)
+    // The herd gallops through the foreground grass, in front of the ger
+    // rather than level with it, and fills the otherwise empty meadow. Every
+    // proportion derives from L (half the barrel length) so the horse keeps
+    // its anatomy at any raster size.
+    const hoof = hd.Y(STEPPE_GROUND_TOP + 2.4 + (hi % 2) * 1.2)
+    const L = Math.max(4, hd.cw * (1.55 + (hi % 2) * 0.2))
     const gait = Math.sin(theta * 6 + hi * 1.3)
-    const bob = gait * hd.ch * 0.05
-    const body = hd.ch * 0.34
-    glow(hd, hx, y + hd.ch * 0.95, L * 1.5, hdHex("#000000"), night ? 0.3 : 0.28, 0.1)
-    // Legs first so the body overlaps their tops.
-    for (const [lx, lph] of [
-      [-0.62, 0],
-      [-0.4, 2.1],
-      [0.42, 1],
-      [0.62, 3.1],
-    ] as const) {
-      const swing = Math.sin(theta * 6 + hi * 1.3 + lph) * L * 0.2
-      const x0 = hx + lx * L
-      const lw = Math.max(1.1, hd.cw * 0.14)
-      const steps = 16
-      for (let s = 0; s <= steps; s++) {
-        const f = s / steps
-        hd.disk(
-          x0 + swing * f,
-          y + bob + body * 0.6 + f * hd.ch * 0.9 - (f > 0.8 ? Math.abs(swing) * 0.1 : 0),
-          lw,
-          hdDarken(hide, 0.9),
-        )
-      }
+    const yb = hoof - L * 1.2 + gait * L * 0.04
+    const shade = hdDarken(hide, 0.78)
+    const dark = hdDarken(hide, 0.55)
+    glow(hd, hx, hoof, L * 1.6, hdHex("#000000"), night ? 0.3 : 0.26, 0.12)
+    // Far legs first and darker, then the barrel, then the near legs.
+    const leg = (attachX: number, phase: number, color: RGB, front: boolean) => {
+      const swing = Math.sin(theta * 6 + hi * 1.3 + phase)
+      const kneeX = attachX + swing * L * (front ? 0.32 : 0.22)
+      const kneeY = yb + L * 0.72
+      const footX = kneeX + (front ? Math.max(0, swing) * L * 0.18 : -Math.max(0, -swing) * L * 0.2)
+      const footY = hoof - Math.max(0, swing) * L * 0.18
+      artLine(hd, attachX, yb + L * 0.15, kneeX, kneeY, L * 0.13, L * 0.08, color)
+      artLine(hd, kneeX, kneeY, footX, footY, L * 0.075, L * 0.06, color)
+      softDisk(hd, footX, footY, L * 0.075, dark)
     }
-    hd.blob(hx, y + bob, L, body, hide)
-    hd.blob(hx - L * 0.1, y + bob - body * 0.35, L * 0.85, body * 0.45, hideLit)
-    // Neck and head reaching forward, mane and tail streaming.
-    const nx = hx + L * 0.75
-    for (let s = 0; s <= 6; s++) {
-      const f = s / 6
-      hd.disk(
-        nx + f * L * 0.4,
-        y + bob - body * 0.4 - f * body * 1.1,
-        Math.max(1.3, hd.cw * 0.22 * (1 - f * 0.25)),
-        hide,
+    leg(hx + L * 0.5, 1.6, shade, true)
+    leg(hx - L * 0.55, 3.6, shade, false)
+    hd.blob(hx, yb, L * 0.8, L * 0.36, hide)
+    softDisk(hd, hx - L * 0.55, yb - L * 0.04, L * 0.38, hide)
+    softDisk(hd, hx + L * 0.55, yb, L * 0.34, hide)
+    hd.blob(hx - L * 0.05, yb - L * 0.18, L * 0.65, L * 0.13, hideLit)
+    leg(hx + L * 0.62, 0, hide, true)
+    leg(hx - L * 0.45, 2.1, hide, false)
+    // Neck rising from the chest, then the head angled down.
+    const poll = { x: hx + L * 1.05, y: yb - L * 0.85 }
+    artLine(hd, hx + L * 0.6, yb - L * 0.05, poll.x, poll.y, L * 0.24, L * 0.13, hide)
+    artLine(hd, poll.x, poll.y, hx + L * 1.42, yb - L * 0.5, L * 0.14, L * 0.08, hide)
+    softDisk(hd, poll.x - L * 0.02, poll.y - L * 0.14, L * 0.06, hide)
+    softDisk(hd, hx + L * 1.12, yb - L * 0.72, Math.max(0.6, L * 0.035), dark)
+    // Mane along the crest and a streaming tail.
+    for (let s = 0; s <= 5; s++) {
+      const f = s / 5
+      artLine(
+        hd,
+        hx + L * (0.62 + f * 0.4),
+        yb - L * (0.2 + f * 0.62),
+        hx + L * (0.48 + f * 0.4) - gait * L * 0.04,
+        yb - L * (0.12 + f * 0.58),
+        L * 0.07,
+        L * 0.03,
+        dark,
       )
     }
-    hd.blob(nx + L * 0.62, y + bob - body * 1.35, L * 0.34, body * 0.38, hide)
-    hd.disk(nx + L * 0.44, y + bob - body * 1.65, Math.max(1, hd.cw * 0.1), hide)
-    for (let s = 0; s < 5; s++) {
-      hd.disk(
-        nx + s * L * 0.07 - L * 0.1,
-        y + bob - body * (0.55 + s * 0.22),
-        Math.max(1, hd.cw * 0.1),
-        hdDarken(hide, 0.65),
-      )
-    }
-    for (let s = 0; s <= 6; s++) {
-      const f = s / 6
-      hd.disk(
-        hx - L * 0.95 - f * L * 0.45,
-        y + bob - body * 0.25 + f * body * 1.1 + gait * f * 2,
-        Math.max(1, hd.cw * 0.13),
-        hdDarken(hide, 0.7),
-      )
-    }
+    const tailX = hx - L * 0.88
+    const tailY = yb - L * 0.2
+    artLine(hd, tailX, tailY, tailX - L * 0.35, tailY + L * 0.2 + gait * L * 0.06, L * 0.1, L * 0.07, dark)
+    artLine(
+      hd,
+      tailX - L * 0.35,
+      tailY + L * 0.2 + gait * L * 0.06,
+      tailX - L * 0.55,
+      tailY + L * 0.55 + gait * L * 0.1,
+      L * 0.07,
+      L * 0.03,
+      dark,
+    )
+    const y = hoof - hd.ch * 0.95
     // Dust puff behind the hooves.
     glow(hd, hx - L * 1.3, y + hd.ch * 0.95, L * 1.2, hdMix(ground, hdHex("#d0c090"), 0.5), night ? 0.12 : 0.28, 0.3)
   })
 
-  const mote = hdMix(grass, hdHex(c.cloud), 0.5)
-  for (let i = 0; i < 12; i++) {
-    const x = (i * 11 + 4 + phase * STEPPE_COLUMNS) % STEPPE_COLUMNS
-    const y = 7.2 + (i % 5) * 0.7 + Math.sin(theta * 2 + i) * 0.2
-    if (night) blendPx(hd, Math.floor(hd.X(x)), Math.floor(hd.Y(y)), hdHex(c.glow), 0.6)
-    else hd.disk(hd.X(x), hd.Y(y), Math.max(1, hd.cw * 0.12), mote)
-  }
+  // Fireflies at night only; daytime motes read as dirt on the sky.
+  if (night)
+    for (let i = 0; i < 12; i++) {
+      const x = (i * 11 + 4 + phase * STEPPE_COLUMNS) % STEPPE_COLUMNS
+      const y = 7.2 + (i % 5) * 0.7 + Math.sin(theta * 2 + i) * 0.2
+      blendPx(hd, Math.floor(hd.X(x)), Math.floor(hd.Y(y)), hdHex(c.glow), 0.6)
+    }
   return hd.pixels
 }

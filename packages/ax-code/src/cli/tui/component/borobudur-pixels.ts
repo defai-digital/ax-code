@@ -36,6 +36,7 @@ export function renderBorobudurPixels(width: number, height: number, style: Boro
   const hd = createHdCanvas(width, height, BOROBUDUR_COLUMNS, BOROBUDUR_ROWS)
   if (hd.w === 0 || hd.h === 0) return hd.pixels
   const { w, h, cw, ch } = hd
+  const bPx = hd.pixels
   const misty = style === "borobudur-mist"
   const c = BOROBUDUR_COLORS[style]
   const stone = hdHex(c.stone)
@@ -83,11 +84,23 @@ export function renderBorobudurPixels(width: number, height: number, style: Boro
     bank(hd.X(48 - loop * 2), hd.Y(1.6), cw * 10)
     bank(hd.X(24), hd.Y(6.4), cw * 8)
   } else {
-    // Overcast streaks.
-    for (let y = 0; y < Math.min(h, Math.ceil(groundY)); y++) {
+    // Overcast streaks. The `sin(y*0.05)*2` term is y-invariant; inline the
+    // blend with a direct buffer write so the inner x loop is one sin and
+    // three blend operations.
+    const mR = mist[0]
+    const mG = mist[1]
+    const mB = mist[2]
+    const yEnd = Math.min(h, Math.ceil(groundY))
+    for (let y = 0; y < yEnd; y++) {
+      const yPart = y * 0.03 + Math.sin(y * 0.05) * 2
+      let i = y * w * 3
       for (let x = 0; x < w; x++) {
-        const k = 0.5 + 0.5 * Math.sin(x * 0.012 + y * 0.03 + Math.sin(y * 0.05) * 2)
-        blend((y * w + x) * 3, mist, 0.14 * k)
+        const k = 0.5 + 0.5 * Math.sin(x * 0.012 + yPart)
+        const a = 0.14 * k
+        bPx[i] = Math.round(bPx[i] + (mR - bPx[i]) * a)
+        bPx[i + 1] = Math.round(bPx[i + 1] + (mG - bPx[i + 1]) * a)
+        bPx[i + 2] = Math.round(bPx[i + 2] + (mB - bPx[i + 2]) * a)
+        i += 3
       }
     }
   }
@@ -118,19 +131,13 @@ export function renderBorobudurPixels(width: number, height: number, style: Boro
       hd.set(x, y, hdMix(col, warm, side > 0.2 ? 0.12 * (1 - u) : 0))
     }
   }
-  // Smoke plume leaning away from the sun.
+  // Smoke plume leaning away from the sun. The plume color doesn't depend on
+  // `k` — hoist it out of the loop.
+  const smokeColor = hdMix(mist, [120, 120, 126], 0.35)
   for (let k = 0; k < 8; k++) {
     const px = vx - hd.X(0.7 * k) + Math.sin(theta + k) * cw * 0.35
     const py = vTop - ch * (0.4 + k * 0.45)
-    softBlob(
-      px,
-      py,
-      cw * (1.1 + k * 0.28),
-      ch * (0.65 + k * 0.1),
-      hdMix(mist, [120, 120, 126], 0.35),
-      0.55 - k * 0.04,
-      0.8,
-    )
+    softBlob(px, py, cw * (1.1 + k * 0.28), ch * (0.65 + k * 0.1), smokeColor, 0.55 - k * 0.04, 0.8)
   }
 
   // Rainforest behind the temple, bumpy canopy with lit tops.
@@ -158,6 +165,23 @@ export function renderBorobudurPixels(width: number, height: number, style: Boro
   }
 
   // Temple: battered terraces, cornices, niches with seated Buddhas, and stairs.
+  // The sandstone() helper runs per pixel inside the tier body. The math
+  // decomposes into per-row (`course`, `k`) and per-pixel (`lit`, `sin(u*0.19)`)
+  // parts. For the tier body, the inner darken is the only rounding+clamp
+  // step, so we can inline it with a direct buffer write. The plinth wraps
+  // sandstone in a second `hdDarken` whose factor depends on `k`, so the
+  // two rounds have to stay separate there.
+  const sdR = stoneDark[0]
+  const sdG = stoneDark[1]
+  const sdB = stoneDark[2]
+  const stR = stone[0]
+  const stG = stone[1]
+  const stB = stone[2]
+  const wmR = warm[0]
+  const wmG = warm[1]
+  const wmB = warm[2]
+  // Keep `sandstone` for the plinth (two rounds), inline its body in the
+  // tier loop where only one round is needed.
   const sandstone = (u: number, v: number, lit: number): RGB => {
     const course = 1 + 0.045 * Math.sin(v * 0.9)
     const tone = hdMix(stoneDark, stone, clamp01(0.55 + lit * 0.5))
@@ -189,9 +213,35 @@ export function renderBorobudurPixels(width: number, height: number, style: Boro
     for (let y = Math.floor(top); y < Math.ceil(bottom); y++) {
       const k = (y - top) / (bottom - top || 1)
       const inset = slope * (1 - k)
-      for (let x = Math.floor(xl + inset); x < Math.ceil(xr - inset); x++) {
-        const lit = (x - xl) / (xr - xl) - 0.3 + 0.1 * (1 - k)
-        hd.set(x, y, sandstone(x, y, lit))
+      const course = 1 + 0.045 * Math.sin(y * 0.9)
+      const xRange = Math.floor(xl + inset)
+      const xEnd = Math.ceil(xr - inset)
+      const xSpan = xr - xl || 1
+      for (let x = xRange; x < xEnd; x++) {
+        const lit = (x - xl) / xSpan - 0.3 + 0.1 * (1 - k)
+        const cL = lit < 0 ? 0 : lit > 1 ? 1 : lit
+        const cTL = 0.55 + lit * 0.5
+        const cTLc = cTL < 0 ? 0 : cTL > 1 ? 1 : cTL
+        const tR = Math.round(sdR + (stR - sdR) * cTLc)
+        const tG = Math.round(sdG + (stG - sdG) * cTLc)
+        const tB = Math.round(sdB + (stB - sdB) * cTLc)
+        const wAmt = 0.12 * cL
+        const aR = Math.round(tR + (wmR - tR) * wAmt)
+        const aG = Math.round(tG + (wmG - tG) * wAmt)
+        const aB = Math.round(tB + (wmB - tB) * wAmt)
+        const sinU = Math.sin(x * 0.19)
+        const absU = sinU < 0 ? -sinU : sinU
+        const darkF = course * (1 - 0.04 * absU)
+        let vR = aR * darkF
+        let vG = aG * darkF
+        let vB = aB * darkF
+        vR = vR < 0 ? 0 : vR > 255 ? 255 : Math.round(vR)
+        vG = vG < 0 ? 0 : vG > 255 ? 255 : Math.round(vG)
+        vB = vB < 0 ? 0 : vB > 255 ? 255 : Math.round(vB)
+        const i = (y * w + x) * 3
+        bPx[i] = vR
+        bPx[i + 1] = vG
+        bPx[i + 2] = vB
       }
     }
     // Cornice and base molding.
@@ -315,12 +365,38 @@ export function renderBorobudurPixels(width: number, height: number, style: Boro
   }
 
   // Foreground lawn, shrubs, and a fog layer that drifts through the terraces.
+  // Hoist the y-invariant parts of the ground mix: `hdHex(c.ground)` is cached
+  // but every pixel still pays a Map.get plus the two tuple allocations.
+  const groundRgb = hdHex(c.ground)
+  const warmR = warm[0]
+  const warmG = warm[1]
+  const warmB = warm[2]
+  const gR0 = groundRgb[0]
+  const gG0 = groundRgb[1]
+  const gB0 = groundRgb[2]
+  const groundSpan = h - groundY || 1
+  const buf = hd.pixels
   for (let y = Math.floor(groundY); y < h; y++) {
-    const u = (y - groundY) / (h - groundY || 1)
+    const u = (y - groundY) / groundSpan
+    const warmAmt = 0.08 * (1 - u)
+    const r1 = Math.round(gR0 + (warmR - gR0) * warmAmt)
+    const g1 = Math.round(gG0 + (warmG - gG0) * warmAmt)
+    const b1 = Math.round(gB0 + (warmB - gB0) * warmAmt)
+    const litBase = 1 - u * 0.25
+    const halfU = 0.5 + u
+    const u9 = u * 9
+    let i = y * w * 3
     for (let x = 0; x < w; x++) {
       const sx = (x + 0.5) / cw
-      const mow = 1 + 0.05 * Math.sin(sx * 0.55 + u * 9) * (0.5 + u)
-      hd.set(x, y, hdDarken(hdMix(hdHex(c.ground), warm, 0.08 * (1 - u)), (1 - u * 0.25) * mow))
+      const mow = 1 + 0.05 * Math.sin(sx * 0.55 + u9) * halfU
+      const lit = litBase * mow
+      const v = r1 * lit
+      buf[i] = v < 0 ? 0 : v > 255 ? 255 : Math.round(v)
+      const gv = g1 * lit
+      buf[i + 1] = gv < 0 ? 0 : gv > 255 ? 255 : Math.round(gv)
+      const bv = b1 * lit
+      buf[i + 2] = bv < 0 ? 0 : bv > 255 ? 255 : Math.round(bv)
+      i += 3
     }
   }
   for (let x = 2; x < BOROBUDUR_COLUMNS; x += 6.5) {

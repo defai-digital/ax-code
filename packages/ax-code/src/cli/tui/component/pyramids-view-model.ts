@@ -64,11 +64,22 @@ export function pyramidsBackground(style: PyramidsStyle) {
   return style === "pyramids-day" ? "#8ec8e8" : "#0a1030"
 }
 
+/** Parsed gradient endpoints per style; the pixel sampler calls pyramidsSkyRgb per row. */
+const SKY_ENDS: Record<PyramidsStyle, readonly [number[], number[]]> = {
+  "pyramids-day": [
+    [1, 3, 5].map((offset) => parseInt(pyramidsBackground("pyramids-day").slice(offset, offset + 2), 16)),
+    [1, 3, 5].map((offset) => parseInt(PYRAMIDS_COLORS["pyramids-day"].skyBottom.slice(offset, offset + 2), 16)),
+  ],
+  "pyramids-night": [
+    [1, 3, 5].map((offset) => parseInt(pyramidsBackground("pyramids-night").slice(offset, offset + 2), 16)),
+    [1, 3, 5].map((offset) => parseInt(PYRAMIDS_COLORS["pyramids-night"].skyBottom.slice(offset, offset + 2), 16)),
+  ],
+}
+
 /** Sample the vertical sky gradient. `t` is 0 at the top of the frame. */
 export function pyramidsSkyRgb(style: PyramidsStyle, t: number): readonly [number, number, number] {
   const x = Math.max(0, Math.min(1, t))
-  const from = [1, 3, 5].map((offset) => parseInt(pyramidsBackground(style).slice(offset, offset + 2), 16))
-  const to = [1, 3, 5].map((offset) => parseInt(PYRAMIDS_COLORS[style].skyBottom.slice(offset, offset + 2), 16))
+  const [from, to] = SKY_ENDS[style]
   return [0, 1, 2].map((channel) => Math.round(from[channel]! + (to[channel]! - from[channel]!) * x)) as [
     number,
     number,

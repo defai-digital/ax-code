@@ -2,7 +2,14 @@ import { expect, test } from "vitest"
 import { inflateSync } from "node:zlib"
 import { renderBenchPixels } from "../../../src/cli/tui/component/bench-pixels"
 import { renderTextScenePixels } from "../../../src/cli/tui/component/text-scene-pixels"
-import { createDigitalCodePixels, digitalCodePixelPlayer } from "../../../src/cli/tui/component/digital-code-pixels"
+import {
+  createDigitalCodePixels,
+  digitalCodePixelPlayer,
+  finishScenePixels,
+} from "../../../src/cli/tui/component/digital-code-pixels"
+import { CINEMA_STILL } from "../../../src/cli/tui/component/scene-cinema"
+
+const STILL_PLAYBACK = { now: () => 0, move: CINEMA_STILL }
 
 // Maps the shared 70x23 reference to exact 10x20 pixel cells.
 const WIDTH = 700
@@ -119,7 +126,7 @@ test.each(["midnight-dream", "sunset-serenade"] as const)("%s renders at any siz
 
 test("Bench transmits its own pixels at bounded resolution and cleans up on resize", () => {
   const writes: string[] = []
-  const player = digitalCodePixelPlayer((data) => writes.push(data))
+  const player = digitalCodePixelPlayer((data) => writes.push(data), STILL_PLAYBACK)
   const input = {
     width: 740,
     height: 500,
@@ -134,10 +141,24 @@ test("Bench transmits its own pixels at bounded resolution and cleans up on resi
       Buffer.from([...output.matchAll(/\x1b_G[^;]+;([A-Za-z0-9+/=]*)\x1b\\/g)].map((m) => m[1]).join(""), "base64"),
     )
   player.draw(input)
-  expect(decode(writes[0]!).equals(renderTextScenePixels(740, 500, "midnight-dream", 750))).toBe(true)
+  expect(
+    decode(writes[0]!).equals(
+      finishScenePixels(renderTextScenePixels(740, 500, "midnight-dream", 750), 740, 500, {
+        elapsedMs: 750,
+        move: CINEMA_STILL,
+      }),
+    ),
+  ).toBe(true)
   player.draw({ ...input, width: 500, style: "sunset-serenade" })
   expect(writes[1]).toContain("a=d,d=I")
-  expect(decode(writes[2]!).equals(renderTextScenePixels(500, 500, "sunset-serenade", 750))).toBe(true)
+  expect(
+    decode(writes[2]!).equals(
+      finishScenePixels(renderTextScenePixels(500, 500, "sunset-serenade", 750), 500, 500, {
+        elapsedMs: 750,
+        move: CINEMA_STILL,
+      }),
+    ),
+  ).toBe(true)
   player.dispose()
   expect(writes[3]).toContain("a=d,d=I")
   player.draw(input)

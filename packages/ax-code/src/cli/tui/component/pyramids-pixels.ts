@@ -97,11 +97,22 @@ export function renderPyramidsPixels(width: number, height: number, style: Pyram
 
   // Hazy distant dune line behind the pyramids.
   const farTop = hd.Y(PYRAMIDS_BASE_ROW - 0.7)
-  for (let x = 0; x < hd.w; x++) {
-    const sx = x / hd.cw
-    const edge = farTop + Math.sin(sx * 0.17 + 0.6) * hd.ch * 0.22 + Math.sin(sx * 0.41) * hd.ch * 0.08
-    for (let y = Math.max(0, Math.floor(edge)); y < horizonY; y++) {
-      blendPixel(hd, x, y, hdMix(sand, horizon, night ? 0.35 : 0.55), 1)
+  {
+    // The mix color is constant and alpha is 1, so this is a plain overwrite.
+    const farCol = hdMix(sand, horizon, night ? 0.35 : 0.55)
+    const f0 = farCol[0]!
+    const f1 = farCol[1]!
+    const f2 = farCol[2]!
+    const pixels = hd.pixels
+    for (let x = 0; x < hd.w; x++) {
+      const sx = x / hd.cw
+      const edge = farTop + Math.sin(sx * 0.17 + 0.6) * hd.ch * 0.22 + Math.sin(sx * 0.41) * hd.ch * 0.08
+      for (let y = Math.max(0, Math.floor(edge)); y < horizonY; y++) {
+        const i = (y * hd.w + x) * 3
+        pixels[i] = f0
+        pixels[i + 1] = f1
+        pixels[i + 2] = f2
+      }
     }
   }
 
@@ -167,7 +178,15 @@ export function renderPyramidsPixels(width: number, height: number, style: Pyram
   for (let y = Math.max(0, Math.floor(horizonY)); y < hd.h; y++) {
     const v = (y - horizonY) / (hd.h - horizonY || 1)
     const row = hdMix(hdMix(sand, horizon, 0.3 * (1 - v)), dune, Math.min(1, v * 1.4))
-    for (let x = 0; x < hd.w; x++) hd.set(x, y, row)
+    const r0 = row[0]!
+    const r1 = row[1]!
+    const r2 = row[2]!
+    let i = y * hd.w * 3
+    for (let x = 0; x < hd.w; x++, i += 3) {
+      hd.pixels[i] = r0
+      hd.pixels[i + 1] = r1
+      hd.pixels[i + 2] = r2
+    }
   }
   // Pyramid cast shadows fall away from the light across the sand.
   const shadowColor: RGB = night ? [14, 14, 36] : [90, 60, 40]
@@ -234,36 +253,131 @@ export function renderPyramidsPixels(width: number, height: number, style: Pyram
   const crestB = (sx: number) => PYRAMIDS_DUNE_TOP + 3.1 + Math.sin(sx * 0.21 + 1.7) * 0.8 + Math.cos(sx * 0.07) * 0.4
   const litSand = hdMix(sand, night ? [120, 120, 170] : [255, 232, 176], night ? 0.2 : 0.35)
   const dimSand = hdDarken(sandDark, night ? 0.9 : 1)
-  for (let y = Math.max(0, Math.floor(hd.Y(PYRAMIDS_DUNE_TOP - 0.8))); y < hd.h; y++) {
-    const sy = (y + 0.5) / hd.ch
-    for (let x = 0; x < hd.w; x++) {
+  {
+    // Every crest, slope, facing, and ripple-constant term depends only on the
+    // column; hoist them into tables so the pixel loop keeps just one sin.
+    const pixels = hd.pixels
+    const cols = hd.w
+    const crestACol = new Float64Array(cols)
+    const crestBCol = new Float64Array(cols)
+    const facingACol = new Float64Array(cols)
+    const facingBCol = new Float64Array(cols)
+    const absFacingACol = new Float64Array(cols)
+    const absFacingBCol = new Float64Array(cols)
+    const targetA0 = new Float64Array(cols)
+    const targetA1 = new Float64Array(cols)
+    const targetA2 = new Float64Array(cols)
+    const targetB0 = new Float64Array(cols)
+    const targetB1 = new Float64Array(cols)
+    const targetB2 = new Float64Array(cols)
+    const ripple26 = new Float64Array(cols)
+    const rippleInner = new Float64Array(cols)
+    const lit0 = litSand[0]!
+    const lit1 = litSand[1]!
+    const lit2 = litSand[2]!
+    const dim0 = dimSand[0]!
+    const dim1 = dimSand[1]!
+    const dim2 = dimSand[2]!
+    const dune0 = dune[0]!
+    const dune1 = dune[1]!
+    const dune2 = dune[2]!
+    for (let x = 0; x < cols; x++) {
       const sx = (x + 0.5) / hd.cw
       const a = crestA(sx)
       const b = crestB(sx)
-      let layer = 0
-      let crest = 0
-      if (sy >= b) {
-        layer = 2
-        crest = b
-      } else if (sy >= a) {
-        layer = 1
-        crest = a
+      crestACol[x] = a
+      crestBCol[x] = b
+      const slopeA = (crestA(sx + 0.2) - crestA(sx - 0.2)) / 0.4
+      const slopeB = (crestB(sx + 0.2) - crestB(sx - 0.2)) / 0.4
+      const facingA = Math.max(-1, Math.min(1, slopeA * lightDir * 3))
+      const facingB = Math.max(-1, Math.min(1, slopeB * lightDir * 3))
+      facingACol[x] = facingA
+      facingBCol[x] = facingB
+      absFacingACol[x] = Math.abs(facingA)
+      absFacingBCol[x] = Math.abs(facingB)
+      if (facingA > 0) {
+        targetA0[x] = lit0
+        targetA1[x] = lit1
+        targetA2[x] = lit2
+      } else {
+        targetA0[x] = dim0
+        targetA1[x] = dim1
+        targetA2[x] = dim2
       }
-      if (!layer) continue
-      const fn = layer === 2 ? crestB : crestA
-      const slope = (fn(sx + 0.2) - fn(sx - 0.2)) / 0.4
-      const facing = Math.max(-1, Math.min(1, slope * lightDir * 3))
-      const depth = Math.min(1, (sy - crest) / 3)
-      let col = hdMix(dune, facing > 0 ? litSand : dimSand, Math.abs(facing) * (0.55 - depth * 0.15))
-      col = hdDarken(col, layer === 2 ? 0.94 : 1)
-      const ripple = Math.sin(sx * 2.6 + sy * 5 + Math.sin(sx * 0.5) * 2)
-      if (ripple > 0.85) col = hdMix(col, litSand, 0.25)
-      else if (ripple < -0.88) col = hdMix(col, dimSand, 0.25)
-      const grain = artHash(x, y) - 0.5
-      col = hdDarken(col, 1 + grain * 0.05)
-      // Rim light along the crest.
-      if (sy - crest < 0.08 && facing * 1 > -0.2) col = hdMix(col, litSand, 0.55)
-      hd.set(x, y, col)
+      if (facingB > 0) {
+        targetB0[x] = lit0
+        targetB1[x] = lit1
+        targetB2[x] = lit2
+      } else {
+        targetB0[x] = dim0
+        targetB1[x] = dim1
+        targetB2[x] = dim2
+      }
+      ripple26[x] = sx * 2.6
+      rippleInner[x] = Math.sin(sx * 0.5) * 2
+    }
+    for (let y = Math.max(0, Math.floor(hd.Y(PYRAMIDS_DUNE_TOP - 0.8))); y < hd.h; y++) {
+      const sy = (y + 0.5) / hd.ch
+      const sy5 = sy * 5
+      let i = y * cols * 3
+      for (let x = 0; x < cols; x++, i += 3) {
+        const a = crestACol[x]!
+        const b = crestBCol[x]!
+        let layer = 0
+        let crest = 0
+        if (sy >= b) {
+          layer = 2
+          crest = b
+        } else if (sy >= a) {
+          layer = 1
+          crest = a
+        }
+        if (!layer) continue
+        const depth = Math.min(1, (sy - crest) / 3)
+        // hdMix clamps are identities here: the factor stays inside [0, 0.55].
+        const k1 = (layer === 2 ? absFacingBCol[x]! : absFacingACol[x]!) * (0.55 - depth * 0.15)
+        let c0 = Math.round(dune0 + ((layer === 2 ? targetB0[x]! : targetA0[x]!) - dune0) * k1)
+        let c1 = Math.round(dune1 + ((layer === 2 ? targetB1[x]! : targetA1[x]!) - dune1) * k1)
+        let c2 = Math.round(dune2 + ((layer === 2 ? targetB2[x]! : targetA2[x]!) - dune2) * k1)
+        if (layer === 2) {
+          // hdDarken(col, 0.94) with the same channel clamp/round.
+          let v0 = c0 * 0.94
+          c0 = v0 < 0 ? 0 : v0 > 255 ? 255 : Math.round(v0)
+          let v1 = c1 * 0.94
+          c1 = v1 < 0 ? 0 : v1 > 255 ? 255 : Math.round(v1)
+          let v2 = c2 * 0.94
+          c2 = v2 < 0 ? 0 : v2 > 255 ? 255 : Math.round(v2)
+        }
+        const ripple = Math.sin(ripple26[x]! + sy5 + rippleInner[x]!)
+        if (ripple > 0.85) {
+          c0 = Math.round(c0 + (lit0 - c0) * 0.25)
+          c1 = Math.round(c1 + (lit1 - c1) * 0.25)
+          c2 = Math.round(c2 + (lit2 - c2) * 0.25)
+        } else if (ripple < -0.88) {
+          c0 = Math.round(c0 + (dim0 - c0) * 0.25)
+          c1 = Math.round(c1 + (dim1 - c1) * 0.25)
+          c2 = Math.round(c2 + (dim2 - c2) * 0.25)
+        }
+        // artHash(x, y) inlined.
+        let n = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) | 0
+        n = Math.imul(n ^ (n >>> 13), 1274126177)
+        const grain = (((n ^ (n >>> 16)) >>> 0) / 4294967296 - 0.5) * 0.05
+        let g0 = c0 * (1 + grain)
+        c0 = g0 < 0 ? 0 : g0 > 255 ? 255 : Math.round(g0)
+        let g1 = c1 * (1 + grain)
+        c1 = g1 < 0 ? 0 : g1 > 255 ? 255 : Math.round(g1)
+        let g2 = c2 * (1 + grain)
+        c2 = g2 < 0 ? 0 : g2 > 255 ? 255 : Math.round(g2)
+        // Rim light along the crest.
+        if (sy - crest < 0.08 && (layer === 2 ? facingBCol[x]! : facingACol[x]!) > -0.2) {
+          c0 = Math.round(c0 + (lit0 - c0) * 0.55)
+          c1 = Math.round(c1 + (lit1 - c1) * 0.55)
+          c2 = Math.round(c2 + (lit2 - c2) * 0.55)
+        }
+        pixels[i] = c0
+        pixels[i + 1] = c1
+        pixels[i + 2] = c2
+      }
     }
   }
 

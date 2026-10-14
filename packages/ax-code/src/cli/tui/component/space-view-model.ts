@@ -80,11 +80,22 @@ export function spaceBackground(style: SpaceStyle) {
   return style === "space-launch" ? "#101a3a" : "#04060f"
 }
 
+/** Parsed gradient endpoints per style; the pixel sampler calls spaceSkyRgb per row. */
+const SKY_ENDS: Record<SpaceStyle, readonly [number[], number[]]> = {
+  "space-launch": [
+    [1, 3, 5].map((offset) => parseInt(spaceBackground("space-launch").slice(offset, offset + 2), 16)),
+    [1, 3, 5].map((offset) => parseInt(SPACE_COLORS["space-launch"].skyBottom.slice(offset, offset + 2), 16)),
+  ],
+  "space-drift": [
+    [1, 3, 5].map((offset) => parseInt(spaceBackground("space-drift").slice(offset, offset + 2), 16)),
+    [1, 3, 5].map((offset) => parseInt(SPACE_COLORS["space-drift"].skyBottom.slice(offset, offset + 2), 16)),
+  ],
+}
+
 /** Sample the vertical sky gradient. `t` is 0 at the top of the frame. */
 export function spaceSkyRgb(style: SpaceStyle, t: number): readonly [number, number, number] {
   const x = Math.max(0, Math.min(1, t))
-  const from = [1, 3, 5].map((offset) => parseInt(spaceBackground(style).slice(offset, offset + 2), 16))
-  const to = [1, 3, 5].map((offset) => parseInt(SPACE_COLORS[style].skyBottom.slice(offset, offset + 2), 16))
+  const [from, to] = SKY_ENDS[style]
   return [0, 1, 2].map((channel) => Math.round(from[channel]! + (to[channel]! - from[channel]!) * x)) as [
     number,
     number,

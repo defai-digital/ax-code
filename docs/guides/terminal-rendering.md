@@ -2,7 +2,7 @@
 
 Status: Current
 Scope: TUI terminal profile selection, overrides, and visual capability boundaries
-Last reviewed: 2026-10-03
+Last reviewed: 2026-10-13
 Owner: AX Code TUI maintainers
 
 AX Code chooses a terminal profile from the environment when it starts. The
@@ -112,6 +112,10 @@ Automatic advanced mode does not bypass these checks.
 All pixel animation frames — Digital Code, Foliage, and the landmark scenes —
 are bounded to 1920x1080. These animation frames update on a
 20 FPS schedule, separately from the renderer's 60 FPS target.
+Foliage and the landmark scenes paint on that schedule within a frame-time
+budget: they start at no more than 1280x720 pixels and lower their raster
+resolution when frames run slow, down to 40% of the window's pixel size. The
+image always covers the same cells; a smaller raster only looks softer.
 See [TUI opening and ending animations](tui-animations.md) for previews.
 
 Windows Terminal sessions with confirmed Sixel support (and without Kitty

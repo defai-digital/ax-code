@@ -66,16 +66,24 @@ export function auroraBackground(style: AuroraStyle) {
   return style === "aurora-night" ? "#0a1230" : "#3a4a6e"
 }
 
+// Both endpoints are fixed hex strings per style; parse them once so pixel
+// loops that sample the gradient per row (or per pixel) never re-parse.
+const auroraSkyStops = new Map<AuroraStyle, { from: number[]; to: number[] }>()
+
 /** Sample the vertical sky gradient. `t` is 0 at the top of the frame. */
 export function auroraSkyRgb(style: AuroraStyle, t: number): readonly [number, number, number] {
   const x = Math.max(0, Math.min(1, t))
-  const from = [1, 3, 5].map((offset) => parseInt(auroraBackground(style).slice(offset, offset + 2), 16))
-  const to = [1, 3, 5].map((offset) => parseInt(AURORA_COLORS[style].skyBottom.slice(offset, offset + 2), 16))
-  return [0, 1, 2].map((channel) => Math.round(from[channel]! + (to[channel]! - from[channel]!) * x)) as [
-    number,
-    number,
-    number,
-  ]
+  let stops = auroraSkyStops.get(style)
+  if (!stops) {
+    stops = {
+      from: [1, 3, 5].map((offset) => parseInt(auroraBackground(style).slice(offset, offset + 2), 16)),
+      to: [1, 3, 5].map((offset) => parseInt(AURORA_COLORS[style].skyBottom.slice(offset, offset + 2), 16)),
+    }
+    auroraSkyStops.set(style, stops)
+  }
+  return [0, 1, 2].map((channel) =>
+    Math.round(stops.from[channel]! + (stops.to[channel]! - stops.from[channel]!) * x),
+  ) as [number, number, number]
 }
 
 /** Ripple offset of the aurora curtains. Loops bit-identically with the cycle. */

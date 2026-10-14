@@ -84,11 +84,22 @@ export function eiffelBackground(style: EiffelStyle) {
   return style === "eiffel-day" ? "#8ec8e8" : "#0a1030"
 }
 
+/** Parsed gradient endpoints per style; the pixel sampler calls eiffelSkyRgb per row. */
+const SKY_ENDS: Record<EiffelStyle, readonly [number[], number[]]> = {
+  "eiffel-day": [
+    [1, 3, 5].map((offset) => parseInt(eiffelBackground("eiffel-day").slice(offset, offset + 2), 16)),
+    [1, 3, 5].map((offset) => parseInt(EIFFEL_COLORS["eiffel-day"].skyBottom.slice(offset, offset + 2), 16)),
+  ],
+  "eiffel-night": [
+    [1, 3, 5].map((offset) => parseInt(eiffelBackground("eiffel-night").slice(offset, offset + 2), 16)),
+    [1, 3, 5].map((offset) => parseInt(EIFFEL_COLORS["eiffel-night"].skyBottom.slice(offset, offset + 2), 16)),
+  ],
+}
+
 /** Sample the vertical sky gradient. `t` is 0 at the top of the frame. */
 export function eiffelSkyRgb(style: EiffelStyle, t: number): readonly [number, number, number] {
   const x = Math.max(0, Math.min(1, t))
-  const from = [1, 3, 5].map((offset) => parseInt(eiffelBackground(style).slice(offset, offset + 2), 16))
-  const to = [1, 3, 5].map((offset) => parseInt(EIFFEL_COLORS[style].skyBottom.slice(offset, offset + 2), 16))
+  const [from, to] = SKY_ENDS[style]
   return [0, 1, 2].map((channel) => Math.round(from[channel]! + (to[channel]! - from[channel]!) * x)) as [
     number,
     number,

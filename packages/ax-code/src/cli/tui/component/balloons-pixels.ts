@@ -58,10 +58,35 @@ export function renderBalloonsPixels(width: number, height: number, style: Ballo
 
   const blend = (i: number, color: RGB, alpha: number) => blendPixelAt(hd, i, color, alpha)
   const softBlob = (cx: number, cy: number, rx: number, ry: number, color: RGB, alpha: number) => {
-    for (let y = Math.max(0, Math.floor(cy - ry)); y < Math.min(h, Math.ceil(cy + ry)); y++) {
-      for (let x = Math.max(0, Math.floor(cx - rx)); x < Math.min(w, Math.ceil(cx + rx)); x++) {
-        const d = Math.hypot((x + 0.5 - cx) / rx, (y + 0.5 - cy) / ry)
-        if (d < 1) blend((y * w + x) * 3, color, alpha * (1 - smooth(0.35, 1, d)))
+    const xa = Math.max(0, Math.floor(cx - rx))
+    const xb = Math.min(w, Math.ceil(cx + rx))
+    const ya = Math.max(0, Math.floor(cy - ry))
+    const yb = Math.min(h, Math.ceil(cy + ry))
+    if (xa >= xb || ya >= yb) return
+    const fx = new Float64Array(xb - xa)
+    for (let x = xa; x < xb; x++) fx[x - xa] = (x + 0.5 - cx) / rx
+    const cr = color[0]!
+    const cg = color[1]!
+    const cb = color[2]!
+    for (let y = ya; y < yb; y++) {
+      const fy = (y + 0.5 - cy) / ry
+      let i = (y * w + xa) * 3
+      for (let k = 0; k < fx.length; k++, i += 3) {
+        const d = Math.hypot(fx[k]!, fy)
+        if (d >= 1) continue
+        // smooth(0.35, 1, d) inlined; clamp01 is the identity on [0.35, 1).
+        let t = (d - 0.35) / 0.65
+        if (t < 0) t = 0
+        const sm = t * t * (3 - 2 * t)
+        let a = alpha * (1 - sm)
+        if (a <= 0) continue
+        if (a > 1) a = 1
+        const p0 = hd.pixels[i]!
+        hd.pixels[i] = Math.round(p0 + (cr - p0) * a)
+        const p1 = hd.pixels[i + 1]!
+        hd.pixels[i + 1] = Math.round(p1 + (cg - p1) * a)
+        const p2 = hd.pixels[i + 2]!
+        hd.pixels[i + 2] = Math.round(p2 + (cb - p2) * a)
       }
     }
   }
@@ -70,13 +95,39 @@ export function renderBalloonsPixels(width: number, height: number, style: Ballo
   hd.sky((t) => balloonsSkyRgb(style, t))
   const bloom = night ? hdMix(moon, [120, 130, 200], 0.4) : warm
   const reach = Math.max(w, h) * (night ? 0.28 : 0.55)
-  for (let y = 0; y < Math.min(h, Math.ceil(groundY)); y++) {
-    const horizon = smooth(0.45, 1, y / (groundY || 1))
-    for (let x = 0; x < w; x++) {
-      const i = (y * w + x) * 3
-      const d = Math.hypot(x + 0.5 - sunX, y + 0.5 - sunY) / reach
-      blend(i, bloom, (night ? 0.3 : 0.55) * Math.exp(-d * d * 3))
-      blend(i, warm, horizon * (night ? 0.05 : 0.3))
+  {
+    const bloomBase = night ? 0.3 : 0.55
+    const bloomR = bloom[0]!
+    const bloomG = bloom[1]!
+    const bloomB = bloom[2]!
+    const warmR = warm[0]!
+    const warmG = warm[1]!
+    const warmB = warm[2]!
+    const warmK = night ? 0.05 : 0.3
+    const dxCol = new Float64Array(w) // x + 0.5 - sunX
+    for (let x = 0; x < w; x++) dxCol[x] = x + 0.5 - sunX
+    for (let y = 0; y < Math.min(h, Math.ceil(groundY)); y++) {
+      const horizon = smooth(0.45, 1, y / (groundY || 1))
+      const dy = y + 0.5 - sunY
+      const warmA = horizon * warmK
+      let i = y * w * 3
+      for (let x = 0; x < w; x++, i += 3) {
+        const d = Math.hypot(dxCol[x]!, dy) / reach
+        let a = bloomBase * Math.exp(-d * d * 3)
+        if (a > 1) a = 1
+        const p0 = hd.pixels[i]!
+        hd.pixels[i] = Math.round(p0 + (bloomR - p0) * a)
+        const p1 = hd.pixels[i + 1]!
+        hd.pixels[i + 1] = Math.round(p1 + (bloomG - p1) * a)
+        const p2 = hd.pixels[i + 2]!
+        hd.pixels[i + 2] = Math.round(p2 + (bloomB - p2) * a)
+        const q0 = hd.pixels[i]!
+        hd.pixels[i] = Math.round(q0 + (warmR - q0) * warmA)
+        const q1 = hd.pixels[i + 1]!
+        hd.pixels[i + 1] = Math.round(q1 + (warmG - q1) * warmA)
+        const q2 = hd.pixels[i + 2]!
+        hd.pixels[i + 2] = Math.round(q2 + (warmB - q2) * warmA)
+      }
     }
   }
   if (night) {
@@ -122,13 +173,39 @@ export function renderBalloonsPixels(width: number, height: number, style: Ballo
     }
   }
   const near = (sx: number) => ridge(sx, BALLOONS_GROUND_TOP + 0.2, 1.1, 0.16, 3)
-  for (let x = 0; x < w; x++) {
-    const sx = (x + 0.5) / cw
-    const top = hd.Y(near(sx))
-    for (let y = Math.max(0, Math.floor(top)); y < Math.ceil(groundY) + 1; y++) {
-      const depth = clamp01((y - top) / hd.Y(1.5))
+  {
+    const midDark = hdDarken(midHill, 0.75)
+    const md0 = midDark[0]!
+    const md1 = midDark[1]!
+    const md2 = midDark[2]!
+    const mh0 = midHill[0]!
+    const mh1 = midHill[1]!
+    const mh2 = midHill[2]!
+    const wr0 = warm[0]!
+    const wr1 = warm[1]!
+    const wr2 = warm[2]!
+    const y15 = hd.Y(1.5)
+    for (let x = 0; x < w; x++) {
+      const sx = (x + 0.5) / cw
+      const top = hd.Y(near(sx))
       const sunSide = clamp01(1 - Math.abs(sx - BALLOONS_MOON.x) / 70)
-      hd.set(x, y, hdMix(hdMix(midHill, warm, 0.22 * sunSide * (1 - depth)), hdDarken(midHill, 0.75), depth))
+      const yEnd = Math.min(h, Math.ceil(groundY) + 1)
+      let i = Math.max(0, Math.floor(top)) * w * 3 + x * 3
+      for (let y = Math.max(0, Math.floor(top)); y < yEnd; y++, i += w * 3) {
+        let depth = (y - top) / y15
+        if (depth < 0) depth = 0
+        else if (depth > 1) depth = 1
+        // hdMix(hdMix(midHill, warm, 0.22 * sunSide * (1 - depth)), midDark, depth)
+        let it = 0.22 * sunSide * (1 - depth)
+        if (it < 0) it = 0
+        else if (it > 1) it = 1
+        const i0 = Math.round(mh0 + (wr0 - mh0) * it)
+        const i1 = Math.round(mh1 + (wr1 - mh1) * it)
+        const i2 = Math.round(mh2 + (wr2 - mh2) * it)
+        hd.pixels[i] = Math.round(i0 + (md0 - i0) * depth)
+        hd.pixels[i + 1] = Math.round(i1 + (md1 - i1) * depth)
+        hd.pixels[i + 2] = Math.round(i2 + (md2 - i2) * depth)
+      }
     }
   }
 
@@ -262,14 +339,24 @@ export function renderBalloonsPixels(width: number, height: number, style: Ballo
 
   // Valley floor: terraced fields, scrub, and a path.
   const floorTop = groundY
-  for (let y = Math.floor(floorTop); y < h; y++) {
-    const u = (y - floorTop) / (h - floorTop || 1)
-    const base = hdMix(hdMix(hdHex(c.ground), warm, night ? 0.04 : 0.16 * (1 - u)), hdDarken(hdHex(c.ground), 0.7), u)
-    for (let x = 0; x < w; x++) {
-      const sx = (x + 0.5) / cw
-      // Perspective furrows fanning toward the viewer.
-      const furrow = Math.sin((sx - 38) * (0.9 + u * 3.2) * 0.35) > 0.6 ? 0.9 : 1
-      hd.set(x, y, hdDarken(base, furrow))
+  {
+    const sxM38 = new Float64Array(w) // (x + 0.5) / cw - 38
+    for (let x = 0; x < w; x++) sxM38[x] = (x + 0.5) / cw - 38
+    for (let y = Math.floor(floorTop); y < h; y++) {
+      const u = (y - floorTop) / (h - floorTop || 1)
+      const base = hdMix(hdMix(hdHex(c.ground), warm, night ? 0.04 : 0.16 * (1 - u)), hdDarken(hdHex(c.ground), 0.7), u)
+      const b0 = base[0]!
+      const b1 = base[1]!
+      const b2 = base[2]!
+      const k12 = 0.9 + u * 3.2
+      let i = y * w * 3
+      for (let x = 0; x < w; x++, i += 3) {
+        // Perspective furrows fanning toward the viewer.
+        const furrow = Math.sin(sxM38[x]! * k12 * 0.35) > 0.6 ? 0.9 : 1
+        hd.pixels[i] = Math.round(b0 * furrow)
+        hd.pixels[i + 1] = Math.round(b1 * furrow)
+        hd.pixels[i + 2] = Math.round(b2 * furrow)
+      }
     }
   }
   const scrub = hdHex(c.scrub)

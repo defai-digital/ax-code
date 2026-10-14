@@ -1,6 +1,7 @@
 import { renderTextScenePixels } from "./text-scene-pixels"
 import { isTextSceneStyle } from "./text-scene-view-model"
 import { createFoliagePixelPainter, isFoliageVariant, type OverlayStyle } from "./foliage-view-model"
+import { applyCinema, chooseCinemaMove, cinemaShot, type CinemaMove } from "./scene-cinema"
 import { deflateSync } from "node:zlib"
 import { randomInt } from "node:crypto"
 import {
@@ -341,31 +342,83 @@ export function kittyDigitalCodeFrame(
   columns: number,
   rows: number,
   rgb?: Buffer,
+  size?: { width: number; height: number },
 ): string {
+  const width = size?.width ?? frame.width
+  const height = size?.height ?? frame.height
   const payload = deflateSync(rgb ?? renderDigitalCodePixels(frame), { level: 1 }).toString("base64")
   const chunks: string[] = ["\x1b7\x1b[H"]
   for (let offset = 0; offset < payload.length; offset += 4096) {
     const more = offset + 4096 < payload.length ? 1 : 0
     const header =
-      offset === 0
-        ? `a=T,f=24,o=z,s=${frame.width},v=${frame.height},i=${id},p=1,c=${columns},r=${rows},C=1,z=1,q=2,`
-        : ""
+      offset === 0 ? `a=T,f=24,o=z,s=${width},v=${height},i=${id},p=1,c=${columns},r=${rows},C=1,z=1,q=2,` : ""
     chunks.push(`\x1b_G${header}m=${more};${payload.slice(offset, offset + 4096)}\x1b\\`)
   }
   chunks.push("\x1b8")
   return chunks.join("")
 }
 
+/**
+ * Scenes paint on the event loop every tick, so their raster adapts to a time
+ * budget instead of always matching the window. The terminal stretches the
+ * image over the same cells either way; a smaller raster only looks softer.
+ * The pixel budget is the starting ceiling, the frame budget steers below it.
+ */
+export const SCENE_PIXEL_BUDGET = 1280 * 720
+export const SCENE_FRAME_BUDGET_MS = 30
+export const SCENE_MIN_QUALITY = 0.4
+
+export function sceneQualityCeiling(width: number, height: number): number {
+  const area = Math.max(1, width * height)
+  return Math.min(1, Math.sqrt(SCENE_PIXEL_BUDGET / area))
+}
+
+/** Next raster scale from the smoothed cost of recent frames. */
+export function nextSceneQuality(input: { quality: number; ceiling: number; costMs: number }): number {
+  const { quality, ceiling, costMs } = input
+  if (costMs > SCENE_FRAME_BUDGET_MS * 1.15)
+    return Math.max(SCENE_MIN_QUALITY, Math.min(ceiling, quality * Math.sqrt(SCENE_FRAME_BUDGET_MS / costMs)))
+  if (costMs < SCENE_FRAME_BUDGET_MS * 0.55) return Math.min(ceiling, quality * 1.08)
+  return Math.min(ceiling, quality)
+}
+
+export function sceneRasterSize(width: number, height: number, quality: number) {
+  return {
+    width: Math.max(16, Math.floor((width * quality) / 2) * 2),
+    height: Math.max(16, Math.floor((height * quality) / 2) * 2),
+  }
+}
+
+/** The finished scene frame the player transmits: the painted raster through the cinema pass. */
+export function finishScenePixels(
+  painted: Buffer,
+  width: number,
+  height: number,
+  input: { elapsedMs: number; durationMs?: number; move: CinemaMove },
+): Buffer {
+  return applyCinema(painted, width, height, cinemaShot({ width, height, ...input }))
+}
+
 // The caller supplies the renderer's native output queue, never intercepted
 // console/stdout output. Delete only this playback's image and its placements.
-export function digitalCodePixelPlayer(write: (data: string) => void) {
+export function digitalCodePixelPlayer(
+  write: (data: string) => void,
+  options: { now?: () => number; move?: CinemaMove } = {},
+) {
+  const now = options.now ?? (() => performance.now())
+  // One camera move per playback, so scenes do not all share the same zoom.
+  const move = options.move ?? chooseCinemaMove()
   const id = randomInt(1, 0x7fffffff)
   let frame: DigitalCodePixels | undefined
-  let foliagePainter: ReturnType<typeof createFoliagePixelPainter> | undefined
+  let foliagePainter: { width: number; height: number; paint: (elapsedMs: number) => Buffer } | undefined
   let tick = 0
-  const started = performance.now()
+  const started = now()
   let size = ""
   let closed = false
+  let quality = 1
+  let ceiling = 1
+  let cost: number | undefined
+  let sceneFrames = 0
   const clear = () => write(kittyDigitalCodeDeleteSequence(id))
   return {
     draw(input: {
@@ -376,17 +429,21 @@ export function digitalCodePixelPlayer(write: (data: string) => void) {
       direction: DigitalCodeDirection
       style?: OverlayStyle
       elapsedMs?: number
+      /** Total playback length; lets scenes ease the camera and fade out on time. */
+      durationMs?: number
     }) {
       if (closed) return
       const next = `${input.width}:${input.height}:${input.columns}:${input.rows}:${input.direction}:${input.style ?? "digital-code"}`
       if (!frame || next !== size) {
         if (frame) clear()
         frame = createDigitalCodePixels(input.width, input.height, input.direction, undefined, input.style)
-        foliagePainter = isFoliageVariant(input.style)
-          ? createFoliagePixelPainter(frame.width, frame.height, input.style)
-          : undefined
+        foliagePainter = undefined
         size = next
         tick = 0
+        ceiling = sceneQualityCeiling(frame.width, frame.height)
+        quality = ceiling
+        cost = undefined
+        sceneFrames = 0
       } else if (!isTextSceneStyle(input.style) && !isFoliageVariant(input.style)) {
         // Scene and foliage styles never render the rain; don't pay per-frame
         // column copies for state nobody reads. Style switches rebuild anyway.
@@ -394,20 +451,41 @@ export function digitalCodePixelPlayer(write: (data: string) => void) {
         tick++
         frame.tick = tick
       }
-      const now = performance.now()
+      const begin = now()
+      const elapsedMs = input.elapsedMs ?? begin - started
+      const style = input.style
+      if (!isTextSceneStyle(style) && !isFoliageVariant(style)) {
+        write(kittyDigitalCodeFrame(id, frame, input.columns, input.rows))
+        return
+      }
+      const raster = sceneRasterSize(frame.width, frame.height, quality)
+      let painted: Buffer
+      if (isFoliageVariant(style)) {
+        if (!foliagePainter || foliagePainter.width !== raster.width || foliagePainter.height !== raster.height)
+          foliagePainter = {
+            ...raster,
+            paint: createFoliagePixelPainter(raster.width, raster.height, style),
+          }
+        painted = foliagePainter.paint(elapsedMs)
+      } else painted = renderTextScenePixels(raster.width, raster.height, style, elapsedMs)
       write(
         kittyDigitalCodeFrame(
           id,
           frame,
           input.columns,
           input.rows,
-          isTextSceneStyle(input.style)
-            ? renderTextScenePixels(frame.width, frame.height, input.style, input.elapsedMs ?? now - started)
-            : foliagePainter
-              ? foliagePainter(input.elapsedMs ?? now - started)
-              : undefined,
+          finishScenePixels(painted, raster.width, raster.height, { elapsedMs, durationMs: input.durationMs, move }),
+          raster,
         ),
       )
+      const spent = now() - begin
+      // A scene's first frame pays one-time setup (caches, warm-up); it says
+      // nothing about steady frame cost, so it never steers the raster.
+      if (sceneFrames++ === 0) return
+      cost = cost === undefined ? spent : cost * 0.5 + spent * 0.5
+      const adjusted = nextSceneQuality({ quality, ceiling, costMs: cost })
+      if (adjusted < quality) cost = undefined // a smaller raster starts its own cost history
+      quality = adjusted
     },
     dispose() {
       if (closed) return

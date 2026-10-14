@@ -5,8 +5,12 @@ import { SINGAPORE_COLORS } from "../../../src/cli/tui/component/singapore-view-
 import { renderTextScenePixels } from "../../../src/cli/tui/component/text-scene-pixels"
 import {
   digitalCodePixelPlayer,
+  finishScenePixels,
   kittyDigitalCodeDeleteSequence,
 } from "../../../src/cli/tui/component/digital-code-pixels"
+import { CINEMA_STILL } from "../../../src/cli/tui/component/scene-cinema"
+
+const STILL_PLAYBACK = { now: () => 0, move: CINEMA_STILL }
 
 const WIDTH = 760,
   HEIGHT = 480
@@ -55,7 +59,7 @@ test.each(["singapore-day", "singapore-night"] as const)(
 
 test("existing Kitty player routes both Singapore variants, resizes and cleans up", () => {
   const writes: string[] = []
-  const player = digitalCodePixelPlayer((data) => writes.push(data))
+  const player = digitalCodePixelPlayer((data) => writes.push(data), STILL_PLAYBACK)
   const input = {
     width: 304,
     height: 192,
@@ -72,14 +76,35 @@ test("existing Kitty player routes both Singapore variants, resizes and cleans u
   }
   player.draw(input)
   const id = Number(/,i=(\d+),/.exec(writes[0]!)![1])
-  expect(decode(writes[0]!).equals(renderSingaporePixels(304, 192, "singapore-day", 1000))).toBe(true)
+  expect(
+    decode(writes[0]!).equals(
+      finishScenePixels(renderSingaporePixels(304, 192, "singapore-day", 1000), 304, 192, {
+        elapsedMs: 1000,
+        move: CINEMA_STILL,
+      }),
+    ),
+  ).toBe(true)
   player.draw({ ...input, direction: "up", style: "singapore-night" })
   expect(writes[1]).toBe(kittyDigitalCodeDeleteSequence(id))
-  expect(decode(writes[2]!).equals(renderSingaporePixels(304, 192, "singapore-night", 1000))).toBe(true)
+  expect(
+    decode(writes[2]!).equals(
+      finishScenePixels(renderSingaporePixels(304, 192, "singapore-night", 1000), 304, 192, {
+        elapsedMs: 1000,
+        move: CINEMA_STILL,
+      }),
+    ),
+  ).toBe(true)
   player.draw({ ...input, width: 380, columns: 95 })
   expect(writes[3]).toBe(kittyDigitalCodeDeleteSequence(id))
   expect(writes[4]).toContain("s=380,v=192,")
-  expect(decode(writes[4]!).equals(renderSingaporePixels(380, 192, "singapore-day", 1000))).toBe(true)
+  expect(
+    decode(writes[4]!).equals(
+      finishScenePixels(renderSingaporePixels(380, 192, "singapore-day", 1000), 380, 192, {
+        elapsedMs: 1000,
+        move: CINEMA_STILL,
+      }),
+    ),
+  ).toBe(true)
   player.dispose()
   expect(writes[5]).toBe(kittyDigitalCodeDeleteSequence(id))
   player.dispose()

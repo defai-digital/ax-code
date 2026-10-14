@@ -1,7 +1,14 @@
 import { expect, test } from "vitest"
 import { inflateSync } from "node:zlib"
 import { renderFujiPixels } from "../../../src/cli/tui/component/fuji-pixels"
-import { createDigitalCodePixels, digitalCodePixelPlayer } from "../../../src/cli/tui/component/digital-code-pixels"
+import {
+  createDigitalCodePixels,
+  digitalCodePixelPlayer,
+  finishScenePixels,
+} from "../../../src/cli/tui/component/digital-code-pixels"
+import { CINEMA_STILL } from "../../../src/cli/tui/component/scene-cinema"
+
+const STILL_PLAYBACK = { now: () => 0, move: CINEMA_STILL }
 
 const pixel = (frame: Buffer, width: number, x: number, y: number) => [
   ...frame.subarray((y * width + x) * 3, (y * width + x) * 3 + 3),
@@ -69,7 +76,7 @@ test("Fuji and Digital Code share the same 1920x1080 bound", () => {
 
 test("Fuji transport sends the scene, preserves animation time on resize, and deletes its image", () => {
   const writes: string[] = []
-  const player = digitalCodePixelPlayer((data) => writes.push(data))
+  const player = digitalCodePixelPlayer((data) => writes.push(data), STILL_PLAYBACK)
   const input = {
     width: 780,
     height: 440,
@@ -84,12 +91,33 @@ test("Fuji transport sends the scene, preserves animation time on resize, and de
       Buffer.from([...output.matchAll(/\x1b_G[^;]+;([A-Za-z0-9+/=]*)\x1b\\/g)].map((m) => m[1]).join(""), "base64"),
     )
   player.draw(input)
-  expect(decode(writes[0]!).equals(renderFujiPixels(780, 440, "fuji-day", 1200))).toBe(true)
+  expect(
+    decode(writes[0]!).equals(
+      finishScenePixels(renderFujiPixels(780, 440, "fuji-day", 1200), 780, 440, {
+        elapsedMs: 1200,
+        move: CINEMA_STILL,
+      }),
+    ),
+  ).toBe(true)
   player.draw({ ...input, width: 600 })
   expect(writes[1]).toContain("a=d,d=I")
-  expect(decode(writes[2]!).equals(renderFujiPixels(600, 440, "fuji-day", 1200))).toBe(true)
+  expect(
+    decode(writes[2]!).equals(
+      finishScenePixels(renderFujiPixels(600, 440, "fuji-day", 1200), 600, 440, {
+        elapsedMs: 1200,
+        move: CINEMA_STILL,
+      }),
+    ),
+  ).toBe(true)
   player.draw({ ...input, style: "fuji-night" })
-  expect(decode(writes[4]!).equals(renderFujiPixels(780, 440, "fuji-night", 1200))).toBe(true)
+  expect(
+    decode(writes[4]!).equals(
+      finishScenePixels(renderFujiPixels(780, 440, "fuji-night", 1200), 780, 440, {
+        elapsedMs: 1200,
+        move: CINEMA_STILL,
+      }),
+    ),
+  ).toBe(true)
   player.dispose()
   expect(writes[5]).toContain("a=d,d=I")
   player.draw(input)

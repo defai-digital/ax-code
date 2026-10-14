@@ -72,16 +72,24 @@ export function borobudurBackground(style: BorobudurStyle) {
   return style === "borobudur-mist" ? "#b4bcbc" : "#7ec0e4"
 }
 
+// Both endpoints are fixed hex strings per style; parse them once so pixel
+// loops that sample the gradient per row (or per pixel) never re-parse.
+const borobudurSkyStops = new Map<BorobudurStyle, { from: readonly number[]; to: readonly number[] }>()
+
 /** Sample the vertical sky gradient. `t` is 0 at the top of the frame. */
 export function borobudurSkyRgb(style: BorobudurStyle, t: number): readonly [number, number, number] {
   const x = Math.max(0, Math.min(1, t))
-  const from = [1, 3, 5].map((offset) => parseInt(borobudurBackground(style).slice(offset, offset + 2), 16))
-  const to = [1, 3, 5].map((offset) => parseInt(BOROBUDUR_COLORS[style].skyBottom.slice(offset, offset + 2), 16))
-  return [0, 1, 2].map((channel) => Math.round(from[channel]! + (to[channel]! - from[channel]!) * x)) as [
-    number,
-    number,
-    number,
-  ]
+  let stops = borobudurSkyStops.get(style)
+  if (!stops) {
+    stops = {
+      from: [1, 3, 5].map((offset) => parseInt(borobudurBackground(style).slice(offset, offset + 2), 16)),
+      to: [1, 3, 5].map((offset) => parseInt(BOROBUDUR_COLORS[style].skyBottom.slice(offset, offset + 2), 16)),
+    }
+    borobudurSkyStops.set(style, stops)
+  }
+  return [0, 1, 2].map((channel) =>
+    Math.round(stops!.from[channel]! + (stops!.to[channel]! - stops!.from[channel]!) * x),
+  ) as [number, number, number]
 }
 
 /** Mist band drift offset on a 4800ms round. */
@@ -96,7 +104,7 @@ export function borobudurBirds(elapsedMs: number): BorobudurBird[] {
   return [
     { x: (10 + Math.floor(t / 300)) % BOROBUDUR_COLUMNS, y: 6 },
     {
-      x: ((60 - Math.floor(t / 400) + BOROBUDUR_COLUMNS) % BOROBUDUR_COLUMNS + BOROBUDUR_COLUMNS) % BOROBUDUR_COLUMNS,
+      x: (((60 - Math.floor(t / 400) + BOROBUDUR_COLUMNS) % BOROBUDUR_COLUMNS) + BOROBUDUR_COLUMNS) % BOROBUDUR_COLUMNS,
       y: 4,
     },
   ]

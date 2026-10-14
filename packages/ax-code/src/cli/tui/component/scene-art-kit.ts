@@ -46,11 +46,21 @@ export function glow(hd: HdCanvas, cx: number, cy: number, radius: number, color
   const xb = Math.min(hd.w - 1, Math.ceil(cx + radius))
   const ya = Math.max(0, Math.floor(cy - radius))
   const yb = Math.min(hd.h - 1, Math.ceil(cy + radius))
+  // Inlined blendPixel over bounds that are already clipped to the canvas.
+  const pixels = hd.pixels
   for (let y = ya; y <= yb; y++) {
-    for (let x = xa; x <= xb; x++) {
-      const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy) / radius
+    const dy = y + 0.5 - cy
+    if (dy >= radius || dy <= -radius) continue
+    let i = (y * hd.w + xa) * 3
+    for (let x = xa; x <= xb; x++, i += 3) {
+      const d = Math.hypot(x + 0.5 - cx, dy) / radius
       if (d >= 1) continue
-      blendPixel(hd, x, y, color, strength * (1 - d) * (1 - d))
+      const alpha = strength * (1 - d) * (1 - d)
+      if (alpha <= 0) continue
+      const a = Math.min(1, alpha)
+      pixels[i] = Math.round(pixels[i]! + (color[0] - pixels[i]!) * a)
+      pixels[i + 1] = Math.round(pixels[i + 1]! + (color[1] - pixels[i + 1]!) * a)
+      pixels[i + 2] = Math.round(pixels[i + 2]! + (color[2] - pixels[i + 2]!) * a)
     }
   }
 }

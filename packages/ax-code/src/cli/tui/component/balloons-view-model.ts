@@ -80,11 +80,22 @@ export function balloonsBackground(style: BalloonsStyle) {
   return style === "balloons-night" ? "#0e1433" : "#b87a6a"
 }
 
+/** Parsed gradient endpoints per style; the pixel sampler calls balloonsSkyRgb per row. */
+const SKY_ENDS: Record<BalloonsStyle, readonly [number[], number[]]> = {
+  "balloons-dawn": [
+    [1, 3, 5].map((offset) => parseInt(balloonsBackground("balloons-dawn").slice(offset, offset + 2), 16)),
+    [1, 3, 5].map((offset) => parseInt(BALLOONS_COLORS["balloons-dawn"].skyBottom.slice(offset, offset + 2), 16)),
+  ],
+  "balloons-night": [
+    [1, 3, 5].map((offset) => parseInt(balloonsBackground("balloons-night").slice(offset, offset + 2), 16)),
+    [1, 3, 5].map((offset) => parseInt(BALLOONS_COLORS["balloons-night"].skyBottom.slice(offset, offset + 2), 16)),
+  ],
+}
+
 /** Sample the vertical sky gradient. `t` is 0 at the top of the frame. */
 export function balloonsSkyRgb(style: BalloonsStyle, t: number): readonly [number, number, number] {
   const x = Math.max(0, Math.min(1, t))
-  const from = [1, 3, 5].map((offset) => parseInt(balloonsBackground(style).slice(offset, offset + 2), 16))
-  const to = [1, 3, 5].map((offset) => parseInt(BALLOONS_COLORS[style].skyBottom.slice(offset, offset + 2), 16))
+  const [from, to] = SKY_ENDS[style]
   return [0, 1, 2].map((channel) => Math.round(from[channel]! + (to[channel]! - from[channel]!) * x)) as [
     number,
     number,

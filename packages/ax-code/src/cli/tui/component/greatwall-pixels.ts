@@ -111,24 +111,70 @@ export function renderGreatwallPixels(width: number, height: number, style: Grea
     }
   }
 
-  // Mountain ranges in atmospheric perspective.
+  // Mountain ranges in atmospheric perspective. The per-row haze mix depends
+  // only on `depth`; hoist it, and precompute `sunward(x)` for every column so
+  // the inner x loop is two vnoise + one mix + one darken (rounded), then a
+  // direct buffer write. With alpha=1 the old `blend(...,1)` was already a
+  // direct assignment of an already-rounded color, so the call was redundant.
+  const sunwardByX = new Float32Array(w)
+  for (let x = 0; x < w; x++) sunwardByX[x] = sunward(x)
   const ranges = [
     { base: 8.2, amp: 3.6, freq: 0.045, color: far, haze: 0.45, seed: 3 },
     { base: 10.3, amp: 3, freq: 0.07, color: hdMix(far, ridge, 0.35), haze: 0.3, seed: 11 },
   ]
+  const duskWarm = dusk ? 1.3 : 0.8
+  const groundYCeil = Math.ceil(groundY)
   for (const layer of ranges) {
+    const lcR = layer.color[0]
+    const lcG = layer.color[1]
+    const lcB = layer.color[2]
+    const hR = horizon[0]
+    const hG = horizon[1]
+    const hB = horizon[2]
+    const wR = warm[0]
+    const wG = warm[1]
+    const wB = warm[2]
+    const layerBaseY = hd.Y(layer.base)
+    const layerPeakSpan = layer.amp * hd.ch * 0.9
+    const topByX = new Float32Array(w)
     for (let x = 0; x < w; x++) {
       const u = x / s
       const peak = vnoise(u * layer.freq * 7, layer.seed) * 0.7 + vnoise(u * layer.freq * 19, layer.seed + 5) * 0.3
-      const top = hd.Y(layer.base) - peak * layer.amp * hd.ch * 0.9 + (sunward(x) - 0.5) * s * 0
-      for (let y = Math.max(0, Math.floor(top)); y < Math.min(h, Math.ceil(groundY)); y++) {
-        const depth = (y - top) / (groundY - top || 1)
-        // Ridge-light on the sunward slope, then haze.
-        const edge = vnoise(x / (s * 3), y / (s * 3) + layer.seed)
-        let col = hdMix(layer.color, horizon, layer.haze * (1 - depth * 0.4))
-        col = hdMix(col, warm, 0.18 * sunward(x) * (1 - depth) * (dusk ? 1.3 : 0.8))
-        col = hdDarken(col, 0.9 + 0.15 * edge)
-        blend(x, y, col, 1)
+      topByX[x] = layerBaseY - peak * layerPeakSpan
+    }
+    for (let x = 0; x < w; x++) {
+      const top = topByX[x]
+      const yStart = Math.max(0, Math.floor(top))
+      const yEnd = Math.min(h, groundYCeil)
+      const ySpan = groundY - top || 1
+      const sunX = sunwardByX[x]
+      const warmBaseX = 0.18 * sunX * duskWarm
+      const edgeXDenom = s * 3
+      for (let y = yStart; y < yEnd; y++) {
+        const depth = (y - top) / ySpan
+        // Pre-mix the haze row color: hdMix(layer.color, horizon, layer.haze*(1-depth*0.4))
+        const hazeAmt = layer.haze * (1 - depth * 0.4)
+        const hR0 = Math.round(lcR + (hR - lcR) * hazeAmt)
+        const hG0 = Math.round(lcG + (hG - lcG) * hazeAmt)
+        const hB0 = Math.round(lcB + (hB - lcB) * hazeAmt)
+        const oneMDepth = 1 - depth
+        const warmAmt = warmBaseX * oneMDepth
+        // Ridge-light + edge: final two rounds.
+        const edge = vnoise(x / edgeXDenom, y / edgeXDenom + layer.seed)
+        const factor = 0.9 + 0.15 * edge
+        const cR = Math.round(hR0 + (wR - hR0) * warmAmt)
+        const cG = Math.round(hG0 + (wG - hG0) * warmAmt)
+        const cB = Math.round(hB0 + (wB - hB0) * warmAmt)
+        const i = (y * w + x) * 3
+        let vR = cR * factor
+        let vG = cG * factor
+        let vB = cB * factor
+        vR = vR < 0 ? 0 : vR > 255 ? 255 : Math.round(vR)
+        vG = vG < 0 ? 0 : vG > 255 ? 255 : Math.round(vG)
+        vB = vB < 0 ? 0 : vB > 255 ? 255 : Math.round(vB)
+        px[i] = vR
+        px[i + 1] = vG
+        px[i + 2] = vB
       }
     }
     // Valley mist.
@@ -159,16 +205,55 @@ export function renderGreatwallPixels(width: number, height: number, style: Grea
       hd.Y(farT.top + 1.9),
       hdDarken(farCol, 0.6),
     )
-  // Near wooded slope beneath the wall.
+  // Near wooded slope beneath the wall. Hoist sunward(x) and the y-mix terms;
+  // the `hdDarken(ridge, 0.7 + 0.5*n)` call uses a per-pixel n, so it stays
+  // inside the inner loop but we cache ridge/ground darken bases by hand.
+  const darkGround80 = hdDarken(ground, 0.8)
+  const ridgeR = ridge[0]
+  const ridgeG = ridge[1]
+  const ridgeB = ridge[2]
+  const dg80R = darkGround80[0]
+  const dg80G = darkGround80[1]
+  const dg80B = darkGround80[2]
+  const wR2 = warm[0]
+  const wG2 = warm[1]
+  const wB2 = warm[2]
+  const slopeDusk = dusk ? 1.2 : 0.7
+  const slopeYEnd = Math.min(h, Math.ceil(groundY + hd.ch * 0.5))
   for (let x = 0; x < w; x++) {
     const sceneX = (x + 0.5) / hd.cw
     const top = hd.Y(greatwallRidgeF(sceneX)) + hd.ch * 1.2
-    for (let y = Math.max(0, Math.floor(top)); y < Math.min(h, Math.ceil(groundY + hd.ch * 0.5)); y++) {
-      const depth = (y - top) / (groundY - top || 1)
+    const yStart = Math.max(0, Math.floor(top))
+    const ySpan = groundY - top || 1
+    const sunX = sunwardByX[x]
+    const warmBaseX = 0.16 * sunX * slopeDusk
+    for (let y = yStart; y < slopeYEnd; y++) {
+      const depth = (y - top) / ySpan
       const n = vnoise(x / (s * 1.6), y / (s * 1.2))
-      let col = hdMix(hdDarken(ridge, 0.7 + 0.5 * n), hdDarken(ground, 0.8), clamp01(depth * 0.9))
-      col = hdMix(col, warm, 0.16 * sunward(x) * (dusk ? 1.2 : 0.7))
-      blend(x, y, col, 1)
+      // hdDarken(ridge, 0.7 + 0.5*n): no clamp is needed because factor in [0.7, 1.2]
+      // and ridge is in [0,255], so result is in [0,306] — must clamp to match
+      // channel() rounding.
+      const ridgeF = 0.7 + 0.5 * n
+      const rA = ridgeR * ridgeF
+      const gA = ridgeG * ridgeF
+      const bA = ridgeB * ridgeF
+      const aR = rA < 0 ? 0 : rA > 255 ? 255 : Math.round(rA)
+      const aG = gA < 0 ? 0 : gA > 255 ? 255 : Math.round(gA)
+      const aB = bA < 0 ? 0 : bA > 255 ? 255 : Math.round(bA)
+      const t = depth * 0.9
+      const tCl = t < 0 ? 0 : t > 1 ? 1 : t
+      // col = hdMix([aR, aG, aB], darkGround80, tCl)
+      const c1R = Math.round(aR + (dg80R - aR) * tCl)
+      const c1G = Math.round(aG + (dg80G - aG) * tCl)
+      const c1B = Math.round(aB + (dg80B - aB) * tCl)
+      // col = hdMix(col, warm, warmBaseX)
+      const cR = Math.round(c1R + (wR2 - c1R) * warmBaseX)
+      const cG = Math.round(c1G + (wG2 - c1G) * warmBaseX)
+      const cB = Math.round(c1B + (wB2 - c1B) * warmBaseX)
+      const i = (y * w + x) * 3
+      px[i] = cR
+      px[i + 1] = cG
+      px[i + 2] = cB
     }
   }
   // Pine silhouettes along the ridge behind the wall.
@@ -435,14 +520,45 @@ export function renderGreatwallPixels(width: number, height: number, style: Grea
   hd.disk(ex, ey, s * 0.28, bird)
   hd.disk(ex + dir * s * 0.3, ey - s * 0.05, s * 0.13, bird)
 
-  // Foreground meadow with grass, rocks, and a worn path.
+  // Foreground meadow with grass, rocks, and a worn path. The two ground mixes
+  // and the warm factor decompose into x- and y-invariant pieces; hoist them
+  // so the inner loop is one vnoise + two mix rounds + a direct write.
+  const midGround = hdMix(ground, ridge, 0.35)
+  const darkGround = hdDarken(ground, 0.65)
+  const mgR = midGround[0]
+  const mgG = midGround[1]
+  const mgB = midGround[2]
+  const dgR = darkGround[0]
+  const dgG = darkGround[1]
+  const dgB = darkGround[2]
+  const wR = warm[0]
+  const wG = warm[1]
+  const wB = warm[2]
+  const meadowDusk = dusk ? 1.3 : 0.8
+  const meadowSpan = h - groundY || 1
   for (let y = Math.floor(groundY); y < h; y++) {
-    const f = (y - groundY) / (h - groundY || 1)
+    const f = (y - groundY) / meadowSpan
+    const tBase = f * 0.8 - 0.1
+    const warmBaseY = 0.12 * (1 - f) * meadowDusk
+    const yDenom = s * 0.9
+    const xDenom = s * 3
     for (let x = 0; x < w; x++) {
-      const n = vnoise(x / (s * 3), y / (s * 0.9))
-      let col = hdMix(hdMix(ground, ridge, 0.35), hdDarken(ground, 0.65), clamp01(f * 0.8 + n * 0.3 - 0.1))
-      col = hdMix(col, warm, 0.12 * sunward(x) * (1 - f) * (dusk ? 1.3 : 0.8))
-      blend(x, y, col, 1)
+      const n = vnoise(x / xDenom, y / yDenom)
+      const t = tBase + n * 0.3
+      const tCl = t < 0 ? 0 : t > 1 ? 1 : t
+      // col = hdMix(midGround, darkGround, tCl)
+      const c1R = Math.round(mgR + (dgR - mgR) * tCl)
+      const c1G = Math.round(mgG + (dgG - mgG) * tCl)
+      const c1B = Math.round(mgB + (dgB - mgB) * tCl)
+      // col = hdMix(col, warm, warmBaseY * sunward(x))
+      const warmAmt = warmBaseY * sunwardByX[x]
+      const cR = Math.round(c1R + (wR - c1R) * warmAmt)
+      const cG = Math.round(c1G + (wG - c1G) * warmAmt)
+      const cB = Math.round(c1B + (wB - c1B) * warmAmt)
+      const i = (y * w + x) * 3
+      px[i] = cR
+      px[i + 1] = cG
+      px[i + 2] = cB
     }
   }
   for (let y = Math.floor(groundY); y < h; y++) {

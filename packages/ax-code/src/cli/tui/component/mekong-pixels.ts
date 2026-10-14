@@ -97,10 +97,28 @@ export function renderMekongPixels(width: number, height: number, style: MekongS
 
   // Riverbank strip.
   const bankTop = hd.Y(MEKONG_WATER_TOP - 0.7)
-  for (let y = Math.floor(bankTop); y < waterY; y++) {
-    for (let x = 0; x < hd.w; x++) {
+  {
+    const bankA = hdDarken(palm, 0.6)
+    const bankB = hdDarken(hut, 0.7)
+    const ba0 = bankA[0]!
+    const ba1 = bankA[1]!
+    const ba2 = bankA[2]!
+    const bb0 = bankB[0]!
+    const bb1 = bankB[1]!
+    const bb2 = bankB[2]!
+    for (let y = Math.max(0, Math.floor(bankTop)); y < waterY; y++) {
       const v = (y - bankTop) / (waterY - bankTop || 1)
-      hd.set(x, y, hdMix(hdDarken(palm, 0.6), hdDarken(hut, 0.7), v * 0.6 + artHash(x, y) * 0.1))
+      const vBase = v * 0.6
+      let i = y * hd.w * 3
+      for (let x = 0; x < hd.w; x++, i += 3) {
+        // hdMix(bankA, bankB, v * 0.6 + artHash(x, y) * 0.1), clamped (factor < 0.7).
+        let t = vBase + artHash(x, y) * 0.1
+        if (t < 0) t = 0
+        else if (t > 1) t = 1
+        hd.pixels[i] = Math.round(ba0 + (bb0 - ba0) * t)
+        hd.pixels[i + 1] = Math.round(ba1 + (bb1 - ba1) * t)
+        hd.pixels[i + 2] = Math.round(ba2 + (bb2 - ba2) * t)
+      }
     }
   }
 
@@ -228,40 +246,107 @@ export function renderMekongPixels(width: number, height: number, style: MekongS
   }
 
   // River: gradient, sky reflection near the far bank, ripple bands.
-  for (let y = Math.max(0, Math.floor(waterY)); y < hd.h; y++) {
-    const v = (y - waterY) / (hd.h - waterY || 1)
-    const base = hdMix(hdMix(waterTop, horizon, (1 - v) * 0.45), waterDeep, v * 0.85)
+  {
+    const pxCol = new Float64Array(hd.w) // x / cw
+    const col037 = new Float64Array(hd.w) // (x / cw) * 0.37
     for (let x = 0; x < hd.w; x++) {
-      const px = x / hd.cw
-      const wave = Math.sin(px * (1.1 + v * 0.8) + y * 0.45 + phase) + Math.sin(px * 0.37 - phase + v * 6) * 0.6
-      let col = hdDarken(base, 1 + wave * 0.035)
-      if (wave > 1.25) col = hdMix(col, shimmerColor, 0.14)
-      hd.set(x, y, col)
+      pxCol[x] = x / hd.cw
+      col037[x] = (x / hd.cw) * 0.37
+    }
+    const sh0 = shimmerColor[0]!
+    const sh1 = shimmerColor[1]!
+    const sh2 = shimmerColor[2]!
+    for (let y = Math.max(0, Math.floor(waterY)); y < hd.h; y++) {
+      const v = (y - waterY) / (hd.h - waterY || 1)
+      const base = hdMix(hdMix(waterTop, horizon, (1 - v) * 0.45), waterDeep, v * 0.85)
+      const b0 = base[0]!
+      const b1 = base[1]!
+      const b2 = base[2]!
+      const f1 = 1.1 + v * 0.8
+      const y045 = y * 0.45
+      const v6 = v * 6
+      let i = y * hd.w * 3
+      for (let x = 0; x < hd.w; x++, i += 3) {
+        const wave = Math.sin(pxCol[x]! * f1 + y045 + phase) + Math.sin(col037[x]! - phase + v6) * 0.6
+        let d0 = b0 * (1 + wave * 0.035)
+        let c0 = d0 < 0 ? 0 : d0 > 255 ? 255 : Math.round(d0)
+        let d1 = b1 * (1 + wave * 0.035)
+        let c1 = d1 < 0 ? 0 : d1 > 255 ? 255 : Math.round(d1)
+        let d2 = b2 * (1 + wave * 0.035)
+        let c2 = d2 < 0 ? 0 : d2 > 255 ? 255 : Math.round(d2)
+        if (wave > 1.25) {
+          c0 = Math.round(c0 + (sh0 - c0) * 0.14)
+          c1 = Math.round(c1 + (sh1 - c1) * 0.14)
+          c2 = Math.round(c2 + (sh2 - c2) * 0.14)
+        }
+        hd.pixels[i] = c0
+        hd.pixels[i + 1] = c1
+        hd.pixels[i + 2] = c2
+      }
     }
   }
   // Mirror the temple, hut, and palms faintly in the near water.
-  for (let y = Math.floor(waterY); y < Math.min(hd.h, waterY + hd.ch * 3.2); y++) {
-    const v = (y - waterY) / (hd.ch * 3.2)
-    const src = Math.floor(waterY - (y - waterY) * 0.9 - 1)
-    if (src < 0) continue
-    for (let x = 0; x < hd.w; x++) {
-      const dx = Math.round(Math.sin(y * 0.8 + phase + x * 0.05) * 2)
-      const i = (src * hd.w + Math.max(0, Math.min(hd.w - 1, x + dx))) * 3
-      const color: RGB = [hd.pixels[i]!, hd.pixels[i + 1]!, hd.pixels[i + 2]!]
-      blendPixel(hd, x, y, color, 0.28 * (1 - v))
+  {
+    const col005 = new Float64Array(hd.w) // x * 0.05
+    for (let x = 0; x < hd.w; x++) col005[x] = x * 0.05
+    for (let y = Math.max(0, Math.floor(waterY)); y < Math.min(hd.h, waterY + hd.ch * 3.2); y++) {
+      const v = (y - waterY) / (hd.ch * 3.2)
+      const src = Math.floor(waterY - (y - waterY) * 0.9 - 1)
+      if (src < 0) continue
+      const a = 0.28 * (1 - v)
+      const rowPhase = y * 0.8 + phase
+      const srcRow = src * hd.w * 3
+      let i = y * hd.w * 3
+      for (let x = 0; x < hd.w; x++, i += 3) {
+        const dx = Math.round(Math.sin(rowPhase + col005[x]!) * 2)
+        let xr = x + dx
+        if (xr < 0) xr = 0
+        else if (xr > hd.w - 1) xr = hd.w - 1
+        const j = srcRow + xr * 3
+        const s0 = hd.pixels[j]!
+        const p0 = hd.pixels[i]!
+        hd.pixels[i] = Math.round(p0 + (s0 - p0) * a)
+        const s1 = hd.pixels[j + 1]!
+        const p1 = hd.pixels[i + 1]!
+        hd.pixels[i + 1] = Math.round(p1 + (s1 - p1) * a)
+        const s2 = hd.pixels[j + 2]!
+        const p2 = hd.pixels[i + 2]!
+        hd.pixels[i + 2] = Math.round(p2 + (s2 - p2) * a)
+      }
     }
   }
   // Sun glitter path on the river.
   const path = hd.X(MEKONG_SUN.x)
   const glitter = hdMix(shimmerColor, sun, 0.4)
-  for (let y = Math.floor(waterY); y < hd.h; y++) {
-    const v = (y - waterY) / (hd.h - waterY || 1)
-    const half = hd.X(1.4 + v * 3.2)
-    const wob = Math.sin(y * 0.4 + phase) * hd.cw * 0.5
-    for (let x = Math.max(0, Math.floor(path - half)); x < Math.min(hd.w, Math.ceil(path + half)); x++) {
-      const r = artHash(x + shimmer * 17, Math.floor(y / 2))
-      const edge = 1 - Math.abs(x - path - wob) / half
-      if (edge > 0 && r < edge * (0.55 - v * 0.2)) blendPixel(hd, x, y, glitter, 0.45 + edge * 0.5)
+  {
+    const gl0 = glitter[0]!
+    const gl1 = glitter[1]!
+    const gl2 = glitter[2]!
+    const shim17 = shimmer * 17
+    for (let y = Math.max(0, Math.floor(waterY)); y < hd.h; y++) {
+      const v = (y - waterY) / (hd.h - waterY || 1)
+      const half = hd.X(1.4 + v * 3.2)
+      const wob = Math.sin(y * 0.4 + phase) * hd.cw * 0.5
+      const gate = 0.55 - v * 0.2
+      const yShift = Math.floor(y / 2)
+      for (let x = Math.max(0, Math.floor(path - half)); x < Math.min(hd.w, Math.ceil(path + half)); x++) {
+        const edge = 1 - Math.abs(x - path - wob) / half
+        if (edge <= 0) continue
+        // artHash(x + shimmer * 17, Math.floor(y / 2)) inlined.
+        let n = (Math.imul(Math.floor(x + shim17) | 0, 374761393) + Math.imul(yShift, 668265263)) | 0
+        n = Math.imul(n ^ (n >>> 13), 1274126177)
+        const r = ((n ^ (n >>> 16)) >>> 0) / 4294967296
+        if (!(r < edge * gate)) continue
+        let a = 0.45 + edge * 0.5
+        if (a > 1) a = 1
+        const i = (y * hd.w + x) * 3
+        const p0 = hd.pixels[i]!
+        hd.pixels[i] = Math.round(p0 + (gl0 - p0) * a)
+        const p1 = hd.pixels[i + 1]!
+        hd.pixels[i + 1] = Math.round(p1 + (gl1 - p1) * a)
+        const p2 = hd.pixels[i + 2]!
+        hd.pixels[i + 2] = Math.round(p2 + (gl2 - p2) * a)
+      }
     }
   }
   glow(hd, path, waterY + hd.ch * 1.5, hd.cw * 6, sunGlow, 0.22)

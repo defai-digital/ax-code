@@ -4,25 +4,32 @@
 
 export type RGB = readonly [number, number, number]
 
+const hexCache = new Map<string, RGB>()
+
 export function hdHex(value: string): RGB {
-  return [1, 3, 5].map((offset) => parseInt(value.slice(offset, offset + 2), 16)) as [number, number, number]
+  // Painters convert palette strings inside per-pixel loops; parse each once.
+  const cached = hexCache.get(value)
+  if (cached) return cached
+  const color: RGB = [parseInt(value.slice(1, 3), 16), parseInt(value.slice(3, 5), 16), parseInt(value.slice(5, 7), 16)]
+  if (hexCache.size < 4096) hexCache.set(value, color)
+  return color
 }
 
+// hdMix and hdDarken run per pixel in most painters. Build the tuple directly:
+// an array-map version allocated twice per call and dominated frame time.
 export function hdMix(a: RGB, b: RGB, t: number): RGB {
-  const u = Math.max(0, Math.min(1, t))
-  return [0, 1, 2].map((channel) => Math.round(a[channel]! + (b[channel]! - a[channel]!) * u)) as [
-    number,
-    number,
-    number,
+  const u = t < 0 ? 0 : t > 1 ? 1 : t
+  return [
+    Math.round(a[0] + (b[0] - a[0]) * u),
+    Math.round(a[1] + (b[1] - a[1]) * u),
+    Math.round(a[2] + (b[2] - a[2]) * u),
   ]
 }
+
+const channel = (value: number) => (value < 0 ? 0 : value > 255 ? 255 : Math.round(value))
 
 export function hdDarken(color: RGB, factor: number): RGB {
-  return [0, 1, 2].map((channel) => Math.max(0, Math.min(255, Math.round(color[channel]! * factor)))) as [
-    number,
-    number,
-    number,
-  ]
+  return [channel(color[0] * factor), channel(color[1] * factor), channel(color[2] * factor)]
 }
 
 export type HdCanvas = {
@@ -144,11 +151,39 @@ export function createHdCanvas(width: number, height: number, columns: number, r
       }
     }
   }
-  const halo = (cx: number, cy: number, coreR: number, core: RGB, body: RGB, around: RGB) => {
+  const halo = (cx: number, cy: number, coreR: number, core: RGB, body: RGB, _around: RGB) => {
+    // A continuous glow blended over the sky, then an anti-aliased disk.
+    // Stepped rings read as a sticker rather than a light source.
+    if (empty) return
     const r = Math.max(2, coreR)
-    disk(cx, cy, r * 2.6, hdMix(body, around, 0.78))
-    disk(cx, cy, r * 1.65, hdMix(body, around, 0.4))
-    disk(cx, cy, r, core)
+    const reach = r * 3.4
+    const xa = Math.max(0, Math.floor(cx - reach))
+    const xb = Math.min(w - 1, Math.ceil(cx + reach))
+    const ya = Math.max(0, Math.floor(cy - reach))
+    const yb = Math.min(h - 1, Math.ceil(cy + reach))
+    for (let y = ya; y <= yb; y++) {
+      for (let x = xa; x <= xb; x++) {
+        const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy)
+        let color = body
+        let a = 0
+        if (d < r + 0.5) {
+          color = hdMix(core, body, Math.max(0, (d - r * 0.55) / (r * 0.45)) * 0.35)
+          a = Math.min(1, r + 0.5 - d)
+          if (d > r - 0.5) {
+            // Edge pixel: the glow under it, then the disk's coverage.
+            const g = Math.pow(1 - Math.min(1, (r - r * 0.9) / (reach - r * 0.9)), 2.2) * 0.75
+            const i = (y * w + x) * 3
+            for (let c = 0; c < 3; c++) pixels[i + c] = Math.round(pixels[i + c]! + (body[c]! - pixels[i + c]!) * g)
+          }
+        } else {
+          const t = Math.min(1, (d - r) / (reach - r))
+          a = Math.pow(1 - t, 2.2) * 0.75
+        }
+        if (a <= 0) continue
+        const i = (y * w + x) * 3
+        for (let c = 0; c < 3; c++) pixels[i + c] = Math.round(pixels[i + c]! + (color[c]! - pixels[i + c]!) * a)
+      }
+    }
   }
   const puff = (sceneX: number, sceneY: number, sceneW: number, color: RGB) => {
     const cy = Y(sceneY)

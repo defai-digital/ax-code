@@ -74,15 +74,31 @@ export function renderDungeonPixels(width: number, height: number, style: Dungeo
   const ambient: RGB = descent ? [0.16, 0.17, 0.26] : [0.24, 0.19, 0.15]
   /** Per-pixel light multiplier (r, g, b), shared by every lit surface. */
   const lightMap = new Float32Array(w * h * 3)
+  // Per-light row-invariant terms, hoisted out of the w*h scan. The per-pixel
+  // `/ l.r` and `/ (l.r * 0.85)` divisions stay in place so the result stays
+  // bit-identical; only the divisor and the row offset are precomputed.
+  const lrI = new Float64Array(lights.length)
+  const lryI = new Float64Array(lights.length)
+  const lkI = new Float64Array(lights.length)
+  const lyI = new Float64Array(lights.length)
+  for (let n = 0; n < lights.length; n++) {
+    const l = lights[n]!
+    lrI[n] = l.r
+    lryI[n] = l.r * 0.85
+    lkI[n] = l.k
+    lyI[n] = l.y
+  }
+  const ln = lights.length
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       let r = ambient[0]
       let g = ambient[1]
       let b = ambient[2]
-      for (const l of lights) {
-        const dx = (x - l.x) / l.r
-        const dy = (y - l.y) / (l.r * 0.85)
-        const q = l.k / (1 + 9 * (dx * dx + dy * dy)) - 0.02
+      for (let n = 0; n < ln; n++) {
+        const l = lights[n]!
+        const dy = (y - lyI[n]!) / lryI[n]!
+        const dx = (x - l.x) / lrI[n]!
+        const q = lkI[n]! / (1 + 9 * (dx * dx + dy * dy)) - 0.02
         if (q <= 0) continue
         r += (q * l.color[0]) / 255
         g += (q * l.color[1]) / 255
@@ -492,13 +508,22 @@ export function renderDungeonPixels(width: number, height: number, style: Dungeo
   // Torchlight pooling on the flagstones.
   for (const l of lights) addGlow(l.x, footY + s * 1.2, s * 10, descent ? [150, 100, 60] : l.color, 0.12 * l.k)
 
-  // Vignette to focus the eye.
+  // Vignette to focus the eye. `vx` only depends on x, so its two terms are
+  // precomputed per column; the row term is hoisted per row as before.
+  const vigVx = new Float64Array(w)
+  const vigVx2 = new Float64Array(w)
+  for (let x = 0; x < w; x++) {
+    const vx = Math.abs(x / w - 0.5) * 2
+    vigVx[x] = vx
+    vigVx2[x] = 0.18 * vx * vx
+  }
   for (let y = 0; y < h; y++) {
     const vy = Math.abs(y / h - 0.5) * 2
+    const rowIndex = y * w
     for (let x = 0; x < w; x++) {
-      const vx = Math.abs(x / w - 0.5) * 2
-      const v = 1 - 0.38 * Math.pow(Math.max(0, Math.max(vx, vy) - 0.55) / 0.45, 1.7) - 0.18 * vx * vx
-      const i = (y * w + x) * 3
+      const vx = vigVx[x]!
+      const v = 1 - 0.38 * Math.pow(Math.max(0, Math.max(vx, vy) - 0.55) / 0.45, 1.7) - vigVx2[x]!
+      const i = (rowIndex + x) * 3
       px[i] = Math.round(px[i]! * v)
       px[i + 1] = Math.round(px[i + 1]! * v)
       px[i + 2] = Math.round(px[i + 2]! * v)

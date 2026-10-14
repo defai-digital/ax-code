@@ -9,7 +9,10 @@ import {
   isFoliageVariant,
   renderFoliagePixels,
 } from "../../../src/cli/tui/component/foliage-view-model"
-import { digitalCodePixelPlayer } from "../../../src/cli/tui/component/digital-code-pixels"
+import { digitalCodePixelPlayer, finishScenePixels } from "../../../src/cli/tui/component/digital-code-pixels"
+import { CINEMA_STILL } from "../../../src/cli/tui/component/scene-cinema"
+
+const STILL_PLAYBACK = { now: () => 0, move: CINEMA_STILL }
 
 describe("falling foliage", () => {
   test.each(["classic-foliage", "golden-foliage"] as const)(
@@ -79,20 +82,26 @@ describe("falling foliage", () => {
   )
   test("pixel transport switches styles and deletes its image only once on disposal", () => {
     const output: string[] = []
-    const player = digitalCodePixelPlayer((data) => output.push(data))
+    const player = digitalCodePixelPlayer((data) => output.push(data), STILL_PLAYBACK)
     const input = { width: 320, height: 180, columns: 40, rows: 12, direction: "down" as const }
     player.draw({ ...input, style: "classic-foliage", elapsedMs: 0 })
     player.draw({ ...input, style: "classic-foliage", elapsedMs: 1200 })
     player.draw({ ...input, style: "golden-foliage", elapsedMs: 1200 })
     const packets = [...output.at(-1)!.matchAll(/\x1b_G[^;]+;([A-Za-z0-9+/=]*)\x1b\\/g)]
     expect(inflateSync(Buffer.from(packets.map((p) => p[1]).join(""), "base64"))).toEqual(
-      renderFoliagePixels(320, 180, "golden-foliage", 1200),
+      finishScenePixels(renderFoliagePixels(320, 180, "golden-foliage", 1200), 320, 180, {
+        elapsedMs: 1200,
+        move: CINEMA_STILL,
+      }),
     )
     expect(output.filter((s) => s.includes("a=d,d=I"))).toHaveLength(1)
     player.draw({ ...input, width: 160, height: 90, style: "golden-foliage", elapsedMs: 1200 })
     const resized = [...output.at(-1)!.matchAll(/\x1b_G[^;]+;([A-Za-z0-9+/=]*)\x1b\\/g)]
     expect(inflateSync(Buffer.from(resized.map((p) => p[1]).join(""), "base64"))).toEqual(
-      renderFoliagePixels(160, 90, "golden-foliage", 1200),
+      finishScenePixels(renderFoliagePixels(160, 90, "golden-foliage", 1200), 160, 90, {
+        elapsedMs: 1200,
+        move: CINEMA_STILL,
+      }),
     )
     expect(output.filter((s) => s.includes("a=d,d=I"))).toHaveLength(2)
     player.dispose()

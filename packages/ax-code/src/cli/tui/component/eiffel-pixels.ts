@@ -58,15 +58,33 @@ export function renderEiffelPixels(width: number, height: number, style: EiffelS
   const horizonSky = eiffelSkyRgb(style, EIFFEL_GROUND_TOP / EIFFEL_ROWS)
 
   const blend = (x: number, y: number, color: RGB, a: number) => blendPixelUnclamped(hd, x, y, color, a)
+  // Glow with a provably-identity skip window: every write in this pipeline
+  // lands on integer pixels, and peak*(1-d)^2 < 1/510 cannot move one.
   const glow = (gx: number, gy: number, r: number, color: RGB, peak: number) => {
     const xa = Math.max(0, Math.floor(gx - r))
     const xb = Math.min(w - 1, Math.ceil(gx + r))
     const ya = Math.max(0, Math.floor(gy - r))
     const yb = Math.min(h - 1, Math.ceil(gy + r))
+    const cr = color[0]!
+    const cg = color[1]!
+    const cb = color[2]!
+    const dSkip = 1 - Math.sqrt(1 / (510 * peak)) - 1e-9
     for (let y = ya; y <= yb; y++) {
-      for (let x = xa; x <= xb; x++) {
-        const d = Math.hypot(x + 0.5 - gx, y + 0.5 - gy) / r
-        if (d < 1) blend(x, y, color, peak * (1 - d) * (1 - d))
+      const dy = y + 0.5 - gy
+      if (dy >= r * dSkip || dy <= -r * dSkip) continue
+      let i = (y * w + xa) * 3
+      for (let x = xa; x <= xb; x++, i += 3) {
+        const d = Math.hypot(x + 0.5 - gx, dy) / r
+        if (d >= dSkip) continue
+        const om = 1 - d
+        const a = peak * om * om
+        if (a <= 0) continue
+        const p0 = px[i]!
+        px[i] = Math.round(p0 + (cr - p0) * a)
+        const p1 = px[i + 1]!
+        px[i + 1] = Math.round(p1 + (cg - p1) * a)
+        const p2 = px[i + 2]!
+        px[i + 2] = Math.round(p2 + (cb - p2) * a)
       }
     }
   }
@@ -173,15 +191,47 @@ export function renderEiffelPixels(width: number, height: number, style: EiffelS
   const plat2 = hd.Y(EIFFEL_PLATFORMS[1])
   const archTop = hd.Y(EIFFEL_BASE - 4)
   const bands = [1, 2.5, 4.5, 6.5, 8, 10, 12, 14]
+  // Per-frame constants hoisted out of the pixel loop (exact same expressions).
+  const bandYs = bands.map((b) => hd.Y(b))
+  const plat1Hh = halfAt(plat1) * 1.3
+  const plat2Hh = halfAt(plat2) * 1.18
+  const topDeck = hd.Y(4.5)
+  const deckHh = halfAt(topDeck) * 1.5
   const lightSide = night ? -1 : 1
   const ironLit = night ? hdMix(iron, [255, 190, 90], 0.55) : hdMix(iron, [255, 214, 170], 0.25)
   const ironBase = hdMix(iron, ironDark, 0.4)
   const ironShade = hdDarken(ironDark, 0.8)
+  const ish0 = ironShade[0]!
+  const ish1 = ironShade[1]!
+  const ish2 = ironShade[2]!
+  const ilt0 = ironLit[0]!
+  const ilt1 = ironLit[1]!
+  const ilt2 = ironLit[2]!
+  const iba0 = ironBase[0]!
+  const iba1 = ironBase[1]!
+  const iba2 = ironBase[2]!
+  const warmCol: RGB = [255, 170, 70]
   const post = (y: number) => 1.1 + (halfAt(y) / hd.cw) * 0.1 * s * 0.4 + (y > plat2 ? 0.25 * s : 0)
   for (let y = Math.floor(yTop); y < Math.min(h, Math.ceil(yBase)); y++) {
     const half = halfAt(y + 0.5)
     const row = rowOf(y + 0.5)
     const hv = clamp01((y - yTop) / (yBase - yTop || 1))
+    const thick = post(y + 0.5)
+    const lower = y > plat2
+    const row15 = (1 - hv) * 0.15
+    const legIn = half * 0.56
+    const archR = half * 0.6
+    const ay = (y - archTop) / (yBase - archTop)
+    const archSqrt = Math.sqrt(Math.max(0, 1 - Math.pow(1 - ay, 2)))
+    const ltRaw = ((y - plat2) / (yBase - plat2)) * 3
+    const lt = ltRaw - Math.floor(ltRaw)
+    const plat1Lo = plat1 - 0.55 * s
+    const plat1Hi = plat1 + 0.55 * s * 0.8
+    const plat1RailLo = plat1 - 0.55 * s * 2
+    const plat2Lo = plat2 - 0.7 * s
+    const plat2Hi = plat2 + 0.7 * s * 0.8
+    const plat2RailLo = plat2 - 0.7 * s * 2
+    const railPeriod = Math.max(2, Math.round(s * 0.5))
     const xa = Math.max(0, Math.floor(cx - half - 3))
     const xb = Math.min(w - 1, Math.ceil(cx + half + 3))
     for (let xx = xa; xx <= xb; xx++) {
@@ -189,16 +239,14 @@ export function renderEiffelPixels(width: number, height: number, style: EiffelS
       const adx = Math.abs(dx)
       const de = half - adx
       if (de < -2) continue
-      const thick = post(y + 0.5)
       let hit = 0
-      const lower = y > plat2
       if (de > -1.5 && de < thick) hit = 1
       if (!hit && !lower) {
         // Upper tower: X-braced bays and ribs across the full width.
         const u = dx / (half || 1)
         for (let b = 0; b < bands.length - 1 && !hit; b++) {
-          const y0 = hd.Y(bands[b]!)
-          const y1 = hd.Y(bands[b + 1]!)
+          const y0 = bandYs[b]!
+          const y1 = bandYs[b + 1]!
           if (y < y0 || y >= y1) continue
           const lt = (y - y0) / (y1 - y0)
           const dd = Math.min(Math.abs(u - (2 * lt - 1)), Math.abs(u + (2 * lt - 1))) * half
@@ -209,18 +257,13 @@ export function renderEiffelPixels(width: number, height: number, style: EiffelS
         }
       } else if (!hit) {
         // Lower tower: lattice leg strips with an open arch between them.
-        const legIn = half * 0.56
-        const archR = half * 0.6
-        const ay = (y - archTop) / (yBase - archTop)
-        const insideArch = adx < archR * Math.sqrt(Math.max(0, 1 - Math.pow(1 - ay, 2))) && y > archTop
+        const insideArch = adx < archR * archSqrt && y > archTop
         if (adx > legIn - 0 && adx < half) {
           const u = (adx - legIn) / (half - legIn || 1)
-          const lt = ((y - plat2) / (yBase - plat2)) * 3
-          const ph = lt - Math.floor(lt)
-          const dd = Math.min(Math.abs(u - ph), Math.abs(u - (1 - ph))) * (half - legIn)
+          const dd = Math.min(Math.abs(u - lt), Math.abs(u - (1 - lt))) * (half - legIn)
           if (dd < Math.max(0.9, s * 0.1 + 0.3)) hit = 0.75
           if (Math.abs(adx - legIn) < thick * 0.6) hit = 1
-          if (ph < 0.05) hit = 0.9
+          if (lt < 0.05) hit = 0.9
         } else if (adx <= legIn && !insideArch) {
           // Spandrel above the arch: fine crosshatch.
           const q = (adx + y) / (s * 1.1)
@@ -235,28 +278,54 @@ export function renderEiffelPixels(width: number, height: number, style: EiffelS
         }
       }
       // Platforms: wide decks with railing and shadow underneath.
-      for (const [py, ext, th] of [
-        [plat1, 1.3, 0.55],
-        [plat2, 1.18, 0.7],
-      ] as const) {
-        const hh = halfAt(py) * ext
-        if (adx < hh && y >= py - th * s && y < py + th * s * 0.8) hit = 1
-        if (adx < hh && y >= py - th * s * 2 && y < py - th * s && xx % Math.max(2, Math.round(s * 0.5)) < 1)
-          hit = Math.max(hit, 0.7)
-      }
+      if (adx < plat1Hh && y >= plat1Lo && y < plat1Hi) hit = 1
+      if (adx < plat1Hh && y >= plat1RailLo && y < plat1Lo && xx % railPeriod < 1) hit = Math.max(hit, 0.7)
+      if (adx < plat2Hh && y >= plat2Lo && y < plat2Hi) hit = 1
+      if (adx < plat2Hh && y >= plat2RailLo && y < plat2Lo && xx % railPeriod < 1) hit = Math.max(hit, 0.7)
       // Observation deck below the spire.
-      const topDeck = hd.Y(4.5)
-      const dh = halfAt(topDeck) * 1.5
-      if (adx < dh && y >= topDeck - s * 0.5 && y < topDeck + s * 0.4) hit = 1
+      if (adx < deckHh && y >= topDeck - s * 0.5 && y < topDeck + s * 0.4) hit = 1
       if (hit === 0) continue
       // Lighting: lit side, floodlight from below at night, haze by day.
       const side = (dx * lightSide) / (half || 1)
       const sh = clamp01(0.5 + side * 0.5)
-      let col = hdMix(ironShade, ironLit, sh * 0.7 + (1 - hv) * 0.15)
-      col = hdMix(ironBase, col, 0.55 + 0.45 * hit)
-      if (night) col = hdMix(col, [255, 170, 70], 0.18 + 0.55 * hv * hv * (0.4 + sh * 0.6))
-      else col = hdMix(col, horizonSky, 0.1 * (1 - hv))
-      blend(xx, y, col, Math.min(1, 0.55 + hit * 0.45))
+      // hdMix chain inlined with the same clamps and round points.
+      let t1 = sh * 0.7 + row15
+      if (t1 < 0) t1 = 0
+      else if (t1 > 1) t1 = 1
+      const m0 = Math.round(ish0 + (ilt0 - ish0) * t1)
+      const m1 = Math.round(ish1 + (ilt1 - ish1) * t1)
+      const m2 = Math.round(ish2 + (ilt2 - ish2) * t1)
+      let t2 = 0.55 + 0.45 * hit
+      const c0 = Math.round(iba0 + (m0 - iba0) * t2)
+      const c1 = Math.round(iba1 + (m1 - iba1) * t2)
+      const c2 = Math.round(iba2 + (m2 - iba2) * t2)
+      let r0v = c0
+      let r1v = c1
+      let r2v = c2
+      if (night) {
+        let t3 = 0.18 + 0.55 * hv * hv * (0.4 + sh * 0.6)
+        if (t3 < 0) t3 = 0
+        else if (t3 > 1) t3 = 1
+        r0v = Math.round(c0 + (warmCol[0]! - c0) * t3)
+        r1v = Math.round(c1 + (warmCol[1]! - c1) * t3)
+        r2v = Math.round(c2 + (warmCol[2]! - c2) * t3)
+      } else {
+        let t3 = 0.1 * (1 - hv)
+        if (t3 < 0) t3 = 0
+        else if (t3 > 1) t3 = 1
+        r0v = Math.round(c0 + (horizonSky[0]! - c0) * t3)
+        r1v = Math.round(c1 + (horizonSky[1]! - c1) * t3)
+        r2v = Math.round(c2 + (horizonSky[2]! - c2) * t3)
+      }
+      let a = 0.55 + hit * 0.45
+      if (a > 1) a = 1
+      const i = (y * w + xx) * 3
+      const p0 = px[i]!
+      px[i] = Math.round(p0 + (r0v - p0) * a)
+      const p1 = px[i + 1]!
+      px[i + 1] = Math.round(p1 + (r1v - p1) * a)
+      const p2 = px[i + 2]!
+      px[i + 2] = Math.round(p2 + (r2v - p2) * a)
     }
   }
   // Spire mast above the observation deck.
@@ -317,22 +386,59 @@ export function renderEiffelPixels(width: number, height: number, style: EiffelS
   }
 
   // Champ de Mars: perspective lawn with mown stripes and a converging gravel walk.
-  for (let y = Math.floor(groundY); y < h; y++) {
-    const f = clamp01((y - groundY) / (h - groundY || 1))
-    for (let xx = 0; xx < w; xx++) {
-      const stripe = Math.floor((xx - cx) / (s * (2 + f * 8)) + 100) % 2 === 0 ? 1 : 0.9
-      const n = 0.92 + 0.12 * hash(xx >> 1, y >> 1)
-      const g = hdDarken(hdMix(hdMix(lawn, horizonSky, 0.18 * (1 - f)), hdDarken(lawn, 0.8), f * 0.7), stripe * n)
-      px[(y * w + xx) * 3] = g[0]
-      px[(y * w + xx) * 3 + 1] = g[1]
-      px[(y * w + xx) * 3 + 2] = g[2]
-    }
-    // Gravel walk, narrow at the horizon and widening toward the viewer.
-    const half = s * (1.4 + f * 4.2)
-    const pcol = hdMix(hdMix(path, horizonSky, 0.25 * (1 - f)), hdDarken(path, 0.85), f)
-    for (let xx = Math.floor(cx - half); xx < Math.ceil(cx + half); xx++) {
-      const edge = clamp01((half - Math.abs(xx + 0.5 - cx)) / 1.6)
-      blend(xx, y, hdDarken(pcol, 0.95 + 0.1 * hash(xx >> 1, y >> 1)), edge)
+  {
+    const lawnDeep = hdDarken(lawn, 0.8)
+    const pathDeep = hdDarken(path, 0.85)
+    for (let y = Math.floor(groundY); y < h; y++) {
+      const f = clamp01((y - groundY) / (h - groundY || 1))
+      // Per-row tones (same hdMix/hdDarken chains as before).
+      const gBase = hdMix(hdMix(lawn, horizonSky, 0.18 * (1 - f)), lawnDeep, f * 0.7)
+      const gb0 = gBase[0]!
+      const gb1 = gBase[1]!
+      const gb2 = gBase[2]!
+      const pBase = hdMix(hdMix(path, horizonSky, 0.25 * (1 - f)), pathDeep, f)
+      const pb0 = pBase[0]!
+      const pb1 = pBase[1]!
+      const pb2 = pBase[2]!
+      const stripeDen = s * (2 + f * 8)
+      const half = s * (1.4 + f * 4.2)
+      const yr = y >> 1
+      let idx = y * w * 3
+      for (let xx = 0; xx < w; xx++, idx += 3) {
+        const stripe = Math.floor((xx - cx) / stripeDen + 100) % 2 === 0 ? 1 : 0.9
+        // atmos hash(xx >> 1, y >> 1) inlined.
+        let hv = Math.imul(xx >> 1, 374761393) ^ Math.imul(yr, 668265263)
+        hv = Math.imul(hv ^ (hv >>> 13), 1274126177)
+        const n = 0.92 + 0.12 * (((hv ^ (hv >>> 16)) >>> 0) / 4294967296)
+        const k = stripe * n
+        let g0 = gb0 * k
+        px[idx] = g0 < 0 ? 0 : g0 > 255 ? 255 : Math.round(g0)
+        let g1 = gb1 * k
+        px[idx + 1] = g1 < 0 ? 0 : g1 > 255 ? 255 : Math.round(g1)
+        let g2 = gb2 * k
+        px[idx + 2] = g2 < 0 ? 0 : g2 > 255 ? 255 : Math.round(g2)
+      }
+      // Gravel walk, narrow at the horizon and widening toward the viewer.
+      for (let xx = Math.max(0, Math.floor(cx - half)); xx < Math.min(w, Math.ceil(cx + half)); xx++) {
+        const edge = clamp01((half - Math.abs(xx + 0.5 - cx)) / 1.6)
+        // hdDarken(pBase, 0.95 + 0.1 * hash(xx >> 1, y >> 1)) then blend inline.
+        let hv = Math.imul(xx >> 1, 374761393) ^ Math.imul(yr, 668265263)
+        hv = Math.imul(hv ^ (hv >>> 13), 1274126177)
+        const kn = 0.95 + 0.1 * (((hv ^ (hv >>> 16)) >>> 0) / 4294967296)
+        let d0 = pb0 * kn
+        const c0 = d0 < 0 ? 0 : d0 > 255 ? 255 : Math.round(d0)
+        let d1 = pb1 * kn
+        const c1 = d1 < 0 ? 0 : d1 > 255 ? 255 : Math.round(d1)
+        let d2 = pb2 * kn
+        const c2 = d2 < 0 ? 0 : d2 > 255 ? 255 : Math.round(d2)
+        const i = (y * w + xx) * 3
+        const p0 = px[i]!
+        px[i] = Math.round(p0 + (c0 - p0) * edge)
+        const p1 = px[i + 1]!
+        px[i + 1] = Math.round(p1 + (c1 - p1) * edge)
+        const p2 = px[i + 2]!
+        px[i + 2] = Math.round(p2 + (c2 - p2) * edge)
+      }
     }
   }
   // Cross walk (shared "=" row of the text view).

@@ -19,12 +19,24 @@ export function glow(hd: HdCanvas, cx: number, cy: number, radius: number, color
   const xb = Math.min(hd.w - 1, Math.ceil(cx + radius))
   const ya = Math.max(0, Math.floor(cy - ry))
   const yb = Math.min(hd.h - 1, Math.ceil(cy + ry))
+  // Inlined blendPx: the loop bounds are already clipped to the canvas, and a
+  // row whose vertical term alone reaches 1 has no pixel inside the ellipse.
+  const pixels = hd.pixels
+  const w = hd.w
   for (let y = ya; y <= yb; y++) {
-    for (let x = xa; x <= xb; x++) {
-      const d = Math.hypot((x + 0.5 - cx) / radius, (y + 0.5 - cy) / ry)
+    const dy = (y + 0.5 - cy) / ry
+    if (dy >= 1 || dy <= -1) continue
+    let i = (y * w + xa) * 3
+    for (let x = xa; x <= xb; x++, i += 3) {
+      const d = Math.hypot((x + 0.5 - cx) / radius, dy)
       if (d >= 1) continue
       const f = 1 - d
-      blendPx(hd, x, y, color, strength * f * f)
+      const alpha = strength * f * f
+      if (alpha <= 0) continue
+      const a = Math.min(1, alpha)
+      pixels[i] = Math.round(pixels[i]! + (color[0] - pixels[i]!) * a)
+      pixels[i + 1] = Math.round(pixels[i + 1]! + (color[1] - pixels[i + 1]!) * a)
+      pixels[i + 2] = Math.round(pixels[i + 2]! + (color[2] - pixels[i + 2]!) * a)
     }
   }
 }

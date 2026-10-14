@@ -151,20 +151,44 @@ export function renderCorcovadoPixels(width: number, height: number, style: Corc
     }
   }
 
-  // Sea: depth gradient, wind ripples, and a sun track.
+  // Sea: depth gradient, wind ripples, and a sun track. Hoist the per-row
+  // constants (`Y(seaTop)`, `Y(seaBottom)`, `skyAt(15.5)`, the row-mix and the
+  // base sea darken) so the inner x loop only does the per-pixel math.
   const seaTop = 15.4
   const seaBottom = CORCOVADO_GROUND_TOP + 0.15
-  for (let y = Math.floor(Y(seaTop)); y < Math.ceil(Y(seaBottom)); y++) {
-    const u = (y - Y(seaTop)) / (Y(seaBottom) - Y(seaTop) || 1)
+  const ySeaTop = Y(seaTop)
+  const ySeaBot = Y(seaBottom)
+  const ySeaSpan = ySeaBot - ySeaTop || 1
+  const skyMid = skyAt(15.5)
+  const seaDark = hdDarken(sea, 0.6)
+  const sunFoam = hdMix(sunColor, foam, 0.3)
+  for (let y = Math.floor(ySeaTop); y < Math.ceil(ySeaBot); y++) {
+    const u = (y - ySeaTop) / ySeaSpan
+    const rowBase = hdMix(hdMix(sea, skyMid, 0.35 * (1 - u)), seaDark, u)
+    const r1 = rowBase[0]
+    const g1 = rowBase[1]
+    const b1 = rowBase[2]
+    const u9 = u * 9
+    const u5 = u * 5
+    const glintAmt = 0.18 * (1 - u * 0.5)
+    let i = y * w * 3
     for (let x = 0; x < w; x++) {
       const sx = x / cw
-      const ripple = Math.sin(sx * 2.1 + phase * 1 + u * 9) * 0.5 + Math.sin(sx * 0.9 - phase * 2 + u * 5) * 0.5
-      let color = hdMix(hdMix(sea, skyAt(15.5), 0.35 * (1 - u)), hdDarken(sea, 0.6), u)
-      color = hdDarken(color, 1 + ripple * 0.06)
-      if (ripple > 0.82) color = hdMix(color, hdMix(sunColor, foam, 0.3), 0.18 * (1 - u * 0.5))
-      px[(y * w + x) * 3] = color[0]
-      px[(y * w + x) * 3 + 1] = color[1]
-      px[(y * w + x) * 3 + 2] = color[2]
+      const ripple = Math.sin(sx * 2.1 + phase + u9) * 0.5 + Math.sin(sx * 0.9 - phase * 2 + u5) * 0.5
+      const factor = 1 + ripple * 0.06
+      const r2 = Math.round(r1 * factor)
+      const g2 = Math.round(g1 * factor)
+      const b2 = Math.round(b1 * factor)
+      if (ripple > 0.82) {
+        px[i] = Math.round(r2 + (sunFoam[0] - r2) * glintAmt)
+        px[i + 1] = Math.round(g2 + (sunFoam[1] - g2) * glintAmt)
+        px[i + 2] = Math.round(b2 + (sunFoam[2] - b2) * glintAmt)
+      } else {
+        px[i] = r2
+        px[i + 1] = g2
+        px[i + 2] = b2
+      }
+      i += 3
     }
   }
   // Sun glitter: a column of bright flecks that shimmer along the loop.
@@ -419,30 +443,75 @@ export function renderCorcovadoPixels(width: number, height: number, style: Corc
     }
   }
 
-  // Beach, mosaic promenade, and park.
+  // Beach, mosaic promenade, and park. The three branches share the same
+  // shape: hoist a per-row base color and a per-row stone pick, then the
+  // inner x loop only does the darken + a direct write.
   const sandTop = Y(CORCOVADO_GROUND_TOP + 0.35)
   const sand = gold ? hdHex("#8a6a4a") : hdHex("#e6d3a0")
   const lawn = hdHex(c.ground)
+  const darkStone = hdHex(gold ? "#2a2024" : "#3a3a42")
+  const lightStone = hdHex(gold ? "#c8a888" : "#e8e2d6")
+  const wetSand = hdDarken(sand, 0.8)
+  const darkLawn = hdDarken(lawn, 0.7)
   for (let y = Math.floor(sandTop); y < h; y++) {
     const sy = (y + 0.5) / ch
     const u = (sy - CORCOVADO_GROUND_TOP) / (CORCOVADO_ROWS - CORCOVADO_GROUND_TOP)
+    let baseR = 0
+    let baseG = 0
+    let baseB = 0
+    let hashShift = 1
+    let hashScale = 0.1
+    let hashOffset = 0.95
+    let waveY = 0
+    if (sy < CORCOVADO_GROUND_TOP + 1.1) {
+      // Sand row base = hdMix(wetSand, sand, min(1, (sy - GROUND_TOP - 0.35)/0.8))
+      const t = Math.min(1, (sy - CORCOVADO_GROUND_TOP - 0.35) / 0.8)
+      baseR = Math.round(wetSand[0] + (sand[0] - wetSand[0]) * t)
+      baseG = Math.round(wetSand[1] + (sand[1] - wetSand[1]) * t)
+      baseB = Math.round(wetSand[2] + (sand[2] - wetSand[2]) * t)
+      hashShift = 1
+      hashScale = 0.1
+      hashOffset = 0.95
+    } else if (sy < CORCOVADO_GROUND_TOP + 2.7) {
+      // Wave-pattern promenade: pick dark vs light stone per x via the wave
+      // sign; hoist the two stone RGB tuples out of the per-pixel path.
+      waveY = sy * 3.2
+      hashShift = 2
+      hashScale = 0.08
+      hashOffset = 0.95
+    } else {
+      // Lawn row base = hdMix(lawn, darkLawn, u)
+      baseR = Math.round(lawn[0] + (darkLawn[0] - lawn[0]) * u)
+      baseG = Math.round(lawn[1] + (darkLawn[1] - lawn[1]) * u)
+      baseB = Math.round(lawn[2] + (darkLawn[2] - lawn[2]) * u)
+      hashShift = 0
+      hashScale = 0.14
+      hashOffset = 0.93
+    }
+    let i = y * w * 3
     for (let x = 0; x < w; x++) {
-      const sx = x / cw
-      let color: RGB
-      if (sy < CORCOVADO_GROUND_TOP + 1.1) {
-        // Wet sand then dry sand.
-        color = hdMix(hdDarken(sand, 0.8), sand, Math.min(1, (sy - CORCOVADO_GROUND_TOP - 0.35) / 0.8))
-        color = hdDarken(color, 0.95 + hash(x >> 1, y >> 1) * 0.1)
-      } else if (sy < CORCOVADO_GROUND_TOP + 2.7) {
-        // Wave-pattern promenade of dark and light stone.
-        const wave = Math.sin(sy * 3.2 + Math.sin(sx * 0.7) * 1.4)
-        const dark = wave > 0 ? hdHex(gold ? "#2a2024" : "#3a3a42") : hdHex(gold ? "#c8a888" : "#e8e2d6")
-        color = hdDarken(dark, 0.95 + hash(x >> 2, y >> 2) * 0.08)
+      let r0 = baseR
+      let g0 = baseG
+      let b0 = baseB
+      let factor: number
+      if (hashShift === 2) {
+        const wave = Math.sin(waveY + Math.sin((x / cw) * 0.7) * 1.4)
+        const stone = wave > 0 ? darkStone : lightStone
+        r0 = stone[0]
+        g0 = stone[1]
+        b0 = stone[2]
+        factor = hashOffset + hash(x >> hashShift, y >> hashShift) * hashScale
       } else {
-        color = hdMix(lawn, hdDarken(lawn, 0.7), u)
-        color = hdDarken(color, 0.93 + hash(x, y >> 1) * 0.14)
+        const h = hashShift === 1 ? hash(x >> 1, y >> 1) : hash(x, y >> 1)
+        factor = hashOffset + h * hashScale
       }
-      hd.set(x, y, color)
+      const vR = r0 * factor
+      const vG = g0 * factor
+      const vB = b0 * factor
+      px[i] = vR < 0 ? 0 : vR > 255 ? 255 : Math.round(vR)
+      px[i + 1] = vG < 0 ? 0 : vG > 255 ? 255 : Math.round(vG)
+      px[i + 2] = vB < 0 ? 0 : vB > 255 ? 255 : Math.round(vB)
+      i += 3
     }
   }
   // Beach umbrellas with striped canopies and soft shadows.

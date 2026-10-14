@@ -1,5 +1,6 @@
 import type { FujiRun } from "./fuji-view-model"
 import { createSceneGrid } from "./scene-grid"
+import type { RGB } from "./scene-hd"
 
 export type FallsStyle = "falls-day" | "falls-moon"
 export function isFallsStyle(style: string | undefined): style is FallsStyle {
@@ -83,15 +84,28 @@ export function fallsBackground(style: FallsStyle) {
   return style === "falls-day" ? "#8ec8e8" : "#0a1030"
 }
 
+/** Endpoints of the vertical sky gradient, parsed once per style. */
+const FALLS_SKY_STOPS = {
+  "falls-day": fallsSkyStops("falls-day"),
+  "falls-moon": fallsSkyStops("falls-moon"),
+}
+function fallsSkyStops(style: FallsStyle): { from: RGB; to: RGB } {
+  const toHex = (value: string): RGB => [
+    parseInt(value.slice(1, 3), 16),
+    parseInt(value.slice(3, 5), 16),
+    parseInt(value.slice(5, 7), 16),
+  ]
+  return { from: toHex(fallsBackground(style)), to: toHex(FALLS_COLORS[style].skyBottom) }
+}
+
 /** Sample the vertical sky gradient. `t` is 0 at the top of the frame. */
 export function fallsSkyRgb(style: FallsStyle, t: number): readonly [number, number, number] {
   const x = Math.max(0, Math.min(1, t))
-  const from = [1, 3, 5].map((offset) => parseInt(fallsBackground(style).slice(offset, offset + 2), 16))
-  const to = [1, 3, 5].map((offset) => parseInt(FALLS_COLORS[style].skyBottom.slice(offset, offset + 2), 16))
-  return [0, 1, 2].map((channel) => Math.round(from[channel]! + (to[channel]! - from[channel]!) * x)) as [
-    number,
-    number,
-    number,
+  const { from, to } = FALLS_SKY_STOPS[style]
+  return [
+    Math.round(from[0]! + (to[0]! - from[0]!) * x),
+    Math.round(from[1]! + (to[1]! - from[1]!) * x),
+    Math.round(from[2]! + (to[2]! - from[2]!) * x),
   ]
 }
 

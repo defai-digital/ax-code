@@ -33,6 +33,7 @@ import {
 export function renderToriiPixels(width: number, height: number, style: ToriiStyle, elapsedMs: number): Buffer {
   const hd = createHdCanvas(width, height, TORII_COLUMNS, TORII_ROWS)
   if (hd.w === 0 || hd.h === 0) return hd.pixels
+  const px = hd.pixels
   const night = style === "torii-night"
   const c = TORII_COLORS[style]
   const t = Math.max(0, elapsedMs)
@@ -98,10 +99,13 @@ export function renderToriiPixels(width: number, height: number, style: ToriiSty
     // Soft sun shafts falling toward the path.
     for (let k = 0; k < 5; k++) {
       const a = 0.35 + k * 0.11
-      for (let r = coreR * 3; r < hd.h * 1.1; r += 2) {
+      // Overlapping soft dabs build each shaft. Every dab still overlaps the
+      // next (radius >= 8, step 6); the per-dab alpha compounds three of the
+      // former 2px steps, 1 - (1 - 0.018)^3, so the beam keeps its density.
+      for (let r = coreR * 3; r < hd.h * 1.1; r += 6) {
         const x = ox + Math.cos(a) * r
         const y = oy + Math.sin(a) * r
-        glow(hd, x, y, 8 + r * 0.045, hdHex("#fff6d0"), 0.018, 1)
+        glow(hd, x, y, 8 + r * 0.045, hdHex("#fff6d0"), 0.053, 1)
       }
     }
   }
@@ -121,14 +125,28 @@ export function renderToriiPixels(width: number, height: number, style: ToriiSty
     )
   }
 
-  // Layered wooded slopes with mist between them.
+  // Layered wooded slopes with mist between them. Each ridge fills a large band,
+  // so the mix writes straight into `px` and the row-invariant divisor is hoisted.
   const ridge = (top: number, amp: number, seed: number, upper: RGB, lower: RGB) => {
+    const yTop = hd.Y(top)
+    const band = hd.ch * 4
+    const upperR = upper[0],
+      upperG = upper[1],
+      upperB = upper[2]
+    const lowerR = lower[0],
+      lowerG = lower[1],
+      lowerB = lower[2]
     for (let x = 0; x < hd.w; x++) {
       const nx = x / hd.w
-      const y =
-        hd.Y(top) + hd.ch * amp * (0.5 + 0.3 * Math.sin(nx * 6.3 + seed) + 0.16 * Math.sin(nx * 15 + seed * 1.9))
-      for (let py = Math.max(0, Math.floor(y)); py < groundY; py++)
-        hd.set(x, py, hdMix(upper, lower, clamp01((py - y) / (hd.ch * 4))))
+      const y = yTop + hd.ch * amp * (0.5 + 0.3 * Math.sin(nx * 6.3 + seed) + 0.16 * Math.sin(nx * 15 + seed * 1.9))
+      for (let py = Math.max(0, Math.floor(y)); py < groundY; py++) {
+        const t = (py - y) / band
+        const u = t < 0 ? 0 : t > 1 ? 1 : t
+        const i = (py * hd.w + x) * 3
+        px[i] = Math.round(upperR + (lowerR - upperR) * u)
+        px[i + 1] = Math.round(upperG + (lowerG - upperG) * u)
+        px[i + 2] = Math.round(upperB + (lowerB - upperB) * u)
+      }
     }
   }
   const far = hdMix(mountain, horizon, 0.5)
@@ -138,12 +156,30 @@ export function renderToriiPixels(width: number, height: number, style: ToriiSty
   ridge(11, 1.6, 4.4, hdMix(tree, mountain, 0.35), hdDarken(tree, 0.75))
   // Cedar silhouettes crowd both flanks, rising to varying heights.
   const cedar = (cx: number, base: number, ht: number, wd: number, col: RGB) => {
+    // Both mixes below are constant per tree, so hoist them out of the fill.
+    const crown = hdMix(col, hdHex("#ffffff"), night ? 0.02 : 0.1)
+    const deep = hdDarken(col, 0.7)
+    const cr = crown[0],
+      cg = crown[1],
+      cb = crown[2]
+    const dr = deep[0],
+      dg = deep[1],
+      db = deep[2]
+    const w = hd.w
     for (let y = Math.floor(base - ht); y < base; y++) {
       const v = (y - (base - ht)) / ht
       const half = wd * (0.12 + 0.88 * v) * (1 + 0.14 * Math.sin(y * 0.9 + cx))
-      for (let x = Math.floor(cx - half); x < Math.ceil(cx + half); x++) {
+      const xa = Math.floor(cx - half)
+      const xb = Math.ceil(cx + half)
+      for (let x = xa; x < xb; x++) {
+        if (x < 0 || y < 0 || x >= w || y >= hd.h) continue
         const u = (x - cx) / (half || 1)
-        hd.set(x, y, hdMix(hdMix(col, hdHex("#ffffff"), night ? 0.02 : 0.1), hdDarken(col, 0.7), clamp01((u + 1) / 2)))
+        const t = u + 1
+        const k = t / 2 < 0 ? 0 : t / 2 > 1 ? 1 : t / 2
+        const i = (y * w + x) * 3
+        px[i] = Math.round(cr + (dr - cr) * k)
+        px[i + 1] = Math.round(cg + (dg - cg) * k)
+        px[i + 2] = Math.round(cb + (db - cb) * k)
       }
     }
     hd.rect(cx - 1, base, cx + 1.5, base + hd.ch * 0.4, hdDarken(col, 0.45))

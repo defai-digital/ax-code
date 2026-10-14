@@ -61,15 +61,33 @@ export function renderIslandsPixels(width: number, height: number, style: Island
   const skyAt = (y: number): RGB => islandsSkyRgb(style, h <= 1 ? 0 : y / (h - 1))
 
   const tint = (x: number, y: number, color: RGB, a: number) => blendPixelUnclamped(hd, x, y, color, a)
+  // Glow with a provably-identity skip window: every write in this pipeline
+  // lands on integer pixels, and strength*(1-d)^2 < 1/510 cannot move one.
   const glow = (cx: number, cy: number, radius: number, color: RGB, strength: number, floor = h) => {
     const xa = Math.max(0, Math.floor(cx - radius)),
       xb = Math.min(w - 1, Math.ceil(cx + radius))
     const ya = Math.max(0, Math.floor(cy - radius)),
       yb = Math.min(floor - 1, Math.ceil(cy + radius))
+    const cr = color[0]!,
+      cg = color[1]!,
+      cb = color[2]!
+    const dSkip = 1 - Math.sqrt(1 / (510 * strength)) - 1e-9
     for (let y = ya; y <= yb; y++) {
-      for (let x = xa; x <= xb; x++) {
-        const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy) / radius
-        if (d < 1) tint(x, y, color, strength * (1 - d) * (1 - d))
+      const dy = y + 0.5 - cy
+      if (dy >= radius * dSkip || dy <= -radius * dSkip) continue
+      let i = (y * w + xa) * 3
+      for (let x = xa; x <= xb; x++, i += 3) {
+        const d = Math.hypot(x + 0.5 - cx, dy) / radius
+        if (d >= dSkip) continue
+        const om = 1 - d
+        const a = strength * om * om
+        if (a <= 0) continue
+        const p0 = hd.pixels[i]!
+        hd.pixels[i] = Math.round(p0 + (cr - p0) * a)
+        const p1 = hd.pixels[i + 1]!
+        hd.pixels[i + 1] = Math.round(p1 + (cg - p1) * a)
+        const p2 = hd.pixels[i + 2]!
+        hd.pixels[i + 2] = Math.round(p2 + (cb - p2) * a)
       }
     }
   }
@@ -168,6 +186,12 @@ export function renderIslandsPixels(width: number, height: number, style: Island
 
   // --- Floating islands -------------------------------------------------------------------
   const topAtList: ((x: number) => number)[] = []
+  // Per-frame tones for the strata/turf chains (constant across pixels).
+  const rockLo = hdDarken(rockDark, 1.15)
+  const rockHi = hdDarken(rock, 1.05)
+  const rockGleam = hdDarken(rock, 1.25)
+  const rimTone = hdHex("#ff9a58")
+  const grassDeep = hdDarken(grass, 1.15)
   ISLANDS.forEach(([x0, x1, top], idx) => {
     const mid = (x0 + x1 + 1) / 2,
       half = (x1 - x0 + 1) / 2
@@ -180,8 +204,12 @@ export function renderIslandsPixels(width: number, height: number, style: Island
     }
     topAtList[idx] = topAt
     const depth = ch * (5.6 + (idx === 0 ? 0.3 : 0))
-    const grassTone = night ? hdDarken(grass, 1.15) : grass
-    for (let x = Math.floor(cx - halfPx); x < Math.ceil(cx + halfPx); x++) {
+    const grassTone = night ? grassDeep : grass
+    const turfDark = hdDarken(grassTone, 0.8)
+    const turfLit = hdMix(grassTone, hdHex("#bde07a"), night ? 0.1 : 0.4)
+    const xStart = Math.max(0, Math.floor(cx - halfPx))
+    const xEnd = Math.min(w, Math.ceil(cx + halfPx))
+    for (let x = xStart; x < xEnd; x++) {
       const u = (x + 0.5 - cx) / halfPx
       const au = Math.abs(u)
       if (au >= 1) continue
@@ -193,29 +221,76 @@ export function renderIslandsPixels(width: number, height: number, style: Island
       if (hash(seg * 3 + idx * 5) > 0.62)
         bottom += ch * (0.9 + hash(seg + 4) * 1.5) * (1 - Math.abs(frac - 0.5) * 2) * (1 - au * 0.6)
       const lit = clamp01(0.5 + 0.55 * u * dir)
-      for (let y = Math.floor(tY); y < bottom; y++) {
-        const t = clamp01((y - tY) / (bottom - tY || 1))
-        const strata = Math.sin(y * 0.26 + Math.sin(x * 0.05 + idx) * 1.8)
-        let col = hdMix(hdDarken(rockDark, 1.15), hdDarken(rock, 1.05), clamp01(lit * 0.75 + 0.15 - t * 0.35))
-        col = hdDarken(col, 0.93 + strata * 0.06)
-        if (strata > 0.92) col = hdMix(col, hdDarken(rock, 1.25), night ? 0.1 : 0.25)
-        if (Math.sin(x * 0.23 + y * 0.11 + idx) > 0.93) col = hdDarken(col, 0.78)
+      // Per-column constants for the pixel chain below.
+      const span = bottom - tY || 1
+      const rowInner = Math.sin(x * 0.05 + idx) * 1.8
+      const x23 = x * 0.23
+      const lip = ch * (0.4 + 0.25 * Math.sin(x * 0.27 + idx * 3)) * (1 - au * 0.5)
+      const rimBase = night ? clamp01(1 - Math.abs(x - sunX) / (w * 0.4)) : 0
+      const rimEdge = au > 0.8 ? 0.25 * lit : 0
+      const yStart = Math.max(0, Math.floor(tY))
+      const yEnd = Math.min(h, Math.ceil(bottom))
+      let i = (yStart * w + x) * 3
+      for (let y = yStart; y < yEnd; y++, i += w * 3) {
+        let t = (y - tY) / span
+        if (t < 0) t = 0
+        else if (t > 1) t = 1
+        const strata = Math.sin(y * 0.26 + rowInner)
+        let mixT = lit * 0.75 + 0.15 - t * 0.35
+        if (mixT < 0) mixT = 0
+        else if (mixT > 1) mixT = 1
+        let c0 = Math.round(rockLo[0]! + (rockHi[0]! - rockLo[0]!) * mixT)
+        let c1 = Math.round(rockLo[1]! + (rockHi[1]! - rockLo[1]!) * mixT)
+        let c2 = Math.round(rockLo[2]! + (rockHi[2]! - rockLo[2]!) * mixT)
+        // hdDarken(col, 0.93 + strata * 0.06)
+        const dF = 0.93 + strata * 0.06
+        let v0 = c0 * dF
+        c0 = v0 < 0 ? 0 : v0 > 255 ? 255 : Math.round(v0)
+        let v1 = c1 * dF
+        c1 = v1 < 0 ? 0 : v1 > 255 ? 255 : Math.round(v1)
+        let v2 = c2 * dF
+        c2 = v2 < 0 ? 0 : v2 > 255 ? 255 : Math.round(v2)
+        if (strata > 0.92) {
+          const gt = night ? 0.1 : 0.25
+          c0 = Math.round(c0 + (rockGleam[0]! - c0) * gt)
+          c1 = Math.round(c1 + (rockGleam[1]! - c1) * gt)
+          c2 = Math.round(c2 + (rockGleam[2]! - c2) * gt)
+        }
+        if (Math.sin(x23 + y * 0.11 + idx) > 0.93) {
+          let s0 = c0 * 0.78
+          c0 = s0 < 0 ? 0 : s0 > 255 ? 255 : Math.round(s0)
+          let s1 = c1 * 0.78
+          c1 = s1 < 0 ? 0 : s1 > 255 ? 255 : Math.round(s1)
+          let s2 = c2 * 0.78
+          c2 = s2 < 0 ? 0 : s2 > 255 ? 255 : Math.round(s2)
+        }
         // Warm rim where rock faces the low sun.
         if (night) {
-          const rim = clamp01(1 - Math.abs(x - sunX) / (w * 0.4)) * (1 - t) * 0.4 + (au > 0.8 ? 0.25 * lit : 0)
-          col = hdMix(col, hdHex("#ff9a58"), clamp01(rim) * 0.6)
+          let rim = rimBase * (1 - t) * 0.4 + rimEdge
+          if (rim < 0) rim = 0
+          else if (rim > 1) rim = 1
+          const rt = rim * 0.6
+          c0 = Math.round(c0 + (rimTone[0]! - c0) * rt)
+          c1 = Math.round(c1 + (rimTone[1]! - c1) * rt)
+          c2 = Math.round(c2 + (rimTone[2]! - c2) * rt)
         }
         // Turf: ragged lip, brighter on the lit side.
-        const lip = ch * (0.4 + 0.25 * Math.sin(x * 0.27 + idx * 3)) * (1 - au * 0.5)
         if (y < tY + lip) {
-          col = hdMix(
-            hdDarken(grassTone, 0.8),
-            hdMix(grassTone, hdHex("#bde07a"), night ? 0.1 : 0.4),
-            clamp01(lit * 0.9 - ((y - tY) / lip) * 0.4 + 0.2),
-          )
-          if (hash(x * 0.4 + y) > 0.88) col = hdDarken(col, 0.8)
+          let tt = lit * 0.9 - ((y - tY) / lip) * 0.4 + 0.2
+          if (tt < 0) tt = 0
+          else if (tt > 1) tt = 1
+          c0 = Math.round(turfDark[0]! + (turfLit[0]! - turfDark[0]!) * tt)
+          c1 = Math.round(turfDark[1]! + (turfLit[1]! - turfDark[1]!) * tt)
+          c2 = Math.round(turfDark[2]! + (turfLit[2]! - turfDark[2]!) * tt)
+          if (hash(x * 0.4 + y) > 0.88) {
+            c0 = Math.round(c0 * 0.8)
+            c1 = Math.round(c1 * 0.8)
+            c2 = Math.round(c2 * 0.8)
+          }
         }
-        hd.set(x, y, col)
+        hd.pixels[i] = c0
+        hd.pixels[i + 1] = c1
+        hd.pixels[i + 2] = c2
       }
       // Hanging roots and vines under the turf lip.
       if (hash(seg * 7 + idx) > 0.55 && Math.abs(frac - 0.5) < 0.1) {
@@ -295,17 +370,42 @@ export function renderIslandsPixels(width: number, height: number, style: Island
     const x0 = X(fallX + 0.5)
     const y0 = Y(fallTop + 0.2)
     const len = seaY - y0
-    for (let y = Math.floor(y0); y < Math.ceil(seaY); y++) {
-      const t = (y - y0) / (len || 1)
-      const wobble = Math.sin(y * 0.05 + i) * unit * 0.25 * t
-      const half = unit * (0.5 + t * 0.55)
-      const cx = x0 + wobble
-      for (let x = Math.floor(cx - half); x < Math.ceil(cx + half); x++) {
-        const u = Math.abs(x + 0.5 - cx) / half
-        // Streaks run downward with the loop (three periods per cycle).
-        const streak = Math.sin(y * 0.11 + Math.floor((x - cx) / (unit * 0.28)) * 2.3 - theta * 3) * 0.5 + 0.5
-        const a = (0.62 - u * 0.28) * (0.75 + 0.25 * t)
-        tint(x, y, hdMix(falls, sheet, streak * 0.8), a + streak * 0.15)
+    {
+      const f0 = falls[0]!
+      const f1 = falls[1]!
+      const f2 = falls[2]!
+      const sh0 = sheet[0]!
+      const sh1 = sheet[1]!
+      const sh2 = sheet[2]!
+      const unit028 = unit * 0.28
+      const theta3 = theta * 3
+      for (let y = Math.floor(y0); y < Math.ceil(seaY); y++) {
+        const t = (y - y0) / (len || 1)
+        const wobble = Math.sin(y * 0.05 + i) * unit * 0.25 * t
+        const half = unit * (0.5 + t * 0.55)
+        const cx = x0 + wobble
+        const rowA = 0.75 + 0.25 * t
+        const xa = Math.max(0, Math.floor(cx - half))
+        const xb = Math.min(w - 1, Math.ceil(cx + half) - 1)
+        let idx = (y * w + xa) * 3
+        for (let x = xa; x <= xb; x++, idx += 3) {
+          const u = Math.abs(x + 0.5 - cx) / half
+          // Streaks run downward with the loop (three periods per cycle).
+          const streak = Math.sin(y * 0.11 + Math.floor((x - cx) / unit028) * 2.3 - theta3) * 0.5 + 0.5
+          let m = streak * 0.8
+          if (m < 0) m = 0
+          else if (m > 1) m = 1
+          const m0 = Math.round(f0 + (sh0 - f0) * m)
+          const m1 = Math.round(f1 + (sh1 - f1) * m)
+          const m2 = Math.round(f2 + (sh2 - f2) * m)
+          const a = (0.62 - u * 0.28) * rowA + streak * 0.15
+          const p0 = hd.pixels[idx]!
+          hd.pixels[idx] = Math.round(p0 + (m0 - p0) * a)
+          const p1 = hd.pixels[idx + 1]!
+          hd.pixels[idx + 1] = Math.round(p1 + (m1 - p1) * a)
+          const p2 = hd.pixels[idx + 2]!
+          hd.pixels[idx + 2] = Math.round(p2 + (m2 - p2) * a)
+        }
       }
     }
     // Foam lip where the water leaves the island.
@@ -323,19 +423,51 @@ export function renderIslandsPixels(width: number, height: number, style: Island
   // --- Sea -------------------------------------------------------------------------------------
   hd.water(ISLANDS_SEA_TOP, ISLANDS_ROWS, hdHex(c.sea), hdHex(c.seaDeep), theta)
   const hazeSea = night ? hdHex("#e07a60") : hdHex("#d8f0f6")
-  for (let y = Math.floor(seaY); y < Math.min(h, Math.ceil(seaY + ch * 1.4)); y++) {
-    const a = (1 - (y - seaY) / (ch * 1.4)) * (night ? 0.45 : 0.4)
-    for (let x = 0; x < w; x++) tint(x, y, hazeSea, a)
+  {
+    const hz0 = hazeSea[0]!
+    const hz1 = hazeSea[1]!
+    const hz2 = hazeSea[2]!
+    for (let y = Math.max(0, Math.floor(seaY)); y < Math.min(h, Math.ceil(seaY + ch * 1.4)); y++) {
+      const a = (1 - (y - seaY) / (ch * 1.4)) * (night ? 0.45 : 0.4)
+      let i = y * w * 3
+      for (let x = 0; x < w; x++, i += 3) {
+        const p0 = hd.pixels[i]!
+        hd.pixels[i] = Math.round(p0 + (hz0 - p0) * a)
+        const p1 = hd.pixels[i + 1]!
+        hd.pixels[i + 1] = Math.round(p1 + (hz1 - p1) * a)
+        const p2 = hd.pixels[i + 2]!
+        hd.pixels[i + 2] = Math.round(p2 + (hz2 - p2) * a)
+      }
+    }
   }
   // Reflect the islands' dark undersides and falls faintly.
-  for (let y = Math.floor(seaY); y < h; y++) {
-    const v = (y - seaY) / (h - seaY || 1)
-    for (let x = 0; x < w; x++) {
-      const dx = Math.sin(y * 0.45 + x * 0.01 + theta) * unit * 0.8
+  {
+    const col001 = new Float64Array(w) // x * 0.01
+    for (let x = 0; x < w; x++) col001[x] = x * 0.01
+    const unit08 = unit * 0.8
+    for (let y = Math.max(0, Math.floor(seaY)); y < h; y++) {
+      const v = (y - seaY) / (h - seaY || 1)
+      const a = 0.28 * (1 - v * 0.7)
       const si = Math.max(0, Math.floor(seaY - (y - seaY) * 1.6 - 1))
-      const j = (si * w + Math.max(0, Math.min(w - 1, Math.round(x + dx)))) * 3
-      const src: RGB = [hd.pixels[j]!, hd.pixels[j + 1]!, hd.pixels[j + 2]!]
-      tint(x, y, src, 0.28 * (1 - v * 0.7))
+      const rowBase = y * 0.45
+      const siRow = si * w * 3
+      let i = y * w * 3
+      for (let x = 0; x < w; x++, i += 3) {
+        const dx = Math.sin(rowBase + col001[x]! + theta) * unit08
+        let xr = Math.round(x + dx)
+        if (xr < 0) xr = 0
+        else if (xr > w - 1) xr = w - 1
+        const j = siRow + xr * 3
+        const s0 = hd.pixels[j]!
+        const p0 = hd.pixels[i]!
+        hd.pixels[i] = Math.round(p0 + (s0 - p0) * a)
+        const s1 = hd.pixels[j + 1]!
+        const p1 = hd.pixels[i + 1]!
+        hd.pixels[i + 1] = Math.round(p1 + (s1 - p1) * a)
+        const s2 = hd.pixels[j + 2]!
+        const p2 = hd.pixels[i + 2]!
+        hd.pixels[i + 2] = Math.round(p2 + (s2 - p2) * a)
+      }
     }
   }
   hd.reflection(

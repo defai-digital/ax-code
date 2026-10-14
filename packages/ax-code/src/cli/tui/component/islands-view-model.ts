@@ -74,11 +74,22 @@ export function islandsBackground(style: IslandsStyle) {
   return style === "islands-day" ? "#8ec8e8" : "#c86a4a"
 }
 
+/** Parsed gradient endpoints per style; the pixel sampler calls islandsSkyRgb per row. */
+const SKY_ENDS: Record<IslandsStyle, readonly [number[], number[]]> = {
+  "islands-day": [
+    [1, 3, 5].map((offset) => parseInt(islandsBackground("islands-day").slice(offset, offset + 2), 16)),
+    [1, 3, 5].map((offset) => parseInt(ISLANDS_COLORS["islands-day"].skyBottom.slice(offset, offset + 2), 16)),
+  ],
+  "islands-dusk": [
+    [1, 3, 5].map((offset) => parseInt(islandsBackground("islands-dusk").slice(offset, offset + 2), 16)),
+    [1, 3, 5].map((offset) => parseInt(ISLANDS_COLORS["islands-dusk"].skyBottom.slice(offset, offset + 2), 16)),
+  ],
+}
+
 /** Sample the vertical sky gradient. `t` is 0 at the top of the frame. */
 export function islandsSkyRgb(style: IslandsStyle, t: number): readonly [number, number, number] {
   const x = Math.max(0, Math.min(1, t))
-  const from = [1, 3, 5].map((offset) => parseInt(islandsBackground(style).slice(offset, offset + 2), 16))
-  const to = [1, 3, 5].map((offset) => parseInt(ISLANDS_COLORS[style].skyBottom.slice(offset, offset + 2), 16))
+  const [from, to] = SKY_ENDS[style]
   return [0, 1, 2].map((channel) => Math.round(from[channel]! + (to[channel]! - from[channel]!) * x)) as [
     number,
     number,

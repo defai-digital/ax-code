@@ -28,6 +28,10 @@ const smooth = (a: number, b: number, v: number) => {
   return t * t * (3 - 2 * t)
 }
 
+// Blend colors the per-pixel loops referenced as freshly allocated tuples.
+const WARM_TINT: RGB = [255, 190, 120]
+const MILKY_WAY: RGB = [120, 140, 200]
+
 /**
  * Freeform HD renderer. A glowing sky, a sun or moon that sinks into the
  * sea, glittering surf, a curved palm with drooping leaflets, a driftwood
@@ -52,13 +56,52 @@ export function renderBenchPixels(width: number, height: number, style: BenchSty
   const sunX = hd.X(benchSunX(BENCH_COLUMNS) + 3.5)
   const sunY = hd.Y(benchSunY(style, elapsedMs, horizon) + 2.5)
   const sunR = Math.max(2, Math.min(cw * 2.6, ch * 1.4))
+  const pixels = hd.pixels
+
+  // Per-column tables: each entry is the exact expression the inner loops
+  // below used to recompute per pixel.
+  const sxCol = new Float64Array(w) // (x + 0.5) / cw
+  const col09 = new Float64Array(w) // x * 0.9
+  const col031 = new Float64Array(w) // x * 0.31
+  const absDx = new Float64Array(w) // Math.abs(x + 0.5 - sunX)
+  const fxBloom = new Float64Array(w) // (x + 0.5 - sunX) / (w * 0.55)
+  for (let x = 0; x < w; x++) {
+    sxCol[x] = (x + 0.5) / cw
+    col09[x] = x * 0.9
+    col031[x] = x * 0.31
+    absDx[x] = Math.abs(x + 0.5 - sunX)
+    fxBloom[x] = (x + 0.5 - sunX) / (w * 0.55)
+  }
 
   const blend = (i: number, color: RGB, alpha: number) => blendPixelAt(hd, i, color, alpha)
   const softBlob = (cx: number, cy: number, rx: number, ry: number, color: RGB, alpha: number, pow = 1) => {
-    for (let y = Math.max(0, Math.floor(cy - ry)); y < Math.min(h, Math.ceil(cy + ry)); y++) {
-      for (let x = Math.max(0, Math.floor(cx - rx)); x < Math.min(w, Math.ceil(cx + rx)); x++) {
-        const d = Math.hypot((x + 0.5 - cx) / rx, (y + 0.5 - cy) / ry)
-        if (d < 1) blend((y * w + x) * 3, color, alpha * Math.pow(1 - smooth(0, 1, d), pow))
+    const xa = Math.max(0, Math.floor(cx - rx))
+    const xb = Math.min(w, Math.ceil(cx + rx))
+    const ya = Math.max(0, Math.floor(cy - ry))
+    const yb = Math.min(h, Math.ceil(cy + ry))
+    if (xa >= xb || ya >= yb) return
+    const fx = new Float64Array(xb - xa)
+    for (let x = xa; x < xb; x++) fx[x - xa] = (x + 0.5 - cx) / rx
+    const cr = color[0]!
+    const cg = color[1]!
+    const cb = color[2]!
+    for (let y = ya; y < yb; y++) {
+      const fy = (y + 0.5 - cy) / ry
+      let i = (y * w + xa) * 3
+      for (let k = 0; k < fx.length; k++, i += 3) {
+        const d = Math.hypot(fx[k]!, fy)
+        if (d >= 1) continue
+        // smooth(0, 1, d) reduces to d on [0, 1): clamp01 is the identity there.
+        const s = d * d * (3 - 2 * d)
+        let a = alpha * Math.pow(1 - s, pow)
+        if (a <= 0) continue
+        if (a > 1) a = 1
+        const p0 = pixels[i]!
+        pixels[i] = Math.round(p0 + (cr - p0) * a)
+        const p1 = pixels[i + 1]!
+        pixels[i + 1] = Math.round(p1 + (cg - p1) * a)
+        const p2 = pixels[i + 2]!
+        pixels[i + 2] = Math.round(p2 + (cb - p2) * a)
       }
     }
   }
@@ -74,23 +117,78 @@ export function renderBenchPixels(width: number, height: number, style: BenchSty
   // Sky gradient with a bloom that pools at the horizon below the sun or moon.
   hd.sky((v) => benchSkyRgb(style, v))
   const bloom: RGB = sunset ? [255, 150, 86] : [110, 140, 210]
-  for (let y = 0; y < Math.min(h, Math.ceil(seaTop)); y++) {
-    const lowness = smooth(0.1, 1, y / (seaTop || 1))
-    for (let x = 0; x < w; x++) {
-      const i = (y * w + x) * 3
-      const d = Math.hypot((x + 0.5 - sunX) / (w * 0.55), (y + 0.5 - sunY) / (h * 0.5))
-      blend(i, bloom, (sunset ? 0.62 : 0.2) * Math.exp(-d * d * 3.2) * (sunset ? 0.35 + lowness * 0.65 : 1))
-      if (sunset) blend(i, [255, 190, 120], lowness * lowness * 0.25)
+  const bloomBase = sunset ? 0.62 : 0.2
+  const bloomR = bloom[0]!
+  const bloomG = bloom[1]!
+  const bloomB = bloom[2]!
+  const skyRows = Math.min(h, Math.ceil(seaTop))
+  const skyDiv = seaTop || 1
+  const invSeaHeight = h * 0.5
+  for (let y = 0; y < skyRows; y++) {
+    const lowness = smooth(0.1, 1, y / skyDiv)
+    const fy = (y + 0.5 - sunY) / invSeaHeight
+    const lowMix = sunset ? 0.35 + lowness * 0.65 : 1
+    const warm = lowness * lowness * 0.25
+    let i = y * w * 3
+    for (let x = 0; x < w; x++, i += 3) {
+      const d = Math.hypot(fxBloom[x]!, fy)
+      let a = bloomBase * Math.exp(-d * d * 3.2) * lowMix
+      if (a > 1) a = 1
+      const p0 = pixels[i]!
+      pixels[i] = Math.round(p0 + (bloomR - p0) * a)
+      const p1 = pixels[i + 1]!
+      pixels[i + 1] = Math.round(p1 + (bloomG - p1) * a)
+      const p2 = pixels[i + 2]!
+      pixels[i + 2] = Math.round(p2 + (bloomB - p2) * a)
+      if (sunset) {
+        const q0 = pixels[i]!
+        pixels[i] = Math.round(q0 + (WARM_TINT[0]! - q0) * warm)
+        const q1 = pixels[i + 1]!
+        pixels[i + 1] = Math.round(q1 + (WARM_TINT[1]! - q1) * warm)
+        const q2 = pixels[i + 2]!
+        pixels[i + 2] = Math.round(q2 + (WARM_TINT[2]! - q2) * warm)
+      }
     }
   }
 
   // Night: a faint Milky Way, glowing stars, and dust.
   if (!sunset) {
-    for (let y = 0; y < Math.min(h, Math.ceil(seaTop)); y++) {
-      for (let x = 0; x < w; x++) {
-        const d = ((x + 0.5) / cw) * 0.45 - ((y + 0.5) / ch) * 1.0 + 6
-        const band = Math.exp(-(d * d) / 14) * (0.55 + 0.45 * Math.sin(x * 0.07 + y * 0.11))
-        blend((y * w + x) * 3, [120, 140, 200], band * 0.12)
+    const mwCol = new Float64Array(w) // ((x + 0.5) / cw) * 0.45
+    const mwSin = new Float64Array(w) // x * 0.07
+    for (let x = 0; x < w; x++) {
+      mwCol[x] = ((x + 0.5) / cw) * 0.45
+      mwSin[x] = x * 0.07
+    }
+    // The band only reaches a blend alpha of 1/510 (the point where it can
+    // still move an integer pixel by one) inside |mwCol - dy + 6| <= 8.2;
+    // outside that window the blend is provably the identity on the integer
+    // sky, so clip each row to the diagonal band (widened by 2 pixels).
+    const mwFrom = new Int32Array(skyRows)
+    const mwTo = new Int32Array(skyRows)
+    let scanLo = 0
+    let scanHi = 0
+    for (let y = 0; y < skyRows; y++) {
+      const dy = (y + 0.5) / ch
+      while (scanLo < w && mwCol[scanLo]! < dy - 14.2) scanLo++
+      while (scanHi < w && mwCol[scanHi]! <= dy + 2.2) scanHi++
+      mwFrom[y] = scanLo > 2 ? scanLo - 2 : 0
+      mwTo[y] = scanHi + 2 < w ? scanHi + 2 : w
+    }
+    for (let y = 0; y < skyRows; y++) {
+      const dy = (y + 0.5) / ch
+      const y11 = y * 0.11
+      let i = (y * w + mwFrom[y]) * 3
+      for (let x = mwFrom[y]; x < mwTo[y]; x++, i += 3) {
+        const d = mwCol[x]! - dy + 6
+        const band = Math.exp(-(d * d) / 14) * (0.55 + 0.45 * Math.sin(mwSin[x]! + y11))
+        let a = band * 0.12
+        if (a > 1) a = 1
+        const p0 = pixels[i]!
+        pixels[i] = Math.round(p0 + (MILKY_WAY[0]! - p0) * a)
+        const p1 = pixels[i + 1]!
+        pixels[i + 1] = Math.round(p1 + (MILKY_WAY[1]! - p1) * a)
+        const p2 = pixels[i + 2]!
+        pixels[i + 2] = Math.round(p2 + (MILKY_WAY[2]! - p2) * a)
       }
     }
     for (let i = 0; i < 90; i++) {
@@ -145,8 +243,10 @@ export function renderBenchPixels(width: number, height: number, style: BenchSty
 
   // Distant headland resting on the horizon.
   const land = hdMix(hdHex(c.skyBottom), sunset ? [60, 24, 50] : [10, 18, 40], 0.6)
-  for (let x = Math.floor(w * 0.66); x < w; x++) {
-    const u = (x - w * 0.66) / (w * 0.34)
+  const landLeft = w * 0.66
+  const landSpan = w * 0.34
+  for (let x = Math.floor(landLeft); x < w; x++) {
+    const u = (x - landLeft) / landSpan
     const top = seaTop - ch * (0.9 * Math.sin(Math.min(1, u * 1.15) * Math.PI * 0.85) + 0.15 * Math.sin(x * 0.05))
     hd.rect(x, top, x + 1, seaTop + 1, land)
   }
@@ -154,27 +254,67 @@ export function renderBenchPixels(width: number, height: number, style: BenchSty
   // Sea: perspective gradient, rolling crests, and a glittering path.
   const seaDeep = hdMix(hdHex(c.wave), sunset ? [60, 30, 70] : [8, 20, 50], 0.78)
   const seaFar = hdMix(seaDeep, sunset ? [255, 150, 110] : [60, 90, 150], sunset ? 0.45 : 0.3)
-  for (let y = Math.floor(seaTop); y < Math.min(h, Math.ceil(shoreTop)); y++) {
-    const u = (y - seaTop) / (shoreTop - seaTop || 1)
-    const base = hdMix(seaFar, hdMix(seaDeep, hdHex(c.wave), 0.25), Math.pow(u, 0.7))
-    for (let x = 0; x < w; x++) {
-      const sx = (x + 0.5) / cw
-      const crest = Math.sin(sx * (0.55 + u * 0.4) + t * (1.2 + u) + u * 22) * 0.5 + 0.5
-      const tone = hdMix(base, hdHex(c.wave), (crest > 0.86 ? 0.28 : 0) * (0.4 + u))
-      hd.set(x, y, tone)
+  const wave = hdHex(c.wave)
+  const seaStart = Math.max(0, Math.floor(seaTop))
+  const seaEnd = Math.min(h, Math.ceil(shoreTop))
+  const seaSpan = shoreTop - seaTop || 1
+  const seaInner = hdMix(seaDeep, wave, 0.25)
+  for (let y = seaStart; y < seaEnd; y++) {
+    const u = (y - seaTop) / seaSpan
+    // Per-row tones: the crest test only picks t = 0 or t = 0.28 * (0.4 + u),
+    // and hdMix(a, b, 0) over integer colors is the identity.
+    const base = hdMix(seaFar, seaInner, Math.pow(u, 0.7))
+    const crestTone = hdMix(base, wave, 0.28 * (0.4 + u))
+    const b0 = base[0]!
+    const b1 = base[1]!
+    const b2 = base[2]!
+    const m0 = crestTone[0]!
+    const m1 = crestTone[1]!
+    const m2 = crestTone[2]!
+    const freq = 0.55 + u * 0.4
+    const drift = t * (1.2 + u)
+    const u22 = u * 22
+    let i = y * w * 3
+    for (let x = 0; x < w; x++, i += 3) {
+      const crest = Math.sin(sxCol[x]! * freq + drift + u22) * 0.5 + 0.5
+      if (crest > 0.86) {
+        pixels[i] = m0
+        pixels[i + 1] = m1
+        pixels[i + 2] = m2
+      } else {
+        pixels[i] = b0
+        pixels[i + 1] = b1
+        pixels[i + 2] = b2
+      }
     }
   }
   // Sun or moon glitter, wider toward the viewer and shimmering with time.
-  for (let y = Math.floor(seaTop); y < Math.min(h, Math.ceil(shoreTop)); y++) {
-    const u = (y - seaTop) / (shoreTop - seaTop || 1)
+  const sky = sunset ? 1 : 0.7
+  for (let y = seaStart; y < seaEnd; y++) {
+    const u = (y - seaTop) / seaSpan
     const spread = cw * (2.2 + u * 5.5)
-    const sky = sunset ? 1 : 0.7
+    const thr = (1 - u) * 0.1
+    const k1 = 0.45 + 0.55 * (1 - u * 0.4)
+    const rA = y * 1.7
+    const rT = t * 3.1
+    const rB = y * 0.6
+    const rS = t * 1.7
+    const lightR = light[0]!
+    const lightG = light[1]!
+    const lightB = light[2]!
     for (let x = Math.max(0, Math.floor(sunX - spread)); x < Math.min(w, Math.ceil(sunX + spread)); x++) {
-      const d = Math.abs(x + 0.5 - sunX) / spread
-      const noise = Math.sin(x * 0.9 + y * 1.7 + t * 3.1) * Math.sin(x * 0.31 - y * 0.6 - t * 1.7)
-      const on = noise > 0.2 + d * 0.9 + (1 - u) * 0.1
-      if (!on) continue
-      blend((y * w + x) * 3, light, (0.85 - d * 0.5) * sky * (0.45 + 0.55 * (1 - u * 0.4)))
+      const d = absDx[x]! / spread
+      const noise = Math.sin(col09[x]! + rA + rT) * Math.sin(col031[x]! - rB - rS)
+      if (!(noise > 0.2 + d * 0.9 + thr)) continue
+      let a = (0.85 - d * 0.5) * sky * k1
+      if (a > 1) a = 1
+      const i = (y * w + x) * 3
+      const p0 = pixels[i]!
+      pixels[i] = Math.round(p0 + (lightR - p0) * a)
+      const p1 = pixels[i + 1]!
+      pixels[i + 1] = Math.round(p1 + (lightG - p1) * a)
+      const p2 = pixels[i + 2]!
+      pixels[i + 2] = Math.round(p2 + (lightB - p2) * a)
     }
   }
   // Horizon line catch-light.
@@ -188,24 +328,69 @@ export function renderBenchPixels(width: number, height: number, style: BenchSty
   const foam = hdHex(c.foam)
   const sandBase = sunset ? hdHex(c.sand) : hdMix(hdHex(c.sand), [70, 90, 140], 0.52)
   const wet = sunset ? hdHex(c.sandWet) : hdMix(hdHex(c.sandWet), [40, 55, 95], 0.55)
+  const foamLight = hdMix(foam, light, sunset ? 0.25 : 0.1)
+  const fl0 = foamLight[0]!
+  const fl1 = foamLight[1]!
+  const fl2 = foamLight[2]!
+  const wet0 = wet[0]!
+  const wet1 = wet[1]!
+  const wet2 = wet[2]!
+  const fm0 = foam[0]!
+  const fm1 = foam[1]!
+  const fm2 = foam[2]!
+  const sb0 = sandBase[0]!
+  const sb1 = sandBase[1]!
+  const sb2 = sandBase[2]!
+  const foamStart = Math.max(0, Math.floor(shoreTop - ch * 0.5))
+  const foamEnd = Math.min(h, Math.ceil(sandTop + ch * 0.3))
   for (let x = 0; x < w; x++) {
-    const sx = (x + 0.5) / cw
+    const sx = sxCol[x]!
     const lap = Math.sin(t * 1.6 + sx * 0.5) * 0.35 + Math.sin(sx * 1.3 - t * 0.9) * 0.12
     const edge = shoreTop + ch * (0.15 + lap)
-    for (let y = Math.floor(shoreTop - ch * 0.5); y < Math.min(h, Math.ceil(sandTop + ch * 0.3)); y++) {
-      if (y < edge - ch * 0.35) continue
+    const cutoff = edge - ch * 0.35
+    for (let y = foamStart; y < foamEnd; y++) {
+      if (y < cutoff) continue
       const d = (y - edge) / ch
-      if (d < 0.18) hd.set(x, y, hdMix(foam, light, sunset ? 0.25 : 0.1))
-      else if (d < 0.5) hd.set(x, y, hdMix(wet, foam, 0.35 * (1 - d)))
+      const i = (y * w + x) * 3
+      if (d < 0.18) {
+        pixels[i] = fl0
+        pixels[i + 1] = fl1
+        pixels[i + 2] = fl2
+      } else if (d < 0.5) {
+        // hdMix clamp is the identity here: t = 0.35 * (1 - d) stays under 0.274.
+        const mixT = 0.35 * (1 - d)
+        pixels[i] = Math.round(wet0 + (fm0 - wet0) * mixT)
+        pixels[i + 1] = Math.round(wet1 + (fm1 - wet1) * mixT)
+        pixels[i + 2] = Math.round(wet2 + (fm2 - wet2) * mixT)
+      }
     }
   }
-  for (let y = Math.floor(sandTop); y < h; y++) {
-    const u = (y - sandTop) / (h - sandTop || 1)
-    for (let x = 0; x < w; x++) {
-      const sx = (x + 0.5) / cw
-      const dune = Math.sin(sx * 0.6 + u * 3) * 0.04 + Math.sin(sx * 2.1 + y * 0.3) * 0.015
-      const base = hdMix(wet, sandBase, smooth(0, 0.35, u + dune))
-      hd.set(x, y, hdDarken(base, 1 - u * 0.22))
+  const sandStart = Math.max(0, Math.floor(sandTop))
+  const sandSpan = h - sandTop || 1
+  for (let y = sandStart; y < h; y++) {
+    const u = (y - sandTop) / sandSpan
+    const f = 1 - u * 0.22
+    const u3 = u * 3
+    const y03 = y * 0.3
+    let i = y * w * 3
+    for (let x = 0; x < w; x++, i += 3) {
+      const sx = sxCol[x]!
+      const dune = Math.sin(sx * 0.6 + u3) * 0.04 + Math.sin(sx * 2.1 + y03) * 0.015
+      const v = u + dune
+      // smooth(0, 0.35, v) inlined, then hdMix/hdDarken with the same round points.
+      let tt = v / 0.35
+      if (tt < 0) tt = 0
+      else if (tt > 1) tt = 1
+      const s = tt * tt * (3 - 2 * tt)
+      const d0 = Math.round(wet0 + (sb0 - wet0) * s)
+      const e0 = d0 * f
+      pixels[i] = e0 < 0 ? 0 : e0 > 255 ? 255 : Math.round(e0)
+      const d1 = Math.round(wet1 + (sb1 - wet1) * s)
+      const e1 = d1 * f
+      pixels[i + 1] = e1 < 0 ? 0 : e1 > 255 ? 255 : Math.round(e1)
+      const d2 = Math.round(wet2 + (sb2 - wet2) * s)
+      const e2 = d2 * f
+      pixels[i + 2] = e2 < 0 ? 0 : e2 > 255 ? 255 : Math.round(e2)
     }
   }
   // Glints on the wet sand line below the sun.
@@ -261,13 +446,16 @@ export function renderBenchPixels(width: number, height: number, style: BenchSty
     (1 - k) * (1 - k) * baseX + 2 * (1 - k) * k * ctrlX + k * k * crownX,
     (1 - k) * (1 - k) * baseY + 2 * (1 - k) * k * ctrlY + k * k * crownY,
   ]
+  const woodToneDark = hdDarken(woodTone, 0.8)
+  const trunkShade = hdMix(woodToneDark, rim, 0.3)
+  const trunkLit = hdMix(woodTone, rim, 0.3)
   for (let i = 0; i <= 120; i++) {
     const k = i / 120
     const [px, py] = trunkPoint(k)
     const r = cw * (0.62 - 0.22 * k)
     const ring = Math.sin(i * 0.9) > 0.55
-    hd.disk(px, py, r, ring ? hdDarken(woodTone, 0.8) : woodTone)
-    hd.disk(px + r * 0.45, py, r * 0.45, hdMix(ring ? hdDarken(woodTone, 0.8) : woodTone, rim, 0.3))
+    hd.disk(px, py, r, ring ? woodToneDark : woodTone)
+    hd.disk(px + r * 0.45, py, r * 0.45, ring ? trunkShade : trunkLit)
   }
   const frond = (angle: number, length: number, droop: number, shade: RGB) => {
     length *= 1.45

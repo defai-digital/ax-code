@@ -39,11 +39,22 @@ export function benchBackground(style: BenchStyle) {
   return style === "midnight-dream" ? "#0b132b" : "#341b36"
 }
 
+/** Parsed gradient endpoints per style; the pixel sampler calls benchSkyRgb per row. */
+const SKY_ENDS: Record<BenchStyle, readonly [number[], number[]]> = {
+  "midnight-dream": [
+    [1, 3, 5].map((offset) => parseInt(benchBackground("midnight-dream").slice(offset, offset + 2), 16)),
+    [1, 3, 5].map((offset) => parseInt(BENCH_COLORS["midnight-dream"].skyBottom.slice(offset, offset + 2), 16)),
+  ],
+  "sunset-serenade": [
+    [1, 3, 5].map((offset) => parseInt(benchBackground("sunset-serenade").slice(offset, offset + 2), 16)),
+    [1, 3, 5].map((offset) => parseInt(BENCH_COLORS["sunset-serenade"].skyBottom.slice(offset, offset + 2), 16)),
+  ],
+}
+
 /** Sample the vertical sky gradient. `t` is 0 at the top of the frame. */
 export function benchSkyRgb(style: BenchStyle, t: number): readonly [number, number, number] {
   const x = Math.max(0, Math.min(1, t))
-  const from = [1, 3, 5].map((offset) => parseInt(benchBackground(style).slice(offset, offset + 2), 16))
-  const to = [1, 3, 5].map((offset) => parseInt(BENCH_COLORS[style].skyBottom.slice(offset, offset + 2), 16))
+  const [from, to] = SKY_ENDS[style]
   return [0, 1, 2].map((channel) => Math.round(from[channel]! + (to[channel]! - from[channel]!) * x)) as [
     number,
     number,

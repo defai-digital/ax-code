@@ -313,14 +313,25 @@ export function renderMahjongPixels(width: number, height: number, style: Mahjon
 
   // Felt: vertical gradient, woven grain, a warm lamp pool, and a soft vignette.
   hd.sky((t) => mahjongFeltRgb(t))
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const weave = ((x >> 1) + (y >> 1)) % 2 === 0 ? 1.03 : 0.97
-      const k = weave + (artHash(x, y) - 0.5) * 0.05
-      const i = (y * w + x) * 3
-      hd.pixels[i] = Math.min(255, Math.round(hd.pixels[i]! * k))
-      hd.pixels[i + 1] = Math.min(255, Math.round(hd.pixels[i + 1]! * k))
-      hd.pixels[i + 2] = Math.min(255, Math.round(hd.pixels[i + 2]! * k))
+  {
+    // artHash(x, y) inlined (x and y are already integers) with the same
+    // imul/shift sequence; the weave parity depends on (x>>1) and (y>>1).
+    const pixels = hd.pixels
+    for (let y = 0; y < h; y++) {
+      const rowOdd = (y >> 1) % 2
+      let i = y * w * 3
+      for (let x = 0; x < w; x++, i += 3) {
+        const weave = (x >> 1) % 2 === rowOdd ? 1.03 : 0.97
+        let n = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) | 0
+        n = Math.imul(n ^ (n >>> 13), 1274126177)
+        const k = weave + (((n ^ (n >>> 16)) >>> 0) / 4294967296 - 0.5) * 0.05
+        const r0 = Math.round(pixels[i]! * k)
+        pixels[i] = r0 > 255 ? 255 : r0
+        const r1 = Math.round(pixels[i + 1]! * k)
+        pixels[i + 1] = r1 > 255 ? 255 : r1
+        const r2 = Math.round(pixels[i + 2]! * k)
+        pixels[i + 2] = r2 > 255 ? 255 : r2
+      }
     }
   }
   const lampX = w / 2
@@ -346,16 +357,34 @@ export function renderMahjongPixels(width: number, height: number, style: Mahjon
     const xb = Math.min(w - 1, Math.ceil(x1))
     const ya = Math.max(0, Math.floor(y0))
     const yb = Math.min(h - 1, Math.ceil(y1))
+    const dxDen = x1 - x0 || 1
+    const dyDen = y1 - y0 || 1
+    const pixels = hd.pixels
     for (let y = ya; y <= yb; y++) {
+      const py = y + 0.5
       for (let x = xa; x <= xb; x++) {
         const px = x + 0.5
-        const py = y + 0.5
         const qx = Math.max(x0 + r - px, 0, px - (x1 - r))
         const qy = Math.max(y0 + r - py, 0, py - (y1 - r))
-        const d = Math.hypot(qx, qy) - r
+        // Math.hypot(a, 0) === |a| exactly, so interior pixels skip the call.
+        const d = (qx === 0 || qy === 0 ? qx + qy : Math.hypot(qx, qy)) - r
         const cover = Math.max(0, Math.min(1, 0.5 - d))
         if (px < x0 - 0.5 || px > x1 + 0.5 || py < y0 - 0.5 || py > y1 + 0.5 || cover <= 0) continue
-        blendPixel(hd, x, y, shade(px, py, (px - x0) / (x1 - x0 || 1), (py - y0) / (y1 - y0 || 1)), cover * alpha)
+        const color = shade(px, py, (px - x0) / dxDen, (py - y0) / dyDen)
+        // blendPixel inlined; the loop bounds already clip to the canvas.
+        let a = cover * alpha
+        if (a <= 0) continue
+        if (a > 1) a = 1
+        const i = (y * w + x) * 3
+        const cr = color[0]!
+        const cg = color[1]!
+        const cb = color[2]!
+        const p0 = pixels[i]!
+        pixels[i] = Math.round(p0 + (cr - p0) * a)
+        const p1 = pixels[i + 1]!
+        pixels[i + 1] = Math.round(p1 + (cg - p1) * a)
+        const p2 = pixels[i + 2]!
+        pixels[i + 2] = Math.round(p2 + (cb - p2) * a)
       }
     }
   }
@@ -367,11 +396,27 @@ export function renderMahjongPixels(width: number, height: number, style: Mahjon
   }
   const ellipse = (cx: number, cy: number, rx: number, ry: number, color: RGB, alpha = 1) => {
     if (rx <= 0 || ry <= 0) return
+    const pixels = hd.pixels
+    const cr = color[0]!
+    const cg = color[1]!
+    const cb = color[2]!
+    const soft = Math.min(rx, ry)
     for (let y = Math.max(0, Math.floor(cy - ry - 1)); y <= Math.min(h - 1, Math.ceil(cy + ry + 1)); y++) {
+      const dy = (y + 0.5 - cy) / ry
       for (let x = Math.max(0, Math.floor(cx - rx - 1)); x <= Math.min(w - 1, Math.ceil(cx + rx + 1)); x++) {
-        const d = Math.hypot((x + 0.5 - cx) / rx, (y + 0.5 - cy) / ry)
-        const cover = clamp01((1 - d) * Math.min(rx, ry) + 0.5)
-        if (cover > 0) blendPixel(hd, x, y, color, cover * alpha)
+        const d = Math.hypot((x + 0.5 - cx) / rx, dy)
+        let cover = (1 - d) * soft + 0.5
+        if (cover <= 0) continue
+        if (cover > 1) cover = 1
+        let a = cover * alpha
+        if (a > 1) a = 1
+        const i = (y * w + x) * 3
+        const p0 = pixels[i]!
+        pixels[i] = Math.round(p0 + (cr - p0) * a)
+        const p1 = pixels[i + 1]!
+        pixels[i + 1] = Math.round(p1 + (cg - p1) * a)
+        const p2 = pixels[i + 2]!
+        pixels[i + 2] = Math.round(p2 + (cb - p2) * a)
       }
     }
   }
@@ -424,6 +469,38 @@ export function renderMahjongPixels(width: number, height: number, style: Mahjon
     softDisk(hd, cx, cy, u * 0.25, hdMix(accent, white, 0.5))
   }
 
+  /** A softDisk twin with identical math and an inlined blend; drawFace paints hundreds of these. */
+  const fastDisk = (cx: number, cy: number, r: number, color: RGB, alpha = 1) => {
+    if (r <= 0) return
+    const xa = Math.max(0, Math.floor(cx - r - 1))
+    const xb = Math.min(w - 1, Math.ceil(cx + r + 1))
+    const ya = Math.max(0, Math.floor(cy - r - 1))
+    const yb = Math.min(h - 1, Math.ceil(cy + r + 1))
+    const pixels = hd.pixels
+    const cr = color[0]!
+    const cg = color[1]!
+    const cb = color[2]!
+    for (let y = ya; y <= yb; y++) {
+      const dy = y + 0.5 - cy
+      let i = (y * w + xa) * 3
+      for (let x = xa; x <= xb; x++, i += 3) {
+        const d = Math.hypot(x + 0.5 - cx, dy)
+        let cover = r - d + 0.5
+        if (cover <= 0) continue
+        if (cover > 1) cover = 1
+        let a = cover * alpha
+        if (a <= 0) continue
+        if (a > 1) a = 1
+        const p0 = pixels[i]!
+        pixels[i] = Math.round(p0 + (cr - p0) * a)
+        const p1 = pixels[i + 1]!
+        pixels[i + 1] = Math.round(p1 + (cg - p1) * a)
+        const p2 = pixels[i + 2]!
+        pixels[i + 2] = Math.round(p2 + (cb - p2) * a)
+      }
+    }
+  }
+
   // One carved tile face inside the ivory rectangle.
   const drawFace = (fx0: number, fy0: number, fx1: number, fy1: number, tileIndex: number) => {
     const face = mahjongTileFace(tileIndex)
@@ -444,19 +521,19 @@ export function renderMahjongPixels(width: number, height: number, style: Mahjon
         const px = cx + ox * fw * 0.3
         const py = cy + oy * fh * 0.38
         const col = face.count === 1 ? (red as RGB) : palette[k]!
-        softDisk(hd, px + pr * 0.1, py + pr * 0.14, pr, [150, 160, 150], 0.35)
-        softDisk(hd, px, py, pr, hdDarken(col, 0.78))
-        softDisk(hd, px, py, pr * 0.84, col)
-        softDisk(hd, px, py, pr * 0.56, ivory)
-        softDisk(hd, px, py, pr * 0.34, hdMix(col, white, 0.1))
+        fastDisk(px + pr * 0.1, py + pr * 0.14, pr, [150, 160, 150], 0.35)
+        fastDisk(px, py, pr, hdDarken(col, 0.78))
+        fastDisk(px, py, pr * 0.84, col)
+        fastDisk(px, py, pr * 0.56, ivory)
+        fastDisk(px, py, pr * 0.34, hdMix(col, white, 0.1))
         if (face.count === 1) {
-          softDisk(hd, px, py, pr * 0.84, [24, 140, 84], 0.0)
+          fastDisk(px, py, pr * 0.84, [24, 140, 84], 0.0)
           for (let k2 = 0; k2 < 8; k2++) {
             const a = (k2 / 8) * Math.PI * 2
-            softDisk(hd, px + Math.cos(a) * pr * 0.7, py + Math.sin(a) * pr * 0.7, pr * 0.1, [24, 140, 84])
+            fastDisk(px + Math.cos(a) * pr * 0.7, py + Math.sin(a) * pr * 0.7, pr * 0.1, [24, 140, 84])
           }
         }
-        softDisk(hd, px - pr * 0.28, py - pr * 0.3, pr * 0.16, white, 0.7)
+        fastDisk(px - pr * 0.28, py - pr * 0.3, pr * 0.16, white, 0.7)
       }
     } else if (face.family === "bamboo") {
       if (face.count === 1) {
@@ -465,14 +542,14 @@ export function renderMahjongPixels(width: number, height: number, style: Mahjon
           const ex = cx + k * fw * 0.13
           const ey = cy + fh * 0.34 - Math.abs(k) * fh * 0.03
           artLine(hd, cx, cy + fh * 0.08, ex, ey, sr * 0.6, sr * 0.6, [24, 140, 84])
-          softDisk(hd, ex, ey, fw * 0.065, k % 2 === 0 ? red : [34, 92, 196])
+          fastDisk(ex, ey, fw * 0.065, k % 2 === 0 ? red : [34, 92, 196])
         }
         ellipse(cx, cy - fh * 0.02, fw * 0.17, fh * 0.17, [24, 140, 84])
         ellipse(cx - fw * 0.04, cy - fh * 0.06, fw * 0.08, fh * 0.08, [88, 190, 130], 0.7)
-        softDisk(hd, cx + fw * 0.05, cy - fh * 0.26, fw * 0.1, [24, 140, 84])
+        fastDisk(cx + fw * 0.05, cy - fh * 0.26, fw * 0.1, [24, 140, 84])
         artLine(hd, cx + fw * 0.02, cy - fh * 0.33, cx - fw * 0.05, cy - fh * 0.4, sr * 0.5, sr * 0.3, red)
         artLine(hd, cx + fw * 0.08, cy - fh * 0.3, cx + fw * 0.18, cy - fh * 0.28, sr * 0.5, sr * 0.2, gold)
-        softDisk(hd, cx + fw * 0.06, cy - fh * 0.27, Math.max(0.6, fw * 0.02), white)
+        fastDisk(cx + fw * 0.06, cy - fh * 0.27, Math.max(0.6, fw * 0.02), white)
       } else {
         const sw = Math.max(1.6, fw * (STICKS[face.count - 1]!.length > 6 ? 0.13 : 0.16))
         for (const [ox, oy, len, flag] of STICKS[face.count - 1]!) {
@@ -542,6 +619,27 @@ export function renderMahjongPixels(width: number, height: number, style: Mahjon
     shadow?: number
   }
   // One tile with thickness: jade body, ivory face or ivory-topped back.
+  // Hot shade callbacks write into scratch tuples (hdMix math inlined with the
+  // same clamp and per-channel round) instead of allocating per pixel.
+  const tileBodyOut: [number, number, number] = [0, 0, 0]
+  const tileFaceOut: [number, number, number] = [0, 0, 0]
+  const tileStripOut: [number, number, number] = [0, 0, 0]
+  const tilePanelOut: [number, number, number] = [0, 0, 0]
+  const sideBackOut: [number, number, number] = [0, 0, 0]
+  const sideStripOut: [number, number, number] = [0, 0, 0]
+  const sidePanelOut: [number, number, number] = [0, 0, 0]
+  const jade0 = jade[0]!
+  const jade1 = jade[1]!
+  const jade2 = jade[2]!
+  const jadeEdge0 = jadeEdge[0]!
+  const jadeEdge1 = jadeEdge[1]!
+  const jadeEdge2 = jadeEdge[2]!
+  const ivory0 = ivory[0]!
+  const ivory1 = ivory[1]!
+  const ivory2 = ivory[2]!
+  const glowGreen: RGB = [120, 235, 180]
+  const faceTint: RGB = [206, 226, 214]
+  const stripTint: RGB = [200, 222, 208]
   const drawTile = (o: TileOpts) => {
     const sx = Math.max(0.05, Math.min(1, o.scaleX ?? 1))
     const tw = o.w * sx
@@ -554,8 +652,18 @@ export function renderMahjongPixels(width: number, height: number, style: Mahjon
     if (o.shadow !== 0) shadowRect(x0, y0, x1, y1, Math.max(2, Math.round(u * 0.3)), o.shadow ?? 0.5)
     const rad = Math.max(1.5, Math.min(o.w, o.h) * 0.13)
     roundRect(x0, y0, x1, y1, rad, (_px, _py, uu, v) => {
-      const body = hdMix(jade, jadeEdge, 0.15 + v * 0.55)
-      return hdMix(body, [120, 235, 180], Math.max(0, 0.25 - uu * 0.6) * 0.5)
+      let t = 0.15 + v * 0.55
+      if (t < 0) t = 0
+      else if (t > 1) t = 1
+      const b0 = Math.round(jade0 + (jadeEdge0 - jade0) * t)
+      const b1 = Math.round(jade1 + (jadeEdge1 - jade1) * t)
+      const b2 = Math.round(jade2 + (jadeEdge2 - jade2) * t)
+      let t2 = Math.max(0, 0.25 - uu * 0.6) * 0.5
+      if (t2 > 1) t2 = 1
+      tileBodyOut[0] = Math.round(b0 + (glowGreen[0]! - b0) * t2)
+      tileBodyOut[1] = Math.round(b1 + (glowGreen[1]! - b1) * t2)
+      tileBodyOut[2] = Math.round(b2 + (glowGreen[2]! - b2) * t2)
+      return tileBodyOut
     })
     if (tw < 3) return
     if (o.up) {
@@ -563,25 +671,51 @@ export function renderMahjongPixels(width: number, height: number, style: Mahjon
       const fx1 = x1 - tw * 0.055
       const fy0 = y0 + o.h * 0.02
       roundRect(fx0, fy0, fx1, yf, rad * 0.85, (_px, _py, uu, v) => {
-        let col = hdMix(ivory, [206, 226, 214], v * 0.5)
-        col = hdMix(col, white, Math.max(0, 0.45 - v * 0.9) * (1 - uu * 0.4))
-        return col
+        let t = v * 0.5
+        if (t < 0) t = 0
+        else if (t > 1) t = 1
+        const c0 = Math.round(ivory0 + (faceTint[0]! - ivory0) * t)
+        const c1 = Math.round(ivory1 + (faceTint[1]! - ivory1) * t)
+        const c2 = Math.round(ivory2 + (faceTint[2]! - ivory2) * t)
+        let t2 = Math.max(0, 0.45 - v * 0.9) * (1 - uu * 0.4)
+        if (t2 < 0) t2 = 0
+        else if (t2 > 1) t2 = 1
+        tileFaceOut[0] = Math.round(c0 + (255 - c0) * t2)
+        tileFaceOut[1] = Math.round(c1 + (255 - c1) * t2)
+        tileFaceOut[2] = Math.round(c2 + (255 - c2) * t2)
+        return tileFaceOut
       })
       hd.rect(fx0 + rad, yf - 1, fx1 - rad, yf, [168, 196, 182])
       if (sx > 0.4)
         drawFace(fx0 + (fx1 - fx0) * 0.06, fy0 + o.h * 0.05, fx1 - (fx1 - fx0) * 0.06, yf - o.h * 0.03, o.tile)
     } else {
       const strip = Math.max(1.5, o.depth * 0.9)
-      roundRect(x0, y0, x1, y0 + strip + rad, rad, (_px, _py, uu, v) =>
-        hdMix(ivory, [200, 222, 208], v * 0.5 + uu * 0.1),
-      )
+      roundRect(x0, y0, x1, y0 + strip + rad, rad, (_px, _py, uu, v) => {
+        let t = v * 0.5 + uu * 0.1
+        if (t < 0) t = 0
+        else if (t > 1) t = 1
+        tileStripOut[0] = Math.round(ivory0 + (stripTint[0]! - ivory0) * t)
+        tileStripOut[1] = Math.round(ivory1 + (stripTint[1]! - ivory1) * t)
+        tileStripOut[2] = Math.round(ivory2 + (stripTint[2]! - ivory2) * t)
+        return tileStripOut
+      })
       const px0 = x0 + tw * 0.07
       const px1 = x1 - tw * 0.07
       const py0 = y0 + strip + o.h * 0.04
       const py1 = y1 - o.depth * 0.5
-      roundRect(px0, py0, px1, py1, rad * 0.8, (_px, _py, uu, v) =>
-        hdMix(hdMix(jade, jadeInk, 0.28), jade, Math.min(1, v * 0.9 + Math.abs(uu - 0.5) * 0.4)),
-      )
+      // The inner mix is the constant hdMix(jade, jadeInk, 0.28).
+      let innerT = 0.28
+      const inner0 = Math.round(jade0 + (jadeInk[0]! - jade0) * innerT)
+      const inner1 = Math.round(jade1 + (jadeInk[1]! - jade1) * innerT)
+      const inner2 = Math.round(jade2 + (jadeInk[2]! - jade2) * innerT)
+      roundRect(px0, py0, px1, py1, rad * 0.8, (_px, _py, uu, v) => {
+        let t = Math.min(1, v * 0.9 + Math.abs(uu - 0.5) * 0.4)
+        if (t < 0) t = 0
+        tilePanelOut[0] = Math.round(inner0 + (jade0 - inner0) * t)
+        tilePanelOut[1] = Math.round(inner1 + (jade1 - inner1) * t)
+        tilePanelOut[2] = Math.round(inner2 + (jade2 - inner2) * t)
+        return tilePanelOut
+      })
       if (sx > 0.4 && px1 - px0 > 8) {
         const mx = (px0 + px1) / 2
         const my = (py0 + py1) / 2
@@ -596,17 +730,41 @@ export function renderMahjongPixels(width: number, height: number, style: Mahjon
   const drawSideBack = (x: number, y: number, tw: number, th: number, rimSide: "left" | "right", lift = 0) => {
     shadowRect(x, y - lift, x + tw, y - lift + th, 2, 0.45)
     const rad = Math.max(1.5, th * 0.3)
-    roundRect(x, y - lift, x + tw, y - lift + th, rad, (_px, _py, _uu, v) => hdMix(jade, jadeEdge, 0.1 + v * 0.55))
+    roundRect(x, y - lift, x + tw, y - lift + th, rad, (_px, _py, _uu, v) => {
+      let t = 0.1 + v * 0.55
+      if (t < 0) t = 0
+      else if (t > 1) t = 1
+      sideBackOut[0] = Math.round(jade0 + (jadeEdge0 - jade0) * t)
+      sideBackOut[1] = Math.round(jade1 + (jadeEdge1 - jade1) * t)
+      sideBackOut[2] = Math.round(jade2 + (jadeEdge2 - jade2) * t)
+      return sideBackOut
+    })
     const strip = Math.max(2, tw * 0.17)
     const sx0 = rimSide === "right" ? x + tw - strip : x
-    roundRect(sx0, y - lift, sx0 + strip, y - lift + th, rad * 0.8, (_px, _py, _uu, v) =>
-      hdMix(ivory, [200, 222, 208], v * 0.5),
-    )
+    roundRect(sx0, y - lift, sx0 + strip, y - lift + th, rad * 0.8, (_px, _py, _uu, v) => {
+      let t = v * 0.5
+      if (t < 0) t = 0
+      else if (t > 1) t = 1
+      sideStripOut[0] = Math.round(ivory0 + (stripTint[0]! - ivory0) * t)
+      sideStripOut[1] = Math.round(ivory1 + (stripTint[1]! - ivory1) * t)
+      sideStripOut[2] = Math.round(ivory2 + (stripTint[2]! - ivory2) * t)
+      return sideStripOut
+    })
     const px0 = rimSide === "right" ? x + tw * 0.08 : x + strip + tw * 0.03
     const px1 = rimSide === "right" ? x + tw - strip - tw * 0.03 : x + tw - tw * 0.08
-    roundRect(px0, y - lift + th * 0.14, px1, y - lift + th * 0.82, rad * 0.6, (_px, _py, _uu, v) =>
-      hdMix(hdMix(jade, jadeInk, 0.26), jade, v),
-    )
+    // The inner mix is the constant hdMix(jade, jadeInk, 0.26).
+    const inner0 = Math.round(jade0 + (jadeInk[0]! - jade0) * 0.26)
+    const inner1 = Math.round(jade1 + (jadeInk[1]! - jade1) * 0.26)
+    const inner2 = Math.round(jade2 + (jadeInk[2]! - jade2) * 0.26)
+    roundRect(px0, y - lift + th * 0.14, px1, y - lift + th * 0.82, rad * 0.6, (_px, _py, _uu, v) => {
+      let t = v
+      if (t < 0) t = 0
+      else if (t > 1) t = 1
+      sidePanelOut[0] = Math.round(inner0 + (jade0 - inner0) * t)
+      sidePanelOut[1] = Math.round(inner1 + (jade1 - inner1) * t)
+      sidePanelOut[2] = Math.round(inner2 + (jade2 - inner2) * t)
+      return sidePanelOut
+    })
     softDisk(hd, (px0 + px1) / 2, y - lift + th * 0.48, Math.max(1, th * 0.14), jadeInk, 0.9)
   }
 
@@ -822,10 +980,24 @@ export function renderMahjongPixels(width: number, height: number, style: Mahjon
       stacks.push({ x: plx0 - 2 - stackW, y: ply0 + i * ((ply1 - ply0) / 4), w: stackW, h: (ply1 - ply0) / 4 - 1.5 })
     stacks.slice(0, remaining).forEach((s) => {
       roundRect(s.x + 1, s.y + 2, s.x + s.w + 1, s.y + s.h + 2, 2, flat([0, 8, 5]), 0.5)
-      roundRect(s.x, s.y, s.x + s.w - 1, s.y + s.h, 2, (_px, _py, _uu, v) => hdMix(jade, jadeEdge, 0.1 + v * 0.5))
-      roundRect(s.x, s.y, s.x + s.w - 1, s.y + Math.max(2, s.h * 0.3), 2, (_px, _py, uu, v) =>
-        hdMix(ivory, [196, 220, 206], v * 0.5 + uu * 0.1),
-      )
+      roundRect(s.x, s.y, s.x + s.w - 1, s.y + s.h, 2, (_px, _py, _uu, v) => {
+        let t = 0.1 + v * 0.5
+        if (t < 0) t = 0
+        else if (t > 1) t = 1
+        tilePanelOut[0] = Math.round(jade0 + (jadeEdge0 - jade0) * t)
+        tilePanelOut[1] = Math.round(jade1 + (jadeEdge1 - jade1) * t)
+        tilePanelOut[2] = Math.round(jade2 + (jadeEdge2 - jade2) * t)
+        return tilePanelOut
+      })
+      roundRect(s.x, s.y, s.x + s.w - 1, s.y + Math.max(2, s.h * 0.3), 2, (_px, _py, uu, v) => {
+        let t = v * 0.5 + uu * 0.1
+        if (t < 0) t = 0
+        else if (t > 1) t = 1
+        tileStripOut[0] = Math.round(ivory0 + (196 - ivory0) * t)
+        tileStripOut[1] = Math.round(ivory1 + (220 - ivory1) * t)
+        tileStripOut[2] = Math.round(ivory2 + (206 - ivory2) * t)
+        return tileStripOut
+      })
     })
   }
   const viewText = "-- MATCH VIEW --"

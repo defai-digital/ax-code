@@ -61,10 +61,24 @@ export function renderFallsPixels(width: number, height: number, style: FallsSty
     const xb = Math.min(w - 1, Math.ceil(cx + r))
     const ya = Math.max(0, Math.floor(cy - r))
     const yb = Math.min(h - 1, Math.ceil(cy + r))
+    const cr = color[0]
+    const cg = color[1]
+    const cb = color[2]
     for (let y = ya; y <= yb; y++) {
+      const dy = y + 0.5 - cy
+      const dy2 = dy * dy
+      const rowIndex = y * w
       for (let x = xa; x <= xb; x++) {
-        const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy) / r
-        if (d < 1) blend(x, y, color, peak * (1 - d) * (1 - d))
+        const dx = x + 0.5 - cx
+        const d = Math.sqrt(dx * dx + dy2) / r
+        if (d >= 1) continue
+        // Math.hypot(dx, dy) === Math.sqrt(dx*dx + dy*dy); dy2 is hoisted per row.
+        const a = peak * (1 - d) * (1 - d)
+        if (a <= 0) continue
+        const i = (rowIndex + x) * 3
+        px[i] = Math.round(px[i]! + (cr - px[i]!) * a)
+        px[i + 1] = Math.round(px[i + 1]! + (cg - px[i + 1]!) * a)
+        px[i + 2] = Math.round(px[i + 2]! + (cb - px[i + 2]!) * a)
       }
     }
   }
@@ -123,10 +137,48 @@ export function renderFallsPixels(width: number, height: number, style: FallsSty
   }
 
   // Gorge walls: strata, cracks, a lit crest, moss, wet darkening near the spray.
-  const rockAt = (x: number, y: number, side: number, wallEdge: number): RGB => {
-    const u = x / hd.cw
-    const v = y / hd.ch
-    const depth = Math.abs(x - wallEdge) / hd.cw // cells from the falls-side edge
+  // rockAt dominates the frame and runs ~390k times, so it writes scalar channels
+  // straight into `px` instead of allocating a tuple per pixel. The arithmetic
+  // mirrors hdMix/hdDarken channel-for-channel, keeping the output byte-identical.
+  const rockDeepR = rockDeep[0],
+    rockDeepG = rockDeep[1],
+    rockDeepB = rockDeep[2]
+  const rockR = rock[0],
+    rockG = rock[1],
+    rockB = rock[2]
+  const flowR = flow[0],
+    flowG = flow[1],
+    flowB = flow[2]
+  const rockD12 = hdDarken(rock, 1.2)
+  const rockD12R = rockD12[0],
+    rockD12G = rockD12[1],
+    rockD12B = rockD12[2]
+  const grassDark = hdDarken(grass, night ? 0.6 : 0.8)
+  const grassDarkR = grassDark[0],
+    grassDarkG = grassDark[1],
+    grassDarkB = grassDark[2]
+  const crestDark = hdDarken(rock, 1.35)
+  const crestDarkR = crestDark[0],
+    crestDarkG = crestDark[1],
+    crestDarkB = crestDark[2]
+  const mossDeep = hdDarken(grass, 0.55)
+  const mossDeepR = mossDeep[0],
+    mossDeepG = mossDeep[1],
+    mossDeepB = mossDeep[2]
+  const grassR = grass[0],
+    grassG = grass[1],
+    grassB = grass[2]
+  const cw = hd.cw,
+    ch = hd.ch
+  // Clamp helpers matching hdMix's internal clamp and hdDarken's channel().
+  const c255 = (value: number) => (value < 0 ? 0 : value > 255 ? 255 : Math.round(value))
+  const mix1 = (a: number, b: number, t: number) => Math.round(a + (b - a) * (t < 0 ? 0 : t > 1 ? 1 : t))
+  // Writes the stratified rock color at (x, y) into px[i]. `side` is -1 or 1;
+  // `crestT` is the pre-computed crest-blend factor (negative to skip the blend).
+  const rockAt = (x: number, y: number, side: number, wallEdge: number, i: number, crestT: number) => {
+    const u = x / cw
+    const v = y / ch
+    const depth = Math.abs(x - wallEdge) / cw // cells from the falls-side edge
     const strata = Math.sin(v * 3.1 + vnoise(u * 0.4, v * 0.6) * 4) * 0.5 + 0.5
     const grain = vnoise((x / s) * 1.6, (y / s) * 0.9)
     const crack = vnoise((x / s) * 0.45 + side * 7, (y / s) * 0.08)
@@ -135,27 +187,65 @@ export function renderFallsPixels(width: number, height: number, style: FallsSty
     const edgeLit = Math.exp(-depth / 2.2) * (side < 0 ? 0.22 : 0.08)
     let k = (0.62 + 0.3 * strata + 0.22 * grain - (crack < 0.2 ? 0.28 : 0)) * face + edgeLit
     k *= 0.55 + 0.45 * clamp01(1 - (v - 4) / 15)
-    let color = hdMix(rockDeep, rock, clamp01(k * 0.95))
-    color = hdDarken(color, 0.78 + 0.35 * clamp01(k - 0.4))
+    let t = clamp01(k * 0.95)
+    let r = Math.round(rockDeepR + (rockR - rockDeepR) * t)
+    let g = Math.round(rockDeepG + (rockG - rockDeepG) * t)
+    let b = Math.round(rockDeepB + (rockB - rockDeepB) * t)
+    const dark = 0.78 + 0.35 * clamp01(k - 0.4)
+    r = c255(r * dark)
+    g = c255(g * dark)
+    b = c255(b * dark)
     // Spray-darkened rock near the base of the falls.
-    const wet = clamp01((v - 11) / 6) * Math.exp(-depth / 9)
-    color = hdMix(color, flow, wet * 0.28)
+    const wet = clamp01((v - 11) / 6) * Math.exp(-depth / 9) * 0.28
+    r = mix1(r, flowR, wet)
+    g = mix1(g, flowG, wet)
+    b = mix1(b, flowB, wet)
     // Deep ledges break up the broad face; moss grows in their sheltered recesses.
     const layer = v * 0.85 + crack * 1.4
     const ledge = layer - Math.floor(layer)
     const exposed = crack
-    if (ledge < 0.07 && exposed > 0.35) color = hdMix(color, hdDarken(rock, 1.2), 0.3 * (1 - ledge / 0.07))
-    if (ledge > 0.9 && exposed > 0.45) color = hdDarken(color, 0.78 + (1 - ledge) * 1.5)
+    if (ledge < 0.07 && exposed > 0.35) {
+      const lt = 0.3 * (1 - ledge / 0.07)
+      r = mix1(r, rockD12R, lt)
+      g = mix1(g, rockD12G, lt)
+      b = mix1(b, rockD12B, lt)
+    }
+    if (ledge > 0.9 && exposed > 0.45) {
+      const df = 0.78 + (1 - ledge) * 1.5
+      r = c255(r * df)
+      g = c255(g * df)
+      b = c255(b * df)
+    }
     const fissure = Math.abs(Math.sin(u * 1.1 + v * 0.3 + crack * 2))
-    if (fissure < 0.055 && exposed > 0.6) color = hdDarken(color, 0.75 + fissure * 3)
-    if (ledge > 0.72 && grain > 0.55 && depth < 18)
-      color = hdMix(color, hdDarken(grass, night ? 0.6 : 0.8), (grain - 0.55) * 1.1)
-    return color
+    if (fissure < 0.055 && exposed > 0.6) {
+      const df = 0.75 + fissure * 3
+      r = c255(r * df)
+      g = c255(g * df)
+      b = c255(b * df)
+    }
+    if (ledge > 0.72 && grain > 0.55 && depth < 18) {
+      const gt = (grain - 0.55) * 1.1
+      r = mix1(r, grassDarkR, gt)
+      g = mix1(g, grassDarkG, gt)
+      b = mix1(b, grassDarkB, gt)
+    }
+    if (crestT >= 0) {
+      px[i] = mix1(r, crestDarkR, crestT)
+      px[i + 1] = mix1(g, crestDarkG, crestT)
+      px[i + 2] = mix1(b, crestDarkB, crestT)
+    } else {
+      px[i] = r
+      px[i + 1] = g
+      px[i + 2] = b
+    }
   }
   for (const side of [-1, 1] as const) {
     const edges = Float64Array.from({ length: h }, (_, y) => hd.X(fallsCliffEdgeF(y / hd.ch, side)))
+    // The ragged inner-face threshold depends only on y and side, so hoist it
+    // out of the per-column scan instead of recomputing it for every pixel.
+    const jagArr = Float64Array.from({ length: h }, (_, y) => vnoise((y / s) * 0.5 + side * 3, 11) * 1.8 - 0.9)
     for (let x = 0; x < w; x++) {
-      const u = (x + 0.5) / hd.cw
+      const u = (x + 0.5) / cw
       const inside = side < 0 ? u < 33 : u > 43
       if (!inside) continue
       const crest = hd.Y(fallsCliffTopF(u)) + (vnoise((x / s) * 0.9, 5) - 0.5) * s * 1.1
@@ -163,21 +253,27 @@ export function renderFallsPixels(width: number, height: number, style: FallsSty
         const wallEdgeX = edges[y]!
         if (side < 0 ? x >= wallEdgeX : x <= wallEdgeX) continue
         // Ragged inner face near the falls.
-        const inner = Math.abs(x - wallEdgeX) / hd.cw
-        const jag = vnoise((y / s) * 0.5 + side * 3, 11) * 1.8
-        if (inner < jag - 0.9 && y > lipY) continue
-        let color = rockAt(x, y, side, wallEdgeX)
+        const inner = Math.abs(x - wallEdgeX) / cw
+        if (inner < jagArr[y]! && y > lipY) continue
         const dTop = y - crest
-        if (dTop < s * 0.9) color = hdMix(color, hdDarken(rock, 1.35), 0.6 * (1 - dTop / (s * 0.9)))
-        px[(y * w + x) * 3] = color[0]
-        px[(y * w + x) * 3 + 1] = color[1]
-        px[(y * w + x) * 3 + 2] = color[2]
+        const crestT = dTop < s * 0.9 ? 0.6 * (1 - dTop / (s * 0.9)) : -1
+        rockAt(x, y, side, wallEdgeX, (y * w + x) * 3, crestT)
       }
       // Moss mat and a few hanging ferns along the crest.
       const mossDepth = s * (0.8 + vnoise((x / s) * 0.8, 21) * 1.3)
       for (let y = Math.max(0, Math.floor(crest) - 1); y < Math.min(h, Math.floor(crest + mossDepth)); y++) {
         const f = (y - crest) / mossDepth
-        blend(x, y, hdMix(grass, hdDarken(grass, 0.55), f), 0.95 * (1 - f * 0.5))
+        // blendPixelUnclamped is safe here without a bounds check: x and y are
+        // already inside the frame, and the alpha stays below 1.
+        const mt = f < 0 ? 0 : f > 1 ? 1 : f
+        const mr = mix1(grassR, mossDeepR, mt)
+        const mg = mix1(grassG, mossDeepG, mt)
+        const mb = mix1(grassB, mossDeepB, mt)
+        const alpha = 0.95 * (1 - f * 0.5)
+        const i = (y * w + x) * 3
+        px[i] = Math.round(px[i]! + (mr - px[i]!) * alpha)
+        px[i + 1] = Math.round(px[i + 1]! + (mg - px[i + 1]!) * alpha)
+        px[i + 2] = Math.round(px[i + 2]! + (mb - px[i + 2]!) * alpha)
       }
     }
   }

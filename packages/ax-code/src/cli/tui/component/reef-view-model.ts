@@ -59,11 +59,22 @@ export function reefBackground(style: ReefStyle) {
   return style === "reef-day" ? "#4a9ac8" : "#101f3c"
 }
 
+/** Parsed gradient endpoints per style; the pixel sampler calls reefSkyRgb per row. */
+const SKY_ENDS: Record<ReefStyle, readonly [number[], number[]]> = {
+  "reef-day": [
+    [1, 3, 5].map((offset) => parseInt(reefBackground("reef-day").slice(offset, offset + 2), 16)),
+    [1, 3, 5].map((offset) => parseInt(REEF_COLORS["reef-day"].skyBottom.slice(offset, offset + 2), 16)),
+  ],
+  "reef-night": [
+    [1, 3, 5].map((offset) => parseInt(reefBackground("reef-night").slice(offset, offset + 2), 16)),
+    [1, 3, 5].map((offset) => parseInt(REEF_COLORS["reef-night"].skyBottom.slice(offset, offset + 2), 16)),
+  ],
+}
+
 /** Sample the vertical water gradient. `t` is 0 at the top of the frame. */
 export function reefSkyRgb(style: ReefStyle, t: number): readonly [number, number, number] {
   const x = Math.max(0, Math.min(1, t))
-  const from = [1, 3, 5].map((offset) => parseInt(reefBackground(style).slice(offset, offset + 2), 16))
-  const to = [1, 3, 5].map((offset) => parseInt(REEF_COLORS[style].skyBottom.slice(offset, offset + 2), 16))
+  const [from, to] = SKY_ENDS[style]
   return [0, 1, 2].map((channel) => Math.round(from[channel]! + (to[channel]! - from[channel]!) * x)) as [
     number,
     number,

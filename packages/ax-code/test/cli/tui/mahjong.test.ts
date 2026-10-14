@@ -22,7 +22,10 @@ import {
   MAHJONG_TILE_COUNT,
 } from "../../../src/cli/tui/component/mahjong-view-model"
 import { renderTextScenePixels } from "../../../src/cli/tui/component/text-scene-pixels"
-import { digitalCodePixelPlayer } from "../../../src/cli/tui/component/digital-code-pixels"
+import { digitalCodePixelPlayer, finishScenePixels } from "../../../src/cli/tui/component/digital-code-pixels"
+import { CINEMA_STILL } from "../../../src/cli/tui/component/scene-cinema"
+
+const STILL_PLAYBACK = { now: () => 0, move: CINEMA_STILL }
 
 const text = (rows: ReturnType<typeof mahjongRows>) => rows.map((row) => row.map((run) => run.text).join("")).join("\n")
 test("match advances seats and discards with bounded repeatable state", () => {
@@ -160,7 +163,7 @@ test("ending is a score ledger without returning to match playback", () => {
 })
 test("Mahjong uses bounded lossless graphics and deletes images on resize and exit", () => {
   const writes: string[] = [],
-    player = digitalCodePixelPlayer((data) => writes.push(data))
+    player = digitalCodePixelPlayer((data) => writes.push(data), STILL_PLAYBACK)
   const input = {
     width: 800,
     height: 540,
@@ -172,7 +175,12 @@ test("Mahjong uses bounded lossless graphics and deletes images on resize and ex
   }
   player.draw(input)
   const payload = [...writes[0]!.matchAll(/\x1b_G[^;]+;([A-Za-z0-9+/=]*)\x1b\\/g)].map((m) => m[1]).join("")
-  expect(inflateSync(Buffer.from(payload, "base64"))).toEqual(renderTextScenePixels(800, 540, "mahjong-match", 1200))
+  expect(inflateSync(Buffer.from(payload, "base64"))).toEqual(
+    finishScenePixels(renderTextScenePixels(800, 540, "mahjong-match", 1200), 800, 540, {
+      elapsedMs: 1200,
+      move: CINEMA_STILL,
+    }),
+  )
   player.draw({ ...input, width: 600, style: "mahjong-ending" })
   expect(writes[1]).toContain("a=d,d=I")
   player.dispose()

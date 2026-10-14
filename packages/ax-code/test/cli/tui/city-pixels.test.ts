@@ -2,7 +2,14 @@ import { expect, test } from "vitest"
 import { inflateSync } from "node:zlib"
 import { renderCityPixels } from "../../../src/cli/tui/component/city-pixels"
 import { renderTextScenePixels } from "../../../src/cli/tui/component/text-scene-pixels"
-import { createDigitalCodePixels, digitalCodePixelPlayer } from "../../../src/cli/tui/component/digital-code-pixels"
+import {
+  createDigitalCodePixels,
+  digitalCodePixelPlayer,
+  finishScenePixels,
+} from "../../../src/cli/tui/component/digital-code-pixels"
+import { CINEMA_STILL } from "../../../src/cli/tui/component/scene-cinema"
+
+const STILL_PLAYBACK = { now: () => 0, move: CINEMA_STILL }
 
 // Maps the shared 72x24 scene to exact 10x20 pixel cells.
 const WIDTH = 720
@@ -68,7 +75,7 @@ test.each(["city-night", "city-dawn"] as const)("%s renders at any size", (style
 
 test("City transmits its own pixels and cleans up on resize", () => {
   const writes: string[] = []
-  const player = digitalCodePixelPlayer((data) => writes.push(data))
+  const player = digitalCodePixelPlayer((data) => writes.push(data), STILL_PLAYBACK)
   const input = {
     width: 720,
     height: 480,
@@ -83,10 +90,24 @@ test("City transmits its own pixels and cleans up on resize", () => {
       Buffer.from([...output.matchAll(/\x1b_G[^;]+;([A-Za-z0-9+/=]*)\x1b\\/g)].map((m) => m[1]).join(""), "base64"),
     )
   player.draw(input)
-  expect(decode(writes[0]!).equals(renderTextScenePixels(720, 480, "city-night", 750))).toBe(true)
+  expect(
+    decode(writes[0]!).equals(
+      finishScenePixels(renderTextScenePixels(720, 480, "city-night", 750), 720, 480, {
+        elapsedMs: 750,
+        move: CINEMA_STILL,
+      }),
+    ),
+  ).toBe(true)
   player.draw({ ...input, width: 600, style: "city-dawn" })
   expect(writes[1]).toContain("a=d,d=I")
-  expect(decode(writes[2]!).equals(renderTextScenePixels(600, 480, "city-dawn", 750))).toBe(true)
+  expect(
+    decode(writes[2]!).equals(
+      finishScenePixels(renderTextScenePixels(600, 480, "city-dawn", 750), 600, 480, {
+        elapsedMs: 750,
+        move: CINEMA_STILL,
+      }),
+    ),
+  ).toBe(true)
   player.dispose()
   expect(writes[3]).toContain("a=d,d=I")
   player.draw(input)

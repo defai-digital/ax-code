@@ -89,23 +89,45 @@ export function renderDomesPixels(width: number, height: number, style: DomesSty
       }
     }
   } else {
-    // Overcast: soft streaked cloud banks.
+    // Overcast: soft streaked cloud banks. x and y are inside the frame and the
+    // alpha never exceeds 1, so the blend writes straight into `px`.
+    const cloud: RGB = [235, 240, 250]
+    const s9 = s * 9
+    const s3 = s * 3
     for (let y = 0; y < Math.ceil(horizonY); y++) {
       for (let x = 0; x < w; x++) {
-        const n = vnoise(x / (s * 9) + t / 60000, y / (s * 3)) - 0.5
-        blend(x, y, [235, 240, 250], clamp01(0.25 + n * 0.5) * 0.45)
+        const n = vnoise(x / s9 + t / 60000, y / s3) - 0.5
+        const a = clamp01(0.25 + n * 0.5) * 0.45
+        const i = (y * w + x) * 3
+        px[i] = Math.round(px[i]! + (cloud[0] - px[i]!) * a)
+        px[i + 1] = Math.round(px[i + 1]! + (cloud[1] - px[i + 1]!) * a)
+        px[i + 2] = Math.round(px[i + 2]! + (cloud[2] - px[i + 2]!) * a)
       }
     }
   }
   // Distant tree line and hills dissolving into haze.
   for (let x = 0; x < w; x++) {
     const hill = horizonY - s * (4.5 + 3 * vnoise(x / (s * 14), 3) + 1.2 * vnoise(x / (s * 4), 9))
-    for (let y = Math.max(0, Math.floor(hill)); y < Math.min(h, Math.ceil(horizonY)); y++) {
-      blend(x, y, hdMix(hdMix(pines, haze, 0.72), skyAt(y), 0.15), 1)
+    const hillLo = hdMix(pines, haze, 0.72)
+    const hillTop = Math.max(0, Math.floor(hill))
+    const hillBot = Math.min(h, Math.ceil(horizonY))
+    for (let y = hillTop; y < hillBot; y++) {
+      // skyAt(y) still varies per row, so only the inner mix is folded out.
+      const col = hdMix(hillLo, skyAt(y), 0.15)
+      const i = (y * w + x) * 3
+      px[i] = col[0]
+      px[i + 1] = col[1]
+      px[i + 2] = col[2]
     }
     const near = horizonY - s * (2.2 + 1.8 * vnoise(x / (s * 5), 21) + 0.8 * hash(x >> 2, 4))
-    for (let y = Math.max(0, Math.floor(near)); y < Math.min(h, Math.ceil(horizonY)); y++) {
-      blend(x, y, hdMix(hdDarken(pines, 0.9), haze, 0.5), 1)
+    const nearCol = hdMix(hdDarken(pines, 0.9), haze, 0.5)
+    const nearTop = Math.max(0, Math.floor(near))
+    const nearBot = Math.min(h, Math.ceil(horizonY))
+    for (let y = nearTop; y < nearBot; y++) {
+      const i = (y * w + x) * 3
+      px[i] = nearCol[0]
+      px[i + 1] = nearCol[1]
+      px[i + 2] = nearCol[2]
     }
   }
 
@@ -215,10 +237,11 @@ export function renderDomesPixels(width: number, height: number, style: DomesSty
   // Church wall: plaster with gradient and texture, cornice, pilasters, plinth.
   for (let y = Math.floor(wallTop); y < Math.ceil(wallBottom); y++) {
     const f = (y - wallTop) / (wallBottom - wallTop || 1)
+    // The plaster base depends only on the row; fold it out of the x scan.
+    const wallBase = hdMix(wall, hdDarken(wall, 0.9), f * 0.8)
     for (let x = Math.floor(wx0); x < Math.ceil(wx1); x++) {
       const n = 0.96 + 0.08 * vnoise((x / s) * 0.5, (y / s) * 0.5)
-      const base = hdMix(wall, hdDarken(wall, 0.9), f * 0.8)
-      blend(x, y, hdDarken(base, n), 1)
+      blend(x, y, hdDarken(wallBase, n), 1)
     }
   }
   // Cornice with a deep shadow beneath and snow along its top.
@@ -354,24 +377,36 @@ export function renderDomesPixels(width: number, height: number, style: DomesSty
 
   // Ground: snow drifts with blue shadows (snow), or meadow (clear).
   const gy = horizonY
+  const groundS = s * 5
+  const groundSY = s * 1.2
   for (let y = Math.floor(gy); y < h; y++) {
     const f = (y - gy) / (h - gy || 1)
+    // The snow base colour depends only on the row, so fold it out of the x scan.
+    const snowBase = snow ? hdMix([236, 242, 252], ground, 0.3 + 0.2 * f) : null
+    const snowShadowShift = f > 0.55 ? (f - 0.55) * 0.3 : 0
+    const rowIndex = y * w
     for (let x = 0; x < w; x++) {
-      const n = vnoise(x / (s * 5), y / (s * 1.2))
+      const n = vnoise(x / groundS, y / groundSY)
+      const i = (rowIndex + x) * 3
       if (snow) {
-        const base = hdMix([236, 242, 252], ground, 0.3 + 0.2 * f)
         const shadow = clamp01(n - 0.5) * 0.35
-        const col = hdMix(base, [150, 170, 208], shadow + (f > 0.55 ? (f - 0.55) * 0.3 : 0))
+        const col = hdMix(snowBase!, [150, 170, 208], shadow + snowShadowShift)
         const sparkle = hash(x, y) > 0.997 ? 1 : 0
-        blend(x, y, hdMix(col, [255, 255, 255], sparkle), 1)
+        const out = sparkle ? ([255, 255, 255] as RGB) : col
+        px[i] = out[0]
+        px[i + 1] = out[1]
+        px[i + 2] = out[2]
       } else {
         const blade = hash(x >> 1, y >> 1) * 0.14
-        blend(
-          x,
-          y,
-          hdMix(hdMix(ground, [120, 170, 110], 0.35), hdDarken(ground, 0.7), clamp01(f * 0.8 + n * 0.2 - 0.1 - blade)),
-          1,
+        const col = hdMix(
+          hdMix(ground, [120, 170, 110], 0.35),
+          hdDarken(ground, 0.7),
+          clamp01(f * 0.8 + n * 0.2 - 0.1 - blade),
         )
+        const a = 1
+        px[i] = Math.round(px[i]! + (col[0] - px[i]!) * a)
+        px[i + 1] = Math.round(px[i + 1]! + (col[1] - px[i + 1]!) * a)
+        px[i + 2] = Math.round(px[i + 2]! + (col[2] - px[i + 2]!) * a)
       }
     }
   }

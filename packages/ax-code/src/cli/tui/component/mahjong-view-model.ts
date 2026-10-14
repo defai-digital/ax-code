@@ -29,11 +29,16 @@ export const MAHJONG_COLORS = {
 } as const
 export const MAHJONG_BACKGROUND = MAHJONG_COLORS.felt
 
+/** Parsed gradient endpoints; the pixel sampler calls mahjongFeltRgb per row. */
+const FELT_ENDS: readonly [number[], number[]] = [
+  [1, 3, 5].map((offset) => parseInt(MAHJONG_COLORS.felt.slice(offset, offset + 2), 16)),
+  [1, 3, 5].map((offset) => parseInt(MAHJONG_COLORS.feltDeep.slice(offset, offset + 2), 16)),
+]
+
 /** Sample the vertical felt gradient. `t` is 0 at the top of the frame. */
 export function mahjongFeltRgb(t: number): readonly [number, number, number] {
   const x = Math.max(0, Math.min(1, t))
-  const from = [1, 3, 5].map((offset) => parseInt(MAHJONG_COLORS.felt.slice(offset, offset + 2), 16))
-  const to = [1, 3, 5].map((offset) => parseInt(MAHJONG_COLORS.feltDeep.slice(offset, offset + 2), 16))
+  const [from, to] = FELT_ENDS
   return [0, 1, 2].map((channel) => Math.round(from[channel]! + (to[channel]! - from[channel]!) * x)) as [
     number,
     number,

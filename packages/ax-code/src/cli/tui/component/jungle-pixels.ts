@@ -1,4 +1,3 @@
-import { blendPixelUnclamped } from "./scene-art-kit"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
 import {
   JUNGLE_CANOPY_BOTTOM,
@@ -67,20 +66,37 @@ export function renderJunglePixels(width: number, height: number, style: JungleS
   const floorY = Y(JUNGLE_GROUND_TOP)
   const mist = night ? hdHex("#3a5a8a") : hdHex("#e8f4d0")
 
-  const tint = (x: number, y: number, color: RGB, a: number) => blendPixelUnclamped(hd, x, y, color, a)
   const glow = (cx: number, cy: number, radius: number, color: RGB, strength: number) => {
     const xa = Math.max(0, Math.floor(cx - radius)),
       xb = Math.min(w - 1, Math.ceil(cx + radius))
     const ya = Math.max(0, Math.floor(cy - radius)),
       yb = Math.min(h - 1, Math.ceil(cy + radius))
+    const cr = color[0]!,
+      cg = color[1]!,
+      cb = color[2]!
+    const pixels = hd.pixels
     for (let y = ya; y <= yb; y++) {
-      for (let x = xa; x <= xb; x++) {
-        const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy) / radius
-        if (d < 1) tint(x, y, color, strength * (1 - d) * (1 - d))
+      const dy = y + 0.5 - cy
+      // |dy| >= radius implies d >= 1, so the row paints nothing.
+      if (dy >= radius || dy <= -radius) continue
+      let i = (y * w + xa) * 3
+      for (let x = xa; x <= xb; x++, i += 3) {
+        const d = Math.hypot(x + 0.5 - cx, dy) / radius
+        if (d >= 1) continue
+        const alpha = strength * (1 - d) * (1 - d)
+        if (alpha <= 0) continue
+        pixels[i] = Math.round(pixels[i]! + (cr - pixels[i]!) * alpha)
+        pixels[i + 1] = Math.round(pixels[i + 1]! + (cg - pixels[i + 1]!) * alpha)
+        pixels[i + 2] = Math.round(pixels[i + 2]! + (cb - pixels[i + 2]!) * alpha)
       }
     }
   }
-  /** Pointed leaf of `len` along `angle`, width `wid`, shaded across its width. */
+  /** Pointed leaf of `len` along `angle`, width `wid`, shaded across its width.
+   * The scan bounds come from the rotated |u|<=1,|v|<=1 rectangle (never larger
+   * than the original reach box); the exact per-pixel u/v/prof tests inside
+   * keep the painted set identical. prof <= 1, so |v| > 1 always fails first. */
+  const leafUCol = new Float64Array(w)
+  const leafVCol = new Float64Array(w)
   const leafShape = (
     cx: number,
     cy: number,
@@ -94,23 +110,84 @@ export function renderJunglePixels(width: number, height: number, style: JungleS
     const ca = Math.cos(angle),
       sa = Math.sin(angle)
     const reach = Math.ceil(Math.max(len, wid) + 1)
-    const xa = Math.max(0, Math.floor(cx - reach)),
-      xb = Math.min(w - 1, Math.ceil(cx + reach))
-    const ya = Math.max(0, Math.floor(cy - reach)),
-      yb = Math.min(h - 1, Math.ceil(cy + reach))
+    const halfX = Math.min(reach, len * Math.abs(ca) + wid * Math.abs(sa) + 1)
+    const halfY = Math.min(reach, len * Math.abs(sa) + wid * Math.abs(ca) + 1)
+    const xa = Math.max(0, Math.floor(cx - halfX)),
+      xb = Math.min(w - 1, Math.ceil(cx + halfX))
+    const ya = Math.max(0, Math.floor(cy - halfY)),
+      yb = Math.min(h - 1, Math.ceil(cy + halfY))
+    if (xa > xb || ya > yb) return
+    for (let x = xa; x <= xb; x++) {
+      const px = x + 0.5 - cx
+      leafUCol[x - xa] = px * ca
+      leafVCol[x - xa] = -px * sa
+    }
+    const baseR = base[0]!,
+      baseG = base[1]!,
+      baseB = base[2]!
+    const hiR = hi[0]!,
+      hiG = hi[1]!,
+      hiB = hi[2]!
+    const pixels = hd.pixels
+    const absCa = Math.abs(ca),
+      absSa = Math.abs(sa)
     for (let y = ya; y <= yb; y++) {
-      for (let x = xa; x <= xb; x++) {
-        const px = x + 0.5 - cx,
-          py = y + 0.5 - cy
-        const u = (px * ca + py * sa) / len
+      const py = y + 0.5 - cy
+      const uRow = py * sa
+      const vRow = py * ca
+      // Solved x interval for |u| <= 1 and |v| <= 1 (with slack); degenerate
+      // angles skip a constraint instead of dividing by zero.
+      let xlo = xa,
+        xhi = xb
+      if (absCa > 1e-12) {
+        let a1 = (-len - uRow) / ca,
+          a2 = (len - uRow) / ca
+        if (a1 > a2) {
+          const tmp = a1
+          a1 = a2
+          a2 = tmp
+        }
+        xlo = Math.max(xlo, Math.floor(a1 + cx - 0.5) - 1)
+        xhi = Math.min(xhi, Math.ceil(a2 + cx - 0.5) + 1)
+      }
+      if (absSa > 1e-12) {
+        let b1 = (vRow - wid) / sa,
+          b2 = (vRow + wid) / sa
+        if (b1 > b2) {
+          const tmp = b1
+          b1 = b2
+          b2 = tmp
+        }
+        xlo = Math.max(xlo, Math.floor(b1 + cx - 0.5) - 1)
+        xhi = Math.min(xhi, Math.ceil(b2 + cx - 0.5) + 1)
+      }
+      if (xlo > xhi) continue
+      let i = (y * w + xlo) * 3
+      for (let x = xlo; x <= xhi; x++, i += 3) {
+        const k = x - xa
+        const u = (leafUCol[k]! + uRow) / len
         if (u < -1 || u > 1) continue
-        const v = (-px * sa + py * ca) / wid
+        const v = (leafVCol[k]! + vRow) / wid
+        if (v < -1 || v > 1) continue
         const prof = Math.pow(1 - u * u, 0.75)
         if (Math.abs(v) > prof) continue
         const lit = clamp01(0.5 - v * 0.5 + (1 - Math.abs(u)) * 0.1)
-        let col = hdMix(base, hi, lit * 0.8)
-        if (rib && Math.abs(v) < 0.07) col = hdDarken(col, 0.82)
-        hd.set(x, y, col)
+        const t = lit * 0.8
+        const tu = t < 0 ? 0 : t > 1 ? 1 : t
+        let r = Math.round(baseR + (hiR - baseR) * tu)
+        let g = Math.round(baseG + (hiG - baseG) * tu)
+        let b = Math.round(baseB + (hiB - baseB) * tu)
+        if (rib && Math.abs(v) < 0.07) {
+          const fr = r * 0.82,
+            fg = g * 0.82,
+            fb = b * 0.82
+          r = fr < 0 ? 0 : fr > 255 ? 255 : Math.round(fr)
+          g = fg < 0 ? 0 : fg > 255 ? 255 : Math.round(fg)
+          b = fb < 0 ? 0 : fb > 255 ? 255 : Math.round(fb)
+        }
+        pixels[i] = r
+        pixels[i + 1] = g
+        pixels[i + 2] = b
       }
     }
   }
@@ -132,33 +209,85 @@ export function renderJunglePixels(width: number, height: number, style: JungleS
       hd.blob(tx, canopyY + ch * (layer === 0 ? 1.4 : 3 + hash(i) * 1.5), crown, ch * (1.4 + hash(i + 8) * 0.8), tone)
     }
   }
-  // Mist layers lying between the far and mid forest.
-  for (let y = Math.floor(floorY - ch * 7); y < floorY; y++) {
-    const a =
-      smooth(floorY - ch * 7, floorY - ch * 1.5, y) *
-      (night ? 0.38 : 0.3) *
-      (1 - smooth(floorY - ch * 1.5, floorY, y) * 0.4)
-    for (let x = 0; x < w; x++) tint(x, y, mist, a * (0.8 + 0.2 * Math.sin(x * 0.012 + theta)))
+  // Mist layers lying between the far and mid forest. Per-column sine and an
+  // inlined blend; whole rows drop out when the base alpha is zero.
+  {
+    const sinTab12 = new Float64Array(w)
+    for (let x = 0; x < w; x++) sinTab12[x] = Math.sin(x * 0.012 + theta)
+    const mr = mist[0]!,
+      mg = mist[1]!,
+      mb = mist[2]!
+    const pixels = hd.pixels
+    for (let y = Math.floor(floorY - ch * 7); y < floorY; y++) {
+      const a =
+        smooth(floorY - ch * 7, floorY - ch * 1.5, y) *
+        (night ? 0.38 : 0.3) *
+        (1 - smooth(floorY - ch * 1.5, floorY, y) * 0.4)
+      if (a <= 0) continue
+      let i = y * w * 3
+      for (let x = 0; x < w; x++, i += 3) {
+        const alpha = a * (0.8 + 0.2 * sinTab12[x]!)
+        if (alpha <= 0) continue
+        pixels[i] = Math.round(pixels[i]! + (mr - pixels[i]!) * alpha)
+        pixels[i + 1] = Math.round(pixels[i + 1]! + (mg - pixels[i + 1]!) * alpha)
+        pixels[i + 2] = Math.round(pixels[i + 2]! + (mb - pixels[i + 2]!) * alpha)
+      }
+    }
   }
 
   // --- Mid trunks ---------------------------------------------------------------------
   const drawTrunk = (xCell: number, half0: number, flare: number, lean: number, lit: number, tone: number) => {
     const cx0 = X(xCell + 0.5)
     const top = -ch
+    // Trunk shading colors are constant per trunk; per-row bark terms are hoisted.
+    const lo = hdDarken(trunk, 0.65 * tone)
+    const hiC = hdDarken(trunk, 1.15 * tone)
+    const mossC = hdDarken(leaf, 1.1)
+    const loR = lo[0]!,
+      loG = lo[1]!,
+      loB = lo[2]!
+    const hiR = hiC[0]!,
+      hiG = hiC[1]!,
+      hiB = hiC[2]!
+    const mossR = mossC[0]!,
+      mossG = mossC[1]!,
+      mossB = mossC[2]!
+    const pixels = hd.pixels
     for (let y = Math.max(0, Math.floor(top)); y < Math.ceil(floorY + ch * 0.3); y++) {
       const t = (y - top) / (floorY - top)
       const bend = Math.sin(t * 3 + xCell) * unit * 0.5 + lean * unit * t * 2
       const half = (half0 + Math.pow(t, 6) * flare) * cw * 0.9
       const cx = cx0 + bend
-      for (let x = Math.floor(cx - half); x < Math.ceil(cx + half); x++) {
+      const barkA = Math.sin(y * 0.04) * 2
+      const barkB = y * 0.01
+      const moss = Math.sin(y * 0.05 + xCell) * 0.5 + 0.5 + (1 - t) * -0.2
+      const xa = Math.max(0, Math.floor(cx - half))
+      const xb = Math.min(w, Math.ceil(cx + half))
+      let i = (y * w + xa) * 3
+      for (let x = xa; x < xb; x++, i += 3) {
         const u = (x + 0.5 - (cx - half)) / (2 * half || 1)
-        const bark = Math.sin(u * 17 + Math.sin(y * 0.04) * 2) * 0.5 + Math.sin(u * 41 + y * 0.01) * 0.25
-        let col = hdMix(hdDarken(trunk, 0.65 * tone), hdDarken(trunk, 1.15 * tone), clamp01(lit - u * 0.9 + 0.35))
-        col = hdDarken(col, 1 + bark * 0.09)
+        const bark = Math.sin(u * 17 + barkA) * 0.5 + Math.sin(u * 41 + barkB) * 0.25
+        const mixT = lit - u * 0.9 + 0.35
+        const tu = mixT < 0 ? 0 : mixT > 1 ? 1 : mixT
+        let r = Math.round(loR + (hiR - loR) * tu)
+        let g = Math.round(loG + (hiG - loG) * tu)
+        let b = Math.round(loB + (hiB - loB) * tu)
+        const dk = 1 + bark * 0.09
+        const dr = r * dk,
+          dg = g * dk,
+          db = b * dk
+        r = dr < 0 ? 0 : dr > 255 ? 255 : Math.round(dr)
+        g = dg < 0 ? 0 : dg > 255 ? 255 : Math.round(dg)
+        b = db < 0 ? 0 : db > 255 ? 255 : Math.round(db)
         // Moss climbs the shaded trunk base and clings in patches.
-        const moss = Math.sin(y * 0.05 + xCell) * 0.5 + 0.5 + (1 - t) * -0.2
-        if (moss > 0.62 && u > 0.55) col = hdMix(col, hdDarken(leaf, 1.1), 0.5)
-        hd.set(x, y, col)
+        if (moss > 0.62 && u > 0.55) {
+          r = Math.round(r + (mossR - r) * 0.5)
+          g = Math.round(g + (mossG - g) * 0.5)
+          b = Math.round(b + (mossB - b) * 0.5)
+        }
+        pixels[i] = r
+        pixels[i + 1] = g
+        pixels[i + 2] = b
       }
     }
     // Buttress roots splaying over the ground.
@@ -268,6 +397,11 @@ export function renderJunglePixels(width: number, height: number, style: JungleS
 
   // --- Light shafts and dust (day) / mist glow (night) ---------------------------------------------------------------
   if (!night) {
+    const shaftCol = hdHex("#fff2b0")
+    const scr = shaftCol[0]!,
+      scg = shaftCol[1]!,
+      scb = shaftCol[2]!
+    const pixels = hd.pixels
     JUNGLE_SHAFTS.forEach((s, k) => {
       const ox = X(s),
         oy = canopyY - ch * 0.8
@@ -280,33 +414,51 @@ export function renderJunglePixels(width: number, height: number, style: JungleS
         const t = (y - oy) / len
         const cx = ox + (((y - oy) * dx) / dy) * 1.0
         const half = unit * (1.8 + t * 7.5)
+        const kk = 1 - t * 0.6
         for (let x = Math.max(0, Math.floor(cx - half)); x < Math.min(w, Math.ceil(cx + half)); x++) {
           const edge = 1 - Math.abs(x + 0.5 - cx) / half
-          tint(x, y, hdHex("#fff2b0"), 0.3 * edge * edge * (1 - t * 0.6) * pulse)
+          const alpha = 0.3 * edge * edge * kk * pulse
+          if (alpha <= 0) continue
+          const i = (y * w + x) * 3
+          pixels[i] = Math.round(pixels[i]! + (scr - pixels[i]!) * alpha)
+          pixels[i + 1] = Math.round(pixels[i + 1]! + (scg - pixels[i + 1]!) * alpha)
+          pixels[i + 2] = Math.round(pixels[i + 2]! + (scb - pixels[i + 2]!) * alpha)
         }
       }
       void nrm
       // Sunlit patch on the forest floor.
       glow(ox + len * dx, floorY + ch * 0.7, unit * 9, hdHex("#fff6b0"), 0.35 * pulse)
     })
+    const moteCol = hdHex("#fffbd0")
     for (let i = 0; i < 26; i++) {
       const s = JUNGLE_SHAFTS[i % 3]!
       const t = (hash(i + 5) + phase * (0.3 + (i % 3) * 0.1)) % 1
       const mx = X(s) + (floorY - canopyY) * t * 0.45 + (hash(i + 70) - 0.5) * unit * 8 * (0.3 + t)
       const my = canopyY + t * (floorY - canopyY)
       const tw = 0.5 + 0.5 * Math.sin(theta * 2 + i)
-      glow(mx, my, unit * 1.2, hdHex("#fffbd0"), 0.5 * tw)
+      glow(mx, my, unit * 1.2, moteCol, 0.5 * tw)
     }
   } else {
     // Cool moonbeam slanting down from the gap.
+    const beamCol = hdHex("#8aa8d8")
+    const bcr = beamCol[0]!,
+      bcg = beamCol[1]!,
+      bcb = beamCol[2]!
+    const pixels = hd.pixels
     const dir = 0.35
     for (let y = Math.floor(moonY); y < floorY; y++) {
       const t = (y - moonY) / (floorY - moonY)
       const cx = moonX - (y - moonY) * dir
       const half = unit * (3 + t * 12)
+      const kk = 1 - t * 0.6
       for (let x = Math.max(0, Math.floor(cx - half)); x < Math.min(w, Math.ceil(cx + half)); x++) {
         const edge = 1 - Math.abs(x + 0.5 - cx) / half
-        tint(x, y, hdHex("#8aa8d8"), 0.14 * edge * edge * (1 - t * 0.6))
+        const alpha = 0.14 * edge * edge * kk
+        if (alpha <= 0) continue
+        const i = (y * w + x) * 3
+        pixels[i] = Math.round(pixels[i]! + (bcr - pixels[i]!) * alpha)
+        pixels[i + 1] = Math.round(pixels[i + 1]! + (bcg - pixels[i + 1]!) * alpha)
+        pixels[i + 2] = Math.round(pixels[i + 2]! + (bcb - pixels[i + 2]!) * alpha)
       }
     }
   }
@@ -397,19 +549,52 @@ export function renderJunglePixels(width: number, height: number, style: JungleS
   }
 
   // --- Forest floor ----------------------------------------------------------------------------------
-  for (let y = Math.floor(floorY); y < h; y++) {
-    const v = (y - floorY) / (h - floorY || 1)
-    for (let x = 0; x < w; x++) {
-      const n = hash(x * 0.17 + y * 0.31)
+  // The two-level mix depends only on the row; the per-pixel hash keeps its
+  // exact argument order through a per-column table.
+  {
+    const x017 = new Float64Array(w)
+    for (let x = 0; x < w; x++) x017[x] = x * 0.17
+    const pixels = hd.pixels
+    for (let y = Math.floor(floorY); y < h; y++) {
+      const v = (y - floorY) / (h - floorY || 1)
       const col = hdMix(hdDarken(ground, 1.1), hdDarken(ground, 0.55), v)
-      hd.set(x, y, hdDarken(col, 0.95 + n * 0.1))
+      const cbr = col[0]!,
+        cbg = col[1]!,
+        cbb = col[2]!
+      const y031 = y * 0.31
+      let i = y * w * 3
+      for (let x = 0; x < w; x++, i += 3) {
+        const n = hash(x017[x]! + y031)
+        const f = 0.95 + n * 0.1
+        const r = cbr * f,
+          g = cbg * f,
+          b = cbb * f
+        pixels[i] = r < 0 ? 0 : r > 255 ? 255 : Math.round(r)
+        pixels[i + 1] = g < 0 ? 0 : g > 255 ? 255 : Math.round(g)
+        pixels[i + 2] = b < 0 ? 0 : b > 255 ? 255 : Math.round(b)
+      }
     }
   }
   hd.rect(0, floorY, w, floorY + Math.max(2, ch * 0.14), hdDarken(ground, 0.7))
   // Ground mist drifting at the base of the trunks.
-  for (let y = Math.floor(floorY - ch * 1.2); y < Math.floor(floorY + ch * 1.4); y++) {
-    const a = (1 - Math.abs(y - floorY) / (ch * 1.3)) * (night ? 0.25 : 0.22)
-    for (let x = 0; x < w; x++) tint(x, y, mist, Math.max(0, a) * (0.7 + 0.3 * Math.sin(x * 0.01 + theta)))
+  {
+    const sinTab01 = new Float64Array(w)
+    for (let x = 0; x < w; x++) sinTab01[x] = Math.sin(x * 0.01 + theta)
+    const mr = mist[0]!,
+      mg = mist[1]!,
+      mb = mist[2]!
+    const pixels = hd.pixels
+    for (let y = Math.floor(floorY - ch * 1.2); y < Math.floor(floorY + ch * 1.4); y++) {
+      const a = Math.max(0, (1 - Math.abs(y - floorY) / (ch * 1.3)) * (night ? 0.25 : 0.22))
+      if (a <= 0) continue
+      let i = y * w * 3
+      for (let x = 0; x < w; x++, i += 3) {
+        const alpha = a * (0.7 + 0.3 * sinTab01[x]!)
+        pixels[i] = Math.round(pixels[i]! + (mr - pixels[i]!) * alpha)
+        pixels[i + 1] = Math.round(pixels[i + 1]! + (mg - pixels[i + 1]!) * alpha)
+        pixels[i + 2] = Math.round(pixels[i + 2]! + (mb - pixels[i + 2]!) * alpha)
+      }
+    }
   }
   // Fallen leaves and root tangles.
   for (let i = 0; i < 18; i++) {

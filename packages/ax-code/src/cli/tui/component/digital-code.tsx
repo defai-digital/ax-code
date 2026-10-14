@@ -199,6 +199,7 @@ export function DigitalCode(props: {
             direction: props.direction ?? "down",
             style: props.style,
             elapsedMs: now - started,
+            durationMs,
           })
           // A capability flip could strand a splash drawn on an earlier tick.
           clearSplash()

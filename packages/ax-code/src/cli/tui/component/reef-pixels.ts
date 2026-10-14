@@ -1,4 +1,4 @@
-import { artHash, artLine, blendPixel, glow, polyFill, softDisk, vignette } from "./scene-art-kit"
+import { artHash, artLine, blendPixel, polyFill, softDisk, vignette } from "./scene-art-kit"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
 import {
   REEF_COLORS,
@@ -52,6 +52,45 @@ export function renderReefPixels(width: number, height: number, style: ReefStyle
   const sandY = hd.Y(REEF_SAND_TOP)
   const glide = reefRipple(elapsed)
   const fogColor = hdMix(reefSkyRgb(style, 0.55), [10, 30, 60], night ? 0.2 : 0)
+  const pixels = hd.pixels
+
+  /** scene-art-kit glow twin with identical math. Every write in this pipeline
+   * lands on integer pixels, so blending where alpha < 1/510 is provably the
+   * identity and can be skipped (per pixel and via the row/column window). */
+  const glowFast = (cx: number, cy: number, radius: number, color: RGB, strength: number, squash = 1) => {
+    if (radius <= 0 || strength <= 0) return
+    const ry = radius * squash
+    const xa = Math.max(0, Math.floor(cx - radius))
+    const xb = Math.min(w - 1, Math.ceil(cx + radius))
+    const ya = Math.max(0, Math.floor(cy - ry))
+    const yb = Math.min(h - 1, Math.ceil(cy + ry))
+    const cr = color[0]!
+    const cg = color[1]!
+    const cb = color[2]!
+    const dSkip = 1 - Math.sqrt(1 / (510 * strength)) - 1e-9
+    for (let y = ya; y <= yb; y++) {
+      const dy = (y + 0.5 - cy) / ry
+      if (dy >= dSkip || dy <= -dSkip) continue
+      const fxSpan = Math.sqrt(Math.max(0, dSkip * dSkip - dy * dy)) * radius + 1
+      const xlo = Math.max(xa, Math.ceil(cx - fxSpan))
+      const xhi = Math.min(xb, Math.floor(cx + fxSpan))
+      let i = (y * w + xlo) * 3
+      for (let x = xlo; x <= xhi; x++, i += 3) {
+        const d = Math.hypot((x + 0.5 - cx) / radius, dy)
+        if (d >= dSkip) continue
+        const f = 1 - d
+        const alpha = strength * f * f
+        if (alpha <= 0) continue
+        const a = alpha > 1 ? 1 : alpha
+        const p0 = pixels[i]!
+        pixels[i] = Math.round(p0 + (cr - p0) * a)
+        const p1 = pixels[i + 1]!
+        pixels[i + 1] = Math.round(p1 + (cg - p1) * a)
+        const p2 = pixels[i + 2]!
+        pixels[i + 2] = Math.round(p2 + (cb - p2) * a)
+      }
+    }
+  }
 
   // Water column: bright near the surface, deepening toward the sand, with a
   // lighter midwater haze for depth.
@@ -61,19 +100,48 @@ export function renderReefPixels(width: number, height: number, style: ReefStyle
   })
   // Surface band: rippling bright ceiling.
   const surfaceH = hd.Y(0.9)
-  for (let y = 0; y < Math.min(h, Math.ceil(surfaceH + hd.ch)); y++) {
+  {
+    // Both wave sines depend only on the column; blend inline with a constant color.
+    const surfCol: RGB = night ? [60, 90, 150] : [190, 236, 250]
+    const sc0 = surfCol[0]!
+    const sc1 = surfCol[1]!
+    const sc2 = surfCol[2]!
+    const surfK = night ? 0.3 : 0.55
+    const sinA = new Float64Array(w)
+    const sinB = new Float64Array(w)
     for (let x = 0; x < w; x++) {
       const px = x / hd.cw
-      const wave = Math.sin(px * 1.3 + phase + glide) + Math.sin(px * 0.5 - phase * 2) * 0.6
-      const edge = surfaceH + wave * hd.ch * 0.12
-      const k = Math.max(0, 1 - Math.max(0, y - edge) / (hd.ch * 1.2))
-      blendPixel(hd, x, y, night ? [60, 90, 150] : [190, 236, 250], k * (night ? 0.3 : 0.55))
+      sinA[x] = Math.sin(px * 1.3 + phase + glide)
+      sinB[x] = Math.sin(px * 0.5 - phase * 2)
+    }
+    const bandH = Math.min(h, Math.ceil(surfaceH + hd.ch))
+    const denom = hd.ch * 1.2
+    for (let y = 0; y < bandH; y++) {
+      let i = y * w * 3
+      for (let x = 0; x < w; x++, i += 3) {
+        const wave = sinA[x]! + sinB[x]! * 0.6
+        const edge = surfaceH + wave * hd.ch * 0.12
+        const above = y - edge
+        const k = Math.max(0, 1 - Math.max(0, above) / denom)
+        if (k <= 0) continue
+        let a = k * surfK
+        if (a > 1) a = 1
+        const p0 = pixels[i]!
+        pixels[i] = Math.round(p0 + (sc0 - p0) * a)
+        const p1 = pixels[i + 1]!
+        pixels[i + 1] = Math.round(p1 + (sc1 - p1) * a)
+        const p2 = pixels[i + 2]!
+        pixels[i + 2] = Math.round(p2 + (sc2 - p2) * a)
+      }
     }
   }
 
   // Distant reef silhouettes and a rock arch in the haze.
   for (let layer = 0; layer < 2; layer++) {
     const baseCol = hdMix(hdDarken(water, night ? 0.55 : 0.8), fogColor, layer === 0 ? 0.7 : 0.45)
+    const b0 = baseCol[0]!
+    const b1 = baseCol[1]!
+    const b2 = baseCol[2]!
     for (let x = 0; x < w; x++) {
       const px = x / hd.cw
       const top =
@@ -82,24 +150,48 @@ export function renderReefPixels(width: number, height: number, style: ReefStyle
         Math.sin(px * 0.19 + layer * 2) * hd.ch * 1.1 -
         Math.abs(Math.sin(px * 0.07 + layer)) * hd.ch * 1.6 -
         artHash(Math.floor(px * 1.5), layer) * hd.ch * 0.4
-      for (let y = Math.max(0, Math.floor(top)); y < sandY; y++) blendPixel(hd, x, y, baseCol, 0.9)
+      // alpha is the constant 0.9; blend inline.
+      let i = (Math.max(0, Math.floor(top)) * w + x) * 3
+      for (let y = Math.max(0, Math.floor(top)); y < sandY; y++, i += w * 3) {
+        const p0 = pixels[i]!
+        pixels[i] = Math.round(p0 + (b0 - p0) * 0.9)
+        const p1 = pixels[i + 1]!
+        pixels[i + 1] = Math.round(p1 + (b1 - p1) * 0.9)
+        const p2 = pixels[i + 2]!
+        pixels[i + 2] = Math.round(p2 + (b2 - p2) * 0.9)
+      }
     }
   }
 
   // God rays: soft slanted shafts that sway on the cycle.
   if (!night) {
+    const r0 = ray[0]!
+    const r1 = ray[1]!
+    const r2 = ray[2]!
+    const sandSpan = sandY - surfaceH
     for (const shaft of REEF_RAYS) {
       const sway = Math.sin(phase + shaft) * hd.cw * 0.8
       const x0 = hd.X(shaft) + sway
       const width0 = hd.cw * 2.2
       const slant = hd.cw * 5
       for (let y = Math.floor(surfaceH); y < sandY; y++) {
-        const v = (y - surfaceH) / (sandY - surfaceH)
+        const v = (y - surfaceH) / sandSpan
         const cx = x0 + slant * v
         const half = width0 * (0.8 + v * 1.9)
-        for (let x = Math.max(0, Math.floor(cx - half)); x < Math.min(w, Math.ceil(cx + half)); x++) {
+        const rowFade = 1 - v * 0.7
+        let i = (y * w + Math.max(0, Math.floor(cx - half))) * 3
+        for (let x = Math.max(0, Math.floor(cx - half)); x < Math.min(w, Math.ceil(cx + half)); x++, i += 3) {
           const d = Math.abs(x - cx) / half
-          blendPixel(hd, x, y, ray, (1 - d) * (1 - d) * 0.22 * (1 - v * 0.7))
+          const om = 1 - d
+          let a = om * om * 0.22 * rowFade
+          if (a <= 0) continue
+          if (a > 1) a = 1
+          const p0 = pixels[i]!
+          pixels[i] = Math.round(p0 + (r0 - p0) * a)
+          const p1 = pixels[i + 1]!
+          pixels[i + 1] = Math.round(p1 + (r1 - p1) * a)
+          const p2 = pixels[i + 2]!
+          pixels[i + 2] = Math.round(p2 + (r2 - p2) * a)
         }
       }
     }
@@ -111,20 +203,62 @@ export function renderReefPixels(width: number, height: number, style: ReefStyle
   }
 
   // Sand bed with ripples, lit by animated caustics by day.
-  for (let y = Math.max(0, Math.floor(sandY)); y < h; y++) {
-    const v = (y - sandY) / (h - sandY || 1)
+  {
+    // Per-column ripple/caustic phases and per-row tones hoisted; the pixel
+    // loop keeps two sins (day) or one (night) with all round points inline.
+    const sandDeep = hdDarken(sand, 0.7)
+    const causticTint: RGB = [255, 255, 235]
+    const ct0 = causticTint[0]!
+    const ct1 = causticTint[1]!
+    const ct2 = causticTint[2]!
+    const col17 = new Float64Array(w) // px * 1.7
+    const colInner = new Float64Array(w) // Math.sin(px * 0.3) * 2
+    const col23p = new Float64Array(w) // px * 2.3 + phase
+    const col14m = new Float64Array(w) // px * 1.4 - phase
     for (let x = 0; x < w; x++) {
       const px = x / hd.cw
-      const rip = Math.sin(px * 1.7 + y * 0.12 + Math.sin(px * 0.3) * 2)
-      let col = hdMix(hdMix(sand, fogColor, 0.28 - v * 0.2), hdDarken(sand, 0.7), v * 0.5)
-      col = hdDarken(col, 1 + rip * 0.04 + (artHash(x, y) - 0.5) * 0.05)
-      if (!night) {
-        const a = Math.sin(px * 2.3 + phase + Math.sin(y * 0.09 + phase) * 1.4)
-        const b = Math.sin(px * 1.4 - phase + y * 0.13)
-        const caustic = Math.max(0, 1 - Math.abs(a + b) * 1.5)
-        col = hdMix(col, [255, 255, 235], caustic * 0.28)
+      col17[x] = px * 1.7
+      colInner[x] = Math.sin(px * 0.3) * 2
+      col23p[x] = px * 2.3 + phase
+      col14m[x] = px * 1.4 - phase
+    }
+    const sandSpan = h - sandY || 1
+    for (let y = Math.max(0, Math.floor(sandY)); y < h; y++) {
+      const v = (y - sandY) / sandSpan
+      const rowTone = hdMix(hdMix(sand, fogColor, 0.28 - v * 0.2), sandDeep, v * 0.5)
+      const t0 = rowTone[0]!
+      const t1 = rowTone[1]!
+      const t2 = rowTone[2]!
+      const y12 = y * 0.12
+      const y13 = y * 0.13
+      const rowSin = Math.sin(y * 0.09 + phase) * 1.4
+      let i = y * w * 3
+      for (let x = 0; x < w; x++, i += 3) {
+        const rip = Math.sin(col17[x]! + y12 + colInner[x]!)
+        // artHash(x, y) inlined.
+        let n = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) | 0
+        n = Math.imul(n ^ (n >>> 13), 1274126177)
+        const grain = (((n ^ (n >>> 16)) >>> 0) / 4294967296 - 0.5) * 0.05
+        const factor = 1 + rip * 0.04 + grain
+        let g0 = t0 * factor
+        let c0 = g0 < 0 ? 0 : g0 > 255 ? 255 : Math.round(g0)
+        let g1 = t1 * factor
+        let c1 = g1 < 0 ? 0 : g1 > 255 ? 255 : Math.round(g1)
+        let g2 = t2 * factor
+        let c2 = g2 < 0 ? 0 : g2 > 255 ? 255 : Math.round(g2)
+        if (!night) {
+          const a = Math.sin(col23p[x]! + rowSin)
+          const b = Math.sin(col14m[x]! + y13)
+          const caustic = Math.max(0, 1 - Math.abs(a + b) * 1.5)
+          const u2 = caustic * 0.28
+          c0 = Math.round(c0 + (ct0 - c0) * u2)
+          c1 = Math.round(c1 + (ct1 - c1) * u2)
+          c2 = Math.round(c2 + (ct2 - c2) * u2)
+        }
+        pixels[i] = c0
+        pixels[i + 1] = c1
+        pixels[i + 2] = c2
       }
-      hd.set(x, y, col)
     }
   }
   // Rim of the sand where it meets the water.
@@ -158,7 +292,7 @@ export function renderReefPixels(width: number, height: number, style: ReefStyle
   // Coral: branching staghorn, ridged brain domes, and sea fans.
   const palette: RGB[] = night ? [coral, [190, 70, 220], [80, 150, 255]] : [coral, [235, 120, 190], [248, 190, 70]]
   const glowTip = (x: number, y: number, color: RGB, r: number) => {
-    if (night) glow(hd, x, y, r * 4, color, 0.45)
+    if (night) glowFast(x, y, r * 4, color, 0.45)
     softDisk(hd, x, y, r, color)
   }
   const branch = (
@@ -214,7 +348,7 @@ export function renderReefPixels(width: number, height: number, style: ReefStyle
           hd.set(x, y, col)
         }
       }
-      if (night) glow(hd, cx, by - r * 0.5, r * 2.2, color, 0.25)
+      if (night) glowFast(cx, by - r * 0.5, r * 2.2, color, 0.25)
     } else {
       const radius = hd.ch * 3.4 * s
       for (let k = -8; k <= 8; k++) {
@@ -248,7 +382,7 @@ export function renderReefPixels(width: number, height: number, style: ReefStyle
           )
         }
       }
-      if (night) glow(hd, cx, by - radius * 0.55, radius * 1.1, color, 0.22)
+      if (night) glowFast(cx, by - radius * 0.55, radius * 1.1, color, 0.22)
     }
   }
   REEF_CORALS.forEach((head, i) => {
@@ -334,7 +468,7 @@ export function renderReefPixels(width: number, height: number, style: ReefStyle
       const jy = hd.Y(5 + ((i * 5 + cycle * 8) % 9)) + Math.sin(phase * 2 + i) * u * 0.3
       const pulse = 1 + Math.sin(phase * 4 + i) * 0.1
       const col: RGB = [150, 120, 255]
-      glow(hd, jx, jy, u * 7, col, 0.4)
+      glowFast(jx, jy, u * 7, col, 0.4)
       for (let y = -Math.round(u * 1.6); y <= 0; y++) {
         const span = Math.sqrt(Math.max(0, 1 - (y / (u * 1.6)) ** 2)) * u * 2 * pulse
         for (let x = -Math.round(span); x <= Math.round(span); x++) {
@@ -365,11 +499,11 @@ export function renderReefPixels(width: number, height: number, style: ReefStyle
     for (const mote of reefPlankton(elapsed)) {
       const mx = hd.X(mote.x + 0.5)
       const my = hd.Y(mote.y + 0.5)
-      glow(hd, mx, my, u * 1.6, plankton, 0.5)
+      glowFast(mx, my, u * 1.6, plankton, 0.5)
       softDisk(hd, mx, my, Math.max(0.9, u * 0.1), plankton)
     }
     // Moonlight dapples on the surface.
-    glow(hd, hd.X(58), hd.Y(0.6), hd.cw * 12, [140, 170, 255], 0.28)
+    glowFast(hd.X(58), hd.Y(0.6), hd.cw * 12, [140, 170, 255], 0.28)
   }
 
   // Bubbles rise with a bright rim.

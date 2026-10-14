@@ -121,33 +121,79 @@ export function renderCanyonPixels(width: number, height: number, style: CanyonS
   const y1 = Math.min(h, Math.ceil(hd.Y(CANYON_RIVER_TOP)))
   const sequence = [0, 2, 1, 0, 2, 1, 2, 0, 1, 2] as const
   const sunSide = night ? 0.5 : orb.x
+  const seqLen = sequence.length
+  const strataR = [strata[0][0], strata[1][0], strata[2][0]]
+  const strataG = [strata[0][1], strata[1][1], strata[2][1]]
+  const strataB = [strata[0][2], strata[1][2], strata[2][2]]
+  const ledgeLit: RGB = hdHex("#ffe6b0")
+  const ledgeLitR = ledgeLit[0],
+    ledgeLitG = ledgeLit[1],
+    ledgeLitB = ledgeLit[2]
+  // Row-invariant terms: `sy` and the occlusion/shadow-sin depend only on y, so
+  // precompute them once instead of per column.
+  const syRow = new Float64Array(y1)
+  const occRow = new Float64Array(y1)
+  const shadowSinRow = new Float64Array(y1)
+  for (let y = y0; y < y1; y++) {
+    const sy = (y + 0.5) / ch
+    syRow[y] = sy
+    occRow[y] = 1 - Math.max(0, (sy - (CANYON_RIVER_TOP - 2.2)) / 2.2) * 0.32
+    shadowSinRow[y] = Math.sin(sy * 0.65) * 3
+  }
+  const edgeAmt = night ? 0.1 : 0.3
   for (let x = 0; x < w; x++) {
     const sx = (x + 0.5) / cw
     const rimWave = Math.sin(sx * 0.55) * 0.42 + Math.cos(sx * 0.27) * 0.28 + Math.sin(sx * 1.3) * 0.12
     const top = hd.Y(CANYON_STRATA_TOP + rimWave)
     const streak = noise1(sx * 2.4, 11)
+    const strataBase = CANYON_STRATA_TOP + rimWave
+    const noiseC = noise1(sx * 0.2, 5) * 0.8
+    const sx035 = sx * 0.35
+    const side = night ? 1 : 1.08 - (Math.abs(sx - sunSide) / CANYON_COLUMNS) * 0.5
     for (let y = y0; y < y1; y++) {
       if (y < top) continue
-      const sy = (y + 0.5) / ch
-      const depth = sy - (CANYON_STRATA_TOP + rimWave)
+      const sy = syRow[y]!
+      const depth = sy - strataBase
       // Each layer has its own thickness so the cut reads as sedimentary rock.
-      const layerPos = depth / 0.85 + noise1(sx * 0.2, 5) * 0.8 + Math.sin(sx * 0.35 + depth) * 0.1
+      const layerPos = depth / 0.85 + noiseC + Math.sin(sx035 + depth) * 0.1
       const layer = Math.floor(layerPos)
       const within = layerPos - layer
-      let color = strata[sequence[((layer % sequence.length) + sequence.length) % sequence.length]!]!
-      color = hdMix(color, hdDarken(color, 0.75), hash(layer, 3) * 0.5)
+      const si = sequence[((layer % seqLen) + seqLen) % seqLen]!
+      let r = strataR[si]!
+      let g = strataG[si]!
+      let b = strataB[si]!
+      // hdMix(color, hdDarken(color, 0.75), hash(layer, 3) * 0.5)
+      const dk = 0.75
+      const dr = r * dk < 0 ? 0 : r * dk > 255 ? 255 : Math.round(r * dk)
+      const dg = g * dk < 0 ? 0 : g * dk > 255 ? 255 : Math.round(g * dk)
+      const db = b * dk < 0 ? 0 : b * dk > 255 ? 255 : Math.round(b * dk)
+      const ht = hash(layer, 3) * 0.5
+      const hu = ht < 0 ? 0 : ht > 1 ? 1 : ht
+      r = Math.round(r + (dr - r) * hu)
+      g = Math.round(g + (dg - g) * hu)
+      b = Math.round(b + (db - b) * hu)
       // Lit top edge of every ledge and a darker undercut.
-      if (within < 0.16) color = hdMix(color, hdHex("#ffe6b0"), night ? 0.1 : 0.3)
-      else if (within > 0.82) color = hdDarken(color, 0.72)
+      if (within < 0.16) {
+        r = Math.round(r + (ledgeLitR - r) * edgeAmt)
+        g = Math.round(g + (ledgeLitG - g) * edgeAmt)
+        b = Math.round(b + (ledgeLitB - b) * edgeAmt)
+      } else if (within > 0.82) {
+        r = r * 0.72 < 0 ? 0 : r * 0.72 > 255 ? 255 : Math.round(r * 0.72)
+        g = g * 0.72 < 0 ? 0 : g * 0.72 > 255 ? 255 : Math.round(g * 0.72)
+        b = b * 0.72 < 0 ? 0 : b * 0.72 > 255 ? 255 : Math.round(b * 0.72)
+      }
       // Vertical erosion streaks and grain.
-      color = hdDarken(color, 0.9 + streak * 0.14 + (hash(x, y) - 0.5) * 0.06)
+      const ek = 0.9 + streak * 0.14 + (hash(x, y) - 0.5) * 0.06
+      r = r * ek < 0 ? 0 : r * ek > 255 ? 255 : Math.round(r * ek)
+      g = g * ek < 0 ? 0 : g * ek > 255 ? 255 : Math.round(g * ek)
+      b = b * ek < 0 ? 0 : b * ek > 255 ? 255 : Math.round(b * ek)
       // Lit on the sun side, shadowed in the far right and toward the river.
-      const side = night ? 1 : 1.08 - (Math.abs(sx - sunSide) / CANYON_COLUMNS) * 0.5
-      const occlusion = 1 - Math.max(0, (sy - (CANYON_RIVER_TOP - 2.2)) / 2.2) * 0.32
-      const shadowSide = sx > 48 + Math.sin(sy * 0.65) * 3 ? 0.84 : 1
-      px[(y * w + x) * 3] = Math.min(255, Math.round(color[0] * side * occlusion * shadowSide))
-      px[(y * w + x) * 3 + 1] = Math.min(255, Math.round(color[1] * side * occlusion * shadowSide))
-      px[(y * w + x) * 3 + 2] = Math.min(255, Math.round(color[2] * side * occlusion * shadowSide))
+      const occlusion = occRow[y]!
+      const shadowSide = sx > 48 + shadowSinRow[y]! ? 0.84 : 1
+      const i = (y * w + x) * 3
+      px[i] = Math.min(255, Math.round(r * side * occlusion * shadowSide))
+      px[i + 1] = Math.min(255, Math.round(g * side * occlusion * shadowSide))
+      px[i + 2] = Math.min(255, Math.round(b * side * occlusion * shadowSide))
     }
   }
 

@@ -15,7 +15,6 @@ import {
   BIGBEN_WATER_TOP,
   bigbenBirds,
   bigbenClouds,
-  bigbenFlag,
   bigbenSkyRgb,
   type BigbenStyle,
 } from "./bigben-view-model"
@@ -147,17 +146,27 @@ export function renderBigbenPixels(width: number, height: number, style: BigbenS
     const ex = hd.X(46)
     const ey = hd.Y(15.3)
     const er = ch * 2.3
-    const eyeColor = hdMix(haze, night ? [120, 140, 200] : [250, 250, 255], 0.35)
-    for (let a = 0; a < 360; a += 1.5) {
+    // A solid steel rim and spokes, so the wheel reads as a structure by day
+    // instead of a faint dotted outline. It turns slowly with the scene clock.
+    const eyeColor = night ? hdMix(haze, [120, 140, 200], 0.45) : hdMix(haze, [96, 108, 128], 0.7)
+    const rim = Math.max(0.7, unit * 0.06)
+    const turn = (Math.max(0, elapsedMs) / 1000) * 0.12
+    for (let a = 0; a < 360; a += 0.75) {
       const r = (a * Math.PI) / 180
-      hd.set(Math.round(ex + Math.cos(r) * er), Math.round(ey + Math.sin(r) * er), eyeColor)
+      hd.disk(ex + Math.cos(r) * er, ey + Math.sin(r) * er, rim, eyeColor)
     }
+    hd.rect(ex - rim, ey, ex + rim, horizonY, eyeColor)
     for (let k = 0; k < 16; k++) {
-      const r = (k / 16) * Math.PI * 2 + phase * 0.0
+      const r = (k / 16) * Math.PI * 2 + turn
       const steps = Math.ceil(er)
-      for (let s = 0; s <= steps; s += 2)
+      for (let s = 0; s <= steps; s++)
         hd.set(Math.round(ex + Math.cos(r) * s), Math.round(ey + Math.sin(r) * s), eyeColor)
-      if (night) hd.disk(ex + Math.cos(r) * er, ey + Math.sin(r) * er, Math.max(1, unit * 0.1), [255, 226, 160])
+      hd.disk(
+        ex + Math.cos(r) * er,
+        ey + Math.sin(r) * er,
+        Math.max(1, unit * 0.11),
+        night ? [255, 226, 160] : [236, 240, 246],
+      )
     }
   }
 
@@ -398,19 +407,6 @@ export function renderBigbenPixels(width: number, height: number, style: BigbenS
   }
   hd.rect(towerMidX - 1, hd.Y(0.2), towerMidX + 1, roofTop + 2, GOLD)
   hd.disk(towerMidX, hd.Y(0.25), Math.max(1.6, cw * 0.14), GOLD)
-  const flag = bigbenFlag(elapsedMs)
-  const flagTop = hd.Y(0.05)
-  hd.rect(towerMidX + 1, flagTop, towerMidX + 2.4, flagTop + ch * 0.9, stoneDark)
-  for (let i = 0; i < cw * 1.8; i++) {
-    const wave = Math.sin(i * 0.5 + flag * 2.1) * ch * 0.08
-    hd.rect(
-      towerMidX + 2 + i,
-      flagTop + wave,
-      towerMidX + 3 + i,
-      flagTop + ch * 0.45 + wave,
-      i < cw * 0.9 ? [200, 40, 50] : [235, 235, 245],
-    )
-  }
 
   // Floodlight beam raking the stone at night.
   if (night) {

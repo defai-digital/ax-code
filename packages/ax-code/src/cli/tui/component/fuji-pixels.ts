@@ -61,6 +61,7 @@ export function renderFujiPixels(width: number, height: number, style: FujiStyle
   const hd = createHdCanvas(width, height, SCENE_WIDTH, SCENE_HEIGHT)
   const { w, h, cw, ch, X, Y } = hd
   if (w === 0 || h === 0) return hd.pixels
+  const pixBuf = hd.pixels
   const night = style === "fuji-night"
   const c = FUJI_COLORS[style]
   const unit = Math.max(1, Math.min(cw, ch / 2))
@@ -86,12 +87,6 @@ export function renderFujiPixels(width: number, height: number, style: FujiStyle
     }
   }
   const tint = (x: number, y: number, color: RGB, a: number) => blendPixelUnclamped(hd, x, y, color, a)
-  const get = (x: number, y: number): RGB => {
-    const xi = Math.max(0, Math.min(w - 1, Math.floor(x))),
-      yi = Math.max(0, Math.min(h - 1, Math.floor(y)))
-    const i = (yi * w + xi) * 3
-    return [hd.pixels[i]!, hd.pixels[i + 1]!, hd.pixels[i + 2]!]
-  }
 
   // --- Sky -----------------------------------------------------------------
   hd.sky((t) => skyAt(t * (h - 1)))
@@ -181,8 +176,14 @@ export function renderFujiPixels(width: number, height: number, style: FujiStyle
         horizonY -
         Y(lift) * (1.1 + Math.sin(s * 0.21 + layer * 2.3) * 0.7 + Math.sin(s * 0.57 + layer) * 0.35) -
         Y(0.25)
-      for (let y = Math.max(0, Math.floor(ridge)); y < horizonY; y++)
-        hd.set(x, y, hdMix(col, skyAt(y), (y - ridge) * -0.0))
+      for (let y = Math.max(0, Math.floor(ridge)); y < horizonY; y++) {
+        // The original weight was `(y - ridge) * -0.0`, i.e. always zero, so the
+        // sky sample dropped out entirely and the band is a flat `col`.
+        const i = (y * w + x) * 3
+        pixBuf[i] = col[0]
+        pixBuf[i + 1] = col[1]
+        pixBuf[i + 2] = col[2]
+      }
     }
   }
 
@@ -205,34 +206,94 @@ export function renderFujiPixels(width: number, height: number, style: FujiStyle
   const rowTop = Math.max(0, Math.floor(topY)),
     rowBottom = Math.min(h, Math.ceil(baseY))
   const halfAt = (t: number) => (CRATER_HALF + Math.pow(clamp01(t), 1.72) * (BASE_HALF - CRATER_HALF)) * cw
+  const _255 = (v: number) => (v < 0 ? 0 : v > 255 ? 255 : Math.round(v))
+  const mixCh = (a: number, b: number, t: number) => Math.round(a + (b - a) * (t < 0 ? 0 : t > 1 ? 1 : t))
+  const rockLitD = hdDarken(rockLit, 0.82)
+  const rockDarkD = hdDarken(rockDark, 0.82)
+  const snowR = snow[0],
+    snowG = snow[1],
+    snowB = snow[2]
+  const snowShadeR = snowShade[0],
+    snowShadeG = snowShade[1],
+    snowShadeB = snowShade[2]
+  const rimWarmR = rimWarm[0],
+    rimWarmG = rimWarm[1],
+    rimWarmB = rimWarm[2]
+  const hazeR = haze[0],
+    hazeG = haze[1],
+    hazeB = haze[2]
   for (let y = rowTop; y < rowBottom; y++) {
     const t = (y + 0.5 - topY) / (baseY - topY || 1)
     const halfW = halfAt(t)
     const xa = Math.max(0, Math.floor(peakX - halfW)),
       xb = Math.min(w, Math.ceil(peakX + halfW))
+    // Row-invariant terms: the terminator offset, the rock mixes and the haze
+    // weight depend only on the row, so compute them once per row.
+    const sinY = Math.sin(y * 0.07) * 0.03
+    const litMix = hdMix(rockLit, rockLitD, t)
+    const darkMix = hdMix(rockDark, rockDarkD, t * 0.6)
+    const lR = litMix[0],
+      lG = litMix[1],
+      lB = litMix[2]
+    const kR = darkMix[0],
+      kG = darkMix[1],
+      kB = darkMix[2]
+    const hazeAmt = smooth(0.62, 1, t) * 0.7
+    const yMid = y + 0.5
     for (let x = xa; x < xb; x++) {
       const s = (x + 0.5 - peakX) / (halfW || 1)
       // Light falls from the left; the terminator is a soft, slightly wavering line.
-      const shadow = smooth(-0.1, 0.45, s + Math.sin(y * 0.07) * 0.03)
+      const shadow = smooth(-0.1, 0.45, s + sinY)
       const gullies = Math.sin(s * 17 + t * 4) * 0.5 + Math.sin(s * 41) * 0.25
-      let color: RGB
-      if (y + 0.5 < snowEdge[x]!) {
-        color = hdMix(snow, snowShade, shadow)
-        color = hdDarken(color, 0.95 + gullies * 0.035)
-        if (!night) color = hdMix(color, rimWarm, 0.22 * (1 - shadow))
+      const i = (y * w + x) * 3
+      if (yMid < snowEdge[x]!) {
+        let r = mixCh(snowR, snowShadeR, shadow)
+        let g = mixCh(snowG, snowShadeG, shadow)
+        let b = mixCh(snowB, snowShadeB, shadow)
+        const dk = 0.95 + gullies * 0.035
+        r = _255(r * dk)
+        g = _255(g * dk)
+        b = _255(b * dk)
+        if (!night) {
+          const wt = 0.22 * (1 - shadow)
+          r = mixCh(r, rimWarmR, wt)
+          g = mixCh(g, rimWarmG, wt)
+          b = mixCh(b, rimWarmB, wt)
+        }
+        pixBuf[i] = r
+        pixBuf[i + 1] = g
+        pixBuf[i + 2] = b
       } else {
-        const lit = hdMix(rockLit, hdDarken(rockLit, 0.82), t)
-        const dark = hdMix(rockDark, hdDarken(rockDark, 0.82), t * 0.6)
-        color = hdMix(lit, dark, shadow)
-        color = hdDarken(color, 1 + gullies * 0.07 * (0.3 + t))
+        let r = mixCh(lR, kR, shadow)
+        let g = mixCh(lG, kG, shadow)
+        let b = mixCh(lB, kB, shadow)
+        const dk = 1 + gullies * 0.07 * (0.3 + t)
+        r = _255(r * dk)
+        g = _255(g * dk)
+        b = _255(b * dk)
         // Snow patches below the cap, aligned with the gullies.
-        const lowSnow = y + 0.5 < snowEdge[x]! + ch * 0.9 && gullies > 0.35
-        if (lowSnow) color = hdMix(color, hdMix(snow, snowShade, shadow), 0.55)
+        if (yMid < snowEdge[x]! + ch * 0.9 && gullies > 0.35) {
+          const sr = mixCh(snowR, snowShadeR, shadow)
+          const sg = mixCh(snowG, snowShadeG, shadow)
+          const sb = mixCh(snowB, snowShadeB, shadow)
+          r = mixCh(r, sr, 0.55)
+          g = mixCh(g, sg, 0.55)
+          b = mixCh(b, sb, 0.55)
+        }
         // Warm rim on the lit ridge, haze toward the base.
-        if (s < -0.82 && !night) color = hdMix(color, rimWarm, 0.28 * smooth(-0.82, -1, s))
-        color = hdMix(color, haze, smooth(0.62, 1, t) * 0.7)
+        if (s < -0.82 && !night) {
+          const wt = 0.28 * smooth(-0.82, -1, s)
+          r = mixCh(r, rimWarmR, wt)
+          g = mixCh(g, rimWarmG, wt)
+          b = mixCh(b, rimWarmB, wt)
+        }
+        r = mixCh(r, hazeR, hazeAmt)
+        g = mixCh(g, hazeG, hazeAmt)
+        b = mixCh(b, hazeB, hazeAmt)
+        pixBuf[i] = r
+        pixBuf[i + 1] = g
+        pixBuf[i + 2] = b
       }
-      hd.set(x, y, color)
     }
     hd.set(xa, y, hdMix(snow, rockLit, smooth(0.3, 0.5, t)))
   }
@@ -257,13 +318,27 @@ export function renderFujiPixels(width: number, height: number, style: FujiStyle
     lakeBottom = Y(WATER_BOTTOM)
   hd.water(WATER_TOP, WATER_BOTTOM, hdHex(c.waterBg), hdHex(c.waterDeep), wavePhase)
   // Mirror the mountain and sky above, compressed and broken by ripples.
-  for (let y = Math.max(0, Math.floor(lakeTop)); y < Math.min(h, Math.ceil(lakeBottom)); y++) {
+  const lakeY0 = Math.max(0, Math.floor(lakeTop))
+  const lakeY1 = Math.min(h, Math.ceil(lakeBottom))
+  for (let y = lakeY0; y < lakeY1; y++) {
     const u = (y - lakeTop) / (lakeBottom - lakeTop || 1)
     const src = lakeTop - 1 - (y - lakeTop) * 2.4
+    const srcF = Math.floor(src)
+    const syi = Math.max(0, Math.min(h - 1, srcF))
+    const rowBase = syi * w
+    const a = 0.5 * (1 - u * 0.7)
     for (let x = 0; x < w; x++) {
       const dx = Math.sin(y * 0.55 + x * 0.015 + wavePhase) * unit * 0.9
-      const mirrored = get(x + dx, src)
-      tint(x, y, mirrored, 0.5 * (1 - u * 0.7))
+      // `get` inlined: sample the source row without allocating a tuple.
+      const xi = Math.max(0, Math.min(w - 1, Math.floor(x + dx)))
+      const si = (rowBase + xi) * 3
+      const sr = pixBuf[si]!
+      const sg = pixBuf[si + 1]!
+      const sb = pixBuf[si + 2]!
+      const i = (y * w + x) * 3
+      pixBuf[i] = Math.round(pixBuf[i]! + (sr - pixBuf[i]!) * a)
+      pixBuf[i + 1] = Math.round(pixBuf[i + 1]! + (sg - pixBuf[i + 1]!) * a)
+      pixBuf[i + 2] = Math.round(pixBuf[i + 2]! + (sb - pixBuf[i + 2]!) * a)
     }
   }
   // Sun or moon pillar and glints.

@@ -70,16 +70,24 @@ export function greatwallBackground(style: GreatwallStyle) {
   return style === "greatwall-dawn" ? "#a8c4e0" : "#7a4a62"
 }
 
+// Both endpoints are fixed hex strings per style; parse them once so pixel
+// loops that sample the gradient per row (or per pixel) never re-parse.
+const greatwallSkyStops = new Map<GreatwallStyle, { from: readonly number[]; to: readonly number[] }>()
+
 /** Sample the vertical sky gradient. `t` is 0 at the top of the frame. */
 export function greatwallSkyRgb(style: GreatwallStyle, t: number): readonly [number, number, number] {
   const x = Math.max(0, Math.min(1, t))
-  const from = [1, 3, 5].map((offset) => parseInt(greatwallBackground(style).slice(offset, offset + 2), 16))
-  const to = [1, 3, 5].map((offset) => parseInt(GREATWALL_COLORS[style].skyBottom.slice(offset, offset + 2), 16))
-  return [0, 1, 2].map((channel) => Math.round(from[channel]! + (to[channel]! - from[channel]!) * x)) as [
-    number,
-    number,
-    number,
-  ]
+  let stops = greatwallSkyStops.get(style)
+  if (!stops) {
+    stops = {
+      from: [1, 3, 5].map((offset) => parseInt(greatwallBackground(style).slice(offset, offset + 2), 16)),
+      to: [1, 3, 5].map((offset) => parseInt(GREATWALL_COLORS[style].skyBottom.slice(offset, offset + 2), 16)),
+    }
+    greatwallSkyStops.set(style, stops)
+  }
+  return [0, 1, 2].map((channel) =>
+    Math.round(stops!.from[channel]! + (stops!.to[channel]! - stops!.from[channel]!) * x),
+  ) as [number, number, number]
 }
 
 /** Wall-top row at scene column `x`, following the ridge peaks. */

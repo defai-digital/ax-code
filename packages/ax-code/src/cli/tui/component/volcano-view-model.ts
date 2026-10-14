@@ -66,11 +66,22 @@ export function volcanoBackground(style: VolcanoStyle) {
   return style === "volcano-eruption" ? "#160a14" : "#0a0e24"
 }
 
+/** Parsed gradient endpoints per style; the pixel sampler calls volcanoSkyRgb per row. */
+const SKY_ENDS: Record<VolcanoStyle, readonly [number[], number[]]> = {
+  "volcano-eruption": [
+    [1, 3, 5].map((offset) => parseInt(volcanoBackground("volcano-eruption").slice(offset, offset + 2), 16)),
+    [1, 3, 5].map((offset) => parseInt(VOLCANO_COLORS["volcano-eruption"].skyBottom.slice(offset, offset + 2), 16)),
+  ],
+  "volcano-calm": [
+    [1, 3, 5].map((offset) => parseInt(volcanoBackground("volcano-calm").slice(offset, offset + 2), 16)),
+    [1, 3, 5].map((offset) => parseInt(VOLCANO_COLORS["volcano-calm"].skyBottom.slice(offset, offset + 2), 16)),
+  ],
+}
+
 /** Sample the vertical sky gradient. `t` is 0 at the top of the frame. */
 export function volcanoSkyRgb(style: VolcanoStyle, t: number): readonly [number, number, number] {
   const x = Math.max(0, Math.min(1, t))
-  const from = [1, 3, 5].map((offset) => parseInt(volcanoBackground(style).slice(offset, offset + 2), 16))
-  const to = [1, 3, 5].map((offset) => parseInt(VOLCANO_COLORS[style].skyBottom.slice(offset, offset + 2), 16))
+  const [from, to] = SKY_ENDS[style]
   return [0, 1, 2].map((channel) => Math.round(from[channel]! + (to[channel]! - from[channel]!) * x)) as [
     number,
     number,

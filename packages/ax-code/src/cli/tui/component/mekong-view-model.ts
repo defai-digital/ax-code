@@ -103,7 +103,7 @@ export function mekongEgrets(elapsedMs: number): MekongEgret[] {
   return [
     { x: (5 + Math.floor(t / 350)) % MEKONG_COLUMNS, y: 7 },
     {
-      x: ((70 - Math.floor(t / 450) + MEKONG_COLUMNS) % MEKONG_COLUMNS + MEKONG_COLUMNS) % MEKONG_COLUMNS,
+      x: (((70 - Math.floor(t / 450) + MEKONG_COLUMNS) % MEKONG_COLUMNS) + MEKONG_COLUMNS) % MEKONG_COLUMNS,
       y: 5,
     },
   ]

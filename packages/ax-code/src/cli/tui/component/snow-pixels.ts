@@ -47,6 +47,7 @@ export function renderSnowPixels(width: number, height: number, style: SnowStyle
   const sparkDim = hdHex(c.sparkDim)
   const orb = hdHex(c.orb)
   const groundY = hd.Y(SNOW_GROUND_TOP)
+  const px = hd.pixels
   const baseY = hd.Y(SNOW_BASE + 1)
   const horizon = snowSkyRgb(style, 1)
   const snowLit = night ? hdMix(snow, [200, 220, 255], 0.3) : snow
@@ -132,20 +133,54 @@ export function renderSnowPixels(width: number, height: number, style: SnowStyle
     for (let x = 0; x < hd.w; x++) blendPixel(hd, x, y, horizon, k)
   }
 
-  // Snowfield with gentle drifts that catch the light.
-  for (let y = Math.max(0, Math.floor(groundY - hd.ch * 0.6)); y < hd.h; y++) {
-    const sy = (y + 0.5) / hd.ch
-    for (let x = 0; x < hd.w; x++) {
-      const sx = (x + 0.5) / hd.cw
-      const crest = SNOW_GROUND_TOP + Math.sin(sx * 0.25) * 0.28 + Math.cos(sx * 0.09 + 1) * 0.22
+  // Snowfield with gentle drifts that catch the light. Column terms
+  // (crest/slope) and the row terms (depth) are hoisted out of the pixel loop.
+  const sfY0 = Math.max(0, Math.floor(groundY - hd.ch * 0.6))
+  const sfR0 = ground,
+    sfR1 = snowLit,
+    sfR2 = snowShade
+  const gR = sfR0[0],
+    gG = sfR0[1],
+    gB = sfR0[2]
+  const litR = sfR1[0],
+    litG = sfR1[1],
+    litB = sfR1[2]
+  const shadeR = sfR2[0],
+    shadeG = sfR2[1],
+    shadeB = sfR2[2]
+  const depthDiv = SNOW_ROWS - SNOW_GROUND_TOP
+  for (let x = 0; x < hd.w; x++) {
+    const sx = (x + 0.5) / hd.cw
+    const crest = SNOW_GROUND_TOP + Math.sin(sx * 0.25) * 0.28 + Math.cos(sx * 0.09 + 1) * 0.22
+    const slope = (Math.cos(sx * 0.25) * 0.25 - Math.sin(sx * 0.09 + 1) * 0.09) * lightDir
+    const sl = slope > 0
+    const sR = sl ? litR : shadeR,
+      sG = sl ? litG : shadeG,
+      sB = sl ? litB : shadeB
+    const absC = Math.min(0.5, Math.abs(slope) * 1.6)
+    for (let y = sfY0; y < hd.h; y++) {
+      const sy = (y + 0.5) / hd.ch
       if (sy < crest) continue
-      const depth = Math.min(1, (sy - SNOW_GROUND_TOP) / (SNOW_ROWS - SNOW_GROUND_TOP))
-      const slope = (Math.cos(sx * 0.25) * 0.25 - Math.sin(sx * 0.09 + 1) * 0.09) * lightDir
-      let col = hdMix(ground, snowLit, 0.3 + depth * 0.2)
-      col = hdMix(col, slope > 0 ? snowLit : snowShade, Math.min(0.5, Math.abs(slope) * 1.6))
-      col = hdMix(col, snowShade, (1 - depth) * 0.12)
-      col = hdDarken(col, 1 + (artHash(x, y) - 0.5) * 0.035)
-      hd.set(x, y, col)
+      const depth = Math.min(1, (sy - SNOW_GROUND_TOP) / depthDiv)
+      const t0 = 0.3 + depth * 0.2
+      let r = Math.round(gR + (litR - gR) * t0)
+      let g = Math.round(gG + (litG - gG) * t0)
+      let b = Math.round(gB + (litB - gB) * t0)
+      r = Math.round(r + (sR - r) * absC)
+      g = Math.round(g + (sG - g) * absC)
+      b = Math.round(b + (sB - b) * absC)
+      const t2 = (1 - depth) * 0.12
+      r = Math.round(r + (shadeR - r) * t2)
+      g = Math.round(g + (shadeG - g) * t2)
+      b = Math.round(b + (shadeB - b) * t2)
+      const dk = 1 + (artHash(x, y) - 0.5) * 0.035
+      const i = (y * hd.w + x) * 3
+      const vr = r * dk,
+        vg = g * dk,
+        vb = b * dk
+      px[i] = vr < 0 ? 0 : vr > 255 ? 255 : Math.round(vr)
+      px[i + 1] = vg < 0 ? 0 : vg > 255 ? 255 : Math.round(vg)
+      px[i + 2] = vb < 0 ? 0 : vb > 255 ? 255 : Math.round(vb)
     }
   }
   // Warm or cool light pool from the orb on the snow.
