@@ -2,6 +2,7 @@ import { Log } from "../util/log"
 import { Flag } from "../flag/flag"
 import { AuditQuery } from "./query"
 import { AuditCallID } from "./id"
+import { redactAuditPayload } from "./redact"
 import { toErrorMessage } from "../util/error-message"
 import type { SessionID, MessageID } from "../session/schema"
 
@@ -73,8 +74,10 @@ export namespace AuditSemanticCall {
       message_id: input.messageID ?? null,
       tool: input.tool,
       operation: input.operation,
-      args_json: input.args,
-      envelope_json: input.envelope,
+      // The row is durable: credentials in the call's args or response
+      // envelope must not survive here (see redactAuditPayload).
+      args_json: redactAuditPayload(input.args),
+      envelope_json: redactAuditPayload(input.envelope),
       error_code: input.errorCode ?? null,
     }
   }

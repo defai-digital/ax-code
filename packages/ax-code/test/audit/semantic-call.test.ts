@@ -25,6 +25,35 @@ afterEach(() => {
 })
 
 describe("AuditSemanticCall (queue mode)", () => {
+  test("does not persist credentials from the call's args or envelope", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        setSyncMode(false)
+        const session = await Session.create({ title: "audit-redaction-test" })
+
+        const id = AuditSemanticCall.record({
+          sessionID: session.id,
+          tool: "lsp",
+          operation: "hover",
+          args: { headers: { Authorization: "Bearer super-secret-token" }, api_key: "sk-live-123" },
+          envelope: { data: [{ contents: "headers: {Cookie: session=abc}" }] },
+        })
+        AuditSemanticCall.flushNow()
+
+        const row = AuditQuery.getById(id)
+        const stored = JSON.stringify(row?.args_json) + JSON.stringify(row?.envelope_json)
+        expect(stored).not.toContain("super-secret-token")
+        expect(stored).not.toContain("sk-live-123")
+        expect(stored).not.toContain("session=abc")
+        // The payload's shape stays inspectable.
+        expect(stored).toContain("headers")
+        expect(stored).toContain("data")
+      },
+    })
+  })
+
   test("record() returns immediately and persists after flush", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
