@@ -206,6 +206,28 @@ describe("tool.bash permissions", () => {
     })
   })
 
+  test("asks for a bare variable inside a shell -c string", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        // The inner command is re-parsed from the -c string; its bare `$OUTSIDE`
+        // must reach the same dynamic-path scan as the outer form, or
+        // `bash -c 'cat $OUTSIDE'` silently skips the isolation ask that
+        // `bash -c 'cat "$OUTSIDE"'` already triggers.
+        const command = "bash -c 'cat $OUTSIDE'"
+        const requests = await collectPermissionRequests(
+          (testCtx) => bash.execute({ command, description: "dynamic path in shell" }, testCtx),
+          (req) => req.permission === "external_directory",
+        )
+        const extDirReq = requests.find((r) => r.permission === "external_directory")
+        expect(extDirReq).toBeDefined()
+        expect(extDirReq!.patterns).toContain(command)
+      },
+    })
+  })
+
   test("asks for a redirected cd that writes a file", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

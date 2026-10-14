@@ -1223,9 +1223,10 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
                 for (let j = 0; j < innerNode.childCount; j++) {
                   const c = innerNode.child(j)
                   if (!c) continue
-                  if (["command_name", "word", "string", "raw_string", "concatenation"].includes(c.type)) {
-                    innerParts.push(c.text)
-                  }
+                  // Same word set as the outer scan: a bare `$F` inside
+                  // `bash -c 'cat $F'` is a simple_expansion and must reach the
+                  // dynamic-path scan like its quoted form already does.
+                  if (COMMAND_WORD_NODE_TYPES.has(c.type)) innerParts.push(c.text)
                 }
                 const normalizedInnerParts = decodeCommandParts(innerParts)
                 const innerDestructiveReason = classifyDestructiveCommand(normalizedInnerParts)
