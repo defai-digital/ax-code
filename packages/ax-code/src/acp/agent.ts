@@ -412,7 +412,11 @@ export namespace ACP {
         const offset = parseListSessionsCursor(params.cursor) ?? 0
         const limit = 100
         const sessions = await this.sdk.session
-          .list({ directory: params.cwd ?? undefined, roots: true }, { throwOnError: true })
+          // Explicit limit: the server caps an omitted limit at 100
+          // (Session.list), and the client-side paging below walks the returned
+          // array — an implicit 100 would make every page past the first
+          // unreachable and leave nextCursor unset.
+          .list({ directory: params.cwd ?? undefined, roots: true, limit: 1000 }, { throwOnError: true })
           .then((x) => x.data ?? [])
         const sorted = sessions.toSorted((a, b) => sessionUpdatedMs(b) - sessionUpdatedMs(a))
         const page = sorted.slice(offset, offset + limit)

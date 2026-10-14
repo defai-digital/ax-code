@@ -27,7 +27,10 @@ function createListAgent(sessions: any[]) {
       }),
     },
     session: {
-      list: async () => ({ data: sessions }),
+      // Mirror the real server: an omitted limit defaults to a hard cap of 100
+      // (Session.list), so the adapter must request a larger page to walk the
+      // full list instead of silently truncating it.
+      list: async (params?: { limit?: number }) => ({ data: sessions.slice(0, params?.limit ?? 100) }),
     },
   } as any
 
