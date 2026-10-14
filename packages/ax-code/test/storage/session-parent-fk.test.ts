@@ -127,4 +127,46 @@ describe("session parent fk", () => {
       sqlite.close()
     }
   })
+
+  test("rebuilding the session table keeps its messages and parts", () => {
+    const sqlite = new Database(":memory:")
+    sqlite.exec("PRAGMA foreign_keys = ON")
+    const dir = path.join(import.meta.dirname, "../../migration")
+    const entries = readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => ({
+        sql: readFileSync(path.join(dir, entry.name, "migration.sql"), "utf-8"),
+        timestamp: Number(entry.name.split("_")[0]),
+        name: entry.name,
+      }))
+      .sort((a, b) => a.timestamp - b.timestamp)
+
+    const rebuildName = "20260410120000_session_parent_fk"
+    const before = entries.filter((entry) => entry.name < rebuildName)
+    const rebuild = entries.find((entry) => entry.name === rebuildName)
+    if (!rebuild) throw new Error(`migration ${rebuildName} not found`)
+
+    // A production database already holds sessions with messages/parts when the
+    // parent-FK rebuild lands. The rebuild's DROP TABLE must not cascade onto
+    // those children.
+    migrate(drizzle({ client: sqlite }), before)
+    try {
+      sqlite.exec(
+        `INSERT INTO project (id, worktree, vcs, sandboxes, time_created, time_updated) VALUES ('proj_1','/tmp/w','git','[]',1,1);
+         INSERT INTO session (id, project_id, slug, directory, title, version, time_created, time_updated) VALUES ('ses_1','proj_1','s','/tmp/w','t','1',1,1);
+         INSERT INTO message (id, session_id, time_created, time_updated, data) VALUES ('msg_1','ses_1',1,1,'{}');
+         INSERT INTO part (id, message_id, session_id, time_created, time_updated, data) VALUES ('prt_1','msg_1','ses_1',1,1,'{}');`,
+      )
+      const count = (table: string) => (sqlite.prepare(`SELECT count(*) c FROM ${table}`).get() as { c: number }).c
+      expect(count("message")).toBe(1)
+      expect(count("part")).toBe(1)
+
+      migrate(drizzle({ client: sqlite }), [rebuild])
+      expect(count("session")).toBe(1)
+      expect(count("message")).toBe(1)
+      expect(count("part")).toBe(1)
+    } finally {
+      sqlite.close()
+    }
+  })
 })

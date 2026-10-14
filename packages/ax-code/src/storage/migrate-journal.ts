@@ -29,5 +29,17 @@ export function migrate(db: unknown, journal: JournalEntry[]): void {
     bps: true,
     name: entry.name,
   }))
-  target.dialect.migrate(migrations, target.session, {})
+  // FK enforcement is a connection-level pragma and cannot change inside
+  // drizzle's per-migration transaction, so a table rebuild's DROP TABLE +
+  // rename cascades onto every child row — e.g. 20260410120000_session_parent_fk
+  // deleted the messages/parts of every session while the journal still recorded
+  // the step complete. Disable enforcement for the whole migration run (the
+  // documented SQLite table-rebuild recipe), then re-enable it.
+  const runRaw = (db as { run?: (sql: string) => unknown }).run
+  runRaw?.call(db, "PRAGMA foreign_keys = OFF")
+  try {
+    target.dialect.migrate(migrations, target.session, {})
+  } finally {
+    runRaw?.call(db, "PRAGMA foreign_keys = ON")
+  }
 }
