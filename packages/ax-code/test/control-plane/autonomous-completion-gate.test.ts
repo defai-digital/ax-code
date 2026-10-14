@@ -1279,4 +1279,48 @@ describe("AutonomousCompletionGate", () => {
       emptyResult: { taskID: "ses_empty" },
     })
   })
+
+  test("resolves the task the text names even when another description overlaps", () => {
+    const taskPart = (sessionId: string, callID: string, description: string) => ({
+      type: "tool",
+      tool: "task",
+      callID,
+      state: {
+        status: "completed",
+        input: { description },
+        output: "Subagent completed without a final response.",
+        metadata: { emptyResult: true, sessionId },
+      },
+    })
+
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          parts: [
+            taskPart("ses_tests", "call_tests", "Review auth middleware tests"),
+            taskPart("ses_middleware", "call_middleware", "Review auth middleware"),
+          ],
+        },
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "text",
+              text: "Completion gate resolution: I reviewed the failed subagent task Review auth middleware directly.",
+            },
+          ],
+        },
+      ],
+    })
+
+    // The named task is resolved even though the other description overlaps its
+    // words; the un-named one stays unresolved, so the gate tracks it instead of
+    // retrying the same resolution forever.
+    expect(decision).toMatchObject({
+      status: "blocked",
+      reason: "empty_subagent_result",
+      emptyResult: { taskID: "ses_tests", description: "Review auth middleware tests" },
+    })
+  })
 })

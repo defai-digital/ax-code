@@ -382,9 +382,19 @@ export namespace AutonomousCompletionGate {
       referencesResultByDescription(text, result),
     )
     if (descriptionMatches.length > 0) {
-      const uniqueDescriptions = new Set(descriptionMatches.map(([, result]) => normalize(result.description ?? "")))
+      const fullMatches = descriptionMatches.filter(([, result]) => referencesResultByFullDescription(text, result))
+      // A unique full-description mention names one entry outright, so resolve it
+      // even when another entry's wording merely overlaps: that incidental match
+      // must not veto the entry the text actually named, or the gate retries a
+      // resolution forever and the session stalls.
+      if (fullMatches.length === 1) {
+        unresolved.delete(fullMatches[0]![0])
+        return
+      }
+      const candidates = fullMatches.length > 1 ? fullMatches : descriptionMatches
+      const uniqueDescriptions = new Set(candidates.map(([, result]) => normalize(result.description ?? "")))
       if (uniqueDescriptions.size <= 1) {
-        for (const [key] of descriptionMatches) unresolved.delete(key)
+        for (const [key] of candidates) unresolved.delete(key)
       }
       return
     }
@@ -481,11 +491,10 @@ export namespace AutonomousCompletionGate {
 
   function referencesResultByDescription(text: string, result: EmptySubagentResult) {
     if (!result.description) return false
+    if (referencesResultByFullDescription(text, result)) return true
     const normalized = normalize(text)
 
     const description = normalize(result.description)
-    if (description.length > 0 && normalized.includes(description)) return true
-
     const descriptionWords = new Set(
       description.split(" ").filter((word) => word.length >= 3 && !DESCRIPTION_STOPWORDS.has(word)),
     )
@@ -495,6 +504,13 @@ export namespace AutonomousCompletionGate {
       if (normalized.includes(word)) matched++
     }
     return matched >= Math.min(3, descriptionWords.size)
+  }
+
+  /** The text names this entry's whole description, not just overlapping words. */
+  function referencesResultByFullDescription(text: string, result: EmptySubagentResult) {
+    if (!result.description) return false
+    const description = normalize(result.description)
+    return description.length > 0 && normalize(text).includes(description)
   }
 
   function isAssistantMessage(message: Message) {
