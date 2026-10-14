@@ -1145,6 +1145,8 @@ export const messages = {
   "animation.canyonNight": "협곡: 밤",
   "animation.singaporeDay": "Singapore: Marina Bay \ub0ae",
   "animation.singaporeNight": "Singapore: Marina Bay \ubc24",
+  "animation.sanguozhiMuster": "삼국지: 새벽 출진",
+  "animation.sanguozhiDusk": "삼국지: 황혼의 귀진",
   "ui.steerNowHint": "{keybind} \uc989\uc2dc \uc870\uc815",
   "ui.steerQueueEmpty":
     "\uc870\uc815\ud560 \uc800\uc7a5\ub41c \ud6c4\uc18d \uc791\uc5c5\uc774 \uc5c6\uc2b5\ub2c8\ub2e4",

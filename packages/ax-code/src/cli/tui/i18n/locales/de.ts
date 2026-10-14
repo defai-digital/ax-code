@@ -1052,6 +1052,8 @@ export const messages = {
   "animation.canyonNight": "Canyon: Nacht",
   "animation.singaporeDay": "Singapore: Marina Bay Tag",
   "animation.singaporeNight": "Singapore: Marina Bay Nacht",
+  "animation.sanguozhiMuster": "Sanguozhi: Morgengrauen",
+  "animation.sanguozhiDusk": "Sanguozhi: Abenddämmerung",
   "ui.steerNowHint": "{keybind} jetzt steuern",
   "ui.steerQueueEmpty": "Keine gespeicherten Folgeauftr\u00e4ge zum Steuern",
   "ui.steerNothingSteerable": "Nichts in der Warteschlange kann den laufenden Durchlauf steuern",

@@ -37,6 +37,7 @@ import { fallsRows, fallsBackground, isFallsStyle, type FallsStyle } from "./fal
 import { steppeRows, steppeBackground, isSteppeStyle, type SteppeStyle } from "./steppe-view-model"
 import { canyonRows, canyonBackground, isCanyonStyle, type CanyonStyle } from "./canyon-view-model"
 import { singaporeRows, singaporeBackground, isSingaporeStyle, type SingaporeStyle } from "./singapore-view-model"
+import { sanguozhiRows, sanguozhiBackground, isSanguozhiStyle, type SanguozhiStyle } from "./sanguozhi-view-model"
 export type TextSceneStyle =
   | BenchStyle
   | FujiStyle
@@ -72,6 +73,7 @@ export type TextSceneStyle =
   | SteppeStyle
   | CanyonStyle
   | SingaporeStyle
+  | SanguozhiStyle
 export type SceneRun = FujiRun
 export function isTextSceneStyle(style: string | undefined): style is TextSceneStyle {
   return (
@@ -108,7 +110,8 @@ export function isTextSceneStyle(style: string | undefined): style is TextSceneS
     isFallsStyle(style) ||
     isSteppeStyle(style) ||
     isCanyonStyle(style) ||
-    isSingaporeStyle(style)
+    isSingaporeStyle(style) ||
+    isSanguozhiStyle(style)
   )
 }
 export function textSceneBackground(style: TextSceneStyle) {
@@ -144,6 +147,7 @@ export function textSceneBackground(style: TextSceneStyle) {
   if (isSteppeStyle(style)) return steppeBackground(style)
   if (isCanyonStyle(style)) return canyonBackground(style)
   if (isSingaporeStyle(style)) return singaporeBackground(style)
+  if (isSanguozhiStyle(style)) return sanguozhiBackground(style)
   return isFujiStyle(style) ? fujiBackground(style) : benchBackground(style)
 }
 export function textSceneRows(width: number, height: number, style: TextSceneStyle, elapsedMs: number): SceneRun[][] {
@@ -179,5 +183,6 @@ export function textSceneRows(width: number, height: number, style: TextSceneSty
   if (isSteppeStyle(style)) return steppeRows(width, height, style, elapsedMs)
   if (isCanyonStyle(style)) return canyonRows(width, height, style, elapsedMs)
   if (isSingaporeStyle(style)) return singaporeRows(width, height, style, elapsedMs)
+  if (isSanguozhiStyle(style)) return sanguozhiRows(width, height, style, elapsedMs)
   return isFujiStyle(style) ? fujiRows(width, height, style, elapsedMs) : benchRows(width, height, style, elapsedMs)
 }

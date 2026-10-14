@@ -1075,6 +1075,8 @@ export const messages = {
   "animation.canyonNight": "Canyon : Nuit",
   "animation.singaporeDay": "Singapore: Marina Bay Jour",
   "animation.singaporeNight": "Singapore: Marina Bay Nuit",
+  "animation.sanguozhiMuster": "Sanguozhi : Aube",
+  "animation.sanguozhiDusk": "Sanguozhi : Crépuscule",
   "ui.steerNowHint": "{keybind} orienter maintenant",
   "ui.steerQueueEmpty": "Aucune relance enregistr\u00e9e \u00e0 orienter",
   "ui.steerNothingSteerable": "Rien dans la file ne peut orienter le tour en cours",

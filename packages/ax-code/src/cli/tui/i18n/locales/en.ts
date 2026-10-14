@@ -1040,6 +1040,8 @@ export const messages = {
   "animation.canyonNight": "Canyon: Night",
   "animation.singaporeDay": "Singapore: Marina Bay Day",
   "animation.singaporeNight": "Singapore: Marina Bay Night",
+  "animation.sanguozhiMuster": "Sanguozhi: Dawn Muster",
+  "animation.sanguozhiDusk": "Sanguozhi: Dusk Banners",
   "ui.steerNowHint": "{keybind} steer now",
   "ui.steerQueueEmpty": "No saved follow-ups to steer",
   "ui.steerNothingSteerable": "Nothing in the queue can steer the running turn",

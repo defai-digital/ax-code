@@ -1041,6 +1041,8 @@ export const messages = {
   "animation.canyonNight": "Ngarai: Malam",
   "animation.singaporeDay": "Singapore: Marina Bay Siang",
   "animation.singaporeNight": "Singapore: Marina Bay Malam",
+  "animation.sanguozhiMuster": "Sanguozhi: Fajar",
+  "animation.sanguozhiDusk": "Sanguozhi: Senja",
   "ui.steerNowHint": "{keybind} arahkan sekarang",
   "ui.steerQueueEmpty": "Tidak ada tindak lanjut tersimpan untuk diarahkan",
   "ui.steerNothingSteerable": "Tidak ada dalam antrean yang dapat mengarahkan giliran yang berjalan",

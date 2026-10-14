@@ -1053,6 +1053,8 @@ export const messages = {
   "animation.canyonNight": "Cañón: Noche",
   "animation.singaporeDay": "Singapore: Marina Bay D\u00eda",
   "animation.singaporeNight": "Singapore: Marina Bay Noche",
+  "animation.sanguozhiMuster": "Sanguozhi: Amanecer",
+  "animation.sanguozhiDusk": "Sanguozhi: Atardecer",
   "ui.steerNowHint": "{keybind} dirigir ahora",
   "ui.steerQueueEmpty": "No hay seguimientos guardados para dirigir",
   "ui.steerNothingSteerable": "Nada en la cola puede dirigir el turno en curso",

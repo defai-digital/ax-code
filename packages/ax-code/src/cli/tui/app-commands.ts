@@ -806,7 +806,10 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
                                                                             : input.animationPair?.opening ===
                                                                                 "singapore-day"
                                                                               ? uiText("animation.singaporeDay")
-                                                                              : uiText("animation.classicFoliage"),
+                                                                              : input.animationPair?.opening ===
+                                                                                  "sanguozhi-muster"
+                                                                                ? uiText("animation.sanguozhiMuster")
+                                                                                : uiText("animation.classicFoliage"),
       slash: { name: "ov", aliases: ["op"], hidden: true },
       value: "app.digital_code.play",
       category: t("category.system"),
@@ -890,7 +893,10 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
                                                                             : input.animationPair?.ending ===
                                                                                 "singapore-night"
                                                                               ? uiText("animation.singaporeNight")
-                                                                              : uiText("animation.goldenFoliage"),
+                                                                              : input.animationPair?.ending ===
+                                                                                  "sanguozhi-dusk"
+                                                                                ? uiText("animation.sanguozhiDusk")
+                                                                                : uiText("animation.goldenFoliage"),
       slash: { name: "ev", hidden: true },
       value: "app.digital_code.play_reverse",
       category: t("category.system"),

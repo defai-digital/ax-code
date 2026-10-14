@@ -36,6 +36,7 @@ export type AnimationPair = Readonly<{
     | "steppe-day"
     | "canyon-day"
     | "singapore-day"
+    | "sanguozhi-muster"
   ending:
     | "digital-code"
     | "golden-foliage"
@@ -73,47 +74,49 @@ export type AnimationPair = Readonly<{
     | "steppe-night"
     | "canyon-night"
     | "singapore-night"
+    | "sanguozhi-dusk"
 }>
 
 /** Choose once per TUI launch; previews and shutdown reuse the same pair. */
 export function chooseAnimationPair(random: () => number = Math.random): AnimationPair {
   const draw = random()
-  if (draw < 1 / 36) return Object.freeze({ opening: "digital-code", ending: "digital-code" })
-  if (draw < 2 / 36) return Object.freeze({ opening: "classic-foliage", ending: "golden-foliage" })
-  if (draw < 3 / 36) return Object.freeze({ opening: "midnight-dream", ending: "sunset-serenade" })
-  if (draw < 4 / 36) return Object.freeze({ opening: "fuji-day", ending: "fuji-night" })
-  if (draw < 5 / 36) return Object.freeze({ opening: "mahjong-match", ending: "mahjong-ending" })
-  if (draw < 6 / 36) return Object.freeze({ opening: "city-night", ending: "city-dawn" })
-  if (draw < 7 / 36) return Object.freeze({ opening: "festival-fireworks", ending: "festival-lanterns" })
-  if (draw < 8 / 36) return Object.freeze({ opening: "snowfall", ending: "winter-night" })
-  if (draw < 9 / 36) return Object.freeze({ opening: "volcano-eruption", ending: "volcano-calm" })
-  if (draw < 10 / 36) return Object.freeze({ opening: "bigben-day", ending: "bigben-night" })
-  if (draw < 11 / 36) return Object.freeze({ opening: "taipei101-day", ending: "taipei101-neon" })
-  if (draw < 12 / 36) return Object.freeze({ opening: "greatwall-dawn", ending: "greatwall-dusk" })
-  if (draw < 13 / 36) return Object.freeze({ opening: "torii-day", ending: "torii-night" })
-  if (draw < 14 / 36) return Object.freeze({ opening: "taegeuk", ending: "taegeuk" })
-  if (draw < 15 / 36) return Object.freeze({ opening: "sagrada-day", ending: "sagrada-night" })
-  if (draw < 16 / 36) return Object.freeze({ opening: "corcovado-day", ending: "corcovado-gold" })
-  if (draw < 17 / 36) return Object.freeze({ opening: "eiffel-day", ending: "eiffel-night" })
-  if (draw < 18 / 36) return Object.freeze({ opening: "brandenburg-night", ending: "brandenburg-dawn" })
-  if (draw < 19 / 36) return Object.freeze({ opening: "domes-snow", ending: "domes-clear" })
-  if (draw < 20 / 36) return Object.freeze({ opening: "borobudur-mist", ending: "borobudur-noon" })
-  if (draw < 21 / 36) return Object.freeze({ opening: "balloons-night", ending: "balloons-dawn" })
-  if (draw < 22 / 36) return Object.freeze({ opening: "mekong-dawn", ending: "mekong-dusk" })
-  if (draw < 23 / 36) return Object.freeze({ opening: "colosseum-day", ending: "colosseum-night" })
-  if (draw < 24 / 36) return Object.freeze({ opening: "space-launch", ending: "space-drift" })
-  if (draw < 25 / 36) return Object.freeze({ opening: "dungeon-descent", ending: "dungeon-treasure" })
-  if (draw < 26 / 36) return Object.freeze({ opening: "castle-day", ending: "castle-night" })
-  if (draw < 27 / 36) return Object.freeze({ opening: "islands-day", ending: "islands-dusk" })
-  if (draw < 28 / 36) return Object.freeze({ opening: "jungle-day", ending: "jungle-night" })
-  if (draw < 29 / 36) return Object.freeze({ opening: "reef-day", ending: "reef-night" })
-  if (draw < 30 / 36) return Object.freeze({ opening: "pyramids-day", ending: "pyramids-night" })
-  if (draw < 31 / 36) return Object.freeze({ opening: "aurora-night", ending: "aurora-dawn" })
-  if (draw < 32 / 36) return Object.freeze({ opening: "lighthouse-day", ending: "lighthouse-night" })
-  if (draw < 33 / 36) return Object.freeze({ opening: "falls-day", ending: "falls-moon" })
-  if (draw < 34 / 36) return Object.freeze({ opening: "steppe-day", ending: "steppe-night" })
-  if (draw < 35 / 36) return Object.freeze({ opening: "canyon-day", ending: "canyon-night" })
-  return Object.freeze({ opening: "singapore-day", ending: "singapore-night" })
+  if (draw < 1 / 37) return Object.freeze({ opening: "digital-code", ending: "digital-code" })
+  if (draw < 2 / 37) return Object.freeze({ opening: "classic-foliage", ending: "golden-foliage" })
+  if (draw < 3 / 37) return Object.freeze({ opening: "midnight-dream", ending: "sunset-serenade" })
+  if (draw < 4 / 37) return Object.freeze({ opening: "fuji-day", ending: "fuji-night" })
+  if (draw < 5 / 37) return Object.freeze({ opening: "mahjong-match", ending: "mahjong-ending" })
+  if (draw < 6 / 37) return Object.freeze({ opening: "city-night", ending: "city-dawn" })
+  if (draw < 7 / 37) return Object.freeze({ opening: "festival-fireworks", ending: "festival-lanterns" })
+  if (draw < 8 / 37) return Object.freeze({ opening: "snowfall", ending: "winter-night" })
+  if (draw < 9 / 37) return Object.freeze({ opening: "volcano-eruption", ending: "volcano-calm" })
+  if (draw < 10 / 37) return Object.freeze({ opening: "bigben-day", ending: "bigben-night" })
+  if (draw < 11 / 37) return Object.freeze({ opening: "taipei101-day", ending: "taipei101-neon" })
+  if (draw < 12 / 37) return Object.freeze({ opening: "greatwall-dawn", ending: "greatwall-dusk" })
+  if (draw < 13 / 37) return Object.freeze({ opening: "torii-day", ending: "torii-night" })
+  if (draw < 14 / 37) return Object.freeze({ opening: "taegeuk", ending: "taegeuk" })
+  if (draw < 15 / 37) return Object.freeze({ opening: "sagrada-day", ending: "sagrada-night" })
+  if (draw < 16 / 37) return Object.freeze({ opening: "corcovado-day", ending: "corcovado-gold" })
+  if (draw < 17 / 37) return Object.freeze({ opening: "eiffel-day", ending: "eiffel-night" })
+  if (draw < 18 / 37) return Object.freeze({ opening: "brandenburg-night", ending: "brandenburg-dawn" })
+  if (draw < 19 / 37) return Object.freeze({ opening: "domes-snow", ending: "domes-clear" })
+  if (draw < 20 / 37) return Object.freeze({ opening: "borobudur-mist", ending: "borobudur-noon" })
+  if (draw < 21 / 37) return Object.freeze({ opening: "balloons-night", ending: "balloons-dawn" })
+  if (draw < 22 / 37) return Object.freeze({ opening: "mekong-dawn", ending: "mekong-dusk" })
+  if (draw < 23 / 37) return Object.freeze({ opening: "colosseum-day", ending: "colosseum-night" })
+  if (draw < 24 / 37) return Object.freeze({ opening: "space-launch", ending: "space-drift" })
+  if (draw < 25 / 37) return Object.freeze({ opening: "dungeon-descent", ending: "dungeon-treasure" })
+  if (draw < 26 / 37) return Object.freeze({ opening: "castle-day", ending: "castle-night" })
+  if (draw < 27 / 37) return Object.freeze({ opening: "islands-day", ending: "islands-dusk" })
+  if (draw < 28 / 37) return Object.freeze({ opening: "jungle-day", ending: "jungle-night" })
+  if (draw < 29 / 37) return Object.freeze({ opening: "reef-day", ending: "reef-night" })
+  if (draw < 30 / 37) return Object.freeze({ opening: "pyramids-day", ending: "pyramids-night" })
+  if (draw < 31 / 37) return Object.freeze({ opening: "aurora-night", ending: "aurora-dawn" })
+  if (draw < 32 / 37) return Object.freeze({ opening: "lighthouse-day", ending: "lighthouse-night" })
+  if (draw < 33 / 37) return Object.freeze({ opening: "falls-day", ending: "falls-moon" })
+  if (draw < 34 / 37) return Object.freeze({ opening: "steppe-day", ending: "steppe-night" })
+  if (draw < 35 / 37) return Object.freeze({ opening: "canyon-day", ending: "canyon-night" })
+  if (draw < 36 / 37) return Object.freeze({ opening: "singapore-day", ending: "singapore-night" })
+  return Object.freeze({ opening: "sanguozhi-muster", ending: "sanguozhi-dusk" })
 }
 
 let launchPair: AnimationPair | undefined

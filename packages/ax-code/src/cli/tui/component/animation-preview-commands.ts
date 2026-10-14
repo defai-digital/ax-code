@@ -579,6 +579,22 @@ const PREVIEWS = [
     value: "app.animation.singapore_ending",
     slash: "singapore-ending",
   },
+  {
+    family: "Sanguozhi",
+    ending: false,
+    style: "sanguozhi-muster",
+    key: "animation.sanguozhiMuster",
+    value: "app.animation.sanguozhi",
+    slash: "sanguozhi",
+  },
+  {
+    family: "Sanguozhi",
+    ending: true,
+    style: "sanguozhi-dusk",
+    key: "animation.sanguozhiDusk",
+    value: "app.animation.sanguozhi_ending",
+    slash: "sanguozhi-ending",
+  },
 ] as const
 
 /** Named theme families remain searchable in every interface language. */
