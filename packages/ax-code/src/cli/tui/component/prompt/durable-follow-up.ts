@@ -193,7 +193,8 @@ async function pauseFollowUp(sdk: FollowUpSdk, id: string) {
   })
   if (!response.ok) throw new Error(await responseErrorMessage(response))
   const current = FollowUpRow.parse(await response.json())
-  return current.status === "paused" ? current : followUpAction(sdk, id, "pause")
+  if (current.status === "paused") return { paused: current, changed: false }
+  return { paused: await followUpAction(sdk, id, "pause"), changed: true }
 }
 
 /**
@@ -203,8 +204,7 @@ async function pauseFollowUp(sdk: FollowUpSdk, id: string) {
  * abandoned edit may undo.
  */
 export async function pauseFollowUpForEdit(sdk: FollowUpSdk, item: DurableFollowUp) {
-  const paused = await pauseFollowUp(sdk, item.id)
-  return { paused, changed: item.status !== "paused" }
+  return pauseFollowUp(sdk, item.id)
 }
 
 /**

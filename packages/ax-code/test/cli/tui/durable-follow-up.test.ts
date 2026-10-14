@@ -209,4 +209,25 @@ describe("follow-up edit hold", () => {
     expect(await cancelFollowUpEdit(fake, hold)).toBeUndefined()
     expect(requests).toEqual(["http://localhost:4096/task-queue/a"])
   })
+
+  test("a stale queued projection does not resume another caller's pause", async () => {
+    const { fake, requests } = sdk([row("a", "paused")])
+    const hold = await pauseFollowUpForEdit(fake, projected("queued"))
+    expect(hold.changed).toBe(false)
+    expect(await cancelFollowUpEdit(fake, hold)).toBeUndefined()
+    expect(requests).toEqual(["http://localhost:4096/task-queue/a"])
+  })
+
+  test("a stale paused projection restores the pause this edit actually acquired", async () => {
+    const queued = row("a", "queued")
+    const { fake, requests } = sdk([queued, row("a", "paused"), queued])
+    const hold = await pauseFollowUpForEdit(fake, projected("paused"))
+    expect(hold.changed).toBe(true)
+    expect((await cancelFollowUpEdit(fake, hold))?.status).toBe("queued")
+    expect(requests).toEqual([
+      "http://localhost:4096/task-queue/a",
+      "http://localhost:4096/task-queue/a/pause",
+      "http://localhost:4096/task-queue/a/resume",
+    ])
+  })
 })
