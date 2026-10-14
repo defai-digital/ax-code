@@ -59,7 +59,12 @@ export async function sendUsageUpdate(
   // Cache-read AND cache-write are prompt-side tokens; every other place that
   // sums this quantity (processor-impl, token-ledger, compaction-budget,
   // acp/prompt.ts) includes cache write, or the client's context gauge is low.
-  const used = msg.tokens.input + (msg.tokens.cache?.read ?? 0) + (msg.tokens.cache?.write ?? 0)
+  // `msg.tokens` accumulates every step of the turn, so prefer the newest
+  // step-finish part: its tokens are that step's own prompt — the live window —
+  // while the accumulated total overstates a turn that called tools.
+  const lastStep = lastAssistant.parts.findLast((part) => part.type === "step-finish")
+  const tokens = lastStep?.type === "step-finish" ? lastStep.tokens : msg.tokens
+  const used = tokens.input + (tokens.cache?.read ?? 0) + (tokens.cache?.write ?? 0)
 
   await connection
     .sessionUpdate({
