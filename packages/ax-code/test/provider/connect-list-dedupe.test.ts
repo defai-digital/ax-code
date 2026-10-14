@@ -1,8 +1,5 @@
 import { describe, expect, test } from "vitest"
-import {
-  dedupeApiCloudVendorVariants,
-  normalizeConnectVendorName,
-} from "../../src/provider/default-setup-providers"
+import { dedupeApiCloudVendorVariants, normalizeConnectVendorName } from "../../src/provider/default-setup-providers"
 import { ModelsDev } from "../../src/provider/models"
 import { shouldShowProviderInList } from "../../src/server/routes/provider"
 import { providerConnectCategory } from "../../src/mode/provider-category"

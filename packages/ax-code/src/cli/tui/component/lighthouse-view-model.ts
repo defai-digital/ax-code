@@ -100,12 +100,7 @@ export function lighthouseSurf(elapsedMs: number): number {
   return Math.floor(phase * 12)
 }
 
-export function lighthouseRows(
-  columns: number,
-  rows: number,
-  style: LighthouseStyle,
-  elapsedMs: number,
-): FujiRun[][] {
+export function lighthouseRows(columns: number, rows: number, style: LighthouseStyle, elapsedMs: number): FujiRun[][] {
   const night = style === "lighthouse-night"
   const colors = LIGHTHOUSE_COLORS[style]
   const beam = lighthouseBeam(elapsedMs)

@@ -183,7 +183,12 @@ test("does not track refactor_apply paths when the refactor aborted", () => {
     created: 10,
     sourcePaths: ["src"],
     messages: [
-      message({ applied: false, abortReason: "no-plan", filesChanged: [absolute("src/a.ts")] }, 20, "refactor_apply", "error"),
+      message(
+        { applied: false, abortReason: "no-plan", filesChanged: [absolute("src/a.ts")] },
+        20,
+        "refactor_apply",
+        "error",
+      ),
     ],
   })
   expect(result.additional).toEqual([])

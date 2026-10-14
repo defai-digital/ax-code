@@ -34,10 +34,7 @@
         "region:us"
       ],
       "cardData": {
-        "base_model": [
-          "mlx-community/gemma-4-12B-it-qat-OptiQ-4bit",
-          "google/gemma-4-12B-it-qat-q4_0-unquantized"
-        ],
+        "base_model": ["mlx-community/gemma-4-12B-it-qat-OptiQ-4bit", "google/gemma-4-12B-it-qat-q4_0-unquantized"],
         "library_name": "mlx"
       },
       "siblings": [
@@ -2432,10 +2429,7 @@
         "region:us"
       ],
       "cardData": {
-        "base_model": [
-          "mlx-community/Qwen3.6-27B-OptiQ-4bit",
-          "Qwen/Qwen3.6-27B"
-        ],
+        "base_model": ["mlx-community/Qwen3.6-27B-OptiQ-4bit", "Qwen/Qwen3.6-27B"],
         "library_name": "mlx"
       },
       "siblings": [
@@ -2540,10 +2534,7 @@
         "region:us"
       ],
       "cardData": {
-        "base_model": [
-          "mlx-community/Qwen3.5-9B-OptiQ-4bit",
-          "Qwen/Qwen3.5-9B"
-        ],
+        "base_model": ["mlx-community/Qwen3.5-9B-OptiQ-4bit", "Qwen/Qwen3.5-9B"],
         "library_name": "mlx"
       },
       "siblings": [
@@ -2643,10 +2634,7 @@
         "region:us"
       ],
       "cardData": {
-        "base_model": [
-          "mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit",
-          "Qwen/Qwen3.6-35B-A3B"
-        ],
+        "base_model": ["mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit", "Qwen/Qwen3.6-35B-A3B"],
         "library_name": "mlx"
       },
       "siblings": [
@@ -2754,10 +2742,7 @@
         "region:us"
       ],
       "cardData": {
-        "base_model": [
-          "mlx-community/gemma-4-31B-it-OptiQ-4bit",
-          "google/gemma-4-31B-it"
-        ],
+        "base_model": ["mlx-community/gemma-4-31B-it-OptiQ-4bit", "google/gemma-4-31B-it"],
         "library_name": "mlx"
       },
       "siblings": [
@@ -2881,10 +2866,7 @@
         "region:us"
       ],
       "cardData": {
-        "base_model": [
-          "mlx-community/gemma-4-26B-A4B-it-OptiQ-4bit",
-          "google/gemma-4-26B-A4B-it"
-        ],
+        "base_model": ["mlx-community/gemma-4-26B-A4B-it-OptiQ-4bit", "google/gemma-4-26B-A4B-it"],
         "library_name": "mlx"
       },
       "siblings": [
@@ -3237,10 +3219,7 @@
         "region:us"
       ],
       "cardData": {
-        "base_model": [
-          "mlx-community/Ministral-3-8B-Instruct-2512-bf16",
-          "mistralai/Ministral-3-8B-Instruct-2512"
-        ],
+        "base_model": ["mlx-community/Ministral-3-8B-Instruct-2512-bf16", "mistralai/Ministral-3-8B-Instruct-2512"],
         "library_name": "mlx"
       },
       "siblings": [
@@ -3343,10 +3322,7 @@
         "region:us"
       ],
       "cardData": {
-        "base_model": [
-          "mlx-community/Ministral-3-14B-Instruct-2512-bf16",
-          "mistralai/Ministral-3-14B-Instruct-2512"
-        ],
+        "base_model": ["mlx-community/Ministral-3-14B-Instruct-2512-bf16", "mistralai/Ministral-3-14B-Instruct-2512"],
         "library_name": "mlx"
       },
       "siblings": [
@@ -3570,10 +3546,7 @@
         "region:us"
       ],
       "cardData": {
-        "base_model": [
-          "google/diffusiongemma-26B-A4B-it",
-          "mlx-community/diffusiongemma-26B-A4B-it-OptiQ-4bit"
-        ],
+        "base_model": ["google/diffusiongemma-26B-A4B-it", "mlx-community/diffusiongemma-26B-A4B-it-OptiQ-4bit"],
         "library_name": "mlx"
       },
       "siblings": [
@@ -3664,10 +3637,7 @@
         "region:us"
       ],
       "cardData": {
-        "base_model": [
-          "Qwen/Qwen3-Coder-Next",
-          "mlx-community/Qwen3-Coder-Next-bf16"
-        ],
+        "base_model": ["Qwen/Qwen3-Coder-Next", "mlx-community/Qwen3-Coder-Next-bf16"],
         "library_name": "mlx"
       },
       "siblings": [
@@ -11042,16 +11012,7 @@
       "sha": "7af86ffac3bdd903c2aaaf514614d6eafef7e704",
       "pipeline_tag": "text-generation",
       "library_name": "mlx",
-      "tags": [
-        "mlx",
-        "safetensors",
-        "qwen3_5_moe",
-        "text-generation",
-        "conversational",
-        "en",
-        "4-bit",
-        "region:us"
-      ],
+      "tags": ["mlx", "safetensors", "qwen3_5_moe", "text-generation", "conversational", "en", "4-bit", "region:us"],
       "cardData": {
         "library_name": "mlx"
       },
@@ -11123,16 +11084,7 @@
       "sha": "b499824a745f43be6007bffabccbd9d0e4012cca",
       "pipeline_tag": "text-generation",
       "library_name": "mlx",
-      "tags": [
-        "mlx",
-        "safetensors",
-        "qwen3_5_moe",
-        "text-generation",
-        "conversational",
-        "en",
-        "4-bit",
-        "region:us"
-      ],
+      "tags": ["mlx", "safetensors", "qwen3_5_moe", "text-generation", "conversational", "en", "4-bit", "region:us"],
       "cardData": {
         "library_name": "mlx"
       },
@@ -18665,9 +18617,7 @@
         "region:us"
       ],
       "cardData": {
-        "base_model": [
-          "peculiar-ragdoll/Tiel-Coder-35B-A3B-MLX-oQ6e-MTP"
-        ],
+        "base_model": ["peculiar-ragdoll/Tiel-Coder-35B-A3B-MLX-oQ6e-MTP"],
         "library_name": "mlx"
       },
       "siblings": [

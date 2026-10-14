@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest"
-import { attentionReasons, buildLedger, ledgerGroup, ledgerSection } from "../../src/quality/run-report/run-report-ledger"
+import {
+  attentionReasons,
+  buildLedger,
+  ledgerGroup,
+  ledgerSection,
+} from "../../src/quality/run-report/run-report-ledger"
 import type { Risk } from "../../src/risk/score"
 import type { Session } from "../../src/session"
 

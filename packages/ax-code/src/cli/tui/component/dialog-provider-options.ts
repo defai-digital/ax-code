@@ -99,9 +99,7 @@ function providerDialogSortKey(providerID: string) {
   return LOCAL_LLM_PROVIDER_IDS.findIndex((id) => id === providerID)
 }
 
-const SUGGESTED_API_PROVIDER_RANK = new Map<string, number>(
-  DEFAULT_SETUP_PROVIDER_IDS.map((id, index) => [id, index]),
-)
+const SUGGESTED_API_PROVIDER_RANK = new Map<string, number>(DEFAULT_SETUP_PROVIDER_IDS.map((id, index) => [id, index]))
 
 /**
  * Suggested (curated) API providers keep their curated relative order ahead of

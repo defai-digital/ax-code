@@ -22,16 +22,16 @@ agree where shared records are retained, or connect development to internal appr
 and systems. Business pricing, deployment requirements, and availability will be
 announced separately. Contact us through [AutomatosX](https://automatosx.com/#contactForm).
 
-| Area | Standard | Business direction (planned) |
-| --- | --- | --- |
-| License | Open source, Apache-2.0 with upstream notices | Separate commercial license for proprietary Business components |
-| Coding workspace | CLI/TUI, local and cloud models, code changes and review | Same core workspace with organization integrations |
-| Local inference | AX Engine on supported Apple Silicon Macs and other supported runtimes | Organization-approved models and deployment configurations |
-| Safety | Core permissions, isolation capabilities, and change review | Organization policies and managed access in addition to core safeguards |
-| Records | Existing local session evidence, snapshots, and export capabilities | Central retention, organization access controls, and managed audit workflows |
-| AX Trust | Provider connectivity where supported | Organization identity, credentials, policy, and AI access management |
-| AutomatosX | Existing integration interfaces where supported | Internal workflows, approvals, and business-system connections |
-| Support | Public documentation and community channels when accessible | Deployment assistance and contracted support |
+| Area             | Standard                                                               | Business direction (planned)                                                 |
+| ---------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| License          | Open source, Apache-2.0 with upstream notices                          | Separate commercial license for proprietary Business components              |
+| Coding workspace | CLI/TUI, local and cloud models, code changes and review               | Same core workspace with organization integrations                           |
+| Local inference  | AX Engine on supported Apple Silicon Macs and other supported runtimes | Organization-approved models and deployment configurations                   |
+| Safety           | Core permissions, isolation capabilities, and change review            | Organization policies and managed access in addition to core safeguards      |
+| Records          | Existing local session evidence, snapshots, and export capabilities    | Central retention, organization access controls, and managed audit workflows |
+| AX Trust         | Provider connectivity where supported                                  | Organization identity, credentials, policy, and AI access management         |
+| AutomatosX       | Existing integration interfaces where supported                        | Internal workflows, approvals, and business-system connections               |
+| Support          | Public documentation and community channels when accessible            | Deployment assistance and contracted support                                 |
 
 Existing runtime capabilities remain part of Standard. Local evidence, audit exports,
 basic safety, and ordinary performance are not being moved behind a Business paywall.

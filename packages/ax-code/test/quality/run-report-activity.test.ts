@@ -1,5 +1,8 @@
 import { describe, expect, test } from "vitest"
-import { runReportActivityToolLabels, summarizeRunReportActivityTools } from "../../src/quality/run-report/run-report-activity"
+import {
+  runReportActivityToolLabels,
+  summarizeRunReportActivityTools,
+} from "../../src/quality/run-report/run-report-activity"
 
 describe("quality.run-report-activity", () => {
   test("summarizes activity into a compact human-readable sentence", () => {

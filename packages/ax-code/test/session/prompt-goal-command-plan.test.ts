@@ -418,7 +418,18 @@ describe("goal assurance is opt-in (item 2, option A)", () => {
               agent: "build",
               model: "test/test-model",
             },
-            async () => ({ info: { id: "msg_assure" as any, sessionID: session.id, role: "assistant", time: { created: Date.now() }, agent: "build", model }, parts: [] }) as any,
+            async () =>
+              ({
+                info: {
+                  id: "msg_assure" as any,
+                  sessionID: session.id,
+                  role: "assistant",
+                  time: { created: Date.now() },
+                  agent: "build",
+                  model,
+                },
+                parts: [],
+              }) as any,
           )
 
           expect(writerCalls).toBe(1)
@@ -444,7 +455,17 @@ describe("goal assurance is opt-in (item 2, option A)", () => {
           { sessionID: session.id, command: "goal", arguments: "--assure", agent: "build", model: "test/test-model" },
           async (input) => {
             prompts.push(input)
-            return { info: { id: "msg_assure_err" as any, sessionID: session.id, role: "assistant", time: { created: Date.now() }, agent: "build", model }, parts: [] } as any
+            return {
+              info: {
+                id: "msg_assure_err" as any,
+                sessionID: session.id,
+                role: "assistant",
+                time: { created: Date.now() },
+                agent: "build",
+                model,
+              },
+              parts: [],
+            } as any
           },
         )
         // The guidance is a control message, not a goal run: nothing was created

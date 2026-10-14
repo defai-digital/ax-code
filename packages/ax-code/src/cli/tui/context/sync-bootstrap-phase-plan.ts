@@ -21,9 +21,7 @@ export type SyncBootstrapPhaseSequenceInput = {
   recordStartup: (name: string, data?: Record<string, unknown>) => void
 }
 
-export function createSyncBootstrapPhaseSequence(
-  input: SyncBootstrapPhaseSequenceInput,
-): BootstrapPhaseSequenceStep[] {
+export function createSyncBootstrapPhaseSequence(input: SyncBootstrapPhaseSequenceInput): BootstrapPhaseSequenceStep[] {
   const hasBlockingTasks = input.blockingTasks.length > 0
 
   return [

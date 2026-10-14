@@ -688,7 +688,12 @@ describe("tui sync store event", () => {
 })
 
 describe("heap-pressure adaptive transcript budget", () => {
-  function dispatchTo(store: ReturnType<typeof createTestStore>[0], setStore: ReturnType<typeof createTestStore>[1], event: unknown, activeSessionID = "ses_1") {
+  function dispatchTo(
+    store: ReturnType<typeof createTestStore>[0],
+    setStore: ReturnType<typeof createTestStore>[1],
+    event: unknown,
+    activeSessionID = "ses_1",
+  ) {
     return dispatchStoreBackedSyncEvent<
       Session,
       Todo,

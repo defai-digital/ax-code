@@ -24,11 +24,7 @@ import { MUTATION_TOOLS, REGISTERED_MUTATION_TOOLS } from "../../src/tool/mutati
 const TOOL_DIR = path.resolve(import.meta.dirname, "../../src/tool")
 
 /** Calls that mean "this code path writes the workspace". */
-const WRITE_MARKERS: ReadonlyArray<RegExp> = [
-  /recordWriteAndAssert/,
-  /fs\.writeFile(?:Sync)?\(/,
-  /Filesystem\.write/,
-]
+const WRITE_MARKERS: ReadonlyArray<RegExp> = [/recordWriteAndAssert/, /fs\.writeFile(?:Sync)?\(/, /Filesystem\.write/]
 
 /**
  * Ids that are classified although no local write marker exists, because the

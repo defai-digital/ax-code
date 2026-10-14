@@ -66,7 +66,12 @@ describe("sidebar activity recent-rows equivalence", () => {
 
 describe("sidebar activity bounded selection", () => {
   function timedToolPart(id: string, start: number | undefined): Part {
-    return { id, type: "tool", tool: "read", state: { status: "completed", time: start === undefined ? undefined : { start } } } as unknown as Part
+    return {
+      id,
+      type: "tool",
+      tool: "read",
+      state: { status: "completed", time: start === undefined ? undefined : { start } },
+    } as unknown as Part
   }
 
   test("limit selects the same newest items as sorting everything, ties included", () => {

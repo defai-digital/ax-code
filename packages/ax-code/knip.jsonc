@@ -23,6 +23,6 @@
     // Declared here so Hono's WebSocket adapter and the language client resolve from this package.
     "ws",
     "@types/ws",
-    "vscode-jsonrpc"
-  ]
+    "vscode-jsonrpc",
+  ],
 }

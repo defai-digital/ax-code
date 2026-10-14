@@ -1,8 +1,5 @@
 import { describe, expect, test } from "vitest"
-import {
-  hasNewActiveSubagent,
-  subagentPanelLayout,
-} from "../../../src/cli/tui/routes/session/subagent-panel-layout"
+import { hasNewActiveSubagent, subagentPanelLayout } from "../../../src/cli/tui/routes/session/subagent-panel-layout"
 import {
   buildSubagentStatusView,
   isGoalPlanning,

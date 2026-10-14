@@ -39,7 +39,11 @@ createRoot((dispose) => {
   tree()
   if (count() !== 1) fail(`title/time write rebuilt the index (builds=${count()})`)
 
-  setStore(produce((draft) => draft.session.splice(2, 0, { id: "grandchild", parentID: "child", title: "G", time: { updated: 3 } })))
+  setStore(
+    produce((draft) =>
+      draft.session.splice(2, 0, { id: "grandchild", parentID: "child", title: "G", time: { updated: 3 } }),
+    ),
+  )
   if (subtree("root") !== "child,grandchild,root" || count() !== 2) fail(`insert: ${subtree("root")} builds=${count()}`)
 
   setStore(produce((draft) => void (draft.session[2]!.parentID = "root")))

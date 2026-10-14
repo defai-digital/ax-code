@@ -197,7 +197,10 @@ describe("prompt helpers", () => {
     expect(relocated[1]).toMatchObject({ source: { path: "/b/README.md", text: { start: 18, end: 27 } } })
 
     // Reordered in the editor: the second chip now precedes the first one.
-    const swapped = relocatePromptPartsAfterEditor([file("/a/README.md", 10), file("/b/README.md", 0)], "README.md README.md")
+    const swapped = relocatePromptPartsAfterEditor(
+      [file("/a/README.md", 10), file("/b/README.md", 0)],
+      "README.md README.md",
+    )
     expect(swapped[0]).toMatchObject({ source: { path: "/a/README.md", text: { start: 10 } } })
     expect(swapped[1]).toMatchObject({ source: { path: "/b/README.md", text: { start: 0 } } })
 

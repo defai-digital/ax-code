@@ -8,7 +8,11 @@ function forwardReference(messages: Array<{ id?: string }> | undefined, partsByM
   for (const message of messages ?? []) {
     if (!message.id) continue
     for (const part of partsByMessage[message.id] ?? []) {
-      const toolPart = part as { type?: unknown; tool?: unknown; state?: { status?: unknown; metadata?: { todos?: unknown } } }
+      const toolPart = part as {
+        type?: unknown
+        tool?: unknown
+        state?: { status?: unknown; metadata?: { todos?: unknown } }
+      }
       if (toolPart.type !== "tool" || toolPart.tool !== "todowrite") continue
       if (toolPart.state?.status !== "completed") continue
       const todos = toolPart.state.metadata?.todos
@@ -47,7 +51,8 @@ describe("hasUnfinishedTodosInPromptParts reverse scan", () => {
           if (roll < 0.3) parts.push({ type: "text", text: "x" })
           else if (roll < 0.4) parts.push({ type: "tool", tool: "bash", state: { status: "completed" } })
           else if (roll < 0.5) parts.push({ type: "tool", tool: "todowrite", state: { status: "running" } })
-          else if (roll < 0.6) parts.push({ type: "tool", tool: "todowrite", state: { status: "completed", metadata: { todos: "nope" } } })
+          else if (roll < 0.6)
+            parts.push({ type: "tool", tool: "todowrite", state: { status: "completed", metadata: { todos: "nope" } } })
           else {
             const todos = Array.from({ length: Math.floor(next() * 4) }, () => ({
               status: STATUSES[Math.floor(next() * STATUSES.length)],

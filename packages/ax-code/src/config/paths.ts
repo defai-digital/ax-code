@@ -30,7 +30,9 @@ export namespace ConfigPaths {
     }
 
     // Probe all candidates concurrently; Promise.all preserves the precedence order.
-    const candidates = dirs.toReversed().flatMap((dir) => [`${name}.json`, `${name}.jsonc`].map((file) => path.join(dir, file)))
+    const candidates = dirs
+      .toReversed()
+      .flatMap((dir) => [`${name}.json`, `${name}.jsonc`].map((file) => path.join(dir, file)))
     const found = await Promise.all(candidates.map((candidate) => Filesystem.exists(candidate)))
     return candidates.filter((_, index) => found[index])
   }

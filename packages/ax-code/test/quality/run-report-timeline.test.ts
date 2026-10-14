@@ -1,5 +1,8 @@
 import { describe, expect, test } from "vitest"
-import { parseRunReportTimeline, parseRunReportTimelineStepDurationMs } from "../../src/quality/run-report/run-report-timeline"
+import {
+  parseRunReportTimeline,
+  parseRunReportTimelineStepDurationMs,
+} from "../../src/quality/run-report/run-report-timeline"
 import type { SessionDre } from "../../src/session/dre"
 
 describe("quality.run-report-timeline", () => {

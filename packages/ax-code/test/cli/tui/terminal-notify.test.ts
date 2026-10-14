@@ -5,10 +5,7 @@ import {
   resetTerminalNotificationKeys,
   supportsTerminalNotification,
 } from "../../../src/cli/tui/util/terminal-notify"
-import {
-  registerTuiSequenceTarget,
-  unregisterTuiSequenceTarget,
-} from "../../../src/cli/tui/util/sequence-writer"
+import { registerTuiSequenceTarget, unregisterTuiSequenceTarget } from "../../../src/cli/tui/util/sequence-writer"
 
 function fakeStdout() {
   const writes: string[] = []

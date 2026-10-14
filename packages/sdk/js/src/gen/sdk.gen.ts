@@ -8361,7 +8361,7 @@ export class AxCodeClient extends HeyApiClient {
 
   /**
    * Generated API method.
-   * 
+   *
    * Calls `GET /run-report/session/{sessionID}`.
    */
   public getRunReportSessionSessionId<ThrowOnError extends boolean = false>(
@@ -8393,7 +8393,7 @@ export class AxCodeClient extends HeyApiClient {
 
   /**
    * Generated API method.
-   * 
+   *
    * Calls `GET /run-report/session/{sessionID}/fingerprint`.
    */
   public getRunReportSessionSessionIdFingerprint<ThrowOnError extends boolean = false>(

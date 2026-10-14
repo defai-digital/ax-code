@@ -1,4 +1,9 @@
-import { createSessionActivityIndex, type ActivityStatuses, type RequestBuckets, type AttentionRequest } from "../util/session-activity"
+import {
+  createSessionActivityIndex,
+  type ActivityStatuses,
+  type RequestBuckets,
+  type AttentionRequest,
+} from "../util/session-activity"
 import { orderRootSessions } from "../component/session-list-data"
 
 export type NavigationFilter = "recent" | "active"

@@ -30,12 +30,7 @@ test("only evidence-backed local convergence can preserve tool definitions", () 
   ]) {
     expect(canPreserveLocalSynthesisTools({ ...eligible, ...override })).toBe(false)
   }
-  for (const forceReason of [
-    "goal_complete",
-    "response_only",
-    "tool_only_breaker",
-    "other",
-  ] as const) {
+  for (const forceReason of ["goal_complete", "response_only", "tool_only_breaker", "other"] as const) {
     expect(canPreserveLocalSynthesisTools({ ...eligible, forceReason })).toBe(false)
   }
 })

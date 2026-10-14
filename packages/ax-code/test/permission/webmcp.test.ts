@@ -62,10 +62,7 @@ test("an always reply to an interactive-only request downgrades to once", async 
     fn: async () => {
       const askOnce = () => {
         const controller = new AbortController()
-        const pending = Permission.ask(
-          { ...request([]), always: ["bridge_*"] },
-          { signal: controller.signal },
-        )
+        const pending = Permission.ask({ ...request([]), always: ["bridge_*"] }, { signal: controller.signal })
         pending.catch(() => {})
         return { controller, pending }
       }

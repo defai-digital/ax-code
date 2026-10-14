@@ -192,7 +192,8 @@ const RADIAL_LABEL_ZOOM: Record<NodeKind, number> = { page: 0, source: 0.85, sym
 const TREEMAP_LABEL_ZOOM: Record<NodeKind, number> = { page: 0, source: 0.5, symbol: 1.1 }
 /** Fixed layouts keep their own positions; there is nothing to drag or reheat. */
 const isStatic = (candidate: ForceLayout | undefined) =>
-  candidate !== undefined && (candidate.radial !== undefined || candidate.arc !== undefined || candidate.treemap !== undefined)
+  candidate !== undefined &&
+  (candidate.radial !== undefined || candidate.arc !== undefined || candidate.treemap !== undefined)
 
 const FRESHNESS_NOTE = {
   fresh: "observed bytes match the recorded hash.",
@@ -544,7 +545,9 @@ export function mount(
     const meta = layout!.radial!
     const isTree = meta.treeParent.get(edge.to) === edge.from
     const beta = isTree ? 0 : edge.kind === "uses" ? 0.3 : 0.75
-    const turn = Math.abs((((meta.angles.get(a.id)! - meta.angles.get(b.id)!) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI)
+    const turn = Math.abs(
+      ((((meta.angles.get(a.id)! - meta.angles.get(b.id)!) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI)) - Math.PI,
+    )
     const k = beta * Math.min(1, turn / (Math.PI / 2))
     const lerp = (n: LayoutNode) => ({ x: n.x + (meta.cx - n.x) * k, y: n.y + (meta.cy - n.y) * k })
     const c0 = lerp(a),
@@ -581,7 +584,7 @@ export function mount(
     const rx = Math.abs(x2 - x1) / 2
     if (rx < 0.5) return { d: `M${x1},${y1} L${x2},${y2}`, head: "" }
     const ry = Math.min(ARC_MAX_HEIGHT, Math.abs(x2 - x1) * 0.5)
-    const sweep = (x2 > x1) === (dir === -1) ? 1 : 0
+    const sweep = x2 > x1 === (dir === -1) ? 1 : 0
     // The ellipse meets the baseline vertically, so the arrow points straight at the node.
     const uy = -dir
     const size = 9,
@@ -633,11 +636,16 @@ export function mount(
             : 0.14
       path.setAttribute(
         "opacity",
-        dimmed ? String(DIMMED_EDGE) : incident ? String(FOCUS_EDGE_OPACITY) : String(resting ? restOpacity : REST_EDGE),
+        dimmed
+          ? String(DIMMED_EDGE)
+          : incident
+            ? String(FOCUS_EDGE_OPACITY)
+            : String(resting ? restOpacity : REST_EDGE),
       )
       // At rest, color is the relationship. A selection keeps the tested focus colors.
       const cited = edge.kind === "references-source" ? topicColor(edge.from) : undefined
-      const restStroke = edge.kind === "uses" ? "#d2b56a" : edge.kind === "contains" ? "#3e5164" : (cited?.edge ?? "#8fd0d6")
+      const restStroke =
+        edge.kind === "uses" ? "#d2b56a" : edge.kind === "contains" ? "#3e5164" : (cited?.edge ?? "#8fd0d6")
       path.setAttribute(
         "stroke",
         !dimmed && direction === "outgoing"
@@ -654,7 +662,11 @@ export function mount(
       )
       arrow.setAttribute(
         "opacity",
-        dimmed ? String(DIMMED_EDGE) : incident ? String(FOCUS_EDGE_OPACITY) : String(resting ? restOpacity : REST_EDGE),
+        dimmed
+          ? String(DIMMED_EDGE)
+          : incident
+            ? String(FOCUS_EDGE_OPACITY)
+            : String(resting ? restOpacity : REST_EDGE),
       )
       if (!dimmed && incident) arrow.setAttribute("stroke", direction === "outgoing" ? FOCUS_OUT : FOCUS_IN)
       else arrow.removeAttribute("stroke")
@@ -748,7 +760,10 @@ export function mount(
     for (const candidate of candidates) {
       const clash = taken.some(
         (box) =>
-          candidate.box.x0 < box.x1 && candidate.box.x1 > box.x0 && candidate.box.y0 < box.y1 && candidate.box.y1 > box.y0,
+          candidate.box.x0 < box.x1 &&
+          candidate.box.x1 > box.x0 &&
+          candidate.box.y0 < box.y1 &&
+          candidate.box.y1 > box.y0,
       )
       if (clash) candidate.label.setAttribute("display", "none")
       else taken.push(candidate.box)
@@ -826,12 +841,15 @@ export function mount(
   }
 
   /** Page -> source -> symbol parents, rebuilt only when the graph changes. */
-  let treeIndex: { graph: typeof graph; parent: Map<string, string>; kids: Map<string, string[]>; cited: Map<string, number> } | undefined
+  let treeIndex:
+    | { graph: typeof graph; parent: Map<string, string>; kids: Map<string, string[]>; cited: Map<string, number> }
+    | undefined
   function tree() {
     if (treeIndex?.graph !== graph) {
       const { treeParent, children } = deriveHierarchy(graph, { x: 0, y: 0 })
       const cited = new Map<string, number>()
-      for (const edge of graph.edges) if (edge.kind === "references-source") cited.set(edge.to, (cited.get(edge.to) ?? 0) + 1)
+      for (const edge of graph.edges)
+        if (edge.kind === "references-source") cited.set(edge.to, (cited.get(edge.to) ?? 0) + 1)
       treeIndex = { graph, parent: treeParent, kids: children, cited }
     }
     return treeIndex
@@ -954,7 +972,11 @@ export function mount(
   // WAI-ARIA tree keys: arrows move and expand, Home/End jump; Enter selects through the button itself.
   list.addEventListener("keydown", (event) => {
     const target = event.target
-    if (!(target instanceof HTMLElement) || !target.classList.contains("node-label") || list.getAttribute("role") !== "tree")
+    if (
+      !(target instanceof HTMLElement) ||
+      !target.classList.contains("node-label") ||
+      list.getAttribute("role") !== "tree"
+    )
       return
     const labels = [...list.querySelectorAll<HTMLElement>(".node-label")]
     const index = labels.indexOf(target)
@@ -1275,7 +1297,12 @@ export function mount(
       const group = doc.createElementNS(svgNS, "g")
       group.setAttribute("class", node.kind === "page" ? "node page" : "node")
       group.setAttribute("data-id", node.id)
-      const drawn = node.kind === "page" ? Math.max(node.radius, 14) : node.kind === "symbol" ? Math.max(5, node.radius - 2) : node.radius
+      const drawn =
+        node.kind === "page"
+          ? Math.max(node.radius, 14)
+          : node.kind === "symbol"
+            ? Math.max(5, node.radius - 2)
+            : node.radius
       const treemapBox = layout.treemap?.rects.get(node.id)
       const circle = doc.createElementNS(svgNS, treemapBox ? "rect" : "circle")
       if (treemapBox) {
@@ -1289,7 +1316,11 @@ export function mount(
       const color = topicColor(node.id)
       circle.setAttribute(
         "fill",
-        node.kind === "symbol" ? SYMBOL_FILL : node.kind === "page" ? (color?.page ?? PAGE_FILL) : (color?.source ?? SOURCE_FILL),
+        node.kind === "symbol"
+          ? SYMBOL_FILL
+          : node.kind === "page"
+            ? (color?.page ?? PAGE_FILL)
+            : (color?.source ?? SOURCE_FILL),
       )
       const label = doc.createElementNS(svgNS, "text")
       label.setAttribute("y", String(drawn + 14))
@@ -1304,7 +1335,10 @@ export function mount(
           room < 3 ? "" : text.length > room ? `…${text.slice(text.length - (room - 1)).join("")}` : info.label
         label.style.textAnchor = "start"
         label.setAttribute("x", String(-treemapBox.w / 2 + 5))
-        label.setAttribute("y", String(-treemapBox.h / 2 + (node.kind === "page" ? 19 : node.kind === "source" ? 12 : 11)))
+        label.setAttribute(
+          "y",
+          String(-treemapBox.h / 2 + (node.kind === "page" ? 19 : node.kind === "source" ? 12 : 11)),
+        )
         if (node.kind === "page") label.style.fontSize = "15px"
       }
       const title = doc.createElementNS(svgNS, "title")
@@ -1508,7 +1542,12 @@ export function mount(
     cancelTween()
     hasFitted = false
     if (view !== "force") {
-      layout = view === "radial" ? createRadialLayout(graph) : view === "arc" ? createArcLayout(graph) : createTreemapLayout(graph)
+      layout =
+        view === "radial"
+          ? createRadialLayout(graph)
+          : view === "arc"
+            ? createArcLayout(graph)
+            : createTreemapLayout(graph)
       hasFitted = true
       buildElements()
       positionElements()

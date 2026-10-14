@@ -187,8 +187,7 @@ export function relocatePromptPartsAfterEditor(parts: readonly PromptPart[], con
     .sort((a, b) => a.start - b.start || a.order - b.order)
   const relocated: { order: number; part: PromptPart }[] = []
   const claimed: { start: number; end: number }[] = []
-  const isClaimed = (start: number, end: number) =>
-    claimed.some((span) => start < span.end && end > span.start)
+  const isClaimed = (start: number, end: number) => claimed.some((span) => start < span.end && end > span.start)
   // First unclaimed occurrence at or after `from`, or -1.
   const findUnclaimed = (virtualText: string, from: number) => {
     let index = content.indexOf(virtualText, from)

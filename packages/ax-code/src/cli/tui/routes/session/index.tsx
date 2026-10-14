@@ -23,10 +23,7 @@ import { SplitBorder } from "@tui/component/border"
 import { tint, useTheme } from "@tui/context/theme"
 import { ScrollBoxRenderable, addDefaultParsers, MacOSScrollAccel, type ScrollAcceleration, RGBA } from "ax-tui"
 import { Prompt, type PromptRef } from "@tui/component/prompt"
-import type {
-  AssistantMessage as AssistantMessageInfo,
-  UserMessage as UserMessageInfo,
-} from "@ax-code/sdk/v2"
+import type { AssistantMessage as AssistantMessageInfo, UserMessage as UserMessageInfo } from "@ax-code/sdk/v2"
 import { useLocal } from "@tui/context/local"
 import { Locale } from "@/util/locale"
 import { useKeyboard, useRenderer } from "ax-tui/solid"
@@ -952,7 +949,8 @@ export function Session() {
         )),
       dialogReplaceCapability: (dialog) => dialog.replace(() => <DialogCapabilityCatalog />),
       dialogReplaceDre: (dialog) => dialog.replace(() => <DialogDre sessionID={route.sessionID} />),
-      dialogReplaceExecutionGraph: (dialog) => dialog.replace(() => <DialogExecutionGraph sessionID={route.sessionID} />),
+      dialogReplaceExecutionGraph: (dialog) =>
+        dialog.replace(() => <DialogExecutionGraph sessionID={route.sessionID} />),
       dialogReplaceGoal: (dialog) =>
         dialog.replace(() => (
           <DialogGoal

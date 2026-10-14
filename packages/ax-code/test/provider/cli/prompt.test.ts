@@ -32,12 +32,7 @@ describe("promptToText", () => {
   test("warns CLI providers that background tasks die with the per-turn process", () => {
     const prompt: LanguageModelV3Prompt = [{ role: "user", content: [{ type: "text", text: "scan the repo" }] }]
 
-    for (const providerID of [
-      "claude-code",
-      "codex-cli",
-      "grok-build-cli",
-      "muse-cli",
-    ]) {
+    for (const providerID of ["claude-code", "codex-cli", "grok-build-cli", "muse-cli"]) {
       const result = promptToText(prompt, { providerID })
       expect(result).toContain("<cli_background_tasks>")
       expect(result).toContain("background task you started")

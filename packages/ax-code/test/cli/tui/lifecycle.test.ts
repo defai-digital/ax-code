@@ -1,9 +1,5 @@
 import { describe, expect, test, vi } from "vitest"
-import {
-  registerTuiEventListener,
-  registerTuiProcessHandler,
-  runTuiCleanup,
-} from "../../../src/cli/tui/util/lifecycle"
+import { registerTuiEventListener, registerTuiProcessHandler, runTuiCleanup } from "../../../src/cli/tui/util/lifecycle"
 
 describe("tui lifecycle helpers", () => {
   test("registers event listeners with an idempotent cleanup", () => {

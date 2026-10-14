@@ -1,10 +1,4 @@
-import {
-  claudeCodeParser,
-  codexCliParser,
-  grokBuildCliParser,
-  museCliParser,
-  type CliOutputParser,
-} from "./parser"
+import { claudeCodeParser, codexCliParser, grokBuildCliParser, museCliParser, type CliOutputParser } from "./parser"
 
 export interface CliProviderDefinition {
   binary: string

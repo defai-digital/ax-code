@@ -1,5 +1,8 @@
 import { describe, expect, test } from "vitest"
-import { renderRunReportRollbackBars, summarizeRollbackToolKinds } from "../../src/quality/run-report/run-report-rollback"
+import {
+  renderRunReportRollbackBars,
+  summarizeRollbackToolKinds,
+} from "../../src/quality/run-report/run-report-rollback"
 import { MessageID, PartID } from "../../src/session/schema"
 import type { SessionRollback } from "../../src/session/rollback"
 

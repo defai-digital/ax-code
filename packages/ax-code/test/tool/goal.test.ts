@@ -113,7 +113,10 @@ describe("create_goal assurance is opt-in (item 2, option A)", () => {
         try {
           const session = await Session.create({})
           const tool = await CreateGoalTool.init()
-          const result = await tool.execute({ objective: "keep main green" } as never, toolContext(session.id, tmp.path) as never)
+          const result = await tool.execute(
+            { objective: "keep main green" } as never,
+            toolContext(session.id, tmp.path) as never,
+          )
 
           expect(writerCalls).toBe(0)
           const goal = await SessionGoal.get(session.id)

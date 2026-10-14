@@ -56,9 +56,7 @@ describe("tool.registry coverage", () => {
     const definitions = walk(toolRoot).filter(
       (file) => file.endsWith(".ts") && readFileSync(file, "utf8").includes("Tool.define("),
     )
-    const missing = definitions
-      .filter((file) => !reachable.has(file))
-      .map((file) => path.relative(toolRoot, file))
+    const missing = definitions.filter((file) => !reachable.has(file)).map((file) => path.relative(toolRoot, file))
     expect(missing).toEqual([])
 
     const ids = definitions.flatMap((file) => [

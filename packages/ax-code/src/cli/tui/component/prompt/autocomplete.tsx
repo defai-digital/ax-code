@@ -28,7 +28,11 @@ import { useKV } from "@tui/context/kv"
 import { buildGlyphSet, detectNerdFontTerminal, NERD_FONT_KV_KEY, resolveNerdFontEnabled } from "@tui/ui/glyphs"
 import { Flag } from "@/flag/flag"
 import { stringWidth } from "@/bun/node-compat"
-import { displayOffsetFromStringIndex, stringIndexFromDisplayOffset, stringIndicesFromDisplayOffsets } from "./prompt-helpers"
+import {
+  displayOffsetFromStringIndex,
+  stringIndexFromDisplayOffset,
+  stringIndicesFromDisplayOffsets,
+} from "./prompt-helpers"
 
 export type AutocompleteGroupEntry =
   | { type: "header"; label: string }

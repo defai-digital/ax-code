@@ -91,5 +91,10 @@ test("statues, pines, gladiators, and camera flashes fill the forecourt", () => 
   expect(line(18)[7]).toBe("*")
   expect(line(18)[20]).toBe(".")
   const day = colosseumRows(76, 24, "colosseum-day", 0)
-  expect(day[1]!.map((run) => run.text).join("").slice(40, 46)).toBe("~~~~~~")
+  expect(
+    day[1]!
+      .map((run) => run.text)
+      .join("")
+      .slice(40, 46),
+  ).toBe("~~~~~~")
 })

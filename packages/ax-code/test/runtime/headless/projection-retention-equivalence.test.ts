@@ -62,7 +62,16 @@ function generate(next: () => number, count: number): Event[] {
         // Streaming snapshots extend the previous text; some end on a lone
         // high surrogate that the next snapshot completes, some shrink, some
         // replace the text outright, and a few carry no text at all.
-        shape: next() < 0.5 ? "extend" : next() < 0.7 ? "surrogate" : next() < 0.8 ? "shrink" : next() < 0.9 ? "replace" : "notext",
+        shape:
+          next() < 0.5
+            ? "extend"
+            : next() < 0.7
+              ? "surrogate"
+              : next() < 0.8
+                ? "shrink"
+                : next() < 0.9
+                  ? "replace"
+                  : "notext",
       })
     } else if (roll < 0.8) {
       const emoji = next() < 0.1
@@ -113,7 +122,7 @@ function apply(mod: Module, state: State, tails: Map<string, string>, event: Eve
       let text: string | undefined
       switch (event.shape) {
         case "extend":
-          text = previous + "é\"\\".repeat(1 + (event.size % 5)) + "a".repeat(event.size % 40)
+          text = previous + 'é"\\'.repeat(1 + (event.size % 5)) + "a".repeat(event.size % 40)
           break
         case "surrogate":
           // Complete a dangling high surrogate first, then leave a new one.
@@ -130,7 +139,13 @@ function apply(mod: Module, state: State, tails: Map<string, string>, event: Eve
       }
       const part =
         text === undefined
-          ? { id: event.partID, messageID: event.messageID, sessionID: event.sessionID, type: "tool", state: { status: "completed" } }
+          ? {
+              id: event.partID,
+              messageID: event.messageID,
+              sessionID: event.sessionID,
+              type: "tool",
+              state: { status: "completed" },
+            }
           : { id: event.partID, messageID: event.messageID, sessionID: event.sessionID, text }
       if (existing >= 0) parts[existing] = part
       else parts.push(part)
@@ -213,7 +228,14 @@ describe("projection retention incremental pending total", () => {
   test("handcrafted sequences match the legacy recompute", () => {
     const events: Event[] = []
     // Push pending past the message cap with tiny parts, then stream into an evicted one.
-    for (let index = 0; index < 140; index++) events.push({ kind: "part", sessionID: "s1", messageID: `m${String(index % 40).padStart(3, "0")}x${index}`, partID: "p1", size: 1 })
+    for (let index = 0; index < 140; index++)
+      events.push({
+        kind: "part",
+        sessionID: "s1",
+        messageID: `m${String(index % 40).padStart(3, "0")}x${index}`,
+        partID: "p1",
+        size: 1,
+      })
     events.push({ kind: "delta", messageID: "m000x0", partID: "p1", suffix: "still streaming" })
     events.push({ kind: "part", sessionID: "s1", messageID: "m000x0", partID: "p2", size: 3 })
     // One part above the byte cap, then a message admitted while pending.

@@ -75,11 +75,9 @@ describe("calculateCompactionBudget", () => {
 
   test("an unknown window returns no budget (auto-compaction off)", () => {
     expect(
-      calculateCompactionBudget(
-        { providerID: "anthropic", limit: { context: 200_000, output: 8_000 } },
-        undefined,
-        { windowUnknown: true },
-      ),
+      calculateCompactionBudget({ providerID: "anthropic", limit: { context: 200_000, output: 8_000 } }, undefined, {
+        windowUnknown: true,
+      }),
     ).toBeUndefined()
   })
 
