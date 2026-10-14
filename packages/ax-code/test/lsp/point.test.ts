@@ -1,4 +1,5 @@
-import { expect, test } from "vitest"
+import { afterEach, beforeEach, expect, test, vi } from "vitest"
+import { codeIntelHost } from "@ax-code/ax-code-intel/host"
 import {
   callHierarchyCallsEnvelope,
   callHierarchyCallsForClient,
@@ -12,6 +13,15 @@ import {
 } from "@ax-code/ax-code-intel/point"
 import type { LSPClient } from "@ax-code/ax-code-intel/client"
 import { normalizeIncomingCalls, normalizeNavigationLocations } from "@ax-code/ax-code-intel/semantic-results"
+
+// These unit clients run without a core Instance; give their scheduler a stable project scope.
+beforeEach(() => {
+  vi.spyOn(codeIntelHost(), "projectRoot").mockReturnValue("/tmp/project")
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 const range = {
   start: { line: 0, character: 0 },

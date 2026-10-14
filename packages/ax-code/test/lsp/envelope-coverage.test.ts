@@ -139,7 +139,7 @@ describe("LSP envelope coverage (S1)", () => {
     })
   })
 
-  test("cache-enabled envelope fallback hashes each file once", async () => {
+  test("cache-enabled envelope fallback revalidates the file hash before writing", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
     await writeFile(file, "export const x = 1\n")
@@ -151,11 +151,11 @@ describe("LSP envelope coverage (S1)", () => {
         const hashFileSpy = vi.spyOn(LSPCache, "hashFile")
         try {
           await LSP.documentSymbolEnvelope(pathToFileURL(file).href, { cache: true })
-          expect(hashFileSpy).toHaveBeenCalledTimes(1)
+          expect(hashFileSpy).toHaveBeenCalledTimes(2)
 
           hashFileSpy.mockClear()
           await LSP.referencesEnvelope({ file, line: 0, character: 0, cache: true })
-          expect(hashFileSpy).toHaveBeenCalledTimes(1)
+          expect(hashFileSpy).toHaveBeenCalledTimes(2)
         } finally {
           hashFileSpy.mockRestore()
         }

@@ -1,6 +1,16 @@
-import { expect, test } from "vitest"
+import { afterEach, beforeEach, expect, test, vi } from "vitest"
+import { codeIntelHost } from "@ax-code/ax-code-intel/host"
 import { envelope, references } from "@ax-code/ax-code-intel/references"
 import type { LSPClient } from "@ax-code/ax-code-intel/client"
+
+// These unit clients run without a core Instance; give their scheduler a stable project scope.
+beforeEach(() => {
+  vi.spyOn(codeIntelHost(), "projectRoot").mockReturnValue("/tmp/project")
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 test("references envelope uses semantic selection and include-declaration request params", async () => {
   const requests: Array<{ method: string; params: unknown }> = []

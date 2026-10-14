@@ -1,12 +1,19 @@
-import { afterEach, describe, expect, test } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
+import { codeIntelHost } from "@ax-code/ax-code-intel/host"
 import { LspScheduler } from "@ax-code/ax-code-intel/scheduler"
 import { Log } from "../../src/util/log"
 
 Log.init({ print: false })
 
+// These unit clients run without a core Instance; give their scheduler a stable project scope.
+beforeEach(() => {
+  vi.spyOn(codeIntelHost(), "projectRoot").mockReturnValue("/tmp/project")
+})
+
 afterEach(() => {
   LspScheduler.Inflight.resetForTest()
   LspScheduler.Budget.resetForTest()
+  vi.restoreAllMocks()
 })
 
 // Unit tests for the scheduler primitives added in v2 §S1+S2.
