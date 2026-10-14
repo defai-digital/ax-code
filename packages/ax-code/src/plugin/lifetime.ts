@@ -97,6 +97,7 @@ export namespace PluginLifetime {
       run(callback) {
         if (controller.signal.aborted) return Promise.reject(disposed())
         const invocation = new AbortController()
+        const startedAt = Date.now()
         return new Promise((resolve, reject) => {
           let settled = false
           const finish = () => {
@@ -112,13 +113,14 @@ export namespace PluginLifetime {
             invocation.abort(error)
             reject(error)
           }
-          const timer = setTimeout(() => {
+          const expire = () => {
             if (!finish()) return
             const error = new Failure({ reason: "timeout", message: "Plugin callback exceeded its 15000ms deadline" })
             invocation.abort(error)
             reject(error)
             void dispose()
-          }, CALLBACK_TIMEOUT_MS)
+          }
+          const timer = setTimeout(expire, CALLBACK_TIMEOUT_MS)
           controller.signal.addEventListener("abort", cancel, { once: true })
           // The rejection handler remains attached after cancellation/timeout.
           // No late callback result is published by this boundary.
@@ -129,6 +131,14 @@ export namespace PluginLifetime {
             })
             .then(
               (value) => {
+                // A callback that blocked the event loop past the deadline
+                // returns before its timer can fire. The deadline still binds:
+                // otherwise the overdue draft is committed and the plugin is
+                // never retired.
+                if (Date.now() - startedAt > CALLBACK_TIMEOUT_MS) {
+                  expire()
+                  return
+                }
                 if (finish()) resolve(value)
               },
               (error) => {

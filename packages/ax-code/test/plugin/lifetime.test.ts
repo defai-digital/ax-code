@@ -55,6 +55,26 @@ describe("plugin owned lifetime", () => {
     expect(getEventListeners(root.signal, "abort")).toHaveLength(0)
   })
 
+  test("rejects a callback that overran its deadline while the event loop was blocked", async () => {
+    vi.useFakeTimers()
+    const owner = PluginLifetime.create(new AbortController().signal, vi.fn())
+    // The deadline timer cannot fire while the callback blocks the event loop,
+    // so the clock is the only thing that can tell it overran — and without
+    // that check the overdue draft is committed and the plugin is never
+    // retired.
+    const outcome = await owner
+      .run(async () => {
+        vi.setSystemTime(Date.now() + PluginLifetime.CALLBACK_TIMEOUT_MS + 1_000)
+        return "late" as const
+      })
+      .then(
+        (value) => ({ value }),
+        (error: unknown) => ({ error }),
+      )
+
+    expect(outcome).toMatchObject({ error: { data: { reason: "timeout" } } })
+  })
+
   test("runs all cleanups once in reverse start order despite hangs and errors", async () => {
     vi.useFakeTimers()
     const failed = vi.fn()
