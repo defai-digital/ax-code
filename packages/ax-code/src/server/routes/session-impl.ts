@@ -1,5 +1,6 @@
 import { SessionSteering } from "@/session/steering"
 import { Hono, type Context } from "hono"
+import { NotFoundError } from "../../storage/db"
 import { describeRoute, resolver } from "hono-openapi"
 import { validator } from "../validation"
 import { HTTPException } from "hono/http-exception"
@@ -1370,6 +1371,13 @@ export const SessionRoutes = lazy(() =>
         const body = c.req.valid("json")
         if (body.id !== params.partID || body.messageID !== params.messageID || body.sessionID !== params.sessionID) {
           throw new HTTPException(400, { message: "Part identifiers do not match the request path" })
+        }
+        // updatePart upserts, so without this a PATCH for an unknown part (or
+        // message) would insert a new part instead of the declared 404,
+        // letting a client inject arbitrary part content into the transcript.
+        const message = await MessageV2.get({ sessionID: params.sessionID, messageID: params.messageID })
+        if (!message.parts.some((part) => part.id === params.partID)) {
+          throw new NotFoundError({ message: "Part not found" })
         }
         const part = await Session.updatePart(body)
         return c.json(part)

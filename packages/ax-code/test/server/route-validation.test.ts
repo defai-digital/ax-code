@@ -162,6 +162,51 @@ describe("server route validation", () => {
     })
   })
 
+  test("part update for an unknown part returns 404 instead of creating it", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const session = await Session.create({})
+        const messageID = MessageID.ascending()
+        const missingPartID = PartID.ascending()
+        await Session.updateMessage({
+          id: messageID,
+          sessionID: session.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "test",
+          model: { providerID: "test", modelID: "test" },
+          tools: {},
+          mode: "",
+        } as unknown as MessageV2.Info)
+
+        try {
+          const res = await Server.Default().request(
+            `/session/${session.id}/message/${messageID}/part/${missingPartID}`,
+            {
+              method: "PATCH",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                id: missingPartID,
+                sessionID: session.id,
+                messageID,
+                type: "text",
+                text: "injected",
+              }),
+            },
+          )
+          expect(res.status).toBe(404)
+
+          // The upsert must not have created the part.
+          const message = await MessageV2.get({ sessionID: session.id, messageID })
+          expect(message.parts.some((part) => part.id === missingPartID)).toBe(false)
+        } finally {
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
   test("missing session route returns a session not found envelope", async () => {
     await Instance.provide({
       directory: root,
