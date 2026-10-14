@@ -24,6 +24,23 @@ describe("extractFilesFromDiff", () => {
     expect(extractFilesFromDiff(modeOnly)).toEqual(["src/mode.sh"])
     expect(extractFilesFromDiff("")).toEqual([])
   })
+
+  test("does not read a hunk content line as a file header", () => {
+    const patch = [
+      "diff --git a/src/loop.rs b/src/loop.rs",
+      "--- a/src/loop.rs",
+      "+++ b/src/loop.rs",
+      "@@ -1,3 +1,3 @@",
+      " fn main() {}",
+      "+++attempt;", // an added line whose text begins with "++" -> diff line "+++attempt;"
+      "---cleanup();", // a removed line whose text begins with "--" -> diff line "---cleanup();"
+      " context();",
+      "diff --git a/src/other.rs b/src/other.rs",
+      "--- a/src/other.rs",
+      "+++ b/src/other.rs",
+    ].join("\n")
+    expect(extractFilesFromDiff(patch)).toEqual(["src/loop.rs", "src/other.rs"])
+  })
 })
 
 describe("analyzeImpactImpl", () => {

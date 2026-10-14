@@ -50,8 +50,20 @@ function restAfterPrefix(line: string, prefix: string): string | undefined {
 
 export function extractFilesFromDiff(patch: string): string[] {
   const files = new Set<string>()
-  const lines = patch.split("\n")
-  for (const raw of lines) {
+  let inHunk = false
+  for (const raw of patch.split("\n")) {
+    // A hunk body can hold an added/removed source line whose text begins with
+    // `++`/`--`, so the diff line itself starts with `+++`/`---`. Only the file
+    // headers OUTSIDE a hunk name files: a `diff --git` header opens the file
+    // region and the first `@@` opens the body.
+    if (raw.startsWith("diff --git")) {
+      inHunk = false
+    } else if (raw.startsWith("@@")) {
+      inHunk = true
+      continue
+    } else if (inHunk) {
+      continue
+    }
     const plusPath = restAfterPrefix(raw, "+++")
     if (plusPath) {
       const file = normalizePatchFile(plusPath)
