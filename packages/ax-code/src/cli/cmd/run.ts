@@ -294,14 +294,23 @@ export function cliFailureShowsFullHelp(message: string | undefined, command: st
 /**
  * The command yargs is parsing, derived from the raw CLI arguments: the
  * first non-flag token after the entry. Global value-taking flags
- * (--log-level, --sandbox, --debug-dir) skip their value so a flag value is
- * never mistaken for the command, and nothing after `--` counts. Used by the
- * shared CLI failure handler to attribute an "Unknown argument" error to its
- * command without depending on yargs internals, which do not expose the
- * command chain reliably at strict-fail time.
+ * (--log-level, --sandbox, --debug-dir, --port, --hostname, --mdns-domain,
+ * --cors) skip their value so a flag value is never mistaken for the command,
+ * and nothing after `--` counts. Used by the shared CLI failure handler to
+ * attribute an "Unknown argument" error to its command without depending on
+ * yargs internals, which do not expose the command chain reliably at
+ * strict-fail time.
  */
 export function commandTokenFromArgv(argv: readonly string[]): string | undefined {
-  const valueFlags = new Set(["--log-level", "--sandbox", "--debug-dir"])
+  const valueFlags = new Set([
+    "--log-level",
+    "--sandbox",
+    "--debug-dir",
+    "--port",
+    "--hostname",
+    "--mdns-domain",
+    "--cors",
+  ])
   let skipValue = false
   for (const token of argv) {
     if (skipValue) {

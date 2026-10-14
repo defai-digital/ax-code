@@ -804,6 +804,11 @@ test("command token derivation finds run from raw argv without yargs internals",
   expect(commandTokenFromArgv(["--debug", "run", "--bogus"])).toBe("run")
   expect(commandTokenFromArgv(["--log-level", "DEBUG", "run", "--bogus"])).toBe("run")
   expect(commandTokenFromArgv(["--log-level=DEBUG", "run", "--bogus"])).toBe("run")
+  // Network value flags are global too; their value must not shadow the command.
+  expect(commandTokenFromArgv(["--port", "4096", "run", "--bogus"])).toBe("run")
+  expect(commandTokenFromArgv(["--hostname", "0.0.0.0", "run", "--bogus"])).toBe("run")
+  expect(commandTokenFromArgv(["--mdns-domain", "example.local", "run", "--bogus"])).toBe("run")
+  expect(commandTokenFromArgv(["--cors", "http://localhost:3000", "run", "--bogus"])).toBe("run")
   // Non-run commands, flag-only argv, and post-`--` text never resolve to run.
   expect(commandTokenFromArgv(["session", "list"])).toBe("session")
   expect(commandTokenFromArgv(["--print-logs"])).toBeUndefined()
