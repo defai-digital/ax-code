@@ -10,6 +10,7 @@ import { LSPClient } from "../../src/client"
 import { LSPServer } from "../../src/server"
 import { Filesystem } from "../../src/internal/filesystem"
 import * as LSPCacheContext from "../../src/cache-context"
+import { InternalBus } from "../../src/internal/events"
 
 // Minimal fake LSP server that speaks JSON-RPC over stdio
 function spawnFakeServer(env?: Record<string, string>) {
@@ -215,6 +216,47 @@ describe("LSPClient interop", () => {
         expect(client.diagnostics.get(target)?.[0]?.message).toBe("newer")
 
         await client.shutdown()
+      },
+    })
+  })
+
+  test("shutdown releases a pending diagnostics wait", async () => {
+    await using tmp = await tmpdir()
+    const file = "file.ts"
+    await fs.writeFile(path.join(tmp.path, file), "export const x = 1\n")
+    const handle = spawnFakeServer() as any
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const client = await LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: tmp.path,
+        })
+
+        // Track whether each diagnostics wait released its bus subscription.
+        const original = InternalBus.subscribe.bind(InternalBus)
+        const unsubscribed: boolean[] = []
+        const spy = vi.spyOn(InternalBus, "subscribe").mockImplementation(((type: string, handler: never) => {
+          const unsub = original(type, handler)
+          const index = unsubscribed.push(false) - 1
+          return () => {
+            unsubscribed[index] = true
+            unsub()
+          }
+        }) as typeof InternalBus.subscribe)
+        try {
+          await client.notify.open({ path: file })
+          // Do not await: the wait only ends on a push or its 3s timeout.
+          void client.waitForDiagnostics({ path: file }).catch(() => undefined)
+          await new Promise((resolve) => setTimeout(resolve, 50))
+
+          await client.shutdown()
+          expect(unsubscribed.some((entry) => entry)).toBe(true)
+        } finally {
+          spy.mockRestore()
+        }
       },
     })
   })

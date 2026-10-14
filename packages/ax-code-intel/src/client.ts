@@ -555,6 +555,8 @@ export namespace LSPClient {
     const lastContent = new ContentCache(sourceCacheBytes())
     const diagnosticTargets = new Set<string>()
     const diagnosticWaits = new Map<string, { generation: number; promise: Promise<void> }>()
+    // Cancels for in-flight push-diagnostics waits, released on shutdown.
+    const pushWaitCancels = new Set<() => void>()
     let refreshTimer: ReturnType<typeof setTimeout> | undefined
     let refreshRunning = false
     let refreshAgain = false
@@ -697,8 +699,12 @@ export namespace LSPClient {
 
     function diagnosticsWaitStarted(input: { path: string }) {
       const wait = diagnosticsWait(input)
+      // Track the push-diagnostics waits so shutdown can release their bus
+      // subscription and debounce timer; otherwise they outlive the client
+      // until the 3s timeout. `cancel` is idempotent.
+      pushWaitCancels.add(wait.cancel)
       wait.start()
-      return wait.promise
+      return wait.promise.finally(() => pushWaitCancels.delete(wait.cancel))
     }
 
     // Unlocked close: the body of notify.close, factored out so
@@ -1106,6 +1112,8 @@ export namespace LSPClient {
         if (refreshTimer) clearTimeout(refreshTimer)
         diagnosticTargets.clear()
         diagnosticWaits.clear()
+        for (const cancel of pushWaitCancels) cancel()
+        pushWaitCancels.clear()
         lastContent.clear()
         diagnostics.clear()
         // Wrap end() and dispose() so a broken-stream throw from
