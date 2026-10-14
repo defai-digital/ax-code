@@ -15,6 +15,20 @@ describe("bash network heuristics (busybox, interpreters, containers)", () => {
     expect(BashNetworkHeuristics.inspect("busybox", ["--help"]).applet).toBeUndefined()
   })
 
+  test("Windows executable names are judged like their bare names", () => {
+    // `docker.exe run` starts a container exactly like `docker run`; the
+    // exact-match container set would otherwise miss the `.exe` spelling.
+    expect(BashNetworkHeuristics.inspect("docker.exe", ["run", "--rm", "alpine"])).toMatchObject({
+      sandboxEscapeSuspect: true,
+    })
+    expect(BashNetworkHeuristics.inspect("C:\\\\bin\\\\nsenter.exe", ["-t", "1"])).toMatchObject({
+      sandboxEscapeSuspect: true,
+    })
+    expect(BashNetworkHeuristics.inspect("python.exe", ["-c", "import socket"])).toMatchObject({
+      inlineCodeNetworkSuspect: true,
+    })
+  })
+
   test("interpreter inline code with network indicators is suspect", () => {
     expect(
       BashNetworkHeuristics.inspect("python", ["-c", "import urllib.request; urllib.request.urlopen('http://x')"]),

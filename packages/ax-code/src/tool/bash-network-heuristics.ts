@@ -94,7 +94,11 @@ export namespace BashNetworkHeuristics {
   }
 
   function baseName(name: string): string {
-    return name.split(/[\\/]/).pop() ?? name
+    const base = name.split(/[\\/]/).pop() ?? name
+    // Windows ships the same binaries with an `.exe` suffix. The interpreter
+    // patterns below allow it, but the container/namespace sets are exact
+    // matches, so normalize once here instead of in every set.
+    return base.replace(/\.exe$/i, "")
   }
 
   function interpreterFor(base: string) {

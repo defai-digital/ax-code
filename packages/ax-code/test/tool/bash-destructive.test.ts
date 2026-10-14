@@ -60,6 +60,17 @@ describe("classifyDestructiveCommand", () => {
     ).toBeUndefined()
   })
 
+  test("classifies a destructive command delegated to find", () => {
+    expect(classifyDestructiveCommand(["find", ".", "-delete"])).toBeTruthy()
+    expect(
+      classifyDestructiveCommand(["find", "build", "-maxdepth", "0", "-exec", "rm", "-rf", "build", ";"]),
+    ).toBeTruthy()
+    expect(classifyDestructiveCommand(["find", "build", "-type", "f", "-exec", "rm", "-rf", "{}", "+"])).toBeTruthy()
+    expect(
+      classifyDestructiveCommand(["find", ".", "-name", "*.log", "-exec", "grep", "-l", "x", "{}", ";"]),
+    ).toBeUndefined()
+  })
+
   test("looks through wrapper commands", () => {
     expect(classifyDestructiveCommand(["sudo", "rm", "-rf", "/var/data"])).toBeTruthy()
     expect(classifyDestructiveCommand(["sudo", "-u", "root", "rm", "-rf", "/var/data"])).toBeTruthy()

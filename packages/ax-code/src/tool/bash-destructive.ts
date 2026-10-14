@@ -417,6 +417,28 @@ function classifyGcloudAzDoctl(args: string[], valueFlags: ReadonlySet<string>, 
   return undefined
 }
 
+/** `find` flags that hand the matched paths to a command the argv walk never sees. */
+const FIND_DELEGATE_FLAGS = new Set(["-exec", "-execdir", "-ok", "-okdir"])
+
+function classifyFind(args: string[]): string | undefined {
+  if (args.some((arg) => arg === "-delete")) return "find -delete removes every matched file"
+  for (let i = 0; i < args.length; i++) {
+    const flag = args[i]!
+    if (!FIND_DELEGATE_FLAGS.has(flag)) continue
+    // `-exec rm -rf {} +` / `-exec rm -rf {} \;` delegates the operation to a
+    // child process: the top-level argv only ever shows `find`, so the inner
+    // command has to be classified here.
+    const end = args.findIndex((arg, index) => index > i && (arg === ";" || arg === "+"))
+    const inner = args.slice(i + 1, end === -1 ? undefined : end)
+    if (inner.length > 0) {
+      const reason = classifyDestructiveCommand(inner)
+      if (reason) return `find ${flag} delegates a destructive command: ${reason}`
+    }
+    i = end === -1 ? args.length : end
+  }
+  return undefined
+}
+
 /**
  * A dry-run flag that really only prints what would change. kubectl spells
  * "no dry run" as `--dry-run=none`, which deletes for real, so any
@@ -581,6 +603,7 @@ export function classifyDestructiveCommand(parts: string[]): string | undefined 
   if (name === "gcloud") return classifyGcloudAzDoctl(args, GCLOUD_VALUE_FLAGS, "gcloud")
   if (name === "az") return classifyGcloudAzDoctl(args, AZ_VALUE_FLAGS, "az")
   if (name === "doctl") return classifyGcloudAzDoctl(args, DOCTL_VALUE_FLAGS, "doctl")
+  if (name === "find") return classifyFind(args)
   if (name === "kubectl") return classifyKubectl(args)
   if (name === "wrangler") return classifyWrangler(args)
   if (name === "ssh") return classifySsh(args)
