@@ -550,6 +550,16 @@ describe("Env.sanitize", () => {
     const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abcdefghijklmnop"
     expect(Env.redactSecrets(`echo ${key}`)).toBe("echo [redacted secret]")
     expect(Env.redactForRecord(`echo ${key}`)).toBe("echo [redacted secret]")
+    // Both AWS access-key id families count, matching .husky/pre-commit's
+    // `A(?:KIA|SIA)`; the temporary (ASIA) form must not survive just because
+    // AKIA is covered. Assembled at runtime so the literal does not trip the
+    // pre-commit scanner.
+    expect(Env.redactForRecord(`aws_access_key_id AKIA${"A".repeat(16)}`)).toBe(
+      "aws_access_key_id [redacted secret]",
+    )
+    expect(Env.redactForRecord(`aws_access_key_id ASIA${"A".repeat(16)}`)).toBe(
+      "aws_access_key_id [redacted secret]",
+    )
     expect(Env.redactForRecord(`curl -H "Auth: ${jwt}" https://api`)).not.toContain(jwt)
     // Assembled at runtime: a literal private-key header trips the pre-commit
     // scanner, and this is a fixture, not a credential.

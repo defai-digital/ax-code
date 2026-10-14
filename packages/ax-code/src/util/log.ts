@@ -393,7 +393,7 @@ export namespace Log {
    * `redactLogText` knows needs one of its prefixes here — a bare JWT, for
    * instance, carries no `=`, `:`, `@` or scheme to trip the gate on.
    */
-  const MAYBE_SECRET = /[=:]|bearer|:\/\/|@|BEGIN|sk-|eyJ|AKIA|AIza|ghp_|github_pat_|xoxb-/i
+  const MAYBE_SECRET = /[=:]|bearer|:\/\/|@|BEGIN|sk-|eyJ|AKIA|ASIA|AIza|ghp_|github_pat_|xoxb-/i
 
   function truncate(value: string, limit: number): string {
     if (value.length <= limit) return value

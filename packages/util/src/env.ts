@@ -691,7 +691,7 @@ export namespace Env {
   // alphanumeric suffix matches the `sk-` alternative mid-word and legitimate
   // records get corrupted.
   const SECRET_VALUE =
-    /(?<![A-Za-z0-9_-])(?:sk-[a-zA-Z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{20,}|xoxb-[0-9]{10,}-[a-zA-Z0-9]{24,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})/g
+    /(?<![A-Za-z0-9_-])(?:sk-[a-zA-Z0-9_-]{20,}|A(?:KIA|SIA)[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{20,}|xoxb-[0-9]{10,}-[a-zA-Z0-9]{24,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})/g
 
   /**
    * Full redaction for a string that will be persisted, shown, or recorded:
