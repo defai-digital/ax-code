@@ -214,10 +214,17 @@ export function buildCliCommand(
 function estimatedUsage(input: string, output: string): LanguageModelV3Usage {
   const inputTokens = Token.estimate(input)
   const outputTokens = Token.estimate(output)
-  return markEstimatedUsage({
+  const usage = markEstimatedUsage({
     inputTokens: { total: inputTokens, noCache: inputTokens, cacheRead: 0, cacheWrite: 0 },
     outputTokens: { total: outputTokens, text: outputTokens, reasoning: 0 },
   })
+  // The AI SDK rebuilds usage (asLanguageModelUsage) into a fresh object,
+  // dropping the non-enumerable marker on the object above; it copies `raw` by
+  // reference, so mirror the marker there for the consumers that read the
+  // SDK-normalized usage (processor ledger, observed window, session usage).
+  // Non-enumerable so it never changes the shape callers compare or serialize.
+  Object.defineProperty(usage, "raw", { value: markEstimatedUsage({}), enumerable: false, configurable: true })
+  return usage
 }
 
 function readAbortError(signal: AbortSignal): Error {

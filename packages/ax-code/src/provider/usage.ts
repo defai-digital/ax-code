@@ -32,6 +32,16 @@ export function usageSource(usage: unknown): UsageSource {
   if (source === "estimated") return "estimated"
   if (source === "exact") return "exact"
 
+  // The AI SDK rebuilds usage (asLanguageModelUsage) into a fresh object, which
+  // drops the non-enumerable top-level marker; it copies `raw` by reference, so
+  // a model that cannot measure usage mirrors its marker there.
+  const raw = (usage as { raw?: unknown }).raw
+  if (raw && typeof raw === "object") {
+    const rawSource = (raw as Partial<UsageWithSource>)[USAGE_SOURCE_KEY]
+    if (rawSource === "estimated") return "estimated"
+    if (rawSource === "exact") return "exact"
+  }
+
   const record = usage as Record<string, unknown>
   const input = tokenCount(record.inputTokens)
   const output = tokenCount(record.outputTokens)

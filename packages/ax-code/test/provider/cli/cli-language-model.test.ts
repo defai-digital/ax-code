@@ -87,6 +87,32 @@ describe("CliLanguageModel", () => {
     expect(result.warnings).toEqual([])
   })
 
+  test("stays estimated after the AI SDK rebuilds the usage object", async () => {
+    const model = makeModel({
+      binary: "echo",
+      args: [],
+      parser: {
+        parseComplete: () => ({ text: "hello" }),
+        parseStreamLine: () => null,
+      },
+      promptMode: "arg",
+    })
+    const result = await model.doGenerate({
+      prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+    })
+    // ai@6 asLanguageModelUsage() builds a fresh object and copies `usage.raw`
+    // by reference, dropping the non-enumerable top-level marker. The CLI model
+    // mirrors its marker in `raw`, so the rebuilt estimate is not read as exact
+    // (which would anchor the token ledger and ratchet the observed window).
+    const rebuilt = {
+      inputTokens: 1,
+      outputTokens: 1,
+      totalTokens: 2,
+      raw: (result.usage as { raw?: unknown }).raw,
+    }
+    expect(usageSource(rebuilt)).toBe("estimated")
+  })
+
   test("doStream returns V3 stream with proper events", async () => {
     const model = makeModel({
       binary: "echo",
