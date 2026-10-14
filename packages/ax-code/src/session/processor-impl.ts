@@ -1231,7 +1231,9 @@ export namespace SessionProcessor {
                             patternCount,
                           })
                           const base = annotatedError === errorMsg ? sanitizedError : annotatedError
-                          annotatedError = `${base}\n\n<system-reminder>\n${guidance}\n</system-reminder>`
+                          // guidance() already returns a <system-reminder> block; only the
+                          // plain payloads (self-correction, doom-loop) are wrapped here.
+                          annotatedError = `${base}\n\n${guidance}`
                         }
                       }
                     }

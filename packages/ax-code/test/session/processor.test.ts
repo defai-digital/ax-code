@@ -655,9 +655,12 @@ describe("session.processor", () => {
     expect(processorSrc).toContain("partWriteBatcher")
   })
 
-  test("wraps recurring error-pattern guidance in system-reminder tags", async () => {
+  test("appends already-wrapped error-pattern guidance without re-wrapping it", async () => {
     const src = await readFile(path.join(import.meta.dirname, "../../src/session/processor-impl.ts"), "utf-8")
-    expect(src).toContain("annotatedError = `${base}\\n\\n<system-reminder>\\n${guidance}\\n</system-reminder>`")
+    // guidance() already returns a <system-reminder> block (pinned by
+    // tool-error-pattern.test.ts), so the call site must not wrap it again.
+    expect(src).toContain("annotatedError = `${base}\\n\\n${guidance}`")
+    expect(src).not.toContain("annotatedError = `${base}\\n\\n<system-reminder>\\n${guidance}\\n</system-reminder>`")
   })
 
   test("sanitizes tool output before appending doom-loop reminders", async () => {
