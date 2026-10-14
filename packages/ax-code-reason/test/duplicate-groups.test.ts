@@ -57,6 +57,34 @@ test("candidate cap truncation and abort remain owned by the caller", async () =
   await expect(detectDuplicatesImpl("project" as never, {}, AbortSignal.abort(reason))).rejects.toBe(reason)
 })
 
+test("a candidate cap consumed by filtered-out symbols still marks the report truncated", async () => {
+  const { graph } = installTestHost()
+  // Two test-file symbols are returned first and filtered out by
+  // excludeTests, so the admitted pool stays empty — but the query already
+  // hit the cap, so more (admissible) nodes went uninspected.
+  for (const id of ["t0", "t1"]) {
+    graph.addSymbol({
+      id,
+      signature: "function exact(value: number): void",
+      file: `/repo/src/${id}.test.ts`,
+    })
+  }
+  for (const id of ["real0", "real1"]) {
+    graph.addSymbol({
+      id,
+      signature: "function exact(value: number): void",
+      file: `/repo/src/${id}.ts`,
+    })
+  }
+
+  const report = await detectDuplicatesImpl("project" as never, {
+    scope: "none",
+    kinds: ["function"],
+    maxCandidates: 2,
+  })
+  expect(report.truncated).toBe(true)
+})
+
 test("fallback is bounded and yields so cancellation can stop large comparisons", async () => {
   installTestHost()
   const controller = new AbortController()

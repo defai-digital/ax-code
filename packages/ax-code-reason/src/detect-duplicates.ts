@@ -215,6 +215,7 @@ function collectDuplicateCandidatePool(
   const pool: Graph.Symbol[] = []
   const ciExplains: Graph.Explain[] = []
   let truncated = false
+  let poolSaturated = false
 
   for (const kind of input.kinds) {
     const hits = codeReasonHost().graph.findSymbolByPrefix(projectID, "", {
@@ -222,6 +223,11 @@ function collectDuplicateCandidatePool(
       limit: input.maxCandidates,
       scope: input.scope,
     })
+    // The query cap is applied before the excludeTests / minSigLen filters
+    // below, so a saturated result means more nodes exist in this kind than
+    // we inspected — even if filtering later trims the admitted pool below
+    // the cap. Report the run incomplete rather than as a complete scan.
+    if (hits.length >= input.maxCandidates) truncated = true
     for (const hit of hits) {
       if (input.excludeTests && isTestFile(hit.file)) continue
       if (!hit.signature || hit.signature.length < input.minSigLen) continue
@@ -236,10 +242,11 @@ function collectDuplicateCandidatePool(
       ciExplains.push(snapshot.explain)
       if (pool.length >= input.maxCandidates) {
         truncated = true
+        poolSaturated = true
         break
       }
     }
-    if (truncated) break
+    if (poolSaturated) break
   }
 
   return { pool, ciExplains, truncated }
@@ -268,8 +275,9 @@ export async function detectDuplicatesImpl(
   //
   // Note: findSymbolByPrefix uses range comparison `[prefix, prefix+\uFFFF)`
   // so an empty-prefix call is effectively "all names" constrained by
-  // kind + limit. We pass a generous limit and rely on the maxCandidates
-  // cap below to bound the total pool.
+  // kind + limit. We query up to maxCandidates per kind; a saturated query
+  // marks the report truncated (the excludeTests / minSigLen filters run
+  // after the cap, so the admitted pool can be smaller than the cap).
   const candidatePool = collectDuplicateCandidatePool(projectID, {
     scope,
     kinds,
