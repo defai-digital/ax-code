@@ -6,6 +6,7 @@ import type { ReplayEvent } from "@/replay/event"
 import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
 import { asRecordOrUndefined } from "@/util/record"
+import { Env } from "@/util/env"
 
 type ConfigureOptions = {
   enabled: boolean
@@ -248,6 +249,29 @@ export namespace DiagnosticLog {
           ...base,
           message: redactText(event.message),
         }
+      case "autonomous.escalation":
+        return {
+          ...base,
+          questionHeader: redactText(event.questionHeader),
+          rationale: redactText(event.rationale),
+        }
+      case "quality.critic_finding":
+        return {
+          ...base,
+          summary: redactText(event.summary),
+        }
+      case "agent.plan.created":
+      case "agent.plan.updated":
+        return {
+          ...base,
+          plan: redactValue(event.plan),
+        }
+      case "computer.action":
+        return {
+          ...base,
+          summary: redactText(event.summary),
+          detail: redactText(event.detail),
+        }
       default:
         return base
     }
@@ -279,7 +303,10 @@ function redactLogValue(input: unknown, seen = new WeakSet<object>(), depth = 0)
         result[key] = redactUrl(value)
         continue
       }
-      result[key] = SENSITIVE_LOG_KEYS.has(key) ? redactValue(value) : redactLogValue(value, seen, depth + 1)
+      result[key] =
+        SENSITIVE_LOG_KEYS.has(key) || Env.isCredentialKeyName(key)
+          ? redactValue(value)
+          : redactLogValue(value, seen, depth + 1)
     }
     return result
   }
@@ -295,7 +322,10 @@ function redactLogValue(input: unknown, seen = new WeakSet<object>(), depth = 0)
       result[key] = redactUrl(value)
       continue
     }
-    result[key] = SENSITIVE_LOG_KEYS.has(key) ? redactValue(value) : redactLogValue(value, seen, depth + 1)
+    result[key] =
+      SENSITIVE_LOG_KEYS.has(key) || Env.isCredentialKeyName(key)
+        ? redactValue(value)
+        : redactLogValue(value, seen, depth + 1)
   }
   return result
 }
@@ -378,6 +408,9 @@ function redactUrl(input: string) {
     const url = new URL(input)
     url.search = ""
     url.hash = ""
+    // Userinfo may carry a database/broker password (postgres://user:pw@host).
+    url.username = ""
+    url.password = ""
     return url.toString()
   } catch {
     return input

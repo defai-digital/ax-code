@@ -108,6 +108,50 @@ describe("DiagnosticLog", () => {
     })
   })
 
+  test("redacts content on event types outside the enumerated switch", async () => {
+    await using tmp = await tmpdir()
+
+    await DiagnosticLog.configure({
+      enabled: true,
+      dir: tmp.path,
+      includeContent: false,
+      manifest: { component: "test", pid: 1234 },
+    })
+
+    DiagnosticLog.record(
+      {
+        type: "computer.action",
+        sessionID: "ses_content",
+        actionType: "click",
+        provider: "axnative",
+        scope: "window",
+        summary: "SECRET_SCREEN_TEXT",
+        ok: true,
+        detail: "SECRET_DETAIL",
+      },
+      { id: "evt_action", sequence: 0 },
+    )
+    DiagnosticLog.record(
+      {
+        type: "quality.critic_finding",
+        sessionID: "ses_content",
+        phaseId: "phase-1",
+        severity: "HIGH",
+        file: "src/a.ts",
+        summary: "SECRET_FINDING",
+      },
+      { id: "evt_finding", sequence: 1 },
+    )
+    await DiagnosticLog.flush()
+
+    const replayEvents = await readJsonLines(path.join(tmp.path, "events.jsonl"))
+    const action = replayEvents.find((event) => event.eventType === "computer.action")
+    expect(action.event.summary).toMatchObject({ redacted: true })
+    expect(action.event.detail).toMatchObject({ redacted: true })
+    const finding = replayEvents.find((event) => event.eventType === "quality.critic_finding")
+    expect(finding.event.summary).toMatchObject({ redacted: true })
+  })
+
   test("preserves structured tool error summaries in replay logs", async () => {
     await using tmp = await tmpdir()
 
@@ -325,5 +369,29 @@ describe("DiagnosticLog", () => {
       },
       url: "https://example.com/v1/chat",
     })
+  })
+
+  test("redacts credential keys through the shared credential policy", () => {
+    const redacted = DiagnosticLog.redactForLog({
+      password: "hunter2",
+      api_key: "sk-live-123",
+      accessToken: "ya29.secret",
+      client_secret: "cs-1",
+      settings: { refreshToken: "rt-1" },
+    }) as Record<string, unknown>
+
+    for (const key of ["password", "api_key", "accessToken", "client_secret"]) {
+      expect(redacted[key]).toMatchObject({ redacted: true })
+    }
+    expect((redacted.settings as Record<string, unknown>).refreshToken).toMatchObject({ redacted: true })
+  })
+
+  test("strips URL userinfo so a connection password never reaches the log", () => {
+    const redacted = DiagnosticLog.redactForLog({
+      url: "postgres://user:hunter2@db.example.com:5432/prod?sslmode=require",
+    }) as Record<string, unknown>
+
+    expect(redacted.url).not.toContain("hunter2")
+    expect(redacted.url).toContain("db.example.com")
   })
 })
