@@ -592,7 +592,10 @@ async function collectResult(
     for await (const event of events.stream) {
       if (event.type === "message.updated") {
         const info = event.properties.info
-        if (info.role === "assistant") {
+        // The stream is instance-wide; another session's assistant message
+        // (a parallel run, or a subagent's child session) must not overwrite
+        // this run's result.
+        if (info.role === "assistant" && info.sessionID === sessionID) {
           agent = info.agent ?? ""
           modelInfo = { providerID: info.providerID ?? "", modelID: info.modelID ?? "" }
           messageID = info.id
@@ -667,7 +670,9 @@ async function* streamEvents(
   for await (const event of events.stream) {
     if (event.type === "message.updated") {
       const info = event.properties.info
-      if (info.role === "assistant") {
+      // The stream is instance-wide; another session's assistant message must
+      // not overwrite this run's result.
+      if (info.role === "assistant" && info.sessionID === sessionID) {
         agent = info.agent ?? ""
         modelInfo = { providerID: info.providerID ?? "", modelID: info.modelID ?? "" }
         messageID = info.id
@@ -790,6 +795,7 @@ function createSessionHandle(
             agent: options?.agent ?? opts.agent,
             model,
             variant: options?.variant ?? opts.variant,
+            ...(opts.system ? { system: opts.system } : {}),
             parts: [{ type: "text", text: message }],
           })
         } catch (err) {
@@ -846,6 +852,7 @@ function createSessionHandle(
               agent: options?.agent ?? opts.agent,
               model,
               variant: options?.variant ?? opts.variant,
+              ...(opts.system ? { system: opts.system } : {}),
               parts: [{ type: "text", text: message }],
             })
           } catch (err) {
@@ -1133,6 +1140,7 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
           await sdk.session.prompt({
             sessionID,
             agent: "build",
+            ...(opts.system ? { system: opts.system } : {}),
             parts: [
               {
                 type: "text",

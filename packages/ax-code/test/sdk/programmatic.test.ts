@@ -61,6 +61,25 @@ test("programmatic stream removes abort listeners when prompt fails", async () =
   )
 })
 
+test("programmatic message.updated handlers filter by session", async () => {
+  const src = await readFile(path.join(import.meta.dirname, "../../src/sdk/programmatic-impl.ts"), "utf-8")
+
+  // The event stream is instance-wide, so an assistant message from another
+  // session (parallel run or subagent child) must not overwrite this run.
+  const guarded = src.match(/info\.role === "assistant" && info\.sessionID === sessionID/g) ?? []
+  const unguarded = src.match(/info\.role === "assistant"\) \{/g) ?? []
+  expect(guarded.length).toBe(2)
+  expect(unguarded.length).toBe(0)
+})
+
+test("programmatic agent forwards the system prompt override", async () => {
+  const src = await readFile(path.join(import.meta.dirname, "../../src/sdk/programmatic-impl.ts"), "utf-8")
+
+  // AgentOptions.system is documented as a custom system prompt override.
+  const forwards = src.match(/\.\.\.\(opts\.system \? \{ system: opts\.system \} : \{\}\)/g) ?? []
+  expect(forwards.length).toBe(3)
+})
+
 test("programmatic stream handle exposes cancel cleanup", async () => {
   const src = await readFile(path.join(import.meta.dirname, "../../src/sdk/programmatic-impl.ts"), "utf-8")
   const start = src.indexOf("function createStreamHandle(")
