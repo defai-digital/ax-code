@@ -27,6 +27,9 @@ export class AxCodeServer {
   private backend: HeadlessBackendHandle | null = null
   private process: ChildProcess | null = null
   private startPromise: Promise<void> | null = null
+  // Cancels the in-flight start so dispose() can stop a backend that is still
+  // booting (its handle is only assigned after the await).
+  private startAbort: AbortController | null = null
   private currentUrl: string | null = null
   private currentHeaders: Record<string, string> = {}
   private onExitCallback: (() => void) | null = null
@@ -57,13 +60,21 @@ export class AxCodeServer {
     if (this.startPromise) {
       return this.startPromise
     }
-    this.startPromise = this.startWithRetry().finally(() => {
+    const controller = new AbortController()
+    this.startAbort = controller
+    this.startPromise = this.startWithRetry(controller.signal).finally(() => {
       this.startPromise = null
+      if (this.startAbort === controller) {
+        this.startAbort = null
+      }
     })
     return this.startPromise
   }
 
   dispose() {
+    // Abort an in-flight start first: its backend/process handles are assigned
+    // only after the await, so the null checks below would miss it.
+    this.startAbort?.abort()
     if (this.backend) {
       void this.backend.close()
       this.backend = null
@@ -76,11 +87,11 @@ export class AxCodeServer {
     this.currentHeaders = {}
   }
 
-  private async startWithRetry(): Promise<void> {
+  private async startWithRetry(signal: AbortSignal): Promise<void> {
     let lastError: unknown
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        await this.startInner()
+        await this.startInner(signal)
         return
       } catch (err: any) {
         lastError = err
@@ -94,29 +105,39 @@ export class AxCodeServer {
     throw lastError instanceof Error ? lastError : new Error("Failed to start ax-code after 3 attempts")
   }
 
-  private async startInner(): Promise<void> {
+  private async startInner(signal: AbortSignal): Promise<void> {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd()
     const axCodePath = this.findAxCodePath()
 
     if (axCodePath.mode === "sdk") {
-      await this.startWithHeadlessSdk(workspaceFolder)
+      await this.startWithHeadlessSdk(workspaceFolder, signal)
       return
     }
 
     await this.startLegacy(axCodePath, workspaceFolder)
   }
 
-  private async startWithHeadlessSdk(workspaceFolder: string): Promise<void> {
+  private async startWithHeadlessSdk(workspaceFolder: string, signal: AbortSignal): Promise<void> {
     const { serverTimeoutMs } = getConfig()
     const backend = await startHeadlessBackend({
       directory: workspaceFolder,
       timeout: serverTimeoutMs,
+      signal,
       env: {
         PATH: enrichPath(process.env.PATH ?? ""),
         AX_CODE_CALLER: "vscode",
         AX_CODE_ORIGINAL_CWD: workspaceFolder,
       },
     })
+
+    // dispose() can run while the backend is still booting; it saw a null
+    // this.backend and could not close it, so close it here rather than adopt a
+    // server we already told to shut down (its detached child would otherwise
+    // keep running across view-hides and window reloads).
+    if (signal.aborted) {
+      await backend.close().catch(() => undefined)
+      return
+    }
 
     this.backend = backend
     this.currentUrl = backend.url

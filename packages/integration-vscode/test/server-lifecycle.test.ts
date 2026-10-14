@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, vi, test } from "vitest"
 
 const backendStarts: any[] = []
 let closeBackend: (() => void) | undefined
+let closeCalls = 0
+// When set, the mocked start blocks until released, so a test can dispose()
+// while a start is in flight.
+let startGate: Promise<void> | undefined
 
 vi.doMock("vscode", () => ({
   workspace: {
@@ -19,6 +23,7 @@ vi.doMock("vscode", () => ({
 vi.doMock("@ax-code/sdk/headless", () => ({
   startHeadlessBackend: async (options: any) => {
     backendStarts.push(options)
+    if (startGate) await startGate
     const closed = new Promise<void>((resolve) => {
       closeBackend = resolve
     })
@@ -26,7 +31,10 @@ vi.doMock("@ax-code/sdk/headless", () => ({
       url: "http://127.0.0.1:18456",
       headers: { Authorization: "Basic sdk-auth" },
       closed,
-      close: async () => closeBackend?.(),
+      close: async () => {
+        closeCalls += 1
+        closeBackend?.()
+      },
     }
   },
 }))
@@ -36,6 +44,8 @@ const { AxCodeServer } = await import("../src/server-lifecycle")
 beforeEach(() => {
   backendStarts.length = 0
   closeBackend = undefined
+  closeCalls = 0
+  startGate = undefined
 })
 
 describe("AxCodeServer SDK lifecycle", () => {
@@ -62,5 +72,24 @@ describe("AxCodeServer SDK lifecycle", () => {
     expect(server.url).toBeNull()
     expect(server.headers).toEqual({})
     expect(exited).toBe(true)
+  })
+
+  test("dispose during an in-flight SDK start closes the backend instead of adopting it", async () => {
+    let release!: () => void
+    startGate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const server = new AxCodeServer({ extensionPath: "/not/a/monorepo/packages/integration-vscode" } as any)
+
+    const started = server.ensureStarted()
+    // The backend handle is only assigned after the await, so dispose() at this
+    // point sees null and cannot close it — the start must do it.
+    server.dispose()
+    release()
+    startGate = undefined
+    await started
+
+    expect(server.url).toBeNull()
+    expect(closeCalls).toBe(1)
   })
 })
