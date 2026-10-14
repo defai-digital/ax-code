@@ -372,4 +372,21 @@ describe("QualityPromotionEligibility", () => {
     expect(QualityPromotionEligibility.reviewReason(summary)).toContain("reentry:same-release-policy")
     expect(QualityPromotionEligibility.reviewReason(summary)).toContain("remediation=rem-1")
   })
+
+  test("rejects a bundle whose comparison belongs to another candidate", () => {
+    const source = benchmarkBundle("pass")
+    const mismatched: QualityCalibrationModel.BenchmarkBundle = {
+      ...source,
+      comparison: { ...source.comparison, candidateSource: "another-model-v2" },
+    }
+
+    // The comparison is the only source of benchmark status while the summary
+    // reports the model's source, so a mismatched pair must not be evaluated.
+    expect(() =>
+      QualityPromotionEligibility.summarize({
+        bundle: mismatched,
+        stability: stabilitySummary("pass"),
+      }),
+    ).toThrow(/comparison mismatch/)
+  })
 })

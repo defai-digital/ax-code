@@ -111,6 +111,20 @@ export namespace QualityPromotionEligibility {
     reportingChainCarryoverHistory?: ReportingChainCarryoverEntry[]
     currentReleasePolicyDigest?: string | null
   }): EligibilitySummary {
+    // Every gate below reads `bundle.comparison`, and a schema-valid bundle can
+    // carry a comparison that another candidate's summaries produced. Require the
+    // linkage the normal builder guarantees, so an unvetted model cannot borrow a
+    // passing comparison and be reported under its own source.
+    const comparison = input.bundle.comparison
+    if (
+      comparison.candidateSource !== input.bundle.model.source ||
+      comparison.candidateSource !== input.bundle.candidateSummary.source ||
+      comparison.baselineSource !== input.bundle.baselineSummary.source
+    ) {
+      throw new Error(
+        `Benchmark bundle comparison mismatch: model=${input.bundle.model.source}, candidate summary=${input.bundle.candidateSummary.source}, comparison ${comparison.baselineSource}->${comparison.candidateSource}`,
+      )
+    }
     if (input.remediation && !input.reentryContext) {
       throw new Error(`Remediation ${input.remediation.remediationID} requires a reentry context`)
     }
