@@ -45,7 +45,13 @@ async function allowInstructionAbsolutePath(input: string) {
 
 async function allowRelativeInstructionPath(input: string) {
   const real = await realpathOrResolved(input)
-  return Filesystem.contains(Instance.worktree, input) && Filesystem.contains(Instance.worktree, real)
+  // Relative instructions resolve against the worktree, or — when project
+  // config is disabled — against AX_CODE_CONFIG_DIR (see resolveRelative).
+  // Both roots must be accepted, or every config-dir-relative instruction is
+  // silently dropped as "escapes allowed roots".
+  const roots = [Instance.worktree]
+  if (Flag.AX_CODE_CONFIG_DIR) roots.push(Flag.AX_CODE_CONFIG_DIR)
+  return roots.some((root) => Filesystem.contains(root, input) && Filesystem.contains(root, real))
 }
 
 function globalFiles() {

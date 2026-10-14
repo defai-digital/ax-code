@@ -255,6 +255,40 @@ describe("InstructionPrompt.systemPaths AX_CODE_CONFIG_DIR", () => {
     }
   })
 
+  test("loads a relative instruction resolved against AX_CODE_CONFIG_DIR", async () => {
+    await using profileTmp = await tmpdir({
+      init: async (dir) => {
+        await fs.mkdir(path.join(dir, "profile"), { recursive: true })
+        await fs.writeFile(path.join(dir, "profile", "AGENTS.md"), "# Profile Instructions")
+      },
+    })
+    await using projectTmp = await tmpdir()
+
+    process.env["AX_CODE_CONFIG_DIR"] = profileTmp.path
+    const originalDisable = process.env["AX_CODE_DISABLE_PROJECT_CONFIG"]
+    process.env["AX_CODE_DISABLE_PROJECT_CONFIG"] = "1"
+
+    try {
+      await Instance.provide({
+        directory: projectTmp.path,
+        fn: async () => {
+          const getSpy = vi.spyOn(Config, "get").mockResolvedValue({
+            instructions: ["profile/AGENTS.md"],
+          } as Awaited<ReturnType<typeof Config.get>>)
+          try {
+            const paths = await InstructionPrompt.systemPaths()
+            expect(paths.has(path.join(profileTmp.path, "profile", "AGENTS.md"))).toBe(true)
+          } finally {
+            getSpy.mockRestore()
+          }
+        },
+      })
+    } finally {
+      if (originalDisable === undefined) delete process.env["AX_CODE_DISABLE_PROJECT_CONFIG"]
+      else process.env["AX_CODE_DISABLE_PROJECT_CONFIG"] = originalDisable
+    }
+  })
+
   test("rejects ~/ instruction paths that escape the home directory", async () => {
     await using tmp = await tmpdir({
       git: true,
