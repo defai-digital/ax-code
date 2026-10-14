@@ -310,6 +310,16 @@ async function runOneTask(input: {
         text = result.parts.findLast((x) => x.type === "text")?.text ?? ""
       } catch (error) {
         if (ctx.abort.aborted || isAbortError(error)) throw error
+        // Cancel the in-flight processor before reporting the failure: a
+        // timed-out finalize would otherwise keep running (LLM calls, tools)
+        // after the swarm has already returned this member as failed. Mirrors
+        // the single-task tool.
+        await SessionPrompt.cancel(session.id).catch((cancelError) => {
+          log.warn("failed to cancel subagent session after finalization error", {
+            sessionID: session.id,
+            error: cancelError,
+          })
+        })
         const failure = errorDetails(error)
         return {
           description: params.description,

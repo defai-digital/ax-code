@@ -193,7 +193,6 @@ describe("task_parallel prompt routing", () => {
 })
 
 describe("task_parallel sibling lifecycle", () => {
-
   test("fires SubagentStop for every child with its outcome", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -468,13 +467,38 @@ describe("task_parallel swarm shape", () => {
   })
 
   test.each([
-    ["both shapes", { tasks: [{ description: "a", prompt: "b", subagent_type: "explore" }], items: ["x"], promptTemplate: "p {{item}}", subagentType: "explore" }, "not both"],
+    [
+      "both shapes",
+      {
+        tasks: [{ description: "a", prompt: "b", subagent_type: "explore" }],
+        items: ["x"],
+        promptTemplate: "p {{item}}",
+        subagentType: "explore",
+      },
+      "not both",
+    ],
     ["neither shape", {}, "Provide tasks"],
     ["items without a template", { items: ["x"], subagentType: "explore" }, "prompt_template is required"],
-    ["a template without the placeholder", { items: ["x"], promptTemplate: "no placeholder", subagentType: "explore" }, "must contain the literal {{item}}"],
-    ["items without an agent type", { items: ["x"], promptTemplate: "check {{item}}", }, "subagent_type is required"],
-    ["a template alongside tasks", { tasks: [{ description: "a", prompt: "b", subagent_type: "explore" }], promptTemplate: "p {{item}}", subagentType: "explore" }, "not both"],
-    ["duplicate filled prompts", { items: ["x", "x"], promptTemplate: "check {{item}}", subagentType: "explore" }, "distinct prompt"],
+    [
+      "a template without the placeholder",
+      { items: ["x"], promptTemplate: "no placeholder", subagentType: "explore" },
+      "must contain the literal {{item}}",
+    ],
+    ["items without an agent type", { items: ["x"], promptTemplate: "check {{item}}" }, "subagent_type is required"],
+    [
+      "a template alongside tasks",
+      {
+        tasks: [{ description: "a", prompt: "b", subagent_type: "explore" }],
+        promptTemplate: "p {{item}}",
+        subagentType: "explore",
+      },
+      "not both",
+    ],
+    [
+      "duplicate filled prompts",
+      { items: ["x", "x"], promptTemplate: "check {{item}}", subagentType: "explore" },
+      "distinct prompt",
+    ],
     [
       "more items than the cap",
       {
@@ -682,32 +706,32 @@ describe("task_parallel swarm scale (item: swarm)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-    const tool = await TaskParallelTool.init()
-    // 16 members are accepted (the pre-deadline cap of 8 is gone)...
-    expect(
-      tool.parameters.safeParse({
-        items: Array.from({ length: 16 }, (_, i) => `m${i}`),
-        prompt_template: "check {{item}}",
-        subagent_type: "explore",
-      }).success,
-    ).toBe(true)
-    // ...while in-flight width stays its own, smaller bound.
-    expect(
-      tool.parameters.safeParse({
-        items: ["a", "b"],
-        prompt_template: "check {{item}}",
-        subagent_type: "explore",
-        concurrency: 9,
-      }).success,
-    ).toBe(false)
-    expect(
-      tool.parameters.safeParse({
-        items: ["a", "b"],
-        prompt_template: "check {{item}}",
-        subagent_type: "explore",
-        concurrency: 8,
-      }).success,
-    ).toBe(true)
+        const tool = await TaskParallelTool.init()
+        // 16 members are accepted (the pre-deadline cap of 8 is gone)...
+        expect(
+          tool.parameters.safeParse({
+            items: Array.from({ length: 16 }, (_, i) => `m${i}`),
+            prompt_template: "check {{item}}",
+            subagent_type: "explore",
+          }).success,
+        ).toBe(true)
+        // ...while in-flight width stays its own, smaller bound.
+        expect(
+          tool.parameters.safeParse({
+            items: ["a", "b"],
+            prompt_template: "check {{item}}",
+            subagent_type: "explore",
+            concurrency: 9,
+          }).success,
+        ).toBe(false)
+        expect(
+          tool.parameters.safeParse({
+            items: ["a", "b"],
+            prompt_template: "check {{item}}",
+            subagent_type: "explore",
+            concurrency: 8,
+          }).success,
+        ).toBe(true)
       },
     })
   })
@@ -918,6 +942,46 @@ describe("task_parallel swarm scale (item: swarm)", () => {
           expect(result.output).toContain("first member finished")
         } finally {
           clock.mockRestore()
+          vi.restoreAllMocks()
+        }
+      },
+    })
+  })
+
+  test("cancels a member whose finalize turn fails", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { ctx } = await parent(tmp.path)
+        const cancelSpy = vi.spyOn(SessionPrompt, "cancel").mockImplementation((async () => undefined) as any)
+        vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
+          const text = input.parts?.[0]?.text ?? ""
+          if (text.includes("ended without a usable final response")) {
+            throw new Error("provider stalled")
+          }
+          // An empty first response starts the finalize turn.
+          return {
+            info: {
+              id: input.messageID,
+              sessionID: input.sessionID,
+              role: "assistant",
+              time: { created: Date.now(), completed: Date.now() },
+            },
+            parts: [],
+          } as any
+        }) as any)
+        try {
+          const result = await (
+            await TaskParallelTool.init()
+          ).execute({ items: ["only"], prompt_template: "check {{item}}", subagent_type: "explore" } as any, ctx)
+          const metadata = result.metadata as any
+          expect(metadata.results[0]).toMatchObject({ ok: false })
+          expect(metadata.results[0].error).toContain("provider stalled")
+          // The member's processor must not keep running after the swarm has
+          // already reported the member as failed.
+          expect(cancelSpy).toHaveBeenCalled()
+        } finally {
           vi.restoreAllMocks()
         }
       },
