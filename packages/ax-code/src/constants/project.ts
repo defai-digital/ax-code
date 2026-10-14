@@ -24,7 +24,7 @@ export const GITHUB_ACTION_REF = `${GITHUB_REPO_SLUG}/packages/integration-githu
 const RAW_MAIN_BASE = `https://raw.githubusercontent.com/${GITHUB_REPO_SLUG}/main`
 
 /** JSON Schema for `ax-code.json`, written into user configs that omit `$schema`. */
-export const CONFIG_SCHEMA_URL = `${RAW_MAIN_BASE}/packages/${PACKAGE_NAME}/config.schema.json`
+export const CONFIG_SCHEMA_URL = "https://ax-code.app/docs-assets/schema/config.schema.json"
 
 /** JSON Schema for the TUI config, used by the legacy-config migrator. */
 export const TUI_SCHEMA_URL = `${RAW_MAIN_BASE}/packages/${PACKAGE_NAME}/tui.schema.json`

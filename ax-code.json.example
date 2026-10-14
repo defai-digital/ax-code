@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+  "$schema": "https://ax-code.app/docs-assets/schema/config.schema.json",
 
   // Pin models on a provider you actually have connected. Disabled plan IDs
   // (alibaba-token-plan, zai-coding-plan, …) remap to a connected gateway but
