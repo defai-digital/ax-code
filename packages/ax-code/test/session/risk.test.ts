@@ -979,4 +979,57 @@ describe("session.risk", () => {
       },
     })
   })
+
+  test("a backgrounded validation without an exit code is not scored as a pass", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+
+        try {
+          Recorder.begin(sid)
+          Recorder.emit({
+            type: "session.start",
+            sessionID: sid,
+            agent: "build",
+            model: "test/model",
+            directory: tmp.path,
+          })
+          Recorder.emit({
+            type: "tool.call",
+            sessionID: sid,
+            tool: "bash",
+            callID: "call_bg_typecheck",
+            input: { command: "pnpm run build" },
+          } as any)
+          // A backgrounded shell — and one killed by a timeout/abort signal —
+          // completes with exit: null. No code is not evidence of a pass.
+          Recorder.emit({
+            type: "tool.result",
+            sessionID: sid,
+            tool: "bash",
+            callID: "call_bg_typecheck",
+            status: "completed",
+            output:
+              'Command running in background with shell ID: 1\nUse the bash_output tool with shell_id "1" to read its output.',
+            metadata: { exit: null, background: { shellID: "1", pid: 42 } },
+            durationMs: 20,
+          } as any)
+          Recorder.emit({ type: "session.end", sessionID: sid, reason: "completed", totalSteps: 2 })
+          Recorder.end(sid)
+
+          await new Promise((resolve) => setTimeout(resolve, 50))
+
+          const assessment = Risk.fromSession(sid)
+          expect(assessment.readiness).toBe("blocked")
+          expect(assessment.summary).toContain("validation failed")
+        } finally {
+          await Session.remove(sid)
+        }
+      },
+    })
+  })
 })

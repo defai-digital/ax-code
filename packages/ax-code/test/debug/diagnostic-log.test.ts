@@ -394,4 +394,56 @@ describe("DiagnosticLog", () => {
     expect(redacted.url).not.toContain("hunter2")
     expect(redacted.url).toContain("db.example.com")
   })
+
+  test("redacts every free-text field on the newer replay event types", async () => {
+    await using tmp = await tmpdir()
+
+    await DiagnosticLog.configure({
+      enabled: true,
+      dir: tmp.path,
+      includeContent: false,
+      manifest: { component: "test", pid: 1235 },
+    })
+
+    DiagnosticLog.record(
+      {
+        type: "computer.action",
+        sessionID: "ses_content",
+        actionType: "click",
+        provider: "axnative",
+        scope: "window",
+        summary: "SECRET_SCREEN_TEXT",
+        ok: false,
+        refusal: "SECRET_REFUSAL",
+        reobserveError: "SECRET_REOBSERVE",
+      },
+      { id: "evt_action_fields", sequence: 5 },
+    )
+    DiagnosticLog.record(
+      {
+        type: "agent.plan.updated",
+        sessionID: "ses_content",
+        plan: {
+          id: "plan-1",
+          objective: "Ship it",
+          evidence: [],
+          assumptions: [],
+          tasks: [],
+          risks: [],
+          validation: [],
+          approvalState: "not_required",
+        },
+        reason: "SECRET_REASON",
+      },
+      { id: "evt_plan_reason", sequence: 6 },
+    )
+    await DiagnosticLog.flush()
+
+    const replayEvents = await readJsonLines(path.join(tmp.path, "events.jsonl"))
+    const action = replayEvents.find((event) => event.eventType === "computer.action")
+    expect(action.event.refusal).toMatchObject({ redacted: true })
+    expect(action.event.reobserveError).toMatchObject({ redacted: true })
+    const plan = replayEvents.find((event) => event.eventType === "agent.plan.updated")
+    expect(plan.event.reason).toMatchObject({ redacted: true })
+  })
 })

@@ -219,7 +219,7 @@ export namespace AgentControlReplayQuery {
         return {
           id,
           eventType,
-          kind: "blocked",
+          kind: blocked ? "blocked" : "completed",
           title: blocked ? "Completion gate blocked" : "Completion gate allowed",
           status,
           tone: blocked ? "warning" : "success",

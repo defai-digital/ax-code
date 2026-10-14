@@ -456,4 +456,19 @@ describe("AgentControlReplayQuery", () => {
     expect(item?.kind).toBe("blocked")
     expect(item?.title).toBe("Completion gate blocked")
   })
+
+  test("renders an allowed completion gate as completed, not blocked", () => {
+    const item = AgentControlReplayQuery.timelineItemFromEvent(
+      {
+        type: "agent.completion_gate.decided",
+        status: "allow",
+        reason: "all_checks_passed",
+      },
+      "event-gate-allow",
+    )
+
+    expect(item?.kind).toBe("completed")
+    expect(item?.title).toBe("Completion gate allowed")
+    expect(item?.tone).toBe("success")
+  })
 })

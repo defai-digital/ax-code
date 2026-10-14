@@ -433,7 +433,11 @@ export namespace Risk {
         const call = validationMap.get((e.callID as string) ?? "")
         if (tool === "bash" && call) {
           const output = (e.output as string) ?? ""
-          const exit = typeof metadata.exit === "number" ? metadata.exit : undefined
+          // Keep `null` distinct from "no code recorded": a backgrounded or
+          // signal-killed bash result completes with `exit: null`, which is not
+          // evidence of a passing validation, while an older event has no field
+          // at all.
+          const exit = typeof metadata.exit === "number" ? metadata.exit : metadata.exit === null ? null : undefined
           runs.push({
             command: call,
             failed: validationFailed({ command: call, status: e.status as "completed" | "error", output, exit }),
@@ -550,9 +554,13 @@ export namespace Risk {
     command: string
     status: "completed" | "error"
     output: string
-    exit?: number
+    exit?: number | null
   }) {
     if (input.status === "error") return true
+    // `null` records a run with no exit code: a backgrounded shell, or one
+    // killed by a timeout/abort signal. That is not evidence of a passing
+    // validation, unlike an event from before the exit field existed.
+    if (input.exit === null) return true
     // A nonzero exit is recorded as a completed bash result (the tool only
     // throws on a spawn failure), so the code must be consulted: a failing
     // typecheck/build/lint prints no test-runner failure text to scan for.

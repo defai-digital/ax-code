@@ -261,16 +261,23 @@ export namespace DiagnosticLog {
           summary: redactText(event.summary),
         }
       case "agent.plan.created":
+        return {
+          ...base,
+          plan: redactValue(event.plan),
+        }
       case "agent.plan.updated":
         return {
           ...base,
           plan: redactValue(event.plan),
+          reason: redactText(event.reason),
         }
       case "computer.action":
         return {
           ...base,
           summary: redactText(event.summary),
           detail: redactText(event.detail),
+          refusal: redactText(event.refusal),
+          reobserveError: redactText(event.reobserveError),
         }
       default:
         return base
