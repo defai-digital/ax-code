@@ -102,3 +102,34 @@ test("track fail-opens when git add exits 128 instead of throwing", async () => 
     },
   })
 })
+
+test.each(["worktree", "repository"])(
+  "track preserves coverage with a nested repo ignored by %s rules",
+  async (scope) => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "tracked.txt")
+    await fs.writeFile(file, "before", "utf-8")
+    const nested = path.join(tmp.path, "nested [reference]")
+    await initUnbornGit(nested)
+    await fs.writeFile(path.join(nested, "private.txt"), "excluded", "utf-8")
+    const ignoreFile =
+      scope === "worktree" ? path.join(tmp.path, ".gitignore") : path.join(tmp.path, ".git/info/exclude")
+    // Brackets in ignore patterns are globs; use an escaped literal name.
+    await fs.writeFile(ignoreFile, String.raw`/nested \[reference\]/` + "\n")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const hash = await Snapshot.track()
+        expect(hash).toMatch(/^[0-9a-f]{40}$/)
+        await fs.writeFile(file, "after", "utf-8")
+        await fs.writeFile(path.join(nested, "private.txt"), "still excluded", "utf-8")
+        const patch = await Snapshot.patch(hash!)
+        expect(patch.files).toEqual([file.replaceAll("\\", "/")])
+        const updated = await Snapshot.track()
+        expect(updated).toMatch(/^[0-9a-f]{40}$/)
+        expect(updated).not.toBe(hash)
+      },
+    })
+  },
+)

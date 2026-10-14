@@ -514,9 +514,28 @@ export namespace Snapshot {
     const windows = await windowsExclusions(current)
     const oversized = await oversizedFiles(current, windows.untracked)
     reportOversized(current, oversized)
+    const nested = await DirectoryScope.nestedGitChildren(current.worktree, { includeDotDirs: true })
+    const ignored = new Set<string>()
+    // Git rejects even a negative pathspec that names an ignored, untracked
+    // directory. Let ignore rules exclude those repositories; retain explicit
+    // exclusions for all others, including already-indexed repositories.
+    await work(8, nested, async (name) => {
+      const result = await runGit([...cfg, ...args(current, ["check-ignore", "--quiet", "--", name])], {
+        cwd: current.worktree,
+      })
+      if (result.code === 0) ignored.add(name)
+      else if (result.code !== 1) {
+        log.error("failed to inspect nested repository ignore rules", {
+          cwd: current.worktree,
+          exitCode: result.code,
+          stderr: result.stderr,
+        })
+        throw new Error(`Snapshot staging failed: git check-ignore exited with code ${result.code}`)
+      }
+    })
     const excluded = [
       ...windows.paths,
-      ...(await DirectoryScope.nestedGitChildren(current.worktree, { includeDotDirs: true })),
+      ...nested.filter((name) => !ignored.has(name)),
       ...oversized.map((file) => file.path),
     ]
     // Stage the whole worktree, not just `current.directory` — a session's
