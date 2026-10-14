@@ -375,15 +375,19 @@ export function providerFallbackSwitchState(input: {
 }
 
 /**
- * Whether overflow compaction has anything to summarize: it works on the
- * messages before the latest real user turn, which it replays unchanged.
+ * Whether overflow compaction has anything to shrink. Compaction works from the
+ * latest real user turn: it drops everything after it and replays that turn, or
+ * — with no earlier user turn — summarizes the whole history and appends a
+ * continue turn. So it can shrink the request whenever any message other than
+ * that user turn carries non-compaction content, before OR after it (a first
+ * turn whose own tool output overflowed).
  */
 export function hasCompactableHistory(messages: MessageV2.WithParts[]): boolean {
   const latestUser = messages.findLastIndex(
     (m) => m.info.role === "user" && !m.parts.some((p) => p.type === "compaction"),
   )
-  if (latestUser <= 0) return false
-  return messages.slice(0, latestUser).some((m) => m.parts.some((p) => p.type !== "compaction"))
+  if (latestUser < 0) return false
+  return messages.some((m, index) => index !== latestUser && m.parts.some((p) => p.type !== "compaction"))
 }
 
 export function processorLoopDecision(input: {

@@ -865,7 +865,7 @@ describe("session.prompt helpers", () => {
     ).toEqual({ action: "compact", overflow: false, triggerReason: "provider_usage" })
   })
 
-  test("reports compactable history only when content precedes the latest real user turn", () => {
+  test("reports compactable history when any turn other than the latest user turn has content", () => {
     const message = (role: "user" | "assistant", parts: string[]) =>
       ({ info: { role }, parts: parts.map((type) => ({ type })) }) as any
     expect(hasCompactableHistory([])).toBe(false)
@@ -883,6 +883,9 @@ describe("session.prompt helpers", () => {
         message("user", ["compaction"]),
       ]),
     ).toBe(true)
+    // A first turn whose own tool output overflowed is compactable: the
+    // summarize-everything branch drops that output, so the request shrinks.
+    expect(hasCompactableHistory([message("user", ["text"]), message("assistant", ["tool"])])).toBe(true)
   })
 
   test("detects whether an assistant response belongs after the current user turn", () => {
