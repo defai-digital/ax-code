@@ -1359,7 +1359,7 @@ describe("AX Code TUI stability guardrails", () => {
     // chip and restores its model only for this session. Persisting it as the
     // agent's global override would shadow config pins in unrelated sessions.
     expect(prompt).not.toContain("local.model.set(msg.model)")
-    expect(prompt).toContain("shouldAdoptMessageModelFromHistory(sessionChanged, local.model.session.has(sessionID))")
+    expect(prompt).toContain("shouldAdoptMessageModelFromHistory(local.model.session.has(sessionID))")
     expect(prompt).toContain("local.model.session.set(sessionID, msg.model, msg.agent)")
     expect(prompt).toContain(
       "if (msg.model && msg.variant !== undefined && current && providerModelEquals(current, msg.model))",

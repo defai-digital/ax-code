@@ -202,4 +202,14 @@ describe("sameSkuOnConnectedProvider", () => {
     ).toBeUndefined()
     expect(sameSkuOnConnectedProvider([gateway], { providerID: "openai", modelID: "gpt-5.2" })).toBeUndefined()
   })
+
+  test("resolves deterministically when several providers serve the same model", () => {
+    const first = { id: "claude-code", models: { "claude-sonnet-5": { tool_call: true } } }
+    const second = { id: "anthropic-gateway", models: { "claude-sonnet-5": { tool_call: true } } }
+    const requested = { providerID: "anthropic", modelID: "claude-sonnet-5" }
+    const forward = sameSkuOnConnectedProvider([first, second], requested)
+    const reversed = sameSkuOnConnectedProvider([second, first], requested)
+    expect(forward).toEqual(reversed)
+    expect(forward).toEqual({ providerID: "anthropic-gateway", modelID: "claude-sonnet-5" })
+  })
 })

@@ -107,7 +107,12 @@ export function sameSkuOnConnectedProvider(
   providers: readonly { id: string; models: Record<string, SelectableModel | undefined> }[],
   model: { providerID: string; modelID: string },
 ): { providerID: string; modelID: string } | undefined {
-  const candidates = providers.filter((provider) => provider.id !== model.providerID)
+  // Sort candidates so the relocation target is deterministic: with several
+  // connected providers serving the same SKU, the winner must not depend on
+  // the caller's array order.
+  const candidates = providers
+    .filter((provider) => provider.id !== model.providerID)
+    .sort((left, right) => left.id.localeCompare(right.id))
   for (const provider of candidates) {
     if (modelSelectableForProvider(provider.id, provider.models[model.modelID]))
       return { providerID: provider.id, modelID: model.modelID }

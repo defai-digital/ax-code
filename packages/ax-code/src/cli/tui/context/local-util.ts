@@ -170,8 +170,16 @@ export function hasSessionModelPreference(input: SessionModelPreferenceStore, se
   return entry.model !== undefined || Object.keys(entry.agents).length > 0
 }
 
-export function shouldAdoptMessageModelFromHistory(sessionChanged: boolean, hasSessionPreference: boolean): boolean {
-  return !sessionChanged || !hasSessionPreference
+/**
+ * History adoption fills an empty slot only. Once the user (or an earlier
+ * adoption) has recorded a session-scoped preference, later user messages for
+ * the same session must not overwrite it: server-synthesized turns (plan_exit
+ * handoff, background-subagent delivery) and dequeued follow-ups can carry a
+ * model resolved at enqueue/execution time, and adopting those would silently
+ * revert the user's current pick.
+ */
+export function shouldAdoptMessageModelFromHistory(hasSessionPreference: boolean): boolean {
+  return !hasSessionPreference
 }
 
 export function applyExplicitModelPreference(

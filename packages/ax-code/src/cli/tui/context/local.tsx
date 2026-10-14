@@ -317,6 +317,10 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       const fallbackModel = createMemo(() => {
         if (args.model) return Provider.parseModel(args.model)
         if (sync.data.config.model) return Provider.parseModel(sync.data.config.model)
+        // Persisted preferences load asynchronously. Resolving the implicit
+        // catalog default before they arrive would briefly show — and, on an
+        // early submit, send with — a provider the user never chose.
+        if (!modelStore.ready) return undefined
         if (modelStore.recent[0]) return modelStore.recent[0]
 
         const implicit = pickImplicitDefaultModel(sync.data.provider)
@@ -339,8 +343,11 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       })
 
       // Re-validate stored model preferences when providers finish loading.
-      // Models set before `provider_loaded` were stored without validation;
-      // this clears any that turned out to be invalid once provider data arrives.
+      // Non-valid preferences are mapped to "unknown", which keepOrMigrate
+      // retains: a provider that is temporarily absent (still discovering,
+      // briefly disconnected) must not eat the user's pick. Only structurally
+      // malformed entries, duplicates, and variants that resolve invalid are
+      // pruned here.
       createEffect(() => {
         if (!sync.data.provider_loaded) return
         const pruned = pruneModelPreferences(
@@ -360,13 +367,13 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           for (const agentName of Object.keys(modelStore.model)) {
             if (Object.hasOwn(pruned.model, agentName)) continue
             const storedModel = modelStore.model[agentName]
-            log.info("removing invalid model override after providers loaded", {
+            log.info("dropping unusable model override after providers loaded", {
               agentName,
               providerID: storedModel?.providerID,
               modelID: storedModel?.modelID,
             })
           }
-          log.info("removing invalid stored model preferences after providers loaded", {
+          log.info("pruned stored model preferences after providers loaded", {
             modelBefore: Object.keys(modelStore.model).length,
             modelAfter: Object.keys(pruned.model).length,
             recentBefore: modelStore.recent.length,

@@ -832,7 +832,13 @@ export function createDialogProviderOptions() {
                     }
                     await sdk.client.instance.dispose()
                     await sync.bootstrap()
-                    await selectDefaultModelForProvider(provider.id, provider.name)
+                    // Connecting a provider must not hijack an existing model
+                    // selection (it also poisons recent[0], the fallback source
+                    // for every later session). Auto-select only to bootstrap a
+                    // fresh install that has nothing to send with yet.
+                    if (!local.model.current()) {
+                      await selectDefaultModelForProvider(provider.id, provider.name)
+                    }
                     toast.show({ variant: "success", message: t("status.connected", { name: provider.name }) })
                     dialog.clear()
                   }

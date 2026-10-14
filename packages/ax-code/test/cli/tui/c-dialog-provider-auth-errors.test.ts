@@ -23,7 +23,7 @@ function sliceFrom(src: string, marker: string, length = 900) {
 describe("tui provider dialog SDK-error handling", () => {
   test("CLI provider connect checks auth.set result before dispose/success toast", async () => {
     const src = await fs.readFile(DIALOG_PROVIDER_SRC, "utf8")
-    const block = sliceFrom(src, "store a marker in auth.json", 1100)
+    const block = sliceFrom(src, "store a marker in auth.json", 1500)
     expect(block).toContain("const stored = await sdk.client.auth.set(")
     const guard = block.indexOf("if (stored.error)")
     expect(guard).toBeGreaterThan(0)

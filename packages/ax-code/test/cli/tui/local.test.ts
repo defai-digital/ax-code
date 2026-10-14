@@ -158,9 +158,12 @@ describe("tui local model preferences", () => {
 
     expect(hasSessionModelPreference(sessions, "session-1")).toBe(true)
     expect(hasSessionModelPreference(sessions, "session-2")).toBe(false)
-    expect(shouldAdoptMessageModelFromHistory(true, true)).toBe(false)
-    expect(shouldAdoptMessageModelFromHistory(true, false)).toBe(true)
-    expect(shouldAdoptMessageModelFromHistory(false, true)).toBe(true)
+    // Adoption fills an empty session slot (revisit restore, first latch after
+    // an auto-route) but never overwrites a recorded session pick — a later
+    // message can carry a server-resolved model (plan_exit handoff, background
+    // delivery, dequeued follow-up) that is not the user's current choice.
+    expect(shouldAdoptMessageModelFromHistory(true)).toBe(false)
+    expect(shouldAdoptMessageModelFromHistory(false)).toBe(true)
   })
 
   test("normalizes and caps persisted session model preferences", () => {

@@ -674,10 +674,14 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
   //   message with agent="build" to hand off out of plan mode, the router
   //   switches "find the bug" to the debug agent). Without this, the
   //   bottom-left chip stays stale.
-  // Restore the message's model only into the session-scoped selection. This
-  // keeps an explicit model stable when the server auto-routes the turn to a
-  // different agent, without copying that model into the agent's global
-  // override and shadowing its config pin in unrelated sessions.
+  // Restore the message's model only into the session-scoped selection, and
+  // only while the session has no recorded preference. This keeps an explicit
+  // model stable when the server auto-routes the turn to a different agent,
+  // without copying that model into the agent's global override and shadowing
+  // its config pin in unrelated sessions. A message whose model was resolved
+  // server-side (plan_exit handoff, background-subagent delivery, a follow-up
+  // dequeued with its enqueue-time model) must not overwrite a pick the user
+  // already made for this session.
   //
   // Use `on()` so only sessionID, lastUserMessage, model-store readiness, and
   // the available primary-agent names trigger re-runs — reads of the current
@@ -709,7 +713,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
         // Only adopt primary-tier agents — subagent results shouldn't change the picker.
         const isPrimaryAgent = local.agent.list().some((x) => x.name === msg.agent)
         if (isPrimaryAgent) {
-          if (msg.model && shouldAdoptMessageModelFromHistory(sessionChanged, local.model.session.has(sessionID))) {
+          if (msg.model && shouldAdoptMessageModelFromHistory(local.model.session.has(sessionID))) {
             local.model.session.set(sessionID, msg.model, msg.agent)
           }
           const shouldSyncAgent = sessionChanged || msg.agent !== local.agent.current().name
