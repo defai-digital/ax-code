@@ -510,6 +510,36 @@ export namespace Config {
       return copy
     }
 
+    // Isolation modes from strictest to loosest. `restrictUntrustedConfig`
+    // drops the absolute worst value ("full-access") per source, but it runs
+    // before any merging and cannot see the accumulated floor, so an untrusted
+    // repository config could still relax a user's `read-only` to
+    // `workspace-write`.
+    const ISOLATION_STRICTNESS = { "read-only": 2, "workspace-write": 1, "full-access": 0 } as const
+
+    /**
+     * Repository-controlled source kinds that the out-of-band project trust
+     * opt-in promotes to trusted. Their descriptor stays `untrusted` so the
+     * source is still reported as repository-controlled, but every untrusted
+     * filter step — including the floor below — steps aside.
+     */
+    const OPT_IN_TRUSTED_KINDS = new Set(["project", "config_directory"])
+
+    function sourceTrustedForFloor(source: McpSource) {
+      if (source.trustedByDefault) return true
+      return OPT_IN_TRUSTED_KINDS.has(source.kind) && ProjectConfigTrust.enabled()
+    }
+
+    /** An untrusted source may tighten the isolation mode, never loosen it. */
+    function tightenIsolationFloor(target: Info, source: Info): Info {
+      const incoming = source.isolation?.mode
+      const floor = target.isolation?.mode
+      if (!incoming || !floor || ISOLATION_STRICTNESS[incoming] >= ISOLATION_STRICTNESS[floor]) return source
+      const isolation = { ...source.isolation }
+      delete isolation.mode
+      return { ...source, isolation }
+    }
+
     function mergeFromSource(source: McpSource, config: Info) {
       recordMcpSources(config, source)
       let scoped = source.kind === "managed" ? config : withoutWebmcpRequirement(source, config)
@@ -518,6 +548,7 @@ export namespace Config {
       if (scoped.llm_routing && !["global", "custom", "inline"].includes(source.kind)) {
         scoped = { ...scoped, llm_routing: RoutePolicy.narrow(result.llm_routing, scoped.llm_routing) }
       }
+      if (!sourceTrustedForFloor(source)) scoped = tightenIsolationFloor(result, scoped)
       result = mergeConfigConcatArrays(result, migrateDeprecatedModeIntoAgent(scoped))
     }
 

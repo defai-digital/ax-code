@@ -2067,6 +2067,65 @@ test("project config can only add to, never replace, a trusted global isolation.
   }
 })
 
+test("untrusted project config cannot loosen a global read-only isolation floor", async () => {
+  // The per-source untrusted filter drops the absolute worst mode
+  // ("full-access"), but it runs before anything is merged and so cannot see
+  // the accumulated floor. Without a merge-time comparison a committed
+  // ax-code.json could relax a user's read-only session to workspace-write.
+  await using globalTmp = await tmpdir()
+  const prevConfig = Global.Path.config
+  ;(Global.Path as { config: string }).config = globalTmp.path
+  Config.global.reset()
+  try {
+    await writeConfig(globalTmp.path, { isolation: { mode: "read-only" } })
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await writeConfig(dir, { isolation: { mode: "workspace-write", network: false } })
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const config = await Config.get()
+        expect(config.isolation?.mode).toBe("read-only")
+        // The same source's tightening fields still apply.
+        expect(config.isolation?.network).toBe(false)
+      },
+    })
+  } finally {
+    ;(Global.Path as { config: string }).config = prevConfig
+    Config.global.reset()
+  }
+})
+
+test("an opted-in trusted project config may still loosen the isolation floor", async () => {
+  // The out-of-band opt-in is the user saying "this repository's config is
+  // mine to trust", which is what lets every other untrusted filter step
+  // aside. The loosening floor must step aside with it.
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+  await using globalTmp = await tmpdir()
+  const prevConfig = Global.Path.config
+  ;(Global.Path as { config: string }).config = globalTmp.path
+  Config.global.reset()
+  try {
+    await writeConfig(globalTmp.path, { isolation: { mode: "read-only" } })
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await writeConfig(dir, { isolation: { mode: "workspace-write" } })
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        expect((await Config.get()).isolation?.mode).toBe("workspace-write")
+      },
+    })
+  } finally {
+    ;(Global.Path as { config: string }).config = prevConfig
+    Config.global.reset()
+  }
+})
+
 test("untrusted project config cannot select a loosening isolation backend", async () => {
   // isolation.backend "app"/"auto" can drop the kernel sandbox, loosening a
   // user or managed floor; an untrusted committed config must not change it.
