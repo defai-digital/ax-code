@@ -90,11 +90,30 @@ async function sendHeadlessRuntimeCommand(input: {
       return postJson(input, `/session/${encodeURIComponent(input.command.sessionID)}/abort`, undefined)
 
     case "permission.reply":
-      return { accepted: true, status: 200, body: await input.client.permission.reply(input.command.body as any) }
+      return headlessReplyResult(await input.client.permission.reply(input.command.body as any))
 
     case "question.reply":
-      return { accepted: true, status: 200, body: await input.client.question.reply(input.command.body as any) }
+      return headlessReplyResult(await input.client.question.reply(input.command.body as any))
   }
+}
+
+/**
+ * The generated client does not throw on non-2xx (throwOnError is off), so a
+ * reply that the server rejected (404 for an already-resolved request, 400 for
+ * invalid answers) would otherwise be reported as accepted. That hid the
+ * failure from the autonomous auto-reply warn path and stalled the run.
+ */
+function headlessReplyResult(result: { data?: unknown; error?: unknown; response?: Response }): HeadlessRuntimeCommandResult {
+  if (!result.response?.ok) {
+    const detail =
+      result.error === undefined
+        ? (result.response?.statusText ?? "")
+        : typeof result.error === "string"
+          ? result.error
+          : JSON.stringify(result.error)
+    throw new Error(`Headless runtime command failed (${result.response?.status ?? "no response"}): ${detail}`)
+  }
+  return { accepted: true, status: 200, body: result.data }
 }
 
 function postSessionCommand(

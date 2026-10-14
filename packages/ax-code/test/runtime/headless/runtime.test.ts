@@ -49,6 +49,38 @@ describe("headless runtime", () => {
     expect(headers).toEqual({ Authorization: "Basic token" })
   })
 
+  test("reports a rejected reply as a failure instead of a silent success", async () => {
+    const runtime = createHeadlessAgentRuntime({
+      baseUrl: "http://localhost",
+      fetch: (async () =>
+        new Response(JSON.stringify({ name: "QuestionNotFoundError", message: "Question not found" }), {
+          status: 404,
+          headers: { "content-type": "application/json" },
+        })) as typeof fetch,
+    })
+
+    await expect(
+      runtime.send({ type: "question.reply", body: { requestID: "que_missing", answers: [["Yes"]] } }),
+    ).rejects.toThrow("Headless runtime command failed (404)")
+    await expect(
+      runtime.send({ type: "permission.reply", body: { requestID: "per_missing", reply: "once" } }),
+    ).rejects.toThrow("Headless runtime command failed (404)")
+  })
+
+  test("returns a reply's body with its real status on success", async () => {
+    const runtime = createHeadlessAgentRuntime({
+      baseUrl: "http://localhost",
+      fetch: (async () =>
+        new Response(JSON.stringify(true), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })) as typeof fetch,
+    })
+
+    const result = await runtime.send({ type: "question.reply", body: { requestID: "que_1", answers: [["Yes"]] } })
+    expect(result).toMatchObject({ accepted: true, status: 200, body: true })
+  })
+
   test("runtime clients use AX Code SDK naming instead of OpenCode aliases", async () => {
     const headlessRuntime = await readFile(
       path.join(import.meta.dirname, "../../../src/runtime/headless/runtime.ts"),
