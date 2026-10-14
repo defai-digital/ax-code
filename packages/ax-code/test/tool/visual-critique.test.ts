@@ -101,4 +101,48 @@ describe("visual_critique tool", () => {
       await fs.rm(projectDir, { recursive: true, force: true })
     }
   })
+
+  test("ignores a summary artifact path that is a symlink out of the run directory", async () => {
+    const fs = await import("fs/promises")
+    const path = await import("path")
+    const os = await import("os")
+    const { VisualArtifactStore } = await import("../../src/visual/artifact")
+    const { Instance } = await import("@/project/instance")
+
+    const projectDir = await fs.mkdtemp(path.join(os.tmpdir(), "visual-critique-link-"))
+    const restore = (Instance as { directory: string }).directory
+    try {
+      ;(Instance as { directory: string }).directory = projectDir
+      const runDir = VisualArtifactStore.runDir(projectDir, "run_link")
+      await fs.mkdir(runDir, { recursive: true })
+      const secret = path.join(projectDir, "secret.png")
+      await fs.writeFile(secret, "do not attach")
+      const link = path.join(runDir, "linked.png")
+      await fs.symlink(secret, link)
+      await fs.writeFile(
+        path.join(runDir, "visual-run.json"),
+        JSON.stringify({ artifacts: [{ kind: "screenshot", path: link, label: "x" }] }),
+      )
+
+      const { VisualCritiqueTool } = await import("../../src/tool/visual/critique")
+      const tool = await VisualCritiqueTool.init()
+      await expect(
+        tool.execute(
+          { runID: "run_link" },
+          {
+            sessionID: "ses_test" as never,
+            messageID: "msg_test" as never,
+            agent: "test",
+            abort: new AbortController().signal,
+            messages: [],
+            metadata: vi.fn(),
+            ask: vi.fn(),
+          },
+        ),
+      ).rejects.toThrow(/No screenshots found/)
+    } finally {
+      ;(Instance as { directory: string }).directory = restore
+      await fs.rm(projectDir, { recursive: true, force: true })
+    }
+  })
 })

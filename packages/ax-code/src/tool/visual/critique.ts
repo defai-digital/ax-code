@@ -38,17 +38,25 @@ export const VisualCritiqueTool = Tool.define("visual_critique", {
     try {
       const summaryContent = await fs.promises.readFile(summaryPath, "utf-8")
       const run = JSON.parse(summaryContent)
-      // The run summary is untrusted (a cloned repo or a prompt-injected write
-      // can ship a crafted .ax-code/ tree), so confine screenshot reads to the
-      // run directory instead of attaching an arbitrary file to the model.
-      screenshotArtifacts = (run.artifacts ?? []).filter((a: { kind: string; path?: string }) => {
-        if (a.kind !== "screenshot" || !a.path) return false
-        if (!Filesystem.contains(runDir, path.resolve(a.path))) {
-          log.warn("ignoring visual artifact outside its run directory", { runID: params.runID, path: a.path })
-          return false
+      // The run summary is untrusted (a prompt-injected write can ship a crafted
+      // .ax-code/ tree), so confine screenshot reads to the run directory instead
+      // of attaching an arbitrary file to the model. `Filesystem.contains` is
+      // lexical — it does not resolve symlinks — so the canonical path is checked
+      // as well: a link inside the run directory would otherwise dereference an
+      // outside file.
+      const runRoot = path.resolve(runDir)
+      const runRootReal = await fs.promises.realpath(runRoot).catch(() => runRoot)
+      for (const artifact of run.artifacts ?? []) {
+        const candidate = artifact as { kind?: string; path?: string }
+        if (candidate.kind !== "screenshot" || !candidate.path) continue
+        const resolved = path.resolve(candidate.path)
+        const real = await fs.promises.realpath(resolved).catch(() => undefined)
+        if (!Filesystem.contains(runRoot, resolved) || !real || !Filesystem.contains(runRootReal, real)) {
+          log.warn("ignoring visual artifact outside its run directory", { runID: params.runID, path: candidate.path })
+          continue
         }
-        return true
-      })
+        screenshotArtifacts.push(artifact)
+      }
     } catch {
       // If no summary exists, try scanning the directory
       try {

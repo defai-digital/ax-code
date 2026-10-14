@@ -5,9 +5,18 @@ vi.mock("@/visual/router", () => ({
   sessionModelFromMessages: vi.fn(() => undefined),
 }))
 
-vi.mock("@/project/instance", () => ({
-  Instance: { directory: "/tmp/test-project" },
-}))
+vi.mock("@/project/instance", () => {
+  const instance = {
+    directory: "/tmp/test-project",
+    worktree: "/",
+    containsPath: (candidate: string) =>
+      candidate === instance.directory || candidate.startsWith(`${instance.directory}/`),
+    // `@/file` (pulled in by the tool's external-directory guard) only needs a
+    // callable state accessor at import time; the tool never reads its cache.
+    state: (init: () => unknown) => init,
+  }
+  return { Instance: instance }
+})
 
 vi.mock("@/visual/snapshot", () => ({
   captureSnapshot: vi.fn(async () => {
@@ -82,5 +91,31 @@ describe("visual_snapshot tool", () => {
     expect(ask).toHaveBeenCalledWith(
       expect.objectContaining({ permission: "read", patterns: ["/tmp/missing-snapshot.png"] }),
     )
+  })
+
+  test("rejects a filePath whose link target leaves the project", async () => {
+    const fs = await import("fs/promises")
+    const path = await import("path")
+    const os = await import("os")
+    const { Instance } = await import("@/project/instance")
+    const { VisualSnapshotTool } = await import("../../src/tool/visual/snapshot")
+
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "visual-snapshot-link-"))
+    const projectDir = path.join(root, "project")
+    await fs.mkdir(projectDir, { recursive: true })
+    const outside = path.join(root, "outside.png")
+    await fs.writeFile(outside, "outside bytes")
+    await fs.symlink(outside, path.join(projectDir, "linked.png"))
+
+    const restore = (Instance as { directory: string }).directory
+    try {
+      ;(Instance as { directory: string }).directory = projectDir
+      const tool = await VisualSnapshotTool.init()
+
+      await expect(tool.execute({ filePath: "linked.png" }, ctx())).rejects.toThrow(/Access denied/)
+    } finally {
+      ;(Instance as { directory: string }).directory = restore
+      await fs.rm(root, { recursive: true, force: true })
+    }
   })
 })

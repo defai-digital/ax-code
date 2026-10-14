@@ -6,6 +6,7 @@ import { Log } from "@/util/log"
 import { captureSnapshot } from "@/visual/snapshot"
 import { checkVisualRouting, sessionModelFromMessages } from "@/visual/router"
 import { BrowserPermission } from "@/visual/permission"
+import { fileToolGuard } from "../external-directory"
 
 const log = Log.create({ service: "tool.visual_snapshot" })
 
@@ -61,15 +62,20 @@ export const VisualSnapshotTool = Tool.define("visual_snapshot", {
         metadata: { url: params.url },
       })
     }
-    // A file capture reads a model-supplied path off disk; gate it like `read`.
-    if (params.filePath) {
-      await ctx.ask({ permission: "read", patterns: [params.filePath], always: ["*"], metadata: {} })
+    // A file capture reads a model-supplied path off disk, so run it through the
+    // same guard as `read`: resolve against the project directory, prompt for the
+    // external-directory boundary, and reject a link whose target leaves the
+    // project. Asking for `read` on the raw input let a linked path inside the
+    // workspace attach an outside file without that boundary check.
+    const filePath = params.filePath ? await fileToolGuard(ctx, params.filePath) : undefined
+    if (filePath) {
+      await ctx.ask({ permission: "read", patterns: [filePath], always: ["*"], metadata: {} })
     }
 
     const source = params.url
       ? { type: "url" as const, url: params.url }
-      : params.filePath
-        ? { type: "file" as const, filePath: params.filePath }
+      : filePath
+        ? { type: "file" as const, filePath }
         : params.source === "region"
           ? { type: "region" as const, x: params.x!, y: params.y!, width: params.width!, height: params.height! }
           : params.source === "window"
