@@ -461,7 +461,13 @@ fn scan_lifecycle(
                 if findings.len() >= max {
                     break;
                 }
-                let create_line_offset = scope.content[..mat.start()].lines().count();
+                // Newlines before the match = the match line's 0-based offset
+                // within the scope. `str::lines().count()` is one too many for
+                // any match not at column 0 (it counts the trailing partial
+                // line), so it reported every finding one line late and made
+                // the suppression lookup inspect the wrong line. Matches the TS
+                // twin and the diagnostics worker, which count `\n` bytes.
+                let create_line_offset = scope.content[..mat.start()].matches('\n').count();
                 let global_line = scope.start + create_line_offset;
                 if global_line > 0
                     && global_line <= lines.len()
@@ -779,13 +785,25 @@ fn scan_hardcodes(
                     break;
                 }
                 let bytes = scan_line.as_bytes();
-                if mat.start() > 0 && is_word_byte(bytes[mat.start() - 1]) {
-                    continue;
+                // JS twin uses (?<![\w.]): reject a match whose preceding byte
+                // is a word character or a dot. A leading `-` preceded by a
+                // word character retries at the digit (only the sign position
+                // is rejected), so `utf-8` yields `8` instead of nothing.
+                let mut start = mat.start();
+                if start > 0 {
+                    let prev = bytes[start - 1];
+                    if is_word_byte(prev) || prev == b'.' {
+                        if bytes[start] == b'-' {
+                            start += 1;
+                        } else {
+                            continue;
+                        }
+                    }
                 }
                 if bytes.get(mat.end()).is_some_and(|byte| is_word_byte(*byte)) {
                     continue;
                 }
-                let val = mat.as_str();
+                let val = &scan_line[start..mat.end()];
                 if TRIVIAL_MAGIC_NUMBERS.contains(val) {
                     continue;
                 }
@@ -796,7 +814,7 @@ fn scan_hardcodes(
                     }
                 }
                 // Skip array indices like [0]
-                let before = &scan_line[..mat.start()];
+                let before = &scan_line[..start];
                 let after_idx = mat.end();
                 if before.ends_with('[')
                     && after_idx < scan_line.len()
@@ -813,7 +831,7 @@ fn scan_hardcodes(
                 findings.push(HardcodeFinding {
                     file: file.to_string(),
                     line: i + 1,
-                    column: column_of(line, mat.start()),
+                    column: column_of(line, start),
                     kind: "magic_number".into(),
                     value: val.to_string(),
                     suggestion: "Extract to a named constant".into(),
@@ -1260,6 +1278,22 @@ mod tests {
     }
 
     #[test]
+    fn hardcode_magic_lookbehind_matches_the_js_twin() {
+        // A digit preceded by `.` is not a magic number (`libc.so.6`).
+        let dotted = scan_hardcodes("open(\"libc.so.6\")\n", "src/a.ts", &enabled(&["magic_number"]), 10);
+        assert_eq!(dotted.len(), 0);
+
+        // A leading `-` preceded by a word character retries at the digit:
+        // `utf-8` yields `8`, and `5-10` yields both `5` and `10`.
+        let hyphen = scan_hardcodes("parse(\"utf-8\")\n", "src/a.ts", &enabled(&["magic_number"]), 10);
+        assert_eq!(hyphen.iter().filter(|f| f.value == "8").count(), 1);
+
+        let range = scan_hardcodes("describe(\"in 5-10 words\")\n", "src/a.ts", &enabled(&["magic_number"]), 10);
+        assert_eq!(range.iter().filter(|f| f.value == "5").count(), 1);
+        assert_eq!(range.iter().filter(|f| f.value == "10").count(), 1);
+    }
+
+    #[test]
     fn hardcode_scan_skips_symbolic_identifiers_and_named_url_or_path_values() {
         let content = r#"
 const errorName = "AI_UnsupportedModelVersionError"
@@ -1345,7 +1379,8 @@ function run() {
 
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].resource_type, "timer");
-        assert_eq!(findings[0].line, 5);
+        // The setInterval call is on line 4 — line 1 is blank.
+        assert_eq!(findings[0].line, 4);
     }
 
     #[test]
