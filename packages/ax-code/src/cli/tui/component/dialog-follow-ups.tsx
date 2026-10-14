@@ -9,7 +9,8 @@ import { useToast } from "@tui/ui/toast"
 import {
   durableFollowUps,
   followUpAction,
-  pauseFollowUp,
+  cancelFollowUpEdit,
+  pauseFollowUpForEdit,
   followUpBody,
   followUpLabel,
   followUpStatus,
@@ -29,7 +30,9 @@ export function DialogFollowUps(props: { sessionID: string; onAttention: () => v
   const sdk = useSDK()
   const toast = useToast()
   const [history, showHistory] = createSignal(false)
-  const items = createMemo(() => durableFollowUps(sync.data.task_queue, props.sessionID, history()))
+  const items = createMemo(() =>
+    durableFollowUps(sync.data.task_queue, props.sessionID, { includeHistory: history(), includeActive: true }),
+  )
   const update = (item: DurableFollowUp) =>
     sync.set("task_queue", (rows) => [...rows.filter((row) => row.id !== item.id), item])
   const reopen = () =>
@@ -54,22 +57,25 @@ export function DialogFollowUps(props: { sessionID: string; onAttention: () => v
         }
       } else if (action !== "edit") update(await followUpAction(sdk, item.id, action))
       else {
-        const paused = await pauseFollowUp(sdk, item.id)
-        update(paused)
-        const body = followUpBody(paused)
+        const hold = await pauseFollowUpForEdit(sdk, item)
+        update(hold.paused)
+        const body = followUpBody(hold.paused)
         const index = body.parts.findIndex((part) => part.type === "text")
         const text = await DialogPrompt.show(dialog, "Edit paused follow-up", {
           value: index < 0 ? "" : body.parts[index].text,
         })
-        if (text !== null) {
+        if (text === null) {
+          const restored = await cancelFollowUpEdit(sdk, hold)
+          if (restored) update(restored)
+        } else {
           const parts = [...body.parts]
           if (index < 0) parts.unshift({ type: "text", text })
           else parts[index] = { ...parts[index], text }
           update(
             await followUpAction(sdk, item.id, "edit", {
-              expectedUpdatedAt: paused.time.updated,
+              expectedUpdatedAt: hold.paused.time.updated,
               title: text.trim().slice(0, 200) || "Follow-up",
-              payload: { ...paused.payload, body: { ...body, parts } },
+              payload: { ...hold.paused.payload, body: { ...body, parts } },
             }),
           )
           toast.show({ message: uiText("ui.savedFollowUpRemainsPausedUntilResumed"), variant: "info" })

@@ -71,17 +71,32 @@ export function mergeFollowUpSnapshot<T extends { id: string; sessionID?: string
   return [...other, ...byID.values()]
 }
 
+export type FollowUpQuery = {
+  /** Keep completed and cancelled rows (the queue manager's history toggle). */
+  includeHistory?: boolean
+  /** Keep the session's own in-flight turn (`running`), which is not pending work. */
+  includeActive?: boolean
+}
+
+/**
+ * The session's saved follow-ups, oldest first. `running` is the turn already
+ * in flight, so it is not pending work by default: the transcript already
+ * renders that turn, and counting it as queued both inflates the follow-up
+ * count and blocks ctrl+s queue promotion behind a barrier that is executing.
+ * The queue manager asks for it explicitly to offer its "stop turn" action.
+ */
 export function durableFollowUps(
   rows: readonly unknown[],
   sessionID: string,
-  includeHistory = false,
+  query: FollowUpQuery = {},
 ): DurableFollowUp[] {
   return rows
     .flatMap((row) => {
       const parsed = FollowUpRow.safeParse(row)
       return parsed.success &&
         parsed.data.sessionID === sessionID &&
-        (includeHistory || !["completed", "cancelled"].includes(parsed.data.status))
+        (query.includeActive || parsed.data.status !== "running") &&
+        (query.includeHistory || !["completed", "cancelled"].includes(parsed.data.status))
         ? [parsed.data]
         : []
     })
@@ -170,7 +185,7 @@ export async function followUpAction(
   return FollowUpRow.parse(await response.json())
 }
 
-export async function pauseFollowUp(sdk: FollowUpSdk, id: string) {
+async function pauseFollowUp(sdk: FollowUpSdk, id: string) {
   if (!sdk.sseConnected) throw new Error("Reconnect before editing saved follow-ups")
   const response = await sdk.fetch(`${sdk.url.replace(/\/$/, "")}/task-queue/${encodeURIComponent(id)}`, {
     headers: directoryRequestHeaders({ directory: sdk.directory }),
@@ -179,4 +194,25 @@ export async function pauseFollowUp(sdk: FollowUpSdk, id: string) {
   if (!response.ok) throw new Error(await responseErrorMessage(response))
   const current = FollowUpRow.parse(await response.json())
   return current.status === "paused" ? current : followUpAction(sdk, id, "pause")
+}
+
+/**
+ * Hold a follow-up paused while its text is being edited. The pause comes
+ * first because an edit cannot race a queued body into execution; `changed`
+ * records whether THIS call paused the row, which is the only case an
+ * abandoned edit may undo.
+ */
+export async function pauseFollowUpForEdit(sdk: FollowUpSdk, item: DurableFollowUp) {
+  const paused = await pauseFollowUp(sdk, item.id)
+  return { paused, changed: item.status !== "paused" }
+}
+
+/**
+ * Undo an abandoned edit (the prompt was dismissed). A row this session paused
+ * returns to the queue instead of being silently left suspended; a row that was
+ * already paused belongs to the interrupt contract and stays paused.
+ */
+export async function cancelFollowUpEdit(sdk: FollowUpSdk, hold: { paused: DurableFollowUp; changed: boolean }) {
+  if (!hold.changed) return undefined
+  return followUpAction(sdk, hold.paused.id, "resume")
 }

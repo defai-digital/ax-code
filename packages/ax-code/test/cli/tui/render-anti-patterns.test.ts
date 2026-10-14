@@ -1042,7 +1042,7 @@ describe("AX Code TUI stability guardrails", () => {
     const submitEnd = submitSrc.indexOf("const selectedModel", submitStart)
     const submitBody = submitSrc.slice(submitStart, submitEnd)
     const slashDispatch = submitBody.indexOf("command.trySlash(slashName)")
-    const autocompleteReturn = submitBody.indexOf("if (autocomplete?.visible) {")
+    const autocompleteReturn = submitBody.indexOf("if (autocomplete?.visible && !options?.steer) {")
 
     expect(slashDispatch).toBeGreaterThan(-1)
     expect(autocompleteReturn).toBeGreaterThan(-1)

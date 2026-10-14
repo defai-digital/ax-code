@@ -33,7 +33,8 @@ import { useKeybind } from "../../context/keybind"
 import {
   durableFollowUps,
   followUpAction,
-  pauseFollowUp,
+  cancelFollowUpEdit,
+  pauseFollowUpForEdit,
   followUpBody,
   followUpLabel,
   followUpStatus,
@@ -201,23 +202,29 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
   function editQueued(id: string) {
     void queueOperation(async () => {
       // Pause first: editing cannot race a queued body into execution.
-      const paused = await pauseFollowUp(sdk, id)
-      updateQueue(paused)
-      const body = followUpBody(paused)
+      const item = queued().find((row) => row.id === id)
+      if (!item) return
+      const hold = await pauseFollowUpForEdit(sdk, item)
+      updateQueue(hold.paused)
+      const body = followUpBody(hold.paused)
       const text = await DialogPrompt.show(queueDialog, "Edit paused follow-up", {
         value: followUpText(body),
         placeholder: uiText("ui.saveChangesThenResumeWhenReady"),
       })
-      if (text === null) return
+      if (text === null) {
+        const restored = await cancelFollowUpEdit(sdk, hold)
+        if (restored) updateQueue(restored)
+        return
+      }
       const parts = [...body.parts]
       const index = parts.findIndex((part) => part.type === "text")
       if (index < 0) parts.unshift({ type: "text", text })
       else parts[index] = { ...parts[index], text }
       updateQueue(
         await followUpAction(sdk, id, "edit", {
-          expectedUpdatedAt: paused.time.updated,
+          expectedUpdatedAt: hold.paused.time.updated,
           title: text.trim().slice(0, 200) || "Follow-up",
-          payload: { ...paused.payload, body: { ...body, parts } },
+          payload: { ...hold.paused.payload, body: { ...body, parts } },
         }),
       )
       toast.show({ message: uiText("ui.followUpSavedAndPausedResumeWhenReady"), variant: "info" })

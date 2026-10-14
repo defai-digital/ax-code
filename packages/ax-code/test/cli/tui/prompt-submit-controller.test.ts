@@ -496,6 +496,30 @@ describe("send-now steering", () => {
     expect(requests).toHaveLength(1)
   })
 
+  test("a send-now steers even while the completion list is open", async () => {
+    const { controller, host, requests, steering, steer } = steerSetup({ generation: "gen-1" })
+    host.autocomplete = { visible: true }
+    await controller.submitSteer()
+    expect(steering).toHaveBeenCalled()
+    expect(steer).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionID: "ses_test", text: "use the other config file" }),
+      { signal: expect.any(AbortSignal) },
+    )
+    expect(requests).toHaveLength(0)
+  })
+
+  test("an unconsumed submit key is still dropped while the completion list is open", async () => {
+    const { controller, host, requests, steering } = steerSetup({ generation: "gen-1" })
+    host.autocomplete = { visible: true }
+    host.sdk.fetch = async (url, init) => {
+      requests.push(new Request(url, init))
+      return Response.json({ id: "queue_saved", status: "waiting_for_idle" }, { status: 202 })
+    }
+    await controller.submit()
+    expect(steering).not.toHaveBeenCalled()
+    expect(requests).toHaveLength(0)
+  })
+
   test.each(["cancel", "dispose"] as const)("%s prevents steering after a late generation lookup", async (action) => {
     const { controller, host, requests, steering, steer } = steerSetup({ generation: "gen-1" })
     const lookup = Promise.withResolvers<{ data: { generation: string } }>()
@@ -599,6 +623,44 @@ describe("empty-composer queue promotion", () => {
     expect(host.toast.show).toHaveBeenCalledWith(
       expect.objectContaining({ variant: "info", message: "No saved follow-ups to steer" }),
     )
+  })
+
+  test("the active turn's own running row does not block the queue promotion", async () => {
+    const active = {
+      ...followUpRow({ id: "tas_0", text: "the running turn", position: 0 }),
+      kind: "prompt",
+      status: "running",
+    }
+    const queued = followUpRow({ id: "tas_1", text: "queued follow-up", position: 1 })
+    const { controller, host, requests } = promotionSetup([active, queued])
+    host.sdk.fetch = async (url, init) => {
+      requests.push(new Request(url, init))
+      return Response.json({ item: cancelledCopy(queued), receipt: { status: "accepted" } })
+    }
+    await controller.submitSteer()
+    expect(requests.map((request) => request.url)).toEqual(["http://localhost:4096/task-queue/tas_1/steer"])
+    expect(host.toast.show).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: "info", message: "Steered 1 follow-up(s) into the running turn" }),
+    )
+  })
+
+  test("a second ctrl+s ignores the promotion already in flight", async () => {
+    const first = followUpRow({ id: "tas_1", text: "first queued", position: 0 })
+    const { controller, host, requests } = promotionSetup([first])
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    host.sdk.fetch = async (url, init) => {
+      requests.push(new Request(url, init))
+      await gate
+      return Response.json({ item: cancelledCopy(first), receipt: { status: "accepted" } })
+    }
+    const inFlight = controller.submitSteer()
+    const second = controller.submitSteer()
+    release()
+    await Promise.all([inFlight, second])
+    expect(requests.map((request) => request.url)).toEqual(["http://localhost:4096/task-queue/tas_1/steer"])
   })
 
   test("a leading barrier steers nothing and keeps every row queued", async () => {

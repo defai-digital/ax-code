@@ -482,6 +482,33 @@ test("a row paused between the steerable check and the hold stays paused when ad
   })
 })
 
+test("an admission interrupted before it lands parks the follow-up instead of starting it", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({})
+      SessionSteering.begin(session.id, new AbortController().signal)
+      const item = await enqueueFollowUp(session.id, "interrupted mid-admission")
+
+      // The steer holds the row, then the user interrupts while admission is
+      // still in flight. finish() records the interrupt on the pending receipt
+      // and rejects it, so the rejection carries the user's intent.
+      vi.spyOn(SessionPrompt, "steer").mockImplementation((sessionID, input) =>
+        SessionSteering.submit(sessionID, input, async () => {
+          SessionSteering.finish(sessionID, { interrupted: true })
+        }),
+      )
+
+      const result = await TaskQueueSteer.steer(item.id)
+      expect(result.receipt?.status).toBe("rejected")
+      // restore() must honor the interrupt and leave the row parked: resuming
+      // it would auto-start the follow-up right after the user's interrupt.
+      expect((await TaskQueue.get(item.id)).status).toBe("paused")
+    },
+  })
+})
+
 test("the steering drain refreshes a steered follow-up's owner heartbeat at the step boundary", async () => {
   await using tmp = await tmpdir({ git: true })
   const app = Server.Default()

@@ -471,7 +471,10 @@ export namespace TaskQueueSteer {
       }
     }
 
-    const restored = await restore()
+    // The admission was rejected. A rejection that raced a user interrupt is
+    // owned by that interrupt: resume() would un-pause and start a follow-up
+    // the interrupt had just parked, so keep the row as it is.
+    const restored = await restore(admission?.interrupted)
     return { item: restored, receipt }
   }
 }

@@ -1,12 +1,15 @@
 import { createStore } from "solid-js/store"
 import { describe, expect, test } from "vitest"
 import {
+  cancelFollowUpEdit,
   durableFollowUps,
   followUpBody,
   followUpLabel,
   followUpStatus,
   isTextFollowUp,
   mergeFollowUpSnapshot,
+  pauseFollowUpForEdit,
+  type FollowUpSdk,
 } from "../../../src/cli/tui/component/prompt/durable-follow-up"
 
 function row(id: string, status = "queued") {
@@ -64,7 +67,9 @@ describe("durable follow-up projection", () => {
     expect(durableFollowUps(state.items, "ses_one")[0].status).toBe("paused")
   })
   test("history explicitly includes completed and cancelled work", () => {
-    expect(durableFollowUps([row("a", "completed"), row("b", "cancelled")], "ses_one", true)).toHaveLength(2)
+    expect(
+      durableFollowUps([row("a", "completed"), row("b", "cancelled")], "ses_one", { includeHistory: true }),
+    ).toHaveLength(2)
   })
   test("separates sessions and task kinds while retaining paused and failed work", () => {
     expect(
@@ -82,6 +87,21 @@ describe("durable follow-up projection", () => {
         "ses_one",
       ).map((item) => item.id),
     ).toEqual(["a", "b", "c"])
+  })
+  test("the active turn's own running row is not a pending follow-up", () => {
+    const active = { ...row("active"), kind: "prompt" as const, status: "running", position: 0 }
+    const pending = { ...row("pending", "waiting_for_idle"), position: 1 }
+    expect(durableFollowUps([active, pending], "ses_one").map((item) => item.id)).toEqual(["pending"])
+    // A running row is the turn in flight whatever its kind; only the queue
+    // manager asks for it, and history alone does not resurrect it.
+    const running = { ...row("running", "running"), position: 0 }
+    expect(durableFollowUps([running, pending], "ses_one", { includeHistory: true }).map((item) => item.id)).toEqual([
+      "pending",
+    ])
+    expect(durableFollowUps([running, pending], "ses_one", { includeActive: true }).map((item) => item.id)).toEqual([
+      "running",
+      "pending",
+    ])
   })
   test("keeps prompt attachments and model selection", () => {
     const item = durableFollowUps([row("a")], "ses_one")[0]
@@ -141,5 +161,52 @@ describe("durable follow-up projection", () => {
     // Unknown kinds stay opaque passthrough entries.
     const automation = { ...queued, id: "auto_1", kind: "automation" }
     expect(mergeFollowUpSnapshot([automation], [], "ses_one", new Map())).toEqual([automation])
+  })
+})
+
+describe("follow-up edit hold", () => {
+  function sdk(responses: unknown[]) {
+    const requests: string[] = []
+    const fake = {
+      sseConnected: true,
+      url: "http://localhost:4096",
+      directory: "/test/workspace",
+      fetch: async (input: RequestInfo | URL) => {
+        requests.push(String(input))
+        return Response.json(responses.shift() ?? row("a"))
+      },
+    } as unknown as FollowUpSdk
+    return { fake, requests }
+  }
+
+  /** The row as the projection hands it to the edit flow. */
+  function projected(status: string) {
+    return durableFollowUps([row("a", status)], "ses_one")[0]!
+  }
+
+  test("holds a pending row for editing and restores it when the edit is abandoned", async () => {
+    const pending = projected("queued")
+    const paused = row("a", "paused")
+    // GET returns the row to pause, POST /pause returns the paused row, POST /resume restores it.
+    const { fake, requests } = sdk([pending, paused, pending])
+    const hold = await pauseFollowUpForEdit(fake, pending)
+    expect(hold.changed).toBe(true)
+    expect(hold.paused.status).toBe("paused")
+    const restored = await cancelFollowUpEdit(fake, hold)
+    expect(restored?.status).toBe("queued")
+    expect(requests).toEqual([
+      "http://localhost:4096/task-queue/a",
+      "http://localhost:4096/task-queue/a/pause",
+      "http://localhost:4096/task-queue/a/resume",
+    ])
+  })
+
+  test("an already paused row is not resumed by an abandoned edit", async () => {
+    const paused = projected("paused")
+    const { fake, requests } = sdk([paused])
+    const hold = await pauseFollowUpForEdit(fake, paused)
+    expect(hold.changed).toBe(false)
+    expect(await cancelFollowUpEdit(fake, hold)).toBeUndefined()
+    expect(requests).toEqual(["http://localhost:4096/task-queue/a"])
   })
 })

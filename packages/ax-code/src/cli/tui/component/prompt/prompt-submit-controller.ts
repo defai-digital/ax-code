@@ -217,6 +217,10 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
   // Send-now requests arrive through submitSteer(), which arms this flag for
   // exactly one submit() so the ordinary keyboard path stays unchanged.
   let steerRequested = false
+  // A queue promotion walks several rows over network round trips. A second
+  // ctrl+s before it settles would re-steer rows the first pass already
+  // cancelled and surface a false failure, so it is dropped instead.
+  let queuePromotionInFlight = false
 
   async function submitSteer() {
     // An empty composer over a busy session promotes the steerable prefix of
@@ -230,7 +234,13 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
       host.store.mode === "normal" &&
       isQueueableStatus(host.status().type)
     ) {
-      await steerSavedFollowUps(sessionID)
+      if (queuePromotionInFlight) return
+      queuePromotionInFlight = true
+      try {
+        await steerSavedFollowUps(sessionID)
+      } finally {
+        queuePromotionInFlight = false
+      }
       return
     }
     steerRequested = true
@@ -413,7 +423,11 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
     // From here on, use routedText for network submission (inputText kept for local settle).
     const submitText = routedText
 
-    if (autocomplete?.visible) {
+    // A visible completion list swallows a plain Enter, so an unconsumed
+    // submit key must not submit behind it. A send-now (ctrl+s) is explicit
+    // intent though: the dropdown never consumes it, so steering the draft as
+    // typed is the whole gesture instead of a silent no-op.
+    if (autocomplete?.visible && !options?.steer) {
       log.info("tui.prompt.submit: autocomplete visible, skipping")
       return
     }
