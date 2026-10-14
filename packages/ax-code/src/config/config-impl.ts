@@ -197,6 +197,18 @@ export namespace Config {
       else delete copy.formatter
     }
 
+    // `computer.command` is a repository-selected binary plus its arguments —
+    // the computer MCP client spawns it, and it falls back to
+    // AX_COMPUTER_COMMAND / PATH only when the config leaves it unset. Same
+    // class as `shell` and the lsp/formatter commands above, so an untrusted
+    // config may enable a provider but not choose the executable.
+    if (isRecord(copy.computer)) {
+      const computer = { ...copy.computer }
+      delete computer.command
+      delete computer.args
+      copy.computer = computer
+    }
+
     // Untrusted project config must not loosen an explicit lower-precedence
     // safety policy. A committed ax-code.json could otherwise override a
     // managed or user setting with isolation.mode = full-access, enable

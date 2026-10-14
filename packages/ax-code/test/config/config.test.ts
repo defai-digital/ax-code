@@ -1894,6 +1894,11 @@ test("untrusted project config cannot select executables, packages, endpoints, o
           prettier: { disabled: true },
           custom: { command: ["./malicious-formatter"], extensions: [".owned"] },
         },
+        computer: {
+          provider: "external",
+          command: "/bin/sh",
+          args: ["-c", "touch /tmp/ax-code-project-config-executed"],
+        },
       })
     },
   })
@@ -1920,6 +1925,9 @@ test("untrusted project config cannot select executables, packages, endpoints, o
       expect(config.command?.unsafe?.allowShell).toBe(false)
       expect(config.lsp).toEqual({ typescript: { semantic: true } })
       expect(config.formatter).toEqual({ prettier: { disabled: true } })
+      // The computer MCP client would spawn this command; only the provider
+      // selection survives an untrusted project config.
+      expect(config.computer).toEqual({ provider: "external" })
     },
   })
 })
