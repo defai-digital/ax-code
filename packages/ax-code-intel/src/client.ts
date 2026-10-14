@@ -399,6 +399,19 @@ export namespace LSPClient {
         count: params.diagnostics.length,
       })
       const exists = diagnostics.has(filePath)
+      // The server may publish for a document version it has already moved
+      // past, so a slow publish can land after a newer one. The client tracks
+      // the version it sent per file; a publish describing an older document
+      // would otherwise overwrite the current diagnostics.
+      const sentVersion = files[filePath]
+      if (params.version !== undefined && sentVersion !== undefined && params.version < sentVersion) {
+        l.debug("skipping diagnostics for an older document version", {
+          path: filePath,
+          version: params.version,
+          sentVersion,
+        })
+        return
+      }
       setDiagnostics(filePath, params.diagnostics)
       // Only suppress the first TypeScript diagnostic event when it carries
       // zero diagnostics (the known "empty initial push" pattern). Real errors

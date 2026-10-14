@@ -173,6 +173,52 @@ describe("LSPClient interop", () => {
     })
   })
 
+  test("ignores a diagnostics push for an older document version", async () => {
+    await using tmp = await tmpdir()
+    const file = "file.ts"
+    await fs.writeFile(path.join(tmp.path, file), "export const x = 1\n")
+    const handle = spawnFakeServer() as any
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const client = await LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: tmp.path,
+        })
+        const target = path.join(tmp.path, file)
+        const uri = pathToFileURL(target).href
+        const diagnostic = (message: string) => ({
+          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+          message,
+        })
+
+        await client.notify.open({ path: file })
+        // A real edit, so the client syncs the changed document and moves the
+        // version it has sent past 0 — which makes a version-0 publish stale.
+        await fs.writeFile(target, "export const x = 2\n")
+        await client.notify.open({ path: file })
+
+        await client.connection.sendNotification("test/publishDiagnostics", {
+          uri,
+          version: 1,
+          diagnostics: [diagnostic("newer")],
+        })
+        await client.connection.sendNotification("test/publishDiagnostics", {
+          uri,
+          version: 0,
+          diagnostics: [diagnostic("older")],
+        })
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        expect(client.diagnostics.get(target)?.[0]?.message).toBe("newer")
+
+        await client.shutdown()
+      },
+    })
+  })
+
   test("handles client/registerCapability request", async () => {
     const handle = spawnFakeServer() as any
 
