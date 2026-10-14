@@ -94,6 +94,7 @@ export async function work<T>(concurrency: number, items: T[], fn: (item: T) => 
 // in-flight deduper: every submitted function still runs.
 export class KeyedSerialQueue {
   private tails = new Map<string, Promise<unknown>>()
+  private admitted = new Set<Promise<unknown>>()
   private accepting = true
 
   size(): number {
@@ -114,9 +115,11 @@ export class KeyedSerialQueue {
 
   /** Wait until all work submitted so far, including already-chained waiters, settles. */
   async drain(): Promise<void> {
-    while (this.tails.size > 0) {
-      await Promise.allSettled([...this.tails.values()])
-    }
+    // clear() detaches per-key sequencing, but cannot release ownership of
+    // admitted work before it settles, including waiters chained to old tails.
+    // Capture admission at entry; teardown callers close() before draining so
+    // later submissions cannot extend this wait or depend on its completion.
+    await Promise.allSettled([...this.admitted])
   }
 
   run<T>(key: string, fn: () => Promise<T>): Promise<T> {
@@ -126,7 +129,9 @@ export class KeyedSerialQueue {
     const tail = next.catch(() => undefined)
 
     this.tails.set(key, tail)
+    this.admitted.add(tail)
     tail.finally(() => {
+      this.admitted.delete(tail)
       if (this.tails.get(key) === tail) this.tails.delete(key)
     })
 

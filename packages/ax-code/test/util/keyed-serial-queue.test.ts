@@ -14,6 +14,55 @@ async function flush(count = 3) {
 }
 
 describe("KeyedSerialQueue", () => {
+  test("drain waits for its admitted snapshot without blocking on later work", async () => {
+    const queue = new KeyedSerialQueue()
+    const initialGate = deferred()
+    const laterGate = deferred()
+    const first = queue.run("initial", () => initialGate.promise)
+    let settled = false
+    const drained = queue.drain().then(() => {
+      settled = true
+    })
+    const later = queue.run("later", () => laterGate.promise)
+    initialGate.resolve()
+    await flush(10)
+    const settledBeforeLater = settled
+    laterGate.resolve()
+    await Promise.all([first, later, drained])
+    expect(settledBeforeLater).toBe(true)
+  })
+
+  test("drain retains running and chained work after clear and replacement", async () => {
+    const queue = new KeyedSerialQueue()
+    const release = deferred()
+    const order: string[] = []
+    const first = queue.run("same", async () => {
+      await release.promise
+      order.push("first")
+    })
+    const second = queue.run("same", async () => {
+      order.push("second")
+    })
+    await flush()
+    queue.clear()
+    await queue.run("same", async () => {
+      order.push("replacement")
+    })
+    queue.close()
+    let settled = false
+    const drained = queue.drain().then(() => {
+      settled = true
+      order.push("drained")
+    })
+    await flush(10)
+    const settledBeforeRelease = settled
+    release.resolve()
+    await Promise.all([first, second, drained])
+    expect(settledBeforeRelease).toBe(false)
+    expect(order).toEqual(["replacement", "first", "second", "drained"])
+    expect(queue.size()).toBe(0)
+  })
+
   test("drain waits for running and chained work", async () => {
     const queue = new KeyedSerialQueue()
     const gate = deferred()
