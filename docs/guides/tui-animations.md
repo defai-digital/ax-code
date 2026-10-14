@@ -2,13 +2,22 @@
 
 Status: Current
 Scope: TUI opening and ending animations and rendering fallbacks
-Last reviewed: 2026-10-09
+Last reviewed: 2026-10-13
 Owner: AX Code TUI maintainers
 
 See [Terminal rendering](terminal-rendering.md) for automatic terminal profiles,
 manual overrides, and the difference between pixel graphics and text rendering.
 
-Each TUI launch randomly selects one of thirty-seven animation pairs with equal probability (1/37 each):
+Each TUI launch randomly selects one of thirty-seven animation pairs with equal probability (1/37 each).
+In pixel mode, Foliage and every landmark scene also pass through a finishing
+pass: a fade in from black and out to black, a soft glow around bright lights,
+a gentle contrast and color grade, and a vignette. Each playback also draws its
+own camera move. Most often the camera holds still; otherwise it slowly pushes
+in, pulls back, or drifts left or right, with a random depth (4–10%), pacing,
+and focal point. The opening and ending draw independently, so the same scene
+can play differently on each launch. The text fallback is unchanged.
+
+The pairs are:
 
 - Digital Code: purple/blue falling code for the opening, reverse code for the ending.
 - Foliage: classic autumn leaves for the opening, golden leaves for the ending.
@@ -46,7 +55,7 @@ Each TUI launch randomly selects one of thirty-seven animation pairs with equal 
 - Steppe: daytime for the opening, night for the ending.
 - Canyon: daytime for the opening, night for the ending.
 - Singapore: Marina Bay daytime for the opening, illuminated bay for the ending.
-- Sanguozhi: a walled city at dawn with cavalry mustering for the opening, lantern-lit walls and campfires at dusk for the ending. Preview with `/sanguozhi` and `/sanguozhi-ending`, or search `Sanguozhi` in the command palette.
+- Sanguozhi: in pixel mode, a shaded-relief campaign map of the late Han heartland with rivers, roads, walled cities, and their historical names. The opening is the age of rival warlords in 184: armies march under faction banners while the date panel turns the months. The ending settles the map at dusk in 280: city lamps come up and every banner turns to one color, spreading outward from Luoyang. The text fallback shows a walled city at dawn and at dusk. Preview with `/sanguozhi` and `/sanguozhi-ending`, or search `Sanguozhi` in the command palette.
 
 Fuji Mountain includes a snow-capped mountain, a reflective lake, cherry blossoms,
 falling petals, and a Shinkansen travelling across the foreground. The 74-column,
