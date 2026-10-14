@@ -78,10 +78,16 @@ class Budget {
    * starve the next. Whatever it does not spend stays in this budget.
    */
   capped<T>(share: number, fill: (child: Budget) => T): T {
-    const child = new Budget(Number.isFinite(this.remaining) ? Math.floor(this.remaining * share) : undefined)
+    // An unbounded parent cannot be split. Computing Infinity - Infinity here
+    // leaves `remaining` NaN, and then every later takeLines() takes the
+    // truncation path (NaN comparisons are always false), keeping all lines but
+    // reporting a false "items were omitted" note. Keep the child unbounded and
+    // skip the debit instead.
+    const bounded = Number.isFinite(this.remaining)
+    const child = new Budget(bounded ? Math.floor(this.remaining * share) : undefined)
     const before = child.remaining
     const result = fill(child)
-    this.remaining -= before - child.remaining
+    if (bounded) this.remaining -= before - child.remaining
     this.omitted += child.omitted
     return result
   }

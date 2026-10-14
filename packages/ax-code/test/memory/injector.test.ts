@@ -166,6 +166,16 @@ describe("memory injection budget", () => {
     expect(context).not.toContain("omitted")
   })
 
+  test("an unbounded budget with global memory does not report omitted items", () => {
+    // capped() over an unbounded parent used to compute Infinity - Infinity,
+    // leaving `remaining` NaN; every scanned section then took the truncation
+    // path and the note claimed omissions although every line was kept.
+    const context = buildContext(large(), { global: memory("/global") })
+    expect(context).toContain("keep-rule")
+    expect(context).toContain("dir/file-399.ts")
+    expect(context).not.toContain("omitted")
+  })
+
   test("drops scanned sections before curated entries and never cuts an entry", () => {
     const context = buildContext(large(), { maxTokens: 400 })
     expect(context).toContain("keep-rule")
