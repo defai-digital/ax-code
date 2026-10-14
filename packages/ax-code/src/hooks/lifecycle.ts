@@ -67,6 +67,12 @@ export namespace LifecycleHooks {
   const HOOK_TIMEOUT_MS = 30_000
   const MAX_CONCURRENT_HOOKS = 4
   const MAX_CAPTURE_BYTES = 1024 * 1024
+  /** Read per call so tests can shorten it; an invalid value falls back. */
+  function hookTimeoutMs(): number {
+    const raw = process.env["AX_CODE_HOOK_TIMEOUT_MS"]
+    const parsed = raw === undefined || raw === "" ? Number.NaN : Number(raw)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : HOOK_TIMEOUT_MS
+  }
   const MAX_COMPAT_ENV_BYTES = 32 * 1024
   const FULL_ENV_FLAG = "AX_CODE_HOOKS_FULL_ENV"
   const READ_HOOK_ARGS =
@@ -495,7 +501,16 @@ export namespace LifecycleHooks {
         } else {
           child.kill("SIGKILL")
         }
-      }, HOOK_TIMEOUT_MS)
+        // A hook whose descendant survives the kill (Windows: detached is false,
+        // so only cmd.exe is killed; POSIX: a child that escaped the group) keeps
+        // the inherited stdout/stderr pipes open, so 'close' never fires and this
+        // promise — and the hook slot `runHook` holds in its finally — would hang
+        // forever. Drop our pipe ends and settle at the timeout instead.
+        child.stdout?.destroy()
+        child.stderr?.destroy()
+        child.stdin?.destroy()
+        finish(124)
+      }, hookTimeoutMs())
       timer.unref?.()
       child.once("error", (error) => {
         stderr.append(error instanceof Error ? error.message : String(error))

@@ -787,3 +787,27 @@ describe("LifecycleHooks session lifecycle firing sites", () => {
     })
   })
 })
+
+describe("LifecycleHooks hook timeout", () => {
+  test("settles at the timeout when a descendant keeps the pipes open", async () => {
+    vi.stubEnv("AX_CODE_HOOK_TIMEOUT_MS", "300")
+    // `shell: true` runs this through sh; the launched node exits, but it leaves
+    // a detached grandchild (its own process group, so the timeout's group kill
+    // misses it) inheriting stdout for 6s. Without settling on the timer the hook
+    // promise — and the slot runHook holds in its finally — would hang until that
+    // child ends.
+    const command =
+      `node -e "const {spawn}=require('node:child_process');` +
+      `const c=spawn(process.execPath,['-e','setTimeout(()=>{},6000)'],{stdio:'inherit',detached:true});` +
+      `c.unref()"`
+    const started = Date.now()
+    const result = await LifecycleHooks.runHooks([{ event: "PostToolUse", command }], {
+      event: "PostToolUse",
+      tool: "bash",
+      args: {},
+      cwd: process.cwd(),
+    })
+    expect(result.outputs[0]?.exit).toBe(124)
+    expect(Date.now() - started).toBeLessThan(3000)
+  }, 20000)
+})
