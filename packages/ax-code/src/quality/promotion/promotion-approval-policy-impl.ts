@@ -444,7 +444,9 @@ export namespace QualityPromotionApprovalPolicy {
     const policySource = input.policySource ?? (input.policy ? "explicit" : "default")
     const requiredOverride = resolved.requiredOverride
     const requirement = resolved.requirement
-    const remediationAuthor = input.bundle.eligibility.remediation?.author ?? null
+    // Canonical identity, matching the approval side: comparison against a raw
+    // spelling would let the remediation author approve their own remediation.
+    const remediationAuthor = input.bundle.eligibility.remediation?.author?.trim() ?? null
     const independentReviewRequired = resolved.reentryApplicable && requirement.requireIndependentReviewer
     const priorApproverExclusionRequired = resolved.reentryApplicable && requirement.requirePriorApproverExclusion
     const maxPriorApproverOverlapRatio = resolved.reentryApplicable ? requirement.maxPriorApproverOverlapRatio : null
@@ -473,7 +475,9 @@ export namespace QualityPromotionApprovalPolicy {
       : null
     const priorPromotionID = input.bundle.eligibility.reentryContext?.promotionID ?? null
     const priorPromotionApprovers = [
-      ...new Set(input.bundle.eligibility.reentryContext?.priorPromotionApprovers ?? []),
+      ...new Set(
+        (input.bundle.eligibility.reentryContext?.priorPromotionApprovers ?? []).map((approver) => approver.trim()),
+      ),
     ].sort()
     const teamCarryoverHistory = [...(input.bundle.eligibility.reentryContext?.teamCarryoverHistory ?? [])].sort(
       (a, b) => {
@@ -493,7 +497,7 @@ export namespace QualityPromotionApprovalPolicy {
       return a.approver.localeCompare(b.approver)
     })
     const reviewerCarryoverByApprover = new Map(
-      reviewerCarryoverHistory.map((entry) => [entry.approver, entry] as const),
+      reviewerCarryoverHistory.map((entry) => [entry.approver.trim(), entry] as const),
     )
     const teamCarryoverByTeam = new Map(teamCarryoverHistory.map((entry) => [entry.team, entry] as const))
     const reportingChainCarryoverHistory = [
@@ -508,6 +512,12 @@ export namespace QualityPromotionApprovalPolicy {
     )
     const verified = input.approvals.map((approval) => ({
       approval,
+      // Identity comparisons (distinctness, independence, overlap, carryover)
+      // must use one canonical spelling: `" mgr@example.com "` and
+      // `"mgr@example.com"` are the same person, and a raw comparison let one
+      // reviewer satisfy a distinct-approver requirement or approve their own
+      // remediation.
+      approver: approval.approver.trim(),
       reasons: approvalReasons(input.bundle, approval),
       approved: approval.disposition === "approved",
     }))
@@ -516,14 +526,12 @@ export namespace QualityPromotionApprovalPolicy {
     const qualifiedApprovals = approvedArtifacts.filter((item) =>
       QualityPromotionApprovalPolicyContract.qualifiesApprovalRole(item.approval.role, requirement.minimumRole),
     )
-    const distinctQualifiedApprovers = new Set(qualifiedApprovals.map((item) => item.approval.approver)).size
+    const distinctQualifiedApprovers = new Set(qualifiedApprovals.map((item) => item.approver)).size
     const independentQualifiedApprovals =
       independentReviewRequired && remediationAuthor
-        ? qualifiedApprovals.filter((item) => item.approval.approver !== remediationAuthor)
+        ? qualifiedApprovals.filter((item) => item.approver !== remediationAuthor)
         : qualifiedApprovals
-    const effectiveQualifiedApprovers = [
-      ...new Set(independentQualifiedApprovals.map((item) => item.approval.approver)),
-    ].sort()
+    const effectiveQualifiedApprovers = [...new Set(independentQualifiedApprovals.map((item) => item.approver))].sort()
     const freshQualifiedApprovers =
       priorApproverExclusionRequired && priorPromotionApprovers.length > 0
         ? effectiveQualifiedApprovers.filter((approver) => !priorPromotionApprovers.includes(approver))
@@ -558,10 +566,10 @@ export namespace QualityPromotionApprovalPolicy {
     const qualifiedApprovalTeamsByApprover = new Map<string, string | null>()
     for (const item of qualifiedApprovals) {
       const normalizedTeam = normalizeTeam(item.approval.team)
-      if (!qualifiedApprovalTeamsByApprover.has(item.approval.approver)) {
-        qualifiedApprovalTeamsByApprover.set(item.approval.approver, normalizedTeam)
-      } else if (normalizedTeam && qualifiedApprovalTeamsByApprover.get(item.approval.approver) === null) {
-        qualifiedApprovalTeamsByApprover.set(item.approval.approver, normalizedTeam)
+      if (!qualifiedApprovalTeamsByApprover.has(item.approver)) {
+        qualifiedApprovalTeamsByApprover.set(item.approver, normalizedTeam)
+      } else if (normalizedTeam && qualifiedApprovalTeamsByApprover.get(item.approver) === null) {
+        qualifiedApprovalTeamsByApprover.set(item.approver, normalizedTeam)
       }
     }
     const qualifiedReviewerTeams = [
@@ -590,13 +598,10 @@ export namespace QualityPromotionApprovalPolicy {
     const qualifiedApprovalReportingChainsByApprover = new Map<string, string | null>()
     for (const item of qualifiedApprovals) {
       const normalizedReportingChain = normalizeReportingChain(item.approval.reportingChain)
-      if (!qualifiedApprovalReportingChainsByApprover.has(item.approval.approver)) {
-        qualifiedApprovalReportingChainsByApprover.set(item.approval.approver, normalizedReportingChain)
-      } else if (
-        normalizedReportingChain &&
-        qualifiedApprovalReportingChainsByApprover.get(item.approval.approver) === null
-      ) {
-        qualifiedApprovalReportingChainsByApprover.set(item.approval.approver, normalizedReportingChain)
+      if (!qualifiedApprovalReportingChainsByApprover.has(item.approver)) {
+        qualifiedApprovalReportingChainsByApprover.set(item.approver, normalizedReportingChain)
+      } else if (normalizedReportingChain && qualifiedApprovalReportingChainsByApprover.get(item.approver) === null) {
+        qualifiedApprovalReportingChainsByApprover.set(item.approver, normalizedReportingChain)
       }
     }
     const qualifiedReportingChains = [
@@ -1051,7 +1056,7 @@ export namespace QualityPromotionApprovalPolicy {
       overallStatus: overallStatusFromGates(gates),
       acceptedApprovals: qualifiedApprovals.map((item) => ({
         approvalID: item.approval.approvalID,
-        approver: item.approval.approver,
+        approver: item.approver,
         role: item.approval.role,
         team: item.approval.team ?? null,
         reportingChain: item.approval.reportingChain ?? null,

@@ -1237,4 +1237,20 @@ describe("QualityPromotionApprovalPolicy", () => {
     expect(summary.gates.find((gate) => gate.name === "prior-reporting-chain-context")?.status).toBe("pass")
     expect(summary.overallStatus).toBe("pass")
   })
+
+  test("treats a whitespace-varied approver as one identity for distinctness", () => {
+    const decisionBundle = bundle("force")
+    const summary = QualityPromotionApprovalPolicy.evaluate({
+      bundle: decisionBundle,
+      approvals: [
+        approval({ bundle: decisionBundle, approver: "mgr@example.com", role: "manager" }),
+        approval({ bundle: decisionBundle, approver: " mgr@example.com ", role: "manager" }),
+      ],
+    })
+
+    expect(summary.qualifiedApprovals).toBe(2)
+    expect(summary.distinctQualifiedApprovers).toBe(1)
+    expect(summary.gates.find((gate) => gate.name === "distinct-approvers")?.status).toBe("fail")
+    expect(summary.overallStatus).toBe("fail")
+  })
 })
