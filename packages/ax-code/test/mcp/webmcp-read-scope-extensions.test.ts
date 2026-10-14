@@ -351,6 +351,7 @@ describe("console stack traces and get_console_message (ADR-192)", () => {
       "    at file:///Users/dev/project/src/main.ts:3:1",
       "    at /home/dev/project/node_modules/react/index.js:1:1",
       "    at C:\\Users\\dev\\project\\src\\win.ts:9:9",
+      "    at c:\\users\\dev\\project\\src\\win.ts:9:9",
     ].join("\n")
     for (const name of ["get_console_message", "list_console_messages"]) {
       const result = { content: [{ type: "text", text: frames }] }
@@ -363,6 +364,7 @@ describe("console stack traces and get_console_message (ADR-192)", () => {
       expect(text).not.toContain("/Users/dev")
       expect(text).not.toContain("/home/dev")
       expect(text).not.toContain("C:\\Users\\dev")
+      expect(text).not.toContain("c:\\users\\dev")
       expect(text).toContain("file://[local path redacted]")
       expect(text).toContain("~/project/node_modules/react/index.js")
     }
