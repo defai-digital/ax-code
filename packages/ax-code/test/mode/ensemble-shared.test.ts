@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import {
   followSkuOnConnectedProviders,
+  isNonTransientMemberError,
   keepDistinctProviderMembers,
   resolveConnectedProviderID,
   resolveExplicitMemberSelection,
@@ -339,5 +340,21 @@ describe("keepDistinctProviderMembers", () => {
     expect(result.rejected).toEqual([
       "Council requires distinct providers — ax-trust-defai-digital/MiniMax-M3 collides with another member on ax-trust-defai-digital.",
     ])
+  })
+})
+
+describe("isNonTransientMemberError", () => {
+  test("matches auth and rate-limit failures on word boundaries only", () => {
+    expect(isNonTransientMemberError("provider returned status 401")).toBe(true)
+    expect(isNonTransientMemberError("429 too many requests")).toBe(true)
+    expect(isNonTransientMemberError("rate limit exceeded")).toBe(true)
+    expect(isNonTransientMemberError("quota exhausted")).toBe(true)
+  })
+
+  test("does not match a port digit run or the word author", () => {
+    // A transient connection failure must still be retried.
+    expect(isNonTransientMemberError("connect ECONNREFUSED 127.0.0.1:40123")).toBe(false)
+    expect(isNonTransientMemberError("failed to generate the author list (4290 tokens)")).toBe(false)
+    expect(isNonTransientMemberError("timeout after 30000ms")).toBe(false)
   })
 })

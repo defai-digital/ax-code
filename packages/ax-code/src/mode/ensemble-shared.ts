@@ -217,8 +217,10 @@ export function keepDistinctProviderMembers<T extends { providerID: string; memb
 export function isNonTransientMemberError(message: string): boolean {
   const text = message.toLowerCase()
   if (/unsupported model version/i.test(text)) return true
-  if (text.includes("401") || text.includes("403") || text.includes("auth")) return true
-  if (text.includes("429") || text.includes("rate limit") || text.includes("rate_limit") || text.includes("quota")) {
+  if (/\b40[13]\b/.test(text) || /\bunauthorized\b|\bforbidden\b|\bauth(?:entication|orization)?\b/.test(text)) {
+    return true
+  }
+  if (/\b429\b/.test(text) || text.includes("rate limit") || text.includes("rate_limit") || /\bquota\b/.test(text)) {
     return true
   }
   return false

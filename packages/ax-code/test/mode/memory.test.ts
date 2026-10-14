@@ -10,6 +10,11 @@ describe("ModeMemory pure helpers", () => {
     expect(ModeMemory.classifyTask("scan for XSS vulnerabilities")).toBe("security")
   })
 
+  test("classifyTask does not read an authoring task as security", () => {
+    expect(ModeMemory.classifyTask("Implement the author lookup")).toBe("implement")
+    expect(ModeMemory.classifyTask("add authentication for the new route")).toBe("security")
+  })
+
   test("aggregateStats ranks winners", () => {
     const stats = ModeMemory.aggregateStats(
       [

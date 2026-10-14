@@ -450,8 +450,10 @@ export namespace Council {
     ) {
       return "JSON schema requirement"
     }
-    if (text.includes("quota") || text.includes("rate") || text.includes("429")) return "rate limit"
-    if (text.includes("auth") || text.includes("401") || text.includes("403")) return "auth"
+    if (/\bquota\b/.test(text) || text.includes("rate limit") || text.includes("rate_limit") || /\b429\b/.test(text))
+      return "rate limit"
+    if (/\b40[13]\b/.test(text) || /\bunauthorized\b|\bforbidden\b|\bauth(?:entication|orization)?\b/.test(text))
+      return "auth"
     return "error"
   }
 

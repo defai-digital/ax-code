@@ -298,6 +298,15 @@ describe("Council.aggregateCouncil", () => {
     expect(Council.classifyMemberFailure("rate limit exceeded 429")).toBe("rate limit")
   })
 
+  test("classifyMemberFailure matches rate and auth labels on word boundaries", () => {
+    // `includes("rate")` used to label these "rate limit".
+    expect(Council.classifyMemberFailure("failed to generate a response")).toBe("error")
+    // `includes("auth")` used to label this "auth".
+    expect(Council.classifyMemberFailure("could not resolve the author field")).toBe("error")
+    expect(Council.classifyMemberFailure("provider status 403 forbidden")).toBe("auth")
+    expect(Council.classifyMemberFailure("unexpected 4290 tokens")).toBe("error")
+  })
+
   test("classifyMemberFailure separates user aborts from timeouts", () => {
     expect(Council.classifyMemberFailure("aborted: This operation was aborted")).toBe("aborted")
   })

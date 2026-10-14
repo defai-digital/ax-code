@@ -50,7 +50,7 @@ export namespace ModeMemory {
 
   export function classifyTask(text: string): TaskClass {
     const t = text.toLowerCase()
-    if (/\b(secur|vuln|cve|auth|xss|inject)/i.test(t)) return "security"
+    if (/\b(?:secur|vuln|cve|xss|inject)|\bauth(?:entication|orization)?\b/i.test(t)) return "security"
     if (/\b(design|architect|trade-?off|should we)\b/i.test(t)) return "design"
     if (/\b(review|pr\b|code quality|lgtm)\b/i.test(t)) return "review"
     if (/\b(bug|debug|crash|failing|stack trace)\b/i.test(t)) return "debug"
