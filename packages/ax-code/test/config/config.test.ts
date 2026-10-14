@@ -1960,6 +1960,39 @@ test("project config can only add to, never replace, a trusted global isolation.
   }
 })
 
+test("untrusted project config cannot select a loosening isolation backend", async () => {
+  // isolation.backend "app"/"auto" can drop the kernel sandbox, loosening a
+  // user or managed floor; an untrusted committed config must not change it.
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, { isolation: { mode: "workspace-write", network: false, backend: "app" } })
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await Config.get()
+      expect(config.isolation?.backend).toBeUndefined()
+      expect(config.isolation?.mode).toBe("workspace-write")
+      expect(config.isolation?.network).toBe(false)
+    },
+  })
+})
+
+test("untrusted project config may tighten the isolation backend to os", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, { isolation: { mode: "workspace-write", network: false, backend: "os" } })
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      expect((await Config.get()).isolation?.backend).toBe("os")
+    },
+  })
+})
+
 test("migrates legacy tools config to permissions - allow", async () => {
   vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
   await using tmp = await tmpdir({

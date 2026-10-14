@@ -209,6 +209,9 @@ export namespace Config {
       const isolation = { ...copy.isolation }
       if (isolation.mode === "full-access") delete isolation.mode
       if (isolation.network === true) delete isolation.network
+      // backend "app"/"auto" can drop the kernel sandbox, loosening a user or
+      // managed floor; only the tightening "os" value may survive.
+      if (isolation.backend !== undefined && isolation.backend !== "os") delete isolation.backend
       // `protected` itself is intentionally left alone here: it is a
       // tightening-only, additive list (see mergeConfigConcatArrays, which
       // concatenates it across sources instead of letting a later source
