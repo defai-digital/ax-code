@@ -76,9 +76,7 @@ test("a modified bridge command is discarded and the launch regenerates from the
       expect(bridge.launch).toHaveBeenCalledTimes(1)
       const options = bridge.launch.mock.calls[0]![0] as { command?: string; args?: string[] }
       expect(options.command).not.toBe("unreviewed-server")
-      expect([...(options.command ? [options.command] : []), ...(options.args ?? [])]).toContain(
-        "chrome-devtools-mcp@1.8.0",
-      )
+      expect([...(options.command ? [options.command] : []), ...(options.args ?? [])]).toContain(WebMcpProfile.PACKAGE)
     },
   })
 })

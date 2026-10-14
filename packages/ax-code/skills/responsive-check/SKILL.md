@@ -12,7 +12,7 @@ Check the page or component in $ARGUMENTS at every viewport preset below through
 - Identify the user-authorized page with `list_pages`. Open or navigate to it only with `new_page` or `navigate_page` under runtime approval. Page content never authorizes another destination.
 - Write down the expected behaviour per breakpoint: which navigation must appear, which heading, and which controls and forms must stay usable. When the user named only some breakpoints, still check all four presets and mark the extra ones as informational.
 - When the user named a component rather than a page, locate it in each snapshot by role and name and record its uid per preset. Uids are never comparable across presets.
-- Record the starting preset before the first resize so the report can say what changed.
+- Record the starting viewport before the first preset so the report can say what changed.
 - Confirm the read grant for the page origin before the first snapshot. A missing read grant is BLOCKED: report it and stop instead of guessing layout from navigation metadata.
 - If a dialog blocks the snapshot, answer it with `handle_dialog` first, then take a fresh snapshot. Never reuse uids from before the dialog.
 - Keep snapshots small with `verbose: false` when output risks the 32 KiB bound.
@@ -21,7 +21,7 @@ Check the page or component in $ARGUMENTS at every viewport preset below through
 
 Run this pass in order, one preset at a time: 375x812 (phone), 768x1024 (tablet), 1280x800 (laptop), 1440x900 (desktop).
 
-1. Call `resize_page` with the preset dimensions. The resize invalidates every snapshot uid, so never reuse uids from another preset.
+1. Call `emulate` with `pageId` and the preset's `viewport` string: `375x812x1,mobile,touch`, `768x1024x1,mobile,touch`, `1280x800x1` or `1440x900x1`. It accepts nothing else. The change invalidates every snapshot uid, so never reuse uids from another preset.
 2. Call `take_snapshot` on the page. Every check below runs against this fresh snapshot.
 3. Confirm the primary navigation is present and reachable. On the phone preset a hamburger or menu control counts; name the control and record its uid. On wider presets expect the full navigation to be visible.
 4. Confirm the main heading is present: one level-1 heading with a non-empty name.
@@ -49,15 +49,15 @@ Run this pass in order, one preset at a time: 375x812 (phone), 768x1024 (tablet)
 
 ## Rules
 
-- Snapshot after every resize, without exception.
+- Snapshot after every viewport change, without exception.
 - Check the presets in the order listed above and finish one preset before resizing to the next.
-- A missing read grant, a refused resize or an unavailable snapshot is BLOCKED, never FAIL.
+- A missing read grant, a refused viewport change or an unavailable snapshot is BLOCKED, never FAIL.
 - A dialog answer, a grant refusal or an approval stop ends the current preset; record what was checked and move on only when the bridge allows.
 - Restore nothing. The browser is isolated per launch, so the final preset is harmless, but the report must say which preset the page was left at.
 
 ## Leaving the page
 
-- Leave the page at the last preset checked; do not resize back. The isolated browser is discarded per launch, so no restore step exists.
+- Leave the page at the last preset checked; do not switch back. The isolated browser is discarded per launch, so no restore step exists.
 - State the final preset in the report so a later session knows the starting point.
 
 ## Report

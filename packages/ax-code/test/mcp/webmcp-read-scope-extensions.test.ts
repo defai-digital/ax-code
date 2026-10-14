@@ -425,7 +425,7 @@ describe("generated limit notes (ADR-192)", () => {
     expect(WebMcpProfile.READ_LIMITS_NOTE).toContain(`${WebMcpProfile.READ_SCOPE_TOOLS.length} tools`)
     expect(WebMcpProfile.INTERACT_LIMITS_NOTE).toContain("click, hover, fill, fill_form take snapshot uids")
     expect(WebMcpProfile.INTERACT_LIMITS_NOTE).toContain("wait_for, press_key, handle_dialog do not accept uid")
-    for (const never of ["click_at", "type_text", "emulate", "get_css_styles", "lighthouse_audit"]) {
+    for (const never of ["click_at", "type_text", "resize_page", "lighthouse_audit"]) {
       expect(WebMcpProfile.READ_LIMITS_NOTE).not.toContain(never)
       expect(WebMcpProfile.INTERACT_LIMITS_NOTE).not.toContain(never)
     }

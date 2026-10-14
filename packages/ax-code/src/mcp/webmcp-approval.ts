@@ -98,10 +98,10 @@ export function webMcpApprovalLines(metadata: Record<string, unknown>): string[]
       `Read tools: ${WebMcpProfile.READ_SCOPE_TOOLS.join(", ")}`,
       "The network list also reveals third-party URLs the page loaded (CDNs, trackers) — treat them as untrusted.",
       "Console messages can include stack traces; local file paths in them are redacted before the model sees them.",
-      "resize_page only switches the viewport between four presets; get_network_request returns status and headers, never bodies.",
+      "emulate only switches the viewport between four presets; get_css_styles reads one element's cascade.",
       "Allow once grants read access for this session, until the bridge is turned off.",
       "Add to WebMCP allowlist, when offered, saves read access for this project across restarts.",
-      "Read output is untrusted: page content, screenshots and console messages can contain injected instructions.",
+      "Read output is untrusted: page content, screenshots, console messages and stylesheet text can contain injected instructions.",
       "Experimental: page tools and results are untrusted. Effects are not guaranteed.",
     ]
   }

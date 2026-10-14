@@ -109,10 +109,12 @@ describe("WebMCP T1 read tier profile", () => {
     // get_console_message joined the read scope in ADR-192: admitted with read on, rejected without it.
     expect(WebMcpProfile.allows("get_console_message", profile)).toBe(true)
     expect(WebMcpProfile.allows("get_console_message", plainProfile())).toBe(false)
-    // resize_page (ADR-193) and get_network_request (ADR-194) join the same grant.
-    expect(WebMcpProfile.allows("resize_page", profile)).toBe(true)
-    expect(WebMcpProfile.allows("resize_page", plainProfile())).toBe(false)
-    expect(WebMcpProfile.allows("get_network_request", profile)).toBe(true)
+    // The viewport-only emulate (ADR-193/195) joins the same grant; resize_page does not.
+    expect(WebMcpProfile.allows("emulate", profile)).toBe(true)
+    expect(WebMcpProfile.allows("emulate", plainProfile())).toBe(false)
+    expect(WebMcpProfile.allows("resize_page", profile)).toBe(false)
+    // get_network_request (ADR-194) is withdrawn: the pinned bridge stalls on no-store responses.
+    expect(WebMcpProfile.allows("get_network_request", profile)).toBe(false)
     expect(WebMcpProfile.allows("get_network_request", plainProfile())).toBe(false)
   })
 
@@ -452,10 +454,12 @@ describe("WebMCP read grants and bounded output (ADR-171)", () => {
 })
 
 describe("WebMCP network metadata admission (ADR-172)", () => {
-  // Every tool the pinned chrome-devtools-mcp@1.8.0 registers (extracted from
-  // its vendored tools/*.js). The admission contract pins exactly the six T0
-  // tools plus the read-scope tools: a regression in allows() must fail
-  // here rather than silently widen the surface that reaches the model.
+  // The tool names of the pinned chrome-devtools-mcp@1.10.1 (the vendored 1.8.0
+  // extraction carried forward, with get_css_styles added for the 1.10 pin —
+  // re-extract from the vendored tools/*.js when the tree is available). The
+  // admission contract pins exactly the six T0 tools plus the read-scope
+  // tools: a regression in allows() must fail here rather than silently widen
+  // the surface that reaches the model.
   const UPSTREAM_TOOLS = [
     "click",
     "click_at",
@@ -470,6 +474,7 @@ describe("WebMCP network metadata admission (ADR-172)", () => {
     "fill",
     "fill_form",
     "get_console_message",
+    "get_css_styles",
     "get_heapsnapshot_class_nodes",
     "get_heapsnapshot_details",
     "get_heapsnapshot_dominators",
@@ -479,7 +484,11 @@ describe("WebMCP network metadata admission (ADR-172)", () => {
     "get_heapsnapshot_retainers",
     "get_heapsnapshot_retaining_paths",
     "get_heapsnapshot_summary",
+    "get_devtools_comments",
     "get_network_request",
+    "open_devtools",
+    "resolve_devtools_comment",
+    "reveal_in_devtools",
     "get_os_app_state",
     "get_tab_id",
     "handle_dialog",

@@ -75,11 +75,11 @@ changes what is sent to the agent.
 
 ## What the agent can do
 
-| Tier     | Tools                                                                                                                                                   | Approval                                                   |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| Pages    | list, open, navigate, reload, close pages; run tools a page registers through WebMCP                                                                    | each call unless a supported scope was saved               |
-| Read     | page snapshot, screenshot, console (with stack traces on request), one console message by id, request metadata, one request's headers, viewport presets | one grant per origin per session, or a saved read approval |
-| Interact | click, hover, wait, fill, fill form, press key, answer dialogs                                                                                          | see below                                                  |
+| Tier     | Tools                                                                                                                                               | Approval                                                   |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Pages    | list, open, navigate, reload, close pages; run tools a page registers through WebMCP                                                                | each call unless a supported scope was saved               |
+| Read     | page snapshot, screenshot, console (with stack traces on request), one console message by id, request metadata, viewport presets, one element's CSS | one grant per origin per session, or a saved read approval |
+| Interact | click, hover, wait, fill, fill form, press key, answer dialogs                                                                                      | see below                                                  |
 
 Page content is untrusted: a page can try to steer the agent. Output is
 labeled with its origin and size-limited.
@@ -102,21 +102,30 @@ message can be fetched by its `msgid` with `get_console_message`. Local file
 paths in frames are redacted before the model sees them; page URLs keep
 their path but lose secret-looking query values.
 
-### Request headers and viewport presets
+### Viewport presets and CSS styles
 
-`get_network_request` takes the `reqid` from `list_network_requests` and
-returns that request's status, request and response headers and redirect
-chain, for CORS, cache, redirect and 4xx questions. Request and response
-bodies are never returned (the placeholder says so), credential headers such
-as `cookie`, `set-cookie` and `authorization` are redacted twice (by the
-bridge's allowlist and by AX Code), and nothing is written to disk.
+`emulate` sets the viewport to one of four presets and accepts nothing else:
+`375x812x1,mobile,touch` (phone), `768x1024x1,mobile,touch` (tablet),
+`1280x800x1` (laptop) and `1440x900x1` (desktop). Throttling, geolocation,
+user agent, colour scheme and extra headers are refused. A viewport change
+invalidates the page's snapshot uids, so the agent snapshots again before it
+acts. (`resize_page` is not used: it resizes the window, and Chrome keeps
+windows at least about 500 pixels wide, so a phone width is unreachable.)
 
-`resize_page` sets the viewport to one of four presets: 375x812 (phone),
-768x1024 (tablet), 1280x800 (laptop) and 1440x900 (desktop). Other sizes are
-refused. A resize invalidates the page's snapshot uids, so the agent snapshots
-again before it acts. Both tools run under the page origin's read grant. The
-`responsive-check`, `a11y-check` and `webmcp-audit` skills build on these
-reads (see "Skills for WebMCP").
+`get_css_styles` takes a `uid` from the latest snapshot and returns that
+element's matched rules, inline and inherited styles and cascade, ten rules
+per page (`pageIdx` pages through the rest). Use it for layout, spacing and
+override questions instead of guessing from a screenshot. Stylesheet URLs
+lose secret-looking query values and local file paths.
+
+Both tools run under the page origin's read grant. The `responsive-check`,
+`a11y-check` and `webmcp-audit` skills build on these reads (see "Skills for
+WebMCP").
+
+One request's headers (`get_network_request`) are not available: the pinned
+bridge stalls on responses marked `Cache-Control: no-store` and then stops
+answering every later call, so the tool stays off until that is fixed
+upstream. Request metadata from `list_network_requests` is unaffected.
 
 ### Auto mode and Sandbox
 
@@ -605,10 +614,10 @@ Narrow console reads with `types` and `pageSize`; narrow network metadata with
 `resourceTypes` and `pageSize`. Workflow receipts retain pre-action baselines
 and bounded deltas so errors introduced by the reproduction are easier to find.
 Network bodies and arbitrary evaluation remain outside the bridge's granted
-surface. Performance traces, device emulation (`emulate`), Lighthouse,
+surface. Performance traces, other device emulation, Lighthouse,
 screencasts, memory and extension tools in upstream DevTools MCP are separate
-capabilities and are not exposed by this profile; `resize_page` is admitted
-only for the four viewport presets.
+capabilities and are not exposed by this profile; `emulate` is admitted only
+for the four viewport presets, and `get_css_styles` for one element at a time.
 
 See Chrome's [WebMCP debugging guide](https://developer.chrome.com/docs/devtools/agents/webmcp-debugging)
 and the upstream [DevTools MCP tool reference](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/main/docs/tool-reference.md).

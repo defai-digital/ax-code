@@ -288,8 +288,8 @@ describe("WebMCP managed requirement", () => {
     const lock = (entry: unknown) => JSON.stringify({ packages: { "node_modules/chrome-devtools-mcp": entry } })
     const good = {
       integrity: WebMcpProfile.VENDORED_INTEGRITY,
-      version: "1.8.0",
-      resolved: "https://registry.npmjs.org/chrome-devtools-mcp/-/chrome-devtools-mcp-1.8.0.tgz",
+      version: WebMcpProfile.VENDORED_VERSION,
+      resolved: `https://registry.npmjs.org/chrome-devtools-mcp/-/chrome-devtools-mcp-${WebMcpProfile.VENDORED_VERSION}.tgz`,
     }
     expect(WebMcpProfile.verifyLockfileIntegrity(lock(good))).toEqual({ ok: true })
     expect(WebMcpProfile.verifyLockfileIntegrity(lock({ ...good, integrity: "sha512-forged" }))).toMatchObject({

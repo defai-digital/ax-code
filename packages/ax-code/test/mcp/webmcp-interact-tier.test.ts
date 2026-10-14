@@ -10,7 +10,7 @@ const readOnly = () => WebMcpProfile.config({ allowedOrigins: [], read: true }, 
 const interactOnly = () => WebMcpProfile.config({ allowedOrigins: [], interact: true }, true).webmcp
 const full = () => WebMcpProfile.config({ allowedOrigins: [], read: true, interact: true }, true).webmcp
 
-const NEVER_ADMITTED = ["click_at", "type_text", "drag", "upload_file", "select_page", "emulate", "evaluate_script"]
+const NEVER_ADMITTED = ["click_at", "type_text", "drag", "upload_file", "select_page", "resize_page", "evaluate_script"]
 
 /** A structured snapshot like the pinned bridge returns with --experimental-structured-content. */
 function snapshotResult(extra: Record<string, unknown>[] = []) {

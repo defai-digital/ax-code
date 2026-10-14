@@ -10,7 +10,7 @@ describe("WebMCP profile", () => {
   test("generates disabled, isolated, pinned and origin-restricted configuration", () => {
     const config = WebMcpProfile.config({ allowedOrigins: origins })
     expect(config.enabled).toBe(false)
-    expect(config.command.slice(0, 3)).toEqual(["npx", "-y", "chrome-devtools-mcp@1.8.0"])
+    expect(config.command.slice(0, 3)).toEqual(["npx", "-y", WebMcpProfile.PACKAGE])
     expect(config.command).toEqual(
       expect.arrayContaining([
         "--isolated",

@@ -1,4 +1,4 @@
-import { expect, test } from "vitest"
+import { afterEach, expect, test, vi } from "vitest"
 import { createServer } from "node:http"
 import { once } from "node:events"
 import { execFileSync } from "node:child_process"
@@ -11,6 +11,14 @@ import { tmpdir } from "../fixture/fixture"
 // Opt-in only: this launches an isolated browser and may download the pinned
 // bridge through npx. No existing browser session or user config is touched.
 const executablePath = process.env.AX_TEST_WEBMCP_CHROME
+
+// The approval-flow test below asserts interactive prompts. Auto mode admits
+// runtime-bound reads without one (ADR-188/189), so the suite runs with Auto
+// off; the Auto path has its own tests (webmcp-interact-asks, read-tier).
+vi.stubEnv("AX_CODE_AUTONOMOUS", "0")
+afterEach(() => {
+  vi.stubEnv("AX_CODE_AUTONOMOUS", "0")
+})
 test.skipIf(!executablePath)(
   "published WebMCP bridge discovers and invokes a real local page tool",
   { timeout: 90_000, retry: 0 },

@@ -72,9 +72,7 @@ test("launcher mode is immutable after import", () => {
 
 test("recognizes profiled and legacy bridges while preserving unrelated MCP servers", () => {
   expect(BrowserRouting.externalBridgeBlocked({ webmcp: {} })).toBe(true)
-  expect(BrowserRouting.externalBridgeBlocked({ type: "local", command: ["npx", "chrome-devtools-mcp@1.8.0"] })).toBe(
-    true,
-  )
+  expect(BrowserRouting.externalBridgeBlocked({ type: "local", command: ["npx", WebMcpProfile.PACKAGE] })).toBe(true)
   expect(
     BrowserRouting.externalBridgeBlocked({
       type: "local",
@@ -99,7 +97,7 @@ test("startup, explicit reconnect and dynamic add cannot launch Chrome in embedd
       const legacy = await MCP.add("legacy", {
         type: "local",
         enabled: true,
-        command: ["npx", "chrome-devtools-mcp@1.8.0"],
+        command: ["npx", WebMcpProfile.PACKAGE],
       })
       expect(legacy.status.legacy).toMatchObject({ status: "blocked" })
       expect(bridge.launch).not.toHaveBeenCalled()
