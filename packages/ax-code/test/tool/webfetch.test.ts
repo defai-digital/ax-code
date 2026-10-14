@@ -206,6 +206,37 @@ describe("tool.webfetch", () => {
     )
   })
 
+  test("fetches an http URL without rewriting the scheme", async () => {
+    let requested: string | undefined
+    await withFetch(
+      async (input) => {
+        requested = String(input)
+        return new Response("plain http ok", {
+          status: 200,
+          headers: { "content-type": "text/plain; charset=utf-8" },
+        })
+      },
+      async () => {
+        await Instance.provide({
+          directory: projectRoot,
+          fn: async () => {
+            const webfetch = await WebFetchTool.init()
+            const result = await webfetch.execute({ url: "http://93.184.216.34/file.txt", format: "text" }, ctx)
+            expect(result.output).toBe("plain http ok")
+            // The tool description used to promise an https upgrade that the
+            // implementation never performed; http is used verbatim.
+            expect(requested).toBe("http://93.184.216.34/file.txt")
+          },
+        })
+      },
+    )
+  })
+
+  test("description does not promise an https upgrade the tool never performs", async () => {
+    const webfetch = await WebFetchTool.init()
+    expect(webfetch.description).not.toContain("upgraded to HTTPS")
+  })
+
   test("cancels the first response body before Cloudflare retry", async () => {
     let calls = 0
     let cancelled = 0
