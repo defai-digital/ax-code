@@ -13,7 +13,7 @@ import {
   listWorkflowEvalCases,
 } from "@/workflow/eval-corpus"
 import { WorkflowRunProjection, summarizeWorkflowRunDetail } from "@/workflow/projection"
-import { WorkflowRoutineDisabledError, WorkflowRoutineNotFoundError, WorkflowRoutineTrigger } from "@/workflow/routine"
+import { WorkflowRoutineDisabledError, WorkflowRoutineNotFoundError, WorkflowRoutineScheduleError, WorkflowRoutineTrigger } from "@/workflow/routine"
 import { WorkflowRun } from "@/workflow/run"
 import { WorkflowScheduler } from "@/workflow/scheduler"
 import {
@@ -23,7 +23,7 @@ import {
   applyWorkflowModelPolicyOverride,
   isWorkflowRuntimeEnabled,
 } from "@/workflow/spec"
-import { WorkflowTemplate, WorkflowTemplateRemovalError } from "@/workflow/template"
+import { WorkflowTemplate, WorkflowTemplateNotFoundError, WorkflowTemplatePromotionError, WorkflowTemplateRemovalError } from "@/workflow/template"
 import {
   WorkflowArtifactEventRecord,
   WorkflowArtifactID,
@@ -545,7 +545,14 @@ export const WorkflowTemplateRoutes = lazy(() =>
         },
       }),
       validator("param", WORKFLOW_TEMPLATE_ID_PARAM),
-      async (c) => c.json(await WorkflowTemplate.get(templateID(c))),
+      async (c) => {
+        try {
+          return c.json(await WorkflowTemplate.get(templateID(c)))
+        } catch (error) {
+          if (error instanceof WorkflowTemplateNotFoundError) throw new HTTPException(404, { message: error.message })
+          throw error
+        }
+      },
     )
     .post(
       "/:templateID/promote",
@@ -562,7 +569,15 @@ export const WorkflowTemplateRoutes = lazy(() =>
         },
       }),
       validator("param", WORKFLOW_TEMPLATE_ID_PARAM),
-      async (c) => c.json(await WorkflowTemplate.promote(templateID(c))),
+      async (c) => {
+        try {
+          return c.json(await WorkflowTemplate.promote(templateID(c)))
+        } catch (error) {
+          if (error instanceof WorkflowTemplateNotFoundError) throw new HTTPException(404, { message: error.message })
+          if (error instanceof WorkflowTemplatePromotionError) throw new HTTPException(409, { message: error.message })
+          throw error
+        }
+      },
     ),
 )
 
@@ -604,7 +619,15 @@ export const WorkflowRoutineRoutes = lazy(() =>
         },
       }),
       validator("json", WorkflowRoutineCreateBody),
-      async (c) => c.json(await WorkflowRoutineTrigger.create(c.req.valid("json"))),
+      async (c) => {
+        try {
+          return c.json(await WorkflowRoutineTrigger.create(c.req.valid("json")))
+        } catch (error) {
+          if (error instanceof WorkflowTemplateNotFoundError) throw new HTTPException(404, { message: error.message })
+          if (error instanceof WorkflowRoutineScheduleError) throw new HTTPException(409, { message: error.message })
+          throw error
+        }
+      },
     )
     .post(
       "/delete",

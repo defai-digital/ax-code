@@ -23,6 +23,39 @@ describe("workflow routes", () => {
     }
   })
 
+  test("maps template and routine domain errors to their declared statuses", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      const app = Server.Default()
+      const directoryQuery = `directory=${encodeURIComponent(tmp.path)}`
+
+      const missingTemplate = await app.request(`/workflow-templates/user:nope?${directoryQuery}`)
+      expect(missingTemplate.status).toBe(404)
+
+      const promoteMissing = await app.request(`/workflow-templates/user:nope/promote?${directoryQuery}`, {
+        method: "POST",
+      })
+      expect(promoteMissing.status).toBe(404)
+
+      const promoteBuiltin = await app.request(`/workflow-templates/builtin:issue-triage/promote?${directoryQuery}`, {
+        method: "POST",
+      })
+      expect(promoteBuiltin.status).toBe(409)
+
+      const createMissing = await app.request(`/workflow-routines?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ templateID: "user:nope", scope: "user", mode: "api", route: "workflow/nope" }),
+      })
+      expect(createMissing.status).toBe(404)
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
   test("creates and controls workflow runs from built-in templates", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
