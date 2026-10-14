@@ -90,6 +90,126 @@ describe("/global/config redaction", () => {
     }
   })
 
+  test("hides per-model provider headers/options and image-generation keys", async () => {
+    const previousConfigPath = Global.Path.config
+    await using tmp = await tmpdir()
+
+    try {
+      ;(Global.Path as { config: string }).config = tmp.path
+      Config.global.reset()
+
+      await fs.mkdir(tmp.path, { recursive: true })
+      await Filesystem.write(
+        path.join(tmp.path, "ax-code.json"),
+        JSON.stringify({
+          provider: {
+            myapi: {
+              options: { baseURL: "https://api.myapi.dev" },
+              models: {
+                "gpt-x": {
+                  headers: { Authorization: "Bearer sk-model-secret" },
+                  options: { apiKey: "sk-model-option-secret", temperature: 0.2 },
+                },
+              },
+            },
+          },
+          image_generation: {
+            provider: "openai",
+            options: { apiKey: "sk-image-secret", baseURL: "https://img.example" },
+          },
+        }),
+      )
+
+      const response = await Server.Default().request("/global/config")
+      expect(response.status).toBe(200)
+
+      const payload = (await response.json()) as {
+        provider?: Record<
+          string,
+          { models?: Record<string, { headers?: Record<string, string>; options?: Record<string, unknown> }> }
+        >
+        image_generation?: { options?: Record<string, unknown> }
+      }
+
+      // A per-model auth header and options bag the provider-level redaction
+      // never reaches must be masked exactly like the provider options.
+      expect(payload.provider?.myapi?.models?.["gpt-x"]?.headers?.Authorization).toBe("[redacted]")
+      expect(payload.provider?.myapi?.models?.["gpt-x"]?.options?.apiKey).toBe("[redacted]")
+      expect(payload.provider?.myapi?.models?.["gpt-x"]?.options?.temperature).toBe(0.2)
+      expect(payload.image_generation?.options?.apiKey).toBe("[redacted]")
+      expect(payload.image_generation?.options?.baseURL).toBe("https://img.example")
+    } finally {
+      ;(Global.Path as { config: string }).config = previousConfigPath
+      Config.global.reset()
+    }
+  })
+
+  test("patch does not persist redacted model headers/options or image-generation keys", async () => {
+    const previousConfigPath = Global.Path.config
+    await using tmp = await tmpdir()
+
+    try {
+      ;(Global.Path as { config: string }).config = tmp.path
+      Config.global.reset()
+
+      await fs.mkdir(tmp.path, { recursive: true })
+      const configPath = path.join(tmp.path, "ax-code.json")
+      await Filesystem.write(
+        configPath,
+        JSON.stringify({
+          provider: {
+            myapi: {
+              models: {
+                "gpt-x": {
+                  headers: { Authorization: "Bearer sk-model-secret" },
+                  options: { apiKey: "sk-model-option-secret" },
+                },
+              },
+            },
+          },
+          image_generation: { provider: "openai", options: { apiKey: "sk-image-secret" } },
+        }),
+      )
+
+      const response = await Server.Default().request("/global/config", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          provider: {
+            myapi: {
+              models: {
+                "gpt-x": { headers: { Authorization: "[redacted]" }, options: { apiKey: "[redacted]" } },
+              },
+            },
+          },
+          image_generation: { provider: "openai", options: { apiKey: "[redacted]" } },
+        }),
+      })
+      expect(response.status).toBe(200)
+
+      const payload = (await response.json()) as {
+        provider?: Record<string, { models?: Record<string, { headers?: Record<string, string> }> }>
+        image_generation?: { options?: Record<string, unknown> }
+      }
+      expect(payload.provider?.myapi?.models?.["gpt-x"]?.headers?.Authorization).toBe("[redacted]")
+      expect(payload.image_generation?.options?.apiKey).toBe("[redacted]")
+
+      const stored = JSON.parse(await Filesystem.readText(configPath)) as {
+        provider?: Record<
+          string,
+          { models?: Record<string, { headers?: Record<string, string>; options?: Record<string, unknown> }> }
+        >
+        image_generation?: { options?: Record<string, unknown> }
+      }
+      expect(stored.provider?.myapi?.models?.["gpt-x"]?.headers?.Authorization).toBe("Bearer sk-model-secret")
+      expect(stored.provider?.myapi?.models?.["gpt-x"]?.options?.apiKey).toBe("sk-model-option-secret")
+      expect(stored.image_generation?.options?.apiKey).toBe("sk-image-secret")
+    } finally {
+      ;(Global.Path as { config: string }).config = previousConfigPath
+      Config.global.reset()
+    }
+  })
+
   test("patch response stays redacted and redacted sentinels do not overwrite secrets", async () => {
     const previousConfigPath = Global.Path.config
     await using tmp = await tmpdir()

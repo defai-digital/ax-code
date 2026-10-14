@@ -110,6 +110,49 @@ function stripRedactedProviderOptions(options: Record<string, unknown> | undefin
   return stripRedactedProviderOptionsDeep(options, 0) as Record<string, unknown>
 }
 
+function maskRecord(rec: Record<string, string> | undefined) {
+  return rec ? Object.fromEntries(Object.entries(rec).map(([k, v]) => [k, v ? REDACTED : v])) : rec
+}
+
+type RedactableModel = { headers?: Record<string, string>; options?: Record<string, unknown> }
+
+// A config-declared provider model can carry credentials the provider-level
+// `options` redaction never reaches: per-model auth `headers` (Authorization,
+// x-api-key) and a per-model `options` bag. The read redaction and the PATCH
+// strip must both walk them, or GET /config and GET /provider return the secret
+// and a later PATCH persists the "[redacted]" sentinel in its place.
+function redactProviderModels<T extends RedactableModel>(
+  models: Record<string, T> | undefined,
+): Record<string, T> | undefined {
+  if (!models) return models
+  return Object.fromEntries(
+    Object.entries(models).map(([id, model]) => {
+      const next = {
+        ...model,
+        headers: model.headers ? maskRecord(model.headers) : model.headers,
+        options: model.options ? redactProviderOptions(model.options) : model.options,
+      } as T
+      return [id, next]
+    }),
+  )
+}
+
+function stripRedactedProviderModels<T extends RedactableModel>(
+  models: Record<string, T> | undefined,
+): Record<string, T> | undefined {
+  if (!models) return models
+  return Object.fromEntries(
+    Object.entries(models).map(([id, model]) => {
+      const next = {
+        ...model,
+        headers: stripRedactedRecord(model.headers),
+        options: stripRedactedProviderOptions(model.options) as T["options"],
+      } as T
+      return [id, next]
+    }),
+  )
+}
+
 export function stripRedactedConfig(config: Config.Info): Config.Info {
   const result: Config.Info = { ...config }
   // Only rewrite provider/mcp when the caller actually sent them. Setting
@@ -125,6 +168,7 @@ export function stripRedactedConfig(config: Config.Info): Config.Info {
         {
           ...p,
           options: stripRedactedProviderOptions(p.options),
+          models: stripRedactedProviderModels(p.models),
         },
       ]),
     )
@@ -150,13 +194,16 @@ export function stripRedactedConfig(config: Config.Info): Config.Info {
       }),
     )
   }
+  if (config.image_generation) {
+    result.image_generation = {
+      ...config.image_generation,
+      options: stripRedactedProviderOptions(config.image_generation.options),
+    }
+  }
   return result
 }
 
 export function redactConfig(config: Config.Info): Config.Info {
-  const maskRecord = (rec: Record<string, string> | undefined) =>
-    rec ? Object.fromEntries(Object.entries(rec).map(([k, v]) => [k, v ? REDACTED : v])) : rec
-
   return {
     ...config,
     provider: config.provider
@@ -166,10 +213,19 @@ export function redactConfig(config: Config.Info): Config.Info {
             {
               ...p,
               options: p.options ? redactProviderOptions(p.options) : p.options,
+              models: redactProviderModels(p.models),
             },
           ]),
         )
       : config.provider,
+    image_generation: config.image_generation
+      ? {
+          ...config.image_generation,
+          options: config.image_generation.options
+            ? redactProviderOptions(config.image_generation.options)
+            : config.image_generation.options,
+        }
+      : config.image_generation,
     mcp: config.mcp
       ? Object.fromEntries(
           Object.entries(config.mcp).map(([name, m]) => {
@@ -195,18 +251,18 @@ export function redactConfig(config: Config.Info): Config.Info {
   }
 }
 
-// Provider `options` is an opaque bag that config and auth loaders fill with
-// credentials (apiKey, OAuth/access tokens, client secrets). The providers
-// list/discovery endpoints must not leak these, so drop the top-level `key`
-// and redact any secret-looking option value — mirroring the redactConfig
-// contract used by the /config endpoints. Non-secret options (e.g. baseURL)
-// are preserved.
+// Provider `options` and per-model `headers`/`options` are opaque bags that
+// config and auth loaders fill with credentials (apiKey, OAuth/access tokens,
+// client secrets, Authorization headers). The providers list/discovery
+// endpoints must not leak these, so drop the top-level `key` and redact any
+// secret-looking value — mirroring the redactConfig contract used by the
+// /config endpoints. Non-secret values (e.g. baseURL) are preserved.
 export function redactProviderInfo(info: Provider.Info): Provider.Info {
   const { key: _key, ...rest } = info
-  if (!rest.options) return rest
   return {
     ...rest,
-    options: redactProviderOptions(rest.options),
+    options: rest.options ? redactProviderOptions(rest.options) : rest.options,
+    models: redactProviderModels(rest.models) ?? rest.models,
   }
 }
 
