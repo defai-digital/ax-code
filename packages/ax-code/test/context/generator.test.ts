@@ -74,4 +74,10 @@ describe("context generator", () => {
     const content = generate(baseInfo)
     expect(content).not.toContain("## Suggested MCP Servers")
   })
+
+  test("points the generated header at an existing init flag", () => {
+    const content = generate(baseInfo, { depth: "standard" })
+    expect(content).toContain("ax-code init --force")
+    expect(content).not.toContain("--refresh")
+  })
 })
