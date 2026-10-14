@@ -230,6 +230,16 @@ describe("scene raster budget", () => {
     expect(size.height % 2).toBe(0)
   })
 
+  test("starts a 1920x1080 window at the 1600x900 raster ceiling", () => {
+    // Benchmarked compromise: a 1920x1080 starting raster measured well over
+    // the 30ms frame budget on every scene, so the ceiling stays at 1600x900
+    // and the adaptive quality steering handles slower machines from there.
+    expect(SCENE_PIXEL_BUDGET).toBe(1600 * 900)
+    expect(sceneRasterSize(1920, 1080, sceneQualityCeiling(1920, 1080))).toEqual({ width: 1600, height: 900 })
+    // Smaller windows keep their native size; the budget never upscales.
+    expect(sceneRasterSize(1280, 720, sceneQualityCeiling(1280, 720))).toEqual({ width: 1280, height: 720 })
+  })
+
   test("shrinks slow frames, grows fast ones, and stays inside its limits", () => {
     const slow = nextSceneQuality({ quality: 1, ceiling: 1, costMs: SCENE_FRAME_BUDGET_MS * 4 })
     expect(slow).toBeLessThan(1)

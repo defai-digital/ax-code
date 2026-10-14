@@ -364,7 +364,7 @@ export function kittyDigitalCodeFrame(
  * image over the same cells either way; a smaller raster only looks softer.
  * The pixel budget is the starting ceiling, the frame budget steers below it.
  */
-export const SCENE_PIXEL_BUDGET = 1280 * 720
+export const SCENE_PIXEL_BUDGET = 1600 * 900
 export const SCENE_FRAME_BUDGET_MS = 30
 export const SCENE_MIN_QUALITY = 0.4
 
