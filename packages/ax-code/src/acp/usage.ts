@@ -56,7 +56,10 @@ export async function sendUsageUpdate(
     return
   }
 
-  const used = msg.tokens.input + (msg.tokens.cache?.read ?? 0)
+  // Cache-read AND cache-write are prompt-side tokens; every other place that
+  // sums this quantity (processor-impl, token-ledger, compaction-budget,
+  // acp/prompt.ts) includes cache write, or the client's context gauge is low.
+  const used = msg.tokens.input + (msg.tokens.cache?.read ?? 0) + (msg.tokens.cache?.write ?? 0)
 
   await connection
     .sessionUpdate({
