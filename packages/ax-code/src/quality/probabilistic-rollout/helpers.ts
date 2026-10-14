@@ -285,8 +285,16 @@ export function qaCommandFailed(input: {
   status: "completed" | "error"
   output: string
   error?: string
+  /**
+   * Bash exit code from the tool result metadata. A non-zero (or `null` —
+   * killed/backgrounded) exit means the run did not complete successfully even
+   * when its output carries no failure keyword: `Error: Cannot find module …`
+   * leaves a "completed" status with an empty failure summary.
+   */
+  exit?: number | null
 }) {
   if (input.status === "error") return true
+  if (input.exit !== undefined && input.exit !== 0) return true
   if (!isQATestCommand(input.command)) return false
 
   const text = `${input.output}\n${input.error ?? ""}`.toLowerCase()
@@ -324,6 +332,10 @@ export function extractQARuns(rows: ReturnType<typeof toolResultRows>, calls: Ma
     const summary = toolSummary(row, call)
     if (!summary) return []
     const output = typeof row.event_data.output === "string" ? row.event_data.output : ""
+    // Distinguish an explicit `exit: null` (killed / backgrounded) from a
+    // missing key: only a real number is reported for a foreground exit.
+    const exitRaw = asRecordOrUndefined(row.event_data.metadata)?.["exit"]
+    const exit = typeof exitRaw === "number" ? exitRaw : exitRaw === null ? null : undefined
     return [
       {
         callID,
@@ -332,6 +344,7 @@ export function extractQARuns(rows: ReturnType<typeof toolResultRows>, calls: Ma
           command,
           status: toolStatus(row.event_data.status),
           output,
+          exit,
           error: typeof row.event_data.error === "string" ? row.event_data.error : undefined,
         }),
         framework: qaFramework(command),

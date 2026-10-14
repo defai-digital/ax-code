@@ -581,6 +581,66 @@ describe("ProbabilisticRollout.exportReplay", () => {
       },
     })
   })
+
+  test("treats a QA command that exited non-zero as failing even without a failure keyword", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+
+        Recorder.begin(sid)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: sid,
+          agent: "qa",
+          model: "test/model",
+          directory: tmp.path,
+        })
+        Recorder.emit({
+          type: "tool.call",
+          sessionID: sid,
+          tool: "bash",
+          callID: "call_qa_exit",
+          input: { command: "bun test" },
+        })
+        // Bash reports status "completed" for a non-zero exit; the run failed to
+        // even start (no module), so no failure keyword appears in the output.
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: sid,
+          tool: "bash",
+          callID: "call_qa_exit",
+          status: "completed",
+          output: "Error: Cannot find module 'vitest'",
+          metadata: { exit: 2 },
+          durationMs: 12,
+        })
+        Recorder.emit({
+          type: "session.end",
+          sessionID: sid,
+          reason: "completed",
+          totalSteps: 0,
+        })
+        Recorder.end(sid)
+
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const exported = await ProbabilisticRollout.exportReplay(sid, "qa")
+        expect(exported.items[0]?.evidence.summary).toMatchObject({
+          runCount: 1,
+          failingRunCount: 1,
+          passingRunCount: 0,
+        })
+        expect(exported.items[0]?.baseline.readiness).toBe("needs_review")
+        expect(exported.items.map((item) => item.artifactKind)).toEqual(["qa_run", "qa_failure"])
+
+        EventQuery.deleteBySession(sid)
+      },
+    })
+  })
 })
 
 describe("ProbabilisticRollout.summarizeReplayReadiness", () => {
