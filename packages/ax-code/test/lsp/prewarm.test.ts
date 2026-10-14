@@ -49,6 +49,16 @@ describe("LSP.selectPrewarmFiles", () => {
       }),
     ).toEqual(["/repo/Dockerfile", "/repo/a.ts"])
   })
+  test("recognizes uppercase file extensions by lowercasing them", () => {
+    // Regression: the extension was used verbatim, so `Foo.TS` resolved to
+    // "unknown" and was never prewarmed.
+    expect(
+      LSP.selectPrewarmFiles(["/repo/Foo.TS", "/repo/lib.rs"], {
+        maxFiles: 5,
+        maxLanguages: 5,
+      }),
+    ).toEqual(["/repo/Foo.TS", "/repo/lib.rs"])
+  })
 })
 
 describe("LSP.prewarmFiles", () => {
