@@ -292,6 +292,17 @@ export namespace Worktree {
     return process.platform === "win32" || process.platform === "darwin" ? normalized.toLowerCase() : normalized
   }
 
+  /**
+   * Realpath WITHOUT the case folding `canonical()` applies. Instance cache keys
+   * come from `Filesystem.resolve` (case-preserving), so only this spelling can
+   * match them; the lowercased form is for comparison keys (git, sandboxes).
+   */
+  async function realOnDiskPath(input: string) {
+    const abs = path.resolve(input)
+    const real = await fs.realpath(abs).catch(() => abs)
+    return path.normalize(real)
+  }
+
   function worktreeName(directory: string) {
     return path.basename(directory) || directory
   }
@@ -336,11 +347,14 @@ export namespace Worktree {
     const branches = Instance.project.vcs === "git" ? await worktreeBranchMap() : new Map<string, string>()
     const items = await Promise.all(
       sandboxes.map(async (sandbox) => {
-        const directory = await canonical(sandbox)
-        const branch = branches.get(directory)
+        // Compare against the branch map by the case-folded key, but RETURN the
+        // recorded spelling: clients send it back as `x-ax-code-directory`, and
+        // Instance keys on the case-preserving Filesystem.resolve, so a
+        // lowercased value boots a second Instance for the same directory.
+        const branch = branches.get(await canonical(sandbox))
         return ListItem.parse({
-          directory,
-          name: worktreeName(directory),
+          directory: sandbox,
+          name: worktreeName(sandbox),
           ...(branch ? { branch } : {}),
         })
       }),
@@ -657,6 +671,9 @@ export namespace Worktree {
     cancelPendingStartScripts(input.directory)
 
     const directory = await canonical(input.directory)
+    // Case-preserving spelling for the Instance cache, which keys on
+    // Filesystem.resolve and does not fold case on macOS/Windows.
+    const realDirectory = await realOnDiskPath(input.directory)
     // Capture the recorded spellings before Git or filesystem cleanup removes
     // the paths. Canonical comparison keys may change case on macOS/Windows
     // and cannot replace the original database keys after the directory is gone.
@@ -713,15 +730,15 @@ export namespace Worktree {
     }
 
     const cleanupInstance = async () => {
-      if (Instance.list().includes(directory)) {
+      if (Instance.list().includes(realDirectory)) {
         await Instance.provide({
-          directory,
+          directory: realDirectory,
           fn: async () => {
             await Instance.dispose()
           },
         }).catch((error) => {
           log.warn("failed to dispose removed worktree instance", {
-            directory,
+            directory: realDirectory,
             error: toErrorMessage(error),
           })
         })

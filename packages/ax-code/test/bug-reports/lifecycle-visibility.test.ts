@@ -113,6 +113,12 @@ describe("bug report lifecycle visibility guards", () => {
       .filter((index) => index !== -1)
     expect(cleanupIndex).toBeGreaterThan(-1)
     expect(cleanIndexes.some((index) => index > cleanupIndex)).toBe(true)
+
+    // The Instance cache keys on Filesystem.resolve (case-preserving on
+    // macOS/Windows), so the dispose guard must use the non-lowercased realpath;
+    // `canonical()` folds case and would never match.
+    expect(worktree).toContain("Instance.list().includes(realDirectory)")
+    expect(worktree).not.toContain("Instance.list().includes(directory)")
   })
 
   test("keeps Rust daemon and watcher send failures visible", async () => {
