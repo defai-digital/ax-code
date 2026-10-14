@@ -128,6 +128,39 @@ describe("AuditReport.generate", () => {
     })
   })
 
+  test("redacts credentials in the command line it logs", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "Audit report redaction" })
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "tool.call",
+          sessionID: session.id,
+          tool: "bash",
+          callID: "call-secret",
+          input: { command: "curl -H 'Authorization: Bearer super-secret-token' example.com" },
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "bash",
+          callID: "call-secret",
+          status: "completed",
+          output: "QUOTA_TOKEN=abc123 applied",
+          durationMs: 3,
+        })
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const report = await AuditReport.generate(session.id)
+        expect(report).not.toContain("super-secret-token")
+        expect(report).not.toContain("abc123")
+      },
+    })
+  })
+
   test("orders the action log by when each tool call started", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

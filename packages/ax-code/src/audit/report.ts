@@ -9,6 +9,7 @@ import { Risk } from "../risk/score"
 import { truncate } from "../util/format"
 import { finiteNumber } from "../util/number"
 import { Env } from "../util/env"
+import { redactAuditText } from "./redact"
 import { stringList } from "../util/string-list"
 import path from "path"
 
@@ -144,7 +145,9 @@ function extractTargetCell(tool: string, input: Record<string, unknown>): string
 }
 
 function escapeCell(s: string): string {
-  return s.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\n/g, " ")
+  // Every free-form cell lands in a durable report: a credential in a command
+  // line or in a tool's output must not survive the render.
+  return redactAuditText(s).replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\n/g, " ")
 }
 
 function formatResult(event: Extract<ReplayEvent, { type: "tool.result" }>): string {
@@ -176,7 +179,8 @@ export namespace AuditReport {
         if (msg.info.role === "user") {
           const text = msg.parts.find((p) => p.type === "text")
           if (text && "text" in text) {
-            goal = truncate(text.text, 500)
+            // The prompt is quoted verbatim into a durable report.
+            goal = truncate(redactAuditText(text.text), 500)
           }
           break
         }

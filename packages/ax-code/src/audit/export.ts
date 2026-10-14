@@ -5,6 +5,7 @@ import type { SessionID } from "../session/schema"
 import { Filesystem } from "@/util/filesystem"
 import { finiteNumber } from "@/util/number"
 import { eventTokens } from "../replay/tokens"
+import { redactAuditPayload } from "./redact"
 
 interface ExportContext {
   policy?: { name: string; version: string }
@@ -129,7 +130,9 @@ export namespace AuditExport {
   export function* stream(sessionID: SessionID, ctx?: ExportContext): Generator<string> {
     const rows = EventQuery.bySessionWithTimestamp(sessionID)
     for (const row of rows) {
-      yield JSON.stringify(toAuditRecord(sessionID, row.event_data, row.time_created, ctx))
+      // The exported lines are a durable artifact a user shares: credentials in
+      // a command line or a tool's output must not survive the export.
+      yield JSON.stringify(redactAuditPayload(toAuditRecord(sessionID, row.event_data, row.time_created, ctx)))
     }
   }
 
@@ -147,7 +150,7 @@ export namespace AuditExport {
       const rows = EventQuery.allSince({ since, cursor })
       if (rows.length === 0) return
       for (const row of rows) {
-        yield JSON.stringify(toAuditRecord(row.session_id, row.event_data, row.time_created, ctx))
+        yield JSON.stringify(redactAuditPayload(toAuditRecord(row.session_id, row.event_data, row.time_created, ctx)))
       }
       const last = rows[rows.length - 1]
       if (!last) return
