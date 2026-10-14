@@ -77,6 +77,13 @@ export async function resolvePromptLoopResult(
     }),
   )
 
+  // An aborted run that produced no message of its own must reject with
+  // AbortError rather than scan history and hand back a previous turn's
+  // assistant message as this run's result.
+  if (input.expectedMessageID === undefined && input.abort.aborted) {
+    throw new DOMException("Aborted", "AbortError")
+  }
+
   for await (const item of deps.stream(input.sessionID)) {
     if (item.info.role === "user") continue
     if (item.info.error?.name === "MessageAbortedError" && item.info.error.data.metadata?.reason === "backend_restart")

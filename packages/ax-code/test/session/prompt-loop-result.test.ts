@@ -142,4 +142,23 @@ describe("resolvePromptLoopResult", () => {
 
     expect(result).toBe(current)
   })
+
+  test("an aborted run that produced no message does not return a previous turn's message", async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const stale = message("assistant", "msg_previous")
+
+    await expect(
+      resolvePromptLoopResult(
+        {
+          sessionID: SessionID.descending(),
+          abort: controller.signal,
+          resumeExisting: false,
+          drainJoinerCallbacks: () => [],
+          shiftQueuedCallback: () => undefined,
+        },
+        { prune: async () => {}, stream: (() => stream([stale])) as any },
+      ),
+    ).rejects.toMatchObject({ name: "AbortError" })
+  })
 })
