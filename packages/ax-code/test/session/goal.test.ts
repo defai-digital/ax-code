@@ -4,6 +4,8 @@ import { Provider } from "../../src/provider/provider"
 import { Session } from "../../src/session"
 import { SessionGoal } from "../../src/session/goal"
 import { GoalPlanWriter } from "../../src/session/goal-plan-writer"
+import { GoalPlan } from "../../src/session/goal-plan"
+import { Bus } from "../../src/bus"
 import { LLM } from "../../src/session/llm"
 import { SessionPrompt } from "../../src/session/prompt"
 import { tmpdir } from "../fixture/fixture"
@@ -290,6 +292,45 @@ describe("SessionGoal", () => {
         expect(second.status).toBe("active")
         expect(second.tokensUsed).toBe(0)
         expect(second.time.created).toBeGreaterThan(first.time.created)
+
+        await SessionGoal.clear(session.id)
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("a goal created while clear awaits plan cleanup is not hidden by a stale null", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        await SessionGoal.create({ sessionID: session.id, objective: "first goal" })
+
+        const seen: Array<{ goal: { objective?: string } | null }> = []
+        const unsubscribe = Bus.subscribe(SessionGoal.Event.Updated, (event) => {
+          seen.push({ goal: event.properties.goal as { objective?: string } | null })
+        })
+
+        const realRemove = GoalPlan.remove
+        const removeSpy = vi.spyOn(GoalPlan, "remove").mockImplementation(async (sessionID, created) => {
+          // A concurrent create lands while clear() is awaiting plan cleanup.
+          await SessionGoal.create({ sessionID: session.id, objective: "second goal" })
+          return realRemove(sessionID, created)
+        })
+
+        try {
+          await SessionGoal.clear(session.id)
+
+          expect((await SessionGoal.get(session.id))?.objective).toBe("second goal")
+          // The last published update must describe the goal that exists, not
+          // a stale null that would blank the projection.
+          expect(seen.at(-1)?.goal).toMatchObject({ objective: "second goal" })
+        } finally {
+          removeSpy.mockRestore()
+          unsubscribe()
+        }
 
         await SessionGoal.clear(session.id)
         await Session.remove(session.id)

@@ -341,8 +341,13 @@ export namespace SessionGoal {
       return row.time_created
     })
     if (removedCreated === undefined) return
-    await GoalPlan.remove(sessionID, removedCreated).catch(() => undefined)
+    // Publish before awaiting the plan-file cleanup. A goal created while that
+    // await is in flight publishes its own update first; publishing this null
+    // afterwards would leave the event projection showing "no goal" while the
+    // database holds the new active one. removeCopiedGoal already orders it
+    // this way.
     publish(undefined, sessionID)
+    await GoalPlan.remove(sessionID, removedCreated).catch(() => undefined)
   }
 
   async function removeCopiedGoal(sessionID: SessionID, expected: Info) {
