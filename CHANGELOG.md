@@ -6,6 +6,22 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.25.7] - 2026-10-14
+
+### Changed
+
+- Publish paired SDK 2.6.18 with the AX Code 7.25.7 release.
+
+### Fixed
+
+- Reject oversized response bodies immediately even when transport cancellation stalls.
+- Preserve trust-scoped configuration and permission denies across configuration sources.
+- Fence LSP cache writes against file changes and scope server concurrency to each project.
+- Preserve task, goal, plugin and shard ownership through asynchronous cleanup and recovery.
+- Redact credentials in audit storage, reports and exports, and retain writable audit rows after a row failure.
+- Enforce file permission patterns and validate destructive commands, patch boundaries and operation receipts.
+- Align LSP unit fixtures with project scopes and verify cache hashes again before writing.
+
 ## [7.25.6] - 2026-10-14
 
 ### Changed
