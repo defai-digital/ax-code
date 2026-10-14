@@ -1,9 +1,13 @@
 import path from "path"
+import fs from "fs/promises"
 import z from "zod"
 import { ConfigMarkdown } from "../config/markdown"
 import { Global } from "../global"
 import { Filesystem } from "../util/filesystem"
 import { Glob } from "../util/glob"
+import { Log } from "../util/log"
+
+const log = Log.create({ service: "command.file" })
 
 export namespace FileCommand {
   export const SourceTool = z.enum(["ax-code", "agents", "opencode", "claude"])
@@ -134,6 +138,14 @@ export namespace FileCommand {
     sourceTool: SourceTool
     scope: Scope
   }): Promise<Info | undefined> {
+    // Glob follows symlinks; a symlinked command file inside a cloned repo could
+    // point at any readable file (e.g. ~/.ssh/id_rsa) and have its bytes become
+    // the command template. Reject anything that resolves outside the config
+    // directory, mirroring loadContainedMarkdownConfig.
+    if (!(await isContainedCommandFile(input.root, input.file))) {
+      log.warn("ignoring command file symlink outside commands directory", { file: input.file, root: input.root })
+      return undefined
+    }
     const md = await ConfigMarkdown.parse(input.file).catch((error) => {
       if (isMissingFile(error)) return undefined
       throw error
@@ -228,5 +240,11 @@ export namespace FileCommand {
     if (Filesystem.isEnoent(error)) return true
     if (!ConfigMarkdown.FrontmatterError.isInstance(error)) return false
     return Filesystem.isEnoent((error as Error).cause)
+  }
+
+  async function isContainedCommandFile(root: string, file: string) {
+    const rootReal = await fs.realpath(path.resolve(root)).catch(() => path.resolve(root))
+    const fileReal = await fs.realpath(path.resolve(file)).catch(() => undefined)
+    return !!fileReal && Filesystem.contains(rootReal, fileReal)
   }
 }

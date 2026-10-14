@@ -62,6 +62,27 @@ Review branch $ARGUMENTS.
   })
 })
 
+test.skipIf(process.platform === "win32")("ignores a symlinked command file that escapes the commands directory", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      const commandDir = path.join(dir, ".agents", "commands")
+      await fs.mkdir(commandDir, { recursive: true })
+      const secret = path.join(dir, "outside-secret.txt")
+      await fs.writeFile(secret, "SUPER-SECRET-PRIVATE-KEY-CONTENT\n")
+      await fs.symlink(secret, path.join(commandDir, "linked.md"))
+      await fs.writeFile(path.join(commandDir, "real.md"), "Real command template\n")
+    },
+  })
+
+  await withTestHome(path.join(tmp.path, "home"), async () => {
+    const results = await FileCommand.discover({ directory: tmp.path, worktree: tmp.path })
+    const names = results.map((entry) => entry.name)
+    expect(names).toContain("real")
+    expect(names).not.toContain("linked")
+  })
+})
+
 test("orders project file-backed commands ahead of same-named global ones", async () => {
   // Regression test: home is an ancestor of the project directory (mirrors
   // ~/code/myrepo nested under ~), so the global command's location string
