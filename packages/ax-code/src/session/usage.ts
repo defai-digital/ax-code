@@ -114,8 +114,13 @@ export namespace SessionUsage {
       const today = new Date()
       today.setHours(0, 0, 0, 0)
       for (let i = windowDays - 1; i >= 0; i--) {
-        const ts = today.getTime() - i * MS_IN_DAY
-        const key = dayKey(ts)
+        // Step back by calendar day (setDate) rather than a fixed 24h. A DST
+        // transition makes one local day 23 or 25 hours, so subtracting
+        // milliseconds across it lands on the wrong date: the window loses a
+        // day (whose tokens then have no bucket) and gains one outside it.
+        const day = new Date(today)
+        day.setDate(day.getDate() - i)
+        const key = dayKey(day.getTime())
         perDay.set(key, { day: key, sessions: 0, tokens: 0 })
       }
     }

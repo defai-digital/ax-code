@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
@@ -159,5 +159,50 @@ describe("SessionUsage.load", () => {
         expect(usage.tools).toEqual({ bash: 1 })
       },
     })
+  })
+
+  test("keeps every local calendar day across a DST transition", async () => {
+    const originalTZ = process.env.TZ
+    // America/Toronto springs forward on 2026-03-08 (a 23-hour local day).
+    process.env.TZ = "America/Toronto"
+    await using tmp = await tmpdir({ git: true })
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({ title: "DST" })
+          await seedConversation({
+            sessionID: session.id,
+            cwd: tmp.path,
+            providerID: "anthropic",
+            modelID: "claude-sonnet-4",
+            tokens: { input: 100, output: 50 },
+            tools: [],
+          })
+
+          vi.useFakeTimers()
+          vi.setSystemTime(new Date("2026-03-09T15:00:00-04:00"))
+          try {
+            const usage = await SessionUsage.load({ days: 7, projectID: Instance.project.id })
+            // A fixed 24h step would skip 2026-03-08 entirely (23-hour day) and
+            // start the window a day early.
+            expect(usage.perDay.map((day) => day.day)).toEqual([
+              "2026-03-03",
+              "2026-03-04",
+              "2026-03-05",
+              "2026-03-06",
+              "2026-03-07",
+              "2026-03-08",
+              "2026-03-09",
+            ])
+          } finally {
+            vi.useRealTimers()
+          }
+        },
+      })
+    } finally {
+      if (originalTZ === undefined) delete process.env.TZ
+      else process.env.TZ = originalTZ
+    }
   })
 })
