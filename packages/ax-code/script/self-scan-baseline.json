@@ -2001,7 +2001,7 @@
       ]
     },
     "security_scan": {
-      "count": 510,
+      "count": 511,
       "findings": [
         {
           "fingerprint": "437e1d0157fc1965a429fe7f0e9474576f6c0db625ea27bb6ce1b57af9e2cd9f",
@@ -6082,6 +6082,14 @@
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "5b3c64652bf45c4e82e6d34aec593cc50baae60a5b3bbb5306894e5f73312ec1",
+          "file": "src/provider/provider-impl.ts",
+          "line": 1093,
+          "severity": "high",
+          "kind": "ssrf",
+          "summary": "Reviewed provider transport: user-configured local and private endpoints are intentional; trust-scoped config prevents repository endpoint injection."
         }
       ]
     },
