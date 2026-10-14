@@ -36,10 +36,14 @@ export type CompareResult = {
  */
 function matchArtifacts(before: VisualRun, after: VisualRun): CompareMatch[] {
   const matches: CompareMatch[] = []
-  const url =
-    before.target.type === "url" ? before.target.url : after.target.type === "url" ? after.target.url : undefined
+  const beforeUrl = before.target.type === "url" ? before.target.url : undefined
+  const afterUrl = after.target.type === "url" ? after.target.url : undefined
 
-  if (!url) return matches
+  // Match only the same URL, as the contract says. Taking whichever run has a
+  // URL target paired artifacts from two different origins and labelled them
+  // with the before run's URL.
+  if (!beforeUrl || beforeUrl !== afterUrl) return matches
+  const url = beforeUrl
 
   // Group screenshots by label (which encodes viewport, e.g. "viewport-desktop")
   const beforeScreens = before.artifacts.filter((a) => a.kind === "screenshot")

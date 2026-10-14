@@ -112,6 +112,22 @@ describe("visual.compare", () => {
     expect(result.matches.length).toBe(2)
   })
 
+  test("compareVisualRuns does not pair artifacts from different URLs", () => {
+    const before = makeRun({
+      id: "run-before",
+      target: { type: "url", url: "http://localhost:3000", profile: "isolated" },
+      artifacts: [{ id: "a1", kind: "screenshot", label: "viewport-desktop", path: "/tmp/a1.png" }],
+    })
+    const after = makeRun({
+      id: "run-after",
+      target: { type: "url", url: "http://evil.example", profile: "isolated" },
+      artifacts: [{ id: "b1", kind: "screenshot", label: "viewport-desktop", path: "/tmp/b1.png" }],
+    })
+
+    const result = compareVisualRuns(before, after)
+    expect(result.matches.length).toBe(0)
+  })
+
   test("compareVisualRuns skips non-matching viewport labels", () => {
     const before = makeRun({
       id: "run-before",
