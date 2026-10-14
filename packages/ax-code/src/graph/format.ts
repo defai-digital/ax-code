@@ -345,8 +345,10 @@ export namespace GraphFormat {
     const stepHasError = new Map<string, boolean>()
     for (const edge of graph.edges) {
       if (edge.type !== "step_contains") continue
-      toolCount.set(edge.from, (toolCount.get(edge.from) ?? 0) + 1)
       const child = graph.nodes.find((n) => n.id === edge.to)
+      // Only a tool CALL is a tool: the matching tool_result node is also a
+      // step child, so counting every edge doubled the label.
+      if (child?.type === "tool_call") toolCount.set(edge.from, (toolCount.get(edge.from) ?? 0) + 1)
       if (child?.status === "error") stepHasError.set(edge.from, true)
     }
 
@@ -430,7 +432,8 @@ export namespace GraphFormat {
     const toolCount = new Map<string, number>()
     for (const edge of graph.edges) {
       if (edge.type !== "step_contains") continue
-      toolCount.set(edge.from, (toolCount.get(edge.from) ?? 0) + 1)
+      const child = graph.nodes.find((n) => n.id === edge.to)
+      if (child?.type === "tool_call") toolCount.set(edge.from, (toolCount.get(edge.from) ?? 0) + 1)
     }
 
     for (const node of sorted) {
