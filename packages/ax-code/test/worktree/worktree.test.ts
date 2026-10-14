@@ -188,6 +188,32 @@ test("createReady rejects option-like git start points before creating a worktre
   })
 })
 
+test("reset refuses to reset the primary workspace from a linked-worktree instance", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  const info = await Instance.provide({
+    directory: tmp.path,
+    fn: () => Worktree.create({ name: "reset-primary-guard" }),
+  })
+
+  try {
+    await Instance.provide({
+      directory: info.directory,
+      fn: async () => {
+        // Instance.worktree is the linked sandbox here, but the project's
+        // primary worktree must still be protected from reset.
+        expect(Instance.worktree).not.toBe(Instance.project.worktree)
+        await expect(Worktree.reset({ directory: tmp.path })).rejects.toThrow("Cannot reset the primary workspace")
+      },
+    })
+  } finally {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.remove({ directory: info.directory }),
+    })
+  }
+})
+
 test("reset cancels pending bootstrap before queueing start scripts", async () => {
   await using tmp = await tmpdir({ git: true })
   await fs.writeFile(path.join(tmp.path, "tracked.txt"), "ready\n")

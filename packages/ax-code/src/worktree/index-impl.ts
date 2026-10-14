@@ -849,7 +849,11 @@ export namespace Worktree {
     cancelPendingStartScripts(input.directory)
 
     const directory = await canonical(input.directory)
-    const primary = await canonical(Instance.worktree)
+    // Instance.worktree is the CURRENT checkout (a sandbox when the instance
+    // runs inside a linked worktree), so it must not stand in for the primary
+    // checkout: reset({directory: <main repo>}) from a sandbox would otherwise
+    // reset the user's main worktree. Use the project's recorded worktree.
+    const primary = await canonical(Instance.project.worktree)
     if (directory === primary) {
       throw new ResetFailedError({ message: "Cannot reset the primary workspace" })
     }
