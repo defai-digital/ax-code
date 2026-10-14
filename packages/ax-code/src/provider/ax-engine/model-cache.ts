@@ -792,14 +792,20 @@ export async function downloadModel(input: {
     )
   }
   input.signal?.throwIfAborted()
-  return markPreparedWithLockHeld({
-    modelID,
-    modelPath: parsed.dest,
-    quantization,
-    revision: definition.revision ?? parsed.revision,
-  }).catch((error: unknown) => {
+  try {
+    // Await inside the `using` scope: returning the promise would dispose the
+    // prepare lock as soon as downloadModel returns, letting another process
+    // rewrite prepare state while this one is still marking the download
+    // complete.
+    return await markPreparedWithLockHeld({
+      modelID,
+      modelPath: parsed.dest,
+      quantization,
+      revision: definition.revision ?? parsed.revision,
+    })
+  } catch (error: unknown) {
     throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: ${toErrorMessage(error)}`)
-  })
+  }
 }
 
 export type AxEngineReclaimResult = {
