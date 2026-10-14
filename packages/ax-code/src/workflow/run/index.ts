@@ -202,7 +202,10 @@ async function setStatus(input: WorkflowRunState.SetStatusInput): Promise<Workfl
   const status = completionGate.ok ? parsed.status : "blocked"
   const updates: Partial<typeof WorkflowRunTable.$inferInsert> = {
     status,
-    error: completionGate.ok ? parsed.error : completionGate.message,
+    // Coerce a missing error to null: drizzle drops undefined keys, so the old
+    // failure text would otherwise survive a re-enable and be reported as a
+    // blocker even after the run completes.
+    error: completionGate.ok ? (parsed.error ?? null) : completionGate.message,
     time_updated: now,
   }
   if (status === "running" && current.time.started === undefined) updates.time_started = now
@@ -224,7 +227,8 @@ async function setPhaseStatus(input: WorkflowRunState.SetPhaseStatusInput): Prom
   const now = Date.now()
   const updates: Partial<typeof WorkflowPhaseTable.$inferInsert> = {
     status: parsed.status,
-    error: parsed.error,
+    // Null (not undefined) so a re-enabled phase actually clears a stale error.
+    error: parsed.error ?? null,
     time_updated: now,
   }
   if (parsed.status === "running" && current.time.started === undefined) updates.time_started = now
@@ -287,7 +291,8 @@ async function setChildStatus(input: WorkflowRunState.SetChildStatusInput): Prom
     output_summary: parsed.outputSummary,
     artifact_ids: parsed.artifactIDs ?? current.artifactIDs,
     evidence_refs: parsed.evidenceRefs ?? current.evidenceRefs,
-    error: parsed.error,
+    // Null (not undefined) so a re-enabled child actually clears a stale error.
+    error: parsed.error ?? null,
     time_updated: now,
   }
   if (parsed.status === "running" && current.time.started === undefined) updates.time_started = now

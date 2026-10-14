@@ -376,6 +376,37 @@ describe("WorkflowRun state", () => {
     })
   })
 
+  test("clears a stale error when a failed record is re-activated", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun) })
+        const detail = await WorkflowRun.getDetail(run.id)
+        const phase = detail.phases[0]!
+
+        // A re-enabled record must drop the old failure text; otherwise the
+        // projection keeps reporting it as a live blocker after recovery.
+        const child = await WorkflowRun.appendChild({ runID: run.id, phaseID: phase.id, agent: "worker" })
+        const failedChild = await WorkflowRun.setChildStatus({ id: child.id, status: "failed", error: "model failed" })
+        expect(failedChild.error).toBe("model failed")
+        const requeuedChild = await WorkflowRun.setChildStatus({ id: child.id, status: "queued" })
+        expect(requeuedChild.error).toBeUndefined()
+
+        const failedPhase = await WorkflowRun.setPhaseStatus({ id: phase.id, status: "failed", error: "phase failed" })
+        expect(failedPhase.error).toBe("phase failed")
+        const rerunPhase = await WorkflowRun.setPhaseStatus({ id: phase.id, status: "running" })
+        expect(rerunPhase.error).toBeUndefined()
+
+        const failedRun = await WorkflowRun.setStatus({ id: run.id, status: "failed", error: "run failed" })
+        expect(failedRun.error).toBe("run failed")
+        const rerunRun = await WorkflowRun.setStatus({ id: run.id, status: "running" })
+        expect(rerunRun.error).toBeUndefined()
+      },
+    })
+  })
+
   test("publishes compact artifact events without raw payloads", async () => {
     await using tmp = await tmpdir({ git: true })
 
