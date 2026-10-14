@@ -93,6 +93,25 @@ describe("alibaba-pai discovery", () => {
     expect(model.limit).toEqual({ context: 1048576, input: 1048576 - 32_000, output: 32_000 })
   })
 
+  test("relabels records to a requested provider id instead of the vendor id", () => {
+    const models = [
+      {
+        id: "GLM-5.2-FP8",
+        name: "GLM 5.2 FP8",
+        context: 1_048_576,
+        output: 32_000,
+        toolCall: true,
+        reasoning: true,
+        attachment: false,
+        temperature: false,
+      },
+    ]
+    const relabeled = alibabaPaiModelRecords(models, "https://pai.example", "my-pai")
+    expect(relabeled[ModelID.make("GLM-5.2-FP8")]?.providerID).toBe("my-pai")
+    const vendorRecords = alibabaPaiModelRecords(models, "https://pai.example")
+    expect(vendorRecords[ModelID.make("GLM-5.2-FP8")]?.providerID).toBe(ALIBABA_PAI_PROVIDER_ID)
+  })
+
   test("fails when the service returns no models", async () => {
     const fetcher = (async () =>
       new Response(JSON.stringify({ object: "list", data: [] }), {

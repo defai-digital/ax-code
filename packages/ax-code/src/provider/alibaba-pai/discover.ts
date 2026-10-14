@@ -5,6 +5,7 @@ import {
 } from "../private-gpu/discover"
 import { requirePrivateGpuVendor } from "../private-gpu/presets"
 import type { Provider } from "../provider"
+import { ProviderID } from "../schema"
 import { ALIBABA_PAI_PROVIDER_ID } from "./constants"
 
 const vendor = requirePrivateGpuVendor(ALIBABA_PAI_PROVIDER_ID)
@@ -18,9 +19,11 @@ export function alibabaPaiModelRecords(
 ): Record<string, Provider.Model> {
   const records = privateGpuModelRecords(models, baseURL, vendor)
   if (providerID === ALIBABA_PAI_PROVIDER_ID) return records
-  return Object.fromEntries(
-    Object.entries(records).map(([id, model]) => [id, { ...model, providerID: model.providerID }]),
-  )
+  // Re-key to the requested provider. `model.providerID` is always the vendor
+  // id, so spreading it left the records labelled alibaba-pai and ignored the
+  // argument.
+  const relabeled = ProviderID.make(providerID)
+  return Object.fromEntries(Object.entries(records).map(([id, model]) => [id, { ...model, providerID: relabeled }]))
 }
 
 export async function discoverAlibabaPaiModels(input: {
