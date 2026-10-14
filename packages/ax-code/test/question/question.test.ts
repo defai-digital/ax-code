@@ -223,6 +223,33 @@ test("reject - throws RejectedError", async () => {
   })
 })
 
+test("ask - rejects with RejectedError when the turn aborts", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const controller = new AbortController()
+      const askPromise = Question.ask({
+        sessionID: SessionID.make("ses_abort"),
+        questions: [
+          {
+            question: "Release me?",
+            header: "Abort",
+            options: [{ label: "Yes", description: "Yes" }],
+          },
+        ],
+        signal: controller.signal,
+      })
+
+      expect(await Question.list()).toHaveLength(1)
+      controller.abort()
+
+      await expect(askPromise).rejects.toBeInstanceOf(Question.RejectedError)
+      expect(await Question.list()).toHaveLength(0)
+    },
+  })
+})
+
 test("reject - removes from pending list", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({

@@ -158,6 +158,7 @@ export namespace Question {
     sessionID: SessionID
     questions: Info[]
     tool?: { messageID: MessageID; callID: string }
+    signal?: AbortSignal
   }
 
   const state = Instance.state(
@@ -225,12 +226,26 @@ export namespace Question {
       questions: input.questions,
       tool: input.tool,
     }
-    current.pending.set(id, { info, deferred })
+    const entry: PendingEntry = { info, deferred }
+    current.pending.set(id, entry)
     Bus.publishDetached(Event.Asked, info)
+
+    // Release the question when the turn aborts, mirroring Permission.ask.
+    // Without it the tool never returns, the AI SDK's tool-results stream
+    // never closes, and the session stays busy behind an unanswerable prompt.
+    const signal = input.signal
+    const onAbort = () => {
+      if (current.pending.get(id) !== entry || !current.pending.delete(id)) return
+      Bus.publishDetached(Event.Rejected, { sessionID: info.sessionID, requestID: id })
+      deferred.reject(new RejectedError())
+    }
+    signal?.addEventListener("abort", onAbort, { once: true })
+    if (signal?.aborted) onAbort()
 
     try {
       return await deferred.promise
     } finally {
+      signal?.removeEventListener("abort", onAbort)
       current.pending.delete(id)
     }
   }
