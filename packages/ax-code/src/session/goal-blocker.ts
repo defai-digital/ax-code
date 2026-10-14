@@ -10,11 +10,16 @@ export function goalBlockerEvidence(messages: readonly MessageV2.WithParts[], si
     ? [{ id: latestUser.info.id, kind: "user" }]
     : []
   for (const message of messages) {
-    if (message.info.role !== "assistant" || message.info.time.created < since) continue
+    if (message.info.role !== "assistant") continue
     for (const part of message.parts) {
-      if (part.type === "tool" && !ADMIN.has(part.tool) && ["completed", "error"].includes(part.state.status)) {
-        evidence.push({ id: part.id, kind: "tool", tool: part.tool, status: part.state.status })
-      }
+      if (part.type !== "tool" || ADMIN.has(part.tool)) continue
+      if (part.state.status !== "completed" && part.state.status !== "error") continue
+      // Scope by when the tool actually finished, not when the enclosing
+      // assistant message started. A message that creates the goal and then
+      // runs a failing command has `time.created` before the goal, so a
+      // message-level cutoff would drop evidence the model is required to cite.
+      if (part.state.time.end < since) continue
+      evidence.push({ id: part.id, kind: "tool", tool: part.tool, status: part.state.status })
     }
   }
   return evidence
