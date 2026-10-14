@@ -221,6 +221,19 @@ describe("memory injection budget", () => {
     expect(context).toContain("decision")
   })
 
+  test("counts CJK entries at the CJK rate so they respect the budget", () => {
+    const body = "字".repeat(4000) // ~4000 tokens, twice the 2000-token budget
+    const cjk: ProjectMemory = {
+      ...memory("/repo"),
+      sections: { feedback: { tokens: 0, entries: [{ name: "rule", body, savedAt: "2026-09-21" }] } },
+    }
+
+    // A chars/4 heuristic counted the 4000-char entry as 1000 tokens and
+    // injected it whole; the CJK-aware estimate must drop it instead.
+    const context = buildContext(cjk, { maxTokens: 2000 })
+    expect(context).not.toContain(body)
+  })
+
   test("derives the budget from the context window with a floor and an unknown fallback", () => {
     expect(budgetForContext(65536)).toBe(6553)
     expect(budgetForContext(8192)).toBe(2000)

@@ -7,6 +7,7 @@ import type { EntrySection, MemoryEntry, MemorySection, ProjectMemory } from "./
 import * as store from "./store"
 import { entryApplies } from "./applicability"
 import { Log } from "../util/log"
+import { TokenEstimate } from "@/provider/token-estimate"
 import path from "node:path"
 import { realpath } from "node:fs/promises"
 
@@ -44,7 +45,10 @@ function orderEntriesForPrompt(entries: MemoryEntry[]): MemoryEntry[] {
 }
 
 function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4)
+  // Unified CJK-aware estimator (ADR-139 D5). A local chars/4 heuristic
+  // under-counted CJK ~4x, so the injected-memory budget was ineffective for
+  // Chinese/Japanese/Korean content.
+  return TokenEstimate.textTokens(text)
 }
 
 /** Share of the model context window that injected memory may occupy. */

@@ -88,4 +88,16 @@ describe("memory.generator", () => {
     expect(memory.sections.patterns?.content).toContain("Framework: React")
     expect(memory.sections.patterns?.content).toContain("Testing: configured")
   })
+
+  test("keeps a CJK section within the token budget", async () => {
+    await using tmp = await tmpdir()
+    // 20k CJK characters are ~20k tokens, five times the 4000-token budget; a
+    // chars/4 budget let the whole section through un-truncated.
+    await fs.writeFile(path.join(tmp.path, "README.md"), "字".repeat(20_000))
+
+    const memory = await generate(tmp.path, { maxTokens: 4000 })
+
+    expect(memory.totalTokens).toBeLessThanOrEqual(4000)
+    expect(memory.sections.readme?.tokens ?? 0).toBeLessThanOrEqual(4000)
+  })
 })

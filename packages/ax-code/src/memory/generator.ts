@@ -61,16 +61,28 @@ function estimateTokens(text: string): number {
 const TRUNCATE_SUFFIX = "\n... (truncated)"
 
 function truncateToTokens(text: string, maxTokens: number): string {
-  const maxChars = maxTokens * 4
-  if (text.length <= maxChars) return text
-  // When the budget can't fit even the suffix, drop the section entirely —
-  // appending the suffix anyway over-shoots maxTokens by ~4 per section.
-  if (maxChars <= TRUNCATE_SUFFIX.length) return ""
-  const sliceLen = maxChars - TRUNCATE_SUFFIX.length
-  let truncated = text.slice(0, sliceLen)
-  const last = truncated.charCodeAt(truncated.length - 1)
-  if (last >= 0xd800 && last <= 0xdbff) truncated = truncated.slice(0, -1)
-  return truncated + TRUNCATE_SUFFIX
+  if (estimateTokens(text) <= maxTokens) return text
+  // When the budget can't fit even the suffix, drop the section entirely.
+  if (estimateTokens(TRUNCATE_SUFFIX) > maxTokens) return ""
+
+  // Longest prefix whose estimate plus the suffix fits the budget. The
+  // estimator is monotonic in prefix length, so binary search is exact. A
+  // chars-based budget (`maxTokens * 4`) assumed Latin text and let CJK
+  // sections pass through un-truncated at ~4x the limit.
+  let low = 0
+  let high = text.length
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2)
+    if (estimateTokens(text.slice(0, dropTrailingHighSurrogate(text, mid)) + TRUNCATE_SUFFIX) <= maxTokens) low = mid
+    else high = mid - 1
+  }
+  return text.slice(0, dropTrailingHighSurrogate(text, low)) + TRUNCATE_SUFFIX
+}
+
+function dropTrailingHighSurrogate(text: string, end: number): number {
+  if (end <= 0) return end
+  const last = text.charCodeAt(end - 1)
+  return last >= 0xd800 && last <= 0xdbff ? end - 1 : end
 }
 
 /**
