@@ -69,10 +69,10 @@ export namespace CompatibilityImport {
   }
 
   async function commandCandidates(input: { source: Source; root: string; targetRoot: string }) {
-    const matches = await scan(input.root, "commands/**/*.md")
+    const matches = await scan(input.root, "{command,commands}/**/*.md")
     return Promise.all(
       matches.map(async (sourcePath) => {
-        const rel = path.relative(path.join(input.root, "commands"), sourcePath)
+        const rel = relativeAfterAny(sourcePath, [path.join(input.root, "command"), path.join(input.root, "commands")])
         const targetPath = path.join(input.targetRoot, "commands", rel)
         const warnings = await commandWarnings(sourcePath)
         return candidate(input.source, "command", sourcePath, targetPath, warnings)
@@ -81,10 +81,10 @@ export namespace CompatibilityImport {
   }
 
   async function skillCandidates(input: { source: Source; root: string; targetRoot: string }) {
-    const matches = await scan(input.root, "skills/**/SKILL.md")
+    const matches = await scan(input.root, "{skill,skills}/**/SKILL.md")
     return Promise.all(
       matches.map(async (sourcePath) => {
-        const rel = path.relative(path.join(input.root, "skills"), sourcePath)
+        const rel = relativeAfterAny(sourcePath, [path.join(input.root, "skill"), path.join(input.root, "skills")])
         const targetPath = path.join(input.targetRoot, "skill", rel)
         return candidate(input.source, "skill", sourcePath, targetPath)
       }),
