@@ -776,6 +776,31 @@ describe("QualityPromotionApprovalPolicy", () => {
     expect(mixedCohorts.qualifiedRoleCohorts).toEqual(["individual-contributor", "management"])
     expect(mixedCohorts.distinctQualifiedRoleCohorts).toBe(2)
     expect(mixedCohorts.gates.find((gate) => gate.name === "role-cohort-diversity")?.status).toBe("pass")
+
+    // One approver contributes one cohort, so filing a second approval that
+    // claims another role cannot supply the missing cohort.
+    const claimedBothCohorts = QualityPromotionApprovalPolicy.evaluate({
+      bundle: decisionBundle,
+      approvals: [
+        approval({
+          bundle: decisionBundle,
+          approver: "solo@example.com",
+          role: "director",
+          team: "release",
+          reportingChain: "eng/release/director-b",
+        }),
+        approval({
+          bundle: decisionBundle,
+          approver: "solo@example.com",
+          role: "staff-engineer",
+          team: "release",
+          reportingChain: "eng/release/director-b",
+        }),
+      ],
+    })
+    expect(claimedBothCohorts.qualifiedRoleCohorts).toEqual(["management"])
+    expect(claimedBothCohorts.distinctQualifiedRoleCohorts).toBe(1)
+    expect(claimedBothCohorts.gates.find((gate) => gate.name === "role-cohort-diversity")?.status).toBe("fail")
   })
 
   test("requires reviewer team diversity on repeated reentry approvals", () => {

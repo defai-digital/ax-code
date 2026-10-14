@@ -555,11 +555,21 @@ export namespace QualityPromotionApprovalPolicy {
             0,
           )
         : 0
+    // One cohort per approver, mirroring the team and reporting-chain maps
+    // below: a role cohort stands for review coverage, and one person cannot
+    // supply two cohorts by filing two approvals that claim different roles.
+    const qualifiedRoleCohortsByApprover = new Map<string, ApprovalRoleCohort | null>()
+    for (const item of qualifiedApprovals) {
+      const cohort = roleCohort(item.approval.role)
+      if (!qualifiedRoleCohortsByApprover.has(item.approver)) {
+        qualifiedRoleCohortsByApprover.set(item.approver, cohort)
+      } else if (cohort && qualifiedRoleCohortsByApprover.get(item.approver) === null) {
+        qualifiedRoleCohortsByApprover.set(item.approver, cohort)
+      }
+    }
     const qualifiedRoleCohorts = [
       ...new Set(
-        qualifiedApprovals
-          .map((item) => roleCohort(item.approval.role))
-          .filter((value): value is ApprovalRoleCohort => value !== null),
+        [...qualifiedRoleCohortsByApprover.values()].filter((value): value is ApprovalRoleCohort => value !== null),
       ),
     ].sort()
     const distinctQualifiedRoleCohorts = qualifiedRoleCohorts.length
