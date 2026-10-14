@@ -117,7 +117,10 @@ export namespace Lock {
         maybeDelete(lock, key)
         reject(new Error(timeoutMessage(kind, key, timeoutMs)))
       }, timeoutMs)
-      if (typeof timer === "object" && "unref" in timer) timer.unref()
+      // The timer must stay ref'd: it is the only thing that settles this
+      // awaited promise while the lock is held. An unref'd timer lets a
+      // short-lived process exit 13 with no error instead of rejecting with
+      // the timeout (see packages/ax-code/src/util/timeout.ts).
       queue.push(waiter)
     })
   }

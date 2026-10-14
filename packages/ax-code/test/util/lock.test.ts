@@ -175,4 +175,33 @@ describe("util.lock", () => {
     const nextReader = await Lock.read(key)
     dispose(nextReader)
   })
+
+  test("keeps the lock timeout timer referenced so an awaited wait cannot be silently dropped", async () => {
+    // If the deadline timer is unref'd, a short-lived process with no other
+    // pending work drains the event loop and exits 13 while the caller still
+    // awaits the lock, instead of rejecting with the timeout.
+    const key = "lock:" + Math.random().toString(36).slice(2)
+    const originalSetTimeout = globalThis.setTimeout
+    let unrefCalls = 0
+
+    globalThis.setTimeout = ((fn: (...args: any[]) => void, ms?: number, ...args: any[]) => {
+      const timer = originalSetTimeout(fn, ms, ...args) as unknown as { unref?: () => unknown }
+      if (timer && typeof timer === "object") {
+        timer.unref = () => {
+          unrefCalls += 1
+          return timer
+        }
+      }
+      return timer as unknown as ReturnType<typeof setTimeout>
+    }) as typeof setTimeout
+
+    try {
+      const holder = await Lock.write(key)
+      await expect(Lock.write(key, { timeoutMs: SHORT_TIMEOUT_MS })).rejects.toThrow(/Lock\.write: timed out/)
+      dispose(holder)
+      expect(unrefCalls).toBe(0)
+    } finally {
+      globalThis.setTimeout = originalSetTimeout
+    }
+  })
 })

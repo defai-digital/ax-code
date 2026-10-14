@@ -42,7 +42,10 @@ export class WorkQueue {
       () => controller.abort(new DOMException("Work deadline exceeded", "TimeoutError")),
       this.timeoutMs,
     )
-    timer.unref?.()
+    // Keep the timer ref'd: it is the only thing that settles `cancelled` when
+    // a queued run cannot acquire a slot (or stalls with no OS handles). An
+    // unref'd timer lets a short-lived process exit 13 silently instead of
+    // rejecting with the timeout.
     const workSignal = controller.signal
     let rejectAbort!: () => void
     const cancelled = new Promise<never>((_, reject) => {

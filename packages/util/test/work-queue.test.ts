@@ -114,3 +114,35 @@ test("expired waiting work is never executed", async () => {
   expect(callback).not.toHaveBeenCalled()
   expect(await queue.run(async () => 3)).toBe(3)
 })
+
+test("keeps the deadline timer referenced so an awaited run cannot be silently dropped", async () => {
+  // An unref'd deadline lets a short-lived process with no other pending work
+  // exit 13 while a queued run's promise is still pending, instead of
+  // rejecting with the TimeoutError the option exists to produce.
+  const originalSetTimeout = globalThis.setTimeout
+  let unrefCalls = 0
+  globalThis.setTimeout = ((fn: (...args: any[]) => void, ms?: number, ...args: any[]) => {
+    const timer = originalSetTimeout(fn, ms, ...args) as unknown as { unref?: () => unknown }
+    if (timer && typeof timer === "object") {
+      timer.unref = () => {
+        unrefCalls += 1
+        return timer
+      }
+    }
+    return timer as unknown as ReturnType<typeof setTimeout>
+  }) as typeof setTimeout
+
+  try {
+    const queue = new WorkQueue(1, { timeoutMs: 25, maxQueued: 1 })
+    const gate = deferred()
+    const first = queue.run(() => gate.promise)
+    const failFirst = expect(first).rejects.toMatchObject({ name: "TimeoutError" })
+    const second = queue.run(async () => 2)
+    const failSecond = expect(second).rejects.toMatchObject({ name: "TimeoutError" })
+    await Promise.all([failFirst, failSecond])
+    gate.resolve()
+    expect(unrefCalls).toBe(0)
+  } finally {
+    globalThis.setTimeout = originalSetTimeout
+  }
+})
