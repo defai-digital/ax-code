@@ -1,10 +1,11 @@
-import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js"
 import type {
+  OAuthClientProvider,
   OAuthClientMetadata,
   OAuthTokens,
   OAuthClientInformation,
   OAuthClientInformationFull,
-} from "@modelcontextprotocol/sdk/shared/auth.js"
+  OAuthDiscoveryState,
+} from "@modelcontextprotocol/client"
 import { McpAuth } from "./auth"
 import { Log } from "../util/log"
 import { GITHUB_REPO_URL } from "@/constants/project"
@@ -30,6 +31,17 @@ export interface McpOAuthConfig {
 
 export interface McpOAuthCallbacks {
   onRedirect: (url: URL) => void | Promise<void>
+}
+
+/**
+ * The authorization-server stamp MCP SDK v2 puts on saved tokens and client
+ * information. The provider rebuilds stored objects field by field, so the
+ * stamp is copied explicitly; dropping it would disable the SDK's per-issuer
+ * credential check and log a warning on every read.
+ */
+function issuerOf(value: object): { issuer?: string } {
+  const issuer = (value as { issuer?: unknown }).issuer
+  return typeof issuer === "string" && issuer.length > 0 ? { issuer } : {}
 }
 
 export class McpOAuthProvider implements OAuthClientProvider {
@@ -77,6 +89,7 @@ export class McpOAuthProvider implements OAuthClientProvider {
       return {
         client_id: entry.clientInfo.clientId,
         client_secret: entry.clientInfo.clientSecret,
+        ...(entry.clientInfo.issuer ? { issuer: entry.clientInfo.issuer } : {}),
       }
     }
 
@@ -92,6 +105,7 @@ export class McpOAuthProvider implements OAuthClientProvider {
         clientSecret: info.client_secret,
         clientIdIssuedAt: info.client_id_issued_at,
         clientSecretExpiresAt: info.client_secret_expires_at,
+        ...issuerOf(info),
       },
       this.serverUrl,
     )
@@ -114,6 +128,7 @@ export class McpOAuthProvider implements OAuthClientProvider {
         ? Math.max(0, Math.floor(entry.tokens.expiresAt - Date.now() / 1000))
         : undefined,
       scope: entry.tokens.scope,
+      ...(entry.tokens.issuer ? { issuer: entry.tokens.issuer } : {}),
     }
   }
 
@@ -128,6 +143,7 @@ export class McpOAuthProvider implements OAuthClientProvider {
             ? Date.now() / 1000 + tokens.expires_in
             : undefined,
         scope: tokens.scope,
+        ...issuerOf(tokens),
       },
       this.serverUrl,
     )
@@ -137,6 +153,16 @@ export class McpOAuthProvider implements OAuthClientProvider {
   async redirectToAuthorization(authorizationUrl: URL): Promise<void> {
     log.info("redirecting to authorization", { mcpName: this.mcpName, url: authorizationUrl.toString() })
     await this.callbacks.onRedirect(authorizationUrl)
+  }
+
+  async saveDiscoveryState(state: OAuthDiscoveryState): Promise<void> {
+    await McpAuth.updateDiscoveryState(this.mcpName, { ...state }, this.serverUrl)
+  }
+
+  async discoveryState(): Promise<OAuthDiscoveryState | undefined> {
+    // Bound to the server URL like the code verifier: a retargeted entry has none.
+    const entry = await McpAuth.getForUrl(this.mcpName, this.serverUrl)
+    return entry?.discoveryState as OAuthDiscoveryState | undefined
   }
 
   async saveCodeVerifier(codeVerifier: string): Promise<void> {

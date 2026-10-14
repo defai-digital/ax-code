@@ -16289,6 +16289,10 @@ export type McpAuthCallbackData = {
      * Authorization code from OAuth callback
      */
     code: string
+    /**
+     * Authorization server issuer (`iss`) from the OAuth callback, when the redirect included one
+     */
+    iss?: string
   }
   path: {
     name: string

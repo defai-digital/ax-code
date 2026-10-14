@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js"
+import { UnauthorizedError } from "@modelcontextprotocol/client"
 import {
   combineTransportErrors,
   isTransientMcpConnectError,

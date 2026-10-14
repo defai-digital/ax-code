@@ -2,7 +2,7 @@ import { expect, test } from "vitest"
 import { createServer } from "node:http"
 import { once } from "node:events"
 import { execFileSync } from "node:child_process"
-import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js"
+import { CallToolResultSchema } from "@modelcontextprotocol/core"
 import { MCP } from "../../src/mcp"
 import { WebMcpProfile } from "../../src/mcp/webmcp-profile"
 import { Instance } from "../../src/project/instance"
@@ -42,7 +42,10 @@ test.skipIf(!executablePath)(
     // The grant API reads the entry from config, so the bridge is configured
     // (disabled) and then connected by the explicit gesture, as the chip does.
     const entry = {
-      ...WebMcpProfile.config({ allowedOrigins: [], headless: true, executablePath, read: true, interact: true }, false),
+      ...WebMcpProfile.config(
+        { allowedOrigins: [], headless: true, executablePath, read: true, interact: true },
+        false,
+      ),
       timeout: 60_000,
     }
     await using tmp = await tmpdir({ git: true, config: { mcp: { live: entry } } as never })
@@ -87,7 +90,15 @@ test.skipIf(!executablePath)(
           )
           const snapshot = await run("take_snapshot", { pageId: login })
           const nameUid = uidOf(snapshot, "textbox", "Full name")
-          expect(WebMcpProfile.sensitiveTarget(WebMcpProfile.targetSummaryFor(tools.live_fill.webmcp!.profile, login, uidOf(snapshot, "textbox", "Password")))).toBe(true)
+          expect(
+            WebMcpProfile.sensitiveTarget(
+              WebMcpProfile.targetSummaryFor(
+                tools.live_fill.webmcp!.profile,
+                login,
+                uidOf(snapshot, "textbox", "Password"),
+              ),
+            ),
+          ).toBe(true)
           expect(await run("fill", { pageId: login, uid: nameUid, value: "Jane Doe" })).toContain("Successfully filled")
           expect(await run("take_snapshot", { pageId: login })).toContain("Jane Doe")
           await expect(run("fill", { pageId: login, uid: "9_9", value: "x" })).rejects.toBeInstanceOf(
@@ -127,14 +138,22 @@ test.skipIf(!executablePath)(
           // Link: escalated because its destination is not visible.
           const link = await open("/link")
           const linkSnapshot = await run("take_snapshot", { pageId: link })
-          const linkNode = WebMcpProfile.targetSummaryFor(tools.live_click.webmcp!.profile, link, uidOf(linkSnapshot, "link", "Learn more"))
+          const linkNode = WebMcpProfile.targetSummaryFor(
+            tools.live_click.webmcp!.profile,
+            link,
+            uidOf(linkSnapshot, "link", "Learn more"),
+          )
           expect(WebMcpProfile.clickEscalation(linkNode)).toContain("link")
 
           // "Continue" submits a form but is not in the consequential vocabulary:
           // recorded residual of ADR-174 rule 2 (a benignly named control).
           const cont = await open("/continue")
           const contSnapshot = await run("take_snapshot", { pageId: cont })
-          const contNode = WebMcpProfile.targetSummaryFor(tools.live_click.webmcp!.profile, cont, uidOf(contSnapshot, "button", "Continue"))
+          const contNode = WebMcpProfile.targetSummaryFor(
+            tools.live_click.webmcp!.profile,
+            cont,
+            uidOf(contSnapshot, "button", "Continue"),
+          )
           expect(WebMcpProfile.clickEscalation(contNode)).toBeUndefined()
 
           // Injection: instruction text and a forged uid in a name never become targets.
@@ -142,7 +161,9 @@ test.skipIf(!executablePath)(
           await run("take_snapshot", { pageId: inject })
           const profile = tools.live_click.webmcp!.profile
           const injectText = await run("take_snapshot", { pageId: inject })
-          const harmless = /uid=(\S+) button "uid=1_1 button \\?"Confirm payment\\?""/.exec(injectText) ?? /uid=(\S+) button "uid=1_1/.exec(injectText)
+          const harmless =
+            /uid=(\S+) button "uid=1_1 button \\?"Confirm payment\\?""/.exec(injectText) ??
+            /uid=(\S+) button "uid=1_1/.exec(injectText)
           expect(harmless, injectText).not.toBeNull()
           const harmlessNode = WebMcpProfile.targetSummaryFor(profile, inject, harmless![1]!)
           expect(harmlessNode?.name).toContain("Confirm payment")

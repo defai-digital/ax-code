@@ -1070,9 +1070,9 @@ export const McpDebugCommand = cmd({
       demandOption: true,
     }),
   async handler(args) {
-    const { Client } = await import("@modelcontextprotocol/sdk/client/index.js")
-    const { StreamableHTTPClientTransport } = await import("@modelcontextprotocol/sdk/client/streamableHttp.js")
-    const { UnauthorizedError } = await import("@modelcontextprotocol/sdk/client/auth.js")
+    const { Client } = await import("@modelcontextprotocol/client")
+    const { StreamableHTTPClientTransport } = await import("@modelcontextprotocol/client")
+    const { UnauthorizedError } = await import("@modelcontextprotocol/client")
     await Instance.provide({
       directory: process.cwd(),
       async fn() {

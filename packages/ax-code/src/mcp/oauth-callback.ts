@@ -55,12 +55,19 @@ const HTML_ERROR = (error: string) => `<!DOCTYPE html>
 </html>`
 
 interface PendingAuth {
-  resolve: (code: string) => void
+  resolve: (result: McpOAuthCallback.Result) => void
   reject: (error: Error) => void
   timeout: ReturnType<typeof setTimeout>
 }
 
 export namespace McpOAuthCallback {
+  /**
+   * What the authorization redirect carried. `iss` is the RFC 9207 issuer the
+   * MCP SDK v2 checks against the recorded authorization-server metadata before
+   * it exchanges the code; dropping it fails the exchange for servers that
+   * advertise `authorization_response_iss_parameter_supported`.
+   */
+  export type Result = { code: string; iss?: string }
   let server: ServerHandle | undefined
   // In-flight init promise. Serializes concurrent ensureRunning() calls so
   // two callers never race past the `if (server)` guard and both attempt
@@ -173,7 +180,8 @@ export namespace McpOAuthCallback {
           clearTimeout(pending.timeout)
           pendingAuths.delete(state)
           forgetPendingState(state)
-          pending.resolve(code)
+          const iss = url.searchParams.get("iss")
+          pending.resolve(iss ? { code, iss } : { code })
 
           return new Response(HTML_SUCCESS, {
             headers: { "Content-Type": "text/html" },
@@ -198,7 +206,7 @@ export namespace McpOAuthCallback {
     return trackedInit
   }
 
-  export function waitForCallback(oauthState: string, mcpName?: string): Promise<string> {
+  export function waitForCallback(oauthState: string, mcpName?: string): Promise<Result> {
     return new Promise((resolve, reject) => {
       const previous = pendingAuths.get(oauthState)
       if (previous) {

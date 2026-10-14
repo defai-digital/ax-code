@@ -146,3 +146,29 @@ test("stop racing initialization does not publish a stale listener", async () =>
   await McpOAuthCallback.ensureRunning()
   expect(McpOAuthCallback.isRunning()).toBe(true)
 }, 5000)
+
+test("the callback hands the authorization server issuer to the waiter with the code (MCP SDK v2 iss check)", async () => {
+  const McpOAuthCallback = await getCallbackModule()
+  const { McpOAuthProvider } = await import("../../src/mcp/oauth-provider")
+  try {
+    await McpOAuthCallback.ensureRunning()
+  } catch {
+    // Binding may be unavailable in constrained CI sandboxes.
+    return
+  }
+  const provider = new McpOAuthProvider("issuer-test", "https://mcp.example.test/mcp", {}, { onRedirect: async () => {} })
+  const callback = new URL(String(provider.redirectUrl))
+  const withIss = McpOAuthCallback.waitForCallback("state-iss", "issuer-test")
+  callback.search = new URLSearchParams({
+    code: "code-1",
+    state: "state-iss",
+    iss: "https://as.example.test",
+  }).toString()
+  expect((await fetch(callback)).status).toBe(200)
+  await expect(withIss).resolves.toEqual({ code: "code-1", iss: "https://as.example.test" })
+
+  const withoutIss = McpOAuthCallback.waitForCallback("state-plain", "issuer-test")
+  callback.search = new URLSearchParams({ code: "code-2", state: "state-plain" }).toString()
+  expect((await fetch(callback)).status).toBe(200)
+  await expect(withoutIss).resolves.toEqual({ code: "code-2" })
+}, 10000)

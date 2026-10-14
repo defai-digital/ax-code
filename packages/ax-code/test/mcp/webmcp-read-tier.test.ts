@@ -17,7 +17,7 @@ const bridge = vi.hoisted(() => ({
   call: vi.fn(),
 }))
 
-vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
+vi.mock("@modelcontextprotocol/client", () => ({
   Client: class {
     async connect() {}
     async close() {}
@@ -33,7 +33,7 @@ vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
   },
 }))
 
-vi.mock("@modelcontextprotocol/sdk/client/stdio.js", () => ({
+vi.mock("@modelcontextprotocol/client/stdio", () => ({
   StdioClientTransport: class {
     stderr = { on() {}, off() {} }
     constructor(options: unknown) {

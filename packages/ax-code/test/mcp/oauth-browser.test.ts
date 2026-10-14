@@ -38,7 +38,10 @@ const transportCalls: Array<{
 }> = []
 
 // Mock the transport constructors
-vi.mock("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
+vi.mock("@modelcontextprotocol/client", async (importOriginal) => ({
+  // v1 mocked separate SDK modules; v2 exports them from one package, so one
+  // factory keeps the real exports and overrides only what the test fakes.
+  ...(await importOriginal<typeof import("@modelcontextprotocol/client")>()),
   StreamableHTTPClientTransport: class MockStreamableHTTP {
     url: string
     authProvider: { redirectToAuthorization?: (url: URL) => Promise<void> } | undefined
@@ -62,9 +65,6 @@ vi.mock("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
       // Mock successful auth completion
     }
   },
-}))
-
-vi.mock("@modelcontextprotocol/sdk/client/sse.js", () => ({
   SSEClientTransport: class MockSSE {
     constructor(url: URL) {
       transportCalls.push({
@@ -77,21 +77,17 @@ vi.mock("@modelcontextprotocol/sdk/client/sse.js", () => ({
       throw new Error("Mock SSE transport cannot connect")
     }
   },
-}))
-
-// Mock the MCP SDK Client to trigger OAuth flow
-vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
   Client: class MockClient {
     async connect(transport: { start: () => Promise<void> }) {
       await transport.start()
     }
   },
-}))
-
-// Mock UnauthorizedError in the auth module
-vi.mock("@modelcontextprotocol/sdk/client/auth.js", () => ({
   UnauthorizedError: MockUnauthorizedError,
 }))
+
+// Mock the MCP SDK Client to trigger OAuth flow
+
+// Mock UnauthorizedError in the auth module
 
 beforeEach(() => {
   openShouldFail = false

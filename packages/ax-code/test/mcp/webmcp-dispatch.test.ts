@@ -44,7 +44,8 @@ test("a healthy dispatch keeps one shared deadline across preflight and main cal
   const current = profile()
   const timeouts: (number | undefined)[] = []
   const client = {
-    callTool: vi.fn(async (request: { name: string }, _schema: unknown, options: { timeout?: number }) => {
+    // v2 callTool takes (params, options); the result schema argument is gone.
+    callTool: vi.fn(async (request: { name: string }, options: { timeout?: number }) => {
       timeouts.push(options.timeout)
       if (request.name === "list_webmcp_tools") {
         return { content: [], structuredContent: { webmcpTools: [{ name: "a" }] } }

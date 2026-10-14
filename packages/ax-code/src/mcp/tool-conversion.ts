@@ -1,6 +1,5 @@
 import { dynamicTool, type Tool, type ToolCallOptions, jsonSchema, type JSONSchema7 } from "ai"
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js"
-import { CallToolResultSchema, type Tool as MCPToolDef } from "@modelcontextprotocol/sdk/types.js"
+import type { Client, Tool as MCPToolDef } from "@modelcontextprotocol/client"
 import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
 import { createHash } from "node:crypto"
@@ -77,10 +76,13 @@ async function webmcpPageUrl(
   timeout: number | undefined,
   signal?: AbortSignal,
 ): Promise<string | undefined> {
-  const pages = await client.callTool({ name: "list_pages", arguments: {} }, CallToolResultSchema, {
-    timeout,
-    signal,
-  })
+  const pages = await client.callTool(
+    { name: "list_pages", arguments: {} },
+    {
+      timeout,
+      signal,
+    },
+  )
   // An error result must never contribute snapshot data, even when it carries
   // a plausible-looking page list alongside the error.
   WebMcpProfile.validateResult("list_pages", pages)
@@ -139,10 +141,13 @@ async function webmcpPreflight(
   const pageId = call.pageId as number
   const toolName = call.toolName as string
   const before = await webmcpPageUrl(client, pageId, budget(), signal)
-  const listing = await client.callTool({ name: "list_webmcp_tools", arguments: { pageId } }, CallToolResultSchema, {
-    timeout: budget(),
-    signal,
-  })
+  const listing = await client.callTool(
+    { name: "list_webmcp_tools", arguments: { pageId } },
+    {
+      timeout: budget(),
+      signal,
+    },
+  )
   WebMcpProfile.validateResult("list_webmcp_tools", listing)
   const after = await webmcpPageUrl(client, pageId, budget(), signal)
   if (!before || !after)
@@ -403,7 +408,6 @@ export async function convertMcpTool(
                 : {}),
             },
           },
-          CallToolResultSchema,
           {
             resetTimeoutOnProgress: true,
             // A bridge that streams progress forever must not extend an

@@ -1,34 +1,41 @@
-import { Server } from "@modelcontextprotocol/sdk/server/index.js"
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js"
+import { StdioServerTransport } from "@modelcontextprotocol/server/stdio"
+import { Server, type ListToolsResult } from "@modelcontextprotocol/server"
 import z from "zod"
 import { callTuiMcpEndpoint, readTuiMcpEndpoint } from "./endpoint"
 import { ResultSchema, SelectSchema, reject } from "./protocol"
 import type { Request } from "./protocol"
 
+// v2 types tool schemas as plain JSON values; zod's JSONSchema type is wider
+// than that but the produced objects are plain JSON (our own static schemas).
+type ListedSchema = ListToolsResult["tools"][number]["inputSchema"]
+
+function objectSchema(schema: z.ZodType): ListedSchema {
+  return { ...z.toJSONSchema(schema, { target: "draft-7", io: "input" }), type: "object" } as ListedSchema
+}
+
 export function createTuiMcpServer(filename: string) {
   const server = new Server({ name: "ax-code-tuimcp", version: "1.0.0" }, { capabilities: { tools: {} } })
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  server.setRequestHandler("tools/list", async () => ({
     tools: [
       {
         name: "get_view_context",
         description:
           "Read bounded state of the explicitly shared live TUI. No transcript, draft, titles or credentials.",
-        inputSchema: z.toJSONSchema(z.object({}).strict(), { target: "draft-7", io: "input" }),
-        outputSchema: { ...z.toJSONSchema(ResultSchema, { target: "draft-7", io: "input" }), type: "object" },
+        inputSchema: objectSchema(z.object({}).strict()),
+        outputSchema: objectSchema(ResultSchema),
         annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
       },
       {
         name: "select_session",
         description:
           "Navigate the shared TUI to a project session. Read context first and supply its identity/revision and a unique requestId. Success acknowledges route state only, not rendering or loading. On timeout_unknown or outcome_unknown, reconcile context; never automatically retry with a new requestId.",
-        inputSchema: z.toJSONSchema(SelectSchema, { target: "draft-7", io: "input" }),
-        outputSchema: { ...z.toJSONSchema(ResultSchema, { target: "draft-7", io: "input" }), type: "object" },
+        inputSchema: objectSchema(SelectSchema),
+        outputSchema: objectSchema(ResultSchema),
         annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
       },
     ],
   }))
-  server.setRequestHandler(CallToolRequestSchema, async (input, extra) => {
+  server.setRequestHandler("tools/call", async (input, ctx) => {
     let request: Request | undefined
     if (
       input.params.name === "get_view_context" &&
@@ -44,7 +51,9 @@ export function createTuiMcpServer(filename: string) {
       if (parsed.success) request = { operation: "select_session", ...parsed.data }
     }
     const result = request
-      ? await callTuiMcpEndpoint(filename, request, { signal: extra.signal }).catch(() => reject("target_unavailable"))
+      ? await callTuiMcpEndpoint(filename, request, { signal: ctx.mcpReq.signal }).catch(() =>
+          reject("target_unavailable"),
+        )
       : reject("invalid_request")
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result) }],

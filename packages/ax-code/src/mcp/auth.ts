@@ -13,6 +13,9 @@ export namespace McpAuth {
     refreshToken: z.string().optional(),
     expiresAt: z.number().optional(),
     scope: z.string().optional(),
+    // MCP SDK v2 stamps the authorization server that issued the credential and
+    // treats a mismatch on read as absent; kept verbatim so that check applies.
+    issuer: z.string().optional(),
   })
   export type Tokens = z.infer<typeof Tokens>
 
@@ -21,6 +24,7 @@ export namespace McpAuth {
     clientSecret: z.string().optional(),
     clientIdIssuedAt: z.number().optional(),
     clientSecretExpiresAt: z.number().optional(),
+    issuer: z.string().optional(),
   })
   export type ClientInfo = z.infer<typeof ClientInfo>
 
@@ -28,6 +32,10 @@ export namespace McpAuth {
     tokens: Tokens.optional(),
     clientInfo: ClientInfo.optional(),
     codeVerifier: z.string().optional(),
+    // MCP SDK v2 discovery state for the authorization in flight: the callback
+    // leg checks it is exchanging the code at the server the redirect targeted.
+    // Opaque SDK data with the code verifier's lifetime.
+    discoveryState: z.record(z.string(), z.unknown()).optional(),
     oauthState: z.string().optional(),
     serverUrl: z.string().optional(), // Track the URL these credentials are for
   })
@@ -186,8 +194,20 @@ export namespace McpAuth {
 
   export async function clearCodeVerifier(mcpName: string): Promise<void> {
     await withFileEntryLock(mcpName, (entry) => {
-      if (!entry.codeVerifier) return
+      if (!entry.codeVerifier && !entry.discoveryState) return
       delete entry.codeVerifier
+      delete entry.discoveryState
+    })
+  }
+
+  export async function updateDiscoveryState(
+    mcpName: string,
+    discoveryState: Record<string, unknown>,
+    serverUrl?: string,
+  ): Promise<void> {
+    await withFileEntryLock(mcpName, (entry) => {
+      entry.discoveryState = discoveryState
+      if (serverUrl) entry.serverUrl = serverUrl
     })
   }
 

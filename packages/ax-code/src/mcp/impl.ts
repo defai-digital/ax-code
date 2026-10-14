@@ -1,14 +1,15 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js"
+import { StdioClientTransport } from "@modelcontextprotocol/client/stdio"
+import {
+  Client,
+  StreamableHTTPClientTransport,
+  SSEClientTransport,
+  UnauthorizedError,
+} from "@modelcontextprotocol/client"
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import { existsSync, readFileSync } from "node:fs"
 import { rm } from "node:fs/promises"
 import path from "node:path"
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
-import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
-import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js"
-import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js"
 import { WebMcpApprovals } from "./webmcp-approvals"
 import { Config } from "../config/config"
 import { Log } from "../util/log"
@@ -309,7 +310,7 @@ export namespace MCP {
   // Register notification handlers for MCP client
   function registerNotificationHandlers(client: MCPClient, serverName: string, owner: McpState) {
     client.setNotificationHandler(
-      ToolListChangedNotificationSchema,
+      "notifications/tools/list_changed",
       Instance.bind(async () => {
         if (owner.disposed || owner.clients[serverName] !== client) return
         log.info("tools list changed notification received", { server: serverName })
@@ -593,10 +594,16 @@ export namespace MCP {
   }
 
   function createClient() {
-    return new Client({
-      name: "ax-code",
-      version: Installation.VERSION,
-    })
+    return new Client(
+      {
+        name: "ax-code",
+        version: Installation.VERSION,
+      },
+      // SDK v2 listTools() walks every page (v1 read only the first). Bound the
+      // walk by the same page budget the prompt/resource catalog uses instead of
+      // the SDK's default of 64.
+      { listMaxPages: MAX_CATALOG_PAGES },
+    )
   }
 
   function rememberClientTransport(client: MCPClient, transport: unknown) {
@@ -1936,7 +1943,15 @@ export namespace MCP {
                 clientName,
                 "prompts",
                 async (cursor) => {
-                  const page = await client.listPrompts(cursor === undefined ? undefined : { cursor })
+                  // One page per request. The v2 typed listPrompts() aggregates every
+                  // page when called without a cursor and throws past its own page
+                  // cap, which would turn a server that repeats a cursor into a
+                  // failed client; the raw request keeps MAX_CATALOG_PAGES and the
+                  // partial result of the pages already read.
+                  const page = await client.request({
+                    method: "prompts/list",
+                    params: cursor === undefined ? {} : { cursor },
+                  })
                   return { items: page.prompts, nextCursor: page.nextCursor }
                 },
                 requestTimeout(cfg, config[clientName]),
@@ -1974,7 +1989,11 @@ export namespace MCP {
                 clientName,
                 "resources",
                 async (cursor) => {
-                  const page = await client.listResources(cursor === undefined ? undefined : { cursor })
+                  // One page per request, as for prompts above.
+                  const page = await client.request({
+                    method: "resources/list",
+                    params: cursor === undefined ? {} : { cursor },
+                  })
                   return { items: page.resources, nextCursor: page.nextCursor }
                 },
                 requestTimeout(cfg, config[clientName]),
@@ -2247,7 +2266,7 @@ export namespace MCP {
       }
 
       // Wait for callback using the already-registered promise
-      const code = await callbackPromise
+      const callback = await callbackPromise
 
       // The callback waiter already validated the state against the request that
       // initiated this flow. Only clear the persisted state if it still matches
@@ -2255,7 +2274,7 @@ export namespace MCP {
       await McpAuth.clearOAuthStateIfMatches(mcpName, oauthState)
 
       // Finish auth
-      return await finishAuth(mcpName, code)
+      return await finishAuth(mcpName, callback.code, callback.iss)
     } catch (error) {
       await closePendingOAuthTransport(mcpName)
       throw error
@@ -2267,7 +2286,7 @@ export namespace MCP {
   /**
    * Complete OAuth authentication with the authorization code.
    */
-  export async function finishAuth(mcpName: string, authorizationCode: string): Promise<Status> {
+  export async function finishAuth(mcpName: string, authorizationCode: string, issuer?: string): Promise<Status> {
     const key = oauthFlowKey(mcpName)
     const transport = pendingOAuthTransports.get(key)
 
@@ -2277,7 +2296,9 @@ export namespace MCP {
 
     try {
       // Call finishAuth on the transport
-      await transport.finishAuth(authorizationCode)
+      // SDK v2 validates the callback issuer against the recorded metadata
+      // (RFC 9207 mix-up defence); pass it through whenever the redirect had one.
+      await transport.finishAuth(authorizationCode, issuer)
 
       // Clear the code verifier after successful auth
       await McpAuth.clearCodeVerifier(mcpName)

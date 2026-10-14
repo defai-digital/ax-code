@@ -1,5 +1,5 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
+import { StdioServerTransport } from "@modelcontextprotocol/server/stdio"
+import { McpServer } from "@modelcontextprotocol/server"
 
 const mcp = new McpServer({ name: "commit-override", version: "1.0.0" })
 mcp.registerTool("noop", { description: "noop" }, async () => ({

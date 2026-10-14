@@ -9,7 +9,7 @@ const bridge = vi.hoisted(() => ({
   call: vi.fn(),
 }))
 
-vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
+vi.mock("@modelcontextprotocol/client", () => ({
   Client: class {
     async connect() {}
     async close() {}
@@ -27,7 +27,7 @@ vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
   },
 }))
 
-vi.mock("@modelcontextprotocol/sdk/client/stdio.js", () => ({
+vi.mock("@modelcontextprotocol/client/stdio", () => ({
   StdioClientTransport: class {
     stderr = { on() {}, off() {} }
     constructor(options: unknown) {
@@ -110,7 +110,6 @@ test("dynamic clients retain admission policy across discovery, notifications an
       await tools.bridge_new_page.execute!({ url: "https://example.test/" }, options)
       expect(bridge.call).toHaveBeenCalledWith(
         { name: "new_page", arguments: { url: "https://example.test/" } },
-        expect.anything(),
         expect.objectContaining({ signal: options.abortSignal }),
       )
 
@@ -297,11 +296,11 @@ test("dispatch propagates cancellation and caps the total webmcp budget", async 
         "list_pages",
         "execute_webmcp_tool",
       ])
-      const main = calls[3][2] as { timeout?: unknown; maxTotalTimeout?: unknown }
+      const main = calls[3][1] as { timeout?: unknown; maxTotalTimeout?: unknown }
       expect(main.timeout).toEqual(expect.any(Number))
       // One shared deadline: every later call sees no more budget than the one before.
       let previous = Number.POSITIVE_INFINITY
-      for (const [, , options] of calls) {
+      for (const [, options] of calls) {
         const typed = options as { signal?: unknown; timeout?: unknown }
         expect(typed.signal).toBe(controller.signal)
         expect(typed.timeout).toEqual(expect.any(Number))

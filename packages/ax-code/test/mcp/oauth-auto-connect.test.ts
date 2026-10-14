@@ -50,7 +50,10 @@ function assertMockPublicUrl(url: string) {
 }
 
 // Mock the transport constructors to simulate OAuth auto-auth on 401
-vi.mock("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
+vi.mock("@modelcontextprotocol/client", async (importOriginal) => ({
+  // v1 mocked separate SDK modules; v2 exports them from one package, so one
+  // factory keeps the real exports and overrides only what the test fakes.
+  ...(await importOriginal<typeof import("@modelcontextprotocol/client")>()),
   StreamableHTTPClientTransport: class MockStreamableHTTP {
     url: string
     closeCalls = 0
@@ -101,9 +104,6 @@ vi.mock("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
       this.closeCalls++
     }
   },
-}))
-
-vi.mock("@modelcontextprotocol/sdk/client/sse.js", () => ({
   SSEClientTransport: class MockSSE {
     // `transportInstances` is typed `{ url: string; closeCalls: number }[]`,
     // so MockSSE must surface a `url` field on the instance — mirrors the
@@ -127,10 +127,6 @@ vi.mock("@modelcontextprotocol/sdk/client/sse.js", () => ({
       this.closeCalls++
     }
   },
-}))
-
-// Mock the MCP SDK Client
-vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
   Client: class MockClient {
     closeCalls = 0
     setNotificationHandler() {}
@@ -147,12 +143,12 @@ vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
       clientInstances.push(this)
     }
   },
-}))
-
-// Mock UnauthorizedError in the auth module so instanceof checks work
-vi.mock("@modelcontextprotocol/sdk/client/auth.js", () => ({
   UnauthorizedError: MockUnauthorizedError,
 }))
+
+// Mock the MCP SDK Client
+
+// Mock UnauthorizedError in the auth module so instanceof checks work
 
 function resetMockOAuthCallback(error?: Error) {
   callbackRunning = false
@@ -177,6 +173,7 @@ beforeEach(() => {
 // Import modules after mocking
 const { Ssrf } = await import("../../src/util/ssrf")
 const { McpOAuthCallback } = await import("../../src/mcp/oauth-callback")
+type CallbackResult = Awaited<ReturnType<typeof McpOAuthCallback.waitForCallback>>
 const { MCP } = await import("../../src/mcp/index")
 const { Instance } = await import("../../src/project/instance")
 const { tmpdir } = await import("../fixture/fixture")
@@ -203,7 +200,7 @@ beforeEach(() => {
   })
   waitForCallbackSpy.mockImplementation(
     (oauthState: string, mcpName?: string) =>
-      new Promise<string>((_resolve, reject) => {
+      new Promise<CallbackResult>((_resolve, reject) => {
         pendingOauthStates.set(oauthState, { reject })
         if (mcpName) pendingOauthNames.set(mcpName, oauthState)
       }),
@@ -805,4 +802,91 @@ test("instance disposal closes pending OAuth transports", async () => {
 
   await Instance.disposeAll()
   expect(pending?.closeCalls).toBe(1)
+})
+
+test("the provider round-trips the SDK v2 issuer stamp on tokens and client information", async () => {
+  const { McpOAuthProvider } = await import("../../src/mcp/oauth-provider")
+
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeFile(`${dir}/ax-code.json`, JSON.stringify({ mcp: {} }))
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const provider = new McpOAuthProvider(
+        "test-issuer",
+        "https://example.com/mcp",
+        {},
+        { onRedirect: async () => {} },
+      )
+      await provider.saveClientInformation({
+        client_id: "client-1",
+        redirect_uris: ["http://127.0.0.1/cb"],
+        issuer: "https://as.example.com",
+      } as Parameters<typeof provider.saveClientInformation>[0])
+      await provider.saveTokens({
+        access_token: "token",
+        token_type: "Bearer",
+        issuer: "https://as.example.com",
+      } as Parameters<typeof provider.saveTokens>[0])
+      expect(await provider.clientInformation()).toMatchObject({
+        client_id: "client-1",
+        issuer: "https://as.example.com",
+      })
+      expect(await provider.tokens()).toMatchObject({ access_token: "token", issuer: "https://as.example.com" })
+
+      // Credentials saved before the upgrade carry no stamp and keep working unchanged.
+      const legacy = new McpOAuthProvider("test-legacy", "https://example.com/mcp", {}, { onRedirect: async () => {} })
+      await legacy.saveTokens({ access_token: "old", token_type: "Bearer" })
+      const tokens = await legacy.tokens()
+      expect(tokens?.access_token).toBe("old")
+      expect(tokens).not.toHaveProperty("issuer")
+    },
+  })
+})
+
+test("the provider keeps the SDK v2 discovery state for the flow and drops it with the code verifier", async () => {
+  const { McpOAuthProvider } = await import("../../src/mcp/oauth-provider")
+  const { McpAuth } = await import("../../src/mcp/auth")
+
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeFile(`${dir}/ax-code.json`, JSON.stringify({ mcp: {} }))
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const provider = new McpOAuthProvider(
+        "test-discovery",
+        "https://example.com/mcp",
+        {},
+        { onRedirect: async () => {} },
+      )
+      expect(await provider.discoveryState()).toBeUndefined()
+      const state = {
+        authorizationServerUrl: "https://as.example.com",
+        resourceMetadataUrl: "https://example.com/.well-known/oauth-protected-resource",
+      } as Parameters<typeof provider.saveDiscoveryState>[0]
+      await provider.saveDiscoveryState(state)
+      await provider.saveCodeVerifier("verifier")
+      expect(await provider.discoveryState()).toEqual(state)
+
+      // Another server URL never sees this flow's state.
+      const retargeted = new McpOAuthProvider(
+        "test-discovery",
+        "https://other.example.com/mcp",
+        {},
+        { onRedirect: async () => {} },
+      )
+      expect(await retargeted.discoveryState()).toBeUndefined()
+
+      await McpAuth.clearCodeVerifier("test-discovery")
+      expect(await provider.discoveryState()).toBeUndefined()
+    },
+  })
 })

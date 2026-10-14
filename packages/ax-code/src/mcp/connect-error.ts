@@ -1,4 +1,4 @@
-import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js"
+import { UnauthorizedError } from "@modelcontextprotocol/client"
 import { toErrorMessage } from "../util/error-message"
 import { Filesystem } from "../util/filesystem"
 import { FIGMA_DESKTOP_MCP_URL, FIGMA_MCP_ORIGIN, FIGMA_MCP_DOCS_URL } from "./constants"

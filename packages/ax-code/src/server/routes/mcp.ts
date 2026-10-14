@@ -293,11 +293,15 @@ export const McpRoutes = lazy(() =>
         "json",
         z.object({
           code: z.string().describe("Authorization code from OAuth callback"),
+          iss: z
+            .string()
+            .optional()
+            .describe("Authorization server issuer (`iss`) from the OAuth callback, when the redirect included one"),
         }),
       ),
       withMcpName(async (name, c) => {
-        const { code } = c.req.valid("json")
-        const status = await MCP.finishAuth(name, code)
+        const { code, iss } = c.req.valid("json")
+        const status = await MCP.finishAuth(name, code, iss)
         return c.json(status)
       }),
     )

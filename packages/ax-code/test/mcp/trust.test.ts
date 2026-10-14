@@ -5,7 +5,7 @@ import path from "path"
 const localTransports: Array<{ command: string; args: string[]; closeCalls: number }> = []
 let connectCalls = 0
 
-vi.mock("@modelcontextprotocol/sdk/client/stdio.js", () => ({
+vi.mock("@modelcontextprotocol/client/stdio", () => ({
   StdioClientTransport: class MockStdioClientTransport {
     command: string
     args: string[]
@@ -29,19 +29,16 @@ vi.mock("@modelcontextprotocol/sdk/client/stdio.js", () => ({
   },
 }))
 
-vi.mock("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
+vi.mock("@modelcontextprotocol/client", async (importOriginal) => ({
+  // v1 mocked separate SDK modules; v2 exports them from one package, so one
+  // factory keeps the real exports and overrides only what the test fakes.
+  ...(await importOriginal<typeof import("@modelcontextprotocol/client")>()),
   StreamableHTTPClientTransport: class MockStreamableHTTPClientTransport {
     async close() {}
   },
-}))
-
-vi.mock("@modelcontextprotocol/sdk/client/sse.js", () => ({
   SSEClientTransport: class MockSSEClientTransport {
     async close() {}
   },
-}))
-
-vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
   Client: class MockClient {
     transport?: { start?: () => Promise<void> }
 

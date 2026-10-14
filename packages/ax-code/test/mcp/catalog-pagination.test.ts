@@ -15,7 +15,7 @@ const bridge = vi.hoisted(() => ({
   resourceCalls: [] as Array<string | undefined>,
 }))
 
-vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
+vi.mock("@modelcontextprotocol/client", () => ({
   Client: class {
     async connect() {}
     async close() {}
@@ -25,19 +25,30 @@ vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
     listTools() {
       return Promise.resolve({ tools: [] })
     }
-    listPrompts(params?: { cursor?: string }) {
-      bridge.promptCalls.push(params?.cursor)
-      return Promise.resolve(bridge.promptPage(params?.cursor))
+    // The v2 typed listPrompts()/listResources() aggregate every page, so the
+    // catalog reads one page per raw request; a typed call here is a regression.
+    listPrompts() {
+      throw new Error("catalog must page prompts with client.request")
     }
-    listResources(params?: { cursor?: string }) {
-      bridge.resourceCalls.push(params?.cursor)
-      return Promise.resolve(bridge.resourcePage(params?.cursor))
+    listResources() {
+      throw new Error("catalog must page resources with client.request")
+    }
+    request(request: { method: string; params?: { cursor?: string } }) {
+      if (request.method === "prompts/list") {
+        bridge.promptCalls.push(request.params?.cursor)
+        return Promise.resolve(bridge.promptPage(request.params?.cursor))
+      }
+      if (request.method === "resources/list") {
+        bridge.resourceCalls.push(request.params?.cursor)
+        return Promise.resolve(bridge.resourcePage(request.params?.cursor))
+      }
+      throw new Error(`unexpected request ${request.method}`)
     }
     setNotificationHandler() {}
   },
 }))
 
-vi.mock("@modelcontextprotocol/sdk/client/stdio.js", () => ({
+vi.mock("@modelcontextprotocol/client/stdio", () => ({
   StdioClientTransport: class {
     stderr = { on() {}, off() {} }
     async close() {}

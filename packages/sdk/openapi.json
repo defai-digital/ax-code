@@ -34499,6 +34499,10 @@
                   "code": {
                     "type": "string",
                     "description": "Authorization code from OAuth callback"
+                  },
+                  "iss": {
+                    "description": "Authorization server issuer (`iss`) from the OAuth callback, when the redirect included one",
+                    "type": "string"
                   }
                 },
                 "required": [

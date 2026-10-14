@@ -13,7 +13,10 @@ const transportCalls: Array<{
 }> = []
 
 // Mock the transport constructors to capture their arguments
-vi.mock("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
+vi.mock("@modelcontextprotocol/client", async (importOriginal) => ({
+  // v1 mocked separate SDK modules; v2 exports them from one package, so one
+  // factory keeps the real exports and overrides only what the test fakes.
+  ...(await importOriginal<typeof import("@modelcontextprotocol/client")>()),
   StreamableHTTPClientTransport: class MockStreamableHTTP {
     constructor(
       url: URL,
@@ -33,9 +36,6 @@ vi.mock("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
       throw new Error("Mock transport cannot connect")
     }
   },
-}))
-
-vi.mock("@modelcontextprotocol/sdk/client/sse.js", () => ({
   SSEClientTransport: class MockSSE {
     constructor(
       url: URL,

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js"
+import type { Client } from "@modelcontextprotocol/client"
 import { convertMcpTool } from "../../src/mcp/tool-conversion"
 import { WebMcpProfile } from "../../src/mcp/webmcp-profile"
 

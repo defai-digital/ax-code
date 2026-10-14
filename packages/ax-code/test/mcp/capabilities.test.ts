@@ -6,7 +6,7 @@ const bridge = vi.hoisted(() => ({
   listResources: vi.fn(async () => ({ resources: [{ name: "notes", uri: "file:///notes" }] })),
 }))
 
-vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
+vi.mock("@modelcontextprotocol/client", () => ({
   Client: class {
     async connect() {}
     async close() {}
@@ -16,17 +16,18 @@ vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
     listTools() {
       return Promise.resolve({ tools: [] })
     }
-    listPrompts() {
-      return bridge.listPrompts()
-    }
-    listResources() {
-      return bridge.listResources()
+    // The catalog pages prompts and resources with raw list requests (SDK v2
+    // typed list verbs aggregate pages); route them to the same fakes.
+    request(request: { method: string }) {
+      if (request.method === "prompts/list") return bridge.listPrompts()
+      if (request.method === "resources/list") return bridge.listResources()
+      throw new Error(`unexpected request ${request.method}`)
     }
     setNotificationHandler() {}
   },
 }))
 
-vi.mock("@modelcontextprotocol/sdk/client/stdio.js", () => ({
+vi.mock("@modelcontextprotocol/client/stdio", () => ({
   StdioClientTransport: class {
     stderr = { on() {}, off() {} }
     async close() {}

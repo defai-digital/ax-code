@@ -2,10 +2,10 @@ import { expect, test } from "vitest"
 import { createServer } from "node:http"
 import { once } from "node:events"
 import { randomUUID } from "node:crypto"
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"
-import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js"
-import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js"
+import { CallToolResultSchema } from "@modelcontextprotocol/core"
+import { SSEServerTransport } from "@modelcontextprotocol/server-legacy/sse"
+import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node"
+import { McpServer } from "@modelcontextprotocol/server"
 import { MCP } from "../../src/mcp"
 import { Config } from "../../src/config/config"
 import { McpTrust } from "../../src/mcp/trust"
@@ -18,7 +18,7 @@ async function localServer(kind: "http" | "sse" = "http", host = "127.0.0.1", ss
   mcp.registerTool("ping", { description: "Return a fixture marker" }, async () => ({
     content: [{ type: "text", text: "LOOPBACK_OK" }],
   }))
-  const http = new StreamableHTTPServerTransport({ sessionIdGenerator: randomUUID, enableJsonResponse: true })
+  const http = new NodeStreamableHTTPServerTransport({ sessionIdGenerator: randomUUID, enableJsonResponse: true })
   let sse: SSEServerTransport | undefined
   if (kind === "http") await mcp.connect(http)
   let requests = 0

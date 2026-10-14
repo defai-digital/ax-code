@@ -55,7 +55,7 @@ function resetGate() {
 
 resetGate()
 
-vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
+vi.mock("@modelcontextprotocol/client", () => ({
   Client: class MockClient {
     onclose?: () => void
     transport?: unknown
@@ -118,7 +118,7 @@ vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
   },
 }))
 
-vi.mock("@modelcontextprotocol/sdk/client/stdio.js", () => ({
+vi.mock("@modelcontextprotocol/client/stdio", () => ({
   StdioClientTransport: class MockStdioTransport {
     pid = nextTransportPid++
     command: string

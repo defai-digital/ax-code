@@ -56,6 +56,9 @@
     }
   },
   "devDependencies": {
+    "@modelcontextprotocol/core": "2.3.1",
+    "@modelcontextprotocol/node": "2.1.1",
+    "@modelcontextprotocol/server-legacy": "2.3.1",
     "@ai-sdk/anthropic": "catalog:",
     "@ax-code/script": "workspace:*",
     "@octokit/webhooks-types": "catalog:",
@@ -110,7 +113,8 @@
     "@hono/node-server": "^2.0.5",
     "@hono/node-ws": "^1.3.1",
     "@hono/standard-validator": "^0.2.0",
-    "@modelcontextprotocol/sdk": "1.32.0",
+    "@modelcontextprotocol/client": "2.3.1",
+    "@modelcontextprotocol/server": "2.3.1",
     "@msgpack/msgpack": "3.1.3",
     "@octokit/graphql": "catalog:",
     "@octokit/rest": "catalog:",
