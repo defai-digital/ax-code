@@ -24,7 +24,9 @@ export async function readBoundedBody(response: Response, maxBytes: number): Pro
       if (done) break
       total += value.byteLength
       if (total > maxBytes) {
-        await reader.cancel().catch(() => {})
+        // Cancellation can wait on a stalled transport or the other branch of
+        // a tee. Request it, but do not let cleanup delay the size rejection.
+        void reader.cancel().catch(() => {})
         throw new BodyTooLargeError(maxBytes)
       }
       chunks.push(value)
