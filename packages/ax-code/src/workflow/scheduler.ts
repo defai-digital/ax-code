@@ -283,6 +283,18 @@ export namespace WorkflowScheduler {
           }
           continue
         }
+        // Pausing a running child cancels its still-active queue item (marking
+        // it terminal, not paused), so resume must re-run that item — otherwise
+        // the child is queued with no execution carrier and the run never
+        // settles.
+        if (item?.status === "failed" || item?.status === "cancelled") {
+          const retried = await TaskQueue.retry(child.taskQueueID)
+          if (shouldAutoStartWorkflowQueueItem(retried)) {
+            const TaskQueueExecutor = await loadTaskQueueExecutor()
+            await TaskQueueExecutor.start(retried)
+          }
+          continue
+        }
       }
       await WorkflowRun.setChildStatus({ id: child.id, status: "queued" })
     }

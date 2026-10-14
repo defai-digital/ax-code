@@ -1638,6 +1638,41 @@ describe("WorkflowScheduler", () => {
     }
   })
 
+  test("resume restarts a child whose queue item was cancelled during pause", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
+          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true, autoStartChildren: false })
+          await WorkflowScheduler.pause(run.id)
+
+          const { TaskQueue } = await import("../../src/session/task-queue")
+          // Pausing a RUNNING child cancels its active queue item, so the item
+          // is terminal (cancelled) rather than paused when resume runs.
+          for (const item of await TaskQueue.list()) await TaskQueue.cancel(item.id)
+          for (const child of (await WorkflowRun.getDetail(run.id)).children) {
+            await WorkflowRun.setChildStatus({ id: child.id, status: "paused" })
+          }
+          expect((await TaskQueue.list()).every((item) => item.status === "cancelled")).toBe(true)
+
+          const resumed = await WorkflowScheduler.resume(run.id)
+          expect(resumed.status).toBe("running")
+          expect(resumed.children.every((child) => child.status === "queued")).toBe(true)
+          // The cancelled items must be re-queued, or the run is stuck forever
+          // with children that have no execution carrier.
+          expect((await TaskQueue.list()).every((item) => item.status === "queued")).toBe(true)
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
   test("resume leaves a cancelled workflow run cancelled when nothing was paused", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
