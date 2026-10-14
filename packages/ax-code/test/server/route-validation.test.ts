@@ -17,6 +17,7 @@ import { Question } from "../../src/question"
 import { QuestionID } from "../../src/question/schema"
 import { appErrorEnvelope } from "../../src/server/error"
 import { DefaultQueryNumber, OptionalQueryNumber } from "../../src/server/routes/query"
+import { PtyID } from "../../src/pty/schema"
 import { parsePtyReconnectCursor } from "../../src/server/routes/pty"
 import { File } from "../../src/file"
 import { MCP } from "../../src/mcp"
@@ -694,9 +695,9 @@ describe("server route validation", () => {
           const response = await Server.Default().request(
             `/question/${pending[0].id}/reply?directory=${encodeURIComponent(tmp.path)}`,
             {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ answers: [["  Option 1  "]] }),
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ answers: [["  Option 1  "]] }),
             },
           )
 
@@ -1094,6 +1095,37 @@ describe("server route validation", () => {
     const src = await fs.readFile(path.join(import.meta.dirname, "../../src/server/routes/pty.ts"), "utf-8")
     expect(src).toContain('throw new NotFoundError({ message: "Session not found" })')
     expect(src).not.toContain('throw new Error("Session not found")')
+  })
+
+  test("pty update and remove routes return a typed 404 for a missing session", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const missingID = PtyID.make("pty_missing_route_validation")
+
+        const updated = await Server.Default().request(`/pty/${missingID}`, {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ title: "renamed" }),
+        })
+        expect(updated.status).toBe(404)
+        expect(await updated.json()).toMatchObject({
+          name: "SessionNotFoundError",
+          message: "Session not found",
+          status: 404,
+          details: { resource: "session" },
+        })
+
+        const removed = await Server.Default().request(`/pty/${missingID}`, { method: "DELETE" })
+        expect(removed.status).toBe(404)
+        expect(await removed.json()).toMatchObject({
+          name: "SessionNotFoundError",
+          message: "Session not found",
+          status: 404,
+          details: { resource: "session" },
+        })
+      },
+    })
   })
 
   test("pty reconnect cursor accepts only decimal integers", () => {

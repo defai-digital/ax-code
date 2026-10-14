@@ -117,6 +117,7 @@ export const PtyRoutes = lazy(() =>
       validator("param", PTY_ID_PARAM),
       validator("json", Pty.UpdateInput),
       withPtyID(async (ptyID, c) => {
+        if (!(await Pty.get(ptyID))) throw new NotFoundError({ message: "Session not found" })
         const info = await Pty.update(ptyID, c.req.valid("json"))
         return c.json(info)
       }),
@@ -141,6 +142,7 @@ export const PtyRoutes = lazy(() =>
       }),
       validator("param", PTY_ID_PARAM),
       withPtyID(async (ptyID, c) => {
+        if (!(await Pty.get(ptyID))) throw new NotFoundError({ message: "Session not found" })
         await Pty.remove(ptyID)
         return c.json(true)
       }),
