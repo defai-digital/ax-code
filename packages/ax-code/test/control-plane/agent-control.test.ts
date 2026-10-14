@@ -259,4 +259,33 @@ describe("AgentControl", () => {
       }),
     ).toThrow("plan task not found")
   })
+
+  test("rejects a new plan whose task ids are not unique", () => {
+    expect(() =>
+      AgentControl.createPlan({
+        id: "plan_duplicate_tasks",
+        objective: "Two tasks labelled the same",
+        tasks: [
+          { id: "task_1", title: "Implement A" },
+          { id: "task_1", title: "Implement B" },
+        ],
+      }),
+    ).toThrow("plan task id must be unique: task_1")
+  })
+
+  test("refuses an ambiguous task id in an already-persisted plan", () => {
+    // A plan stored before the uniqueness check can still carry duplicates, and
+    // one status write must not complete both tasks.
+    const duplicated = AgentControl.PlanArtifact.parse({
+      ...plan,
+      tasks: [
+        { id: "task_dup", title: "Implement A", status: "pending", evidence: [], validation: [] },
+        { id: "task_dup", title: "Implement B", status: "pending", evidence: [], validation: [] },
+      ],
+    })
+
+    expect(() => AgentControl.updateTaskStatus(duplicated, "task_dup", "completed")).toThrow(
+      "plan task id is ambiguous: task_dup",
+    )
+  })
 })

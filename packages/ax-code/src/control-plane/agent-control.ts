@@ -210,6 +210,15 @@ export namespace AgentControl {
   }
 
   export function createPlan(input: CreatePlanInput): PlanArtifact {
+    // A task id addresses exactly one task: `updateTaskStatus` and
+    // `applyCheckpoint` update every task carrying the matching id, so a
+    // duplicate would let one status write complete two tasks and `planProgress`
+    // would then report no open work while a task was never done.
+    const seen = new Set<string>()
+    for (const task of input.tasks ?? []) {
+      if (seen.has(task.id)) throw new Error(`plan task id must be unique: ${task.id}`)
+      seen.add(task.id)
+    }
     return PlanArtifact.parse({
       id: input.id,
       objective: input.objective,
@@ -259,6 +268,9 @@ export namespace AgentControl {
       ...plan,
       tasks: plan.tasks.map((task) => {
         if (task.id !== taskID) return task
+        // A persisted plan can predate the uniqueness check in `createPlan`, and
+        // one status write must never complete two tasks; refuse the ambiguity.
+        if (matched) throw new Error(`plan task id is ambiguous: ${taskID}`)
         matched = true
         return {
           ...task,
