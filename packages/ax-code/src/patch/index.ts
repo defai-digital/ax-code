@@ -130,65 +130,70 @@ export namespace Patch {
     let i = startIdx
 
     while (i < lines.length && !lines[i].startsWith("***")) {
+      // A chunk opens at an explicit "@@" marker, or — when a model omits it
+      // (the format's most common slip) — implicitly at the first body line
+      // that carries a " "/"-"/"+" prefix. Without the implicit chunk those
+      // body lines were dropped and the hunk applied as a silent no-op.
+      let contextLine: string | undefined
       if (lines[i].startsWith("@@")) {
-        // Parse context line
-        const contextLine = lines[i] === "@@" ? "" : lines[i].startsWith("@@ ") ? lines[i].slice(3) : lines[i].slice(2)
+        contextLine = lines[i] === "@@" ? "" : lines[i].startsWith("@@ ") ? lines[i].slice(3) : lines[i].slice(2)
         i++
+      } else if (!lines[i].startsWith(" ") && !lines[i].startsWith("-") && !lines[i].startsWith("+")) {
+        i++
+        continue
+      }
 
-        const oldLines: string[] = []
-        const newLines: string[] = []
-        let isEndOfFile = false
+      const oldLines: string[] = []
+      const newLines: string[] = []
+      let isEndOfFile = false
 
-        // Parse change lines
-        while (
-          i < lines.length &&
-          !lines[i].startsWith("@@") &&
-          // *** End of File is a chunk-level anchor, not a file header, so it
-          // must reach the body below to set is_end_of_file. Other *** lines
-          // (Add/Delete/Update/Move to/Begin/End Patch) terminate the chunk.
-          (lines[i] === "*** End of File" || !lines[i].startsWith("***"))
-        ) {
-          const changeLine = lines[i]
+      // Parse change lines
+      while (
+        i < lines.length &&
+        !lines[i].startsWith("@@") &&
+        // *** End of File is a chunk-level anchor, not a file header, so it
+        // must reach the body below to set is_end_of_file. Other *** lines
+        // (Add/Delete/Update/Move to/Begin/End Patch) terminate the chunk.
+        (lines[i] === "*** End of File" || !lines[i].startsWith("***"))
+      ) {
+        const changeLine = lines[i]
 
-          if (changeLine === "*** End of File") {
-            isEndOfFile = true
-            i++
-            break
-          }
-
-          if (changeLine.startsWith(" ")) {
-            // Keep line - appears in both old and new
-            const content = changeLine.substring(1)
-            oldLines.push(content)
-            newLines.push(content)
-          } else if (changeLine.startsWith("-")) {
-            // Remove line - only in old
-            oldLines.push(changeLine.substring(1))
-          } else if (changeLine.startsWith("+")) {
-            // Add line - only in new
-            newLines.push(changeLine.substring(1))
-          } else {
-            // A line with no " "/"-"/"+" prefix is a context line — most often
-            // a blank line a model emitted without the leading space. Keep it
-            // in both old and new so the match pattern stays intact instead of
-            // silently dropping it (which corrupts seekSequence and makes the
-            // patch fail with "Failed to find expected lines").
-            oldLines.push(changeLine)
-            newLines.push(changeLine)
-          }
-
+        if (changeLine === "*** End of File") {
+          isEndOfFile = true
           i++
+          break
         }
 
-        chunks.push({
-          old_lines: oldLines,
-          new_lines: newLines,
-          change_context: contextLine || undefined,
-          is_end_of_file: isEndOfFile || undefined,
-        })
-      } else {
+        if (changeLine.startsWith(" ")) {
+          // Keep line - appears in both old and new
+          const content = changeLine.substring(1)
+          oldLines.push(content)
+          newLines.push(content)
+        } else if (changeLine.startsWith("-")) {
+          // Remove line - only in old
+          oldLines.push(changeLine.substring(1))
+        } else if (changeLine.startsWith("+")) {
+          // Add line - only in new
+          newLines.push(changeLine.substring(1))
+        } else {
+          // A line with no " "/"-"/"+" prefix is a context line — most often
+          // a blank line a model emitted without the leading space. Keep it
+          // in both old and new so the match pattern stays intact instead of
+          // silently dropping it (which corrupts seekSequence and makes the
+          // patch fail with "Failed to find expected lines").
+          oldLines.push(changeLine)
+          newLines.push(changeLine)
+        }
+
         i++
       }
+
+      chunks.push({
+        old_lines: oldLines,
+        new_lines: newLines,
+        change_context: contextLine || undefined,
+        is_end_of_file: isEndOfFile || undefined,
+      })
     }
 
     return { chunks, nextIdx: i }
@@ -243,6 +248,13 @@ export namespace Patch {
       throw new Error("Invalid patch format: missing Begin/End markers")
     }
 
+    // A single patch carries exactly one Begin/End envelope. A second
+    // "*** Begin Patch" (models sometimes batch two patches into one string)
+    // would otherwise be silently discarded, applying only the first block.
+    if (lines.slice(beginIdx + 1).some((line) => line.trim() === beginMarker)) {
+      throw new Error("Invalid patch format: multiple Begin Patch markers")
+    }
+
     // Parse content between markers
     i = beginIdx + 1
 
@@ -269,6 +281,12 @@ export namespace Patch {
         i = header.nextIdx
       } else if (lines[i].startsWith("*** Update File:")) {
         const { chunks, nextIdx } = parseUpdateFileChunks(lines, header.nextIdx)
+        // A move-only update legitimately carries no chunks; anything else with
+        // no chunks has no effect and must fail loudly rather than report a
+        // silent success for an edit that never landed.
+        if (chunks.length === 0 && !header.movePath) {
+          throw new Error(`Invalid patch format: update file hunk for '${header.filePath}' is empty`)
+        }
         hunks.push({
           type: "update",
           path: header.filePath,

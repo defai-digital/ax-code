@@ -110,6 +110,44 @@ describe("Patch namespace", () => {
       expect(hunk.chunks).toHaveLength(1)
       expect(hunk.chunks[0].is_end_of_file).toBe(true)
     })
+
+    test("starts an implicit chunk when the first chunk omits the @@ marker", () => {
+      const patchText = [
+        "*** Begin Patch",
+        "*** Update File: file.py",
+        " import foo",
+        "+bar",
+        "*** End Patch",
+      ].join("\n")
+
+      const result = Patch.parsePatch(patchText)
+      expect(result.hunks).toHaveLength(1)
+      const hunk = result.hunks[0]
+      if (hunk.type !== "update") throw new Error("expected update hunk")
+      expect(hunk.chunks).toHaveLength(1)
+      expect(hunk.chunks[0].old_lines).toEqual(["import foo"])
+      expect(hunk.chunks[0].new_lines).toEqual(["import foo", "bar"])
+    })
+
+    test("rejects an update hunk with no body lines instead of applying a no-op", () => {
+      const patchText = "*** Begin Patch\n*** Update File: file.py\n*** End Patch"
+      expect(() => Patch.parsePatch(patchText)).toThrow("is empty")
+    })
+
+    test("rejects a patch that carries a second Begin Patch block", () => {
+      const patchText = [
+        "*** Begin Patch",
+        "*** Add File: a.txt",
+        "+a",
+        "*** End Patch",
+        "*** Begin Patch",
+        "*** Add File: b.txt",
+        "+b",
+        "*** End Patch",
+      ].join("\n")
+
+      expect(() => Patch.parsePatch(patchText)).toThrow("multiple Begin Patch markers")
+    })
   })
 
   describe("maybeParseApplyPatch", () => {
@@ -348,6 +386,19 @@ PATCH`
 
       const content = await fs.readFile(filePath, "utf-8")
       expect(content).toBe("a\n\nB\n")
+    })
+
+    test("applies an update whose first chunk omits the @@ marker", async () => {
+      const filePath = path.join(tempDir, "implicit-chunk.txt")
+      await fs.writeFile(filePath, "import foo\nold\n")
+
+      const patchText = ["*** Begin Patch", `*** Update File: ${filePath}`, " import foo", "-old", "+new", "*** End Patch"].join(
+        "\n",
+      )
+
+      const result = await Patch.applyPatch(patchText)
+      expect(result.modified).toHaveLength(1)
+      expect(await fs.readFile(filePath, "utf-8")).toBe("import foo\nnew\n")
     })
 
     test("should move and update a file", async () => {
