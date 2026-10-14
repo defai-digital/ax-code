@@ -137,4 +137,47 @@ describe("tool.list", () => {
       },
     })
   })
+
+  test("does not report an exactly-full directory as truncated", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Promise.all(
+          Array.from({ length: 100 }, (_, i) => fs.writeFile(path.join(dir, `f-${String(i).padStart(3, "0")}.txt`), "x")),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const list = await ListTool.init()
+        const result = await list.execute({}, ctx)
+
+        expect(result.metadata.count).toBe(100)
+        expect(result.metadata.truncated).toBe(false)
+        expect(result.output).not.toContain("truncated")
+      },
+    })
+  })
+
+  test("reports truncation only once an entry exceeds the cap", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Promise.all(
+          Array.from({ length: 101 }, (_, i) => fs.writeFile(path.join(dir, `f-${String(i).padStart(3, "0")}.txt`), "x")),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const list = await ListTool.init()
+        const result = await list.execute({}, ctx)
+
+        expect(result.metadata.count).toBe(100)
+        expect(result.metadata.truncated).toBe(true)
+      },
+    })
+  })
 })

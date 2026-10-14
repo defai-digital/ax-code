@@ -89,7 +89,11 @@ async function listEntries(root: string, ignore: string[] | undefined, signal: A
       if (ignored.some((rule) => matchesIgnore(rule, entry))) continue
 
       entries.push(entry)
-      if (entries.length >= LIMIT) {
+      if (entries.length > LIMIT) {
+        // One entry past the cap proves there are more; exactly LIMIT is a
+        // complete listing and must not be reported as truncated (mirrors
+        // glob/grep, which scan limit + 1 for the same reason).
+        entries.pop()
         truncated = true
         return { entries, truncated }
       }
