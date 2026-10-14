@@ -1,10 +1,12 @@
-import { afterEach, describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import path from "path"
 import fs from "fs/promises"
 import { readFile } from "fs/promises"
 import { route, classifyComplexity, formatComplexityFailureError } from "../../src/agent/router"
 import { Instance } from "../../src/project/instance"
 import { ScopedFlag } from "../../src/flag/scoped"
+import { Provider } from "../../src/provider/provider"
+import { ProviderID } from "../../src/provider/schema"
 import { tmpdir } from "../fixture/fixture"
 
 describe("v2-style keyword route", () => {
@@ -290,5 +292,29 @@ describe("classifyComplexity cross-directory env leak", () => {
         expect(result.complexity).toBeNull()
       },
     })
+  })
+})
+
+describe("classifyComplexity provider failure", () => {
+  const origEnv = process.env["AX_CODE_SMART_LLM"]
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    if (origEnv === undefined) delete process.env["AX_CODE_SMART_LLM"]
+    else process.env["AX_CODE_SMART_LLM"] = origEnv
+  })
+
+  test("returns null instead of throwing when the small-model language cannot load", async () => {
+    process.env["AX_CODE_SMART_LLM"] = "true"
+    vi.spyOn(Provider, "getSmallModel").mockResolvedValue({ providerID: "test", id: "small" } as any)
+    vi.spyOn(Provider, "getLanguage").mockRejectedValue(new Error("provider sdk unavailable"))
+
+    // A throw here would escape resolveUserMessageRouting and fail user-message
+    // creation; routing must instead skip.
+    const result = await classifyComplexity(
+      "explain how this caching layer is supposed to work end to end",
+      ProviderID.make("test"),
+    )
+    expect(result.complexity).toBeNull()
   })
 })

@@ -375,7 +375,13 @@ export async function classifyComplexity(message: string, providerID?: ProviderI
     log.info("complexity-skipped", { reason: "no-small-model" })
     return { complexity: null }
   }
-  const language = await Provider.getLanguage(small)
+  // Same guard as the two lookups above: a missing/unloadable language must
+  // skip routing, not throw out of user-message creation.
+  const language = await Provider.getLanguage(small).catch((error) => {
+    log.info("complexity-skipped", { reason: "language-unavailable", error: toErrorMessage(error) })
+    return undefined
+  })
+  if (!language) return { complexity: null }
 
   const abort = new AbortController()
   const timer = setTimeout(() => abort.abort(), LLM_TIMEOUT)
