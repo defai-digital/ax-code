@@ -51,6 +51,25 @@ test("reports a deleted path once with deleted status", async () => {
   })
 })
 
+test("reports a staged-deleted path once, not also as untracked", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const filename = "staged-deleted.txt"
+      await Filesystem.write(path.join(tmp.path, filename), "before\n")
+      expect((await git(["add", "--", filename], { cwd: tmp.path })).exitCode).toBe(0)
+      expect((await git(["commit", "--no-gpg-sign", "-m", "Add fixture"], { cwd: tmp.path })).exitCode).toBe(0)
+      // Remove from the index only, leaving the file on disk: git now reports
+      // it as both deleted (index) and untracked (worktree).
+      expect((await git(["rm", "--cached", "--", filename], { cwd: tmp.path })).exitCode).toBe(0)
+
+      const entries = (await File.status()).filter((entry) => entry.path === filename)
+      expect(entries).toEqual([{ path: filename, added: 0, removed: 1, status: "deleted" }])
+    },
+  })
+})
+
 test("reports literal paths for staged renames", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({

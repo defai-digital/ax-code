@@ -545,6 +545,21 @@ export namespace File {
 
     const changed: File.Info[] = parseModifiedNumstat(diffOutput)
 
+    // A path staged for deletion but still present on disk shows up in both
+    // diff-filter=D and `ls-files --others` (git no longer tracks it), so it
+    // would be reported twice with contradictory statuses. The API is one
+    // record per path, and deleted paths must not also surface as untracked.
+    const deleted: File.Info[] = []
+    const deletedPaths = new Set<string>()
+    if (deletedNumstat) {
+      for (const line of deletedNumstat.split("\n")) {
+        const parsed = parseNumstatLine(line)
+        if (!parsed) continue
+        deleted.push(deletedFileStatus(parsed.file, line))
+        deletedPaths.add(parsed.file)
+      }
+    }
+
     if (untrackedOutput) {
       const untrackedFiles = untrackedOutput
         .split("\n")
@@ -582,16 +597,11 @@ export namespace File {
         }),
       )
       for (const result of untrackedResults) {
-        if (result) changed.push(result)
+        if (result && !deletedPaths.has(result.path)) changed.push(result)
       }
     }
 
-    if (deletedNumstat) {
-      for (const line of deletedNumstat.split("\n")) {
-        const parsed = parseNumstatLine(line)
-        if (parsed) changed.push(deletedFileStatus(parsed.file, line))
-      }
-    }
+    changed.push(...deleted)
 
     return changed.map((item) => {
       const full = path.isAbsolute(item.path) ? item.path : path.join(Instance.directory, item.path)
