@@ -38,8 +38,11 @@ export namespace Bus {
       }
     },
     async (entry) => {
+      // Typed subscribers (`Bus.subscribe(InstanceDisposed, cb)`) are keyed by
+      // the event type, not "*"; deliver to them too or they never fire.
+      const typed = entry.subscriptions.get(InstanceDisposed.type) ?? []
       const wildcard = entry.subscriptions.get("*") ?? []
-      if (wildcard.length === 0 && entry.sequencedSubscriptions.length === 0) return
+      if (typed.length === 0 && wildcard.length === 0 && entry.sequencedSubscriptions.length === 0) return
       const event = {
         type: InstanceDisposed.type,
         properties: {
@@ -48,7 +51,7 @@ export namespace Bus {
       }
       const entryEvent = entry.journal.append(event)
       await Promise.all([
-        ...deliver([...wildcard], event, InstanceDisposed.type),
+        ...deliver([...typed, ...wildcard], event, InstanceDisposed.type),
         ...deliver([...entry.sequencedSubscriptions], entryEvent, InstanceDisposed.type),
       ])
     },

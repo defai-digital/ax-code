@@ -122,4 +122,25 @@ describe("Bus", () => {
       },
     })
   })
+
+  test("a typed InstanceDisposed subscriber fires on instance teardown", async () => {
+    await using tmp = await tmpdir()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const expected = Instance.directory
+        const directories: string[] = []
+        const off = Bus.subscribe(Bus.InstanceDisposed, (event) => {
+          directories.push(event.properties.directory)
+        })
+        try {
+          await Instance.dispose()
+        } finally {
+          off()
+        }
+        expect(directories).toEqual([expected])
+      },
+    })
+  })
 })
