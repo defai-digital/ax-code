@@ -9,6 +9,7 @@ import {
   SessionGoalTable,
   TaskQueueTable,
   ScheduledTaskTable,
+  ScheduledTaskRunTable,
 } from "./session.sql"
 import { EventLogTable } from "../replay/event-log.sql"
 import {
@@ -34,9 +35,9 @@ export namespace SessionShard {
   // bumps this so projects backfilled under an earlier slice re-run the
   // (idempotent) copy on next access. 1 = message/part (Slice 1),
   // 2 = +event_log (Slice 2), 3 = +todo/session_goal (Slice 3),
-  // 4 = +task_queue/scheduled_task/workflow_* (Slice 4). New slices bump to 5,
-  // 6, ...
-  export const BACKFILL_VERSION = 4
+  // 4 = +task_queue/scheduled_task/workflow_* (Slice 4),
+  // 5 = +scheduled_task_run (Slice 5). New slices bump to 6, 7, ...
+  export const BACKFILL_VERSION = 5
 
   // Structurally interchangeable with the registry Database: `Shard.TxOrDb` is
   // kept identical to `Database.TxOrDb` (see shard.ts) so a Shard handle is
@@ -189,6 +190,12 @@ export namespace SessionShard {
             db.select().from(WorkflowBudgetLedgerTable).where(inArray(WorkflowBudgetLedgerTable.run_id, runIDs)).all(),
           )
 
+    // Project-keyed (not session-keyed): the run history must move too, or
+    // enabling sharding drops the audit/overlap/failure-backoff record.
+    const runHistory = Database.use((db) =>
+      db.select().from(ScheduledTaskRunTable).where(eq(ScheduledTaskRunTable.project_id, projectID)).all(),
+    )
+
     Shard.handle(projectID).transaction((db) => {
       for (const message of messages) {
         db.insert(MessageTable).values(message).onConflictDoNothing().run()
@@ -210,6 +217,10 @@ export namespace SessionShard {
       }
       for (const row of scheduled) {
         db.insert(ScheduledTaskTable).values(row).onConflictDoNothing().run()
+      }
+      // After scheduled_task and task_queue: scheduled_task_run FKs into both.
+      for (const row of runHistory) {
+        db.insert(ScheduledTaskRunTable).values(row).onConflictDoNothing().run()
       }
       for (const row of runs) {
         db.insert(WorkflowRunTable).values(row).onConflictDoNothing().run()

@@ -17,11 +17,19 @@ import { Project } from "../../src/project/project"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Shard } from "../../src/storage/shard"
 import { Database, eq } from "../../src/storage/db"
-import { MessageTable, TodoTable, SessionGoalTable, TaskQueueTable, SessionTable } from "../../src/session/session.sql"
+import {
+  MessageTable,
+  TodoTable,
+  SessionGoalTable,
+  TaskQueueTable,
+  SessionTable,
+  ScheduledTaskTable,
+  ScheduledTaskRunTable,
+} from "../../src/session/session.sql"
 import { EventLogTable } from "../../src/replay/event-log.sql"
 import { WorkflowRunTable, WorkflowPhaseTable, WorkflowChildTable } from "../../src/workflow/workflow.sql"
 import { ProjectShardTable } from "../../src/storage/shard.sql"
-import { MessageID, TaskQueueID } from "../../src/session/schema"
+import { MessageID, TaskQueueID, ScheduledTaskID, ScheduledTaskRunID } from "../../src/session/schema"
 import { WorkflowRunID, WorkflowPhaseID, WorkflowChildID } from "../../src/workflow/state"
 import { existsSync } from "node:fs"
 import { tmpdir } from "../fixture/fixture"
@@ -276,6 +284,56 @@ describe("AX_CODE_SHARD_SESSIONS=1 lifecycle cleanup", () => {
         )
         expect(child).toBeDefined()
         expect(child?.session_id).toBeNull()
+      },
+    })
+  })
+
+  test("backfill carries scheduled run history into the shard", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const projectID = Instance.project.id
+        const now = Date.now()
+        // Seed the run history in the registry (the pre-backfill home).
+        Database.use((db) => {
+          db.insert(ScheduledTaskTable)
+            .values({
+              id: ScheduledTaskID.make("sch_backfill_1"),
+              project_id: projectID,
+              directory: ".",
+              title: "backfill task",
+              prompt: "run",
+              schedule: { type: "interval", everyMs: 60_000 },
+              status: "active",
+              time_created: now,
+              time_updated: now,
+            } as never)
+            .run()
+          db.insert(ScheduledTaskRunTable)
+            .values({
+              id: ScheduledTaskRunID.make("schrun_backfill_1"),
+              task_id: ScheduledTaskID.make("sch_backfill_1"),
+              project_id: projectID,
+              trigger_type: "scheduled",
+              status: "completed",
+              occurrence_at: now,
+              time_created: now,
+              time_updated: now,
+            } as never)
+            .run()
+        })
+
+        // First write triggers the lazy backfill, which must move the run
+        // history too — otherwise the shard shows no run history at all.
+        await Session.updateMessage(userMessage(MessageID.ascending(), session.id))
+
+        const rows = Shard.handle(projectID).use((db) =>
+          db.select().from(ScheduledTaskRunTable).where(eq(ScheduledTaskRunTable.project_id, projectID)).all(),
+        )
+        expect(rows).toHaveLength(1)
+        expect(rows[0]!.id).toBe(ScheduledTaskRunID.make("schrun_backfill_1"))
       },
     })
   })
