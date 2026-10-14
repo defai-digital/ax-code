@@ -130,6 +130,36 @@ describe("BunProc registry behavior", () => {
       ;(Global.Path as { cache: string }).cache = originalCache
     }
   })
+  test("reinstalls a cached non-semver spec instead of throwing", async () => {
+    await using tmp = await tmpdir()
+    const originalCache = Global.Path.cache
+    const pkg = "example-sdk"
+    const manifest = path.join(tmp.path, "package.json")
+    const modDir = path.join(tmp.path, "node_modules", pkg)
+    await fs.mkdir(modDir, { recursive: true })
+    // Poisoned: a prior "latest" install whose post-install version read
+    // failed persisted the spec itself as the cached dependency. semver.lt
+    // throws on it, which would block every future install of this package.
+    await fs.writeFile(manifest, JSON.stringify({ dependencies: { [pkg]: "latest" } }))
+    await fs.writeFile(path.join(modDir, "package.json"), JSON.stringify({ name: pkg, version: "9.9.9" }))
+
+    const run = vi.spyOn(Process, "run").mockImplementation((async (cmd: string[]) => {
+      if (cmd.includes("info") || cmd.includes("view")) {
+        return { code: 0, stdout: Buffer.from("9.9.9\n"), stderr: Buffer.alloc(0) }
+      }
+      return { code: 0, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) }
+    }) as any)
+
+    try {
+      ;(Global.Path as { cache: string }).cache = tmp.path
+      await expect(BunProc.install(pkg, "latest")).resolves.toBe(path.join(tmp.path, "node_modules", pkg))
+      const installCalls = run.mock.calls.filter(([cmd]) => !cmd.includes("info") && !cmd.includes("view"))
+      expect(installCalls.length).toBeGreaterThan(0)
+    } finally {
+      run.mockRestore()
+      ;(Global.Path as { cache: string }).cache = originalCache
+    }
+  })
 })
 
 describe("BunProc.install range pins (provider SDK compatibility)", () => {

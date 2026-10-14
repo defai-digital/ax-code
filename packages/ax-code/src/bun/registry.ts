@@ -47,6 +47,12 @@ export namespace PackageRegistry {
     const isRange = /[\s^~*xX<>|=]/.test(cachedVersion)
     if (isRange) return !semver.satisfies(latestVersion, cachedVersion)
 
+    // A non-semver spec — the "latest" BunProc.install persists when its
+    // post-install version read fails, or a github:/tarball spec — is not
+    // comparable, and semver.lt throws on it. Treat it as outdated so the
+    // package is reinstalled instead of failing every future install call.
+    if (!semver.valid(cachedVersion)) return true
+
     return semver.lt(cachedVersion, latestVersion)
   }
 }
