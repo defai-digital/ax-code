@@ -24,14 +24,25 @@ export const PermissionRoutes = lazy(() =>
       withPermissionRequestID(async (requestID, c) => {
         const unauthorized = ServerRuntimeAuth.require(c)
         if (unauthorized) return unauthorized
-        const applied = await Permission.saveWebMcpApproval(requestID)
-        if (!applied)
-          return notFound(c, {
+        const unavailable = () =>
+          notFound(c, {
             name: "PermissionUnavailableError",
             message: "WebMCP approval request is unavailable",
             resource: "permission",
           })
-        return c.json(true)
+        try {
+          const applied = await Permission.saveWebMcpApproval(requestID)
+          if (!applied) return unavailable()
+          return c.json(true)
+        } catch (error) {
+          // A concurrent reply, abort, or policy change can resolve the pending
+          // entry during the save; saveWebMcpApproval then throws the same "the
+          // request is gone" condition it returns false for before the call.
+          // Report the declared 404 instead of an internal 500.
+          if (error instanceof Error && /WebMCP approval request (is no longer valid|was canceled)/.test(error.message))
+            return unavailable()
+          throw error
+        }
       }),
     )
     .post(

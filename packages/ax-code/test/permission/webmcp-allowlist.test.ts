@@ -227,6 +227,32 @@ test("abort while saving rejects the call and leaves no saved approval", async (
   })
 })
 
+test("HTTP save maps a mid-save cancellation to the declared 404", async () => {
+  await using tmp = await tmpdir({ git: true, config: { mcp: { bridge: entry() } } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const app = new Hono().route("/permission", PermissionRoutes())
+      const controller = new AbortController()
+      const first = await ask(controller.signal)
+      const rejected = expect(first.pending).rejects.toThrow()
+      const write = Filesystem.writeJson
+      vi.spyOn(Filesystem, "writeJson").mockImplementationOnce(async (...args) => {
+        await write(...args)
+        controller.abort()
+      })
+      const response = await app.request(`http://localhost/permission/${first.request.id}/webmcp-allowlist`, {
+        method: "POST",
+        headers: ServerRuntimeAuth.headers(),
+      })
+      // The same gone condition the pre-call path reports as 404 must not
+      // surface as an undeclared internal 500.
+      expect(response.status).toBe(404)
+      await rejected
+    },
+  })
+})
+
 test("HTTP save requires runtime authorization, binds the pending request, and supports revocation", async () => {
   await using tmp = await tmpdir({ git: true, config: { mcp: { bridge: entry() } } })
   await Instance.provide({
