@@ -828,6 +828,9 @@ importers:
         specifier: "catalog:"
         version: 4.3.6
     devDependencies:
+      "@ax-code/script":
+        specifier: workspace:*
+        version: link:../script
       "@tsconfig/node24":
         specifier: "catalog:"
         version: 24.0.4

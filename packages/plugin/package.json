@@ -39,6 +39,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@ax-code/script": "workspace:*",
     "@tsconfig/node24": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:",
