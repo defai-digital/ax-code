@@ -22,6 +22,7 @@ import fs from "fs/promises"
 import { fileURLToPath, pathToFileURL } from "url"
 import { Filesystem } from "../util/filesystem"
 import { withTimeout } from "../util/timeout"
+import { isFileUrl } from "../util/file-url"
 import { isNonEmptyRecord, recordCount } from "@/util/record"
 
 // Direct imports for bundled providers
@@ -72,16 +73,8 @@ export namespace Provider {
   // lists remain non-blocking so TUI startup stays responsive.
   export const DISCOVERY_WAIT_HEADER = "x-ax-code-wait-for-provider-discovery"
 
-  function isFileUrlSpecifier(value: string) {
-    try {
-      return new URL(value).protocol === "file:"
-    } catch {
-      return false
-    }
-  }
-
   function providerImportSpecifier(installedPath: string, subpath?: string) {
-    const fsPath = isFileUrlSpecifier(installedPath) ? fileURLToPath(installedPath) : installedPath
+    const fsPath = isFileUrl(installedPath) ? fileURLToPath(installedPath) : installedPath
     const entry = Module.resolveEntry(fsPath, subpath)
     if (!entry) {
       throw new Error(
@@ -1115,8 +1108,8 @@ export namespace Provider {
         // Prevents supply-chain attacks where compromised remote data (ModelsDev)
         // or a malicious config could trigger installation of arbitrary packages.
         const NPM_ALLOWLIST = /^@ai-sdk\//
-        const isFileUrl = isFileUrlSpecifier(model.api.npm)
-        if (!isFileUrl && !NPM_ALLOWLIST.test(model.api.npm)) {
+        const fileUrlSpecifier = isFileUrl(model.api.npm)
+        if (!fileUrlSpecifier && !NPM_ALLOWLIST.test(model.api.npm)) {
           throw new InitError(
             { providerID: model.providerID },
             {
@@ -1129,7 +1122,7 @@ export namespace Provider {
 
         let installedPath: string
         let installedSubpath: string | undefined
-        if (!isFileUrl) {
+        if (!fileUrlSpecifier) {
           const runtimePackage = ProviderSdkCompat.runtimePackage(model.api.npm)
           installedSubpath = runtimePackage.subpath
           const now = Date.now()

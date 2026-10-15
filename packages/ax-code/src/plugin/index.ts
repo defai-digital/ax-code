@@ -14,6 +14,7 @@ import { Global } from "@/global"
 import { RuntimeLocalClient } from "@/runtime/local-client"
 import { PluginLifetime } from "./lifetime"
 import { PluginData } from "./data"
+import { isFileUrl } from "../util/file-url"
 
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
@@ -29,14 +30,6 @@ export namespace Plugin {
 
   const INTERNAL_PLUGINS: PluginInstance[] = [...PRIVATE_GPU_AUTH_PLUGINS]
   const DEPRECATED_PLUGIN_PACKAGES = ["ax-code-openai-codex-auth", "ax-code-copilot-auth"]
-
-  function isFileUrl(value: string) {
-    try {
-      return new URL(value).protocol === "file:"
-    } catch {
-      return false
-    }
-  }
 
   function failure(phase: string, error: unknown) {
     // Plugin exceptions can embed prompts, credentials, or returned data.

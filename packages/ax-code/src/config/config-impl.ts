@@ -49,6 +49,7 @@ import { WebMcpProfile } from "@/mcp/webmcp-profile"
 // and into remote wellknown configs that omit `$schema`. See issue #17.
 import { CONFIG_SCHEMA_URL } from "@/constants/project"
 import { ProjectConfigTrust } from "./project-config-trust"
+import { isFileUrl } from "../util/file-url"
 
 const PROGRAM_DATA_FALLBACK_DIR = "C:\\ProgramData"
 const UNIX_SYSTEM_CONFIG_DIR = "/etc/ax-code"
@@ -1327,14 +1328,6 @@ export namespace Config {
       plugins.push(pathToFileURL(item).href)
     }
     return plugins
-  }
-
-  function isFileUrl(value: string) {
-    try {
-      return new URL(value).protocol === "file:"
-    } catch {
-      return false
-    }
   }
 
   async function isLocalFilePlugin(plugin: string, dir: string) {
