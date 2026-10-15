@@ -1,17 +1,11 @@
 import { EOL } from "os"
 import path from "path"
 import type { Argv } from "yargs"
-import { CodeIntelligence } from "../../../code-intelligence"
-import { CodeGraphQuery } from "../../../code-intelligence/query"
-import { Instance } from "../../../project/instance"
-import { Ripgrep } from "../../../file/ripgrep"
-import { LSP } from "@ax-code/ax-code-intel"
 import {
   INDEXER_SEMANTIC_METHODS,
   INDEX_PREWARM_MAX_FILES,
   INDEX_PREWARM_MAX_LANGUAGES,
 } from "@ax-code/ax-code-intel/prewarm-profile"
-import { NativePerf } from "../../../perf/native"
 import {
   buildIndexReport,
   groupFilesByLanguage,
@@ -21,6 +15,23 @@ import {
 } from "../index-graph"
 import { cmd } from "../cmd"
 import { isNonEmptyRecord, recordCount } from "@/util/record"
+
+// The graph, the LSP host and the native perf counters load when the
+// benchmark runs; the helpers below take them as `rt`, so `--help` never
+// evaluates that graph.
+async function loadPerfRuntime() {
+  const [{ CodeIntelligence }, { CodeGraphQuery }, { Instance }, { Ripgrep }, { LSP }, { NativePerf }] =
+    await Promise.all([
+      import("../../../code-intelligence"),
+      import("../../../code-intelligence/query"),
+      import("../../../project/instance"),
+      import("../../../file/ripgrep"),
+      import("@ax-code/ax-code-intel"),
+      import("../../../perf/native"),
+    ])
+  return { CodeIntelligence, CodeGraphQuery, Instance, Ripgrep, LSP, NativePerf }
+}
+type PerfRuntime = Awaited<ReturnType<typeof loadPerfRuntime>>
 
 export type IndexReport = ReturnType<typeof buildIndexReport>
 export type CacheMode = "cold" | "warm-cache"
@@ -292,7 +303,8 @@ function print(label: string, value: Stat, unit = "ms") {
   )
 }
 
-async function files(limit?: number) {
+async function files(rt: PerfRuntime, limit?: number) {
+  const { Ripgrep, Instance } = rt
   const list: string[] = []
   for await (const rel of Ripgrep.files({ cwd: Instance.directory })) {
     const abs = path.join(Instance.directory, rel)
@@ -304,6 +316,7 @@ async function files(limit?: number) {
 }
 
 async function run(
+  rt: PerfRuntime,
   list: string[],
   args: {
     concurrency: number
@@ -313,6 +326,7 @@ async function run(
   },
   probeResult?: Bench["probeResult"],
 ): Promise<IndexReport> {
+  const { CodeIntelligence, Instance, LSP, NativePerf } = rt
   if (args.nativeProfile) NativePerf.reset()
   LSP.perfReset()
   const start = Date.now()
@@ -361,8 +375,8 @@ async function run(
   })
 }
 
-function clearSemanticCache() {
-  CodeGraphQuery.clearLspCache(Instance.project.id)
+function clearSemanticCache(rt: PerfRuntime) {
+  rt.CodeGraphQuery.clearLspCache(rt.Instance.project.id)
 }
 
 const PerfIndexCommand = cmd({
@@ -422,6 +436,8 @@ const PerfIndexCommand = cmd({
     // not bootstrap(), which is what loads the glue. Register both hosts first.
     await import("../../../lsp-glue")
     await import("../../../dre-glue")
+    const rt = await loadPerfRuntime()
+    const { Instance, NativePerf } = rt
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -429,7 +445,7 @@ const PerfIndexCommand = cmd({
           NativePerf.enable()
         }
 
-        const list = await files(limit)
+        const list = await files(rt, limit)
         let probeResult: Bench["probeResult"] | undefined
 
         if (args.probe && list.length > 0) {
@@ -491,22 +507,22 @@ const PerfIndexCommand = cmd({
         }
 
         if (currentCacheMode === "warm-cache") {
-          clearSemanticCache()
+          clearSemanticCache(rt)
           if (!json) console.log("  seed warm-cache")
-          await run(list, runArgs, probeResult)
+          await run(rt, list, runArgs, probeResult)
         }
 
         for (let i = 0; i < warmup; i++) {
-          if (currentCacheMode === "cold") clearSemanticCache()
+          if (currentCacheMode === "cold") clearSemanticCache(rt)
           if (!json) console.log(`  warmup ${i + 1}/${warmup}`)
-          await run(list, runArgs, probeResult)
+          await run(rt, list, runArgs, probeResult)
         }
 
         const samples: IndexReport[] = []
         for (let i = 0; i < repeat; i++) {
-          if (currentCacheMode === "cold") clearSemanticCache()
+          if (currentCacheMode === "cold") clearSemanticCache(rt)
           if (!json) console.log(`  sample ${i + 1}/${repeat}`)
-          samples.push(await run(list, runArgs, probeResult))
+          samples.push(await run(rt, list, runArgs, probeResult))
         }
 
         const summary = summarize(samples)

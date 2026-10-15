@@ -6,8 +6,6 @@ import type { Agent } from "../../agent/agent"
 import path from "path"
 import fs from "fs/promises"
 import { Filesystem } from "../../util/filesystem"
-import matter from "gray-matter"
-import { Instance } from "../../project/instance"
 import { EOL } from "os"
 import type { Argv } from "yargs"
 
@@ -83,8 +81,14 @@ const AgentCreateCommand = cmd({
         describe: "model to use in the format of provider/model",
       }),
   async handler(args) {
-    const { Agent } = await import("../../agent/agent")
-    const { Provider } = await import("../../provider/provider")
+    // Instance carries the project graph and gray-matter is handler-only;
+    // neither belongs on the `--help` path.
+    const [{ Agent }, { Provider }, { Instance }, { default: matter }] = await Promise.all([
+      import("../../agent/agent"),
+      import("../../provider/provider"),
+      import("../../project/instance"),
+      import("gray-matter"),
+    ])
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -282,7 +286,7 @@ export const AgentListCommand = cmd({
       default: false,
     }),
   async handler(args) {
-    const { Agent } = await import("../../agent/agent")
+    const [{ Agent }, { Instance }] = await Promise.all([import("../../agent/agent"), import("../../project/instance")])
     await Instance.provide({
       directory: process.cwd(),
       async fn() {

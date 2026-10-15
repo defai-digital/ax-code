@@ -1,24 +1,45 @@
 import type { Argv } from "yargs"
 import path from "path"
-import { Instance } from "../../project/instance"
-import { CodeIntelligence } from "../../code-intelligence"
-import { CodeGraphBuilder } from "../../code-intelligence/builder"
-import { CodeGraphQuery } from "../../code-intelligence/query"
-import { AutoIndex } from "../../code-intelligence/auto-index"
-import { Ripgrep } from "../../file/ripgrep"
+import type { CodeGraphBuilder } from "../../code-intelligence/builder"
+import type { CodeGraphQuery } from "../../code-intelligence/query"
 import { LANGUAGE_EXTENSIONS } from "@ax-code/ax-code-intel/language"
-import { LSP } from "@ax-code/ax-code-intel"
+import type { LSP } from "@ax-code/ax-code-intel"
 import {
   INDEXER_SEMANTIC_METHODS,
   INDEX_PREWARM_MAX_FILES,
   INDEX_PREWARM_MAX_LANGUAGES,
 } from "@ax-code/ax-code-intel/prewarm-profile"
-import { NativePerf } from "../../perf/native"
 import type { NativePerfSnapshot } from "../../perf/native"
 import { UI } from "../ui"
 import { cmd } from "./cmd"
 import { isNonEmptyRecord } from "@/util/record"
 import { toErrorMessage } from "@/util/error-message"
+
+// The graph, the LSP host, the indexer and the native perf counters are only
+// needed once `index` runs; keeping them off this module's static imports keeps
+// them off `ax-code --help`.
+async function loadIndexRuntime() {
+  const [
+    { Instance },
+    { CodeIntelligence },
+    { CodeGraphBuilder },
+    { CodeGraphQuery },
+    { AutoIndex },
+    { Ripgrep },
+    { NativePerf },
+    { LSP },
+  ] = await Promise.all([
+    import("../../project/instance"),
+    import("../../code-intelligence"),
+    import("../../code-intelligence/builder"),
+    import("../../code-intelligence/query"),
+    import("../../code-intelligence/auto-index"),
+    import("../../file/ripgrep"),
+    import("../../perf/native"),
+    import("@ax-code/ax-code-intel"),
+  ])
+  return { Instance, CodeIntelligence, CodeGraphBuilder, CodeGraphQuery, AutoIndex, Ripgrep, NativePerf, LSP }
+}
 
 // Initial population command for the v3 Code Intelligence graph.
 //
@@ -245,6 +266,7 @@ export async function probeLspServers(
 ): Promise<{ ready: Set<string>; missing: Map<string, number> }> {
   const ready = new Set<string>()
   const missing = new Map<string, number>()
+  const { LSP } = await import("@ax-code/ax-code-intel")
   const probes = [...groups.entries()]
     .filter(([lang]) => lang !== "unknown" && lang !== "plaintext")
     .map(async ([lang, files]) => {
@@ -341,6 +363,8 @@ export const IndexCommand = cmd({
     // bootstrap(), which is what loads the glue. Register both hosts first.
     await import("../../lsp-glue")
     await import("../../dre-glue")
+    const { Instance, CodeIntelligence, CodeGraphBuilder, CodeGraphQuery, AutoIndex, Ripgrep, NativePerf, LSP } =
+      await loadIndexRuntime()
     await Instance.provide({
       directory: process.cwd(),
       async fn() {

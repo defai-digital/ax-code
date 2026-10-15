@@ -1,6 +1,6 @@
 import type { CommandModule } from "yargs"
 import path from "node:path"
-import { Context, type DepthLevel } from "../../context"
+import type { DepthLevel } from "../../context"
 import { Filesystem } from "../../util/filesystem"
 
 export const InitCommand: CommandModule<
@@ -49,6 +49,7 @@ export const InitCommand: CommandModule<
         default: false,
       }),
   handler: async (args) => {
+    const { Context } = await import("../../context")
     const caller = Filesystem.callerCwd()
     // @scan-suppress security_scan - --dir intentionally selects the project root; Context.init owns writes within that root.
     const root = Filesystem.resolve(args.dir ? path.resolve(caller, args.dir) : caller)

@@ -1,6 +1,9 @@
-import { Snapshot } from "../../../snapshot"
 import { bootstrap } from "../../bootstrap"
 import { cmd } from "../cmd"
+
+// snapshot/index carries Config and the storage graph; load it per handler
+// so `--help` never evaluates it.
+const loadSnapshot = async () => (await import("../../../snapshot")).Snapshot
 
 export const SnapshotCommand = cmd({
   command: "snapshot",
@@ -13,6 +16,7 @@ const TrackCommand = cmd({
   command: "track",
   describe: "track current snapshot state",
   async handler() {
+    const Snapshot = await loadSnapshot()
     await bootstrap(process.cwd(), async () => {
       console.log(await Snapshot.track())
     })
@@ -29,6 +33,7 @@ const PatchCommand = cmd({
       demandOption: true,
     }),
   async handler(args) {
+    const Snapshot = await loadSnapshot()
     await bootstrap(process.cwd(), async () => {
       console.log(await Snapshot.patch(args.hash))
     })
@@ -45,6 +50,7 @@ const DiffCommand = cmd({
       demandOption: true,
     }),
   async handler(args) {
+    const Snapshot = await loadSnapshot()
     await bootstrap(process.cwd(), async () => {
       console.log(await Snapshot.diff(args.hash))
     })

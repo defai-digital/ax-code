@@ -3,34 +3,20 @@ import { EOL } from "os"
 import path from "path"
 import type { Argv } from "yargs"
 import type { Skill } from "../../skill"
-import {
-  buildSkillDoctorReport,
-  buildSkillTriggerReport,
-  buildSkillValidationReport,
-  createSkill,
-  SkillInputError,
-  skillCreateContent,
-  skillCreatePath,
-  SkillExistsError,
-  SkillPathError,
-  type SkillDoctorReport,
-  type SkillTriggerReport,
-  type SkillValidationReport,
-} from "../../skill/authoring"
+import type { SkillDoctorReport, SkillTriggerReport, SkillValidationReport } from "../../skill/authoring"
 import { cmd } from "./cmd"
 
+// skill/authoring reaches skill/index, permission and MCP; only the handlers
+// need it, so `--help` never evaluates that graph.
 async function loadSkill() {
-  const [{ Skill }, boot] = await Promise.all([import("../../skill"), import("../bootstrap")])
-  return { Skill, bootstrap: boot.bootstrap, bootstrapReadonly: boot.bootstrapReadonly }
+  const [{ Skill }, boot, authoring] = await Promise.all([
+    import("../../skill"),
+    import("../bootstrap"),
+    import("../../skill/authoring"),
+  ])
+  return { Skill, bootstrap: boot.bootstrap, bootstrapReadonly: boot.bootstrapReadonly, authoring }
 }
 
-export {
-  buildSkillDoctorReport,
-  buildSkillTriggerReport,
-  buildSkillValidationReport,
-  skillCreateContent,
-  skillCreatePath,
-}
 export type { SkillDoctorReport, SkillTriggerReport, SkillValidationReport }
 
 export function applySkillValidationExitCode(
@@ -135,7 +121,8 @@ const SkillCreateCommand = cmd({
         describe: "base skill directory; defaults to .ax-code/skill in the current worktree",
       }),
   async handler(args) {
-    const { bootstrap } = await loadSkill()
+    const { bootstrap, authoring } = await loadSkill()
+    const { createSkill, SkillExistsError, SkillPathError, SkillInputError } = authoring
     await bootstrap(process.cwd(), async () => {
       try {
         const result = await createSkill({
@@ -165,9 +152,9 @@ const SkillValidateCommand = cmd({
       describe: "output machine-readable JSON",
     }),
   async handler(args) {
-    const { Skill, bootstrapReadonly } = await loadSkill()
+    const { Skill, bootstrapReadonly, authoring } = await loadSkill()
     await bootstrapReadonly(process.cwd(), async () => {
-      const report = buildSkillValidationReport(await Skill.all())
+      const report = authoring.buildSkillValidationReport(await Skill.all())
       if (args.json) {
         process.stdout.write(JSON.stringify(report, null, 2) + EOL)
       } else {
@@ -187,9 +174,9 @@ const SkillDoctorCommand = cmd({
       describe: "output machine-readable JSON",
     }),
   async handler(args) {
-    const { Skill, bootstrapReadonly } = await loadSkill()
+    const { Skill, bootstrapReadonly, authoring } = await loadSkill()
     await bootstrapReadonly(process.cwd(), async () => {
-      const report = buildSkillDoctorReport(await Skill.all(), await Skill.duplicateNames())
+      const report = authoring.buildSkillDoctorReport(await Skill.all(), await Skill.duplicateNames())
       if (args.json) {
         process.stdout.write(JSON.stringify(report, null, 2) + EOL)
       } else {
@@ -215,10 +202,10 @@ const SkillTestTriggerCommand = cmd({
         describe: "output machine-readable JSON",
       }),
   async handler(args) {
-    const { Skill, bootstrapReadonly } = await loadSkill()
+    const { Skill, bootstrapReadonly, authoring } = await loadSkill()
     await bootstrapReadonly(process.cwd(), async () => {
       const files = ((args.files as string[] | undefined) ?? []).filter(Boolean)
-      const report = buildSkillTriggerReport(await Skill.all(), files)
+      const report = authoring.buildSkillTriggerReport(await Skill.all(), files)
       if (args.json) {
         process.stdout.write(JSON.stringify(report, null, 2) + EOL)
         return

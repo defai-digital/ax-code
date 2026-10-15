@@ -2,7 +2,7 @@ import type { Argv } from "yargs"
 import { UI } from "../ui"
 import { cmd } from "./cmd"
 import { jsonOption, writeJson } from "./json-output"
-import { SnapshotStores } from "../../snapshot/stores"
+import type { SnapshotStores } from "../../snapshot/stores"
 import { formatStorageBytes } from "../../storage/policy"
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -59,6 +59,7 @@ const StatusCommand = cmd({
       .option("all", { describe: "list every store", type: "boolean", default: false })
       .option("json", { ...jsonOption(), default: false }),
   async handler(args) {
+    const { SnapshotStores } = await import("../../snapshot/stores")
     const now = Date.now()
     const stores = await SnapshotStores.inspect({ now })
     const total = stores.reduce((sum, store) => sum + store.bytes, 0)
@@ -128,6 +129,7 @@ const PruneCommand = cmd({
       .option("dry-run", { describe: "show what would be removed without deleting", type: "boolean", default: false })
       .option("force", { describe: "skip confirmation prompt", type: "boolean", default: false }),
   async handler(args) {
+    const { SnapshotStores } = await import("../../snapshot/stores")
     const now = Date.now()
     const stores = await SnapshotStores.inspect({ now })
     const wanted = { orphaned: args.orphaned, idle: args.idle }

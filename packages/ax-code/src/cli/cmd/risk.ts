@@ -1,5 +1,4 @@
 import { cmd } from "./cmd"
-import { Instance } from "../../project/instance"
 import type { SessionRisk } from "../../session/risk"
 import {
   readinessDetailLabel,
@@ -230,6 +229,7 @@ export const RiskCommand = cmd({
   async handler(args) {
     const { SessionRisk } = await import("../../session/risk")
     const { SessionID } = await import("../../session/schema")
+    const { Instance } = await import("../../project/instance")
     await Instance.provide({
       directory: process.cwd(),
       fn: async () => {
