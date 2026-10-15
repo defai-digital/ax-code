@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest"
 import { appErrorEnvelope } from "../../src/server/error"
 import { Session } from "../../src/session"
+import { SessionRevert } from "../../src/session/revert"
+import { SessionID, MessageID } from "../../src/session/schema"
 import { File } from "../../src/file"
 
 describe("server appErrorEnvelope classification", () => {
@@ -23,6 +25,26 @@ describe("server appErrorEnvelope classification", () => {
       name: "ForbiddenError",
       status: 403,
       message: "Access denied: symlink target escapes project directory",
+    })
+  })
+
+  test("maps SessionRevert.IncompleteCoverageError to a 400 with its remediation message", () => {
+    // The revert route declares errors(400, 404); an unfinished tool step is a
+    // client-visible state the caller can act on, so it must not surface as a
+    // generic 500 that drops the remediation text.
+    const envelope = appErrorEnvelope({
+      error: new SessionRevert.IncompleteCoverageError({
+        message:
+          "Undo coverage is incomplete for an unfinished tool step. Inspect and restore workspace changes manually.",
+        sessionID: SessionID.make("ses_revert_incomplete"),
+        messageID: MessageID.make("msg_revert_incomplete"),
+      }),
+    })
+    expect(envelope).toMatchObject({
+      name: "InvalidRequestError",
+      status: 400,
+      message: expect.stringContaining("Undo coverage is incomplete"),
+      details: { resource: "sessionRevert" },
     })
   })
 

@@ -147,6 +147,17 @@ function namedErrorEnvelope(error: NamedError, logRef?: string): AppErrorEnvelop
       details: resource ? { resource } : undefined,
     }
   }
+  if (error.name === "SessionRevertIncompleteCoverageError") {
+    const data = namedErrorData(error)
+    return {
+      name: "InvalidRequestError",
+      message:
+        typeof data.message === "string" ? data.message : "Undo coverage is incomplete for an unfinished tool step",
+      status: 400,
+      details: { resource: "sessionRevert" },
+      retryable: false,
+    }
+  }
   if (error.name === "PtyInvalidCwd") {
     const data = namedErrorData(error)
     return {
