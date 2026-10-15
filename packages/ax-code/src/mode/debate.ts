@@ -20,37 +20,48 @@ export namespace Debate {
     return Math.max(0, Math.min(MAX_ROUNDS, Math.floor(value)))
   }
 
-  function redactMemberIdentities(report: Council.CouncilReport, text: string): string {
+  // Parts that appear in many vendor ids and would over-redact ordinary prose
+  // ("api", "code", …). Hoisted: a single synthesis used to rebuild this set,
+  // the identity set and one RegExp per identity for every redacted string.
+  const GENERIC_IDENTITY_PARTS = new Set([
+    "api",
+    "cli",
+    "cloud",
+    "local",
+    "model",
+    "core",
+    "lab",
+    "labs",
+    "ai",
+    "engine",
+    "code",
+    "copilot",
+  ])
+  const SHORT_MODEL_PART = /^[a-z]\d+$/i
+
+  /** Every identity to mask, longest first so a longer id wins over its own prefix. */
+  function memberIdentities(report: Council.CouncilReport): string[] {
     const identities = new Set<string>()
-    const genericParts = new Set([
-      "api",
-      "cli",
-      "cloud",
-      "local",
-      "model",
-      "core",
-      "lab",
-      "labs",
-      "ai",
-      "engine",
-      "code",
-      "copilot",
-    ])
     for (const item of [...report.consensus, ...report.majority, ...report.minority, ...report.singleton]) {
       for (const memberId of item.memberIds) {
         identities.add(memberId)
         for (const part of memberId.split("/")) {
-          const shortModel = /^[a-z]\d+$/i.test(part)
-          if ((part.length >= 3 || shortModel) && !genericParts.has(part.toLowerCase())) identities.add(part)
+          const shortModel = SHORT_MODEL_PART.test(part)
+          if ((part.length >= 3 || shortModel) && !GENERIC_IDENTITY_PARTS.has(part.toLowerCase())) identities.add(part)
         }
       }
     }
+    return [...identities].sort((a, b) => b.length - a.length)
+  }
+
+  function identityPattern(identity: string): RegExp {
+    const escaped = identity.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    return new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, "giu")
+  }
+
+  function redactIdentities(text: string, patterns: RegExp[]): string {
     let redacted = text
-    for (const identity of [...identities].sort((a, b) => b.length - a.length)) {
-      const escaped = identity.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-      const pattern = `(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`
-      redacted = redacted.replace(new RegExp(pattern, "giu"), "[member]")
-    }
+    for (const pattern of patterns) redacted = redacted.replace(pattern, "[member]")
     return redacted
   }
 
@@ -59,22 +70,23 @@ export namespace Debate {
    * Strips member ids so models cannot anchor on brand prestige.
    */
   export function buildAnonymousSynthesis(report: Council.CouncilReport, round: number): RoundSummary {
+    const identityPatterns = memberIdentities(report).map(identityPattern)
     const issuesRaised: string[] = []
     for (const item of [...report.consensus, ...report.majority, ...report.minority, ...report.singleton]) {
       const loc = item.location ? ` @ ${item.location}` : ""
       issuesRaised.push(
-        redactMemberIdentities(report, `[${item.severity}/${item.tier}] ${item.category}${loc}: ${item.summary}`),
+        redactIdentities(`[${item.severity}/${item.tier}] ${item.category}${loc}: ${item.summary}`, identityPatterns),
       )
     }
 
     const pointsOfAgreement = report.consensus.map((item) => {
       const loc = item.location ? ` @ ${item.location}` : ""
-      return redactMemberIdentities(report, `${item.category}${loc}: ${item.summary}`)
+      return redactIdentities(`${item.category}${loc}: ${item.summary}`, identityPatterns)
     })
 
     const openQuestions = [...report.minority, ...report.singleton]
       .filter((item) => item.severity === "high" || item.severity === "medium")
-      .map((item) => redactMemberIdentities(report, item.summary))
+      .map((item) => redactIdentities(item.summary, identityPatterns))
       .slice(0, 8)
 
     return {
