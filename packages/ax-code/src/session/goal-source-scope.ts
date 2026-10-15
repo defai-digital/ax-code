@@ -77,6 +77,12 @@ export function goalSourceScope(input: {
         add(asRecordOrUndefined(state.input)?.notebook_path)
         add(metadata?.notebook_path)
       }
+      // ImageGenTool writes the generated artifact into the workspace and
+      // reports it as `metadata.path` (not `filepath`), so without an explicit
+      // reader the image never reaches receipt freshness.
+      if (record.tool === "image_gen") {
+        add(metadata?.path)
+      }
       // MultiEditTool returns each executed edit's metadata in results, rather
       // than a top-level filediff. Do not infer changed paths from tool inputs.
       if (record.tool === "multiedit" && Array.isArray(metadata?.results)) {

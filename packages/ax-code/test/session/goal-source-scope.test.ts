@@ -211,3 +211,18 @@ test("attributes a notebook_edit change by its notebook_path input", () => {
   const result = goalSourceScope({ cwd, created: 10, sourcePaths: ["src/declared"], messages: [changed] })
   expect(result.additional).toEqual(["src/analysis.ipynb"])
 })
+
+test("attributes an image_gen artifact by its metadata path", () => {
+  // ImageGenTool reports the written file as `metadata.path`, not `filepath`,
+  // so without an explicit reader the generated artifact never reaches receipt
+  // freshness and regenerating it would not invalidate the frozen checks.
+  const result = goalSourceScope({
+    cwd,
+    created: 10,
+    sourcePaths: ["src/declared"],
+    messages: [
+      message({ provider: "openai", path: absolute("assets/generated/logo.png"), size: "1024x1024" }, 20, "image_gen"),
+    ],
+  })
+  expect(result.additional).toEqual(["assets/generated/logo.png"])
+})
