@@ -14,7 +14,7 @@ import { unixNodeLauncherScript, windowsNodeLauncherScript } from "./node-launch
 import { copyTuiDistPackage, toTuiDistPackageJson, withoutTuiTransformDependencies } from "./tui-dist"
 import { inspectNativeAddonPayload, nativeAddonIncompleteMessage, NATIVE_ADDON_PACKAGES } from "./native-addon-payload"
 import pkg from "../package.json"
-import { resolveNativeTypescript } from "../../ax-code-intel/src/typescript-native"
+import { resolveNativeTypescript } from "@ax-code/ax-code-intel/typescript-native"
 import { pruneParserDistribution } from "./parser-dist"
 
 // Full Node distribution build INCLUDING the interactive TUI. Bundles

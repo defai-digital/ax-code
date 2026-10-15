@@ -38,6 +38,7 @@ const CONSOLIDATED: Consolidated[] = [
     slug: "string-list",
     symbols: ["stringList", "uniqueItems", "uniqueStrings", "uniqueSortedStrings"],
     shims: [
+      "packages/ax-code/src/util/string-list.ts",
       "packages/ax-code-intel/src/internal/string-list.ts",
       "packages/ax-code-reason/src/internal/string-list.ts",
     ],

@@ -38,7 +38,8 @@
     "./semantic-results": "./src/semantic-results.ts",
     "./oxlint": "./src/oxlint.ts",
     "./jdtls-data-dir": "./src/jdtls-data-dir.ts",
-    "./log": "./src/log.ts"
+    "./log": "./src/log.ts",
+    "./typescript-native": "./src/typescript-native.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
