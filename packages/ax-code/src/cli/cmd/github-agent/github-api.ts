@@ -27,10 +27,12 @@ export async function exchangeForAppToken(
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: JSON.stringify({ owner, repo }),
+        signal: AbortSignal.timeout(30_000),
       })
     : await fetch(`${oidcBaseUrl}/exchange_github_app_token`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(30_000),
       })
 
   if (!response.ok) {
@@ -62,6 +64,7 @@ export async function revokeAppToken(appToken: string) {
       Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": "2022-11-28",
     },
+    signal: AbortSignal.timeout(30_000),
   })
 }
 

@@ -19,10 +19,16 @@ export async function restartRuntimeServer(input: { directory: string; port: unk
       method: "POST",
       headers: RuntimeRegistry.headers(record),
       redirect: "error",
+      // `.catch` absorbs the timeout into the `false` result instead of letting
+      // a connected-but-silent peer hang the command.
+      signal: AbortSignal.timeout(5_000),
     }).catch(() => null)
     return res?.ok === true
   }
   const port = validateRuntimeRestartPort(input.port)
-  const res = await fetch(`http://127.0.0.1:${port}/instance/restart`, { method: "POST" }).catch(() => null)
+  const res = await fetch(`http://127.0.0.1:${port}/instance/restart`, {
+    method: "POST",
+    signal: AbortSignal.timeout(5_000),
+  }).catch(() => null)
   return res?.ok === true
 }

@@ -18,9 +18,7 @@ import { Flag } from "../flag/flag"
 import { iife } from "@/util/iife"
 import { sleep as sleepDefault } from "@/util/timeout"
 import { init } from "#db"
-import { NativeStore } from "@/code-intelligence/native-store"
 import { DurableStoragePolicy } from "./policy"
-import { Recorder } from "@/replay/recorder"
 import { Shard } from "./shard"
 import { toErrorMessage } from "../util/error-message"
 import type { ProjectID } from "../project/schema"
@@ -168,6 +166,9 @@ export namespace Database {
     // get scheduled on a microtask that never runs (the handle closes
     // first). flushAll is synchronous and idempotent.
     try {
+      // Lazy: `replay/recorder` value-imports this module back, so a top-level
+      // import here would close a module-init cycle on the DB floor.
+      const { Recorder } = await import("@/replay/recorder")
       Recorder.flushAll()
     } catch (error) {
       log.warn("recorder flush during shutdown failed", {
@@ -209,7 +210,19 @@ export namespace Database {
     // stay open for the lifetime of the process — a real fd / WAL leak in
     // long-running server / desktop / TUI hosts (BUG-008). NativeStore.close
     // is idempotent and safe to call when the addon isn't loaded.
-    const nativeClosing = NativeStore.close()
+    // Lazy for the same reason as the recorder flush above: the code-intelligence
+    // layer value-imports this module back. Guarded so a failed import still
+    // releases the shard handles below instead of aborting shutdown.
+    let nativeClosing: Promise<void> | undefined
+    try {
+      const { NativeStore } = await import("@/code-intelligence/native-store")
+      nativeClosing = NativeStore.close()
+    } catch (error) {
+      log.warn("failed to release the native index store during shutdown", {
+        path: Path,
+        error: toErrorMessage(error),
+      })
+    }
     // Close + evict every open per-project shard handle (idempotent). Shard
     // handles are opened lazily, so an empty cache is a no-op — but a
     // long-running server / desktop host may hold up to Shard.MAX_OPEN of them.

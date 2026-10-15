@@ -165,7 +165,9 @@ export namespace SkillCandidate {
     for (const component of [".ax-code", "skill", Name.parse(name)]) {
       // @scan-suppress security_scan - Components are fixed or validated lowercase skill names; each directory is checked below with lstat to reject symlinks.
       current = path.join(current, component)
-      if (create && !fs.existsSync(current)) fs.mkdirSync(current)
+      // Idempotent: a concurrent promoter may win the create, and `lstatSync`
+      // below still rejects a symlink or non-directory at this component.
+      if (create) fs.mkdirSync(current, { recursive: true })
       const stat = fs.lstatSync(current)
       if (stat.isSymbolicLink() || !stat.isDirectory())
         throw new Error("Skill promotion path must contain real directories only")

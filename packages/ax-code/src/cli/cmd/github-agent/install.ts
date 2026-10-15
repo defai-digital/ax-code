@@ -162,8 +162,11 @@ export const GithubInstallCommand = cmd({
 
             async function getInstallation() {
               try {
+                // Bounded per attempt: the caller polls in a retry loop, so a
+                // connected-but-silent server must not stall the counter forever.
                 const response = await fetch(
                   `${requireOidcBaseUrl()}/get_github_app_installation?owner=${app.owner}&repo=${app.repo}`,
+                  { signal: AbortSignal.timeout(5_000) },
                 )
                 if (!response.ok) return null
 
