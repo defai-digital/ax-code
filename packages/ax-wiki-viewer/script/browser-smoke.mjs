@@ -299,6 +299,9 @@ try {
   await page.evaluate(() =>
     document.querySelector(".canvas svg[role=img]").dispatchEvent(new MouseEvent("click", { bubbles: true })),
   )
+  // Move away from the real list row before synthesizing a canvas hover.
+  // Otherwise Chromium can deliver a real row mouseenter between synthetic events.
+  await page.mouse.move(2, 2)
   await page.evaluate(() => document.querySelector("svg g.node").dispatchEvent(new Event("mouseenter")))
   assert.equal(
     await page.evaluate(
