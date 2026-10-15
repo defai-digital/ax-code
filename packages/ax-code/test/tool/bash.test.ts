@@ -821,6 +821,46 @@ describe("tool.bash truncation", () => {
     })
   })
 
+  test("split-quoted inner shell redirect targets are checked in autonomous mode", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await withAutonomous(async () => {
+      const sessionID = SessionID.make("ses_bash_inner_split_redirect")
+      BlastRadius.reset(sessionID)
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const bash = await BashTool.init()
+            // The redirect lives inside a quoted `-c` string, so only the inner
+            // scan sees it. A split-quoted target must decode to the real word
+            // (.git/config, .env); stripping a single wrapping quote pair leaves
+            // the quotes in and skips the non-overridable refusal.
+            await expect(
+              bash.execute(
+                {
+                  command: `bash -c ${shellQuote('echo pwned> ".git/con"fig')}`,
+                  description: "split-quoted inner redirect into .git",
+                },
+                { ...ctx, sessionID },
+              ),
+            ).rejects.toMatchObject({ message: expect.stringContaining("Refusing to write") })
+            await expect(
+              bash.execute(
+                {
+                  command: `sh -c ${shellQuote('echo y > ."en"v')}`,
+                  description: "split-quoted inner redirect into .env",
+                },
+                { ...ctx, sessionID },
+              ),
+            ).rejects.toMatchObject({ message: expect.stringContaining("Refusing to write") })
+          },
+        })
+      } finally {
+        BlastRadius.reset(sessionID)
+      }
+    })
+  })
+
   test("git config write to a dangerous key is blocked in autonomous mode even behind a global git flag", async () => {
     await using tmp = await tmpdir({ git: true })
     await withAutonomous(async () => {

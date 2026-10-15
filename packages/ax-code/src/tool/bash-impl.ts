@@ -1258,7 +1258,15 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
                   const c = innerRedirect.child(j)
                   if (!c) continue
                   if (!["word", "string", "raw_string", "concatenation"].includes(c.type)) continue
-                  const target = stripShellQuotes(c.text)
+                  // decodeShellLiteral joins split-quoted targets
+                  // (`> ".git/con"fig`), mirroring the outer scan at the
+                  // top-level redirect loop; a word it cannot decode is dynamic
+                  // and must fail closed rather than resolve to a bogus path.
+                  const target = decodeShellLiteral(c.text)
+                  if (target === undefined) {
+                    dynamicPathAccess = true
+                    continue
+                  }
                   if (!target || /^&/.test(target)) continue
                   assertStaticRedirectTarget(target)
                   assertSupportedWindowsRedirect(c.text, isEval ? shell : scanParts[0])
