@@ -39515,117 +39515,7 @@
           "data"
         ]
       },
-      "DesktopWebMcpConnection": {
-        "type": "object",
-        "properties": {
-          "providerID": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "epoch": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "projectID": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 256
-          },
-          "capability": {
-            "type": "string",
-            "const": "desktop.webmcp.v1"
-          }
-        },
-        "required": [
-          "providerID",
-          "epoch",
-          "projectID",
-          "capability"
-        ],
-        "additionalProperties": false
-      },
-      "DesktopWebMcpEnrollment": {
-        "type": "object",
-        "properties": {
-          "sessionID": {
-            "type": "string",
-            "pattern": "^ses_.*"
-          },
-          "snapshot": {
-            "$ref": "#/components/schemas/DesktopWebMcpSnapshot"
-          }
-        },
-        "required": [
-          "sessionID",
-          "snapshot"
-        ],
-        "additionalProperties": false
-      },
-      "DesktopWebMcpPoll": {
-        "type": "object",
-        "properties": {
-          "request": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DesktopWebMcpRequest"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "canceled": {
-            "maxItems": 8,
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-            }
-          }
-        },
-        "required": [
-          "request",
-          "canceled"
-        ],
-        "additionalProperties": false
-      },
-      "DesktopWebMcpReply": {
-        "type": "object",
-        "properties": {
-          "requestID": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "generation": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "Completed",
-              "Canceled",
-              "Error"
-            ]
-          },
-          "snapshot": {
-            "$ref": "#/components/schemas/DesktopWebMcpSnapshot"
-          },
-          "output": {}
-        },
-        "required": [
-          "requestID",
-          "generation",
-          "status"
-        ],
-        "additionalProperties": false
-      },
-      "DesktopWebMcpRequest": {
+      "DesktopWebMcpBoundRequest": {
         "type": "object",
         "properties": {
           "providerID": {
@@ -39706,6 +39596,201 @@
           "deadline"
         ],
         "additionalProperties": false
+      },
+      "DesktopWebMcpConnection": {
+        "type": "object",
+        "properties": {
+          "providerID": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "epoch": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "projectID": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "capability": {
+            "type": "string",
+            "const": "desktop.webmcp.v1"
+          }
+        },
+        "required": [
+          "providerID",
+          "epoch",
+          "projectID",
+          "capability"
+        ],
+        "additionalProperties": false
+      },
+      "DesktopWebMcpEnrollment": {
+        "type": "object",
+        "properties": {
+          "sessionID": {
+            "type": "string",
+            "pattern": "^ses_.*"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/DesktopWebMcpSnapshot"
+          }
+        },
+        "required": [
+          "sessionID",
+          "snapshot"
+        ],
+        "additionalProperties": false
+      },
+      "DesktopWebMcpNavigateRequest": {
+        "type": "object",
+        "properties": {
+          "providerID": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "epoch": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "projectID": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "sessionID": {
+            "type": "string",
+            "pattern": "^ses_.*"
+          },
+          "generation": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "frameId": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "requestID": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "operation": {
+            "type": "string",
+            "const": "navigate"
+          },
+          "deadline": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 2048
+          }
+        },
+        "required": [
+          "providerID",
+          "epoch",
+          "projectID",
+          "sessionID",
+          "generation",
+          "origin",
+          "frameId",
+          "requestID",
+          "operation",
+          "deadline",
+          "url"
+        ],
+        "additionalProperties": false
+      },
+      "DesktopWebMcpPoll": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DesktopWebMcpRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "canceled": {
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        },
+        "required": [
+          "request",
+          "canceled"
+        ],
+        "additionalProperties": false
+      },
+      "DesktopWebMcpReply": {
+        "type": "object",
+        "properties": {
+          "requestID": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "generation": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "Completed",
+              "Canceled",
+              "Error"
+            ]
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/DesktopWebMcpSnapshot"
+          },
+          "output": {}
+        },
+        "required": [
+          "requestID",
+          "generation",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "DesktopWebMcpRequest": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/DesktopWebMcpBoundRequest"
+          },
+          {
+            "$ref": "#/components/schemas/DesktopWebMcpNavigateRequest"
+          }
+        ]
       },
       "DesktopWebMcpSnapshot": {
         "type": "object",

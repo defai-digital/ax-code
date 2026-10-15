@@ -1051,6 +1051,25 @@ export type ContextOverflowError = {
   }
 }
 
+/** AX Code API schema `DesktopWebMcpBoundRequest` (auto-generated from the OpenAPI contract). */
+export type DesktopWebMcpBoundRequest = {
+  providerID: string
+  epoch: string
+  projectID: string
+  sessionID: string
+  generation: string
+  origin: string
+  frameId: string
+  requestID: string
+  operation: "list" | "invoke"
+  deadline: number
+  toolName?: string
+  digest?: string
+  input?: {
+    [key: string]: unknown
+  }
+}
+
 /** AX Code API schema `DesktopWebMcpConnection` (auto-generated from the OpenAPI contract). */
 export type DesktopWebMcpConnection = {
   providerID: string
@@ -1063,6 +1082,21 @@ export type DesktopWebMcpConnection = {
 export type DesktopWebMcpEnrollment = {
   sessionID: string
   snapshot: DesktopWebMcpSnapshot
+}
+
+/** AX Code API schema `DesktopWebMcpNavigateRequest` (auto-generated from the OpenAPI contract). */
+export type DesktopWebMcpNavigateRequest = {
+  providerID: string
+  epoch: string
+  projectID: string
+  sessionID: string
+  generation: string
+  origin: string | null
+  frameId: string
+  requestID: string
+  operation: "navigate"
+  deadline: number
+  url: string
 }
 
 /** AX Code API schema `DesktopWebMcpPoll` (auto-generated from the OpenAPI contract). */
@@ -1081,23 +1115,7 @@ export type DesktopWebMcpReply = {
 }
 
 /** AX Code API schema `DesktopWebMcpRequest` (auto-generated from the OpenAPI contract). */
-export type DesktopWebMcpRequest = {
-  providerID: string
-  epoch: string
-  projectID: string
-  sessionID: string
-  generation: string
-  origin: string
-  frameId: string
-  requestID: string
-  operation: "list" | "invoke"
-  deadline: number
-  toolName?: string
-  digest?: string
-  input?: {
-    [key: string]: unknown
-  }
-}
+export type DesktopWebMcpRequest = DesktopWebMcpBoundRequest | DesktopWebMcpNavigateRequest
 
 /** AX Code API schema `DesktopWebMcpSnapshot` (auto-generated from the OpenAPI contract). */
 export type DesktopWebMcpSnapshot = {
