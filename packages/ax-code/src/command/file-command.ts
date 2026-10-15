@@ -5,6 +5,7 @@ import { ConfigMarkdown } from "../config/markdown"
 import { Global } from "../global"
 import { Filesystem } from "../util/filesystem"
 import { Glob } from "../util/glob"
+import { mapWithConcurrency, OutboundLimits } from "../util/concurrency"
 import { Log } from "../util/log"
 
 const log = Log.create({ service: "command.file" })
@@ -198,6 +199,8 @@ export namespace FileCommand {
     return results.sort((a, b) => a.name.localeCompare(b.name) || SCOPE_PRIORITY[a.scope] - SCOPE_PRIORITY[b.scope])
   }
 
+  const fileConcurrency = 8
+
   async function scanRoot(input: { root: string; sourceTool: SourceTool; scope: Scope }) {
     const matches = await Glob.scan(COMMAND_PATTERN, {
       cwd: input.root,
@@ -209,8 +212,12 @@ export namespace FileCommand {
       if (Filesystem.isEnoent(error)) return [] as string[]
       throw error
     })
-    const parsed = await Promise.all(
-      matches.map((file) =>
+    // Bound the fan-out: a global root plus several project roots can surface
+    // hundreds of command files, and an unbridled Promise.all would open every
+    // one of them at once. The numeric cap bounds this scan and the shared
+    // limiter keeps it from composing with other file I/O into FD exhaustion.
+    const parsed = await mapWithConcurrency(matches, fileConcurrency, (file) =>
+      OutboundLimits.fileIO.run(() =>
         parseFile({
           file,
           root: input.root,
