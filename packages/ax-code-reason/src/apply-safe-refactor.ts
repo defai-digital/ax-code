@@ -4,7 +4,7 @@ import os from "os"
 import { git } from "./internal/git"
 
 import { Log } from "./internal/log"
-import { codeReasonHost, type Graph } from "./host"
+import { codeReasonHost } from "./host"
 import type { ProjectID } from "./id"
 import { resolveCommands, runCheck, runTests, type TimedCheckResult, type TimedTestResult } from "./verification-runner"
 import { DebugEngine } from "./index"

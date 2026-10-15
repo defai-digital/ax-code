@@ -1,6 +1,5 @@
 import z from "zod"
 import { Config } from "@/config/config"
-import { Instance } from "@/project/instance"
 import { Filesystem } from "@/util/filesystem"
 import { FileLock } from "@/util/filelock"
 import { Lock } from "@/util/lock"

@@ -10,7 +10,7 @@
 // SSE/OpenAPI event contract now that their shapes live in the package.
 
 import z from "zod"
-import { configureCodeIntelHost, type LspCacheOperation } from "@ax-code/ax-code-intel/host"
+import { configureCodeIntelHost } from "@ax-code/ax-code-intel/host"
 import { setLogSink } from "@ax-code/ax-code-intel/log"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
@@ -98,5 +98,3 @@ configureCodeIntelHost({
   },
   state: (init, dispose) => Instance.state(init, dispose),
 })
-
-export type LspGlueOperation = LspCacheOperation

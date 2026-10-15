@@ -80,18 +80,6 @@ export function sanguozhiBackground(style: SanguozhiStyle) {
   return style === "sanguozhi-muster" ? "#2a3050" : "#0c1226"
 }
 
-/** Sample the vertical sky gradient. `t` is 0 at the top of the frame. */
-export function sanguozhiSkyRgb(style: SanguozhiStyle, t: number): readonly [number, number, number] {
-  const x = Math.max(0, Math.min(1, t))
-  const from = [1, 3, 5].map((offset) => parseInt(sanguozhiBackground(style).slice(offset, offset + 2), 16))
-  const to = [1, 3, 5].map((offset) => parseInt(SANGUOZHI_COLORS[style].skyBottom.slice(offset, offset + 2), 16))
-  return [0, 1, 2].map((channel) => Math.round(from[channel]! + (to[channel]! - from[channel]!) * x)) as [
-    number,
-    number,
-    number,
-  ]
-}
-
 /** The opening sun climbs a short arc over one cycle; the ending keeps the moon fixed. */
 export function sanguozhiSunY(elapsedMs: number): number {
   const phase = (Math.max(0, elapsedMs) % SANGUOZHI_CYCLE_MS) / SANGUOZHI_CYCLE_MS

@@ -115,10 +115,6 @@ export type HeadlessRuntimeEvent<
   | HeadlessRuntimeStatusEvent
   | HeadlessControlEvent
 
-export type HeadlessRuntimeEventEnvelope<TEvent = unknown> = {
-  details: TEvent
-}
-
 export const HEADLESS_RUNTIME_EVENT_TYPES = new Set<string>([
   "message.updated",
   "message.removed",

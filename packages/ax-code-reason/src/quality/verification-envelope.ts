@@ -75,7 +75,6 @@ export const ArtifactRefSchema = z.object({
   kind: ArtifactRefKindEnum,
   id: z.string().min(1),
 })
-export type ArtifactRef = z.infer<typeof ArtifactRefSchema>
 
 // ─── Phase 1 provenance fields (all optional; never part of the id) ──────
 //
