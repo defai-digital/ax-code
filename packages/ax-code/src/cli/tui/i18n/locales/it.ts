@@ -327,6 +327,7 @@ export const messages = {
   "ui.connectFrom75ProvidersToUseOtherModelsIncludingClaudeGptGeminiEtc":
     "Connettiti a oltre 75 provider per usare altri modelli, tra cui Claude, GPT, Gemini, ecc.",
   "ui.leaderActive": "Tasto leader attivo",
+  "ui.pressCtrlCAgainToExit": "Premi di nuovo ctrl+c per uscire",
   "ui.pressShortcutKeyOrWaitToCancel": "premi un tasto di scelta rapida o attendi per annullare",
   "ui.finished": "Terminato",
   "ui.thinking": "Ragionamento",

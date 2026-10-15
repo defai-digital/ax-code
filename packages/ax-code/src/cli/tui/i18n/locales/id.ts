@@ -327,6 +327,7 @@ export const messages = {
   "ui.connectFrom75ProvidersToUseOtherModelsIncludingClaudeGptGeminiEtc":
     "Hubungkan lebih dari 75 penyedia untuk model lain, termasuk Claude, GPT, Gemini.",
   "ui.leaderActive": "Tombol pemimpin aktif",
+  "ui.pressCtrlCAgainToExit": "Tekan ctrl+c lagi untuk keluar",
   "ui.pressShortcutKeyOrWaitToCancel": "tekan pintasan atau tunggu untuk membatalkan",
   "ui.finished": "Selesai",
   "ui.thinking": "Berpikir",

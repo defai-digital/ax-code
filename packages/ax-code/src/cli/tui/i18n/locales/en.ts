@@ -325,6 +325,7 @@ export const messages = {
   "ui.connectFrom75ProvidersToUseOtherModelsIncludingClaudeGptGeminiEtc":
     "Connect from 75+ providers to use other models, including Claude, GPT, Gemini etc",
   "ui.leaderActive": "Leader active",
+  "ui.pressCtrlCAgainToExit": "Press ctrl+c again to exit",
   "ui.pressShortcutKeyOrWaitToCancel": "press shortcut key or wait to cancel",
   "ui.finished": "Finished",
   "ui.thinking": "Thinking",

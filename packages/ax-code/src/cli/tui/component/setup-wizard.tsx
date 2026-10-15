@@ -29,7 +29,10 @@ export function SetupWizard(props: { guidance: SetupGuidance; onLanguages: () =>
             ]}
             onSelect={({ value }) => {
               if (value === "skip") {
-                dialog.clear()
+                // Skipping language selection must still mark the step done so
+                // the wizard advances to provider setup; closing the dialog here
+                // used to abandon the wizard and never re-offer the connect step.
+                kv.set("setup_language_done_v1", true)
                 return
               }
               language.setLocale(value as (typeof LOCALES)[number])

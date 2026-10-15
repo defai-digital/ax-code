@@ -356,6 +356,7 @@ export const messages = {
   "ui.connectFrom75ProvidersToUseOtherModelsIncludingClaudeGptGeminiEtc":
     "\ub2e4\ub978 \uacf5\uae09\uc790\uc5d0 \uc5f0\uacb0\ud558\uc5ec Claude, GPT, Gemini \ub4f1\uc758 \ubaa8\ub378\uc744 \uc0ac\uc6a9\ud558\uc138\uc694.",
   "ui.leaderActive": "\ub9ac\ub354 \ud0a4 \ud65c\uc131\ud654",
+  "ui.pressCtrlCAgainToExit": "\uc885\ub8cc\ud558\ub824\uba74 ctrl+c\ub97c \ub2e4\uc2dc \ub204\ub974\uc138\uc694",
   "ui.pressShortcutKeyOrWaitToCancel":
     "\ub2e8\ucd95\ud0a4\ub97c \ub204\ub974\uac70\ub098 \ucde8\uc18c\ub420 \ub54c\uae4c\uc9c0 \uae30\ub2e4\ub9ac\uc138\uc694",
   "ui.finished": "\uc644\ub8cc",

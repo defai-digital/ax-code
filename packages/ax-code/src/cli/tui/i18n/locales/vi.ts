@@ -349,6 +349,7 @@ export const messages = {
   "ui.connectFrom75ProvidersToUseOtherModelsIncludingClaudeGptGeminiEtc":
     "K\u1ebft n\u1ed1i h\u01a1n 75 nh\u00e0 cung c\u1ea5p \u0111\u1ec3 d\u00f9ng m\u00f4 h\u00ecnh kh\u00e1c nh\u01b0 Claude, GPT, Gemini.",
   "ui.leaderActive": "Ph\u00edm d\u1eabn \u0111ang b\u1eadt",
+  "ui.pressCtrlCAgainToExit": "Nh\u1ea5n ctrl+c l\u1ea7n n\u1eefa \u0111\u1ec3 tho\u00e1t",
   "ui.pressShortcutKeyOrWaitToCancel": "nh\u1ea5n ph\u00edm t\u1eaft ho\u1eb7c ch\u1edd \u0111\u1ec3 h\u1ee7y",
   "ui.finished": "\u0110\u00e3 xong",
   "ui.thinking": "\u0110ang suy ngh\u0129",

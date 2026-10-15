@@ -51,6 +51,7 @@ import {
   sanitizePromptInput,
   clipboardTextPaste,
 } from "./view-model"
+import { createExitConfirmGate, isPlainCtrlC } from "./exit-confirm"
 import { FooterAnimationSpinner } from "../footer-animation"
 import { summarizedPasteViews } from "./paste-view-model"
 import {
@@ -123,6 +124,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
   const dialog = useDialog()
   const toast = useToast()
   const exit = useExit()
+  const exitConfirm = createExitConfirmGate({ now: () => Date.now() })
   const status = createMemo(() => sync.data.session_status?.[props.sessionID ?? ""] ?? { type: "idle" })
   const history = usePromptHistory()
   const stash = usePromptStash()
@@ -1115,6 +1117,9 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
                 // mode switches, autocomplete) never reach the escape-intent
                 // chain and would otherwise leave a stale arm behind.
                 if (escapeRewindDisarmKey(e.name)) lastIdleEscapeAt = undefined
+                // A pending Ctrl+C exit confirmation must not survive an
+                // unrelated keypress, mirroring the rewind-window disarm above.
+                if (!isPlainCtrlC(e)) exitConfirm.reset()
                 const pendingIntent = pendingSubmitKeyIntent({
                   pending: submitPending() || submitController.submitInFlight,
                   appExit: keybind.match("app_exit", e),
@@ -1203,6 +1208,16 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
                     // await the event has already been dispatched to the
                     // textarea's own handlers.
                     e.preventDefault()
+                    // Ctrl+D and the leader binding still exit at once; only a
+                    // plain Ctrl+C asks for confirmation first.
+                    if (isPlainCtrlC(e) && exitConfirm.press() === "arm") {
+                      toast.show({
+                        variant: "info",
+                        message: uiText("ui.pressCtrlCAgainToExit"),
+                        duration: 2000,
+                      })
+                      return
+                    }
                     try {
                       // An explicit ctrl+c exit plays the ending video before
                       // the renderer tears down; pressing it again skips it.

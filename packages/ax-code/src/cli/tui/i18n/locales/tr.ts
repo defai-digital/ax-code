@@ -336,6 +336,7 @@ export const messages = {
   "ui.connectFrom75ProvidersToUseOtherModelsIncludingClaudeGptGeminiEtc":
     "Claude, GPT, Gemini gibi modeller i\u00e7in 75\u2019ten fazla sa\u011flay\u0131c\u0131ya ba\u011flan\u0131n.",
   "ui.leaderActive": "\u00d6nc\u00fc tu\u015f etkin",
+  "ui.pressCtrlCAgainToExit": "\u00c7\u0131kmak i\u00e7in ctrl+c tu\u015flar\u0131na tekrar bas\u0131n",
   "ui.pressShortcutKeyOrWaitToCancel": "k\u0131sayola bas\u0131n veya iptal i\u00e7in bekleyin",
   "ui.finished": "Bitti",
   "ui.thinking": "D\u00fc\u015f\u00fcn\u00fcyor",
