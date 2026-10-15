@@ -9,6 +9,12 @@ import { shouldUseTuiAnimations } from "./spinner-profile"
 
 const frames = ["|", "/", "-", "\\"]
 
+// The animated spinner paints [1-cell glyph][1-cell gap] before its text, so
+// the disabled-animation fallback prefix must keep the same 2-cell gutter or
+// every row it leads shifts when animations are off. "-" is single-width and
+// not East-Asian-ambiguous ("..." spans 4 cells; "·" has ambiguous width).
+const DEFAULT_FALLBACK_PREFIX = "- "
+
 function AxTuiSpinner(props: { frames: string[]; interval: number; color: RGBA | ColorGenerator }) {
   return <spinner frames={props.frames} interval={props.interval} color={props.color} />
 }
@@ -17,7 +23,7 @@ export function Spinner(props: { children?: JSX.Element; color?: RGBA; fallbackP
   const { theme } = useTheme()
   const kv = useKV()
   const color = () => props.color ?? theme.textMuted
-  const fallbackPrefix = () => props.fallbackPrefix ?? "... "
+  const fallbackPrefix = () => props.fallbackPrefix ?? DEFAULT_FALLBACK_PREFIX
   return (
     <Show
       when={shouldUseTuiAnimations({ userEnabled: kv.get("animations_enabled", true) })}

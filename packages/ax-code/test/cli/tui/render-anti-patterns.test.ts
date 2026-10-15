@@ -35,6 +35,7 @@ const WORKSPACE_SESSION_LIST_DIALOG_SRC = SESSION_LIST_DIALOG_SRC
 const SESSION_RENAME_DIALOG_SRC = path.join(TUI_ROOT, "component/dialog-session-rename.tsx")
 const SPINNER_SRC = path.join(TUI_ROOT, "component/spinner.tsx")
 const SPINNER_PROFILE_SRC = path.join(TUI_ROOT, "component/spinner-profile.ts")
+const TOOL_PRIMITIVES_SRC = path.join(TUI_ROOT, "routes/session/tool-renderers/primitives.tsx")
 const LIVENESS_VIEW_MODEL_SRC = path.join(TUI_ROOT, "component/prompt/liveness-view-model.ts")
 const WORKSPACE_LIST_DIALOG_SRC = path.join(TUI_ROOT, "component/dialog-workspace-list.tsx")
 const DIALOG_COMMAND_SRC = path.join(TUI_ROOT, "component/dialog-command.tsx")
@@ -1158,6 +1159,53 @@ describe("AX Code TUI stability guardrails", () => {
     expect(liveness).toContain("shouldUseTuiAnimations")
     expect(prompt).toContain("footerLivenessIndicator")
     expect(prompt).toContain('type === "native-spinner"')
+  })
+
+  test("keeps the disabled-animation spinner fallback on the shared 2-cell gutter", async () => {
+    const spinner = await fs.readFile(SPINNER_SRC, "utf8")
+
+    // The animated spinner paints [1-cell glyph][1-cell gap] before its text.
+    // The static fallback prefix must keep that 2-cell gutter so every row a
+    // Spinner leads stays aligned when animations are off; "..." spans 4
+    // cells and "·" has East-Asian-ambiguous width, so both are banned.
+    expect(spinner).toContain('DEFAULT_FALLBACK_PREFIX = "- "')
+    expect(spinner).not.toContain('"... "')
+  })
+
+  test("keeps tool row gutters stable across running, pending, and finished states", async () => {
+    const primitives = await fs.readFile(TOOL_PRIMITIVES_SRC, "utf8")
+    const inlineStart = primitives.indexOf("export function InlineTool")
+    const blockStart = primitives.indexOf("export function BlockTool")
+    const inline = primitives.slice(inlineStart, blockStart)
+    const block = primitives.slice(blockStart)
+
+    // InlineTool: the spinner glyph, the completed icon, and the pending
+    // "..." marker must all paint at the box gutter (paddingLeft 3) with the
+    // label two cells later, so the row never shifts when its state changes.
+    // A per-state <text paddingLeft={...}> reintroduces the old skew.
+    expect(inline).toContain("paddingLeft={3}")
+    expect(inline).not.toContain("<text paddingLeft=")
+
+    // BlockTool: the finished title renders the same stripped text as the
+    // spinner row and indents by the shared glyph gutter, so the title
+    // column does not move when the spinner stops.
+    expect(block).toContain("{toolTitleText(props.title)}")
+    expect(block).toContain("paddingLeft={TOOL_TITLE_GLYPH_GUTTER}")
+    expect(block).not.toContain(".replace(/^# /")
+  })
+
+  test("renders the reasoning label as a real localized row without markdown underscores", async () => {
+    const transcript = await fs.readFile(TRANSCRIPT_VIEW_SRC, "utf8")
+    const start = transcript.indexOf("function ReasoningPart")
+    const end = transcript.indexOf("function TextPart", start)
+    const reasoning = transcript.slice(start, end)
+
+    // The literal "_Thinking:_ " prefix showed raw markdown underscores in
+    // the transcript. The label is now a separate localized italic row that
+    // both branches paint identically, so the finalize swap changes no row.
+    expect(reasoning).not.toContain("_Thinking:_")
+    expect(reasoning).toContain("attributes={TextAttributes.ITALIC}")
+    expect(reasoning).toContain('{uiText("ui.thinking")}')
   })
 
   test("keeps the footer A/X pixel morph owned by the footer component", async () => {

@@ -80,3 +80,19 @@ export function bashLiveWindow(lines: readonly string[]): { text: string; hidden
     hidden: lines.length - BASH_LIVE_WINDOW_LINES,
   }
 }
+
+/**
+ * Gutter the finished block-tool title uses to line up with the spinner's
+ * text column. The running row paints [1-cell glyph][1-cell gap] before the
+ * title, so the finished title needs the same inset once the glyph is gone.
+ */
+export const TOOL_TITLE_GLYPH_GUTTER = 2
+
+/**
+ * Strips the leading markdown heading marker ("# ") from a block tool title.
+ * Both the spinner row and the finished title row render this text so the
+ * title never shifts when the spinner stops.
+ */
+export function toolTitleText(title: string): string {
+  return title.replace(/^# /, "")
+}

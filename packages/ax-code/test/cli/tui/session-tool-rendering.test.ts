@@ -4,11 +4,13 @@ import fs from "fs/promises"
 import {
   BASH_LIVE_WINDOW_LINES,
   SESSION_TOOL_RENDERER_KEYS,
+  TOOL_TITLE_GLYPH_GUTTER,
   bashDisplayMode,
   bashLiveWindow,
   coalescedToolLabel,
   isKnownSessionToolRenderer,
   sessionToolRendererKey,
+  toolTitleText,
 } from "../../../src/cli/tui/routes/session/tool-rendering"
 import { scheduleTaskLine } from "../../../src/cli/tui/routes/session/tool-renderers/schedule-view"
 
@@ -95,5 +97,23 @@ describe("tui session tool rendering policy", () => {
       expect(text).not.toMatch(/from\s+["']\.\.\/index["']/)
       expect(text).not.toMatch(/from\s+["']\.\.\/index\.tsx["']/)
     }
+  })
+
+  test("strips the markdown heading marker from block tool titles", () => {
+    expect(toolTitleText("# Bash")).toBe("Bash")
+    expect(toolTitleText("# Read")).toBe("Read")
+    // Only the single leading heading marker with its space is stripped; any
+    // other shape passes through untouched.
+    expect(toolTitleText("Plain title")).toBe("Plain title")
+    expect(toolTitleText("## Keep")).toBe("## Keep")
+    expect(toolTitleText("#NoSpace")).toBe("#NoSpace")
+    expect(toolTitleText("")).toBe("")
+  })
+
+  test("keeps the block tool title gutter at the spinner glyph width", () => {
+    // The running spinner paints [1-cell glyph][1-cell gap] before its text;
+    // the finished title must indent by exactly that width or the title
+    // shifts when the spinner stops.
+    expect(TOOL_TITLE_GLYPH_GUTTER).toBe(2)
   })
 })

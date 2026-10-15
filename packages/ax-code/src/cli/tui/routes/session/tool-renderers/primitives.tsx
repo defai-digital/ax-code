@@ -8,6 +8,7 @@ import { useTheme } from "@tui/context/theme"
 import type { ToolPart } from "@ax-code/sdk/v2"
 import type { Tool } from "@/tool/tool"
 import { useSessionRouteContext } from "../context"
+import { TOOL_TITLE_GLYPH_GUTTER, toolTitleText } from "../tool-rendering"
 import { renderableChildren } from "@tui/util/renderable-safety"
 
 export type ToolProps<T extends Tool.Info> = {
@@ -98,7 +99,11 @@ export function InlineTool(props: {
           <Spinner color={fg()} children={props.children} />
         </Match>
         <Match when={true}>
-          <text paddingLeft={3} fg={fg()} attributes={denied() ? TextAttributes.STRIKETHROUGH : undefined}>
+          {/* Both states share the box's 3-column gutter: the spinner glyph,
+              the completed icon, and the pending "..." all start at column 3
+              and the label follows at column 5, so the row never shifts when
+              its state changes. */}
+          <text fg={fg()} attributes={denied() ? TextAttributes.STRIKETHROUGH : undefined}>
             <Show fallback={<>... {props.pending}</>} when={props.complete}>
               <span style={{ fg: props.iconColor }}>{props.icon}</span> {props.children}
             </Show>
@@ -153,12 +158,16 @@ export function BlockTool(props: {
       <Show
         when={props.spinner}
         fallback={
-          <text paddingLeft={3} fg={titleFg()}>
-            {props.title}
+          // The finished title shares the spinner row's geometry: the spinner
+          // paints [1-cell glyph][1-cell gap] before its text, so the static
+          // title indents by the same width and renders the same stripped
+          // text — the title never moves when the spinner stops.
+          <text paddingLeft={TOOL_TITLE_GLYPH_GUTTER} fg={titleFg()}>
+            {toolTitleText(props.title)}
           </text>
         }
       >
-        <Spinner color={titleFg()}>{props.title.replace(/^# /, "")}</Spinner>
+        <Spinner color={titleFg()}>{toolTitleText(props.title)}</Spinner>
       </Show>
       {props.children}
       <Show when={error()}>

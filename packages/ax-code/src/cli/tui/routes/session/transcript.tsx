@@ -1,7 +1,7 @@
 import { useLanguage } from "@tui/context/language"
 import { createMemo, createSignal, ErrorBoundary, For, Match, Show, Switch, untrack } from "solid-js"
 import { Dynamic } from "solid-js/web"
-import { stringToStyledText } from "ax-tui"
+import { stringToStyledText, TextAttributes } from "ax-tui"
 import { SplitBorder } from "@tui/component/border"
 import { Spinner } from "@tui/component/spinner"
 import { Chip } from "@tui/ui/primitives/chip"
@@ -494,6 +494,7 @@ const PART_MAPPING = {
 
 function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: AssistantMessage }) {
   const { theme, subtleSyntax } = useTheme()
+  const uiText = useLanguage().t
   const ctx = use()
   const content = createMemo(() => {
     // Some providers send encrypted reasoning data that appears as [REDACTED].
@@ -511,7 +512,7 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
   const display = createMemo(() =>
     codeDisplayView({
       filePath: "thinking.md",
-      content: "_Thinking:_ " + paintedContent(),
+      content: paintedContent(),
     }),
   )
   // Show while streaming even before first delta arrives (time.end undefined = still active)
@@ -528,12 +529,17 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
         customBorderChars={SplitBorder.customBorderChars}
         borderColor={theme.borderSubtle}
       >
+        {/* The label is its own row, painted identically in the streaming and
+            finished branches so the finalize swap changes no row. */}
+        <text fg={theme.textMuted} attributes={TextAttributes.ITALIC}>
+          {uiText("ui.thinking")}
+        </text>
         <Switch>
           {/* Plain text while reasoning streams (same paint discipline as
               TextPart); the styled renderer mounts once at finalize. */}
           <Match when={streaming()}>
             <text wrapMode="word" fg={theme.textMuted}>
-              {"_Thinking:_ " + paintedContent()}
+              {paintedContent()}
             </text>
           </Match>
           <Match when={true}>
