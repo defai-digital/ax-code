@@ -119,6 +119,15 @@ export function subscribeStoreBackedSyncEvents<
     TPart,
     TStore
   >["refreshProviders"]
+  resyncSession?: DispatchStoreBackedSyncEventInput<
+    TSession,
+    TTodo,
+    TDiff,
+    TStatus,
+    TMessage,
+    TPart,
+    TStore
+  >["resyncSession"]
   onWarn: DispatchStoreBackedSyncEventInput<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TStore>["onWarn"]
   maxSessionMessages: DispatchStoreBackedSyncEventInput<
     TSession,
@@ -160,6 +169,7 @@ export function subscribeStoreBackedSyncEvents<
       scheduleRuntimeProbe: input.scheduleRuntimeProbe,
       bootstrap: input.bootstrap,
       refreshProviders: input.refreshProviders,
+      resyncSession: input.resyncSession,
       onWarn: input.onWarn,
       maxSessionMessages: input.maxSessionMessages,
     })

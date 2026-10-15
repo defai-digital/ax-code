@@ -40,6 +40,8 @@ const SESSION_SYNC_REQUEST_TIMEOUT_MS = 10_000
 // The transcript only loads the most recent N messages of a session. The
 // fetch below probes with N+1 so truncation is detectable and surfaced.
 export const MAX_SESSION_MESSAGES = 100
+// Floor between two drift-triggered session refetches (see resyncSession).
+const ELIDED_DRIFT_RESYNC_MIN_INTERVAL_MS = 5_000
 
 function withSyncTimeout<T>(label: string, promise: Promise<T>, timeoutMs = BOOTSTRAP_REQUEST_TIMEOUT_MS) {
   return withTimeout(promise, timeoutMs, `${label} timed out after ${timeoutMs}ms`)
@@ -216,6 +218,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     // second and clobber the store with stale provider data. Only the
     // response of the most recently issued request is applied.
     let providerRefreshGeneration = 0
+    const driftResyncAt = new Map<string, number>()
     const unsubscribeEvents = subscribeStoreBackedSyncEvents<
       Session,
       Todo,
@@ -259,6 +262,18 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             applyProviderBootstrapState(draft, createProviderBootstrapSuccess(data))
           }),
         )
+      },
+      // An elided part snapshot names the prefix the worker believes this
+      // renderer holds; a mismatch means a delta went missing. Refetch the
+      // session rather than wait for the terminal snapshot, at most once per
+      // session per window so a persistent disagreement cannot loop.
+      resyncSession(sessionID) {
+        const now = Date.now()
+        if (now - (driftResyncAt.get(sessionID) ?? 0) < ELIDED_DRIFT_RESYNC_MIN_INTERVAL_MS) return
+        driftResyncAt.set(sessionID, now)
+        void sessionSync.sync(sessionID, { force: true }).catch((error) => {
+          Log.Default.warn("session resync after elided snapshot drift failed", { error })
+        })
       },
       onWarn(label, error) {
         Log.Default.warn(label, { error })

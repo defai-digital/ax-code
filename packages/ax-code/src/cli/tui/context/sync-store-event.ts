@@ -115,9 +115,45 @@ export interface DispatchStoreBackedSyncEventInput<
   // signals discovery finished via `provider.updated`. Optional so non-TUI
   // dispatch callers can omit it.
   refreshProviders?: () => Promise<void> | void
+  // The worker elides the text of a mid-stream part snapshot when the deltas
+  // it forwarded already cover a prefix, and says which prefix it assumed.
+  // When this renderer's part disagrees, a delta went missing: refetch the
+  // session instead of waiting for the terminal snapshot.
+  resyncSession?: (sessionID: string, reason: string) => void
   onWarn: (label: string, error: unknown) => void
   maxSessionMessages: number
   getActiveSessionID?: () => string | undefined
+}
+
+/**
+ * Compare an elided `message.part.updated` against the part this renderer
+ * holds. Returns a reason when the renderer's text is not at least the prefix
+ * the worker assumed. A part the renderer never admitted (budget, cap) is not
+ * drift: the terminal snapshot still arrives in full.
+ */
+function elidedPartDrift(
+  parts: Record<string, Array<{ id: string; text?: unknown }>>,
+  event: { type?: string; properties?: unknown },
+): { sessionID: string; reason: string } | undefined {
+  if (event.type !== "message.part.updated") return undefined
+  const properties = event.properties as {
+    part?: { id?: unknown; messageID?: unknown; sessionID?: unknown }
+    elided?: { end?: unknown; tail?: unknown }
+  }
+  const elided = properties.elided
+  if (!elided || typeof elided.end !== "number" || typeof elided.tail !== "string") return undefined
+  const part = properties.part
+  if (!part || typeof part.id !== "string" || typeof part.messageID !== "string") return undefined
+  const existing = parts[part.messageID]?.find((entry) => entry.id === part.id)
+  if (!existing || typeof existing.text !== "string") return undefined
+  const text = existing.text
+  const ok =
+    text.length >= elided.end && text.slice(Math.max(0, elided.end - elided.tail.length), elided.end) === elided.tail
+  if (ok) return undefined
+  return {
+    sessionID: typeof part.sessionID === "string" ? part.sessionID : "",
+    reason: `part ${part.id} holds ${text.length} chars, the stream assumed a ${elided.end}-char prefix`,
+  }
 }
 
 export function dispatchStoreBackedSyncEvent<
@@ -226,11 +262,13 @@ function dispatchHeadlessProjectionEvent<
     case "server.resync_required":
     case "server.instance.disposed": {
       let effects: HeadlessProjectionEffect[] = []
+      let drift: ReturnType<typeof elidedPartDrift>
       if (input.event.type === "session.deleted") {
         input.clearSessionSyncState(input.event.properties.info.id)
       }
       setStore(
         produce((draft) => {
+          drift = elidedPartDrift(draft.part, input.event)
           const messageSessionID =
             input.event.type === "message.updated" ? input.event.properties.info.sessionID : undefined
           effects = applyHeadlessProjectionEvent(draft, input.event, {
@@ -294,6 +332,10 @@ function dispatchHeadlessProjectionEvent<
         },
         onWarn: input.onWarn,
       })
+      if (drift && drift.sessionID) {
+        input.onWarn("elided part snapshot drift", drift.reason)
+        input.resyncSession?.(drift.sessionID, drift.reason)
+      }
       return true
     }
 

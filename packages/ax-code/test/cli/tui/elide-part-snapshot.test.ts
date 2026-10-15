@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest"
-import { createPartSnapshotElider, type PartStreamEvent } from "../../../src/cli/tui/util/elide-part-snapshot"
+import {
+  createPartSnapshotElider,
+  type ElidedPartCoverage,
+  type PartStreamEvent,
+} from "../../../src/cli/tui/util/elide-part-snapshot"
 import { applyHeadlessProjectionEvent, createHeadlessProjectionState } from "../../../src/runtime/headless/projection"
 
 type Session = { id: string }
@@ -16,14 +20,18 @@ type Part = {
   time?: { start?: number; end?: number }
 }
 
-function clocked(start = 0) {
-  let time = start
+// The elider is clock-free: verification moved to the renderer, which checks
+// the `elided` prefix on every elided snapshot. `set` only documents the
+// timeline a case models.
+function clocked(_start = 0) {
   return {
-    tracker: createPartSnapshotElider({ now: () => time }),
-    set(next: number) {
-      time = next
-    },
+    tracker: createPartSnapshotElider(),
+    set(_next: number) {},
   }
+}
+
+function elidedOf(event: unknown): ElidedPartCoverage | undefined {
+  return (event as { properties?: { elided?: ElidedPartCoverage } }).properties?.elided
 }
 
 function updated(
@@ -180,8 +188,7 @@ function productionOrdered1MiB() {
 }
 
 function projectElided(events: readonly TimedPartEvent[], mark?: number) {
-  let clock = 0
-  const elider = createPartSnapshotElider({ now: () => clock })
+  const elider = createPartSnapshotElider()
   const state = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
   // Admit the message first. Otherwise the part stays pending and the 1 MiB
   // pending budget evicts it before the terminal snapshot.
@@ -193,7 +200,6 @@ function projectElided(events: readonly TimedPartEvent[], mark?: number) {
   let marked: string | undefined
   for (let index = 0; index < events.length; index++) {
     const item = events[index]!
-    clock = item.at
     const out = elider.observe(item.event)
     emitted.push(out)
     applyHeadlessProjectionEvent(state, out as never)
@@ -331,7 +337,7 @@ describe("part snapshot elision", () => {
     expect(hasText(second)).toBe(false)
   })
 
-  test("forwards a full snapshot at the 2s heartbeat and elides again after it", () => {
+  test("no heartbeat: every covered snapshot is elided and carries the assumed prefix", () => {
     const { tracker, set } = clocked()
     tracker.observe(updated("Hello"))
     tracker.observe(delta("!", 5))
@@ -339,15 +345,23 @@ describe("part snapshot elision", () => {
     set(1999)
     const early = tracker.observe(updated("Hello!"))
     expect(hasText(early)).toBe(false)
+    expect(elidedOf(early)).toEqual({ end: 6, tail: "Hello!" })
 
-    set(2000)
-    const beat = updated("Hello!")
-    expect(tracker.observe(beat)).toBe(beat)
-    expect(beat.properties.part.text).toBe("Hello!")
+    // Long after the last full snapshot the elision still holds: the renderer
+    // verifies `elided` itself instead of receiving a periodic full copy.
+    set(60_000)
+    const later = tracker.observe(updated("Hello! world"))
+    expect(hasText(later)).toBe(false)
+    expect(elidedOf(later)).toEqual({ end: 6, tail: "Hello!" })
+    expect((later as { properties: { part: { id: string } } }).properties.part.id).toBe("prt_1")
 
-    set(2001)
-    const after = tracker.observe(updated("Hello!"))
-    expect(hasText(after)).toBe(false)
+    // The tail is the last 64 covered chars once coverage is longer than that.
+    const long = "a".repeat(100)
+    tracker.observe(delta(long, 6))
+    const wide = tracker.observe(updated("Hello!" + long + "zz"))
+    expect(elidedOf(wide)).toEqual({ end: 106, tail: "a".repeat(64) })
+    // A full snapshot carries no `elided`.
+    expect(elidedOf(tracker.observe(updated("different", { id: "prt_2" })))).toBeUndefined()
   })
 
   test("reset() forgets coverage", () => {
@@ -663,8 +677,7 @@ describe("part snapshot elision", () => {
     expect(progress).toBeGreaterThan(0)
     expect(raced).toBeGreaterThan(0)
 
-    let clock = 0
-    const elider = createPartSnapshotElider({ now: () => clock })
+    const elider = createPartSnapshotElider()
     const state = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
     // Admit the message first. Otherwise the part stays pending and the 1 MiB
     // pending budget evicts it before the terminal snapshot.
@@ -676,7 +689,6 @@ describe("part snapshot elision", () => {
     let elidedSnapshots = 0
     let fullSnapshots = 0
     for (const item of raw) {
-      clock = item.at
       const out = elider.observe(item.event)
       emitted.push(out)
       applyHeadlessProjectionEvent(state, out as never)
@@ -685,14 +697,20 @@ describe("part snapshot elision", () => {
       else {
         elidedSnapshots++
         // The renderer may still be on the covered prefix; the deltas flushed
-        // after this snapshot append the rest.
+        // after this snapshot append the rest. The elided event names that
+        // prefix, and the projection must hold exactly it at this point.
         const projected = state.part["msg_1"]?.[0]?.text
         expect(projected).toBeDefined()
         expect(item.event.properties.part.text.startsWith(projected!)).toBe(true)
+        const elided = elidedOf(out)
+        expect(elided?.end).toBe(projected!.length)
+        expect(projected!.endsWith(elided!.tail)).toBe(true)
       }
     }
     expect(state.part["msg_1"]?.[0]?.text).toBe(text)
-    expect(elidedSnapshots).toBeGreaterThan(0)
+    // Only the empty text-start snapshot and the terminal one stay full.
+    expect(fullSnapshots).toBe(2)
+    expect(elidedSnapshots).toBe(progress)
     expect(hasText(emitted[emitted.length - 1])).toBe(true)
 
     const bytes = (events: readonly unknown[]) => {

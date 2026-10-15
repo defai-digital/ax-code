@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import { createStore } from "solid-js/store"
 import {
   dispatchStoreBackedSyncEvent,
@@ -572,6 +572,90 @@ describe("tui sync store event", () => {
     expect(store.part).toEqual({
       msg_2: [{ id: "part_2", messageID: "msg_2" }],
     })
+  })
+
+  test("an elided part snapshot whose prefix the renderer holds applies without a resync", () => {
+    const [store, setStore] = createTestStore()
+    setStore({
+      message: { ses_1: [{ id: "msg_1", sessionID: "ses_1" }] },
+      part: { msg_1: [{ id: "part_1", messageID: "msg_1", type: "text", text: "Hello, wor" }] },
+    })
+    const resync = vi.fn()
+    const warn = vi.fn()
+    const dispatch = (event: unknown) =>
+      dispatchStoreBackedSyncEvent<
+        Session,
+        Todo,
+        Diff,
+        Status,
+        Message,
+        Part,
+        SyncEventStoreState<Session, Todo, Diff, Status, Message, Part>
+      >({
+        event: event as never,
+        autonomous: false,
+        setStore,
+        clearSessionSyncState: () => undefined,
+        replyPermission: () => undefined,
+        replyQuestion: () => undefined,
+        syncMcpStatus: () => undefined,
+        syncLspStatus: () => undefined,
+        syncDebugEngine: () => undefined,
+        bootstrap: () => undefined,
+        resyncSession: resync,
+        onWarn: warn,
+        maxSessionMessages: 10,
+      })
+    const elided = (end: number, tail: string, extra: Record<string, unknown> = {}) => ({
+      type: "message.part.updated",
+      properties: {
+        part: { id: "part_1", messageID: "msg_1", sessionID: "ses_1", type: "text", time: { start: 1 }, ...extra },
+        elided: { end, tail },
+      },
+    })
+
+    // The renderer holds exactly the assumed prefix: text untouched, no resync.
+    expect(dispatch(elided(10, "Hello, wor"))).toBe(true)
+    expect(store.part.msg_1?.[0]).toMatchObject({ text: "Hello, wor", time: { start: 1 } })
+    // The renderer is ahead (its deltas raced past the snapshot): still fine.
+    expect(dispatch(elided(5, "Hello"))).toBe(true)
+    expect(resync).not.toHaveBeenCalled()
+    expect(warn).not.toHaveBeenCalled()
+
+    // The renderer is behind the assumed prefix: a delta went missing.
+    dispatch(elided(12, "Hello, world"))
+    expect(resync).toHaveBeenCalledTimes(1)
+    expect(resync.mock.calls[0]?.[0]).toBe("ses_1")
+    expect(warn).toHaveBeenCalledWith("elided part snapshot drift", expect.stringContaining("part_1"))
+    // Same length, different content: also drift.
+    dispatch(elided(10, "Hello, WOR"))
+    expect(resync).toHaveBeenCalledTimes(2)
+
+    // A part this renderer never admitted is not drift.
+    dispatch({
+      type: "message.part.updated",
+      properties: {
+        part: { id: "part_9", messageID: "msg_1", sessionID: "ses_1", type: "text", time: { start: 1 } },
+        elided: { end: 3, tail: "abc" },
+      },
+    })
+    expect(resync).toHaveBeenCalledTimes(2)
+    // A snapshot without `elided` is an ordinary full snapshot.
+    dispatch({
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: "part_1",
+          messageID: "msg_1",
+          sessionID: "ses_1",
+          type: "text",
+          text: "Hello, world!",
+          time: { start: 1 },
+        },
+      },
+    })
+    expect(store.part.msg_1?.[0]?.text).toBe("Hello, world!")
+    expect(resync).toHaveBeenCalledTimes(2)
   })
 
   test("applies runtime branch updates through the same store-backed dispatcher", () => {

@@ -13,24 +13,27 @@
  * the full part. `end === text.length` is the special case where nothing
  * is still buffered.
  *
- * A missing offset, non-text field, prefix mismatch, or a 2s heartbeat
- * still forwards the full part. A gap (`offset > end`) invalidates
- * coverage: the renderer skips that delta and every later one, so the next
- * snapshot must be full and heals immediately rather than at the heartbeat.
- * Overlap (`offset <= end`) appends only the suffix past `end`, the same
- * reconcile as `appendPartTextDelta`.
+ * An elided snapshot carries `properties.elided = { end, tail }`: the prefix
+ * length this side believes the renderer holds and the last 64 chars of it.
+ * The renderer checks that against its own text and refetches the session
+ * when they disagree, so no periodic full snapshot is needed; every elided
+ * snapshot is itself the check.
+ *
+ * A missing offset, non-text field, or prefix mismatch still forwards the
+ * full part. A gap (`offset > end`) invalidates coverage: the renderer skips
+ * that delta and every later one, so the next snapshot must be full and
+ * heals immediately. Overlap (`offset <= end`) appends only the suffix past
+ * `end`, the same reconcile as `appendPartTextDelta`.
  *
  * Reasoning parts publish deltas on the same channel as text parts:
  * `processor-impl` pushes both through the delta batcher, which always sets
  * `field: "text"`. Other fields do not extend coverage.
  *
- * State per part is the coverage end (contiguous from 0), the last 64
- * covered chars, and when the last full snapshot was forwarded. The input
- * event and its part are never mutated.
+ * State per part is the coverage end (contiguous from 0) and the last 64
+ * covered chars. The input event and its part are never mutated.
  */
 
 const TAIL_CHARS = 64
-const HEARTBEAT_MS = 2000
 const MAX_TRACKED_PARTS = 256
 
 export type PartStreamEvent = {
@@ -39,23 +42,22 @@ export type PartStreamEvent = {
   [key: string]: unknown
 }
 
+/** What the worker believes the renderer holds when it elides a snapshot. */
+export type ElidedPartCoverage = { end: number; tail: string }
+
 export type PartSnapshotElider = {
-  /** Return the event to emit: the original, or a shallow copy with `text` omitted. */
+  /**
+   * Return the event to emit: the original, or a shallow copy whose part has
+   * no `text` and whose properties carry `elided`.
+   */
   observe<T extends PartStreamEvent>(event: T): T
   /** Drop every part. The next snapshot is treated as the first. */
   reset(): void
 }
 
-export type PartSnapshotEliderOptions = {
-  /** Clock for the full-snapshot heartbeat. Defaults to `Date.now`. */
-  now?: () => number
-}
-
 type PartTrack = {
   /** A full snapshot of this part has been forwarded. */
   full: boolean
-  /** `now()` when that full snapshot was forwarded. */
-  fullAt: number
   /**
    * End of coverage contiguous from 0. Absent once a missing offset, a
    * non-text field, or a gap (`offset > end`) has invalidated coverage.
@@ -99,8 +101,7 @@ function withoutText(part: Record<string, unknown>): Record<string, unknown> {
   return copy
 }
 
-export function createPartSnapshotElider(options: PartSnapshotEliderOptions = {}): PartSnapshotElider {
-  const now = options.now ?? Date.now
+export function createPartSnapshotElider(): PartSnapshotElider {
   // Insertion order is observation order. Updating a part moves it to the end
   // so the cap drops the least recently observed part, not the one still streaming.
   const parts = new Map<string, PartTrack>()
@@ -151,7 +152,7 @@ export function createPartSnapshotElider(options: PartSnapshotEliderOptions = {}
         return
       }
       if (offset !== 0) return
-      remember(partID, { full: false, fullAt: 0, end: delta.length, tail: takeTail(delta) })
+      remember(partID, { full: false, end: delta.length, tail: takeTail(delta) })
       return
     }
     // Mirror `appendPartTextDelta`. `offset > end` is a gap: the renderer
@@ -183,7 +184,6 @@ export function createPartSnapshotElider(options: PartSnapshotEliderOptions = {}
     const terminal = typeof timeEnd(part) === "number"
     const text = typeof part.text === "string" ? part.text : undefined
     const track = parts.get(partID)
-    const at = now()
     // Prefix coverage: the renderer already holds [0, end). The snapshot may
     // be longer; the bytes past `end` are the deltas still in flight.
     // `end === text.length` is the special case where the tail is the
@@ -198,16 +198,17 @@ export function createPartSnapshotElider(options: PartSnapshotEliderOptions = {}
       track.end !== undefined &&
       text !== undefined &&
       track.end <= text.length &&
-      track.tail === prefix &&
-      at - track.fullAt < HEARTBEAT_MS
+      track.tail === prefix
 
-    if (!terminal && covered && track) {
+    if (!terminal && covered && track && track.end !== undefined) {
       touch(partID, track)
+      const elided: ElidedPartCoverage = { end: track.end, tail: track.tail }
       return {
         ...event,
         properties: {
           ...event.properties,
           part: withoutText(part),
+          elided,
         },
       } as T
     }
@@ -220,9 +221,9 @@ export function createPartSnapshotElider(options: PartSnapshotEliderOptions = {}
     }
 
     if (text !== undefined) {
-      remember(partID, { full: true, fullAt: at, end: text.length, tail: takeTail(text) })
+      remember(partID, { full: true, end: text.length, tail: takeTail(text) })
     } else {
-      remember(partID, { full: true, fullAt: at, tail: "" })
+      remember(partID, { full: true, tail: "" })
     }
     return event
   }
