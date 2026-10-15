@@ -67,25 +67,35 @@ export function squarify(cells: Cell[], box: Rect): Map<string, Rect> {
   return out
 }
 
+/** Width-to-height ratios the treemap may take to fill its canvas without becoming a strip. */
+export const TREEMAP_ASPECT = { min: 0.8, max: 2.6 } as const
+
 /**
- * DOM-free nested treemap: page -> source -> symbol, sized by 1 + visible connections so the
- * legend "size = visible connections" holds. Cross links are not drawn here; the viewer shows
- * them as lines when a cell is focused. Every node is a rectangle centered on its x/y.
+ * DOM-free nested treemap: page -> source -> symbol. Every cited file is one unit of area
+ * (plus one per symbol drawn inside it), so a page's area is the number of files it cites
+ * in this view. Cross links are not drawn here; the viewer shows them as lines when a cell
+ * is focused. Every node is a rectangle centered on its x/y. `aspect` is the canvas
+ * width-to-height ratio the rectangle should fill.
  */
-export function createTreemapLayout(input: HierarchyInput): ForceLayout {
+export function createTreemapLayout(input: HierarchyInput, options: { aspect?: number } = {}): ForceLayout {
   const origin = { x: LAYOUT_WORLD.width / 2, y: LAYOUT_WORLD.height / 2 }
   const { nodes, byId, links, children, groups } = deriveHierarchy(input, origin)
-  const weight = (id: string) => 1 + (byId.get(id)?.degree ?? 0)
+  const weight = () => 1
+  const aspect =
+    options.aspect !== undefined && Number.isFinite(options.aspect) && options.aspect > 0
+      ? Math.min(TREEMAP_ASPECT.max, Math.max(TREEMAP_ASPECT.min, options.aspect))
+      : TREEMAP_SIZE.width / TREEMAP_SIZE.height
+  // The framed bounds (with their 20-unit margin) take the canvas aspect, not just the cells.
+  const size = { width: TREEMAP_SIZE.width, height: (TREEMAP_SIZE.width + 40) / aspect - 40 }
 
   const sourceCell = (id: string): Cell => {
-    const kids = (children.get(id) ?? []).map((kid) => ({ id: kid, value: weight(kid), kids: [] }))
-    const own = weight(id)
-    return { id, value: Math.max(own, kids.reduce((sum, kid) => sum + kid.value, 0) + 1), kids }
+    const kids = (children.get(id) ?? []).map((kid) => ({ id: kid, value: weight(), kids: [] }))
+    return { id, value: kids.length + 1, kids }
   }
   const pageCells: Cell[] = groups.map((group, index) => {
     const kids = [
       ...group.sources.map(sourceCell),
-      ...group.loose.map((id) => ({ id, value: weight(id), kids: [] as Cell[] })),
+      ...group.loose.map((id) => ({ id, value: weight(), kids: [] as Cell[] })),
     ]
     const id = group.head ?? `\u0000unattached:${index}`
     return {
@@ -99,8 +109,8 @@ export function createTreemapLayout(input: HierarchyInput): ForceLayout {
   })
 
   const rects = new Map<string, { w: number; h: number; depth: number }>()
-  const left = origin.x - TREEMAP_SIZE.width / 2
-  const top = origin.y - TREEMAP_SIZE.height / 2
+  const left = origin.x - size.width / 2
+  const top = origin.y - size.height / 2
   const assign = (cells: Cell[], box: Rect, depth: number) => {
     for (const [id, rect] of squarify(cells, box)) {
       const cell = cells.find((candidate) => candidate.id === id)!
@@ -120,7 +130,7 @@ export function createTreemapLayout(input: HierarchyInput): ForceLayout {
       )
     }
   }
-  assign(pageCells, { x: left, y: top, w: TREEMAP_SIZE.width, h: TREEMAP_SIZE.height }, 0)
+  assign(pageCells, { x: left, y: top, w: size.width, h: size.height }, 0)
 
   // Draw parents first so children sit on top of them.
   nodes.sort((a, b) => (rects.get(a.id)?.depth ?? 0) - (rects.get(b.id)?.depth ?? 0))
@@ -134,8 +144,8 @@ export function createTreemapLayout(input: HierarchyInput): ForceLayout {
     bounds: {
       minX: left - 20,
       minY: top - 20,
-      maxX: left + TREEMAP_SIZE.width + 20,
-      maxY: top + TREEMAP_SIZE.height + 20,
+      maxX: left + size.width + 20,
+      maxY: top + size.height + 20,
     },
   }
 }

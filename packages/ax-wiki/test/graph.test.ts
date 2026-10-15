@@ -34,8 +34,8 @@ test("compares each page's recorded evidence and aggregates conflicting freshnes
   const graph = projectWikiManifest(input, { snapshot: "fixture", observed: new Map([["src/a.ts", hash]]) })
   expect(graph.nodes.map((n) => [n.id, n.freshness])).toEqual([
     ["page:guide.md", "fresh"],
-    ["source:src/a.ts", "stale"],
     ["page:other.md", "stale"],
+    ["source:src/a.ts", "stale"],
   ])
   expect(
     projectWikiManifest(input, { snapshot: "fixture", observed: new Map([["src/a.ts", null]]) }).nodes.every(
@@ -60,9 +60,12 @@ test("deterministically caps without dangling edges and reports known omissions"
   )
   const input = { schemaVersion: 1, generator: "ax-wiki", pages }
   const graph = projectWikiManifest(input, { snapshot: "fixture" })
+  // Pages are admitted first, so a wiki with more pages than the cap keeps pages only.
   expect(graph.nodes).toHaveLength(GRAPH_LIMITS.nodes)
-  expect(graph.edges).toHaveLength(100)
-  expect(graph.omitted).toEqual({ nodes: 400, edges: 200 })
+  expect(graph.nodes.every((node) => node.kind === "page")).toBe(true)
+  expect(graph.edges).toHaveLength(0)
+  expect(graph.omitted).toEqual({ nodes: 400, edges: 300 })
+  expect(graph.pages).toHaveLength(300)
   expect(
     projectWikiManifest(
       { ...input, pages: Object.fromEntries(Object.entries(pages).reverse()) },
@@ -445,8 +448,8 @@ test("emits inventory-derived edges once when pages share a source", () => {
     ["page:guide.md", "source:src/a.ts", "references-source"],
     ["page:guide.md", "source:src/b.ts", "references-source"],
     ["page:other.md", "source:src/a.ts", "references-source"],
-    ["source:src/a.ts", "symbol:src/a.ts#Foo", "contains"],
     ["source:src/a.ts", "source:src/b.ts", "uses"],
+    ["source:src/a.ts", "symbol:src/a.ts#Foo", "contains"],
   ])
 })
 
@@ -564,4 +567,149 @@ test("rejects malformed and over-limit gloss lists", () => {
     ),
   ).toThrow(/gloss/)
   expect(projectWikiManifest(bare(), { snapshot: "ok" }).nodes.every((n) => n.summary === "")).toBe(true)
+})
+
+test("admits every page before sources and sources round-robin before any symbol", () => {
+  const inventory = new Map<string, Array<{ name: string; qualified: string; kind: string }>>()
+  const pages: Record<string, unknown> = {}
+  for (let p = 0; p < 4; p++) {
+    const sources = Array.from({ length: 60 }, (_, i) => `src/p${p}/f${String(i).padStart(2, "0")}.ts`)
+    for (const source of sources)
+      inventory.set(
+        source,
+        Array.from({ length: 5 }, (_, s) => ({ name: `s${s}`, qualified: `s${s}`, kind: "function" })),
+      )
+    pages[`p${p}.md`] = { title: `Page ${p}`, sources, sourceHashes: {} }
+  }
+  const graph = projectWikiManifest({ schemaVersion: 1, generator: "ax-wiki", pages }, { snapshot: "fair", inventory })
+  expect(graph.nodes).toHaveLength(GRAPH_LIMITS.nodes)
+  expect(graph.nodes.slice(0, 4).map((node) => node.id)).toEqual(["page:p0.md", "page:p1.md", "page:p2.md", "page:p3.md"])
+  expect(graph.nodes.some((node) => node.kind === "symbol")).toBe(false)
+  const perPage = [0, 1, 2, 3].map((p) => graph.nodes.filter((node) => node.path.startsWith(`src/p${p}/`)).length)
+  expect(perPage).toEqual([49, 49, 49, 49])
+  expect(graph.edges.every((edge) => edge.kind === "references-source")).toBe(true)
+})
+
+test("projects readable pages with related pages, freshness counts and bounded markdown", () => {
+  const graph = projectWikiManifest(
+    {
+      schemaVersion: 1,
+      generator: "ax-wiki",
+      pages: {
+        "a.md": {
+          title: "A",
+          purpose: "Explain A",
+          generatedAt: "2026-10-14T00:00:00.000Z",
+          sources: ["src/x.ts", "src/y.ts"],
+          sourceHashes: { "src/x.ts": hash, "src/y.ts": hash },
+        },
+        "b.md": { title: "B", sources: ["src/x.ts", "src/y.ts"], sourceHashes: {} },
+        "c.md": { title: "C", sources: ["src/y.ts"], sourceHashes: {} },
+        "d.md": { title: "D", sources: ["src/z.ts"], sourceHashes: {} },
+      },
+    },
+    {
+      snapshot: "pages",
+      observed: new Map([
+        ["src/x.ts", hash],
+        ["src/y.ts", "f".repeat(64)],
+      ]),
+      documents: new Map([
+        ["a.md", "# A\r\nBody\u0007 text\u202e"],
+        ["b.md", "x".repeat(GRAPH_LIMITS.markdown + 10)],
+      ]),
+    },
+  )
+  const [a, b, c, d] = graph.pages!
+  expect(a).toMatchObject({ purpose: "Explain A", generatedAt: "2026-10-14T00:00:00.000Z", stale: 1, unknown: 0, changed: ["src/y.ts"] })
+  expect(a.markdown).toBe("# A\nBody text")
+  expect(a.related).toEqual([
+    { id: "page:b.md", shared: 2 },
+    { id: "page:c.md", shared: 1 },
+  ])
+  expect(b.truncated).toBe(true)
+  expect(b.markdown.length).toBe(GRAPH_LIMITS.markdown)
+  expect(c).toMatchObject({ markdown: "", truncated: false, unknown: 1, related: [
+      { id: "page:a.md", shared: 1 },
+      { id: "page:b.md", shared: 1 },
+    ],
+  })
+  expect(d.related).toEqual([])
+  expect(parseWikiGraph(graph)).toEqual(graph)
+})
+
+test("projects coverage areas from the indexed inventory and never reports cited above indexed", () => {
+  const graph = projectWikiManifest(
+    {
+      schemaVersion: 1,
+      generator: "ax-wiki",
+      generatedAt: "2026-10-14T00:00:00.000Z",
+      repositoryHead: "abc123",
+      model: "provider/model",
+      sources: { "src/a.ts": hash, "src/b.ts": hash, "docs/x.md": hash, "README.md": hash },
+      pages: { "a.md": { title: "A", sources: ["src/a.ts", "lib/extra.ts"], sourceHashes: {} } },
+    },
+    { snapshot: "coverage" },
+  )
+  expect(graph.overview).toMatchObject({
+    generatedAt: "2026-10-14T00:00:00.000Z",
+    repositoryHead: "abc123",
+    model: "provider/model",
+    indexedSources: 5,
+    citedSources: 2,
+  })
+  const areas = Object.fromEntries(graph.overview!.areas.map((area) => [area.path, [area.indexed, area.cited]]))
+  expect(areas).toEqual({ "": [5, 2], src: [2, 1], docs: [1, 0], lib: [1, 1] })
+})
+
+test("groups cited files into sizeable directory modules and sums recorded imports between groups", () => {
+  const sources = [
+    "pkg/a/1.ts",
+    "pkg/a/2.ts",
+    "pkg/a/3.ts",
+    "pkg/b/1.ts",
+    "pkg/b/2.ts",
+    "pkg/b/3.ts",
+    "pkg/b/deep/x.ts",
+    "root.ts",
+  ]
+  const graph = projectWikiManifest(
+    { schemaVersion: 1, generator: "ax-wiki", pages: { "a.md": { title: "A", sources, sourceHashes: {} } } },
+    {
+      snapshot: "modules",
+      imports: new Map([
+        ["pkg/a/1.ts", ["pkg/b/1.ts", "pkg/a/2.ts"]],
+        ["pkg/a/2.ts", ["pkg/b/deep/x.ts"]],
+        ["pkg/b/1.ts", ["root.ts"]],
+      ]),
+    },
+  )
+  // pkg/b/deep has one cited file, below the three-file minimum, so it stays inside pkg/b.
+  expect(graph.modules!.groups).toEqual([
+    { path: "", files: 1 },
+    { path: "pkg/a", files: 3 },
+    { path: "pkg/b", files: 4 },
+  ])
+  expect(graph.modules!.dependencies).toEqual([
+    { from: "pkg/a", to: "pkg/b", imports: 2 },
+    { from: "pkg/b", to: "", imports: 1 },
+  ])
+  expect(graph.modules!.rule).toContain("at least 3 cited files")
+})
+
+test("rejects malformed reading, coverage and module projections", () => {
+  const base = projectWikiManifest(manifest(), { snapshot: "fixture", documents: new Map([["guide.md", "Hi"]]) })
+  const page = base.pages![0]
+  for (const bad of [
+    { ...base, pages: [{ ...page, id: "page:other.md" }] },
+    { ...base, pages: [{ ...page, markdown: "a\u0000b" }] },
+    { ...base, pages: [{ ...page, related: [{ id: "page:missing.md", shared: 1 }] }] },
+    { ...base, pages: [{ ...page, sources: ["../escape"] }] },
+    { ...base, overview: { ...base.overview!, areas: [{ path: "src", indexed: 1, cited: 2 }] } },
+    { ...base, modules: { ...base.modules!, dependencies: [{ from: "nope", to: "src", imports: 1 }] } },
+  ])
+    expect(() => parseWikiGraph(bad)).toThrow()
+  // Older producers omit the optional projections entirely.
+  const { pages: _p, overview: _o, modules: _m, ...legacy } = base
+  expect(parseWikiGraph(legacy).pages).toBeUndefined()
 })

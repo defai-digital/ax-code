@@ -4,7 +4,7 @@ Status: Active
 
 Scope: current-state
 
-Last reviewed: 2026-10-02
+Last reviewed: 2026-10-15
 
 Owner: ax-code runtime
 
@@ -21,29 +21,44 @@ stop the local viewer.
 
 ## What you see
 
-The lines are recorded citations, not function calls. These three pictures are
-AX Code's own wiki. The same snapshot has four switchable layouts; arc and
-treemap are the other two and are not shown here.
+The viewer opens on the evidence map so you get the picture first, then lets you
+read, check and navigate the wiki. These pictures are AX Code's own wiki.
 
-![Radial view. Three wiki pages sit inside a ring of the files they cite.](../images/wiki/radial.png)
+![Evidence map. A treemap with one block per wiki page and one cell per cited file; changed files are outlined in amber.](../images/wiki/map.png)
 
-**Radial.** What surrounds each page? Architecture Overview, Development
-Workflows, and the Ax Code Intel module sit inside a ring of cited files.
-Cross-links bundle through the center. The ring is derived from each file's
-first citing page. It does not encode distance or branch length.
+**Evidence map.** Which files does each page cite, and which changed since the page
+was written? The map opens as a treemap: each page is a block sized by the files it
+cites, each cited file is one cell, changed files are outlined in amber and page
+headers count them. Force and Radial redraw the same evidence as a network; lines
+are recorded citations and static imports, not calls. Freshness chips count files
+whose current bytes match (fresh) or differ from (stale) the hash recorded when the
+page was written. Symbols are hidden until you turn them on or select one. Select a
+page and use **Read this page** to open it.
 
-![Force layout. Files cluster beside the page that cites them.](../images/wiki/force.png)
+![Overview. Tiles for pages, cited files, freshness and generation, a page table, and the most-cited files.](../images/wiki/overview.png)
 
-**Force.** Who cites what? Pages, files, and symbols are placed by their
-connections, so cited files gather next to the page that records them.
+**Overview.** Can I trust this wiki today? Start pages, the share of indexed files
+that any page cites (citation coverage, not documentation quality), how many pages
+have changed cited files, each page's freshness bar, the files most pages rely on,
+and a coverage icicle by directory.
 
-![Ax Code Intel selected. Cited files are lit, and 39 of 80 references are shown.](../images/wiki/page-focus.png)
+![Reader. Page list and search on the left, the rendered page in the middle, contents, related pages and cited files on the right.](../images/wiki/read.png)
 
-**One page, opened.** Selecting Ax Code Intel (`modules/ax-code-intel.md`)
-lights the files that page cites, including its CLI, server, and handler
-sources. The detail panel reports freshness as unknown, because the snapshot
-does not re-read current source, and shows 39 of 80 recorded references. At
-most 200 nodes and 500 relationships are drawn. Omitted counts stay visible.
+**Read.** The generated page, rendered without raw HTML. Search covers every page's
+text. Cited paths in the text open a card that says who cites the file, whether it
+changed, and jumps to it on the map. Related pages are ranked by shared cited files;
+that is a list, never a drawn dependency.
+
+![Modules. A dependency structure matrix of cited directories with one cycle outlined.](../images/wiki/modules.png)
+
+**Modules.** How do the documented areas depend on each other? Cited files are grouped
+by directory, and each cell counts recorded static imports (relative imports and
+tsconfig `paths` aliases) between cited files. Rows are ordered providers first;
+cycles are outlined in amber. A page-by-module heatmap shows which areas each page
+cites.
+
+At most 200 nodes and 500 relationships are drawn on the map, with omitted counts
+shown; the reader, overview and module views use every page.
 
 ```sh
 ax-code wiki viz --open
@@ -55,22 +70,22 @@ ax-code wiki viz --export ./wiki-evidence.html
 a server, or external assets. It refuses to overwrite an existing file. Its parent
 directory must exist. `--open` and `--export` cannot be combined.
 
-The viewer supports search, page/source filters, one-hop selection, evidence
-details, and zoom/pan controls. The adjacent list works with the keyboard:
-Tab to an item and press Enter; Escape returns focus to search. Reset restores
-the overview. At most 200 nodes and 500 relationships are included, with omitted
-counts displayed. Search covers the included snapshot, not omitted items.
+The map supports search, page/source filters, one-hop selection, evidence details,
+and zoom/pan controls. The Explore list works with the keyboard: Tab to an item and
+press Enter; Escape returns focus to search. Arrow keys move between the view tabs.
+Map search covers the drawn snapshot; the reader's search covers every page.
 
-The CLI graph is a fixed snapshot of `.manifest.json`. It does not generate a Wiki,
-run a model, reindex code, or automatically refresh. It shows recorded page-to-source
-membership, not function calls or a complete dependency graph. Current source
-contents are not read, so freshness is explicitly unknown. Paths identify recorded
-locations and do not open or read source files.
+The CLI view is a fixed snapshot of `.manifest.json` and the page files. It does not
+generate a Wiki, run a model, reindex code, or automatically refresh. When the
+snapshot is taken, cited files are hashed (without following symlinks) to decide
+freshness, and cited source files are read for symbols and static imports; their
+text is not included. Freshness is as of that moment.
 
 The local link grants access to that snapshot until the process stops. The server
 binds only to `127.0.0.1` and serves only the snapshot. Exported files contain page
-titles, relative source paths, and recorded content hashes; review these before
-sharing. No source snippets, absolute project root, or model settings are exported.
+titles, page text, relative source paths, recorded content hashes, the generation
+model name and commit; review these before sharing. No source text, absolute project
+root, or credentials are exported.
 
 ## Open from the TUI
 
@@ -115,14 +130,15 @@ start AX Code or a server.
 import { projectWikiManifest } from "@ax-code/ax-wiki/graph"
 import { mount } from "@ax-code/ax-wiki-viewer"
 
-const graph = projectWikiManifest(manifest, { snapshot: contentIdentity })
-const viewer = mount(document.getElementById("map")!, graph)
+const graph = projectWikiManifest(manifest, { snapshot: contentIdentity, documents: pageBodies })
+const viewer = mount(document.getElementById("wiki")!, graph)
 viewer.update(nextGraph)
 viewer.dispose()
 ```
 
-Use a host-produced content identity for `snapshot`. Changed identity clears the
-selection. Invalid updates throw and preserve the existing view; disposing is
+Use a host-produced content identity for `snapshot`. `documents` maps manifest page
+paths to page markdown without frontmatter; without it the reader shows summaries.
+`mountMap` mounts only the evidence map. Changed identity clears the selection. Invalid updates throw and preserve the existing view; disposing is
 idempotent. Use `{ injectStyles: false }` and the exported `viewerCss` string when
 the host manages styles. Node hosts can import `renderWikiGraphHtml` from
 `@ax-code/ax-wiki-viewer/node`; its result contains `html` and the matching `csp`.

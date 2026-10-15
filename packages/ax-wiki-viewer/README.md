@@ -10,46 +10,40 @@ view.update(nextGraph)
 view.dispose()
 ```
 
-Supply a schema-1 graph from `@ax-code/ax-wiki/graph`. Its validated view is bounded
-to 200 nodes and 500 relationships. The graph represents Wiki membership, not code
-calls. A new snapshot identity resets selection; invalid updates preserve the
-previous view. Hosts can disable style injection with `{ injectStyles: false }`
-and provide the exported `viewerCss` themselves.
+Supply a schema-1 graph from `@ax-code/ax-wiki/graph`. `mount` shows four tabs:
+
+- **Evidence map** (the landing view): pages, the files they cite and recorded imports,
+  bounded to 200 nodes and 500 relationships with omissions disclosed. It opens as a
+  treemap (one block per page, one equal cell per cited file, changed files outlined);
+  Force and Radial show the same evidence as a network. Symbols are hidden until
+  enabled or selected.
+- **Overview**: start pages, citation coverage against the indexed inventory, per-page
+  freshness bars, most-cited files, and a `d3-hierarchy` coverage icicle by directory.
+- **Read**: page markdown rendered to DOM nodes (no raw HTML, no script or data URLs),
+  full-text search, table of contents, related pages by shared citations, and a card
+  for each cited path.
+- **Modules**: a levelized dependency structure matrix of cited directories with
+  cycles outlined, and a page-by-module heatmap.
+
+The reading, overview and module data come from the optional `pages`, `overview` and
+`modules` projections (pass page bodies as `documents` to `projectWikiManifest`).
+Graphs without them still render the map. `mountMap` mounts only the evidence map.
+A new snapshot identity resets selection; invalid updates preserve the previous view.
+Hosts can disable style injection with `{ injectStyles: false }` and provide the
+exported `viewerCss` themselves.
 
 For a self-contained offline file, Node hosts use `renderWikiGraphHtml(graph)`
 from `@ax-code/ax-wiki-viewer/node`. The function returns HTML and its hash-based CSP.
 The browser root does not import the Node entrypoint. Data is field-allowlisted;
-relative paths and page titles can still be sensitive.
+page text, relative paths and titles can still be sensitive.
 
-The map offers four switchable views over the same evidence: a force-directed lane
-layout, a radial cluster (every file and symbol leaf on the outer ring), an arc
-diagram (nodes on one line, citations above and imports below), and a nested
-treemap (pages contain files, files contain symbols). The radial, arc and treemap
-views derive a hierarchy from each file's first citing page and never invent
-branch lengths or distances. The Explore panel is a collapsible tree over the same
-hierarchy. Each view states the question it answers.
+![Evidence map of AX Code's wiki.](../../docs/images/wiki/map.png)
 
-The pictures below are AX Code's own wiki in this viewer. Lines are page-to-source
-citations, not calls. Arc and treemap are not shown.
+![Overview of AX Code's wiki.](../../docs/images/wiki/overview.png)
 
-![Radial view of AX Code's wiki.](../../docs/images/wiki/radial.png)
-
-**Radial.** What surrounds each page? Cited files sit on the outer ring.
-
-![Force layout of AX Code's wiki.](../../docs/images/wiki/force.png)
-
-**Force.** Who cites what? Files gather next to the page that cites them.
-
-![Ax Code Intel page selected in the wiki viewer.](../../docs/images/wiki/page-focus.png)
-
-**One page, opened.** Selecting a page lights its cited files. This selection
-shows 39 of 80 recorded references for `modules/ax-code-intel.md`.
-
-An opt-in Auto-tour (off by default,
-disabled under reduced motion) can cycle the views while the page is idle; any
-activity restarts the idle clock, and it can be started from `mount` with
-`{ tour: { enabled: true, intervalMs } }` (default 3 minutes). New views are one
-entry in the view registry plus a layout factory.
+An opt-in Auto-tour (off by default, disabled under reduced motion) can cycle the map
+layouts while the page is idle; start it from `mount` with
+`{ tour: { enabled: true, intervalMs } }` (default 3 minutes).
 
 Build: `pnpm build`. Check generated assets: `pnpm check:bundle`.
 Run unit tests: `pnpm test`. Run browser tests after building: `pnpm test:browser`.

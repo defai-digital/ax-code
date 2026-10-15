@@ -7,7 +7,13 @@ import { open, realpath, unlink } from "node:fs/promises"
 import path from "node:path"
 import { createHash, randomBytes } from "node:crypto"
 import { createServer } from "node:http"
-import { AX_WIKI_DIR_DEFAULT, assertWikiDirectorySafe, readGroundingExcerpts } from "@ax-code/ax-wiki/node"
+import {
+  AX_WIKI_DIR_DEFAULT,
+  assertWikiDirectorySafe,
+  observeSourceHashes,
+  readGroundingExcerpts,
+  readWikiPageBodies,
+} from "@ax-code/ax-wiki/node"
 import { graphRelativePath, projectWikiManifest, parseWikiGraph } from "@ax-code/ax-wiki/graph"
 import type { InventorySymbol } from "@ax-code/ax-wiki/graph"
 import { WikiInventory } from "./inventory"
@@ -24,6 +30,20 @@ export namespace WikiVisualization {
   )
 
   const MAX_MANIFEST_BYTES = 4 * 1024 * 1024
+
+  /** Collect page paths defensively; malformed shapes yield no bodies. */
+  function collectPages(manifest: unknown): string[] {
+    if (!manifest || typeof manifest !== "object") return []
+    const pages = (manifest as { pages?: unknown }).pages
+    if (!pages || typeof pages !== "object" || Array.isArray(pages)) return []
+    return Object.keys(pages).filter((page) => {
+      try {
+        return graphRelativePath(page) === page && page.endsWith(".md")
+      } catch {
+        return false
+      }
+    })
+  }
 
   /** Collect cited source paths defensively; malformed shapes yield no excerpts. */
   function collectCitedSources(manifest: unknown): string[] {
@@ -99,7 +119,17 @@ export namespace WikiVisualization {
       inventory = undefined
       imports = undefined
     }
-    const graph = projectWikiManifest(parsed, { snapshot: "pending", sourceContents, inventory, imports })
+    // Current bytes decide freshness; without them every node would stay unknown.
+    const observed = await observeSourceHashes(canonicalRoot, cited).catch(() => undefined)
+    const documents = await readWikiPageBodies(canonicalRoot, wikiDir, collectPages(parsed)).catch(() => undefined)
+    const graph = projectWikiManifest(parsed, {
+      snapshot: "pending",
+      sourceContents,
+      inventory,
+      imports,
+      observed,
+      documents,
+    })
     // Identity covers the complete recorded manifest, including evidence beyond the view cap.
     // Canonical JSON prevents insertion order alone from changing snapshot identity.
     const canonical = (value: unknown, depth = 0): unknown => {

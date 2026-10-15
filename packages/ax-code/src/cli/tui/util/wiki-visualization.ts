@@ -32,7 +32,8 @@ async function readWikiResponse(input: {
   input.signal.addEventListener("abort", abort, { once: true })
   if (input.signal.aborted) abort()
   const timer = setTimeout(abort, 10_000)
-  const limit = 2 * 1024 * 1024
+  // Page bodies are bounded at 1 MiB of text; the graph itself is far smaller.
+  const limit = 4 * 1024 * 1024
   try {
     const response = await input.fetch(
       new URL(input.endpoint ?? "experimental/wiki-visualization", input.base.replace(/\/?$/, "/")),

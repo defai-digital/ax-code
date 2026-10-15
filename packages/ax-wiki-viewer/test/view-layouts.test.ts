@@ -1,5 +1,4 @@
 import { expect, test } from "vitest"
-import { createArcLayout, ARC_SPACING } from "../src/arc-layout.js"
 import { createTreemapLayout, squarify, TREEMAP_SIZE } from "../src/treemap-layout.js"
 
 const nodes = [
@@ -21,31 +20,6 @@ const edges = [
   { from: "s:1", to: "y:2", kind: "contains" },
   { from: "s:1", to: "s:3", kind: "uses" },
 ]
-
-test("arc layout puts every node on one baseline in hierarchy order without overlap", () => {
-  const layout = createArcLayout({ nodes, edges })
-  const ys = new Set(layout.nodes.map((node) => node.y))
-  expect(ys.size).toBe(1)
-  const xs = (id: string) => layout.byId.get(id)!.x
-  // page a, its files (each followed by its symbols), then page b ...
-  expect(xs("p:a")).toBeLessThan(xs("s:1"))
-  expect(xs("s:1")).toBeLessThan(xs("y:1"))
-  expect(xs("y:2")).toBeLessThan(xs("s:2"))
-  expect(xs("s:2")).toBeLessThan(xs("p:b"))
-  const sorted = [...layout.nodes].sort((a, b) => a.x - b.x)
-  for (let i = 1; i < sorted.length; i++) {
-    expect(sorted[i].x - sorted[i - 1].x).toBeGreaterThanOrEqual(ARC_SPACING - 1e-9)
-    expect(sorted[i].x - sorted[i - 1].x).toBeGreaterThan(sorted[i].radius + sorted[i - 1].radius - 1)
-  }
-  expect(layout.arc?.baselineY).toBe([...ys][0])
-  expect(layout.bounds!.maxX).toBeGreaterThan(layout.bounds!.minX)
-})
-
-test("arc layout handles empty graphs", () => {
-  const layout = createArcLayout({ nodes: [], edges: [] })
-  expect(layout.nodes).toEqual([])
-  expect(Number.isFinite(layout.bounds!.minX)).toBe(true)
-})
 
 test("squarify tiles the box exactly and is deterministic", () => {
   const cells = [5, 3, 3, 2, 1, 1].map((value, i) => ({ id: `c${i}`, value, kids: [] }))
@@ -105,3 +79,35 @@ test("treemap handles empty and orphan-only graphs", () => {
 function layoutFinite(node: { x: number; y: number }) {
   return Number.isFinite(node.x) && Number.isFinite(node.y)
 }
+
+test("treemap gives every cited file the same area and fills the requested aspect", () => {
+  const input = {
+    nodes: [
+      { id: "p:a", kind: "page" as const },
+      { id: "p:b", kind: "page" as const },
+      ...["s:1", "s:2", "s:3"].map((id) => ({ id, kind: "source" as const })),
+    ],
+    edges: [
+      { from: "p:a", to: "s:1", kind: "references-source" },
+      { from: "p:a", to: "s:2", kind: "references-source" },
+      { from: "p:b", to: "s:3", kind: "references-source" },
+      // Imports no longer inflate a file's cell.
+      { from: "s:1", to: "s:3", kind: "uses" },
+      { from: "s:2", to: "s:3", kind: "uses" },
+    ],
+  }
+  const layout = createTreemapLayout(input, { aspect: 2 })
+  const area = (id: string) => {
+    const rect = layout.treemap!.rects.get(id)!
+    return rect.w * rect.h
+  }
+  const pageA = area("p:a"),
+    pageB = area("p:b")
+  expect(pageA / pageB).toBeCloseTo(2, 1)
+  expect(area("s:1") / area("s:2")).toBeCloseTo(1, 1)
+  const bounds = layout.bounds!
+  expect((bounds.maxX - bounds.minX) / (bounds.maxY - bounds.minY)).toBeCloseTo(2, 5)
+  // Extreme canvases are clamped so the map never becomes a strip.
+  const wide = createTreemapLayout(input, { aspect: 10 }).bounds!
+  expect((wide.maxX - wide.minX) / (wide.maxY - wide.minY)).toBeCloseTo(2.6, 5)
+})

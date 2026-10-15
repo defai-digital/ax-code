@@ -1,7 +1,7 @@
 import { constants as fsConstants } from "node:fs"
 import { access, open, readdir, stat } from "node:fs/promises"
 import path from "node:path"
-import { discoverSources, readSourceEvidence } from "./discovery.js"
+import { discoverSources, readFilePrefix, readSourceEvidence } from "./discovery.js"
 import { parseFrontmatter } from "./frontmatter.js"
 import { DISCOVERY_READ_CONCURRENCY, mapWithBoundedConcurrency } from "./discovery-concurrency.js"
 import { symbolGrounded } from "./grounding.js"
@@ -193,6 +193,53 @@ async function readSourceNoFollow(root: string, relative: string): Promise<Buffe
   } finally {
     await handle.close().catch(() => {})
   }
+}
+
+/**
+ * Current content hashes for root-relative sources, read without following
+ * symlinks. A missing or unreadable source maps to null, which the graph
+ * projection reports as stale, matching `getPageFreshness`.
+ */
+export async function observeSourceHashes(root: string, sources: readonly string[]): Promise<Map<string, string | null>> {
+  const unique = [...new Set(sources)]
+  const resolved = path.resolve(root)
+  const hashes = await mapWithBoundedConcurrency(unique, DISCOVERY_READ_CONCURRENCY, async (source) => {
+    const content = await readSourceNoFollow(resolved, source)
+    return content ? sha256(content) : null
+  })
+  return new Map(unique.map((source, index) => [source, hashes[index]]))
+}
+
+/** Bytes read per page before frontmatter is removed; generator frontmatter can be large. */
+export const WIKI_PAGE_BODY_READ_BYTES = 512 * 1024
+
+/**
+ * Page bodies for reading views, keyed by manifest page path: frontmatter and
+ * AX-WIKI marker comments removed. Unreadable pages are left out.
+ */
+export async function readWikiPageBodies(
+  root: string,
+  wikiDir: string,
+  pages: readonly string[],
+): Promise<Map<string, string>> {
+  const dir = sanitizeWikiDir(wikiDir)
+  const unique = [...new Set(pages)]
+  const bodies = await mapWithBoundedConcurrency(unique, DISCOVERY_READ_CONCURRENCY, async (page) => {
+    const content = await readFilePrefix(path.resolve(root), `${dir}/${page}`, WIKI_PAGE_BODY_READ_BYTES)
+    if (content === undefined) return undefined
+    return parseFrontmatter(content)
+      .body.split(/\r?\n/)
+      .filter((line) => !/^\s*<!--\s*AX-WIKI:[A-Z:]+.*-->\s*$/.test(line))
+      .join("\n")
+      .replace(/^\n+/, "")
+      .trimEnd()
+  })
+  const result = new Map<string, string>()
+  unique.forEach((page, index) => {
+    const body = bodies[index]
+    if (body !== undefined) result.set(page, body)
+  })
+  return result
 }
 
 /**

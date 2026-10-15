@@ -1,6 +1,6 @@
 import { expect, test } from "vitest"
 import { projectWikiManifest } from "@ax-code/ax-wiki/graph"
-import { LAYOUT_LANES, LAYOUT_WORLD, createForceLayout, layoutRadius } from "../src/force-layout.js"
+import { LAYOUT_LANES, LAYOUT_WORLD, PAGE_LABEL_GAP, createForceLayout, layoutRadius } from "../src/force-layout.js"
 
 const graph = projectWikiManifest(
   {
@@ -146,3 +146,17 @@ test("reheat restarts a settled simulation and moves neighbors", async () => {
     layout.stop()
   }
 }, 60000)
+
+test("keeps page names from stacking in the shared page lane", () => {
+  const pages = Array.from({ length: 12 }, (_, i) => ({ id: `page:${i}.md`, kind: "page" as const }))
+  const shared = { id: "source:shared.ts", kind: "source" as const }
+  const layout = createForceLayout(
+    { nodes: [...pages, shared], edges: pages.map((page) => ({ from: page.id, to: shared.id })) },
+    { reducedMotion: true },
+  )
+  const ys = layout.nodes
+    .filter((node) => node.kind === "page")
+    .map((node) => node.y)
+    .sort((a, b) => a - b)
+  for (let i = 1; i < ys.length; i++) expect(ys[i] - ys[i - 1]).toBeGreaterThanOrEqual(PAGE_LABEL_GAP - 1)
+})

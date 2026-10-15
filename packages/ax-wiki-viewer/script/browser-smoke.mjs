@@ -58,7 +58,13 @@ try {
   await page.route("http://**/*", (route) => route.abort())
   await page.route("https://**/*", (route) => route.abort())
   await page.goto(pathToFileURL(output).href)
-  await page.getByRole("heading", { name: "AX Wiki evidence map" }).waitFor()
+  await page.getByRole("heading", { name: "AX Wiki", exact: true }).waitFor()
+  await page.getByRole("tab", { name: "Evidence map" }).click()
+  await page.getByRole("heading", { name: "Evidence map", exact: true }).waitFor()
+  // The map opens on the treemap; the force-layout checks below switch to Force first.
+  assert.equal(await page.getByRole("button", { name: "Treemap", exact: true }).getAttribute("aria-pressed"), "true")
+  assert.match(await page.locator(".view-caption").innerText(), /^Treemap:/)
+  await page.getByRole("button", { name: "Force" }).click()
   assert.equal(await page.locator(".detail").evaluate((el) => getComputedStyle(el).whiteSpace), "pre-wrap")
   assert.equal(await page.locator(".legend .topic").count(), 2)
   // Wait until the force simulation has settled and the camera has framed the names.
@@ -78,7 +84,7 @@ try {
   // Camera affordances: zoom readout, double-click zoom, and a one-click return to the framed view.
   const fitted = await page.locator(".zoom-readout").textContent()
   assert.match(fitted ?? "", /^\d+%$/)
-  await page.locator("svg[role=img]").dblclick({ position: { x: 20, y: 20 } })
+  await page.locator(".canvas svg[role=img]").dblclick({ position: { x: 20, y: 20 } })
   assert.notEqual(await page.locator(".zoom-readout").textContent(), fitted)
   await page.getByRole("button", { name: "Fit to view" }).click()
   assert.equal(await page.locator(".zoom-readout").textContent(), fitted)
@@ -108,7 +114,7 @@ try {
   assert.notEqual(await page.evaluate(() => document.activeElement?.dataset.kind), "page")
   await page.mouse.move(2, 2)
   // Each view explains the question it answers, and the opt-in tour starts off.
-  assert.equal(await page.locator(".views button svg.view-icon").count(), 4)
+  assert.equal(await page.locator(".views button svg.view-icon").count(), 3)
   assert.match(await page.locator(".view-caption").innerText(), /^Force: Who cites what\?/)
   assert.equal(await page.getByRole("button", { name: "Auto-tour" }).getAttribute("aria-pressed"), "false")
   assert.equal(await page.locator(".tour-status").isHidden(), true)
@@ -137,20 +143,7 @@ try {
     ),
     settled,
   )
-  // Arc: every node on one baseline. Treemap: every node is a rectangle and cross links stay hidden until focus.
-  await page.getByRole("button", { name: "Arc", exact: true }).click()
-  assert.match(await page.locator(".view-caption").innerText(), /^Arc: How do files depend/)
-  await page.waitForTimeout(700)
-  assert.equal(await page.locator("svg g.node").count(), nodeCount)
-  assert.equal(
-    await page.evaluate(
-      () =>
-        new Set(
-          [...document.querySelectorAll("svg g.node")].map((group) => group.getAttribute("transform").split(",")[1]),
-        ).size,
-    ),
-    1,
-  )
+  // Treemap: every node is a rectangle and cross links stay hidden until focus.
   await page.getByRole("button", { name: "Treemap", exact: true }).click()
   await page.waitForTimeout(700)
   assert.equal(await page.locator("svg g.node").count(), nodeCount)
@@ -168,7 +161,7 @@ try {
   // Wait for the force layout to settle again before the label checks.
   await page.waitForTimeout(1500)
   const pageLabels = await page.evaluate(() => {
-    const svgBox = document.querySelector("svg[role=img]").getBoundingClientRect()
+    const svgBox = document.querySelector(".canvas svg[role=img]").getBoundingClientRect()
     return [...document.querySelectorAll("svg g.node.page")].map((group) => {
       const text = group.querySelector("text")
       const box = text.getBoundingClientRect()
@@ -249,7 +242,7 @@ try {
   await page.keyboard.press("Enter")
   assert.match(await page.locator(".detail").innerText(), /Source: src\/b\.ts/)
   await page.evaluate(() =>
-    document.querySelector("svg[role=img]").dispatchEvent(new MouseEvent("click", { bubbles: true })),
+    document.querySelector(".canvas svg[role=img]").dispatchEvent(new MouseEvent("click", { bubbles: true })),
   )
   assert.equal(await page.locator(".list .node-label").count(), 2)
   await page.getByRole("searchbox").focus()
@@ -292,7 +285,7 @@ try {
   assert.match(await page.locator(".detail").innerText(), /Page: Architecture/)
   assert.equal(await page.locator(".list .node-label").count(), 1)
   await page.evaluate(() =>
-    document.querySelector("svg[role=img]").dispatchEvent(new MouseEvent("click", { bubbles: true })),
+    document.querySelector(".canvas svg[role=img]").dispatchEvent(new MouseEvent("click", { bubbles: true })),
   )
   assert.match(await page.locator(".detail").innerText(), /Select a page, source, or symbol/)
   assert.equal(await page.locator(".list .node-label").count(), 1)
@@ -304,7 +297,7 @@ try {
   assert.match(await page.locator(".detail").innerText(), /Foo \(verified\)/)
   assert.match(await page.locator(".detail").innerText(), /Ghost \(inferred\)/)
   await page.evaluate(() =>
-    document.querySelector("svg[role=img]").dispatchEvent(new MouseEvent("click", { bubbles: true })),
+    document.querySelector(".canvas svg[role=img]").dispatchEvent(new MouseEvent("click", { bubbles: true })),
   )
   await page.evaluate(() => document.querySelector("svg g.node").dispatchEvent(new Event("mouseenter")))
   assert.equal(
@@ -340,7 +333,7 @@ try {
       group.dispatchEvent(new PointerEvent("pointermove", opts(sx + dx, sy + dy)))
     group.dispatchEvent(new PointerEvent("pointerup", opts(sx + 80, sy + 40)))
     const drop = new DOMPoint(sx + 80, sy + 40).matrixTransform(
-      document.querySelector("svg[role=img]").getScreenCTM().inverse(),
+      document.querySelector(".canvas svg[role=img]").getScreenCTM().inverse(),
     )
     return {
       before: [...document.querySelectorAll("svg g.node")].map((g) => g.getAttribute("transform")),
@@ -401,7 +394,9 @@ try {
   // Reduced motion positions drags synchronously with no reheating.
   const calm = await browser.newPage({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" })
   await calm.goto(pathToFileURL(output).href)
-  await calm.getByRole("heading", { name: "AX Wiki evidence map" }).waitFor()
+  await calm.getByRole("tab", { name: "Evidence map" }).click()
+  await calm.getByRole("heading", { name: "Evidence map", exact: true }).waitFor()
+  await calm.getByRole("button", { name: "Force" }).click()
   const calmDrag = await calm.evaluate(() => {
     const group = document.querySelectorAll("svg g.node")[0]
     const box = group.querySelector("circle").getBoundingClientRect()
@@ -419,7 +414,7 @@ try {
       group.dispatchEvent(new PointerEvent("pointermove", opts(sx + dx, sy + dy)))
     group.dispatchEvent(new PointerEvent("pointerup", opts(sx + 80, sy + 40)))
     const drop = new DOMPoint(sx + 80, sy + 40).matrixTransform(
-      document.querySelector("svg[role=img]").getScreenCTM().inverse(),
+      document.querySelector(".canvas svg[role=img]").getScreenCTM().inverse(),
     )
     return {
       before,
@@ -464,7 +459,7 @@ try {
   })
   assert.match(await calm.locator(".detail").innerText(), /Page: Architecture/)
   await calm.evaluate(() =>
-    document.querySelector("svg[role=img]").dispatchEvent(new MouseEvent("click", { bubbles: true })),
+    document.querySelector(".canvas svg[role=img]").dispatchEvent(new MouseEvent("click", { bubbles: true })),
   )
   assert.match(await calm.locator(".detail").innerText(), /Select a page, source, or symbol/)
   // A touch drag targets the node on pointerup but does not emit a click.
@@ -499,7 +494,7 @@ try {
       sy = box.y + box.height / 2
     const opts = (x, y) => ({ clientX: x, clientY: y, pointerId: 31, bubbles: true, isPrimary: true })
     group.dispatchEvent(new PointerEvent("pointerdown", opts(sx, sy)))
-    document.querySelector("svg[role=img]").dispatchEvent(new PointerEvent("pointermove", opts(sx + 48, sy + 22)))
+    document.querySelector(".canvas svg[role=img]").dispatchEvent(new PointerEvent("pointermove", opts(sx + 48, sy + 22)))
     document.dispatchEvent(new PointerEvent("pointerup", opts(sx + 48, sy + 22)))
     return { before, after: group.getAttribute("transform") }
   })
@@ -514,7 +509,7 @@ try {
   await page.getByRole("button", { name: "Show all / reset" }).click()
   // Wheel zooms toward the pointer: one notch in shrinks the viewBox, one notch out restores it.
   const wheeled = await page.evaluate(() => {
-    const svg = document.querySelector("svg[role=img]")
+    const svg = document.querySelector(".canvas svg[role=img]")
     const before = svg.getAttribute("viewBox").split(" ").map(Number)
     const box = svg.getBoundingClientRect()
     const at = { clientX: box.x + box.width / 2, clientY: box.y + box.height / 2, bubbles: true, cancelable: true }
@@ -604,8 +599,8 @@ try {
   await api.setContent('<main id="one"></main><main id="two"></main>')
   await api.addScriptTag({ content: bundle.outputFiles[0].text })
   const result = await api.evaluate((graph) => {
-    const first = WikiViewer.mount(document.getElementById("one"), graph)
-    const second = WikiViewer.mount(document.getElementById("two"), graph)
+    const first = WikiViewer.mountMap(document.getElementById("one"), graph)
+    const second = WikiViewer.mountMap(document.getElementById("two"), graph)
     let rejected = false
     try {
       first.update({ ...graph, schemaVersion: 99 })
@@ -632,35 +627,35 @@ try {
   await tourPage.setContent('<main id="t"></main>')
   await tourPage.addScriptTag({ content: bundle.outputFiles[0].text })
   await tourPage.evaluate((graph) => {
-    globalThis.tour = WikiViewer.mount(document.getElementById("t"), graph, {
+    globalThis.tour = WikiViewer.mountMap(document.getElementById("t"), graph, {
       tour: { enabled: true, intervalMs: 2000 },
     })
   }, graph)
   assert.equal(await tourPage.getByRole("button", { name: "Auto-tour" }).getAttribute("aria-pressed"), "true")
-  assert.match(await tourPage.locator(".tour-status").innerText(), /^Next: Radial · 0:0[12]$/)
+  assert.match(await tourPage.locator(".tour-status").innerText(), /^Next: Force · 0:0[12]$/)
   // Activity keeps resetting the idle clock, so the view must not change while the user is active.
   for (let i = 0; i < 6; i++) {
     await tourPage.mouse.move(100 + i * 40, 120 + i * 25)
     await tourPage.waitForTimeout(500)
   }
-  assert.equal(await tourPage.getByRole("button", { name: "Force" }).getAttribute("aria-pressed"), "true")
+  assert.equal(await tourPage.getByRole("button", { name: "Treemap" }).getAttribute("aria-pressed"), "true")
   // Pausing holds the view even when idle.
   await tourPage.getByRole("button", { name: "Pause" }).click()
   await tourPage.waitForTimeout(2600)
-  assert.equal(await tourPage.getByRole("button", { name: "Force" }).getAttribute("aria-pressed"), "true")
+  assert.equal(await tourPage.getByRole("button", { name: "Treemap" }).getAttribute("aria-pressed"), "true")
   assert.equal(await tourPage.locator(".tour-status").innerText(), "Tour paused")
   // Resuming and staying idle advances to the next view and announces it once, politely.
   await tourPage.getByRole("button", { name: "Resume" }).click()
   await tourPage.mouse.move(1, 1)
   await tourPage.waitForFunction(
-    () => document.querySelector(".views button[aria-pressed=true]")?.textContent === "Radial",
+    () => document.querySelector(".views button[aria-pressed=true]")?.textContent === "Force",
     null,
     {
       timeout: 6000,
     },
   )
-  assert.equal(await tourPage.locator(".sr-only").innerText(), "Switched to Radial view")
-  assert.match(await tourPage.locator(".view-caption").innerText(), /^Radial:/)
+  assert.equal(await tourPage.locator(".sr-only").innerText(), "Switched to Force view")
+  assert.match(await tourPage.locator(".view-caption").innerText(), /^Force:/)
   assert.equal(await tourPage.locator(".tour-status").getAttribute("aria-hidden"), "true")
   // Turning it off stops the countdown entirely.
   await tourPage.getByRole("button", { name: "Auto-tour" }).click()
@@ -672,7 +667,7 @@ try {
   await calmTour.setContent('<main id="c"></main>')
   await calmTour.addScriptTag({ content: bundle.outputFiles[0].text })
   await calmTour.evaluate((graph) => {
-    WikiViewer.mount(document.getElementById("c"), graph, { tour: { enabled: true, intervalMs: 1000 } })
+    WikiViewer.mountMap(document.getElementById("c"), graph, { tour: { enabled: true, intervalMs: 1000 } })
   }, graph)
   assert.equal(await calmTour.getByRole("button", { name: "Auto-tour" }).isDisabled(), true)
   assert.equal(await calmTour.getByRole("button", { name: "Auto-tour" }).getAttribute("aria-pressed"), "false")
@@ -688,7 +683,7 @@ try {
   const badges = await api.evaluate(() => {
     const host = document.createElement("main")
     document.body.appendChild(host)
-    const handle = WikiViewer.mount(host, {
+    const handle = WikiViewer.mountMap(host, {
       schemaVersion: 1,
       snapshot: "badge-fixture",
       scope: "wiki-manifest",
@@ -713,7 +708,7 @@ try {
   const stale = await api.evaluate(() => {
     const host = document.createElement("main")
     document.body.appendChild(host)
-    const handle = WikiViewer.mount(host, {
+    const handle = WikiViewer.mountMap(host, {
       schemaVersion: 1,
       snapshot: "stale-fixture",
       scope: "wiki-manifest",
@@ -725,20 +720,25 @@ try {
       edges: [{ from: "page:g.md", to: "source:s.ts", kind: "references-source", freshness: "stale" }],
       omitted: { nodes: 0, edges: 0 },
     })
-    const rings = [...host.querySelectorAll("circle.ring")]
+    // Page rings are a network-view signal; treemap page cells count changed files in their header.
+    const treemapRings = host.querySelectorAll(".ring").length
+    ;[...host.querySelectorAll(".views button")].find((button) => button.textContent === "Force")?.click()
+    const rings = [...host.querySelectorAll(".ring")]
     const found = {
       count: rings.length,
       stroke: rings[0]?.getAttribute("stroke"),
       animation: rings[0] ? getComputedStyle(rings[0]).animationName : "missing",
       hidden: rings[0]?.getAttribute("aria-hidden"),
-      freshHasRing: host.querySelectorAll("svg g.node")[1]?.querySelector("circle.ring") !== null,
+      freshHasRing: host.querySelectorAll("svg g.node")[1]?.querySelector(".ring") !== null,
       tooltip: host.querySelectorAll("svg g.node")[0]?.querySelector("title")?.textContent,
       chips: [...host.querySelectorAll(".chip")].map((chip) => chip.textContent),
+      treemapRings,
     }
     handle.dispose()
     host.remove()
     return found
   })
+  assert.equal(stale.treemapRings, 0)
   assert.equal(stale.count, 1)
   assert.equal(stale.stroke, "#e0a63c")
   assert.equal(stale.animation, "none")
@@ -749,7 +749,7 @@ try {
   const outline = await api.evaluate(() => {
     const host = document.createElement("main")
     document.body.appendChild(host)
-    const handle = WikiViewer.mount(host, {
+    const handle = WikiViewer.mountMap(host, {
       schemaVersion: 1,
       snapshot: "outline-fixture",
       scope: "wiki-manifest",
@@ -819,7 +819,7 @@ try {
       outlineShown: details?.style.display !== "none",
       rows: buttons.map((button) => button.textContent),
       nested: host.querySelectorAll(".outline ul ul").length,
-      symbolFill: host.querySelectorAll("svg g.node circle")[2]?.getAttribute("fill"),
+      symbolFill: host.querySelectorAll("svg g.node")[2]?.firstElementChild?.getAttribute("fill"),
       legend: [...host.querySelectorAll(".legend button")].map((button) => button.textContent),
     }
     buttons.find((button) => button.textContent === "method Foo.bar")?.click()
@@ -839,6 +839,97 @@ try {
   assert.match(outline.detail, /Contained by 1 source/)
   // Selecting a symbol reveals it in the Explore tree: page, source, class and method are all shown.
   assert.equal(outline.afterSelect, 4)
+  // The reading workspace: overview, reader, citations, module matrix and the map, offline.
+  const workspaceGraph = projectWikiManifest(
+    {
+      schemaVersion: 1,
+      generator: "ax-wiki",
+      generatedAt: "2026-10-14T00:00:00.000Z",
+      model: "fixture/model",
+      sources: { "src/a.ts": "a".repeat(64), "src/b.ts": "b".repeat(64), "lib/c.ts": "c".repeat(64), "README.md": "d".repeat(64) },
+      pages: {
+        "quickstart.md": {
+          title: "Quickstart",
+          purpose: "Start here.",
+          sources: ["src/a.ts", "lib/c.ts"],
+          sourceHashes: { "src/a.ts": "a".repeat(64), "lib/c.ts": "c".repeat(64) },
+        },
+        "modules/core.md": {
+          title: "Core",
+          sources: ["src/a.ts", "src/b.ts"],
+          sourceHashes: { "src/a.ts": "a".repeat(64), "src/b.ts": "b".repeat(64) },
+        },
+      },
+    },
+    {
+      snapshot: "workspace-fixture",
+      observed: new Map([
+        ["src/a.ts", "a".repeat(64)],
+        ["src/b.ts", "f".repeat(64)],
+      ]),
+      imports: new Map([["src/a.ts", ["lib/c.ts"]]]),
+      documents: new Map([
+        [
+          "quickstart.md",
+          '# Quickstart\n\nRead `src/a.ts` then [Core](modules/core.md).\n\n<img src=x onerror="window.attacked=true">\n\n[bad](javascript:window.attacked=true)\n\n## Next\n\n- one\n- two',
+        ],
+        ["modules/core.md", "# Core\n\n| a | b |\n| --- | --- |\n| `src/b.ts` | x |"],
+      ]),
+    },
+  )
+  const workspaceFile = path.join(dir, "workspace.html")
+  await writeFile(workspaceFile, renderWikiGraphHtml(workspaceGraph).html)
+  const work = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+  const workErrors = []
+  work.on("pageerror", (error) => workErrors.push(error.message))
+  await work.route("http://**/*", (route) => route.abort())
+  await work.route("https://**/*", (route) => route.abort())
+  await work.goto(pathToFileURL(workspaceFile).href)
+  // The evidence map is the landing view; a selected page opens in the reader.
+  assert.equal(await work.getByRole("tab", { name: "Evidence map" }).getAttribute("aria-selected"), "true")
+  assert.equal(await work.getByRole("tab", { name: "Evidence map" }).getAttribute("tabindex"), "0")
+  await work.locator(".list .node-label").filter({ hasText: "page: Core" }).click()
+  await work.getByRole("button", { name: "Read this page" }).click()
+  assert.equal(await work.getByRole("tab", { name: "Read" }).getAttribute("aria-selected"), "true")
+  assert.equal(await work.locator(".article > h1").innerText(), "Core")
+  await work.getByRole("tab", { name: "Overview" }).click()
+  assert.match(await work.locator(".app-head .meta").innerText(), /Generated 2026-10-14 00:00 UTC · fixture\/model · 2 pages/)
+  assert.match(await work.locator(".tiles").innerText(), /Cited files\s+3\s+of 4 indexed files/)
+  assert.match(await work.locator(".tiles").innerText(), /1 stale/)
+  // Arrow keys move between tabs.
+  await work.getByRole("tab", { name: "Overview" }).focus()
+  await work.keyboard.press("ArrowRight")
+  assert.equal(await work.getByRole("tab", { name: "Read" }).getAttribute("aria-selected"), "true")
+  await work.locator(".nav button", { hasText: "Quickstart" }).click()
+  assert.equal(await work.locator(".article > h1").innerText(), "Quickstart")
+  // The duplicate title heading is dropped; hostile markdown stays inert text.
+  assert.equal(await work.locator(".md h1").count(), 0)
+  assert.equal(await work.locator(".md img").count(), 0)
+  await work.locator(".md span", { hasText: "bad" }).click()
+  assert.equal(await work.evaluate(() => window.attacked), undefined)
+  assert.equal(await work.locator(".rail .toc button").innerText(), "Next")
+  // A cited path opens the source drawer, which jumps to the evidence map.
+  await work.locator(".md code.md-source", { hasText: "src/a.ts" }).click()
+  assert.equal(await work.locator(".drawer .path").innerText(), "src/a.ts")
+  assert.match(await work.locator(".drawer").innerText(), /Cited by 2 pages/)
+  await work.getByRole("button", { name: "Show in evidence map" }).click()
+  assert.equal(await work.getByRole("tab", { name: "Evidence map" }).getAttribute("aria-selected"), "true")
+  assert.match(await work.locator(".detail").innerText(), /Source: src\/a\.ts/)
+  // Page links and search navigate between pages.
+  await work.getByRole("tab", { name: "Read" }).click()
+  await work.locator(".md a.md-page").click()
+  assert.equal(await work.locator(".article > h1").innerText(), "Core")
+  assert.match(await work.locator(".article .badge").innerText(), /1 of 2 cited files changed/)
+  assert.equal(await work.locator(".md table td code.md-source").count(), 1)
+  await work.getByRole("searchbox", { name: "Search the wiki" }).fill("then")
+  assert.equal(await work.locator(".nav button").count(), 1)
+  // Modules: a matrix row selects its cited files.
+  await work.getByRole("tab", { name: "Modules" }).click()
+  assert.match(await work.locator(".modules").innerText(), /Module dependencies/i)
+  assert.ok((await work.locator(".modules .row-label").count()) >= 2)
+  assert.deepEqual(workErrors, [])
+  await work.close()
+
   console.log(
     JSON.stringify({
       browser: browser.version(),

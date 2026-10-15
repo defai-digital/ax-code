@@ -3,10 +3,11 @@ import { LANGUAGE_EXTENSIONS } from "@ax-code/ax-code-intel/language"
 import { readFilePrefix } from "@ax-code/ax-wiki/node"
 import type { InventorySymbol } from "@ax-code/ax-wiki/graph"
 import { SyntacticExtractor } from "../code-intelligence/syntactic"
+import { parseJsonStrict } from "../util/json-value"
 
 export namespace WikiInventory {
   export const LIMITS = {
-    maxSources: 200,
+    maxSources: 500,
     perFileBytes: 262_144,
     totalBytes: 8_388_608,
     symbolsPerSource: 100,
@@ -42,18 +43,89 @@ export namespace WikiInventory {
   const JS_EXT_SWAP: Record<string, string> = { ".js": ".ts", ".jsx": ".tsx", ".mjs": ".mts", ".cjs": ".cts" }
 
   /**
-   * Resolve a relative module specifier against the cited source set without
-   * I/O: exact match, TypeScript extension swap, extension probing, then
-   * index files. Bare, absolute, escaping, or unlisted targets yield
-   * undefined (no edge), never a guess.
+   * A `compilerOptions.paths` table from one tsconfig.json, with its targets
+   * already joined to the config directory (root-relative, posix).
    */
-  export function resolveImport(from: string, specifier: string, cited: ReadonlySet<string>): string | undefined {
-    if (!specifier || specifier.includes("\\") || specifier.includes("?") || specifier.includes("#")) return undefined
-    if (specifier !== "." && specifier !== ".." && !specifier.startsWith("./") && !specifier.startsWith("../"))
+  export type PathAliases = {
+    dir: string
+    rules: Array<{ prefix: string; suffix: string; wildcard: boolean; targets: string[] }>
+  }
+
+  /** Parse the `paths` table of a plain-JSON tsconfig; anything else yields no aliases. */
+  export function parsePathAliases(dir: string, text: string): PathAliases | undefined {
+    let config: unknown
+    try {
+      config = parseJsonStrict(text)
+    } catch {
       return undefined
+    }
+    const options = (config as { compilerOptions?: { baseUrl?: unknown; paths?: unknown } } | null)?.compilerOptions
+    const paths = options?.paths
+    if (!paths || typeof paths !== "object" || Array.isArray(paths)) return undefined
+    const base = typeof options.baseUrl === "string" ? options.baseUrl : "."
+    const rules: PathAliases["rules"] = []
+    for (const [pattern, raw] of Object.entries(paths)) {
+      if (!Array.isArray(raw) || pattern.split("*").length > 2) continue
+      const star = pattern.indexOf("*")
+      const targets = raw
+        .filter((target): target is string => typeof target === "string" && target.split("*").length <= 2)
+        .map((target) => path.posix.join(dir, base, target))
+        .filter((target) => target !== ".." && !target.startsWith("../") && !path.posix.isAbsolute(target))
+      if (!targets.length) continue
+      rules.push({
+        prefix: star < 0 ? pattern : pattern.slice(0, star),
+        suffix: star < 0 ? "" : pattern.slice(star + 1),
+        wildcard: star >= 0,
+        targets,
+      })
+    }
+    // TypeScript prefers the longest matching prefix.
+    rules.sort((a, b) => b.prefix.length - a.prefix.length)
+    return rules.length ? { dir, rules } : undefined
+  }
+
+  /**
+   * Resolve a module specifier against the cited source set without I/O:
+   * relative specifiers, or `paths` aliases from the importing file's nearest
+   * tsconfig when supplied. Then exact match, TypeScript extension swap,
+   * extension probing, and index files. Bare, absolute, escaping, or unlisted
+   * targets yield undefined (no edge), never a guess.
+   */
+  export function resolveImport(
+    from: string,
+    specifier: string,
+    cited: ReadonlySet<string>,
+    aliases?: PathAliases,
+  ): string | undefined {
+    // A leading `#` is a subpath alias such as `#db`; anywhere else it is a fragment.
+    if (!specifier || specifier.includes("\\") || specifier.includes("?") || specifier.indexOf("#", 1) >= 0)
+      return undefined
+    if (specifier !== "." && specifier !== ".." && !specifier.startsWith("./") && !specifier.startsWith("../")) {
+      for (const rule of aliases?.rules ?? []) {
+        const matches = rule.wildcard
+          ? specifier.startsWith(rule.prefix) &&
+            specifier.endsWith(rule.suffix) &&
+            specifier.length >= rule.prefix.length + rule.suffix.length
+          : specifier === rule.prefix
+        if (!matches) continue
+        const rest = rule.wildcard ? specifier.slice(rule.prefix.length, specifier.length - rule.suffix.length) : ""
+        for (const target of rule.targets) {
+          const base = path.posix.normalize(target.replace("*", rest))
+          if (base.startsWith("../") || path.posix.isAbsolute(base)) continue
+          const found = probe(base, cited)
+          if (found) return found
+        }
+        return undefined
+      }
+      return undefined
+    }
     const base = path.posix.normalize(path.posix.join(path.posix.dirname(from), specifier))
     if (!base || base === "." || base === ".." || base.startsWith("../") || path.posix.isAbsolute(base))
       return undefined
+    return probe(base, cited)
+  }
+
+  function probe(base: string, cited: ReadonlySet<string>): string | undefined {
     if (cited.has(base)) return base
     const ext = path.posix.extname(base).toLowerCase()
     const swapped = JS_EXT_SWAP[ext]
@@ -84,6 +156,23 @@ export namespace WikiInventory {
     const cited = new Set(sources)
     const selected = [...cited].sort().slice(0, Math.max(0, limits.maxSources))
     const inventory = new Map<string, SourceInventory>()
+    // Nearest tsconfig.json per directory, read once; only its own `paths` apply (no `extends`).
+    const configs = new Map<string, PathAliases | undefined>()
+    for (const relative of selected) {
+      for (let dir = path.posix.dirname(relative); ; dir = path.posix.dirname(dir)) {
+        if (configs.has(dir)) break
+        const text = await readFilePrefix(root, dir === "." ? "tsconfig.json" : `${dir}/tsconfig.json`, 65_536)
+        configs.set(dir, text === undefined ? undefined : (parsePathAliases(dir === "." ? "" : dir, text) ?? { dir, rules: [] }))
+        if (dir === ".") break
+      }
+    }
+    const aliasesFor = (relative: string): PathAliases | undefined => {
+      for (let dir = path.posix.dirname(relative); ; dir = path.posix.dirname(dir)) {
+        const found = configs.get(dir)
+        if (found) return found.rules.length ? found : undefined
+        if (dir === ".") return undefined
+      }
+    }
     let remaining = Math.max(0, limits.totalBytes)
     for (const relative of selected) {
       signal?.throwIfAborted()
@@ -109,7 +198,7 @@ export namespace WikiInventory {
       const imports = [
         ...new Set(
           (refs ?? [])
-            .map((ref) => resolveImport(relative, ref.specifier, cited))
+            .map((ref) => resolveImport(relative, ref.specifier, cited, aliasesFor(relative)))
             .filter((target): target is string => !!target && target !== relative),
         ),
       ]

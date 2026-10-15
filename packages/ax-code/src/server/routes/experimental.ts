@@ -131,10 +131,10 @@ export const ExperimentalRoutes = lazy(() =>
         try {
           const config = await resolveWikiRuntimeConfig()
           const graph = await WikiVisualization.snapshot(await wikiProjectRoot(), config.dir)
-          if (Buffer.byteLength(JSON.stringify(graph)) > 2 * 1024 * 1024) {
+          if (Buffer.byteLength(JSON.stringify(graph)) > 4 * 1024 * 1024) {
             throw new WikiVisualization.Unavailable({
               reason: "too_large",
-              message: "Wiki visualization snapshot exceeds the 2 MiB response limit.",
+              message: "Wiki visualization snapshot exceeds the 4 MiB response limit.",
             })
           }
           return c.json(WikiGraphSchema.parse(graph))

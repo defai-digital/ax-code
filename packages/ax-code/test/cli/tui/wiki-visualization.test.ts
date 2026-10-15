@@ -172,7 +172,7 @@ describe("runtime Wiki snapshot transport", () => {
   })
   test("rejects oversized streaming bodies and malformed successful responses", async () => {
     for (const [response, reason] of [
-      [new Response("x".repeat(2 * 1024 * 1024 + 1)), "too_large"],
+      [new Response("x".repeat(4 * 1024 * 1024 + 1)), "too_large"],
       [Response.json({ schemaVersion: 99 }), "invalid"],
     ] as const) {
       await expect(

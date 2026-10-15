@@ -14,7 +14,8 @@ export type ViewFilters = {
 export function defaultFilters(): ViewFilters {
   return {
     query: "",
-    kinds: { page: true, source: true, symbol: true },
+    // Symbols are detail: a page's inventory would otherwise bury the citations. The legend toggles them.
+    kinds: { page: true, source: true, symbol: false },
     freshness: { fresh: true, stale: true, unknown: true },
   }
 }
@@ -24,7 +25,7 @@ export function isDefaultFilters(filters: ViewFilters): boolean {
     filters.query.trim() === "" &&
     filters.kinds.page &&
     filters.kinds.source &&
-    filters.kinds.symbol &&
+    !filters.kinds.symbol &&
     filters.freshness.fresh &&
     filters.freshness.stale &&
     filters.freshness.unknown

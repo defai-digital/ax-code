@@ -258,21 +258,21 @@ The output format above is verbatim from these commands; the session IDs and tas
 
 ## The wiki map
 
-`ax-code wiki viz` draws that wiki as a map of pages and the files they cite. The lines are citations, not function calls. These three pictures are AX Code's own wiki: Architecture Overview, Development Workflows, and the Ax Code Intel module.
+`ax-code wiki viz` opens the wiki in a local, offline viewer. It starts on the evidence map: every page and the files it cites. These pictures are AX Code's own wiki.
 
-![Radial view of AX Code's wiki. Three pages sit inside a ring of the files they cite.](docs/images/wiki/radial.png)
+![Evidence map of AX Code's wiki as a treemap: one block per page, one cell per cited file, changed files outlined in amber.](docs/images/wiki/map.png)
 
-**Radial.** What surrounds each page? The pages sit inside a ring of cited files, and cross-links bundle through the center.
+**Evidence map.** Which files does each page cite, and which of them changed since the page was written? Each block is a page, each cell a cited file. Force and Radial layouts show the same evidence as a network. Select a page and read it.
 
-![Force layout of the same wiki. Files cluster beside the page that cites them.](docs/images/wiki/force.png)
+![The reader showing the Session Subsystem page with its contents, related pages and cited files.](docs/images/wiki/read.png)
 
-**Force.** Who cites what? The same evidence, placed by its connections, so files gather next to the page that cites them.
+**Read.** The page itself, with searchable text, a table of contents, related pages, and cited paths you can click to check.
 
-![The Ax Code Intel module selected. Its cited files are lit, and the panel says 39 of 80 references are shown.](docs/images/wiki/page-focus.png)
+![A dependency structure matrix of cited directories, with a session and tool cycle outlined.](docs/images/wiki/modules.png)
 
-**One page, opened.** Selecting Ax Code Intel (`modules/ax-code-intel.md`) lights the files that page cites. Freshness reads unknown, because this snapshot does not re-read source. The panel shows 39 of 80 recorded references; the view is bounded, and omitted counts stay on screen.
+**Modules.** Recorded imports between the cited directories, providers first, cycles outlined. An overview tab adds coverage, freshness by page, and the most-cited files.
 
-Open it with `ax-code wiki viz`, or from **Wiki graph** in the session sidebar. Arc, treemap, search, and offline export are in [Wiki evidence visualization](docs/guides/wiki-visualization.md).
+Open it with `ax-code wiki viz`, or from **Wiki graph** in the session sidebar. Views, search, and offline export are in [Wiki evidence visualization](docs/guides/wiki-visualization.md).
 
 ## Hardware requirements
 

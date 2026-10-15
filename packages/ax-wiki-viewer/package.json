@@ -35,7 +35,8 @@
   },
   "dependencies": {
     "@ax-code/ax-wiki": "workspace:*",
-    "d3-force": "catalog:"
+    "d3-force": "catalog:",
+    "d3-hierarchy": "catalog:"
   },
   "devDependencies": {
     "@types/d3-force": "catalog:",
@@ -45,6 +46,7 @@
     "vitest": "catalog:",
     "tsx": "catalog:",
     "esbuild": "catalog:",
-    "playwright-core": "catalog:"
+    "playwright-core": "catalog:",
+    "@types/d3-hierarchy": "catalog:"
   }
 }

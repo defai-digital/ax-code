@@ -19,13 +19,14 @@ async function setup(root: string) {
 }
 
 describe("Wiki visualization snapshot", () => {
-  test("is read-only, source-independent and gives content-bound identity", async () => {
+  test("is read-only and gives manifest-bound identity", async () => {
     await using tmp = await tmpdir()
     await setup(tmp.path)
     const before = await readFile(path.join(tmp.path, ".ax-wiki", ".manifest.json"), "utf8")
     const graph = await WikiVisualization.snapshot(tmp.path)
     expect(graph.snapshot).toMatch(/^sha256:[a-f0-9]{64}$/)
-    expect(graph.nodes.every((n) => n.freshness === "unknown")).toBe(true)
+    // The cited source is missing, so its recorded evidence is stale rather than unknown.
+    expect(graph.nodes.every((n) => n.freshness === "stale")).toBe(true)
     expect(await WikiVisualization.snapshot(tmp.path)).toEqual(graph)
     await writeFile(
       path.join(tmp.path, ".ax-wiki", ".manifest.json"),
@@ -35,6 +36,43 @@ describe("Wiki visualization snapshot", () => {
     expect(JSON.stringify(graph)).not.toContain(tmp.path)
     await writeFile(path.join(tmp.path, ".ax-wiki", ".manifest.json"), before.replace('"Guide"', '"Changed"'))
     expect((await WikiVisualization.snapshot(tmp.path)).snapshot).not.toBe(graph.snapshot)
+  })
+  test("hashes current sources and projects readable page bodies without frontmatter", async () => {
+    await using tmp = await tmpdir()
+    await mkdir(path.join(tmp.path, ".ax-wiki"))
+    await mkdir(path.join(tmp.path, "src"))
+    await writeFile(path.join(tmp.path, "src", "a.ts"), "export const a = 1\n")
+    await writeFile(path.join(tmp.path, "src", "b.ts"), "export const b = 2\n")
+    const { createHash } = await import("node:crypto")
+    const sha = (text: string) => createHash("sha256").update(text).digest("hex")
+    await writeFile(
+      path.join(tmp.path, ".ax-wiki", ".manifest.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        generator: "ax-wiki",
+        pages: {
+          "guide.md": {
+            title: "Guide",
+            sources: ["src/a.ts", "src/b.ts"],
+            sourceHashes: { "src/a.ts": sha("export const a = 1\n"), "src/b.ts": sha("old\n") },
+          },
+        },
+      }),
+    )
+    await writeFile(
+      path.join(tmp.path, ".ax-wiki", "guide.md"),
+      '---\ntitle: "Guide"\nsymbols:\n  - "a"\n---\n\n<!-- AX-WIKI:START -->\n# Guide\n\nSee `src/a.ts`.\n<!-- AX-WIKI:END -->\n',
+    )
+    const graph = await WikiVisualization.snapshot(tmp.path)
+    const freshness = Object.fromEntries(
+      graph.nodes.filter((n) => n.kind !== "symbol").map((n) => [n.id, n.freshness]),
+    )
+    expect(freshness).toEqual({ "page:guide.md": "stale", "source:src/a.ts": "fresh", "source:src/b.ts": "stale" })
+    expect(graph.pages?.[0]).toMatchObject({ stale: 1, unknown: 0, changed: ["src/b.ts"], truncated: false })
+    expect(graph.pages?.[0].markdown).toBe("# Guide\n\nSee `src/a.ts`.")
+    expect(graph.overview).toMatchObject({ citedSources: 2, indexedSources: 2 })
+    expect(WikiGraphSchema.parse(graph)).toEqual(graph)
+    expect(JSON.stringify(graph)).not.toContain(tmp.path)
   })
   test("projects recorded summaries and symbol provenance from source excerpts", async () => {
     await using tmp = await tmpdir()

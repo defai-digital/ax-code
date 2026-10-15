@@ -123,3 +123,36 @@ test("buildAll skips self imports and caps imports per source", async () => {
   // Self import dropped, remainder sorted and capped deterministically.
   expect(inventory.get("src/self.ts")?.imports).toEqual(["src/m0.ts", "src/m1.ts"])
 })
+
+test("resolves tsconfig path aliases from the nearest config without guessing", () => {
+  const cited = new Set(["pkg/src/session/index.ts", "pkg/src/tool/bash.ts", "pkg/lib/util.ts"])
+  const aliases = WikiInventory.parsePathAliases(
+    "pkg",
+    JSON.stringify({ compilerOptions: { paths: { "@/*": ["./src/*"], "@tui/*": ["./src/cli/tui/*"], "#lib": ["./lib/util.ts"] } } }),
+  )!
+  expect(aliases.rules.map((rule) => rule.prefix)).toEqual(["@tui/", "#lib", "@/"])
+  expect(WikiInventory.resolveImport("pkg/src/a.ts", "@/session", cited, aliases)).toBe("pkg/src/session/index.ts")
+  expect(WikiInventory.resolveImport("pkg/src/a.ts", "@/tool/bash.js", cited, aliases)).toBe("pkg/src/tool/bash.ts")
+  expect(WikiInventory.resolveImport("pkg/src/a.ts", "#lib", cited, aliases)).toBe("pkg/lib/util.ts")
+  // Longest prefix wins and an unresolved match never falls back to a shorter rule.
+  expect(WikiInventory.resolveImport("pkg/src/a.ts", "@tui/app", cited, aliases)).toBeUndefined()
+  expect(WikiInventory.resolveImport("pkg/src/a.ts", "@/missing", cited, aliases)).toBeUndefined()
+  expect(WikiInventory.resolveImport("pkg/src/a.ts", "zod", cited, aliases)).toBeUndefined()
+  expect(WikiInventory.resolveImport("pkg/src/a.ts", "@/session", cited)).toBeUndefined()
+  // Escaping targets and comment-bearing configs are ignored.
+  expect(WikiInventory.parsePathAliases("", JSON.stringify({ compilerOptions: { paths: { "x/*": ["../out/*"] } } }))).toBeUndefined()
+  expect(WikiInventory.parsePathAliases("pkg", '{ // comment\n "compilerOptions": {} }')).toBeUndefined()
+})
+
+test("buildAll links aliased imports between cited files", async () => {
+  await using tmp = await tmpdir()
+  await mkdir(path.join(tmp.path, "pkg", "src", "session"), { recursive: true })
+  await writeFile(
+    path.join(tmp.path, "pkg", "tsconfig.json"),
+    JSON.stringify({ compilerOptions: { paths: { "@/*": ["./src/*"] } } }),
+  )
+  await writeFile(path.join(tmp.path, "pkg", "src", "a.ts"), 'import { s } from "@/session/s"\nexport const a = s\n')
+  await writeFile(path.join(tmp.path, "pkg", "src", "session", "s.ts"), "export const s = 1\n")
+  const all = await WikiInventory.buildAll(tmp.path, ["pkg/src/a.ts", "pkg/src/session/s.ts"])
+  expect(all.get("pkg/src/a.ts")?.imports).toEqual(["pkg/src/session/s.ts"])
+})

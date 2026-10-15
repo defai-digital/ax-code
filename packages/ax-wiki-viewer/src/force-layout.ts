@@ -39,15 +39,11 @@ type RadialMeta = {
 
 type Bounds = { minX: number; minY: number; maxX: number; maxY: number }
 
-/** Arc diagram: nodes on one baseline, edges drawn as arcs above (citations) or below (imports). */
-type ArcMeta = { baselineY: number }
-
 /** Nested treemap: every node is a rectangle centered on its x/y. */
 type TreemapMeta = { rects: ReadonlyMap<string, { w: number; h: number; depth: number }> }
 
 export type ForceLayout = {
   radial?: RadialMeta
-  arc?: ArcMeta
   treemap?: TreemapMeta
   /** Fixed framing for static layouts whose extent is not just the node positions. */
   bounds?: Bounds
@@ -57,6 +53,29 @@ export type ForceLayout = {
   stop(): void
   /** Reheat a settled simulation (e.g. after a drag); resets the tick budget. */
   reheat(alpha?: number): void
+}
+
+/** Vertical room for one 22px page name; pages share a lane, so their names would otherwise stack. */
+export const PAGE_LABEL_GAP = 30
+
+/** Keep page nodes at least `gap` apart vertically, splitting each correction between neighbors. */
+function pageSpacing(gap: number) {
+  let pages: LayoutNode[] = []
+  const force = () => {
+    pages.sort((a, b) => a.y - b.y)
+    for (let index = 1; index < pages.length; index++) {
+      const above = pages[index - 1],
+        below = pages[index]
+      const short = gap - (below.y - above.y)
+      if (short <= 0) continue
+      if (below.fy == null) below.y += above.fy == null ? short / 2 : short
+      if (above.fy == null) above.y -= below.fy == null ? short / 2 : short
+    }
+  }
+  force.initialize = (nodes: LayoutNode[]) => {
+    pages = nodes.filter((node) => node.kind === "page")
+  }
+  return force
 }
 
 /** Node radius from visible degree; recorded totals must never size the drawing. */
@@ -129,6 +148,7 @@ export function createForceLayout(
         .iterations(2),
     )
     .force("center", forceCenter(LAYOUT_WORLD.width / 2, LAYOUT_WORLD.height / 2))
+    .force("page-spacing", pageSpacing(PAGE_LABEL_GAP))
     .alphaDecay(0.04)
 
   let ended = false

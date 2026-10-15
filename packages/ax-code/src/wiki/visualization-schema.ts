@@ -43,5 +43,46 @@ export const WikiGraphSchema = z
       )
       .max(GRAPH_LIMITS.edges),
     omitted: z.object({ nodes: count, edges: count }),
+    pages: z
+      .array(
+        z.object({
+          id: z.string().max(1100),
+          path: z.string().max(1024),
+          title: z.string().max(1024),
+          purpose: z.string().max(GRAPH_LIMITS.summary),
+          summary: z.string().max(GRAPH_LIMITS.summary),
+          generatedAt: z.string().max(64),
+          sources: z.array(z.string().max(1024)).max(GRAPH_LIMITS.sourcesPerPage),
+          stale: count,
+          unknown: count,
+          changed: z.array(z.string().max(1024)).max(GRAPH_LIMITS.sourcesPerPage),
+          related: z.array(z.object({ id: z.string().max(1100), shared: count })).max(GRAPH_LIMITS.related),
+          markdown: z.string().max(GRAPH_LIMITS.markdown),
+          truncated: z.boolean(),
+        }),
+      )
+      .max(GRAPH_LIMITS.pageInfos)
+      .optional(),
+    overview: z
+      .object({
+        generatedAt: z.string().max(64),
+        repositoryHead: z.string().max(128),
+        model: z.string().max(256),
+        indexedSources: count,
+        citedSources: count,
+        areas: z
+          .array(z.object({ path: z.string().max(1024), indexed: count, cited: count }))
+          .max(GRAPH_LIMITS.areas),
+      })
+      .optional(),
+    modules: z
+      .object({
+        rule: z.string().max(256),
+        groups: z.array(z.object({ path: z.string().max(1024), files: count })).max(GRAPH_LIMITS.moduleGroups),
+        dependencies: z
+          .array(z.object({ from: z.string().max(1024), to: z.string().max(1024), imports: count }))
+          .max(GRAPH_LIMITS.moduleDependencies),
+      })
+      .optional(),
   })
   .meta({ ref: "WikiVisualizationGraph" })

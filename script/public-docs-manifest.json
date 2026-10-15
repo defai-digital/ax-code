@@ -238,16 +238,20 @@
       "asset": "images/tiel-vs-mtplx-2026-09-20.svg"
     },
     {
-      "source": "docs/images/wiki/force.png",
-      "asset": "images/wiki/force.png"
+      "source": "docs/images/wiki/map.png",
+      "asset": "images/wiki/map.png"
     },
     {
-      "source": "docs/images/wiki/page-focus.png",
-      "asset": "images/wiki/page-focus.png"
+      "source": "docs/images/wiki/modules.png",
+      "asset": "images/wiki/modules.png"
     },
     {
-      "source": "docs/images/wiki/radial.png",
-      "asset": "images/wiki/radial.png"
+      "source": "docs/images/wiki/overview.png",
+      "asset": "images/wiki/overview.png"
+    },
+    {
+      "source": "docs/images/wiki/read.png",
+      "asset": "images/wiki/read.png"
     },
     {
       "source": "docs/integrations/acp.md",

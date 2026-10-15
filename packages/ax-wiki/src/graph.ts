@@ -44,6 +44,43 @@ export type WikiGraphEdge = {
   freshness: GraphFreshness
   recordedHash?: string
 }
+/** Reading view of one page. Projected before the node cap, so every page stays readable. */
+export type WikiGraphPage = {
+  /** The page node id (`page:<path>`), present in `nodes` only when the cap admitted it. */
+  id: string
+  path: string
+  title: string
+  purpose: string
+  summary: string
+  generatedAt: string
+  /** Every cited source path, in recorded order (bounded by `sourcesPerPage`). */
+  sources: string[]
+  stale: number
+  unknown: number
+  /** Cited sources whose current bytes differ from the recorded hash or are missing. */
+  changed: string[]
+  /** Other pages ranked by the number of cited sources they share; a list, never an edge. */
+  related: Array<{ id: string; shared: number }>
+  /** Page body without frontmatter; "" when the caller supplied none. */
+  markdown: string
+  truncated: boolean
+}
+/** Directory coverage of the manifest's indexed sources by cited sources. */
+export type WikiGraphArea = { path: string; indexed: number; cited: number }
+export type WikiGraphOverview = {
+  generatedAt: string
+  repositoryHead: string
+  model: string
+  indexedSources: number
+  citedSources: number
+  areas: WikiGraphArea[]
+}
+/** Cited sources grouped by directory, with recorded static imports summed between groups. */
+export type WikiGraphModules = {
+  rule: string
+  groups: Array<{ path: string; files: number }>
+  dependencies: Array<{ from: string; to: string; imports: number }>
+}
 export type WikiGraph = {
   schemaVersion: 1
   snapshot: string
@@ -52,6 +89,10 @@ export type WikiGraph = {
   nodes: WikiGraphNode[]
   edges: WikiGraphEdge[]
   omitted: { nodes: number; edges: number }
+  /** Optional reading, coverage and module projections; older producers omit them. */
+  pages?: WikiGraphPage[]
+  overview?: WikiGraphOverview
+  modules?: WikiGraphModules
 }
 export const GRAPH_LIMITS = {
   nodes: 200,
@@ -64,6 +105,15 @@ export const GRAPH_LIMITS = {
   summary: 2048,
   detail: 512,
   qualified: 1024,
+  pageInfos: 500,
+  sourcesPerPage: 400,
+  related: 8,
+  markdown: 96 * 1024,
+  markdownTotal: 1024 * 1024,
+  areas: 400,
+  areaDepth: 4,
+  moduleGroups: 40,
+  moduleDependencies: 800,
 } as const
 
 /**
@@ -129,6 +179,108 @@ function symbolAnchors(value: unknown): SymbolAnchor[] {
     seen.add(name)
     return { name, provenance: provenance(anchor.provenance) }
   })
+}
+/** Markdown may carry newlines and tabs; every other forbidden character is rejected. */
+const MARKDOWN_FORBIDDEN = /[\x00-\x08\x0b-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]/
+/** Normalize recorded model prose into projectable markdown instead of rejecting a whole manifest. */
+export function cleanGraphMarkdown(value: string): string {
+  return value.replace(/\r\n?/g, "\n").replace(new RegExp(MARKDOWN_FORBIDDEN.source, "g"), "")
+}
+function markdownText(value: unknown): string {
+  if (typeof value !== "string" || value.length > GRAPH_LIMITS.markdown || MARKDOWN_FORBIDDEN.test(value))
+    throw new Error("Invalid page markdown")
+  return value
+}
+function optionalText(value: unknown, max = 1024): string {
+  return value === "" ? "" : text(value, max)
+}
+function list(value: unknown, max: number, what: string): unknown[] {
+  if (!Array.isArray(value) || value.length > max) throw new Error(`Invalid ${what}`)
+  return value
+}
+function parsePages(value: unknown): WikiGraphPage[] | undefined {
+  if (value === undefined) return undefined
+  const ids = new Set<string>()
+  let total = 0
+  const pages = list(value, GRAPH_LIMITS.pageInfos, "page list").map((raw): WikiGraphPage => {
+    const page = record(raw)
+    const path = graphRelativePath(page.path)
+    const id = text(page.id, 1100)
+    if (id !== `page:${path}` || ids.has(id)) throw new Error("Invalid page id")
+    ids.add(id)
+    const markdown = markdownText(page.markdown)
+    if ((total += markdown.length) > GRAPH_LIMITS.markdownTotal) throw new Error("Page markdown exceeds total limit")
+    if (typeof page.truncated !== "boolean") throw new Error("Invalid page truncation flag")
+    return {
+      id,
+      path,
+      title: text(page.title),
+      purpose: summaryText(page.purpose),
+      summary: summaryText(page.summary),
+      generatedAt: optionalText(page.generatedAt, 64),
+      sources: list(page.sources, GRAPH_LIMITS.sourcesPerPage, "page sources").map(graphRelativePath),
+      stale: count(page.stale),
+      unknown: count(page.unknown),
+      changed: list(page.changed, GRAPH_LIMITS.sourcesPerPage, "changed sources").map(graphRelativePath),
+      related: list(page.related, GRAPH_LIMITS.related, "related pages").map((entry) => {
+        const item = record(entry)
+        return { id: text(item.id, 1100), shared: count(item.shared) }
+      }),
+      markdown,
+      truncated: page.truncated,
+    }
+  })
+  for (const page of pages)
+    for (const item of page.related)
+      if (!ids.has(item.id) || item.id === page.id || item.shared < 1) throw new Error("Invalid related page")
+  return pages
+}
+function parseOverview(value: unknown): WikiGraphOverview | undefined {
+  if (value === undefined) return undefined
+  const overview = record(value)
+  const areas = list(overview.areas, GRAPH_LIMITS.areas, "area list").map((raw) => {
+    const area = record(raw)
+    const indexed = count(area.indexed),
+      cited = count(area.cited)
+    if (cited > indexed) throw new Error("Invalid area coverage")
+    return { path: area.path === "" ? "" : graphRelativePath(area.path), indexed, cited }
+  })
+  const indexedSources = count(overview.indexedSources),
+    citedSources = count(overview.citedSources)
+  return {
+    generatedAt: optionalText(overview.generatedAt, 64),
+    repositoryHead: optionalText(overview.repositoryHead, 128),
+    model: optionalText(overview.model, 256),
+    indexedSources,
+    citedSources,
+    areas,
+  }
+}
+function parseModules(value: unknown): WikiGraphModules | undefined {
+  if (value === undefined) return undefined
+  const modules = record(value)
+  const groups = list(modules.groups, GRAPH_LIMITS.moduleGroups, "module groups").map((raw) => {
+    const group = record(raw)
+    return { path: group.path === "" ? "" : graphRelativePath(group.path), files: count(group.files) }
+  })
+  const known = new Set(groups.map((group) => group.path))
+  if (known.size !== groups.length) throw new Error("Duplicate module group")
+  const pairs = new Set<string>()
+  const dependencies = list(modules.dependencies, GRAPH_LIMITS.moduleDependencies, "module dependencies").map(
+    (raw) => {
+      const dependency = record(raw)
+      const from = optionalText(dependency.from),
+        to = optionalText(dependency.to)
+      const pair = JSON.stringify([from, to])
+      if (!known.has(from) || !known.has(to) || from === to || pairs.has(pair))
+        throw new Error("Invalid module dependency")
+      pairs.add(pair)
+      const imports = count(dependency.imports)
+      if (imports < 1) throw new Error("Invalid module dependency")
+      return { from, to, imports }
+    },
+  )
+  return { rule: text(modules.rule, 256), groups, dependencies }
 }
 /** Validate and detach an allowlisted graph; extra producer fields never reach exports. */
 export function parseWikiGraph(input: unknown): WikiGraph {
@@ -205,7 +357,7 @@ export function parseWikiGraph(input: unknown): WikiGraph {
       throw new Error("Invalid recorded relationship count")
   }
   const omitted = record(value.omitted)
-  return {
+  const graph: WikiGraph = {
     schemaVersion: 1,
     snapshot: text(value.snapshot, 128),
     scope: "wiki-manifest",
@@ -214,6 +366,13 @@ export function parseWikiGraph(input: unknown): WikiGraph {
     edges,
     omitted: { nodes: count(omitted.nodes), edges: count(omitted.edges) },
   }
+  const pages = parsePages(value.pages)
+  const overview = parseOverview(value.overview)
+  const modules = parseModules(value.modules)
+  if (pages) graph.pages = pages
+  if (overview) graph.overview = overview
+  if (modules) graph.modules = modules
+  return graph
 }
 
 /** Project recorded membership only. Missing observations are unknown, never fresh. */
@@ -228,6 +387,8 @@ export function projectWikiManifest(
     inventory?: ReadonlyMap<string, InventorySymbol[]>
     /** Caller-supplied resolved import targets keyed by root-relative source path. */
     imports?: ReadonlyMap<string, string[]>
+    /** Page bodies without frontmatter, keyed by the manifest page path. */
+    documents?: ReadonlyMap<string, string>
   },
 ): WikiGraph {
   const manifest = record(input)
@@ -246,7 +407,13 @@ export function projectWikiManifest(
     pushedPairs.add(pair)
     allEdges.push(edge)
   }
-  const citedByPage: Array<{ id: string; cited: string[]; glosses: PageGloss[] }> = []
+  const citedByPage: Array<{
+    id: string
+    cited: string[]
+    glosses: PageGloss[]
+    purpose: string
+    generatedAt: string
+  }> = []
   let references = 0
   for (const [pagePath, raw] of pages) {
     const page = record(raw)
@@ -296,7 +463,13 @@ export function projectWikiManifest(
       qualified: "",
     }
     allNodes.set(id, node)
-    citedByPage.push({ id, cited, glosses })
+    citedByPage.push({
+      id,
+      cited,
+      glosses,
+      purpose: recordedText(page.purpose, GRAPH_LIMITS.summary),
+      generatedAt: recordedText(page.generatedAt, 64),
+    })
     const states: GraphFreshness[] = []
     for (const source of cited) {
       const recordedHash = hash(Object.hasOwn(hashes, source) ? hashes[source] : undefined)
@@ -354,22 +527,16 @@ export function projectWikiManifest(
       for (const gloss of glosses) if (!map.has(gloss.name)) map.set(gloss.name, gloss.summary)
     }
   }
-  // Order page, source, then that source's symbols so neighborhoods stay
-  // together under the view caps; symbols inherit final source freshness.
-  const ordered: WikiGraphNode[] = []
-  const emitted = new Set<string>()
-  const emit = (node: WikiGraphNode) => {
-    if (emitted.has(node.id)) return
-    emitted.add(node.id)
-    ordered.push(node)
-  }
-  for (const { id, cited } of citedByPage) {
-    emit(allNodes.get(id)!)
+  // Inventory-derived symbol nodes and edges. Admission order is decided
+  // afterwards, so a page's symbol inventory can never starve later pages.
+  const symbolsBySource = new Map<string, WikiGraphNode[]>()
+  for (const { cited } of citedByPage) {
     for (const source of cited) {
       const target = `source:${source}`
       const sourceNode = allNodes.get(target)
-      if (!sourceNode) continue
-      emit(sourceNode)
+      if (!sourceNode || symbolsBySource.has(source)) continue
+      const symbols: WikiGraphNode[] = []
+      symbolsBySource.set(source, symbols)
       const seen = new Set<string>()
       for (const raw of options.inventory?.get(source) ?? []) {
         const item = record(raw)
@@ -379,7 +546,7 @@ export function projectWikiManifest(
         if (seen.has(qualified)) continue
         seen.add(qualified)
         const symbolId = text(`symbol:${source}#${qualified}`, 1100)
-        emit({
+        symbols.push({
           id: symbolId,
           kind: "symbol",
           label: name,
@@ -410,9 +577,36 @@ export function projectWikiManifest(
       }
     }
   }
+  // Fair admission under the view cap: every page first, then cited sources
+  // round-robin across pages (widely shared sources first within a page),
+  // then symbols round-robin across admitted sources.
+  const ordered: WikiGraphNode[] = []
+  const emitted = new Set<string>()
+  const emit = (node: WikiGraphNode | undefined) => {
+    if (!node || emitted.has(node.id)) return
+    emitted.add(node.id)
+    ordered.push(node)
+  }
+  for (const { id } of citedByPage) emit(allNodes.get(id))
+  const queues = citedByPage.map(({ cited }) =>
+    [...cited].sort(
+      (a, b) =>
+        allNodes.get(`source:${b}`)!.recordedReferences - allNodes.get(`source:${a}`)!.recordedReferences ||
+        compareText(a, b),
+    ),
+  )
+  for (let round = 0; queues.some((queue) => round < queue.length); round++)
+    for (const queue of queues) if (round < queue.length) emit(allNodes.get(`source:${queue[round]}`))
+  const sourceOrder = ordered.filter((node) => node.kind === "source").map((node) => node.path)
+  for (let round = 0; sourceOrder.some((source) => round < (symbolsBySource.get(source)?.length ?? 0)); round++)
+    for (const source of sourceOrder) emit(symbolsBySource.get(source)?.[round])
   const nodes = ordered.slice(0, GRAPH_LIMITS.nodes)
   const selected = new Set(nodes.map((node) => node.id))
-  const edges = allEdges.filter((edge) => selected.has(edge.from) && selected.has(edge.to)).slice(0, GRAPH_LIMITS.edges)
+  const rank = { "references-source": 0, uses: 1, contains: 2 } as const
+  const edges = allEdges
+    .filter((edge) => selected.has(edge.from) && selected.has(edge.to))
+    .sort((a, b) => rank[a.kind] - rank[b.kind])
+    .slice(0, GRAPH_LIMITS.edges)
   return parseWikiGraph({
     schemaVersion: 1,
     snapshot: options.snapshot,
@@ -421,5 +615,183 @@ export function projectWikiManifest(
     nodes,
     edges,
     omitted: { nodes: ordered.length - nodes.length, edges: allEdges.length - edges.length },
+    pages: projectPages(citedByPage, allNodes, allEdges, options.documents),
+    overview: projectOverview(manifest, allNodes),
+    modules: projectModules(allNodes, allEdges),
   })
+}
+
+function compareText(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0
+}
+
+/** Optional recorded prose: kept when projectable, otherwise left out rather than failing the manifest. */
+function recordedText(value: unknown, max: number): string {
+  return typeof value === "string" && value.length <= max && !GRAPH_TEXT_FORBIDDEN.test(value) ? value : ""
+}
+
+function projectPages(
+  citedByPage: Array<{ id: string; cited: string[]; purpose: string; generatedAt: string }>,
+  allNodes: ReadonlyMap<string, WikiGraphNode>,
+  allEdges: readonly WikiGraphEdge[],
+  documents: ReadonlyMap<string, string> | undefined,
+): WikiGraphPage[] {
+  const citing = new Map<string, string[]>()
+  for (const { id, cited } of citedByPage)
+    for (const source of cited) citing.set(source, [...(citing.get(source) ?? []), id])
+  const states = new Map<string, Map<string, GraphFreshness>>()
+  for (const edge of allEdges) {
+    if (edge.kind !== "references-source") continue
+    const map = states.get(edge.from) ?? new Map<string, GraphFreshness>()
+    map.set(edge.to, edge.freshness)
+    states.set(edge.from, map)
+  }
+  let budget: number = GRAPH_LIMITS.markdownTotal
+  return citedByPage.slice(0, GRAPH_LIMITS.pageInfos).map(({ id, cited, purpose, generatedAt }) => {
+    const node = allNodes.get(id)!
+    const shared = new Map<string, number>()
+    for (const source of cited)
+      for (const other of citing.get(source) ?? []) if (other !== id) shared.set(other, (shared.get(other) ?? 0) + 1)
+    const related = [...shared]
+      .filter(([other]) => citedByPage.findIndex((page) => page.id === other) < GRAPH_LIMITS.pageInfos)
+      .sort(([a, x], [b, y]) => y - x || compareText(a, b))
+      .slice(0, GRAPH_LIMITS.related)
+      .map(([other, count]) => ({ id: other, shared: count }))
+    const recorded = [...(states.get(id) ?? [])]
+    const freshness = recorded.map(([, state]) => state)
+    const body = cleanGraphMarkdown(documents?.get(node.path) ?? "")
+    const allowed = Math.max(0, Math.min(GRAPH_LIMITS.markdown, budget))
+    let markdown = body
+    if (body.length > allowed) {
+      const cut = body.lastIndexOf("\n", allowed)
+      markdown = body.slice(0, cut > allowed / 2 ? cut : allowed)
+    }
+    budget -= markdown.length
+    return {
+      id,
+      path: node.path,
+      title: node.label,
+      purpose,
+      summary: node.summary,
+      generatedAt,
+      sources: cited.slice(0, GRAPH_LIMITS.sourcesPerPage),
+      stale: freshness.filter((state) => state === "stale").length,
+      unknown: freshness.filter((state) => state === "unknown").length,
+      changed: recorded
+        .filter(([, state]) => state === "stale")
+        .map(([source]) => source.slice("source:".length))
+        .slice(0, GRAPH_LIMITS.sourcesPerPage),
+      related,
+      markdown,
+      truncated: markdown.length < body.length,
+    }
+  })
+}
+
+/** Directory prefixes of a root-relative file path, shallowest first, bounded by `areaDepth`. */
+function directories(file: string): string[] {
+  const parts = file.split("/").slice(0, -1).slice(0, GRAPH_LIMITS.areaDepth)
+  return parts.map((_, index) => parts.slice(0, index + 1).join("/"))
+}
+
+function projectOverview(manifest: Record<string, unknown>, allNodes: ReadonlyMap<string, WikiGraphNode>) {
+  const cited = new Set([...allNodes.values()].filter((node) => node.kind === "source").map((node) => node.path))
+  const inventory =
+    manifest.sources && typeof manifest.sources === "object" && !Array.isArray(manifest.sources)
+      ? Object.keys(manifest.sources).filter((file) => {
+          try {
+            return graphRelativePath(file) === file
+          } catch {
+            return false
+          }
+        })
+      : []
+  // A cited file the inventory does not list still exists as recorded evidence.
+  const indexed = new Set([...inventory, ...cited])
+  const areas = new Map<string, WikiGraphArea>([["", { path: "", indexed: 0, cited: 0 }]])
+  for (const file of indexed) {
+    for (const directory of ["", ...directories(file)]) {
+      const area = areas.get(directory) ?? { path: directory, indexed: 0, cited: 0 }
+      area.indexed++
+      if (cited.has(file)) area.cited++
+      areas.set(directory, area)
+    }
+  }
+  // Keep shallow areas first, then the largest; a kept area's parent is always kept.
+  const kept = [...areas.values()]
+    .sort(
+      (a, b) =>
+        (a.path ? a.path.split("/").length : 0) - (b.path ? b.path.split("/").length : 0) ||
+        b.indexed - a.indexed ||
+        compareText(a.path, b.path),
+    )
+    .slice(0, GRAPH_LIMITS.areas)
+  return {
+    generatedAt: recordedText(manifest.generatedAt, 64),
+    repositoryHead: recordedText(manifest.repositoryHead, 128),
+    model: recordedText(manifest.model, 256),
+    indexedSources: indexed.size,
+    citedSources: cited.size,
+    areas: kept,
+  }
+}
+
+/**
+ * Split the largest directory group into its sizeable child directories until
+ * the group budget is reached, so busy trees get finer groups than quiet ones.
+ * Child directories with only a few cited files stay in their parent group.
+ */
+function projectModules(allNodes: ReadonlyMap<string, WikiGraphNode>, allEdges: readonly WikiGraphEdge[]) {
+  const files = [...allNodes.values()].filter((node) => node.kind === "source").map((node) => node.path)
+  const minimum = Math.max(3, Math.ceil(files.length * 0.015))
+  const groupOf = new Map<string, string>(files.map((file) => [file, ""]))
+  const childOf = (file: string, group: string) => {
+    const rest = (group ? file.slice(group.length + 1) : file).split("/")
+    return rest.length > 1 ? (group ? `${group}/${rest[0]}` : rest[0]) : group
+  }
+  const unsplittable = new Set<string>()
+  for (;;) {
+    const members = new Map<string, string[]>()
+    for (const [file, group] of groupOf) members.set(group, [...(members.get(group) ?? []), file])
+    const next = [...members]
+      .filter(([group]) => !unsplittable.has(group))
+      .sort(([a, x], [b, y]) => y.length - x.length || compareText(a, b))[0]
+    if (!next || next[1].length < minimum) break
+    const [group, groupFiles] = next
+    const children = new Map<string, string[]>()
+    for (const file of groupFiles) {
+      const child = childOf(file, group)
+      if (child !== group) children.set(child, [...(children.get(child) ?? []), file])
+    }
+    const sizeable = [...children].filter(([, list]) => list.length >= minimum)
+    const residual = groupFiles.length - sizeable.reduce((sum, [, list]) => sum + list.length, 0)
+    if (!sizeable.length || members.size - 1 + sizeable.length + (residual > 0 ? 1 : 0) > GRAPH_LIMITS.moduleGroups) {
+      unsplittable.add(group)
+      continue
+    }
+    for (const [child, list] of sizeable) for (const file of list) groupOf.set(file, child)
+    if (residual > 0) unsplittable.add(group)
+  }
+  const counts = new Map<string, number>()
+  for (const group of groupOf.values()) counts.set(group, (counts.get(group) ?? 0) + 1)
+  const imports = new Map<string, { from: string; to: string; imports: number }>()
+  for (const edge of allEdges) {
+    if (edge.kind !== "uses") continue
+    const from = groupOf.get(edge.from.slice("source:".length))
+    const to = groupOf.get(edge.to.slice("source:".length))
+    if (from === undefined || to === undefined || from === to) continue
+    const pair = `${from}\u0000${to}`
+    const entry = imports.get(pair) ?? { from, to, imports: 0 }
+    entry.imports++
+    imports.set(pair, entry)
+  }
+  return {
+    rule: `Cited files grouped by directory: the largest groups split first into subdirectories with at least ${minimum} cited files, at most ${GRAPH_LIMITS.moduleGroups} groups`,
+    groups: [...counts]
+      .sort(([a], [b]) => compareText(a, b))
+      .map(([path, count]) => ({ path, files: count })),
+    dependencies: [...imports.values()]
+      .sort((a, b) => b.imports - a.imports || compareText(a.from, b.from) || compareText(a.to, b.to))
+      .slice(0, GRAPH_LIMITS.moduleDependencies),
+  }
 }

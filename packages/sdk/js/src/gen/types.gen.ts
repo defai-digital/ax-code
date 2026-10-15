@@ -4859,6 +4859,48 @@ export type WikiVisualizationGraph = {
     nodes: number
     edges: number
   }
+  pages?: Array<{
+    id: string
+    path: string
+    title: string
+    purpose: string
+    summary: string
+    generatedAt: string
+    sources: Array<string>
+    stale: number
+    unknown: number
+    changed: Array<string>
+    related: Array<{
+      id: string
+      shared: number
+    }>
+    markdown: string
+    truncated: boolean
+  }>
+  overview?: {
+    generatedAt: string
+    repositoryHead: string
+    model: string
+    indexedSources: number
+    citedSources: number
+    areas: Array<{
+      path: string
+      indexed: number
+      cited: number
+    }>
+  }
+  modules?: {
+    rule: string
+    groups: Array<{
+      path: string
+      files: number
+    }>
+    dependencies: Array<{
+      from: string
+      to: string
+      imports: number
+    }>
+  }
 }
 
 /** AX Code API schema `WorkflowArtifactCompactEventRecord` (auto-generated from the OpenAPI contract). */
