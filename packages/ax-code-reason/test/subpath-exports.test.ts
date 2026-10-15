@@ -127,6 +127,16 @@ const SUBPATHS: Subpath[] = [
     symbols: ["detectDuplicatesImpl", "normalizeSignature"],
   },
   {
+    name: "./duplicate-groups",
+    load: () => import("@ax-code/ax-code-reason/duplicate-groups"),
+    symbols: ["compareDuplicateGroups", "DUPLICATE_WORKER_THRESHOLD"],
+  },
+  {
+    name: "./testing",
+    load: () => import("@ax-code/ax-code-reason/testing"),
+    symbols: ["installTestHost", "resetTestHost", "RefactorPlanID", "EmbeddingCacheID"],
+  },
+  {
     name: "./diagnostic-correlation",
     load: () => import("@ax-code/ax-code-reason/diagnostic-correlation"),
     symbols: ["DiagnosticCorrelation"],

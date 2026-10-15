@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { NativeAddon } from "../../src/native/addon"
-import { compareDuplicateGroups } from "../../../ax-code-reason/src/duplicate-groups"
-import { detectDuplicatesImpl } from "../../../ax-code-reason/src/detect-duplicates"
-import { installTestHost, resetTestHost } from "../../../ax-code-reason/test/fixture/host"
+import { compareDuplicateGroups } from "@ax-code/ax-code-reason/duplicate-groups"
+import { detectDuplicatesImpl } from "@ax-code/ax-code-reason/detect-duplicates"
+import { installTestHost, resetTestHost } from "@ax-code/ax-code-reason/testing"
 import { parseJsonStrict } from "@ax-code/util/json-value"
 const native = NativeAddon.diff()
 const enabled = !!native?.duplicateGroupsAsync && !!native.DiffCancellation

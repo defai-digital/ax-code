@@ -18,6 +18,8 @@
     "./analyze-bug": "./src/analyze-bug.ts",
     "./analyze-impact": "./src/analyze-impact.ts",
     "./detect-duplicates": "./src/detect-duplicates.ts",
+    "./duplicate-groups": "./src/duplicate-groups.ts",
+    "./testing": "./test/fixture/host.ts",
     "./diagnostic-correlation": "./src/diagnostic-correlation.ts",
     "./language-scan": "./src/language-scan.ts",
     "./native-scan": "./src/native-scan.ts",
