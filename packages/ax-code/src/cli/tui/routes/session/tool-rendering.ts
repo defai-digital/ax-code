@@ -44,6 +44,16 @@ export function coalescedToolLabel(tool: string, count: number): string {
   return `${tool} · ${count}`
 }
 
+// Completed calls that stay rendered while "tool details" is toggled off.
+// Edits and shell commands are the surface the user reviews; hiding them
+// would make a whole turn's work invisible.
+const DETAILS_OFF_VISIBLE_TOOLS = new Set(["edit", "write", "apply_patch", "bash"])
+
+/** Whether a completed tool call is hidden while "tool details" is off. */
+export function hidesCompletedToolWhenDetailsOff(tool: string): boolean {
+  return !DETAILS_OFF_VISIBLE_TOOLS.has(tool)
+}
+
 // A bash call keeps ONE row shape. As soon as the tool has published a live
 // snapshot (it publishes an empty one from the first tick) the card renders in
 // its final block shape and the output window fills in, so completion only

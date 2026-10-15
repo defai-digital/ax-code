@@ -27,7 +27,7 @@ export function GenericTool(props: ToolProps<any>) {
       fallback={
         <InlineTool
           icon="⚙"
-          pending="Writing command..."
+          pending={`Running ${props.tool}...`}
           complete={props.part.state.status !== "running"}
           part={props.part}
         >

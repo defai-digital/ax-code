@@ -37,7 +37,7 @@ import {
   userMessageMetadataDensity,
 } from "./view-model"
 import { SessionCodeRenderer } from "./render-adapter"
-import { coalescedToolLabel } from "./tool-rendering"
+import { coalescedToolLabel, hidesCompletedToolWhenDetailsOff } from "./tool-rendering"
 import { toolRendererComponent } from "./tool-renderers"
 import { followUpLabel, followUpStatus, type DurableFollowUp } from "../../component/prompt/durable-follow-up"
 import { useSessionRouteContext as use } from "./context"
@@ -686,10 +686,12 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
   const sync = useSync()
   const { theme } = useTheme()
 
-  // Hide tool if showDetails is false and tool completed successfully
+  // Hide tool if showDetails is false and tool completed successfully,
+  // except edits and shell commands — those are what the user reviews.
   const shouldHide = createMemo(() => {
     if (ctx.showDetails()) return false
     if (props.part.state.status !== "completed") return false
+    if (!hidesCompletedToolWhenDetailsOff(props.part.tool)) return false
     return true
   })
 

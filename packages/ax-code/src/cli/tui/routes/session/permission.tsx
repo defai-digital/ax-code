@@ -712,7 +712,8 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
               </Match>
             </Switch>
           }
-          options={{ confirm: t("common.confirm"), cancel: t("common.cancel") }}
+          options={{ cancel: t("common.cancel"), confirm: t("common.confirm") }}
+          dangerOption="confirm"
           escapeKey="cancel"
           onSelect={(option) => {
             const canConfirm =
