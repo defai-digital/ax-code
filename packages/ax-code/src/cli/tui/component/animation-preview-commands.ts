@@ -1,4 +1,6 @@
 import type { Translate } from "../i18n"
+import type { DialogContext } from "../ui/dialog"
+import { DialogSelect, type DialogSelectOption } from "../ui/dialog-select"
 import type { CommandOption } from "./dialog-command"
 import type { OverlayStyle } from "./foliage-view-model"
 
@@ -597,24 +599,61 @@ const PREVIEWS = [
   },
 ] as const
 
-/** Named theme families remain searchable in every interface language. */
-export function animationPreviewCommands(input: {
+type AnimationPreviewInput = {
   t: Translate
   opening: (style: OverlayStyle) => void
   ending: (style: OverlayStyle) => void
-}): CommandOption[] {
+}
+
+type Preview = (typeof PREVIEWS)[number]
+
+function previewTitle(t: Translate, preview: Preview) {
+  return preview.style === "digital-code"
+    ? t(preview.key)
+    : `${t(preview.ending ? "command.ending" : "command.opening")} - ${t(preview.key)}`
+}
+
+function runPreview(input: AnimationPreviewInput, preview: Preview, dialog: DialogContext) {
+  dialog.clear()
+  if (preview.ending) input.ending(preview.style)
+  else input.opening(preview.style)
+}
+
+/** Options for the preview picker opened from the visible command below. */
+export function animationPreviewOptions(input: AnimationPreviewInput): DialogSelectOption<string>[] {
   return PREVIEWS.map((preview) => ({
-    title:
-      preview.style === "digital-code"
-        ? input.t(preview.key)
-        : `${input.t(preview.ending ? "command.ending" : "command.opening")} - ${input.t(preview.key)}`,
+    title: previewTitle(input.t, preview),
+    value: preview.value,
+    category: preview.family,
+    onSelect: (dialog) => runPreview(input, preview, dialog),
+  }))
+}
+
+/** Named theme families remain searchable in every interface language. */
+export function animationPreviewCommands(input: AnimationPreviewInput): CommandOption[] {
+  return PREVIEWS.map((preview) => ({
+    title: previewTitle(input.t, preview),
     value: preview.value,
     category: `${input.t("category.system")} - ${preview.family}`,
     slash: { name: preview.slash, hidden: true },
-    onSelect: (dialog) => {
-      dialog.clear()
-      if (preview.ending) input.ending(preview.style)
-      else input.opening(preview.style)
-    },
+    // Hidden from the palette: the previews are reached through the single
+    // "Preview animations" command. The slash names keep working unchanged.
+    hidden: true,
+    onSelect: (dialog) => runPreview(input, preview, dialog),
   }))
+}
+
+/** One visible palette command that opens the full animation preview list. */
+export function animationPreviewMenuCommand(input: AnimationPreviewInput): CommandOption {
+  return {
+    title: input.t("command.previewAnimations"),
+    value: "app.animation.preview",
+    category: input.t("category.system"),
+    onSelect: (dialog) => {
+      DialogSelect.show(dialog, {
+        title: input.t("command.previewAnimations"),
+        options: animationPreviewOptions(input),
+      })
+    },
+  }
 }

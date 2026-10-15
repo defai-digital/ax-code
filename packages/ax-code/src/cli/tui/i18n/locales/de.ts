@@ -243,6 +243,7 @@ export const messages = {
   "command.animationsOn": "Animationen aktivieren",
   "command.opening": "Er\u00f6ffnungsvideo abspielen",
   "command.ending": "Abschlussvideo abspielen",
+  "command.previewAnimations": "Animationen ansehen...",
   "command.nerdOff": "Nerd Font-Zeichen deaktivieren",
   "command.nerdOn": "Nerd Font-Zeichen aktivieren",
   "command.wrapOff": "Diff-Zeilenumbruch deaktivieren",

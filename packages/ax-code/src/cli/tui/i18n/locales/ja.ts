@@ -286,6 +286,7 @@ export const messages = {
   "command.animationsOn": "\u30a2\u30cb\u30e1\u30fc\u30b7\u30e7\u30f3\u3092\u6709\u52b9\u5316",
   "command.opening": "\u30aa\u30fc\u30d7\u30cb\u30f3\u30b0\u3092\u518d\u751f",
   "command.ending": "\u30a8\u30f3\u30c7\u30a3\u30f3\u30b0\u3092\u518d\u751f",
+  "command.previewAnimations": "\u30a2\u30cb\u30e1\u30fc\u30b7\u30e7\u30f3\u3092\u30d7\u30ec\u30d3\u30e5\u30fc...",
   "command.nerdOff": "Nerd Font \u306e\u30b0\u30ea\u30d5\u3092\u7121\u52b9\u5316",
   "command.nerdOn": "Nerd Font \u306e\u30b0\u30ea\u30d5\u3092\u6709\u52b9\u5316",
   "command.wrapOff": "diff \u306e\u6298\u308a\u8fd4\u3057\u3092\u7121\u52b9\u5316",

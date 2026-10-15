@@ -250,6 +250,7 @@ export const messages = {
   "command.animationsOn": "\u542f\u7528\u52a8\u753b",
   "command.opening": "\u64ad\u653e\u5f00\u573a\u52a8\u753b",
   "command.ending": "\u64ad\u653e\u7ed3\u675f\u52a8\u753b",
+  "command.previewAnimations": "\u9884\u89c8\u52a8\u753b...",
   "command.nerdOff": "\u7981\u7528 Nerd Font \u56fe\u6807",
   "command.nerdOn": "\u542f\u7528 Nerd Font \u56fe\u6807",
   "command.wrapOff": "\u7981\u7528 diff \u6362\u884c",

@@ -245,6 +245,7 @@ export const messages = {
   "command.animationsOn": "Ativar anima\u00e7\u00f5es",
   "command.opening": "Reproduzir v\u00eddeo de abertura",
   "command.ending": "Reproduzir v\u00eddeo de encerramento",
+  "command.previewAnimations": "Pr\u00e9-visualizar anima\u00e7\u00f5es...",
   "command.nerdOff": "Desativar glifos Nerd Font",
   "command.nerdOn": "Ativar glifos Nerd Font",
   "command.wrapOff": "Desativar quebra de linhas do diff",

@@ -241,6 +241,7 @@ export const messages = {
   "command.animationsOn": "Aktifkan animasi",
   "command.opening": "Putar video pembuka",
   "command.ending": "Putar video penutup",
+  "command.previewAnimations": "Pratinjau animasi...",
   "command.nerdOff": "Nonaktifkan glif Nerd Font",
   "command.nerdOn": "Aktifkan glif Nerd Font",
   "command.wrapOff": "Nonaktifkan pembungkusan diff",

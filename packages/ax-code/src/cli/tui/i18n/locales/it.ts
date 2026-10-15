@@ -241,6 +241,7 @@ export const messages = {
   "command.animationsOn": "Attiva animazioni",
   "command.opening": "Riproduci video di apertura",
   "command.ending": "Riproduci video finale",
+  "command.previewAnimations": "Anteprima animazioni...",
   "command.nerdOff": "Disattiva glifi Nerd Font",
   "command.nerdOn": "Attiva glifi Nerd Font",
   "command.wrapOff": "Disattiva a capo del diff",

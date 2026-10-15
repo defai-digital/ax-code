@@ -1,4 +1,4 @@
-import { animationPreviewCommands } from "./component/animation-preview-commands"
+import { animationPreviewCommands, animationPreviewMenuCommand } from "./component/animation-preview-commands"
 import type { AnimationPair } from "./component/animation-pair"
 import type { OverlayStyle } from "./component/foliage-view-model"
 import { english, type Translate } from "./i18n"
@@ -905,6 +905,9 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
         playReverseDigitalCode()
       },
     },
+    // One visible palette entry for every animation preview; the individual
+    // previews are hidden commands whose slash names still work.
+    animationPreviewMenuCommand({ t: uiText, opening: playDigitalCode, ending: playReverseDigitalCode }),
     ...animationPreviewCommands({ t: uiText, opening: playDigitalCode, ending: playReverseDigitalCode }),
     {
       title: kv.get("digital_code_on_task_complete", false)

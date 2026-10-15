@@ -1,6 +1,6 @@
 import { useLanguage } from "@tui/context/language"
 import { InputRenderable, RGBA, ScrollBoxRenderable, TextAttributes } from "ax-tui"
-import { useTheme, selectedForeground } from "@tui/context/theme"
+import { tint, useTheme } from "@tui/context/theme"
 import { batch, createEffect, createMemo, For, Show, type JSX, on, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useKeyboard, useTerminalDimensions } from "ax-tui/solid"
@@ -422,11 +422,10 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
             paddingLeft: 1,
             visible: overflow(),
             trackOptions: {
-              // Thumb uses the theme's primary accent (same color as the
-              // selected-row highlight) so the scrollbar stays clearly visible
-              // against any selected theme; the track stays subtle.
+              // Neutral, high-contrast thumb (a chrome affordance, not an
+              // identity/status color); the track stays subtle.
               backgroundColor: theme.backgroundElement,
-              foregroundColor: theme.primary,
+              foregroundColor: theme.borderActive,
             },
           }}
           ref={(r: ScrollBoxRenderable) => (scroll = r)}
@@ -439,7 +438,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                 <>
                   <Show when={category}>
                     <box paddingTop={index() > 0 ? 1 : 0} paddingLeft={3}>
-                      <text fg={theme.accent} attributes={TextAttributes.BOLD}>
+                      <text fg={theme.secondary} attributes={TextAttributes.BOLD}>
                         {category}
                       </text>
                     </box>
@@ -482,13 +481,21 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                             active()
                               ? option.disabled
                                 ? theme.backgroundElement
-                                : (option.bg ?? theme.primary)
+                                : // One accent-tinted panel fill for both theme
+                                  // modes (a purple selection reads as "chosen",
+                                  // not "success"); option.bg still overrides.
+                                  (option.bg ?? tint(theme.backgroundPanel, theme.accent, 0.3))
                               : RGBA.fromInts(0, 0, 0, 0)
                           }
                           paddingLeft={current() || option.gutter ? 1 : 3}
                           paddingRight={3}
                           gap={1}
                         >
+                          {/* Selection marker cell: a "›" on the active row, a
+                              space elsewhere, so option text never shifts. */}
+                          <text flexShrink={0} fg={theme.secondary}>
+                            {active() ? "›" : " "}
+                          </text>
                           <Option
                             title={option.title}
                             footer={flatten() ? (option.category ?? option.footer) : option.footer}
@@ -513,11 +520,13 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
         <box paddingRight={2} paddingLeft={4} flexDirection="row" gap={2} flexShrink={0} paddingTop={1}>
           <For each={keybinds()}>
             {(item) => (
+              // Same grammar as the KeyHint primitive: the key in the text
+              // color (bold) first, then the muted action label.
               <text>
                 <span style={{ fg: theme.text }}>
-                  <b>{item.title}</b>{" "}
+                  <b>{Keybind.toString(item.keybind)}</b>{" "}
                 </span>
-                <span style={{ fg: theme.textMuted }}>{Keybind.toString(item.keybind)}</span>
+                <span style={{ fg: theme.textMuted }}>{item.title}</span>
               </text>
             )}
           </For>
@@ -544,12 +553,14 @@ function Option(props: {
   onMouseOver?: () => void
 }) {
   const { theme } = useTheme()
-  const fg = selectedForeground(theme)
+  // The selected row now uses a neutral text color on the accent-tinted fill;
+  // selectedForeground / theme.selectedListItemText were tuned for the old
+  // solid-primary fill and are intentionally no longer consulted here.
 
   return (
     <>
       <Show when={props.current}>
-        <text flexShrink={0} fg={props.active ? fg : props.current ? theme.primary : theme.text} marginRight={0}>
+        <text flexShrink={0} fg={props.active ? theme.text : theme.secondary} marginRight={0}>
           ●
         </text>
       </Show>
@@ -561,7 +572,7 @@ function Option(props: {
       <text
         flexGrow={1}
         height={1}
-        fg={props.disabled ? theme.textMuted : props.active ? fg : props.current ? theme.primary : theme.text}
+        fg={props.disabled ? theme.textMuted : props.active ? theme.text : props.current ? theme.secondary : theme.text}
         attributes={props.active && !props.disabled ? TextAttributes.BOLD : undefined}
         // One painted row per option. Word-wrap made 4–5 provider actions look
         // like three rows and hid the scrollbar (viewport height counted
@@ -574,7 +585,11 @@ function Option(props: {
         <Show when={props.description}>
           <span
             style={{
-              fg: props.disabled ? theme.textMuted : props.active ? fg : (props.descriptionFg ?? theme.textMuted),
+              fg: props.disabled
+                ? theme.textMuted
+                : props.active
+                  ? theme.text
+                  : (props.descriptionFg ?? theme.textMuted),
             }}
           >
             {" "}
@@ -584,9 +599,16 @@ function Option(props: {
       </text>
       <Show when={props.footer}>
         <box flexShrink={0}>
-          <text fg={props.disabled ? theme.textMuted : props.active ? fg : theme.textMuted}>{props.footer}</text>
+          <text fg={props.disabled ? theme.textMuted : props.active ? theme.text : theme.textMuted}>
+            {props.footer}
+          </text>
         </box>
       </Show>
     </>
   )
+}
+
+/** Open a standard select list as a dialog. Mirrors `DialogConfirm.show`. */
+DialogSelect.show = <T,>(dialog: DialogContext, props: Omit<DialogSelectProps<T>, "ref">) => {
+  dialog.replace(() => <DialogSelect<T> {...props} />)
 }

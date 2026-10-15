@@ -261,6 +261,7 @@ export const messages = {
   "command.animationsOn": "B\u1eadt ho\u1ea1t \u1ea3nh",
   "command.opening": "Ph\u00e1t video m\u1edf \u0111\u1ea7u",
   "command.ending": "Ph\u00e1t video k\u1ebft th\u00fac",
+  "command.previewAnimations": "Xem tr\u01b0\u1edbc ho\u1ea1t \u1ea3nh...",
   "command.nerdOff": "T\u1eaft k\u00fd t\u1ef1 Nerd Font",
   "command.nerdOn": "B\u1eadt k\u00fd t\u1ef1 Nerd Font",
   "command.wrapOff": "T\u1eaft ng\u1eaft d\u00f2ng b\u1ea3n so s\u00e1nh",

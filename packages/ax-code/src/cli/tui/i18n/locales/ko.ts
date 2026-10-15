@@ -268,6 +268,7 @@ export const messages = {
   "command.animationsOn": "\uc560\ub2c8\uba54\uc774\uc158 \ud65c\uc131\ud654",
   "command.opening": "\uc2dc\uc791 \uc601\uc0c1 \uc7ac\uc0dd",
   "command.ending": "\uc885\ub8cc \uc601\uc0c1 \uc7ac\uc0dd",
+  "command.previewAnimations": "\uc560\ub2c8\uba54\uc774\uc158 \ubbf8\ub9ac\ubcf4\uae30...",
   "command.nerdOff": "Nerd Font \uae00\ub9ac\ud504 \ube44\ud65c\uc131\ud654",
   "command.nerdOn": "Nerd Font \uae00\ub9ac\ud504 \ud65c\uc131\ud654",
   "command.wrapOff": "diff \uc904 \ubc14\uafc8 \ube44\ud65c\uc131\ud654",

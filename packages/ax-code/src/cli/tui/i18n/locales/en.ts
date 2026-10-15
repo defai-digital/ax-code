@@ -239,6 +239,7 @@ export const messages = {
   "command.animationsOn": "Enable animations",
   "command.opening": "Play Opening Video",
   "command.ending": "Play Ending Video",
+  "command.previewAnimations": "Preview animations...",
   "command.nerdOff": "Disable Nerd Font glyphs",
   "command.nerdOn": "Enable Nerd Font glyphs",
   "command.wrapOff": "Disable diff wrapping",

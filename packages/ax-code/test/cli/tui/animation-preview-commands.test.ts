@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest"
-import { animationPreviewCommands } from "../../../src/cli/tui/component/animation-preview-commands"
+import {
+  animationPreviewCommands,
+  animationPreviewMenuCommand,
+  animationPreviewOptions,
+} from "../../../src/cli/tui/component/animation-preview-commands"
 import { dialogSelectFilteredOptions } from "../../../src/cli/tui/ui/dialog-select-view-model"
 import { translate, LOCALES } from "../../../src/cli/tui/i18n"
 import type { DialogContext } from "../../../src/cli/tui/ui/dialog"
@@ -218,5 +222,19 @@ describe("animation command palette", () => {
       "clear",
       "ending:sanguozhi-dusk",
     ])
+  })
+
+  test("previews stay out of the palette behind one picker command", () => {
+    const input = { t: (key: string) => translate("en", key as never), opening: () => {}, ending: () => {} }
+    const commands = animationPreviewCommands(input)
+    expect(commands.every((option) => option.hidden === true)).toBe(true)
+
+    const menu = animationPreviewMenuCommand(input)
+    expect(menu.hidden).toBeUndefined()
+    expect(menu.title).toBe("Preview animations...")
+
+    const options = animationPreviewOptions(input)
+    expect(options.map((option) => option.value)).toEqual(commands.map((option) => option.value))
+    expect(options.map((option) => option.title)).toEqual(commands.map((option) => option.title))
   })
 })

@@ -250,6 +250,7 @@ export const messages = {
   "command.animationsOn": "Animasyonlar\u0131 a\u00e7",
   "command.opening": "A\u00e7\u0131l\u0131\u015f videosunu oynat",
   "command.ending": "Kapan\u0131\u015f videosunu oynat",
+  "command.previewAnimations": "Animasyonlar\u0131 \u00f6nizle...",
   "command.nerdOff": "Nerd Font gliflerini kapat",
   "command.nerdOn": "Nerd Font gliflerini a\u00e7",
   "command.wrapOff": "Diff sat\u0131r kayd\u0131rmas\u0131n\u0131 kapat",
