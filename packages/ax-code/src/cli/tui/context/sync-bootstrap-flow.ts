@@ -12,6 +12,7 @@ import {
 import {
   createBootstrapLifecycle,
   runBootstrapPhaseSequence,
+  type BootstrapFailureContext,
   type BootstrapPhaseSequenceStep,
   type BootstrapSpan,
 } from "./sync-bootstrap-runner"
@@ -130,7 +131,7 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
   recordStartup: (name: string, data?: Record<string, unknown>) => void
   logWarn: (label: string, data: { error: string }) => void
   logError: (label: string, data: { error: string }) => void
-  onFailure: (error: unknown) => Promise<void> | void
+  onFailure: (error: unknown, context: BootstrapFailureContext) => Promise<void> | void
   coreConcurrency?: number
   deferredDelayMs?: number
   deferredConcurrency?: number

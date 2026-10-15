@@ -1586,7 +1586,10 @@ function ErrorComponent(props: {
     DiagnosticLog.recordProcess("tui.errorBoundary", { error: props.error })
   })
 
+  let exiting = false
   const handleExit = async () => {
+    if (exiting) return
+    exiting = true
     await destroyTuiRenderer(renderer)
     win32FlushInputBuffer()
     await props.onExit()
@@ -1594,7 +1597,18 @@ function ErrorComponent(props: {
 
   useKeyboard((evt) => {
     if (evt.ctrl && evt.name === "c") {
-      handleExit()
+      void handleExit()
+      return
+    }
+    // Only unmodified keys act on this screen so terminal chords (e.g.
+    // ctrl+r) keep their usual meaning here.
+    if (evt.ctrl || evt.meta) return
+    if (evt.name === "c") {
+      copyIssueURL()
+    } else if (evt.name === "r") {
+      props.reset()
+    } else if (evt.name === "q" || evt.name === "escape") {
+      void handleExit()
     }
   })
   const [copied, setCopied] = createSignal(false)
@@ -1644,7 +1658,7 @@ function ErrorComponent(props: {
         </text>
         <box onMouseUp={copyIssueURL} backgroundColor={colors.primary} padding={1}>
           <text attributes={TextAttributes.BOLD} fg={colors.bg}>
-            {uiText("ui.copyIssueUrlExceptionInfoPreFilled")}
+            {`[c] ${uiText("ui.copyIssueUrlExceptionInfoPreFilled")}`}
           </text>
         </box>
         {copied() && <text fg={colors.muted}>{uiText("ui.successfullyCopied")}</text>}
@@ -1653,10 +1667,10 @@ function ErrorComponent(props: {
       <box flexDirection="row" gap={2} alignItems="center">
         <text fg={colors.text}>{uiText("ui.aFatalErrorOccurred")}</text>
         <box onMouseUp={props.reset} backgroundColor={colors.primary} padding={1}>
-          <text fg={colors.bg}>{uiText("ui.resetTui")}</text>
+          <text fg={colors.bg}>{`[r] ${uiText("ui.resetTui")}`}</text>
         </box>
         <box onMouseUp={handleExit} backgroundColor={colors.primary} padding={1}>
-          <text fg={colors.bg}>{uiText("ui.exit2")}</text>
+          <text fg={colors.bg}>{`[q] ${uiText("ui.exit2")}`}</text>
         </box>
       </box>
       <scrollbox height={Math.floor(term().height * 0.7)}>

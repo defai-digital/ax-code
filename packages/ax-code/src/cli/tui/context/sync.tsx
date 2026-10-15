@@ -30,6 +30,8 @@ import { subscribeStoreBackedSyncEvents } from "./sync-subscription"
 import { registerSyncLifecycle } from "./sync-lifecycle"
 import { parseSyncedSessionRisk } from "./sync-session-risk"
 import { createRuntimeSyncProbeScheduler } from "./sync-runtime-probe"
+import { useToast } from "../ui/toast"
+import { useLanguage } from "./language"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { sessionDerivedRequestHeaders, sessionGoalURL, sessionRiskURL } from "./sync-session-urls"
 
@@ -133,6 +135,10 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
 
     const exit = useExit()
     const args = useArgs()
+    // SyncProvider mounts inside ToastProvider and LanguageProvider, so the
+    // recovery-failure toast below can resolve both contexts here.
+    const toast = useToast()
+    const uiText = useLanguage().t
     const bootstrapFlow = createSyncBootstrapFlow({
       store,
       setStatus: (status) => setStore("status", status),
@@ -167,9 +173,19 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       logError(label, data) {
         Log.Default.error(label, data)
       },
-      async onFailure(error) {
-        Log.Default.error("tui bootstrap failed", { error })
-        await exit(error)
+      onFailure(error, context) {
+        if (context.startup) {
+          Log.Default.error("tui bootstrap failed", { error })
+          return exit(error)
+        }
+        // A bootstrap re-run after a reconnect is a best-effort refresh of an
+        // already-running TUI; a transient failure must surface as a toast
+        // instead of exiting the whole session.
+        Log.Default.error("tui bootstrap recovery failed", { error })
+        toast.show({
+          message: uiText("ui.reconnectedButRefreshingTheSessionStateFailed"),
+          variant: "error",
+        })
       },
     })
 

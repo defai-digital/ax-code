@@ -275,6 +275,7 @@ describe("tui sync bootstrap runner", () => {
     const created: string[] = []
     const spanPayloads = new Map<string, Array<Record<string, unknown> | undefined>>()
     const failures: string[] = []
+    const failureContexts: Array<{ startup: boolean }> = []
 
     const lifecycle = createBootstrapLifecycle({
       isStartupBootstrap: true,
@@ -286,8 +287,9 @@ describe("tui sync bootstrap runner", () => {
           spanPayloads.set(name, payloads)
         }
       },
-      onFailure(error) {
+      onFailure(error, context) {
         failures.push(String(error))
+        failureContexts.push(context)
       },
     })
 
@@ -308,11 +310,13 @@ describe("tui sync bootstrap runner", () => {
       { ok: false, error: "Error: bootstrap exploded" },
     ])
     expect(failures).toEqual(["Error: bootstrap exploded"])
+    expect(failureContexts).toEqual([{ startup: true }])
   })
 
   test("returns no-op lifecycle spans when startup bootstrap is disabled", async () => {
     const created: string[] = []
     const failures: string[] = []
+    const failureContexts: Array<{ startup: boolean }> = []
 
     const lifecycle = createBootstrapLifecycle({
       isStartupBootstrap: false,
@@ -320,8 +324,9 @@ describe("tui sync bootstrap runner", () => {
         created.push(name)
         return () => {}
       },
-      onFailure(error) {
+      onFailure(error, context) {
         failures.push(String(error))
+        failureContexts.push(context)
       },
     })
 
@@ -334,6 +339,7 @@ describe("tui sync bootstrap runner", () => {
 
     expect(created).toEqual([])
     expect(failures).toEqual(["Error: bootstrap exploded"])
+    expect(failureContexts).toEqual([{ startup: false }])
   })
 
   test("preserves the original bootstrap error when failure cleanup also rejects", async () => {

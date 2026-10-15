@@ -4,6 +4,10 @@ import { registerTuiEventListener } from "../util/lifecycle"
 
 export type BootstrapSpan = ((data?: Record<string, unknown>) => void) | undefined
 
+export interface BootstrapFailureContext {
+  startup: boolean
+}
+
 export interface BootstrapLifecycle {
   startupSpan: BootstrapSpan
   createCoreSpan: () => BootstrapSpan
@@ -145,7 +149,7 @@ function waitBootstrapPhaseDelay(delayMs: number, signal?: AbortSignal) {
 export function createBootstrapLifecycle(input: {
   isStartupBootstrap: boolean
   createSpan: (name: string) => Exclude<BootstrapSpan, undefined>
-  onFailure: (error: unknown) => Promise<void> | void
+  onFailure: (error: unknown, context: BootstrapFailureContext) => Promise<void> | void
 }): BootstrapLifecycle {
   const startupSpan = input.isStartupBootstrap ? input.createSpan("tui.startup.bootstrap") : undefined
 
@@ -167,7 +171,7 @@ export function createBootstrapLifecycle(input: {
     async fail(error, ...spans): Promise<never> {
       failBootstrapSpans(error, ...spans, startupSpan)
       try {
-        await input.onFailure(error)
+        await input.onFailure(error, { startup: input.isStartupBootstrap })
       } finally {
         throw error
       }

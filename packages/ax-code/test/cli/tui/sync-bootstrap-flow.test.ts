@@ -219,6 +219,7 @@ describe("tui sync bootstrap flow", () => {
   test("routes failures through the bootstrap lifecycle failure handler and rethrows the original error", async () => {
     const [store, setStore] = createStore(createInitialSyncState())
     const failures: string[] = []
+    const failureContexts: Array<{ startup: boolean }> = []
 
     const flow = createSyncBootstrapFlow({
       store,
@@ -247,8 +248,9 @@ describe("tui sync bootstrap flow", () => {
       recordStartup: () => undefined,
       logWarn: () => undefined,
       logError: () => undefined,
-      async onFailure(error) {
+      async onFailure(error, context) {
         failures.push(String(error))
+        failureContexts.push(context)
       },
       deferredDelayMs: 0,
       deferredBackground: false,
@@ -256,6 +258,58 @@ describe("tui sync bootstrap flow", () => {
 
     await expect(flow.run()).rejects.toThrow("bootstrap flow failed")
     expect(failures).toEqual(["Error: bootstrap flow failed"])
+    expect(failureContexts).toEqual([{ startup: true }])
+  })
+
+  test("reports a later bootstrap run as non-startup so recovery failures do not exit the TUI", async () => {
+    const [store, setStore] = createStore(createInitialSyncState())
+    const failureContexts: Array<{ startup: boolean }> = []
+    let runs = 0
+
+    const flow = createSyncBootstrapFlow({
+      store,
+      setStatus(status) {
+        setStore("status", status)
+      },
+      setSessionLoaded(loaded) {
+        setStore("session_loaded", loaded)
+      },
+      resetSessionSync: () => undefined,
+      wrap: async (_label, promise) => promise,
+      client: createClient() as never,
+      syncIsolation: async () => undefined,
+      syncAutonomous: async () => undefined,
+      syncWorkspaces: async () => undefined,
+      syncDebugEngine: async () => undefined,
+      syncSmartLlm: async () => undefined,
+      syncSuperLong: async () => undefined,
+      syncWorkflowDashboard: async () => undefined,
+      createTasks() {
+        runs++
+        throw new Error(`bootstrap attempt ${runs} failed`)
+      },
+      createSpan() {
+        return () => undefined
+      },
+      recordStartup: () => undefined,
+      logWarn: () => undefined,
+      logError: () => undefined,
+      onFailure(_error, context) {
+        failureContexts.push(context)
+      },
+      deferredDelayMs: 0,
+      deferredBackground: false,
+    })
+
+    // Startup run: the store is still in its initial "loading" status.
+    await expect(flow.run()).rejects.toThrow("bootstrap attempt 1 failed")
+    expect(failureContexts).toEqual([{ startup: true }])
+
+    // A bootstrap re-run only happens in a live TUI after a successful first
+    // bootstrap moved the store past "loading" (e.g. a reconnect recovery).
+    setStore("status", "complete")
+    await expect(flow.run()).rejects.toThrow("bootstrap attempt 2 failed")
+    expect(failureContexts).toEqual([{ startup: true }, { startup: false }])
   })
 
   test("serializes overlapping bootstrap runs so only one mutates the store at a time", async () => {
