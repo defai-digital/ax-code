@@ -57,7 +57,7 @@
     "prepare": "husky",
     "postinstall": "node script/fix-node-pty-permissions.mjs",
     "pretest:extracted-packages": "node script/only-allow-pnpm.mjs",
-    "test:extracted-packages": "pnpm --dir packages/ax-code-intel typecheck && pnpm --dir packages/ax-code-intel test && pnpm --dir packages/ax-code-reason typecheck && pnpm --dir packages/ax-code-reason test && pnpm --dir packages/ax-agent-runtime typecheck && pnpm --dir packages/ax-agent-runtime test && pnpm --dir packages/ax-wiki typecheck && pnpm --dir packages/ax-wiki test",
+    "test:extracted-packages": "pnpm --dir packages/util typecheck && pnpm --dir packages/util test && pnpm --dir packages/ax-code-intel typecheck && pnpm --dir packages/ax-code-intel test && pnpm --dir packages/ax-code-reason typecheck && pnpm --dir packages/ax-code-reason test && pnpm --dir packages/ax-agent-runtime typecheck && pnpm --dir packages/ax-agent-runtime test && pnpm --dir packages/ax-wiki typecheck && pnpm --dir packages/ax-wiki test",
     "pretest:scripts": "node script/only-allow-pnpm.mjs",
     "test:scripts": "vitest run",
     "pretest": "node script/only-allow-pnpm.mjs",
