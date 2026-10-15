@@ -2009,7 +2009,7 @@
       ]
     },
     "security_scan": {
-      "count": 512,
+      "count": 511,
       "findings": [
         {
           "fingerprint": "437e1d0157fc1965a429fe7f0e9474576f6c0db625ea27bb6ce1b57af9e2cd9f",
@@ -2079,14 +2079,6 @@
           "fingerprint": "dc59500cb4c1d15ac05af7ba902cb561d552d23440c09b14214887c32ef9e53f",
           "file": "../ax-code-intel/src/internal/archive.ts",
           "line": 13,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
-          "fingerprint": "d181997c20d3f936f86998308e1b0177fda41aee622d2f03062c00f364c218a2",
-          "file": "../ax-code-intel/src/internal/filesystem.ts",
-          "line": 163,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -2447,6 +2439,14 @@
           "fingerprint": "47b0394ab53d9fcb1ec543c91d2246883f6a7b94f0882a8f4e18e65356cc485c",
           "file": "../ax-code-reason/src/verification-runner.ts",
           "line": 155,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "bce5d43fcb25bbea90f63d0920188b75872608737f79d60d6b4afbdfb207e019",
+          "file": "../util/src/filesystem.ts",
+          "line": 171,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3294,7 +3294,7 @@
         {
           "fingerprint": "882ffe135a03e8cca5437798d9111e5e83e24525b8ef1a62b3992a157f2d261d",
           "file": "src/command/file-command.ts",
-          "line": 167,
+          "line": 168,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3302,7 +3302,7 @@
         {
           "fingerprint": "5fb93241487346e537fc62065123bcd37120226e1b113c1cf4c0b506924ba9a4",
           "file": "src/command/file-command.ts",
-          "line": 168,
+          "line": 169,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3310,7 +3310,7 @@
         {
           "fingerprint": "f71171cf16e87a9a3cd1494dd461c2e1797fa3ea44a8fbea653562c96ca3c608",
           "file": "src/command/file-command.ts",
-          "line": 169,
+          "line": 170,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3318,7 +3318,7 @@
         {
           "fingerprint": "49229f153ce8dda0fd79da0265578aaaa1cc283ad2c549ac61eaa2ac2a49e9b9",
           "file": "src/command/file-command.ts",
-          "line": 233,
+          "line": 240,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5823,14 +5823,6 @@
           "fingerprint": "bf575a0f40cb1330997fda014fac366b921c54dee824b84c6571af0b8e6d8669",
           "file": "src/tuimcp/endpoint.ts",
           "line": 190,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
-          "fingerprint": "7962e0765b389f401a79bb611e16a170bdf09406a2b19e6b8415310b8b777c78",
-          "file": "src/util/filesystem.ts",
-          "line": 172,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
