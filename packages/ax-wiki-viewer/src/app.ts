@@ -227,16 +227,30 @@ export function readingOrder(pages: readonly WikiGraphPage[]): WikiGraphPage[] {
   return [...pages].sort((a, b) => (rank(a) < rank(b) ? -1 : rank(a) > rank(b) ? 1 : 0))
 }
 
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+
 /** Case-insensitive full-text match over a page; returns a short context snippet or undefined. */
 export function searchPage(page: WikiGraphPage, query: string): string | undefined {
   const needle = query.trim().toLowerCase()
   if (!needle) return ""
   for (const field of [page.title, page.summary, page.purpose, page.path, page.markdown]) {
-    const at = field.toLowerCase().indexOf(needle)
+    const lowered = field.toLowerCase()
+    const at = lowered.indexOf(needle)
     if (at < 0) continue
     if (field !== page.markdown) return ""
-    const start = Math.max(0, at - 40)
-    const line = field.slice(start, at + needle.length + 60).replace(/\s+/g, " ")
+    // `at` addresses the lowercased copy, but the snippet is sliced from the
+    // original. Case folding can change string length ("İ" lowers to two code
+    // units), so when the lengths differ the match is re-located in original
+    // coordinates — otherwise the window slides past the match or off the end.
+    let index = at
+    let length = needle.length
+    if (lowered.length !== field.length) {
+      const found = new RegExp(escapeRegExp(needle), "i").exec(field)
+      index = found ? found.index : Math.min(at, Math.max(0, field.length - needle.length))
+      length = found ? found[0].length : needle.length
+    }
+    const start = Math.max(0, index - 40)
+    const line = field.slice(start, index + length + 60).replace(/\s+/g, " ")
     return `${start > 0 ? "…" : ""}${line}…`
   }
   return undefined
@@ -442,11 +456,9 @@ export function mount(
     }
     const stale = list.filter((page) => pageState(page) === "stale").length
     const unknown = list.filter((page) => pageState(page) === "unknown").length
-    tile(
-      "Pages",
-      list.length.toLocaleString("en-US"),
-      `${plural(new Set(list.map((page) => page.path.split("/")[0])).size, "section")}`,
-    )
+    // Root pages share one bucket, matching the reader nav's "Start" group.
+    const sections = new Set(list.map((page) => (page.path.includes("/") ? page.path.split("/")[0] : "")))
+    tile("Pages", list.length.toLocaleString("en-US"), `${plural(sections.size, "section")}`)
     if (overview) {
       const share = overview.indexedSources ? (overview.citedSources / overview.indexedSources) * 100 : 0
       tile(
