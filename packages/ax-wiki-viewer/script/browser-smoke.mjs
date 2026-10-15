@@ -846,7 +846,14 @@ try {
       generator: "ax-wiki",
       generatedAt: "2026-10-14T00:00:00.000Z",
       model: "fixture/model",
-      sources: { "src/a.ts": "a".repeat(64), "src/b.ts": "b".repeat(64), "lib/c.ts": "c".repeat(64), "README.md": "d".repeat(64) },
+      sources: {
+        "src/a.ts": "a".repeat(64),
+        "src/b.ts": "b".repeat(64),
+        "lib/c.ts": "c".repeat(64),
+        "README.md": "d".repeat(64),
+        "docs/x.md": "e".repeat(64),
+        "docs/y.md": "f".repeat(64),
+      },
       pages: {
         "quickstart.md": {
           title: "Quickstart",
@@ -894,7 +901,15 @@ try {
   assert.equal(await work.locator(".article > h1").innerText(), "Core")
   await work.getByRole("tab", { name: "Overview" }).click()
   assert.match(await work.locator(".app-head .meta").innerText(), /Generated 2026-10-14 00:00 UTC · fixture\/model · 2 pages/)
-  assert.match(await work.locator(".tiles").innerText(), /Cited files\s+3\s+of 4 indexed files/)
+  assert.match(await work.locator(".tiles").innerText(), /Cited files\s+3\s+of 6 indexed files/)
+  // Blind spots name uncited directories; page overlap lists shared citations for a pair.
+  assert.deepEqual(await work.locator(".spots li button").allInnerTexts(), ["docs"])
+  assert.equal(await work.locator(".spots .count").innerText(), "2 / 2")
+  await work.locator(".spots li button", { hasText: "docs" }).click()
+  assert.match(await work.locator(".icicle .crumbs").innerText(), /docs/)
+  await work.locator(".overlap rect.cell.hit").first().click()
+  assert.match(await work.locator(".drawer").innerText(), /Shared citations[\s\S]*1 cited file in common[\s\S]*src\/a\.ts/i)
+  await work.keyboard.press("Escape")
   assert.match(await work.locator(".tiles").innerText(), /1 stale/)
   // Arrow keys move between tabs.
   await work.getByRole("tab", { name: "Overview" }).focus()

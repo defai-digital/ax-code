@@ -40,7 +40,10 @@ page and use **Read this page** to open it.
 **Overview.** Can I trust this wiki today? Start pages, the share of indexed files
 that any page cites (citation coverage, not documentation quality), how many pages
 have changed cited files, each page's freshness bar, the files most pages rely on,
-and a coverage icicle by directory.
+**blind spots** (the directories with the most indexed files no page cites, the most
+specific directory first), a coverage icicle by directory, and a **page overlap**
+matrix counting the cited files each pair of pages shares. Click a blind spot to zoom
+the icicle, or an overlap cell to list the shared files.
 
 ![Reader. Page list and search on the left, the rendered page in the middle, contents, related pages and cited files on the right.](../images/wiki/read.png)
 

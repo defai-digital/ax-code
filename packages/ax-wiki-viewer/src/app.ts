@@ -6,6 +6,14 @@ import { mapCss, mountMap } from "./map.js"
 import { parseMarkdown, renderMarkdown } from "./markdown.js"
 import type { MarkdownLink } from "./markdown.js"
 import { modulesCss, renderModulesView } from "./modules-view.js"
+import {
+  blindSpots,
+  overviewChartsCss,
+  pageOverlap,
+  renderBlindSpots,
+  renderPageOverlap,
+  sharedFiles,
+} from "./overview-charts.js"
 
 const appCss = `
 .axw{--bg:#0d1520;--surface:#142130;--surface-2:#1b2c3f;--canvas:#0a111a;--line:#27394d;--line-2:#3a5068;--text:#e3ecf6;--muted:#93a6ba;--accent:#78dacc;--amber:#e0a63c;--fresh:#7cc78a;--stale:#e0a63c;--unknown:#64778b;display:flex;flex-direction:column;height:100%;min-height:100%;font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--text);background:var(--bg);box-sizing:border-box;-webkit-font-smoothing:antialiased}
@@ -125,7 +133,7 @@ const appCss = `
 `
 
 /** All viewer styles: the shell, the evidence map and the module view. */
-export const viewerCss = appCss + mapCss + modulesCss
+export const viewerCss = appCss + overviewChartsCss + mapCss + modulesCss
 
 // The map opens first: people want the picture before the prose.
 const TABS = [
@@ -231,7 +239,7 @@ export function mount(
   root.className = "axw axwv-app"
   if (options.injectStyles !== false) {
     const style = doc.createElement("style")
-    style.textContent = appCss + modulesCss
+    style.textContent = appCss + overviewChartsCss + modulesCss
     root.append(style)
   }
   const el = <K extends keyof HTMLElementTagNameMap>(tag: K, parent: Node, text?: string, className?: string) => {
@@ -507,9 +515,60 @@ export function mount(
     }
 
     if (overview?.areas.length) {
+      const spots = el("div", right, undefined, "card")
+      el("h2", spots, "Blind spots")
+      renderBlindSpots(doc, spots, blindSpots(overview.areas), (path) => {
+        icicleFocus = path
+        renderOverview()
+        panel.querySelector(".icicle")?.scrollIntoView({ block: "start" })
+      })
+      el(
+        "p",
+        spots,
+        "Directories with the most indexed files no page cites (uncited / indexed). Click one to zoom the coverage chart.",
+        "note",
+      )
       const coverage = el("div", right, undefined, "card icicle")
       el("h2", coverage, "Coverage by directory")
       renderIcicle(coverage, overview.areas)
+    }
+
+    if (list.length > 1) {
+      const overlapCard = el("div", wrap, undefined, "card overlap")
+      overlapCard.style.marginTop = "16px"
+      el("h2", overlapCard, "Page overlap")
+      renderPageOverlap(doc, overlapCard, pageOverlap(list), {
+        onPage: (id) => {
+          const page = pageById(id)
+          if (page) openPage(page.path)
+        },
+        onPair: (a, b) => {
+          const first = pageById(a),
+            second = pageById(b)
+          if (!first || !second) return
+          const files = sharedFiles(first, second)
+          drawer.replaceChildren()
+          const close = el("button", drawer, "✕", "close")
+          close.setAttribute("aria-label", "Close")
+          close.onclick = () => (drawer.hidden = true)
+          el("h2", drawer, "Shared citations")
+          el("p", drawer, `${first.title} and ${second.title}`, "path")
+          el("p", drawer, `${plural(files.length, "cited file")} in common`, "note")
+          const ul = el("ul", drawer)
+          for (const file of files.slice(0, 200)) {
+            const button = el("button", el("li", ul), file, "linkish")
+            button.onclick = () => openSource(file)
+          }
+          drawer.hidden = false
+          close.focus()
+        },
+      })
+      el(
+        "p",
+        overlapCard,
+        "Cited files each pair of pages shares, from every recorded citation. Darker cells overlap more; the diagonal is each page's own count. Overlap is shared evidence, not a dependency.",
+        "note",
+      )
     }
   }
 

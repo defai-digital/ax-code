@@ -18,7 +18,9 @@ Supply a schema-1 graph from `@ax-code/ax-wiki/graph`. `mount` shows four tabs:
   Force and Radial show the same evidence as a network. Symbols are hidden until
   enabled or selected.
 - **Overview**: start pages, citation coverage against the indexed inventory, per-page
-  freshness bars, most-cited files, and a `d3-hierarchy` coverage icicle by directory.
+  freshness bars, most-cited files, blind spots (directories with the most uncited
+  indexed files, never nested), a `d3-hierarchy` coverage icicle by directory, and a
+  page overlap matrix of shared cited files.
 - **Read**: page markdown rendered to DOM nodes (no raw HTML, no script or data URLs),
   full-text search, table of contents, related pages by shared citations, and a card
   for each cited path.
