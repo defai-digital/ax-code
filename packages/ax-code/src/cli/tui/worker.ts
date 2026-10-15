@@ -20,6 +20,7 @@ import { tmpdir } from "node:os"
 import fs from "node:fs/promises"
 import { runResilientStream, type StreamConnectionStatus } from "./util/resilient-stream"
 import { createStreamDeltaCoalescer } from "./util/coalesce-stream-events"
+import { createPartSnapshotElider } from "./util/elide-part-snapshot"
 import { registerShutdownSignals } from "@/util/signals"
 import { toErrorMessage } from "@/util/error-message"
 import { isHarmlessInterrupt } from "@/util/harmless-interrupt"
@@ -167,17 +168,29 @@ const startEventStream = async (input: { directory?: string }) => {
   // dispatch per event, and the TUI-side coalescer then merges what already
   // crossed. Merging here keeps ordering (pending deltas flush before any
   // non-delta event) and cuts per-window RPC churn to one emit per part.
+  // One elider per stream generation. It sees the coalesced deltas (what we
+  // actually emit) and drops `text` from progress snapshots whose covered
+  // prefix those deltas already match. Abort forgets that coverage with the
+  // stream.
+  const partSnapshots = createPartSnapshotElider()
   const coalescer = createStreamDeltaCoalescer({
     emit(events) {
       for (const event of events) {
         if (signal.aborted) return
-        Rpc.emit("event", event)
+        Rpc.emit("event", partSnapshots.observe(event))
       }
     },
   })
   // Teardown drops still-buffered deltas — the stream is dead, so flushing
   // them after abort would emit events for a workspace that no longer exists.
-  signal.addEventListener("abort", () => coalescer.dispose(), { once: true })
+  signal.addEventListener(
+    "abort",
+    () => {
+      coalescer.dispose()
+      partSnapshots.reset()
+    },
+    { once: true },
+  )
 
   const done = runResilientStream<AxCodeEvent>({
     signal,
