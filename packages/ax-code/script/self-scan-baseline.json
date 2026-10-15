@@ -615,14 +615,6 @@
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "8a29821f8c3a61a635a165b4095a72b41e0b98fe03c7b7cae2f8bc48714fc521",
-          "file": "../ax-code-intel/src/internal/process.ts",
-          "line": 17,
-          "severity": "medium",
-          "kind": "event_listener:no_cleanup",
-          "summary": "event_listener:no_cleanup"
-        },
-        {
           "fingerprint": "dab25e1b24bdc73862426112cd83b7fa491a004c6e5006d57e61135040ab9fd7",
           "file": "../ax-code-intel/src/internal/which.ts",
           "line": 43,
@@ -645,14 +637,6 @@
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
-        },
-        {
-          "fingerprint": "9bc6d92eaea5b75196a8744af5efea9269cb8b72de88dacdff827850235c9e82",
-          "file": "../ax-code-reason/src/internal/process.ts",
-          "line": 17,
-          "severity": "medium",
-          "kind": "event_listener:no_cleanup",
-          "summary": "event_listener:no_cleanup"
         },
         {
           "fingerprint": "4eab77d802949e936c2a5824d9bca079b2cb893c08a103020ee7024abbed3540",
@@ -2005,11 +1989,27 @@
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "c760d9ebc7fc28da8db666f080c5c9ad513b0bf28f33c0f110ba5e33f34f5717",
+          "file": "src/cli/cmd/run-report-server.ts",
+          "line": 49,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "00cc9d02a4aecd35317b26684283986ee5cf9f77f1c977edba69f6ce731d0bb0",
+          "file": "src/code-intelligence/index.ts",
+          "line": 308,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
         }
       ]
     },
     "security_scan": {
-      "count": 511,
+      "count": 513,
       "findings": [
         {
           "fingerprint": "437e1d0157fc1965a429fe7f0e9474576f6c0db625ea27bb6ce1b57af9e2cd9f",
@@ -6098,6 +6098,22 @@
           "severity": "medium",
           "kind": "env_leak",
           "summary": "env_leak"
+        },
+        {
+          "fingerprint": "e2571eb6168ce6e06c59b21711efc784bbba2ba58f7d377a8929e64ee55fa2de",
+          "file": "src/code-intelligence/index.ts",
+          "line": 270,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "432b0ffeff36d02101f236f4f92664c5228e4a9d5ffcd23b358c855e5b11a894",
+          "file": "src/code-intelligence/index.ts",
+          "line": 271,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
         }
       ]
     },
