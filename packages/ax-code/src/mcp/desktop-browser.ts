@@ -486,6 +486,13 @@ export namespace DesktopBrowser {
     }
     const reply = await enqueue(entry, NavigateRequest.parse(request), signal)
     if (reply.status !== "Completed") return fail("The project browser could not open that page")
+    // A redirect can land the document on an origin the caller never approved
+    // (the approval is bound to `target.origin`). Fail closed rather than report
+    // the approved origin while the pane sits on a different one.
+    if (entry.snapshot.origin !== target.origin)
+      return fail(
+        "The project browser landed on a different origin than the one approved; ask the user before continuing",
+      )
     return { url: target.toString(), origin: target.origin }
   }
   export async function list(binding: Binding, signal: AbortSignal) {

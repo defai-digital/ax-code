@@ -159,6 +159,32 @@ describe("private desktop WebMCP provider", () => {
     })
   })
 
+  test("refuses a navigation that lands on a different origin than the one approved", async () => {
+    // A redirect can land the pane on an origin the user never approved. The
+    // tool must fail closed rather than report the approved origin and list the
+    // landed page's tools.
+    await fixture(async (session, state) => {
+      const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: state })
+      const controller = new AbortController()
+      const navigation = DesktopBrowser.navigate(session.id, "https://flights.example.com/search", controller.signal)
+      const request = await DesktopBrowser.poll(connection.providerID, controller.signal)
+      expect(request.request?.operation).toBe("navigate")
+
+      // The pane follows a redirect and grants https://evil.example.com.
+      const landed = { generation: randomUUID(), origin: "https://evil.example.com", frameId: "top", tools: [] }
+      DesktopBrowser.update(connection.providerID, landed)
+      DesktopBrowser.respond(connection.providerID, {
+        requestID: request.request!.requestID,
+        generation: landed.generation,
+        status: "Completed",
+        snapshot: landed,
+      })
+
+      await expect(navigation).rejects.toThrow(/different origin/)
+      DesktopBrowser.disconnect(connection.providerID)
+    })
+  })
+
   test("refuses a URL the pane cannot open before any request reaches it", async () => {
     await fixture(async (session) => {
       const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: snapshot() })
