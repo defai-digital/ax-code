@@ -9,6 +9,11 @@ import { UNIX_BRAND_AND_EXEC_NODE, unixNodeLauncherScript } from "../../script/n
 
 const execFileAsync = promisify(execFile)
 const temporaryRoots: string[] = []
+// Node's own fatal-error report, written beside the compile cache (see
+// UNIX_BRAND_AND_EXEC_NODE); the launcher adds it whenever the cache home is
+// a path NODE_OPTIONS can carry.
+const reportFlags = (cacheHome: string) =>
+  `--report-on-fatalerror --report-exclude-env --report-exclude-network --report-directory=${path.join(cacheHome, "ax-code", "crash-reports")}`
 
 afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
@@ -75,8 +80,48 @@ describe("Unix node launcher", () => {
       }).catch((error: unknown) => error)
       expect(failure).toMatchObject({ code: 37, signal: null })
       expect(await readFile(calls, "utf8")).toBe(
-        "--experimental-ffi --disable-warning=ExperimentalWarning application literal argument\n",
+        `--experimental-ffi --disable-warning=ExperimentalWarning ${reportFlags(path.join(root, "cache"))} application literal argument\n`,
       )
+    },
+  )
+
+  test.skipIf(process.platform === "win32")(
+    "omits the fatal-error report flags when the cache home has whitespace NODE_OPTIONS cannot carry",
+    async () => {
+      const root = await mkdtemp(path.join(os.tmpdir(), "ax-code-node-report-space-"))
+      temporaryRoots.push(root)
+      const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'"
+      const original = path.join(root, "node")
+      const launcher = path.join(root, "launcher")
+      const calls = path.join(root, "calls")
+      await writeFile(
+        original,
+        [
+          "#!/bin/sh",
+          `if [ "$1" = "-e" ]; then exec ${quote(process.execPath)} "$@"; fi`,
+          `if [ "$1" = "-p" ]; then printf '%s\\n' ${quote(process.version)}; exit 0; fi`,
+          `printf '%s\\n' "$*" >> ${quote(calls)}`,
+          "exit 37",
+          "",
+        ].join("\n"),
+        { mode: 0o755 },
+      )
+      await writeFile(
+        launcher,
+        `#!/bin/sh\n${UNIX_BRAND_AND_EXEC_NODE}\nbrand_and_exec_node ${quote(original)} "$@"\n`,
+        { mode: 0o755 },
+      )
+      const cacheHome = path.join(root, "cache home")
+      const failure = await execFileAsync(launcher, ["application"], {
+        env: { ...process.env, XDG_CACHE_HOME: cacheHome },
+        timeout: 10_000,
+      }).catch((error: unknown) => error)
+      expect(failure).toMatchObject({ code: 37, signal: null })
+      expect(await readFile(calls, "utf8")).toBe(
+        "--experimental-ffi --disable-warning=ExperimentalWarning application\n",
+      )
+      // The directory is still prepared for a later launch from a safe path.
+      await expect(readdir(path.join(cacheHome, "ax-code", "crash-reports"))).resolves.toEqual([])
     },
   )
 
@@ -114,7 +159,7 @@ describe("Unix node launcher", () => {
       }).catch((error: unknown) => error)
       expect(failure).toMatchObject({ code: 37, signal: null })
       expect(await readFile(calls, "utf8")).toBe(
-        `--experimental-ffi --disable-warning=ExperimentalWarning ${entry} --version\noptions=[] saved=[]\n`,
+        `--experimental-ffi --disable-warning=ExperimentalWarning ${reportFlags(path.join(root, "cache"))} ${entry} --version\noptions=[] saved=[]\n`,
       )
     },
   )
@@ -333,6 +378,10 @@ describe("Unix node launcher", () => {
     const nodeOptions = await readFile(`${outputPath}.node-options`, "utf8")
     expect(nodeOptions).toContain("--experimental-ffi")
     expect(nodeOptions).toContain("--disable-warning=ExperimentalWarning")
+    expect(nodeOptions).toContain(
+      "--report-on-fatalerror --report-exclude-env --report-exclude-network --report-directory=",
+    )
+    await expect(readdir(path.join(root, "cache", "ax-code", "crash-reports"))).resolves.toEqual([])
     const entryImport = nodeOptions.split(" ").find((token) => token.includes("/lib/index-node-tui.js"))
     expect(entryImport).toBeDefined()
     // A safe absolute entry is a raw file URL. The node -e / pathToFileURL

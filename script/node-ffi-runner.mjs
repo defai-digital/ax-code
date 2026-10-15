@@ -4,6 +4,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import {
+  crashReportArgs,
   partitionExecveFlags,
   pinPackageImportSpecifier,
   prepareNodeArgs,
@@ -130,7 +131,8 @@ try {
 }
 
 const launchArgs = prepareNodeArgs(process.argv.slice(2))
-const tuiArgs = [...ffiArgs, ...launchArgs]
+const reportArgs = crashReportArgs(process.env)
+const tuiArgs = [...ffiArgs, ...reportArgs, ...launchArgs]
 const brandedPath = resolveBrandedNodePath(runtime.path)
 const launchEnv = withCompileCache(process.env)
 const spawnOptions = brandedSpawnOptions(launchEnv)
@@ -195,7 +197,7 @@ if (process.platform !== "win32" && typeof process.execve === "function") {
   // warns about that (DEP0205, module.register is deprecated). The fallback is
   // tsx's intentional compatibility path, so silence only that warning code for
   // the TUI child instead of changing the loader.
-  const augmented = [...ffiArgs, "--disable-warning=DEP0205", ...optionsFlags]
+  const augmented = [...ffiArgs, ...reportArgs, "--disable-warning=DEP0205", ...optionsFlags]
   if (entry) augmented.push("--import", toNodeOptionsImportSpecifier(entry))
   if (process.env.NODE_OPTIONS) augmented.push(process.env.NODE_OPTIONS)
   childEnv.NODE_OPTIONS = augmented.join(" ")
@@ -227,6 +229,9 @@ if (result.error) {
   process.exit(1)
 }
 if (result.signal) {
+  // Re-raising the child's signal makes this process the one the OS crash
+  // reporter names; say what actually died so the report can be attributed.
+  console.error(`node-ffi-runner: child exited with ${result.signal}: ${[runtime.path, ...tuiArgs].join(" ")}`)
   process.kill(process.pid, result.signal)
 }
 process.exit(result.status ?? 1)

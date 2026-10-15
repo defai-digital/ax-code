@@ -61,6 +61,26 @@ export const UNIX_BRAND_AND_EXEC_NODE = `brand_and_exec_node() {
       fi
     fi
   fi
+  # A fatal Node error (heap exhaustion, a V8 abort) leaves only the OS crash
+  # dump, which has no JavaScript stack and no argv; that is what made the
+  # 2026-10-14 node crash reports unattributable. Ask Node for its own
+  # diagnostic report on fatal errors, beside the compile cache. Environment
+  # variables stay out of the file so no credential lands in it. Skipped when
+  # the directory cannot be created or has whitespace NODE_OPTIONS cannot
+  # carry; a missing report must never become a launch failure.
+  report_dir=""
+  if [ -n "\${XDG_CACHE_HOME-}" ]; then
+    report_dir="\$XDG_CACHE_HOME/ax-code/crash-reports"
+  elif [ -n "\${HOME-}" ]; then
+    report_dir="\$HOME/.cache/ax-code/crash-reports"
+  fi
+  report_flags=""
+  if [ -n "$report_dir" ] && mkdir -p "$report_dir" 2>/dev/null; then
+    case "$report_dir" in
+      *[[:space:]]*) ;;
+      *) report_flags="--report-on-fatalerror --report-exclude-env --report-exclude-network --report-directory=$report_dir" ;;
+    esac
+  fi
   case "$entry" in
     *[[:space:]]*) launch_modern=0 ;;
     /*) launch_modern=1 ;;
@@ -81,11 +101,13 @@ export const UNIX_BRAND_AND_EXEC_NODE = `brand_and_exec_node() {
         import_entry="file://\$entry"
         ;;
     esac
-    NODE_OPTIONS="${NODE_LAUNCH_ARGS} --import \${import_entry}\${NODE_OPTIONS:+ \$NODE_OPTIONS}"
+    NODE_OPTIONS="${NODE_LAUNCH_ARGS}\${report_flags:+ \$report_flags} --import \${import_entry}\${NODE_OPTIONS:+ \$NODE_OPTIONS}"
     export AX_CODE_LAUNCH_NODE_OPTIONS NODE_OPTIONS
     set -- /dev/null "$@"
   else
-    set -- ${NODE_LAUNCH_ARGS} "$entry" "$@"
+    # $report_flags is unquoted on purpose: it is a space-separated flag list
+    # whose only path has no whitespace (checked above), or empty.
+    set -- ${NODE_LAUNCH_ARGS} $report_flags "$entry" "$@"
   fi
   real="$node_bin"
   while [ -L "$real" ]; do

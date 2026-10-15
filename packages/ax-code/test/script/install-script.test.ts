@@ -18,6 +18,12 @@ describe("install script", () => {
     expect(text).toContain("AX_CODE_SOURCE_ENTRY=")
     expect(text).toContain("/packages/ax-code/src/index-node-tui.ts")
     expect(text).toContain("node --experimental-ffi")
+    // The packaged launcher and the installer's launch_node() both ask Node
+    // for its fatal-error report, without the environment, beside the cache.
+    expect(text).toContain('report_dir="${XDG_CACHE_HOME:-$HOME/.cache}/ax-code/crash-reports"')
+    expect(text).toContain(
+      "--report-on-fatalerror --report-exclude-env --report-exclude-network --report-directory=$report_dir",
+    )
     expect(text).toContain("AX_CODE_SOURCE_NODE_FFI_RUNNER=")
     expect(text).toContain("node-ffi-runner.mjs")
     // Legacy source launcher detection is retained so the Node installer can

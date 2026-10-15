@@ -5,6 +5,7 @@ import os from "node:os"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 import {
+  crashReportArgs,
   partitionExecveFlags,
   pinPackageImportSpecifier,
   prepareNodeArgs,
@@ -12,6 +13,42 @@ import {
   toNodeOptionsImportSpecifier,
   withCompileCache,
 } from "./node-ffi-runner-args.mjs"
+
+describe("crashReportArgs", () => {
+  test("asks Node for a fatal-error report beside the compile cache, without the environment", () => {
+    const created: string[] = []
+    const dir = path.join("/home/dev/.cache", "ax-code", "crash-reports")
+    expect(
+      crashReportArgs({ HOME: "/home/dev" }, { home: "/home/dev", mkdir: (target) => created.push(target) }),
+    ).toEqual([
+      "--report-on-fatalerror",
+      "--report-exclude-env",
+      "--report-exclude-network",
+      `--report-directory=${dir}`,
+    ])
+    expect(created).toEqual([dir])
+    expect(crashReportArgs({ XDG_CACHE_HOME: "/xdg" }, { home: "/home/dev", mkdir: () => undefined })).toContain(
+      `--report-directory=${path.join("/xdg", "ax-code", "crash-reports")}`,
+    )
+  })
+
+  test("adds nothing when the directory cannot be created or NODE_OPTIONS could not carry it", () => {
+    expect(
+      crashReportArgs(
+        { HOME: "/home/dev" },
+        {
+          home: "/home/dev",
+          mkdir: () => {
+            throw new Error("read-only")
+          },
+        },
+      ),
+    ).toEqual([])
+    expect(
+      crashReportArgs({ XDG_CACHE_HOME: "/Users/dev/Library/Application Support" }, { mkdir: () => undefined }),
+    ).toEqual([])
+  })
+})
 
 describe("node FFI runner arguments", () => {
   test("omits optional env files that do not exist", () => {

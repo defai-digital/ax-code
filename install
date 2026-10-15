@@ -846,6 +846,17 @@ launch_node() {
     NODE_COMPILE_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/ax-code/compile-cache"
     export NODE_COMPILE_CACHE
   fi
+  # Node's own diagnostic report on a fatal error (heap exhaustion, V8
+  # abort): the OS crash dump alone carries no JavaScript stack or argv.
+  # Environment variables are excluded. Mirrors script/node-launcher.ts.
+  report_dir="${XDG_CACHE_HOME:-$HOME/.cache}/ax-code/crash-reports"
+  report_flags=""
+  if mkdir -p "$report_dir" 2>/dev/null; then
+    case "$report_dir" in
+      *[[:space:]]*) ;;
+      *) report_flags="--report-on-fatalerror --report-exclude-env --report-exclude-network --report-directory=$report_dir" ;;
+    esac
+  fi
   if [ "$launch_modern" -eq 1 ]; then
     AX_CODE_LAUNCH_NODE_OPTIONS="${NODE_OPTIONS-}"
     import_entry="$entry"
@@ -860,11 +871,13 @@ launch_node() {
         import_entry="file://$entry"
         ;;
     esac
-    NODE_OPTIONS="--experimental-ffi --disable-warning=ExperimentalWarning --import ${import_entry}${NODE_OPTIONS:+ $NODE_OPTIONS}"
+    NODE_OPTIONS="--experimental-ffi --disable-warning=ExperimentalWarning${report_flags:+ $report_flags} --import ${import_entry}${NODE_OPTIONS:+ $NODE_OPTIONS}"
     export AX_CODE_LAUNCH_NODE_OPTIONS NODE_OPTIONS
     exec "$node_cmd" /dev/null "$@"
   fi
-  exec "$node_cmd" --experimental-ffi --disable-warning=ExperimentalWarning "$entry" "$@"
+  # $report_flags is unquoted on purpose: a space-separated flag list whose
+  # only path has no whitespace (checked above), or empty.
+  exec "$node_cmd" --experimental-ffi --disable-warning=ExperimentalWarning $report_flags "$entry" "$@"
 }
 if [ -z "$AX_CODE_SYSTEM_NODE" ] && [ -x "$dir/../node/bin/node" ]; then
   launch_node "$dir/../node/bin/node" "$@"

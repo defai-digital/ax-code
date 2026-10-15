@@ -141,3 +141,25 @@ export function withCompileCache(env = process.env, options = {}) {
   const cacheHome = env.XDG_CACHE_HOME || path.join(home, ".cache")
   return { ...env, NODE_COMPILE_CACHE: path.join(cacheHome, "ax-code", "compile-cache") }
 }
+
+/**
+ * Node flags that write Node's own diagnostic report on a fatal error (heap
+ * exhaustion, a V8 abort). The OS crash dump alone has no JavaScript stack
+ * and no argv, which is what made the 2026-10-14 node crash reports
+ * unattributable. Reports go beside the compile cache; environment variables
+ * are excluded so no credential lands in the file. Empty when the directory
+ * cannot be created or has whitespace NODE_OPTIONS cannot carry — a missing
+ * report must never become a launch failure. Mirrors the packaged launchers.
+ */
+export function crashReportArgs(env = process.env, options = {}) {
+  const home = options.home ?? os.homedir()
+  const cacheHome = env.XDG_CACHE_HOME || path.join(home, ".cache")
+  const dir = path.join(cacheHome, "ax-code", "crash-reports")
+  if (/\s/.test(dir)) return []
+  try {
+    ;(options.mkdir ?? ((target) => fs.mkdirSync(target, { recursive: true })))(dir)
+  } catch {
+    return []
+  }
+  return ["--report-on-fatalerror", "--report-exclude-env", "--report-exclude-network", `--report-directory=${dir}`]
+}
