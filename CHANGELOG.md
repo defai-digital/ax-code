@@ -6,6 +6,18 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.25.10] - 2026-10-15
+
+### Changed
+
+- Publish SDK 2.6.21 with matching v1/v2 server-sent-event retry fixes.
+
+### Fixed
+
+- Refuse queued work and results after their deadlines even when a blocked event loop delays timeout callbacks.
+- Preserve long work deadlines without Node timer overflow while retaining cancellation and cleanup ownership.
+- Bound SDK reconnections after empty, metadata-only or idle HTTP 200 streams; reset retries only after delivering a data event.
+
 ## [7.25.9] - 2026-10-15
 
 ### Changed
