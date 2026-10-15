@@ -18,13 +18,9 @@
 // Over-invalidation is safe — a cache miss just costs a live query.
 // Under-invalidation is the bug this module exists to prevent.
 
-import { createHash } from "node:crypto"
 import { codeIntelHostMaybe } from "./host"
 import { PINNED_GITHUB_LSP_RELEASES, PINNED_CHECKSUM_LSP_RELEASES, PINNED_DIRECT_LSP_RELEASES } from "./server-releases"
-
-function fingerprintHash(input: string): string {
-  return createHash("sha256").update(input).digest("hex").slice(0, 16)
-}
+import { fingerprintHash } from "./internal/fingerprint"
 
 // Pinned server releases ship with the package, so this fingerprint only
 // changes on a deliberate package update. Servers spawned from floating

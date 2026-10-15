@@ -3,7 +3,7 @@ import { noteWorkspaceChange } from "./cache-context"
 import { InternalBus } from "./internal/events"
 import path from "path"
 import { pathToFileURL, fileURLToPath } from "url"
-import { createHash, randomUUID } from "node:crypto"
+import { randomUUID } from "node:crypto"
 import {
   CancellationTokenSource,
   createMessageConnection,
@@ -23,16 +23,7 @@ import { Lock } from "./internal/lock"
 import { ContentCache } from "./content-cache"
 import { ClientActivity } from "./client-activity"
 import { sourceCacheBytes } from "./prewarm-profile"
-
-// Local-only content fingerprint. The hash never leaves the process — it
-// only compares the previous text content against the current one to skip
-// redundant diagnostics work. We use SHA-256-prefix instead of Bun.hash
-// so this code path stays bun-runtime-agnostic; the algorithm choice
-// does not affect correctness because both producer and comparer always
-// use the same function.
-function fingerprintHash(input: string | Uint8Array): string {
-  return createHash("sha256").update(input).digest("hex").slice(0, 16)
-}
+import { fingerprintHash } from "./internal/fingerprint"
 
 const DIAGNOSTICS_DEBOUNCE_MS = 150
 

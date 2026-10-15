@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto"
+import { fingerprintHash } from "./internal/fingerprint"
 
 type Snapshot = { hash: string; length: number; text: string; bytes: number }
 
@@ -38,6 +38,6 @@ export class ContentCache {
     this.bytes += bytes
   }
   static hash(text: string) {
-    return createHash("sha256").update(text).digest("hex").slice(0, 16)
+    return fingerprintHash(text)
   }
 }
