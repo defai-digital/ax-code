@@ -120,6 +120,16 @@ const CONSOLIDATED: Consolidated[] = [
       "packages/ax-code-reason/src/internal/env.ts",
     ],
   },
+  {
+    slug: "package-json",
+    symbols: ["decodePackageJsonObject", "parsePackageJsonObject", "packageJsonStringMap", "packageJsonObjectKeys"],
+    shims: ["packages/ax-code/src/util/package-json.ts", "packages/ax-code-reason/src/internal/package-json.ts"],
+  },
+  {
+    slug: "json-schema",
+    symbols: ["JsonBoolean", "JsonNumber"],
+    shims: ["packages/ax-code/src/util/schema.ts", "packages/ax-code-reason/src/quality/json-number.ts"],
+  },
 ]
 
 const reExport = (slug: string) => new RegExp(`export\\s+\\*\\s+from\\s+["']@ax-code/util/${slug}["']`)

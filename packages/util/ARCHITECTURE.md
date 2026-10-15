@@ -18,6 +18,8 @@
 - `glob` — glob scan/match helpers (`Glob`) over `fast-glob`/`minimatch`; shared by core, `ax-code-intel` and `ax-code-reason`, which previously carried byte-identical copies
 - `filesystem` — path and file I/O helpers (`Filesystem`): mode-preserving atomic writes, extraction-safe streaming, containment checks, executable probing; shared by core and `ax-code-intel`
 - `leveled-log` — minimal leveled logger factory (`LeveledLog.createRuntime`) shared by `ax-code-intel` and `ax-code-reason`; each package keeps its own sink and log-level environment variable
+- `package-json` — `package.json` decoding helpers (`decodePackageJsonObject`, `parsePackageJsonObject`, `packageJsonStringMap`, `packageJsonObjectKeys`) shared by core and `ax-code-reason`
+- `json-schema` — zod coercion helpers for JSON artifacts (`JsonBoolean`, `JsonNumber`) shared by core and `ax-code-reason`
 - `unref-timeout` — unref'd `sleep`/`withTimeout` shared by `ax-code-intel` and `ax-code-reason`; deliberately separate from `timeout`, whose timers stay ref'd
 
 ## Allowed Dependencies
