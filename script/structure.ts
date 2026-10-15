@@ -151,15 +151,45 @@ async function deps() {
   return hit
 }
 
+// A relative import must stay inside the file's own workspace package:
+// reaching a sibling package by path bypasses its declared `exports` contract,
+// and a sibling's `test/` directory is not a publishable artifact.
+function packageOf(file: string): string | undefined {
+  const parts = rel(file).split(path.sep).join("/").split("/")
+  if (parts[0] !== "packages") return undefined
+  if (parts[1] === "sdk" && parts[2] === "js") return "packages/sdk/js"
+  return parts[1] ? `packages/${parts[1]}` : undefined
+}
+
+function escapesPackage(file: string, name: string): boolean {
+  if (!name.startsWith(".")) return false
+  const pkg = packageOf(file)
+  if (!pkg) return false
+  const from = rel(file).split(path.sep).join("/")
+  const target = path.posix.normalize(path.posix.join(path.posix.dirname(from), name))
+  return target !== pkg && !target.startsWith(`${pkg}/`)
+}
+
 async function deep() {
   const out = [] as { file: string; spec: string }[]
   for (const dir of [
     "packages/ax-code/src",
+    "packages/ax-code/test",
     "packages/plugin/src",
+    "packages/plugin/test",
     "packages/sdk/js/src",
     "packages/integration-github",
     "packages/integration-vscode/src",
     "packages/util/src",
+    "packages/util/test",
+    "packages/ax-code-intel/src",
+    "packages/ax-code-intel/test",
+    "packages/ax-code-reason/src",
+    "packages/ax-code-reason/test",
+    "packages/ax-wiki/src",
+    "packages/ax-wiki/test",
+    "packages/ax-agent-runtime/src",
+    "packages/ax-agent-runtime/test",
   ]) {
     for (const file of await list(dir)) {
       const text = await readText(file)
@@ -174,7 +204,9 @@ async function deep() {
         }
         if (name.includes("../packages/") && name.includes("/src/")) {
           out.push({ file: rel(file), spec: name })
+          continue
         }
+        if (escapesPackage(file, name)) out.push({ file: rel(file), spec: name })
       }
     }
   }
