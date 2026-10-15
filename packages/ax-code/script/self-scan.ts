@@ -49,7 +49,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const packageDir = path.resolve(scriptDir, "..")
 const repoRoot = path.resolve(packageDir, "../..")
 const defaultBaselinePath = path.join(scriptDir, "self-scan-baseline.json")
-const sourceRoots = ["src", "../ax-code-intel/src", "../ax-code-reason/src"]
+const sourceRoots = ["src", "../util/src", "../ax-code-intel/src", "../ax-code-reason/src"]
 const sourceScope = sourceRoots.map((root) => path.relative(repoRoot, path.resolve(packageDir, root))).join(", ")
 const sourceGlobs = sourceRoots.flatMap((root) =>
   ["ts", "tsx", "js", "jsx", "mjs", "cjs"].map((extension) => `${root}/**/*.${extension}`),
