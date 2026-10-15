@@ -131,7 +131,7 @@ describe("schedule tools", () => {
           ),
         ).rejects.toThrow(/read-only/)
         expect(asked).toBe(false)
-        expect((await ListScheduledTasksTool.init()).execute({}, ctx)).resolves.toMatchObject({
+        await expect((await ListScheduledTasksTool.init()).execute({}, ctx)).resolves.toMatchObject({
           metadata: { count: 0 },
         })
       },
