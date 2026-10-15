@@ -892,6 +892,12 @@ importers:
 
   packages/util:
     dependencies:
+      fast-glob:
+        specifier: "catalog:"
+        version: 3.3.3
+      minimatch:
+        specifier: 10.2.6
+        version: 10.2.6
       zod:
         specifier: "catalog:"
         version: 4.3.6

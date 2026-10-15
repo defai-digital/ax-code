@@ -12,7 +12,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "fast-glob": "catalog:",
+    "minimatch": "10.2.6"
   },
   "devDependencies": {
     "typescript": "catalog:",
