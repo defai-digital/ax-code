@@ -302,9 +302,9 @@ export const TRANSCRIPT_FOLD_LINE_LIMIT = 50
 
 /**
  * A fenced code block delimiter: up to three leading spaces, three or more
- * backticks or tildes, and an optional info string. Matches the lines the
- * markdown renderer consumes structurally, so the streamed plain text and the
- * finished render agree on the row count.
+ * backticks or tildes, and an optional info string. These are the rows the
+ * finished render hides (see `finishedConcealsFenceRows`), so the streamed
+ * plain text drops them and both agree on the row count.
  */
 const FENCE_LINE = /^ {0,3}(?:`{3,}[^`]*|~{3,}.*)$/
 /**
@@ -314,14 +314,25 @@ const FENCE_LINE = /^ {0,3}(?:`{3,}[^`]*|~{3,}.*)$/
  */
 const PARTIAL_TRAILING_FENCE = /^ {0,3}[`~]{1,2}$/
 
+/** Whether `line` is a complete fenced code block delimiter row. */
+export function isFenceLine(line: string): boolean {
+  return FENCE_LINE.test(line)
+}
+
 /**
- * Drop fence-only lines from the streamed plain text.
+ * Drop fence-only lines from text painted as plain source: the streamed reply
+ * and the finished code render's pre-highlight frame (`initialStyledText`).
  *
- * The finished render never paints them: the markdown renderable consumes a
- * fenced block structurally, and the `code` renderable drops them when conceal
- * is on. Streaming paints the raw source, so without this the block grows by
- * two rows per code fence the moment the message finalizes (measured: 5 rows
- * raw vs 3 rows finished for a single fenced block). See
+ * The finished render never paints fence rows once highlighted: the markdown
+ * renderable consumes a fenced block structurally, and the `code` renderable
+ * removes the whole row when conceal is on (the bundled markdown highlights
+ * query marks delimiters and info strings `conceal_lines`). Plain text paints
+ * the raw source, so without this the block shrinks by two rows per code fence
+ * the moment the message finalizes.
+ *
+ * Only the plain-painted text is stripped. The finished renderers must still
+ * receive the fences: without them tree-sitter parses the code as a markdown
+ * paragraph and the block gets no syntax highlighting. See
  * `.internal/reports/2026-09-26-tui-transcript-stability-plan.md`.
  */
 export function stripFenceLines(text: string): string {
@@ -344,13 +355,17 @@ export function stripFenceLines(text: string): string {
 }
 
 /**
- * Whether the finished render drops fence-only rows, in which case the
- * streamed plain text must drop them too so the finalize swap changes no row.
+ * Whether the *finished* render of a text part hides fence-only rows. Pass the
+ * mode the part finishes in (`streamingTextRenderMode({ final: true, ... })`),
+ * not the current one: the streamed plain text uses this to decide whether to
+ * drop fence rows so the finalize swap changes no row.
+ *
  * The markdown renderable consumes fences structurally; the code renderable
- * hides them while conceal is on (see stripFenceLines). Plain text and
- * unconcealed code paint the raw source and keep them.
+ * removes fence rows (`conceal_lines`) while conceal is on. Unconcealed code
+ * paints the raw source and keeps them. Either way the finished renderer gets
+ * the source with its fences, which it needs to highlight the code.
  */
-export function finishedDropsFenceRows(mode: StreamingTextRenderMode, conceal: boolean): boolean {
+export function finishedConcealsFenceRows(mode: StreamingTextRenderMode, conceal: boolean): boolean {
   return mode === "markdown" || (mode === "code" && conceal)
 }
 
@@ -384,15 +399,30 @@ export function transcriptFoldView(input: {
   lines: readonly string[]
   finalAtMount: boolean
   userFold: boolean | undefined
+  /**
+   * Source lines the renderer does not paint (fence rows the finished render
+   * conceals). They do not count toward the fold limit, so the fold decision
+   * matches the streamed text, which has them stripped.
+   */
+  hiddenRow?: (line: string) => boolean
 }): TranscriptFoldView {
-  const foldable = input.lines.length > TRANSCRIPT_FOLD_LINE_LIMIT
+  const hiddenRow = input.hiddenRow
+  const rows = hiddenRow ? input.lines.filter((line) => !hiddenRow(line)).length : input.lines.length
+  const foldable = rows > TRANSCRIPT_FOLD_LINE_LIMIT
   const folded = foldable && (input.userFold ?? input.finalAtMount)
   const text = input.lines.join("\n")
   if (!folded) return { foldable, folded: false, hiddenLines: 0, visibleText: text }
+  // Keep source lines until TRANSCRIPT_FOLD_LINE_LIMIT painted rows are in.
+  let end = 0
+  let painted = 0
+  while (end < input.lines.length && painted < TRANSCRIPT_FOLD_LINE_LIMIT) {
+    if (!hiddenRow?.(input.lines[end]!)) painted++
+    end++
+  }
   return {
     foldable,
     folded: true,
-    hiddenLines: input.lines.length - TRANSCRIPT_FOLD_LINE_LIMIT,
-    visibleText: input.lines.slice(0, TRANSCRIPT_FOLD_LINE_LIMIT).join("\n") + "\n...",
+    hiddenLines: rows - TRANSCRIPT_FOLD_LINE_LIMIT,
+    visibleText: input.lines.slice(0, end).join("\n") + "\n...",
   }
 }

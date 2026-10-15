@@ -6,6 +6,8 @@ export type SessionCodeRendererProps = {
   fg?: unknown
   conceal?: boolean
   drawUnstyledText?: boolean
+  /** Painted instead of the raw content until the highlight resolves. */
+  initialStyledText?: unknown
   streaming?: boolean
 }
 
@@ -38,6 +40,7 @@ export function SessionCodeRenderer(props: SessionCodeRendererProps) {
       // Kimi Code keeps the cheap version visible the same way: transient plain
       // text, one highlight at the end.
       drawUnstyledText={props.drawUnstyledText ?? true}
+      initialStyledText={props.initialStyledText as any}
       streaming={props.streaming}
       syntaxStyle={props.syntaxStyle as any}
       content={props.display.content}

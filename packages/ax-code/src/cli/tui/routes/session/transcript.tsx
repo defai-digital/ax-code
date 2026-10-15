@@ -1,6 +1,7 @@
 import { useLanguage } from "@tui/context/language"
 import { createMemo, createSignal, ErrorBoundary, For, Match, Show, Switch, untrack } from "solid-js"
 import { Dynamic } from "solid-js/web"
+import { stringToStyledText } from "ax-tui"
 import { SplitBorder } from "@tui/component/border"
 import { Spinner } from "@tui/component/spinner"
 import { Chip } from "@tui/ui/primitives/chip"
@@ -29,7 +30,8 @@ import {
   assistantToolSummary,
   codeDisplayView,
   compactDelegatedLabel,
-  finishedDropsFenceRows,
+  finishedConcealsFenceRows,
+  isFenceLine,
   streamingTextRenderMode,
   stripFenceLines,
   transcriptDisplayText,
@@ -576,21 +578,38 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
   const renderMode = createMemo(() =>
     streamingTextRenderMode({ final: isFinal(), experimentalMarkdown: Flag.AX_CODE_EXPERIMENTAL_MARKDOWN }),
   )
-  // The finished markdown render consumes fence rows structurally and the code
-  // fallback hides them while conceal is on, so the streamed source drops
-  // fence rows in exactly those cases (finishedDropsFenceRows) and the
-  // finalize swap changes no row. Concealment follows the session toggle
+  // The finished render hides fence rows: markdown consumes them structurally
+  // and the code renderer removes them (`conceal_lines`) while conceal is on.
+  // The streamed plain text drops them in exactly those cases
+  // (finishedConcealsFenceRows, asked about the mode the part *finishes* in)
+  // so the finalize swap changes no row. The finished renderer itself always
+  // gets the fences: without them tree-sitter parses the code as a paragraph
+  // and nothing is highlighted. Concealment follows the session toggle
   // (`messages_toggle_conceal`, default on): with it on the renderer hides
   // heading/emphasis/code-span markers, which can re-wrap a line at the
   // finalize swap; turning it off keeps the markdown source exactly as
   // streamed.
+  const finishedMode = streamingTextRenderMode({
+    final: true,
+    experimentalMarkdown: Flag.AX_CODE_EXPERIMENTAL_MARKDOWN,
+  })
+  const concealsFences = createMemo(() => finishedConcealsFenceRows(finishedMode, ctx.conceal()))
   const trimmed = createMemo(() => {
     const text = transcriptDisplayText(paintedText())
-    return (finishedDropsFenceRows(renderMode(), ctx.conceal()) ? stripFenceLines(text) : text).trim()
+    return (renderMode() === "plain" && concealsFences() ? stripFenceLines(text) : text).trim()
   })
   const lines = createMemo(() => trimmed().split("\n"))
   const finalAtMount = untrack(() => isFinal())
-  const fold = createMemo(() => transcriptFoldView({ lines: lines(), finalAtMount, userFold: userFold() }))
+  const fold = createMemo(() =>
+    transcriptFoldView({
+      lines: lines(),
+      finalAtMount,
+      userFold: userFold(),
+      // Concealed fence rows are not painted, so they do not count toward the
+      // fold limit (the streamed text has them stripped already).
+      hiddenRow: renderMode() !== "plain" && concealsFences() ? isFenceLine : undefined,
+    }),
+  )
   const visibleText = createMemo(() => fold().visibleText)
 
   // Autonomous-mode visual: in-flight text inside an active loop gets a
@@ -658,6 +677,10 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
           <Match when={true}>
             <SessionCodeRenderer
               display={codeDisplayView({ filePath: "message.md", content: visibleText() })}
+              // Until the highlight resolves the renderer paints this instead
+              // of the raw source. Without it the fence rows the highlight then
+              // conceals would flash in for a frame at the finalize swap.
+              initialStyledText={concealsFences() ? stringToStyledText(stripFenceLines(visibleText())) : undefined}
               streaming={false}
               syntaxStyle={syntax()}
               conceal={ctx.conceal()}
