@@ -23,6 +23,8 @@ import { RGBA } from "ax-tui"
 import { Filesystem } from "@/util/filesystem"
 import { optionalStateErrorMessage, shouldSurfaceOptionalStateError } from "@tui/util/optional-state"
 import {
+  agentIcon,
+  AGENT_COLOR_THEME_KEYS,
   applyExplicitModelPreference,
   hasSessionModelPreference,
   modelIdentity,
@@ -86,15 +88,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         current: agents()[0]?.name ?? "",
       })
       const { theme } = useTheme()
-      const colors = createMemo(() => [
-        theme.secondary,
-        theme.accent,
-        theme.success,
-        theme.warning,
-        theme.primary,
-        theme.error,
-        theme.info,
-      ])
+      const colors = createMemo(() => AGENT_COLOR_THEME_KEYS.map((key) => theme[key]))
       return {
         list() {
           return agents()
@@ -150,20 +144,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           return colors()[index % colors().length]
         },
         icon(name: string) {
-          const icons: Record<string, string> = {
-            build: "\uD83E\uDD16",
-            plan: "\uD83D\uDCCB",
-            general: "\uD83D\uDCAC",
-            explore: "\uD83D\uDD0D",
-            react: "\uD83E\uDDE0",
-            security: "\uD83D\uDEE1\uFE0F",
-            architect: "\uD83C\uDFD7\uFE0F",
-            debug: "\uD83D\uDC1B",
-            perf: "\u26A1",
-            devops: "\uD83D\uDE80",
-            test: "\uD83E\uDDEA",
-          }
-          return icons[name] ?? "\uD83D\uDCAC"
+          return agentIcon(name)
         },
       }
     })

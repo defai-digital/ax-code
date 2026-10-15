@@ -1,5 +1,11 @@
 import { describe, expect, test } from "vitest"
-import { FOOTER_ANIMATION_FRAMES, FOOTER_ANIMATION_INTERVAL_MS } from "../../../src/cli/tui/component/footer-animation"
+import * as fs from "node:fs/promises"
+import path from "node:path"
+import {
+  FOOTER_ANIMATION_FRAMES,
+  FOOTER_ANIMATION_INTERVAL_MS,
+  footerStaticFrame,
+} from "../../../src/cli/tui/component/footer-animation"
 
 // A braille cell (U+2800-U+28FF) is East Asian Width "Narrow" and CJK-safe;
 // ambiguous-width block glyphs drift CJK layouts and must not come back.
@@ -36,5 +42,25 @@ describe("footer A/X pixel morph", () => {
         expect(xor & (xor - 1)).toBe(0)
       }
     }
+  })
+
+  test("static fallback holds the full A pose when animations are disabled", () => {
+    expect(footerStaticFrame()).toBe(FOOTER_ANIMATION_FRAMES[0])
+    // The full "A" pose, not a mid-morph frame.
+    expect(footerStaticFrame()).toBe("\u286e\u28b5")
+    // Degenerate frame lists must not crash the disabled path.
+    expect(footerStaticFrame([])).toBe("")
+  })
+
+  test("footer morph honors the animations_enabled kv setting", async () => {
+    const source = await fs.readFile(
+      path.resolve(import.meta.dirname, "../../../src/cli/tui/component/footer-animation.tsx"),
+      "utf8",
+    )
+    // The busy glyph follows the user's setting; the static frame above is
+    // what renders when it is off. Compiled builds keep it animated because it
+    // is their only busy indicator, so the runtime-mode policy is not applied.
+    expect(source).toContain('kv.get("animations_enabled", true)')
+    expect(source).not.toContain("shouldUseTuiAnimations")
   })
 })

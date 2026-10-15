@@ -24,10 +24,10 @@ export function Chip(props: {
         return theme.error
       case "warning":
         return theme.warning
-      case "done":
-        return theme.textMuted
+      // "done" and "neutral" both recede to a muted dot; borderSubtle is a
+      // border colour and was near invisible as a foreground on dark themes.
       default:
-        return theme.borderSubtle
+        return theme.textMuted
     }
   }
   const labelColor = () => {

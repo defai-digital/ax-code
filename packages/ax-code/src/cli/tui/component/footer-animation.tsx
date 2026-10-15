@@ -1,5 +1,7 @@
-import { createSignal, onCleanup } from "solid-js"
+import { Show, createSignal, onCleanup } from "solid-js"
 import { scheduleTuiInterval } from "@tui/util/timer"
+import { useTheme } from "../context/theme"
+import { useKV } from "../context/kv"
 import { brailleDotBit } from "@/util/braille"
 
 // Footer busy indicator: the A/X brand mark as a 4x4 braille dot matrix (two
@@ -14,6 +16,10 @@ import { brailleDotBit } from "@/util/braille"
 // Braille is East Asian Width "Narrow" and CJK-safe. The ambiguous-width block
 // glyphs the old "Knight Rider" scanner used drift CJK layouts, so braille is
 // the only dot-matrix family this glyph may use.
+//
+// Honors the user's "animations_enabled" setting: when it is off the mark holds
+// a static frame. It stays animated in compiled builds, where it is the only
+// busy indicator.
 const FOOTER_GLYPH_ROWS = 4
 const FOOTER_GLYPH_COLUMNS = 4
 
@@ -81,7 +87,24 @@ export const FOOTER_ANIMATION_FRAMES = footerGlyphMorphFrames()
 // 26 frames (2 glyphs x 3 dwell + 20 one-dot morphs) pulse A <-> X in ~1.8s.
 export const FOOTER_ANIMATION_INTERVAL_MS = 70
 
-export function FooterAnimationSpinner() {
+// Frame held when the glyph must not animate: the full "A" pose, so the brand
+// mark still renders — just without motion. Pure so the disabled path can be
+// unit tested without booting a component.
+export function footerStaticFrame(frames: readonly string[] = FOOTER_ANIMATION_FRAMES): string {
+  return frames[0] ?? ""
+}
+
+function FooterAnimationStatic() {
+  const { theme } = useTheme()
+  return (
+    <box flexDirection="row">
+      <text fg={theme.textMuted}>{footerStaticFrame()}</text>
+    </box>
+  )
+}
+
+function FooterAnimationAnimated() {
+  const { theme } = useTheme()
   const [frame, setFrame] = createSignal(0)
 
   const stop = scheduleTuiInterval(
@@ -98,7 +121,16 @@ export function FooterAnimationSpinner() {
 
   return (
     <box flexDirection="row">
-      <text>{FOOTER_ANIMATION_FRAMES[frame()]!}</text>
+      <text fg={theme.textMuted}>{FOOTER_ANIMATION_FRAMES[frame()]!}</text>
     </box>
+  )
+}
+
+export function FooterAnimationSpinner() {
+  const kv = useKV()
+  return (
+    <Show when={kv.get("animations_enabled", true)} fallback={<FooterAnimationStatic />}>
+      <FooterAnimationAnimated />
+    </Show>
   )
 }

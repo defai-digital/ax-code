@@ -39,7 +39,7 @@
     "brandGradientStart": { "dark": "green900", "light": "lightGreen" },
     "brandGradientEnd": { "dark": "greenDeep", "light": "lightGreenDeep" },
     "error": { "dark": "red700", "light": "#DC3545" },
-    "warning": { "dark": "amber700", "light": "#FF9500" },
+    "warning": { "dark": "amber700", "light": "#B45309" },
     "success": { "dark": "green700", "light": "#388E3C" },
     "info": { "dark": "blue900", "light": "blue700" },
     "text": { "dark": "gray1000", "light": "lightGray1000" },

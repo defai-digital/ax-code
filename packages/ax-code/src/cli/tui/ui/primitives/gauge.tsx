@@ -30,7 +30,7 @@ export function Gauge(props: {
     <Show when={props.view}>
       <text fg={theme.textMuted} selectable={false}>
         <span style={{ fg: fillColor() }}>{parts().filled}</span>
-        <span style={{ fg: theme.borderSubtle }}>{parts().empty}</span> {props.view!.percent}%
+        <span style={{ fg: theme.textMuted }}>{parts().empty}</span> {props.view!.percent}%
         {props.label ? ` ${props.label}` : ""}
       </text>
     </Show>

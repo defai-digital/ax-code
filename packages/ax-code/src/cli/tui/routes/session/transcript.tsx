@@ -758,14 +758,14 @@ function CoalescedTool(props: {
       fallback={
         <box paddingLeft={3} flexDirection="row">
           <Chip status={isRunning() ? "running" : "done"} spinner={isRunning()} onMouseUp={() => props.onToggle(true)}>
-            {label()} <span style={{ fg: theme.borderSubtle }}>▸</span>
+            {label()} <span style={{ fg: theme.textMuted }}>▸</span>
           </Chip>
         </box>
       }
     >
       <For each={props.group.parts}>{(part) => <ToolPart last={false} part={part} message={props.message} />}</For>
       <box paddingLeft={3}>
-        <text paddingLeft={3} fg={theme.borderSubtle} onMouseUp={() => props.onToggle(false)}>
+        <text paddingLeft={3} fg={theme.textMuted} onMouseUp={() => props.onToggle(false)}>
           {uiText("ui.collapse")}
         </text>
       </box>

@@ -78,6 +78,34 @@ export function defaultVisibleAgentName(
   return agents[0]?.name
 }
 
+// Theme keys used for the agent identity colour rotation. Status hues
+// (error, warning) are deliberately excluded: agent identity must never
+// read as a failure or warning state.
+export const AGENT_COLOR_THEME_KEYS = ["secondary", "accent", "success", "primary", "info"] as const
+
+const GENERAL_AGENT_ICON = ">"
+
+// Agent identity marks rendered next to the agent name (prompt meta row,
+// agent dialog). Single-width printable ASCII only: astral emoji have
+// unstable cell width, two carried VS16, and non-ASCII marks drift CJK
+// layouts.
+export function agentIcon(name: string): string {
+  const icons: Record<string, string> = {
+    build: "#",
+    plan: "~",
+    general: GENERAL_AGENT_ICON,
+    explore: "?",
+    react: "^",
+    security: "!",
+    architect: "=",
+    debug: "*",
+    perf: "+",
+    devops: "&",
+    test: "%",
+  }
+  return icons[name] ?? GENERAL_AGENT_ICON
+}
+
 export function normalizeModelVariantStore(input: unknown): Record<string, string | undefined> {
   if (!input || typeof input !== "object" || Array.isArray(input)) return {}
   return Object.fromEntries(
