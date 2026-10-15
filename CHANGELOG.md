@@ -17,6 +17,7 @@ changes belong to AX Coder.
 ### Fixed
 
 - Consume the standard Node option separator before constructing TUI preload options, preventing startup exit 9.
+- Detach output-drain listeners after normal completion, early pipe close, or stream failure.
 - Refresh the embedded Wiki viewer bundle and isolate real mouse movement from synthetic hover checks.
 - Include the renderer missing-part recovery and quoted cache-path launcher fixes already integrated into main.
 
