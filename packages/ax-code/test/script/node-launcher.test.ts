@@ -126,6 +126,47 @@ describe("Unix node launcher", () => {
   )
 
   test.skipIf(process.platform === "win32")(
+    "omits the fatal-error report flags when the cache home has a double quote NODE_OPTIONS cannot carry",
+    async () => {
+      const root = await mkdtemp(path.join(os.tmpdir(), "ax-code-node-report-quote-"))
+      temporaryRoots.push(root)
+      const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'"
+      const original = path.join(root, "node")
+      const launcher = path.join(root, "launcher")
+      const calls = path.join(root, "calls")
+      const entry = path.join(root, "lib", "index-node-tui.js")
+      await mkdir(path.dirname(entry), { recursive: true })
+      await writeFile(entry, "process.stdout.write('ok')\n")
+      await writeFile(
+        original,
+        [
+          "#!/bin/sh",
+          `if [ "$1" = "-e" ]; then exec ${quote(process.execPath)} "$@"; fi`,
+          `printf 'options=[%s]\\n' "$NODE_OPTIONS" >> ${quote(calls)}`,
+          "exit 37",
+          "",
+        ].join("\n"),
+        { mode: 0o755 },
+      )
+      await writeFile(
+        launcher,
+        `#!/bin/sh\n${UNIX_BRAND_AND_EXEC_NODE}\nbrand_and_exec_node ${quote(original)} ${quote(entry)} "$@"\n`,
+        { mode: 0o755 },
+      )
+      const failure = await execFileAsync(launcher, ["--version"], {
+        env: { ...process.env, XDG_CACHE_HOME: path.join(root, 'cache"home'), NODE_OPTIONS: "" },
+        timeout: 10_000,
+      }).catch((error: unknown) => error)
+      expect(failure).toMatchObject({ code: 37, signal: null })
+      const options = await readFile(calls, "utf8")
+      // A raw quote would make Node reject NODE_OPTIONS outright ("unterminated
+      // string", exit 9) before any application code runs.
+      expect(options).not.toContain("--report-directory")
+      expect(options).toContain(`--import file://${entry}`)
+    },
+  )
+
+  test.skipIf(process.platform === "win32")(
     "keeps the legacy argv form for entry paths NODE_OPTIONS cannot tokenize",
     async () => {
       const root = await mkdtemp(path.join(os.tmpdir(), "ax-code-node-space-"))

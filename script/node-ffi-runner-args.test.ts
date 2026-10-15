@@ -47,6 +47,9 @@ describe("crashReportArgs", () => {
     expect(
       crashReportArgs({ XDG_CACHE_HOME: "/Users/dev/Library/Application Support" }, { mkdir: () => undefined }),
     ).toEqual([])
+    // A lone double quote survives mkdir but makes NODE_OPTIONS unparseable
+    // ("unterminated string"), which would fail every launch.
+    expect(crashReportArgs({ XDG_CACHE_HOME: '/Users/dev/cache"home' }, { mkdir: () => undefined })).toEqual([])
   })
 })
 

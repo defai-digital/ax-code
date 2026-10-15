@@ -24,6 +24,9 @@ describe("install script", () => {
     expect(text).toContain(
       "--report-on-fatalerror --report-exclude-env --report-exclude-network --report-directory=$report_dir",
     )
+    // Whitespace or a double quote in that path makes NODE_OPTIONS unusable
+    // ("unterminated string"), so the flags are dropped instead.
+    expect(text).toContain("*[[:space:]]* | *'\"'*)")
     expect(text).toContain("AX_CODE_SOURCE_NODE_FFI_RUNNER=")
     expect(text).toContain("node-ffi-runner.mjs")
     // Legacy source launcher detection is retained so the Node installer can

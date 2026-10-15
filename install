@@ -848,12 +848,14 @@ launch_node() {
   fi
   # Node's own diagnostic report on a fatal error (heap exhaustion, V8
   # abort): the OS crash dump alone carries no JavaScript stack or argv.
-  # Environment variables are excluded. Mirrors script/node-launcher.ts.
+  # Environment variables are excluded. Skipped when the directory cannot be
+  # created or holds whitespace or a double quote, which NODE_OPTIONS cannot
+  # carry. Mirrors script/node-launcher.ts.
   report_dir="${XDG_CACHE_HOME:-$HOME/.cache}/ax-code/crash-reports"
   report_flags=""
   if mkdir -p "$report_dir" 2>/dev/null; then
     case "$report_dir" in
-      *[[:space:]]*) ;;
+      *[[:space:]]* | *'"'*) ;;
       *) report_flags="--report-on-fatalerror --report-exclude-env --report-exclude-network --report-directory=$report_dir" ;;
     esac
   fi

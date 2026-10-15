@@ -66,8 +66,9 @@ export const UNIX_BRAND_AND_EXEC_NODE = `brand_and_exec_node() {
   # 2026-10-14 node crash reports unattributable. Ask Node for its own
   # diagnostic report on fatal errors, beside the compile cache. Environment
   # variables stay out of the file so no credential lands in it. Skipped when
-  # the directory cannot be created or has whitespace NODE_OPTIONS cannot
-  # carry; a missing report must never become a launch failure.
+  # the directory cannot be created or holds whitespace or a double quote,
+  # which NODE_OPTIONS cannot carry; a missing report must never become a
+  # launch failure.
   report_dir=""
   if [ -n "\${XDG_CACHE_HOME-}" ]; then
     report_dir="\$XDG_CACHE_HOME/ax-code/crash-reports"
@@ -77,7 +78,7 @@ export const UNIX_BRAND_AND_EXEC_NODE = `brand_and_exec_node() {
   report_flags=""
   if [ -n "$report_dir" ] && mkdir -p "$report_dir" 2>/dev/null; then
     case "$report_dir" in
-      *[[:space:]]*) ;;
+      *[[:space:]]* | *'"'*) ;;
       *) report_flags="--report-on-fatalerror --report-exclude-env --report-exclude-network --report-directory=$report_dir" ;;
     esac
   fi

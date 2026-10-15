@@ -148,14 +148,15 @@ export function withCompileCache(env = process.env, options = {}) {
  * and no argv, which is what made the 2026-10-14 node crash reports
  * unattributable. Reports go beside the compile cache; environment variables
  * are excluded so no credential lands in the file. Empty when the directory
- * cannot be created or has whitespace NODE_OPTIONS cannot carry — a missing
- * report must never become a launch failure. Mirrors the packaged launchers.
+ * cannot be created or holds whitespace or a double quote, which NODE_OPTIONS
+ * cannot carry — a missing report must never become a launch failure. Mirrors
+ * the packaged launchers.
  */
 export function crashReportArgs(env = process.env, options = {}) {
   const home = options.home ?? os.homedir()
   const cacheHome = env.XDG_CACHE_HOME || path.join(home, ".cache")
   const dir = path.join(cacheHome, "ax-code", "crash-reports")
-  if (/\s/.test(dir)) return []
+  if (/[\s"]/.test(dir)) return []
   try {
     ;(options.mkdir ?? ((target) => fs.mkdirSync(target, { recursive: true })))(dir)
   } catch {
