@@ -39942,6 +39942,9 @@
             "$ref": "#/components/schemas/Event.lsp.client.diagnostics"
           },
           {
+            "$ref": "#/components/schemas/Event.debug-engine.correlated-diagnostics"
+          },
+          {
             "$ref": "#/components/schemas/Event.session.goal"
           },
           {
@@ -40015,9 +40018,6 @@
           },
           {
             "$ref": "#/components/schemas/Event.file.edited"
-          },
-          {
-            "$ref": "#/components/schemas/Event.debug-engine.correlated-diagnostics"
           },
           {
             "$ref": "#/components/schemas/Event.vcs.branch.updated"

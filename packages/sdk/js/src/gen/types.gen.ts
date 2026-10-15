@@ -1158,6 +1158,7 @@ export type Event =
   | EventFileWatcherUpdated
   | EventLspUpdated
   | EventLspClientDiagnostics
+  | EventDebugEngineCorrelatedDiagnostics
   | EventSessionGoal
   | EventNotificationToastShow
   | EventNotificationMonitorLine
@@ -1183,7 +1184,6 @@ export type Event =
   | EventQuestionRejected
   | EventSessionCompacted
   | EventFileEdited
-  | EventDebugEngineCorrelatedDiagnostics
   | EventVcsBranchUpdated
   | EventWorkflowRunCreated
   | EventWorkflowRunUpdated
