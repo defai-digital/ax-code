@@ -1,6 +1,6 @@
 /**
  * Fan-out lifecycle utility for parallel member execution.
- * Encapsulates abort-controller chaining, timeout with unref, and error wrapping.
+ * Encapsulates abort-controller chaining, bounded timeouts, and error wrapping.
  * Shared between council.ts and arena.ts.
  */
 
@@ -71,7 +71,7 @@ export namespace FanOut {
    * Execute a callback for each member with independent abort/timeout lifecycle.
    * - Bounded concurrency: at most `concurrency` (default 3) members run in parallel.
    * - Each member gets a local AbortController chained to the parent abort signal.
-   * - Each member gets a setTimeout with .unref() for timeout.
+   * - Each member gets a referenced timeout so awaited work can always settle.
    * - Proper cleanup in finally (clear timer, remove abort listener).
    * - Errors become `{ error: string }` results, never thrown.
    * - Optional `onMemberComplete` fires after each member finishes.
@@ -126,11 +126,13 @@ export namespace FanOut {
     let timedOut = false
     // Node treats delays above 2^31-1 ms as 1 ms.
     const delayMs = Math.min(Math.max(1, config.timeoutMs), 2_147_483_647)
+    const deadline = performance.now() + delayMs
     const timer = setTimeout(() => {
       timedOut = true
       localAbort.abort()
     }, delayMs)
-    timer.unref?.()
+    // This timer owns settlement when execute() has no live handles. Unref'ing
+    // it lets a standalone CLI exit with an unsettled await instead of a timeout.
     let onAbort: (() => void) | undefined
     try {
       localAbort.signal.throwIfAborted()
@@ -146,8 +148,21 @@ export namespace FanOut {
       })
       const result = await Promise.race([execution, cancelled])
       localAbort.signal.throwIfAborted()
+      // Promise continuations run before an overdue timer when execute blocks
+      // the event loop. Check the monotonic deadline before publishing success.
+      if (performance.now() >= deadline) {
+        timedOut = true
+        localAbort.abort()
+        localAbort.signal.throwIfAborted()
+      }
       return { result, durationMs: Date.now() - started }
     } catch (err) {
+      // A blocking callback can reject before the timer gets a turn as well.
+      // Preserve an existing parent abort, but classify overdue errors as timeouts.
+      if (!localAbort.signal.aborted && performance.now() >= deadline) {
+        timedOut = true
+        localAbort.abort()
+      }
       const message = describeError(err)
       const durationMs = Date.now() - started
       // A timer-fired abort and a parent-signal abort surface identically

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import { execFileSync } from "node:child_process"
 import { FanOut } from "../../src/util/fan-out"
 
 describe("FanOut.run", () => {
@@ -132,4 +133,57 @@ describe("FanOut.run", () => {
 
     expect(result?.error).toMatch(/^aborted: /)
   })
+})
+
+test("an awaited fan-out timeout keeps a standalone Node process alive", () => {
+  const source = new URL("../../src/util/fan-out.ts", import.meta.url).href
+  const script = `
+    import { FanOut } from ${JSON.stringify(source)}
+    const result = await FanOut.run({
+      members: [1],
+      timeoutMs: 20,
+      abort: new AbortController().signal,
+      execute: () => new Promise(() => {}),
+    })
+    console.log(result[0].error)
+  `
+  const output = execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", script], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    timeout: 10_000,
+  })
+  expect(output).toContain("timeout: member exceeded 20ms")
+})
+
+test("does not publish success after execute blocks past its deadline", async () => {
+  const [result] = await FanOut.run({
+    members: [1],
+    timeoutMs: 1,
+    abort: new AbortController().signal,
+    execute: async () => {
+      const until = performance.now() + 20
+      while (performance.now() < until) {
+        // Keep the event loop occupied so the timeout callback cannot run.
+      }
+      return "late success"
+    },
+  })
+  expect(result?.error).toBe("timeout: member exceeded 1ms")
+  expect(result?.result).toBeUndefined()
+})
+
+test("classifies a synchronous failure beyond the deadline as a timeout", async () => {
+  const [result] = await FanOut.run({
+    members: [1],
+    timeoutMs: 1,
+    abort: new AbortController().signal,
+    execute: async () => {
+      const until = performance.now() + 20
+      while (performance.now() < until) {
+        // The error is delivered before the overdue timer can run.
+      }
+      throw new Error("late SDK error")
+    },
+  })
+  expect(result?.error).toBe("timeout: member exceeded 1ms")
 })
