@@ -60,7 +60,7 @@ try {
   await page.goto(pathToFileURL(output).href)
   await page.getByRole("heading", { name: "AX Wiki", exact: true }).waitFor()
   await page.getByRole("tab", { name: "Evidence map" }).click()
-  await page.getByRole("heading", { name: "Evidence map", exact: true }).waitFor()
+  await page.locator(".panel-map .canvas").waitFor()
   // The map opens on the treemap; the force-layout checks below switch to Force first.
   assert.equal(await page.getByRole("button", { name: "Treemap", exact: true }).getAttribute("aria-pressed"), "true")
   assert.match(await page.locator(".view-caption").innerText(), /^Treemap:/)
@@ -395,7 +395,7 @@ try {
   const calm = await browser.newPage({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" })
   await calm.goto(pathToFileURL(output).href)
   await calm.getByRole("tab", { name: "Evidence map" }).click()
-  await calm.getByRole("heading", { name: "Evidence map", exact: true }).waitFor()
+  await calm.locator(".panel-map .canvas").waitFor()
   await calm.getByRole("button", { name: "Force" }).click()
   const calmDrag = await calm.evaluate(() => {
     const group = document.querySelectorAll("svg g.node")[0]

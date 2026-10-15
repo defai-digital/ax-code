@@ -8,12 +8,13 @@ export const modulesCss = `
 .axwv .modules h3{font-size:13px;font-weight:650;margin:10px 0 4px}
 .axwv .modules .caption{margin:2px 0 8px;color:var(--muted);font-size:12px;max-width:78ch}
 .axwv .modules .empty{margin:4px 0 8px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--muted)}
-.axwv .modules .scroll{overflow:auto;max-width:100%;margin:0 0 8px;border:1px solid var(--line);border-radius:12px;background:var(--canvas);scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
+.axwv .modules .scroll{overflow:auto;max-width:100%;width:fit-content;margin:0 0 8px;border:1px solid var(--line);border-radius:12px;background:var(--canvas);scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
 .axwv .modules svg.chart{display:block;width:auto;height:auto;max-width:none}
 .axwv .modules svg.chart text{font-family:inherit;font-size:11px;fill:var(--text);pointer-events:none}
 .axwv .modules svg.chart text.count{font-size:10px;text-anchor:middle;font-variant-numeric:tabular-nums}
 .axwv .modules svg.chart text.diag-num{fill:var(--muted)}
 .axwv .modules svg.chart text.col-label{fill:var(--muted);text-anchor:start}
+.axwv .modules svg.chart text.col-num{fill:var(--muted);text-anchor:middle;font-size:10px;pointer-events:auto}
 .axwv .modules svg.chart text.row-text{text-anchor:end}
 .axwv .modules .row-label{cursor:pointer}
 .axwv .modules .hit{fill:transparent}
@@ -312,12 +313,19 @@ type GridMetrics = {
   originY: number
 }
 
-function gridMetrics(rowLabels: readonly string[], colLabels: readonly string[]): GridMetrics {
+function gridMetrics(
+  rowLabels: readonly string[],
+  colLabels: readonly string[],
+  options: { numbered?: boolean } = {},
+): GridMetrics {
   const rows = rowLabels.length
   const cols = colLabels.length
   const cell = cellSize(cols)
   const rowLabelW = Math.max(72, labelSpan(rowLabels) + 36)
-  const colLabelH = Math.max(36, labelSpan(colLabels) + 18)
+  // Numbered columns need one short line, not room for rotated paths.
+  const colLabelH = options.numbered ? 22 : Math.max(36, Math.ceil(labelSpan(colLabels) * 0.72) + 18)
+  // Angled labels lean right past the last column.
+  const overhang = options.numbered ? 0 : Math.ceil(labelSpan(colLabels) * 0.72)
   const pad = 4
   return {
     cell,
@@ -325,7 +333,7 @@ function gridMetrics(rowLabels: readonly string[], colLabels: readonly string[])
     cols,
     rowLabelW,
     colLabelH,
-    width: rowLabelW + cols * cell + pad,
+    width: rowLabelW + cols * cell + pad + overhang,
     height: colLabelH + rows * cell + pad,
     originX: rowLabelW,
     originY: colLabelH,
@@ -414,13 +422,27 @@ function addColumnLabels(
   metrics: GridMetrics,
   labels: readonly string[],
   full?: readonly string[],
+  numbered = false,
 ) {
   for (let column = 0; column < labels.length; column++) {
+    if (numbered) {
+      const text = svg(doc, "text")
+      text.setAttribute("class", "col-num")
+      text.setAttribute("x", String(metrics.originX + column * metrics.cell + metrics.cell / 2))
+      text.setAttribute("y", String(metrics.colLabelH - 7))
+      text.textContent = String(column + 1)
+      const tip = svg(doc, "title")
+      tip.textContent = full?.[column] ?? labels[column]
+      text.append(tip)
+      chart.append(text)
+      continue
+    }
     const text = svg(doc, "text")
     text.setAttribute("class", "col-label")
     const x = metrics.originX + column * metrics.cell + metrics.cell / 2
     const y = metrics.colLabelH - 2
-    text.setAttribute("transform", `translate(${x} ${y}) rotate(-90)`)
+    // 45 degrees needs about 70% of the height a vertical label does.
+    text.setAttribute("transform", `translate(${x} ${y}) rotate(-45)`)
     text.setAttribute("x", "4")
     text.setAttribute("y", "0")
     text.setAttribute("text-anchor", "start")
@@ -569,9 +591,10 @@ function renderMatrix(
   options: ViewOptions,
   signal: AbortSignal,
 ): SVGSVGElement {
-  const labels = analysis.order.map((path) => shortGroupLabel(path))
+  // Columns are numbered to match their rows, so long paths are read once, on the left.
+  const labels = analysis.order.map((path, index) => `${shortGroupLabel(path)}  ${index + 1}`)
   const fullLabels = analysis.order.map(groupLabel)
-  const metrics = gridMetrics(labels, labels)
+  const metrics = gridMetrics(labels, labels, { numbered: true })
   const chart = createChart(doc, metrics)
   const { weights, max } = importWeights(modules.dependencies)
   const files = new Map<string, number>()
@@ -628,7 +651,7 @@ function renderMatrix(
   }
   const highlight = crossHighlight(doc, chart, metrics, true)
   appendCounts(doc, chart, marks)
-  addColumnLabels(doc, chart, metrics, labels, fullLabels)
+  addColumnLabels(doc, chart, metrics, labels, fullLabels, true)
   const listed = filesByGroup(modules.groups, analysis.order, pages)
   const focus = bindHoverFocus(signal, highlight)
   for (let index = 0; index < analysis.order.length; index++) {
@@ -662,7 +685,8 @@ function renderHeatmap(
   options: ViewOptions,
   signal: AbortSignal,
 ): SVGSVGElement {
-  const colLabels = columns.map((path) => shortGroupLabel(path))
+  const colLabels = columns.map((path) => shortGroupLabel(path, 24))
+  const fullColumns = columns.map(groupLabel)
   const rowLabels = rows.map((row) => (row.title.length > 40 ? `${row.title.slice(0, 39)}…` : row.title))
   const metrics = gridMetrics(rowLabels, colLabels)
   const chart = createChart(doc, metrics)
@@ -695,7 +719,7 @@ function renderHeatmap(
   }
   const highlight = crossHighlight(doc, chart, metrics, false)
   appendCounts(doc, chart, marks)
-  addColumnLabels(doc, chart, metrics, colLabels)
+  addColumnLabels(doc, chart, metrics, colLabels, fullColumns)
   const focus = bindHoverFocus(signal, highlight)
   for (let index = 0; index < rows.length; index++) {
     const page = rows[index]

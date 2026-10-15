@@ -77,7 +77,7 @@ export function sharedFiles(a: WikiGraphPage, b: WikiGraphPage): string[] {
 export const overviewChartsCss = `
 .axw .spots{list-style:none;margin:0;padding:0}
 .axw .spots li{display:grid;grid-template-columns:minmax(0,1fr) 110px 64px;gap:8px;align-items:center;padding:3px 0}
-.axw .spots button{background:none;border:0;padding:0;text-align:left;color:#c9d6e4;font:12px ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere;cursor:pointer}
+.axw .spots button{background:none;border:0;padding:0;text-align:left;color:#c9d6e4;font:12px ui-monospace,SFMono-Regular,Menlo,monospace;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:rtl}
 .axw .spots button:hover{color:var(--accent);background:none}
 .axw .spots .bar span.cited{background:var(--accent)}
 .axw .spots .bar span.uncited{background:#4a5c70}
@@ -116,7 +116,10 @@ export function renderBlindSpots(
   for (const spot of spots) {
     const item = doc.createElement("li")
     const button = doc.createElement("button")
-    button.textContent = spot.path
+    const text = doc.createElement("span")
+    text.dir = "ltr"
+    text.textContent = spot.path
+    button.append(text)
     button.title = `${spot.path}: ${spot.uncited} of ${spot.indexed} indexed files are not cited by any page`
     button.onclick = () => onSelect(spot.path)
     const bar = doc.createElement("div")

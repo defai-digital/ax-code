@@ -361,7 +361,9 @@ test("renders the matrix, cycles, heatmap, and safe text", () => {
   ).toEqual(["1", "3", "5"])
   expect(nodes.some((node) => node.attrs.get("class") === "scroll")).toBe(true)
 
-  const labeled = (label: string) => buttons.filter((button) => textOf(button) === label)
+  // Matrix rows end with their column number; heatmap rows are plain page titles.
+  const labeled = (label: string) =>
+    buttons.filter((button) => textOf(button) === label || textOf(button).startsWith(`${label}  `))
   fire(labeled("(root)")[0], "click", { preventDefault() {} })
   fire(labeled("a")[0], "keydown", { key: "Enter", preventDefault() {} })
   const space = {

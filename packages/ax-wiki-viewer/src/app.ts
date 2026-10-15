@@ -21,9 +21,9 @@ const appCss = `
 .axw button{font:inherit;font-size:13px;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 11px;cursor:pointer}
 .axw button:hover{background:var(--surface-2);border-color:var(--line-2)}
 .axw :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.axw .app-head{display:flex;flex-wrap:wrap;gap:6px 20px;align-items:center;padding:12px 20px 0;border-bottom:1px solid var(--line)}
-.axw .brand{display:flex;flex-direction:column;gap:2px;min-width:0;padding-bottom:10px}
-.axw .brand h1{margin:0;font-size:16px;font-weight:650;letter-spacing:-.01em}
+.axw .app-head{display:flex;flex-wrap:wrap;gap:4px 20px;align-items:flex-end;padding:6px 20px 0;border-bottom:1px solid var(--line)}
+.axw .brand{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;min-width:0;padding-bottom:9px}
+.axw .brand h1{margin:0;font-size:15px;font-weight:650;letter-spacing:-.01em}
 .axw .brand .meta{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
 .axw .tabs{display:flex;gap:2px;margin-left:auto;align-self:flex-end}
 .axw .tabs button{border:0;border-radius:8px 8px 0 0;background:transparent;color:var(--muted);padding:8px 14px;box-shadow:none}
@@ -31,7 +31,15 @@ const appCss = `
 .axw .panel{flex:1;min-height:0;overflow:auto}
 .axw .panel[hidden]{display:none}
 .axw .panel-map{overflow:hidden}
-.axw .axwv.map{height:100%}
+.axw .axwv.map{height:100%;padding:8px 20px 12px}
+.axw .axwv.map>h1{display:none}
+.axw .axwv.map>h1+p{font-size:12px;margin:0}
+.axw .axwv.map>.counts{margin-top:2px}
+.axw .axwv.map>details:first-of-type{order:3;margin-top:6px}
+.axw .axwv.map .controls{margin-top:8px}
+.axw .axwv.map .legend{margin-top:4px}
+.axw .axwv.map .view-caption{margin-top:4px}
+.axw .axwv.map .layout{margin-top:8px}
 .axw .page-wrap{max-width:1280px;margin:0 auto;padding:18px 20px 28px}
 .axw h2{font-size:12px;font-weight:650;margin:0 0 10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .axw .card{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:14px 16px}
@@ -53,6 +61,8 @@ const appCss = `
 .axw .ptitle{font-weight:600;color:var(--text)}
 .axw .psub{color:var(--muted);font-size:12px;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .axw .bar{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--canvas);min-width:80px}
+.axw td.fresh{width:150px}
+.axw td.fresh .note{margin-top:4px;white-space:nowrap}
 .axw .bar span{display:block;height:100%}
 .axw .badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:2px 9px;border-radius:999px;border:1px solid var(--line-2);color:var(--muted);white-space:nowrap}
 .axw .badge::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--unknown)}
@@ -61,6 +71,7 @@ const appCss = `
 .axw .note{font-size:12px;color:var(--muted);margin:8px 0 0}
 .axw .hot{list-style:none;margin:0;padding:0}
 .axw .hot li{display:grid;grid-template-columns:minmax(0,1fr) 90px 22px;gap:8px;align-items:center;padding:4px 0}
+.axw .hot button{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:rtl;text-align:left}
 .axw .hot button,.axw .linkish{background:none;border:0;padding:0;text-align:left;color:#c9d6e4;font:12px ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere;cursor:pointer}
 .axw .hot button:hover,.axw .linkish:hover{color:var(--accent);background:none}
 .axw .hot .count{font-size:12px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
@@ -161,6 +172,14 @@ function pageState(page: WikiGraphPage): "fresh" | "stale" | "unknown" {
   if (page.stale > 0) return "stale"
   if (page.unknown > 0 || page.sources.length === 0) return "unknown"
   return "fresh"
+}
+
+/** Compact table form of the page state. */
+function shortState(page: WikiGraphPage): string {
+  const state = pageState(page)
+  if (state === "stale") return `${page.stale}/${page.sources.length} changed`
+  if (state === "unknown") return "Unverified"
+  return "Unchanged"
 }
 
 function stateText(page: WikiGraphPage): string {
@@ -458,7 +477,7 @@ export function mount(
     el("h2", pagesCard, "Pages")
     const table = el("table", pagesCard)
     const headRow = el("tr", el("thead", table))
-    for (const label of ["Page", "Files", "Cited file freshness"]) el("th", headRow, label)
+    for (const label of ["Page", "Files", "Freshness"]) el("th", headRow, label)
     const body = el("tbody", table)
     for (const page of list) {
       const row = el("tr", body, undefined, "row")
@@ -471,7 +490,7 @@ export function mount(
       el("div", cell, page.title, "ptitle")
       el("div", cell, page.purpose || page.summary, "psub")
       el("td", row, String(page.sources.length), "num")
-      const freshCell = el("td", row)
+      const freshCell = el("td", row, undefined, "fresh")
       const bar = el("div", freshCell, undefined, "bar")
       const total = Math.max(1, page.sources.length)
       const fresh = Math.max(0, page.sources.length - page.stale - page.unknown)
@@ -486,7 +505,7 @@ export function mount(
         part.style.background = color
       }
       bar.title = `${fresh} unchanged, ${page.stale} changed, ${page.unknown} unverified`
-      el("div", freshCell, stateText(page), "note")
+      el("div", freshCell, shortState(page), "note")
     }
 
     const counts = citations()
@@ -502,7 +521,9 @@ export function mount(
       const ul = el("ul", hotCard, undefined, "hot")
       for (const [path, citing] of hot) {
         const li = el("li", ul)
-        const button = el("button", li, path)
+        // The button cuts long paths at the start; the inner span keeps the path itself left to right.
+        const button = el("button", li)
+        el("span", button, path).dir = "ltr"
         button.title = path
         button.onclick = () => openSource(path)
         const bar = el("div", li, undefined, "bar")

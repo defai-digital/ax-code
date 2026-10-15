@@ -71,8 +71,8 @@ export const mapCss = `
 .axwv .notice{border:1px solid var(--line-2);border-radius:10px;padding:8px 12px;color:#b5c5d7;background:var(--surface)}
 .axwv .overlay{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;text-align:center;background:rgba(10,17,26,.94);padding:24px}
 .axwv .overlay p{margin:0;max-width:52ch;color:var(--muted)}
-.axwv .hud{position:absolute;right:12px;bottom:12px;z-index:2;display:grid;grid-template-columns:repeat(3,32px);gap:4px;align-items:center;margin:0;padding:6px;border:1px solid var(--line);border-radius:12px;background:rgba(13,21,32,.82);backdrop-filter:blur(6px)}
-.axwv .hud button{padding:0;height:32px;width:32px;line-height:1;font-size:16px;background:transparent;border-color:transparent;border-radius:8px;display:flex;align-items:center;justify-content:center}
+.axwv .hud{position:absolute;right:10px;bottom:10px;z-index:2;display:grid;grid-template-columns:30px;gap:2px;align-items:center;margin:0;padding:4px;border:1px solid var(--line);border-radius:12px;background:rgba(13,21,32,.82);backdrop-filter:blur(6px)}
+.axwv .hud button{padding:0;height:30px;width:30px;line-height:1;font-size:16px;background:transparent;border-color:transparent;border-radius:8px;display:flex;align-items:center;justify-content:center}
 .axwv .hud button:hover{background:var(--surface-2)}
 .axwv .view-caption{order:1;margin:6px 0 0;font-size:12px;color:var(--muted)}
 .axwv .sr-only{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
@@ -93,7 +93,7 @@ export const mapCss = `
 .axwv .tip{position:absolute;z-index:4;pointer-events:none;flex-direction:column;gap:2px;max-width:320px;padding:8px 10px;border:1px solid var(--line-2);border-radius:10px;background:rgba(13,21,32,.96);box-shadow:0 8px 24px rgba(0,0,0,.45);font-size:12px;color:var(--muted)}
 .axwv .tip strong{color:var(--text);font-size:13px;overflow-wrap:anywhere}
 .axwv .tip code{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;color:#b5c5d7;overflow-wrap:anywhere}
-.axwv .zoom-readout{grid-column:span 2;text-align:center;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.axwv .zoom-readout{grid-column:span 1;font-size:10px!important;text-align:center;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
 .axwv .key{display:inline-block;margin:0 0 0 10px;padding-left:12px;border-left:1px solid var(--line);font-size:12px}
 .axwv .key[open]{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center}
 .axwv .key summary{font-size:12px}
@@ -101,7 +101,10 @@ export const mapCss = `
 .axwv .controls .chips{margin:0 0 0 auto}
 .axwv .list ul{list-style:none;margin:0;padding:0 0 0 14px;border-left:1px solid var(--line);margin-left:9px}
 .axwv .list .row{display:flex;align-items:center;gap:2px}
-.axwv .list .row .node-label{flex:1;min-width:0;margin:0}
+.axwv .list .row .node-label{flex:1;min-width:0;margin:0;display:flex;align-items:center;white-space:nowrap;overflow:hidden}
+.axwv .list .node-label .kind-text{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.axwv .list .node-label .dir{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;direction:rtl;color:var(--muted);font-size:12px}
+.axwv .list .node-label .name{flex:0 0 auto;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .axwv .list .twisty,.axwv .list .spacer{flex:none;width:20px;height:24px;padding:0;margin:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text)}
 .axwv .list .twisty::before{content:none}
 .axwv .list .twisty .caret{display:inline-block;font-size:13px;line-height:1;transition:transform .12s}
@@ -109,7 +112,7 @@ export const mapCss = `
 .axwv .list .meta{flex:none;font-size:11px;color:var(--muted);padding-right:6px;font-variant-numeric:tabular-nums}
 .axwv .tree-tools{display:flex;gap:6px;margin:-2px 0 8px}
 .axwv .tree-tools button{padding:2px 9px;font-size:11px;border-radius:999px;background:transparent;color:var(--muted)}
-.axwv .list .node-label::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;background:#64778b}
+.axwv .list .node-label::before{content:"";display:inline-block;flex:none;width:8px;height:8px;border-radius:50%;margin-right:8px;background:#64778b}
 .axwv .list button[data-kind=page]::before{background:#3db8c4}
 .axwv .list button[data-kind=source]::before{background:#4d7cb4}
 .axwv .list button[data-kind=symbol]::before{background:#b8974f}
@@ -837,9 +840,28 @@ export function mountMap(
   function listNodeLabel(node: WikiGraphNode): HTMLButtonElement {
     const button = doc.createElement("button")
     button.className = node.id === selected ? "node-label selected" : "node-label"
-    button.textContent = `${node.kind}: ${node.label}`
+    // Text content stays "kind: label"; the dot shows the kind, so only the name is drawn, and a
+    // source's directory is muted and trimmed from the start to keep each row on one line.
+    const kind = doc.createElement("span")
+    kind.className = "kind-text"
+    kind.textContent = `${node.kind}: `
+    button.append(kind)
+    const cut = node.kind === "source" ? node.label.lastIndexOf("/") + 1 : 0
+    if (cut > 0) {
+      const dir = doc.createElement("span")
+      dir.className = "dir"
+      const inner = doc.createElement("span")
+      inner.dir = "ltr"
+      inner.textContent = node.label.slice(0, cut)
+      dir.append(inner)
+      button.append(dir)
+    }
+    const name = doc.createElement("span")
+    name.className = "name"
+    name.textContent = node.label.slice(cut)
+    button.append(name)
     const degree = layout?.byId.get(node.id)?.degree ?? 0
-    button.title = `${node.freshness} · ${plural(degree, "connection", "connections")} shown of ${plural(node.recordedReferences, "recorded reference", "recorded references")}`
+    button.title = `${node.label}\n${node.freshness} · ${plural(degree, "connection", "connections")} shown of ${plural(node.recordedReferences, "recorded reference", "recorded references")}`
     button.dataset.kind = node.kind
     button.dataset.id = node.id
     button.tabIndex = -1
@@ -1705,13 +1727,10 @@ export function mountMap(
     viewBox()
     applyEmphasis()
   }
+  // Dragging and the arrow keys pan; the pad only zooms, so it covers less of the picture.
   for (const [label, glyph, action] of [
-    ["Pan up", "↑", () => pan(0, -100 / zoom)],
     ["Zoom in", "+", () => zoomBy(1.5)],
     ["Zoom out", "−", () => zoomBy(1 / 1.5)],
-    ["Pan left", "←", () => pan(-100 / zoom, 0)],
-    ["Pan down", "↓", () => pan(0, 100 / zoom)],
-    ["Pan right", "→", () => pan(100 / zoom, 0)],
     [
       "Fit to view",
       "⤢",
