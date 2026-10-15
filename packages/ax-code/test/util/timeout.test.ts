@@ -1,5 +1,5 @@
-import { describe, expect, test } from "vitest"
-import { sleep, withTimeout } from "../../src/util/timeout"
+import { describe, expect, test, vi } from "vitest"
+import { scheduleUnref, sleep, withTimeout } from "../../src/util/timeout"
 
 function captureTimerRef(fn: () => void) {
   const original = globalThis.setTimeout
@@ -113,6 +113,30 @@ describe("util.timeout", () => {
     void sleep(Number.NaN).then(() => fired.push("sleep NaN"))
     await new Promise((resolve) => setTimeout(resolve, 30))
     expect(fired.sort()).toEqual(["sleep NaN", "withTimeout NaN"])
+  })
+
+  test("negative infinity means an elapsed delay for all timer helpers", async () => {
+    vi.useFakeTimers()
+    try {
+      const fired: string[] = []
+      void sleep(-Infinity).then(() => fired.push("sleep"))
+      void withTimeout(new Promise<never>(() => {}), -Infinity).catch(() => fired.push("timeout"))
+      scheduleUnref(() => fired.push("scheduled"), -Infinity)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(fired.sort()).toEqual(["scheduled", "sleep", "timeout"])
+    } finally {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
+  })
+
+  test("a cleanup throwing undefined remains a cleanup failure", async () => {
+    const pending = withTimeout(new Promise<never>(() => {}), 1, "ordinary timeout", {
+      onTimeout: () => {
+        throw undefined
+      },
+    })
+    await expect(pending).rejects.toThrow("undefined")
   })
 
   test("does not fire onTimeout when the promise settles first", async () => {

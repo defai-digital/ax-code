@@ -66,6 +66,7 @@ export function withTimeout<T>(
       if (settled) return
       settled = true
       let cleanupFailure: unknown
+      let cleanupFailed = false
       try {
         const cleanup: unknown = opts?.onTimeout?.()
         // An async cleanup that rejects must not become an unhandled rejection.
@@ -78,6 +79,7 @@ export function withTimeout<T>(
         // an error factory still get their timeout error; the cleanup failure
         // only stands in when there is nothing better to report.
         cleanupFailure = e
+        cleanupFailed = true
       }
       if (opts?.error) {
         try {
@@ -87,7 +89,7 @@ export function withTimeout<T>(
         }
         return
       }
-      if (cleanupFailure !== undefined) {
+      if (cleanupFailed) {
         reject(toError(cleanupFailure))
         return
       }
@@ -119,7 +121,7 @@ const MAX_TIMER_DELAY_MS = 2_147_483_647
 // immediate firing Node always gave it so the fault surfaces instead of hanging.
 function clampDelay(ms: number) {
   if (Number.isNaN(ms)) return 0
-  return Number.isFinite(ms) ? Math.min(Math.max(ms, 0), MAX_TIMER_DELAY_MS) : MAX_TIMER_DELAY_MS
+  return Math.min(Math.max(ms, 0), MAX_TIMER_DELAY_MS)
 }
 
 // Fire-and-forget timer for background batching; unref'd so it never holds the
