@@ -55,7 +55,6 @@ export namespace JsonParseGuard {
     "src/session/processor-impl.ts",
     "src/session/prompt/prompt-command-workflow.ts",
     "src/tool/visual/compare.ts",
-    "src/tool/visual/critique.ts",
   ])
 
   export interface Violation {
