@@ -3,16 +3,35 @@ import {
   DIALOG_FRAME_CHROME_HEIGHT,
   DIALOG_HELP_CHROME_HEIGHT,
   DIALOG_OVERLAY_BOTTOM_SAFE_MARGIN,
+  DIALOG_OVERLAY_TOP_MARGIN,
   DIALOG_SELECT_CHROME_HEIGHT,
+  dialogOverlayBottomMargin,
   dialogOverlayMaxHeight,
   dialogOverlayVisibleBodyHeight,
+  dialogOverlayWidth,
 } from "../../../src/cli/tui/ui/dialog-overlay"
 
 describe("tui dialog overlay viewport", () => {
-  test("leaves a one-row margin on each side of the overlay", () => {
-    expect(dialogOverlayMaxHeight(24)).toBe(22)
-    expect(dialogOverlayMaxHeight(16)).toBe(14)
+  test("keeps the top row and the app's bottom status rows clear", () => {
+    // 80x24: the frame must end above the status line at row 22 (0-based).
+    expect(dialogOverlayBottomMargin(24)).toBe(2)
+    expect(dialogOverlayMaxHeight(24)).toBe(21)
+    const lastFrameRow = DIALOG_OVERLAY_TOP_MARGIN + dialogOverlayMaxHeight(24) - 1
+    expect(lastFrameRow).toBe(21)
+    expect(dialogOverlayMaxHeight(16)).toBe(13)
+    // Very short terminals cannot spare both status rows.
+    expect(dialogOverlayBottomMargin(10)).toBe(1)
+    expect(dialogOverlayMaxHeight(10)).toBe(8)
     expect(dialogOverlayMaxHeight(1)).toBe(1)
+  })
+
+  test("clamps the frame width to the terminal minus a side margin", () => {
+    expect(dialogOverlayWidth(60, 120)).toBe(60)
+    expect(dialogOverlayWidth(80, 80)).toBe(76)
+    expect(dialogOverlayWidth(60, 60)).toBe(56)
+    // Narrow terminals keep one column per side for label room.
+    expect(dialogOverlayWidth(60, 40)).toBe(38)
+    expect(dialogOverlayWidth(60, 3)).toBe(1)
   })
 
   test("sizes the select list from remaining space rather than half the terminal", () => {

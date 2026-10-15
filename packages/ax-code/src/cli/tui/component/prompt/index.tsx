@@ -65,6 +65,7 @@ import { calculateCompactionBudget, effectiveTokenTotal } from "@/session/compac
 import { Gauge } from "@tui/ui/primitives/gauge"
 import { KeyHint } from "@tui/ui/primitives/key-hint"
 import { footerHintWidth, promptFooterLayout } from "./footer-layout"
+import { stringWidth } from "@/bun/node-compat"
 import { computeSessionMainPaneWidth } from "../../routes/session/layout"
 import { pendingSubmitKeyIntent, pendingSubmitStatusText, type SubmitStage } from "./submit-state"
 import { connectionChipText, footerLivenessIndicator, footerLivenessTextFrame } from "./liveness-view-model"
@@ -613,21 +614,6 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
       label: hasDraft ? uiText("ui.clear2") : uiText("ui.exit"),
     }
   })
-  const footerLayout = createMemo(() =>
-    promptFooterLayout({
-      contentWidth: promptContentWidth(),
-      toggleWidth: 0,
-      busy: status().type !== "idle" || subagentStatus() !== undefined,
-      mode: store.mode,
-      variantsWidth:
-        local.model.variant.list().length > 0
-          ? footerHintWidth(keybind.print("variant_cycle"), uiText("ui.effort"))
-          : 0,
-      shellWidth: footerHintWidth("esc", uiText("ui.exitShellMode")),
-      clearWidth: footerHintWidth(footerClearHint().keys, footerClearHint().label),
-    }),
-  )
-
   createEffect(
     on(
       () => props.sessionID,
@@ -1071,6 +1057,41 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     if (hasUnfinishedTodosInPromptParts(msgs, sync.data.part)) return false
     return lastMessage?.role === "assistant" && !lastMessage.error && Boolean(lastMessage.time?.completed)
   })
+
+  // Declared after contextGauge and finishedStatus: this memo reads both at creation time.
+  // Natural widths of the always-shown footer pieces, measured after layout
+  // (both boxes are flexShrink 0, so their width is their content width).
+  const [footerGaugeWidth, setFooterGaugeWidth] = createSignal(0)
+  const [footerExtraWidth, setFooterExtraWidth] = createSignal(0)
+  const footerLeftWidth = createMemo(() => {
+    if (status().type !== "idle" || subagentStatus() !== undefined) return 0
+    if (submitPending()) {
+      const cancel = pendingCancelHint()
+      return stringWidth(
+        pendingSubmitStatusText(submitStage()) + (cancel ? " " + uiText("ui.keysToCancel", { keys: cancel }) : ""),
+      )
+    }
+    return finishedStatus() ? stringWidth(uiText("ui.finished")) : 0
+  })
+  const footerLayout = createMemo(() =>
+    promptFooterLayout({
+      measured: {
+        leftWidth: footerLeftWidth(),
+        gaugeWidth: contextGauge() ? footerGaugeWidth() : 0,
+        extraWidth: props.footerRight ? footerExtraWidth() : 0,
+      },
+      contentWidth: promptContentWidth(),
+      toggleWidth: 0,
+      busy: status().type !== "idle" || subagentStatus() !== undefined,
+      mode: store.mode,
+      variantsWidth:
+        local.model.variant.list().length > 0
+          ? footerHintWidth(keybind.print("variant_cycle"), uiText("ui.effort"))
+          : 0,
+      shellWidth: footerHintWidth("esc", uiText("ui.exitShellMode")),
+      clearWidth: footerHintWidth(footerClearHint().keys, footerClearHint().label),
+    }),
+  )
 
   return (
     <>
@@ -1620,7 +1641,14 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
               flexShrink={0}
             >
               <Show when={contextGauge()}>
-                <box flexDirection="row" flexShrink={0} paddingRight={1}>
+                <box
+                  flexDirection="row"
+                  flexShrink={0}
+                  paddingRight={1}
+                  onSizeChange={function (this: BoxRenderable) {
+                    setFooterGaugeWidth(this.width)
+                  }}
+                >
                   <Gauge
                     view={contextGauge()}
                     label={
@@ -1638,7 +1666,18 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
                 }
               >
                 <box gap={2} flexDirection="row" flexShrink={0}>
-                  {props.footerRight}
+                  <Show when={props.footerRight}>
+                    <box
+                      flexDirection="row"
+                      flexShrink={0}
+                      gap={2}
+                      onSizeChange={function (this: BoxRenderable) {
+                        setFooterExtraWidth(this.width)
+                      }}
+                    >
+                      {props.footerRight}
+                    </box>
+                  </Show>
                   <Switch>
                     <Match when={store.mode === "normal"}>
                       <Show when={footerLayout().showClearHint}>

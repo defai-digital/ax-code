@@ -1,5 +1,7 @@
 import fuzzysort from "fuzzysort"
 import { entries, flatMap, groupBy, pipe } from "remeda"
+import { stringWidth } from "@/bun/node-compat"
+import { truncateCells } from "./cell-text"
 import { DIALOG_SELECT_CHROME_HEIGHT, dialogOverlayVisibleBodyHeight } from "./dialog-overlay"
 
 export type DialogSelectViewOption<T = unknown> = {
@@ -101,4 +103,70 @@ export function dialogSelectActionOption<T>(options: readonly T[], selectedIndex
 
 export function dialogSelectHasCurrentValue(value: unknown): boolean {
   return value !== undefined && value !== null
+}
+
+/** Horizontal chrome around the header row: frame borders (2) + header padding (4 + 4). */
+const DIALOG_SELECT_HEADER_CHROME_WIDTH = 10
+/** Horizontal chrome around the keybind footer row: frame borders (2) + padding (4 + 2). */
+const DIALOG_SELECT_FOOTER_CHROME_WIDTH = 8
+const DIALOG_SELECT_FOOTER_GAP = 2
+/** A secondary description is only worth showing when this many cells remain for it. */
+const DIALOG_SELECT_MIN_DESCRIPTION_WIDTH = 6
+
+/** Cell budget for the dialog title, leaving one cell before the esc label. */
+export function dialogSelectTitleWidth(frameWidth: number, escLabel: string) {
+  return Math.max(0, frameWidth - DIALOG_SELECT_HEADER_CHROME_WIDTH - stringWidth(escLabel) - 1)
+}
+
+export type DialogSelectOptionLine = {
+  title: string
+  description?: string
+  /** False when the footer column was dropped to keep the title readable. */
+  showFooter: boolean
+}
+
+/**
+ * Fit one option row into `slotWidth` cells (the title text slot plus, when
+ * the footer is shown, the footer column and its one-cell gap). Secondary
+ * content goes first: the footer column is dropped before the title is cut,
+ * the inline description is shortened or dropped next, and only then is the
+ * title truncated with an ellipsis at a cell boundary. A slot width of 0 means
+ * "not measured yet" and leaves the row untouched.
+ */
+export function dialogSelectOptionLine(input: {
+  slotWidth: number
+  title: string
+  description?: string
+  /** Cell width of a plain-text footer; undefined for none or an unmeasurable element. */
+  footerWidth?: number
+}): DialogSelectOptionLine {
+  const slot = Math.floor(input.slotWidth)
+  const footerCost = input.footerWidth && input.footerWidth > 0 ? input.footerWidth + 1 : 0
+  if (slot <= 0) return { title: input.title, description: input.description, showFooter: true }
+  const titleWidth = stringWidth(input.title)
+  const showFooter = footerCost === 0 || titleWidth <= slot - footerCost
+  const available = Math.max(0, slot - (showFooter ? footerCost : 0))
+  if (titleWidth > available) return { title: truncateCells(input.title, available), showFooter }
+  if (!input.description) return { title: input.title, showFooter }
+  const remaining = available - titleWidth - 1
+  const descriptionWidth = stringWidth(input.description)
+  if (remaining >= descriptionWidth) return { title: input.title, description: input.description, showFooter }
+  if (remaining < DIALOG_SELECT_MIN_DESCRIPTION_WIDTH) return { title: input.title, showFooter }
+  return { title: input.title, description: truncateCells(input.description, remaining), showFooter }
+}
+
+/**
+ * Keybind hints in the dialog footer, kept as whole groups in their given
+ * (priority) order: a hint that does not fit is dropped, never cut mid-token.
+ */
+export function dialogSelectFooterHints<T extends { width: number }>(hints: readonly T[], frameWidth: number): T[] {
+  let budget = frameWidth - DIALOG_SELECT_FOOTER_CHROME_WIDTH
+  const kept: T[] = []
+  for (const hint of hints) {
+    const cost = hint.width + (kept.length > 0 ? DIALOG_SELECT_FOOTER_GAP : 0)
+    if (cost > budget) break
+    budget -= cost
+    kept.push(hint)
+  }
+  return kept
 }

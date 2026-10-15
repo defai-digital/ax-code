@@ -6,10 +6,15 @@ import {
   dialogSelectGroupStartIndex,
   dialogSelectGroupedOptions,
   dialogSelectHasCurrentValue,
+  dialogSelectFooterHints,
   dialogSelectMoveIndex,
+  dialogSelectOptionLine,
   dialogSelectRows,
+  dialogSelectTitleWidth,
   dialogSelectVisibleHeight,
 } from "../../../src/cli/tui/ui/dialog-select-view-model"
+import { truncateCells } from "../../../src/cli/tui/ui/cell-text"
+import { stringWidth } from "../../../src/bun/node-compat"
 
 describe("tui dialog select view model", () => {
   const options = [
@@ -121,5 +126,84 @@ describe("tui dialog select view model", () => {
     expect(dialogSelectActionOption(selectable, 99)).toBe(options[1])
     expect(dialogSelectActionOption(selectable, -1)).toBe(options[0])
     expect(dialogSelectActionOption([], 0)).toBeUndefined()
+  })
+})
+
+describe("tui dialog select row fitting", () => {
+  const longTitle = "Cyber-Tiel Coder 35B A3B AXQ MXFP4 MTP (Local MLX)"
+
+  test("leaves a row untouched until the slot is measured", () => {
+    expect(dialogSelectOptionLine({ slotWidth: 0, title: longTitle, description: "x", footerWidth: 8 })).toEqual({
+      title: longTitle,
+      description: "x",
+      showFooter: true,
+    })
+  })
+
+  test("keeps title, description, and footer when everything fits", () => {
+    expect(
+      dialogSelectOptionLine({ slotWidth: 40, title: "Switch model", description: "Recent", footerWidth: 8 }),
+    ).toEqual({ title: "Switch model", description: "Recent", showFooter: true })
+  })
+
+  test("shortens, then drops, the description before touching the title", () => {
+    const shortened = dialogSelectOptionLine({ slotWidth: 24, title: "Claude Opus 5.5", description: "Anthropic API" })
+    expect(shortened.title).toBe("Claude Opus 5.5")
+    expect(shortened.description).toBe("Anthrop…")
+    const dropped = dialogSelectOptionLine({ slotWidth: 18, title: "Claude Opus 5.5", description: "Anthropic API" })
+    expect(dropped).toEqual({ title: "Claude Opus 5.5", showFooter: true })
+  })
+
+  test("drops the footer column before cutting the title", () => {
+    const line = dialogSelectOptionLine({ slotWidth: 20, title: "Open the editor now", footerWidth: 8 })
+    expect(line).toEqual({ title: "Open the editor now", showFooter: false })
+  })
+
+  test("truncates an over-long title with an ellipsis inside the slot", () => {
+    const line = dialogSelectOptionLine({ slotWidth: 46, title: longTitle, description: "AX_ENGINE", footerWidth: 8 })
+    expect(line.showFooter).toBe(false)
+    expect(line.description).toBeUndefined()
+    expect(line.title.endsWith("…")).toBe(true)
+    expect(stringWidth(line.title)).toBeLessThanOrEqual(46)
+  })
+
+  test.each([1, 5, 20, 37, 46, 80])("never exceeds a %i-cell slot", (slot) => {
+    const line = dialogSelectOptionLine({ slotWidth: slot, title: longTitle + " 👀 🌐", description: "Local" })
+    const width = stringWidth(line.title) + (line.description ? 1 + stringWidth(line.description) : 0)
+    expect(width).toBeLessThanOrEqual(slot)
+  })
+
+  test("derives the title budget from the frame width", () => {
+    expect(dialogSelectTitleWidth(60, "esc")).toBe(46)
+    expect(dialogSelectTitleWidth(36, "esc clear")).toBe(16)
+    expect(dialogSelectTitleWidth(8, "esc")).toBe(0)
+  })
+
+  test("keeps whole footer hints in priority order", () => {
+    const hints = [
+      { id: "connect", width: 23 },
+      { id: "favorite", width: 15 },
+    ]
+    expect(dialogSelectFooterHints(hints, 60).map((hint) => hint.id)).toEqual(["connect", "favorite"])
+    expect(dialogSelectFooterHints(hints, 40).map((hint) => hint.id)).toEqual(["connect"])
+    expect(dialogSelectFooterHints(hints, 20)).toEqual([])
+  })
+})
+
+describe("truncateCells", () => {
+  test("returns text that fits unchanged", () => {
+    expect(truncateCells("Switch model", 12)).toBe("Switch model")
+  })
+
+  test("ends a cut with a one-cell ellipsis", () => {
+    expect(truncateCells("Switch model", 8)).toBe("Switch…")
+    expect(truncateCells("Switch model", 1)).toBe("…")
+    expect(truncateCells("Switch model", 0)).toBe("")
+  })
+
+  test("drops a wide glyph whole instead of splitting it", () => {
+    const cut = truncateCells("模型選擇器", 6)
+    expect(cut).toBe("模型…")
+    expect(stringWidth(cut)).toBeLessThanOrEqual(6)
   })
 })

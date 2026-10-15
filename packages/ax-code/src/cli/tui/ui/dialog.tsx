@@ -9,7 +9,12 @@ import { scheduleMicrotaskTask } from "@tui/util/microtask"
 import { Flag } from "@/flag/flag"
 import { Selection } from "@tui/util/selection"
 import { blurRenderable, focusRenderable, isRenderableAlive, renderableChildren } from "@tui/util/renderable-safety"
-import { DIALOG_OVERLAY_VERTICAL_MARGIN, dialogOverlayMaxHeight } from "./dialog-overlay"
+import {
+  DIALOG_OVERLAY_TOP_MARGIN,
+  dialogOverlayBottomMargin,
+  dialogOverlayMaxHeight,
+  dialogOverlayWidth,
+} from "./dialog-overlay"
 import {
   ContextMenuOverlay,
   ContextMenuProvider,
@@ -53,8 +58,8 @@ function Dialog(
       alignItems="center"
       justifyContent="center"
       position="absolute"
-      paddingTop={DIALOG_OVERLAY_VERTICAL_MARGIN}
-      paddingBottom={DIALOG_OVERLAY_VERTICAL_MARGIN}
+      paddingTop={DIALOG_OVERLAY_TOP_MARGIN}
+      paddingBottom={dialogOverlayBottomMargin(dimensions().height)}
       left={0}
       top={0}
       backgroundColor={RGBA.fromInts(0, 0, 0, 150)}
@@ -71,8 +76,7 @@ function Dialog(
           armed = false
           e.stopPropagation()
         }}
-        width={props.size === "large" ? 80 : 60}
-        maxWidth={dimensions().width - 2}
+        width={dialogOverlayWidth(props.size === "large" ? 80 : 60, dimensions().width)}
         maxHeight={dialogOverlayMaxHeight(dimensions().height)}
         backgroundColor={theme.backgroundPanel}
         paddingTop={1}

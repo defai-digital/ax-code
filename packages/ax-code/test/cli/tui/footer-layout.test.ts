@@ -93,4 +93,79 @@ describe("promptFooterLayout", () => {
     expect(layout.showVariants).toBe(false)
     expect(layout.showClearHint).toBe(false)
   })
+
+  describe("measured footer content", () => {
+    const base = {
+      contentWidth: 76,
+      toggleWidth: 0,
+      mode: "normal" as const,
+      clearWidth: footerHintWidth("ctrl+c", "exit"),
+      variantsWidth: footerHintWidth("ctrl+t", "effort"),
+      shellWidth: footerHintWidth("esc", "exit shell mode"),
+    }
+
+    test("drops the effort hint as a whole group when Home chips fill the 80-column row", () => {
+      // 80x24 Home: mode + WebMCP chips measure 58 cells inside a 76-cell row.
+      const layout = promptFooterLayout({ ...base, measured: { leftWidth: 0, gaugeWidth: 0, extraWidth: 58 } })
+      expect(layout.stacked).toBe(false)
+      expect(layout.showClearHint).toBe(true)
+      expect(layout.showVariants).toBe(false)
+    })
+
+    test("keeps every hint when the measured row has room", () => {
+      const layout = promptFooterLayout({
+        ...base,
+        contentWidth: 116,
+        measured: { leftWidth: 0, gaugeWidth: 0, extraWidth: 58 },
+      })
+      expect(layout.showClearHint).toBe(true)
+      expect(layout.showVariants).toBe(true)
+    })
+
+    test("never lets the right group exceed the row, including the idle left text and gauge", () => {
+      for (let contentWidth = 0; contentWidth <= 140; contentWidth++) {
+        for (const measured of [
+          { leftWidth: 0, gaugeWidth: 0, extraWidth: 0 },
+          { leftWidth: 8, gaugeWidth: 0, extraWidth: 0 },
+          { leftWidth: 8, gaugeWidth: 14, extraWidth: 0 },
+          { leftWidth: 0, gaugeWidth: 14, extraWidth: 40 },
+        ]) {
+          const layout = promptFooterLayout({ ...base, contentWidth, measured })
+          const fixed = measured.gaugeWidth + measured.extraWidth + (measured.gaugeWidth && measured.extraWidth ? 1 : 0)
+          const shown = [
+            layout.showClearHint ? base.clearWidth : 0,
+            layout.showVariants ? base.variantsWidth : 0,
+          ].filter(Boolean)
+          const leading = measured.extraWidth ? 2 : measured.gaugeWidth ? 1 : 0
+          const hints = shown.reduce((sum, width, index) => sum + width + (index === 0 ? leading : 2), 0)
+          const left = measured.leftWidth ? measured.leftWidth + 1 : 0
+          if (shown.length > 0) expect(left + fixed + hints).toBeLessThanOrEqual(contentWidth)
+        }
+      }
+    })
+
+    test("uses the full row once busy status stacks onto its own line", () => {
+      const layout = promptFooterLayout({
+        ...base,
+        contentWidth: 40,
+        busy: true,
+        measured: { leftWidth: 0, gaugeWidth: 30, extraWidth: 0 },
+      })
+      expect(layout.stacked).toBe(true)
+      expect(layout.showClearHint).toBe(true)
+      expect(layout.showVariants).toBe(true)
+    })
+
+    test("keeps the shell escape hint whole or drops it", () => {
+      const shell = { ...base, mode: "shell" as const }
+      expect(
+        promptFooterLayout({ ...shell, contentWidth: 41, measured: { leftWidth: 0, gaugeWidth: 0, extraWidth: 20 } })
+          .showShellHint,
+      ).toBe(true)
+      expect(
+        promptFooterLayout({ ...shell, contentWidth: 40, measured: { leftWidth: 0, gaugeWidth: 0, extraWidth: 20 } })
+          .showShellHint,
+      ).toBe(false)
+    })
+  })
 })

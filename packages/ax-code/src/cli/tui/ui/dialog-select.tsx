@@ -1,18 +1,19 @@
 import { useLanguage } from "@tui/context/language"
-import { InputRenderable, RGBA, ScrollBoxRenderable, TextAttributes } from "ax-tui"
+import { InputRenderable, RGBA, ScrollBoxRenderable, TextAttributes, type BoxRenderable } from "ax-tui"
 import { tint, useTheme } from "@tui/context/theme"
-import { batch, createEffect, createMemo, For, Show, type JSX, on, onCleanup } from "solid-js"
+import { batch, createEffect, createMemo, createSignal, For, Show, type JSX, on, onCleanup, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useKeyboard, useTerminalDimensions } from "ax-tui/solid"
 import { isDeepEqual } from "remeda"
 import { useDialog, type DialogContext } from "@tui/ui/dialog"
 import { useKeybind } from "@tui/context/keybind"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
+import { scheduleTuiTimeout } from "@tui/util/timer"
 import { CONFIRM_KEYS } from "@tui/util/keys"
 import { findRenderableChild, focusRenderable, isRenderableAlive } from "@tui/util/renderable-safety"
 import { useToast } from "@tui/ui/toast"
 import { Keybind } from "@/util/keybind"
-import { Locale } from "@/util/locale"
+import { stringWidth } from "@/bun/node-compat"
 import { Log } from "@/util/log"
 import {
   dialogSelectClampIndex,
@@ -21,12 +22,19 @@ import {
   dialogSelectGroupStartIndex,
   dialogSelectGroupedOptions,
   dialogSelectHasCurrentValue,
+  dialogSelectFooterHints,
   dialogSelectMoveIndex,
+  dialogSelectOptionLine,
   dialogSelectRows,
+  dialogSelectTitleWidth,
   dialogSelectVisibleHeight,
 } from "./dialog-select-view-model"
+import { dialogOverlayWidth } from "./dialog-overlay"
+import { truncateCells } from "./cell-text"
 
 const log = Log.create({ service: "tui.dialog-select" })
+
+const DIALOG_SELECT_COMPACT_FRAME_WIDTH = 48
 
 export interface DialogSelectProps<T> {
   title: string
@@ -157,6 +165,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
               moveTo(currentIndex, true)
             }
           }
+          revealSelected() // rows may lack layout on open
         },
         {
           name: "dialog-select-current-option",
@@ -225,6 +234,29 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
       }
     }
   }
+
+  // Bring the selected row into the viewport (centered) when it is not fully
+  // visible. Runs after layout, unlike moveTo calls made before rows exist.
+  let stopReveal: (() => void) | undefined
+  function revealSelected() {
+    stopReveal?.()
+    stopReveal = scheduleTuiTimeout(
+      () => {
+        if (!scroll || scroll.isDestroyed) return
+        const target = findRenderableChild<{ id?: string; y: number; height: number }>(
+          scroll,
+          (child) => child.id === optionID(store.selected),
+          { name: "dialog-select-reveal-target" },
+        )
+        if (!target) return
+        const top = target.y - scroll.viewport.y
+        if (top >= 0 && top + target.height <= scroll.viewport.height) return
+        scroll.scrollBy(top - Math.floor(scroll.viewport.height / 2))
+      },
+      { name: "dialog-select-reveal-selected", delayMs: 16, unref: true },
+    )
+  }
+  onCleanup(() => stopReveal?.())
 
   function runDialogSelectAction(action: () => unknown, failureLabel: string, failureMessage: string) {
     return Promise.resolve()
@@ -352,14 +384,29 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   }
   props.ref?.(ref)
 
-  const keybinds = createMemo(() => props.keybind?.filter((x) => !x.disabled && x.keybind) ?? [])
+  // Frame width mirrors the Dialog frame (ui/dialog.tsx) so header and footer
+  // budgets follow the real viewport instead of a fixed character count.
+  const frameWidth = createMemo(() => dialogOverlayWidth(dialog.size === "large" ? 80 : 60, dimensions().width))
+  const escLabel = createMemo(() => (store.filter ? "esc clear" : "esc"))
+  const title = createMemo(() => truncateCells(props.title, dialogSelectTitleWidth(frameWidth(), escLabel())))
+  // Whole hints only: at narrow widths trailing hints drop instead of wrapping
+  // or being cut mid-token.
+  const keybinds = createMemo(() =>
+    dialogSelectFooterHints(
+      (props.keybind?.filter((x) => !x.disabled && x.keybind) ?? []).map((item) => ({
+        ...item,
+        width: stringWidth(Keybind.toString(item.keybind)) + 1 + stringWidth(item.title),
+      })),
+      frameWidth(),
+    ),
+  )
 
   return (
     <box gap={1} paddingBottom={1}>
       <box paddingLeft={4} paddingRight={4}>
         <box flexDirection="row" justifyContent="space-between">
-          <text fg={theme.text} attributes={TextAttributes.BOLD}>
-            {props.title}
+          <text fg={theme.text} attributes={TextAttributes.BOLD} wrapMode="none">
+            {title()}
           </text>
           <text
             fg={theme.textMuted}
@@ -367,7 +414,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
               if (!clearSearch()) dialog.clear()
             }}
           >
-            {store.filter ? "esc clear" : "esc"}
+            {escLabel()}
           </text>
         </box>
         <box paddingTop={1}>
@@ -429,6 +476,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
             },
           }}
           ref={(r: ScrollBoxRenderable) => (scroll = r)}
+          onSizeChange={revealSelected}
           maxHeight={height()}
         >
           <For each={grouped()}>
@@ -488,7 +536,8 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                               : RGBA.fromInts(0, 0, 0, 0)
                           }
                           paddingLeft={current() || option.gutter ? 1 : 3}
-                          paddingRight={3}
+                          // Narrow frames trade the right inset for label room.
+                          paddingRight={frameWidth() < DIALOG_SELECT_COMPACT_FRAME_WIDTH ? 1 : 3}
                           gap={1}
                         >
                           {/* Selection marker cell: a "›" on the active row, a
@@ -516,7 +565,9 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
           </For>
         </scrollbox>
       </Show>
-      <Show when={keybinds().length || props.hint} fallback={<box flexShrink={0} />}>
+      {/* No footer, no placeholder: an empty box would still cost a gap row,
+          which short terminals need for options (36x20 setup wizard). */}
+      <Show when={keybinds().length || props.hint}>
         <box paddingRight={2} paddingLeft={4} flexDirection="row" gap={2} flexShrink={0} paddingTop={1}>
           <For each={keybinds()}>
             {(item) => (
@@ -557,6 +608,36 @@ function Option(props: {
   // selectedForeground / theme.selectedListItemText were tuned for the old
   // solid-primary fill and are intentionally no longer consulted here.
 
+  // Measured cell width of the title text slot (0 until the first layout),
+  // plus whether the footer column was on screen when it was measured. The
+  // slot is flex-sized by the row, so it does not depend on the text it holds
+  // and the measure cannot feed back into itself.
+  const [measured, setMeasured] = createSignal({ width: 0, withFooter: false })
+  let slotRef: BoxRenderable | undefined
+  const footerWidth = createMemo(() => (typeof props.footer === "string" ? stringWidth(props.footer) : undefined))
+  const line = createMemo(() => {
+    const sample = measured()
+    const plainFooter = footerWidth()
+    // Re-add the footer column (and its one-cell row gap) when it was on
+    // screen, so the plan always sees the same full budget either way.
+    const slot = sample.width > 0 ? sample.width + (sample.withFooter && plainFooter ? plainFooter + 1 : 0) : 0
+    return dialogSelectOptionLine({
+      slotWidth: slot,
+      title: props.title,
+      description: props.description,
+      footerWidth: plainFooter,
+    })
+  })
+  const footerVisible = () => Boolean(props.footer) && line().showFooter
+  function measure() {
+    if (!slotRef) return
+    const width = slotRef.width
+    const withFooter = untrack(footerVisible)
+    const previous = untrack(measured)
+    if (previous.width === width && previous.withFooter === withFooter) return
+    setMeasured({ width, withFooter })
+  }
+
   return (
     <>
       <Show when={props.current}>
@@ -569,35 +650,46 @@ function Option(props: {
           {props.gutter}
         </box>
       </Show>
-      <text
+      {/* The slot box is flex-sized by the row and measured; the text inside
+          is pre-fitted to it, so it never relies on clipping mid-glyph. */}
+      <box
+        ref={(r: BoxRenderable) => (slotRef = r)}
+        onSizeChange={measure}
         flexGrow={1}
+        flexShrink={1}
+        flexBasis={0}
+        minWidth={0}
         height={1}
-        fg={props.disabled ? theme.textMuted : props.active ? theme.text : props.current ? theme.secondary : theme.text}
-        attributes={props.active && !props.disabled ? TextAttributes.BOLD : undefined}
-        // One painted row per option. Word-wrap made 4–5 provider actions look
-        // like three rows and hid the scrollbar (viewport height counted
-        // options, not wrapped lines).
         overflow="hidden"
-        wrapMode="none"
-        paddingLeft={3}
       >
-        {Locale.truncate(props.title, 61)}
-        <Show when={props.description}>
-          <span
-            style={{
-              fg: props.disabled
-                ? theme.textMuted
-                : props.active
-                  ? theme.text
-                  : (props.descriptionFg ?? theme.textMuted),
-            }}
-          >
-            {" "}
-            {props.description}
-          </span>
-        </Show>
-      </text>
-      <Show when={props.footer}>
+        <text
+          fg={
+            props.disabled ? theme.textMuted : props.active ? theme.text : props.current ? theme.secondary : theme.text
+          }
+          attributes={props.active && !props.disabled ? TextAttributes.BOLD : undefined}
+          // One painted row per option. Word-wrap made 4–5 provider actions look
+          // like three rows and hid the scrollbar (viewport height counted
+          // options, not wrapped lines).
+          wrapMode="none"
+        >
+          {line().title}
+          <Show when={line().description}>
+            <span
+              style={{
+                fg: props.disabled
+                  ? theme.textMuted
+                  : props.active
+                    ? theme.text
+                    : (props.descriptionFg ?? theme.textMuted),
+              }}
+            >
+              {" "}
+              {line().description}
+            </span>
+          </Show>
+        </text>
+      </box>
+      <Show when={footerVisible()}>
         <box flexShrink={0}>
           <text fg={props.disabled ? theme.textMuted : props.active ? theme.text : theme.textMuted}>
             {props.footer}
