@@ -561,6 +561,7 @@ export const messages = {
   "ui.createANewWorkspace": "\uc0c8 \uc6cc\ud06c\uc2a4\ud398\uc774\uc2a4 \ub9cc\ub4e4\uae30",
   "ui.thisCanTakeAWhileForRemoteEnvironments":
     "\uc6d0\uaca9 \ud658\uacbd\uc5d0\uc11c\ub294 \uc2dc\uac04\uc774 \uac78\ub9b4 \uc218 \uc788\uc2b5\ub2c8\ub2e4",
+  "ui.copySessionId": "\uc138\uc158 ID \ubcf5\uc0ac",
   "ui.sessionIdCopiedToClipboard":
     "\uc138\uc158 ID\ub97c \ud074\ub9bd\ubcf4\ub4dc\uc5d0 \ubcf5\uc0ac\ud588\uc2b5\ub2c8\ub2e4",
   "ui.noPreviousSessionToContinue": "\uacc4\uc18d\ud560 \uc774\uc804 \uc138\uc158\uc774 \uc5c6\uc2b5\ub2c8\ub2e4",

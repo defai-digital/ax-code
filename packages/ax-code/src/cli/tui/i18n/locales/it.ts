@@ -508,6 +508,7 @@ export const messages = {
   "ui.useTheLocalMachine": "Usa la macchina locale",
   "ui.createANewWorkspace": "Crea un nuovo spazio di lavoro",
   "ui.thisCanTakeAWhileForRemoteEnvironments": "L'operazione può richiedere del tempo per ambienti remoti",
+  "ui.copySessionId": "Copia ID sessione",
   "ui.sessionIdCopiedToClipboard": "ID sessione copiato negli appunti",
   "ui.noPreviousSessionToContinue": "Nessuna sessione precedente da continuare",
   "ui.theCurrentSessionWasDeleted": "La sessione corrente è stata eliminata",

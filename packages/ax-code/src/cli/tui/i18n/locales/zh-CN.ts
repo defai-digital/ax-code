@@ -530,6 +530,7 @@ export const messages = {
   "ui.createANewWorkspace": "\u521b\u5efa\u65b0\u5de5\u4f5c\u533a",
   "ui.thisCanTakeAWhileForRemoteEnvironments":
     "\u8fdc\u7a0b\u73af\u5883\u53ef\u80fd\u9700\u8981\u8f83\u957f\u65f6\u95f4",
+  "ui.copySessionId": "\u590d\u5236\u4f1a\u8bdd ID",
   "ui.sessionIdCopiedToClipboard": "\u4f1a\u8bdd ID \u5df2\u590d\u5236\u5230\u526a\u8d34\u677f",
   "ui.noPreviousSessionToContinue": "\u6ca1\u6709\u53ef\u7ee7\u7eed\u7684\u4e4b\u524d\u4f1a\u8bdd",
   "ui.theCurrentSessionWasDeleted": "\u5f53\u524d\u4f1a\u8bdd\u5df2\u5220\u9664",

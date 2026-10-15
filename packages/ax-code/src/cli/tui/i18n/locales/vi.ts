@@ -548,6 +548,7 @@ export const messages = {
   "ui.createANewWorkspace": "T\u1ea1o kh\u00f4ng gian l\u00e0m vi\u1ec7c m\u1edbi",
   "ui.thisCanTakeAWhileForRemoteEnvironments":
     "C\u00f3 th\u1ec3 m\u1ea5t th\u1eddi gian v\u1edbi m\u00f4i tr\u01b0\u1eddng t\u1eeb xa",
+  "ui.copySessionId": "Sao ch\u00e9p ID phi\u00ean",
   "ui.sessionIdCopiedToClipboard": "\u0110\u00e3 sao ch\u00e9p ID phi\u00ean v\u00e0o b\u1ed9 nh\u1edb t\u1ea1m",
   "ui.noPreviousSessionToContinue": "Kh\u00f4ng c\u00f3 phi\u00ean tr\u01b0\u1edbc \u0111\u1ec3 ti\u1ebfp t\u1ee5c",
   "ui.theCurrentSessionWasDeleted": "Phi\u00ean hi\u1ec7n t\u1ea1i \u0111\u00e3 b\u1ecb x\u00f3a",

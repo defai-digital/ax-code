@@ -5,7 +5,6 @@ import { stringWidth } from "@/bun/node-compat"
 import { truncateToCellWidth } from "./last-input-view-model"
 
 export interface SessionTopBarSegments {
-  id: string
   title?: string
   status?: string
   share?: string
@@ -13,7 +12,6 @@ export interface SessionTopBarSegments {
 }
 
 export interface SessionTopBarLayout {
-  id?: string
   title?: string
   status?: string
   share?: string
@@ -23,7 +21,6 @@ export interface SessionTopBarLayout {
 const GAP = 2
 const MIN_MAIN_WIDTH = 10
 const MIN_STATUS_WIDTH = 8
-const MIN_ID_WIDTH = 8
 
 export function sessionTopBarLayout(input: { width: number; segments: SessionTopBarSegments }): SessionTopBarLayout {
   const { segments } = input
@@ -40,24 +37,18 @@ export function sessionTopBarLayout(input: { width: number; segments: SessionTop
 
   // A running status gets a small reserved budget, while the title receives
   // the rest. On very narrow terminals the title survives on its own.
-  const main = segments.title || segments.status || segments.id
+  const main = segments.title || segments.status
   const hasSeparateStatus = Boolean(segments.title && segments.status)
   const reserveStatus = hasSeparateStatus && remaining >= MIN_MAIN_WIDTH + GAP + MIN_STATUS_WIDTH
   const mainBudget = remaining - (reserveStatus ? GAP + MIN_STATUS_WIDTH : 0)
-  const fittedMain = truncateToCellWidth(main, Math.min(stringWidth(main), mainBudget))
+  const fittedMain = truncateToCellWidth(main ?? "", Math.min(stringWidth(main ?? ""), mainBudget))
   if (segments.title) result.title = fittedMain
   else if (segments.status) result.status = fittedMain
-  else result.id = fittedMain
   remaining -= stringWidth(fittedMain)
 
   if (segments.title && segments.status && remaining >= GAP + MIN_STATUS_WIDTH) {
     result.status = truncateToCellWidth(segments.status, Math.min(stringWidth(segments.status), remaining - GAP))
     remaining -= GAP + stringWidth(result.status)
-  }
-
-  if (segments.id && result.id === undefined && remaining >= GAP + MIN_ID_WIDTH) {
-    result.id = truncateToCellWidth(segments.id, remaining - GAP)
-    remaining -= GAP + stringWidth(result.id)
   }
 
   if (segments.share && remaining >= GAP + stringWidth(segments.share)) result.share = segments.share

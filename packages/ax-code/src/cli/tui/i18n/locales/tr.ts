@@ -524,6 +524,7 @@ export const messages = {
   "ui.useTheLocalMachine": "Yerel makineyi kullan",
   "ui.createANewWorkspace": "Yeni \u00e7al\u0131\u015fma alan\u0131 olu\u015ftur",
   "ui.thisCanTakeAWhileForRemoteEnvironments": "Uzak ortamlarda bu i\u015flem s\u00fcrebilir",
+  "ui.copySessionId": "Oturum kimli\u011fini kopyala",
   "ui.sessionIdCopiedToClipboard": "Oturum kimli\u011fi panoya kopyaland\u0131",
   "ui.noPreviousSessionToContinue": "S\u00fcrd\u00fcr\u00fclecek \u00f6nceki oturum yok",
   "ui.theCurrentSessionWasDeleted": "Ge\u00e7erli oturum silindi",

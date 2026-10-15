@@ -4,8 +4,6 @@ import { SessionTopBar } from "../../../src/cli/tui/routes/session/top-bar"
 
 const mocked = vi.hoisted(() => ({
   trigger: vi.fn(),
-  copy: vi.fn(async (_text: string) => {}),
-  toast: vi.fn(),
   providers: [
     { id: "anthropic", name: "Anthropic (Claude Code)" },
     { id: "codex", name: "OpenAI (Codex CLI)" },
@@ -43,8 +41,6 @@ vi.mock("@tui/context/sync", () => ({
 vi.mock("../../../src/cli/tui/context/theme", () => ({
   useTheme: () => ({ theme: { accent: "accent-color", warning: "warning-color", textMuted: "muted-color" } }),
 }))
-vi.mock("../../../src/cli/tui/ui/toast", () => ({ useToast: () => ({ show: mocked.toast }) }))
-vi.mock("../../../src/cli/tui/util/clipboard", () => ({ Clipboard: { copy: mocked.copy } }))
 vi.mock("../../../src/cli/tui/component/dialog-command", () => ({
   useCommandDialog: () => ({ trigger: mocked.trigger }),
 }))
@@ -127,11 +123,11 @@ function bar(props: { width?: number; showTitle?: boolean } = {}) {
 }
 
 describe("session top bar callbacks", () => {
-  test("renders the title, session id, and one providers entry", () => {
+  test("renders the title and one providers entry without the raw session id", () => {
     const tree = bar()
-    expect(text(tree)).toContain("root")
     expect(text(tree)).toContain("Rebrand this project")
     expect(text(tree)).toContain("Providers (2)")
+    expect(text(tree)).not.toContain("root")
     expect(text(tree)).not.toContain("manage")
   })
 
@@ -140,15 +136,6 @@ describe("session top bar callbacks", () => {
     click(tree, "Providers (2)")
     expect(mocked.trigger).toHaveBeenCalledWith("provider.manage")
     expect(mocked.trigger).toHaveBeenCalledTimes(1)
-  })
-
-  test("copies the session id on click and confirms with a toast", async () => {
-    const tree = bar()
-    click(tree, "root")
-    await vi.waitFor(() => expect(mocked.copy).toHaveBeenCalledExactlyOnceWith("root"))
-    expect(mocked.toast).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ message: "Session ID copied to clipboard", variant: "success" }),
-    )
   })
 
   test("shows the live status label while the session is busy", () => {
@@ -163,7 +150,7 @@ describe("session top bar callbacks", () => {
   test("omits the title when the route header already shows it", () => {
     const tree = bar({ showTitle: false })
     expect(text(tree)).not.toContain("Rebrand this project")
-    expect(text(tree)).toContain("root")
+    expect(text(tree)).not.toContain("root")
   })
 
   test("hides the providers entry when no provider is connected or disabled", () => {

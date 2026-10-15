@@ -61,10 +61,39 @@ describe("autonomousActiveView", () => {
       continuations: 2,
       continuationLimit: 3,
     })
-    expect(autonomousProgressLabel(view)).toBe("turn 5/50 · total 105/2000 · cont 2/3")
+    // Early in the run (5/50, 105/2000): neither limit is near, so only the
+    // step and the non-zero continuation count show.
+    expect(autonomousProgressLabel(view)).toBe("step 5 · continued 2 of 3")
   })
 
-  test("renders an unbounded continuation cap explicitly", () => {
+  test("shows the segment limit once the run nears it", () => {
+    const view = autonomousActiveView({
+      type: "busy",
+      step: 42,
+      maxSteps: 50,
+      segmentModelTurns: 42,
+      segmentModelTurnLimit: 50,
+    })
+
+    expect(autonomousProgressLabel(view)).toBe("step 42 of 50")
+  })
+
+  test("shows the total budget once it nears its limit", () => {
+    const view = autonomousActiveView({
+      type: "busy",
+      step: 3,
+      maxSteps: 50,
+      segmentModelTurns: 3,
+      segmentModelTurnLimit: 50,
+      totalModelTurns: 1700,
+      totalModelTurnLimit: 2000,
+    })
+
+    // 3/50 is well below the segment threshold, so only the total budget shows.
+    expect(autonomousProgressLabel(view)).toBe("step 3 · total 1700 of 2000")
+  })
+
+  test("renders an unbounded continuation cap without a limit", () => {
     const view = autonomousActiveView({
       type: "busy",
       step: 1,
@@ -73,7 +102,12 @@ describe("autonomousActiveView", () => {
       continuationLimit: null,
     })
 
-    expect(autonomousProgressLabel(view)).toBe("turn 1/500 · cont 7/∞")
+    expect(autonomousProgressLabel(view)).toBe("step 1 · continued 7")
+  })
+
+  test("omits a limit that is not yet approached", () => {
+    const view = autonomousActiveView({ type: "busy", step: 1, maxSteps: 500 })
+    expect(autonomousProgressLabel(view)).toBe("step 1")
   })
 })
 

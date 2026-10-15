@@ -505,6 +505,7 @@ export const messages = {
   "ui.useTheLocalMachine": "Gunakan mesin lokal",
   "ui.createANewWorkspace": "Buat ruang kerja baru",
   "ui.thisCanTakeAWhileForRemoteEnvironments": "Ini dapat memakan waktu di lingkungan jarak jauh",
+  "ui.copySessionId": "Salin ID sesi",
   "ui.sessionIdCopiedToClipboard": "ID sesi disalin ke papan klip",
   "ui.noPreviousSessionToContinue": "Tidak ada sesi sebelumnya untuk dilanjutkan",
   "ui.theCurrentSessionWasDeleted": "Sesi saat ini dihapus",

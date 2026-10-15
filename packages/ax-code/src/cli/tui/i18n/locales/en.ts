@@ -502,6 +502,7 @@ export const messages = {
   "ui.useTheLocalMachine": "Use the local machine",
   "ui.createANewWorkspace": "Create a new workspace",
   "ui.thisCanTakeAWhileForRemoteEnvironments": "This can take a while for remote environments",
+  "ui.copySessionId": "Copy session ID",
   "ui.sessionIdCopiedToClipboard": "Session ID copied to clipboard",
   "ui.noPreviousSessionToContinue": "No previous session to continue",
   "ui.theCurrentSessionWasDeleted": "The current session was deleted",

@@ -40,16 +40,38 @@ export function autonomousActiveView(status?: FooterSessionStatus): AutonomousAc
   }
 }
 
+// A limit is only worth surfacing once the count is close to it: early on,
+// "step 3" reads better than "step 3 of 500". 80% is the point where the
+// remaining headroom stops being noise and becomes useful.
+const NEAR_LIMIT_RATIO = 0.8
+
+function nearLimit(count: number, limit: number): boolean {
+  return Number.isFinite(limit) && limit > 0 && count >= limit * NEAR_LIMIT_RATIO
+}
+
+// Human, quiet progress for the header chip. The default is just the segment
+// step count; the budget ("of LIMIT"), the total, and the continuation count
+// each appear only when they start to matter, so a fresh run stays short.
 export function autonomousProgressLabel(view: AutonomousActive): string {
   if (!view.active || view.step === undefined || view.maxSteps === undefined) return ""
   const segmentTurns = view.segmentModelTurns ?? view.step
   const segmentLimit = view.segmentModelTurnLimit ?? view.maxSteps
-  const parts = [`turn ${segmentTurns}/${segmentLimit}`]
-  if (view.totalModelTurns !== undefined && view.totalModelTurnLimit !== undefined) {
-    parts.push(`total ${view.totalModelTurns}/${view.totalModelTurnLimit}`)
+  const parts = [
+    nearLimit(segmentTurns, segmentLimit) ? `step ${segmentTurns} of ${segmentLimit}` : `step ${segmentTurns}`,
+  ]
+  if (
+    view.totalModelTurns !== undefined &&
+    view.totalModelTurnLimit !== undefined &&
+    nearLimit(view.totalModelTurns, view.totalModelTurnLimit)
+  ) {
+    parts.push(`total ${view.totalModelTurns} of ${view.totalModelTurnLimit}`)
   }
-  if (view.continuations !== undefined && view.continuationLimit !== undefined) {
-    parts.push(`cont ${view.continuations}/${view.continuationLimit === null ? "∞" : view.continuationLimit}`)
+  if (view.continuations !== undefined && view.continuations > 0) {
+    parts.push(
+      view.continuationLimit === null || view.continuationLimit === undefined
+        ? `continued ${view.continuations}`
+        : `continued ${view.continuations} of ${view.continuationLimit}`,
+    )
   }
   return parts.join(" · ")
 }

@@ -141,6 +141,9 @@ export function Header() {
     const alpha = pulseAlpha(chipPulse(), AUTONOMOUS_CHROME_PULSE_MIN_ALPHA, AUTONOMOUS_CHROME_PULSE_MAX_ALPHA)
     return tint(theme.background, theme.accent, alpha)
   })
+  // Progress label for the AUTONOMOUS chip. May be empty (e.g. no step data),
+  // in which case the " · " separator must not render on its own.
+  const autonomousLabel = createMemo(() => autonomousProgressLabel(autonomous()))
   const goalChip = createMemo(() =>
     footerGoalChip({
       t: uiText,
@@ -284,7 +287,9 @@ export function Header() {
                       <span style={{ fg: chipColor(), bold: true }}>
                         {sync.data.autonomous ? "◆ AUTO" : "◆ WORKING"}
                       </span>
-                      <span style={{ fg: theme.textMuted }}> · {autonomousProgressLabel(autonomous())}</span>
+                      <Show when={autonomousLabel()}>
+                        <span style={{ fg: theme.textMuted }}> · {autonomousLabel()}</span>
+                      </Show>
                     </Spinner>
                   </box>
                 </Show>

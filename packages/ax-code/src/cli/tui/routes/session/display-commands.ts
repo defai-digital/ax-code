@@ -131,6 +131,22 @@ export function displayCommands(input: {
       onSelect: (dialog: DialogContext) => input.dialogReplaceRename(dialog),
     },
     {
+      // The top bar no longer prints the raw session id; this keeps it one
+      // command away for issues, logs and `--session` flags.
+      title: uiText("ui.copySessionId"),
+      value: "session.copy.id",
+      category: uiText("common.session"),
+      onSelect: async (dialog: DialogContext) => {
+        dialog.clear()
+        try {
+          await Clipboard.copy(input.routeSessionID)
+          input.toast.show({ message: uiText("ui.sessionIdCopiedToClipboard"), variant: "success", duration: 1500 })
+        } catch {
+          input.toast.show({ message: uiText("ui.failedToCopySessionId"), variant: "error" })
+        }
+      },
+    },
+    {
       title: uiText("ui.viewSessionGoal"),
       value: "session.goal",
       category: uiText("common.session"),

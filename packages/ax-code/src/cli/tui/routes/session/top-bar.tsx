@@ -2,21 +2,20 @@ import { useLanguage } from "@tui/context/language"
 import { createMemo, Show, type Accessor } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { useTheme } from "../../context/theme"
-import { Log } from "@/util/log"
 import { useCommandDialog } from "../../component/dialog-command"
-import { useToast } from "../../ui/toast"
-import { Clipboard } from "../../util/clipboard"
 import { disabledProviderIDs } from "../../component/provider-list-view-model"
 import { footerSessionStatusOrIdle, footerSessionStatusView } from "./footer-view-model"
 import { sessionTopBarLayout } from "./top-bar-view-model"
 
-const log = Log.create({ service: "tui.session.top-bar" })
-
 // Slim bar pinned to the top of the session route. It carries the session
-// identity block (title, live status, id, share URL) and the providers entry
+// identity block (title, live status, share URL) and the providers entry
 // that previously sat at the top of the docked sidebar, so both stay visible
 // at the top regardless of sidebar visibility. The title is only needed when
 // the route header is not already showing it.
+//
+// The raw session id is deliberately not shown here: as an opaque identifier it
+// cluttered the bar and read as noise. It stays reachable through `/copy`, which
+// includes a "Session ID" line in the copied transcript.
 export function SessionTopBar(props: {
   sessionID: string
   width: number
@@ -25,7 +24,6 @@ export function SessionTopBar(props: {
 }) {
   const uiText = useLanguage().t
   const sync = useSync()
-  const toast = useToast()
   const { theme } = useTheme()
   const command = useCommandDialog()
 
@@ -63,24 +61,6 @@ export function SessionTopBar(props: {
   // re-enable disappears.
   const hasProviderSection = createMemo(() => connectedProviders().length > 0 || disabledProviders().length > 0)
 
-  // Clicking the session id copies it so it can be pasted into issues, logs,
-  // or `--session` flags without selecting the text by hand.
-  async function copySessionID() {
-    const id = props.sessionID
-    try {
-      await Clipboard.copy(id)
-      toast.show({ message: uiText("ui.sessionIdCopiedToClipboard"), variant: "success", duration: 1500 })
-    } catch (error) {
-      log.warn("copy session id failed", {
-        command: "tui.session.top-bar.copy",
-        status: "error",
-        sessionID: id,
-        error,
-      })
-      toast.show({ message: uiText("ui.failedToCopySessionId"), variant: "error" })
-    }
-  }
-
   function manage() {
     command.trigger("provider.manage")
   }
@@ -90,7 +70,6 @@ export function SessionTopBar(props: {
       // The bar's own horizontal padding consumes two cells of the pane width.
       width: Math.max(0, props.width - 2),
       segments: {
-        id: session()?.id ?? props.sessionID,
         title: props.showTitle ? session()?.title : undefined,
         status: statusView()?.label,
         share: session()?.share?.url,
@@ -123,11 +102,6 @@ export function SessionTopBar(props: {
               {status()}
             </text>
           )}
-        </Show>
-        <Show when={layout().id}>
-          <text fg={theme.textMuted} wrapMode="none" selectable={false} onMouseUp={() => void copySessionID()}>
-            {layout().id}
-          </text>
         </Show>
         <Show when={layout().share}>
           {(url) => (
