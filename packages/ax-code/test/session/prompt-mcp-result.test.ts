@@ -1,14 +1,13 @@
 import { describe, expect, test } from "vitest"
+import { boundMcpHookFeedback, formatHookFeedback } from "../../src/session/prompt/prompt-tools"
 import {
-  boundMcpHookFeedback,
   boundMcpResultText,
   boundedJsonStringify,
   collectMcpToolContent,
   collectMcpToolResult,
-  formatHookFeedback,
   mcpResultMetadata,
   mcpResultPartMetadata,
-} from "../../src/session/prompt/prompt-tools"
+} from "../../src/session/prompt/prompt-mcp-content"
 
 // "TWFu" decodes to "Man": length stays a multiple of 4 for any repeat count.
 const validBase64 = (bytes: number) => "TWFu".repeat(Math.ceil(bytes / 4))

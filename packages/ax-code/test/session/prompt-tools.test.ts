@@ -6,13 +6,12 @@ import { Agent } from "../../src/agent/agent"
 import { ProviderTransform } from "../../src/provider/transform"
 import { Instance } from "../../src/project/instance"
 import {
-  collectMcpToolContent,
-  collectMcpToolResult,
   resolveTools,
   runToolLifecycle,
   shouldBypassAgentCheck,
   transformMcpInputSchema,
 } from "../../src/session/prompt/prompt-tools"
+import { collectMcpToolContent, collectMcpToolResult } from "../../src/session/prompt/prompt-mcp-content"
 import { tmpdir } from "../fixture/fixture"
 import { Plugin } from "../../src/plugin"
 import { LifecycleHooks } from "../../src/hooks/lifecycle"
