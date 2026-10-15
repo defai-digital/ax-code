@@ -55,6 +55,7 @@ export type WikiGraphPage = {
   generatedAt: string
   /** Every cited source path, in recorded order (bounded by `sourcesPerPage`). */
   sources: string[]
+  /** Counts over `sources` only, so they never exceed the bounded list they describe. */
   stale: number
   unknown: number
   /** Cited sources whose current bytes differ from the recorded hash or are missing. */
@@ -657,7 +658,13 @@ function projectPages(
       .sort(([a, x], [b, y]) => y - x || compareText(a, b))
       .slice(0, GRAPH_LIMITS.related)
       .map(([other, count]) => ({ id: other, shared: count }))
-    const recorded = [...(states.get(id) ?? [])]
+    const visible = cited.slice(0, GRAPH_LIMITS.sourcesPerPage)
+    const listed = new Set(visible)
+    // Freshness describes the same bounded source list the page exposes: with
+    // more recorded citations than sourcesPerPage, uncapped counts would exceed
+    // the cited-file total the viewer renders (and `changed` could name files
+    // missing from `sources`).
+    const recorded = [...(states.get(id) ?? [])].filter(([source]) => listed.has(source.slice("source:".length)))
     const freshness = recorded.map(([, state]) => state)
     const body = cleanGraphMarkdown(documents?.get(node.path) ?? "")
     const allowed = Math.max(0, Math.min(GRAPH_LIMITS.markdown, budget))
@@ -674,13 +681,10 @@ function projectPages(
       purpose,
       summary: node.summary,
       generatedAt,
-      sources: cited.slice(0, GRAPH_LIMITS.sourcesPerPage),
+      sources: visible,
       stale: freshness.filter((state) => state === "stale").length,
       unknown: freshness.filter((state) => state === "unknown").length,
-      changed: recorded
-        .filter(([, state]) => state === "stale")
-        .map(([source]) => source.slice("source:".length))
-        .slice(0, GRAPH_LIMITS.sourcesPerPage),
+      changed: recorded.filter(([, state]) => state === "stale").map(([source]) => source.slice("source:".length)),
       related,
       markdown,
       truncated: markdown.length < body.length,

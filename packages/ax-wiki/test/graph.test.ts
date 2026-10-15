@@ -713,3 +713,19 @@ test("rejects malformed reading, coverage and module projections", () => {
   const { pages: _p, overview: _o, modules: _m, ...legacy } = base
   expect(parseWikiGraph(legacy).pages).toBeUndefined()
 })
+
+test("page freshness counts stay within the bounded source list", () => {
+  const sources = Array.from({ length: GRAPH_LIMITS.sourcesPerPage + 2 }, (_, i) => `src/${i}.ts`)
+  const graph = projectWikiManifest(
+    { schemaVersion: 1, generator: "ax-wiki", pages: { "a.md": { title: "A", sources, sourceHashes: {} } } },
+    { snapshot: "fixture", observed: new Map(sources.map((source) => [source, null])) },
+  )
+  const page = graph.pages![0]!
+  expect(page.sources).toHaveLength(GRAPH_LIMITS.sourcesPerPage)
+  // Every recorded citation is stale, so the count must cover the listed sources
+  // rather than the citations the cap removed from the list.
+  expect(page.stale).toBe(GRAPH_LIMITS.sourcesPerPage)
+  expect(page.unknown).toBe(0)
+  expect(page.changed).toHaveLength(GRAPH_LIMITS.sourcesPerPage)
+  expect(page.changed.every((source) => page.sources.includes(source))).toBe(true)
+})
