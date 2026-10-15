@@ -7,7 +7,7 @@ import { NotFoundError } from "../storage/db"
 import { TaskQueue } from "../session/task-queue"
 import { SessionPrompt } from "../session/prompt"
 import { MessageV2 } from "../session/message-v2"
-import { isLiveTaskSubagent } from "../session/background-subagent-delivery"
+import { isLiveTaskSubagent, queueModel } from "../session/background-subagent-delivery"
 import { childResultText, resolveTarget } from "./waitfor"
 import { Log } from "@/util/log"
 
@@ -35,17 +35,6 @@ const parameters = z.object({
     ),
   message: z.string().min(1).describe("The follow-up message to deliver to the background task"),
 })
-
-function queueModel(model: unknown): MessageV2.User["model"] {
-  if (!model || typeof model !== "object") {
-    return { providerID: "unknown" as never, modelID: "unknown" as never }
-  }
-  const record = model as { providerID?: unknown; modelID?: unknown }
-  if (typeof record.providerID === "string" && typeof record.modelID === "string") {
-    return { providerID: record.providerID as never, modelID: record.modelID as never }
-  }
-  return { providerID: "unknown" as never, modelID: "unknown" as never }
-}
 
 // Only the DIRECT parent may message a background task (ADR-057 D2 scoping):
 // the payload records the spawning session, with the child session's parentID

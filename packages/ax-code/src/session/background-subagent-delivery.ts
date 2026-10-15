@@ -225,7 +225,7 @@ async function recoveryOutcome(
   }
 }
 
-function queueModel(model: unknown) {
+export function queueModel(model: unknown): MessageV2.User["model"] {
   if (!model || typeof model !== "object") {
     return { providerID: "unknown" as never, modelID: "unknown" as never }
   }

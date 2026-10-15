@@ -15,6 +15,7 @@ import { Session } from "../session"
 import { SessionID, MessageID, type TaskQueueID } from "../session/schema"
 import { NotFoundError } from "../storage/db"
 import { MessageV2 } from "../session/message-v2"
+import { needsRecoveredResultReview } from "../session/background-subagent-handoff"
 import { agentModel } from "../session/prompt/prompt-command-selection"
 import { Agent } from "../agent/agent"
 import { SessionPrompt } from "../session/prompt"
@@ -45,12 +46,6 @@ export class BackgroundCapacityError extends Error {
 const SUBAGENT_TIMEOUT_MS = 10 * 60 * 1000
 const SUBAGENT_FINALIZE_TIMEOUT_MS = 2 * 60 * 1000
 const log = Log.create({ service: "task-tool" })
-
-function needsRecoveredResultReview(text: string) {
-  return /\b(?:incomplete|unresolved|insufficient|no usable|not enough evidence|unable to determine|could not verify|needs? validation|requires? validation)\b/i.test(
-    text,
-  )
-}
 
 const parameters = z.object({
   description: z.string().describe("A short (3-5 words) description of the task"),
