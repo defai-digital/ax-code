@@ -32,6 +32,7 @@
     "check:session-tree-memo": "node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node script/check-session-tree-memo.ts",
     "check:tui-snapshot": "node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node script/check-tui-snapshot.ts",
     "check:golden-frames": "node ../../script/node-ffi-runner.mjs --import tsx --conditions=node script/check-golden-frames.ts",
+    "check:product-frames": "node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node script/check-product-frames.tsx",
     "check:bun-compat": "tsx script/check-bun-compat.ts",
     "check:bare-json-parse": "tsx script/check-bare-json-parse.ts",
     "check:self-scan": "tsx script/self-scan.ts",
