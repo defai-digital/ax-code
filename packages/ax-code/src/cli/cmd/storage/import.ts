@@ -6,7 +6,6 @@ import { EOL } from "os"
 import { Filesystem } from "../../../util/filesystem"
 import { toErrorMessage } from "../../../util/error-message"
 import type { SessionTransfer } from "./transfer"
-import { writeTransfer } from "./transfer"
 import z from "zod"
 
 const TransferRecord = z.object({ id: z.string().min(1) }).passthrough()
@@ -92,6 +91,10 @@ export const ImportCommand = cmd({
         process.exit(1)
       }
 
+      // transfer.ts pulls Session and MessageV2 (the whole session graph);
+      // load it here so `--help` never evaluates it. writeTransfer stays
+      // synchronous inside its transaction.
+      const { writeTransfer } = await import("./transfer")
       writeTransfer(exportData)
 
       process.stdout.write(`Imported session: ${exportData.info.id}`)

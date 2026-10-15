@@ -1,7 +1,5 @@
-import { Session } from "../../session"
-import { SessionID } from "../../session/schema"
-
 export async function resolveSession(id?: string) {
+  const [{ Session }, { SessionID }] = await Promise.all([import("../../session"), import("../../session/schema")])
   if (id) {
     return Session.get(SessionID.make(id))
   }

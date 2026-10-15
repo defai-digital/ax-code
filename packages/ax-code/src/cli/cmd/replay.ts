@@ -1,10 +1,5 @@
 import type { Argv } from "yargs"
-import { SessionID } from "../../session/schema"
 import { cmd } from "./cmd"
-import { bootstrap } from "../bootstrap"
-import { Session } from "../../session"
-import { Replay } from "../../replay/replay"
-import { EventQuery } from "../../replay/query"
 import { EOL } from "os"
 
 export const ReplayCommand = cmd({
@@ -28,6 +23,13 @@ export const ReplayCommand = cmd({
       })
   },
   handler: async (args) => {
+    const [{ SessionID }, { bootstrap }, { Session }, { Replay }, { EventQuery }] = await Promise.all([
+      import("../../session/schema"),
+      import("../bootstrap"),
+      import("../../session"),
+      import("../../replay/replay"),
+      import("../../replay/query"),
+    ])
     await bootstrap(process.cwd(), async () => {
       const sid = SessionID.make(args.sessionID)
       const count = EventQuery.count(sid)

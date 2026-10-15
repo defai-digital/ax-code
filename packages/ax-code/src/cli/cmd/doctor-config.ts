@@ -1,4 +1,4 @@
-import { Config } from "../../config/config"
+import type { Config } from "../../config/config"
 import { Instance } from "../../project/instance"
 import type { DoctorCheck } from "./doctor-health"
 
@@ -13,6 +13,7 @@ export function getConfiguredCredentialProviders(
 
 export async function getDoctorConfiguration(directory: string): Promise<{ config?: Config.Info; check: DoctorCheck }> {
   try {
+    const { Config } = await import("../../config/config")
     const config = await Instance.provide({ directory, fn: () => Config.get() })
     return {
       config,

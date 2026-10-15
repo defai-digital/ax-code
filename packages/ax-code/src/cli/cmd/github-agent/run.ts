@@ -13,14 +13,9 @@ import type {
 } from "@octokit/webhooks-types"
 import { cmd } from "../cmd"
 import { bootstrap } from "../../bootstrap"
-import { Session } from "../../../session"
 import type { SessionID } from "../../../session/schema"
-import { MessageID, PartID } from "../../../session/schema"
-import { Provider } from "../../../provider/provider"
 import { Bus } from "../../../bus"
-import { MessageV2 } from "../../../session/message-v2"
 import { toErrorMessage } from "../../../util/error-message"
-import { SessionPrompt } from "../../../session/prompt"
 import { Instance } from "../../../project/instance"
 import { isNonEmptyRecord } from "../../../util/record"
 import { parseJsonResult } from "../../../util/json-value"
@@ -123,6 +118,11 @@ export const GithubRunCommand = cmd({
         describe: "GitHub personal access token (github_pat_********)",
       }),
   async handler(args) {
+    const { Session } = await import("../../../session")
+    const { MessageID, PartID } = await import("../../../session/schema")
+    const { Provider } = await import("../../../provider/provider")
+    const { MessageV2 } = await import("../../../session/message-v2")
+    const { SessionPrompt } = await import("../../../session/prompt")
     await bootstrap(process.cwd(), async () => {
       const isMock = !!(args.token && args.event)
 

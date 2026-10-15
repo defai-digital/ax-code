@@ -1,12 +1,10 @@
 import { cmd } from "./cmd"
 import { UI } from "../ui"
 import { Instance } from "../../project/instance"
-import { Session } from "../../session"
-import { SessionID } from "../../session/schema"
-import { SessionRevert } from "../../session/revert"
-import { SessionRollback } from "../../session/rollback"
-import { Risk } from "../../risk/score"
 import { getRequiredSession } from "./session-required"
+import type { SessionRevert } from "../../session/revert"
+
+type SessionRevertInput = SessionRevert.RevertInput
 
 export const RollbackCommand = cmd({
   command: "rollback <sessionID>",
@@ -27,6 +25,11 @@ export const RollbackCommand = cmd({
       })
       .option("step", { describe: "Rollback to a specific step index instead of the full session", type: "number" }),
   async handler(args) {
+    const { Session } = await import("../../session")
+    const { SessionID } = await import("../../session/schema")
+    const { SessionRevert } = await import("../../session/revert")
+    const { SessionRollback } = await import("../../session/rollback")
+    const { Risk } = await import("../../risk/score")
     await Instance.provide({
       directory: process.cwd(),
       fn: async () => {
@@ -63,7 +66,7 @@ export const RollbackCommand = cmd({
           return
         }
 
-        let target: SessionRevert.RevertInput
+        let target: SessionRevertInput
         if (args.step != null) {
           const step = args.step as number
           const point = SessionRollback.pick({ points: await SessionRollback.points(sessionID), step })

@@ -1,7 +1,3 @@
-import { Provider } from "@/provider/provider"
-import { askFixedContext } from "@/provider/fixed-context-operation"
-import { validateFixedContextQuestion } from "@/provider/fixed-context"
-import { bootstrapReadonly } from "../bootstrap"
 import { cmd } from "./cmd"
 
 export const AskCommand = cmd({
@@ -36,6 +32,13 @@ export const AskCommand = cmd({
         describe: "emit the answer as a single JSON document",
       }),
   async handler(args) {
+    const [{ Provider }, { askFixedContext }, { validateFixedContextQuestion }, { bootstrapReadonly }] =
+      await Promise.all([
+        import("@/provider/provider"),
+        import("@/provider/fixed-context-operation"),
+        import("@/provider/fixed-context"),
+        import("../bootstrap"),
+      ])
     const question = args.question.join(" ")
     validateFixedContextQuestion(question)
     const controller = new AbortController()

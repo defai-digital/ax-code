@@ -1,20 +1,21 @@
 import type { Argv } from "yargs"
 import { cmd } from "./cmd"
-import { Session } from "../../session"
+import type { Session } from "../../session"
 import { bootstrapReadonly } from "../bootstrap"
 import { Database } from "../../storage/db"
 import type { SessionID } from "../../session/schema"
-import { SessionTable } from "../../session/session.sql"
-import { SessionShard } from "../../session/shard"
-import { SessionUsageStats } from "../../session/usage-stats"
+import type { SessionShard } from "../../session/shard"
+import type { SessionUsageStats } from "../../session/usage-stats"
 import type { ProjectID } from "../../project/schema"
-import { Project } from "../../project/project"
+import type { Project } from "../../project/project"
 import { Instance } from "../../project/instance"
 import { isNonEmptyRecord } from "../../util/record"
-import { componentTokenTotal } from "../../session/compaction-budget"
 import { toErrorMessage } from "../../util/error-message"
 import { Locale } from "../../util/locale"
 import { EOL } from "os"
+
+type SessionShardStore = SessionShard.Store
+type SessionUsageAggregate = SessionUsageStats.Aggregate
 
 interface SessionStats {
   totalSessions: number
@@ -193,6 +194,10 @@ async function getCurrentProject(): Promise<Project.Info> {
 }
 
 async function getAllSessions(): Promise<Session.Info[]> {
+  const [{ Session }, { SessionTable }] = await Promise.all([
+    import("../../session"),
+    import("../../session/session.sql"),
+  ])
   const rows = Database.use((db) => db.select().from(SessionTable).all())
   return rows.flatMap((row) => {
     const next = Session.safe(row)
@@ -280,10 +285,15 @@ export async function aggregateSessionStats(
   // Aggregate inside SQLite, one pass per store (a shared registry store, or
   // one shard per project). A store that fails is skipped with a warning, the
   // same way a failing session batch used to be.
-  const usage = new Map<SessionID, SessionUsageStats.Aggregate>()
+  const [{ SessionShard }, { SessionUsageStats }, { componentTokenTotal }] = await Promise.all([
+    import("../../session/shard"),
+    import("../../session/usage-stats"),
+    import("../../session/compaction-budget"),
+  ])
+  const usage = new Map<SessionID, SessionUsageAggregate>()
   const failed = new Set<SessionID>()
-  const byStore = new Map<SessionShard.Store, SessionID[]>()
-  const storeByProject = new Map<ProjectID, SessionShard.Store>()
+  const byStore = new Map<SessionShardStore, SessionID[]>()
+  const storeByProject = new Map<ProjectID, SessionShardStore>()
   for (const session of filteredSessions) {
     let store = storeByProject.get(session.projectID)
     if (!store) {

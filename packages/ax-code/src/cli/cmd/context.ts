@@ -2,11 +2,9 @@ import { cmd } from "./cmd"
 import { UI } from "../ui"
 import * as prompts from "@clack/prompts"
 import { bootstrapReadonly } from "../bootstrap"
-import { Session } from "../../session"
-import { MessageV2 } from "../../session/message-v2"
-import { Provider } from "../../provider/provider"
-import { ProviderID, ModelID } from "../../provider/schema"
-import { calculateBreakdown, formatBreakdown } from "../../stats"
+import type { Session } from "../../session"
+import type { MessageV2 } from "../../session/message-v2"
+import type { Provider } from "../../provider/provider"
 import { EOL } from "os"
 
 export type ContextJSONDocument = {
@@ -69,6 +67,10 @@ export const ContextCommand = cmd({
     }
 
     await bootstrapReadonly(process.cwd(), async () => {
+      const { Session } = await import("../../session")
+      const { Provider } = await import("../../provider/provider")
+      const { ProviderID, ModelID } = await import("../../provider/schema")
+      const { calculateBreakdown, formatBreakdown } = await import("../../stats")
       const sessions = [...Session.list({ limit: 1000 })]
 
       if (sessions.length === 0) {

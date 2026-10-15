@@ -1,7 +1,7 @@
-import { Server } from "../../server/server"
 import { internalBaseUrl } from "../../util/internal-url"
 
-type Live = Awaited<ReturnType<typeof Server.listen>>
+type ServerListen = (typeof import("../../server/server"))["Server"]["listen"]
+type Live = Awaited<ReturnType<ServerListen>>
 
 let shared: Promise<Live> | undefined
 
@@ -10,7 +10,8 @@ export namespace RunReportServer {
     shared = undefined
   }
 
-  export function listen(port = 0) {
+  export async function listen(port = 0) {
+    const { Server } = await import("../../server/server")
     return Server.listen({
       hostname: "127.0.0.1",
       port,

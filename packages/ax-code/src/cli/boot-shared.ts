@@ -4,7 +4,6 @@ import { fatal } from "./bootstrap/fatal"
 import { init } from "./bootstrap/env"
 import { migrate } from "./bootstrap/migrate"
 import { cancelShellEnvLoad } from "../runtime/shell-env"
-import { FormatError } from "./error"
 import { UI } from "./ui"
 import { Installation } from "../installation"
 import { Log } from "../util/log"
@@ -80,6 +79,9 @@ export async function runAxCodeCli(cmd: { parse(): unknown }) {
   try {
     await cmd.parse()
   } catch (err) {
+    // Provider, Config, and MCP stay off the --help graph: this module
+    // formats those domain errors, and it is only needed once parse throws.
+    const { FormatError } = await import("./error")
     fatal(err, {
       format: FormatError,
       ui: UI.error,

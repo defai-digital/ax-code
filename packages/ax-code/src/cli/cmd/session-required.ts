@@ -1,8 +1,9 @@
 import { UI } from "../ui"
-import { Session } from "../../session"
+import type { SessionID } from "../../session/schema"
 import { NotFoundError } from "../../storage/db"
 
-export async function getRequiredSession(sessionID: Parameters<typeof Session.get>[0], displayID = String(sessionID)) {
+export async function getRequiredSession(sessionID: SessionID, displayID = String(sessionID)) {
+  const { Session } = await import("../../session")
   try {
     return await Session.get(sessionID)
   } catch (error) {

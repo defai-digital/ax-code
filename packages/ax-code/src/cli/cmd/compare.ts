@@ -1,9 +1,4 @@
 import { cmd } from "./cmd"
-import { Instance } from "../../project/instance"
-import { EventQuery } from "../../replay/query"
-import { Replay } from "../../replay/replay"
-import { Risk } from "../../risk/score"
-import { SessionID } from "../../session/schema"
 import type { ReplayEvent } from "../../replay/event"
 import { getRequiredSession } from "./session-required"
 import { uniqueSortedStrings } from "@/util/string-list"
@@ -22,6 +17,13 @@ export const CompareCommand = cmd({
         default: false,
       }),
   async handler(args) {
+    const [{ Instance }, { EventQuery }, { Replay }, { Risk }, { SessionID }] = await Promise.all([
+      import("../../project/instance"),
+      import("../../replay/query"),
+      import("../../replay/replay"),
+      import("../../risk/score"),
+      import("../../session/schema"),
+    ])
     await Instance.provide({
       directory: process.cwd(),
       fn: async () => {

@@ -2,7 +2,7 @@ import { SkillCandidateCommand } from "./skill-candidate"
 import { EOL } from "os"
 import path from "path"
 import type { Argv } from "yargs"
-import { Skill } from "../../skill"
+import type { Skill } from "../../skill"
 import {
   buildSkillDoctorReport,
   buildSkillTriggerReport,
@@ -17,8 +17,12 @@ import {
   type SkillTriggerReport,
   type SkillValidationReport,
 } from "../../skill/authoring"
-import { bootstrap, bootstrapReadonly } from "../bootstrap"
 import { cmd } from "./cmd"
+
+async function loadSkill() {
+  const [{ Skill }, boot] = await Promise.all([import("../../skill"), import("../bootstrap")])
+  return { Skill, bootstrap: boot.bootstrap, bootstrapReadonly: boot.bootstrapReadonly }
+}
 
 export {
   buildSkillDoctorReport,
@@ -99,6 +103,7 @@ const SkillListCommand = cmd({
       describe: "output machine-readable JSON",
     }),
   async handler(args) {
+    const { Skill, bootstrapReadonly } = await loadSkill()
     await bootstrapReadonly(process.cwd(), async () => {
       const skills = await Skill.all()
       if (args.json) {
@@ -130,6 +135,7 @@ const SkillCreateCommand = cmd({
         describe: "base skill directory; defaults to .ax-code/skill in the current worktree",
       }),
   async handler(args) {
+    const { bootstrap } = await loadSkill()
     await bootstrap(process.cwd(), async () => {
       try {
         const result = await createSkill({
@@ -159,6 +165,7 @@ const SkillValidateCommand = cmd({
       describe: "output machine-readable JSON",
     }),
   async handler(args) {
+    const { Skill, bootstrapReadonly } = await loadSkill()
     await bootstrapReadonly(process.cwd(), async () => {
       const report = buildSkillValidationReport(await Skill.all())
       if (args.json) {
@@ -180,6 +187,7 @@ const SkillDoctorCommand = cmd({
       describe: "output machine-readable JSON",
     }),
   async handler(args) {
+    const { Skill, bootstrapReadonly } = await loadSkill()
     await bootstrapReadonly(process.cwd(), async () => {
       const report = buildSkillDoctorReport(await Skill.all(), await Skill.duplicateNames())
       if (args.json) {
@@ -207,6 +215,7 @@ const SkillTestTriggerCommand = cmd({
         describe: "output machine-readable JSON",
       }),
   async handler(args) {
+    const { Skill, bootstrapReadonly } = await loadSkill()
     await bootstrapReadonly(process.cwd(), async () => {
       const files = ((args.files as string[] | undefined) ?? []).filter(Boolean)
       const report = buildSkillTriggerReport(await Skill.all(), files)

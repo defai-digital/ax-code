@@ -1,14 +1,32 @@
 import { EOL } from "os"
 import { basename } from "path"
-import { Agent } from "../../../agent/agent"
-import { Provider } from "../../../provider/provider"
-import { Session } from "../../../session"
+import type { Agent } from "../../../agent/agent"
 import type { MessageV2 } from "../../../session/message-v2"
-import { MessageID, PartID } from "../../../session/schema"
-import { ToolRegistry } from "../../../tool/registry"
+import type { Permission } from "../../../permission"
+
+type PermissionAskRequest = Omit<Permission.Request, "id" | "sessionID" | "tool">
 import { Instance } from "../../../project/instance"
-import { Permission } from "../../../permission"
 import { iife } from "../../../util/iife"
+
+async function loadAgentDebug() {
+  const [agent, provider, session, schema, registry, permission] = await Promise.all([
+    import("../../../agent/agent"),
+    import("../../../provider/provider"),
+    import("../../../session"),
+    import("../../../session/schema"),
+    import("../../../tool/registry"),
+    import("../../../permission"),
+  ])
+  return {
+    Agent: agent.Agent,
+    Provider: provider.Provider,
+    Session: session.Session,
+    MessageID: schema.MessageID,
+    PartID: schema.PartID,
+    ToolRegistry: registry.ToolRegistry,
+    Permission: permission.Permission,
+  }
+}
 import { bootstrap } from "../../bootstrap"
 import { cmd } from "../cmd"
 import { decodeJsonRecord } from "@/util/json-record"
@@ -35,6 +53,7 @@ export const AgentCommand = cmd({
         description: "Tool params as JSON",
       }),
   async handler(args) {
+    const { Agent } = await loadAgentDebug()
     await bootstrap(process.cwd(), async () => {
       const agentName = args.name as string
       const agent = await Agent.get(agentName)
@@ -74,11 +93,13 @@ export const AgentCommand = cmd({
 })
 
 async function getAvailableTools(agent: Agent.Info) {
+  const { Provider, ToolRegistry } = await loadAgentDebug()
   const model = agent.model ?? (await Provider.defaultModel())
   return ToolRegistry.tools(model, agent)
 }
 
 async function resolveTools(agent: Agent.Info, availableTools: Awaited<ReturnType<typeof getAvailableTools>>) {
+  const { Permission } = await loadAgentDebug()
   const disabled = Permission.disabled(
     availableTools.map((tool) => tool.id),
     agent.permission,
@@ -123,6 +144,7 @@ export function parseToolParams(input?: string): ToolParams {
 }
 
 export async function createToolContext(agent: Agent.Info) {
+  const { Session, Provider, MessageID, PartID, Permission } = await loadAgentDebug()
   const session = await Session.create({ title: `Debug tool run (${agent.name})` })
   const userID = MessageID.ascending()
   const messageID = MessageID.ascending()
@@ -174,7 +196,7 @@ export async function createToolContext(agent: Agent.Info) {
     abort: new AbortController().signal,
     messages: [],
     metadata: () => {},
-    async ask(req: Omit<Permission.Request, "id" | "sessionID" | "tool">) {
+    async ask(req: PermissionAskRequest) {
       for (const pattern of req.patterns) {
         const rule = Permission.evaluate(req.permission, pattern, ruleset)
         if (rule.action === "deny") {

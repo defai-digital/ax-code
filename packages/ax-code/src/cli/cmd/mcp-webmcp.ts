@@ -1,5 +1,4 @@
 import { cmd } from "./cmd"
-import { WebMcpProfile } from "@/mcp/webmcp-profile"
 
 export const McpWebMcpCommand = cmd({
   command: "webmcp",
@@ -42,6 +41,7 @@ export const McpWebMcpCommand = cmd({
         describe: "Launch a vendored, integrity-pinned bridge install (requires the managed allowVendored requirement)",
       }),
   async handler(args) {
+    const { WebMcpProfile } = await import("@/mcp/webmcp-profile")
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(args.name)) {
       throw new Error("MCP server name must contain 1-64 ASCII letters, digits, underscores or hyphens")
     }

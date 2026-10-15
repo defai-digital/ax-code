@@ -16,7 +16,7 @@ import { createAxCodeClient, type AxCodeClient, type ToolPart, type Event } from
 import type { Permission } from "../../permission"
 import { Log } from "../../util/log"
 import { toErrorMessage } from "../../util/error-message"
-import { DEFAULT_SERVER_PORT } from "@/server/constants"
+import { DEFAULT_SERVER_PORT } from "@/constants/server"
 import type { Tool } from "../../tool/tool"
 import type { GlobTool } from "../../tool/glob"
 import type { GrepTool } from "../../tool/grep"
@@ -31,7 +31,6 @@ import type { TaskTool } from "../../tool/task"
 import type { SkillTool } from "../../tool/skill"
 import type { BashTool } from "../../tool/bash"
 import type { TodoWriteTool } from "../../tool/todo"
-import { Todo } from "../../session/todo"
 import { Locale } from "../../util/locale"
 import { internalBaseUrl, isInternalHostname } from "../../util/internal-url"
 import { isNonEmptyRecord } from "../../util/record"
@@ -145,6 +144,13 @@ function block(info: Inline, output: string | undefined, full: boolean) {
 }
 
 export { isRunEventStreamFormat }
+export {
+  cliFailureShowsFullHelp,
+  commandTokenFromArgv,
+  isCliUsageFailureMessage,
+  runArgvUsesEventStream,
+  runUsageFailureHint,
+} from "./run-usage"
 
 export function joinRunMessageArguments(args: readonly string[]): string {
   // Yargs has already removed shell quoting and preserved each argument's
@@ -240,115 +246,6 @@ export function findRunModelErrorCode(input: {
 }): RunEarlyErrorCode {
   const provider = input.providers.find((item) => item.id === input.providerID)
   return provider ? "model" : "provider"
-}
-
-/** Yargs usage-failure message prefixes the shared CLI failure handler recognizes. */
-const CLI_USAGE_FAILURE_PREFIXES: readonly string[] = [
-  "Unknown argument",
-  "Not enough non-option arguments",
-  "Invalid values:",
-  "Missing required argument",
-]
-
-export function isCliUsageFailureMessage(message: string | undefined): boolean {
-  return message !== undefined && CLI_USAGE_FAILURE_PREFIXES.some((prefix) => message.startsWith(prefix))
-}
-
-/** The offending token in a yargs "Unknown argument: x" message, when present. */
-function unknownArgumentToken(message: string): string | undefined {
-  if (!message.startsWith("Unknown argument")) return undefined
-  const token = message
-    .slice("Unknown argument".length)
-    .replace(/^[:\s]+/, "")
-    .trim()
-  return token.length > 0 ? token : undefined
-}
-
-/**
- * Hint appended to a yargs usage failure ("Unknown argument",
- * "Invalid values", "Missing required argument", "Not enough non-option
- * arguments") when the failing command is `run`, so headless callers get a
- * one-line pointer instead of a full help dump. A bare `json` argument is
- * almost always a mistyped `--format json`, so it gets the NDJSON-specific
- * hint.
- */
-export function runUsageFailureHint(message: string | undefined, command: string | undefined): string | undefined {
-  if (command !== "run") return undefined
-  if (!isCliUsageFailureMessage(message)) return undefined
-  if (unknownArgumentToken(message ?? "") === "json") {
-    return "Use --format json for the NDJSON event stream (run --help lists the accepted flags)."
-  }
-  return "Run `ax-code run --help` to see the accepted flags."
-}
-
-/**
- * Whether the shared CLI failure handler prints the full help for this usage
- * failure: the `run` command prints only the one-line error plus the hint
- * above (scripted callers must be able to read stderr), every other command
- * keeps the full help dump.
- */
-export function cliFailureShowsFullHelp(message: string | undefined, command: string | undefined): boolean {
-  return isCliUsageFailureMessage(message) && command !== "run"
-}
-
-/**
- * The command yargs is parsing, derived from the raw CLI arguments: the
- * first non-flag token after the entry. Global value-taking flags
- * (--log-level, --sandbox, --debug-dir, --port, --hostname, --mdns-domain,
- * --cors) skip their value so a flag value is never mistaken for the command,
- * and nothing after `--` counts. Used by the shared CLI failure handler to
- * attribute an "Unknown argument" error to its command without depending on
- * yargs internals, which do not expose the command chain reliably at
- * strict-fail time.
- */
-export function commandTokenFromArgv(argv: readonly string[]): string | undefined {
-  const valueFlags = new Set([
-    "--log-level",
-    "--sandbox",
-    "--debug-dir",
-    "--port",
-    "--hostname",
-    "--mdns-domain",
-    "--cors",
-  ])
-  let skipValue = false
-  for (const token of argv) {
-    if (skipValue) {
-      skipValue = false
-      continue
-    }
-    if (token === "--") return undefined
-    if (token.startsWith("-")) {
-      if (!token.includes("=") && valueFlags.has(token)) skipValue = true
-      continue
-    }
-    return token
-  }
-  return undefined
-}
-
-/**
- * Whether the raw CLI argv selects the `run` command with one of the NDJSON
- * event-stream `--format` values (spaced or `=` spelling). Used by the shared
- * CLI failure handler so a yargs-level usage failure (e.g. a mistyped flag)
- * still writes one structured `{"type":"error",...}` stdout line for stream
- * consumers before the human-readable stderr prose — without it they get
- * nothing on stdout at all.
- */
-export function runArgvUsesEventStream(argv: readonly string[]): boolean {
-  if (commandTokenFromArgv(argv) !== "run") return false
-  for (let i = 0; i < argv.length; i++) {
-    const token = argv[i]
-    // Prompt text after `--` must never match, even when it spells a flag.
-    if (token === "--") return false
-    if (token === "--format") {
-      const value = argv[i + 1]
-      if (value !== undefined && isRunEventStreamFormat(value)) return true
-      continue
-    }
-    if (token.startsWith("--format=") && isRunEventStreamFormat(token.slice("--format=".length))) return true
-  }
-  return false
 }
 
 /**
@@ -545,14 +442,25 @@ function bash(info: ToolProps<typeof BashTool>, full: boolean) {
   )
 }
 
+type TodoRenderer = {
+  formatCheckboxLines(todos: readonly { status: string; content: string }[]): string[]
+  countActive(todos: readonly { status?: unknown }[]): number
+}
+
+// Set by executeRun before tool rendering. Kept off the dispatch call so that
+// call stays the two-argument form the run source pin checks.
+let todoRenderer: TodoRenderer | undefined
+
 function todo(info: ToolProps<typeof TodoWriteTool>, full: boolean) {
+  const todosApi = todoRenderer
+  if (!todosApi) throw new Error("todo renderer is not loaded")
   if (full) {
     block(
       {
         icon: "#",
         title: "Todos",
       },
-      Todo.formatCheckboxLines(info.input.todos).join("\n"),
+      todosApi.formatCheckboxLines(info.input.todos).join("\n"),
       true,
     )
     return
@@ -566,7 +474,7 @@ function todo(info: ToolProps<typeof TodoWriteTool>, full: boolean) {
   const done = todos.filter((item) => item.status === "completed").length
   UI.println(
     UI.Style.TEXT_DIM +
-      `${Todo.countActive(todos)} active · ${done} done · ${todos.length} total; pass --full to show the list` +
+      `${todosApi.countActive(todos)} active · ${done} done · ${todos.length} total; pass --full to show the list` +
       UI.Style.TEXT_NORMAL,
   )
   UI.empty()
@@ -1284,6 +1192,7 @@ export const RunCommand = cmd({
         }
 
         async function executeRun(sdk: AxCodeClient) {
+          todoRenderer ??= (await import("../../session/todo")).Todo
           function tool(part: ToolPart) {
             try {
               const full = Boolean(args.full)

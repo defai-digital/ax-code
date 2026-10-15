@@ -1,9 +1,4 @@
 import { cmd } from "./cmd"
-import { Instance } from "../../project/instance"
-import { Session } from "../../session"
-import { SessionID, MessageID } from "../../session/schema"
-import { Risk } from "../../risk/score"
-import { Snapshot } from "../../snapshot"
 import { getRequiredSession } from "./session-required"
 
 export const BranchCommand = cmd({
@@ -15,6 +10,13 @@ export const BranchCommand = cmd({
       .option("from", { describe: "Branch from a specific message ID (defaults to latest)", type: "string" })
       .option("json", { describe: "Output as JSON", type: "boolean", default: false }),
   async handler(args) {
+    const [{ Instance }, { Session }, { SessionID, MessageID }, { Risk }, { Snapshot }] = await Promise.all([
+      import("../../project/instance"),
+      import("../../session"),
+      import("../../session/schema"),
+      import("../../risk/score"),
+      import("../../snapshot"),
+    ])
     await Instance.provide({
       directory: process.cwd(),
       fn: async () => {

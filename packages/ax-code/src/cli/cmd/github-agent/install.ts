@@ -6,7 +6,6 @@ import * as prompts from "@clack/prompts"
 import { map, pipe, sortBy, values } from "remeda"
 import { UI } from "../../ui"
 import { cmd } from "../cmd"
-import { ModelsDev } from "../../../provider/models"
 import { Instance } from "../../../project/instance"
 import { git } from "../../../util/git"
 import { setTimeout as sleep } from "node:timers/promises"
@@ -22,6 +21,7 @@ export const GithubInstallCommand = cmd({
   command: "install",
   describe: "install the GitHub agent",
   async handler() {
+    const { ModelsDev } = await import("../../../provider/models")
     await Instance.provide({
       directory: process.cwd(),
       async fn() {

@@ -1,20 +1,50 @@
 import { EOL } from "os"
 import type { Argv } from "yargs"
-import { bootstrap, bootstrapReadonly } from "../bootstrap"
 import { cmd } from "./cmd"
 import { Filesystem } from "@/util/filesystem"
-import {
-  createHeadlessConsoleEventSinks,
-  createHeadlessIdleAbort,
-  headlessBackendOptions,
-  resolveHeadlessWorkdir,
-  withHeadlessBackend,
-  withHeadlessGuards,
-} from "./headless-shared"
+import { DEFAULT_SERVER_PORT } from "@/constants/server"
 import type { HeadlessRuntimeCommand } from "@/runtime/headless"
-import { SessionGoal } from "../../session/goal"
-import { SessionID } from "../../session/schema"
+import type { SessionGoal } from "../../session/goal"
+import type { SessionID } from "../../session/schema"
 import { jsonOption, writeJson } from "./json-output"
+
+// Same options as headlessBackendOptions. Inlined so `goal` registration does
+// not import headless-shared (bootstrap and server constants).
+function headlessBackendOptions<T>(yargs: Argv<T>) {
+  return yargs
+    .option("attach", {
+      describe: `attach to a running ax-code server, e.g. http://localhost:${DEFAULT_SERVER_PORT}`,
+      type: "string",
+    })
+    .option("password", {
+      describe: "basic auth password for --attach; defaults to AX_CODE_SERVER_PASSWORD",
+      type: "string",
+    })
+    .option("autonomous", {
+      describe: "auto-answer permission/question prompts through the headless effect policy",
+      type: "boolean",
+      default: true,
+    })
+    .option("idle-timeout-ms", {
+      describe:
+        "abort if the headless session emits no events for this long (inactivity timeout — a busy long run keeps resetting it); set 0 to disable",
+      type: "number",
+      default: 10 * 60 * 1000,
+    })
+    .option("event-log", {
+      describe: "also write raw headless JSONL events to this file",
+      type: "string",
+    })
+}
+
+async function loadGoal() {
+  const [{ SessionGoal }, { SessionID }, boot] = await Promise.all([
+    import("../../session/goal"),
+    import("../../session/schema"),
+    import("../bootstrap"),
+  ])
+  return { SessionGoal, SessionID, bootstrap: boot.bootstrap, bootstrapReadonly: boot.bootstrapReadonly }
+}
 
 // Statuses a bare `goal resume` may pick on its own. A complete goal would be
 // reactivated and a budget-limited one refused, so neither is a safe default.
@@ -30,6 +60,7 @@ const ANY_GOAL_SESSION_DESCRIBE = "session id (defaults to the project's single 
  * goal and starts burning budget, so the wrong pick is expensive.
  */
 export async function resolveGoalSession(sessionID: string | undefined): Promise<SessionID> {
+  const { SessionGoal, SessionID } = await loadGoal()
   if (sessionID) return SessionID.make(sessionID)
   const goals = await SessionGoal.list()
   const resumable = goals.filter((goal) => RESUMABLE_STATUSES.has(goal.status))
@@ -54,6 +85,7 @@ export async function resolveGoalSession(sessionID: string | undefined): Promise
  * so any existing goal resolves regardless of status.
  */
 export async function resolveAnyGoalSession(sessionID: string | undefined): Promise<SessionID> {
+  const { SessionGoal, SessionID } = await loadGoal()
   if (sessionID) return SessionID.make(sessionID)
   const goals = await SessionGoal.list()
   if (goals.length === 0) throw new Error("No goal is set in this project.")
@@ -112,6 +144,7 @@ const GoalStatusCommand = cmd({
   describe: "show the current session goal",
   builder: (yargs: Argv) => dirOption(sessionFilter(yargs, ANY_GOAL_SESSION_DESCRIBE)).option("json", jsonOption()),
   async handler(args) {
+    const { SessionGoal, bootstrapReadonly } = await loadGoal()
     await bootstrapReadonly(args.dir ?? process.cwd(), async () => {
       const sessionID = await resolveAnyGoalSession(args.session)
       const goal = await SessionGoal.get(sessionID)
@@ -129,6 +162,7 @@ const GoalPauseCommand = cmd({
   describe: "pause the current session goal",
   builder: (yargs: Argv) => dirOption(sessionFilter(yargs, ANY_GOAL_SESSION_DESCRIBE)),
   async handler(args) {
+    const { SessionGoal, bootstrap } = await loadGoal()
     await bootstrap(args.dir ?? process.cwd(), async () => {
       const sessionID = await resolveAnyGoalSession(args.session)
       const current = await SessionGoal.get(sessionID)
@@ -159,6 +193,7 @@ const GoalClearCommand = cmd({
   describe: "clear the current session goal and its plan",
   builder: (yargs: Argv) => dirOption(sessionFilter(yargs, ANY_GOAL_SESSION_DESCRIBE)),
   async handler(args) {
+    const { SessionGoal, bootstrap } = await loadGoal()
     await bootstrap(args.dir ?? process.cwd(), async () => {
       const sessionID = await resolveAnyGoalSession(args.session)
       await SessionGoal.clear(sessionID)
@@ -188,6 +223,14 @@ const GoalResumeCommand = cmd({
         }),
     ),
   async handler(args) {
+    const {
+      createHeadlessConsoleEventSinks,
+      createHeadlessIdleAbort,
+      resolveHeadlessWorkdir,
+      withHeadlessBackend,
+      withHeadlessGuards,
+    } = await import("./headless-shared")
+    const { SessionGoal, bootstrapReadonly } = await loadGoal()
     const callerCwd = Filesystem.callerCwd()
     const { target } = resolveHeadlessWorkdir(args, callerCwd)
 

@@ -1,31 +1,29 @@
 import { AX_WIKI_DIR_DEFAULT } from "@ax-code/ax-wiki"
-import { wikiProjectRoot } from "../../wiki/root"
 import type { Argv } from "yargs"
 import path from "node:path"
 import open from "open"
-import { WikiVisualization } from "../../wiki/visualization"
-import { bootstrap, bootstrapReadonly } from "../bootstrap"
 import { UI } from "../ui"
 import { Filesystem } from "../../util/filesystem"
-import {
-  buildWikiCards,
-  engineConfig,
-  ensureAgentsWikiPointers,
-  getWikiStatus,
-  gitHeadCommit,
-  lintWiki,
-  planNativeWiki,
-  readWikiBuildReport,
-  relatedWikiPages,
-  resolveWikiRuntimeConfig,
-  runNativeWiki,
-  summarizeWikiBuildReport,
-  writeWikiCards,
-  type WikiBuildReport,
-  type WikiRuntimeConfig,
-  type WikiStatus,
-} from "../../wiki"
+import type { WikiBuildReport, WikiRuntimeConfig, WikiStatus } from "../../wiki"
 import { cmd } from "./cmd"
+
+async function loadWiki() {
+  const [root, wiki, visualization, boot] = await Promise.all([
+    import("../../wiki/root"),
+    import("../../wiki"),
+    import("../../wiki/visualization"),
+    import("../bootstrap"),
+  ])
+  return {
+    wikiProjectRoot: root.wikiProjectRoot,
+    ...wiki,
+    WikiVisualization: visualization.WikiVisualization,
+    bootstrap: boot.bootstrap,
+    bootstrapReadonly: boot.bootstrapReadonly,
+  }
+}
+
+type WikiApi = Awaited<ReturnType<typeof loadWiki>>
 
 type CommonArgs = { directory?: string; dir?: string; model?: string }
 
@@ -34,15 +32,17 @@ function rootFromArgs(directory?: string): string {
   return Filesystem.resolve(directory ? path.resolve(caller, directory) : caller)
 }
 
-type WikiRun<T> = (input: { root: string; config: WikiRuntimeConfig }) => Promise<T>
+type WikiRun<T> = (input: { root: string; config: WikiRuntimeConfig; api: WikiApi }) => Promise<T>
 
 // Subcommands that only read the repository and wiki files use the read-only
 // bootstrap: the full one starts providers, LSP, and watchers whose open
 // handles keep the process alive until the 2 s forced-exit grace expires.
 async function withWiki<T>(args: CommonArgs, fn: WikiRun<T>, options: { models?: boolean } = {}) {
+  const api = await loadWiki()
   const root = rootFromArgs(args.directory)
-  const run = async () => fn({ root: await wikiProjectRoot(), config: await resolveWikiRuntimeConfig(args) })
-  return options.models ? bootstrap(root, run) : bootstrapReadonly(root, run)
+  const run = async () =>
+    fn({ root: await api.wikiProjectRoot(), config: await api.resolveWikiRuntimeConfig(args), api })
+  return options.models ? api.bootstrap(root, run) : api.bootstrapReadonly(root, run)
 }
 
 export function wikiStatusExitCode(status: Pick<WikiStatus, "exists" | "healthy" | "freshness">): number {
@@ -52,7 +52,8 @@ export function wikiStatusExitCode(status: Pick<WikiStatus, "exists" | "healthy"
   return 0
 }
 
-function printStatus(status: WikiStatus, json: boolean, report?: WikiBuildReport) {
+async function printStatus(status: WikiStatus, json: boolean, report?: WikiBuildReport) {
+  const { summarizeWikiBuildReport } = await loadWiki()
   if (json) {
     console.log(JSON.stringify(report ? { ...status, lastBuild: report } : status, null, 2))
     return
@@ -92,14 +93,14 @@ export const WikiStatusCommand = cmd({
   builder: (yargs: Argv) =>
     commonOptions(yargs).option("json", { type: "boolean", default: false, describe: "machine-readable JSON" }),
   handler: async (args) => {
-    await withWiki(args, async ({ root, config }) => {
-      const status = await getWikiStatus({
+    await withWiki(args, async ({ root, config, api }) => {
+      const status = await api.getWikiStatus({
         root,
         wikiDir: config.dir,
-        repositoryHead: await gitHeadCommit(root),
-        config: engineConfig(config),
+        repositoryHead: await api.gitHeadCommit(root),
+        config: api.engineConfig(config),
       })
-      printStatus(status, args.json === true, await readWikiBuildReport(root, config.dir))
+      await printStatus(status, args.json === true, await api.readWikiBuildReport(root, config.dir))
       process.exitCode = wikiStatusExitCode(status)
     })
   },
@@ -111,24 +112,24 @@ export const WikiDoctorCommand = cmd({
   builder: (yargs: Argv) =>
     commonOptions(yargs).option("json", { type: "boolean", default: false, describe: "machine-readable JSON" }),
   handler: async (args) => {
-    await withWiki(args, async ({ root, config }) => {
-      const head = await gitHeadCommit(root)
-      const status = await getWikiStatus({
+    await withWiki(args, async ({ root, config, api }) => {
+      const head = await api.gitHeadCommit(root)
+      const status = await api.getWikiStatus({
         root,
         wikiDir: config.dir,
         repositoryHead: head,
-        config: engineConfig(config),
+        config: api.engineConfig(config),
       })
-      const lint = await lintWiki({
+      const lint = await api.lintWiki({
         root,
         wikiDir: config.dir,
         repositoryHead: head,
-        config: engineConfig(config),
+        config: api.engineConfig(config),
       })
-      const report = await readWikiBuildReport(root, config.dir)
+      const report = await api.readWikiBuildReport(root, config.dir)
       if (args.json) console.log(JSON.stringify({ status, lint, ...(report ? { lastBuild: report } : {}) }, null, 2))
       else {
-        printStatus(status, false, report)
+        await printStatus(status, false, report)
         UI.println("")
         UI.println(
           `Lint: ok=${lint.ok} stale=${lint.stale} pages=${lint.stats.pageCount} symbols=${lint.stats.symbolCount}`,
@@ -152,8 +153,8 @@ export const WikiPlanCommand = cmd({
   builder: (yargs: Argv) =>
     commonOptions(yargs).option("json", { type: "boolean", default: false, describe: "machine-readable JSON" }),
   handler: async (args) => {
-    await withWiki(args, async ({ root, config }) => {
-      const plan = await planNativeWiki({ root, dir: config.dir })
+    await withWiki(args, async ({ root, config, api }) => {
+      const plan = await api.planNativeWiki({ root, dir: config.dir })
       if (args.json) console.log(JSON.stringify(plan, null, 2))
       else {
         UI.println(`${UI.Style.TEXT_INFO_BOLD}AX Wiki plan${UI.Style.TEXT_NORMAL}`)
@@ -172,12 +173,12 @@ export const WikiEnsureAgentsCommand = cmd({
       .option("dry-run", { type: "boolean", default: false, describe: "preview without writing" })
       .option("force", { type: "boolean", default: false, describe: "override wiki.autoInjectAgents=false" }),
   handler: async (args) => {
-    await withWiki(args, async ({ root, config }) => {
+    await withWiki(args, async ({ root, config, api }) => {
       if (!config.autoInjectAgents && args.force !== true) {
         UI.println("Skipped: wiki.autoInjectAgents is false (use --force to override).")
         return
       }
-      const result = await ensureAgentsWikiPointers(root, {
+      const result = await api.ensureAgentsWikiPointers(root, {
         dryRun: args["dry-run"] === true,
         wikiDir: config.dir,
         touchClaudeMd: config.touchClaudeMd,
@@ -203,7 +204,7 @@ async function runGenerateOrUpdate(
 ) {
   await withWiki(
     args,
-    async ({ root, config }) => {
+    async ({ root, config, api }) => {
       UI.println(
         `${UI.Style.TEXT_INFO_BOLD}${action === "generate" ? "Generating" : "Updating"} native AX Wiki…${UI.Style.TEXT_NORMAL}`,
       )
@@ -211,7 +212,7 @@ async function runGenerateOrUpdate(
       UI.println(`  dir:   ${config.dir}/`)
       UI.println(`  model: ${config.model ?? "AX Code default"}`)
       const started = Date.now()
-      const result = await runNativeWiki({
+      const result = await api.runNativeWiki({
         root,
         action,
         dir: config.dir,
@@ -233,7 +234,7 @@ async function runGenerateOrUpdate(
             },
       })
       if (args["skip-agents"] !== true && config.autoInjectAgents) {
-        const agents = await ensureAgentsWikiPointers(root, {
+        const agents = await api.ensureAgentsWikiPointers(root, {
           wikiDir: config.dir,
           touchClaudeMd: config.touchClaudeMd,
         })
@@ -279,12 +280,12 @@ export const WikiLintCommand = cmd({
   builder: (yargs: Argv) =>
     commonOptions(yargs).option("json", { type: "boolean", default: false, describe: "machine-readable JSON" }),
   handler: async (args) => {
-    await withWiki(args, async ({ root, config }) => {
-      const report = await lintWiki({
+    await withWiki(args, async ({ root, config, api }) => {
+      const report = await api.lintWiki({
         root,
         wikiDir: config.dir,
-        repositoryHead: await gitHeadCommit(root),
-        config: engineConfig(config),
+        repositoryHead: await api.gitHeadCommit(root),
+        config: api.engineConfig(config),
       })
       if (args.json) console.log(JSON.stringify(report, null, 2))
       else {
@@ -309,13 +310,13 @@ export const WikiCardsCommand = cmd({
       .option("stdout", { type: "boolean", default: false, describe: "print Markdown instead of writing" })
       .option("output", { type: "string", describe: "output path (default: .ax-code/wiki-cards.md)" }),
   handler: async (args) => {
-    await withWiki(args, async ({ root, config }) => {
-      const result = await buildWikiCards({ root, wikiDir: config.dir })
+    await withWiki(args, async ({ root, config, api }) => {
+      const result = await api.buildWikiCards({ root, wikiDir: config.dir })
       if (args.json) console.log(JSON.stringify({ wiki: result.wikiDir, cards: result.cards }, null, 2))
       else if (args.stdout) process.stdout.write(result.markdown)
       else {
         const output = args.output || result.defaultOutputPath
-        await writeWikiCards(output, result.markdown)
+        await api.writeWikiCards(output, result.markdown)
         UI.println(`Wrote ${result.cards.length} card(s) → ${output}`)
       }
     })
@@ -332,8 +333,13 @@ export const WikiRelatedCommand = cmd({
       .option("exact", { type: "boolean", default: false, describe: "disable body mention fallback" }),
   handler: async (args) => {
     const symbol = String(args.symbol ?? "").trim()
-    await withWiki(args, async ({ root, config }) => {
-      const result = await relatedWikiPages({ root, symbol, wikiDir: config.dir, mentionFallback: args.exact !== true })
+    await withWiki(args, async ({ root, config, api }) => {
+      const result = await api.relatedWikiPages({
+        root,
+        symbol,
+        wikiDir: config.dir,
+        mentionFallback: args.exact !== true,
+      })
       if (args.json) console.log(JSON.stringify(result, null, 2))
       else {
         UI.println(`${UI.Style.TEXT_INFO_BOLD}AX Wiki related: ${result.symbol}${UI.Style.TEXT_NORMAL}`)
@@ -362,18 +368,19 @@ export const WikiVizCommand = cmd({
         return true
       }),
   handler: async (args) => {
-    const document = await withWiki(args, async ({ root, config }) =>
-      WikiVisualization.render(await WikiVisualization.snapshot(root, config.dir)),
+    const api = await loadWiki()
+    const document = await withWiki(args, async ({ root, config, api }) =>
+      api.WikiVisualization.render(await api.WikiVisualization.snapshot(root, config.dir)),
     )
     if (args.export !== undefined) {
       if (!args.export.trim()) throw new Error("--export requires a destination")
       // @scan-suppress security_scan - Caller-selected export path. This command writes only the HTML the user named.
       const destination = path.resolve(Filesystem.callerCwd(), args.export)
-      await WikiVisualization.exportHtml(destination, document.html)
+      await api.WikiVisualization.exportHtml(destination, document.html)
       UI.println(`Wrote Wiki evidence snapshot: ${destination}`)
       return
     }
-    const server = await WikiVisualization.serve(document)
+    const server = await api.WikiVisualization.serve(document)
     let finish!: () => void
     const stopped = new Promise<void>((resolve) => {
       finish = resolve

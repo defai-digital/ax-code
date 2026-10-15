@@ -5,14 +5,12 @@
  * Validates configuration, providers, tools, and environment
  */
 
-import { Config } from "../../config/config"
 import { cmd } from "./cmd"
 import { Installation } from "../../installation"
 import { runtimeMode } from "../../installation/runtime-mode"
 import { Global } from "../../global"
 import { Flag } from "../../flag/flag"
 import { Auth } from "../../auth"
-import { ModelsDev } from "../../provider/models"
 import { Log } from "../../util/log"
 import { Filesystem } from "../../util/filesystem"
 import { NativeAddon } from "../../native/addon"
@@ -23,18 +21,15 @@ import { Locale } from "@/util/locale"
 import { getTuiPreloadCheck } from "./doctor-preload"
 import { getDoctorDatabaseCheck } from "./doctor-storage"
 import { getRecentLogsChecks, getRunningInstancesCheck } from "./doctor-health"
-import { getComputerUseCheck } from "./doctor-computer"
 import path from "path"
 import { realpathSync } from "fs"
 import { access } from "fs/promises"
-import { ProjectIdentity } from "../../project/project-identity"
 import { isLoopbackHostname } from "../../util/listen-security"
-import { DEFAULT_SERVER_PORT } from "@/server/constants"
+import { DEFAULT_SERVER_PORT } from "@/constants/server"
 import type { Isolation as IsolationConfig } from "../../config/schema"
 import { Isolation } from "../../isolation"
 import { toErrorMessage } from "@/util/error-message"
-import { isPlausiblySupportedHost } from "@/provider/ax-engine/platform"
-import { getAxEngineStatus } from "@/provider/ax-engine/status"
+import type { AxEngineStatus } from "@/provider/ax-engine/status"
 import { whichAll } from "../../util/which"
 import { Process } from "../../util/process"
 
@@ -219,9 +214,10 @@ export function getFeatureFlagsCheck(flags: string[]): DoctorCheck | undefined {
   }
 }
 
-export function getAxEngineDoctorCheck(status: Awaited<ReturnType<typeof getAxEngineStatus>>): DoctorCheck {
+export function getAxEngineDoctorCheck(status: AxEngineStatus): DoctorCheck {
   const configuredOrPrepared = status.model.present || status.server.running || status.dependency.available
-  const relevant = isPlausiblySupportedHost() || configuredOrPrepared
+  // Same predicate as isPlausiblySupportedHost, kept local so registration does not load the provider graph.
+  const relevant = (process.platform === "darwin" && process.arch === "arm64") || configuredOrPrepared
   if (!relevant) {
     return {
       name: "AX Engine local provider",
@@ -306,6 +302,7 @@ async function findAncestor(start: string, predicate: (dir: string) => Promise<b
 
 async function getConfiguredTuiPort(): Promise<number> {
   try {
+    const { Config } = await import("../../config/config")
     const config = await Config.global()
     const configured = config?.server?.port
     if (typeof configured === "number" && configured > 0) return configured
@@ -321,6 +318,7 @@ export async function getDuplicateProjectIdentityCheck(input: {
 }): Promise<{ name: string; status: "ok" | "warn" | "fail"; detail: string } | undefined> {
   const useDatabase = input.useDatabase ?? Database.use
   try {
+    const { ProjectIdentity } = await import("../../project/project-identity")
     const rows = await ProjectIdentity.listWorktreeIdentities({ worktree: input.worktree, useDatabase })
     if (rows.length <= 1) return
     const detail = rows
@@ -499,6 +497,7 @@ export async function runDoctorChecks(input: { skip?: ReadonlySet<string> } = {}
 
     const envKeys: { env: string; provider: string }[] = []
     try {
+      const { ModelsDev } = await import("../../provider/models")
       const modelsDev = await ModelsDev.get()
       const seenEnv = new Set<string>()
       for (const provider of Object.values(modelsDev)) {
@@ -564,6 +563,7 @@ export async function runDoctorChecks(input: { skip?: ReadonlySet<string> } = {}
     if (duplicateProjectIdentity) push("project-identity", duplicateProjectIdentity)
   }
 
+  const { Config } = await import("../../config/config")
   try {
     const globalConfig = await Config.global()
     push(
@@ -625,6 +625,7 @@ export async function runDoctorChecks(input: { skip?: ReadonlySet<string> } = {}
 
   try {
     const config = configuration.config ?? (await Config.global())
+    const { getAxEngineStatus } = await import("@/provider/ax-engine/status")
     push("ax-engine", getAxEngineDoctorCheck(await getAxEngineStatus(config?.provider?.["ax-engine"]?.options ?? {})))
   } catch (error) {
     push("ax-engine", {
@@ -638,6 +639,7 @@ export async function runDoctorChecks(input: { skip?: ReadonlySet<string> } = {}
   // (spawn + MCP handshake + list_apps, capped by the probe timeout).
   try {
     const config = configuration.config ?? (await Config.global())
+    const { getComputerUseCheck } = await import("./doctor-computer")
     push("computer-use", await getComputerUseCheck({ config: config?.computer }))
   } catch (error) {
     push("computer-use", {

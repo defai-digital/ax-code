@@ -1,34 +1,43 @@
 import { EOL } from "os"
 import type { Argv } from "yargs"
-import { bootstrap } from "../bootstrap"
+import z from "zod"
+import { Identifier } from "../../id/id"
 import { UI } from "../ui"
 import { cmd } from "./cmd"
 import { jsonOption, writeJson } from "./json-output"
 import { truncate } from "../../util/format"
 import { compactWorkflowArtifact } from "../../workflow/artifact"
-import { WorkflowRun } from "../../workflow/run"
-import { WorkflowRoutineTrigger } from "../../workflow/routine"
-import { WorkflowScheduler } from "../../workflow/scheduler"
+import type { WorkflowRun } from "../../workflow/run"
+import type { WorkflowRoutineTrigger } from "../../workflow/routine"
 import { isWorkflowRuntimeEnabled } from "../../workflow/spec"
 import type { WorkflowModelPolicyOverride } from "../../workflow/spec"
-import { WorkflowTemplate } from "../../workflow/template"
-import { SessionID } from "../../session/schema"
-import {
+import type { WorkflowTemplate } from "../../workflow/template"
+import type { SessionID } from "../../session/schema"
+import type {
+  WorkflowArtifactRecord,
   WorkflowChildID,
   WorkflowPhaseID,
+  WorkflowRunDetail,
   WorkflowRunID,
-  type WorkflowArtifactRecord,
-  type WorkflowRunDetail,
 } from "../../workflow/state"
-import { summarizeWorkflowRunDetail, type WorkflowRunProjection } from "../../workflow/projection"
-import {
-  evaluateWorkflowEvalCaseRun,
-  listWorkflowEvalCases,
-  type WorkflowEvalCase,
-  type WorkflowEvalCaseID,
-  type WorkflowEvalCaseRunSummary,
-} from "../../workflow/eval-corpus"
+import type { WorkflowRunProjection } from "../../workflow/projection"
+import type { WorkflowEvalCase, WorkflowEvalCaseID, WorkflowEvalCaseRunSummary } from "../../workflow/eval-corpus"
 import { uniqueStrings } from "../../util/string-list"
+
+const workflowRunIDSchema = Identifier.schema("workflow_run").pipe(z.custom<WorkflowRunID>())
+const workflowPhaseIDSchema = Identifier.schema("workflow_phase").pipe(z.custom<WorkflowPhaseID>())
+const workflowChildIDSchema = Identifier.schema("workflow_child").pipe(z.custom<WorkflowChildID>())
+const sessionIDSchema = Identifier.schema("session").pipe(z.custom<SessionID>())
+
+async function loadWorkflow() {
+  const [{ WorkflowRun }, { WorkflowRoutineTrigger }, { WorkflowScheduler }, { WorkflowTemplate }] = await Promise.all([
+    import("../../workflow/run"),
+    import("../../workflow/routine"),
+    import("../../workflow/scheduler"),
+    import("../../workflow/template"),
+  ])
+  return { WorkflowRun, WorkflowRoutineTrigger, WorkflowScheduler, WorkflowTemplate }
+}
 
 type JsonOption = {
   json?: boolean
@@ -392,7 +401,8 @@ const WorkflowTemplateListCommand = cmd({
   builder: (yargs: Argv) => yargs.option("json", jsonOption()),
   async handler(args) {
     await withWorkflowRuntime(async () => {
-      const templates = await WorkflowTemplate.list()
+      const wf = await loadWorkflow()
+      const templates = await wf.WorkflowTemplate.list()
       if (args.json) {
         writeJson(templates)
         return
@@ -419,7 +429,8 @@ const WorkflowRunListCommand = cmd({
       .option("json", jsonOption()),
   async handler(args) {
     await withWorkflowRuntime(async () => {
-      const runs = await WorkflowRun.list({
+      const wf = await loadWorkflow()
+      const runs = await wf.WorkflowRun.list({
         status: args.status as WorkflowRun.Status | undefined,
         limit: args.limit,
       })
@@ -449,12 +460,14 @@ const WorkflowRunDashboardCommand = cmd({
       .option("json", jsonOption()),
   async handler(args) {
     await withWorkflowRuntime(async () => {
-      const runs = await WorkflowRun.list({
+      const wf = await loadWorkflow()
+      const { summarizeWorkflowRunDetail } = await import("../../workflow/projection")
+      const runs = await wf.WorkflowRun.list({
         status: args.status as WorkflowRun.Status | undefined,
         limit: args.limit,
       })
       const summaries = await Promise.all(
-        runs.map(async (run) => summarizeWorkflowRunDetail(await WorkflowRun.getDetail(run.id))),
+        runs.map(async (run) => summarizeWorkflowRunDetail(await wf.WorkflowRun.getDetail(run.id))),
       )
       if (args.json) {
         writeJson(summaries)
@@ -471,7 +484,8 @@ const WorkflowRoutineListCommand = cmd({
   builder: (yargs: Argv) => yargs.option("json", jsonOption()),
   async handler(args) {
     await withWorkflowRuntime(async () => {
-      const routines = await WorkflowRoutineTrigger.list()
+      const wf = await loadWorkflow()
+      const routines = await wf.WorkflowRoutineTrigger.list()
       if (args.json) {
         writeJson(routines)
         return
@@ -487,6 +501,7 @@ const WorkflowEvalCaseListCommand = cmd({
   builder: (yargs: Argv) => yargs.option("json", jsonOption()),
   async handler(args) {
     await withWorkflowRuntime(async () => {
+      const { listWorkflowEvalCases } = await import("../../workflow/eval-corpus")
       const cases = listWorkflowEvalCases()
       if (args.json) {
         writeJson(cases)
@@ -515,8 +530,10 @@ const WorkflowEvalCaseRunCommand = cmd({
       .option("json", jsonOption()),
   async handler(args) {
     await withWorkflowRuntime(async () => {
+      const wf = await loadWorkflow()
+      const { evaluateWorkflowEvalCaseRun } = await import("../../workflow/eval-corpus")
       const options = args as unknown as EvalCaseOptions
-      const detail = await WorkflowRun.getDetail(parseWorkflowRunID(options.runID))
+      const detail = await wf.WorkflowRun.getDetail(parseWorkflowRunID(options.runID))
       const result = evaluateWorkflowEvalCaseRun({
         run: detail,
         caseID: (options.caseId ?? "verified-bug-sweep-seeded") as WorkflowEvalCaseID,
@@ -581,8 +598,9 @@ const WorkflowRoutineCreateCommand = cmd({
       .option("json", jsonOption()),
   async handler(args) {
     await withWorkflowRuntime(async () => {
+      const wf = await loadWorkflow()
       const options = args as unknown as RoutineCreateOptions
-      const routine = await WorkflowRoutineTrigger.create({
+      const routine = await wf.WorkflowRoutineTrigger.create({
         templateID: options.templateID as WorkflowTemplate.ID,
         scope: options.scope,
         mode: options.mode,
@@ -615,8 +633,9 @@ const WorkflowRoutineDeleteCommand = cmd({
       .option("json", jsonOption()),
   async handler(args) {
     await withWorkflowRuntime(async () => {
+      const wf = await loadWorkflow()
       const options = args as unknown as { route: string } & JsonOption
-      const result = await WorkflowRoutineTrigger.remove({ route: options.route })
+      const result = await wf.WorkflowRoutineTrigger.remove({ route: options.route })
       if (options.json) {
         writeJson(result)
         return
@@ -639,14 +658,15 @@ const WorkflowRunStartCommand = cmd({
     ),
   async handler(args) {
     await withWorkflowRuntime(async () => {
+      const wf = await loadWorkflow()
       const options = args as unknown as StartOptions
-      const run = await WorkflowTemplate.createRun({
+      const run = await wf.WorkflowTemplate.createRun({
         templateID: options.templateID as WorkflowTemplate.ID,
         parentSessionID: parseOptionalSessionID(options.parentSession),
         modelPolicy: modelPolicyFromStartOptions(options),
         inputValues: parseWorkflowInputArguments(options.input),
       })
-      const detail = await WorkflowScheduler.start(run.id, {
+      const detail = await wf.WorkflowScheduler.start(run.id, {
         allowScaleBeyondDefaults: options.allowScale,
         allowWriteWorkflows: options.allowWrite,
         durableChildren: options.durableChildren,
@@ -674,8 +694,9 @@ const WorkflowRoutineRunCommand = cmd({
     ),
   async handler(args) {
     await withWorkflowRuntime(async () => {
+      const wf = await loadWorkflow()
       const options = args as unknown as RoutineRunOptions
-      const result = await WorkflowRoutineTrigger.run({
+      const result = await wf.WorkflowRoutineTrigger.run({
         route: options.route,
         parentSessionID: parseOptionalSessionID(options.parentSession),
         modelPolicy: modelPolicyFromStartOptions(options),
@@ -753,19 +774,19 @@ export function parseWorkflowInputArguments(input: unknown): Record<string, unkn
 }
 
 export function parseWorkflowRunID(value: string): WorkflowRunID {
-  return WorkflowRunID.zod.parse(value)
+  return workflowRunIDSchema.parse(value)
 }
 
 export function parseWorkflowPhaseID(value: string): WorkflowPhaseID {
-  return WorkflowPhaseID.zod.parse(value)
+  return workflowPhaseIDSchema.parse(value)
 }
 
 export function parseWorkflowChildID(value: string): WorkflowChildID {
-  return WorkflowChildID.zod.parse(value)
+  return workflowChildIDSchema.parse(value)
 }
 
 export function parseOptionalSessionID(value: string | undefined): SessionID | undefined {
-  return value === undefined ? undefined : SessionID.zod.parse(value)
+  return value === undefined ? undefined : sessionIDSchema.parse(value)
 }
 
 function parseWorkflowInputValue(value: string): unknown {
@@ -790,8 +811,9 @@ const WorkflowRunStatusCommand = cmd({
       .option("json", jsonOption()),
   async handler(args) {
     await withWorkflowRuntime(async () => {
+      const wf = await loadWorkflow()
       const options = args as unknown as RunIDOptions
-      const detail = await WorkflowRun.getDetail(parseWorkflowRunID(options.runID))
+      const detail = await wf.WorkflowRun.getDetail(parseWorkflowRunID(options.runID))
       if (options.json) {
         writeJson(detail)
         return
@@ -832,8 +854,9 @@ const WorkflowRunArtifactsCommand = cmd({
       .option("json", jsonOption()),
   async handler(args) {
     await withWorkflowRuntime(async () => {
+      const wf = await loadWorkflow()
       const options = args as unknown as ArtifactOptions
-      const detail = await WorkflowRun.getDetail(parseWorkflowRunID(options.runID))
+      const detail = await wf.WorkflowRun.getDetail(parseWorkflowRunID(options.runID))
       const phaseID = options.phaseId ? parseWorkflowPhaseID(options.phaseId) : undefined
       const childID = options.childId ? parseWorkflowChildID(options.childId) : undefined
       const artifacts = detail.artifacts
@@ -870,8 +893,9 @@ const WorkflowRunSaveTemplateCommand = cmd({
       .option("json", jsonOption()),
   async handler(args) {
     await withWorkflowRuntime(async () => {
+      const wf = await loadWorkflow()
       const options = args as unknown as SaveTemplateOptions
-      const template = await WorkflowTemplate.saveFromRun({
+      const template = await wf.WorkflowTemplate.saveFromRun({
         runID: parseWorkflowRunID(options.runID),
         scope: options.scope,
       })
@@ -884,9 +908,9 @@ const WorkflowRunSaveTemplateCommand = cmd({
   },
 })
 
-const WorkflowRunPauseCommand = controlCommand("pause", "pause queued workflow children", WorkflowScheduler.pause)
-const WorkflowRunResumeCommand = controlCommand("resume", "resume paused workflow children", WorkflowScheduler.resume)
-const WorkflowRunCancelCommand = controlCommand("cancel", "cancel a workflow run", WorkflowScheduler.cancel)
+const WorkflowRunPauseCommand = controlCommand("pause", "pause queued workflow children")
+const WorkflowRunResumeCommand = controlCommand("resume", "resume paused workflow children")
+const WorkflowRunCancelCommand = controlCommand("cancel", "cancel a workflow run")
 const WorkflowRunRetryCommand = cmd({
   command: "retry <runID>",
   describe: "retry failed or cancelled workflow children",
@@ -904,11 +928,12 @@ const WorkflowRunRetryCommand = cmd({
       .option("json", jsonOption()),
   async handler(args) {
     await withWorkflowRuntime(async () => {
+      const wf = await loadWorkflow()
       const options = args as unknown as RetryOptions
       const runID = parseWorkflowRunID(options.runID)
       const detail = options.phaseId
-        ? await WorkflowScheduler.retryPhase(runID, parseWorkflowPhaseID(options.phaseId))
-        : await WorkflowScheduler.retry(runID)
+        ? await wf.WorkflowScheduler.retryPhase(runID, parseWorkflowPhaseID(options.phaseId))
+        : await wf.WorkflowScheduler.retry(runID)
       if (options.json) {
         writeJson(detail)
         return
@@ -960,11 +985,7 @@ export const WorkflowCommand = cmd({
   async handler() {},
 })
 
-function controlCommand(
-  name: "pause" | "resume" | "cancel" | "retry",
-  describe: string,
-  run: (runID: WorkflowRunID) => Promise<WorkflowRunDetail>,
-) {
+function controlCommand(name: "pause" | "resume" | "cancel", describe: string) {
   return cmd({
     command: `${name} <runID>`,
     describe,
@@ -978,8 +999,9 @@ function controlCommand(
         .option("json", jsonOption()),
     async handler(args) {
       await withWorkflowRuntime(async () => {
+        const wf = await loadWorkflow()
         const options = args as unknown as RunIDOptions
-        const detail = await run(parseWorkflowRunID(options.runID))
+        const detail = await wf.WorkflowScheduler[name](parseWorkflowRunID(options.runID))
         if (options.json) {
           writeJson(detail)
           return
@@ -998,6 +1020,7 @@ async function withWorkflowRuntime(fn: () => Promise<void> | void) {
     process.exitCode = 1
     return
   }
+  const { bootstrap } = await import("../bootstrap")
   await bootstrap(process.cwd(), async () => {
     await fn()
   })

@@ -1,5 +1,4 @@
 import type { Argv, InferredOptionTypes } from "yargs"
-import { Config } from "../config/config"
 import { isLoopbackHostname, normalizeLoopbackHostname, normalizeLoopbackHttpOrigin } from "../util/listen-security"
 
 const options = {
@@ -42,6 +41,7 @@ export async function resolveNetworkOptions(
   args: NetworkOptions,
   rawArgv = (args as NetworkOptionsWithRawArgv).__axCodeRawArgv ?? process.argv,
 ) {
+  const { Config } = await import("../config/config")
   const config = await Config.global()
   // Detect both the space form (`--port 80`) and the equals form (`--port=80`).
   // Direct callers can pass argv, and CLI handlers receive the parser's raw

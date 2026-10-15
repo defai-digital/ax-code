@@ -1,12 +1,9 @@
-import { assertTuiMcpPlatform } from "@/tuimcp/endpoint"
 import { cmd } from "../cmd/cmd"
 import { UI } from "@/cli/ui"
 import { win32DisableProcessedInput, win32InstallCtrlCGuard } from "./win32"
-import { TuiConfig } from "@/config/tui"
-import { Instance } from "@/project/instance"
 import { existsSync } from "fs"
 import { buildAttachAuthHeaders } from "../attach-auth"
-import { DEFAULT_SERVER_PORT } from "@/server/constants"
+import { DEFAULT_SERVER_PORT } from "@/constants/server"
 import { withSessionContinuationOptions, withTuiMcpOption } from "../session-options"
 import { createTuiCrashHandler, registerTuiCrashHandlers } from "./util/lifecycle"
 import { assertLoopbackHttpUrl } from "@/util/listen-security"
@@ -33,6 +30,11 @@ export const AttachCommand = cmd({
       describe: "basic auth password (defaults to AX_CODE_SERVER_PASSWORD)",
     }),
   handler: async (args) => {
+    const [{ assertTuiMcpPlatform }, { Instance }, { TuiConfig }] = await Promise.all([
+      import("@/tuimcp/endpoint"),
+      import("@/project/instance"),
+      import("@/config/tui"),
+    ])
     if (args.tuiMcp) assertTuiMcpPlatform()
     assertLoopbackHttpUrl(args.url, "attach URL")
     const unguard = win32InstallCtrlCGuard()

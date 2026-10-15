@@ -1,5 +1,3 @@
-import "../lsp-glue"
-import "../dre-glue"
 import { NamedError } from "@ax-code/util/error"
 import { hideBin } from "yargs/helpers"
 import { AskCommand } from "./cmd/ask"
@@ -31,14 +29,14 @@ import { WikiCommand } from "./cmd/wiki"
 import { ModelsCommand } from "./cmd/models"
 import { ReleaseCommand } from "./cmd/release"
 import { ProvidersCommand } from "./cmd/providers"
+import { RunCommand } from "./cmd/run"
 import {
   cliFailureShowsFullHelp,
   commandTokenFromArgv,
   isCliUsageFailureMessage,
-  RunCommand,
   runArgvUsesEventStream,
   runUsageFailureHint,
-} from "./cmd/run"
+} from "./cmd/run-usage"
 import { buildRunEarlyErrorEvent } from "./cmd/run-output"
 import { ServeCommand } from "./cmd/serve"
 import { RuntimeCommand } from "./cmd/runtime"
@@ -57,7 +55,6 @@ import { GoalCommand } from "./cmd/goal-impl"
 import { fatal } from "./bootstrap/fatal"
 import { setKnownCommands } from "./tui/project-arg"
 import { ensureWindowsUtf8Console } from "./bootstrap/windows-console"
-import { FormatError } from "./error"
 import { UI } from "./ui"
 import { Log } from "../util/log"
 import { setAxCodeProcessTitle } from "../util/process-title"
@@ -259,6 +256,9 @@ export async function run() {
     try {
       await cmd.parse()
     } catch (err) {
+      // Provider, Config, and MCP stay off the --help graph: this module
+      // formats those domain errors, and it is only needed once parse throws.
+      const { FormatError } = await import("./error")
       fatal(err, {
         format: FormatError,
         ui: UI.error,

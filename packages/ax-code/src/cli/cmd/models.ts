@@ -1,7 +1,5 @@
 import type { Argv } from "yargs"
 import { Instance } from "../../project/instance"
-import { providerModelKey } from "../../provider/model-key"
-import { Provider } from "../../provider/provider"
 import { modelSelectableForProvider } from "../../provider/model-selectability"
 import { ProviderID } from "../../provider/schema"
 import { cmd } from "./cmd"
@@ -50,8 +48,6 @@ export function buildModelsDocument(input: {
 
   let providerIDs: string[]
   if (input.provider) {
-    // Same normalization as the text mode below (`ProviderID.make`) so both
-    // output modes resolve the provider filter identically.
     const requestedProviderID = ProviderID.make(input.provider)
     if (!input.providers[requestedProviderID]) return { error: `Provider not found: ${input.provider}` }
     providerIDs = [requestedProviderID]
@@ -67,7 +63,7 @@ export function buildModelsDocument(input: {
       .sort(([a], [b]) => a.localeCompare(b))
     for (const [modelID, model] of sorted) {
       const entry: ModelsJSONEntry = {
-        id: providerModelKey({ providerID, modelID }),
+        id: `${providerID}/${modelID}`,
         provider: providerID,
         model: modelID,
         connected: connected.has(providerID),
@@ -105,6 +101,7 @@ export const ModelsCommand = cmd({
       )
   },
   handler: async (args) => {
+    const { Provider } = await import("../../provider/provider")
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -141,13 +138,13 @@ export const ModelsCommand = cmd({
           return
         }
 
-        function printModels(providerID: ProviderID, verbose?: boolean) {
-          const provider = providers[providerID]
+        function printModels(providerID: string, verbose?: boolean) {
+          const provider = providers[ProviderID.make(providerID)]
           const sortedModels = Object.entries(provider.models)
             .filter(([, model]) => modelSelectableForProvider(providerID, model))
             .sort(([a], [b]) => a.localeCompare(b))
           for (const [modelID, model] of sortedModels) {
-            process.stdout.write(providerModelKey({ providerID, modelID }))
+            process.stdout.write(`${providerID}/${modelID}`)
             process.stdout.write(EOL)
             if (verbose) {
               process.stdout.write(JSON.stringify(model, null, 2))
@@ -172,7 +169,7 @@ export const ModelsCommand = cmd({
         const providerIDs = orderedProviderIDs(providers)
 
         for (const providerID of providerIDs) {
-          printModels(ProviderID.make(providerID), args.verbose)
+          printModels(providerID, args.verbose)
         }
       },
     })

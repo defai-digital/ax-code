@@ -1,8 +1,6 @@
 import fs from "node:fs/promises"
 import type { Argv } from "yargs"
-import { SkillCandidate } from "@/skill/candidate"
 import { parseJsonStrict } from "@/util/json-value"
-import { bootstrapReadonly } from "../bootstrap"
 import { cmd } from "./cmd"
 
 export const SkillCandidateCommand = cmd({
@@ -21,6 +19,10 @@ export const SkillCandidateCommand = cmd({
         describe: "JSON proposal for propose, or sessionID/messageID/partID evidence for validate",
       }),
   async handler(args) {
+    const [{ SkillCandidate }, { bootstrapReadonly }] = await Promise.all([
+      import("@/skill/candidate"),
+      import("../bootstrap"),
+    ])
     // Candidate operations need canonical storage, not interactive model warmups.
     await bootstrapReadonly(process.cwd(), async () => {
       const action = args.action

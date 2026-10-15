@@ -1,7 +1,6 @@
 import { EOL } from "os"
 import type { Argv } from "yargs"
-import { Capability } from "../../capability"
-import { bootstrapReadonly } from "../bootstrap"
+import type { Capability } from "../../capability"
 import { cmd } from "./cmd"
 
 export function formatCapabilityList(capabilities: Capability.Info[]) {
@@ -32,7 +31,9 @@ const CapabilityListCommand = cmd({
         describe: "file paths used to mark path-matching skills as recommended",
       }),
   async handler(args) {
+    const { bootstrapReadonly } = await import("../bootstrap")
     await bootstrapReadonly(process.cwd(), async () => {
+      const { Capability } = await import("../../capability")
       const capabilities = await Capability.list({
         filePaths: (args.file as string[] | undefined)?.map(String),
         // One-shot inventory must not spawn MCP children; HTTP /capability keeps the default.

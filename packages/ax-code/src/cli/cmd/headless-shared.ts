@@ -3,7 +3,7 @@ import type { Argv } from "yargs"
 import { bootstrap } from "../bootstrap"
 import { internalBaseUrl, isInternalHostname } from "@/util/internal-url"
 import { buildAttachAuthHeaders } from "../attach-auth"
-import { DEFAULT_SERVER_PORT } from "@/server/constants"
+import { DEFAULT_SERVER_PORT } from "@/constants/server"
 import { assertLoopbackHttpUrl } from "@/util/listen-security"
 import type { HeadlessEventSink } from "@/runtime/headless"
 

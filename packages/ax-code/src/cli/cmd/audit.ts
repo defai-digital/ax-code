@@ -1,12 +1,18 @@
 import type { Argv } from "yargs"
-import { SessionID } from "../../session/schema"
 import { cmd } from "./cmd"
-import { bootstrap } from "../bootstrap"
-import { AuditExport } from "../../audit/export"
 import { auditSessionIDFromRecord, parseAuditJsonLineResult } from "../../audit/json"
-import { EventQuery } from "../../replay/query"
 import { EOL } from "os"
 import { writeFile } from "node:fs/promises"
+
+async function loadAudit() {
+  const [{ SessionID }, { bootstrap }, { AuditExport }, { EventQuery }] = await Promise.all([
+    import("../../session/schema"),
+    import("../bootstrap"),
+    import("../../audit/export"),
+    import("../../replay/query"),
+  ])
+  return { SessionID, bootstrap, AuditExport, EventQuery }
+}
 
 const AuditPruneCommand = cmd({
   command: "prune",
@@ -23,6 +29,7 @@ const AuditPruneCommand = cmd({
         return true
       }),
   handler: async (args) => {
+    const { bootstrap, EventQuery } = await loadAudit()
     await bootstrap(process.cwd(), async () => {
       const days = validateAuditPruneDays(args.days)
       const cutoffMs = days * 24 * 60 * 60 * 1000
@@ -79,6 +86,7 @@ const AuditExportCommand = cmd({
       })
   },
   handler: async (args) => {
+    const { SessionID, bootstrap, AuditExport, EventQuery } = await loadAudit()
     await bootstrap(process.cwd(), async () => {
       const ctx = await AuditExport.policyContext(process.cwd())
       if (args.sessionID) {
@@ -144,6 +152,7 @@ const AuditReportCommand = cmd({
         type: "string",
       }),
   handler: async (args) => {
+    const { SessionID, bootstrap, EventQuery } = await loadAudit()
     await bootstrap(process.cwd(), async () => {
       const { AuditReport } = await import("../../audit/report")
       const sid = SessionID.make(args.sessionID)
@@ -175,6 +184,7 @@ const AuditOtlpCommand = cmd({
       demandOption: true,
     }),
   handler: async (args) => {
+    const { SessionID, bootstrap, EventQuery } = await loadAudit()
     await bootstrap(process.cwd(), async () => {
       const { Telemetry } = await import("../../telemetry")
       if (!Telemetry.enabled()) {

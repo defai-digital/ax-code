@@ -2,10 +2,17 @@ import { EOL } from "os"
 import type { Argv } from "yargs"
 import { bootstrap } from "../bootstrap"
 import { cmd } from "./cmd"
-import { TaskQueue } from "../../session/task-queue"
-import { TaskQueueExecutor } from "../../session/task-queue-executor"
-import { SessionID, TaskQueueID } from "../../session/schema"
+import type { TaskQueue } from "../../session/task-queue"
 import { jsonOption, writeJson } from "./json-output"
+
+async function loadTaskCommands() {
+  const [{ TaskQueue }, { TaskQueueExecutor }, { SessionID, TaskQueueID }] = await Promise.all([
+    import("../../session/task-queue"),
+    import("../../session/task-queue-executor"),
+    import("../../session/schema"),
+  ])
+  return { TaskQueue, TaskQueueExecutor, SessionID, TaskQueueID }
+}
 
 export function formatTaskList(items: TaskQueue.Info[]) {
   if (items.length === 0) return `No tasks found.${EOL}`
@@ -59,8 +66,9 @@ function formatTime(value: number | undefined) {
   return new Date(value).toISOString()
 }
 
-function parseStatus(value: unknown) {
+async function parseStatus(value: unknown) {
   if (typeof value !== "string" || value.length === 0) return undefined
+  const { TaskQueue } = await loadTaskCommands()
   const parsed = TaskQueue.Status.safeParse(value)
   if (!parsed.success) {
     throw new Error(`Unknown task status "${value}". Expected one of: ${TaskQueue.Status.options.join(", ")}`)
@@ -91,9 +99,10 @@ const TaskListCommand = cmd({
       })
       .option("json", jsonOption()),
   async handler(args) {
+    const { TaskQueue, SessionID } = await loadTaskCommands()
     await withProject(async () => {
       const items = await TaskQueue.list({
-        status: parseStatus(args.status),
+        status: await parseStatus(args.status),
         sessionID: typeof args.session === "string" ? SessionID.make(args.session) : undefined,
         limit: typeof args.limit === "number" ? args.limit : undefined,
       })
@@ -118,6 +127,7 @@ const TaskShowCommand = cmd({
       })
       .option("json", jsonOption()),
   async handler(args) {
+    const { TaskQueue, TaskQueueID } = await loadTaskCommands()
     await withProject(async () => {
       const item = await TaskQueue.get(TaskQueueID.make(args.taskID))
       if (args.json) {
@@ -141,6 +151,7 @@ const TaskCancelCommand = cmd({
       })
       .option("json", jsonOption()),
   async handler(args) {
+    const { TaskQueue, TaskQueueID } = await loadTaskCommands()
     await withProject(async () => {
       const item = await TaskQueue.stop(TaskQueueID.make(args.taskID))
       if (args.json) {
@@ -164,6 +175,7 @@ const TaskRetryCommand = cmd({
       })
       .option("json", jsonOption()),
   async handler(args) {
+    const { TaskQueue, TaskQueueExecutor, TaskQueueID } = await loadTaskCommands()
     await withProject(async () => {
       const retried = await TaskQueue.retry(TaskQueueID.make(args.taskID))
       const started = await TaskQueueExecutor.start(retried)

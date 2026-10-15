@@ -2,8 +2,7 @@ import { cmd } from "./cmd"
 import * as prompts from "@clack/prompts"
 import { UI } from "../ui"
 import { Global } from "../../global"
-import { Agent } from "../../agent/agent"
-import { Provider } from "../../provider/provider"
+import type { Agent } from "../../agent/agent"
 import path from "path"
 import fs from "fs/promises"
 import { Filesystem } from "../../util/filesystem"
@@ -11,7 +10,6 @@ import matter from "gray-matter"
 import { Instance } from "../../project/instance"
 import { EOL } from "os"
 import type { Argv } from "yargs"
-import { providerModelKey } from "../../provider/model-key"
 
 export type AgentMode = "all" | "primary" | "subagent"
 
@@ -85,6 +83,8 @@ const AgentCreateCommand = cmd({
         describe: "model to use in the format of provider/model",
       }),
   async handler(args) {
+    const { Agent } = await import("../../agent/agent")
+    const { Provider } = await import("../../provider/provider")
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -266,8 +266,7 @@ export function buildAgentsDocument(agents: Agent.Info[]): AgentsJSONDocument {
     }
     if (agent.description) entry.description = agent.description
     if (agent.tier) entry.tier = agent.tier
-    if (agent.model)
-      entry.model = providerModelKey({ providerID: agent.model.providerID, modelID: agent.model.modelID })
+    if (agent.model) entry.model = `${agent.model.providerID}/${agent.model.modelID}`
     return entry
   })
   return { agents: entries }
@@ -283,6 +282,7 @@ export const AgentListCommand = cmd({
       default: false,
     }),
   async handler(args) {
+    const { Agent } = await import("../../agent/agent")
     await Instance.provide({
       directory: process.cwd(),
       async fn() {

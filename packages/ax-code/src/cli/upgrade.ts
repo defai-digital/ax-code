@@ -1,5 +1,3 @@
-import { Bus } from "@/bus"
-import { Config } from "@/config/config"
 import { Flag } from "@/flag/flag"
 import { Installation } from "@/installation"
 import { Log } from "@/util/log"
@@ -10,6 +8,8 @@ const log = Log.create({ service: "cli.upgrade" })
 // (offline, registry error) returns false so the caller can retry at the
 // next launch instead of consuming the check interval on a silent no-op.
 export async function upgrade(): Promise<boolean> {
+  const { Config } = await import("@/config/config")
+  const { Bus } = await import("@/bus")
   const config = await Config.global()
   const method = await Installation.method()
   const latest = await Installation.latest(method).catch((err) => {

@@ -5,18 +5,15 @@ import { GITHUB_REPO_URL } from "@/constants/project"
 import { UI } from "../ui"
 import path from "path"
 import os from "os"
-import { Config } from "../../config/config"
 import { Global } from "../../global"
-import { Plugin } from "../../plugin"
 import { Instance } from "../../project/instance"
 import type { Hooks } from "@ax-code/plugin"
 import { Ssrf } from "../../util/ssrf"
 import { toErrorMessage } from "../../util/error-message"
-import { AX_ENGINE_QUANTIZATION_IDS } from "@/provider/ax-engine"
 import { Filesystem } from "@/util/filesystem"
 import { DEFAULT_SETUP_PROVIDER_IDS } from "@/provider/default-setup-providers"
-import { disableProviderPatch, enableProviderPatch } from "@/provider/enablement"
 import { isRetiredProviderID } from "@/provider/retired-providers"
+import { AX_ENGINE_QUANTIZATION_IDS } from "@/provider/ax-engine/constants"
 
 type PluginAuth = NonNullable<Hooks["auth"]>
 
@@ -351,6 +348,7 @@ export const ProvidersAxEngineCommand = cmd({
       prepareAxEngine,
       stopServer,
     } = await import("@/provider/ax-engine")
+    const { Config } = await import("../../config/config")
     const { Provider } = await import("../../provider/provider")
     const action = args.action
     const configuredOptions = ["status", "prepare", "start"].includes(action ?? "")
@@ -521,6 +519,7 @@ export const ProvidersListCommand = cmd({
       default: false,
     }),
   async handler(args) {
+    const { Config } = await import("../../config/config")
     if (args.json) {
       await Instance.provide({
         directory: process.cwd(),
@@ -654,6 +653,8 @@ export const ProvidersLoginCommand = cmd({
         type: "string",
       }),
   async handler(args) {
+    const { Config } = await import("../../config/config")
+    const { Plugin } = await import("../../plugin")
     const { ModelsDev } = await import("../../provider/models")
     const { getCliProviderDefinition } = await import("../../provider/cli/config")
     const { probeCliProvider } = await import("../../provider/cli/connect")
@@ -1015,6 +1016,8 @@ export const ProvidersDisableCommand = cmd({
       type: "string",
     }),
   async handler(args) {
+    const { Config } = await import("../../config/config")
+    const { disableProviderPatch } = await import("@/provider/enablement")
     const { ModelsDev } = await import("../../provider/models")
     UI.empty()
     prompts.intro("Disable provider")
@@ -1082,6 +1085,8 @@ export const ProvidersEnableCommand = cmd({
       type: "string",
     }),
   async handler(args) {
+    const { Config } = await import("../../config/config")
+    const { enableProviderPatch } = await import("@/provider/enablement")
     const { ModelsDev } = await import("../../provider/models")
     UI.empty()
     prompts.intro("Enable provider")

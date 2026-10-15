@@ -1,9 +1,16 @@
 import { EOL } from "os"
 import type { Argv } from "yargs"
-import { bootstrapReadonly } from "../bootstrap"
 import { cmd } from "./cmd"
-import { ScheduledTask } from "../../session/scheduled-task"
-import { ScheduledTaskID } from "../../session/schema"
+import type { ScheduledTask } from "../../session/scheduled-task"
+
+async function loadSchedule() {
+  const [{ ScheduledTask }, { ScheduledTaskID }, { bootstrapReadonly }] = await Promise.all([
+    import("../../session/scheduled-task"),
+    import("../../session/schema"),
+    import("../bootstrap"),
+  ])
+  return { ScheduledTask, ScheduledTaskID, bootstrapReadonly }
+}
 import { RuntimeRegistry } from "@/runtime/runtime-registry"
 import { assertLoopbackHttpUrl } from "@/util/listen-security"
 import { parseJsonResult } from "@/util/json-value"
@@ -78,8 +85,9 @@ export function formatScheduleShow(task: ScheduledTask.Info, runs: ScheduledTask
   return lines.join(EOL) + EOL + EOL + "Recent runs:" + EOL + formatScheduleRunList(runs)
 }
 
-function parseStatus(value: unknown) {
+async function parseStatus(value: unknown) {
   if (typeof value !== "string" || value.length === 0) return undefined
+  const { ScheduledTask } = await loadSchedule()
   const parsed = ScheduledTask.Status.safeParse(value)
   if (!parsed.success) {
     throw new Error(`Unknown task status "${value}". Expected one of: ${ScheduledTask.Status.options.join(", ")}`)
@@ -88,6 +96,7 @@ function parseStatus(value: unknown) {
 }
 
 async function withProject<T>(fn: () => Promise<T>) {
+  const { bootstrapReadonly } = await loadSchedule()
   return bootstrapReadonly(process.cwd(), fn)
 }
 
@@ -127,6 +136,7 @@ async function runtimeFetch(record: RuntimeRegistry.Record, path: string, method
 // events. With no live runtime the shard is written directly — the next
 // backend's scheduler reads task state fresh on every poll.
 async function mutateScheduledTask(taskID: string, action: "pause" | "resume" | "delete") {
+  const { ScheduledTask, ScheduledTaskID } = await loadSchedule()
   const id = ScheduledTaskID.make(taskID)
   const record = await liveRuntimeRecord()
   if (record) {
@@ -167,7 +177,8 @@ const ScheduleListCommand = cmd({
     yargs.option("status", { type: "string", describe: "filter by task status" }).option("json", jsonOption()),
   async handler(args) {
     await withProject(async () => {
-      const items = await ScheduledTask.list({ status: parseStatus(args.status) })
+      const { ScheduledTask } = await loadSchedule()
+      const items = await ScheduledTask.list({ status: await parseStatus(args.status) })
       if (args.json) {
         writeJson(items)
         return
@@ -186,6 +197,7 @@ const ScheduleShowCommand = cmd({
       .option("json", jsonOption()),
   async handler(args) {
     await withProject(async () => {
+      const { ScheduledTask, ScheduledTaskID } = await loadSchedule()
       const id = ScheduledTaskID.make(args.taskID)
       const task = await ScheduledTask.get(id)
       const runs = await ScheduledTask.listRuns({ taskID: id, limit: 5 })
@@ -208,6 +220,7 @@ const ScheduleRunsCommand = cmd({
       .option("json", jsonOption()),
   async handler(args) {
     await withProject(async () => {
+      const { ScheduledTask, ScheduledTaskID } = await loadSchedule()
       const runs = await ScheduledTask.listRuns({
         taskID: ScheduledTaskID.make(args.taskID),
         limit: typeof args.limit === "number" ? args.limit : undefined,
@@ -272,6 +285,7 @@ const ScheduleRunCommand = cmd({
       process.exitCode = 1
       return
     }
+    const { ScheduledTask, ScheduledTaskID } = await loadSchedule()
     const id = ScheduledTaskID.make(args.taskID)
     const response = await runtimeFetch(
       status.record,

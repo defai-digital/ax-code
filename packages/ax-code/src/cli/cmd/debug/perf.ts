@@ -418,6 +418,10 @@ const PerfIndexCommand = cmd({
     const json = args.json === true
     const nativeProfile = args.nativeProfile === true
 
+    // `debug perf index` calls LSP and CodeIntelligence through Instance.provide,
+    // not bootstrap(), which is what loads the glue. Register both hosts first.
+    await import("../../../lsp-glue")
+    await import("../../../dre-glue")
     await Instance.provide({
       directory: process.cwd(),
       async fn() {

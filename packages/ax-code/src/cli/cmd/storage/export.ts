@@ -1,13 +1,10 @@
 import type { Argv } from "yargs"
-import { Session } from "../../../session"
 import { SessionID } from "../../../session/schema"
-import { EventQuery } from "../../../replay/query"
 import { cmd } from "../cmd"
 import { bootstrap } from "../../bootstrap"
 import { UI } from "../../ui"
 import * as prompts from "@clack/prompts"
 import { EOL } from "os"
-import { buildTransfer } from "./transfer"
 
 export const ExportCommand = cmd({
   command: "export [sessionID]",
@@ -19,6 +16,13 @@ export const ExportCommand = cmd({
     })
   },
   handler: async (args) => {
+    // Session, the replay query and transfer.ts carry the session graph;
+    // load them here so `--help` never evaluates them.
+    const [{ Session }, { EventQuery }, { buildTransfer }] = await Promise.all([
+      import("../../../session"),
+      import("../../../replay/query"),
+      import("./transfer"),
+    ])
     await bootstrap(process.cwd(), async () => {
       let sessionID = args.sessionID ? SessionID.make(args.sessionID) : undefined
       process.stderr.write(`Exporting session: ${sessionID ?? "latest"}\n`)

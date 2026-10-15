@@ -1,9 +1,5 @@
 import { cmd } from "./cmd"
-import { Instance } from "../../project/instance"
-import { EventQuery } from "../../replay/query"
-import { SessionID } from "../../session/schema"
-import { ExecutionGraph } from "../../graph"
-import { GraphFormat } from "../../graph/format"
+import type { SessionID } from "../../session/schema"
 import { printNoSessionFound, resolveSession } from "./session-latest"
 
 export const GraphCommand = cmd({
@@ -26,6 +22,12 @@ export const GraphCommand = cmd({
         default: false,
       }),
   async handler(args) {
+    const [{ Instance }, { EventQuery }, { ExecutionGraph }, { GraphFormat }] = await Promise.all([
+      import("../../project/instance"),
+      import("../../replay/query"),
+      import("../../graph"),
+      import("../../graph/format"),
+    ])
     await Instance.provide({
       directory: process.cwd(),
       fn: async () => {

@@ -337,6 +337,10 @@ export const IndexCommand = cmd({
       })
   },
   handler: async (args) => {
+    // `index` calls LSP and CodeIntelligence through Instance.provide, not
+    // bootstrap(), which is what loads the glue. Register both hosts first.
+    await import("../../lsp-glue")
+    await import("../../dre-glue")
     await Instance.provide({
       directory: process.cwd(),
       async fn() {

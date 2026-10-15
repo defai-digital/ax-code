@@ -1,10 +1,7 @@
 import { cmd } from "./cmd"
 import { RuntimeRegistry } from "@/runtime/runtime-registry"
-import { DEFAULT_SERVER_PORT } from "@/server/constants"
+import { DEFAULT_SERVER_PORT } from "@/constants/server"
 import { restartRuntimeServer } from "./runtime/restart"
-import { backendProcessCommand } from "../tui/thread"
-import { Instance } from "@/project/instance"
-import { TuiConfig } from "@/config/tui"
 import { Filesystem } from "@/util/filesystem"
 import { win32DisableProcessedInput, win32InstallCtrlCGuard } from "../tui/win32"
 import { createTuiCrashHandler, registerTuiCrashHandlers } from "../tui/util/lifecycle"
@@ -84,6 +81,7 @@ export const RuntimeCommand = cmd({
       }
       return
     }
+    const { backendProcessCommand } = await import("../tui/thread")
     const record = await RuntimeRegistry.start(
       directory,
       backendProcessCommand(["serve", "--hostname", "127.0.0.1", "--port", "0"]),
@@ -98,6 +96,8 @@ export const RuntimeCommand = cmd({
     const unregisterCrashHandlers = registerTuiCrashHandlers(createTuiCrashHandler(), { namePrefix: "runtime-attach" })
     try {
       process.chdir(record.directory)
+      const { Instance } = await import("@/project/instance")
+      const { TuiConfig } = await import("@/config/tui")
       const config = await Instance.provide({ directory: record.directory, fn: () => TuiConfig.get() })
       const { tui } = await import("../tui/app")
       await tui({

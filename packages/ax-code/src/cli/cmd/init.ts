@@ -1,10 +1,7 @@
-import { wikiProjectRoot } from "../../wiki/root"
 import type { CommandModule } from "yargs"
 import path from "node:path"
 import { Context, type DepthLevel } from "../../context"
 import { Filesystem } from "../../util/filesystem"
-import { ensureAgentsWikiPointers, getWikiStatus, resolveWikiRuntimeConfig, runNativeWiki } from "../../wiki"
-import { bootstrap } from "../bootstrap"
 
 export const InitCommand: CommandModule<
   {},
@@ -78,7 +75,12 @@ export const InitCommand: CommandModule<
         console.log(`  Complexity: ${complexity.level} (${complexity.fileCount} files, ~${complexity.linesOfCode} LOC)`)
     }
 
+    const { bootstrap } = await import("../bootstrap")
     await bootstrap(root, async () => {
+      const { wikiProjectRoot } = await import("../../wiki/root")
+      const { ensureAgentsWikiPointers, getWikiStatus, resolveWikiRuntimeConfig, runNativeWiki } = await import(
+        "../../wiki"
+      )
       const root = await wikiProjectRoot()
       const config = await resolveWikiRuntimeConfig()
       if (!args.wiki) {

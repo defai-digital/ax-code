@@ -1,23 +1,20 @@
-import { assertTuiMcpPlatform } from "@/tuimcp/endpoint"
 import { cmd } from "@/cli/cmd/cmd"
 import { cliBooleanFlagValue } from "@/cli/boolean-flag"
 import { Rpc } from "@/util/rpc"
-import { type rpc } from "./worker"
+import type { rpc } from "./worker"
 import { createRequire } from "module"
 import path from "path"
 import { fileURLToPath, pathToFileURL } from "url"
 import { UI } from "@/cli/ui"
 import { Log } from "@/util/log"
 import { withTimeout } from "@/util/timeout"
-import { withNetworkOptions, resolveNetworkOptions } from "@/cli/network"
+import { withNetworkOptions } from "./network-options"
 import { withSessionContinuationOptions, withTuiMcpOption } from "@/cli/session-options"
 import { Filesystem } from "@/util/filesystem"
 import type { Event } from "@ax-code/sdk/v2"
 import type { EventSource } from "./context/sdk"
 import { win32DisableProcessedInput, win32InstallCtrlCGuard } from "./win32"
 import { ensureShellEnv } from "@/runtime/shell-env"
-import { TuiConfig } from "@/config/tui"
-import { Instance } from "@/project/instance"
 import { writeHeapSnapshot } from "v8"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { Global } from "@/global"
@@ -667,6 +664,12 @@ export const TuiThreadCommand = cmd({
         describe: "agent to use",
       }),
   handler: async (args) => {
+    const [{ assertTuiMcpPlatform }, { Instance }, { TuiConfig }, { resolveNetworkOptions }] = await Promise.all([
+      import("@/tuimcp/endpoint"),
+      import("@/project/instance"),
+      import("@/config/tui"),
+      import("@/cli/network"),
+    ])
     if (args.tuiMcp) assertTuiMcpPlatform()
     // Keep ENABLE_PROCESSED_INPUT cleared even if other code flips it.
     // (Important when running under `bun run` wrappers on Windows.)

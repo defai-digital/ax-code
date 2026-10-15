@@ -1,7 +1,3 @@
-import { Config } from "../../../config/config"
-import { Provider } from "../../../provider/provider"
-import { RoutePolicy } from "../../../provider/route-policy"
-import { SessionRetry } from "../../../session/retry"
 import { bootstrapReadonly } from "../../bootstrap"
 import { cmd } from "../cmd"
 
@@ -10,6 +6,10 @@ export const RoutingCommand = cmd({
   describe: "explain configured model selection and recovery without calling a model",
   builder: (yargs) => yargs.option("model", { type: "string", describe: "Exact primary provider/model to explain" }),
   async handler(args) {
+    const { Config } = await import("../../../config/config")
+    const { Provider } = await import("../../../provider/provider")
+    const { RoutePolicy } = await import("../../../provider/route-policy")
+    const { SessionRetry } = await import("../../../session/retry")
     await bootstrapReadonly(process.cwd(), async () => {
       const config = await Config.get()
       const primary = args.model ? Provider.parseModel(args.model) : await Provider.defaultModel()

@@ -1,4 +1,3 @@
-import { Server } from "../../server/server"
 import { isRecord } from "../../util/record"
 import type { CommandModule } from "yargs"
 
@@ -41,6 +40,12 @@ export function buildOperationCodeSample(operationID: string): string {
 export const GenerateCommand = {
   command: "generate",
   handler: async () => {
+    // Server.openapi snapshots BusEvent payloads. This command does not call
+    // bootstrap(), and boot.ts no longer imports the glue, so register the
+    // LSP and DRE hosts before the document is built.
+    await import("../../lsp-glue")
+    await import("../../dre-glue")
+    const { Server } = await import("../../server/server")
     const specs = await Server.openapi()
     for (const item of Object.values(specs.paths)) {
       for (const method of ["get", "post", "put", "delete", "patch"] as const) {

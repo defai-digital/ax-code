@@ -8,10 +8,7 @@
 
 import type { CommandModule } from "yargs"
 import { Global } from "../../global"
-import { Instance } from "../../project/instance"
-import { EventQuery } from "../../replay/query"
-import { Risk } from "../../risk/score"
-import { SessionID } from "../../session/schema"
+import type { SessionID } from "../../session/schema"
 import type { ReplayEvent } from "../../replay/event"
 import path from "path"
 import fs from "fs/promises"
@@ -148,6 +145,11 @@ export const TraceCommand: CommandModule = {
 
     // DRE v3.0: replay-based trace with risk scoring
     if (!args.logs) {
+      const [{ Instance }, { EventQuery }, { Risk }] = await Promise.all([
+        import("../../project/instance"),
+        import("../../replay/query"),
+        import("../../risk/score"),
+      ])
       await Instance.provide({
         directory: process.cwd(),
         fn: async () => {

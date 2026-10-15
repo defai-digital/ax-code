@@ -1,11 +1,8 @@
 import { cmd } from "./cmd"
 import * as prompts from "@clack/prompts"
 import { UI } from "../ui"
-import { MCP } from "../../mcp"
-import { McpAuth } from "../../mcp/auth"
-import { McpOAuthProvider } from "../../mcp/oauth-provider"
-import { Config } from "../../config/config"
-import { Instance } from "../../project/instance"
+import type { MCP } from "../../mcp"
+import type { Config } from "../../config/config"
 import { Installation } from "../../installation"
 import path from "path"
 import { Global } from "../../global"
@@ -13,9 +10,21 @@ import { modify, applyEdits, parse as parseJsonc, type ParseError } from "jsonc-
 import { Filesystem } from "../../util/filesystem"
 import { FileLock } from "../../util/filelock"
 import { Lock } from "../../util/lock"
-import { Bus } from "../../bus"
 import { isRecord } from "../../util/record"
-import { Permission } from "../../permission"
+
+async function loadMcp() {
+  const [{ MCP }, { McpAuth }, { McpOAuthProvider }, { Config }, { Instance }, { Bus }, { Permission }] =
+    await Promise.all([
+      import("../../mcp"),
+      import("../../mcp/auth"),
+      import("../../mcp/oauth-provider"),
+      import("../../config/config"),
+      import("../../project/instance"),
+      import("../../bus"),
+      import("../../permission"),
+    ])
+  return { MCP, McpAuth, McpOAuthProvider, Config, Instance, Bus, Permission }
+}
 import { parseJsonPayload } from "../../util/json-value"
 import { toErrorMessage } from "../../util/error-message"
 import { parseShellArgs } from "../../util/shell-args"
@@ -53,11 +62,14 @@ function getAuthStatusText(status: MCP.AuthStatus): string {
 
 type McpEntry = NonNullable<Config.Info["mcp"]>[string]
 
-type McpConfigured = Config.Mcp
+type McpConfig = Config.Mcp
+type McpToolListing = MCP.ToolListing
+
+type McpConfigured = McpConfig
 
 type McpRemote = Extract<McpConfigured, { type: "remote" }>
 function isMcpRemote(config: McpEntry): config is McpRemote {
-  return MCP.isConfigured(config) && config.type === "remote"
+  return isRecord(config) && "type" in config && config.type === "remote"
 }
 
 export function decodeMcpDebugServerInfoValue(value: unknown): unknown | undefined {
@@ -225,6 +237,7 @@ export const McpListCommand = cmd({
         default: false,
       }),
   async handler(args) {
+    const { MCP, McpAuth, McpOAuthProvider, Config, Instance, Bus, Permission } = await loadMcp()
     const { available: discoverAvailable } = await import("../../mcp/discovery")
     await Instance.provide({
       directory: process.cwd(),
@@ -277,7 +290,7 @@ export const McpListCommand = cmd({
         // Pre-compute tool listings once so we can both render per-server
         // and total the count. listAllTools() only returns connected
         // servers, which is the only case we have a tool list anyway.
-        const toolsByServer = new Map<string, MCP.ToolListing[]>()
+        const toolsByServer = new Map<string, McpToolListing[]>()
         if (args.tools) {
           for (const t of await MCP.listAllTools()) {
             const arr = toolsByServer.get(t.server) ?? []
@@ -390,6 +403,7 @@ export const McpAuthCommand = cmd({
       })
       .command(McpAuthListCommand),
   async handler(args) {
+    const { MCP, McpAuth, McpOAuthProvider, Config, Instance, Bus, Permission } = await loadMcp()
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -533,6 +547,7 @@ export const McpAuthListCommand = cmd({
       default: false,
     }),
   async handler(args) {
+    const { MCP, McpAuth, McpOAuthProvider, Config, Instance, Bus, Permission } = await loadMcp()
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -593,6 +608,7 @@ export const McpLogoutCommand = cmd({
       type: "string",
     }),
   async handler(args) {
+    const { MCP, McpAuth, McpOAuthProvider, Config, Instance, Bus, Permission } = await loadMcp()
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -655,6 +671,7 @@ export const McpTrustCommand = cmd({
       demandOption: true,
     }),
   async handler(args) {
+    const { MCP, McpAuth, McpOAuthProvider, Config, Instance, Bus, Permission } = await loadMcp()
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -690,6 +707,7 @@ export const McpUntrustCommand = cmd({
       demandOption: true,
     }),
   async handler(args) {
+    const { MCP, McpAuth, McpOAuthProvider, Config, Instance, Bus, Permission } = await loadMcp()
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -723,7 +741,7 @@ async function resolveConfigPath(baseDir: string, global = false) {
   return candidates[0]
 }
 
-async function addMcpToConfig(name: string, mcpConfig: Config.Mcp, configPath: string) {
+async function addMcpToConfig(name: string, mcpConfig: McpConfig, configPath: string) {
   using _process = await Lock.write(configPath)
   using _crossProcess = await FileLock.acquire(configPath)
   let text = "{}"
@@ -788,6 +806,7 @@ export const McpRemoveCommand = cmd({
         describe: "remove from global config instead of the current project",
       }),
   async handler(args) {
+    const { MCP, McpAuth, McpOAuthProvider, Config, Instance, Bus, Permission } = await loadMcp()
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -833,6 +852,7 @@ export const McpAddCommand = cmd({
   command: "add",
   describe: "add an MCP server",
   async handler() {
+    const { MCP, McpAuth, McpOAuthProvider, Config, Instance, Bus, Permission } = await loadMcp()
     const McpTemplates = await import("../../mcp/templates")
     await Instance.provide({
       directory: process.cwd(),
@@ -941,7 +961,7 @@ export const McpAddCommand = cmd({
             }
           }
 
-          const mcpConfig = McpTemplates.toConfig(template, environment) as Config.Mcp
+          const mcpConfig = McpTemplates.toConfig(template, environment) as McpConfig
           await addMcpToConfig(template.name, mcpConfig, configPath)
           prompts.log.success(`MCP server "${template.name}" added to ${configPath}`)
           if (template.docs) prompts.log.info(`Docs: ${template.docs}`)
@@ -963,7 +983,7 @@ export const McpAddCommand = cmd({
           })
           if (prompts.isCancel(command)) throw new UI.CancelledError()
 
-          const mcpConfig: Config.Mcp = {
+          const mcpConfig: McpConfig = {
             type: "local",
             command: parseMcpLocalCommand(command),
           }
@@ -997,7 +1017,7 @@ export const McpAddCommand = cmd({
           })
           if (prompts.isCancel(useOAuth)) throw new UI.CancelledError()
 
-          let mcpConfig: Config.Mcp
+          let mcpConfig: McpConfig
 
           if (useOAuth) {
             const hasClientId = await prompts.confirm({
@@ -1070,6 +1090,7 @@ export const McpDebugCommand = cmd({
       demandOption: true,
     }),
   async handler(args) {
+    const { MCP, McpAuth, McpOAuthProvider, Config, Instance, Bus, Permission } = await loadMcp()
     const { Client } = await import("@modelcontextprotocol/client")
     const { StreamableHTTPClientTransport } = await import("@modelcontextprotocol/client")
     const { UnauthorizedError } = await import("@modelcontextprotocol/client")

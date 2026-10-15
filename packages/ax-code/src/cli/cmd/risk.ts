@@ -1,8 +1,12 @@
 import { cmd } from "./cmd"
 import { Instance } from "../../project/instance"
-import { SessionRisk } from "../../session/risk"
-import { SessionID } from "../../session/schema"
-import { ProbabilisticRollout } from "../../quality/probabilistic-rollout"
+import type { SessionRisk } from "../../session/risk"
+import {
+  readinessDetailLabel,
+  readinessNextActionLabel,
+  readinessStateLabel,
+  targetedTestRecommendations,
+} from "../../quality/probabilistic-rollout/probabilistic-rollout-readiness"
 
 export namespace RiskView {
   type ReplayReadinessSummary = NonNullable<SessionRisk.QualityReadiness["review"]>
@@ -18,11 +22,11 @@ export namespace RiskView {
   }
 
   function qualityLine(workflow: "review" | "debug" | "qa", summary: ReplayReadinessSummary) {
-    const readiness = ProbabilisticRollout.readinessStateLabel(summary)
-    const detail = ProbabilisticRollout.readinessDetailLabel(summary)
-    const recommended = ProbabilisticRollout.targetedTestRecommendations(summary)[0]
+    const readiness = readinessStateLabel(summary)
+    const detail = readinessDetailLabel(summary)
+    const recommended = targetedTestRecommendations(summary)[0]
     const first = recommended ? ` · first: ${recommended}` : ""
-    const nextAction = ProbabilisticRollout.readinessNextActionLabel(summary)
+    const nextAction = readinessNextActionLabel(summary)
     const next = nextAction ? ` · next: ${nextAction}` : ""
     return `  ${workflow}: ${readiness} · ${detail}${first}${next}`
   }
@@ -224,6 +228,8 @@ export const RiskCommand = cmd({
       })
       .option("json", { describe: "Output as JSON", type: "boolean", default: false }),
   async handler(args) {
+    const { SessionRisk } = await import("../../session/risk")
+    const { SessionID } = await import("../../session/schema")
     await Instance.provide({
       directory: process.cwd(),
       fn: async () => {

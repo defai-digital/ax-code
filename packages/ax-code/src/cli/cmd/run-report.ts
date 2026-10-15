@@ -1,10 +1,10 @@
 import open from "open"
 import { RunReportServer } from "./run-report-server"
-import { Instance } from "../../project/instance"
 import { cmd } from "./cmd"
 import { printNoSessionFound, resolveSession } from "./session-latest"
 
 async function target(id?: string) {
+  const { Instance } = await import("../../project/instance")
   return Instance.provide({
     directory: process.cwd(),
     fn: async () => {
