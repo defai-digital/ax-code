@@ -17,8 +17,6 @@ const note = [
   "packages/sdk/js/ARCHITECTURE.md",
 ]
 
-const rule = [] as { name: string; dir: string; bad: string[] }[]
-
 const hot = ["packages/ax-code/src/cli/cmd", "packages/ax-code/src/cli/tui"]
 const workspacePackageRoots = ["packages", "packages/sdk/js"]
 const dependencyFields = ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"] as const
@@ -126,29 +124,6 @@ async function docs() {
     if (!ok) miss.push(file)
   }
   return miss
-}
-
-async function deps() {
-  const hit = [] as { name: string; file: string; bad: string; spec: string }[]
-
-  for (const item of rule) {
-    for (const file of await list(item.dir)) {
-      const text = await readText(file)
-      for (const name of spec(text, file)) {
-        for (const bad of item.bad) {
-          if (!name.includes(bad)) continue
-          hit.push({
-            name: item.name,
-            file: rel(file),
-            bad,
-            spec: name,
-          })
-        }
-      }
-    }
-  }
-
-  return hit
 }
 
 // A relative import must stay inside the file's own workspace package:
@@ -433,7 +408,6 @@ function trackedInternalFiles() {
 
 async function main() {
   const miss = await docs()
-  const hit = await deps()
   const raw = await deep()
   const sdkRaw = await sdkSourceImports()
   const runtimeBoundary = await runtimeInternalBoundaries()
@@ -452,13 +426,6 @@ async function main() {
   out.push("")
   out.push("## Docs")
   out.push(miss.length ? `- missing: ${miss.join(", ")}` : "- ok: required architecture notes are present")
-  out.push("")
-  out.push("## Boundaries")
-  if (hit.length) {
-    for (const row of hit) out.push(`- ${row.name}: ${row.file} imports ${row.spec}`)
-  } else {
-    out.push("- ok: no package boundary violations found")
-  }
   out.push("")
   out.push("## Deep Imports")
   if (raw.length) {
@@ -546,7 +513,6 @@ async function main() {
 
   if (
     miss.length ||
-    hit.length ||
     raw.length ||
     runtimeBoundary.length ||
     v4.length ||
