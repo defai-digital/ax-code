@@ -32,6 +32,8 @@
     "check:sdk-jsr": "pnpm --dir packages/sdk/js run build && pnpm --dir packages/sdk/js run check:jsr",
     "precheck:self-scan": "node script/only-allow-pnpm.mjs",
     "check:self-scan": "pnpm --dir packages/ax-code run check:self-scan",
+    "precheck:migrations": "node script/only-allow-pnpm.mjs",
+    "check:migrations": "pnpm --dir packages/ax-code run check:migrations",
     "prerelease:cli": "node script/only-allow-pnpm.mjs",
     "release:cli": "pnpm run publish:github",
     "pretypecheck": "node script/only-allow-pnpm.mjs",

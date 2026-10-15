@@ -105,3 +105,6 @@ jobs:
 
       - name: Check OpenAPI snapshot
         run: pnpm run check:openapi
+
+      - name: Check schema matches migrations
+        run: pnpm run check:migrations
