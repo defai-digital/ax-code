@@ -5,6 +5,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import {
   partitionExecveFlags,
+  pinPackageImportSpecifier,
   prepareNodeArgs,
   splitNodeLaunchArgs,
   toNodeOptionsImportSpecifier,
@@ -172,14 +173,14 @@ if (process.platform !== "win32" && typeof process.execve === "function") {
     const flag = nodeOptionsFlags[i]
     if (flag.startsWith("--import=")) {
       const value = flag.slice("--import=".length)
-      const specifier = toNodeOptionsImportSpecifier(value)
+      const specifier = pinPackageImportSpecifier(toNodeOptionsImportSpecifier(value))
       if (value.includes("solid-loader")) solidLoader = specifier
       optionsFlags.push("--import", specifier)
       continue
     }
     if (flag === "--import" && i + 1 < nodeOptionsFlags.length) {
       const value = nodeOptionsFlags[i + 1]
-      const specifier = toNodeOptionsImportSpecifier(value)
+      const specifier = pinPackageImportSpecifier(toNodeOptionsImportSpecifier(value))
       if (value.includes("solid-loader")) solidLoader = specifier
       optionsFlags.push(flag, specifier)
       i += 1

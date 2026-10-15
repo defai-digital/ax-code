@@ -1,4 +1,5 @@
 import fs from "node:fs"
+import { createRequire } from "node:module"
 import os from "node:os"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
@@ -107,6 +108,27 @@ export function toNodeOptionsImportSpecifier(value, options = {}) {
   // as a real file relative to cwd (`src/index-node-tui.ts`).
   if (!absolute && !dottedRelative && !exists(resolved)) return value
   return pathToFileURL(resolved).href
+}
+
+/**
+ * Pin a bare package preload (`--import tsx`) to an absolute file URL resolved
+ * from the launch directory. NODE_OPTIONS preloads also load in every worker,
+ * and Node resolves a bare `--import` against the current directory at that
+ * point: the CLI has moved into the user's project by the time ax-tui starts
+ * its tree-sitter worker, so a bare `tsx` no longer resolves and the worker
+ * dies before it can highlight anything. Values that are already file URLs or
+ * paths, and packages that cannot be resolved, are returned unchanged.
+ */
+export function pinPackageImportSpecifier(value, options = {}) {
+  if (typeof value !== "string" || value.length === 0) return value
+  if (value.startsWith("file:") || value.startsWith(".") || path.isAbsolute(value)) return value
+  const cwd = options.cwd ?? process.cwd()
+  const resolve = options.resolve ?? ((specifier) => createRequire(path.join(cwd, "noop.js")).resolve(specifier))
+  try {
+    return pathToFileURL(resolve(value)).href
+  } catch {
+    return value
+  }
 }
 
 /**

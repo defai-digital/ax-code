@@ -6,6 +6,7 @@ import path from "node:path"
 import { pathToFileURL } from "node:url"
 import {
   partitionExecveFlags,
+  pinPackageImportSpecifier,
   prepareNodeArgs,
   splitNodeLaunchArgs,
   toNodeOptionsImportSpecifier,
@@ -175,5 +176,30 @@ describe("POSIX runner env-file admission", () => {
     expect(result.status, result.stderr).toBe(0)
     expect(result.stderr).not.toContain("not allowed in NODE_OPTIONS")
     expect(result.stdout).toContain("from-file")
+  })
+})
+
+describe("pinPackageImportSpecifier", () => {
+  test("pins a bare package preload to the file it resolves to from the launch directory", () => {
+    const resolve = vi.fn(() => "/repo/node_modules/tsx/dist/loader.mjs")
+
+    expect(pinPackageImportSpecifier("tsx", { cwd: "/repo/packages/ax-code", resolve })).toBe(
+      pathToFileURL("/repo/node_modules/tsx/dist/loader.mjs").href,
+    )
+    expect(resolve).toHaveBeenCalledWith("tsx")
+  })
+
+  test("leaves file URLs, paths and unresolvable packages unchanged", () => {
+    const resolve = vi.fn(() => {
+      throw new Error("not found")
+    })
+
+    expect(pinPackageImportSpecifier("file:///repo/script/solid-loader.mjs", { resolve })).toBe(
+      "file:///repo/script/solid-loader.mjs",
+    )
+    expect(pinPackageImportSpecifier("./loader.mjs", { resolve })).toBe("./loader.mjs")
+    expect(pinPackageImportSpecifier("/abs/loader.mjs", { resolve })).toBe("/abs/loader.mjs")
+    expect(pinPackageImportSpecifier("missing-package", { resolve })).toBe("missing-package")
+    expect(resolve).toHaveBeenCalledTimes(1)
   })
 })
