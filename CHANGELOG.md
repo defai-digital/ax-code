@@ -6,6 +6,23 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.25.8] - 2026-10-15
+
+### Changed
+
+- Publish paired SDK 2.6.19 with the desktop WebMCP navigation request contract.
+- Refine TUI contrast, status chips, list selection and animation discovery.
+
+### Fixed
+
+- Keep fan-out timeout timers alive in standalone CLI processes and reject successes that arrive after a blocked event loop exceeds the deadline.
+- Preserve snapshot coverage when an ignored nested Git checkout would otherwise make staging fail.
+- Restrict desktop WebMCP navigation to approved origins and regenerate matching SDK contracts.
+- Keep reconnect bootstrap failures from closing the TUI, confirm accidental Ctrl+C exits, and default persistent permission grants to Cancel.
+- Keep file edits and successful steps of multi-step turns visible.
+- Count generated image artifacts toward goal source scope and recognize split-quoted protected shell redirects.
+- Return actionable HTTP 400 responses for incomplete undo coverage and unsupported workflow merge strategies.
+
 ## [7.25.7] - 2026-10-14
 
 ### Changed
