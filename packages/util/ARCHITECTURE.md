@@ -14,6 +14,7 @@
 - `slug` — random adjective-noun slug generation (`Slug`)
 - `string-list` — array/iterable string helpers (`stringList`, `uniqueItems`, `uniqueStrings`, `uniqueSortedStrings`); shared by `ax-code-intel` and `ax-code-reason`
 - `timeout` — ref'd `sleep`/`withTimeout`/`scheduleUnref`; awaited timeouts must not unref or a short-lived process can exit with an unsettled await
+- `ssrf` — SSRF-guarded fetch (`Ssrf`): resolves DNS once, classifies every resolved address by its own shape, and pins the connection to the checked IP; shared by core and `ax-code-intel`
 - `unref-timeout` — unref'd `sleep`/`withTimeout` shared by `ax-code-intel` and `ax-code-reason`; deliberately separate from `timeout`, whose timers stay ref'd
 
 ## Allowed Dependencies
