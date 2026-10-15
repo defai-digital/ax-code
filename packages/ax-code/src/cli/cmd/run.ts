@@ -61,7 +61,7 @@ import {
 import { createRunLifecycle, RUN_SERVER_ABORT_BOUND_MS } from "./run-lifecycle"
 import { waitForRunBackground } from "./run-background-wait"
 import { printPendingScheduledTaskNotice } from "./run-schedule-notice"
-import { assertLoopbackHttpUrl } from "../../runtime/listen-security"
+import { assertLoopbackHttpUrl } from "../../util/listen-security"
 import { sameSkuOnConnectedProvider } from "../../provider/model-selectability"
 import { DEFAULT_STDIN_PIPE_QUIET_WINDOW_MS, readNonTtyStdin } from "../stdin"
 import { CLI_CONCISE_MAX_LINES, diffSummary, formatDiffSummary, tailLines } from "../../util/tool-output"

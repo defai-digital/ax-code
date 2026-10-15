@@ -3,7 +3,7 @@ import path from "path"
 import z from "zod"
 import semver from "semver"
 import { parseJsonResult } from "../../util/json-value"
-import { assertLoopbackHttpUrl } from "../../runtime/listen-security"
+import { assertLoopbackHttpUrl } from "../../util/listen-security"
 import { Filesystem } from "../../util/filesystem"
 import { AX_ENGINE_ERROR } from "./constants"
 

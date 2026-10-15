@@ -1,6 +1,6 @@
 import type { Argv, InferredOptionTypes } from "yargs"
 import { Config } from "../config/config"
-import { isLoopbackHostname, normalizeLoopbackHostname, normalizeLoopbackHttpOrigin } from "../runtime/listen-security"
+import { isLoopbackHostname, normalizeLoopbackHostname, normalizeLoopbackHttpOrigin } from "../util/listen-security"
 
 const options = {
   port: {

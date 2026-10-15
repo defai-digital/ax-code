@@ -52,7 +52,7 @@ import {
   isLoopbackHostname,
   normalizeLoopbackHostname,
   normalizeLoopbackHttpOrigin,
-} from "./listen-security"
+} from "@/util/listen-security"
 import { toErrorMessage } from "../util/error-message"
 import { requestDirectory } from "./request-directory"
 import { createRateLimitMiddleware, createRequestLoggingMiddleware } from "./middleware"

@@ -5,7 +5,7 @@ import { cmd } from "./cmd"
 import { ScheduledTask } from "../../session/scheduled-task"
 import { ScheduledTaskID } from "../../session/schema"
 import { RuntimeRegistry } from "@/runtime/runtime-registry"
-import { assertLoopbackHttpUrl } from "@/runtime/listen-security"
+import { assertLoopbackHttpUrl } from "@/util/listen-security"
 import { parseJsonResult } from "@/util/json-value"
 import { jsonOption, writeJson } from "./json-output"
 

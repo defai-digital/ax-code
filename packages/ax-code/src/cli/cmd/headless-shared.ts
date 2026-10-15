@@ -4,7 +4,7 @@ import { bootstrap } from "../bootstrap"
 import { internalBaseUrl, isInternalHostname } from "@/util/internal-url"
 import { buildAttachAuthHeaders } from "../attach-auth"
 import { DEFAULT_SERVER_PORT } from "@/server/constants"
-import { assertLoopbackHttpUrl } from "@/runtime/listen-security"
+import { assertLoopbackHttpUrl } from "@/util/listen-security"
 import type { HeadlessEventSink } from "@/runtime/headless"
 
 // Shared plumbing for the headless CLI entry points (headless-run,

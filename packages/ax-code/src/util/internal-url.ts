@@ -1,5 +1,5 @@
 import { Flag } from "../flag/flag"
-import { isLoopbackHostname } from "../runtime/listen-security"
+import { isLoopbackHostname } from "./listen-security"
 
 const DEFAULT_INTERNAL_BASE_URL = "http://ax-code.internal"
 

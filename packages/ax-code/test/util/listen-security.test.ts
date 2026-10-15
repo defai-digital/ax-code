@@ -7,7 +7,7 @@ import {
   isLoopbackHostname,
   normalizeLoopbackHostname,
   normalizeLoopbackHttpOrigin,
-} from "../../src/runtime/listen-security"
+} from "../../src/util/listen-security"
 
 describe("isLoopbackHostname", () => {
   test("accepts loopback hostnames and literals", () => {

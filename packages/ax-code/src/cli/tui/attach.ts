@@ -9,7 +9,7 @@ import { buildAttachAuthHeaders } from "../attach-auth"
 import { DEFAULT_SERVER_PORT } from "@/server/constants"
 import { withSessionContinuationOptions, withTuiMcpOption } from "../session-options"
 import { createTuiCrashHandler, registerTuiCrashHandlers } from "./util/lifecycle"
-import { assertLoopbackHttpUrl } from "@/runtime/listen-security"
+import { assertLoopbackHttpUrl } from "@/util/listen-security"
 
 export const AttachCommand = cmd({
   command: "attach <url>",
