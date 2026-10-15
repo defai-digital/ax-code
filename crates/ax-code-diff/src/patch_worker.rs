@@ -7,11 +7,11 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-const MAX_BYTES: usize = 32 * 1024 * 1024;
+pub(crate) const MAX_BYTES: usize = 32 * 1024 * 1024;
 const MAX_OUTPUT: usize = 16 * 1024 * 1024;
-const MAX_LINES: usize = 200_000;
+pub(crate) const MAX_LINES: usize = 200_000;
 const MAX_CHUNKS: usize = 4096;
-const MAX_COMPARISONS: usize = 2_000_000;
+pub(crate) const MAX_COMPARISONS: usize = 2_000_000;
 const MAX_MATCH_BYTES: usize = 128 * 1024 * 1024;
 
 #[napi]
@@ -37,7 +37,7 @@ fn check(cancel: &AtomicBool) -> Result<()> {
     }
     Ok(())
 }
-fn limit() -> napi::Error {
+pub(crate) fn limit() -> napi::Error {
     napi::Error::from_reason("Patch resource limit exceeded; split the patch into smaller changes")
 }
 struct Budget<'a> {

@@ -12,6 +12,33 @@ pub use preview_worker::*;
 mod helpers;
 pub use edit_worker::*;
 use helpers::*;
+use patch_worker::{MAX_BYTES, MAX_COMPARISONS, MAX_LINES};
+
+fn sync_limit() -> napi::Error {
+    patch_worker::limit()
+}
+
+fn line_count(text: &str) -> usize {
+    if text.is_empty() {
+        0
+    } else {
+        text.bytes().filter(|b| *b == b'\n').count() + 1
+    }
+}
+
+fn check_bytes_and_lines(parts: &[&str]) -> napi::Result<()> {
+    let mut bytes = 0usize;
+    for part in parts {
+        bytes = bytes.checked_add(part.len()).ok_or_else(sync_limit)?;
+        if bytes > MAX_BYTES {
+            return Err(sync_limit());
+        }
+        if line_count(part) > MAX_LINES {
+            return Err(sync_limit());
+        }
+    }
+    Ok(())
+}
 
 // ── NAPI exports ─────────────────────────────────────────────────────────────
 
@@ -42,6 +69,7 @@ pub fn edit_replace(
             "No changes to apply: oldString and newString are identical.",
         ));
     }
+    check_bytes_and_lines(&[&content, &old_string, &new_string])?;
 
     if replace_all {
         if !content.contains(&old_string) {
@@ -214,13 +242,126 @@ fn seek_sequence_impl(lines: &[&str], pattern: &[&str], start_index: usize, eof:
     )
 }
 
+fn try_match_bounded<F>(
+    lines: &[&str],
+    pattern: &[&str],
+    start_index: usize,
+    compare: F,
+    eof: bool,
+    comparisons: &mut usize,
+) -> napi::Result<i32>
+where
+    F: Fn(&str, &str) -> bool,
+{
+    if pattern.is_empty() || lines.len() < pattern.len() {
+        return Ok(-1);
+    }
+    if eof {
+        let from_end = lines.len() - pattern.len();
+        if from_end >= start_index {
+            let mut matches = true;
+            for j in 0..pattern.len() {
+                *comparisons += 1;
+                if *comparisons > MAX_COMPARISONS {
+                    return Err(sync_limit());
+                }
+                if !compare(lines[from_end + j], pattern[j]) {
+                    matches = false;
+                    break;
+                }
+            }
+            if matches {
+                return Ok(from_end as i32);
+            }
+        }
+    }
+    for i in start_index..=(lines.len() - pattern.len()) {
+        let mut matches = true;
+        for j in 0..pattern.len() {
+            *comparisons += 1;
+            if *comparisons > MAX_COMPARISONS {
+                return Err(sync_limit());
+            }
+            if !compare(lines[i + j], pattern[j]) {
+                matches = false;
+                break;
+            }
+        }
+        if matches {
+            return Ok(i as i32);
+        }
+    }
+    Ok(-1)
+}
+
+fn seek_sequence_bounded(
+    lines: &[&str],
+    pattern: &[&str],
+    start_index: usize,
+    eof: bool,
+) -> napi::Result<i32> {
+    if lines.len() > MAX_LINES || pattern.len() > MAX_LINES {
+        return Err(sync_limit());
+    }
+    let mut bytes = 0usize;
+    for line in lines.iter().chain(pattern.iter()) {
+        bytes = bytes.checked_add(line.len()).ok_or_else(sync_limit)?;
+        if bytes > MAX_BYTES {
+            return Err(sync_limit());
+        }
+    }
+    if pattern.is_empty() {
+        return Ok(-1);
+    }
+    let mut comparisons = 0usize;
+    let exact = try_match_bounded(lines, pattern, start_index, |a, b| a == b, eof, &mut comparisons)?;
+    if exact != -1 {
+        return Ok(exact);
+    }
+    let rstrip = try_match_bounded(
+        lines,
+        pattern,
+        start_index,
+        |a, b| a.trim_end() == b.trim_end(),
+        eof,
+        &mut comparisons,
+    )?;
+    if rstrip != -1 {
+        return Ok(rstrip);
+    }
+    let trimmed = try_match_bounded(
+        lines,
+        pattern,
+        start_index,
+        |a, b| a.trim() == b.trim(),
+        eof,
+        &mut comparisons,
+    )?;
+    if trimmed != -1 {
+        return Ok(trimmed);
+    }
+    try_match_bounded(
+        lines,
+        pattern,
+        start_index,
+        |a, b| normalize_unicode(a.trim()) == normalize_unicode(b.trim()),
+        eof,
+        &mut comparisons,
+    )
+}
+
 /// 4-pass fuzzy line matching.
 /// Returns the index of the first match, or -1.
 #[napi]
-pub fn seek_sequence(lines: Vec<String>, pattern: Vec<String>, start_index: i32, eof: bool) -> i32 {
+pub fn seek_sequence(
+    lines: Vec<String>,
+    pattern: Vec<String>,
+    start_index: i32,
+    eof: bool,
+) -> napi::Result<i32> {
     let lines_ref: Vec<&str> = lines.iter().map(|s| s.as_str()).collect();
     let pattern_ref: Vec<&str> = pattern.iter().map(|s| s.as_str()).collect();
-    seek_sequence_impl(&lines_ref, &pattern_ref, start_index.max(0) as usize, eof)
+    seek_sequence_bounded(&lines_ref, &pattern_ref, start_index.max(0) as usize, eof)
 }
 
 /// Generate a unified diff between two strings.
@@ -248,17 +389,29 @@ pub fn diff_stats(old_content: String, new_content: String) -> napi::Result<Stri
     .map_err(|e| napi::Error::from_reason(format!("JSON serialization error: {}", e)))
 }
 
+fn check_string_pair(a: &str, b: &str) -> napi::Result<()> {
+    if a.len().checked_add(b.len()).is_none_or(|total| total > MAX_BYTES) {
+        return Err(sync_limit());
+    }
+    if (a.len() as u128) * (b.len() as u128) > MAX_COMPARISONS as u128 {
+        return Err(sync_limit());
+    }
+    Ok(())
+}
+
 /// Levenshtein edit distance.
 /// BUG-301: Return f64 to avoid truncating usize on very long strings
 #[napi]
-pub fn levenshtein(a: String, b: String) -> f64 {
-    strsim::levenshtein(&a, &b) as f64
+pub fn levenshtein(a: String, b: String) -> napi::Result<f64> {
+    check_string_pair(&a, &b)?;
+    Ok(strsim::levenshtein(&a, &b) as f64)
 }
 
 /// Normalized string similarity (0.0 - 1.0).
 #[napi]
-pub fn similarity(a: String, b: String) -> f64 {
-    strsim::normalized_levenshtein(&a, &b)
+pub fn similarity(a: String, b: String) -> napi::Result<f64> {
+    check_string_pair(&a, &b)?;
+    Ok(strsim::normalized_levenshtein(&a, &b))
 }
 
 // ── apply_chunks ─────────────────────────────────────────────────────────────
@@ -290,8 +443,24 @@ pub fn apply_chunks(
     file_content: String,
     chunks_json: String,
 ) -> napi::Result<String> {
+    check_bytes_and_lines(&[&file_path, &file_content, &chunks_json])?;
     let chunks: Vec<PatchChunk> = serde_json::from_str(&chunks_json)
         .map_err(|e| napi::Error::from_reason(format!("Failed to parse chunks JSON: {}", e)))?;
+    let mut chunk_lines = 0usize;
+    for chunk in &chunks {
+        chunk_lines = chunk_lines
+            .checked_add(chunk.old_lines.len())
+            .and_then(|n| n.checked_add(chunk.new_lines.len()))
+            .ok_or_else(sync_limit)?;
+        if chunk_lines > MAX_LINES {
+            return Err(sync_limit());
+        }
+        for line in chunk.old_lines.iter().chain(chunk.new_lines.iter()) {
+            if line.len() > MAX_BYTES {
+                return Err(sync_limit());
+            }
+        }
+    }
 
     let mut original_lines: Vec<String> = file_content.split('\n').map(|s| s.to_string()).collect();
 
@@ -308,7 +477,7 @@ pub fn apply_chunks(
         if let Some(ref ctx) = chunk.change_context {
             let lines_ref: Vec<&str> = original_lines.iter().map(|s| s.as_str()).collect();
             let pattern = [ctx.as_str()];
-            let ctx_idx = seek_sequence_impl(&lines_ref, &pattern, line_index, false);
+            let ctx_idx = seek_sequence_bounded(&lines_ref, &pattern, line_index, false)?;
             if ctx_idx == -1 {
                 return Err(napi::Error::from_reason(format!(
                     "Failed to find context '{}' in {}",
@@ -340,7 +509,7 @@ pub fn apply_chunks(
         let mut new_slice: Vec<String> = chunk.new_lines.clone();
         let eof = chunk.is_end_of_file.unwrap_or(false);
 
-        let mut found = seek_sequence_impl(&lines_ref, &pattern, line_index, eof);
+        let mut found = seek_sequence_bounded(&lines_ref, &pattern, line_index, eof)?;
 
         // Retry without trailing empty line
         if found == -1 && pattern.last().is_some_and(|line| line.is_empty()) {
@@ -348,7 +517,7 @@ pub fn apply_chunks(
             if !new_slice.is_empty() && new_slice.last().map(|s| s.as_str()) == Some("") {
                 new_slice.pop();
             }
-            found = seek_sequence_impl(&lines_ref, &pattern, line_index, eof);
+            found = seek_sequence_bounded(&lines_ref, &pattern, line_index, eof)?;
         }
 
         if found != -1 {
@@ -659,6 +828,53 @@ mod tests {
         let err = edit_replace("abc".into(), "".into(), "x".into(), false).unwrap_err();
         assert!(err.reason.contains("must not be empty"));
         assert!(strategy_multi_occurrence("abc", "").is_empty());
+    }
+
+    // ── R1.1 gates ────────────────────────────────────────────────────────
+
+    #[test]
+    fn gate_edit_replace_rejects_oversized_content() {
+        let content = "x\n".repeat(MAX_LINES + 1);
+        let err = edit_replace(content, "x".into(), "y".into(), false).unwrap_err();
+        assert!(err.reason.contains("Patch resource limit exceeded"), "{}", err.reason);
+    }
+
+    #[test]
+    fn gate_seek_sequence_rejects_too_many_lines() {
+        let lines = vec!["a".to_string(); MAX_LINES + 1];
+        let err = seek_sequence(lines, vec!["a".into()], 0, false).unwrap_err();
+        assert!(err.reason.contains("Patch resource limit exceeded"), "{}", err.reason);
+    }
+
+    #[test]
+    fn gate_seek_sequence_rejects_comparison_budget() {
+        // Each position compares ~pattern.len() lines before failing on the last.
+        let lines = vec!["a".to_string(); 5_000];
+        let mut pattern = vec!["a".to_string(); 499];
+        pattern.push("b".to_string());
+        let err = seek_sequence(lines, pattern, 0, false).unwrap_err();
+        assert!(err.reason.contains("Patch resource limit exceeded"), "{}", err.reason);
+    }
+
+    #[test]
+    fn gate_apply_chunks_rejects_too_many_lines() {
+        let content = "a\n".repeat(MAX_LINES + 1);
+        let chunks = serde_json::json!([{"old_lines":["a"],"new_lines":["b"]}]).to_string();
+        let err = apply_chunks("file".into(), content, chunks).unwrap_err();
+        assert!(err.reason.contains("Patch resource limit exceeded"), "{}", err.reason);
+    }
+
+    #[test]
+    fn gate_levenshtein_and_similarity_reject_oversized_pair() {
+        let a = "a".repeat(2_000);
+        let b = "b".repeat(2_000);
+        // 2000*2000 = 4M comparisons > MAX_COMPARISONS.
+        assert!(levenshtein(a.clone(), b.clone()).unwrap_err().reason.contains("Patch resource limit exceeded"));
+        assert!(similarity(a, b).unwrap_err().reason.contains("Patch resource limit exceeded"));
+        // Small inputs still work.
+        assert_eq!(levenshtein("kitten".into(), "sitting".into()).unwrap(), 3.0);
+        assert!((similarity("abc".into(), "abc".into()).unwrap() - 1.0).abs() < f64::EPSILON);
+        assert_eq!(seek_sequence(vec!["a".into(), "b".into()], vec!["b".into()], 0, false).unwrap(), 1);
     }
 
     #[test]

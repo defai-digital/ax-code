@@ -913,6 +913,9 @@ pub fn scan_files(cwd: String, config_json: String) -> napi::Result<String> {
     serde_json::to_string(&result).map_err(|e| napi::Error::from_reason(e.to_string()))
 }
 
+const MAX_READ_BATCH_FILES: usize = 10_000;
+const MAX_READ_BATCH_BYTES: usize = 64 * 1024 * 1024;
+
 /// Batch file reader: reads multiple files in parallel using rayon.
 /// Returns a JSON object mapping file paths to their UTF-8 contents.
 /// If any file cannot be read as UTF-8, return an error so the JavaScript
@@ -922,12 +925,35 @@ pub fn read_files_batch(files_json: String) -> napi::Result<String> {
     let files: Vec<String> = serde_json::from_str(&files_json)
         .map_err(|e| napi::Error::from_reason(format!("invalid JSON: {e}")))?;
 
+    if files.len() > MAX_READ_BATCH_FILES {
+        return Err(napi::Error::from_reason(
+            "Native read batch limit exceeded",
+        ));
+    }
+    // Fail fast on declared sizes before allocating the contents.
+    let mut declared_total = 0usize;
+    for path in &files {
+        if let Ok(meta) = std::fs::metadata(path) {
+            declared_total = declared_total.saturating_add(meta.len() as usize);
+            if declared_total > MAX_READ_BATCH_BYTES {
+                return Err(napi::Error::from_reason(
+                    "Native read batch limit exceeded",
+                ));
+            }
+        }
+    }
+    let accumulated = AtomicUsize::new(0);
     let results: Result<Vec<(String, String)>, String> = files
         .par_iter()
         .map(|path| {
-            std::fs::read_to_string(path)
-                .map(|content| (path.clone(), content))
-                .map_err(|error| format!("failed to read {path}: {error}"))
+            let content = std::fs::read_to_string(path)
+                .map_err(|error| format!("failed to read {path}: {error}"))?;
+            if accumulated.fetch_add(content.len(), Ordering::Relaxed) + content.len()
+                > MAX_READ_BATCH_BYTES
+            {
+                return Err("Native read batch limit exceeded".to_string());
+            }
+            Ok((path.clone(), content))
         })
         .collect();
     let results = results.map_err(napi::Error::from_reason)?;
@@ -1641,6 +1667,33 @@ mod tests {
             err.reason
         );
 
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn gate_read_files_batch_rejects_too_many_paths() {
+        let files: Vec<String> = (0..=MAX_READ_BATCH_FILES).map(|i| format!("/nonexistent/{i}")).collect();
+        let err = read_files_batch(serde_json::to_string(&files).unwrap()).unwrap_err();
+        assert!(err.reason.contains("Native read batch limit exceeded"), "{}", err.reason);
+    }
+
+    #[test]
+    fn gate_read_files_batch_rejects_oversized_content() {
+        let dir = make_tmp_dir("read_batch_limit");
+        // One file just over the limit via two ~33 MiB halves; declared-size
+        // prefilter rejects before/while reading without exceeding ~100 MiB.
+        let p1 = dir.join("a.bin");
+        let p2 = dir.join("b.bin");
+        fs::write(&p1, "x".repeat(33 * 1024 * 1024)).unwrap();
+        fs::write(&p2, "y".repeat(33 * 1024 * 1024)).unwrap();
+        let files = vec![p1.to_string_lossy().into_owned(), p2.to_string_lossy().into_owned()];
+        let err = read_files_batch(serde_json::to_string(&files).unwrap()).unwrap_err();
+        assert!(err.reason.contains("Native read batch limit exceeded"), "{}", err.reason);
+        // Normal batch still works.
+        let small = dir.join("small.txt");
+        fs::write(&small, "hello").unwrap();
+        let out = read_files_batch(serde_json::to_string(&vec![small.to_string_lossy().into_owned()]).unwrap()).unwrap();
+        assert!(out.contains("hello"));
         cleanup(&dir);
     }
 

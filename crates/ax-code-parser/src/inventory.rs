@@ -6,7 +6,7 @@ use std::sync::{
 };
 use tree_sitter::{Node, ParseOptions, Parser};
 
-const MAX_SOURCE_UNITS: usize = 1_500_000;
+pub(crate) const MAX_SOURCE_UNITS: usize = 1_500_000;
 const MAX_SYMBOLS: usize = 2_000;
 const MAX_IMPORTS: usize = 256;
 

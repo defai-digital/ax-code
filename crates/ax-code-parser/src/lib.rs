@@ -628,6 +628,11 @@ fn extract_with_parser(
     source: &str,
     language_name: &str,
 ) -> Result<Vec<Symbol>, String> {
+    if source.len() > inventory::MAX_SOURCE_UNITS * 3
+        || source.encode_utf16().count() > inventory::MAX_SOURCE_UNITS
+    {
+        return Err("Native parser source limit exceeded".to_string());
+    }
     let lang = get_language(language_name)
         .ok_or_else(|| format!("unsupported language: {language_name}"))?;
 
@@ -723,6 +728,26 @@ pub fn has_grammar(language: String) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gate_oversized_source_is_rejected() {
+        let source = "a".repeat(inventory::MAX_SOURCE_UNITS + 1);
+        let err = extract_symbols_internal(&source, "typescript").unwrap_err();
+        assert_eq!(err, "Native parser source limit exceeded");
+        // parse_batch reports it per-file, not as a whole-batch failure.
+        let files = serde_json::json!([
+            {"path": "big.ts", "content": source, "language": "typescript"},
+            {"path": "small.ts", "content": "export function ok() {}", "language": "typescript"}
+        ])
+        .to_string();
+        let out = parse_batch(files, 2).unwrap();
+        let results: Vec<FileSymbols> = serde_json::from_str(&out).unwrap();
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].error.as_deref(), Some("Native parser source limit exceeded"));
+        assert!(results[0].symbols.is_empty());
+        assert!(results[1].error.is_none());
+        assert!(!results[1].symbols.is_empty());
+    }
 
     #[test]
     fn test_deeply_nested_source_does_not_overflow_the_stack() {
