@@ -155,93 +155,6 @@ pub fn edit_replace(
 
 // ── seek_sequence ────────────────────────────────────────────────────────────
 
-fn try_match<F>(lines: &[&str], pattern: &[&str], start_index: usize, compare: F, eof: bool) -> i32
-where
-    F: Fn(&str, &str) -> bool,
-{
-    if pattern.is_empty() || lines.len() < pattern.len() {
-        return -1;
-    }
-
-    // If EOF anchor, try from end first
-    if eof {
-        let from_end = lines.len() - pattern.len();
-        if from_end >= start_index {
-            let mut matches = true;
-            for j in 0..pattern.len() {
-                if !compare(lines[from_end + j], pattern[j]) {
-                    matches = false;
-                    break;
-                }
-            }
-            if matches {
-                return from_end as i32;
-            }
-        }
-    }
-
-    // Forward search
-    for i in start_index..=(lines.len() - pattern.len()) {
-        let mut matches = true;
-        for j in 0..pattern.len() {
-            if !compare(lines[i + j], pattern[j]) {
-                matches = false;
-                break;
-            }
-        }
-        if matches {
-            return i as i32;
-        }
-    }
-
-    -1
-}
-
-fn seek_sequence_impl(lines: &[&str], pattern: &[&str], start_index: usize, eof: bool) -> i32 {
-    if pattern.is_empty() {
-        return -1;
-    }
-
-    // Pass 1: exact
-    let exact = try_match(lines, pattern, start_index, |a, b| a == b, eof);
-    if exact != -1 {
-        return exact;
-    }
-
-    // Pass 2: right-strip
-    let rstrip = try_match(
-        lines,
-        pattern,
-        start_index,
-        |a, b| a.trim_end() == b.trim_end(),
-        eof,
-    );
-    if rstrip != -1 {
-        return rstrip;
-    }
-
-    // Pass 3: full trim
-    let trimmed = try_match(
-        lines,
-        pattern,
-        start_index,
-        |a, b| a.trim() == b.trim(),
-        eof,
-    );
-    if trimmed != -1 {
-        return trimmed;
-    }
-
-    // Pass 4: unicode normalized + trim
-    try_match(
-        lines,
-        pattern,
-        start_index,
-        |a, b| normalize_unicode(a.trim()) == normalize_unicode(b.trim()),
-        eof,
-    )
-}
-
 fn try_match_bounded<F>(
     lines: &[&str],
     pattern: &[&str],
@@ -656,13 +569,13 @@ mod tests {
         assert!(msg.contains("identical"));
     }
 
-    // ── seek_sequence_impl ──────────────────────────────────────────────────
+    // ── seek_sequence_bounded ──────────────────────────────────────────────────
 
     #[test]
     fn seek_sequence_exact_match() {
         let lines = vec!["fn main() {", "  println!(\"hi\");", "}"];
         let pattern = vec!["  println!(\"hi\");"];
-        assert_eq!(seek_sequence_impl(&lines, &pattern, 0, false), 1);
+        assert_eq!(seek_sequence_bounded(&lines, &pattern, 0, false).unwrap(), 1);
     }
 
     #[test]
@@ -670,7 +583,7 @@ mod tests {
         let lines = vec!["fn main() {", "  println!(\"hi\");  ", "}"];
         // Trailing whitespace differs — exact pass fails, rstrip or trim passes.
         let pattern = vec!["  println!(\"hi\");"];
-        assert_eq!(seek_sequence_impl(&lines, &pattern, 0, false), 1);
+        assert_eq!(seek_sequence_bounded(&lines, &pattern, 0, false).unwrap(), 1);
     }
 
     #[test]
@@ -679,7 +592,7 @@ mod tests {
         let lines = vec!["let s = \"hello\";"];
         let pattern = vec!["let s = \u{201C}hello\u{201D};"];
         // Exact, rstrip, and trim passes will fail; unicode-normalized pass should match.
-        assert_eq!(seek_sequence_impl(&lines, &pattern, 0, false), 0);
+        assert_eq!(seek_sequence_bounded(&lines, &pattern, 0, false).unwrap(), 0);
     }
 
     #[test]
@@ -687,23 +600,23 @@ mod tests {
         let lines = vec!["a", "b", "c", "d", "b"];
         let pattern = vec!["b"];
         // Without eof, should find first occurrence at index 1.
-        assert_eq!(seek_sequence_impl(&lines, &pattern, 0, false), 1);
+        assert_eq!(seek_sequence_bounded(&lines, &pattern, 0, false).unwrap(), 1);
         // With eof, should prefer the match closest to end (index 4).
-        assert_eq!(seek_sequence_impl(&lines, &pattern, 0, true), 4);
+        assert_eq!(seek_sequence_bounded(&lines, &pattern, 0, true).unwrap(), 4);
     }
 
     #[test]
     fn seek_sequence_not_found_returns_negative_one() {
         let lines = vec!["aaa", "bbb", "ccc"];
         let pattern = vec!["zzz"];
-        assert_eq!(seek_sequence_impl(&lines, &pattern, 0, false), -1);
+        assert_eq!(seek_sequence_bounded(&lines, &pattern, 0, false).unwrap(), -1);
     }
 
     #[test]
     fn seek_sequence_empty_pattern_returns_negative_one() {
         let lines = vec!["a", "b"];
         let pattern: Vec<&str> = vec![];
-        assert_eq!(seek_sequence_impl(&lines, &pattern, 0, false), -1);
+        assert_eq!(seek_sequence_bounded(&lines, &pattern, 0, false).unwrap(), -1);
     }
 
     #[test]
@@ -711,7 +624,7 @@ mod tests {
         let lines = vec!["x", "y", "x", "y"];
         let pattern = vec!["x"];
         // Starting from index 1 should skip the first "x".
-        assert_eq!(seek_sequence_impl(&lines, &pattern, 1, false), 2);
+        assert_eq!(seek_sequence_bounded(&lines, &pattern, 1, false).unwrap(), 2);
     }
 
     // ── unified_diff ────────────────────────────────────────────────────────
