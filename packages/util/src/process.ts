@@ -11,8 +11,10 @@ import { toErrorMessage } from "./error-message"
 // same shape as `leveled-log`'s per-package runtime.
 //
 // Core keeps its own implementation (ax-code/src/util/process.ts): it adds
-// `unref`/`detached` support and a bounded drain grace that these callers do
-// not use. Do not merge the two without revisiting those differences.
+// `unref`/`detached` support and awaits tree termination before resolving exit.
+// The bounded drain grace below is mirrored from core, which found that a
+// single I/O cycle can truncate still-pending pipe output under load. Do not
+// merge the two files without revisiting those remaining differences.
 
 // Drain a child stream tolerantly. The strict `node:stream/consumers` buffer()
 // rejects with ERR_STREAM_PREMATURE_CLOSE when the stream is destroy()ed (which
@@ -33,6 +35,11 @@ function drain(stream: Readable): Promise<Buffer> {
 }
 
 const TIMEOUT_FORCE_KILL_GRACE_MS = 250
+
+// Bounded grace before the exit pipes of a finished child are destroyed. A
+// single I/O cycle is not enough under load: pending pipe data can still be in
+// flight, and truncating it makes complete output look partial.
+const EXIT_DRAIN_GRACE_MS = 100
 
 export type ProcessStdio = "inherit" | "pipe" | "ignore" | number
 export type ProcessShell = boolean | string
@@ -191,13 +198,16 @@ export function createProcess(killTree: ProcessKillTree): ProcessApi {
         done()
         resolve(timedOut ? 124 : (code ?? (signal ? 1 : 0)))
         // Background children spawned by the command inherit the pipe FDs and
-        // keep them open, preventing stream EOF. Destroy after one I/O cycle
-        // (giving Node.js a chance to drain the kernel buffer first) so that
-        // any awaiter of the piped streams unblocks regardless.
-        setImmediate(() => {
+        // keep them open, preventing stream EOF. Allow a bounded drain grace:
+        // a single setImmediate can run before pending pipe data or EOF under
+        // load, truncating output and making complete metrics look partial.
+        // Descendant-held pipes still close without waiting for the descendant.
+        const drainTimer = setTimeout(() => {
           if (opts.stdout === "pipe") (proc as ChildProcess).stdout?.destroy()
           if (opts.stderr === "pipe") (proc as ChildProcess).stderr?.destroy()
-        })
+        }, EXIT_DRAIN_GRACE_MS)
+        drainTimer.unref()
+        proc.once("close", () => clearTimeout(drainTimer))
       })
 
       proc.once("error", (error) => {
