@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { webMcpChipModel, webMcpChipTone } from "../../../src/cli/tui/component/webmcp-chip-model"
+import { webMcpChipModel, webMcpChipRisk } from "../../../src/cli/tui/component/webmcp-chip-model"
 
 const configured = (names: string[]) => Object.fromEntries(names.map((name) => [name, { webmcp: {} }]))
 
@@ -142,17 +142,17 @@ describe("webMcpChipModel interact marker (ADR-174)", () => {
   })
 })
 
-describe("webMcpChipTone (calm chip)", () => {
-  test("the act tier keeps the warning hue in both on and off states", () => {
-    const off = webMcpChipModel({ bridge: { webmcp: { interact: true } } }, {})
-    expect(webMcpChipTone(off)).toBe("warning")
-    const on = webMcpChipModel({ bridge: { webmcp: { interact: true } } }, { bridge: { status: "connected" } })
-    expect(webMcpChipTone(on)).toBe("warning")
+describe("webMcpChipRisk", () => {
+  test("only a connected act tier carries the risk marker", () => {
+    const actOff = webMcpChipModel({ bridge: { webmcp: { interact: true } } }, {})
+    expect(webMcpChipRisk(actOff)).toBe(false)
+    const actOn = webMcpChipModel({ bridge: { webmcp: { interact: true } } }, { bridge: { status: "connected" } })
+    expect(webMcpChipRisk(actOn)).toBe(true)
   })
 
-  test("a read-only bridge is routine configuration: muted when off, text when on", () => {
+  test("a read-only bridge never carries the risk marker", () => {
     const profile = { bridge: { webmcp: { read: true } } }
-    expect(webMcpChipTone(webMcpChipModel(profile, {}))).toBe("textMuted")
-    expect(webMcpChipTone(webMcpChipModel(profile, { bridge: { status: "connected" } }))).toBe("text")
+    expect(webMcpChipRisk(webMcpChipModel(profile, {}))).toBe(false)
+    expect(webMcpChipRisk(webMcpChipModel(profile, { bridge: { status: "connected" } }))).toBe(false)
   })
 })

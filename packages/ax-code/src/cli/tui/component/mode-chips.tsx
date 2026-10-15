@@ -46,15 +46,16 @@ export function ModeChips() {
     ),
   )
 
-  // Mode chips are text-only: routine configuration must not read as an
-  // alarm. Sandbox off is the one real risk signal and keeps a warning tone.
+  // Every chip uses one grammar: "●" and bright text mean on, "○" and muted
+  // text mean off, and a separate warning "!" marks a risky state (sandbox
+  // off). Colour never encodes on/off by itself.
   return (
     <box flexDirection="row" flexWrap="wrap" flexShrink={1} maxWidth="100%">
       <Show when={workModeChipVisible(chipWorkMode())}>
         <ModeToggle
           label={workModeView().label}
           active={workModeView().active}
-          activeFg={theme.secondary}
+          activeFg={theme.text}
           inactiveFg={theme.textMuted}
           onMouseUp={() => command.trigger("app.clear.work_mode")}
         />
@@ -70,7 +71,8 @@ export function ModeChips() {
         label={t("mode.sandbox")}
         active={sync.data.isolation.mode !== "full-access"}
         activeFg={theme.text}
-        inactiveFg={theme.warning}
+        inactiveFg={theme.textMuted}
+        risk={sync.data.isolation.mode === "full-access"}
         onMouseUp={() => command.trigger("app.toggle.sandbox")}
       />
     </box>
@@ -83,6 +85,8 @@ export function ModeToggle(input: {
   activeFg: unknown
   inactiveFg: unknown
   background?: unknown
+  /** Appends a warning "!" after the label; the on/off colour is unchanged. */
+  risk?: boolean
   onMouseUp: () => void
 }) {
   const { theme } = useTheme()
@@ -106,8 +110,13 @@ export function ModeToggle(input: {
             bold: input.active,
           }}
         >
-          {footerToggleLabel(input.label, input.active)}
+          {input.risk
+            ? footerToggleLabel(input.label, input.active).trimEnd()
+            : footerToggleLabel(input.label, input.active)}
         </span>
+        <Show when={input.risk}>
+          <span style={{ fg: theme.warning, bold: true }}> ! </span>
+        </Show>
       </text>
     </box>
   )

@@ -91,6 +91,17 @@ describe("webmcp toggle chip stays calm", () => {
   test("the toggle view renders no filled error background", async () => {
     const chip = await read("component/webmcp-chip.tsx")
     expect(chip).not.toContain("background={theme.error}")
-    expect(chip).toContain("webMcpChipTone")
+    expect(chip).toContain("webMcpChipRisk")
+  })
+
+  test("status chips share one grammar: brightness for on/off, a warning bang for risk", async () => {
+    const chip = await read("component/webmcp-chip.tsx")
+    const modes = await read("component/mode-chips.tsx")
+    for (const source of [chip, modes]) {
+      expect(source).not.toContain("inactiveFg={theme.warning}")
+      expect(source).not.toContain("activeFg={theme.warning}")
+    }
+    expect(modes).toContain('risk={sync.data.isolation.mode === "full-access"}')
+    expect(modes).toContain("<span style={{ fg: theme.warning, bold: true }}> ! </span>")
   })
 })

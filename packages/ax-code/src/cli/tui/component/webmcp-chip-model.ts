@@ -121,15 +121,12 @@ export function webMcpChipModel(
   return { servers, connected, blocked, attentions, interact, view, label, lockText, warningText }
 }
 
-export type WebMcpChipTone = "warning" | "text" | "textMuted"
-
 /**
- * Text tone for the toggle view. The act tier is the one genuine risk signal
- * on this chip, so it keeps the warning hue in both the on and off states;
- * a read-only bridge renders as routine configuration: neutral text when
- * connected, muted when not. Never a filled background.
+ * Whether the toggle view carries the risk marker. Chips share one grammar:
+ * the dot and brightness say on/off, and a separate warning "!" marks a risky
+ * live state. For WebMCP that is the act tier while the bridge is connected;
+ * a configured but disconnected act tier is simply off.
  */
-export function webMcpChipTone(model: WebMcpChipModel): WebMcpChipTone {
-  if (model.interact) return "warning"
-  return model.connected.length > 0 ? "text" : "textMuted"
+export function webMcpChipRisk(model: WebMcpChipModel): boolean {
+  return model.interact && model.connected.length > 0
 }

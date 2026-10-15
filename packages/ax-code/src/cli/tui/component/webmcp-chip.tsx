@@ -8,7 +8,7 @@ import { useTheme } from "@tui/context/theme"
 import { ChromeAction } from "./chrome-action"
 import { useCommandDialog } from "./dialog-command"
 import { ModeToggle } from "./mode-chips"
-import { webMcpChipModel, webMcpChipTone, webMcpServers } from "./webmcp-chip-model"
+import { webMcpChipModel, webMcpChipRisk, webMcpServers } from "./webmcp-chip-model"
 import { toggleWebMcpFromTui } from "./webmcp-toggle"
 
 /**
@@ -76,16 +76,6 @@ export function WebMcpChip() {
     void Promise.allSettled(model().attentions.map(({ name }) => local.mcp.toggle(name)))
   }
 
-  // Text-only chip: routine on/off must not read as an alarm, so the toggle
-  // carries no filled background and the tone (see webMcpChipTone) already
-  // folds the connected state — warning only for the act tier.
-  const chipFg = createMemo(() => {
-    const tone = webMcpChipTone(model())
-    if (tone === "warning") return theme.warning
-    if (tone === "text") return theme.text
-    return theme.textMuted
-  })
-
   return (
     <Show when={model().servers.length > 0}>
       <Show
@@ -97,8 +87,9 @@ export function WebMcpChip() {
               <ModeToggle
                 label={model().label}
                 active={model().connected.length > 0}
-                activeFg={chipFg()}
-                inactiveFg={chipFg()}
+                activeFg={theme.text}
+                inactiveFg={theme.textMuted}
+                risk={webMcpChipRisk(model())}
                 onMouseUp={toggle}
               />
             }
