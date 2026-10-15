@@ -15,6 +15,7 @@ import { generateObject, generateText } from "ai"
 import z from "zod"
 import type { Computer } from "@/computer/computer"
 import { ensureJsonModeInstruction } from "@/mode/json-mode-prompt"
+import { ProviderError } from "@/provider/error"
 import type { ProviderModel } from "@/provider/model-info"
 import { Provider } from "@/provider/provider"
 import { ProviderTransform } from "@/provider/transform"
@@ -96,16 +97,6 @@ Return the 0-based index of the winning candidate and a short rationale.`)
 const JSON_FALLBACK_INSTRUCTION = `Your previous response could not be parsed as structured output.
 Respond with ONLY one json object, no markdown fences or extra text, matching the requested shape.`
 
-// AI SDK throws NoObjectGeneratedError when generateObject output fails schema
-// conformance. Detect by message/name so the check survives error wrapping.
-// (Same fallback strategy as council.ts.)
-function isSchemaConformanceError(error: unknown): boolean {
-  const name = (error as { name?: string } | null)?.name
-  if (name === "AI_NoObjectGeneratedError") return true
-  const message = error instanceof Error ? error.message : String(error)
-  return /no object generated/i.test(message) || /response did not match schema/i.test(message)
-}
-
 async function generate<T>(input: {
   model: ProviderModel
   schema: z.ZodType<T>
@@ -130,7 +121,7 @@ async function generate<T>(input: {
     })
     return result.object
   } catch (error) {
-    if (!isSchemaConformanceError(error)) throw error
+    if (!ProviderError.isSchemaConformanceError(error)) throw error
     // generateText fallback: some models return JSON that generateObject's
     // strict structured-output path rejects (same pattern as council.ts).
     const fallback = await generateText({

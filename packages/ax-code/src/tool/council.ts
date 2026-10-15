@@ -17,6 +17,7 @@ import { ensureJsonModeInstruction } from "../mode/json-mode-prompt"
 import { EnsemblePreflight } from "../mode/preflight"
 import { ModeMemory } from "../mode/memory"
 import { ModePolicy } from "../mode/policy"
+import { ProviderError } from "../provider/error"
 import { Provider } from "../provider/provider"
 import { stripThinkTags } from "../provider/think-tags"
 import { ProviderTransform } from "../provider/transform"
@@ -171,27 +172,6 @@ const JSON_OUTPUT_INSTRUCTION = `Respond with ONLY one json object, no markdown 
 // Use streaming for both paths: buffered reasoning responses can exceed gateway
 // response deadlines even while the upstream model is healthy. Consume the full
 // stream and propagate error events before accepting the validated final object.
-// AI SDK throws NoObjectGeneratedError ("No object generated: could not parse
-// the response." / "No object generated: response did not match schema.") when
-// streamObject output fails schema conformance. Detect by message/name so the
-// check survives error wrapping and test mocks of the "ai" module.
-function isSchemaConformanceError(error: unknown): boolean {
-  const name = (error as { name?: string } | null)?.name
-  if (name === "AI_NoObjectGeneratedError") return true
-  const message = error instanceof Error ? error.message : String(error)
-  return /no object generated/i.test(message) || /response did not match schema/i.test(message)
-}
-
-// The bundled ai major only accepts provider models declaring specificationVersion
-// v2/v3; a runtime-installed provider package that is too new declares v4+ and
-// every call fails with AI_UnsupportedModelVersionError ("Unsupported model
-// version ..."). With the provider SDK compatibility pin this should be rare.
-function isUnsupportedSpecVersionError(error: unknown): boolean {
-  const name = (error as { name?: string } | null)?.name
-  if (name === "AI_UnsupportedModelVersionError") return true
-  const message = error instanceof Error ? error.message : String(error)
-  return /unsupported model version/i.test(message)
-}
 
 type ResolvedMember = {
   member: EnsembleShared.MemberSpec
@@ -290,14 +270,14 @@ async function runMember(input: {
           }
           return await r.object
         } catch (error) {
-          if (isUnsupportedSpecVersionError(error)) {
+          if (ProviderError.isUnsupportedSpecVersionError(error)) {
             const detail = error instanceof Error ? error.message : String(error)
             throw new Error(
               `provider package for "${member.providerID}" is incompatible with this ax-code build: ${detail} ` +
                 "The runtime-installed provider SDK declares an AI SDK specification version the bundled AI SDK does not support; a compatible version must be installed for this provider.",
             )
           }
-          if (signal.aborted || !isSchemaConformanceError(error)) throw error
+          if (signal.aborted || !ProviderError.isSchemaConformanceError(error)) throw error
           // streamText fallback: some models return review JSON that
           // streamObject's strict structured-output path rejects
           // ("No object generated"). Retry in plain json mode and validate

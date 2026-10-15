@@ -76,6 +76,28 @@ export namespace ProviderError {
     return typeof input.responseBody === "string" && isOverflow(input.responseBody, providerID)
   }
 
+  // The bundled ai major only accepts provider models declaring specificationVersion
+  // v2/v3; a runtime-installed provider package that is too new declares v4+ and
+  // every call fails with AI_UnsupportedModelVersionError ("Unsupported model
+  // version ..."). With the provider SDK compatibility pin this should be rare.
+  export function isUnsupportedSpecVersionError(error: unknown): boolean {
+    const name = (error as { name?: string } | null)?.name
+    if (name === "AI_UnsupportedModelVersionError") return true
+    const message = error instanceof Error ? error.message : String(error)
+    return /unsupported model version/i.test(message)
+  }
+
+  // AI SDK throws NoObjectGeneratedError ("No object generated: could not parse
+  // the response." / "No object generated: response did not match schema.") when
+  // structured-output generation fails schema conformance. Detect by message/name
+  // so the check survives error wrapping and test mocks of the "ai" module.
+  export function isSchemaConformanceError(error: unknown): boolean {
+    const name = (error as { name?: string } | null)?.name
+    if (name === "AI_NoObjectGeneratedError") return true
+    const message = error instanceof Error ? error.message : String(error)
+    return /no object generated/i.test(message) || /response did not match schema/i.test(message)
+  }
+
   /** Classifies non-standard SDK errors that did not arrive as APICallError. */
   export function isRequestTooLarge(input: unknown) {
     if (typeof input === "string") return isRequestTooLargeMessage(input)
