@@ -5,6 +5,7 @@ import { Log } from "./internal/log"
 import { spawn as lspspawn } from "./launch"
 import { LSPServer } from "./server"
 import { BuiltinServerProfiles } from "./server-profile"
+import { normalizeCommand } from "@ax-code/util/command"
 
 export namespace LSPServerConfig {
   const log = Log.create({ service: "lsp.config" })
@@ -29,13 +30,6 @@ export namespace LSPServerConfig {
     } else if (servers["ty"]) {
       delete servers["ty"]
     }
-  }
-
-  function normalizeCommand(command: string[] | undefined): string[] | undefined {
-    if (command === undefined) return undefined
-    const normalized = command.map((item) => item.trim())
-    if (normalized.length === 0 || normalized.some((item) => item.length === 0)) return undefined
-    return normalized
   }
 
   export function buildEnabledServers(cfg: { lsp?: LspConfigSection }): Record<string, LSPServer.Info> {

@@ -9,6 +9,7 @@ import { Instance } from "../project/instance"
 import { Process } from "../util/process"
 import { Log } from "../util/log"
 import * as Formatter from "./formatter"
+import { normalizeCommand } from "@ax-code/util/command"
 
 export namespace Format {
   const log = Log.create({ service: "format" })
@@ -28,13 +29,6 @@ export namespace Format {
     formatters: Record<string, Formatter.Info>
     isEnabled: (item: Formatter.Info) => Promise<boolean>
     unsubscribe: () => void
-  }
-
-  function normalizeCommand(command: string[] | undefined): string[] | undefined {
-    if (command === undefined) return undefined
-    const normalized = command.map((item) => item.trim())
-    if (normalized.length === 0 || normalized.some((item) => item.length === 0)) return undefined
-    return normalized
   }
 
   const state = Instance.state(
