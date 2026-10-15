@@ -175,11 +175,14 @@ export function Edit(props: ToolProps<typeof EditTool>) {
             {(s) => (
               <text paddingLeft={1} fg={theme.textMuted}>
                 {s().hunks} {s().hunks === 1 ? "hunk" : "hunks"} ·{" "}
-                <span style={{ fg: theme.success }}>+{s().added}</span>{" "}
-                <span style={{ fg: theme.error }}>−{s().removed}</span>
+                <span style={{ fg: theme.diffAdded }}>+{s().added}</span>{" "}
+                <span style={{ fg: theme.diffRemoved }}>−{s().removed}</span>
               </text>
             )}
           </Show>
+          {/* Context lines and their line-number gutter use the enclosing
+              panel surface: theme.diffContextBg is tuned for the transcript
+              background and reads as a black band inside the BlockTool panel. */}
           <box paddingLeft={1} maxHeight={collapsed() ? 30 : undefined} overflow={collapsed() ? "hidden" : undefined}>
             <SessionDiffRenderer
               diff={rawDiff()}
@@ -189,11 +192,11 @@ export function Edit(props: ToolProps<typeof EditTool>) {
                 fg: theme.text,
                 addedBg: theme.diffAddedBg,
                 removedBg: theme.diffRemovedBg,
-                contextBg: theme.diffContextBg,
+                contextBg: theme.backgroundPanel,
                 addedSignColor: theme.diffHighlightAdded,
                 removedSignColor: theme.diffHighlightRemoved,
                 lineNumberFg: theme.diffLineNumber,
-                lineNumberBg: theme.diffContextBg,
+                lineNumberBg: theme.backgroundPanel,
                 addedLineNumberBg: theme.diffAddedLineNumberBg,
                 removedLineNumberBg: theme.diffRemovedLineNumberBg,
               }}
@@ -263,8 +266,9 @@ function ApplyPatchFile(props: {
         <Show when={fileSummary()}>
           {(s) => (
             <text paddingLeft={1} fg={theme.textMuted}>
-              {s().hunks} {s().hunks === 1 ? "hunk" : "hunks"} · <span style={{ fg: theme.success }}>+{s().added}</span>{" "}
-              <span style={{ fg: theme.error }}>−{s().removed}</span>
+              {s().hunks} {s().hunks === 1 ? "hunk" : "hunks"} ·{" "}
+              <span style={{ fg: theme.diffAdded }}>+{s().added}</span>{" "}
+              <span style={{ fg: theme.diffRemoved }}>−{s().removed}</span>
             </text>
           )}
         </Show>
@@ -277,11 +281,11 @@ function ApplyPatchFile(props: {
               fg: theme.text,
               addedBg: theme.diffAddedBg,
               removedBg: theme.diffRemovedBg,
-              contextBg: theme.diffContextBg,
+              contextBg: theme.backgroundPanel,
               addedSignColor: theme.diffHighlightAdded,
               removedSignColor: theme.diffHighlightRemoved,
               lineNumberFg: theme.diffLineNumber,
-              lineNumberBg: theme.diffContextBg,
+              lineNumberBg: theme.backgroundPanel,
               addedLineNumberBg: theme.diffAddedLineNumberBg,
               removedLineNumberBg: theme.diffRemovedLineNumberBg,
             }}

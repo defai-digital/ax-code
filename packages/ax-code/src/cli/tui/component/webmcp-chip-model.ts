@@ -7,6 +7,8 @@ export type WebMcpChipModel = {
   connected: string[]
   blocked: { name: string; error?: string }[]
   attentions: { name: string; error?: string }[]
+  /** Effective interact tier (ADR-174): true exactly when the [act] marker is shown. */
+  interact: boolean
   /**
    * toggle: something is live, or something can be connected. warning: a
    * failure needs recovery and nothing is live. lock: every server is
@@ -116,5 +118,18 @@ export function webMcpChipModel(
       ? `⚠ WebMCP: ${first.name}: ${first.error ?? "needs attention"} (+${attentions.length - 1} more)`
       : `⚠ WebMCP: ${first?.error ?? first?.name ?? "(unknown)"}`
   const warningText = `${warningCore}${blocked.length > 0 ? " 🔒" : ""}`
-  return { servers, connected, blocked, attentions, view, label, lockText, warningText }
+  return { servers, connected, blocked, attentions, interact, view, label, lockText, warningText }
+}
+
+export type WebMcpChipTone = "warning" | "text" | "textMuted"
+
+/**
+ * Text tone for the toggle view. The act tier is the one genuine risk signal
+ * on this chip, so it keeps the warning hue in both the on and off states;
+ * a read-only bridge renders as routine configuration: neutral text when
+ * connected, muted when not. Never a filled background.
+ */
+export function webMcpChipTone(model: WebMcpChipModel): WebMcpChipTone {
+  if (model.interact) return "warning"
+  return model.connected.length > 0 ? "text" : "textMuted"
 }

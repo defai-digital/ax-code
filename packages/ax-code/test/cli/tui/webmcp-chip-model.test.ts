@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { webMcpChipModel } from "../../../src/cli/tui/component/webmcp-chip-model"
+import { webMcpChipModel, webMcpChipTone } from "../../../src/cli/tui/component/webmcp-chip-model"
 
 const configured = (names: string[]) => Object.fromEntries(names.map((name) => [name, { webmcp: {} }]))
 
@@ -131,5 +131,28 @@ describe("webMcpChipModel interact marker (ADR-174)", () => {
     expect(webMcpChipModel(config, {}, { allow: false }).label).toBe("WebMCP")
     expect(webMcpChipModel(config, {}, { allowRead: false }).label).toBe("WebMCP [act]")
     expect(webMcpChipModel(config, {}, {}).label).toBe("WebMCP [act]")
+  })
+
+  test("the effective interact tier is exposed beside the marker", () => {
+    expect(webMcpChipModel({ bridge: { webmcp: { interact: true } } }, {}).interact).toBe(true)
+    expect(webMcpChipModel({ bridge: { webmcp: { read: true } } }, {}).interact).toBe(false)
+    expect(webMcpChipModel({ bridge: { webmcp: { interact: true } } }, {}, { allowInteract: false }).interact).toBe(
+      false,
+    )
+  })
+})
+
+describe("webMcpChipTone (calm chip)", () => {
+  test("the act tier keeps the warning hue in both on and off states", () => {
+    const off = webMcpChipModel({ bridge: { webmcp: { interact: true } } }, {})
+    expect(webMcpChipTone(off)).toBe("warning")
+    const on = webMcpChipModel({ bridge: { webmcp: { interact: true } } }, { bridge: { status: "connected" } })
+    expect(webMcpChipTone(on)).toBe("warning")
+  })
+
+  test("a read-only bridge is routine configuration: muted when off, text when on", () => {
+    const profile = { bridge: { webmcp: { read: true } } }
+    expect(webMcpChipTone(webMcpChipModel(profile, {}))).toBe("textMuted")
+    expect(webMcpChipTone(webMcpChipModel(profile, { bridge: { status: "connected" } }))).toBe("text")
   })
 })

@@ -5,7 +5,7 @@ import { useContentDimensions } from "@tui/context/content-dimensions"
 import { useSync } from "@tui/context/sync"
 import { createMemo, createEffect, untrack, type Accessor, For, Match, Show, Switch } from "solid-js"
 import { createStore } from "solid-js/store"
-import { RGBA } from "ax-tui"
+import semver from "semver"
 import { useTheme } from "../../context/theme"
 import { Installation } from "@/installation"
 import { useDirectory } from "../../context/directory"
@@ -14,7 +14,7 @@ import { ModeChips } from "../../component/mode-chips"
 import { WebMcpAllowlistLink, WebMcpChip } from "../../component/webmcp-chip"
 import { GoalChip } from "../../component/goal-chip"
 import { TodoItem } from "../../component/todo-item"
-import { CHROME_CONTROL_COLOR, ChromeAction, ChromeWidthAction } from "../../component/chrome-action"
+import { ChromeAction, ChromeWidthAction } from "../../component/chrome-action"
 import { useCommandDialog } from "../../component/dialog-command"
 import { useSDK } from "@tui/context/sdk"
 import { useToast } from "../../ui/toast"
@@ -71,7 +71,15 @@ import {
 } from "./workflow-status"
 
 const log = Log.create({ service: "tui.sidebar.queue" })
-const PATH_BACKGROUND = RGBA.fromHex("#000000")
+
+/**
+ * Footer version label: the "v" prefix only reads naturally in front of a
+ * semver release ("v7.25.5"), never a word like "local" ("vlocal").
+ */
+export function sidebarVersionLabel(version: string) {
+  const normalized = semver.valid(version)
+  return normalized ? `v${normalized}` : version
+}
 
 const QUEUED_DELETE_ICON = "x"
 const QUEUED_DELETE_ICON_WIDTH = 2
@@ -394,11 +402,11 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
           position={props.overlay ? "absolute" : "relative"}
         >
           <box flexShrink={0} flexDirection="row" gap={2} flexWrap="wrap" marginBottom={1}>
-            <ChromeAction fg={CHROME_CONTROL_COLOR} onMouseUp={() => command.trigger("session.sidebar.toggle")}>
+            <ChromeAction fg={theme.secondary} onMouseUp={() => command.trigger("session.sidebar.toggle")}>
               /sidebar
             </ChromeAction>
             <ChromeWidthAction
-              fg={CHROME_CONTROL_COLOR}
+              fg={theme.secondary}
               width={chromeWidth(kv.get("sidebar_width"), SIDEBAR_WIDTH_DEFAULT)}
               onMouseUp={() => command.trigger("session.sidebar.width")}
             />
@@ -1109,12 +1117,12 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
             <text>
               <Show
                 when={directory().split("/").length > 1}
-                fallback={<span style={{ fg: theme.text, bg: PATH_BACKGROUND }}>{directory()}</span>}
+                fallback={<span style={{ fg: theme.text, bg: theme.backgroundPanel }}>{directory()}</span>}
               >
-                <span style={{ fg: theme.textMuted, bg: PATH_BACKGROUND }}>
+                <span style={{ fg: theme.textMuted, bg: theme.backgroundPanel }}>
                   {directory().split("/").slice(0, -1).join("/")}/
                 </span>
-                <span style={{ fg: theme.text, bg: PATH_BACKGROUND }}>{directory().split("/").at(-1)}</span>
+                <span style={{ fg: theme.text, bg: theme.backgroundPanel }}>{directory().split("/").at(-1)}</span>
               </Show>
             </text>
             <GoalChip sessionID={props.sessionID} />
@@ -1123,7 +1131,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
               <span style={{ fg: theme.text }}>
                 <b> Code</b>
               </span>{" "}
-              <span>v{Installation.VERSION}</span>
+              <span>{sidebarVersionLabel(Installation.VERSION)}</span>
             </text>
           </box>
         </box>

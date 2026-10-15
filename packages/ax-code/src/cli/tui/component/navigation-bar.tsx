@@ -10,7 +10,6 @@ import { knownAttentionRequests } from "../util/session-activity"
 import { projectLabel } from "../navigation/navigation-model"
 import { truncateToCellWidth } from "../routes/session/last-input-view-model"
 import { sidebarRestoreEntry } from "../sidebar-restore-view-model"
-import { CHROME_CONTROL_COLOR } from "./chrome-action"
 
 /** A visible navigation entry survives both responsive collapse and opt-out. */
 export function NavigationBar(props: { width: number; showSidebarRestore?: boolean }) {
@@ -44,7 +43,7 @@ export function NavigationBar(props: { width: number; showSidebarRestore?: boole
     >
       <box flexGrow={1} minWidth={0} flexDirection="row" gap={2}>
         <box flexShrink={0} onMouseUp={() => command.trigger("session.navigation")}>
-          <text fg={CHROME_CONTROL_COLOR} selectable={false}>
+          <text fg={theme.secondary} selectable={false}>
             {entry()}
           </text>
         </box>
@@ -74,7 +73,7 @@ export function NavigationBar(props: { width: number; showSidebarRestore?: boole
       </box>
       <Show when={sidebarEntry()}>
         <box flexShrink={0} paddingRight={1} onMouseUp={() => command.trigger("session.sidebar.toggle")}>
-          <text fg={CHROME_CONTROL_COLOR} selectable={false}>
+          <text fg={theme.secondary} selectable={false}>
             {sidebarEntry()}
           </text>
         </box>

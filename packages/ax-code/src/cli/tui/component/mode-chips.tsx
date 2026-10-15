@@ -46,15 +46,16 @@ export function ModeChips() {
     ),
   )
 
+  // Mode chips are text-only: routine configuration must not read as an
+  // alarm. Sandbox off is the one real risk signal and keeps a warning tone.
   return (
     <box flexDirection="row" flexWrap="wrap" flexShrink={1} maxWidth="100%">
       <Show when={workModeChipVisible(chipWorkMode())}>
         <ModeToggle
           label={workModeView().label}
           active={workModeView().active}
-          activeFg={theme.text}
+          activeFg={theme.secondary}
           inactiveFg={theme.textMuted}
-          background={theme.primary}
           onMouseUp={() => command.trigger("app.clear.work_mode")}
         />
       </Show>
@@ -63,15 +64,13 @@ export function ModeChips() {
         active={chipRunMode() !== "none"}
         activeFg={theme.text}
         inactiveFg={theme.textMuted}
-        background={theme.warning}
         onMouseUp={() => command.trigger("app.cycle.run_mode")}
       />
       <ModeToggle
         label={t("mode.sandbox")}
         active={sync.data.isolation.mode !== "full-access"}
         activeFg={theme.text}
-        inactiveFg={theme.error}
-        background={theme.success}
+        inactiveFg={theme.warning}
         onMouseUp={() => command.trigger("app.toggle.sandbox")}
       />
     </box>
