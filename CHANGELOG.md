@@ -6,6 +6,20 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.25.9] - 2026-10-15
+
+### Changed
+
+- Publish paired SDK 2.6.20 with the updated desktop WebMCP page interaction contract.
+- Integrate shared filesystem, timer, SSRF and logging helpers across runtime packages.
+
+### Fixed
+
+- Preserve exact file permissions during atomic and streamed overwrites, including restrictive umasks and explicit zero modes.
+- Treat negative-infinite delays as elapsed and retain cleanup failures even when JavaScript throws `undefined`.
+- Keep dialogs and footer hints inside small terminals, stabilize finished code rendering and preserve worker preload paths.
+- Bound outbound fetches and command-file scans, and check database migration drift in CI.
+
 ## [7.25.8] - 2026-10-15
 
 ### Changed
