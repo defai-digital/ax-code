@@ -18,9 +18,13 @@ import type { EntrySection, MemoryEntry, MemoryEntryKind, ProjectMemory } from "
 import { FileLock } from "../util/filelock"
 import { Lock } from "../util/lock"
 import { uniqueStrings } from "../util/string-list"
+import { TokenEstimate } from "../provider/token-estimate"
 
+// Delegates to the unified estimator (ADR-139 D5), like generator/injector: a
+// local chars/4 heuristic under-counted CJK ~4x, so the recorded budget
+// disagreed with the injected-memory budget derived from it.
 function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4)
+  return TokenEstimate.textTokens(text)
 }
 
 function rebuildSection(entries: MemoryEntry[]): EntrySection {
