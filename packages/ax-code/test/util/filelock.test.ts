@@ -160,7 +160,7 @@ describe("util.filelock", () => {
   })
 
   // Polling timers must stay ref'd. They were briefly unref'd (see the
-  // sleep() note in src/util/timeout.ts): if the poll timer is the only
+  // sleep() note in packages/util/src/timeout.ts): if the poll timer is the only
   // pending work, Node drains the event loop and exits while the caller is
   // still awaiting acquire(), so the awaiting promise never settles. In a CLI
   // process that is a silent exit 13 with no output. The bounded timeoutMs

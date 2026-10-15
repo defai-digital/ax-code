@@ -646,7 +646,7 @@ describe("session.processor", () => {
     // onFlushError so timer failures never become unhandled rejections.
     const batcherSrc = await readFile(path.join(import.meta.dirname, "../../src/session/delta-batcher.ts"), "utf-8")
     expect(batcherSrc).toContain("scheduleUnref")
-    const timeoutSrc = await readFile(path.join(import.meta.dirname, "../../src/util/timeout.ts"), "utf-8")
+    const timeoutSrc = await readFile(path.join(import.meta.dirname, "../../../util/src/timeout.ts"), "utf-8")
     expect(timeoutSrc).toContain("id.unref?.()")
     expect(batcherSrc).toContain("onFlushError")
     const processorSrc = await readFile(path.join(import.meta.dirname, "../../src/session/processor-impl.ts"), "utf-8")

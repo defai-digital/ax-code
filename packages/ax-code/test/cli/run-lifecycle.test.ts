@@ -527,7 +527,7 @@ test("auth lock polling does not keep the process alive while waiting", async ()
   // pending wait never keeps the process alive.
   expect(body).toContain("sleep(LOCK_POLL_MS)")
 
-  const timeoutSrc = await readFile(path.join(import.meta.dirname, "../../src/util/timeout.ts"), "utf-8")
+  const timeoutSrc = await readFile(path.join(import.meta.dirname, "../../../util/src/timeout.ts"), "utf-8")
   const sleepStart = timeoutSrc.indexOf("export function sleep(")
   expect(sleepStart).toBeGreaterThan(-1)
   expect(timeoutSrc.slice(sleepStart)).toContain("timer.unref?.()")

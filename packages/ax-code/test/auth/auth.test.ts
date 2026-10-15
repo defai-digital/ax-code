@@ -355,7 +355,7 @@ test("stale auth lock stealing claims and revalidates the stale snapshot before 
 // auth lock poll is awaited by Auth.set, so if its timer is the only pending
 // work an unref lets Node drain the event loop and exit with the caller's
 // promise unsettled. Termination is guaranteed by the bounded deadline in the
-// poll loop, not by the unref. See the sleep() note in src/util/timeout.ts.
+// poll loop, not by the unref. See the sleep() note in packages/util/src/timeout.ts.
 test("set keeps lock polling timers referenced while waiting for an active holder", async () => {
   const originalSetTimeout = globalThis.setTimeout
   const host = currentLockHost()
