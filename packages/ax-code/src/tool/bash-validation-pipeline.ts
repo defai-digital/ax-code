@@ -6,6 +6,9 @@ const WORD_TYPES = new Set(["command_name", "number", "word", "string", "raw_str
 const DRIVERS = new Set(["vitest", "jest", "mocha", "pytest", "tsc"])
 const PACKAGE_MANAGERS = new Set(["pnpm", "npm", "yarn", "bun"])
 const VALUE_OPTIONS = new Set(["--dir", "-C", "--prefix", "--cwd", "--filter", "-F", "--workspace"])
+const STAGE_TYPES = new Set(["list", "subshell", "compound_statement", "redirected_statement"])
+const DRIVER_HELP_FLAGS = new Set(["--help", "-h", "--version", "--showConfig"])
+const CARGO_CHECK_SUBCOMMANDS = new Set(["test", "check", "clippy"])
 const CHECK_SCRIPT = /^(?:test|typecheck|check|lint|validate)(?::[a-zA-Z0-9_-]+)*$/
 
 function command(node: Node | null): { name: string; args: string[] } | undefined {
@@ -27,7 +30,7 @@ function command(node: Node | null): { name: string; args: string[] } | undefine
 
 function stageCommands(node: Node | null): { name: string; args: string[] }[] {
   if (!node) return []
-  if (["list", "subshell", "compound_statement", "redirected_statement"].includes(node.type)) {
+  if (STAGE_TYPES.has(node.type)) {
     return node.namedChildren.flatMap(stageCommands)
   }
   const resolved = command(node)
@@ -35,9 +38,9 @@ function stageCommands(node: Node | null): { name: string; args: string[] }[] {
 }
 
 function validation(name: string, args: string[]): boolean {
-  if (DRIVERS.has(name)) return !args.some((arg) => ["--help", "-h", "--version", "--showConfig"].includes(arg))
+  if (DRIVERS.has(name)) return !args.some((arg) => DRIVER_HELP_FLAGS.has(arg))
   if (name === "cargo")
-    return ["test", "check", "clippy"].includes(args[0] ?? "") || (args[0] === "fmt" && args.includes("--check"))
+    return CARGO_CHECK_SUBCOMMANDS.has(args[0] ?? "") || (args[0] === "fmt" && args.includes("--check"))
   if (name === "go") return args[0] === "test" || args[0] === "vet"
   if (!PACKAGE_MANAGERS.has(name)) return false
   let i = 0

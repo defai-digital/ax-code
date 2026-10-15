@@ -69,6 +69,25 @@ export function isDangerousGitConfigKey(key: string, value?: string): boolean {
 
 // Parse config options once so option values and tokens after -- never act
 // as flags. Both legacy actions and the modern config subcommands are used.
+// Flag tables hoisted out of the parse loop: membership must not allocate a new
+// array per argument. bash-helpers and bash-network-heuristics keep their flag
+// tables at module scope the same way.
+const READ_ACTIONS = new Set(["--get", "--get-regexp", "--get-all", "--get-urlmatch", "--list", "-l"])
+const CONFIG_SUBCOMMANDS = new Set(["get", "list", "set", "unset", "rename-section", "remove-section", "edit"])
+const LOCATION_FLAGS = new Set(["--global", "--system", "--worktree"])
+const WHOLE_FILE_FLAGS = new Set(["--rename-section", "--remove-section", "--edit", "-e"])
+const VALUE_FLAGS = new Set(["--type", "-t", "--default", "--value", "--comment"])
+const WRITE_ACTIONS = new Set([
+  "--add",
+  "--replace-all",
+  "--unset",
+  "--unset-all",
+  "--rename-section",
+  "--remove-section",
+  "--edit",
+  "-e",
+])
+
 export function gitConfigInvocation(args: string[]): {
   key?: string
   value?: string
@@ -77,9 +96,7 @@ export function gitConfigInvocation(args: string[]): {
   wholeFile: boolean
   unresolvedLocation: boolean
 } {
-  const readActions = new Set(["--get", "--get-regexp", "--get-all", "--get-urlmatch", "--list", "-l"])
-  const subcommands = new Set(["get", "list", "set", "unset", "rename-section", "remove-section", "edit"])
-  let action = subcommands.has(args[0]) ? args[0] : undefined
+  let action = CONFIG_SUBCOMMANDS.has(args[0]) ? args[0] : undefined
   let wholeFile = action === "rename-section" || action === "remove-section" || action === "edit"
   let file: string | undefined
   let unresolvedLocation = false
@@ -93,26 +110,14 @@ export function gitConfigInvocation(args: string[]): {
     }
     if (options && arg.startsWith("-")) {
       if (arg === "--local") continue
-      if (["--global", "--system", "--worktree"].includes(arg)) unresolvedLocation = true
-      if (["--rename-section", "--remove-section", "--edit", "-e"].includes(arg)) wholeFile = true
+      if (LOCATION_FLAGS.has(arg)) unresolvedLocation = true
+      if (WHOLE_FILE_FLAGS.has(arg)) wholeFile = true
       if (arg === "--file" || arg === "-f") file = args[++i]
       else if (arg.startsWith("--file=")) file = arg.slice(7)
       else if (arg.startsWith("-f")) file = arg.slice(2)
-      else if (["--type", "-t", "--default", "--value", "--comment"].includes(arg)) i++
-      else if (readActions.has(arg)) action = "get"
-      else if (
-        [
-          "--add",
-          "--replace-all",
-          "--unset",
-          "--unset-all",
-          "--rename-section",
-          "--remove-section",
-          "--edit",
-          "-e",
-        ].includes(arg)
-      )
-        action = "set"
+      else if (VALUE_FLAGS.has(arg)) i++
+      else if (READ_ACTIONS.has(arg)) action = "get"
+      else if (WRITE_ACTIONS.has(arg)) action = "set"
       // Git accepts abbreviated long options. Unmodeled options cannot be
       // assumed unrelated to the destination (for example --glob or --fi).
       else unresolvedLocation = true
