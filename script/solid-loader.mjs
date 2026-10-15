@@ -7,6 +7,7 @@ import { registerHooks, createRequire } from "node:module"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
+import { isMainThread } from "node:worker_threads"
 
 const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../packages/ax-code")
 
@@ -98,5 +99,17 @@ registerHooks({
 
 // Install the Bun→Node global shim. node-compat.ts is .ts, so it loads through
 // tsx (already registered) — import it dynamically after our hooks are in place.
-const { installNodeBunCompat } = await import(pathToFileURL(path.join(pkgRoot, "src/bun/node-compat.ts")).href)
-installNodeBunCompat()
+// ax-tui decides at module load whether it runs under Bun (`globalThis.Bun`)
+// and then loads its tree-sitter wasm and queries with Bun-only import
+// attributes, so evaluate it before the shim defines `Bun`. Workers inherit
+// this preload; like src/index-node-tui.ts, only the main thread gets the shim,
+// which keeps the tree-sitter parser worker on its Node path.
+if (isMainThread) {
+  try {
+    await import(pathToFileURL(pkgRequire.resolve("ax-tui")).href)
+  } catch {
+    // Non-TUI source commands still run where ax-tui is not installed.
+  }
+  const { installNodeBunCompat } = await import(pathToFileURL(path.join(pkgRoot, "src/bun/node-compat.ts")).href)
+  installNodeBunCompat()
+}
