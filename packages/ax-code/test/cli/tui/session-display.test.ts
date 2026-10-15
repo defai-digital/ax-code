@@ -136,4 +136,20 @@ describe("tui session display helpers", () => {
     expect(recoveredAssistantMessageIDs([failed, recovered, unrelated])).toEqual(new Set(["failed"]))
     expect(recoveredAssistantMessageIDs([failed, unrelated])).toEqual(new Set())
   })
+
+  test("keeps successful earlier steps of a multi-step turn visible", () => {
+    const step1 = assistant("step1", "u")
+    const step2 = assistant("step2", "u")
+    const step3 = assistant("step3", "u")
+
+    expect(recoveredAssistantMessageIDs([step1, step2, step3])).toEqual(new Set())
+  })
+
+  test("hides a failed step but keeps successful steps around it", () => {
+    const step1 = assistant("step1", "u")
+    const failed = { ...assistant("failed", "u"), error: { name: "APIError" } }
+    const step2 = assistant("step2", "u")
+
+    expect(recoveredAssistantMessageIDs([step1, failed, step2])).toEqual(new Set(["failed"]))
+  })
 })

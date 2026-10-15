@@ -65,7 +65,10 @@ export function recoveredAssistantMessageIDs(messages: Message[]) {
     const message = messages[index]
     if (message.role !== "assistant" || !message.parentID) continue
 
-    if (laterSuccessfulParents.has(message.parentID)) {
+    // Every step of a multi-step turn is its own assistant message under the
+    // same user message, so only a failed attempt is superseded by a later
+    // successful sibling; successful earlier steps carry the turn's tool calls.
+    if (message.error && laterSuccessfulParents.has(message.parentID)) {
       recovered.add(message.id)
     }
     if (!message.error) {
