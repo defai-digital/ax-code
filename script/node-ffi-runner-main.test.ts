@@ -92,44 +92,47 @@ test("source runner preserves an explicit NODE_COMPILE_CACHE", () => {
   }
 })
 
-test("TUI runner admits equals-form preloads with spaces and records the Solid loader", () => {
-  const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), "ax runner tui ")))
-  try {
-    mkdirSync(path.join(root, "script"), { recursive: true })
-    mkdirSync(path.join(root, "packages/ax-code/src"), { recursive: true })
-    for (const file of ["node-ffi-runner.mjs", "node-ffi-runner-args.mjs", "node-ffi-runner-brand.mjs"]) {
-      copyFileSync(path.join(import.meta.dirname, file), path.join(root, "script", file))
-    }
-    writeFileSync(path.join(root, "solid-loader probe.mjs"), "globalThis.preloadProbe = 'loaded'")
-    writeFileSync(
-      path.join(root, "packages/ax-code/src/index-node-tui.ts"),
-      `
+for (const separator of [false, true]) {
+  test(`TUI runner preserves preloads and the option separator (${separator})`, () => {
+    const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), "ax runner tui ")))
+    try {
+      mkdirSync(path.join(root, "script"), { recursive: true })
+      mkdirSync(path.join(root, "packages/ax-code/src"), { recursive: true })
+      for (const file of ["node-ffi-runner.mjs", "node-ffi-runner-args.mjs", "node-ffi-runner-brand.mjs"]) {
+        copyFileSync(path.join(import.meta.dirname, file), path.join(root, "script", file))
+      }
+      writeFileSync(path.join(root, "solid-loader probe.mjs"), "globalThis.preloadProbe = 'loaded'")
+      writeFileSync(
+        path.join(root, "packages/ax-code/src/index-node-tui.ts"),
+        `
 console.log(JSON.stringify({ loaded: globalThis.preloadProbe, loader: process.env.AX_CODE_CLI_SOLID_LOADER, nodeOptions: process.env.NODE_OPTIONS }))
 `,
-    )
-    const result = spawnSync(
-      process.execPath,
-      [
-        path.join(root, "script/node-ffi-runner.mjs"),
-        "--import=./solid-loader probe.mjs",
-        "packages/ax-code/src/index-node-tui.ts",
-      ],
-      {
-        cwd: root,
-        encoding: "utf8",
-        timeout: 20_000,
-        env: { ...process.env, NODE_OPTIONS: "", XDG_CACHE_HOME: path.join(root, "cache") },
-      },
-    )
-    expect(result.status, result.stderr).toBe(0)
-    const output = JSON.parse(result.stdout)
-    expect(output.loaded).toBe("loaded")
-    if (process.platform !== "win32")
-      expect(output.loader).toBe(new URL("solid-loader%20probe.mjs", `file://${root}/`).href)
-    // The TUI entry is a .ts preload, so tsx falls back to the deprecated
-    // module.register(); the runner must silence only that DEP0205 warning.
-    if (process.platform !== "win32") expect(output.nodeOptions).toContain("--disable-warning=DEP0205")
-  } finally {
-    rmSync(root, { recursive: true, force: true })
-  }
-})
+      )
+      const result = spawnSync(
+        process.execPath,
+        [
+          path.join(root, "script/node-ffi-runner.mjs"),
+          "--import=./solid-loader probe.mjs",
+          ...(separator ? ["--"] : []),
+          "packages/ax-code/src/index-node-tui.ts",
+        ],
+        {
+          cwd: root,
+          encoding: "utf8",
+          timeout: 20_000,
+          env: { ...process.env, NODE_OPTIONS: "", XDG_CACHE_HOME: path.join(root, "cache") },
+        },
+      )
+      expect(result.status, result.stderr).toBe(0)
+      const output = JSON.parse(result.stdout)
+      expect(output.loaded).toBe("loaded")
+      if (process.platform !== "win32")
+        expect(output.loader).toBe(new URL("solid-loader%20probe.mjs", `file://${root}/`).href)
+      // The TUI entry is a .ts preload, so tsx falls back to the deprecated
+      // module.register(); the runner must silence only that DEP0205 warning.
+      if (process.platform !== "win32") expect(output.nodeOptions).toContain("--disable-warning=DEP0205")
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+}

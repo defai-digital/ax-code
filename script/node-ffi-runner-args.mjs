@@ -45,6 +45,12 @@ export function splitNodeLaunchArgs(args) {
   let index = 0
   while (index < args.length) {
     const arg = args[index]
+    // Node consumes the option separator itself; it is never a NODE_OPTIONS flag.
+    // Everything after it starts with the entry, even when that path begins with '-'.
+    if (arg === "--") {
+      index += 1
+      break
+    }
     if (!arg.startsWith("--") && arg !== "-r") break
     nodeFlags.push(arg)
     index += 1
