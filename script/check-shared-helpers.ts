@@ -44,6 +44,11 @@ const CONSOLIDATED: Consolidated[] = [
     ],
   },
   {
+    slug: "timeout",
+    symbols: ["sleep", "withTimeout", "scheduleUnref"],
+    shims: ["packages/ax-code/src/util/timeout.ts"],
+  },
+  {
     slug: "unref-timeout",
     symbols: ["sleep", "withTimeout"],
     // ax-code-reason dropped its shim once its last call site went away;

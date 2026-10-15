@@ -1,8 +1,8 @@
 // Shared by @ax-code/ax-code-intel and @ax-code/ax-code-reason, which both
 // need timers that must not hold a short-lived process open. This is the
-// unref'd variant on purpose: `packages/ax-code/src/util/timeout.ts` keeps its
-// timers ref'd because the CLI awaits those sleeps as a correctness boundary.
-// Do not merge the two — the timer lifetime is the contract.
+// unref'd variant on purpose: `packages/util/src/timeout.ts` keeps its timers
+// ref'd because the CLI awaits those sleeps as a correctness boundary. Do not
+// merge the two — the timer lifetime is the contract.
 
 // Resolve after `ms`, with the timer unref'd so a pending sleep never keeps
 // the process alive (e.g. a lock poll loop during shutdown).

@@ -13,7 +13,8 @@
 - `module` — Node module resolution helpers, including manifest-based entry resolution (`Module`)
 - `slug` — random adjective-noun slug generation (`Slug`)
 - `string-list` — array/iterable string helpers (`stringList`, `uniqueItems`, `uniqueStrings`, `uniqueSortedStrings`); shared by `ax-code-intel` and `ax-code-reason`
-- `unref-timeout` — unref'd `sleep`/`withTimeout` shared by `ax-code-intel` and `ax-code-reason`; deliberately separate from `packages/ax-code/src/util/timeout.ts`, whose timers stay ref'd
+- `timeout` — ref'd `sleep`/`withTimeout`/`scheduleUnref`; awaited timeouts must not unref or a short-lived process can exit with an unsettled await
+- `unref-timeout` — unref'd `sleep`/`withTimeout` shared by `ax-code-intel` and `ax-code-reason`; deliberately separate from `timeout`, whose timers stay ref'd
 
 ## Allowed Dependencies
 
