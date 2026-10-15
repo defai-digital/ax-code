@@ -1,6 +1,6 @@
 import fs from "node:fs/promises"
-import path from "node:path"
 import { resolveInside, sanitizeWikiDir } from "@ax-code/ax-wiki"
+import { atomicWrite } from "@ax-code/ax-wiki/node"
 import { parseJsonStrict } from "../util/json-value"
 
 /**
@@ -60,17 +60,7 @@ export async function readWikiFailureMemory(root: string, wikiDir: string): Prom
 }
 
 async function writeWikiFailureMemory(root: string, wikiDir: string, memory: WikiFailureMemory): Promise<void> {
-  const target = wikiFailureMemoryPath(root, wikiDir)
-  await fs.mkdir(path.dirname(target), { recursive: true })
-  const tmp = `${target}.${process.pid}.${Date.now()}.tmp`
-  const handle = await fs.open(tmp, "w")
-  try {
-    await handle.writeFile(`${JSON.stringify(memory, null, 2)}\n`, "utf8")
-    await handle.sync()
-  } finally {
-    await handle.close()
-  }
-  await fs.rename(tmp, target)
+  await atomicWrite(wikiFailureMemoryPath(root, wikiDir), `${JSON.stringify(memory, null, 2)}\n`)
 }
 
 /** Record a failed build, extending the streak only for the same key. */

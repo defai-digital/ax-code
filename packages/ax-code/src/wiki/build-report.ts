@@ -1,6 +1,6 @@
 import fs from "node:fs/promises"
-import path from "node:path"
 import { resolveInside, sanitizeWikiDir } from "@ax-code/ax-wiki"
+import { atomicWrite } from "@ax-code/ax-wiki/node"
 import { parseJsonStrict } from "../util/json-value"
 
 /**
@@ -72,21 +72,12 @@ export function wikiBuildReportPath(root: string, wikiDir: string): string {
 }
 
 /**
- * Atomic best-effort write: temp file + fsync + rename. A failure to persist
- * the report is logged by the caller and never fails the build.
+ * Atomic best-effort write through the wiki engine's shared helper (temp file +
+ * fsync + rename, temp removed on failure). A failure to persist the report is
+ * logged by the caller and never fails the build.
  */
 export async function writeWikiBuildReport(root: string, wikiDir: string, report: WikiBuildReport): Promise<void> {
-  const target = wikiBuildReportPath(root, wikiDir)
-  await fs.mkdir(path.dirname(target), { recursive: true })
-  const tmp = `${target}.${process.pid}.${Date.now()}.tmp`
-  const handle = await fs.open(tmp, "w")
-  try {
-    await handle.writeFile(`${JSON.stringify(report, null, 2)}\n`, "utf8")
-    await handle.sync()
-  } finally {
-    await handle.close()
-  }
-  await fs.rename(tmp, target)
+  await atomicWrite(wikiBuildReportPath(root, wikiDir), `${JSON.stringify(report, null, 2)}\n`)
 }
 
 /** Tolerant read: a missing, unreadable, or malformed report is `undefined`. */
