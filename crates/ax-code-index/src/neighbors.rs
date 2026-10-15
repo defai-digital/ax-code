@@ -34,6 +34,22 @@ struct Neighbor {
     indexed_at: Option<i64>,
     completeness: Option<String>,
 }
+// `+e.kind` (unary plus) disables index use for the kind term: without
+// planner statistics (no sqlite_stat1 before the first ANALYZE) SQLite would
+// otherwise pick code_edge_project_kind_idx and scan every edge of the
+// project. The no-op `+` forces code_edge_to_idx / code_edge_from_idx
+// regardless of statistics, with identical results.
+fn neighbors_sql(callers: bool) -> String {
+    let (anchor, neighbor) = if callers {
+        ("to_node", "from_node")
+    } else {
+        ("from_node", "to_node")
+    };
+    format!("SELECT n.id,n.project_id,n.kind,n.name,n.qualified_name,n.file,n.range_start_line,n.range_start_char,n.range_end_line,n.range_end_char,n.signature,n.visibility,f.indexed_at,f.completeness
+      FROM code_edge e JOIN code_node n ON n.id=e.{neighbor} AND n.project_id=e.project_id
+      LEFT JOIN code_file f ON f.project_id=n.project_id AND f.path=n.file
+      WHERE e.project_id=?1 AND e.{anchor}=?2 AND +e.kind='calls' ORDER BY e.rowid")
+}
 fn query(
     conn: &Connection,
     project: &str,
@@ -56,17 +72,9 @@ fn query(
         }),
     );
     let result = (|| {
-        let (anchor, neighbor) = if callers {
-            ("to_node", "from_node")
-        } else {
-            ("from_node", "to_node")
-        };
         // Both joins are project-scoped. A single SELECT observes one SQLite snapshot.
         // Preserve edge multiplicity and the existing indexed edge iteration order.
-        let sql = format!("SELECT n.id,n.project_id,n.kind,n.name,n.qualified_name,n.file,n.range_start_line,n.range_start_char,n.range_end_line,n.range_end_char,n.signature,n.visibility,f.indexed_at,f.completeness
-          FROM code_edge e JOIN code_node n ON n.id=e.{neighbor} AND n.project_id=e.project_id
-          LEFT JOIN code_file f ON f.project_id=n.project_id AND f.path=n.file
-          WHERE e.project_id=?1 AND e.{anchor}=?2 AND e.kind='calls' ORDER BY e.rowid");
+        let sql = neighbors_sql(callers);
         let mut stmt = conn
             .prepare(&sql)
             .map_err(|e| napi::Error::from_reason(e.to_string()))?;
@@ -219,6 +227,84 @@ mod tests {
             .unwrap_err()
             .reason
             .contains("cancelled")
+        );
+    }
+    fn explain_plan(conn: &Connection, sql: &str, symbol: &str) -> String {
+        let explain = format!("EXPLAIN QUERY PLAN {sql}");
+        let mut stmt = conn.prepare(&explain).unwrap();
+        let rows = stmt
+            .query_map(params!["p", symbol], |row| row.get::<_, String>(3))
+            .unwrap()
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .unwrap();
+        rows.join("\n")
+    }
+    #[test]
+    fn plus_kind_uses_node_indexes_without_analyze() {
+        let store = IndexStore::new(":memory:".into()).unwrap();
+        store.with_conn(|conn| {
+            conn.execute_batch("INSERT INTO code_node(id,project_id,kind,name,qualified_name,file,range_start_line,range_start_char,range_end_line,range_end_char) VALUES ('a','p','function','a','a','/a',0,0,1,0),('b','p','function','b','b','/b',0,0,1,0),('c','p','function','c','c','/c',0,0,1,0),('d','p','function','d','d','/d',0,0,1,0); INSERT INTO code_edge(id,project_id,kind,from_node,to_node,file) VALUES ('e1','p','calls','a','b','/a'),('e2','p','calls','c','b','/a'),('e3','p','references','a','b','/a'),('e4','p','calls','b','a','/a'),('e5','p','calls','b','c','/a');")?;
+            for i in 0..40 {
+                conn.execute(
+                    "INSERT INTO code_edge(id,project_id,kind,from_node,to_node,file) VALUES (?1,'p','imports','a','d','/a')",
+                    params![format!("f{i}")],
+                )?;
+            }
+            Ok(())
+        }).unwrap();
+        {
+            let guard = store.conn.lock().unwrap();
+            let conn = guard.as_ref().unwrap();
+            let stat1: i64 = conn
+                .query_row(
+                    "SELECT count(*) FROM sqlite_master WHERE name='sqlite_stat1'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(stat1, 0, "test must run without ANALYZE / sqlite_stat1");
+            let callers = explain_plan(conn, &neighbors_sql(true), "b");
+            assert!(
+                callers.contains("code_edge_to_idx"),
+                "callers plan: {callers}"
+            );
+            assert!(
+                !callers.contains("code_edge_project_kind_idx"),
+                "callers plan: {callers}"
+            );
+            let callees = explain_plan(conn, &neighbors_sql(false), "b");
+            assert!(
+                callees.contains("code_edge_from_idx"),
+                "callees plan: {callees}"
+            );
+            assert!(
+                !callees.contains("code_edge_project_kind_idx"),
+                "callees plan: {callees}"
+            );
+        }
+        let callers: serde_json::Value =
+            serde_json::from_str(&store.call_neighbors("p".into(), "b".into(), true).unwrap())
+                .unwrap();
+        assert_eq!(
+            callers
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|row| row["id"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            vec!["a", "c"]
+        );
+        let callees: serde_json::Value =
+            serde_json::from_str(&store.call_neighbors("p".into(), "b".into(), false).unwrap())
+                .unwrap();
+        assert_eq!(
+            callees
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|row| row["id"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            vec!["a", "c"]
         );
     }
 }

@@ -38,6 +38,31 @@ fn row_to_edge(row: &rusqlite::Row) -> rusqlite::Result<EdgeRow> {
 
 const SELECT_COLS: &str = "id, project_id, kind, from_node, to_node, file, range_start_line, range_start_char, range_end_line, range_end_char, time_created, time_updated";
 
+// `+kind` (unary plus) disables index use for the kind term: without planner
+// statistics (no sqlite_stat1 before the first ANALYZE) SQLite would otherwise
+// pick code_edge_project_kind_idx and scan every edge of the project. The
+// no-op `+` forces code_edge_from_idx / code_edge_to_idx regardless of
+// statistics, with identical results.
+fn edges_from_sql(kind: bool) -> String {
+    if kind {
+        format!(
+            "SELECT {SELECT_COLS} FROM code_edge WHERE project_id = ?1 AND from_node = ?2 AND +kind = ?3"
+        )
+    } else {
+        format!("SELECT {SELECT_COLS} FROM code_edge WHERE project_id = ?1 AND from_node = ?2")
+    }
+}
+
+fn edges_to_sql(kind: bool) -> String {
+    if kind {
+        format!(
+            "SELECT {SELECT_COLS} FROM code_edge WHERE project_id = ?1 AND to_node = ?2 AND +kind = ?3"
+        )
+    } else {
+        format!("SELECT {SELECT_COLS} FROM code_edge WHERE project_id = ?1 AND to_node = ?2")
+    }
+}
+
 fn query_edges(
     conn: &rusqlite::Connection,
     sql: &str,
@@ -97,14 +122,10 @@ impl IndexStore {
     ) -> napi::Result<String> {
         self.with_conn(|conn| {
       let rows = if let Some(ref kind) = kind {
-        let sql = format!(
-          "SELECT {SELECT_COLS} FROM code_edge WHERE project_id = ?1 AND from_node = ?2 AND kind = ?3"
-        );
+        let sql = edges_from_sql(true);
         query_edges(conn, &sql, &[&project_id as &dyn rusqlite::types::ToSql, &from_node, kind])?
       } else {
-        let sql = format!(
-          "SELECT {SELECT_COLS} FROM code_edge WHERE project_id = ?1 AND from_node = ?2"
-        );
+        let sql = edges_from_sql(false);
         query_edges(conn, &sql, &[&project_id as &dyn rusqlite::types::ToSql, &from_node])?
       };
 
@@ -121,14 +142,10 @@ impl IndexStore {
     ) -> napi::Result<String> {
         self.with_conn(|conn| {
       let rows = if let Some(ref kind) = kind {
-        let sql = format!(
-          "SELECT {SELECT_COLS} FROM code_edge WHERE project_id = ?1 AND to_node = ?2 AND kind = ?3"
-        );
+        let sql = edges_to_sql(true);
         query_edges(conn, &sql, &[&project_id as &dyn rusqlite::types::ToSql, &to_node, kind])?
       } else {
-        let sql = format!(
-          "SELECT {SELECT_COLS} FROM code_edge WHERE project_id = ?1 AND to_node = ?2"
-        );
+        let sql = edges_to_sql(false);
         query_edges(conn, &sql, &[&project_id as &dyn rusqlite::types::ToSql, &to_node])?
       };
 
@@ -191,5 +208,58 @@ impl IndexStore {
             )?;
             Ok(count)
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::store::IndexStore;
+
+    fn explain_plan(conn: &rusqlite::Connection, sql: &str, node: &str) -> String {
+        let explain = format!("EXPLAIN QUERY PLAN {sql}");
+        let mut stmt = conn.prepare(&explain).unwrap();
+        stmt.query_map(params!["p", node, "calls"], |row| row.get::<_, String>(3))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
+            .join("\n")
+    }
+
+    #[test]
+    fn plus_kind_uses_node_indexes_without_analyze() {
+        let store = IndexStore::new(":memory:".into()).unwrap();
+        store
+            .with_conn(|conn| {
+                conn.execute_batch("INSERT INTO code_edge(id,project_id,kind,from_node,to_node,file) VALUES ('e1','p','calls','a','b','/a'),('e2','p','references','a','b','/a'),('e3','p','calls','a','c','/a'),('e4','p','calls','c','b','/a');")?;
+                for i in 0..40 {
+                    conn.execute("INSERT INTO code_edge(id,project_id,kind,from_node,to_node,file) VALUES (?1,'p','imports','a','d','/a')", params![format!("f{i}")])?;
+                }
+                Ok(())
+            })
+            .unwrap();
+        {
+            let guard = store.conn.lock().unwrap();
+            let conn = guard.as_ref().unwrap();
+            let stat1: i64 = conn
+                .query_row("SELECT count(*) FROM sqlite_master WHERE name='sqlite_stat1'", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(stat1, 0, "test must run without ANALYZE / sqlite_stat1");
+            let from_plan = explain_plan(conn, &edges_from_sql(true), "a");
+            assert!(from_plan.contains("code_edge_from_idx"), "edges_from plan: {from_plan}");
+            assert!(!from_plan.contains("code_edge_project_kind_idx"), "edges_from plan: {from_plan}");
+            let to_plan = explain_plan(conn, &edges_to_sql(true), "b");
+            assert!(to_plan.contains("code_edge_to_idx"), "edges_to plan: {to_plan}");
+            assert!(!to_plan.contains("code_edge_project_kind_idx"), "edges_to plan: {to_plan}");
+        }
+        let from: Vec<EdgeRow> =
+            serde_json::from_str(&store.edges_from("p".into(), "a".into(), Some("calls".into())).unwrap()).unwrap();
+        assert_eq!(from.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), vec!["e1", "e3"]);
+        let to: Vec<EdgeRow> =
+            serde_json::from_str(&store.edges_to("p".into(), "b".into(), Some("calls".into())).unwrap()).unwrap();
+        assert_eq!(to.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), vec!["e1", "e4"]);
+        let all_from: Vec<EdgeRow> =
+            serde_json::from_str(&store.edges_from("p".into(), "a".into(), None).unwrap()).unwrap();
+        assert_eq!(all_from.len(), 43);
     }
 }

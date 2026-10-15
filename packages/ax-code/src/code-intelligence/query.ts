@@ -185,7 +185,10 @@ export namespace CodeGraphQuery {
   export function edgesFrom(projectID: ProjectID, fromNode: CodeNodeID, kind?: CodeEdgeKind): EdgeRow[] {
     if (useNative) return NativeStore.edgesFrom(projectID, fromNode, kind)
     const filters = [eq(CodeEdgeTable.project_id, projectID), eq(CodeEdgeTable.from_node, fromNode)]
-    if (kind) filters.push(eq(CodeEdgeTable.kind, kind))
+    // `+kind` disables index use for kind so the planner uses the from/to
+    // index without sqlite_stat1 (see edgesTo); Drizzle renders this as
+    // `+"code_edge"."kind" = ?`, which SQLite treats as a no-op unary plus.
+    if (kind) filters.push(sql`+${CodeEdgeTable.kind} = ${kind}`)
     return Database.use((db) =>
       db
         .select()
@@ -282,7 +285,7 @@ export namespace CodeGraphQuery {
   export function edgesTo(projectID: ProjectID, toNode: CodeNodeID, kind?: CodeEdgeKind): EdgeRow[] {
     if (useNative) return NativeStore.edgesTo(projectID, toNode, kind)
     const filters = [eq(CodeEdgeTable.project_id, projectID), eq(CodeEdgeTable.to_node, toNode)]
-    if (kind) filters.push(eq(CodeEdgeTable.kind, kind))
+    if (kind) filters.push(sql`+${CodeEdgeTable.kind} = ${kind}`)
     return Database.use((db) =>
       db
         .select()
