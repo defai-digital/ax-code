@@ -413,9 +413,6 @@ importers:
       jsonc-parser:
         specifier: 3.3.1
         version: 3.3.1
-      mime-types:
-        specifier: 3.0.2
-        version: 3.0.2
       minimatch:
         specifier: 10.2.6
         version: 10.2.6
@@ -519,9 +516,6 @@ importers:
       "@types/cross-spawn":
         specifier: 6.0.6
         version: 6.0.6
-      "@types/mime-types":
-        specifier: "catalog:"
-        version: 3.0.1
       "@types/node":
         specifier: "catalog:"
         version: 24.13.2
