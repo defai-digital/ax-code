@@ -6,6 +6,20 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.26.0] - 2026-10-15
+
+### Changed
+
+- Publish SDK 2.6.22 with the Wiki visualization page, overview, and module data types.
+- Integrate the validated upstream model catalog update.
+- Include the Wiki reading workspace, expanded overview charts, and accumulated runtime and native-index improvements.
+
+### Fixed
+
+- Consume the standard Node option separator before constructing TUI preload options, preventing startup exit 9.
+- Refresh the embedded Wiki viewer bundle and isolate real mouse movement from synthetic hover checks.
+- Include the renderer missing-part recovery and quoted cache-path launcher fixes already integrated into main.
+
 ## [7.25.10] - 2026-10-15
 
 ### Changed
