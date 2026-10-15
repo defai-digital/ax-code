@@ -1,10 +1,11 @@
 import { codeIntelHost } from "./host"
+import { type ProcessChild, type ProcessOptions } from "@ax-code/util/process"
 import type { ChildProcessWithoutNullStreams } from "child_process"
 import { Process } from "./internal/process"
 import { Env } from "./internal/env"
 
-type Child = Process.Child & ChildProcessWithoutNullStreams
-type SpawnOptions = Process.Options & {
+type Child = ProcessChild & ChildProcessWithoutNullStreams
+type SpawnOptions = ProcessOptions & {
   onStderr?: (chunk: Buffer | string) => void
 }
 

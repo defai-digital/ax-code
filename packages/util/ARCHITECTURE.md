@@ -20,6 +20,7 @@
 - `leveled-log` — minimal leveled logger factory (`LeveledLog.createRuntime`) shared by `ax-code-intel` and `ax-code-reason`; each package keeps its own sink and log-level environment variable
 - `package-json` — `package.json` decoding helpers (`decodePackageJsonObject`, `parsePackageJsonObject`, `packageJsonStringMap`, `packageJsonObjectKeys`) shared by core and `ax-code-reason`
 - `json-schema` — zod coercion helpers for JSON artifacts (`JsonBoolean`, `JsonNumber`) shared by core and `ax-code-reason`
+- `process` — `createProcess(killTree)` spawn/drain/kill helpers shared by `ax-code-intel` and `ax-code-reason`; each package injects its host's process-tree killer. Core keeps its own `src/util/process.ts`, which adds `unref`/`detached` and a bounded drain grace
 - `unref-timeout` — unref'd `sleep`/`withTimeout` shared by `ax-code-intel` and `ax-code-reason`; deliberately separate from `timeout`, whose timers stay ref'd
 
 ## Allowed Dependencies

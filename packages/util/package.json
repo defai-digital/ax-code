@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "zod": "catalog:",
+    "cross-spawn": "^7.0.6",
     "fast-glob": "catalog:",
     "minimatch": "10.2.6",
     "mime-types": "3.0.2"
@@ -20,6 +21,7 @@
   "devDependencies": {
     "typescript": "catalog:",
     "@types/node": "catalog:",
+    "@types/cross-spawn": "6.0.6",
     "@types/mime-types": "catalog:",
     "vitest": "catalog:",
     "@typescript/native": "catalog:"

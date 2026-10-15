@@ -7,11 +7,12 @@ import { Archive } from "./internal/archive"
 import { Filesystem } from "./internal/filesystem"
 import { Log } from "./internal/log"
 import { Process } from "./internal/process"
+import type { ProcessRunOptions } from "@ax-code/util/process"
 import { Ssrf } from "./internal/ssrf"
 
 const log = Log.create({ service: "lsp.server" })
 
-const run = (cmd: string[], opts: Process.RunOptions = {}) => Process.run(cmd, { ...opts, nothrow: true })
+const run = (cmd: string[], opts: ProcessRunOptions = {}) => Process.run(cmd, { ...opts, nothrow: true })
 
 const ZLS = [
   "zls-x86_64-linux.tar.xz",

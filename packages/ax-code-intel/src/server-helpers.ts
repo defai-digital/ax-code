@@ -4,6 +4,7 @@ import path from "path"
 import fs from "fs/promises"
 import { Filesystem } from "./internal/filesystem"
 import { Process } from "./internal/process"
+import type { ProcessRunOptions } from "@ax-code/util/process"
 import { Log } from "./internal/log"
 import { Env } from "./internal/env"
 import { which } from "./internal/which"
@@ -23,8 +24,8 @@ export const pathExists = async (p: string) =>
       throw error
     })
 
-export const run = (cmd: string[], opts: Process.RunOptions = {}) => Process.run(cmd, { ...opts, nothrow: true })
-export const output = (cmd: string[], opts: Process.RunOptions = {}) => Process.text(cmd, { ...opts, nothrow: true })
+export const run = (cmd: string[], opts: ProcessRunOptions = {}) => Process.run(cmd, { ...opts, nothrow: true })
+export const output = (cmd: string[], opts: ProcessRunOptions = {}) => Process.text(cmd, { ...opts, nothrow: true })
 
 const bunEnv = () => ({
   ...Env.sanitize(),
