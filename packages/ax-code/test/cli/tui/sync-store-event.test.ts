@@ -631,15 +631,28 @@ describe("tui sync store event", () => {
     dispatch(elided(10, "Hello, WOR"))
     expect(resync).toHaveBeenCalledTimes(2)
 
-    // A part this renderer never admitted is not drift.
+    // A part whose message the transcript does not hold was refused by
+    // retention: a refetch cannot restore it, so it is not drift.
     dispatch({
       type: "message.part.updated",
       properties: {
-        part: { id: "part_9", messageID: "msg_1", sessionID: "ses_1", type: "text", time: { start: 1 } },
+        part: { id: "part_9", messageID: "msg_9", sessionID: "ses_1", type: "text", time: { start: 1 } },
         elided: { end: 3, tail: "abc" },
       },
     })
     expect(resync).toHaveBeenCalledTimes(2)
+    // The transcript still holds msg_1 but not part_2: the renderer lost it,
+    // so the elided snapshot re-inserts it text-less and every later delta is
+    // skipped as a gap. That is drift.
+    dispatch({
+      type: "message.part.updated",
+      properties: {
+        part: { id: "part_2", messageID: "msg_1", sessionID: "ses_1", type: "text", time: { start: 1 } },
+        elided: { end: 3, tail: "abc" },
+      },
+    })
+    expect(resync).toHaveBeenCalledTimes(3)
+    expect(store.part.msg_1?.find((entry) => entry.id === "part_2")?.text).toBeUndefined()
     // A snapshot without `elided` is an ordinary full snapshot.
     dispatch({
       type: "message.part.updated",
@@ -655,7 +668,60 @@ describe("tui sync store event", () => {
       },
     })
     expect(store.part.msg_1?.[0]?.text).toBe("Hello, world!")
-    expect(resync).toHaveBeenCalledTimes(2)
+    expect(resync).toHaveBeenCalledTimes(3)
+  })
+
+  test("deltas cannot heal a part an elided snapshot re-inserted without text", () => {
+    const [store, setStore] = createTestStore()
+    setStore({
+      message: { ses_1: [{ id: "msg_1", sessionID: "ses_1" }] },
+      part: {},
+    })
+    const resync = vi.fn()
+    const dispatch = (event: unknown) =>
+      dispatchStoreBackedSyncEvent<
+        Session,
+        Todo,
+        Diff,
+        Status,
+        Message,
+        Part,
+        SyncEventStoreState<Session, Todo, Diff, Status, Message, Part>
+      >({
+        event: event as never,
+        autonomous: false,
+        setStore,
+        clearSessionSyncState: () => undefined,
+        replyPermission: () => undefined,
+        replyQuestion: () => undefined,
+        syncMcpStatus: () => undefined,
+        syncLspStatus: () => undefined,
+        syncDebugEngine: () => undefined,
+        bootstrap: () => undefined,
+        resyncSession: resync,
+        onWarn: () => undefined,
+        maxSessionMessages: 10,
+      })
+
+    // msg_1 is in the transcript while the renderer holds no part for it: the
+    // state a session snapshot that raced the stream leaves behind.
+    dispatch({
+      type: "message.part.updated",
+      properties: {
+        part: { id: "part_1", messageID: "msg_1", sessionID: "ses_1", type: "text", time: { start: 1 } },
+        elided: { end: 3, tail: "abc" },
+      },
+    })
+    expect(resync).toHaveBeenCalledTimes(1)
+    expect(resync.mock.calls[0]?.[1]).toContain("missing the 3-char prefix")
+    // The re-inserted part has no text, and the delta that would extend it is
+    // skipped because its offset is past the empty accumulated text.
+    expect(store.part.msg_1?.[0]?.text).toBeUndefined()
+    dispatch({
+      type: "message.part.delta",
+      properties: { messageID: "msg_1", partID: "part_1", field: "text", delta: "abc def", offset: 3 },
+    })
+    expect(store.part.msg_1?.[0]?.text).toBeUndefined()
   })
 
   test("applies runtime branch updates through the same store-backed dispatcher", () => {

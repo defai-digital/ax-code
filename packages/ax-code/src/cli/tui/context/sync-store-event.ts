@@ -128,11 +128,16 @@ export interface DispatchStoreBackedSyncEventInput<
 /**
  * Compare an elided `message.part.updated` against the part this renderer
  * holds. Returns a reason when the renderer's text is not at least the prefix
- * the worker assumed. A part the renderer never admitted (budget, cap) is not
- * drift: the terminal snapshot still arrives in full.
+ * the worker assumed. A part whose message is not in the transcript was
+ * refused by retention (budget, cap), and a refetch could not restore it
+ * either, so that is not drift; a part with no text whose message the
+ * transcript does hold is.
  */
 function elidedPartDrift(
-  parts: Record<string, Array<{ id: string; text?: unknown }>>,
+  state: {
+    message: Record<string, Array<{ id: string }>>
+    part: Record<string, Array<{ id: string; text?: unknown }>>
+  },
   event: { type?: string; properties?: unknown },
 ): { sessionID: string; reason: string } | undefined {
   if (event.type !== "message.part.updated") return undefined
@@ -144,14 +149,27 @@ function elidedPartDrift(
   if (!elided || typeof elided.end !== "number" || typeof elided.tail !== "string") return undefined
   const part = properties.part
   if (!part || typeof part.id !== "string" || typeof part.messageID !== "string") return undefined
-  const existing = parts[part.messageID]?.find((entry) => entry.id === part.id)
-  if (!existing || typeof existing.text !== "string") return undefined
-  const text = existing.text
+  const sessionID = typeof part.sessionID === "string" ? part.sessionID : ""
+  const existing = state.part[part.messageID]?.find((entry) => entry.id === part.id)
+  const text = typeof existing?.text === "string" ? existing.text : undefined
+  if (text === undefined) {
+    // Nothing to compare. While the transcript holds the message, the absence
+    // of this part means the renderer lost it (a session snapshot replaced the
+    // parts list mid-stream, or an eviction dropped it). The elided snapshot
+    // then re-inserts the part with no text, and every later delta is skipped
+    // as a gap, so it stays blank until the terminal snapshot — refetch
+    // instead. A message the transcript does not hold was refused by retention,
+    // which a refetch cannot change.
+    if (elided.end <= 0) return undefined
+    const held = Object.values(state.message).some((list) => list.some((entry) => entry.id === part.messageID))
+    if (!held) return undefined
+    return { sessionID, reason: `part ${part.id} is missing the ${elided.end}-char prefix the stream assumed` }
+  }
   const ok =
     text.length >= elided.end && text.slice(Math.max(0, elided.end - elided.tail.length), elided.end) === elided.tail
   if (ok) return undefined
   return {
-    sessionID: typeof part.sessionID === "string" ? part.sessionID : "",
+    sessionID,
     reason: `part ${part.id} holds ${text.length} chars, the stream assumed a ${elided.end}-char prefix`,
   }
 }
@@ -268,7 +286,7 @@ function dispatchHeadlessProjectionEvent<
       }
       setStore(
         produce((draft) => {
-          drift = elidedPartDrift(draft.part, input.event)
+          drift = elidedPartDrift(draft, input.event)
           const messageSessionID =
             input.event.type === "message.updated" ? input.event.properties.info.sessionID : undefined
           effects = applyHeadlessProjectionEvent(draft, input.event, {
