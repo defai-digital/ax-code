@@ -104,12 +104,15 @@ export namespace Filesystem {
     try {
       await fs.mkdir(dir, { recursive: true })
       await fs.writeFile(tmp, content, writeOptions)
+      // Creation modes are filtered by umask; set the exact mode before publication.
+      if (resolvedMode !== undefined) await fs.chmod(tmp, resolvedMode)
       await fs.rename(tmp, p)
     } catch (error) {
       if (isEnoent(error)) {
         try {
           await fs.mkdir(dir, { recursive: true })
           await fs.writeFile(tmp, content, writeOptions)
+          if (resolvedMode !== undefined) await fs.chmod(tmp, resolvedMode)
           await fs.rename(tmp, p)
         } catch (retryError) {
           await fs.unlink(tmp).catch(() => {})
@@ -133,16 +136,21 @@ export namespace Filesystem {
   ): Promise<void> {
     const dir = dirname(p)
     const tmp = join(dir, `.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`)
+    const resolvedMode =
+      mode ??
+      (await fs
+        .stat(p)
+        .then((s) => s.mode & 0o777)
+        .catch(() => undefined))
     await fs.mkdir(dir, { recursive: true })
 
     const nodeStream = stream instanceof ReadableStream ? Readable.fromWeb(stream as any) : stream
     try {
-      // `createWriteStream(tmp, { mode })` opens the file with the requested
-      // mode at creation, so the previous follow-up `fs.chmod(tmp, mode)`
-      // was redundant and added a window between stream-close and rename
-      // where the tmp file existed without the rename being staged. Drop it.
-      const writeStream = createWriteStream(tmp, mode ? { mode } : undefined)
+      const writeStream = createWriteStream(tmp, resolvedMode !== undefined ? { mode: resolvedMode } : undefined)
       await pipeline(nodeStream, writeStream)
+      // Preserve inherited permissions and explicit zero modes, including bits
+      // masked off while creating the temporary file under a restrictive umask.
+      if (resolvedMode !== undefined) await fs.chmod(tmp, resolvedMode)
       await fs.rename(tmp, p)
     } catch (error) {
       await fs.unlink(tmp).catch(() => {})
