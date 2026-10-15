@@ -146,3 +146,84 @@ test("keeps the deadline timer referenced so an awaited run cannot be silently d
     globalThis.setTimeout = originalSetTimeout
   }
 })
+
+test.each([false, true])("rejects a completion after a blocked deadline (drain=%s)", async (drainOnAbort) => {
+  const queue = new WorkQueue(1, { timeoutMs: 5, drainOnAbort })
+  let received!: AbortSignal
+  const pending = queue.run(async (signal) => {
+    received = signal
+    const until = performance.now() + 20
+    while (performance.now() < until) {}
+    return "late"
+  })
+  await expect(pending).rejects.toMatchObject({ name: "TimeoutError" })
+  expect(received.aborted).toBe(true)
+  expect(await queue.run(async () => "next")).toBe("next")
+})
+
+test("does not start queued work whose deadline elapsed before timers could run", async () => {
+  const queue = new WorkQueue(1, { timeoutMs: 5 })
+  const gate = deferred()
+  const first = queue
+    .run(() => gate.promise)
+    .then(
+      () => "success",
+      (error: Error) => error.name,
+    )
+  const callback = vi.fn(async () => "queued")
+  const second = queue.run(callback).then(
+    () => "success",
+    (error: Error) => error.name,
+  )
+  gate.resolve()
+  const until = performance.now() + 20
+  while (performance.now() < until) {}
+  expect(await Promise.all([first, second])).toEqual(["TimeoutError", "TimeoutError"])
+  expect(callback).not.toHaveBeenCalled()
+})
+
+test("large deadlines do not overflow into an immediate timeout", async () => {
+  vi.useFakeTimers()
+  const queue = new WorkQueue(1, { timeoutMs: 2_147_483_647 + 1000 })
+  const gate = deferred()
+  let state = "pending"
+  const running = queue
+    .run(() => gate.promise)
+    .then(
+      () => {
+        state = "completed"
+      },
+      () => {
+        state = "timed out"
+      },
+    )
+  await vi.advanceTimersByTimeAsync(2_147_483_647)
+  expect(state).toBe("pending")
+  gate.resolve()
+  await running
+  expect(state).toBe("completed")
+})
+
+test("classifies a blocked rejection as a deadline failure", async () => {
+  const queue = new WorkQueue(1, { timeoutMs: 5 })
+  await expect(
+    queue.run(async () => {
+      const until = performance.now() + 20
+      while (performance.now() < until) {}
+      throw new Error("late failure")
+    }),
+  ).rejects.toMatchObject({ name: "TimeoutError" })
+})
+
+test("draining preserves cleanup errors after an explicit parent abort", async () => {
+  const queue = new WorkQueue(1, { drainOnAbort: true })
+  const gate = deferred()
+  const controller = new AbortController()
+  const pending = queue.run(async () => {
+    await gate.promise
+    throw new Error("cleanup failed")
+  }, controller.signal)
+  controller.abort(new Error("user cancelled"))
+  gate.resolve()
+  await expect(pending).rejects.toThrow("cleanup failed")
+})

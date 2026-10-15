@@ -38,15 +38,24 @@ export class WorkQueue {
     const controller = new AbortController()
     const abort = () => controller.abort(signal?.reason)
     signal?.addEventListener("abort", abort, { once: true })
-    const timer = setTimeout(
-      () => controller.abort(new DOMException("Work deadline exceeded", "TimeoutError")),
-      this.timeoutMs,
-    )
+    const deadline = performance.now() + this.timeoutMs
+    const workSignal = controller.signal
+    const expire = () => {
+      if (workSignal.aborted || performance.now() < deadline) return false
+      controller.abort(new DOMException("Work deadline exceeded", "TimeoutError"))
+      return true
+    }
+    const onDeadline = () => {
+      if (expire() || workSignal.aborted) return
+      timer = setTimeout(onDeadline, Math.min(deadline - performance.now(), 2_147_483_647))
+    }
+    // Node replaces delays above its signed 32-bit limit with 1 ms. Re-arm
+    // long deadlines in bounded pieces instead of timing out immediately.
+    let timer = setTimeout(onDeadline, Math.min(this.timeoutMs, 2_147_483_647))
     // Keep the timer ref'd: it is the only thing that settles `cancelled` when
     // a queued run cannot acquire a slot (or stalls with no OS handles). An
     // unref'd timer lets a short-lived process exit 13 silently instead of
     // rejecting with the timeout.
-    const workSignal = controller.signal
     let rejectAbort!: () => void
     const cancelled = new Promise<never>((_, reject) => {
       rejectAbort = () => reject(workSignal.reason)
@@ -78,10 +87,15 @@ export class WorkQueue {
           this.active++
           acquired = true
         }
+        expire()
         workSignal.throwIfAborted()
         const result = await fn(workSignal)
+        expire()
         workSignal.throwIfAborted()
         return result
+      } catch (error) {
+        if (expire()) throw workSignal.reason
+        throw error
       } finally {
         if (acquired) {
           const next = this.waiters.shift()
