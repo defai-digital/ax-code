@@ -26,8 +26,15 @@ import { toErrorMessage } from "./error-message"
 function drain(stream: Readable): Promise<Buffer> {
   return new Promise((resolve) => {
     const chunks: Buffer[] = []
-    stream.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)))
-    const finish = () => resolve(Buffer.concat(chunks))
+    const onData = (chunk: Buffer | string) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+    const finish = () => {
+      stream.off("data", onData)
+      stream.off("end", finish)
+      stream.off("close", finish)
+      stream.off("error", finish)
+      resolve(Buffer.concat(chunks))
+    }
+    stream.on("data", onData)
     stream.once("end", finish)
     stream.once("close", finish)
     stream.once("error", finish)
