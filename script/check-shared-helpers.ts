@@ -63,6 +63,11 @@ const CONSOLIDATED: Consolidated[] = [
     ],
   },
   {
+    slug: "filesystem",
+    symbols: ["Filesystem"],
+    shims: ["packages/ax-code/src/util/filesystem.ts", "packages/ax-code-intel/src/internal/filesystem.ts"],
+  },
+  {
     slug: "unref-timeout",
     symbols: ["sleep", "withTimeout"],
     // ax-code-reason dropped its shim once its last call site went away;

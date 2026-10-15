@@ -247,7 +247,7 @@ test("the store is replaced atomically: a reader never observes a partial file",
   expect(store).toContain("await Filesystem.writeJson(filepath, next, 0o600)")
   expect(store).toContain("await Filesystem.writeJson(filepath, store, 0o600)")
   expect(store).not.toMatch(/fs\.writeFile\(filepath/)
-  const filesystem = await fs.readFile(path.resolve(import.meta.dirname, "../../src/util/filesystem.ts"), "utf8")
+  const filesystem = await fs.readFile(path.resolve(import.meta.dirname, "../../../util/src/filesystem.ts"), "utf8")
   const write = filesystem.slice(
     filesystem.indexOf("export async function write("),
     filesystem.indexOf("export async function writeJson("),

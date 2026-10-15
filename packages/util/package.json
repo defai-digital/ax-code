@@ -14,11 +14,13 @@
   "dependencies": {
     "zod": "catalog:",
     "fast-glob": "catalog:",
-    "minimatch": "10.2.6"
+    "minimatch": "10.2.6",
+    "mime-types": "3.0.2"
   },
   "devDependencies": {
     "typescript": "catalog:",
     "@types/node": "catalog:",
+    "@types/mime-types": "catalog:",
     "vitest": "catalog:",
     "@typescript/native": "catalog:"
   }
