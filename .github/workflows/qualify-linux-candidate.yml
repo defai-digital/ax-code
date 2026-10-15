@@ -1,0 +1,97 @@
+name: Qualify frozen Linux candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: Full frozen source commit SHA
+        required: true
+        type: string
+      version:
+        description: CLI version
+        required: true
+        type: string
+      source_sha256:
+        description: SHA-256 of git archive tar.gz for candidate
+        required: true
+        type: string
+      mode:
+        description: Build candidate or qualify the published installation
+        required: true
+        type: choice
+        options: [build, install]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-candidate-${{ inputs.candidate }}-${{ inputs.mode }}
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CANDIDATE: ${{ inputs.candidate }}
+      VERSION: ${{ inputs.version }}
+      SOURCE_SHA256: ${{ inputs.source_sha256 }}
+      MODE: ${{ inputs.mode }}
+    steps:
+      - name: Validate immutable inputs
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$SOURCE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$MODE" == build || "$MODE" == install ]]
+          [[ "$(uname -m)" == x86_64 ]]
+      - uses: actions/checkout@v7
+        with:
+          path: control
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.candidate }}
+          path: candidate
+          persist-credentials: false
+      - name: Verify frozen source and prepare isolated workspace
+        run: |
+          set -euo pipefail
+          [[ "$(git -C candidate rev-parse HEAD)" == "$CANDIDATE" ]]
+          python3 - <<'PYTHON'
+          import json, os
+          with open('candidate/packages/ax-code/package.json') as file:
+              assert json.load(file)['version'] == os.environ['VERSION']
+          PYTHON
+          mkdir -p "$RUNNER_TEMP/linux-work" "$RUNNER_TEMP/linux-cache"
+          git -C candidate archive --format=tar.gz "$CANDIDATE" > "$RUNNER_TEMP/linux-work/source.tar.gz"
+          printf '%s  %s\n' "$SOURCE_SHA256" "$RUNNER_TEMP/linux-work/source.tar.gz" | sha256sum -c -
+      - name: Build and qualify native Linux x64 in Ubuntu 24.04
+        if: inputs.mode == 'build'
+        run: |
+          docker run --rm --platform linux/amd64 \
+            -e CANDIDATE -e VERSION -e SOURCE_SHA256 \
+            -v "$RUNNER_TEMP/linux-work:/work" -v "$RUNNER_TEMP/linux-cache:/cache" \
+            -v "$GITHUB_WORKSPACE/control/.github/scripts:/qualification:ro" \
+            ubuntu:24.04 bash /qualification/build-linux-candidate.sh
+          sudo cp "$RUNNER_TEMP/linux-work/source/packages/ax-code/dist/ax-code-linux-x64.tar.gz" "$RUNNER_TEMP/linux-work/"
+      - name: Qualify public signed installation on a fresh native runner
+        if: inputs.mode == 'install'
+        run: |
+          bash control/.github/scripts/qualify-public-unix.sh "$VERSION" linux-x64 "$RUNNER_TEMP/linux-work/install-smoke" "$GITHUB_WORKSPACE/candidate"
+          cp "$RUNNER_TEMP/linux-work/install-smoke/install-linux-x64.json" "$RUNNER_TEMP/linux-work/"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-x64-${{ inputs.mode }}-${{ inputs.candidate }}
+          path: |
+            ${{ runner.temp }}/linux-work/ax-code-linux-x64.tar.gz
+            ${{ runner.temp }}/linux-work/*qualification.json
+            ${{ runner.temp }}/linux-work/install-linux-x64.json
+            ${{ runner.temp }}/linux-work/doctor.txt
+            ${{ runner.temp }}/linux-work/backend.txt
+            ${{ runner.temp }}/linux-work/pty.json
+            ${{ runner.temp }}/linux-work/typescript-native.json
+            ${{ runner.temp }}/linux-work/build-receipt.txt
+          if-no-files-found: error
+          retention-days: 7
