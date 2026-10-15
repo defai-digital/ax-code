@@ -171,3 +171,19 @@ test("does not publish success after execute blocks past its deadline", async ()
   expect(result?.error).toBe("timeout: member exceeded 1ms")
   expect(result?.result).toBeUndefined()
 })
+
+test("classifies a synchronous failure beyond the deadline as a timeout", async () => {
+  const [result] = await FanOut.run({
+    members: [1],
+    timeoutMs: 1,
+    abort: new AbortController().signal,
+    execute: async () => {
+      const until = performance.now() + 20
+      while (performance.now() < until) {
+        // The error is delivered before the overdue timer can run.
+      }
+      throw new Error("late SDK error")
+    },
+  })
+  expect(result?.error).toBe("timeout: member exceeded 1ms")
+})

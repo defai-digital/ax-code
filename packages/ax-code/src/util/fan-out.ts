@@ -157,6 +157,12 @@ export namespace FanOut {
       }
       return { result, durationMs: Date.now() - started }
     } catch (err) {
+      // A blocking callback can reject before the timer gets a turn as well.
+      // Preserve an existing parent abort, but classify overdue errors as timeouts.
+      if (!localAbort.signal.aborted && performance.now() >= deadline) {
+        timedOut = true
+        localAbort.abort()
+      }
       const message = describeError(err)
       const durationMs = Date.now() - started
       // A timer-fired abort and a parent-signal abort surface identically
