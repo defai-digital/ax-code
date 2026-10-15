@@ -45,8 +45,6 @@
     "@ax-code/util": "workspace:*",
     "cross-spawn": "^7.0.6",
     "drizzle-orm": "catalog:",
-    "fast-glob": "catalog:",
-    "minimatch": "10.2.6",
     "zod": "catalog:"
   },
   "devDependencies": {
