@@ -58,10 +58,17 @@ async function patchGeneratedSseClient(outputPath: string) {
     [
       /        const reader = response\.body\.pipeThrough\(new TextDecoderStream\(\)\)\.getReader\(\)\n\n        let buffer = ""/,
       `        const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
-        attempt = 0
 
         let buffer = ""
         let completed = false`,
+    ],
+    [
+      /              if \(dataLines.length\) \{\n                yield data as any/,
+      `              if (dataLines.length) {
+                // A successful HTTP response can still be an empty failing stream.
+                // Reset consecutive retries only after a data event is delivered.
+                attempt = 0
+                yield data as any`,
     ],
     [
       /            const \{ done, value \} = await reader\.read\(\)\n            if \(done\) break/,
@@ -217,6 +224,10 @@ async function patchGeneratedSseClient(outputPath: string) {
   )
   if (next === source) throw new Error(`Generated SSE framing changed shape: ${file}`)
   source = next
+    .replace(
+      "Maximum number of retry attempts before giving up.",
+      "Maximum consecutive retries without a delivered data event before giving up.",
+    )
     .replace('        let buffer = ""', "        const parser = new SseParser(sseMaxEventCharacters)")
     .replace("  const sleep = sseSleepFn ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)))", "")
     .replace("  sseIdleTimeout,", "  sseIdleTimeout,\n  sseMaxEventCharacters,")

@@ -8,7 +8,7 @@ const clients = [
 ] as const
 
 describe.each(clients)("generated SSE client %s", (_name, createSseClient) => {
-  test("resets retry attempts after a connection succeeds", async () => {
+  test("backs off consecutive failures after an unsuccessful stream", async () => {
     let fetchCalls = 0
     const sleepDelays: number[] = []
 
@@ -45,6 +45,78 @@ describe.each(clients)("generated SSE client %s", (_name, createSseClient) => {
     // First failure after the reset gets the base delay (10); the second
     // consecutive failure (no success in between) doubles it (20).
     expect(sleepDelays).toEqual([10, 20])
+  })
+
+  test.each(["", ": keepalive\n\nid: metadata-only\n\n"])(
+    "bounds consecutive connections without a data event (%j)",
+    async (body) => {
+      const abort = new AbortController()
+      let calls = 0
+      const delays: number[] = []
+      const { stream } = createSseClient({
+        signal: abort.signal,
+        fetch: async () => {
+          calls++
+          // Bound the failing-before case so this regression cannot loop forever.
+          if (calls > 5) abort.abort()
+          return new Response(body)
+        },
+        sseIdleTimeout: 0,
+        sseMaxRetryAttempts: 2,
+        sseDefaultRetryDelay: 10,
+        sseSleepFn: async (delay) => {
+          delays.push(delay)
+        },
+        url: "http://localhost/events",
+      })
+      for await (const _event of stream) throw new Error("unexpected data event")
+      expect(calls).toBe(3)
+      expect(delays).toEqual([10, 20])
+    },
+  )
+
+  test("idle HTTP 200 responses also exhaust the retry budget", async () => {
+    const abort = new AbortController()
+    let calls = 0
+    const { stream } = createSseClient({
+      signal: abort.signal,
+      fetch: async () => {
+        if (++calls > 5) {
+          abort.abort()
+          return new Response("")
+        }
+        return new Response(new ReadableStream())
+      },
+      sseIdleTimeout: 5,
+      sseMaxRetryAttempts: 2,
+      sseSleepFn: async () => {},
+      url: "http://localhost/events",
+    })
+    for await (const _event of stream) throw new Error("unexpected data event")
+    expect(calls).toBe(3)
+  })
+
+  test("a delivered data event resets consecutive retries", async () => {
+    let calls = 0
+    const delays: number[] = []
+    const events: unknown[] = []
+    const { stream } = createSseClient({
+      fetch: async () => {
+        if (++calls === 2) return new Response('data: {"ok":true}\n\n')
+        throw new Error("connect failed")
+      },
+      sseIdleTimeout: 0,
+      sseMaxRetryAttempts: 1,
+      sseDefaultRetryDelay: 10,
+      sseSleepFn: async (delay) => {
+        delays.push(delay)
+      },
+      url: "http://localhost/events",
+    })
+    for await (const event of stream) events.push(event)
+    expect(events).toEqual([{ ok: true }])
+    expect(calls).toBe(3)
+    expect(delays).toEqual([10, 10])
   })
 
   test("cancels the response body when the consumer stops early", async () => {

@@ -53,7 +53,7 @@ export type ServerSentEventsOptions<TData = unknown> = Omit<RequestInit, "method
     /** Maximum buffered UTF-16 units per event, including fields and separators. Default: 16777216. */
     sseMaxEventCharacters?: number
     /**
-     * Maximum number of retry attempts before giving up.
+     * Maximum consecutive retries without a delivered data event before giving up.
      */
     sseMaxRetryAttempts?: number
     /**
@@ -163,7 +163,6 @@ export function createSseClient<TData = unknown>({
         if (!response.body) throw new Error("No body in SSE response")
 
         const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
-        attempt = 0
 
         const parser = new SseParser(sseMaxEventCharacters)
         let completed = false
@@ -223,6 +222,9 @@ export function createSseClient<TData = unknown>({
               })
 
               if (dataLines.length) {
+                // A successful HTTP response can still be an empty failing stream.
+                // Reset consecutive retries only after a data event is delivered.
+                attempt = 0
                 yield data as any
               }
             }
