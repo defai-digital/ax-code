@@ -1061,9 +1061,15 @@ export type DesktopWebMcpBoundRequest = {
   origin: string
   frameId: string
   requestID: string
-  operation: "list" | "invoke"
+  operation: "list" | "invoke" | "read" | "act" | "wait"
   deadline: number
   toolName?: string
+  readId?: string
+  ref?: string
+  how?: "click" | "type" | "select"
+  text?: string
+  waitText?: string
+  timeoutMs?: number
   digest?: string
   input?: {
     [key: string]: unknown

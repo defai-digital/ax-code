@@ -39559,7 +39559,10 @@
             "type": "string",
             "enum": [
               "list",
-              "invoke"
+              "invoke",
+              "read",
+              "act",
+              "wait"
             ]
           },
           "deadline": {
@@ -39570,6 +39573,37 @@
           "toolName": {
             "type": "string",
             "maxLength": 256
+          },
+          "readId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "ref": {
+            "type": "string",
+            "pattern": "^e[1-9][0-9]{0,3}$"
+          },
+          "how": {
+            "type": "string",
+            "enum": [
+              "click",
+              "type",
+              "select"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "waitText": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 10000
           },
           "digest": {
             "type": "string",

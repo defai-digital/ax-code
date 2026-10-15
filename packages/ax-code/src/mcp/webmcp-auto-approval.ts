@@ -87,7 +87,7 @@ export namespace WebMcpAutoApproval {
     metadata: Record<string, unknown>,
     admission: Admission,
     valid: () => Promise<boolean>,
-    operation: "list" | "invoke" | "navigate",
+    operation: "list" | "invoke" | "navigate" | "read" | "wait",
   ) {
     bindings.delete(metadata)
     if (metadata.requireInteractive === true || metadata.originGrant === true) return
@@ -97,7 +97,8 @@ export namespace WebMcpAutoApproval {
       tier: "desktop",
       // Opening a page the agent chose has effects comparable to invoking one of
       // its tools, so it needs the same full-access admission as an invocation.
-      fullAccessOnly: operation !== "list",
+      // Reading and waiting only observe the granted page, like listing. Acting is never bound at all.
+      fullAccessOnly: operation !== "list" && operation !== "read" && operation !== "wait",
       valid,
     })
   }

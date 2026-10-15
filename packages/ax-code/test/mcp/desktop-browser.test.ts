@@ -651,3 +651,215 @@ describe("desktop WebMCP failure messages", () => {
     })
   })
 })
+
+describe("desktop WebMCP page interaction", () => {
+  const ctxFor = (sessionID: Session.Info["id"], asked: Permission.Request[], reply: "once" | "reject" = "once") => {
+    const stop = Bus.subscribe(Permission.Event.Asked, (event) => {
+      asked.push(event.properties)
+      void Permission.reply({ requestID: event.properties.id, reply })
+    })
+    const ctx: Tool.Context = {
+      sessionID,
+      messageID: MessageID.ascending(),
+      agent: "build",
+      abort: new AbortController().signal,
+      messages: [],
+      metadata: () => {},
+      ask: (input) => Permission.ask({ ...input, sessionID, ruleset: [] }),
+    }
+    return { ctx, stop }
+  }
+  const outline = [
+    { ref: "e1", kind: "link", name: "Flights", href: "https://example.com/flights" },
+    { ref: "e2", kind: "text", name: "From" },
+    { ref: "e3", kind: "password", name: "Pass" },
+    { ref: "e4", kind: "button", name: "Search", submit: true },
+    { ref: "e5", kind: "select", name: "Cabin", options: ["Economy", "Business"] },
+  ]
+  const answerRead = async (connection: { providerID: string }, state: DesktopBrowser.Snapshot, ctx: Tool.Context) => {
+    const batch = await DesktopBrowser.poll(connection.providerID, ctx.abort)
+    expect(batch.request?.operation).toBe("read")
+    const readId = randomUUID()
+    DesktopBrowser.respond(connection.providerID, {
+      requestID: batch.request!.requestID,
+      generation: state.generation,
+      status: "Completed",
+      output: { readId, title: "Fares", text: "Toronto to Tokyo", outline },
+    })
+    return readId
+  }
+
+  test("reads a page, then acts on its references; every act asks even in full-access Auto", async () => {
+    vi.stubEnv("AX_CODE_AUTONOMOUS", "1")
+    vi.stubEnv("AX_CODE_ISOLATION_MODE", "full-access")
+    await fixture(async (session, state) => {
+      const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: state })
+      const tool = await DesktopWebMcpTool.init()
+      const asked: Permission.Request[] = []
+      const { ctx, stop } = ctxFor(session.id, asked)
+      try {
+        const reading = tool.execute({ action: "read" }, ctx)
+        const readId = await answerRead(connection, state, ctx)
+        const read = JSON.parse((await reading).output)
+        expect(read).toMatchObject({ untrusted: true, result: { readId, text: "Toronto to Tokyo" } })
+
+        const typing = tool.execute({ action: "act", readId, ref: "e2", how: "type", text: "Toronto" }, ctx)
+        const typed = await DesktopBrowser.poll(connection.providerID, ctx.abort)
+        expect(typed.request).toMatchObject({ operation: "act", readId, ref: "e2", how: "type", text: "Toronto" })
+        DesktopBrowser.respond(connection.providerID, {
+          requestID: typed.request!.requestID,
+          generation: state.generation,
+          status: "Completed",
+          output: { done: true, how: "type", navigated: false },
+        })
+        expect(JSON.parse((await typing).output).result).toMatchObject({ done: true, navigated: false, originChanged: false })
+
+        // Reading was admitted live; the action was the only prompt, and it names the element.
+        expect(asked).toHaveLength(1)
+        expect(asked[0]!.metadata).toMatchObject({
+          operation: "act",
+          how: "type",
+          text: "Toronto",
+          element: { ref: "e2", name: "From" },
+        })
+      } finally {
+        stop()
+        DesktopBrowser.disconnect(connection.providerID)
+      }
+    })
+  })
+
+  test("a click that navigates keeps the pending action and reports an origin change without content", async () => {
+    await fixture(async (session, state) => {
+      const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: state })
+      const tool = await DesktopWebMcpTool.init()
+      const { ctx, stop } = ctxFor(session.id, [])
+      try {
+        const reading = tool.execute({ action: "read" }, ctx)
+        const readId = await answerRead(connection, state, ctx)
+        await reading
+        const clicking = tool.execute({ action: "act", readId, ref: "e4", how: "click" }, ctx)
+        const click = await DesktopBrowser.poll(connection.providerID, ctx.abort)
+        const landed = { ...snapshot(), origin: "https://pay.example.net", tools: [] }
+        DesktopBrowser.update(connection.providerID, landed)
+        DesktopBrowser.respond(connection.providerID, {
+          requestID: click.request!.requestID,
+          generation: landed.generation,
+          status: "Completed",
+          snapshot: landed,
+          output: { done: true, how: "click", navigated: true },
+        })
+        const result = JSON.parse((await clicking).output).result
+        expect(result).toEqual({ done: true, how: "click", navigated: true, originChanged: true })
+        // The new document retired every reference from the old read.
+        const binding = DesktopBrowser.forSession(session.id)
+        expect(() => DesktopBrowser.describeRef(binding, readId, "e4")).toThrow()
+      } finally {
+        stop()
+        DesktopBrowser.disconnect(connection.providerID)
+      }
+    })
+  })
+
+  test("refuses stale references, passwords, credential text and unknown elements before asking", async () => {
+    await fixture(async (session, state) => {
+      const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: state })
+      const tool = await DesktopWebMcpTool.init()
+      const asked: Permission.Request[] = []
+      const { ctx, stop } = ctxFor(session.id, asked)
+      try {
+        const reading = tool.execute({ action: "read" }, ctx)
+        const readId = await answerRead(connection, state, ctx)
+        await reading
+        const act = (extra: Record<string, unknown>) =>
+          tool.execute({ action: "act", readId, how: "click", ...extra } as never, ctx)
+        await expect(act({ ref: "e3", how: "type", text: "x" })).rejects.toThrow("credentials manually")
+        await expect(act({ ref: "e2", how: "type", text: "ghp_abcdefghijklmnopqrstuvwxyz0123" })).rejects.toThrow()
+        await expect(act({ ref: "e9" })).rejects.toThrow("no element e9")
+        await expect(act({ ref: "e2", how: "select", text: "x" })).rejects.toThrow("not a selector")
+        await expect(act({ readId: randomUUID(), ref: "e1" })).rejects.toThrow("stale")
+        expect(asked).toHaveLength(0)
+      } finally {
+        stop()
+        DesktopBrowser.disconnect(connection.providerID)
+      }
+    })
+  })
+
+  test("denying an action never dispatches it", async () => {
+    await fixture(async (session, state) => {
+      const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: state })
+      const tool = await DesktopWebMcpTool.init()
+      const { ctx, stop } = ctxFor(session.id, [])
+      try {
+        const reading = tool.execute({ action: "read" }, ctx)
+        const readId = await answerRead(connection, state, ctx)
+        await reading
+        const { ctx: denying, stop: stopDenying } = ctxFor(session.id, [], "reject")
+        stop()
+        try {
+          await expect(tool.execute({ action: "act", readId, ref: "e1", how: "click" }, denying)).rejects.toThrow()
+        } finally {
+          stopDenying()
+        }
+        // A queued request would be handed out at once; an empty queue only ends when the signal aborts.
+        await expect(DesktopBrowser.poll(connection.providerID, AbortSignal.timeout(100))).rejects.toThrow(
+          "Provider stream closed",
+        )
+      } finally {
+        DesktopBrowser.disconnect(connection.providerID)
+      }
+    })
+  })
+
+  test("rejects a page read that is malformed or carries credential-like content", async () => {
+    await fixture(async (session, state) => {
+      const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: state })
+      const tool = await DesktopWebMcpTool.init()
+      const { ctx, stop } = ctxFor(session.id, [])
+      try {
+        for (const output of [
+          { readId: randomUUID(), title: "", text: "", outline: [], extra: 1 },
+          { readId: randomUUID(), title: "", text: "key ghp_abcdefghijklmnopqrstuvwxyz0123", outline: [] },
+        ]) {
+          const reading = tool.execute({ action: "read" }, ctx)
+          const batch = await DesktopBrowser.poll(connection.providerID, ctx.abort)
+          DesktopBrowser.respond(connection.providerID, {
+            requestID: batch.request!.requestID,
+            generation: state.generation,
+            status: "Completed",
+            output,
+          })
+          await expect(reading).rejects.toThrow()
+        }
+      } finally {
+        stop()
+        DesktopBrowser.disconnect(connection.providerID)
+      }
+    })
+  })
+
+  test("waits for text and reports whether it appeared", async () => {
+    await fixture(async (session, state) => {
+      const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: state })
+      const tool = await DesktopWebMcpTool.init()
+      const { ctx, stop } = ctxFor(session.id, [])
+      try {
+        const waiting = tool.execute({ action: "wait", waitText: "Results", timeoutMs: 2000 }, ctx)
+        const batch = await DesktopBrowser.poll(connection.providerID, ctx.abort)
+        expect(batch.request).toMatchObject({ operation: "wait", waitText: "Results", timeoutMs: 2000 })
+        DesktopBrowser.respond(connection.providerID, {
+          requestID: batch.request!.requestID,
+          generation: state.generation,
+          status: "Completed",
+          output: { found: true },
+        })
+        expect(JSON.parse((await waiting).output).result).toEqual({ found: true })
+        await expect(tool.execute({ action: "wait" }, ctx)).rejects.toThrow("text to wait for")
+      } finally {
+        stop()
+        DesktopBrowser.disconnect(connection.providerID)
+      }
+    })
+  })
+})

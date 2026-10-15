@@ -82,9 +82,19 @@ export namespace DesktopBrowser {
   export type Binding = z.infer<typeof Binding>
   export const BoundRequest = Binding.extend({
     requestID: ID,
-    operation: z.enum(["list", "invoke"]),
+    operation: z.enum(["list", "invoke", "read", "act", "wait"]),
     deadline: z.number().int(),
     toolName: z.string().max(256).optional(),
+    // ADR-198 page interaction. `ref` is only meaningful for the read named by `readId`.
+    readId: ID.optional(),
+    ref: z
+      .string()
+      .regex(/^e[1-9][0-9]{0,3}$/)
+      .optional(),
+    how: z.enum(["click", "type", "select"]).optional(),
+    text: z.string().max(2000).optional(),
+    waitText: z.string().min(1).max(200).optional(),
+    timeoutMs: z.number().int().min(100).max(10000).optional(),
     digest: z
       .string()
       .regex(/^[a-f0-9]{64}$/)
@@ -114,6 +124,29 @@ export namespace DesktopBrowser {
     })
     .strict()
     .meta({ ref: "DesktopWebMcpNavigateRequest" })
+  export const OutlineEntry = z
+    .object({
+      ref: z.string().regex(/^e[1-9][0-9]{0,3}$/),
+      kind: z.string().max(32),
+      name: z.string().max(80),
+      submit: z.boolean().optional(),
+      disabled: z.boolean().optional(),
+      href: z.string().max(200).optional(),
+      value: z.string().max(100).optional(),
+      options: z.string().max(60).array().max(20).optional(),
+    })
+    .strict()
+  export type OutlineEntry = z.infer<typeof OutlineEntry>
+  export const ReadOutput = z
+    .object({
+      readId: ID,
+      title: z.string().max(200),
+      text: z.string().max(8000),
+      outline: OutlineEntry.array().max(150),
+    })
+    .strict()
+    .meta({ ref: "DesktopWebMcpReadOutput" })
+  export type ReadOutput = z.infer<typeof ReadOutput>
   export const Request = z
     .union([BoundRequest, NavigateRequest])
     .meta({ ref: "DesktopWebMcpRequest" })
@@ -157,6 +190,8 @@ export namespace DesktopBrowser {
     canceled: string[]
     pending: Map<string, Pending>
     touched: number
+    /** The latest page read; element references from any other read are refused. */
+    lastRead?: { readId: string; generation: string; refs: Map<string, OutlineEntry> }
     wake?: () => void
     polling: boolean
   }
@@ -239,13 +274,13 @@ export namespace DesktopBrowser {
       // it must survive the retire that the new snapshot triggers. Any other
       // change still retires it (the navigate request was made against the old
       // page state).
-      if (keepNavigate && pending.request.operation === "navigate") continue
+      if (keepNavigate && (pending.request.operation === "navigate" || pending.request.operation === "act")) continue
       provider.canceled.push(pending.request.requestID)
       pending.cleanup()
       pending.reject(failure("Browser connection or document changed; completion is unconfirmed"))
     }
     provider.queue = keepNavigate
-      ? provider.queue.filter((request) => request.operation === "navigate")
+      ? provider.queue.filter((request) => request.operation === "navigate" || request.operation === "act")
       : []
     provider.canceled = provider.canceled.slice(-8)
     provider.wake?.()
@@ -303,6 +338,8 @@ export namespace DesktopBrowser {
   export function update(id: string, snapshot: Snapshot) {
     const entry = provider(id)
     const next = Snapshot.parse(snapshot)
+    // Element references belong to one document; a new generation retires them.
+    if (next.generation !== entry.snapshot.generation) entry.lastRead = undefined
     // Catalog changes retire already-approved calls even within the same document,
     // except a navigation that is waiting for exactly this document.
     if (canonical(next) !== canonical(entry.snapshot)) retire(entry, { keepNavigate: true })
@@ -340,8 +377,10 @@ export namespace DesktopBrowser {
     const pending = entry.pending.get(reply.requestID)
     // A navigate request is bound to the page BEFORE the load, so only the pushed
     // snapshot (the document the shell actually ended up on) must match the reply.
+    // An action may navigate too: it is bound to the page it was issued against, but its reply
+    // reports the document it ended on.
     const generationMatches =
-      pending?.request.operation === "navigate"
+      pending?.request.operation === "navigate" || pending?.request.operation === "act"
         ? entry.snapshot.generation === reply.generation
         : pending?.request.generation === reply.generation && entry.snapshot.generation === reply.generation
     if (!pending || !generationMatches) {
@@ -414,9 +453,19 @@ export namespace DesktopBrowser {
 
   async function dispatch(
     binding: Binding,
-    operation: "list" | "invoke",
+    operation: "list" | "invoke" | "read" | "act" | "wait",
     signal: AbortSignal,
-    extra: { toolName?: string; digest?: string; input?: Record<string, unknown> } = {},
+    extra: {
+      toolName?: string
+      digest?: string
+      input?: Record<string, unknown>
+      readId?: string
+      ref?: string
+      how?: "click" | "type" | "select"
+      text?: string
+      waitText?: string
+      timeoutMs?: number
+    } = {},
   ) {
     await checkPolicy(binding)
     if (signal.aborted) return fail("Browser request was aborted")
@@ -495,6 +544,85 @@ export namespace DesktopBrowser {
       )
     return { url: target.toString(), origin: target.origin }
   }
+  /** What the model last read for this element, so approval and refusals can name it. */
+  export function describeRef(binding: Binding, readId: string, ref: string): OutlineEntry {
+    const entry = bound(binding)
+    const read = entry.lastRead
+    if (!read || read.readId !== readId || read.generation !== entry.snapshot.generation)
+      return fail("Element references are stale; read the page again")
+    const found = read.refs.get(ref)
+    if (!found) return fail(`There is no element ${ref} in the latest read`)
+    return found
+  }
+
+  /** Read the visible text and an element outline of the enrolled page. */
+  export async function read(binding: Binding, signal: AbortSignal) {
+    const reply = await dispatch(binding, "read", signal)
+    const entry = bound(binding)
+    const parsed = ReadOutput.safeParse(reply.output)
+    if (!parsed.success || bytes(parsed.data) > 65536) return fail("The project browser returned an unusable page read")
+    assertNoCredentialOutput(parsed.data, "Credential-like page content cannot enter the coding session")
+    entry.lastRead = {
+      readId: parsed.data.readId,
+      generation: entry.snapshot.generation,
+      refs: new Map(parsed.data.outline.map((item) => [item.ref, item])),
+    }
+    return parsed.data
+  }
+
+  /**
+   * Click, type into or select within an element named by the latest read. Typing refuses password and
+   * credential-named fields and credential-shaped text. The page may navigate as a result; the reply
+   * only reports whether the origin changed, never the new page's content.
+   */
+  export function prepareAction(
+    binding: Binding,
+    action: { readId: string; ref: string; how: "click" | "type" | "select"; text?: string },
+  ) {
+    const target = describeRef(binding, action.readId, action.ref)
+    if (target.disabled) return fail(`Element ${action.ref} is disabled`)
+    if (action.how !== "click") {
+      if (typeof action.text !== "string" || action.text.length > 2000) return fail("Text of at most 2000 characters is required")
+      if (target.kind === "password" || WebMcpProfile.maskedValue(action.text))
+        return fail("Enter credentials manually in the browser")
+      const node = { uid: action.ref, role: target.kind, name: target.name, focused: false, attributes: {} }
+      if (action.how === "type" && WebMcpProfile.sensitiveTarget(node))
+        return fail("Enter credentials and payment details manually in the browser")
+    }
+    if (action.how === "select" && !target.options) return fail(`Element ${action.ref} is not a selector`)
+    return { ...action, target }
+  }
+  export async function act(
+    binding: Binding,
+    action: { readId: string; ref: string; how: "click" | "type" | "select"; text?: string },
+    signal: AbortSignal,
+  ) {
+    const prepared = prepareAction(binding, action)
+    const entry = bound(binding)
+    const reply = await dispatch(binding, "act", signal, {
+      readId: prepared.readId,
+      ref: prepared.ref,
+      how: prepared.how,
+      text: prepared.text,
+    })
+    // The reply generation is the document the action ended on; a different one retires every reference.
+    const navigated = entry.snapshot.generation !== binding.generation
+    return {
+      done: true,
+      how: prepared.how,
+      navigated,
+      originChanged: entry.snapshot.origin !== binding.origin,
+    }
+  }
+
+  /** Wait until the page shows some text, or report that it did not within the time. */
+  export async function wait(binding: Binding, waitText: string, timeoutMs: number, signal: AbortSignal) {
+    const reply = await dispatch(binding, "wait", signal, { waitText, timeoutMs })
+    bound(binding)
+    const output = z.object({ found: z.boolean() }).strict().safeParse(reply.output)
+    if (!output.success) return fail("The project browser returned an unusable wait result")
+    return output.data
+  }
   export async function list(binding: Binding, signal: AbortSignal) {
     const reply = await dispatch(binding, "list", signal)
     if (!reply.snapshot) return fail("Native browser did not return a catalog")
@@ -526,6 +654,25 @@ export namespace DesktopBrowser {
     }
     return { toolName, digest: expectedDigest, input: frozenInput }
   }
+  function assertNoCredentialOutput(output: unknown, message: string) {
+    const values = [output] as unknown[]
+    while (values.length) {
+      const value = values.pop()
+      if (
+        typeof value === "string" &&
+        (WebMcpProfile.maskedValue(value) ||
+          /"(?:password|passwd|secret|token|api[_-]?key|authorization|cookie)"\s*:/i.test(value))
+      ) {
+        return fail(message)
+      }
+      if (value && typeof value === "object") {
+        for (const [key, item] of Object.entries(value)) {
+          if (/^(password|passwd|secret|token|api[_-]?key|authorization|cookie)$/i.test(key)) return fail(message)
+          values.push(item)
+        }
+      }
+    }
+  }
   export async function invoke(
     binding: Binding,
     toolName: string,
@@ -538,25 +685,7 @@ export namespace DesktopBrowser {
     bound(binding)
     if (reply.output === undefined) return fail("Native completion did not include an output")
     if (bytes(reply.output) > 65536) return fail("Tool output exceeds 64 KiB")
-    const values = [reply.output] as unknown[]
-    while (values.length) {
-      const value = values.pop()
-      if (
-        typeof value === "string" &&
-        (WebMcpProfile.maskedValue(value) ||
-          /"(?:password|passwd|secret|token|api[_-]?key|authorization|cookie)"\s*:/i.test(value))
-      ) {
-        return fail("Credential-like tool output cannot enter the coding session")
-      }
-      if (value && typeof value === "object") {
-        for (const [key, item] of Object.entries(value)) {
-          if (/^(password|passwd|secret|token|api[_-]?key|authorization|cookie)$/i.test(key)) {
-            return fail("Credential-like tool output cannot enter the coding session")
-          }
-          values.push(item)
-        }
-      }
-    }
+    assertNoCredentialOutput(reply.output, "Credential-like tool output cannot enter the coding session")
     return reply.output
   }
 }
