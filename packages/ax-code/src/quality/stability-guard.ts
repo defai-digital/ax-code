@@ -1,5 +1,6 @@
 import z from "zod"
 import { pushGateLines } from "./promotion/promotion-summary"
+import { finiteOption } from "./coerce"
 
 export namespace QualityStabilityGuard {
   export const DEFAULT_COOLDOWN_HOURS = 24
@@ -60,10 +61,6 @@ export namespace QualityStabilityGuard {
 
   function subtractHours(iso: string, hours: number) {
     return isoAt(new Date(new Date(iso).getTime() - hours * 60 * 60 * 1000))
-  }
-
-  function finiteOption(value: number | undefined, fallback: number) {
-    return typeof value === "number" && Number.isFinite(value) ? value : fallback
   }
 
   export function summarize(input: {

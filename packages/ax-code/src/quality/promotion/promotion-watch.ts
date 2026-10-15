@@ -2,6 +2,7 @@ import z from "zod"
 import { ProbabilisticRollout } from "../probabilistic-rollout"
 import { QualityPromotionReleasePolicy } from "./promotion-release-policy"
 import { pushGateLines } from "./promotion-summary"
+import { ratio } from "../coerce"
 
 export namespace QualityPromotionWatch {
   export const WatchGate = z.object({
@@ -39,11 +40,6 @@ export namespace QualityPromotionWatch {
     gates: WatchGate.array(),
   })
   export type WatchSummary = z.output<typeof WatchSummary>
-
-  function ratio(numerator: number, denominator: number) {
-    if (denominator === 0) return null
-    return Number((numerator / denominator).toFixed(4))
-  }
 
   function recordTimestamp(record: ProbabilisticRollout.ShadowRecord) {
     return record.capturedAt ?? record.createdAt

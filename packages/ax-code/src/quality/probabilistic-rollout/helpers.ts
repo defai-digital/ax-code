@@ -7,6 +7,9 @@ import { uniqueStrings } from "@/util/string-list"
 import { finiteNumber } from "@/util/number"
 import * as ProbabilisticRolloutReadiness from "./probabilistic-rollout-readiness"
 import * as ProbabilisticRolloutSchema from "./probabilistic-rollout-schema"
+import { booleanField, finiteOption, ratio } from "../coerce"
+
+export { booleanField, finiteOption, ratio }
 
 export const REVIEW_TOOLS = new Set([
   "impact_analyze",
@@ -149,11 +152,6 @@ export function stringValue(value: unknown, fallback = "unknown") {
 
 export function toolStatus(value: unknown): ToolSummary["status"] {
   return value === "error" ? "error" : "completed"
-}
-
-export function booleanField(input: Record<string, unknown> | undefined, key: string) {
-  const value = input?.[key]
-  return typeof value === "boolean" ? value : undefined
 }
 
 export function recordField(input: Record<string, unknown> | undefined, key: string) {
@@ -477,19 +475,10 @@ export function isResolved(label: Label) {
   return label.outcome !== "unresolved"
 }
 
-export function finiteOption(value: number | undefined, fallback: number) {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback
-}
-
 export function finiteOptionalOption(value: number | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined
 }
 
 export function positiveIntegerOption(value: number | undefined, fallback: number) {
   return Math.max(1, Math.floor(finiteOption(value, fallback)))
-}
-
-export function ratio(numerator: number, denominator: number) {
-  if (denominator === 0) return null
-  return Number((numerator / denominator).toFixed(4))
 }

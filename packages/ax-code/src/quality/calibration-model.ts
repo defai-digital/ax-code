@@ -1,6 +1,7 @@
 import z from "zod"
 import { ProbabilisticRollout } from "./probabilistic-rollout"
 import { uniqueSortedStrings } from "@/util/string-list"
+import { finiteOption, ratio } from "./coerce"
 
 export namespace QualityCalibrationModel {
   type TrainingRecord = ProbabilisticRollout.CalibrationRecord & {
@@ -72,11 +73,6 @@ export namespace QualityCalibrationModel {
     artifactKind: ProbabilisticRollout.ArtifactKind
   }) {
     return `${input.workflow}:${input.artifactKind}`
-  }
-
-  function ratio(numerator: number, denominator: number) {
-    if (denominator === 0) return null
-    return Number((numerator / denominator).toFixed(4))
   }
 
   function monotonicRates(bins: CalibrationBin[]) {
@@ -178,10 +174,6 @@ export namespace QualityCalibrationModel {
   function globalPrior(records: TrainingRecord[]) {
     if (records.length === 0) return 0.5
     return ratio(records.filter((record) => record.actualPositive).length, records.length) ?? 0.5
-  }
-
-  function finiteOption(value: number | undefined, fallback: number) {
-    return typeof value === "number" && Number.isFinite(value) ? value : fallback
   }
 
   function predictionConfidence(item: ProbabilisticRollout.ReplayItem, model: ModelFile) {

@@ -7,6 +7,7 @@ import { Installation } from "../installation"
 import type { Risk } from "../risk/score"
 import type { Session } from "../session"
 import { Log } from "../util/log"
+import { booleanField } from "./coerce"
 import { parseJsonStrict } from "../util/json-value"
 import { uniqueStrings } from "../util/string-list"
 import { QualityCalibrationModel } from "./calibration-model"
@@ -52,11 +53,6 @@ export namespace QualityShadow {
   function numberField(input: Record<string, unknown> | undefined, key: string) {
     const value = input?.[key]
     return typeof value === "number" ? value : undefined
-  }
-
-  function booleanField(input: Record<string, unknown> | undefined, key: string) {
-    const value = input?.[key]
-    return typeof value === "boolean" ? value : undefined
   }
 
   function touchedFiles(session: Session.Info) {
