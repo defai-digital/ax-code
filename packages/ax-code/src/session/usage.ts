@@ -4,6 +4,7 @@ import { SessionTable } from "./session.sql"
 import { providerModelKey } from "../provider/model-key"
 import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
+import { componentTokenTotal } from "../session/compaction-budget"
 
 const log = Log.create({ service: "session.usage" })
 
@@ -64,10 +65,6 @@ export namespace SessionUsage {
 
   function emptyTokens(): Tokens {
     return { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
-  }
-
-  function totalTokens(tokens: Tokens) {
-    return tokens.input + tokens.output + tokens.reasoning + tokens.cache.read + tokens.cache.write
   }
 
   export async function load(input: { days?: number; projectID?: string; sessionID?: string }): Promise<Info> {
@@ -156,31 +153,24 @@ export namespace SessionUsage {
         for (const message of messages) {
           if (message.info.role === "assistant" && message.info.tokens) {
             const tokens = message.info.tokens
-            sessionTokens.input += tokens.input ?? 0
-            sessionTokens.output += tokens.output ?? 0
-            sessionTokens.reasoning += tokens.reasoning ?? 0
-            sessionTokens.cache.read += tokens.cache?.read ?? 0
-            sessionTokens.cache.write += tokens.cache?.write ?? 0
+            const counts = {
+              input: tokens.input ?? 0,
+              output: tokens.output ?? 0,
+              reasoning: tokens.reasoning ?? 0,
+              cache: { read: tokens.cache?.read ?? 0, write: tokens.cache?.write ?? 0 },
+            }
+            sessionTokens.input += counts.input
+            sessionTokens.output += counts.output
+            sessionTokens.reasoning += counts.reasoning
+            sessionTokens.cache.read += counts.cache.read
+            sessionTokens.cache.write += counts.cache.write
 
             const model = providerModelKey(message.info)
             const modelEntry = (info.models[model] ??= { messages: 0, tokens: 0 })
             modelEntry.messages++
-            modelEntry.tokens +=
-              (tokens.input ?? 0) +
-              (tokens.output ?? 0) +
-              (tokens.reasoning ?? 0) +
-              (tokens.cache?.read ?? 0) +
-              (tokens.cache?.write ?? 0)
+            modelEntry.tokens += componentTokenTotal(counts)
 
-            bumpDay(
-              message.info.time.created,
-              totalTokens({
-                input: tokens.input ?? 0,
-                output: tokens.output ?? 0,
-                reasoning: tokens.reasoning ?? 0,
-                cache: { read: tokens.cache?.read ?? 0, write: tokens.cache?.write ?? 0 },
-              }),
-            )
+            bumpDay(message.info.time.created, componentTokenTotal(counts))
           }
 
           for (const part of message.parts) {
@@ -195,11 +185,11 @@ export namespace SessionUsage {
         info.tokens.reasoning += sessionTokens.reasoning
         info.tokens.cache.read += sessionTokens.cache.read
         info.tokens.cache.write += sessionTokens.cache.write
-        info.perSession[session.id] = totalTokens(sessionTokens)
+        info.perSession[session.id] = componentTokenTotal(sessionTokens)
       }
     }
 
-    info.totalTokens = totalTokens(info.tokens)
+    info.totalTokens = componentTokenTotal(info.tokens)
     const cacheBase = info.tokens.input + info.tokens.cache.read
     info.cacheShare = cacheBase > 0 ? info.tokens.cache.read / cacheBase : undefined
     info.perDay = [...perDay.values()]

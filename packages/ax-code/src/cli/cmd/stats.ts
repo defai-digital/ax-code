@@ -11,6 +11,7 @@ import type { ProjectID } from "../../project/schema"
 import { Project } from "../../project/project"
 import { Instance } from "../../project/instance"
 import { isNonEmptyRecord } from "../../util/record"
+import { componentTokenTotal } from "../../session/compaction-budget"
 import { toErrorMessage } from "../../util/error-message"
 import { Locale } from "../../util/locale"
 import { EOL } from "os"
@@ -359,12 +360,7 @@ export async function aggregateSessionStats(
     latest: latestTime,
   }
   stats.days = effectiveDays
-  const totalTokens =
-    stats.totalTokens.input +
-    stats.totalTokens.output +
-    stats.totalTokens.reasoning +
-    stats.totalTokens.cache.read +
-    stats.totalTokens.cache.write
+  const totalTokens = componentTokenTotal(stats.totalTokens)
   // Average over the sessions that actually loaded — the same population the
   // median uses — so a failed store does not drag the mean toward zero.
   stats.tokensPerSession = totalTokens / sessionTotalTokens.length
