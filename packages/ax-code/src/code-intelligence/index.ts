@@ -1,3 +1,4 @@
+import path from "path"
 import type { CallNeighborRow, SymbolRow } from "./call-neighbors"
 import { Log } from "../util/log"
 import { Instance } from "../project/instance"
@@ -257,6 +258,67 @@ export namespace CodeIntelligence {
 
   export function findCallees(projectID: ProjectID, symbolId: CodeNodeID, opts?: { scope?: Scope }): CallChainNode[] {
     return callChain(projectID, CodeGraphQuery.callNeighbors(projectID, symbolId, false), opts?.scope ?? "none")
+  }
+
+  export type WalkNode = { symbol: Symbol; distance: number; parent: CodeNodeID }
+  export type WalkResult = { nodes: WalkNode[]; truncated: boolean }
+
+  // The two containment roots Instance.containsPath checks, resolved the way
+  // Filesystem.contains resolves them, so the native walk can apply the
+  // "worktree" scope while it traverses (a filtered node must not expand).
+  function scopeRoots(): string[] {
+    const roots = new Set([path.resolve(Instance.directory)])
+    if (Instance.worktree !== "/") roots.add(path.resolve(Instance.worktree))
+    return [...roots]
+  }
+
+  /**
+   * Breadth-first caller walk from `seeds` (already visited, distance 0) in
+   * one native call. Node order, parents, distances and truncation are those
+   * of a per-node findCallers loop, and each node is projected once instead
+   * of once per caller edge. Undefined means the native index is unavailable
+   * and the caller keeps its loop.
+   */
+  export function walkCallers(
+    projectID: ProjectID,
+    seeds: CodeNodeID[],
+    opts: { scope?: Scope; depth: number; budget: number },
+  ): WalkResult | undefined {
+    const scope = opts.scope ?? "none"
+    const walk = CodeGraphQuery.walkCallGraph(projectID, {
+      seeds,
+      callers: true,
+      depth: opts.depth,
+      budget: opts.budget,
+      roots: scope === "worktree" ? scopeRoots() : undefined,
+    })
+    if (!walk) return undefined
+    // The native scope filter is a resolved-prefix check. Re-verify every
+    // node with the host rule and let the loop decide if they ever disagree.
+    if (walk.nodes.some((node) => !inScope(node.file, scope))) {
+      log.warn("native call walk returned an out-of-scope node; using the per-node loop")
+      return undefined
+    }
+    // One query id per expanded anchor, as the loop produced one per findCallers call.
+    const queryIds = new Map<string, string>()
+    const nodes = walk.nodes.map((row) => {
+      let queryId = queryIds.get(row.parent)
+      if (!queryId) {
+        queryId = nextQueryId()
+        queryIds.set(row.parent, queryId)
+      }
+      return {
+        symbol: nodeRowToSymbol(row, projectID, queryId, {
+          source: "code-graph",
+          indexedAt: row.indexed_at ?? 0,
+          completeness: normalizeCompleteness(row.completeness ?? undefined),
+          queryId,
+        }),
+        distance: row.distance,
+        parent: row.parent,
+      }
+    })
+    return { nodes, truncated: walk.truncated }
   }
 
   export async function findCallersAsync(

@@ -1,4 +1,4 @@
-import { admitCallQuery, decodeCallNeighbors } from "./call-neighbors"
+import { admitCallQuery, decodeCallNeighbors, decodeCallWalk } from "./call-neighbors"
 import { mkdirSync } from "node:fs"
 import { Log } from "../util/log"
 import { Global } from "../global"
@@ -169,6 +169,30 @@ export namespace NativeStore {
       return fallback
     }
     return parsed as T
+  }
+
+  export type WalkOptions = {
+    seeds: CodeNodeID[]
+    callers: boolean
+    depth: number
+    budget: number
+    /** Resolved absolute roots; a node outside all of them is neither returned nor expanded. */
+    roots?: string[]
+  }
+
+  /** One native breadth-first walk over call edges. Undefined means an old binding. */
+  export function walkCallGraph(project: ProjectID, options: WalkOptions) {
+    for (const seed of options.seeds) admitCallQuery(project, seed)
+    const current = store() as (IndexStore & { walkCallGraph?: (p: string, optionsJson: string) => string }) | undefined
+    if (!current?.walkCallGraph) return undefined
+    return decodeCallWalk(
+      NativePerf.run(
+        "index.walkCallGraph",
+        { seeds: options.seeds.length, depth: options.depth, budget: options.budget },
+        () => current.walkCallGraph!(project, JSON.stringify(options)),
+      ),
+      project,
+    )
   }
 
   /** Undefined means an old binding; real query/validation failures propagate. */

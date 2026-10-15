@@ -198,6 +198,16 @@ export namespace CodeGraphQuery {
     )
   }
 
+  /**
+   * One native breadth-first walk over call edges. Undefined when the native
+   * index is off or the binding predates it; the caller keeps its per-node
+   * callNeighbors loop, which this walk reproduces exactly.
+   */
+  export function walkCallGraph(project: ProjectID, options: NativeStore.WalkOptions) {
+    if (!useNative) return undefined
+    return NativeStore.walkCallGraph(project, options)
+  }
+
   export function callNeighbors(project: ProjectID, symbol: CodeNodeID, callers: boolean): CallNeighborRow[] {
     admitCallQuery(project, symbol)
     if (useNative) {

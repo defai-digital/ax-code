@@ -52,6 +52,12 @@ export declare class IndexStore {
   /** Atomic ingest: delete old data for a file and insert new nodes/edges/file metadata. */
   ingestFile(projectId: string, filePath: string, nodesJson: string, edgesJson: string, fileMetaJson: string): void
   callNeighbors(project: string, symbol: string, callers: boolean): string
+  /**
+   * One breadth-first walk over call edges; see `walk`. `options_json` is
+   * `{ seeds, callers?, depth, budget, roots? }` and the result is
+   * `{ nodes: [neighbor + distance + parent, ...], truncated }`.
+   */
+  walkCallGraph(project: string, optionsJson: string): string
   insertNodes(json: string): void
   getNode(projectId: string, id: string): string | null
   findNodesByName(projectId: string, name: string, optsJson: string): string

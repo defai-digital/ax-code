@@ -115,6 +115,96 @@ describe.skipIf(!enabled)("native call neighbor projections", () => {
     }
   })
 
+  test("walkCallGraph reproduces the per-node loop: order, parents, scope, budget and depth", async () => {
+    await using tmp = await tmpdir({})
+    const store = new native!.IndexStore(path.join(tmp.path, "graph.db"))
+    try {
+      store.insertNodes(
+        JSON.stringify([
+          node("s", project, "/in/s.ts"),
+          node("a", project, "/in/a.ts"),
+          node("b", project, "/in/b.ts"),
+          node("d", project, "/in/d.ts"),
+          node("x", project, "/outside/x.ts"),
+          node("y", project, "/in/y.ts"),
+          node("foreign", "other", "/in/f.ts"),
+        ]),
+      )
+      store.insertEdges(
+        JSON.stringify([
+          edge("e1", "a", "s"),
+          edge("e2", "x", "s"),
+          edge("e3", "b", "a"),
+          edge("e4", "d", "a"),
+          edge("e5", "a", "d"),
+          edge("e6", "y", "x"),
+          edge("e7", "a", "s"),
+          edge("e8", "missing", "s"),
+          edge("e9", "foreign", "s"),
+        ]),
+      )
+      type Visit = { id: string; distance: number; parent: string }
+      // The host loop, including its scope filter, written against callNeighbors.
+      const loop = (seeds: string[], depth: number, budget: number, roots?: string[]) => {
+        const inScope = (file: string) => !roots || roots.some((root) => file === root || file.startsWith(root + "/"))
+        const visited = new Set(seeds)
+        const queue = seeds.map((id) => ({ id, distance: 0 }))
+        const nodes: Visit[] = []
+        let truncated = false
+        let head = 0
+        walk: while (head < queue.length) {
+          const { id, distance } = queue[head++]
+          if (distance >= depth) continue
+          for (const row of JSON.parse(store.callNeighbors(project, id, true)) as { id: string; file: string }[]) {
+            if (!inScope(row.file) || visited.has(row.id)) continue
+            visited.add(row.id)
+            nodes.push({ id: row.id, distance: distance + 1, parent: id })
+            if (visited.size >= budget) {
+              truncated = true
+              break walk
+            }
+            queue.push({ id: row.id, distance: distance + 1 })
+          }
+        }
+        return { nodes, truncated }
+      }
+      const walk = (seeds: string[], depth: number, budget: number, roots?: string[]) => {
+        const result = JSON.parse(store.walkCallGraph(project, JSON.stringify({ seeds, depth, budget, roots }))) as {
+          nodes: Array<Visit & Record<string, unknown>>
+          truncated: boolean
+        }
+        return {
+          nodes: result.nodes.map(({ id, distance, parent }) => ({ id, distance, parent })),
+          truncated: result.truncated,
+        }
+      }
+      const cases: Array<[string[], number, number, string[] | undefined]> = [
+        [["s"], 6, 100, undefined],
+        [["s"], 6, 100, ["/in"]],
+        [["s"], 6, 3, undefined],
+        [["s"], 1, 100, undefined],
+        [["y", "s"], 2, 100, undefined],
+        [["missing"], 6, 100, undefined],
+      ]
+      for (const [seeds, depth, budget, roots] of cases) {
+        expect(walk(seeds, depth, budget, roots)).toEqual(loop(seeds, depth, budget, roots))
+      }
+      expect(walk(["s"], 6, 100).nodes.map((n) => n.id)).toEqual(["a", "x", "b", "d", "y"])
+      expect(walk(["s"], 6, 100, ["/in"]).nodes.map((n) => n.id)).toEqual(["a", "b", "d"])
+      expect(walk(["s"], 6, 3)).toMatchObject({ truncated: true })
+      // Each node carries the single query's projection columns plus its visit.
+      const [first] = JSON.parse(
+        store.walkCallGraph(project, JSON.stringify({ seeds: ["s"], depth: 1, budget: 9 })),
+      ).nodes
+      expect(first).toEqual({ ...JSON.parse(store.callNeighbors(project, "s", true))[0], distance: 1, parent: "s" })
+      expect(() => store.walkCallGraph(project, JSON.stringify({ seeds: ["s"], depth: 65, budget: 9 }))).toThrow(
+        "Graph query input limit exceeded",
+      )
+    } finally {
+      store.close()
+    }
+  })
+
   test("async readers observe committed WAL snapshots and never create a missing DB", async () => {
     await using tmp = await tmpdir({})
     const dbPath = path.join(tmp.path, "graph.db")
@@ -207,6 +297,69 @@ test("public sync/async APIs preserve scope, duplicates and normalized explanati
       expect(sync[0].symbol.explain).toMatchObject({ indexedAt: 12, completeness: "partial" })
       expect(getNode).not.toHaveBeenCalled()
       expect(getFile).not.toHaveBeenCalled()
+    },
+  })
+})
+
+test("walkCallers keeps the host scope rule, one query id per anchor, and hands back to the loop", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const p = Instance.project.id
+      const seed = CodeNodeID.ascending(),
+        inside = CodeNodeID.ascending(),
+        deeper = CodeNodeID.ascending(),
+        outside = CodeNodeID.ascending()
+      const visit = (id: CodeNodeID, file: string, parent: CodeNodeID, distance: number) => ({
+        ...node(id, p, file),
+        project_id: p,
+        id,
+        indexed_at: 12,
+        completeness: "full",
+        parent,
+        distance,
+      })
+      const walk = vi.spyOn(CodeGraphQuery, "walkCallGraph").mockReturnValue({
+        nodes: [
+          visit(inside, path.join(tmp.path, "a.ts"), seed, 1),
+          visit(deeper, path.join(tmp.path, "b.ts"), inside, 2),
+        ],
+        truncated: true,
+      })
+      const opts = { scope: "worktree" as const, depth: 6, budget: 10 }
+      const result = CodeIntelligence.walkCallers(p, [seed], opts)
+      expect(walk).toHaveBeenCalledWith(p, {
+        seeds: [seed],
+        callers: true,
+        depth: 6,
+        budget: 10,
+        roots: [path.resolve(tmp.path)],
+      })
+      expect(result?.truncated).toBe(true)
+      expect(result?.nodes.map((n) => [n.symbol.id, n.distance, n.parent])).toEqual([
+        [inside, 1, seed],
+        [deeper, 2, inside],
+      ])
+      expect(result?.nodes[0].symbol.explain).toMatchObject({
+        source: "code-graph",
+        indexedAt: 12,
+        completeness: "full",
+      })
+      expect(result?.nodes[0].symbol.explain.queryId).not.toBe(result?.nodes[1].symbol.explain.queryId)
+
+      // A node the host rule rejects means the native filter disagreed: use the loop.
+      walk.mockReturnValue({
+        nodes: [visit(outside, path.resolve(tmp.path, "../outside.ts"), seed, 1)],
+        truncated: false,
+      })
+      expect(CodeIntelligence.walkCallers(p, [seed], opts)).toBeUndefined()
+      expect(
+        CodeIntelligence.walkCallers(p, [seed], { ...opts, scope: "none" })?.nodes.map((n) => n.symbol.id),
+      ).toEqual([outside])
+      expect(walk).toHaveBeenLastCalledWith(p, expect.objectContaining({ roots: undefined }))
+      walk.mockReturnValue(undefined)
+      expect(CodeIntelligence.walkCallers(p, [seed], opts)).toBeUndefined()
     },
   })
 })

@@ -1,5 +1,5 @@
 import path from "node:path"
-import { beforeEach, describe, expect, test } from "vitest"
+import { beforeEach, describe, expect, test, vi } from "vitest"
 import { analyzeImpactImpl, extractFilesFromDiff } from "../src/analyze-impact"
 import { installTestHost, type TestHost } from "./fixture/host"
 
@@ -78,6 +78,89 @@ describe("analyzeImpactImpl", () => {
     // Paths are seed-first shortest chains back to the seed.
     expect(report.affectedSymbols.find((s) => s.symbol.id === "b")?.path).toEqual(["s", "a", "b"])
     expect(report.truncated).toBe(false)
+  })
+
+  test("takes the host's one-call walk when present and reports the same impact as the loop", async () => {
+    // s <- a <- b, a <- d (cycle d <-> a), s <- x <- y, plus eight more direct
+    // callers c1..c8 of s; the loop visits a, x, c1..c8, b, d, y.
+    const extra = Array.from({ length: 8 }, (_, i) => `c${i + 1}`)
+    for (const id of ["s", "a", "b", "d", "x", "y", ...extra]) {
+      testHost.graph.addSymbol({ id, name: `fn_${id}`, file: `/repo/${id}.ts` })
+    }
+    testHost.graph.addCallerEdge("s", "a")
+    testHost.graph.addCallerEdge("s", "x")
+    for (const id of extra) testHost.graph.addCallerEdge("s", id)
+    testHost.graph.addCallerEdge("a", "b")
+    testHost.graph.addCallerEdge("a", "d")
+    testHost.graph.addCallerEdge("d", "a")
+    testHost.graph.addCallerEdge("x", "y")
+    // The budget floor is 10: the seed plus nine callers, truncated mid-level.
+    const input = { changes: [{ kind: "symbol" as const, id: "s" }], maxVisited: 10 }
+    const summarize = (report: Awaited<ReturnType<typeof analyzeImpactImpl>>) => ({
+      seeds: report.seeds,
+      affected: report.affectedSymbols.map((s) => [s.symbol.id, s.distance, s.path]),
+      files: report.affectedFiles,
+      truncated: report.truncated,
+      risk: [report.riskScore, report.riskLabel],
+      heuristics: report.explain.heuristicsApplied,
+    })
+    const loop = summarize(await analyzeImpactImpl("test-project", input))
+
+    const port = testHost.graph.port
+    const findCallers = port.findCallers.bind(port)
+    // A faithful walk over the same fake edges, as the native index provides it.
+    const walkCallers = vi.fn((projectID: string, seeds: string[], opts: { depth: number; budget: number }) => {
+      const visited = new Set(seeds)
+      const queue = seeds.map((id) => ({ id, distance: 0 }))
+      const nodes: Array<{
+        symbol: (typeof queue)[number] extends never ? never : any
+        distance: number
+        parent: string
+      }> = []
+      let truncated = false
+      let head = 0
+      walk: while (head < queue.length) {
+        const { id, distance } = queue[head++]
+        if (distance >= opts.depth) continue
+        for (const caller of findCallers(projectID, id)) {
+          if (visited.has(caller.symbol.id)) continue
+          visited.add(caller.symbol.id)
+          nodes.push({ symbol: caller.symbol, distance: distance + 1, parent: id })
+          if (visited.size >= opts.budget) {
+            truncated = true
+            break walk
+          }
+          queue.push({ id: caller.symbol.id, distance: distance + 1 })
+        }
+      }
+      return { nodes, truncated }
+    })
+    port.walkCallers = walkCallers
+    const loopCalls = vi.spyOn(port, "findCallers")
+    const walked = summarize(await analyzeImpactImpl("test-project", input))
+    expect(walkCallers).toHaveBeenCalledTimes(1)
+    expect(walkCallers.mock.calls[0][1]).toEqual(["s"])
+    expect(walkCallers.mock.calls[0][2]).toMatchObject({ budget: 10, scope: "worktree" })
+    expect(loopCalls).not.toHaveBeenCalled()
+    expect(walked).toEqual(loop)
+    expect(walked.truncated).toBe(true)
+    // The report orders affected symbols itself; compare the visited set.
+    expect(walked.affected.map((entry) => entry[0]).sort()).toEqual(["a", "x", ...extra.slice(0, 7)].sort())
+
+    // Without the budget bite the walk and the loop still agree on the whole graph.
+    const wide = { ...input, maxVisited: 100 }
+    port.walkCallers = undefined
+    const wideLoop = summarize(await analyzeImpactImpl("test-project", wide))
+    port.walkCallers = walkCallers
+    const wideWalk = summarize(await analyzeImpactImpl("test-project", wide))
+    expect(wideWalk).toEqual(wideLoop)
+    expect(wideWalk.affected.map((entry) => entry[0]).sort()).toEqual(["a", "x", ...extra, "b", "d", "y"].sort())
+    expect(wideWalk.truncated).toBe(false)
+
+    // A host that offers the walk but cannot serve it hands the loop back.
+    port.walkCallers = vi.fn(() => undefined)
+    expect(summarize(await analyzeImpactImpl("test-project", input))).toEqual(loop)
+    expect(loopCalls).toHaveBeenCalled()
   })
 
   test("caps traversal at the requested depth without marking truncation", async () => {

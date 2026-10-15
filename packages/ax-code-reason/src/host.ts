@@ -106,6 +106,18 @@ export type GraphPort = {
   getSymbol(projectID: string, id: string, opts?: Graph.QueryOpts): Graph.Symbol | null
   symbolsInFile(projectID: string, file: string, opts?: Graph.QueryOpts): Graph.Symbol[]
   findCallers(projectID: string, symbolId: string, opts?: Graph.QueryOpts): Graph.CallChainNode[]
+  /**
+   * Optional one-call breadth-first caller walk from already-visited seeds
+   * (distance 0, in visit order). It must reproduce the per-node findCallers
+   * loop exactly: per-anchor caller order, first-arrival parents, the budget
+   * (seeds included) checked after every insertion, no expansion at `depth`.
+   * Undefined means "not available here" and the caller runs its own loop.
+   */
+  walkCallers?(
+    projectID: string,
+    seeds: string[],
+    opts: Graph.QueryOpts & { depth: number; budget: number },
+  ): { nodes: Array<{ symbol: Graph.Symbol; distance: number; parent: string }>; truncated: boolean } | undefined
   findReferences(projectID: string, symbolId: string, opts?: Graph.QueryOpts): Graph.Reference[]
   findDependents(projectID: string, file: string, opts?: Graph.QueryOpts): string[]
   status(projectID: string): Graph.Status

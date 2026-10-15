@@ -188,6 +188,17 @@ function bfsUpstream(
     if (visited.size >= budget) return { visited, truncated: true }
   }
 
+  // One native walk when the host offers it. It reproduces the loop below
+  // exactly, with every node projected once instead of once per caller edge.
+  const walk = codeReasonHost().graph.walkCallers?.(projectID, [...visited.keys()], { scope, depth, budget })
+  if (walk) {
+    for (const node of walk.nodes) {
+      visited.set(node.symbol.id, { symbol: node.symbol, distance: node.distance, parent: node.parent })
+      ciExplains.push(node.symbol.explain)
+    }
+    return { visited, truncated: walk.truncated }
+  }
+
   let truncated = false
   // Head-index dequeue: advancing `head` instead of `queue.shift()` keeps
   // dequeue O(1) and avoids the O(n) element moves shift() performs when the
