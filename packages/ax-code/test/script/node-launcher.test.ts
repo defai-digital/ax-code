@@ -3,6 +3,7 @@ import { execFile } from "node:child_process"
 import { chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 import { UNIX_BRAND_AND_EXEC_NODE, unixNodeLauncherScript } from "../../script/node-launcher"
 
@@ -127,6 +128,7 @@ describe("Unix node launcher", () => {
       const original = path.join(root, "node")
       const launcher = path.join(root, "launcher")
       const calls = path.join(root, "calls")
+      const invocations = path.join(root, "invocations")
       const entryDir = path.join(root, "C#tools")
       await mkdir(entryDir)
       const entry = path.join(entryDir, "index-node-tui.js")
@@ -135,6 +137,7 @@ describe("Unix node launcher", () => {
         original,
         [
           "#!/bin/sh",
+          `printf '%s\\n' "$*" >> ${quote(invocations)}`,
           `if [ "$1" = "-e" ]; then exec ${quote(process.execPath)} "$@"; fi`,
           `printf '%s\\n' "$*" >> ${quote(calls)}`,
           `printf 'options=[%s]\\n' "$NODE_OPTIONS" >> ${quote(calls)}`,
@@ -153,6 +156,9 @@ describe("Unix node launcher", () => {
         timeout: 10_000,
       }).catch((error: unknown) => error)
       expect(failure).toMatchObject({ code: 37, signal: null })
+      const invoked = await readFile(invocations, "utf8")
+      expect(invoked).toContain("pathToFileURL")
+      expect(invoked).toMatch(/^-e /m)
       const log = await readFile(calls, "utf8")
       expect(log).toContain("/dev/null --version")
       expect(log).toContain("file://")
@@ -160,6 +166,112 @@ describe("Unix node launcher", () => {
       expect(log).not.toMatch(/--import \/.*C#tools/)
     },
   )
+
+  test.skipIf(process.platform === "win32")(
+    "uses a raw file URL for a safe absolute entry and does not run the node -e encoder",
+    async () => {
+      const root = await mkdtemp(path.join(os.tmpdir(), "ax-code-node-safe-"))
+      temporaryRoots.push(root)
+      const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'"
+      const original = path.join(root, "node")
+      const launcher = path.join(root, "launcher")
+      const invocations = path.join(root, "invocations")
+      const calls = path.join(root, "calls")
+      const entry = path.join(root, "lib", "index-node-tui.js")
+      await mkdir(path.dirname(entry), { recursive: true })
+      await writeFile(entry, "process.stdout.write('ok')\n")
+      await writeFile(
+        original,
+        [
+          "#!/bin/sh",
+          `printf '%s\\n' "$*" >> ${quote(invocations)}`,
+          `if [ "$1" = "-e" ]; then exec ${quote(process.execPath)} "$@"; fi`,
+          `printf 'options=[%s]\\n' "$NODE_OPTIONS" >> ${quote(calls)}`,
+          "exit 37",
+          "",
+        ].join("\n"),
+        { mode: 0o755 },
+      )
+      await writeFile(
+        launcher,
+        `#!/bin/sh\n${UNIX_BRAND_AND_EXEC_NODE}\nbrand_and_exec_node ${quote(original)} ${quote(entry)} "$@"\n`,
+        { mode: 0o755 },
+      )
+      const failure = await execFileAsync(launcher, ["--version"], {
+        env: { ...process.env, XDG_CACHE_HOME: path.join(root, "cache"), NODE_OPTIONS: "" },
+        timeout: 10_000,
+      }).catch((error: unknown) => error)
+      expect(failure).toMatchObject({ code: 37, signal: null })
+      const invoked = await readFile(invocations, "utf8")
+      expect(invoked).not.toContain("pathToFileURL")
+      const log = await readFile(calls, "utf8")
+      expect(log).toContain(`--import file://${entry}`)
+      expect(log).not.toContain("pathToFileURL")
+      expect(log).not.toContain("%")
+    },
+  )
+
+  test.skipIf(process.platform === "win32")(
+    "still encodes absolute entries that contain % through the node -e encoder",
+    async () => {
+      const root = await mkdtemp(path.join(os.tmpdir(), "ax-code-node-pct-"))
+      temporaryRoots.push(root)
+      const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'"
+      const original = path.join(root, "node")
+      const launcher = path.join(root, "launcher")
+      const invocations = path.join(root, "invocations")
+      const calls = path.join(root, "calls")
+      const entryDir = path.join(root, "100%done")
+      await mkdir(entryDir)
+      const entry = path.join(entryDir, "index-node-tui.js")
+      await writeFile(entry, "process.stdout.write('ok')\n")
+      await writeFile(
+        original,
+        [
+          "#!/bin/sh",
+          `printf '%s\\n' "$*" >> ${quote(invocations)}`,
+          `if [ "$1" = "-e" ]; then exec ${quote(process.execPath)} "$@"; fi`,
+          `printf 'options=[%s]\\n' "$NODE_OPTIONS" >> ${quote(calls)}`,
+          "exit 37",
+          "",
+        ].join("\n"),
+        { mode: 0o755 },
+      )
+      await writeFile(
+        launcher,
+        `#!/bin/sh\n${UNIX_BRAND_AND_EXEC_NODE}\nbrand_and_exec_node ${quote(original)} ${quote(entry)} "$@"\n`,
+        { mode: 0o755 },
+      )
+      const failure = await execFileAsync(launcher, ["--version"], {
+        env: { ...process.env, XDG_CACHE_HOME: path.join(root, "cache"), NODE_OPTIONS: "" },
+        timeout: 10_000,
+      }).catch((error: unknown) => error)
+      expect(failure).toMatchObject({ code: 37, signal: null })
+      const invoked = await readFile(invocations, "utf8")
+      expect(invoked).toContain("pathToFileURL")
+      expect(invoked).toMatch(/^-e /m)
+      const log = await readFile(calls, "utf8")
+      expect(log).toContain("file://")
+      expect(log).toContain("%25")
+      expect(log).not.toMatch(/--import \/.*100%done/)
+    },
+  )
+
+  test("records the import case branches and the generated script passes sh -n", async () => {
+    const encoder = `"$node_bin" -e 'process.stdout.write(require("url").pathToFileURL(process.argv[1]).href)'`
+    for (const text of [UNIX_BRAND_AND_EXEC_NODE, unixNodeLauncherScript()]) {
+      expect(text).toContain("*[!A-Za-z0-9._/-]*)")
+      expect(text).toContain(encoder)
+      expect(text).toContain('import_entry="file://$entry"')
+      expect(text.indexOf(encoder)).toBeLessThan(text.indexOf('import_entry="file://$entry"'))
+    }
+    if (process.platform === "win32") return
+    const root = await mkdtemp(path.join(os.tmpdir(), "ax-code-node-syntax-"))
+    temporaryRoots.push(root)
+    const launcher = path.join(root, "launcher")
+    await writeFile(launcher, unixNodeLauncherScript(), { mode: 0o755 })
+    await execFileAsync("sh", ["-n", launcher])
+  })
 
   test("resolves the bundle root when invoked through an rbenv-style symlink", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "ax-code-node-launcher-"))
@@ -221,9 +333,13 @@ describe("Unix node launcher", () => {
     const nodeOptions = await readFile(`${outputPath}.node-options`, "utf8")
     expect(nodeOptions).toContain("--experimental-ffi")
     expect(nodeOptions).toContain("--disable-warning=ExperimentalWarning")
-    const entryImport = nodeOptions.split(" ").find((token) => token.endsWith("/lib/index-node-tui.js"))
+    const entryImport = nodeOptions.split(" ").find((token) => token.includes("/lib/index-node-tui.js"))
     expect(entryImport).toBeDefined()
-    expect(await realpath(entryImport!)).toBe(await realpath(libEntry))
+    // A safe absolute entry is a raw file URL. The node -e / pathToFileURL
+    // encoder is only for paths that are not already a valid file URL.
+    expect(entryImport!.startsWith("file://")).toBe(true)
+    expect(entryImport).not.toContain("pathToFileURL")
+    expect(await realpath(fileURLToPath(entryImport!))).toBe(await realpath(libEntry))
     expect(nodeOptions).not.toContain(path.join(root, ".rbenv", "lib"))
     // The caller's NODE_OPTIONS is appended for the launch and saved verbatim so
     // the entry can restore it before the CLI graph spawns Node children.
