@@ -257,6 +257,21 @@ function plainErrorEnvelope(error: Error, logRef?: string): AppErrorEnvelope {
       details: { resource: "file" },
     }
   }
+  // A run whose spec declares a merge strategy the runtime cannot execute
+  // (`custom-reducer` is a schema placeholder) is client-caused: answer 400
+  // with the diagnostic, not a generic 500 that drops it.
+  if (
+    error.name === "WorkflowUnsupportedMergeStrategyError" ||
+    error.name === "WorkflowDispatchUnsupportedMergeStrategyError"
+  ) {
+    return {
+      name: "InvalidRequestError",
+      message: error.message,
+      status: 400,
+      details: { resource: "workflow" },
+      retryable: false,
+    }
+  }
   return {
     name: "UnknownError",
     message: "Internal server error",

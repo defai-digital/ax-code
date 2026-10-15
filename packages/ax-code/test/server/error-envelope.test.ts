@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import { appErrorEnvelope } from "../../src/server/error"
 import { Session } from "../../src/session"
 import { SessionRevert } from "../../src/session/revert"
+import { WorkflowUnsupportedMergeStrategyError } from "../../src/workflow/scheduler"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { File } from "../../src/file"
 
@@ -45,6 +46,19 @@ describe("server appErrorEnvelope classification", () => {
       status: 400,
       message: expect.stringContaining("Undo coverage is incomplete"),
       details: { resource: "sessionRevert" },
+    })
+  })
+
+  test("maps an unsupported workflow merge strategy to a 400 with its message", () => {
+    // `custom-reducer` is a legal spec enum value the runtime cannot execute;
+    // the client-caused failure must not surface as a generic 500.
+    const error = new WorkflowUnsupportedMergeStrategyError("phase_collect", "custom-reducer")
+    const envelope = appErrorEnvelope({ error })
+    expect(envelope).toMatchObject({
+      name: "InvalidRequestError",
+      status: 400,
+      message: error.message,
+      details: { resource: "workflow" },
     })
   })
 
