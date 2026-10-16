@@ -148,6 +148,17 @@ This escape hatch exposes every environment variable to every enabled hook. A re
 > Hooks remain arbitrary shell code that can read accessible files and use the host network. Treat them as trusted code
 > and review every enabled hook and pack.
 
+## Inspecting hooks from a client
+
+The server exposes the hooks in effect without running them. `GET /hooks?directory=<path>` (SDK: `hooks.get`)
+returns whether project config is trusted, whether `.ax-code/hooks.json` exists and parses, the effective hook
+entries in run order (pack hooks first, then project hooks), and every built-in pack with its enabled state. When
+`AX_CODE_TRUST_PROJECT_CONFIG` is not set, a valid file is reported but none of its hooks are listed as active.
+
+Each executed hook entry also publishes a `hook.completed` event with the event name, tool, command, source, pack,
+exit code, duration and an outcome of `ok`, `failed`, `blocked` or `ask`. A block or ask carries the same bounded
+reason the model sees. Hook stdout, stderr and tool arguments are never included.
+
 ## Relationship to isolation
 
 Hooks do **not** replace the sandbox. Use:

@@ -42,6 +42,7 @@ import { GlobalRoutes } from "./routes/global"
 import { AppContextRoutes } from "./routes/app-context"
 import { AppRoutes } from "./routes/app"
 import { SkillRoutes } from "./routes/skill"
+import { HookRoutes } from "./routes/hooks"
 import { RuntimeStatusRoutes } from "./routes/runtime-status"
 import { PROVIDER_ID_PARAM, withProviderID } from "./routes/route-params"
 import { MDNS } from "./mdns"
@@ -342,6 +343,7 @@ export namespace Server {
       .route("/", AppRoutes())
       .route("/context", AppContextRoutes())
       .route("/skill", SkillRoutes())
+      .route("/hooks", HookRoutes())
       .route("/", RuntimeStatusRoutes())
   }
 

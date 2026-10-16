@@ -87,6 +87,7 @@ import type {
   GraphGetResponses,
   GraphTopologyErrors,
   GraphTopologyResponses,
+  HooksGetResponses,
   InstanceDisposeResponses,
   InstanceRestartResponses,
   IsolationGetResponses,
@@ -8286,6 +8287,28 @@ export class Skill extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Hooks` (auto-generated from the OpenAPI contract). */
+export class Hooks extends HeyApiClient {
+  /**
+   * Get lifecycle hooks
+   *
+   * Get the lifecycle hooks in effect for the directory, the built-in packs, and whether the project hooks file is trusted and valid.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<HooksGetResponses, unknown, ThrowOnError>({
+      url: "/hooks",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 /** AX Code API schema `Lsp` (auto-generated from the OpenAPI contract). */
 export class Lsp extends HeyApiClient {
   /**
@@ -8641,6 +8664,11 @@ export class AxCodeClient extends HeyApiClient {
   private _skill?: Skill
   get skill(): Skill {
     return (this._skill ??= new Skill({ client: this.client }))
+  }
+
+  private _hooks?: Hooks
+  get hooks(): Hooks {
+    return (this._hooks ??= new Hooks({ client: this.client }))
   }
 
   private _lsp?: Lsp

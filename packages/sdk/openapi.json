@@ -37503,6 +37503,40 @@
         ]
       }
     },
+    "/hooks": {
+      "get": {
+        "operationId": "hooks.get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Get lifecycle hooks",
+        "description": "Get the lifecycle hooks in effect for the directory, the built-in packs, and whether the project hooks file is trusted and valid.",
+        "responses": {
+          "200": {
+            "description": "Effective lifecycle hook configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HookWorkspace"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.hooks.get({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/lsp": {
       "get": {
         "operationId": "lsp.status",
@@ -40717,6 +40751,9 @@
             "$ref": "#/components/schemas/Event.worktree.failed"
           },
           {
+            "$ref": "#/components/schemas/Event.hook.completed"
+          },
+          {
             "$ref": "#/components/schemas/Event.code.index.progress"
           },
           {
@@ -41120,6 +41157,22 @@
           "properties": {
             "type": "object",
             "properties": {}
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.hook.completed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "hook.completed"
+          },
+          "properties": {
+            "$ref": "#/components/schemas/HookCompleted"
           }
         },
         "required": [
@@ -46234,6 +46287,188 @@
           "version",
           "time",
           "project"
+        ]
+      },
+      "HookCompleted": {
+        "type": "object",
+        "properties": {
+          "sessionID": {
+            "type": "string"
+          },
+          "event": {
+            "type": "string",
+            "enum": [
+              "PreToolUse",
+              "PostToolUse",
+              "PostToolUseFailure",
+              "Stop",
+              "UserPromptSubmit",
+              "PreCompact",
+              "SubagentStop",
+              "SessionStart",
+              "SessionEnd",
+              "PostCompact",
+              "Interrupt"
+            ]
+          },
+          "tool": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "project",
+              "pack"
+            ]
+          },
+          "pack": {
+            "type": "string"
+          },
+          "exit": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "durationMs": {
+            "type": "number",
+            "minimum": 0
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "failed",
+              "blocked",
+              "ask"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "event",
+          "command",
+          "source",
+          "exit",
+          "durationMs",
+          "outcome"
+        ]
+      },
+      "HookEntry": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "PreToolUse",
+              "PostToolUse",
+              "PostToolUseFailure",
+              "Stop",
+              "UserPromptSubmit",
+              "PreCompact",
+              "SubagentStop",
+              "SessionStart",
+              "SessionEnd",
+              "PostCompact",
+              "Interrupt"
+            ]
+          },
+          "matcher": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string",
+            "const": "claude-code"
+          },
+          "blockOnFailure": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "project",
+              "pack"
+            ]
+          },
+          "pack": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "event",
+          "command",
+          "source"
+        ]
+      },
+      "HookWorkspace": {
+        "type": "object",
+        "properties": {
+          "trusted": {
+            "type": "boolean"
+          },
+          "file": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "exists": {
+                "type": "boolean"
+              },
+              "valid": {
+                "type": "boolean"
+              },
+              "error": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "exists",
+              "valid"
+            ]
+          },
+          "hooks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HookEntry"
+            }
+          },
+          "packs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "enabled": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "name",
+                "description",
+                "enabled"
+              ]
+            }
+          }
+        },
+        "required": [
+          "trusted",
+          "file",
+          "hooks",
+          "packs"
         ]
       },
       "IsolationBackend": {

@@ -1228,6 +1228,7 @@ export type Event =
   | EventScheduledTaskFailedPersistently
   | EventWorktreeReady
   | EventWorktreeFailed
+  | EventHookCompleted
   | EventCodeIndexProgress
   | EventCodeIndexState
   | EventSessionCreated
@@ -1331,6 +1332,12 @@ export type EventGlobalDisposed = {
   properties: {
     [key: string]: unknown
   }
+}
+
+/** Server event payload with `type: "hook.completed"` (auto-generated). */
+export type EventHookCompleted = {
+  type: "hook.completed"
+  properties: HookCompleted
 }
 
 /** Server event payload with `type: "installation.update-available"` (auto-generated). */
@@ -2816,6 +2823,70 @@ export type GlobalSession = {
     [key: string]: unknown
   }
   project: ProjectSummary | null
+}
+
+/** AX Code API schema `HookCompleted` (auto-generated from the OpenAPI contract). */
+export type HookCompleted = {
+  sessionID?: string
+  event:
+    | "PreToolUse"
+    | "PostToolUse"
+    | "PostToolUseFailure"
+    | "Stop"
+    | "UserPromptSubmit"
+    | "PreCompact"
+    | "SubagentStop"
+    | "SessionStart"
+    | "SessionEnd"
+    | "PostCompact"
+    | "Interrupt"
+  tool?: string
+  command: string
+  source: "project" | "pack"
+  pack?: string
+  exit: number
+  durationMs: number
+  outcome: "ok" | "failed" | "blocked" | "ask"
+  reason?: string
+}
+
+/** AX Code API schema `HookEntry` (auto-generated from the OpenAPI contract). */
+export type HookEntry = {
+  event:
+    | "PreToolUse"
+    | "PostToolUse"
+    | "PostToolUseFailure"
+    | "Stop"
+    | "UserPromptSubmit"
+    | "PreCompact"
+    | "SubagentStop"
+    | "SessionStart"
+    | "SessionEnd"
+    | "PostCompact"
+    | "Interrupt"
+  matcher?: string
+  command: string
+  protocol?: "claude-code"
+  blockOnFailure?: boolean
+  source: "project" | "pack"
+  pack?: string
+}
+
+/** AX Code API schema `HookWorkspace` (auto-generated from the OpenAPI contract). */
+export type HookWorkspace = {
+  trusted: boolean
+  file: {
+    path: string
+    exists: boolean
+    valid: boolean
+    error?: string
+  }
+  hooks: Array<HookEntry>
+  packs: Array<{
+    name: string
+    description: string
+    enabled: boolean
+  }>
 }
 
 /**
@@ -17703,6 +17774,27 @@ export type SkillTestTriggerResponses = {
 
 /** Successful response payload for `POST /skill/test-trigger` — Test skill triggers */
 export type SkillTestTriggerResponse = SkillTestTriggerResponses[keyof SkillTestTriggerResponses]
+
+/** Request payload shape for `GET /hooks` — Get lifecycle hooks */
+export type HooksGetData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/hooks"
+}
+
+/** Success response payloads for `GET /hooks` — Get lifecycle hooks */
+export type HooksGetResponses = {
+  /**
+   * Effective lifecycle hook configuration
+   */
+  200: HookWorkspace
+}
+
+/** Successful response payload for `GET /hooks` — Get lifecycle hooks */
+export type HooksGetResponse = HooksGetResponses[keyof HooksGetResponses]
 
 /** Request payload shape for `GET /lsp` — Get LSP status */
 export type LspStatusData = {

@@ -58,6 +58,8 @@ import { parseJsonResult, parseJsonPayload } from "@/util/json-value"
 import { Env } from "@/util/env"
 import { Instance } from "@/project/instance"
 import { ProjectConfigTrust } from "@/config/project-config-trust"
+import { Bus } from "@/bus"
+import { BusEvent } from "@/bus/bus-event"
 import { truncateUtf8Bytes } from "@/tool/bash-helpers"
 import { StringDecoder } from "node:string_decoder"
 
@@ -247,6 +249,69 @@ export namespace LifecycleHooks {
   export type EventName = z.infer<typeof EventNameSchema>
   export type HookCommand = z.infer<typeof HookCommandSchema>
 
+  /** Longest block or ask reason carried on a `hook.completed` event. */
+  const MAX_EVENT_REASON_CHARS = 1_000
+
+  /**
+   * ADR-211: one event per executed hook entry so clients can show hook
+   * activity. Redacted on purpose (ADR-057 D4): no stdout, stderr or tool
+   * arguments, only the bounded decision reason the model already sees.
+   */
+  export const Event = {
+    Completed: BusEvent.define(
+      "hook.completed",
+      z
+        .object({
+          sessionID: z.string().optional(),
+          event: EventNameSchema,
+          tool: z.string().optional(),
+          command: z.string(),
+          source: z.enum(["project", "pack"]),
+          pack: z.string().optional(),
+          exit: z.number().int(),
+          durationMs: z.number().nonnegative(),
+          outcome: z.enum(["ok", "failed", "blocked", "ask"]),
+          reason: z.string().optional(),
+        })
+        .meta({ ref: "HookCompleted" }),
+    ),
+  }
+
+  export const Entry = z
+    .object({
+      event: EventNameSchema,
+      matcher: z.string().optional(),
+      command: z.string(),
+      protocol: z.literal("claude-code").optional(),
+      blockOnFailure: z.boolean().optional(),
+      source: z.enum(["project", "pack"]),
+      pack: z.string().optional(),
+    })
+    .meta({ ref: "HookEntry" })
+  export type Entry = z.infer<typeof Entry>
+
+  /** ADR-211: the hooks in effect for a directory, and why a project file may be ignored. */
+  export const Workspace = z
+    .object({
+      trusted: z.boolean(),
+      file: z.object({
+        path: z.string(),
+        exists: z.boolean(),
+        valid: z.boolean(),
+        error: z.string().optional(),
+      }),
+      hooks: Entry.array(),
+      packs: z
+        .object({
+          name: z.string(),
+          description: z.string(),
+          enabled: z.boolean(),
+        })
+        .array(),
+    })
+    .meta({ ref: "HookWorkspace" })
+  export type Workspace = z.infer<typeof Workspace>
+
   const ProjectHooksSchema = z.object({
     hooks: z.array(HookCommandSchema).max(100).optional(),
     packs: z.array(z.string().min(1).max(500)).max(100).optional(),
@@ -409,6 +474,113 @@ export namespace LifecycleHooks {
     return [...fromConfigPacks, ...fromProject, ...(input.extra ?? [])]
   }
 
+  /**
+   * The hooks that would run in `directory`, without running anything. When
+   * project config is untrusted the file is still read and validated so a
+   * client can say it is ignored, but no entry from it is reported as active.
+   */
+  export async function describeWorkspace(
+    directory: string,
+    trusted = ProjectConfigTrust.enabled(),
+  ): Promise<Workspace> {
+    const file = path.join(directory, ".ax-code", "hooks.json")
+    let exists = false
+    let parsed: z.infer<typeof ProjectHooksSchema> | undefined
+    let error: string | undefined
+    try {
+      const raw = await fs.readFile(file, "utf8")
+      exists = true
+      const decoded = parseJsonResult(raw)
+      if (!decoded.ok) {
+        error = "hooks.json is not valid JSON"
+      } else {
+        const result = ProjectHooksSchema.safeParse(decoded.value)
+        if (result.success) parsed = result.data
+        else error = `hooks.json does not match the hook schema: ${result.error.issues[0]?.message ?? "invalid"}`
+      }
+    } catch (cause) {
+      const code = (cause as NodeJS.ErrnoException | undefined)?.code
+      if (code !== "ENOENT") {
+        exists = code !== "ENOTDIR"
+        error = "hooks.json could not be read"
+      }
+    }
+
+    const enabledPacks = new Set(trusted ? (parsed?.packs ?? []) : [])
+    const hooks: Entry[] = []
+    if (trusted && parsed) {
+      for (const name of parsed.packs ?? []) {
+        const pack = BUILTIN_PACKS.find((p) => p.name === name)
+        if (pack) hooks.push(...pack.hooks.map((hook) => toEntry(hook, hookSource(hook))))
+      }
+      hooks.push(...(parsed.hooks ?? []).map((hook) => toEntry(hook, hookSource(hook))))
+    }
+    return {
+      trusted,
+      file: { path: file, exists, valid: exists && parsed !== undefined, ...(error ? { error } : {}) },
+      hooks,
+      packs: BUILTIN_PACKS.map((pack) => ({
+        name: pack.name,
+        description: pack.description,
+        enabled: enabledPacks.has(pack.name),
+      })),
+    }
+  }
+
+  /**
+   * Where a resolved entry came from. A project entry may carry its own
+   * `pack` label, so only an entry identical to a built-in pack's hook counts
+   * as a pack hook; the route and the event agree on this.
+   */
+  function hookSource(hook: HookCommand): Entry["source"] {
+    const pack = hook.pack ? BUILTIN_PACKS.find((candidate) => candidate.name === hook.pack) : undefined
+    const builtin = pack?.hooks.some(
+      (candidate) =>
+        candidate.event === hook.event && candidate.command === hook.command && candidate.matcher === hook.matcher,
+    )
+    return builtin ? "pack" : "project"
+  }
+
+  function toEntry(hook: HookCommand, source: Entry["source"]): Entry {
+    return {
+      event: hook.event,
+      command: hook.command,
+      source,
+      ...(hook.matcher === undefined ? {} : { matcher: hook.matcher }),
+      ...(hook.protocol === undefined ? {} : { protocol: hook.protocol }),
+      ...(hook.blockOnFailure === undefined ? {} : { blockOnFailure: hook.blockOnFailure }),
+      ...(hook.pack === undefined ? {} : { pack: hook.pack }),
+    }
+  }
+
+  function publishCompleted(
+    hook: HookCommand,
+    input: RunInput,
+    result: RunResult["outputs"][number],
+    durationMs: number,
+    outcome: z.infer<typeof Event.Completed.properties>["outcome"],
+    reason?: string,
+  ) {
+    try {
+      Bus.publishDetached(Event.Completed, {
+        ...(input.sessionID === undefined ? {} : { sessionID: input.sessionID }),
+        event: input.event,
+        ...(input.tool === undefined ? {} : { tool: input.tool }),
+        command: hook.command,
+        source: hookSource(hook),
+        ...(hook.pack ? { pack: hook.pack } : {}),
+        exit: result.exit,
+        durationMs: Math.max(0, Math.round(durationMs)),
+        outcome,
+        ...(reason ? { reason: reason.slice(0, MAX_EVENT_REASON_CHARS) } : {}),
+      })
+    } catch (error) {
+      // Observation only: a publish failure (for example outside an instance)
+      // must never change the gate result.
+      log.warn("hook.completed publish failed", { error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
   // Decode the stream incrementally: a StringDecoder carries a multi-byte
   // UTF-8 sequence split across pipe chunks and replaces genuinely invalid
   // bytes, so neither a split character nor a stray byte can wedge or drop the
@@ -546,6 +718,7 @@ export namespace LifecycleHooks {
     let feedbackChars = 0
     for (const hook of selected) {
       let result: RunResult["outputs"][number]
+      const startedAt = performance.now()
       try {
         result = await runHook(hook, input)
       } catch (error) {
@@ -561,6 +734,7 @@ export namespace LifecycleHooks {
         result = { command: hook.command, exit: 1, stdout: "", stderr: message }
       }
       outputs.push(result)
+      const durationMs = performance.now() - startedAt
       if (input.event === "PostToolUse") {
         const text = decodePostToolUseFeedback(hook, result)
         if (text !== undefined) {
@@ -587,6 +761,7 @@ export namespace LifecycleHooks {
           })
           blocked = true
           blockReason = decoded.reason
+          publishCompleted(hook, input, result, durationMs, "blocked", decoded.reason)
           break
         }
         if (decoded.ask) {
@@ -597,23 +772,32 @@ export namespace LifecycleHooks {
           if (input.event !== "PreToolUse") {
             blocked = true
             blockReason = decoded.reason ?? "hook requested user confirmation"
+            publishCompleted(hook, input, result, durationMs, "blocked", blockReason)
             break
           }
           // Keep evaluating: a later hook may still deny, and deny wins.
           ask = ask ?? { reason: decoded.reason ?? "hook requested user confirmation" }
+          if (result.exit !== 0) {
+            log.warn("lifecycle hook non-zero", { event: input.event, tool: input.tool, exit: result.exit })
+          }
+          publishCompleted(hook, input, result, durationMs, "ask", decoded.reason ?? "hook requested user confirmation")
+          continue
         }
         if (result.exit !== 0) {
           log.warn("lifecycle hook non-zero", { event: input.event, tool: input.tool, exit: result.exit })
         }
+        publishCompleted(hook, input, result, durationMs, result.exit === 0 ? "ok" : "failed")
         continue
       }
       if (result.exit !== 0) {
         log.warn("lifecycle hook non-zero", { event: input.event, tool: input.tool, exit: result.exit })
         if (hook.blockOnFailure && BLOCKABLE_EVENTS.has(input.event)) {
           blocked = true
+          publishCompleted(hook, input, result, durationMs, "blocked")
           break
         }
       }
+      publishCompleted(hook, input, result, durationMs, result.exit === 0 ? "ok" : "failed")
     }
     return {
       ok: !blocked,
