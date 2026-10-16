@@ -81,7 +81,9 @@ function detectPathTraversal(lines: string[], file: string, max: number): DebugE
     // followed exclusively by string literals. The latter is a common safe
     // pattern for private scratch files; keep flagging any caller-controlled
     // segment after tmpdir().
-    let argsStr = lines[i].slice(lines[i].indexOf("path."))
+    // From the matched call, not from the line's first `path.`: an earlier
+    // `path.dirname(file)` would otherwise hand the literal check the wrong call.
+    let argsStr = lines[i].slice(match.index)
     if (!argsStr.includes(")")) {
       let j = i + 1
       while (j < lines.length && j < i + 20 && !argsStr.includes(")")) {
