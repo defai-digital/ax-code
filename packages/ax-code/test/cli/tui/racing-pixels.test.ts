@@ -19,6 +19,14 @@ test.each(["racing-day", "racing-night"] as const)("%s paints deterministically 
   expect(pixel(first, 80, 120)).not.toEqual(pixel(first, 380, 0))
 })
 
+test("the chase car stays dark under a day sky and a night sky", () => {
+  const day = renderRacingPixels(WIDTH, HEIGHT, "racing-day", 400)
+  const night = renderRacingPixels(WIDTH, HEIGHT, "racing-night", 400)
+  expect(Math.max(...pixel(day, 355, 390))).toBeLessThan(60)
+  expect(Math.max(...pixel(night, 355, 390))).toBeLessThan(60)
+  expect(pixel(day, 80, 16)[2]).toBeGreaterThan(pixel(night, 80, 16)[2]! + 40)
+})
+
 test.each(["racing-day", "racing-night"] as const)("%s renders at any size", (style) => {
   for (const [width, height] of [
     [0, 0],

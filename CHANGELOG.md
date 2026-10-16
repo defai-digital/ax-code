@@ -6,6 +6,10 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Changed
+
+- Restyle the racing theme HD opening and ending as a chase view behind a glossy sports car on a mountain highway, with a textured rock face, concrete wall, overhead gantry signs, curved street lamps, tyre-marked asphalt, conifer slope, and layered clouds. The text fallback is unchanged.
+
 ## [7.26.1] - 2026-10-16
 
 ### Changed
