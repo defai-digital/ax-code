@@ -16,6 +16,7 @@ import { Log } from "@/util/log"
 import { isHarmlessInterrupt } from "@/util/harmless-interrupt"
 import { NULL_BYTE_PATH_ERROR, normalizeToWorkspacePath, resolveToolFilePath, withFilePathAliases } from "./file-path"
 import { isBinaryFile } from "./file-content"
+import { detectOfficeKind, extractOfficeText } from "./office-text"
 import { ToolNumber } from "./schema"
 import { CanonicalOutput } from "./canonical-output"
 
@@ -261,7 +262,42 @@ export const ReadTool = Tool.define("read", {
       }
 
       const isBinary = await isBinaryFile(filepath)
-      if (isBinary) throw readError("ReadBinaryFileError", `Cannot read binary file: ${filepath}`)
+      if (isBinary) {
+        // ADR-238: extract plain text from Office Open XML files before
+        // rejecting as binary. zip-encrypted or malformed archives return a
+        // short reason and the same binary refusal shape.
+        const office = detectOfficeKind(filepath)
+        if (office) {
+          const bigStat = await fs.stat(filepath, { bigint: true })
+          const result = await extractOfficeText(filepath)
+          if (result.reason) {
+            throw readError("ReadOfficeExtractionError", result.reason)
+          }
+          const out = result.text
+          const note = result.truncated ? "\n(truncated to 200 KB)" : ""
+          ctx.abort.throwIfAborted()
+          await FileTime.read(ctx.sessionID, filepath, {
+            mtime: Number(bigStat.mtimeMs),
+            ctime: Number(bigStat.ctimeMs),
+            size: Number(bigStat.size),
+            mtimeNs: bigStat.mtimeNs.toString(),
+            ctimeNs: bigStat.ctimeNs.toString(),
+            dev: bigStat.dev.toString(),
+            ino: bigStat.ino.toString(),
+          })
+          return {
+            title,
+            output: out + note,
+            data: { kind: "text", text: out, truncated: Boolean(result.truncated) },
+            metadata: {
+              preview: out.slice(0, 200),
+              truncated: Boolean(result.truncated),
+              loaded: instructions.map((i) => i.filepath),
+            },
+          }
+        }
+        throw readError("ReadBinaryFileError", `Cannot read binary file: ${filepath}`)
+      }
 
       const limit = params.limit ?? DEFAULT_READ_LIMIT
       const offset = params.offset ?? 1

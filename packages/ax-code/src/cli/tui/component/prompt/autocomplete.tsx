@@ -577,13 +577,64 @@ export function Autocomplete(props: {
     }))
   })
 
+  // ADR-236: static autocomplete entries for the new prompt reference forms.
+  // Each option inserts a prefix into the prompt; the user fills in the rest
+  // (path, range, URL, …) and the parser in prompt-reference-parser.ts picks
+  // it up on submit. No new search round-trip is needed because the list is
+  // small and constant.
+  const referenceOptions = createMemo<AutocompleteOption[]>(() => {
+    const width = props.anchor().width - 4
+    const insertPrefix = (prefix: string) => () => {
+      const cursor = props.input().logicalCursor
+      props.input().deleteRange(0, 0, cursor.row, cursor.col)
+      props.input().insertText(prefix)
+      props.input().cursorOffset = stringWidth(prefix)
+    }
+    const options: AutocompleteOption[] = [
+      {
+        display: Locale.truncateMiddle("@diff", width),
+        description: "Unstaged working-tree diff",
+        group: "References",
+        onSelect: insertPrefix("@diff "),
+      },
+      {
+        display: Locale.truncateMiddle("@staged", width),
+        description: "Staged (index) diff",
+        group: "References",
+        onSelect: insertPrefix("@staged "),
+      },
+      {
+        display: Locale.truncateMiddle("@git:N", width),
+        description: "Last N commit patches (N at most 10)",
+        group: "References",
+        onSelect: insertPrefix("@git:"),
+      },
+      {
+        display: Locale.truncateMiddle("@file:…:start-end", width),
+        description: "Lines start–end of a file",
+        group: "References",
+        onSelect: insertPrefix("@file:"),
+      },
+      {
+        display: Locale.truncateMiddle("@url:https://…", width),
+        description: "Fetch a URL (SSRF-pinned)",
+        group: "References",
+        onSelect: insertPrefix("@url:"),
+      },
+    ]
+    return options
+  })
+
   const options = createMemo((prev: AutocompleteOption[] | undefined) => {
     const filesValue = files()
     const agentsValue = agents()
     const commandsValue = commands()
+    const refsValue = referenceOptions()
 
     const mixed: AutocompleteOption[] =
-      store.visible === "@" ? [...(filesValue || []), ...mcpResources(), ...agentsValue] : [...commandsValue]
+      store.visible === "@"
+        ? [...(filesValue || []), ...mcpResources(), ...agentsValue, ...refsValue]
+        : [...commandsValue]
 
     const searchValue = search()
 
