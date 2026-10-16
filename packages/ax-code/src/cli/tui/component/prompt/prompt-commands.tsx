@@ -5,6 +5,14 @@ import { Editor } from "@tui/util/editor"
 import { errorPayloadMessage } from "@tui/util/error-message"
 import type { DialogContext } from "@tui/ui/dialog"
 import { showBtwDialog } from "../dialog-btw"
+import {
+  createWorktree,
+  listWorktrees,
+  matchWorktree,
+  moveSessionToDirectory,
+  removeWorktree,
+  showWorktreeListDialog,
+} from "../dialog-worktree"
 import type { CommandOption } from "../dialog-command"
 import { endDisplayOffset, expandPromptTextParts, relocatePromptPartsAfterEditor } from "./prompt-helpers"
 import type { PromptInfo } from "./history"
@@ -180,6 +188,77 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
           sessionID: currentSessionID,
           question,
         })
+      },
+    },
+    {
+      // Session worktree (ADR-233): /worktree new [name] | list | remove
+      // <name|path>. A thin wrapper over the worktree and session-move routes;
+      // refused while a turn is running so the move cannot race the turn.
+      title: uiText("ui.worktreeCommand"),
+      value: "session.worktree",
+      category: uiText("common.session"),
+      slash: { name: "worktree", arguments: true },
+      onSelect: (dialog) => {
+        toast.show({ message: uiText("ui.worktreeUsageHint"), variant: "info", duration: 6000 })
+        dialog.clear()
+      },
+      onSlashArguments: (args, dialog) => {
+        const worktreeSdk = { url: sdk.url, directory: sdk.directory, fetch: sdk.fetch }
+        const usage = () => toast.show({ message: uiText("ui.worktreeUsageHint"), variant: "info", duration: 6000 })
+        const [sub, ...rest] = args.trim().split(/\s+/)
+        const argument = rest.join(" ").trim()
+        const run = async () => {
+          if (statusType() !== "idle") {
+            toast.show({ message: uiText("ui.worktreeBusy"), variant: "warning" })
+            return
+          }
+          // The list view is the only branch that keeps the dialog open; every
+          // other outcome closes it so a stale panel does not linger.
+          let keepOpen = false
+          try {
+            if (sub === "list") {
+              keepOpen = true
+              showWorktreeListDialog({ dialog, sdk: worktreeSdk })
+              return
+            }
+            if (sub === "new") {
+              const currentSessionID = sessionID()
+              if (!currentSessionID) {
+                toast.show({ message: uiText("ui.worktreeNoSession"), variant: "warning" })
+                return
+              }
+              const info = await createWorktree({ sdk: worktreeSdk, name: argument || undefined })
+              await moveSessionToDirectory({ sdk: worktreeSdk, sessionID: currentSessionID, directory: info.directory })
+              toast.show({ message: uiText("ui.worktreeCreated", { directory: info.directory }), variant: "success" })
+              return
+            }
+            if (sub === "remove") {
+              if (!argument) {
+                usage()
+                return
+              }
+              const items = await listWorktrees({ sdk: worktreeSdk })
+              const match = matchWorktree(items, argument)
+              if (!match) {
+                toast.show({ message: uiText("ui.worktreeNotFound", { name: argument }), variant: "warning" })
+                return
+              }
+              await removeWorktree({ sdk: worktreeSdk, directory: match.directory })
+              toast.show({ message: uiText("ui.worktreeRemoved"), variant: "success" })
+              return
+            }
+            usage()
+          } catch (error) {
+            log.warn("prompt worktree command failed", { error, subcommand: sub })
+            toast.show({
+              message: error instanceof Error ? error.message : uiText("ui.worktreeFailed"),
+              variant: "error",
+            })
+          } finally {
+            if (!keepOpen) dialog.clear()
+          }
+        }
+        void run()
       },
     },
     {

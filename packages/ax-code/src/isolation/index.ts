@@ -39,6 +39,14 @@ export namespace Isolation {
   export interface State {
     mode: Mode
     network: boolean
+    /**
+     * Hosts sandboxed bash may reach through the loopback egress proxy
+     * (ADR-232). Present only when `isolation.network` uses the object form.
+     * An empty/undefined list means no egress allowlist is configured.
+     */
+    allowedDomains?: string[]
+    /** Hosts the egress proxy always refuses; evaluated before the allowlist. */
+    deniedDomains?: string[]
     protected: string[]
     /**
      * Isolation backend for bash OS wrapping. App-layer checks always run;
@@ -129,7 +137,8 @@ export namespace Isolation {
 
   export function resolve(config: IsolationConfig | undefined, directory: string, worktree = directory): State {
     const mode = Flag.AX_CODE_ISOLATION_MODE ?? config?.mode ?? DEFAULT_MODE
-    const network = Flag.AX_CODE_ISOLATION_NETWORK ?? config?.network
+    const policy = networkPolicy(config?.network)
+    const envNetwork = Flag.AX_CODE_ISOLATION_NETWORK
     const backend = OsSandboxModule.resolveBackend({
       configBackend: config?.backend as Backend | undefined,
       envBackend: Flag.AX_CODE_ISOLATION_BACKEND,
@@ -144,10 +153,55 @@ export namespace Isolation {
     }
     return {
       mode,
-      network: mode === "full-access" ? true : (network ?? false),
+      network: mode === "full-access" ? true : (envNetwork ?? policy.enabled ?? false),
+      allowedDomains: policy.allowedDomains.length ? policy.allowedDomains : undefined,
+      deniedDomains: policy.deniedDomains.length ? policy.deniedDomains : undefined,
       protected: uniqueStrings(protectedPaths.map(resolvePath)),
       backend,
     }
+  }
+
+  /**
+   * Normalize `isolation.network` (boolean or `{ allowed_domains, denied_domains }`).
+   * The object form enables network access and attaches the egress allowlist
+   * (ADR-232); a bare boolean keeps the all-or-nothing behavior.
+   */
+  function networkPolicy(raw: IsolationConfig["network"]): {
+    enabled: boolean | undefined
+    allowedDomains: string[]
+    deniedDomains: string[]
+  } {
+    if (raw === undefined) return { enabled: undefined, allowedDomains: [], deniedDomains: [] }
+    if (typeof raw === "boolean") return { enabled: raw, allowedDomains: [], deniedDomains: [] }
+    return {
+      enabled: true,
+      allowedDomains: raw.allowed_domains ?? [],
+      deniedDomains: raw.denied_domains ?? [],
+    }
+  }
+
+  export type EgressEnforcement = "off" | "enforced" | "advisory" | "unsupported"
+
+  /** Whether a non-empty egress allowlist applies to this state. */
+  export function egressConfigured(state: State | undefined): boolean {
+    if (!state || state.mode === "full-access") return false
+    return (state.allowedDomains?.length ?? 0) > 0
+  }
+
+  /**
+   * How strongly the egress allowlist is enforced on the current platform
+   * (ADR-232): macOS Seatbelt permits outbound only to the proxy port;
+   * bubblewrap shares the host network namespace, so the proxy is advisory;
+   * Windows has no OS sandbox and ignores the setting.
+   */
+  export function egressEnforcement(
+    state: State | undefined,
+    platform: NodeJS.Platform = process.platform,
+  ): EgressEnforcement {
+    if (!egressConfigured(state)) return "off"
+    if (platform === "darwin") return "enforced"
+    if (platform === "linux") return "advisory"
+    return "unsupported"
   }
 
   /**

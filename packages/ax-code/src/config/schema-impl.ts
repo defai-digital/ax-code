@@ -159,6 +159,23 @@ export const IsolationBackend = z.enum(["app", "os", "auto"]).meta({
 })
 export type IsolationBackend = z.infer<typeof IsolationBackend>
 
+export const IsolationNetworkPolicy = z
+  .object({
+    allowed_domains: z
+      .array(z.string())
+      .optional()
+      .describe(
+        "Hosts sandboxed bash may reach through the loopback egress proxy. Each entry is an exact host or a *.suffix wildcard",
+      ),
+    denied_domains: z
+      .array(z.string())
+      .optional()
+      .describe("Hosts the egress proxy always refuses. Evaluated before allowed_domains and wins over it"),
+  })
+  .strict()
+  .meta({ ref: "IsolationNetworkPolicy" })
+export type IsolationNetworkPolicy = z.infer<typeof IsolationNetworkPolicy>
+
 export const Isolation = z
   .object({
     // Keep defaults out of the per-source schema. Config files are parsed
@@ -170,10 +187,10 @@ export const Isolation = z
       "Isolation mode: read-only blocks all mutations, workspace-write allows writes inside workspace only, full-access disables isolation. Defaults to full-access (sandbox off)",
     ),
     network: z
-      .boolean()
+      .union([IsolationNetworkPolicy, z.boolean()])
       .optional()
       .describe(
-        "Allow network access from tools. Defaults to enabled in full-access and disabled in read-only and workspace-write modes",
+        "Allow network access from tools. A boolean turns all network on or off. An object opts in to a loopback egress proxy that permits only allowed_domains (denied_domains always win). Defaults to enabled in full-access and disabled in read-only and workspace-write modes",
       ),
     protected: z
       .array(z.string())
@@ -823,9 +840,26 @@ export const Info = z
     agents: z
       .object({
         model_pool: ModelPool.optional(),
+        // ADR-231: opt-in worktree isolation for task_parallel. When true and
+        // the project is git-based, two or more writer subagents run in
+        // their own worktrees (one per writer) so the existing
+        // multi-writer rejection is lifted. Read-only members still share
+        // the main tree. Off by default — the strict-deny behaviour in
+        // WriteIsolation.evaluateParallelAgents is the safer default for
+        // unattended calls.
+        task_parallel: z
+          .object({
+            worktree_isolation: z
+              .boolean()
+              .optional()
+              .describe(
+                "When true and the project is a git repo, two or more writer subagents in one task_parallel call each get their own worktree via Worktree.createReady. Read-only members still share the main tree. Per-writer branches, worktree paths and short diff summaries are reported back; nothing is merged. Off by default.",
+              ),
+          })
+          .optional(),
       })
       .optional()
-      .describe("Agent subsystem settings (subagent model selection pool, ADR-218)"),
+      .describe("Agent subsystem settings (subagent model selection pool, ADR-218; task_parallel options, ADR-231)"),
     provider: z.record(z.string(), Provider).optional().describe("Custom provider configurations and model overrides"),
     mcp: z
       .record(

@@ -423,6 +423,7 @@ export const DOCTOR_CHECK_IDS = [
   "stale-instances",
   "ax-engine",
   "computer-use",
+  "network-egress",
   "tui-server",
   "tui-preload",
   "recent-logs",
@@ -686,6 +687,20 @@ export async function runDoctorChecks(input: { skip?: ReadonlySet<string> } = {}
       name: "Computer use",
       status: "warn",
       detail: `Could not run computer-use preflight: ${toErrorMessage(error)}`,
+    })
+  }
+
+  // 11b. Egress allowlist — how strongly isolation.network.allowed_domains is
+  // enforced on this platform (ADR-232: enforced / advisory / unsupported).
+  try {
+    const config = configuration.config ?? (await Config.global())
+    const { getEgressCheck } = await import("./doctor-egress")
+    push("network-egress", getEgressCheck({ config: config?.isolation?.network, mode: config?.isolation?.mode }))
+  } catch (error) {
+    push("network-egress", {
+      name: "Network egress",
+      status: "warn",
+      detail: `Could not inspect egress allowlist: ${toErrorMessage(error)}`,
     })
   }
 

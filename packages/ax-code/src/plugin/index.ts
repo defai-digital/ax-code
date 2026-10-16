@@ -138,7 +138,13 @@ export namespace Plugin {
       if (!entry.hooks.config) continue
       const draft = PluginData.copy(cfg)
       try {
-        await entry.lifetime.run((context) => entry.hooks.config!(draft, context))
+        // The runtime Config can be strictly wider than the generated SDK
+        // `Config` a plugin hook declares (e.g. the ADR-232 `isolation.network`
+        // allowlist object). The hook only narrows the config, so pass the same
+        // data through the SDK-facing type rather than widening the generated
+        // contract, which must stay byte-identical until the SDK regenerates.
+        const hookConfig = draft as Parameters<NonNullable<Hooks["config"]>>[0]
+        await entry.lifetime.run((context) => entry.hooks.config!(hookConfig, context))
         signal.throwIfAborted()
         entry.lifetime.signal.throwIfAborted()
         PluginData.commit(cfg, draft)

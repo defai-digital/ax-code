@@ -33,6 +33,7 @@ import { Truncate } from "./truncate"
 import { Plugin } from "@/plugin"
 import { Isolation } from "@/isolation"
 import { OsSandbox } from "@/isolation/os-sandbox"
+import { EgressProxy } from "@/isolation/egress-proxy"
 import { BlastRadius } from "@/session/blast-radius"
 import { assertSymlinkInsideProject } from "./external-directory"
 import { classifyDestructiveCommand, findWrappedCommand, gitSubcommand } from "./bash-destructive"
@@ -1491,18 +1492,42 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
       // above always run; the default `auto` backend adds kernel enforcement
       // whenever the platform supports it.
       let osWrap: OsSandbox.WrapResult | undefined
+      let egressProxy: EgressProxy.Handle | undefined
       if (Isolation.shouldUseOsSandbox(ctx.extra?.isolation)) {
         const state = ctx.extra!.isolation!
+        // Egress allowlist (ADR-232): start a loopback proxy and constrain the
+        // child to it. Only platforms with an OS sandbox are wired; Windows has
+        // none, so the setting is ignored there (doctor reports it).
+        const useEgressProxy =
+          Isolation.egressConfigured(state) && (process.platform === "darwin" || process.platform === "linux")
+        if (useEgressProxy) {
+          egressProxy = await EgressProxy.start({
+            allowedDomains: state.allowedDomains ?? [],
+            deniedDomains: state.deniedDomains,
+          })
+        }
+        // Linux routes the child through the proxy by sharing the host network
+        // namespace (bubblewrap), which makes the proxy advisory there; macOS
+        // keeps the deny-all profile and admits only the proxy's loopback port.
+        const shareNetwork = useEgressProxy && process.platform === "linux"
         osWrap = OsSandbox.wrapCommand({
           command: params.command,
           shell,
           cwd,
           workspaceRoot: Instance.directory,
           worktree: Instance.worktree,
-          network: state.network,
+          network: state.network || shareNetwork,
+          egressPort: useEgressProxy && process.platform === "darwin" ? egressProxy!.port : undefined,
           protectedPaths: state.protected,
         })
+        if (useEgressProxy) {
+          log.info("egress allowlist active", {
+            enforcement: Isolation.egressEnforcement(state),
+            allowed: state.allowedDomains?.length ?? 0,
+          })
+        }
         if (!osWrap.active && state.backend === "os") {
+          await egressProxy?.stop()
           throw new Isolation.DeniedError(
             "bash",
             `OS isolation backend is required but unavailable: ${osWrap.reason}. ` +
@@ -1510,6 +1535,10 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           )
         }
         if (!osWrap.active) {
+          // No kernel enforcement: a loopback proxy alone would be advisory, so
+          // do not leave it running.
+          await egressProxy?.stop()
+          egressProxy = undefined
           log.info("os sandbox unavailable; using app-layer isolation only", { reason: osWrap.reason })
         }
       }
@@ -1599,15 +1628,19 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
       for (let attempt = 0; ; attempt++) {
         // undefined on the escalated retry: spawn the command unsandboxed.
         const activeWrap = attempt === 0 ? osWrap : undefined
+        // The egress proxy env only applies while the sandbox wrap is active;
+        // the relaxed retry spawns unsandboxed, so it must not be proxied.
+        const attemptEnv =
+          activeWrap?.active === true && egressProxy
+            ? { ...sanitizedEnv, ...EgressProxy.proxyEnv(egressProxy.port) }
+            : { ...sanitizedEnv }
         let proc: ChildProcess
         try {
           proc =
             activeWrap?.active === true
               ? spawn(activeWrap.file, activeWrap.args, {
                   cwd,
-                  env: {
-                    ...sanitizedEnv,
-                  },
+                  env: attemptEnv,
                   stdio: [stdinMode, "pipe", "pipe"],
                   detached: process.platform !== "win32",
                   windowsHide: process.platform === "win32",
@@ -1615,9 +1648,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
               : useSetsidProcessGroup
                 ? spawn("setsid", [shell, "-c", params.command], {
                     cwd,
-                    env: {
-                      ...sanitizedEnv,
-                    },
+                    env: attemptEnv,
                     stdio: [stdinMode, "pipe", "pipe"],
                     detached: false,
                     windowsHide: process.platform === "win32",
@@ -1625,9 +1656,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
                 : spawn(params.command, {
                     shell,
                     cwd,
-                    env: {
-                      ...sanitizedEnv,
-                    },
+                    env: attemptEnv,
                     stdio: [stdinMode, "pipe", "pipe"],
                     detached: process.platform !== "win32",
                     windowsHide: process.platform === "win32",
@@ -1637,11 +1666,16 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           // never reaches the close/error listeners below — clean up the
           // seatbelt profile here or it leaks in os.tmpdir().
           OsSandbox.cleanupProfile(activeWrap?.active === true ? activeWrap.profilePath : undefined)
+          void egressProxy?.stop()
           throw error
         }
         const commandStartedAt = Date.now()
         const seatbeltProfile = activeWrap?.active === true ? activeWrap.profilePath : undefined
-        const cleanupSeatbelt = () => OsSandbox.cleanupProfile(seatbeltProfile)
+        const cleanupSeatbelt = () => {
+          OsSandbox.cleanupProfile(seatbeltProfile)
+          // The egress proxy lived only for this command (ADR-232).
+          void egressProxy?.stop()
+        }
         if (proc.pid) {
           trackedPIDs.add(proc.pid)
         } else {

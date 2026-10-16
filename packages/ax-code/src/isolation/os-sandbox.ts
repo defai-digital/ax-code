@@ -39,6 +39,12 @@ export namespace OsSandbox {
     workspaceRoot: string
     worktree?: string
     network: boolean
+    /**
+     * Loopback egress-proxy port (ADR-232). When set, macOS Seatbelt allows
+     * outbound traffic only to 127.0.0.1:<port> and denies everything else,
+     * so the sandboxed child can only reach the allowlist proxy.
+     */
+    egressPort?: number
     protectedPaths?: string[]
   }
 
@@ -184,6 +190,7 @@ export namespace OsSandbox {
     workspaceRoot: string
     worktree?: string
     network: boolean
+    egressPort?: number
     protectedPaths?: string[]
   }): string {
     const roots = uniqueRoots(
@@ -199,9 +206,15 @@ export namespace OsSandbox {
     // Deny writes into protected subpaths even if under workspace
     const writeDeny = protectedPaths.map((p) => `(deny file-write* (subpath ${sbString(p)}))`).join("\n  ")
 
-    const networkRule = input.network
-      ? "(allow network*)"
-      : "(deny network*)\n  (deny network-outbound)\n  (deny network-inbound)"
+    // With an egress proxy (ADR-232) the child may open outbound connections
+    // only to the proxy's loopback port; everything else stays denied. The
+    // allow rule follows the deny rules so it re-permits that single target.
+    const networkRule =
+      input.egressPort != null
+        ? `(deny network*)\n  (deny network-outbound)\n  (deny network-inbound)\n  (allow network-outbound (remote ip ${sbString(`127.0.0.1:${input.egressPort}`)}))`
+        : input.network
+          ? "(allow network*)"
+          : "(deny network*)\n  (deny network-outbound)\n  (deny network-inbound)"
 
     return `(version 1)
 (deny default)
@@ -262,6 +275,7 @@ ${networkRule}
         workspaceRoot: input.workspaceRoot,
         worktree: input.worktree,
         network: input.network,
+        egressPort: input.egressPort,
         protectedPaths: input.protectedPaths,
       })
       // Write profile under realpath(tmpdir) so parent can always create it;
