@@ -16,6 +16,7 @@ import { Filesystem } from "../util/filesystem"
 import { FileTime } from "../file/time"
 import DESCRIPTION from "./apply_patch.txt"
 import { collectDiagnostics } from "./diagnostics"
+import { appendPostEditDependentsNotice } from "./post-edit-dependents"
 import { toErrorMessage, errorCode } from "@/util/error-message"
 import { Log } from "../util/log"
 import { BlastRadius } from "@/session/blast-radius"
@@ -612,6 +613,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
     if (cleanupIncomplete)
       output +=
         "\n\nLSP document cleanup was incomplete. File changes were saved; run a full project type check to verify diagnostics."
+    output = await appendPostEditDependentsNotice(output, ctx, changedFiles)
 
     return {
       title: output,

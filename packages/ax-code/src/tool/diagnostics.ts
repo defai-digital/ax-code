@@ -3,9 +3,11 @@ import { Filesystem } from "../util/filesystem"
 import { Bus } from "../bus"
 import { File } from "../file"
 import { FileWatcher } from "../file/watcher"
+import { readFile, stat } from "node:fs/promises"
 import { MAX_DIAGNOSTICS_PER_FILE, MAX_PROJECT_DIAGNOSTICS_FILES } from "@/constants/tool"
 import { Log } from "@/util/log"
 import { Flag } from "@/flag/flag"
+import { SyntacticExtractor } from "../code-intelligence/syntactic"
 import { DiagnosticCorrelation, prewarmAffectedFiles } from "@ax-code/ax-code-reason"
 import { DebugEngine } from "@ax-code/ax-code-reason"
 import { Instance } from "@/project/instance"
@@ -15,6 +17,13 @@ const log = Log.create({ service: "tool.diagnostics" })
 
 // Maximum correlation hints per file in the rendered output.
 const MAX_CORRELATIONS_IN_OUTPUT = 5
+
+// ADR-216: when no LSP client answered for an edited file, run a bounded
+// tree-sitter syntax check so a syntax error is not reported as silence.
+// Silence from the fallback itself is always labeled syntax-only; it never
+// claims type correctness.
+const SYNTAX_FALLBACK_BUDGET_MS = 200
+const SYNTAX_FALLBACK_MAX_BYTES = 1_048_576
 
 /**
  * Publish file edit + watcher events. Shared across edit, write, and apply_patch.
@@ -50,7 +59,8 @@ export async function collectDiagnostics(files: string[], options?: { includePro
     return {
       diagnostics: {},
       output:
-        "\n\nLSP diagnostics are incomplete or unavailable. File changes were saved, but absence of reported errors does not confirm a clean type check.",
+        "\n\nLSP diagnostics are incomplete or unavailable. File changes were saved, but absence of reported errors does not confirm a clean type check." +
+        (await renderSyntaxFallback(uniqueFiles)),
     }
   }
 
@@ -67,7 +77,9 @@ export async function collectDiagnostics(files: string[], options?: { includePro
 
   return {
     diagnostics,
-    output: renderDiagnostics(diagnostics, files, options, correlationMap),
+    output:
+      renderDiagnostics(diagnostics, files, options, correlationMap) +
+      (await renderSyntaxFallback(unansweredFiles(diagnostics, uniqueFiles))),
   }
 }
 
@@ -111,6 +123,57 @@ export function renderDiagnostics(
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────
+
+/**
+ * Files the LSP diagnostics record has no entry for: no client answered
+ * for them (unknown language, missing server, or a server that never
+ * pushed). Those files are eligible for the syntax-only fallback.
+ */
+function unansweredFiles(diagnostics: Awaited<ReturnType<typeof LSP.diagnostics>>, files: string[]): string[] {
+  return files.filter((file) => diagnostics[Filesystem.normalizePath(file)] === undefined)
+}
+
+/**
+ * ADR-216 syntax-only fallback. Bounded to SYNTAX_FALLBACK_BUDGET_MS across
+ * all files via a shared deadline; every per-file failure (unreadable file,
+ * unsupported language, size cap, grammar failure, timeout) is silent so
+ * the fallback can never throw into the edit result.
+ */
+async function renderSyntaxFallback(files: string[]): Promise<string> {
+  if (files.length === 0) return ""
+  const deadline = AbortSignal.timeout(SYNTAX_FALLBACK_BUDGET_MS)
+  let output = ""
+  for (const file of files) {
+    if (deadline.aborted) break
+    const issues = await syntaxCheckFile(file, deadline)
+    if (issues === undefined) continue
+    output += renderSyntaxBlock(file, issues)
+  }
+  return output
+}
+
+async function syntaxCheckFile(
+  file: string,
+  deadline: AbortSignal,
+): Promise<SyntacticExtractor.SyntaxIssue[] | undefined> {
+  try {
+    const info = await stat(file)
+    if (!info.isFile() || info.size > SYNTAX_FALLBACK_MAX_BYTES) return undefined
+    const source = await readFile(file, "utf8")
+    return await SyntacticExtractor.syntaxErrors(file, source, deadline)
+  } catch (error) {
+    if (deadline.aborted) return undefined
+    log.warn("syntax fallback check failed", { file, error })
+    return undefined
+  }
+}
+
+function renderSyntaxBlock(file: string, issues: SyntacticExtractor.SyntaxIssue[]): string {
+  const header = `\n\nSyntax-only check for ${file} (no language server answered; this is not a type check):\n`
+  if (issues.length === 0) return `${header}no syntax errors found`
+  const lines = issues.map((issue) => `${issue.line}:${issue.column} ${issue.snippet}`)
+  return `${header}<syntax-errors file="${file}">\n${lines.join("\n")}\n</syntax-errors>`
+}
 
 function renderCorrelationBlock(
   file: string,

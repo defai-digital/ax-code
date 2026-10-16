@@ -14,6 +14,7 @@ import { Instance } from "../project/instance"
 import { Snapshot } from "@/snapshot"
 import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
 import { notifyFileEdited, collectDiagnostics } from "./diagnostics"
+import { appendPostEditDependentsNotice } from "./post-edit-dependents"
 import { Isolation } from "@/isolation"
 import { BlastRadius } from "@/session/blast-radius"
 import { NativePerf } from "../perf/native"
@@ -261,6 +262,7 @@ export const EditTool = Tool.define("edit", {
             .join("\n")
         : ""
     let output = "Edit applied successfully." + snippet + diagOutput
+    output = await appendPostEditDependentsNotice(output, ctx, filePath)
 
     return {
       metadata: {

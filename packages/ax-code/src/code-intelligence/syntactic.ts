@@ -1,7 +1,9 @@
 import z from "zod"
+import { LANGUAGE_EXTENSIONS } from "@ax-code/ax-code-intel/language"
 import { EvidenceCache } from "../evidence/cache"
 import { evidenceCacheMode } from "../evidence/mode"
 import { createRequire } from "node:module"
+import path from "node:path"
 import { lazy } from "@/util/lazy"
 import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
@@ -654,5 +656,114 @@ export namespace SyntacticExtractor {
       // Function definitions can hide inside compound statements/blocks.
       walkBash(child, symbols)
     }
+  }
+
+  // ─── Syntax-only error check (ADR-216) ─────────────────────────────
+  //
+  // Edit feedback fallback for files no language server answered for.
+  // Walks a real parse for tree-sitter ERROR/MISSING nodes and reports up
+  // to 5 locations. The native inventory API has no error-node projection,
+  // so only languages with a bundled WASM grammar can be checked; other
+  // languages return undefined (skipped, never a false clean claim).
+
+  // 1 MiB: beyond this the synchronous WASM parse is not worth the latency.
+  const MAX_SYNTAX_CHECK_BYTES = 1_048_576
+  const MAX_SYNTAX_ISSUES = 5
+  // Bound the walk so a pathological tree cannot spin the event loop; the
+  // caller also enforces a wall-clock deadline via the AbortSignal.
+  const MAX_SYNTAX_WALK_NODES = 250_000
+  const SNIPPET_MAX_CHARS = 100
+
+  export type SyntaxIssue = {
+    /** 1-based line of the ERROR/MISSING node start. */
+    line: number
+    /** 1-based column of the ERROR/MISSING node start. */
+    column: number
+    /** Collapsed node text, or a marker for zero-width MISSING nodes. */
+    snippet: string
+  }
+
+  // web-tree-sitter node shaped for the all-children walk below. ERROR
+  // nodes can sit in unnamed positions and MISSING nodes are always
+  // unnamed, so childCount/child are used instead of namedChild.
+  type WalkNode = {
+    type: string
+    text: string
+    childCount: number
+    child(i: number): WalkNode | null
+    startPosition: { row: number; column: number }
+  }
+
+  /**
+   * Parse `source` (detected from `filePath`'s extension) and report up to
+   * 5 ERROR/MISSING locations in document order. Returns `[]` when the
+   * parse ran and found nothing, and `undefined` when the check cannot
+   * run (unsupported language, source above 1 MiB, grammar unavailable,
+   * or `signal` aborted) — callers must treat `undefined` as "not
+   * checked", never as "clean".
+   */
+  export async function syntaxErrors(
+    filePath: string,
+    source: string,
+    signal?: AbortSignal,
+  ): Promise<SyntaxIssue[] | undefined> {
+    signal?.throwIfAborted()
+    const lang = LANGUAGE_EXTENSIONS[path.extname(filePath).toLowerCase()]
+    if (!lang || !(lang in GRAMMARS) || source.length > MAX_SYNTAX_CHECK_BYTES) return undefined
+    const language = await loadLanguage(lang)
+    if (!language) return undefined
+    const { Parser } = await runtime()
+    const parser = new Parser()
+    let tree: { rootNode: unknown; delete(): void } | null = null
+    try {
+      parser.setLanguage(language)
+      signal?.throwIfAborted()
+      tree = parser.parse(source)
+      if (!tree) return undefined
+      const issues = collectErrorNodes(tree.rootNode as WalkNode)
+      signal?.throwIfAborted()
+      return issues
+    } catch (err) {
+      if (signal?.aborted) return undefined
+      log.warn("syntax error check failed", { lang, err: toErrorMessage(err) })
+      return undefined
+    } finally {
+      tree?.delete()
+      parser.delete?.()
+    }
+  }
+
+  // Iterative pre-order walk over all children, bounded by
+  // MAX_SYNTAX_WALK_NODES, stopping at the first MAX_SYNTAX_ISSUES hits.
+  // ERROR subtrees are parser salvage; descending into them would only
+  // yield nested duplicates of the same broken region.
+  function collectErrorNodes(root: WalkNode): SyntaxIssue[] {
+    const issues: SyntaxIssue[] = []
+    const stack: WalkNode[] = [root]
+    let visited = 0
+    while (stack.length > 0) {
+      if (issues.length >= MAX_SYNTAX_ISSUES) break
+      const node = stack.pop()!
+      if (++visited > MAX_SYNTAX_WALK_NODES) break
+      if (node.type === "ERROR" || node.type === "MISSING") {
+        issues.push({
+          line: node.startPosition.row + 1,
+          column: node.startPosition.column + 1,
+          snippet: snippetOf(node),
+        })
+        continue
+      }
+      for (let i = node.childCount - 1; i >= 0; i--) {
+        const child = node.child(i)
+        if (child) stack.push(child)
+      }
+    }
+    return issues
+  }
+
+  function snippetOf(node: WalkNode): string {
+    if (node.type === "MISSING" || node.text.length === 0) return "<missing token>"
+    const collapsed = node.text.replace(/\s+/g, " ").trim()
+    return collapsed.length > SNIPPET_MAX_CHARS ? collapsed.slice(0, SNIPPET_MAX_CHARS - 3) + "..." : collapsed
   }
 }

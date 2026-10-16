@@ -268,6 +268,47 @@ describe("SyntacticExtractor.extractImports", () => {
   })
 })
 
+describe("SyntacticExtractor.syntaxErrors", () => {
+  test("valid TypeScript parses with no error nodes", async () => {
+    const source = ["export function add(a: number, b: number) {", "  return a + b", "}", ""].join("\n")
+    expect(await SyntacticExtractor.syntaxErrors("/repo/sum.ts", source)).toEqual([])
+  })
+
+  test("broken TypeScript reports 1-based locations inside the file", async () => {
+    const lines = ["const valid = 1", "function broken( {", "  return valid", "}", ""]
+    const issues = await SyntacticExtractor.syntaxErrors("/repo/broken.ts", lines.join("\n"))
+    expect(issues!.length).toBeGreaterThan(0)
+    for (const issue of issues!) {
+      expect(issue.line).toBeGreaterThanOrEqual(1)
+      expect(issue.line).toBeLessThanOrEqual(lines.length)
+      expect(issue.column).toBeGreaterThanOrEqual(1)
+      expect(issue.snippet.length).toBeGreaterThan(0)
+    }
+  })
+
+  test("unsupported extensions are skipped, not reported clean", async () => {
+    expect(await SyntacticExtractor.syntaxErrors("/repo/model.py", "def broken(:\n")).toBeUndefined()
+    expect(await SyntacticExtractor.syntaxErrors("/repo/notes.md", "[unclosed\n")).toBeUndefined()
+  })
+
+  test("sources above the 1 MiB cap are skipped", async () => {
+    const huge = "const x = 1\n".repeat(90_000) // ~1.08 MB
+    expect(await SyntacticExtractor.syntaxErrors("/repo/huge.ts", huge)).toBeUndefined()
+  })
+
+  test("caps reported issues at 5 in document order", async () => {
+    const lines: string[] = []
+    for (let i = 0; i < 8; i++) lines.push("const ok" + i + " = " + i, "@!?garbage" + i, "")
+    const issues = await SyntacticExtractor.syntaxErrors("/repo/noisy.ts", lines.join("\n"))
+    expect(issues!.length).toBeGreaterThan(0)
+    expect(issues!.length).toBeLessThanOrEqual(5)
+    for (let i = 1; i < issues!.length; i++) {
+      const [prev, cur] = [issues![i - 1], issues![i]]
+      expect(cur.line).toBeGreaterThan(prev.line)
+    }
+  })
+})
+
 describe("builder.indexFile syntactic fallback", () => {
   test("writes tagged nodes with completeness partial when LSP has no symbols", async () => {
     await using tmp = await tmpdir({ git: true })

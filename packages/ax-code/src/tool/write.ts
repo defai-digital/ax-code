@@ -9,6 +9,7 @@ import { Instance } from "../project/instance"
 import { trimDiff } from "./edit"
 import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
 import { notifyFileEdited, collectDiagnostics } from "./diagnostics"
+import { appendPostEditDependentsNotice } from "./post-edit-dependents"
 import { Isolation } from "@/isolation"
 import { BlastRadius } from "@/session/blast-radius"
 import { normalizeToWorkspacePath, resolveToolFilePath, withFilePathAliases } from "./file-path"
@@ -130,6 +131,7 @@ export const WriteTool = Tool.define("write", {
       includeProjectDiagnostics: true,
     })
     let output = "Wrote file successfully." + diagOutput
+    output = await appendPostEditDependentsNotice(output, ctx, filepath)
 
     return {
       title: relativePath,
