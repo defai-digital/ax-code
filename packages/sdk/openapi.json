@@ -53686,6 +53686,31 @@
                     "maxLength": 1024
                   }
                 },
+                "omitted": {
+                  "type": "object",
+                  "properties": {
+                    "sources": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "stale": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "unknown": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "sources",
+                    "stale",
+                    "unknown"
+                  ]
+                },
                 "related": {
                   "maxItems": 8,
                   "type": "array",
@@ -53727,6 +53752,7 @@
                 "stale",
                 "unknown",
                 "changed",
+                "omitted",
                 "related",
                 "markdown",
                 "truncated"

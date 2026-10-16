@@ -1342,7 +1342,10 @@ export function mountMap(
         // The page cell supplies the directory context, so a file shows its own name.
         const fontSize = node.kind === "page" ? 15 : 11
         const room = Math.floor((treemapBox.w - (omittedBadge ? 26 : 10)) / (fontSize * 0.58))
-        const changed = node.kind === "page" ? (graph.pages?.find((page) => page.id === node.id)?.stale ?? 0) : 0
+        const pageInfo = node.kind === "page" ? graph.pages?.find((candidate) => candidate.id === node.id) : undefined
+        // Citations past the page cap count too: the stale ring uses the node's
+        // aggregate freshness, so a bounded count here would contradict it.
+        const changed = pageInfo ? pageInfo.stale + pageInfo.omitted.stale : 0
         const name =
           node.kind === "source" ? info.label.slice(info.label.lastIndexOf("/") + 1) : info.label
         const full = changed > 0 ? `${name} · ${changed} changed` : name

@@ -38,6 +38,7 @@ const page = (id: string, sources: string[]): WikiGraphPage => ({
   related: [],
   markdown: "",
   truncated: false,
+  omitted: { sources: 0, stale: 0, unknown: 0 },
 })
 
 test("page overlap counts shared cited files symmetrically with own counts on the diagonal", () => {

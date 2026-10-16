@@ -728,6 +728,79 @@ test("page freshness counts stay within the bounded source list", () => {
   expect(page.unknown).toBe(0)
   expect(page.changed).toHaveLength(GRAPH_LIMITS.sourcesPerPage)
   expect(page.changed.every((source) => page.sources.includes(source))).toBe(true)
+  // The two citations the cap hides are accounted for beside the list, so the
+  // page's own state still agrees with its node, which aggregates every citation.
+  expect(page.omitted).toEqual({ sources: 2, stale: 2, unknown: 0 })
+  expect(graph.nodes.find((node) => node.id === page.id)?.freshness).toBe("stale")
+})
+
+test("reports citations past the cap so a page state matches its node", () => {
+  const sources = Array.from({ length: GRAPH_LIMITS.sourcesPerPage + 1 }, (_, i) => `src/${i}.ts`)
+  // The projection deduplicates and sorts citations before the cap, so the one it
+  // drops is the lexicographically last.
+  const sorted = [...sources].sort()
+  const listed = sorted.slice(0, GRAPH_LIMITS.sourcesPerPage)
+  const digest = "a".repeat(64)
+  const graph = projectWikiManifest(
+    {
+      schemaVersion: 1,
+      generator: "ax-wiki",
+      pages: { "a.md": { title: "A", sources, sourceHashes: Object.fromEntries(listed.map((s) => [s, digest])) } },
+    },
+    {
+      snapshot: "fixture",
+      // Everything the list can name is fresh; only the citation past the cap is gone.
+      observed: new Map([...listed.map((source) => [source, digest]), [sorted.at(-1)!, null]]),
+    },
+  )
+  const page = graph.pages![0]!
+  expect(page.stale).toBe(0)
+  expect(page.changed).toEqual([])
+  expect(page.omitted).toEqual({ sources: 1, stale: 1, unknown: 0 })
+  expect(graph.nodes.find((node) => node.id === page.id)?.freshness).toBe("stale")
+})
+
+test("parses a page projected before the omitted counts existed as zeros", () => {
+  const graph = parseWikiGraph({
+    schemaVersion: 1,
+    snapshot: "fixture",
+    scope: "wiki-manifest",
+    codeRelationships: "unavailable",
+    nodes: [
+      {
+        id: "page:a.md",
+        kind: "page",
+        label: "A",
+        path: "a.md",
+        freshness: "fresh",
+        recordedReferences: 1,
+        summary: "",
+        symbols: [],
+        detail: "",
+        qualified: "",
+      },
+    ],
+    edges: [],
+    omitted: { nodes: 0, edges: 0 },
+    pages: [
+      {
+        id: "page:a.md",
+        path: "a.md",
+        title: "A",
+        purpose: "",
+        summary: "",
+        generatedAt: "",
+        sources: ["src/a.ts"],
+        stale: 0,
+        unknown: 0,
+        changed: [],
+        related: [],
+        markdown: "",
+        truncated: false,
+      },
+    ],
+  })
+  expect(graph.pages![0]!.omitted).toEqual({ sources: 0, stale: 0, unknown: 0 })
 })
 
 test("cuts a composed symbol detail to its own budget instead of failing the projection", () => {

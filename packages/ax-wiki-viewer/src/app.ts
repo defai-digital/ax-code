@@ -167,10 +167,24 @@ function shortDate(iso: string): string {
   return new Date(time).toISOString().slice(0, 16).replace("T", " ") + " UTC"
 }
 
-/** Recorded freshness of a page: stale wins, then unverified, else current. */
-function pageState(page: WikiGraphPage): "fresh" | "stale" | "unknown" {
-  if (page.stale > 0) return "stale"
-  if (page.unknown > 0 || page.sources.length === 0) return "unknown"
+/** Recorded totals: the cited files `sources` lists plus those the projection could not list. */
+function pageTotals(page: WikiGraphPage): { sources: number; stale: number; unknown: number } {
+  return {
+    sources: page.sources.length + page.omitted.sources,
+    stale: page.stale + page.omitted.stale,
+    unknown: page.unknown + page.omitted.unknown,
+  }
+}
+
+/**
+ * Recorded freshness of a page: stale wins, then unverified, else current. The
+ * bounded counts describe only the citations `sources` lists, so `pageTotals`
+ * decides: a page whose only changed file sits past `sourcesPerPage` is stale.
+ */
+export function pageState(page: WikiGraphPage): "fresh" | "stale" | "unknown" {
+  const totals = pageTotals(page)
+  if (totals.stale > 0) return "stale"
+  if (totals.unknown > 0 || totals.sources === 0) return "unknown"
   return "fresh"
 }
 
@@ -187,15 +201,17 @@ export function sourceUnverified(path: string, page: WikiGraphPage, nodes: reado
 
 /** Compact table form of the page state. */
 function shortState(page: WikiGraphPage): string {
+  const totals = pageTotals(page)
   const state = pageState(page)
-  if (state === "stale") return `${page.stale}/${page.sources.length} changed`
+  if (state === "stale") return `${totals.stale}/${totals.sources} changed`
   if (state === "unknown") return "Unverified"
   return "Unchanged"
 }
 
 function stateText(page: WikiGraphPage): string {
+  const totals = pageTotals(page)
   const state = pageState(page)
-  if (state === "stale") return `${page.stale} of ${plural(page.sources.length, "cited file")} changed`
+  if (state === "stale") return `${totals.stale} of ${plural(totals.sources, "cited file")} changed`
   if (state === "unknown") return "Unverified"
   return "Cited files unchanged"
 }
@@ -503,6 +519,7 @@ export function mount(
     for (const label of ["Page", "Files", "Freshness"]) el("th", headRow, label)
     const body = el("tbody", table)
     for (const page of list) {
+      const totals = pageTotals(page)
       const row = el("tr", body, undefined, "row")
       row.tabIndex = 0
       row.onclick = () => openPage(page.path)
@@ -512,22 +529,22 @@ export function mount(
       const cell = el("td", row)
       el("div", cell, page.title, "ptitle")
       el("div", cell, page.purpose || page.summary, "psub")
-      el("td", row, String(page.sources.length), "num")
+      el("td", row, String(totals.sources), "num")
       const freshCell = el("td", row, undefined, "fresh")
       const bar = el("div", freshCell, undefined, "bar")
-      const total = Math.max(1, page.sources.length)
-      const fresh = Math.max(0, page.sources.length - page.stale - page.unknown)
+      const total = Math.max(1, totals.sources)
+      const fresh = Math.max(0, totals.sources - totals.stale - totals.unknown)
       for (const [count, color] of [
         [fresh, "var(--fresh)"],
-        [page.stale, "var(--stale)"],
-        [page.unknown, "var(--unknown)"],
+        [totals.stale, "var(--stale)"],
+        [totals.unknown, "var(--unknown)"],
       ] as const) {
         if (!count) continue
         const part = el("span", bar)
         part.style.width = `${(count / total) * 100}%`
         part.style.background = color
       }
-      bar.title = `${fresh} unchanged, ${page.stale} changed, ${page.unknown} unverified`
+      bar.title = `${fresh} unchanged, ${totals.stale} changed, ${totals.unknown} unverified`
       el("div", freshCell, shortState(page), "note")
     }
 
@@ -768,14 +785,15 @@ export function mount(
     el("div", article, page.path, "crumb")
     el("h1", article, page.title)
     const facts = el("div", article, undefined, "facts")
+    const totals = pageTotals(page)
     const state = pageState(page)
     el("span", facts, stateText(page), `badge ${state}`)
-    el("span", facts, plural(page.sources.length, "cited file"))
+    el("span", facts, plural(totals.sources, "cited file"))
     if (page.generatedAt) el("span", facts, `generated ${shortDate(page.generatedAt)}`)
     if (page.purpose) el("p", article, page.purpose, "callout")
     if (state === "stale") {
       const warn = el("p", article, undefined, "callout warn")
-      warn.textContent = `${plural(page.stale, "cited file")} changed after this page was written, so parts may be out of date. Run ax-code wiki update to refresh it.`
+      warn.textContent = `${plural(totals.stale, "cited file")} changed after this page was written, so parts may be out of date. Run ax-code wiki update to refresh it.`
     }
     const knownPages = new Set((graph.pages ?? []).map((candidate) => candidate.path))
     const knownSources = new Set((graph.pages ?? []).flatMap((candidate) => candidate.sources))
@@ -835,7 +853,13 @@ export function mount(
       }
     }
     const sources = el("section", rail)
-    el("h2", sources, `Cited files (${page.sources.length})`)
+    el(
+      "h2",
+      sources,
+      totals.sources > page.sources.length
+        ? `Cited files (${page.sources.length} of ${totals.sources})`
+        : `Cited files (${page.sources.length})`,
+    )
     const ul = el("ul", sources)
     const changed = new Set(page.changed)
     for (const source of page.sources) {

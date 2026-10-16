@@ -1,6 +1,6 @@
 import { expect, test } from "vitest"
 import type { WikiGraphNode, WikiGraphPage } from "@ax-code/ax-wiki/graph"
-import { searchPage, sourceUnverified } from "../src/app.js"
+import { pageState, searchPage, sourceUnverified } from "../src/app.js"
 
 const page = (markdown: string): WikiGraphPage => ({
   id: "page:guide.md",
@@ -16,6 +16,7 @@ const page = (markdown: string): WikiGraphPage => ({
   related: [],
   markdown,
   truncated: false,
+  omitted: { sources: 0, stale: 0, unknown: 0 },
 })
 
 test("returns a markdown snippet around the match", () => {
@@ -61,4 +62,15 @@ test("falls back to the page count when the view cap omitted the source node", (
   const citing = { ...page(""), sources: ["src/a.ts"], unknown: 1 }
   expect(sourceUnverified("src/a.ts", citing, [])).toBe(true)
   expect(sourceUnverified("src/a.ts", { ...citing, unknown: 0 }, [])).toBe(false)
+})
+
+test("counts the citations the page projection could not list", () => {
+  // Only the citation past `sourcesPerPage` changed, so the listed counters are
+  // empty: the omitted counts have to decide the page's state.
+  const citing = { ...page(""), sources: ["src/a.ts"], omitted: { sources: 1, stale: 1, unknown: 0 } }
+  expect(pageState(citing)).toBe("stale")
+  expect(pageState({ ...citing, omitted: { sources: 1, stale: 0, unknown: 1 } })).toBe("unknown")
+  expect(pageState({ ...citing, omitted: { sources: 1, stale: 0, unknown: 0 } })).toBe("fresh")
+  // A page with no citations at all is unverified, not current.
+  expect(pageState({ ...page(""), omitted: { sources: 0, stale: 0, unknown: 0 } })).toBe("unknown")
 })

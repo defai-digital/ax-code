@@ -4870,6 +4870,11 @@ export type WikiVisualizationGraph = {
     stale: number
     unknown: number
     changed: Array<string>
+    omitted: {
+      sources: number
+      stale: number
+      unknown: number
+    }
     related: Array<{
       id: string
       shared: number

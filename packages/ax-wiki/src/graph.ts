@@ -60,6 +60,13 @@ export type WikiGraphPage = {
   unknown: number
   /** Cited sources whose current bytes differ from the recorded hash or are missing. */
   changed: string[]
+  /**
+   * Recorded citations beyond `sources`, which the bounded list cannot name. `stale`
+   * and `unknown` above describe that list alone, so a page whose only changed file
+   * sits past the cap would read as unchanged while its node is stale. The page's own
+   * state has to fold these in; a page projected by an earlier version parses as zeros.
+   */
+  omitted: { sources: number; stale: number; unknown: number }
   /** Other pages ranked by the number of cited sources they share; a list, never an edge. */
   related: Array<{ id: string; shared: number }>
   /** Page body without frontmatter; "" when the caller supplied none. */
@@ -212,6 +219,13 @@ function list(value: unknown, max: number, what: string): unknown[] {
   if (!Array.isArray(value) || value.length > max) throw new Error(`Invalid ${what}`)
   return value
 }
+/** Page-level counts over the citations `sources` cannot list; absent in earlier graphs. */
+function parsePageOmitted(value: unknown): { sources: number; stale: number; unknown: number } {
+  if (value === undefined) return { sources: 0, stale: 0, unknown: 0 }
+  const omitted = record(value)
+  return { sources: count(omitted.sources), stale: count(omitted.stale), unknown: count(omitted.unknown) }
+}
+
 function parsePages(value: unknown): WikiGraphPage[] | undefined {
   if (value === undefined) return undefined
   const ids = new Set<string>()
@@ -236,6 +250,8 @@ function parsePages(value: unknown): WikiGraphPage[] | undefined {
       stale: count(page.stale),
       unknown: count(page.unknown),
       changed: list(page.changed, GRAPH_LIMITS.sourcesPerPage, "changed sources").map(graphRelativePath),
+      // A graph projected before this field existed describes no omitted citations.
+      omitted: parsePageOmitted(page.omitted),
       related: list(page.related, GRAPH_LIMITS.related, "related pages").map((entry) => {
         const item = record(entry)
         return { id: text(item.id, 1100), shared: count(item.shared) }
@@ -678,9 +694,21 @@ function projectPages(
     // Freshness describes the same bounded source list the page exposes: with
     // more recorded citations than sourcesPerPage, uncapped counts would exceed
     // the cited-file total the viewer renders (and `changed` could name files
-    // missing from `sources`).
-    const recorded = [...(states.get(id) ?? [])].filter(([source]) => listed.has(source.slice("source:".length)))
-    const freshness = recorded.map(([, state]) => state)
+    // missing from `sources`). The citations past the cap are accounted for
+    // separately, so the page's own state can still agree with its node: the node
+    // aggregates every recorded citation, the bounded counters cannot.
+    const listedStates: GraphFreshness[] = []
+    const omittedStates: GraphFreshness[] = []
+    const listedChanged: string[] = []
+    for (const [source, state] of states.get(id) ?? []) {
+      const sourcePath = source.slice("source:".length)
+      if (!listed.has(sourcePath)) {
+        omittedStates.push(state)
+        continue
+      }
+      listedStates.push(state)
+      if (state === "stale") listedChanged.push(sourcePath)
+    }
     const body = cleanGraphMarkdown(documents?.get(node.path) ?? "")
     const allowed = Math.max(0, Math.min(GRAPH_LIMITS.markdown, budget))
     let markdown = body
@@ -697,9 +725,14 @@ function projectPages(
       summary: node.summary,
       generatedAt,
       sources: visible,
-      stale: freshness.filter((state) => state === "stale").length,
-      unknown: freshness.filter((state) => state === "unknown").length,
-      changed: recorded.filter(([, state]) => state === "stale").map(([source]) => source.slice("source:".length)),
+      stale: listedStates.filter((state) => state === "stale").length,
+      unknown: listedStates.filter((state) => state === "unknown").length,
+      changed: listedChanged,
+      omitted: {
+        sources: omittedStates.length,
+        stale: omittedStates.filter((state) => state === "stale").length,
+        unknown: omittedStates.filter((state) => state === "unknown").length,
+      },
       related,
       markdown,
       truncated: markdown.length < body.length,
