@@ -1,6 +1,8 @@
 import { EOL } from "os"
+import path from "path"
 import type { Argv } from "yargs"
 import { CompatibilityImport } from "../../import/compatibility"
+import { ClaudeSessions } from "../../import/claude-sessions"
 import { bootstrap } from "../bootstrap"
 import { cmd } from "./cmd"
 import { ImportCommand as StorageImportCommand } from "./storage/import"
@@ -18,11 +20,85 @@ export function formatCompatibilityImportReport(report: CompatibilityImport.Repo
   return lines.join(EOL).concat(EOL)
 }
 
+export function formatClaudeSessionsReport(report: ClaudeSessions.Report) {
+  const lines = [
+    `Import claude sessions: ${report.dryRun ? "dry-run" : "written"}`,
+    `Project: ${report.directory}`,
+    `Transcripts: ${report.transcripts.length}`,
+  ]
+  if (report.missing) lines.push(`  no transcripts found under ${report.projectDirectory}`)
+  for (const transcript of report.transcripts) {
+    lines.push(`  ${transcript.name} (${transcript.summary.length} chars) <- ${transcript.sourcePath}`)
+  }
+  return lines.join(EOL).concat(EOL)
+}
+
+export const ImportSessionsCommand = cmd({
+  command: "sessions",
+  describe: "import Claude Code session history as summary sessions (dry-run by default)",
+  builder: (yargs: Argv) =>
+    yargs
+      .option("from", {
+        type: "string",
+        describe: "source agent history to import",
+        choices: ["claude"] as const,
+        default: "claude" as const,
+      })
+      .option("user", {
+        type: "boolean",
+        describe:
+          "read ~/.claude/projects transcripts for the current project; nothing outside the project is read without this flag",
+      })
+      .option("write", {
+        type: "boolean",
+        describe: "create one AX Code session per transcript; dry-run is the default",
+      })
+      .option("root", {
+        type: "string",
+        describe: "override the ~/.claude/projects root (primarily for tests)",
+      })
+      .option("json", {
+        type: "boolean",
+        describe: "output machine-readable JSON",
+      }),
+  async handler(args) {
+    const directory = process.cwd()
+    const root = args.root ?? ClaudeSessions.defaultRoot()
+    const projectDirectory = ClaudeSessions.projectDirectory({ root, projectPath: directory })
+
+    await bootstrap(directory, async () => {
+      const report = await ClaudeSessions.run({
+        projectPath: directory,
+        projectDirectory,
+        write: args.write === true,
+        createSession: args.write
+          ? async (transcript) => {
+              const { Session } = await import("../../session")
+              const { createUserMessage } = await import("../../session/prompt/prompt-user-message")
+              const session = await Session.create({ title: `Claude import: ${transcript.name}` })
+              await createUserMessage({
+                sessionID: session.id,
+                agentRouting: "preserve",
+                parts: [{ type: "text", text: transcript.summary }],
+              })
+            }
+          : undefined,
+      })
+      if (args.json) {
+        process.stdout.write(JSON.stringify(report, null, 2) + EOL)
+        return
+      }
+      process.stdout.write(formatClaudeSessionsReport(report))
+    })
+  },
+})
+
 export const ImportCommand = cmd({
   command: "import <file>",
   describe: "import session data, or dry-run import opencode/claude/codex/cursor/windsurf compatibility files",
   builder: (yargs: Argv) =>
     yargs
+      .command(ImportSessionsCommand)
       .positional("file", {
         describe: "path to JSON file, or one of: opencode, claude, codex, cursor, windsurf",
         type: "string",

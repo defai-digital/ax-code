@@ -47,6 +47,7 @@ import { TuiBackendCommand } from "./tui/backend"
 import { TuiThreadCommand } from "./tui/thread"
 import { UninstallCommand } from "./cmd/uninstall"
 import { UpgradeCommand } from "./cmd/upgrade"
+import { WatchCommand } from "./cmd/watch"
 import { WebUiCommand } from "./cmd/webui"
 import { WorkflowCommand } from "./cmd/workflow"
 import { TaskCommand } from "./cmd/task"
@@ -106,6 +107,7 @@ const cmds = [
   UpgradeCommand,
   UninstallCommand,
   ReleaseCommand,
+  WatchCommand,
   // Hidden / internal commands (registered, never listed)
   TuiBackendCommand,
   TuiThreadCommand,

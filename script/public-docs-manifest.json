@@ -130,6 +130,10 @@
       "page": "guides/headless-cli"
     },
     {
+      "source": "docs/guides/herdr.md",
+      "page": "guides/herdr"
+    },
+    {
       "source": "docs/guides/hooks.md",
       "page": "guides/hooks"
     },
