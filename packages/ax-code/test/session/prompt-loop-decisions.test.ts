@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest"
-import { compactionLoopBreakReason, pendingCompactionDecision } from "../../src/session/prompt/prompt-loop-decisions"
+import {
+  assistantLoopExitDecision,
+  compactionLoopBreakReason,
+  pendingCompactionDecision,
+} from "../../src/session/prompt/prompt-loop-decisions"
+import { MessageID } from "../../src/session/schema"
 
 describe("session.prompt-loop-decisions.pendingCompactionDecision", () => {
   test("'stop' on a non-overflow (proactive) compaction is escalated as 'error'", () => {
@@ -38,5 +43,36 @@ describe("session.prompt-loop-decisions.pendingCompactionDecision", () => {
       type: "break",
       reason: "error",
     })
+  })
+})
+
+describe("session.prompt-loop-decisions.assistantLoopExitDecision", () => {
+  test("finish=length is unfinished: the loop continues instead of completing", () => {
+    // Baseline for supervised truncated-turn recovery: the exit decision never
+    // completes on finish=length, so without the recovery path a supervised
+    // loop re-called the model with the partial assistant text as the last
+    // message and no continuation instruction, bounded only by the generic
+    // step ceilings. Recovery must own this turn instead.
+    expect(
+      assistantLoopExitDecision({
+        lastUserID: "msg_1",
+        lastAssistant: { id: MessageID.make("msg_2"), finish: "length" },
+        hasPendingSubtask: false,
+      }),
+    ).toEqual({ action: "continue" })
+  })
+
+  test("an errored finish=length turn still yields to the error retry path", () => {
+    expect(
+      assistantLoopExitDecision({
+        lastUserID: "msg_1",
+        lastAssistant: {
+          id: MessageID.make("msg_2"),
+          finish: "length",
+          error: { name: "APIError", data: { message: "boom", isRetryable: false } },
+        },
+        hasPendingSubtask: false,
+      }),
+    ).toEqual({ action: "continue" })
   })
 })

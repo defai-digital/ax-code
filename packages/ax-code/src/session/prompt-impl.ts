@@ -45,6 +45,7 @@ import {
   handlePromptLoopTruncatedTurn,
   isLargeTruncatedCodePaste,
   truncatedModelOutputPrefix,
+  truncatedTurnRecoveryEngaged,
 } from "./prompt/prompt-loop-truncated-turn"
 import { handlePromptLoopTodoConvergence } from "./prompt/prompt-loop-todo-convergence"
 import { handlePromptLoopTodoContinuation } from "./prompt/prompt-loop-todo-continuation"
@@ -1756,7 +1757,25 @@ export namespace SessionPrompt {
       // complements the system-prompt reminder injected per turn. Capped by
       // maxTodoRetries to prevent infinite loops when the model genuinely
       // cannot finish a todo (blocked tool, missing data, etc.).
-      if (effectivelyAutonomous && !processor.message.error) {
+      //
+      // The gate is ALSO entered for a clean truncated turn (finish=length)
+      // in supervised sessions: truncated-turn recovery must run outside
+      // autonomous mode too, because the supervised alternative was an
+      // unbounded re-call of the model with the partial assistant text as
+      // the last message and no continuation instruction (bounded only by
+      // the generic step ceilings while every retry paid a full output
+      // window). Everything else in this block stays autonomous-only: a
+      // supervised entry always has truncatedModelTurn set, so the shared
+      // steps above the truncated section are inert for it (an empty turn
+      // stopped earlier; the gate telemetry emit is autonomy-gated below;
+      // handlePromptLoopEmptyTurn ignores non-empty turns), and the truncated
+      // section itself always ends in continue/break, so the autonomous-only
+      // remainder below it is unreachable for supervised entries.
+      const truncatedRecovery = truncatedTurnRecoveryEngaged({
+        truncatedModelTurn,
+        messageError: Boolean(processor.message.error),
+      })
+      if ((effectivelyAutonomous || truncatedRecovery) && !processor.message.error) {
         // Append only messages written this step (the new assistant + parts)
         // instead of re-streaming the full history via Session.messages().
         const latestMessages = await appendNewerMessages(sessionID, msgs)
@@ -1781,17 +1800,19 @@ export namespace SessionPrompt {
         const shouldRecoverEmptySubagentResult =
           modelFinished && completionGate.status === "blocked" && completionGate.reason === "empty_subagent_result"
 
-        emitPromptLoopCompletionGateDecision({
-          sessionID,
-          messageID: processor.message.id,
-          step,
-          modelFinished,
-          gate: completionGate,
-          todoRetries,
-          maxTodoRetries,
-          completionGateRetries,
-          maxCompletionGateRetries,
-        })
+        if (effectivelyAutonomous) {
+          emitPromptLoopCompletionGateDecision({
+            sessionID,
+            messageID: processor.message.id,
+            step,
+            modelFinished,
+            gate: completionGate,
+            todoRetries,
+            maxTodoRetries,
+            completionGateRetries,
+            maxCompletionGateRetries,
+          })
+        }
 
         const emptyTurnTransition = await handlePromptLoopEmptyTurn({
           sessionID,
@@ -1826,11 +1847,13 @@ export namespace SessionPrompt {
         const currentTruncatedModelOutputPrefix = truncatedModelTurn
           ? truncatedModelOutputPrefix(truncatedOutputText)
           : undefined
-        if (truncatedModelTurn && textOnlyProfile?.kind === "conversation") {
+        if (truncatedModelTurn && effectivelyAutonomous && textOnlyProfile?.kind === "conversation") {
           // A direct conversation has no pending repository work for an
           // autonomous recovery turn to complete. Preserve the partial text
           // and stop at the provider limit instead of paying for another
           // full local generation with coding-oriented recovery instructions.
+          // Supervised conversations keep the neutral continue-from-the-
+          // cutoff recovery below instead — the user is watching the turn.
           log.info("direct conversation reached provider output limit", {
             command: "session.prompt.loop",
             status: "stopped",
@@ -1857,6 +1880,7 @@ export namespace SessionPrompt {
           pendingCount: pendingTodos.length,
           previousOutputPrefix: previousTruncatedModelOutputPrefix,
           currentOutputPrefix: currentTruncatedModelOutputPrefix,
+          mode: effectivelyAutonomous ? "autonomous" : "supervised",
         })
         retries.truncatedTurn = truncatedTurnTransition.truncatedModelTurnRetries
 

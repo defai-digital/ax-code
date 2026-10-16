@@ -146,6 +146,22 @@ describe("prompt loop assistant exit", () => {
 
     expect(result).toEqual({ action: "stop", reason: "completed" })
   })
+
+  test("a finish=length turn keeps the loop running", () => {
+    // Reproduction of the supervised baseline: the provider cut the response
+    // at its output limit, and the exit decision answers "continue". Before
+    // truncated-turn recovery ran outside autonomous mode, that continuation
+    // re-called the model with the partial assistant text as the last message
+    // and no instruction, with no truncation-specific bound.
+    const result = resolvePromptLoopAssistantExit({
+      sessionID: SessionID.descending(),
+      lastUserID: "msg_1",
+      lastAssistant: { id: MessageID.make("msg_2"), finish: "length" },
+      hasPendingSubtask: false,
+    })
+
+    expect(result).toEqual({ action: "continue" })
+  })
 })
 
 describe("prompt loop assistant exit with pending steering", () => {
