@@ -5,9 +5,16 @@ import type { DialogContext } from "@tui/ui/dialog"
 import { Clipboard } from "../../util/clipboard"
 import { Editor } from "../../util/editor"
 import { DialogExportOptions } from "../../ui/dialog-export-options"
+import { DialogAlert } from "../../ui/dialog-alert"
 import { formatTranscript, type MessageWithParts, type SessionInfo } from "../../util/transcript"
 import { lastAssistantText, scrollDelta, scrollTo, transcriptItems } from "./display"
-import { resolveTranscriptExportPath, transcriptFilename } from "./display-command-helpers"
+import {
+  parseCompactArgs,
+  renderCompactPreview,
+  resolveTranscriptExportPath,
+  transcriptFilename,
+  type CompactArgs,
+} from "./display-command-helpers"
 import { sdkErrorMessage } from "./sdk-error-message"
 import { Filesystem } from "@/util/filesystem"
 import { RunReportServer } from "@/cli/cmd/run-report-server"
@@ -18,6 +25,8 @@ type Session = SessionInfo & {
   revert?: {
     messageID?: string
   }
+  // ADR-226: user-pinned messages carried on the session record.
+  pins?: Array<{ messageID: string; text: string }>
 }
 
 type Model = {
@@ -67,6 +76,10 @@ export function displayCommands(input: {
           providerID: string
           focus?: string
         }) => Promise<{ error?: unknown }>
+        // ADR-226: pins are new routes. Typed optional so this file compiles
+        // before the SDK is regenerated; the call sites guard for absence.
+        pin?: (input: { sessionID: string; messageID: string; text: string }) => Promise<{ error?: unknown }>
+        unpin?: (input: { sessionID: string; messageID: string }) => Promise<{ error?: unknown }>
       }
     }
   }
@@ -112,9 +125,11 @@ export function displayCommands(input: {
     return "auto"
   }
 
-  // ADR-215: manual compaction, optionally steered by a focus topic from
-  // `/compact <focus>`. Omitted focus keeps the unmodified summarize call.
-  function runCompact(focus: string | undefined, dialog: DialogContext) {
+  // ADR-215/ADR-225: manual compaction. `/compact <focus>` steers what the
+  // summary preserves; `--keep N` keeps the last N messages verbatim; and
+  // `--preview` shows the read-only preview instead of compacting. A bare
+  // `/compact` (or omitted flags) keeps the unmodified summarize call.
+  function runCompact(args: CompactArgs, dialog: DialogContext) {
     const model = input.currentModel()
     if (!model) {
       input.toast.show({
@@ -131,7 +146,9 @@ export function displayCommands(input: {
           sessionID: input.routeSessionID,
           modelID: model.modelID,
           providerID: model.providerID,
-          ...(focus ? { focus } : {}),
+          ...(args.focus ? { focus: args.focus } : {}),
+          ...(args.keep === undefined ? {} : { keep: args.keep }),
+          ...(args.preview ? { preview: true } : {}),
         }),
       )
       .then((result) => {
@@ -145,6 +162,19 @@ export function displayCommands(input: {
           })
           return
         }
+        // ADR-225: a preview returns the counts object (no compaction ran);
+        // show it in a dialog. A real summarize returns `true`. The generated
+        // type only knows `boolean`, so read the union through a cast — same
+        // precedent as the revert call in dialog-message.tsx.
+        const data = (result as { data?: unknown }).data
+        if (args.preview && data && typeof data === "object") {
+          void DialogAlert.show(
+            dialog,
+            uiText("ui.compactPreview"),
+            renderCompactPreview(data as Parameters<typeof renderCompactPreview>[0]),
+          )
+          return
+        }
         dialog.clear()
       })
       .catch((error) => {
@@ -153,6 +183,87 @@ export function displayCommands(input: {
           variant: "error",
         })
       })
+  }
+
+  // ADR-226: pins. The candidate is the last user message (or an explicit id
+  // when invoked from a message action). Text is captured from its parts.
+  function pinTargetText(messageID?: string): { messageID: string; text: string } | undefined {
+    const infos = input.messages()
+    const userMessages = infos.filter((info) => info.role === "user")
+    const target = messageID ? userMessages.find((info) => info.id === messageID) : userMessages.at(-1)
+    if (!target) return undefined
+    const text = (input.parts[target.id] ?? [])
+      .flatMap((part) => (part.type === "text" ? [part.text] : []))
+      .join("\n")
+      .trim()
+    if (!text) return undefined
+    return { messageID: target.id, text }
+  }
+
+  function runPin(dialog: DialogContext, messageID?: string) {
+    const target = pinTargetText(messageID)
+    if (!target) {
+      input.toast.show({ variant: "warning", message: uiText("ui.pinNoUserMessage"), duration: 3000 })
+      dialog.clear()
+      return
+    }
+    if (!input.sdk.client.session.pin) {
+      input.toast.show({ message: uiText("ui.failedToPinMessage"), variant: "error" })
+      dialog.clear()
+      return
+    }
+    void input.sdk.client.session
+      .pin({ sessionID: input.routeSessionID, messageID: target.messageID, text: target.text })
+      .then((result) => {
+        if (result?.error) {
+          input.toast.show({ message: sdkErrorMessage(result.error, "Failed to pin message"), variant: "error" })
+          return
+        }
+        input.toast.show({ message: uiText("ui.messagePinned"), variant: "success", duration: 2000 })
+      })
+      .catch((error) => {
+        input.toast.show({
+          message: error instanceof Error ? error.message : "Failed to pin message",
+          variant: "error",
+        })
+      })
+    dialog.clear()
+  }
+
+  function runUnpin(dialog: DialogContext, messageID?: string) {
+    const target = pinTargetText(messageID)
+    if (!target) {
+      input.toast.show({ variant: "warning", message: uiText("ui.pinNoUserMessage"), duration: 3000 })
+      dialog.clear()
+      return
+    }
+    if (!input.sdk.client.session.unpin) {
+      input.toast.show({ message: uiText("ui.failedToUnpinMessage"), variant: "error" })
+      dialog.clear()
+      return
+    }
+    void input.sdk.client.session
+      .unpin({ sessionID: input.routeSessionID, messageID: target.messageID })
+      .then((result) => {
+        if (result?.error) {
+          input.toast.show({ message: sdkErrorMessage(result.error, "Failed to unpin message"), variant: "error" })
+          return
+        }
+        input.toast.show({ message: uiText("ui.messageUnpinned"), variant: "success", duration: 2000 })
+      })
+      .catch((error) => {
+        input.toast.show({
+          message: error instanceof Error ? error.message : "Failed to unpin message",
+          variant: "error",
+        })
+      })
+    dialog.clear()
+  }
+
+  function runPinList(dialog: DialogContext) {
+    const pins = input.session()?.pins ?? []
+    const body = pins.length === 0 ? uiText("ui.pinListEmpty") : pins.map((pin) => pin.text).join("\n\n---\n\n")
+    void DialogAlert.show(dialog, uiText("ui.pinListTitle"), body)
   }
 
   return [
@@ -330,13 +441,39 @@ export function displayCommands(input: {
       slash: {
         name: "compact",
         aliases: ["summarize"],
-        // `/compact <focus>` (ADR-215): the inline argument steers what the
-        // summary preserves; the bare command still uses onSelect.
+        // `/compact [--keep N] [--preview] [focus]` (ADR-215/ADR-225): the
+        // inline argument steers what the summary preserves and can request a
+        // read-only preview; the bare command still uses onSelect.
         arguments: true,
       },
-      onSelect: (dialog: DialogContext) => runCompact(undefined, dialog),
-      onSlashArguments: (args: string, dialog: DialogContext) =>
-        runCompact(args.trim().slice(0, 500) || undefined, dialog),
+      onSelect: (dialog: DialogContext) => runCompact(parseCompactArgs(""), dialog),
+      onSlashArguments: (args: string, dialog: DialogContext) => runCompact(parseCompactArgs(args), dialog),
+    },
+    {
+      // ADR-226: pins survive compaction verbatim. `/pin [list]` pins the last
+      // user message or lists the current pins; `/unpin` removes the last pin's
+      // message. Message-action variants pass an explicit message id.
+      title: uiText("ui.pinMessage"),
+      value: "session.pin",
+      category: uiText("common.session"),
+      slash: {
+        name: "pin",
+        arguments: true,
+      },
+      onSelect: (dialog: DialogContext) => runPin(dialog),
+      onSlashArguments: (args: string, dialog: DialogContext) => {
+        if (args.trim() === "list") return runPinList(dialog)
+        runPin(dialog)
+      },
+    },
+    {
+      title: uiText("ui.unpinMessage"),
+      value: "session.unpin",
+      category: uiText("common.session"),
+      slash: {
+        name: "unpin",
+      },
+      onSelect: (dialog: DialogContext) => runUnpin(dialog),
     },
     {
       title: input.sidebarVisible()

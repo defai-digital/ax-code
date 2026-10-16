@@ -94,6 +94,21 @@ export namespace Session {
   })
   export type LastRecap = z.output<typeof LastRecap>
 
+  /** ADR-226: hard caps for pinned messages, kept as storage/contract constants. */
+  export const PIN_MAX_COUNT = 8
+  export const PIN_MAX_CHARS = 4_000
+
+  /**
+   * A user-pinned message that survives compaction verbatim (ADR-226). The
+   * text is captured at pin time so the block can be re-sent without re-reading
+   * the message; `messageID` ties the pin to its source for revert/fork.
+   */
+  export const Pin = z.object({
+    messageID: MessageID.zod,
+    text: z.string().min(1).max(PIN_MAX_CHARS),
+  })
+  export type Pin = z.output<typeof Pin>
+
   function parseRow(row: SessionRow) {
     const summary =
       row.summary_additions !== null || row.summary_deletions !== null || row.summary_files !== null
@@ -109,6 +124,14 @@ export namespace Session {
     // A display hint must never hide an otherwise valid session: a legacy or
     // corrupt recap payload is dropped here instead of failing Info below.
     const lastRecap = row.last_recap ? LastRecap.safeParse(row.last_recap).data : undefined
+    // ADR-226: same defensive read as lastRecap — a corrupt pins payload is
+    // dropped rather than hiding the session; each surviving pin is validated.
+    const pins = Array.isArray(row.pins)
+      ? row.pins.flatMap((pin) => {
+          const parsed = Pin.safeParse(pin)
+          return parsed.success ? [parsed.data] : []
+        })
+      : undefined
     const next = Info.safeParse({
       id: row.id,
       slug: row.slug,
@@ -121,6 +144,7 @@ export namespace Session {
       share,
       revert,
       lastRecap,
+      pins,
       permission: row.permission ?? undefined,
       metadata: row.metadata ?? undefined,
       time: {
@@ -172,6 +196,7 @@ export namespace Session {
       permission: info.permission,
       metadata: info.metadata ?? null,
       last_recap: info.lastRecap ?? null,
+      pins: info.pins ?? null,
       time_created: info.time.created,
       time_updated: info.time.updated,
       time_compacting: info.time.compacting,
@@ -230,6 +255,9 @@ export namespace Session {
       // Durable display hint from the most recent recap generation (ADR-148).
       // Optional: sessions that never produced a usable recap carry none.
       lastRecap: LastRecap.optional(),
+      // User-pinned messages (ADR-226): re-sent verbatim after a compaction.
+      // Optional: sessions with no pins carry none.
+      pins: Pin.array().optional(),
       metadata: z.record(z.string(), z.unknown()).optional(),
     })
     .meta({
@@ -494,6 +522,30 @@ export namespace Session {
         })
       })
 
+      // ADR-226: pins copy on fork. Remap each pin's source message id through
+      // the fork's id map so a pin still points at its (copied) message, and
+      // drop pins whose source fell outside the fork cutoff. Committed fork
+      // events are already published above, so a copy failure must not fail
+      // the fork — log and return the fork without pins.
+      const originalPins = original.pins ?? []
+      if (originalPins.length > 0) {
+        const copied = originalPins.flatMap((pin) => {
+          const mapped = idMap.get(pin.messageID)
+          return mapped ? [{ messageID: mapped, text: pin.text }] : []
+        })
+        if (copied.length > 0) {
+          try {
+            updateAndPublish(session.id, { pins: copied })
+          } catch (error) {
+            log.warn("failed to copy pins to forked session", {
+              from: input.sessionID,
+              to: session.id,
+              error,
+            })
+          }
+        }
+      }
+
       return session
     },
   )
@@ -629,6 +681,52 @@ export namespace Session {
         time_updated: Date.now(),
       }),
   )
+
+  /**
+   * ADR-226: pin a user message so its text survives compaction verbatim.
+   * Re-pinning the same message replaces the stored copy; the pin list is
+   * capped at PIN_MAX_COUNT with the oldest pins evicted first, and each
+   * text is capped at PIN_MAX_CHARS at write time.
+   */
+  export const setPin = fn(
+    z.object({ sessionID: SessionID.zod, messageID: MessageID.zod, text: z.string().trim().min(1) }),
+    async (input) => {
+      using _lock = await Lock.write(`session:pins:${input.sessionID}`)
+      const session = await get(input.sessionID)
+      const existing = session.pins ?? []
+      const text = input.text.slice(0, PIN_MAX_CHARS)
+      const next = [
+        ...existing.filter((pin) => pin.messageID !== input.messageID),
+        { messageID: input.messageID, text },
+      ]
+      const pins = next.slice(-PIN_MAX_COUNT)
+      return updateAndPublish(input.sessionID, { pins })
+    },
+  )
+
+  /** ADR-226: remove a pin by its source message id. No-op when unpinned. */
+  export const removePin = fn(z.object({ sessionID: SessionID.zod, messageID: MessageID.zod }), async (input) => {
+    using _lock = await Lock.write(`session:pins:${input.sessionID}`)
+    const session = await get(input.sessionID)
+    const existing = session.pins ?? []
+    const pins = existing.filter((pin) => pin.messageID !== input.messageID)
+    if (pins.length === existing.length) return session
+    return updateAndPublish(input.sessionID, { pins })
+  })
+
+  /**
+   * ADR-226: drop pins whose source message is no longer present (a revert of
+   * the pinned message). Called after a revert so a reverted message's pin
+   * disappears with it — matches the "vanish on revert of that message" rule.
+   */
+  export async function prunePins(sessionID: SessionID, presentMessageIDs: ReadonlySet<string>): Promise<Info> {
+    using _lock = await Lock.write(`session:pins:${sessionID}`)
+    const session = await get(sessionID)
+    const existing = session.pins ?? []
+    const pins = existing.filter((pin) => presentMessageIDs.has(pin.messageID))
+    if (pins.length === existing.length) return session
+    return updateAndPublish(sessionID, { pins })
+  }
 
   export const setProductMetadata = fn(
     z.object({

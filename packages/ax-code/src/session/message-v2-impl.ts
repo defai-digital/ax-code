@@ -246,6 +246,8 @@ export namespace MessageV2 {
     triggerReason: CompactionTriggerReason.optional(),
     /** ADR-215: manual compaction focus, quoted into the compaction prompt. */
     focus: z.string().max(500).optional(),
+    /** ADR-225: keep the last N messages verbatim outside the summary. */
+    keep: z.number().int().min(1).max(50).optional(),
   }).meta({
     ref: "CompactionPart",
   })
@@ -1212,6 +1214,27 @@ export namespace MessageV2 {
     return hydrate(rows, store)
   }
 
+  // Mirror of SessionCompaction.COMPACTION_KEEP_MAX, kept local to avoid a
+  // module cycle with ./compaction (which imports this namespace).
+  const KEEP_WINDOW_MAX = 50
+
+  function markerKeep(msg: MessageV2.WithParts): number {
+    for (const part of msg.parts) {
+      if (part.type === "compaction" && typeof part.keep === "number") {
+        return Math.max(0, Math.min(KEEP_WINDOW_MAX, Math.floor(part.keep)))
+      }
+    }
+    return 0
+  }
+
+  // Same rule as SessionCompaction.isCompactionBoundary: history before an
+  // earlier compaction boundary was already discarded by that compaction, so
+  // a keep window must never cross (or include) one.
+  function isCompactionBoundaryMsg(msg: MessageV2.WithParts): boolean {
+    if (msg.info.role === "user") return msg.parts.some((part) => part.type === "compaction")
+    return msg.info.role === "assistant" && msg.info.summary === true
+  }
+
   export async function filterCompacted(stream: AsyncIterable<MessageV2.WithParts>) {
     // Stream order is newest → oldest (see MessageV2.stream). We walk
     // backwards looking for the most recent compaction marker whose
@@ -1229,7 +1252,23 @@ export namespace MessageV2 {
     const responded = new Set<string>()
     let latestMarkerEnd = -1 // result length immediately after the latest marker we've seen
     let latestMarkerResponded = false
+    let latestMarkerKeep = 0
+    let brokeAtCompleted = false
+    // ADR-225: while positive, the next (older) messages from the stream are
+    // the keep window of the marker we broke at and stay verbatim.
+    let extendRemaining = 0
     for await (const msg of stream) {
+      if (extendRemaining > 0) {
+        // The window never crosses an earlier compaction boundary: history
+        // before one was already discarded by that compaction, and the
+        // boundary itself is part of that compacted context, not the recent
+        // conversation the user asked to keep.
+        if (isCompactionBoundaryMsg(msg)) break
+        result.push(msg)
+        extendRemaining--
+        if (extendRemaining === 0) break
+        continue
+      }
       result.push(msg)
       if (msg.info.role === "user" && msg.parts.some((part) => part.type === "compaction")) {
         if (latestMarkerEnd === -1) {
@@ -1238,11 +1277,20 @@ export namespace MessageV2 {
           // (created after the marker) was already processed — we know here
           // whether the latest marker has any response at all.
           latestMarkerResponded = responded.has(msg.info.id)
+          latestMarkerKeep = markerKeep(msg)
         }
         if (completed.has(msg.info.id)) {
-          // Happy path: marker + completed summary → break here.
-          result.reverse()
-          return result
+          // Happy path: marker + completed summary. With a keep window
+          // (ADR-225) the marker's `keep` older messages survive verbatim;
+          // they sit chronologically before the summary in the continued
+          // context. Without one, break here exactly as before.
+          const keep = markerKeep(msg)
+          brokeAtCompleted = true
+          if (keep > 0) {
+            extendRemaining = keep
+            continue
+          }
+          break
         }
       }
       if (msg.info.role === "assistant" && msg.info.summary) {
@@ -1250,13 +1298,29 @@ export namespace MessageV2 {
         if (msg.info.finish && !msg.info.error) completed.add(msg.info.parentID)
       }
     }
+    if (brokeAtCompleted) {
+      result.reverse()
+      return result
+    }
     // No successful compaction found. Truncate to the latest marker when it
     // has an assistant response — even an errored or unfinished one bounds
     // the history, and the response sits after the marker in the stream so
     // it stays in the truncated prefix. Orphaned markers with no assistant
     // response are ignored to avoid losing context with no summary to
     // replace it.
-    const truncated = latestMarkerEnd > -1 && latestMarkerResponded ? result.slice(0, latestMarkerEnd) : result
+    let truncated = result
+    if (latestMarkerEnd > -1 && latestMarkerResponded) {
+      // ADR-225: an interrupted compaction's marker may still carry a keep
+      // window; extend the truncation by it with the same boundary rule.
+      let end = latestMarkerEnd
+      let remaining = latestMarkerKeep
+      while (remaining > 0 && end < result.length) {
+        if (isCompactionBoundaryMsg(result[end]!)) break
+        end++
+        remaining--
+      }
+      truncated = result.slice(0, end)
+    }
     truncated.reverse()
     return truncated
   }

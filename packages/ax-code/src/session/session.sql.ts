@@ -12,6 +12,8 @@ import { Timestamps } from "../storage/schema.sql"
 type PartData = Omit<MessageV2.Part, "id" | "sessionID" | "messageID">
 type InfoData = Omit<MessageV2.User, "id" | "sessionID"> | Omit<MessageV2.Assistant, "id" | "sessionID">
 export type SessionLastRecapData = { text: string; time: number; scope: "turn" | "conversation" }
+/** ADR-226: one pinned user message, stored verbatim for post-compaction context. */
+export type SessionPinData = { messageID: MessageID; text: string }
 
 export const SessionTable = sqliteTable(
   "session",
@@ -46,6 +48,9 @@ export const SessionTable = sqliteTable(
     // Durable last recap (ADR-148): a bounded display hint for the session
     // picker, written only by SessionRecap.generate. Never model context.
     last_recap: text({ mode: "json" }).$type<SessionLastRecapData>(),
+    // User-pinned messages (ADR-226): bounded user content re-sent verbatim
+    // after a compaction. Nullable so pre-existing sessions simply carry none.
+    pins: text({ mode: "json" }).$type<SessionPinData[]>(),
   },
   (table) => [
     foreignKey({

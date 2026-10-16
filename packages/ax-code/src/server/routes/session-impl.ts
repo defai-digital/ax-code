@@ -33,6 +33,7 @@ import { Log } from "../../util/log"
 import { Permission } from "@/permission"
 import { PermissionID } from "@/permission/schema"
 import { ModelID, ProviderID } from "@/provider/schema"
+import { Provider } from "../../provider/provider"
 import { errors, invalidRequest, notFound } from "../error"
 import { lazy } from "../../util/lazy"
 import { parseSessionID, type SessionRouteContext, SESSION_ID_PARAM } from "./route-params"
@@ -879,6 +880,66 @@ export const SessionRoutes = lazy(() =>
       },
     )
     .post(
+      "/:sessionID/pin",
+      describeRoute({
+        summary: "Pin a message",
+        description:
+          "Pin a user message so its text survives compaction verbatim (ADR-226). Re-pinning the same message replaces the stored copy.",
+        operationId: "session.pin",
+        responses: {
+          200: {
+            description: "Session with the updated pin list",
+            content: {
+              "application/json": {
+                schema: resolver(Session.Info),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", SESSION_ID_PARAM),
+      validator(
+        "json",
+        z.object({
+          messageID: MessageID.zod,
+          // Captured from the message at pin time; capped at Session.PIN_MAX_CHARS.
+          text: z.string().trim().min(1),
+        }),
+      ),
+      async (c) => {
+        const sessionID = await parseCurrentProjectSessionID(c)
+        const body = c.req.valid("json")
+        return c.json(await Session.setPin({ sessionID, messageID: body.messageID, text: body.text }))
+      },
+    )
+    .delete(
+      "/:sessionID/pin",
+      describeRoute({
+        summary: "Unpin a message",
+        description: "Remove a pin by its source message id (ADR-226). No-op when the message is not pinned.",
+        operationId: "session.unpin",
+        responses: {
+          200: {
+            description: "Session with the updated pin list",
+            content: {
+              "application/json": {
+                schema: resolver(Session.Info),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", SESSION_ID_PARAM),
+      validator("query", z.object({ messageID: MessageID.zod })),
+      async (c) => {
+        const sessionID = await parseCurrentProjectSessionID(c)
+        const body = c.req.valid("query")
+        return c.json(await Session.removePin({ sessionID, messageID: body.messageID }))
+      },
+    )
+    .post(
       "/:sessionID/init",
       describeRoute({
         summary: "Initialize session",
@@ -1041,14 +1102,17 @@ export const SessionRoutes = lazy(() =>
       "/:sessionID/summarize",
       describeRoute({
         summary: "Summarize session",
-        description: "Generate a concise summary of the session using AI compaction to preserve key information.",
+        description:
+          "Generate a concise summary of the session using AI compaction to preserve key information. " +
+          "With keep, the last N messages (1-50) stay verbatim outside the summary. " +
+          "With preview, compute and return what a compaction would do (read-only: no model call, no mutation).",
         operationId: "session.summarize",
         responses: {
           200: {
-            description: "Summarized session",
+            description: "Summarized session, or the read-only preview when preview=true",
             content: {
               "application/json": {
-                schema: resolver(z.boolean()),
+                schema: resolver(z.union([z.boolean(), SessionCompaction.SummarizePreview])),
               },
             },
           },
@@ -1065,11 +1129,31 @@ export const SessionRoutes = lazy(() =>
           // ADR-215: optional focus topic for manual compaction, quoted into
           // the prompt as user data. Omitted focus keeps today's prompt.
           focus: z.string().trim().max(SessionCompaction.COMPACTION_FOCUS_MAX_CHARS).optional(),
+          // ADR-225: keep the last N messages (1-50) verbatim outside the
+          // summarized range.
+          keep: z.number().int().min(1).max(SessionCompaction.COMPACTION_KEEP_MAX).optional(),
+          // ADR-225: read-only preview instead of starting a compaction.
+          preview: JsonBoolean.optional().default(false),
         }),
       ),
       async (c) => {
         const sessionID = await parseCurrentProjectSessionID(c)
         const body = c.req.valid("json")
+        if (body.preview) {
+          // Read-only: no busy check, no revert cleanup, no marker, no model
+          // call — only the same window math and token estimates the
+          // compaction would use.
+          const model = await Provider.getModel(body.providerID, body.modelID)
+          const msgs = await MessageV2.filterCompacted(MessageV2.stream(sessionID))
+          return c.json(
+            await SessionCompaction.preview({
+              messages: msgs,
+              model,
+              ...(body.keep === undefined ? {} : { keep: body.keep }),
+              ...(body.focus === undefined || body.focus === "" ? {} : { focus: body.focus }),
+            }),
+          )
+        }
         SessionPrompt.assertNotBusy(sessionID)
         const session = await Session.get(sessionID)
         await SessionRevert.cleanup(session)
@@ -1093,6 +1177,7 @@ export const SessionRoutes = lazy(() =>
           auto: body.auto,
           triggerReason: "manual",
           ...(body.focus === undefined || body.focus === "" ? {} : { focus: body.focus }),
+          ...(body.keep === undefined ? {} : { keep: body.keep }),
         })
         await SessionPrompt.loop({ sessionID })
         return c.json(true)

@@ -510,5 +510,11 @@ export namespace SessionRevert {
       }
     }
     await Session.clearRevert(sessionID)
+    // ADR-226: a pin on a reverted message disappears with it. The surviving
+    // set is `preserve`; pruning here keeps pins in sync with the transcript
+    // without a schema-level FK (pins live in the registry, messages in shards).
+    await Session.prunePins(sessionID, new Set(preserve.map((msg) => msg.info.id))).catch((error) => {
+      log.warn("failed to prune pins after revert", { sessionID, error })
+    })
   }
 }

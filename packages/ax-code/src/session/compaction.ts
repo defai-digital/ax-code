@@ -142,6 +142,78 @@ export namespace SessionCompaction {
     }
   }
 
+  /** Machine-readable marker on the synthetic pinned-context part (ADR-226). */
+  export const PINNED_CONTEXT_PURPOSE = "compaction_pinned_context"
+  /**
+   * Stable first line of the pinned-context part. Framed as background context
+   * FROM THE USER so a weak model does not read a pinned constraint as a new
+   * task; consumers match this prefix instead of asserting a part count.
+   */
+  export const PINNED_CONTEXT_HEADING = "## Background context from the user (pinned before compaction)"
+
+  /**
+   * Render the pinned-message block for a compaction summary. Pure helper:
+   * exported so the shape is unit-testable without driving the Provider stack
+   * (same precedent as `renderPlanCarryover`).
+   *
+   * Returns undefined when there are no pins. The texts are re-sent verbatim,
+   * capped at the ADR-226 limits (8 pins, 4 KB each) with the newest pins kept
+   * when the list is over the cap, so a pathological session cannot consume the
+   * context this block is meant to protect.
+   */
+  export function renderPinnedContext(pins: readonly Session.Pin[]): string | undefined {
+    if (pins.length === 0) return undefined
+    const kept = pins.slice(-Session.PIN_MAX_COUNT)
+    const blocks = kept.map((pin) => pin.text.slice(0, Session.PIN_MAX_CHARS))
+    const omitted = pins.length - kept.length
+    return [
+      PINNED_CONTEXT_HEADING,
+      "These are messages the user pinned verbatim. Treat them as standing background context,",
+      "not as new requests: do not restart work they describe and do not reply to them directly.",
+      ...blocks,
+      ...(omitted > 0 ? [`- (${omitted} older pinned message${omitted === 1 ? "" : "s"} omitted)`] : []),
+    ].join("\n")
+  }
+
+  /**
+   * Append the session's pinned messages to a compaction summary message.
+   * Best-effort by contract, exactly like `appendPlanCarryover`: a missing or
+   * unreadable session must never fail a compaction, and the block is appended
+   * at most once per summary message (fail-closed idempotence read).
+   */
+  export async function appendPinnedContext(input: { sessionID: SessionID; messageID: MessageID }): Promise<boolean> {
+    let pins: Session.Pin[]
+    try {
+      pins = (await Session.get(input.sessionID)).pins ?? []
+    } catch (error) {
+      log.warn("compaction pinned-context skipped: session read failed", { sessionID: input.sessionID, error })
+      return false
+    }
+    const text = renderPinnedContext(pins)
+    if (!text) return false
+    try {
+      // Same fail-closed idempotence guard as the plan carryover: if we cannot
+      // prove the block is absent we do not write a second copy.
+      const existing = await MessageV2.parts(input.messageID)
+      if (existing.some((part) => part.type === "text" && part.metadata?.purpose === PINNED_CONTEXT_PURPOSE)) {
+        return false
+      }
+      await Session.updatePart({
+        id: PartID.ascending(),
+        messageID: input.messageID,
+        sessionID: input.sessionID,
+        type: "text",
+        synthetic: true,
+        text,
+        metadata: { purpose: PINNED_CONTEXT_PURPOSE },
+      })
+      return true
+    } catch (error) {
+      log.warn("compaction pinned-context append failed", { sessionID: input.sessionID, error })
+      return false
+    }
+  }
+
   /**
    * ADR-215: manual compaction focus. Rendered into the default compaction
    * prompt as QUOTED USER DATA — a preference over what to keep, never an
@@ -179,6 +251,118 @@ export namespace SessionCompaction {
     return [input.defaultPrompt, ...(input.focus ? [renderCompactionFocus(input.focus)] : []), ...input.context].join(
       "\n\n",
     )
+  }
+
+  /** ADR-225: upper bound for `--keep` (messages kept verbatim). */
+  export const COMPACTION_KEEP_MAX = 50
+
+  /**
+   * A prior compaction boundary: everything before it was already discarded
+   * by an earlier compaction, so a keep window must never cross it. Shared
+   * by the window selection and `MessageV2.filterCompacted` so both apply
+   * the same rule.
+   */
+  export function isCompactionBoundary(message: MessageV2.WithParts): boolean {
+    if (message.info.role === "user") return message.parts.some((part) => part.type === "compaction")
+    return message.info.role === "assistant" && message.info.summary === true
+  }
+
+  /**
+   * ADR-225: split the pre-marker history into the range to summarize and a
+   * keep window of the last N messages that survive verbatim. The window
+   * grows back from just before the compaction marker (or the list end when
+   * the marker is absent, e.g. the overflow replay path) and never crosses
+   * an earlier compaction boundary. Pure so the selection is unit-testable
+   * without driving the Provider stack.
+   */
+  export function selectKeepWindow(input: {
+    messages: MessageV2.WithParts[]
+    keep: number
+    /** Marker message id; the window grows back from just before it. */
+    markerID?: MessageID
+  }): { summarize: MessageV2.WithParts[]; kept: MessageV2.WithParts[] } {
+    const keep = Math.max(1, Math.min(COMPACTION_KEEP_MAX, Math.floor(input.keep)))
+    const markerIdx = input.markerID
+      ? input.messages.findLastIndex((message) => message.info.id === input.markerID)
+      : -1
+    const anchor = markerIdx >= 0 ? markerIdx : input.messages.length
+    let start = anchor
+    let taken = 0
+    for (let i = anchor - 1; i >= 0 && taken < keep; i--) {
+      if (isCompactionBoundary(input.messages[i]!)) break
+      start = i
+      taken++
+    }
+    return { summarize: input.messages.slice(0, start), kept: input.messages.slice(start, anchor) }
+  }
+
+  /** ADR-225: read-only preview of what a compaction would do (route schema). */
+  export const SummarizePreview = z
+    .object({
+      /** Messages whose content would be replaced by the generated summary. */
+      summarizeMessages: z.number().int().min(0),
+      /** Estimated request tokens of the summarized range (media stripped). */
+      summarizeTokens: z.number().int().min(0),
+      /** Messages kept verbatim outside the summary (`--keep`). */
+      keepMessages: z.number().int().min(0),
+      /** Estimated tokens of the kept window in the continued context. */
+      keepTokens: z.number().int().min(0),
+      /** Completed tool outputs inside the summarized range, by tool. */
+      prunedToolOutputs: z.array(
+        z.object({
+          tool: z.string(),
+          parts: z.number().int().min(0),
+          estimatedTokens: z.number().int().min(0),
+        }),
+      ),
+      /** The focus section that would be injected (empty when none). */
+      focus: z.string(),
+    })
+    .meta({ ref: "SessionSummarizePreview" })
+  export type SummarizePreview = z.infer<typeof SummarizePreview>
+
+  async function estimateMessageTokens(messages: MessageV2.WithParts[], model: Provider.Model): Promise<number> {
+    let total = 0
+    for (const message of messages) {
+      const modelMessages = await MessageV2.toModelMessages([message], model, { stripMedia: true })
+      total += estimateRequestTokens({ system: [], messages: modelMessages })
+    }
+    return total
+  }
+
+  /**
+   * ADR-225: compute what a compaction would summarize and keep WITHOUT
+   * calling a model or mutating anything. The keep window anchors at the
+   * list end because the preview runs before the compaction marker exists.
+   */
+  export async function preview(input: {
+    messages: MessageV2.WithParts[]
+    model: Provider.Model
+    keep?: number
+    focus?: string
+  }): Promise<SummarizePreview> {
+    const window =
+      input.keep !== undefined ? selectKeepWindow({ messages: input.messages, keep: input.keep }) : undefined
+    const summarize = window ? window.summarize : input.messages
+    const kept = window ? window.kept : []
+    const pruned = new Map<string, { tool: string; parts: number; estimatedTokens: number }>()
+    for (const message of summarize) {
+      for (const part of message.parts) {
+        if (part.type !== "tool" || part.state.status !== "completed") continue
+        const entry = pruned.get(part.tool) ?? { tool: part.tool, parts: 0, estimatedTokens: 0 }
+        entry.parts += 1
+        entry.estimatedTokens += estimateToolPartTokens(part)
+        pruned.set(part.tool, entry)
+      }
+    }
+    return {
+      summarizeMessages: summarize.length,
+      summarizeTokens: await estimateMessageTokens(summarize, input.model),
+      keepMessages: kept.length,
+      keepTokens: await estimateMessageTokens(kept, input.model),
+      prunedToolOutputs: [...pruned.values()],
+      focus: renderCompactionFocus(input.focus ?? ""),
+    }
   }
 
   /**
@@ -551,8 +735,10 @@ export namespace SessionCompaction {
     auto: boolean
     overflow?: boolean
     triggerReason?: TriggerReason
-    /** ADR-215: manual compaction focus, quoted into the default prompt. */
+    /** ADR-215: manual compaction focus, quoted into the compaction prompt. */
     focus?: string
+    /** ADR-225: keep the last N messages verbatim outside the summary. */
+    keep?: number
   }) {
     if (inFlight.has(input.sessionID)) {
       log.info("compaction already in-flight", {
@@ -734,7 +920,14 @@ When constructing the summary, try to stick to this template:
         context: compacting.context,
         focus: input.focus,
       })
-      const msgs = [...messages]
+      // ADR-225: with `keep`, only the pre-window range is summarized; the
+      // kept messages survive verbatim (MessageV2.filterCompacted extends
+      // past the marker by the same count). Without `keep` the range is the
+      // full history — byte-identical to the pre-ADR-225 request.
+      const msgs =
+        input.keep !== undefined
+          ? selectKeepWindow({ messages, keep: input.keep, markerID: input.parentID }).summarize
+          : [...messages]
       await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
       // If the history to summarize exceeds the compaction model's own window,
       // the summarization request itself overflows and compaction hard-fails,
@@ -1043,6 +1236,12 @@ When constructing the summary, try to stick to this template:
         sessionID: input.sessionID,
         messageID: processor.message.id,
       })
+      // ADR-226: pinned user messages survive compaction verbatim, appended as
+      // one background-context block after the plan carryover.
+      await SessionCompaction.appendPinnedContext({
+        sessionID: input.sessionID,
+        messageID: processor.message.id,
+      })
       await Bus.publish(Event.Compacted, { sessionID: input.sessionID })
       // History was rewritten: pre-compaction ledger anchors must stop
       // matching so the ledger degrades to estimated until the next exact
@@ -1097,6 +1296,8 @@ When constructing the summary, try to stick to this template:
       triggerReason: TriggerReason.optional(),
       // ADR-215: quoted into the compaction prompt as user data.
       focus: z.string().trim().max(COMPACTION_FOCUS_MAX_CHARS).optional(),
+      // ADR-225: last N messages kept verbatim outside the summary.
+      keep: z.number().int().min(1).max(COMPACTION_KEEP_MAX).optional(),
     }),
     async (input) => {
       const triggerReason = input.triggerReason ?? (input.auto ? "provider_usage" : "manual")
@@ -1130,6 +1331,7 @@ When constructing the summary, try to stick to this template:
         overflow: input.overflow,
         triggerReason,
         ...(input.focus === undefined ? {} : { focus: input.focus }),
+        ...(input.keep === undefined ? {} : { keep: input.keep }),
       })
     },
   )

@@ -11,6 +11,7 @@ import { messageRoute } from "./route"
 import { Log } from "@/util/log"
 import { Locale } from "@/util/locale"
 import { promptState } from "./messages"
+import { sdkErrorMessage } from "./sdk-error-message"
 import { useToast } from "@tui/ui/toast"
 
 const log = Log.create({ service: "tui.dialog-message" })
@@ -63,6 +64,74 @@ export function DialogMessage(props: {
     return extractCodeBlocks(text)
   })
 
+  // Whether the open message is currently pinned (ADR-226); drives the label
+  // and which SDK call togglePin makes.
+  const pinState = createMemo(() => {
+    const msg = message()
+    if (!msg) return false
+    // `pins` is a new session field the generated sync type may not carry until
+    // the SDK is regenerated; read it through a cast.
+    const session = sync.data.session?.find((item) => item.id === props.sessionID) as
+      | { pins?: Array<{ messageID: string; text: string }> }
+      | undefined
+    return (session?.pins ?? []).some((pin) => pin.messageID === msg.id)
+  })
+
+  // ADR-226: pinned user messages survive compaction verbatim. The panel
+  // targets the open message; only user messages can be pinned.
+  function messageText(msg: { id: string }) {
+    return (sync.data.part[msg.id] ?? [])
+      .reduce((agg, part) => (part.type === "text" && !part.synthetic && !part.ignored ? agg + part.text : agg), "")
+      .trim()
+  }
+
+  function togglePin(dialog: DialogContext) {
+    const msg = message()
+    if (!msg || msg.role !== "user") {
+      toast.show({ message: uiText("ui.pinNoUserMessage"), variant: "warning" })
+      dialog.clear()
+      return
+    }
+    // session.pin / session.unpin are new routes; the generated client type may
+    // not carry them until the SDK is regenerated, so read them through a cast
+    // and surface absence as a normal failure toast.
+    const client = sdk.client.session as unknown as {
+      pin?: (input: { sessionID: string; messageID: string; text: string }) => Promise<{ error?: unknown }>
+      unpin?: (input: { sessionID: string; messageID: string }) => Promise<{ error?: unknown }>
+    }
+    const text = messageText(msg)
+    const call = pinState()
+      ? client.unpin?.({ sessionID: props.sessionID, messageID: msg.id })
+      : client.pin?.({ sessionID: props.sessionID, messageID: msg.id, text })
+    if (!call) {
+      toast.show({ message: uiText("ui.failedToPinMessage"), variant: "error" })
+      dialog.clear()
+      return
+    }
+    void call
+      .then((result) => {
+        if (result?.error) {
+          toast.show({
+            message: sdkErrorMessage(result.error, pinState() ? "Failed to unpin message" : "Failed to pin message"),
+            variant: "error",
+          })
+          return
+        }
+        toast.show({
+          message: pinState() ? uiText("ui.messageUnpinned") : uiText("ui.messagePinned"),
+          variant: "success",
+          duration: 2000,
+        })
+      })
+      .catch((error) => {
+        toast.show({
+          message: error instanceof Error ? error.message : "Failed to pin message",
+          variant: "error",
+        })
+      })
+    dialog.clear()
+  }
+
   function copyCodeBlock(code: string, dialog: DialogContext) {
     return Clipboard.copy(code)
       .then(() => {
@@ -87,6 +156,16 @@ export function DialogMessage(props: {
       title={uiText("ui.messageActions")}
       options={[
         ...routeOptions(),
+        ...(message()?.role === "user"
+          ? [
+              {
+                title: pinState() ? uiText("ui.unpinMessage") : uiText("ui.pinMessage"),
+                value: "message.pin",
+                category: "Actions",
+                onSelect: (dialog: DialogContext) => togglePin(dialog),
+              },
+            ]
+          : []),
         {
           title: uiText("ui.revert"),
           value: "session.revert",
