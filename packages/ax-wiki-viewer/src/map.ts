@@ -525,10 +525,16 @@ export function mountMap(
     const rim = (node: LayoutNode) => (node.kind === "page" ? Math.max(node.radius, 14) : node.radius)
     const trimA = Math.min(rim(a) + 2, length / 2 - 1)
     const trimB = Math.min(rim(b) + 4, length / 2 - 1)
-    const t0x = a.x + ((cx - a.x) / length) * trimA,
-      t0y = a.y + ((cy - a.y) / length) * trimA
-    const t1x = b.x + ((cx - b.x) / length) * trimB,
-      t1y = b.y + ((cy - b.y) / length) * trimB
+    // The control point is offset from the chord, so the direction toward it is
+    // not a unit vector: normalize it before trimming or the trim lands about
+    // half the intended distance and the head stays under the bubble (the node
+    // layer paints over the edge layer). `radialEdgeCurve` normalizes the same way.
+    const towardA = Math.hypot(cx - a.x, cy - a.y) || 1
+    const towardB = Math.hypot(cx - b.x, cy - b.y) || 1
+    const t0x = a.x + ((cx - a.x) / towardA) * trimA,
+      t0y = a.y + ((cy - a.y) / towardA) * trimA
+    const t1x = b.x + ((cx - b.x) / towardB) * trimB,
+      t1y = b.y + ((cy - b.y) / towardB) * trimB
     const tx = t1x - cx,
       ty = t1y - cy
     const tangent = Math.hypot(tx, ty) || 1
@@ -1822,11 +1828,22 @@ export function mountMap(
       svg.removeEventListener("pointermove", move)
       svg.removeEventListener("pointerup", up)
       svg.removeEventListener("pointercancel", up)
+      doc.removeEventListener("pointermove", move)
+      doc.removeEventListener("pointerup", up)
+      doc.removeEventListener("pointercancel", up)
       if (moved) suppressCanvasClick = true
     }
     svg.addEventListener("pointermove", move)
     svg.addEventListener("pointerup", up)
     svg.addEventListener("pointercancel", up)
+    // A release outside the svg (the HUD, a panel, the window edge) never
+    // reaches the svg, so without these the pan stayed armed and every later
+    // hover dragged the map. The node drag takes the same document fallback;
+    // a move over the svg reaching both listeners is harmless because `move`
+    // re-anchors `lastX`/`lastY` and the second call is then a no-op.
+    doc.addEventListener("pointermove", move)
+    doc.addEventListener("pointerup", up)
+    doc.addEventListener("pointercancel", up)
   })
 
   svg.addEventListener("dblclick", (event) => {

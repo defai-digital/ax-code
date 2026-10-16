@@ -1,5 +1,5 @@
 import { parseWikiGraph } from "@ax-code/ax-wiki/graph"
-import type { WikiGraph, WikiGraphArea, WikiGraphPage } from "@ax-code/ax-wiki/graph"
+import type { WikiGraph, WikiGraphArea, WikiGraphNode, WikiGraphPage } from "@ax-code/ax-wiki/graph"
 import { hierarchy, partition } from "d3-hierarchy"
 import type { HierarchyRectangularNode } from "d3-hierarchy"
 import { mapCss, mountMap } from "./map.js"
@@ -172,6 +172,17 @@ function pageState(page: WikiGraphPage): "fresh" | "stale" | "unknown" {
   if (page.stale > 0) return "stale"
   if (page.unknown > 0 || page.sources.length === 0) return "unknown"
   return "fresh"
+}
+
+/**
+ * Whether one cited file is unverified rather than unchanged. The file's own
+ * node carries its recorded freshness when the view cap admitted that source;
+ * `page.unknown` only counts this page's unverified files without naming them,
+ * so it is the fallback and marks every file the page cites.
+ */
+export function sourceUnverified(path: string, page: WikiGraphPage, nodes: readonly WikiGraphNode[]): boolean {
+  const node = nodes.find((candidate) => candidate.id === `source:${path}`)
+  return node ? node.freshness === "unknown" : page.unknown > 0
 }
 
 /** Compact table form of the page state. */
@@ -385,7 +396,7 @@ export function mount(
     el("p", drawer, path, "path")
     const citing = (graph.pages ?? []).filter((page) => page.sources.includes(path))
     const changed = citing.some((page) => page.changed.includes(path))
-    const unknown = !changed && citing.some((page) => page.unknown > 0)
+    const unknown = !changed && citing.some((page) => sourceUnverified(path, page, graph.nodes))
     const badge = el(
       "span",
       drawer,
@@ -829,7 +840,12 @@ export function mount(
     const changed = new Set(page.changed)
     for (const source of page.sources) {
       const li = el("li", ul, undefined, "src")
-      const dot = el("span", li, undefined, `dot ${changed.has(source) ? "stale" : page.unknown ? "unknown" : ""}`)
+      const dot = el(
+        "span",
+        li,
+        undefined,
+        `dot ${changed.has(source) ? "stale" : sourceUnverified(source, page, graph.nodes) ? "unknown" : ""}`,
+      )
       dot.setAttribute("aria-hidden", "true")
       const button = el("button", li, undefined, "linkish")
       const cut = source.lastIndexOf("/")

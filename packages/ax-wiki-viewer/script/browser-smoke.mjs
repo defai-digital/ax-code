@@ -497,7 +497,9 @@ try {
       sy = box.y + box.height / 2
     const opts = (x, y) => ({ clientX: x, clientY: y, pointerId: 31, bubbles: true, isPrimary: true })
     group.dispatchEvent(new PointerEvent("pointerdown", opts(sx, sy)))
-    document.querySelector(".canvas svg[role=img]").dispatchEvent(new PointerEvent("pointermove", opts(sx + 48, sy + 22)))
+    document
+      .querySelector(".canvas svg[role=img]")
+      .dispatchEvent(new PointerEvent("pointermove", opts(sx + 48, sy + 22)))
     document.dispatchEvent(new PointerEvent("pointerup", opts(sx + 48, sy + 22)))
     return { before, after: group.getAttribute("transform") }
   })
@@ -509,6 +511,51 @@ try {
     2,
   )
   await calm.close()
+  // A pan that ends outside the svg must not stay armed: a later hover must not
+  // drag the map. The pointerup below targets the document, the way a release
+  // over another panel or past the window edge arrives.
+  const abandonedPan = await page.evaluate(() => {
+    const svg = document.querySelector(".canvas svg[role=img]")
+    const box = svg.getBoundingClientRect()
+    const sx = box.x + 30,
+      sy = box.y + 30
+    const opts = (x, y) => ({ clientX: x, clientY: y, pointerId: 41, bubbles: true, isPrimary: true })
+    const before = svg.getAttribute("viewBox")
+    svg.dispatchEvent(new PointerEvent("pointerdown", opts(sx, sy)))
+    svg.dispatchEvent(new PointerEvent("pointermove", opts(sx + 24, sy + 12)))
+    const panned = svg.getAttribute("viewBox")
+    document.dispatchEvent(new PointerEvent("pointerup", opts(sx + 24, sy + 12)))
+    svg.dispatchEvent(new PointerEvent("pointermove", opts(sx + 320, sy + 260)))
+    return { before, panned, afterHover: svg.getAttribute("viewBox") }
+  })
+  assert.notEqual(abandonedPan.panned, abandonedPan.before)
+  assert.equal(abandonedPan.afterHover, abandonedPan.panned)
+  // An edge must meet the bubble rim it leaves, not stop inside it: the trim is
+  // a distance along the direction to the control point, which is not a unit
+  // vector. Retry while the force layout is still settling.
+  const edgeSlack = () =>
+    page.evaluate(() => {
+      const circles = [...document.querySelectorAll("svg g.node")].map((group) => {
+        const [, x, y] = /translate\(([^,]+),([^)]+)\)/.exec(group.getAttribute("transform") ?? "").map(Number)
+        const circle = group.querySelector("circle")
+        return { x, y, r: circle ? Number(circle.getAttribute("r")) : 0 }
+      })
+      let slack = Infinity
+      for (const path of document.querySelectorAll("svg path.edge")) {
+        const match = /^M([-\d.]+),([-\d.]+)/.exec(path.getAttribute("d") ?? "")
+        if (!match) continue
+        const x = Number(match[1]),
+          y = Number(match[2])
+        for (const circle of circles) slack = Math.min(slack, Math.hypot(x - circle.x, y - circle.y) - circle.r)
+      }
+      return slack
+    })
+  let slack = await edgeSlack()
+  for (let attempt = 0; slack < 0 && attempt < 20; attempt++) {
+    await page.waitForTimeout(250)
+    slack = await edgeSlack()
+  }
+  assert.ok(slack >= 0, `an edge starts ${(-slack).toFixed(2)} units inside a bubble`)
   await page.getByRole("button", { name: "Show all / reset" }).click()
   // Wheel zooms toward the pointer: one notch in shrinks the viewBox, one notch out restores it.
   const wheeled = await page.evaluate(() => {
@@ -903,7 +950,10 @@ try {
   assert.equal(await work.getByRole("tab", { name: "Read" }).getAttribute("aria-selected"), "true")
   assert.equal(await work.locator(".article > h1").innerText(), "Core")
   await work.getByRole("tab", { name: "Overview" }).click()
-  assert.match(await work.locator(".app-head .meta").innerText(), /Generated 2026-10-14 00:00 UTC · fixture\/model · 2 pages/)
+  assert.match(
+    await work.locator(".app-head .meta").innerText(),
+    /Generated 2026-10-14 00:00 UTC · fixture\/model · 2 pages/,
+  )
   assert.match(await work.locator(".tiles").innerText(), /Cited files\s+3\s+of 6 indexed files/)
   // Blind spots name uncited directories; page overlap lists shared citations for a pair.
   assert.deepEqual(await work.locator(".spots li button").allInnerTexts(), ["docs"])
@@ -911,7 +961,10 @@ try {
   await work.locator(".spots li button", { hasText: "docs" }).click()
   assert.match(await work.locator(".icicle .crumbs").innerText(), /docs/)
   await work.locator(".overlap rect.cell.hit").first().click()
-  assert.match(await work.locator(".drawer").innerText(), /Shared citations[\s\S]*1 cited file in common[\s\S]*src\/a\.ts/i)
+  assert.match(
+    await work.locator(".drawer").innerText(),
+    /Shared citations[\s\S]*1 cited file in common[\s\S]*src\/a\.ts/i,
+  )
   await work.keyboard.press("Escape")
   assert.match(await work.locator(".tiles").innerText(), /1 stale/)
   // Arrow keys move between tabs.
