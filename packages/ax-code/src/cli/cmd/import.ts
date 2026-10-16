@@ -20,17 +20,22 @@ export function formatCompatibilityImportReport(report: CompatibilityImport.Repo
 
 export const ImportCommand = cmd({
   command: "import <file>",
-  describe: "import session data, or dry-run import opencode/claude/codex compatibility files",
+  describe: "import session data, or dry-run import opencode/claude/codex/cursor/windsurf compatibility files",
   builder: (yargs: Argv) =>
     yargs
       .positional("file", {
-        describe: "path to JSON file, or one of: opencode, claude, codex",
+        describe: "path to JSON file, or one of: opencode, claude, codex, cursor, windsurf",
         type: "string",
         demandOption: true,
       })
       .option("write", {
         type: "boolean",
         describe: "write compatibility import candidates; dry-run is the default",
+      })
+      .option("user", {
+        type: "boolean",
+        describe:
+          "also read user-level files (~/.claude.json, ~/.codex/config.toml). Nothing outside the project is read without this flag. Codex config.toml MCP tables are reported but not imported (no TOML parser).",
       })
       .option("json", {
         type: "boolean",
@@ -48,6 +53,7 @@ export const ImportCommand = cmd({
         source: source.data,
         directory: process.cwd(),
         write: args.write === true,
+        user: args.user === true,
       })
       if (args.json) {
         process.stdout.write(JSON.stringify(report, null, 2) + EOL)

@@ -1,7 +1,8 @@
-import { describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { CompatibilityImport } from "../src/import/compatibility"
+import { Global } from "../src/global"
 import { tmpdir } from "./fixture/fixture"
 
 describe("CompatibilityImport", () => {
@@ -51,5 +52,213 @@ describe("CompatibilityImport", () => {
         targetPath: path.join(tmp.path, ".ax-code", "skill", "release", "SKILL.md"),
       }),
     )
+  })
+})
+
+describe("CompatibilityImport MCP servers (ADR-220)", () => {
+  const MCP_JSON = {
+    mcpServers: {
+      github: {
+        command: "npx",
+        args: ["-y", "@modelcontextprotocol/server-github"],
+        env: {
+          GITHUB_TOKEN: "${GITHUB_TOKEN}",
+          LITERAL_SECRET: "super-secret-value",
+        },
+      },
+      docs: {
+        type: "http",
+        url: "https://mcp.example.com/docs",
+        headers: { Authorization: "${DOCS_TOKEN}", X_Static: "header-literal-value" },
+      },
+      broken: { unexpected: true },
+    },
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  test("dry-run maps servers, omits literal env/header values, never prints them", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(path.join(dir, ".mcp.json"), JSON.stringify(MCP_JSON), "utf-8")
+      },
+    })
+
+    const report = await CompatibilityImport.plan({ source: "claude", directory: tmp.path })
+    const mcp = report.candidates.filter((item) => item.kind === "mcp")
+    expect(mcp.length).toBe(3)
+
+    const github = mcp.find((item) => item.targetPath.endsWith("#mcp/github"))
+    expect(github?.action).toBe("copy")
+    expect(github?.warnings).toContain("env_value_omitted:LITERAL_SECRET")
+
+    const docs = mcp.find((item) => item.targetPath.endsWith("#mcp/docs"))
+    expect(docs?.action).toBe("copy")
+    expect(docs?.warnings).toContain("header_value_omitted:X_Static")
+
+    const broken = mcp.find((item) => item.targetPath.endsWith("#mcp/broken"))
+    expect(broken?.action).toBe("skip")
+    expect(broken?.reason).toBe("unsupported_mcp_shape")
+
+    // Secret non-disclosure: variable names only, never values.
+    const serialized = JSON.stringify(report)
+    expect(serialized).not.toContain("super-secret-value")
+    expect(serialized).not.toContain("header-literal-value")
+    expect(serialized).toContain("LITERAL_SECRET")
+  })
+
+  test("write merges disabled servers into the project config without overwriting", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(path.join(dir, ".mcp.json"), JSON.stringify(MCP_JSON), "utf-8")
+        // An existing github entry must never be overwritten.
+        await fs.writeFile(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({ mcp: { github: { type: "local", command: ["keep-me"] } } }),
+          "utf-8",
+        )
+      },
+    })
+
+    const report = await CompatibilityImport.run({ source: "claude", directory: tmp.path, write: true })
+    const github = report.candidates.find((item) => item.targetPath.endsWith("#mcp/github"))
+    expect(github?.action).toBe("skip")
+    expect(github?.reason).toBe("target_exists")
+
+    const config = JSON.parse(await fs.readFile(path.join(tmp.path, "ax-code.json"), "utf-8"))
+    expect(config.mcp.github).toEqual({ type: "local", command: ["keep-me"] })
+    expect(config.mcp.docs).toEqual({
+      type: "remote",
+      url: "https://mcp.example.com/docs",
+      enabled: false,
+      headers: { Authorization: "{env:DOCS_TOKEN}" },
+    })
+    expect(config.mcp.broken).toBeUndefined()
+    // Only reference-style env values are carried; literals are omitted.
+    expect(JSON.stringify(config)).not.toContain("super-secret-value")
+    expect(JSON.stringify(config)).not.toContain("LITERAL_SECRET")
+  })
+
+  test("writes local servers as disabled with {env:VAR} references", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(path.join(dir, ".mcp.json"), JSON.stringify(MCP_JSON), "utf-8")
+      },
+    })
+
+    await CompatibilityImport.run({ source: "claude", directory: tmp.path, write: true })
+    const config = JSON.parse(await fs.readFile(path.join(tmp.path, "ax-code.json"), "utf-8"))
+    expect(config.mcp.github).toEqual({
+      type: "local",
+      command: ["npx", "-y", "@modelcontextprotocol/server-github"],
+      enabled: false,
+      environment: { GITHUB_TOKEN: "{env:GITHUB_TOKEN}" },
+    })
+  })
+
+  test("reads user-level ~/.claude.json only with the explicit user flag", async () => {
+    await using home = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(
+          path.join(dir, ".claude.json"),
+          JSON.stringify({ mcpServers: { personal: { command: "uvx", args: ["personal-mcp"] } } }),
+          "utf-8",
+        )
+      },
+    })
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(
+          path.join(dir, ".claude.json"),
+          JSON.stringify({
+            projects: { [path.resolve(dir)]: { mcpServers: { scoped: { command: "npx", args: ["scoped-mcp"] } } } },
+          }),
+          "utf-8",
+        )
+      },
+    })
+
+    const homeSpy = vi.spyOn(Global.Path, "home", "get").mockReturnValue(home.path)
+    try {
+      const withoutUser = await CompatibilityImport.plan({ source: "claude", directory: tmp.path })
+      expect(
+        withoutUser.candidates
+          .filter((item) => item.kind === "mcp")
+          .map((item) => item.targetPath)
+          .join("\n"),
+      ).not.toContain("personal")
+
+      const withUser = await CompatibilityImport.plan({ source: "claude", directory: tmp.path, user: true })
+      const names = withUser.candidates.filter((item) => item.kind === "mcp").map((item) => item.targetPath)
+      expect(names.join("\n")).toContain("#mcp/personal")
+      expect(names.join("\n")).toContain("#mcp/scoped")
+    } finally {
+      homeSpy.mockRestore()
+    }
+  })
+
+  test("codex user config.toml is reported as skipped, not silently ignored", async () => {
+    await using home = await tmpdir({
+      init: async (dir) => {
+        await fs.mkdir(path.join(dir, ".codex"), { recursive: true })
+        await fs.writeFile(path.join(dir, ".codex", "config.toml"), '[mcp_servers.docs]\ncommand = "npx"\n', "utf-8")
+      },
+    })
+    await using tmp = await tmpdir()
+
+    const homeSpy = vi.spyOn(Global.Path, "home", "get").mockReturnValue(home.path)
+    try {
+      const report = await CompatibilityImport.plan({ source: "codex", directory: tmp.path, user: true })
+      const skipped = report.candidates.find((item) => item.kind === "mcp")
+      expect(skipped?.action).toBe("skip")
+      expect(skipped?.reason).toBe("toml_parser_unavailable")
+    } finally {
+      homeSpy.mockRestore()
+    }
+  })
+})
+
+describe("CompatibilityImport cursor and windsurf instructions (ADR-220)", () => {
+  test("cursor rules and legacy .cursorrules become instruction candidates and are copied", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.mkdir(path.join(dir, ".cursor", "rules"), { recursive: true })
+        await fs.writeFile(
+          path.join(dir, ".cursor", "rules", "style.mdc"),
+          "---\ndescription: style\n---\nStyle rule.",
+          "utf-8",
+        )
+        await fs.writeFile(path.join(dir, ".cursorrules"), "Legacy cursor rules.", "utf-8")
+      },
+    })
+
+    const planned = await CompatibilityImport.plan({ source: "cursor", directory: tmp.path })
+    expect(planned.candidates.map((item) => item.kind)).toEqual(["instruction", "instruction"])
+
+    const report = await CompatibilityImport.run({ source: "cursor", directory: tmp.path, write: true })
+    expect(report.copy).toBe(2)
+    expect(
+      await fs.readFile(path.join(tmp.path, ".ax-code", "instructions", "cursor", "style.mdc"), "utf-8"),
+    ).toContain("Style rule.")
+    expect(
+      await fs.readFile(path.join(tmp.path, ".ax-code", "instructions", "cursor", "cursorrules.md"), "utf-8"),
+    ).toContain("Legacy cursor rules.")
+  })
+
+  test("windsurf rules keep their relative layout", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.mkdir(path.join(dir, ".windsurf", "rules", "frontend"), { recursive: true })
+        await fs.writeFile(path.join(dir, ".windsurf", "rules", "frontend", "react.md"), "React rule.", "utf-8")
+      },
+    })
+
+    const report = await CompatibilityImport.run({ source: "windsurf", directory: tmp.path, write: true })
+    expect(report.copy).toBe(1)
+    expect(
+      await fs.readFile(path.join(tmp.path, ".ax-code", "instructions", "windsurf", "frontend", "react.md"), "utf-8"),
+    ).toContain("React rule.")
   })
 })
