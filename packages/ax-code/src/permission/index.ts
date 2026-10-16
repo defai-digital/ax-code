@@ -78,6 +78,12 @@ export namespace Permission {
       // interactive ask (full-access + autonomous + configured allowlist).
       // Absent on every other ask; clients render a countdown from it.
       autoOnceAt: z.number().int().positive().optional(),
+      // ADR-212: descriptive only, set by the runtime when the request is
+      // built. `riskClass` is classify() from risk-classes.ts; `interactiveOnly`
+      // means no rule or autonomous policy may answer the request. Neither
+      // changes any approval decision; clients use them to order and badge.
+      riskClass: z.enum(["safe", "risk", "unknown"]).optional(),
+      interactiveOnly: z.boolean().optional(),
       tool: z
         .object({
           messageID: MessageID.zod,
@@ -638,6 +644,9 @@ export namespace Permission {
       ...(request.permission === "webmcp" && candidate
         ? { webmcpAllowlist: { server: candidate.server, project: candidate.project, scope: candidate.scope } }
         : {}),
+      // Always the runtime's own classification, never a caller-supplied value.
+      riskClass: classifyRisk(request.permission),
+      interactiveOnly: isInteractiveOnly(request.permission, request.metadata),
     }
     log.info("asking", { id, permission: info.permission, patterns: info.patterns })
 

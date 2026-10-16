@@ -3232,6 +3232,8 @@ export type PermissionRequest = {
   always: Array<string>
   webmcpAllowlist?: WebMcpApprovalSummary
   autoOnceAt?: number
+  riskClass?: "safe" | "risk" | "unknown"
+  interactiveOnly?: boolean
   tool?: {
     messageID: string
     callID: string
