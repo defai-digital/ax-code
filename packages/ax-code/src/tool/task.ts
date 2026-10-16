@@ -10,6 +10,7 @@ import {
 } from "./task-shared"
 import { Tool } from "./tool"
 import DESCRIPTION from "./task.txt"
+import { assertPoolAlias, modelPoolParameter, resolvePoolModel } from "./task-model-pool"
 import z from "zod"
 import { Session } from "../session"
 import { SessionID, MessageID, type TaskQueueID } from "../session/schema"
@@ -47,7 +48,7 @@ const SUBAGENT_TIMEOUT_MS = 10 * 60 * 1000
 const SUBAGENT_FINALIZE_TIMEOUT_MS = 2 * 60 * 1000
 const log = Log.create({ service: "task-tool" })
 
-const parameters = z.object({
+const baseParameters = z.object({
   description: z.string().describe("A short (3-5 words) description of the task"),
   prompt: z.string().describe("The task for the agent to perform"),
   subagent_type: z.string().describe("The type of specialized agent to use for this task"),
@@ -63,6 +64,9 @@ const parameters = z.object({
   ),
   output_schema: TaskOutputSchema.Parameter.optional(),
 })
+
+/** Parameters the executor accepts: the base shape plus the pool `model` alias (ADR-218). */
+type TaskParameters = z.infer<typeof baseParameters> & { model?: string }
 
 type TaskMetadata = {
   sessionId: SessionID
@@ -96,7 +100,7 @@ const BACKGROUND_STARTED = [
 ].join("\n")
 
 async function startBackgroundSubagent(input: {
-  params: z.infer<typeof parameters>
+  params: TaskParameters
   ctx: Tool.Context
   session: Awaited<ReturnType<typeof Session.create>>
   agent: Agent.Info
@@ -227,10 +231,16 @@ async function assertBackgroundCapacity(
 
 export const TaskTool = Tool.define("task", async (ctx?) => {
   const description = await subagentDescription(DESCRIPTION, ctx?.agent)
+  // ADR-218: with a configured agents.model_pool the tool advertises a `model`
+  // alias parameter; without one the schema stays byte-identical to the
+  // pre-pool shape.
+  const initConfig = await Config.get()
+  const modelParam = modelPoolParameter(initConfig.agents?.model_pool)
+  const parameters = modelParam ? baseParameters.extend({ model: modelParam }) : baseParameters
   return {
     description,
     parameters,
-    async execute(params: z.infer<typeof parameters>, ctx) {
+    async execute(params: TaskParameters, ctx) {
       // Fail before any child session exists. A background task cannot return a
       // validated structured result, so accepting this combination would spawn
       // work whose contract the caller can never observe.
@@ -269,6 +279,10 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
 
       const config = await Config.get()
       ensureNotAborted()
+      // ADR-218: reject an unknown pool alias before the permission ask or
+      // any child session exists. Without a pool every non-"primary" value
+      // is rejected, so the model cannot route to an unauthorised provider.
+      assertPoolAlias(config.agents?.model_pool, params.model)
       await assertSubagentDepth(ctx.sessionID, ensureNotAborted)
 
       // Skip permission check when user explicitly invoked via @ or command subtask
@@ -337,11 +351,20 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
 
       // A subagent pinned to a disabled provider (native deepseek after the
       // SKU moved behind a custom gateway) runs on the parent's model instead
-      // of failing the whole task with ModelNotFound.
-      const model = (await agentModel(agent)) ?? {
-        modelID: msg.info.modelID,
-        providerID: msg.info.providerID,
-      }
+      // of failing the whole task with ModelNotFound. A pool alias (or the
+      // pool default) overrides the agent pin only when the caller asked for
+      // one or the user configured a default (ADR-218); the resolved model
+      // flows into SessionPrompt.prompt so the usual provider availability
+      // and permission checks still run.
+      const model = resolvePoolModel({
+        pool: config.agents?.model_pool,
+        requested: params.model,
+        agentPin: await agentModel(agent),
+        fallback: {
+          modelID: msg.info.modelID,
+          providerID: msg.info.providerID,
+        },
+      })
 
       const taskTools = subagentToolGates({
         constraints: constraints.tools,

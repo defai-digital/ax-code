@@ -352,6 +352,92 @@ export const Agent = z
   })
 export type Agent = z.infer<typeof Agent>
 
+// ADR-218: user-authorised models the task/task_parallel `model` parameter
+// may select from. Entries arrive as an array of {alias, model, hint} or as
+// a record keyed by alias; the transform normalizes both to one array.
+const ModelPoolEntry = z.object({
+  alias: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Pool alias (required in the array form; the record key supplies it otherwise)"),
+  model: ModelId.describe('Model in "provider/model" format, e.g. anthropic/claude-sonnet-5'),
+  hint: z.string().optional().describe("Short usage hint listed next to the alias in the task tool schema"),
+})
+
+export const ModelPool = z
+  .object({
+    default: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Alias used when a task call omits the model parameter. An agent's own model pin still wins over this default.",
+      ),
+    models: z
+      .union([z.array(ModelPoolEntry), z.record(z.string(), ModelPoolEntry)])
+      .describe("Pool entries as an array of {alias, model, hint} or a record keyed by alias"),
+  })
+  .superRefine((pool, context) => {
+    const entries: Array<{ alias: string | undefined; model: string; key: string | number }> = Array.isArray(
+      pool.models,
+    )
+      ? pool.models.map((entry, position) => ({ alias: entry.alias, model: entry.model, key: position }))
+      : Object.entries(pool.models).map(([alias, entry]) => ({
+          alias: entry.alias ?? alias,
+          model: entry.model,
+          key: alias,
+        }))
+    const seen = new Set<string>()
+    for (const entry of entries) {
+      const path = ["models", entry.key]
+      if (!entry.alias) {
+        context.addIssue({ code: "custom", message: "Pool entries in the array form require an alias", path })
+        continue
+      }
+      const slash = entry.model.indexOf("/")
+      if (slash <= 0 || slash === entry.model.length - 1) {
+        context.addIssue({
+          code: "custom",
+          message: `Model must be in "provider/model" format, got "${entry.model}"`,
+          path: [...path, "model"],
+        })
+      }
+      if (seen.has(entry.alias)) {
+        context.addIssue({ code: "custom", message: `Duplicate pool alias: ${entry.alias}`, path })
+      }
+      seen.add(entry.alias)
+    }
+    if (pool.default !== undefined && !seen.has(pool.default)) {
+      context.addIssue({
+        code: "custom",
+        message: `default alias "${pool.default}" does not match any pool entry`,
+        path: ["default"],
+      })
+    }
+  })
+  .transform(
+    (
+      pool,
+    ): {
+      default?: string
+      models: Array<{ alias: string; model: string; hint?: string }>
+    } => ({
+      default: pool.default,
+      models: Array.isArray(pool.models)
+        ? pool.models.map((entry) => ({ alias: entry.alias!, model: entry.model, hint: entry.hint }))
+        : Object.entries(pool.models).map(([alias, entry]) => ({
+            alias: entry.alias ?? alias,
+            model: entry.model,
+            hint: entry.hint,
+          })),
+    }),
+  )
+  .describe(
+    "User-authorised models the task/task_parallel model parameter can select from (ADR-218). Without a pool the tools offer no model parameter.",
+  )
+export type ModelPool = z.output<typeof ModelPool>
+
 export const Keybinds = z
   .object({
     leader: z.string().optional().default("ctrl+x").describe("Leader key for keybind combinations"),
@@ -734,6 +820,12 @@ export const Info = z
       .catchall(Agent)
       .optional()
       .describe(`Agent configuration, see ${REPO_URL}`),
+    agents: z
+      .object({
+        model_pool: ModelPool.optional(),
+      })
+      .optional()
+      .describe("Agent subsystem settings (subagent model selection pool, ADR-218)"),
     provider: z.record(z.string(), Provider).optional().describe("Custom provider configurations and model overrides"),
     mcp: z
       .record(

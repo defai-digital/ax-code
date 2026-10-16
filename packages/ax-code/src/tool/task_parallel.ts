@@ -10,6 +10,7 @@ import {
 } from "./task-shared"
 import { toErrorMessage } from "@/util/error-message"
 import { TaskOutputSchema } from "./task-output-schema"
+import { assertPoolAlias, modelPoolParameter, resolvePoolModel } from "./task-model-pool"
 import { Tool } from "./tool"
 import DESCRIPTION from "./task_parallel.txt"
 import z from "zod"
@@ -80,45 +81,46 @@ const TaskItem = z.object({
   output_schema: TaskOutputSchema.Parameter.optional(),
 })
 
-const parameters = z
-  .object({
-    tasks: z
-      .array(TaskItem)
-      .min(1, "Provide at least one task")
-      .max(MAX_PARALLEL, `At most ${MAX_PARALLEL} parallel tasks`)
-      .optional()
-      .describe("Independent subagent tasks to run concurrently, each with its own full prompt"),
-    items: z
-      .array(z.string().min(1))
-      .min(1, "Provide at least one item")
-      .max(MAX_PARALLEL, `At most ${MAX_PARALLEL} items`)
-      .optional()
-      .describe(
-        `Items to fan one prompt_template over. Each item replaces every ${ITEM_PLACEHOLDER} occurrence, so one brief covers N members instead of writing N prompts.`,
-      ),
-    prompt_template: z
-      .string()
-      .min(1)
-      .optional()
-      .describe(
-        `Prompt shared by every item, containing the literal ${ITEM_PLACEHOLDER} placeholder. Validation runs before any member starts.`,
-      ),
-    subagent_type: z
-      .string()
-      .optional()
-      .describe("Agent type for every item member. Required with items; the whole swarm uses one type."),
-    concurrency: z
-      .number()
-      .int()
-      .min(1)
-      .max(MAX_CONCURRENCY)
-      .optional()
-      .describe(`Members allowed to run at once (default ${DEFAULT_CONCURRENCY}). Members beyond this queue.`),
-    output_schema: TaskOutputSchema.Parameter.optional().describe(
-      "Optional JSON Schema every item member must return. One schema per swarm, not per item.",
+const baseParameters = z.object({
+  tasks: z
+    .array(TaskItem)
+    .min(1, "Provide at least one task")
+    .max(MAX_PARALLEL, `At most ${MAX_PARALLEL} parallel tasks`)
+    .optional()
+    .describe("Independent subagent tasks to run concurrently, each with its own full prompt"),
+  items: z
+    .array(z.string().min(1))
+    .min(1, "Provide at least one item")
+    .max(MAX_PARALLEL, `At most ${MAX_PARALLEL} items`)
+    .optional()
+    .describe(
+      `Items to fan one prompt_template over. Each item replaces every ${ITEM_PLACEHOLDER} occurrence, so one brief covers N members instead of writing N prompts.`,
     ),
-  })
-  .describe("Provide either tasks, or items with prompt_template and subagent_type — never both")
+  prompt_template: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      `Prompt shared by every item, containing the literal ${ITEM_PLACEHOLDER} placeholder. Validation runs before any member starts.`,
+    ),
+  subagent_type: z
+    .string()
+    .optional()
+    .describe("Agent type for every item member. Required with items; the whole swarm uses one type."),
+  concurrency: z
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_CONCURRENCY)
+    .optional()
+    .describe(`Members allowed to run at once (default ${DEFAULT_CONCURRENCY}). Members beyond this queue.`),
+  output_schema: TaskOutputSchema.Parameter.optional().describe(
+    "Optional JSON Schema every item member must return. One schema per swarm, not per item.",
+  ),
+})
+
+/** Parameters the executor accepts: the base shape plus the pool `model` alias (ADR-218). */
+type TaskParallelParameters = z.infer<typeof baseParameters> & { model?: string }
 
 export type TaskParallelItem = z.infer<typeof TaskItem>
 
@@ -401,11 +403,19 @@ async function runOneTask(input: {
 
 export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
   const description = await subagentDescription(DESCRIPTION, ctx?.agent)
+  // ADR-218: with a configured agents.model_pool the swarm advertises a
+  // `model` alias applied to every member; without one the schema stays
+  // byte-identical to the pre-pool shape.
+  const initConfig = await Config.get()
+  const modelParam = modelPoolParameter(initConfig.agents?.model_pool)
+  const parameters = (modelParam ? baseParameters.extend({ model: modelParam }) : baseParameters).describe(
+    "Provide either tasks, or items with prompt_template and subagent_type — never both",
+  )
 
   return {
     description,
     parameters,
-    async execute(params: z.infer<typeof parameters>, toolCtx) {
+    async execute(params: TaskParallelParameters, toolCtx) {
       await assertSubagentDepth(toolCtx.sessionID)
 
       // Hard gate: multi-provider ensemble requests must not open parallel digs first.
@@ -427,6 +437,12 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
       if (!expansion.ok) throw new Error(expansion.message)
       const members = expansion.tasks
       const swarmItems = (params.items?.length ?? 0) > 0
+
+      // ADR-218: reject an unknown pool alias before the permission ask or any
+      // child session exists, matching the single-task tool.
+      const config = await Config.get()
+      const pool = config.agents?.model_pool
+      assertPoolAlias(pool, params.model)
 
       if (!toolCtx.extra?.bypassAgentCheck) {
         const types = [...new Set(members.map((t) => t.subagent_type))]
@@ -464,7 +480,6 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
       if (msg.info.role !== "assistant") throw new Error("Not an assistant message")
 
       const constraints = await taskParentConstraints(msg.info)
-      const config = await Config.get()
       const defaultModel = {
         modelID: msg.info.modelID,
         providerID: msg.info.providerID,
@@ -524,7 +539,15 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
             outcomes[index] = await runOneTask({
               params: task,
               ctx: toolCtx,
-              model: (await agentModel(agent)) ?? defaultModel,
+              // ADR-218: the swarm-wide alias (or the pool default) resolves
+              // per member so an explicit agent pin still applies when no
+              // alias was requested.
+              model: resolvePoolModel({
+                pool,
+                requested: params.model,
+                agentPin: await agentModel(agent),
+                fallback: defaultModel,
+              }),
               config,
               agent,
               constraints,
