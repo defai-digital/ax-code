@@ -259,6 +259,8 @@ import type {
   SessionMoveResponses,
   SessionMoveValidateErrors,
   SessionMoveValidateResponses,
+  SessionPinErrors,
+  SessionPinResponses,
   SessionPromptAsyncErrors,
   SessionPromptAsyncResponses,
   SessionPromptErrors,
@@ -292,6 +294,8 @@ import type {
   SessionSummarizeResponses,
   SessionTodoErrors,
   SessionTodoResponses,
+  SessionUnpinErrors,
+  SessionUnpinResponses,
   SessionUnrevertErrors,
   SessionUnrevertResponses,
   SessionUpdateErrors,
@@ -4586,6 +4590,77 @@ export class Session2 extends HeyApiClient {
   }
 
   /**
+   * Unpin a message
+   *
+   * Remove a pin by its source message id (ADR-226). No-op when the message is not pinned.
+   */
+  public unpin<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      messageID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "messageID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<SessionUnpinResponses, SessionUnpinErrors, ThrowOnError>({
+      url: "/session/{sessionID}/pin",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Pin a message
+   *
+   * Pin a user message so its text survives compaction verbatim (ADR-226). Re-pinning the same message replaces the stored copy.
+   */
+  public pin<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      messageID: string
+      text: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "messageID" },
+            { in: "body", key: "text" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SessionPinResponses, SessionPinErrors, ThrowOnError>({
+      url: "/session/{sessionID}/pin",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
    * Initialize session
    *
    * Analyze the current application and create an AGENTS.md file with project-specific agent configurations.
@@ -4799,7 +4874,7 @@ export class Session2 extends HeyApiClient {
   /**
    * Summarize session
    *
-   * Generate a concise summary of the session using AI compaction to preserve key information.
+   * Generate a concise summary of the session using AI compaction to preserve key information. With keep, the last N messages (1-50) stay verbatim outside the summary. With preview, compute and return what a compaction would do (read-only: no model call, no mutation).
    */
   public summarize<ThrowOnError extends boolean = false>(
     parameters: {
@@ -4809,6 +4884,8 @@ export class Session2 extends HeyApiClient {
       modelID: string
       auto?: boolean
       focus?: string
+      keep?: number
+      preview?: boolean
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4823,6 +4900,8 @@ export class Session2 extends HeyApiClient {
             { in: "body", key: "modelID" },
             { in: "body", key: "auto" },
             { in: "body", key: "focus" },
+            { in: "body", key: "keep" },
+            { in: "body", key: "preview" },
           ],
         },
       ],

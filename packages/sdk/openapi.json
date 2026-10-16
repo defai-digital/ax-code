@@ -28088,6 +28088,162 @@
         ]
       }
     },
+    "/session/{sessionID}/pin": {
+      "post": {
+        "operationId": "session.pin",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses_.*"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Pin a message",
+        "description": "Pin a user message so its text survives compaction verbatim (ADR-226). Re-pinning the same message replaces the stored copy.",
+        "responses": {
+          "200": {
+            "description": "Session with the updated pin list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "messageID": {
+                    "type": "string",
+                    "pattern": "^msg_.*"
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "messageID",
+                  "text"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.session.pin({\n  ...\n})"
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "session.unpin",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses_.*"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "messageID",
+            "schema": {
+              "type": "string",
+              "pattern": "^msg_.*"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Unpin a message",
+        "description": "Remove a pin by its source message id (ADR-226). No-op when the message is not pinned.",
+        "responses": {
+          "200": {
+            "description": "Session with the updated pin list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.session.unpin({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/session/{sessionID}/init": {
       "post": {
         "operationId": "session.init",
@@ -28545,14 +28701,21 @@
           }
         ],
         "summary": "Summarize session",
-        "description": "Generate a concise summary of the session using AI compaction to preserve key information.",
+        "description": "Generate a concise summary of the session using AI compaction to preserve key information. With keep, the last N messages (1-50) stay verbatim outside the summary. With preview, compute and return what a compaction would do (read-only: no model call, no mutation).",
         "responses": {
           "200": {
-            "description": "Summarized session",
+            "description": "Summarized session, or the read-only preview when preview=true",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "boolean"
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SessionSummarizePreview"
+                    }
+                  ]
                 }
               }
             }
@@ -28596,6 +28759,14 @@
                   "focus": {
                     "type": "string",
                     "maxLength": 500
+                  },
+                  "keep": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50
+                  },
+                  "preview": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -38844,6 +39015,11 @@
           "focus": {
             "type": "string",
             "maxLength": 500
+          },
+          "keep": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
           }
         },
         "required": [
@@ -39167,7 +39343,7 @@
             }
           },
           "agents": {
-            "description": "Agent subsystem settings (subagent model selection pool, ADR-218)",
+            "description": "Agent subsystem settings (subagent model selection pool, ADR-218; task_parallel options, ADR-231)",
             "type": "object",
             "properties": {
               "model_pool": {
@@ -39239,6 +39415,15 @@
                 "required": [
                   "models"
                 ]
+              },
+              "task_parallel": {
+                "type": "object",
+                "properties": {
+                  "worktree_isolation": {
+                    "description": "When true and the project is a git repo, two or more writer subagents in one task_parallel call each get their own worktree via Worktree.createReady. Read-only members still share the main tree. Per-writer branches, worktree paths and short diff summaries are reported back; nothing is merged. Off by default.",
+                    "type": "boolean"
+                  }
+                }
               }
             }
           },
@@ -39656,6 +39841,16 @@
             },
             "additionalProperties": {
               "type": "boolean"
+            }
+          },
+          "mcp_security": {
+            "description": "MCP server launch security checks. All fields default to off and only send data off-machine when enabled.",
+            "type": "object",
+            "properties": {
+              "osv_check": {
+                "description": "ADR-230: query api.osv.dev for the npx/uvx/pnpm-dlx/bunx/pipx-run package before launching a local MCP server. When set, the package name and version are sent to api.osv.dev. Advisories whose id starts with MAL- block the launch; other advisories are logged. Network errors fail open. Default: false (opt-in).",
+                "type": "boolean"
+              }
             }
           },
           "session": {
@@ -46462,6 +46657,27 @@
               "scope"
             ]
           },
+          "pins": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "messageID": {
+                  "type": "string",
+                  "pattern": "^msg_.*"
+                },
+                "text": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4000
+                }
+              },
+              "required": [
+                "messageID",
+                "text"
+              ]
+            }
+          },
           "metadata": {
             "type": "object",
             "propertyNames": {
@@ -46696,8 +46912,15 @@
             "$ref": "#/components/schemas/IsolationMode"
           },
           "network": {
-            "description": "Allow network access from tools. Defaults to enabled in full-access and disabled in read-only and workspace-write modes",
-            "type": "boolean"
+            "description": "Allow network access from tools. A boolean turns all network on or off. An object opts in to a loopback egress proxy that permits only allowed_domains (denied_domains always win). Defaults to enabled in full-access and disabled in read-only and workspace-write modes",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IsolationNetworkPolicy"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
           },
           "protected": {
             "description": "Additional paths relative to workspace root that are protected from writes. .git and .ax-code are always protected",
@@ -46720,6 +46943,26 @@
           "workspace-write",
           "full-access"
         ]
+      },
+      "IsolationNetworkPolicy": {
+        "type": "object",
+        "properties": {
+          "allowed_domains": {
+            "description": "Hosts sandboxed bash may reach through the loopback egress proxy. Each entry is an exact host or a *.suffix wildcard",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "denied_domains": {
+            "description": "Hosts the egress proxy always refuses. Evaluated before allowed_domains and wins over it",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
       },
       "IsolationState": {
         "type": "object",
@@ -48963,6 +49206,27 @@
               "time",
               "scope"
             ]
+          },
+          "pins": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "messageID": {
+                  "type": "string",
+                  "pattern": "^msg_.*"
+                },
+                "text": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4000
+                }
+              },
+              "required": [
+                "messageID",
+                "text"
+              ]
+            }
           },
           "metadata": {
             "type": "object",
@@ -52368,6 +52632,68 @@
           "AGGREGATE_TOOL_CALL_LIMIT",
           "FILE_CHANGE_LIMIT",
           "LINE_CHANGE_LIMIT"
+        ]
+      },
+      "SessionSummarizePreview": {
+        "type": "object",
+        "properties": {
+          "summarizeMessages": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "summarizeTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "keepMessages": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "keepTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "prunedToolOutputs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "tool": {
+                  "type": "string"
+                },
+                "parts": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "estimatedTokens": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "tool",
+                "parts",
+                "estimatedTokens"
+              ]
+            }
+          },
+          "focus": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "summarizeMessages",
+          "summarizeTokens",
+          "keepMessages",
+          "keepTokens",
+          "prunedToolOutputs",
+          "focus"
         ]
       },
       "SmartLlmState": {

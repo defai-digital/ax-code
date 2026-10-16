@@ -260,6 +260,7 @@ export type CompactionPart = {
   overflow?: boolean
   triggerReason?: "provider_usage" | "context_overflow_error" | "request_too_large" | "prompt_preflight" | "manual"
   focus?: string
+  keep?: number
 }
 
 /** Runtime configuration of a generated client instance: baseUrl, headers, fetch, and parsers. */
@@ -416,7 +417,7 @@ export type Config = {
     [key: string]: AgentConfig | undefined
   }
   /**
-   * Agent subsystem settings (subagent model selection pool, ADR-218)
+   * Agent subsystem settings (subagent model selection pool, ADR-218; task_parallel options, ADR-231)
    */
   agents?: {
     /**
@@ -461,6 +462,12 @@ export type Config = {
               hint?: string
             }
           }
+    }
+    task_parallel?: {
+      /**
+       * When true and the project is a git repo, two or more writer subagents in one task_parallel call each get their own worktree via Worktree.createReady. Read-only members still share the main tree. Per-writer branches, worktree paths and short diff summaries are reported back; nothing is merged. Off by default.
+       */
+      worktree_isolation?: boolean
     }
   }
   /**
@@ -657,6 +664,15 @@ export type Config = {
    */
   tools?: {
     [key: string]: boolean
+  }
+  /**
+   * MCP server launch security checks. All fields default to off and only send data off-machine when enabled.
+   */
+  mcp_security?: {
+    /**
+     * ADR-230: query api.osv.dev for the npx/uvx/pnpm-dlx/bunx/pipx-run package before launching a local MCP server. When set, the package name and version are sent to api.osv.dev. Advisories whose id starts with MAL- block the launch; other advisories are logged. Network errors fail open. Default: false (opt-in).
+     */
+    osv_check?: boolean
   }
   /**
    * Session lifecycle management
@@ -2886,6 +2902,10 @@ export type GlobalSession = {
     time: number
     scope: "turn" | "conversation"
   }
+  pins?: Array<{
+    messageID: string
+    text: string
+  }>
   metadata?: {
     [key: string]: unknown
   }
@@ -2973,9 +2993,9 @@ export type IsolationBackend = "app" | "os" | "auto"
 export type IsolationConfig = {
   mode?: IsolationMode
   /**
-   * Allow network access from tools. Defaults to enabled in full-access and disabled in read-only and workspace-write modes
+   * Allow network access from tools. A boolean turns all network on or off. An object opts in to a loopback egress proxy that permits only allowed_domains (denied_domains always win). Defaults to enabled in full-access and disabled in read-only and workspace-write modes
    */
-  network?: boolean
+  network?: IsolationNetworkPolicy | boolean
   /**
    * Additional paths relative to workspace root that are protected from writes. .git and .ax-code are always protected
    */
@@ -2987,6 +3007,18 @@ export type IsolationConfig = {
  * Isolation mode: read-only blocks all mutations, workspace-write allows writes inside workspace only, full-access disables isolation. Defaults to full-access (sandbox off)
  */
 export type IsolationMode = "read-only" | "workspace-write" | "full-access"
+
+/** AX Code API schema `IsolationNetworkPolicy` (auto-generated from the OpenAPI contract). */
+export type IsolationNetworkPolicy = {
+  /**
+   * Hosts sandboxed bash may reach through the loopback egress proxy. Each entry is an exact host or a *.suffix wildcard
+   */
+  allowed_domains?: Array<string>
+  /**
+   * Hosts the egress proxy always refuses. Evaluated before allowed_domains and wins over it
+   */
+  denied_domains?: Array<string>
+}
 
 /** AX Code API schema `IsolationState` (auto-generated from the OpenAPI contract). */
 export type IsolationState = {
@@ -3775,6 +3807,10 @@ export type Session = {
     time: number
     scope: "turn" | "conversation"
   }
+  pins?: Array<{
+    messageID: string
+    text: string
+  }>
   metadata?: {
     [key: string]: unknown
   }
@@ -4502,6 +4538,20 @@ export type SessionStopCode =
   | "AGGREGATE_TOOL_CALL_LIMIT"
   | "FILE_CHANGE_LIMIT"
   | "LINE_CHANGE_LIMIT"
+
+/** AX Code API schema `SessionSummarizePreview` (auto-generated from the OpenAPI contract). */
+export type SessionSummarizePreview = {
+  summarizeMessages: number
+  summarizeTokens: number
+  keepMessages: number
+  keepTokens: number
+  prunedToolOutputs: Array<{
+    tool: string
+    parts: number
+    estimatedTokens: number
+  }>
+  focus: string
+}
 
 /** AX Code API schema `SmartLlmState` (auto-generated from the OpenAPI contract). */
 export type SmartLlmState = {
@@ -13673,6 +13723,86 @@ export type SessionTodoResponses = {
 /** Successful response payload for `GET /session/{sessionID}/todo` — Get session todos */
 export type SessionTodoResponse = SessionTodoResponses[keyof SessionTodoResponses]
 
+/** Request payload shape for `DELETE /session/{sessionID}/pin` — Unpin a message */
+export type SessionUnpinData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query: {
+    directory?: string
+    messageID: string
+  }
+  url: "/session/{sessionID}/pin"
+}
+
+/** Error response payloads for `DELETE /session/{sessionID}/pin` — Unpin a message */
+export type SessionUnpinErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+}
+
+/** Error response payload for `DELETE /session/{sessionID}/pin` — Unpin a message */
+export type SessionUnpinError = SessionUnpinErrors[keyof SessionUnpinErrors]
+
+/** Success response payloads for `DELETE /session/{sessionID}/pin` — Unpin a message */
+export type SessionUnpinResponses = {
+  /**
+   * Session with the updated pin list
+   */
+  200: Session
+}
+
+/** Successful response payload for `DELETE /session/{sessionID}/pin` — Unpin a message */
+export type SessionUnpinResponse = SessionUnpinResponses[keyof SessionUnpinResponses]
+
+/** Request payload shape for `POST /session/{sessionID}/pin` — Pin a message */
+export type SessionPinData = {
+  body?: {
+    messageID: string
+    text: string
+  }
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/pin"
+}
+
+/** Error response payloads for `POST /session/{sessionID}/pin` — Pin a message */
+export type SessionPinErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+}
+
+/** Error response payload for `POST /session/{sessionID}/pin` — Pin a message */
+export type SessionPinError = SessionPinErrors[keyof SessionPinErrors]
+
+/** Success response payloads for `POST /session/{sessionID}/pin` — Pin a message */
+export type SessionPinResponses = {
+  /**
+   * Session with the updated pin list
+   */
+  200: Session
+}
+
+/** Successful response payload for `POST /session/{sessionID}/pin` — Pin a message */
+export type SessionPinResponse = SessionPinResponses[keyof SessionPinResponses]
+
 /** Request payload shape for `POST /session/{sessionID}/init` — Initialize session */
 export type SessionInitData = {
   body?: {
@@ -13893,6 +14023,8 @@ export type SessionSummarizeData = {
     modelID: string
     auto?: boolean
     focus?: string
+    keep?: number
+    preview?: boolean
   }
   path: {
     sessionID: string
@@ -13921,9 +14053,9 @@ export type SessionSummarizeError = SessionSummarizeErrors[keyof SessionSummariz
 /** Success response payloads for `POST /session/{sessionID}/summarize` — Summarize session */
 export type SessionSummarizeResponses = {
   /**
-   * Summarized session
+   * Summarized session, or the read-only preview when preview=true
    */
-  200: boolean
+  200: boolean | SessionSummarizePreview
 }
 
 /** Successful response payload for `POST /session/{sessionID}/summarize` — Summarize session */
