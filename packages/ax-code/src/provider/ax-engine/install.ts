@@ -19,6 +19,7 @@ import {
 import { AxEnginePaths } from "./paths"
 import { probeVersion } from "./version-probe"
 import { requirePlatformEligibility } from "./platform"
+import { runningServerBinaryPath } from "./server"
 import { axEngineRuntimeFile, AX_ENGINE_RUNTIME_REQUIRED_FILES, AX_ENGINE_RUNTIME_SIGNED_FILES } from "./payload"
 
 const log = Log.create({ service: "ax-engine-install" })
@@ -51,6 +52,7 @@ export type AxEngineInstallRuntime = {
   verifyCodesign?: (binaryPath: string, expectedTeamId?: string) => Promise<void>
   clearQuarantine?: (binaryPath: string) => Promise<void>
   smoke?: (binaryPath: string, expectedVersion: string) => Promise<void>
+  runningServerBinary?: () => Promise<string | undefined>
 }
 
 function assetNameFromUrl(url: string): string {
@@ -199,6 +201,11 @@ async function clearQuarantine(binaryPath: string): Promise<void> {
   await Process.run(["xattr", "-cr", binaryPath], { timeout: 5_000, nothrow: true }).catch(() => undefined)
 }
 
+function isInside(root: string, file: string) {
+  const relative = path.relative(path.resolve(root), path.resolve(file))
+  return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative)
+}
+
 // Best-effort GC of older managed versions once a new one is installed.
 async function cleanupOtherVersions(keep: string): Promise<void> {
   const entries = await fs.readdir(AxEnginePaths.bin, { withFileTypes: true }).catch(() => [])
@@ -230,6 +237,7 @@ export async function installAxEngineBinary(
   const verify = runtime.verifyCodesign ?? verifyCodesign
   const clearXattr = runtime.clearQuarantine ?? clearQuarantine
   const smoke = runtime.smoke ?? smokeInstalledBinary
+  const runningServer = runtime.runningServerBinary ?? runningServerBinaryPath
 
   await requireEligibility()
 
@@ -267,10 +275,31 @@ export async function installAxEngineBinary(
       return current && current.version === release.version ? current : undefined
     }
 
+    // Guards that must hold before any file under the managed tree changes
+    // (ADR-200): the install removes the target directory and every other
+    // version, so it never runs under a live managed server, and it never
+    // replaces a newer managed binary with an older pin.
+    const assertReplaceable = async () => {
+      const current = await getManagedBinary()
+      const currentVersion = current ? semver.coerce(current.version, { includePrerelease: true }) : undefined
+      if (current && currentVersion && semver.valid(release.version) && semver.gt(currentVersion, release.version)) {
+        throw new Error(
+          `${AX_ENGINE_ERROR.DowngradeRefused}: managed ax-engine ${current.version} is newer than the ${release.version} release this AX Code installs; not downgrading`,
+        )
+      }
+      const serverBinary = await runningServer().catch(() => undefined)
+      if (serverBinary && isInside(AxEnginePaths.bin, serverBinary)) {
+        throw new Error(
+          `${AX_ENGINE_ERROR.ServerRunning}: stop the running ax-engine server before installing ax-engine ${release.version}`,
+        )
+      }
+    }
+
     const before = await present()
     if (before) {
       return { installed: false, alreadyPresent: true, version: before.version, binaryPath: before.path }
     }
+    await assertReplaceable()
 
     using _ = await FileLock.acquire(AxEnginePaths.installLock, { timeoutMs: 60_000, staleMs: 45 * 60_000 })
 
@@ -279,6 +308,7 @@ export async function installAxEngineBinary(
     if (afterLock) {
       return { installed: false, alreadyPresent: true, version: afterLock.version, binaryPath: afterLock.path }
     }
+    await assertReplaceable()
 
     input.signal?.throwIfAborted()
 

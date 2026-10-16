@@ -982,6 +982,8 @@ export const AX_ENGINE_ERROR = {
   ToolcallUnsupported: "AX_ENGINE_TOOLCALL_UNSUPPORTED",
   ModelUnsupported: "AX_ENGINE_MODEL_UNSUPPORTED",
   CatalogUnavailable: "AX_ENGINE_CATALOG_UNAVAILABLE",
+  ServerRunning: "AX_ENGINE_SERVER_RUNNING",
+  DowngradeRefused: "AX_ENGINE_DOWNGRADE_REFUSED",
 } as const
 
 export const AX_ENGINE_MIN_MACOS_MAJOR = 26

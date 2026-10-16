@@ -25,6 +25,7 @@ import {
   type AxEngineInstallRuntime,
 } from "../../../src/provider/ax-engine/install"
 import { getDependencyStatus } from "../../../src/provider/ax-engine/dependency"
+import * as Install from "../../../src/provider/ax-engine/install"
 
 const RELEASE: AxEngineBinaryRelease = {
   version: "9.9.9",
@@ -58,8 +59,29 @@ const baseRuntime = (overrides: Partial<AxEngineInstallRuntime> = {}): AxEngineI
   install: fakeInstall,
   verifyCodesign: async () => {},
   clearQuarantine: async () => {},
+  runningServerBinary: async () => undefined,
   ...overrides,
 })
+
+const releaseAt = (version: string): AxEngineBinaryRelease => ({
+  version,
+  assetName: `ax-engine-${version}-darwin-arm64.tar.gz`,
+  url: `https://example.com/ax-engine-${version}-darwin-arm64.tar.gz`,
+  sha256: "b".repeat(64),
+})
+
+const installAt = (version: string, overrides: Partial<AxEngineInstallRuntime> = {}) =>
+  installAxEngineBinary(
+    {},
+    baseRuntime({
+      resolveRelease: () => releaseAt(version),
+      install: (async (input: { bin: string }) => {
+        await writeRuntimePayload(path.dirname(input.bin), `#!/bin/sh\necho 'ax-engine ${version}'\n`)
+        return input.bin
+      }) as unknown as NonNullable<AxEngineInstallRuntime["install"]>,
+      ...overrides,
+    }),
+  )
 
 async function cleanup() {
   await fs.rm(AxEnginePaths.installState, { force: true }).catch(() => undefined)
@@ -235,6 +257,44 @@ echo '${detected}'
     await expect(fs.access(AxEnginePaths.managedBinary(RELEASE.version))).rejects.toBeTruthy()
   })
 
+  test("updates an older managed install to the pin and removes the old version", async () => {
+    const old = await installAt("9.9.8")
+    const updated = await installAt("9.9.9")
+    expect(updated).toMatchObject({ installed: true, alreadyPresent: false, version: "9.9.9" })
+    expect(await getManagedBinary()).toEqual({ path: updated.binaryPath, version: "9.9.9" })
+    await expect(fs.access(old.binaryPath)).rejects.toBeTruthy()
+  })
+
+  test("refuses to replace a newer managed install with an older pin", async () => {
+    const newer = await installAt("9.9.9")
+    await expect(installAt("9.9.8")).rejects.toThrow(AX_ENGINE_ERROR.DowngradeRefused)
+    await expect(
+      installAxEngineBinary({ force: true }, baseRuntime({ resolveRelease: () => releaseAt("9.9.8") })),
+    ).rejects.toThrow(AX_ENGINE_ERROR.DowngradeRefused)
+    expect(await getManagedBinary()).toEqual({ path: newer.binaryPath, version: "9.9.9" })
+  })
+
+  test("refuses to install while a server runs from the managed tree", async () => {
+    const old = await installAt("9.9.8")
+    let installCalls = 0
+    await expect(
+      installAt("9.9.9", {
+        runningServerBinary: async () => old.binaryPath,
+        install: (async () => {
+          installCalls += 1
+          return undefined
+        }) as unknown as NonNullable<AxEngineInstallRuntime["install"]>,
+      }),
+    ).rejects.toThrow(AX_ENGINE_ERROR.ServerRunning)
+    expect(installCalls).toBe(0)
+    expect(await getManagedBinary()).toEqual({ path: old.binaryPath, version: "9.9.8" })
+  })
+
+  test("installs while a server runs from a binary outside the managed tree", async () => {
+    const result = await installAt("9.9.9", { runningServerBinary: async () => "/opt/homebrew/bin/ax-engine" })
+    expect(result).toMatchObject({ installed: true, version: "9.9.9" })
+  })
+
   test("fails when no installable release is available", async () => {
     await expect(installAxEngineBinary({}, baseRuntime({ resolveRelease: () => undefined }))).rejects.toThrow(
       AX_ENGINE_ERROR.BinaryMissing,
@@ -284,6 +344,57 @@ describe("dependency resolution picks up the managed binary", () => {
     expect(status.mode).toBe("managed")
     expect(status.managedVersion).toBe(RELEASE.version)
     expect(status.binaryPath).toBe(AxEnginePaths.managedBinary(RELEASE.version))
+  })
+
+  test("reports the pin and an available update for a managed install older than the pin", async () => {
+    const pinSpy = vi.spyOn(Install, "resolveInstallableRelease").mockReturnValue(releaseAt("9.9.9"))
+    await installAt("9.9.8")
+    const stale = await getDependencyStatus()
+    expect(stale).toMatchObject({
+      mode: "managed",
+      managedVersion: "9.9.8",
+      pinnedVersion: "9.9.9",
+      updateAvailable: true,
+    })
+    expect(stale.warnings.join(" ")).toContain("managed ax-engine 9.9.8 is older than the 9.9.9 release")
+
+    await installAt("9.9.9")
+    const current = await getDependencyStatus()
+    expect(current).toMatchObject({ mode: "managed", pinnedVersion: "9.9.9", updateAvailable: false, warnings: [] })
+
+    pinSpy.mockReturnValue(releaseAt("9.9.8"))
+    const ahead = await getDependencyStatus()
+    expect(ahead).toMatchObject({
+      mode: "managed",
+      managedVersion: "9.9.9",
+      pinnedVersion: "9.9.8",
+      updateAvailable: false,
+    })
+  })
+
+  test("never offers a managed update for a configured binary behind the pin", async () => {
+    vi.spyOn(Install, "resolveInstallableRelease").mockReturnValue(releaseAt("9.9.9"))
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "axe-version-"))
+    try {
+      const binary = path.join(dir, "ax-engine")
+      await fs.writeFile(binary, "#!/bin/sh\necho 'ax-engine 7.7.0'\n", { mode: 0o755 })
+      const status = await getDependencyStatus({ binaryPath: binary })
+      expect(status).toMatchObject({
+        mode: "configured",
+        available: true,
+        pinnedVersion: "9.9.9",
+        updateAvailable: false,
+      })
+      expect(status.warnings.join(" ")).toContain("configured ax-engine 7.7.0 is older than the 9.9.9 release")
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  test("has no pin when the install override has no semver version", async () => {
+    vi.spyOn(Install, "resolveInstallableRelease").mockReturnValue({ ...releaseAt("9.9.9"), version: "custom" })
+    await installAt("9.9.8")
+    expect(await getDependencyStatus()).toMatchObject({ pinnedVersion: undefined, updateAvailable: false })
   })
 
   test("falls back to doctor JSON when the Python wrapper has no --version command", async () => {

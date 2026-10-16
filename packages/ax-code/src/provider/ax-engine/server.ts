@@ -590,6 +590,14 @@ async function loadServerModel(input: {
   await response.body?.cancel()
 }
 
+// The binary of a live `ax-engine serve` this runtime started, if any. The
+// installer uses it to avoid replacing files under a running server.
+export async function runningServerBinaryPath(): Promise<string | undefined> {
+  const { state } = await readServerState()
+  if (!state) return undefined
+  return (await serverProcessAlive(state)) ? state.binaryPath : undefined
+}
+
 export async function getServerStatus(
   apiKey = resolveAxEngineApiKey(),
   mtpPolicy = resolveAxEngineMtpPolicy(),

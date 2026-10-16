@@ -108,6 +108,14 @@ releases do not bundle the engine (ADR-190): users install it from Homebrew
 archive. When no engine is found AX Code reports where to get it, only once a
 local model is selected or `providers ax-engine status` runs.
 
+The same command updates an engine that AX Code installed (or a legacy bundled
+one) when it is older than the pinned release; status reports `pinnedVersion`
+and `updateAvailable` for that case. It never downgrades a newer managed
+engine and refuses to run while a server started from the managed copy is
+running. An engine on `PATH` or set through `binaryPath` / `AX_ENGINE_BIN` is
+used ahead of the managed copy, so AX Code only warns when it is older than the
+pin; update it with the tool that installed it.
+
 ## Non-goals
 
 - Replacing sidecar with in-process SDK embedding in AX Code

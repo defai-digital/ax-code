@@ -3,7 +3,6 @@ import semver from "semver"
 import { which } from "@/util/which"
 import { Filesystem } from "@/util/filesystem"
 import {
-  AX_ENGINE_BINARY_RELEASE,
   AX_ENGINE_BUNDLED_MIN_VERSION,
   AX_ENGINE_ERROR,
   AX_ENGINE_MIN_VERSION,
@@ -11,7 +10,7 @@ import {
   noteAxEngineOnce,
 } from "./constants"
 import { getBundledBinary } from "./bundled"
-import { getManagedBinary, isAxEngineInstallable } from "./install"
+import { getManagedBinary, isAxEngineInstallable, resolveInstallableRelease } from "./install"
 import { axEngineBinaryIdentity } from "./binary-identity"
 import { probeVersion } from "./version-probe"
 
@@ -24,6 +23,13 @@ export const AxEngineDependencyStatus = z.object({
   managedVersion: z.string().optional(),
   // When missing, whether AX Code can download + install the binary on this host.
   installable: z.boolean().default(false),
+  // The release `providers ax-engine install` would install on this host, when
+  // it has a semver version (ADR-200). Absent on hosts with no release.
+  pinnedVersion: z.string().optional(),
+  // True only when an install would replace the binary resolution selects with
+  // a newer pinned release: a managed or legacy bundled engine older than the
+  // pin. Never for PATH or configured binaries, which outrank the managed copy.
+  updateAvailable: z.boolean().optional(),
   blockers: z.array(z.string()).default([]),
   warnings: z.array(z.string()).default([]),
 })
@@ -100,6 +106,24 @@ function coercedVersionLabel(detected: string | undefined) {
   return coerceVersion(detected)?.version ?? detected ?? "unknown"
 }
 
+// The version an install would put on this host. An AX_ENGINE_INSTALL_URL
+// override without a semver version ("custom") has no comparable pin.
+function pinnedReleaseVersion() {
+  const version = resolveInstallableRelease()?.version
+  return version && semver.valid(version) ? version : undefined
+}
+
+function olderThanPin(detected: string | undefined, pinned: string | undefined) {
+  const parsed = coerceVersion(detected)
+  return Boolean(parsed && pinned && semver.lt(parsed, pinned))
+}
+
+function behindPinWarning(source: string, detected: string | undefined, pinned: string, advice: string) {
+  return `${AX_ENGINE_ERROR.VersionUnsupported}: ${source} ax-engine ${coercedVersionLabel(detected)} is older than the ${pinned} release this AX Code installs; ${advice}`
+}
+
+const MANAGED_UPDATE_ADVICE = "run `ax-code providers ax-engine install` to update it"
+
 export function pinnedDownloadVersionBlocker(detected: string | undefined) {
   const version = coerceVersion(detected)
   if (version && semver.gte(version, AX_ENGINE_PINNED_DOWNLOAD_MIN_VERSION)) return undefined
@@ -135,6 +159,7 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
   const env = process.env.AX_ENGINE_BIN?.trim() || undefined
   const candidate = configured ?? env
   const warnings: string[] = []
+  const pinnedVersion = pinnedReleaseVersion()
   if (configured && env && configured !== env) {
     const message = `AX_ENGINE_BIN (${env}) is ignored because provider.ax-engine.options.binaryPath is set (${configured})`
     warnings.push(message)
@@ -150,18 +175,32 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
         mode: "configured",
         binaryPath: candidate,
         installable: false,
+        pinnedVersion,
+        updateAvailable: false,
         blockers: [`${AX_ENGINE_ERROR.BinaryMissing}: configured ax-engine binary is not executable`],
         warnings,
       }
     }
     const detectedVersion = await version(candidate)
     const versionBlocker = unsupportedVersionBlocker(detectedVersion)
+    if (!versionBlocker && pinnedVersion && olderThanPin(detectedVersion, pinnedVersion)) {
+      warnings.push(
+        behindPinWarning(
+          "configured",
+          detectedVersion,
+          pinnedVersion,
+          "update it at its source, or clear provider.ax-engine.options.binaryPath / AX_ENGINE_BIN to use a managed install",
+        ),
+      )
+    }
     return {
       available: !versionBlocker,
       mode: "configured",
       binaryPath: candidate,
       version: detectedVersion,
       installable: false,
+      pinnedVersion,
+      updateAvailable: false,
       blockers: versionBlocker ? [versionBlocker] : [],
       warnings,
     }
@@ -172,13 +211,12 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
     const detectedVersion = await version(found)
     const versionBlocker = unsupportedVersionBlocker(detectedVersion)
     if (!versionBlocker && !lacksBundledContract(detectedVersion)) {
-      if (AX_ENGINE_BINARY_RELEASE && detectedVersion && semver.coerce(detectedVersion)) {
-        const parsed = semver.coerce(detectedVersion)
-        if (parsed && semver.lt(parsed, AX_ENGINE_BINARY_RELEASE.version)) {
-          warnings.push(
-            `${AX_ENGINE_ERROR.VersionUnsupported}: PATH ax-engine ${parsed.version} is older than the bundled ${AX_ENGINE_BINARY_RELEASE.version} runtime`,
-          )
-        }
+      // PATH outranks the managed copy, so installing cannot fix this; only
+      // the tool that put it on PATH can.
+      if (pinnedVersion && olderThanPin(detectedVersion, pinnedVersion)) {
+        warnings.push(
+          behindPinWarning("PATH", detectedVersion, pinnedVersion, "update it with the tool that installed it"),
+        )
       }
       return {
         available: true,
@@ -186,6 +224,8 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
         binaryPath: found,
         version: detectedVersion,
         installable: false,
+        pinnedVersion,
+        updateAvailable: false,
         blockers: [],
         warnings,
       }
@@ -201,6 +241,10 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
     const detectedVersion = await version(managed.path)
     const versionBlocker = unsupportedVersionBlocker(detectedVersion)
     if (!versionBlocker && !lacksBundledContract(detectedVersion)) {
+      const updateAvailable = olderThanPin(detectedVersion, pinnedVersion)
+      if (updateAvailable && pinnedVersion) {
+        warnings.push(behindPinWarning("managed", detectedVersion, pinnedVersion, MANAGED_UPDATE_ADVICE))
+      }
       return {
         available: true,
         mode: "managed",
@@ -208,6 +252,8 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
         version: detectedVersion,
         managedVersion: managed.version,
         installable: false,
+        pinnedVersion,
+        updateAvailable,
         blockers: [],
         warnings,
       }
@@ -225,12 +271,19 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
     const detectedVersion = await version(bundled.path)
     const versionBlocker = unsupportedVersionBlocker(detectedVersion)
     if (!versionBlocker && !lacksBundledContract(detectedVersion)) {
+      // A managed install outranks the legacy bundled copy, so it can update it.
+      const updateAvailable = olderThanPin(detectedVersion, pinnedVersion)
+      if (updateAvailable && pinnedVersion) {
+        warnings.push(behindPinWarning("bundled", detectedVersion, pinnedVersion, MANAGED_UPDATE_ADVICE))
+      }
       return {
         available: true,
         mode: "bundled",
         binaryPath: bundled.path,
         version: detectedVersion,
         installable: false,
+        pinnedVersion,
+        updateAvailable,
         blockers: [],
         warnings,
       }
@@ -246,6 +299,8 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
     available: false,
     mode: "missing",
     installable,
+    pinnedVersion,
+    updateAvailable: false,
     blockers: [axEngineMissingBlocker(installable)],
     warnings,
   }
