@@ -1,5 +1,5 @@
 import { createHash, generateKeyPairSync, sign } from "node:crypto"
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import { verifyMinisign } from "../../src/installation/minisign"
 import { Installation } from "../../src/installation"
 
@@ -672,6 +672,70 @@ describe("installation", () => {
         ),
       ).rejects.toBeInstanceOf(Installation.UpgradeBusyError)
       expect(invoked).toBe(false)
+    })
+
+    test("does not expire a still-owned upgrade lock during a long installation", async () => {
+      const { FileLock } = await import("../../src/util/filelock")
+      using held = await FileLock.tryAcquire(Installation.upgradeLockPath())
+      expect(held).toBeDefined()
+      const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 16 * 60 * 1_000)
+      let invoked = false
+      try {
+        await expect(
+          withTestDependencies(
+            {
+              run: () => {
+                invoked = true
+                return { code: 0, stdout: "", stderr: "" }
+              },
+            },
+            () => Installation.upgrade("brew", "5.3.0"),
+          ),
+        ).rejects.toBeInstanceOf(Installation.UpgradeBusyError)
+        expect(invoked).toBe(false)
+      } finally {
+        clock.mockRestore()
+      }
+    })
+
+    test("recovers a crashed same-host upgrader without waiting for an age limit", async () => {
+      const fs = await import("node:fs/promises")
+      const { createProcessLockBody } = await import("../../src/util/process-lock")
+      const { FileLock } = await import("../../src/util/filelock")
+      const lockpath = Installation.upgradeLockPath() + ".lock"
+      // Acquire/dispose first to create the isolated test state directory.
+      const initial = await FileLock.tryAcquire(Installation.upgradeLockPath())
+      expect(initial).toBeDefined()
+      initial![Symbol.dispose]()
+      await fs.writeFile(lockpath, JSON.stringify({ ...createProcessLockBody(), pid: process.pid + 1 }), { flag: "wx" })
+      const kill = vi.spyOn(process, "kill").mockImplementation((pid, signal) => {
+        expect(pid).toBe(process.pid + 1)
+        expect(signal).toBe(0)
+        throw Object.assign(new Error("No such process"), { code: "ESRCH" })
+      })
+      try {
+        await expect(withTestDependencies({}, () => Installation.upgrade("brew", "5.3.0"))).resolves.toBeUndefined()
+        expect(kill).toHaveBeenCalled()
+      } finally {
+        kill.mockRestore()
+        await fs.rm(lockpath, { force: true })
+      }
+    })
+
+    test("does not steal an old foreign-host upgrade lock", async () => {
+      const fs = await import("node:fs/promises")
+      const { createProcessLockBody } = await import("../../src/util/process-lock")
+      const lockpath = Installation.upgradeLockPath() + ".lock"
+      const body = { ...createProcessLockBody(), host: "foreign-upgrade-owner", startedAt: Date.now() - 86_400_000 }
+      await fs.writeFile(lockpath, JSON.stringify(body), { flag: "wx" })
+      try {
+        await expect(withTestDependencies({}, () => Installation.upgrade("brew", "5.3.0"))).rejects.toBeInstanceOf(
+          Installation.UpgradeBusyError,
+        )
+        expect(await fs.readFile(lockpath, "utf8")).toBe(JSON.stringify(body))
+      } finally {
+        await fs.rm(lockpath, { force: true })
+      }
     })
 
     test("releases the lock after a failed upgrade", async () => {

@@ -100,9 +100,6 @@ export namespace Installation {
   // A version probe runs from a background timer; a stalled connection must
   // not leave the check pending for the whole process lifetime.
   export const VERSION_PROBE_TIMEOUT_MS = 20_000
-  // Installs download and verify a full runtime archive; a lock older than
-  // this belongs to a crashed upgrader and may be taken over.
-  const UPGRADE_LOCK_STALE_MS = 15 * 60 * 1_000
 
   export class UpgradeFailedError extends Error {
     override name: string = "UpgradeFailedError"
@@ -468,6 +465,8 @@ export namespace Installation {
   }
 
   export function upgradeLockPath() {
+    // Managed user-state root and fixed leaf, never a caller-supplied path.
+    // @scan-suppress security_scan — trusted application state path
     return path.join(Global.Path.state, "upgrade")
   }
 
@@ -477,7 +476,9 @@ export namespace Installation {
   }
 
   async function acquireUpgradeLock(): Promise<Disposable> {
-    const lock = await FileLock.tryAcquire(upgradeLockPath(), { staleMs: UPGRADE_LOCK_STALE_MS })
+    // An installer can legitimately run for more than 15 minutes. Never steal
+    // its lock by age; FileLock still reclaims dead owners on the same host.
+    const lock = await FileLock.tryAcquire(upgradeLockPath(), { staleMs: Number.POSITIVE_INFINITY })
     if (!lock) throw new UpgradeBusyError()
     return lock
   }
