@@ -12,6 +12,7 @@ import { Ssrf } from "../util/ssrf"
 import type { MessageV2 } from "./message-v2"
 import { parseContentLengthHeader } from "@/util/http-header"
 import { BodyTooLargeError, readBoundedBody } from "@/util/http-body"
+import { detectHiddenUnicode } from "../util/untrusted-content"
 
 const log = Log.create({ service: "instruction" })
 
@@ -212,6 +213,11 @@ export namespace InstructionPrompt {
         log.warn("instruction file read failed", { path: p, err })
         return ""
       })
+      // ADR-206: hidden Unicode in an instruction file can disguise or
+      // reorder its text. Advisory warning only — file and count, never the
+      // content itself.
+      const hidden = detectHiddenUnicode(content)
+      if (hidden > 0) log.warn("instruction file contains hidden Unicode characters", { path: p, count: hidden })
       return content ? "Instructions from: " + p + "\n" + content : ""
     })
 
@@ -316,6 +322,9 @@ export namespace InstructionPrompt {
         claim(messageID, found)
         const content = await Filesystem.readText(found)
         if (content) {
+          const hidden = detectHiddenUnicode(content)
+          if (hidden > 0)
+            log.warn("instruction file contains hidden Unicode characters", { path: found, count: hidden })
           results.push({ filepath: found, content: "Instructions from: " + found + "\n" + content })
         }
       }

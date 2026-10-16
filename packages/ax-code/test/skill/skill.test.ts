@@ -6,6 +6,7 @@ import { tmpdir } from "../fixture/fixture"
 import path from "path"
 import fs from "fs/promises"
 import { Glob } from "../../src/util/glob"
+import { Log } from "../../src/util/log"
 
 afterEach(async () => {
   await Instance.disposeAll()
@@ -35,6 +36,36 @@ test("skill names do not use or mutate the registry object prototype", async () 
       expect((await Skill.all()).some((skill) => skill.name === "__proto__")).toBe(true)
       expect((await Skill.get("__proto__"))?.content.trim()).toBe("Instructions")
     },
+  })
+})
+
+test("warns with file and count when a skill contains hidden Unicode", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    config: { username: "testuser" },
+    init: async (dir) => {
+      const skillDir = path.join(dir, ".claude", "skills", "hidden-unicode-skill")
+      await fs.mkdir(skillDir, { recursive: true })
+      await fs.writeFile(
+        path.join(skillDir, "SKILL.md"),
+        "---\nname: hidden-unicode-skill\ndescription: Exercises the hidden Unicode warning.\n---\nDo the work\u202Ereversed\u200Bnow",
+      )
+    },
+  })
+  // Log.create caches by service tag, so this is the same logger instance the
+  // skill loader writes through.
+  const warn = vi.spyOn(Log.create({ service: "skill" }), "warn")
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const skill = await Skill.get("hidden-unicode-skill")
+      // Advisory only (ADR-206): the skill still loads verbatim.
+      expect(skill?.content).toContain("Do the work\u202Ereversed\u200Bnow")
+    },
+  })
+  expect(warn).toHaveBeenCalledWith("skill contains hidden Unicode characters", {
+    skill: path.join(tmp.path, ".claude", "skills", "hidden-unicode-skill", "SKILL.md"),
+    count: 2,
   })
 })
 

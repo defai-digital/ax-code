@@ -13,6 +13,7 @@ import { parseContentLengthHeader } from "@/util/http-header"
 import { BodyTooLargeError, readBoundedBody } from "@/util/http-body"
 import { ToolNumber } from "./schema"
 import { originPermissionPatterns } from "@/util/url-permission"
+import { wrapUntrustedContent } from "../util/untrusted-content"
 
 // Block SSRF to private/reserved IP ranges. Uses pinnedFetch to
 // resolve DNS once and connect to the validated IP directly —
@@ -202,19 +203,21 @@ export const WebFetchTool = Tool.define("webfetch", {
         }
       })()
 
-      // Handle content based on requested format and actual content type
+      // Handle content based on requested format and actual content type.
+      // Every non-image output is untrusted external text, so it leaves the
+      // tool inside the ADR-206 untrusted-content envelope.
       switch (params.format) {
         case "markdown":
           if (contentType.includes("text/html")) {
             const markdown = await convertHTMLToMarkdown(content)
             return {
-              output: markdown,
+              output: wrapUntrustedContent(markdown, "webfetch"),
               title,
               metadata: {},
             }
           }
           return {
-            output: content,
+            output: wrapUntrustedContent(content, "webfetch"),
             title,
             metadata: {},
           }
@@ -223,27 +226,27 @@ export const WebFetchTool = Tool.define("webfetch", {
           if (contentType.includes("text/html")) {
             const text = await extractTextFromHTML(content)
             return {
-              output: text,
+              output: wrapUntrustedContent(text, "webfetch"),
               title,
               metadata: {},
             }
           }
           return {
-            output: content,
+            output: wrapUntrustedContent(content, "webfetch"),
             title,
             metadata: {},
           }
 
         case "html":
           return {
-            output: content,
+            output: wrapUntrustedContent(content, "webfetch"),
             title,
             metadata: {},
           }
 
         default:
           return {
-            output: content,
+            output: wrapUntrustedContent(content, "webfetch"),
             title,
             metadata: {},
           }

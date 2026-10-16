@@ -32,6 +32,14 @@ const MemoryEntrySchema = z.object({
   confidence: z.number().optional(),
   sourceSessionId: z.string().optional(),
   agents: z.array(z.string()).optional(),
+  // ADR-206 threat-scan verdict; optional so pre-existing files still load.
+  flagged: z
+    .object({
+      patterns: z.array(z.string()),
+      reasons: z.array(z.string()),
+      flaggedAt: z.string(),
+    })
+    .optional(),
 })
 
 const MemoryEntrySectionSchema = z.object({

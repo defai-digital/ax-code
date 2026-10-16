@@ -76,6 +76,7 @@ export const WebSearchTool = Tool.define("websearch", async () => {
         noResultsMessage: "No search results found. Please try a different query.",
         title: `Web search: ${params.query}`,
         abort: ctx.abort,
+        source: "websearch",
       })
     },
   }

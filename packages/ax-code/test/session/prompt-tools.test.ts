@@ -1161,6 +1161,88 @@ describe("session.prompt-tools lifecycle hook channels", () => {
     expect(result.output).toContain('<hook_feedback event="PostToolUse">\naudited\n</hook_feedback>')
   })
 
+  test("wraps regular MCP tool output in the untrusted-content envelope", async () => {
+    await using tmp = await tmpdir({ config: { username: "testuser" } })
+    vi.spyOn(ToolRegistry, "tools").mockResolvedValue([])
+    vi.spyOn(MCP, "tools").mockResolvedValue({
+      remote_search: {
+        description: "search",
+        inputSchema: z.object({ text: z.string() }),
+        execute: async () => ({
+          content: [{ type: "text", text: "First result with plenty of length to cross the threshold" }],
+        }),
+      } as any,
+    })
+    vi.spyOn(Plugin, "trigger").mockImplementation(
+      (async (_name: string, _input: unknown, output: unknown) => output) as any,
+    )
+    vi.spyOn(LifecycleHooks, "runForWorkspace").mockResolvedValue({ ok: true, blocked: false, outputs: [] })
+    vi.spyOn(Permission, "ask").mockResolvedValue(undefined)
+
+    const result = await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tools = await resolveTools({
+          agent: { name: "build", permission: [{ permission: "*", pattern: "*", action: "allow" }] } as any,
+          session: { id: "ses_mcp_env", permission: [] } as any,
+          model: { providerID: "test-provider", api: { id: "test-model", npm: "@ai-sdk/openai-compatible" } } as any,
+          tools: {},
+          bypassAgentCheck: false,
+          messages: [],
+          processor: { message: { id: "msg_mcp_env" }, partFromToolCall: () => undefined } as any,
+        })
+        return (tools.remote_search.execute as any)(
+          { text: "query" },
+          { toolCallId: "call_mcp_env", abortSignal: new AbortController().signal },
+        )
+      },
+    })
+
+    // ADR-206: the MCP server's text is data — enveloped with the tool key as
+    // the source, never presented bare.
+    expect(result.output).toContain('<untrusted_content source="remote_search">')
+    expect(result.output).toContain("First result with plenty of length to cross the threshold")
+    expect(result.output.trimEnd().endsWith("</untrusted_content>")).toBe(true)
+  })
+
+  test("leaves short MCP tool output unwrapped below the envelope threshold", async () => {
+    await using tmp = await tmpdir({ config: { username: "testuser" } })
+    vi.spyOn(ToolRegistry, "tools").mockResolvedValue([])
+    vi.spyOn(MCP, "tools").mockResolvedValue({
+      remote_ping: {
+        description: "ping",
+        inputSchema: z.object({}),
+        execute: async () => ({ content: [{ type: "text", text: "pong" }] }),
+      } as any,
+    })
+    vi.spyOn(Plugin, "trigger").mockImplementation(
+      (async (_name: string, _input: unknown, output: unknown) => output) as any,
+    )
+    vi.spyOn(LifecycleHooks, "runForWorkspace").mockResolvedValue({ ok: true, blocked: false, outputs: [] })
+    vi.spyOn(Permission, "ask").mockResolvedValue(undefined)
+
+    const result = await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tools = await resolveTools({
+          agent: { name: "build", permission: [{ permission: "*", pattern: "*", action: "allow" }] } as any,
+          session: { id: "ses_mcp_short", permission: [] } as any,
+          model: { providerID: "test-provider", api: { id: "test-model", npm: "@ai-sdk/openai-compatible" } } as any,
+          tools: {},
+          bypassAgentCheck: false,
+          messages: [],
+          processor: { message: { id: "msg_mcp_short" }, partFromToolCall: () => undefined } as any,
+        })
+        return (tools.remote_ping.execute as any)(
+          {},
+          { toolCallId: "call_mcp_short", abortSignal: new AbortController().signal },
+        )
+      },
+    })
+
+    expect(result.output).toBe("pong")
+  })
+
   test("fires PostToolUseFailure when the tool throws and skips PostToolUse", async () => {
     await using tmp = await tmpdir()
     const events: { event: string; args?: unknown }[] = []

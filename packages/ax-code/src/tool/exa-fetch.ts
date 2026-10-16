@@ -3,6 +3,7 @@ import { EXA_BASE_URL, EXA_ENDPOINT } from "@/constants/network"
 import { Ssrf } from "@/util/ssrf"
 import { parseJsonPayload } from "@/util/json-value"
 import { BodyTooLargeError, readBoundedBody } from "@/util/http-body"
+import { wrapUntrustedContent } from "../util/untrusted-content"
 import z from "zod"
 
 const MAX_RESPONSE_BYTES = 1024 * 1024
@@ -45,6 +46,11 @@ export async function fetchExaTool(config: {
   noResultsMessage: string
   title: string
   abort?: AbortSignal
+  /**
+   * Tool id for the ADR-206 untrusted-content envelope. When set, network
+   * text is wrapped; the trusted no-results fallback stays unwrapped.
+   */
+  source?: string
 }): Promise<{ output: string; title: string; metadata: Record<string, never> }> {
   const { signal, clearTimeout } = abortAfterAny(config.timeout, ...(config.abort ? [config.abort] : []))
 
@@ -103,7 +109,7 @@ export async function fetchExaTool(config: {
       const text = parseExaSseContentText(line)
       if (text) {
         lastResult = {
-          output: text,
+          output: config.source ? wrapUntrustedContent(text, config.source) : text,
           title: config.title,
           metadata: {},
         }

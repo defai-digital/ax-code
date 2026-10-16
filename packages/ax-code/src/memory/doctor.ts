@@ -1,5 +1,6 @@
 import type { MemoryEntry, MemoryEntryKind, MemorySection, ProjectMemory } from "./types"
 import * as store from "./store"
+import { scanMemoryEntry } from "./threat-patterns"
 import { toErrorMessage } from "@/util/error-message"
 
 export type MemoryDoctorStatus = "ok" | "warn" | "error"
@@ -18,6 +19,7 @@ export interface MemoryDoctorIssue {
     | "blank_scope_value"
     | "redundant_scope_value"
     | "stale_scan"
+    | "threat_flagged"
   source: MemoryDoctorSource
   message: string
   kind?: MemoryEntryKind
@@ -216,8 +218,31 @@ function inspectEntry(
   }
 
   issues.push(...inspectScopeValues(entry, source, kind))
+  issues.push(...inspectThreats(entry, source, kind))
 
   return issues
+}
+
+/**
+ * ADR-206: list every entry that injection excludes — both entries flagged
+ * at write time and legacy entries whose stored text matches the scan now.
+ * The message carries static reasons only, never entry content.
+ */
+function inspectThreats(entry: MemoryEntry, source: MemoryDoctorSource, kind: MemoryEntryKind): MemoryDoctorIssue[] {
+  const stored = entry.flagged?.patterns?.length ? entry.flagged : undefined
+  const scanned = stored ? undefined : scanMemoryEntry(entry)
+  const reasons = stored ? stored.reasons : (scanned?.map((threat) => threat.reason) ?? [])
+  if (reasons.length === 0) return []
+  return [
+    {
+      status: "warn",
+      code: "threat_flagged",
+      source,
+      kind,
+      entryName: entry.name,
+      message: `flagged memory entry excluded from injection: ${entry.name} (${reasons.join("; ")})`,
+    },
+  ]
 }
 
 function normalizeContent(value: string | undefined) {

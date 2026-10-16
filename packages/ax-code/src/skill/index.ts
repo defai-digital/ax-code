@@ -13,6 +13,7 @@ import { Config } from "../config/config"
 import { ConfigMarkdown } from "../config/markdown"
 import { Glob } from "../util/glob"
 import { Log } from "../util/log"
+import { detectHiddenUnicode } from "../util/untrusted-content"
 import { Discovery } from "./discovery"
 import { SkillValidate } from "./validate"
 import { SkillInvocationPolicy } from "./invocation-policy"
@@ -93,6 +94,12 @@ export namespace Skill {
     })
 
     if (!md) return
+
+    // ADR-206: hidden Unicode in skill content can disguise or reorder the
+    // instructions it carries. Advisory warning only — file and count,
+    // never the content itself.
+    const hidden = detectHiddenUnicode(md.content)
+    if (hidden > 0) log.warn("skill contains hidden Unicode characters", { skill: match, count: hidden })
 
     const data = md.data as Record<string, unknown>
     const parsed = Info.pick({ name: true, description: true }).safeParse(data)
@@ -318,6 +325,9 @@ export namespace Skill {
       return undefined
     })
     if (!md) return
+    const hidden = detectHiddenUnicode(md.content)
+    if (hidden > 0)
+      log.warn("built-in skill contains hidden Unicode characters", { location: entry.location, count: hidden })
     const data = md.data as Record<string, unknown>
     const parsed = Info.pick({ name: true, description: true }).safeParse(data)
     if (!parsed.success) return

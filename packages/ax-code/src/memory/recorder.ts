@@ -19,6 +19,7 @@ import { FileLock } from "../util/filelock"
 import { Lock } from "../util/lock"
 import { uniqueStrings } from "../util/string-list"
 import { TokenEstimate } from "../provider/token-estimate"
+import { scanMemoryEntry } from "./threat-patterns"
 
 // Delegates to the unified estimator (ADR-139 D5), like generator/injector: a
 // local chars/4 heuristic under-counted CJK ~4x, so the recorded budget
@@ -167,10 +168,20 @@ export async function recordEntry(
     const confidence = normalizeConfidence(input.confidence)
     const expiresAt = normalizeExpiresAt(input.expiresAt)
     const sourceSessionId = input.sourceSessionId?.trim()
+    // ADR-206: every write scans the entry and persists the verdict, so the
+    // flag follows the stored file (and re-saving an edited entry recomputes
+    // it — a fix clears the flag without a doctor pass).
+    const threats = scanMemoryEntry({
+      name,
+      body,
+      why: input.why?.trim() || undefined,
+      howToApply: input.howToApply?.trim() || undefined,
+    })
+    const savedAt = new Date().toISOString()
     const entry: MemoryEntry = {
       name,
       body,
-      savedAt: new Date().toISOString(),
+      savedAt,
       ...(input.why ? { why: input.why.trim() } : {}),
       ...(input.howToApply ? { howToApply: input.howToApply.trim() } : {}),
       ...(tags ? { tags } : {}),
@@ -179,6 +190,15 @@ export async function recordEntry(
       ...(confidence !== undefined ? { confidence } : {}),
       ...(sourceSessionId ? { sourceSessionId } : {}),
       ...(agents && agents.length > 0 ? { agents } : {}),
+      ...(threats.length
+        ? {
+            flagged: {
+              patterns: threats.map((threat) => threat.pattern),
+              reasons: threats.map((threat) => threat.reason),
+              flaggedAt: savedAt,
+            },
+          }
+        : {}),
     }
     filtered.push(entry)
     memory.sections[kind] = rebuildSection(filtered)

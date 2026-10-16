@@ -6,6 +6,7 @@
 import type { EntrySection, MemoryEntry, MemorySection, ProjectMemory } from "./types"
 import * as store from "./store"
 import { entryApplies } from "./applicability"
+import { scanMemoryEntry } from "./threat-patterns"
 import { Log } from "../util/log"
 import { TokenEstimate } from "@/provider/token-estimate"
 import path from "node:path"
@@ -34,6 +35,16 @@ function renderEntry(entry: MemoryEntry): string {
 
 function confidence(entry: MemoryEntry): number {
   return entry.confidence ?? 1
+}
+
+/**
+ * ADR-206: entries flagged at write time — or matching the threat scan at
+ * load time, which covers entries stored before scanning existed — are
+ * excluded from injection. `memory doctor` surfaces them with the reason.
+ */
+function injectable(entry: MemoryEntry): boolean {
+  if (entry.flagged?.patterns?.length) return false
+  return scanMemoryEntry(entry).length === 0
 }
 
 function orderEntriesForPrompt(entries: MemoryEntry[]): MemoryEntry[] {
@@ -141,7 +152,7 @@ function pushEntries(
   budget: Budget,
 ) {
   if (!section || section.entries.length === 0) return
-  const applicable = orderEntriesForPrompt(section.entries.filter((e) => entryApplies(e, opts)))
+  const applicable = orderEntriesForPrompt(section.entries.filter((e) => entryApplies(e, opts) && injectable(e)))
   const rendered = applicable.map(renderEntry).filter((text) => budget.take(text))
   if (rendered.length === 0) return
   parts.push(`## ${title}`)
@@ -216,7 +227,7 @@ export function buildContext(memory: ProjectMemory, opts: BuildContextOptions = 
         const section = global.sections[kind]
         if (!section) continue
         for (const entry of orderEntriesForPrompt(section.entries)) {
-          if (entryApplies(entry, { agent, paths, projectRoot: memory.projectRoot })) {
+          if (entryApplies(entry, { agent, paths, projectRoot: memory.projectRoot }) && injectable(entry)) {
             const text = renderEntry(entry)
             if (scoped.take(text)) rendered.push(text)
           }

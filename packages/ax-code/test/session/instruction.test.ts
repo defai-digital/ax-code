@@ -10,6 +10,7 @@ import { Ssrf } from "../../src/util/ssrf"
 import { Filesystem } from "../../src/util/filesystem"
 import { Glob } from "../../src/util/glob"
 import { Config } from "../../src/config/config"
+import { Log } from "../../src/util/log"
 
 describe("InstructionPrompt.resolve", () => {
   test("returns empty when AGENTS.md is at project root (already in systemPaths)", async () => {
@@ -154,6 +155,41 @@ describe("InstructionPrompt.resolve", () => {
     } finally {
       await fs.chmod(instructionPath, 0o600)
     }
+  })
+
+  test("warns with file and count when an instruction file contains hidden Unicode", async () => {
+    await using tmp = await tmpdir({
+      config: { username: "testuser" },
+      init: async (dir) => {
+        await fs.mkdir(path.join(dir, "subdir"), { recursive: true })
+        await fs.writeFile(
+          path.join(dir, "subdir", "AGENTS.md"),
+          "# Instructions\nvisible\u202Ereorder\u200Bzero-width",
+        )
+        await fs.mkdir(path.join(dir, "subdir", "nested"), { recursive: true })
+        await fs.writeFile(path.join(dir, "subdir", "nested", "file.ts"), "const x = 1")
+      },
+    })
+    // Log.create caches by service tag, so this is the same logger instance
+    // the instruction module writes through.
+    const warn = vi.spyOn(Log.create({ service: "instruction" }), "warn")
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const results = await InstructionPrompt.resolve(
+          [],
+          path.join(tmp.path, "subdir", "nested", "file.ts"),
+          "test-message-hidden-unicode",
+        )
+        // Advisory only (ADR-206): the content still loads verbatim.
+        expect(results.length).toBe(1)
+        expect(results[0].content).toContain("visible\u202Ereorder\u200Bzero-width")
+      },
+    })
+    expect(warn).toHaveBeenCalledWith("instruction file contains hidden Unicode characters", {
+      path: path.join(tmp.path, "subdir", "AGENTS.md"),
+      count: 2,
+    })
   })
 })
 

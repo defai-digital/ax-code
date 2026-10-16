@@ -36,6 +36,7 @@ import { truncateUtf8Bytes } from "@/tool/bash-helpers"
 import { uniqueStrings } from "@/util/string-list"
 import { isRecord } from "@/util/record"
 import { defer } from "@/util/defer"
+import { wrapUntrustedContent } from "../../util/untrusted-content"
 import { ToolWriteGate } from "../tool-write-gate"
 import type { SessionProcessor } from "../processor"
 import {
@@ -1206,7 +1207,14 @@ export async function resolveTools(input: ResolveToolsInput) {
       if (nestedBrowser) nestedBrowser.result = result
       const { textParts, attachments } = collectMcpToolResult(result)
 
-      const outputText = textParts.length ? `[Untrusted MCP tool content from ${key}]\n\n${textParts.join("\n\n")}` : ""
+      // ADR-206: regular MCP server output is wrapped in the untrusted-content
+      // envelope (source is the `server:tool` key). WebMCP browser tools keep
+      // their own established labeling — the envelope is never applied twice.
+      const outputText = textParts.length
+        ? item.webmcp
+          ? `[Untrusted MCP tool content from ${key}]\n\n${textParts.join("\n\n")}`
+          : wrapUntrustedContent(textParts.join("\n\n"), key)
+        : ""
       // Each side capped separately, then joined: Truncate.output persists
       // everything it receives, so an unbounded side would bypass the text
       // budget, while a single shared cap would let hostile output squeeze

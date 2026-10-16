@@ -30,6 +30,19 @@ export interface MemoryEntry {
    * into prompts for those agents. Absent or empty means "applies to all".
    */
   agents?: string[]
+  /**
+   * ADR-206 threat-scan verdict. A flagged entry stays stored but is excluded
+   * from injection; `memory doctor` lists it with the reasons. Optional so
+   * existing memory files keep loading.
+   */
+  flagged?: {
+    /** Stable pattern ids that matched (e.g. "instruction_override"). */
+    patterns: string[]
+    /** Static human-readable reasons, never entry content. */
+    reasons: string[]
+    /** ISO8601 timestamp of the scan that flagged the entry. */
+    flaggedAt: string
+  }
 }
 
 export type MemoryEntryKind = "userPrefs" | "feedback" | "decisions" | "reference"

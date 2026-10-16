@@ -179,7 +179,11 @@ describe("tool.webfetch", () => {
             const result = await webfetch.execute({ url: "https://93.184.216.34/page.html", format: "text" }, ctx)
             // script/style/comment removed; `&amp;` decoded; the out-of-range
             // numeric entity is left literal rather than throwing RangeError.
-            expect(result.output).toBe("Heading Hello & welcome &#9999999999; world")
+            // ADR-206: the 45-char extracted text crosses the envelope
+            // threshold, so it comes back inside the untrusted-content wrap.
+            expect(result.output).toBe(
+              `<untrusted_content source="webfetch">\nHeading Hello & welcome &#9999999999; world\n</untrusted_content>`,
+            )
           },
         })
       },

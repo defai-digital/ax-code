@@ -1,6 +1,7 @@
 import z from "zod"
 import { Tool } from "./tool"
 import { recordEntry } from "../memory/recorder"
+import { scanMemoryEntry } from "../memory/threat-patterns"
 import { Instance } from "../project/instance"
 
 const DESCRIPTION = `Save a memory entry that persists across sessions.
@@ -72,6 +73,14 @@ export const MemorySaveTool = Tool.define("memory_save", {
       always: ["*"],
       metadata: { kind: params.kind, name: params.name, scope: params.scope ?? "project" },
     })
+    // ADR-206: the same scan the recorder persists, run here so the save
+    // result tells the model (and the user) when an entry was flagged.
+    const threats = scanMemoryEntry({
+      name: params.name,
+      body: params.body,
+      why: params.why,
+      howToApply: params.howToApply,
+    })
     await recordEntry(Instance.directory, params.kind, {
       name: params.name,
       body: params.body,
@@ -81,14 +90,20 @@ export const MemorySaveTool = Tool.define("memory_save", {
       scope: params.scope,
     })
     const scopeLabel = params.scope === "global" ? "global" : "project"
+    // Flagged entries are stored but excluded from injection (ADR-206); the
+    // note makes that visible instead of silently dropping the entry.
+    const flagNote = threats.length
+      ? ` — flagged by threat scan (${threats.map((threat) => threat.pattern).join(", ")}); stored but excluded from injection, run "memory doctor" to review`
+      : ""
     return {
       title: `Memory saved: ${params.name}`,
-      output: `Saved ${params.kind} memory (${scopeLabel} scope): "${params.name}"`,
+      output: `Saved ${params.kind} memory (${scopeLabel} scope): "${params.name}"${flagNote}`,
       metadata: {
         kind: params.kind,
         name: params.name,
         scope: scopeLabel,
         truncated: false,
+        flagged: threats.length > 0,
       },
     }
   },
