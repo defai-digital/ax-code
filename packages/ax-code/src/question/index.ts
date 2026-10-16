@@ -47,6 +47,9 @@ export namespace Question {
           callID: z.string(),
         })
         .optional(),
+      // ADR-222: the asking tool call already returned; the answer arrives
+      // later as a steering/follow-up message instead of the tool result.
+      deferred: z.boolean().optional().describe("Answer is delivered later, not through the tool result"),
     })
     .meta({ ref: "QuestionRequest" })
   export type Request = z.infer<typeof Request>
@@ -153,6 +156,8 @@ export namespace Question {
   interface PendingEntry {
     info: Request
     deferred: PromiseDeferred<Answer[]>
+    /** ADR-222: the answer is delivered as a message, not resolved into a tool result. */
+    isDeferred?: boolean
   }
 
   interface AskInput {
@@ -230,25 +235,7 @@ export namespace Question {
     const entry: PendingEntry = { info, deferred }
     current.pending.set(id, entry)
     Bus.publishDetached(Event.Asked, info)
-    // ADR-212: observation-only Notification hook (question asked). The
-    // payload carries a bounded, redacted first-question label only — never
-    // the full questions, which are model-authored text. Fire-and-forget.
-    void import("@/hooks/lifecycle")
-      .then(({ LifecycleHooks }) => {
-        const first = info.questions[0]
-        const header = first ? first.header?.trim() || first.question?.trim() || "" : ""
-        return LifecycleHooks.runForWorkspace({
-          event: "Notification",
-          sessionID: info.sessionID,
-          args: {
-            sessionID: info.sessionID,
-            kind: "question",
-            questionCount: info.questions.length,
-            ...(header ? { header: Env.redactForRecord(header).slice(0, 120) } : {}),
-          },
-        })
-      })
-      .catch((error) => log.warn("Notification lifecycle hooks failed", { id, error }))
+    fireNotificationHook(info)
 
     // Release the question when the turn aborts, mirroring Permission.ask.
     // Without it the tool never returns, the AI SDK's tool-results stream
@@ -270,6 +257,63 @@ export namespace Question {
     }
   }
 
+  /**
+   * ADR-212: observation-only Notification hook (question asked). The
+   * payload carries a bounded, redacted first-question label only — never
+   * the full questions, which are model-authored text. Fire-and-forget.
+   */
+  function fireNotificationHook(info: Request) {
+    void import("@/hooks/lifecycle")
+      .then(({ LifecycleHooks }) => {
+        const first = info.questions[0]
+        const header = first ? first.header?.trim() || first.question?.trim() || "" : ""
+        return LifecycleHooks.runForWorkspace({
+          event: "Notification",
+          sessionID: info.sessionID,
+          args: {
+            sessionID: info.sessionID,
+            kind: "question",
+            questionCount: info.questions.length,
+            ...(header ? { header: Env.redactForRecord(header).slice(0, 120) } : {}),
+          },
+        })
+      })
+      .catch((error) => log.warn("Notification lifecycle hooks failed", { id: info.id, error }))
+  }
+
+  /**
+   * ADR-222: record a question without blocking the turn. The request shows
+   * up in the UI like any other pending question, but the asking tool call
+   * has already returned; when the user answers, `reply()` delivers the
+   * answer to the session as a message instead of resolving a tool result.
+   *
+   * Unlike `ask()`, no abort signal is attached: a deferred question is
+   * allowed to outlive the turn that asked it, and it expires with the
+   * session (Instance dispose clears the pending map).
+   */
+  export async function askDeferred(input: Omit<AskInput, "signal">): Promise<QuestionID> {
+    const current = await state()
+    const id = QuestionID.ascending()
+    log.info("asking deferred", { id, questions: input.questions.length })
+
+    const deferred = createDeferred<Answer[]>()
+    // Nothing awaits this promise; the dispose-time rejection below would
+    // otherwise surface as an unhandled rejection.
+    deferred.promise.catch(() => {})
+    const info: Request = {
+      id,
+      sessionID: input.sessionID,
+      questions: input.questions,
+      tool: input.tool,
+      deferred: true,
+    }
+    const entry: PendingEntry = { info, deferred, isDeferred: true }
+    current.pending.set(id, entry)
+    Bus.publishDetached(Event.Asked, info)
+    fireNotificationHook(info)
+    return id
+  }
+
   export async function reply(input: { requestID: QuestionID; answers: Answer[] }): Promise<boolean> {
     const pending = (await state()).pending
     const existing = pending.get(input.requestID)
@@ -289,8 +333,71 @@ export namespace Question {
       requestID: existing.info.id,
       answers: input.answers,
     })
+    if (existing.isDeferred) {
+      // ADR-222: the asking tool call already returned; hand the answer to
+      // the session as a message. Fire-and-forget: the entry is gone, so a
+      // delivery failure is logged, never retried and never re-delivered.
+      existing.deferred.resolve(input.answers)
+      void deliverDeferredAnswer(existing.info, input.answers)
+      return true
+    }
     existing.deferred.resolve(input.answers)
     return true
+  }
+
+  /**
+   * ADR-222: deliver a deferred question's answer to the session as a user
+   * message, exactly once. Busy session: the existing steering path (ADR-134/
+   * 146) admits the text into the running generation, including its durable
+   * follow-up row. Idle session (or a refused steer): the same follow-up
+   * queue row a queued user message takes, so the answer runs as the next
+   * turn instead of starting one out of band.
+   */
+  async function deliverDeferredAnswer(info: Request, answers: Answer[]): Promise<void> {
+    try {
+      const text = deferredAnswerText(info.questions, answers)
+      const { SessionSteering } = await import("@/session/steering")
+      const generation = SessionSteering.view(info.sessionID).generation
+      if (generation) {
+        try {
+          const { SessionPrompt } = await import("@/session/prompt")
+          const receipt = await SessionPrompt.steer(info.sessionID, {
+            expectedGeneration: generation,
+            clientID: `question_${info.id}`,
+            text,
+          })
+          if (receipt.status === "accepted" || receipt.status === "applied") return
+          log.warn("deferred answer steer was not admitted", { id: info.id, reason: receipt.reason })
+        } catch (error) {
+          log.warn("deferred answer steer failed", { id: info.id, error })
+        }
+      }
+      const { TaskQueue } = await import("@/session/task-queue")
+      const item = await TaskQueue.enqueueIdempotent({
+        sessionID: info.sessionID,
+        kind: "followup",
+        title: "Deferred question answer",
+        sourceMessageID: `question_${info.id}`,
+        payload: { body: { parts: [{ type: "text", text }] } },
+      })
+      const { TaskQueueExecutor } = await import("@/session/task-queue-executor")
+      await TaskQueueExecutor.start(item)
+    } catch (error) {
+      log.error("could not deliver deferred question answer", { id: info.id, error })
+    }
+  }
+
+  /** Compose the delivered answer text (ADR-222). */
+  export function deferredAnswerText(questions: Info[], answers: Answer[]): string {
+    const lines = questions.map((question, i) => {
+      const answer = answers[i]?.length ? answers[i].join(", ") : "Unanswered"
+      return `${question.question} -> ${answer}`
+    })
+    const lead = lines.length === 1 ? "Answer to your deferred question: " : "Answers to your deferred questions: "
+    const text = lead + lines.join("; ")
+    // Steering input caps text at 16k characters; answers are validated but
+    // question text is model-authored, so clip defensively.
+    return text.length > 16_000 ? `${text.slice(0, 15_997)}...` : text
   }
 
   export async function reject(requestID: QuestionID): Promise<boolean> {

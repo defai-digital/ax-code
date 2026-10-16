@@ -9,3 +9,4 @@ Usage notes:
 - Answers are returned as arrays of labels; set `multiple: true` to allow selecting more than one
 - If you recommend a specific option, make that the first option in the list and add "(Recommended)" at the end of the label
 - In autonomous mode, ax-code will choose for the user. Prefer options that represent industry/common best practice and avoid over-engineering; label those options with terms like "Recommended", "Default", "Best practice", "Common", "Simple", or "Minimal" so autonomous selection can make the same choice a senior engineer would make.
+- Set `defer: true` to ask without blocking: the question is shown to the user, the tool returns immediately, and the answer arrives later as a new user message. Continue the turn without depending on the answer. Not available in subagent sessions; ignored in autonomous mode.

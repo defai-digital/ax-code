@@ -1,6 +1,8 @@
 import { describe, expect, test, beforeEach, afterEach, vi } from "vitest"
 import { QuestionTool } from "../../src/tool/question"
 import * as QuestionModule from "../../src/question"
+import { QuestionID } from "../../src/question/schema"
+import * as SessionModule from "../../src/session"
 import { SessionID, MessageID } from "../../src/session/schema"
 
 const ctx = {
@@ -173,5 +175,90 @@ describe("tool.question", () => {
       if (original === undefined) delete process.env.AX_CODE_AUTONOMOUS
       else process.env.AX_CODE_AUTONOMOUS = original
     }
+  })
+
+  describe("defer (ADR-222)", () => {
+    const questions = [
+      {
+        question: "Which database?",
+        header: "Database",
+        options: [
+          { label: "Postgres", description: "Relational default" },
+          { label: "SQLite", description: "Embedded" },
+        ],
+      },
+    ]
+    const fakeSession = { parentID: undefined } as unknown as Awaited<ReturnType<typeof SessionModule.Session.get>>
+    let askDeferredSpy: ReturnType<typeof vi.spyOn>
+    let sessionGetSpy: ReturnType<typeof vi.spyOn>
+    // Autonomous mode defaults ON in this environment (see question.test.ts);
+    // the non-autonomous defer tests need it off. The autonomous test below
+    // flips it back on inside its own scope.
+    const originalAutonomous = process.env.AX_CODE_AUTONOMOUS
+
+    beforeEach(() => {
+      process.env.AX_CODE_AUTONOMOUS = "false"
+      askDeferredSpy = vi
+        .spyOn(QuestionModule.Question, "askDeferred")
+        .mockResolvedValue(QuestionID.make("que_deferred_tool_test"))
+      sessionGetSpy = vi.spyOn(SessionModule.Session, "get").mockResolvedValue(fakeSession)
+    })
+
+    afterEach(() => {
+      if (originalAutonomous === undefined) delete process.env.AX_CODE_AUTONOMOUS
+      else process.env.AX_CODE_AUTONOMOUS = originalAutonomous
+      askDeferredSpy.mockRestore()
+      sessionGetSpy.mockRestore()
+    })
+
+    test("defer returns immediately without blocking for an answer", async () => {
+      const tool = await QuestionTool.init()
+      const result = await tool.execute({ questions, defer: true }, ctx)
+
+      expect(askDeferredSpy).toHaveBeenCalledTimes(1)
+      expect(askDeferredSpy.mock.calls[0]![0].sessionID).toBe(ctx.sessionID)
+      expect(askDeferredSpy.mock.calls[0]![0].questions).toEqual(questions)
+      // The blocking ask path is never taken for a deferred question.
+      expect(askSpy).not.toHaveBeenCalled()
+      expect(result.title).toBe("Deferred 1 question")
+      expect(result.metadata.deferred).toBe(true)
+      expect(result.metadata.requestID).toBe(QuestionID.make("que_deferred_tool_test"))
+      expect(result.output).toContain('"Which database?"')
+      expect(result.output).toContain("answer will arrive later as a new user message")
+      expect(result.output).toContain("do not depend on it in this turn")
+    })
+
+    test("defer in a subagent session returns an error string and asks nothing", async () => {
+      sessionGetSpy.mockResolvedValue({
+        parentID: SessionID.make("ses_parent"),
+      } as unknown as Awaited<ReturnType<typeof SessionModule.Session.get>>)
+      const tool = await QuestionTool.init()
+      const result = await tool.execute({ questions, defer: true }, ctx)
+
+      expect(askDeferredSpy).not.toHaveBeenCalled()
+      expect(askSpy).not.toHaveBeenCalled()
+      expect(result.output).toContain("not available in subagent sessions")
+      expect(result.metadata.deferred).toBe(false)
+    })
+
+    test("defer is ignored in autonomous mode with a note in the result", async () => {
+      const original = process.env.AX_CODE_AUTONOMOUS
+      process.env.AX_CODE_AUTONOMOUS = "true"
+      try {
+        askSpy.mockResolvedValueOnce([["Postgres"]])
+        const tool = await QuestionTool.init()
+        const result = await tool.execute({ questions, defer: true }, ctx)
+
+        // Autonomous mode keeps today's auto-answer behaviour; defer is dropped.
+        expect(askDeferredSpy).not.toHaveBeenCalled()
+        expect(askSpy).toHaveBeenCalledTimes(1)
+        expect(result.output).toContain("defer was ignored in autonomous mode")
+        expect(result.metadata.deferred).toBeUndefined()
+        expect(result.metadata.autonomous).toBe(true)
+      } finally {
+        if (original === undefined) delete process.env.AX_CODE_AUTONOMOUS
+        else process.env.AX_CODE_AUTONOMOUS = original
+      }
+    })
   })
 })
