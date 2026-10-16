@@ -10,6 +10,7 @@ import {
   getFeatureFlagsCheck,
   getIsolationPolicyCheck,
   getNativeAddonsCheck,
+  getNetworkCheck,
   getPathLauncherCheck,
   getRuntimeCheck,
   getEvidenceCacheCheck,
@@ -215,6 +216,32 @@ describe("cli doctor", () => {
     })
   })
 
+  test("reports network environment with redacted proxy credentials", () => {
+    const check = getNetworkCheck({
+      env: { HTTP_PROXY: "http://user:secret@proxy.example:8080", NO_PROXY: "example.com" },
+      systemCaActive: true,
+    })
+    expect(check.name).toBe("Network")
+    expect(check.status).toBe("ok")
+    expect(check.detail).toContain("proxy HTTP_PROXY=***@proxy.example:8080")
+    expect(check.detail).not.toContain("secret")
+    expect(check.detail).toContain("NO_PROXY example.com")
+    expect(check.detail).toContain("system CA active")
+  })
+
+  test("reports no proxy and unset NO_PROXY without failing", () => {
+    const check = getNetworkCheck({ env: {}, systemCaActive: false })
+    expect(check.status).toBe("ok")
+    expect(check.detail).toContain("no proxy")
+    expect(check.detail).toContain("NO_PROXY (unset)")
+    expect(check.detail).toContain("system CA off")
+  })
+
+  test("notes NODE_EXTRA_CA_CERTS presence", () => {
+    const check = getNetworkCheck({ env: { NODE_EXTRA_CA_CERTS: "/etc/ca.pem" }, systemCaActive: false })
+    expect(check.detail).toContain("NODE_EXTRA_CA_CERTS set")
+  })
+
   test("reports effective isolation policy and provenance", () => {
     expect(getIsolationPolicyCheck({})).toMatchObject({
       name: "Isolation policy",
@@ -305,6 +332,7 @@ describe("cli doctor machine contract", () => {
       "project-identity",
       "server-exposure",
       "isolation-policy",
+      "network",
       "evidence-cache",
       "native-addons",
       "stale-instances",

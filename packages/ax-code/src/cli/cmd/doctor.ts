@@ -32,6 +32,7 @@ import { toErrorMessage } from "@/util/error-message"
 import type { AxEngineStatus } from "@/provider/ax-engine/status"
 import { whichAll } from "../../util/which"
 import { Process } from "../../util/process"
+import { networkEnvState, proxyEnvSummary } from "../../util/network-env"
 
 type DoctorCheck = { name: string; status: "ok" | "warn" | "fail"; detail: string }
 
@@ -142,6 +143,30 @@ export function getServerExposureCheck(input: { hostname?: string; mdns?: boolea
     detail: loopbackOnly
       ? `hostname ${hostname}; loopback-only; auth ${authConfigured ? "configured" : "not configured"}`
       : `requested hostname ${requestedHostname} and mDNS are ignored; effective hostname ${hostname}; local-only policy enforced`,
+  }
+}
+
+export function getNetworkCheck(input: {
+  env?: Readonly<Record<string, string | undefined>>
+  systemCaActive?: boolean
+}): DoctorCheck {
+  const env = input.env ?? process.env
+  const proxies = proxyEnvSummary(env)
+  const noProxy = (env.NO_PROXY ?? env.no_proxy ?? "").trim()
+  const caActive = input.systemCaActive ?? networkEnvState().systemCaApplied
+  const extraCa = (env.NODE_EXTRA_CA_CERTS ?? "").trim()
+
+  const parts: string[] = []
+  parts.push(proxies ? `proxy ${proxies}` : "no proxy")
+  parts.push(`NO_PROXY ${noProxy || "(unset)"}`)
+  parts.push(`system CA ${caActive ? "active" : "off"}`)
+  if (extraCa) parts.push("NODE_EXTRA_CA_CERTS set")
+
+  return {
+    name: "Network",
+    // Never a failure: a missing proxy is a valid configuration.
+    status: "ok",
+    detail: parts.join("; "),
   }
 }
 
@@ -390,6 +415,7 @@ export const DOCTOR_CHECK_IDS = [
   "project-identity",
   "server-exposure",
   "isolation-policy",
+  "network",
   "evidence-cache",
   "native-addons",
   "stale-instances",
@@ -602,6 +628,10 @@ export async function runDoctorChecks(input: { skip?: ReadonlySet<string> } = {}
       }),
     )
   }
+
+  // Network environment: proxy variables (credentials redacted), NO_PROXY, and
+  // whether the OS trust store was merged into the default CA list.
+  push("network", getNetworkCheck({}))
 
   // 9. Native Rust addons — routed through the central NativeAddon registry
   // so the doctor reflects the exact same load semantics (flag gating +

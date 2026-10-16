@@ -123,6 +123,9 @@ catalogs:
     ulid:
       specifier: 3.0.2
       version: 3.0.1
+    undici:
+      specifier: 7.29.1
+      version: 7.29.1
     vitest:
       specifier: 4.1.11
       version: 4.1.11
@@ -459,6 +462,9 @@ importers:
       ulid:
         specifier: 'catalog:'
         version: 3.0.1
+      undici:
+        specifier: 'catalog:'
+        version: 7.29.1
       vscode-jsonrpc:
         specifier: 8.2.1
         version: 8.2.1

@@ -1,6 +1,7 @@
 import { DiagnosticLog } from "../debug/diagnostic-log"
 import { Log } from "../util/log"
 import { isHarmlessInterrupt } from "../util/harmless-interrupt"
+import { initNetworkEnv } from "../util/network-env"
 
 // Process-lifecycle machinery shared by cli/boot.ts (full CLI) and
 // cli/boot-node.ts (doctor/generate-only build): forced-exit timer and the
@@ -51,6 +52,10 @@ export function scheduleForcedExit(exit: () => void = () => process.exit()) {
 export function hooks() {
   if (hooksInstalled) return
   hooksInstalled = true
+  // Enable proxy env support and the system CA store before any provider, MCP,
+  // or models.dev request. Shared by every CLI entry point (and harmless when
+  // the TUI worker thread calls it again: init is idempotent).
+  initNetworkEnv()
   process.on("unhandledRejection", onUnhandledRejection)
   process.on("uncaughtException", onUncaughtException)
 }

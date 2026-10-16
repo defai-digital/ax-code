@@ -4,6 +4,7 @@ packages:
 
 catalog:
   "tsx": "4.23.15"
+  "undici": "7.29.1"
   "esbuild": "0.28.2"
   "@ai-sdk/anthropic": "3.0.66"
   "@ai-sdk/provider-utils": "4.0.33"

@@ -24,6 +24,7 @@ import { Filesystem } from "../util/filesystem"
 import { withTimeout } from "../util/timeout"
 import { isFileUrl } from "../util/file-url"
 import { isNonEmptyRecord, recordCount } from "@/util/record"
+import { ensureLocalDispatcher, needsLocalDispatcher, selectDispatcher } from "./local-dispatcher"
 
 // Direct imports for bundled providers
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
@@ -1078,6 +1079,23 @@ export namespace Provider {
 
           const combined = signals.length === 0 ? null : signals.length === 1 ? signals[0] : AbortSignal.any(signals)
           if (combined) opts.signal = combined
+
+          // Local/private model servers (ax-engine, LM Studio, Ollama, llama.cpp,
+          // the custom gateway) can prefill a large prompt longer than undici's
+          // default 300s headersTimeout/bodyTimeout, which would kill the request
+          // even when the provider sets `timeout: false`. Attach the shared
+          // timeout-free dispatcher for local hosts and explicit opt-outs; public
+          // hosts keep undici's defaults. Only set it when the caller did not
+          // already choose a dispatcher.
+          if (opts.dispatcher === undefined) {
+            const decision = {
+              url: input,
+              timeoutDisabled: rawProviderTimeout === 0 || rawProviderTimeout === false,
+            }
+            if (needsLocalDispatcher(decision)) await ensureLocalDispatcher()
+            const dispatcher = selectDispatcher(decision)
+            if (dispatcher) opts.dispatcher = dispatcher
+          }
 
           let res: Response
           try {

@@ -27,6 +27,7 @@ import { isHarmlessInterrupt } from "@/util/harmless-interrupt"
 import { stopServer as stopAxEngineServer } from "@/provider/ax-engine"
 import { registerTuiProcessHandler } from "./util/lifecycle"
 import { startShellEnvLoad } from "@/runtime/shell-env"
+import { initNetworkEnv } from "@/util/network-env"
 
 type GlobalEvent = {
   directory?: string
@@ -367,6 +368,10 @@ export const rpc = {
 }
 
 export async function startTuiBackend(transport: "worker" | "stdio" = "worker") {
+  // Worker threads do not inherit the main thread's global dispatcher, so the
+  // proxy env must be applied here too (idempotent; covers the stdio process
+  // transport which re-runs boot.ts only by coincidence in some launch modes).
+  initNetworkEnv()
   if (transport === "stdio") {
     const done = Rpc.listenStdio(rpc)
     // Process transport: signal-driven cleanup. The thread's
