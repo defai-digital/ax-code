@@ -979,8 +979,9 @@ describe("AX Code TUI stability guardrails", () => {
   test("prioritizes file attachment suggestions for bare @ autocomplete", async () => {
     const autocomplete = await fs.readFile(AUTOCOMPLETE_SRC, "utf8")
 
-    expect(autocomplete).toContain(
-      'store.visible === "@" ? [...(filesValue || []), ...mcpResources(), ...agentsValue] : [...commandsValue]',
+    // File attachments stay first; the static reference forms (@diff, @git:N, ...) come last (ADR-236).
+    expect(autocomplete).toMatch(
+      /store\.visible === "@"\s*\?\s*\[\.\.\.\(filesValue \|\| \[\]\), \.\.\.mcpResources\(\), \.\.\.agentsValue, \.\.\.refsValue\]\s*:\s*\[\.\.\.commandsValue\]/,
     )
   })
 

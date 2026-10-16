@@ -338,6 +338,7 @@ describe("cli doctor machine contract", () => {
       "stale-instances",
       "ax-engine",
       "computer-use",
+      "network-egress",
       "tui-server",
       "tui-preload",
       "recent-logs",

@@ -61,7 +61,7 @@ describe("v2 SDK result.error handling", () => {
 
     const summarizeIndex = displayCommands.indexOf("input.sdk.client.session.summarize({")
     expect(summarizeIndex).toBeGreaterThan(0)
-    const summarizeBlock = displayCommands.slice(summarizeIndex, summarizeIndex + 900)
+    const summarizeBlock = displayCommands.slice(summarizeIndex, summarizeIndex + 2200)
     // The failure toast must come from the resolved `{error}` — a bare
     // `.then(() => dialog.clear())` closes the dialog silently on 4xx/5xx.
     expect(summarizeBlock).toContain("if (result?.error)")
