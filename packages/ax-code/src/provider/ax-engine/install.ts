@@ -14,6 +14,7 @@ import {
   AX_ENGINE_ERROR,
   AX_ENGINE_EXPECTED_TEAM_ID,
   AX_ENGINE_INSTALL_ENV,
+  AX_ENGINE_SERVER_LOCK_STALE_MS,
   type AxEngineBinaryRelease,
 } from "./constants"
 import { AxEnginePaths } from "./paths"
@@ -53,6 +54,7 @@ export type AxEngineInstallRuntime = {
   clearQuarantine?: (binaryPath: string) => Promise<void>
   smoke?: (binaryPath: string, expectedVersion: string) => Promise<void>
   runningServerBinary?: () => Promise<string | undefined>
+  acquireServerLock?: () => Promise<Disposable>
 }
 
 function assetNameFromUrl(url: string): string {
@@ -201,6 +203,21 @@ async function clearQuarantine(binaryPath: string): Promise<void> {
   await Process.run(["xattr", "-cr", binaryPath], { timeout: 5_000, nothrow: true }).catch(() => undefined)
 }
 
+// A cold server start holds this lock until the model is ready, so wait a
+// bounded time and report a busy server as a domain error, not a lock timeout.
+async function acquireServerLockForInstall(): Promise<Disposable> {
+  try {
+    return await FileLock.acquire(AxEnginePaths.serverLock, {
+      timeoutMs: 30_000,
+      staleMs: AX_ENGINE_SERVER_LOCK_STALE_MS,
+    })
+  } catch (error) {
+    throw new Error(
+      `${AX_ENGINE_ERROR.ServerRunning}: an ax-engine server is starting or stopping; retry once it settles (${toErrorMessage(error)})`,
+    )
+  }
+}
+
 function isInside(root: string, file: string) {
   const relative = path.relative(path.resolve(root), path.resolve(file))
   return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative)
@@ -238,6 +255,7 @@ export async function installAxEngineBinary(
   const clearXattr = runtime.clearQuarantine ?? clearQuarantine
   const smoke = runtime.smoke ?? smokeInstalledBinary
   const runningServer = runtime.runningServerBinary ?? runningServerBinaryPath
+  const acquireServerLock = runtime.acquireServerLock ?? acquireServerLockForInstall
 
   await requireEligibility()
 
@@ -278,7 +296,9 @@ export async function installAxEngineBinary(
     // Guards that must hold before any file under the managed tree changes
     // (ADR-200): the install removes the target directory and every other
     // version, so it never runs under a live managed server, and it never
-    // replaces a newer managed binary with an older pin.
+    // replaces a newer managed binary with an older pin. They run before the
+    // download and again before the switch, since a server can start while
+    // the archive downloads.
     const assertReplaceable = async () => {
       const current = await getManagedBinary()
       const currentVersion = current ? semver.coerce(current.version, { includePrerelease: true }) : undefined
@@ -287,7 +307,7 @@ export async function installAxEngineBinary(
           `${AX_ENGINE_ERROR.DowngradeRefused}: managed ax-engine ${current.version} is newer than the ${release.version} release this AX Code installs; not downgrading`,
         )
       }
-      const serverBinary = await runningServer().catch(() => undefined)
+      const serverBinary = await runningServer()
       if (serverBinary && isInside(AxEnginePaths.bin, serverBinary)) {
         throw new Error(
           `${AX_ENGINE_ERROR.ServerRunning}: stop the running ax-engine server before installing ax-engine ${release.version}`,
@@ -359,13 +379,25 @@ export async function installAxEngineBinary(
       throw error
     }
 
-    const state: AxEngineInstallState = {
-      version: release.version,
-      path: binaryPath,
-      installedAt: Date.now(),
-      sha256: release.sha256,
+    // Switch versions under the server lock. A server start that resolved the
+    // old binary either finishes first, and the final check sees it running,
+    // or waits until the old versions are gone and then fails cleanly. A
+    // cancel that arrives after the download still wins here.
+    try {
+      using _server = await acquireServerLock()
+      input.signal?.throwIfAborted()
+      await assertReplaceable()
+      const state: AxEngineInstallState = {
+        version: release.version,
+        path: binaryPath,
+        installedAt: Date.now(),
+        sha256: release.sha256,
+      }
+      await Filesystem.writeJson(AxEnginePaths.installState, state)
+    } catch (error) {
+      await fs.rm(installDir, { recursive: true, force: true }).catch(() => undefined)
+      throw error
     }
-    await Filesystem.writeJson(AxEnginePaths.installState, state)
     await cleanupOtherVersions(release.version).catch(() => undefined)
 
     log.info("installed managed ax-engine binary", {

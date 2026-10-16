@@ -290,6 +290,82 @@ echo '${detected}'
     expect(await getManagedBinary()).toEqual({ path: old.binaryPath, version: "9.9.8" })
   })
 
+  test("refuses to switch when a managed server starts during the download", async () => {
+    const old = await installAt("9.9.8")
+    let serverStarted = false
+    await expect(
+      installAt("9.9.9", {
+        runningServerBinary: async () => (serverStarted ? old.binaryPath : undefined),
+        install: (async (input: { bin: string }) => {
+          await writeRuntimePayload(path.dirname(input.bin), "#!/bin/sh\necho 'ax-engine 9.9.9'\n")
+          serverStarted = true
+          return input.bin
+        }) as unknown as NonNullable<AxEngineInstallRuntime["install"]>,
+      }),
+    ).rejects.toThrow(AX_ENGINE_ERROR.ServerRunning)
+    expect(await getManagedBinary()).toEqual({ path: old.binaryPath, version: "9.9.8" })
+    await fs.access(old.binaryPath)
+    await expect(fs.access(AxEnginePaths.managedBinaryDir("9.9.9"))).rejects.toBeTruthy()
+  })
+
+  test("a cancel after the download keeps the old version", async () => {
+    const old = await installAt("9.9.8")
+    const controller = new AbortController()
+    await expect(
+      installAxEngineBinary(
+        { signal: controller.signal },
+        baseRuntime({
+          resolveRelease: () => releaseAt("9.9.9"),
+          install: fakeInstall,
+          smoke: async () => controller.abort(),
+        }),
+      ),
+    ).rejects.toThrow()
+    expect(await getManagedBinary()).toEqual({ path: old.binaryPath, version: "9.9.8" })
+    await expect(fs.access(AxEnginePaths.managedBinaryDir("9.9.9"))).rejects.toBeTruthy()
+  })
+
+  test("switches versions only while holding the server lock", async () => {
+    await installAt("9.9.8")
+    const events: string[] = []
+    await installAt("9.9.9", {
+      acquireServerLock: async () => {
+        events.push("lock")
+        return { [Symbol.dispose]: () => void events.push("unlock") }
+      },
+      runningServerBinary: async () => {
+        events.push("check")
+        return undefined
+      },
+    })
+    // Pre-download check, post-lock check, then the final check under the server lock.
+    expect(events).toEqual(["check", "check", "lock", "check", "unlock"])
+  })
+
+  test("reports a server that holds the lock too long as running", async () => {
+    await installAt("9.9.8")
+    await expect(
+      installAt("9.9.9", {
+        acquireServerLock: async () => {
+          throw new Error(`${AX_ENGINE_ERROR.ServerRunning}: an ax-engine server is starting or stopping`)
+        },
+      }),
+    ).rejects.toThrow(AX_ENGINE_ERROR.ServerRunning)
+    expect((await getManagedBinary())?.version).toBe("9.9.8")
+  })
+
+  test("refuses to install when the server state cannot be read", async () => {
+    await fs.mkdir(path.dirname(AxEnginePaths.serverState), { recursive: true })
+    await fs.writeFile(AxEnginePaths.serverState, "{not json")
+    try {
+      await expect(installAt("9.9.9", { runningServerBinary: undefined })).rejects.toThrow(
+        AX_ENGINE_ERROR.ServerRunning,
+      )
+    } finally {
+      await fs.rm(AxEnginePaths.serverState, { force: true })
+    }
+  })
+
   test("installs while a server runs from a binary outside the managed tree", async () => {
     const result = await installAt("9.9.9", { runningServerBinary: async () => "/opt/homebrew/bin/ax-engine" })
     expect(result).toMatchObject({ installed: true, version: "9.9.9" })

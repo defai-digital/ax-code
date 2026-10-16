@@ -591,9 +591,15 @@ async function loadServerModel(input: {
 }
 
 // The binary of a live `ax-engine serve` this runtime started, if any. The
-// installer uses it to avoid replacing files under a running server.
+// installer uses it to avoid replacing files under a running server, so an
+// unreadable record fails closed instead of reading as "not running".
 export async function runningServerBinaryPath(): Promise<string | undefined> {
-  const { state } = await readServerState()
+  const { state, error } = await readServerState()
+  if (error) {
+    throw new Error(
+      `${AX_ENGINE_ERROR.ServerRunning}: cannot read the ax-engine server state; stop any running ax-engine server and retry`,
+    )
+  }
   if (!state) return undefined
   return (await serverProcessAlive(state)) ? state.binaryPath : undefined
 }
