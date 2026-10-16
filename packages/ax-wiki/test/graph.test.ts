@@ -765,7 +765,10 @@ test("reports citations past the cap so a page state matches its node", () => {
     {
       snapshot: "fixture",
       // Everything the list can name is fresh; only the citation past the cap is gone.
-      observed: new Map([...listed.map((source) => [source, digest]), [sorted.at(-1)!, null]]),
+      observed: new Map<string, string | null>([
+        ...listed.map((source): [string, string] => [source, digest]),
+        [sorted.at(-1)!, null],
+      ]),
     },
   )
   const page = graph.pages![0]!
