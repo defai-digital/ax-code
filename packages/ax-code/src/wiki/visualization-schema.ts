@@ -56,6 +56,7 @@ export const WikiGraphSchema = z
           stale: count,
           unknown: count,
           changed: z.array(z.string().max(1024)).max(GRAPH_LIMITS.sourcesPerPage),
+          unverified: z.array(z.string().max(1024)).max(GRAPH_LIMITS.sourcesPerPage).optional(),
           // Citations past `sourcesPerPage`, which `sources` cannot list. The
           // page's own state needs them: `stale`/`unknown` above describe the
           // listed list only.

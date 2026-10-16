@@ -60,6 +60,8 @@ export type WikiGraphPage = {
   unknown: number
   /** Cited sources whose current bytes differ from the recorded hash or are missing. */
   changed: string[]
+  /** Listed citations whose evidence cannot be verified for this page; absent in older snapshots. */
+  unverified?: string[]
   /**
    * Recorded citations beyond `sources`, which the bounded list cannot name. `stale`
    * and `unknown` above describe that list alone, so a page whose only changed file
@@ -250,6 +252,11 @@ function parsePages(value: unknown): WikiGraphPage[] | undefined {
       stale: count(page.stale),
       unknown: count(page.unknown),
       changed: list(page.changed, GRAPH_LIMITS.sourcesPerPage, "changed sources").map(graphRelativePath),
+      ...(page.unverified === undefined
+        ? {}
+        : {
+            unverified: list(page.unverified, GRAPH_LIMITS.sourcesPerPage, "unverified sources").map(graphRelativePath),
+          }),
       // A graph projected before this field existed describes no omitted citations.
       omitted: parsePageOmitted(page.omitted),
       related: list(page.related, GRAPH_LIMITS.related, "related pages").map((entry) => {
@@ -260,6 +267,17 @@ function parsePages(value: unknown): WikiGraphPage[] | undefined {
       truncated: page.truncated,
     }
   })
+  for (const page of pages) {
+    if (page.unverified === undefined) continue
+    const sources = new Set(page.sources)
+    const unverified = new Set(page.unverified)
+    if (
+      unverified.size !== page.unverified.length ||
+      unverified.size !== page.unknown ||
+      page.unverified.some((source) => !sources.has(source) || page.changed.includes(source))
+    )
+      throw new Error("Invalid unverified sources")
+  }
   for (const page of pages)
     for (const item of page.related)
       if (!ids.has(item.id) || item.id === page.id || item.shared < 1) throw new Error("Invalid related page")
@@ -296,20 +314,18 @@ function parseModules(value: unknown): WikiGraphModules | undefined {
   const known = new Set(groups.map((group) => group.path))
   if (known.size !== groups.length) throw new Error("Duplicate module group")
   const pairs = new Set<string>()
-  const dependencies = list(modules.dependencies, GRAPH_LIMITS.moduleDependencies, "module dependencies").map(
-    (raw) => {
-      const dependency = record(raw)
-      const from = optionalText(dependency.from),
-        to = optionalText(dependency.to)
-      const pair = JSON.stringify([from, to])
-      if (!known.has(from) || !known.has(to) || from === to || pairs.has(pair))
-        throw new Error("Invalid module dependency")
-      pairs.add(pair)
-      const imports = count(dependency.imports)
-      if (imports < 1) throw new Error("Invalid module dependency")
-      return { from, to, imports }
-    },
-  )
+  const dependencies = list(modules.dependencies, GRAPH_LIMITS.moduleDependencies, "module dependencies").map((raw) => {
+    const dependency = record(raw)
+    const from = optionalText(dependency.from),
+      to = optionalText(dependency.to)
+    const pair = JSON.stringify([from, to])
+    if (!known.has(from) || !known.has(to) || from === to || pairs.has(pair))
+      throw new Error("Invalid module dependency")
+    pairs.add(pair)
+    const imports = count(dependency.imports)
+    if (imports < 1) throw new Error("Invalid module dependency")
+    return { from, to, imports }
+  })
   return { rule: text(modules.rule, 256), groups, dependencies }
 }
 /** Validate and detach an allowlisted graph; extra producer fields never reach exports. */
@@ -700,6 +716,7 @@ function projectPages(
     const listedStates: GraphFreshness[] = []
     const omittedStates: GraphFreshness[] = []
     const listedChanged: string[] = []
+    const listedUnverified: string[] = []
     for (const [source, state] of states.get(id) ?? []) {
       const sourcePath = source.slice("source:".length)
       if (!listed.has(sourcePath)) {
@@ -708,6 +725,7 @@ function projectPages(
       }
       listedStates.push(state)
       if (state === "stale") listedChanged.push(sourcePath)
+      if (state === "unknown") listedUnverified.push(sourcePath)
     }
     const body = cleanGraphMarkdown(documents?.get(node.path) ?? "")
     const allowed = Math.max(0, Math.min(GRAPH_LIMITS.markdown, budget))
@@ -728,6 +746,7 @@ function projectPages(
       stale: listedStates.filter((state) => state === "stale").length,
       unknown: listedStates.filter((state) => state === "unknown").length,
       changed: listedChanged,
+      unverified: listedUnverified,
       omitted: {
         sources: omittedStates.length,
         stale: omittedStates.filter((state) => state === "stale").length,
@@ -839,9 +858,7 @@ function projectModules(allNodes: ReadonlyMap<string, WikiGraphNode>, allEdges: 
   }
   return {
     rule: `Cited files grouped by directory: the largest groups split first into subdirectories with at least ${minimum} cited files, at most ${GRAPH_LIMITS.moduleGroups} groups`,
-    groups: [...counts]
-      .sort(([a], [b]) => compareText(a, b))
-      .map(([path, count]) => ({ path, files: count })),
+    groups: [...counts].sort(([a], [b]) => compareText(a, b)).map(([path, count]) => ({ path, files: count })),
     dependencies: [...imports.values()]
       .sort((a, b) => b.imports - a.imports || compareText(a.from, b.from) || compareText(a.to, b.to))
       .slice(0, GRAPH_LIMITS.moduleDependencies),

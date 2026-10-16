@@ -53686,6 +53686,14 @@
                     "maxLength": 1024
                   }
                 },
+                "unverified": {
+                  "maxItems": 400,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 1024
+                  }
+                },
                 "omitted": {
                   "type": "object",
                   "properties": {
