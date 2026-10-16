@@ -1,8 +1,11 @@
 import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
 import { Instance } from "@/project/instance"
+import { Log } from "@/util/log"
 import { SessionID } from "./schema"
 import z from "zod"
+
+const log = Log.create({ service: "session.status" })
 
 export namespace SessionStatus {
   export const Info = z
@@ -74,9 +77,25 @@ export namespace SessionStatus {
 
     // Update state before publishing events so subscribers see current state.
     if (status.type === "idle") {
+      // ADR-212: the Notification observation hook fires only on a genuine
+      // busy/retry -> idle transition (the "idle prompt" — the agent finished
+      // and is waiting for input), not on repeated idle sets. Fire-and-forget
+      // so a broken or slow hook can never affect the status machine.
+      const wasActive = data.has(sessionID)
       data.delete(sessionID)
       Bus.publishDetached(Event.Status, { sessionID, status })
       Bus.publishDetached(Event.Idle, { sessionID })
+      if (wasActive) {
+        void import("@/hooks/lifecycle")
+          .then(({ LifecycleHooks }) =>
+            LifecycleHooks.runForWorkspace({
+              event: "Notification",
+              sessionID,
+              args: { sessionID, kind: "idle_prompt" },
+            }),
+          )
+          .catch((error) => log.warn("Notification lifecycle hooks failed", { sessionID, error }))
+      }
       return
     }
 

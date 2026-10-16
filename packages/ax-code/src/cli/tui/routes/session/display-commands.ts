@@ -61,7 +61,12 @@ export function displayCommands(input: {
     url: string
     client: {
       session: {
-        summarize: (input: { sessionID: string; modelID: string; providerID: string }) => Promise<{ error?: unknown }>
+        summarize: (input: {
+          sessionID: string
+          modelID: string
+          providerID: string
+          focus?: string
+        }) => Promise<{ error?: unknown }>
       }
     }
   }
@@ -105,6 +110,49 @@ export function displayCommands(input: {
     if (current === "auto") return "compact"
     if (current === "compact") return "full"
     return "auto"
+  }
+
+  // ADR-215: manual compaction, optionally steered by a focus topic from
+  // `/compact <focus>`. Omitted focus keeps the unmodified summarize call.
+  function runCompact(focus: string | undefined, dialog: DialogContext) {
+    const model = input.currentModel()
+    if (!model) {
+      input.toast.show({
+        variant: "warning",
+        message: uiText("ui.connectAProviderToSummarizeThisSession"),
+        duration: 3000,
+      })
+      dialog.clear()
+      return
+    }
+    void Promise.resolve()
+      .then(() =>
+        input.sdk.client.session.summarize({
+          sessionID: input.routeSessionID,
+          modelID: model.modelID,
+          providerID: model.providerID,
+          ...(focus ? { focus } : {}),
+        }),
+      )
+      .then((result) => {
+        // The v2 SDK client resolves `{error}` instead of rejecting, so
+        // a failed summarize must be checked here — the .catch below
+        // never fires for HTTP errors.
+        if (result?.error) {
+          input.toast.show({
+            message: sdkErrorMessage(result.error, "Failed to summarize session"),
+            variant: "error",
+          })
+          return
+        }
+        dialog.clear()
+      })
+      .catch((error) => {
+        input.toast.show({
+          message: error instanceof Error ? error.message : "Failed to summarize session",
+          variant: "error",
+        })
+      })
   }
 
   return [
@@ -282,46 +330,13 @@ export function displayCommands(input: {
       slash: {
         name: "compact",
         aliases: ["summarize"],
+        // `/compact <focus>` (ADR-215): the inline argument steers what the
+        // summary preserves; the bare command still uses onSelect.
+        arguments: true,
       },
-      onSelect: (dialog: DialogContext) => {
-        const model = input.currentModel()
-        if (!model) {
-          input.toast.show({
-            variant: "warning",
-            message: uiText("ui.connectAProviderToSummarizeThisSession"),
-            duration: 3000,
-          })
-          dialog.clear()
-          return
-        }
-        void Promise.resolve()
-          .then(() =>
-            input.sdk.client.session.summarize({
-              sessionID: input.routeSessionID,
-              modelID: model.modelID,
-              providerID: model.providerID,
-            }),
-          )
-          .then((result) => {
-            // The v2 SDK client resolves `{error}` instead of rejecting, so
-            // a failed summarize must be checked here — the .catch below
-            // never fires for HTTP errors.
-            if (result?.error) {
-              input.toast.show({
-                message: sdkErrorMessage(result.error, "Failed to summarize session"),
-                variant: "error",
-              })
-              return
-            }
-            dialog.clear()
-          })
-          .catch((error) => {
-            input.toast.show({
-              message: error instanceof Error ? error.message : "Failed to summarize session",
-              variant: "error",
-            })
-          })
-      },
+      onSelect: (dialog: DialogContext) => runCompact(undefined, dialog),
+      onSlashArguments: (args: string, dialog: DialogContext) =>
+        runCompact(args.trim().slice(0, 500) || undefined, dialog),
     },
     {
       title: input.sidebarVisible()

@@ -244,6 +244,8 @@ export namespace MessageV2 {
     auto: z.boolean(),
     overflow: z.boolean().optional(),
     triggerReason: CompactionTriggerReason.optional(),
+    /** ADR-215: manual compaction focus, quoted into the compaction prompt. */
+    focus: z.string().max(500).optional(),
   }).meta({
     ref: "CompactionPart",
   })

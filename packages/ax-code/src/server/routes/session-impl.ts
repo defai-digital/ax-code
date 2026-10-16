@@ -1062,6 +1062,9 @@ export const SessionRoutes = lazy(() =>
           modelID: ModelID.zod,
           auto: JsonBoolean.optional().default(false),
         }),
+          // ADR-215: optional focus topic for manual compaction, quoted into
+          // the prompt as user data. Omitted focus keeps today's prompt.
+          focus: z.string().trim().max(SessionCompaction.COMPACTION_FOCUS_MAX_CHARS).optional(),
       ),
       async (c) => {
         const sessionID = await parseCurrentProjectSessionID(c)
@@ -1089,6 +1092,7 @@ export const SessionRoutes = lazy(() =>
           auto: body.auto,
           triggerReason: "manual",
         })
+          ...(body.focus === undefined || body.focus === "" ? {} : { focus: body.focus }),
         await SessionPrompt.loop({ sessionID })
         return c.json(true)
       },

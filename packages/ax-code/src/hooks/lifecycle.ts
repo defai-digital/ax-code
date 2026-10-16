@@ -9,7 +9,8 @@
  * - config `hooks` field
  *
  * Observation-only events (ADR-057): SessionStart, SessionEnd, PostCompact,
- * Interrupt, PostToolUseFailure. They are NOT in BLOCKABLE_EVENTS, so a
+ * Interrupt, PostToolUseFailure, and the ADR-212 trio PermissionRequest,
+ * StopFailure, Notification. They are NOT in BLOCKABLE_EVENTS, so a
  * non-zero exit can never veto anything — `runHooks` logs the failure and
  * continues.
  *
@@ -111,6 +112,12 @@ export namespace LifecycleHooks {
     "SessionEnd",
     "PostCompact",
     "Interrupt",
+    // ADR-212 observation-only events: a permission prompt was raised, a turn
+    // ended in failure, or a user-facing notification fired. Payloads are
+    // redacted at the log boundary and never carry tool arguments.
+    "PermissionRequest",
+    "StopFailure",
+    "Notification",
   ])
   const HookCommandSchema = z.object({
     event: EventNameSchema,

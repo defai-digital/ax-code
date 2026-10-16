@@ -551,3 +551,116 @@ describe("turn context post-compaction todo rearm", () => {
     expect(shouldSurfacePendingTodos({ autonomous: false, messages })).toBe(true)
   })
 })
+
+describe("ADR-214 request-only notices in turn context", () => {
+  function modelUserMessage(id: string, sessionID: string, providerID: string, modelID: string) {
+    return {
+      info: { id, sessionID, role: "user" as const, model: { providerID, modelID } },
+      parts: [{ type: "text" as const, text: "go" }],
+    } as any as MessageV2.WithParts
+  }
+
+  function modelAssistantMessage(
+    id: string,
+    sessionID: string,
+    input: { providerID: string; modelID: string; aborted?: boolean },
+  ) {
+    return {
+      info: {
+        id,
+        sessionID,
+        role: "assistant" as const,
+        providerID: input.providerID,
+        modelID: input.modelID,
+        ...(input.aborted ? { error: { name: "MessageAbortedError", data: { message: "aborted" } } } : {}),
+      },
+      parts: [{ type: "text" as const, text: "done" }],
+    } as any as MessageV2.WithParts
+  }
+
+  test("renders the interruption marker on the first request after an aborted turn", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const result = await buildTurnContext({
+          messages: [
+            modelUserMessage("m1", session.id, "prov-a", "model-a"),
+            modelAssistantMessage("a1", session.id, { providerID: "prov-a", modelID: "model-a", aborted: true }),
+            modelUserMessage("m2", session.id, "prov-a", "model-a"),
+          ],
+          sessionID: session.id,
+          decisionHints: async () => undefined,
+        })
+        expect(result).toContain("<turn_interrupted>")
+        // Same history with a settled assistant turn stays quiet.
+        const settled = await buildTurnContext({
+          messages: [
+            modelUserMessage("m1", session.id, "prov-a", "model-a"),
+            modelAssistantMessage("a1", session.id, { providerID: "prov-a", modelID: "model-a" }),
+            modelUserMessage("m2", session.id, "prov-a", "model-a"),
+          ],
+          sessionID: session.id,
+          decisionHints: async () => undefined,
+        })
+        expect(settled ?? "").not.toContain("<turn_interrupted>")
+      },
+    })
+  })
+
+  test("renders the model-switch note when the anchored model differs from the last assistant", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const result = await buildTurnContext({
+          messages: [
+            modelUserMessage("m1", session.id, "prov-a", "model-a"),
+            modelAssistantMessage("a1", session.id, { providerID: "prov-a", modelID: "model-a" }),
+            modelUserMessage("m2", session.id, "prov-b", "model-b"),
+          ],
+          sessionID: session.id,
+          decisionHints: async () => undefined,
+        })
+        expect(result).toContain('<model_switch previous="prov-a/model-a" current="prov-b/model-b">')
+      },
+    })
+  })
+
+  test("renders the stale-todo reminder after five steps without a todowrite, and not before", async () => {
+    process.env.AX_CODE_AUTONOMOUS = "0"
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        Todo.update({
+          sessionID: session.id,
+          todos: [{ content: "still open", status: "in_progress", priority: "high" }],
+        })
+        const steps = (count: number) =>
+          Array.from({ length: count }, (_, i) =>
+            modelAssistantMessage(`a${i}`, session.id, { providerID: "prov-a", modelID: "model-a" }),
+          )
+        const base = [modelUserMessage("m1", session.id, "prov-a", "model-a")]
+
+        const fresh = await buildTurnContext({
+          messages: [...base, ...steps(4)],
+          sessionID: session.id,
+          decisionHints: async () => undefined,
+        })
+        expect(fresh ?? "").not.toContain("<stale_todos")
+
+        const stale = await buildTurnContext({
+          messages: [...base, ...steps(5)],
+          sessionID: session.id,
+          decisionHints: async () => undefined,
+        })
+        expect(stale).toContain('<stale_todos steps="5">')
+        expect(stale).toContain("1 open todo")
+      },
+    })
+  })
+})

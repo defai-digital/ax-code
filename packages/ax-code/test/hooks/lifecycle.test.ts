@@ -248,6 +248,9 @@ describe("LifecycleHooks matcher and run", () => {
       "SessionEnd",
       "PostCompact",
       "Interrupt",
+      "PermissionRequest",
+      "StopFailure",
+      "Notification",
     ] as const) {
       const result = await LifecycleHooks.runHooks([{ event, blockOnFailure: true, command: "exit 2" }], {
         event,
@@ -255,6 +258,40 @@ describe("LifecycleHooks matcher and run", () => {
       })
       expect(result.blocked).toBe(false)
     }
+  })
+
+  test("ADR-212 observation events are fail-open under the claude-code protocol too", async () => {
+    // A hook that answers deny (exit 2) on PermissionRequest/StopFailure/
+    // Notification must not block or veto anything: observation-only.
+    for (const event of ["PermissionRequest", "StopFailure", "Notification"] as const) {
+      const result = await LifecycleHooks.runHooks(
+        [{ event, protocol: "claude-code", blockOnFailure: true, command: "exit 2" }],
+        { event, tool: "bash", args: { sessionID: "s1" }, cwd: process.cwd() },
+      )
+      expect(result.blocked).toBe(false)
+      expect(result.ok).toBe(true)
+    }
+  })
+
+  test("a PermissionRequest hook receives the payload but never tool arguments", async () => {
+    const result = await LifecycleHooks.runHooks(
+      [
+        {
+          event: "PermissionRequest" as const,
+          command:
+            "node -e \"let s='';process.stdin.on('data',c=>s+=c).on('end',()=>{const a=JSON.parse(s);process.stdout.write(JSON.stringify({permission:a.permission,hasArgs:'command' in a}))})\"",
+        },
+      ],
+      {
+        event: "PermissionRequest",
+        tool: "bash",
+        // Mirrors the payload the permission gate sends: no tool arguments.
+        args: { sessionID: "s1", permission: "bash", patterns: ["git push"], riskClass: "risk" },
+        cwd: process.cwd(),
+      },
+    )
+    expect(result.outputs[0]?.exit).toBe(0)
+    expect(JSON.parse(result.outputs[0]!.stdout)).toEqual({ permission: "bash", hasArgs: false })
   })
 
   test("a hook that cannot be spawned is a failed run, not a broken gate", async () => {
@@ -298,6 +335,9 @@ describe("LifecycleHooks matcher and run", () => {
           { event: "SessionEnd", command: "true" },
           { event: "PostCompact", command: "true" },
           { event: "Interrupt", command: "true" },
+          { event: "PermissionRequest", command: "true" },
+          { event: "StopFailure", command: "true" },
+          { event: "Notification", command: "true" },
         ],
       }),
       "utf8",
@@ -311,6 +351,9 @@ describe("LifecycleHooks matcher and run", () => {
       "SessionEnd",
       "PostCompact",
       "Interrupt",
+      "PermissionRequest",
+      "StopFailure",
+      "Notification",
     ])
   })
 

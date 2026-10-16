@@ -4,6 +4,7 @@ import { GoalPlan } from "../goal-plan"
 import { IntelligenceNudge } from "../intelligence-nudge"
 import { BackgroundNotification } from "../background-notification"
 import type { MessageV2 } from "../message-v2"
+import { interruptionNotice, modelSwitchNotice, staleTodoNotice, stepsSinceTodoWrite } from "./prompt-notices"
 import type { SessionID } from "../schema"
 import { SystemPrompt } from "../system"
 import { Todo } from "../todo"
@@ -79,6 +80,14 @@ export async function buildTurnContext(input: {
   const decisionHints = await decisionHintsFn({ messages: input.messages, sessionID: input.sessionID })
   const intelligenceNudge = IntelligenceNudge.evaluate(input.messages ?? [])
 
+  // ADR-214 request-only notices: interruption marker, stale-todo reminder
+  // and model-switch note. Pure derivations over the message list (plus the
+  // live open-todo count); rendered here so they ride the request-only
+  // reminder channel and never reach the durable transcript.
+  const interruption = interruptionNotice(input.messages ?? [])
+  const modelSwitch = modelSwitchNotice(input.messages ?? [])
+  const openTodos = input.sessionID ? Todo.active(input.sessionID) : []
+
   // In autonomous mode, surface pending todos each turn so the model always
   // knows exactly what's left. This is live state visible at the start of
   // every reasoning cycle, not just an upfront instruction.
@@ -89,7 +98,7 @@ export async function buildTurnContext(input: {
   // todos again (see shouldSurfacePendingTodos).
   const pendingTodos =
     input.sessionID && shouldSurfacePendingTodos({ autonomous: ScopedFlag.autonomous(), messages: input.messages })
-      ? Todo.active(input.sessionID)
+      ? openTodos
       : []
   const pendingTodosSection =
     pendingTodos.length > 0
@@ -147,7 +156,15 @@ export async function buildTurnContext(input: {
     ? BackgroundNotification.drainForModelStep(input.sessionID)
     : undefined
 
+  const staleTodo = staleTodoNotice({
+    openTodos: openTodos.length,
+    stepsSinceTodoWrite: stepsSinceTodoWrite(input.messages ?? []),
+  })
+
   const sections = [
+    ...(interruption ? [interruption] : []),
+    ...(modelSwitch ? [modelSwitch] : []),
+    ...(staleTodo ? [staleTodo] : []),
     ...(decisionHints ? [decisionHints] : []),
     ...(intelligenceNudge.active ? [intelligenceNudge.text] : []),
     ...(goalSection ? [goalSection] : []),

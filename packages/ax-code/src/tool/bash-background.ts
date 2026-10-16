@@ -254,6 +254,24 @@ export namespace BackgroundShell {
           variant: entry.status === "completed" ? "info" : "warning",
           duration: TOAST_DURATION_LONG_MS,
         })
+        // ADR-212: observation-only Notification hook (background task
+        // complete). No command text or description — the shell id, status
+        // and exit code identify the task without secrets. Fire-and-forget.
+        void import("@/hooks/lifecycle")
+          .then(({ LifecycleHooks }) =>
+            LifecycleHooks.runForWorkspace({
+              event: "Notification",
+              sessionID: entry.sessionID,
+              args: {
+                sessionID: entry.sessionID,
+                kind: "background_task",
+                shellID: id,
+                status: entry.status,
+                exitCode: entry.exitCode,
+              },
+            }),
+          )
+          .catch((error) => log.warn("Notification lifecycle hooks failed", { id, error }))
       } catch (error) {
         log.warn("background shell toast publish failed", { id, error: error instanceof Error ? error.message : error })
       }

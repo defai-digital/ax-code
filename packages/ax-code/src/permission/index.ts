@@ -11,6 +11,7 @@ import { MessageID, SessionID } from "@/session/schema"
 import { PermissionTable } from "@/session/session.sql"
 import { Database, eq } from "@/storage/db"
 import { Log } from "@/util/log"
+import { Env } from "@/util/env"
 import { Wildcard } from "@/util/wildcard"
 import { Filesystem } from "@/util/filesystem"
 import os from "os"
@@ -694,6 +695,28 @@ export namespace Permission {
         tool: typeof info.metadata?.tool === "string" ? info.metadata.tool : undefined,
       })
     }
+    // ADR-212: observation-only PermissionRequest hook. Fired once per ask —
+    // the queue-promotion and idle-once republishes of Event.Asked above do
+    // not refire it. The payload carries the tool name, patterns and risk
+    // class only, never tool arguments (metadata), which can hold secrets;
+    // patterns are redacted at the log boundary (ADR-147). Fire-and-forget:
+    // hook latency or failures must never delay the permission gate.
+    void import("@/hooks/lifecycle")
+      .then(({ LifecycleHooks }) =>
+        LifecycleHooks.runForWorkspace({
+          event: "PermissionRequest",
+          sessionID: info.sessionID,
+          tool: info.permission,
+          args: {
+            sessionID: info.sessionID,
+            permission: info.permission,
+            patterns: info.patterns.slice(0, 32).map((pattern) => Env.redactForRecord(pattern).slice(0, 500)),
+            ...(info.riskClass === undefined ? {} : { riskClass: info.riskClass }),
+            ...(info.interactiveOnly === undefined ? {} : { interactiveOnly: info.interactiveOnly }),
+          },
+        }),
+      )
+      .catch((error) => log.warn("PermissionRequest lifecycle hooks failed", { id: info.id, error }))
 
     try {
       return await deferred.promise

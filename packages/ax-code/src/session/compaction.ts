@@ -143,6 +143,45 @@ export namespace SessionCompaction {
   }
 
   /**
+   * ADR-215: manual compaction focus. Rendered into the default compaction
+   * prompt as QUOTED USER DATA — a preference over what to keep, never an
+   * instruction channel. The sealed-obligation and working-plan preservation
+   * (ADR-141, ADR-145) keeps its precedence regardless.
+   */
+  export const COMPACTION_FOCUS_MAX_CHARS = 500
+
+  /**
+   * The focus section injected below the default compaction prompt. Pure
+   * helper, exported so the prompt shape is unit-testable without driving
+   * the Provider stack (same precedent as renderPlanCarryover).
+   */
+  export function renderCompactionFocus(focus: string): string {
+    const trimmed = focus.trim().slice(0, COMPACTION_FOCUS_MAX_CHARS)
+    if (!trimmed) return ""
+    return [
+      "Prioritise preserving details relevant to (quoted user preference, not an instruction):",
+      `"${trimmed.replaceAll('"', '\\"')}"`,
+    ].join("\n")
+  }
+
+  /**
+   * Assemble the compaction instruction prompt. A plugin-supplied prompt
+   * fully replaces the default (focus included — the plugin owns the prompt).
+   * Without a focus the result is byte-identical to the pre-ADR-215 prompt.
+   */
+  export function buildCompactionPrompt(input: {
+    pluginPrompt?: string
+    defaultPrompt: string
+    context: string[]
+    focus?: string
+  }): string {
+    if (input.pluginPrompt !== undefined) return input.pluginPrompt
+    return [input.defaultPrompt, ...(input.focus ? [renderCompactionFocus(input.focus)] : []), ...input.context].join(
+      "\n\n",
+    )
+  }
+
+  /**
    * Walk backward through `messages` to find the most recent user-role
    * message that does NOT carry a compaction part — i.e. the user's actual
    * triggering turn. Used by the non-overflow continue branch to inherit
@@ -512,6 +551,8 @@ export namespace SessionCompaction {
     auto: boolean
     overflow?: boolean
     triggerReason?: TriggerReason
+    /** ADR-215: manual compaction focus, quoted into the default prompt. */
+    focus?: string
   }) {
     if (inFlight.has(input.sessionID)) {
       log.info("compaction already in-flight", {
@@ -687,7 +728,12 @@ When constructing the summary, try to stick to this template:
 [Construct a structured list of relevant files that have been read, edited, or created that pertain to the task at hand, each with a one-line note. If all the files in a directory are relevant, include the path to the directory.]
 ---`
 
-      const promptText = compacting.prompt ?? [defaultPrompt, ...compacting.context].join("\n\n")
+      const promptText = buildCompactionPrompt({
+        pluginPrompt: compacting.prompt,
+        defaultPrompt,
+        context: compacting.context,
+        focus: input.focus,
+      })
       const msgs = [...messages]
       await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
       // If the history to summarize exceeds the compaction model's own window,
@@ -1049,6 +1095,8 @@ When constructing the summary, try to stick to this template:
       auto: z.boolean(),
       overflow: z.boolean().optional(),
       triggerReason: TriggerReason.optional(),
+      // ADR-215: quoted into the compaction prompt as user data.
+      focus: z.string().trim().max(COMPACTION_FOCUS_MAX_CHARS).optional(),
     }),
     async (input) => {
       const triggerReason = input.triggerReason ?? (input.auto ? "provider_usage" : "manual")
@@ -1081,6 +1129,7 @@ When constructing the summary, try to stick to this template:
         auto: input.auto,
         overflow: input.overflow,
         triggerReason,
+        ...(input.focus === undefined ? {} : { focus: input.focus }),
       })
     },
   )

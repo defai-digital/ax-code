@@ -5,6 +5,7 @@ import { Instance } from "@/project/instance"
 import { Recorder } from "@/replay/recorder"
 import { SessionID, MessageID } from "@/session/schema"
 import { Log } from "@/util/log"
+import { Env } from "@/util/env"
 import { JsonBoolean } from "@/util/schema"
 import z from "zod"
 import { AutonomousQuestion } from "./autonomous"
@@ -229,6 +230,25 @@ export namespace Question {
     const entry: PendingEntry = { info, deferred }
     current.pending.set(id, entry)
     Bus.publishDetached(Event.Asked, info)
+    // ADR-212: observation-only Notification hook (question asked). The
+    // payload carries a bounded, redacted first-question label only — never
+    // the full questions, which are model-authored text. Fire-and-forget.
+    void import("@/hooks/lifecycle")
+      .then(({ LifecycleHooks }) => {
+        const first = info.questions[0]
+        const header = first ? first.header?.trim() || first.question?.trim() || "" : ""
+        return LifecycleHooks.runForWorkspace({
+          event: "Notification",
+          sessionID: info.sessionID,
+          args: {
+            sessionID: info.sessionID,
+            kind: "question",
+            questionCount: info.questions.length,
+            ...(header ? { header: Env.redactForRecord(header).slice(0, 120) } : {}),
+          },
+        })
+      })
+      .catch((error) => log.warn("Notification lifecycle hooks failed", { id, error }))
 
     // Release the question when the turn aborts, mirroring Permission.ask.
     // Without it the tool never returns, the AI SDK's tool-results stream
