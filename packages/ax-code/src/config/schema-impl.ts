@@ -1419,6 +1419,17 @@ export const Info = z
       .describe(
         "Native source-backed AX Wiki. Complements structural ax-code index; does not replace code_intelligence.",
       ),
+    code_intelligence: z
+      .object({
+        post_edit_dependents: z
+          .boolean()
+          .optional()
+          .describe(
+            "After edit, write, and apply_patch, list up to 5 files that import the edited file, using the code graph (ADR-217). Only reads a fresh graph; never triggers indexing. Default: false.",
+          ),
+      })
+      .optional()
+      .describe("Code graph / code-intelligence behavior."),
     image_generation: z
       .object({
         provider: z
@@ -1444,14 +1455,3 @@ export const Info = z
   })
 
 export type Info = z.output<typeof Info>
-    code_intelligence: z
-      .object({
-        post_edit_dependents: z
-          .boolean()
-          .optional()
-          .describe(
-            "After edit, write, and apply_patch, list up to 5 files that import the edited file, using the code graph (ADR-217). Only reads a fresh graph; never triggers indexing. Default: false.",
-          ),
-      })
-      .optional()
-      .describe("Code graph / code-intelligence behavior."),
