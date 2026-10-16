@@ -43,6 +43,7 @@ vi.mock("@modelcontextprotocol/client", async (importOriginal) => ({
     transport?: { start?: () => Promise<void> }
 
     setNotificationHandler() {}
+    setRequestHandler() {}
 
     async connect(transport: { start?: () => Promise<void> }) {
       this.transport = transport

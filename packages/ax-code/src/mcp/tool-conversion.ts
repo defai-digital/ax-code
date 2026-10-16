@@ -7,6 +7,7 @@ import z from "zod"
 import { WebMcpApprovals } from "./webmcp-approvals"
 import { WebMcpProfile } from "./webmcp-profile"
 import { redirectOriginOutsideAllowlist } from "./webmcp-redirect"
+import { McpElicitation } from "./elicitation"
 
 const log = Log.create({ service: "mcp" })
 const MAX_TOOL_DESCRIPTION = 4_000
@@ -393,29 +394,36 @@ export async function convertMcpTool(
         // The request is about to reach the bridge: the session layer refunds
         // a wait_for reservation only for failures before this point.
         if (webmcp) WebMcpProfile.markDispatched(args)
-        const result = await client.callTool(
-          {
-            name: mcpTool.name,
-            arguments: {
-              ...((input || {}) as Record<string, unknown>),
-              ...(webmcp?.toolName === "new_page"
-                ? WebMcpProfile.workflowContextArguments(webmcp.profile, input as object)
-                : {}),
-              // A wait longer than the remaining dispatch budget would outlive
-              // the MCP request; let the bridge settle first and report.
-              ...(webmcp?.toolName === "wait_for" && mainTimeout !== undefined
-                ? { timeout: WebMcpProfile.waitTimeoutWithin((input as Record<string, unknown>).timeout, mainTimeout) }
-                : {}),
+        // The call context bound by the session wrapper rides on `opts`; make
+        // it active for this client so an elicitation/create the server sends
+        // mid-call resolves the session (and abort signal) it belongs to.
+        const result = await McpElicitation.withActiveCall(client, opts, () =>
+          client.callTool(
+            {
+              name: mcpTool.name,
+              arguments: {
+                ...((input || {}) as Record<string, unknown>),
+                ...(webmcp?.toolName === "new_page"
+                  ? WebMcpProfile.workflowContextArguments(webmcp.profile, input as object)
+                  : {}),
+                // A wait longer than the remaining dispatch budget would outlive
+                // the MCP request; let the bridge settle first and report.
+                ...(webmcp?.toolName === "wait_for" && mainTimeout !== undefined
+                  ? {
+                      timeout: WebMcpProfile.waitTimeoutWithin((input as Record<string, unknown>).timeout, mainTimeout),
+                    }
+                  : {}),
+              },
             },
-          },
-          {
-            resetTimeoutOnProgress: true,
-            // A bridge that streams progress forever must not extend an
-            // approved WebMCP call past its total budget.
-            ...(webmcp && mainTimeout !== undefined ? { maxTotalTimeout: mainTimeout } : {}),
-            signal: opts.abortSignal,
-            timeout: mainTimeout,
-          },
+            {
+              resetTimeoutOnProgress: true,
+              // A bridge that streams progress forever must not extend an
+              // approved WebMCP call past its total budget.
+              ...(webmcp && mainTimeout !== undefined ? { maxTotalTimeout: mainTimeout } : {}),
+              signal: opts.abortSignal,
+              timeout: mainTimeout,
+            },
+          ),
         )
         if (webmcp) {
           try {

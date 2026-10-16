@@ -78,6 +78,7 @@ vi.mock("@modelcontextprotocol/client", async (importOriginal) => ({
     }
   },
   Client: class MockClient {
+    setRequestHandler() {}
     async connect(transport: { start: () => Promise<void> }) {
       await transport.start()
     }

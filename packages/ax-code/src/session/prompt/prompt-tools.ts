@@ -19,6 +19,7 @@ import { Tool } from "../../tool/tool"
 import { MCP } from "../../mcp"
 import { ToolDiscovery } from "../tool-discovery"
 import { McpPermissionPattern } from "../../mcp/permission-pattern"
+import { McpElicitation } from "../../mcp/elicitation"
 import { WebMcpApprovals } from "../../mcp/webmcp-approvals"
 import { WebMcpAutoApproval } from "../../mcp/webmcp-auto-approval"
 import { WebMcpProfile } from "../../mcp/webmcp-profile"
@@ -792,6 +793,15 @@ export async function resolveTools(input: ResolveToolsInput) {
     // Wrap execute to add plugin hooks and format output
     mcpTool.execute = async (args, opts) => {
       const ctx = context(args, opts)
+      // Bridge the session identity onto the AI SDK options object: its
+      // identity flows into the converted tool's execute, where the MCP
+      // client's elicitation handler resolves it to surface server-initiated
+      // prompts in the session that is waiting on this call.
+      McpElicitation.bindCallContext(opts, {
+        sessionID: ctx.sessionID,
+        signal: ctx.abort,
+        tool: ctx.callID ? { messageID: ctx.messageID, callID: ctx.callID } : undefined,
+      })
       let hookFeedback: string | undefined
       // @scan-suppress race_scan - This invocation-local token is installed synchronously by the workflow while it holds the exclusive session lane; only that nested call can reuse the lane.
       const nestedBrowser = browserCalls.get(opts)

@@ -58,6 +58,7 @@ import {
   mcpRegistrationRejection,
   mergeRemoteMcpHeaders,
 } from "./connect-error"
+import { McpElicitation } from "./elicitation"
 
 export namespace MCP {
   const log = Log.create({ service: "mcp" })
@@ -145,7 +146,7 @@ export namespace MCP {
     let transport = createTransport()
     let lastError: unknown
     for (let attempt = 1; attempt <= MCP_CONNECT_ATTEMPTS; attempt++) {
-      const client = createClient()
+      const client = createClient(key)
       try {
         await withTimeout(client.connect(transport), timeout)
         return { ok: true, client, transport }
@@ -593,17 +594,25 @@ export namespace MCP {
     mcpState.tools.generation++
   }
 
-  function createClient() {
-    return new Client(
+  function createClient(serverName: string) {
+    const client = new Client(
       {
         name: "ax-code",
         version: Installation.VERSION,
       },
-      // SDK v2 listTools() walks every page (v1 read only the first). Bound the
-      // walk by the same page budget the prompt/resource catalog uses instead of
-      // the SDK's default of 64.
-      { listMaxPages: MAX_CATALOG_PAGES },
+      {
+        // SDK v2 listTools() walks every page (v1 read only the first). Bound the
+        // walk by the same page budget the prompt/resource catalog uses instead of
+        // the SDK's default of 64.
+        listMaxPages: MAX_CATALOG_PAGES,
+        // Advertise form-mode elicitation only (never URL mode); the handler
+        // maps elicitation/create onto the in-flight session's Question prompt
+        // and declines when no session call can surface it.
+        capabilities: McpElicitation.clientCapabilities(),
+      },
     )
+    McpElicitation.registerHandler(client, serverName)
+    return client
   }
 
   function rememberClientTransport(client: MCPClient, transport: unknown) {
@@ -1187,7 +1196,7 @@ export namespace MCP {
 
       const connectTimeout = mcp.timeout ?? DEFAULT_TIMEOUT
       try {
-        const client = createClient()
+        const client = createClient(key)
         if (webmcp && configured && mcp.type === "local") {
           webMcpProfiles.set(client, webmcp)
           webMcpLaunchFingerprints.set(
@@ -2153,7 +2162,7 @@ export namespace MCP {
         requestInit: remoteRequestInit(mcpConfig.headers),
         fetch,
       })
-      const client = createClient()
+      const client = createClient(mcpName)
 
       // Try to connect - this will trigger the OAuth flow
       try {

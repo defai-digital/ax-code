@@ -24,6 +24,7 @@ vi.mock("@modelcontextprotocol/client", () => ({
       throw new Error(`unexpected request ${request.method}`)
     }
     setNotificationHandler() {}
+    setRequestHandler() {}
   },
 }))
 

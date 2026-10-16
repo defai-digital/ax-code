@@ -27,6 +27,7 @@ vi.mock("@modelcontextprotocol/client", () => ({
       }
     }
     setNotificationHandler(_schema: unknown, _handler: () => Promise<void>) {}
+    setRequestHandler() {}
     callTool(...args: unknown[]) {
       return bridge.call(...args)
     }

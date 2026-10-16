@@ -111,6 +111,8 @@ vi.mock("@modelcontextprotocol/client", () => ({
       this.notificationHandler = handler
     }
 
+    setRequestHandler() {}
+
     async close() {
       this.closed = true
       if (closeInvokesOnclose) this.onclose?.()
