@@ -111,7 +111,20 @@ export async function systemPrompt(input: {
   // The WebMCP bridge block appears when a bridge connects mid-session
   // (sidebar chip), so its tier is part of the key too.
   const webmcpTier = input.environment ? undefined : await MCP.webmcpPromptTier().catch(() => undefined)
-  const environmentCacheKey = `${modelKey}:${ScopedFlag.autonomous() ? "autonomous" : "manual"}:${webmcpTier ?? "nobridge"}`
+  // The environment block prints "Today's date: …" (local timezone,
+  // toDateString) so a long-running run that crosses midnight would
+  // otherwise keep serving yesterday's date until the model or the
+  // autonomous flag changes. Include the local YYYY-MM-DD in the cache
+  // key so a new day forces a refresh; toDateString / new Date use the
+  // local timezone, matching the rendered string.
+  const localDateKey = (() => {
+    const now = new Date()
+    const y = now.getFullYear()
+    const m = String(now.getMonth() + 1).padStart(2, "0")
+    const d = String(now.getDate()).padStart(2, "0")
+    return `${y}-${m}-${d}`
+  })()
+  const environmentCacheKey = `${modelKey}:${ScopedFlag.autonomous() ? "autonomous" : "manual"}:${webmcpTier ?? "nobridge"}:${localDateKey}`
   if (
     input.environmentOverride === undefined &&
     (!input.cache.environment || input.cache.environmentModelKey !== environmentCacheKey)

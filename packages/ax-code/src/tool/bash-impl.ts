@@ -36,7 +36,12 @@ import { OsSandbox } from "@/isolation/os-sandbox"
 import { BlastRadius } from "@/session/blast-radius"
 import { assertSymlinkInsideProject } from "./external-directory"
 import { classifyDestructiveCommand, findWrappedCommand, gitSubcommand } from "./bash-destructive"
-import { classifyReadOnlyCommand, planReadOnlyError, readonlyRedirectDenial } from "./bash-readonly"
+import {
+  classifyReadOnlyCommand,
+  explicitBashAllowOverride,
+  planReadOnlyError,
+  readonlyRedirectDenial,
+} from "./bash-readonly"
 import { gitConfigInvocation, gitConfigLocationFlags, isDangerousGitConfigKey } from "./bash-git-config"
 import { BashNetworkHeuristics } from "./bash-network-heuristics"
 import { denyDestructiveInOpsStrict } from "./bash-strict"
@@ -129,6 +134,21 @@ function isWriteFileRedirect(redirect: { childCount: number; child(index: number
     if (child && WRITE_REDIRECT_OPERATORS.has(child.type)) return true
   }
   return false
+}
+
+// ADR-235: a resolved absolute path that lives inside the .git/ control
+// directory (hooks, config, HEAD, refs, info) gets a permission ask instead
+// of the historical isolation-throw, so a user or autonomous guardian can
+// approve an ordinary `git <subcommand>` touching .git/ indirectly. The
+// match is intentionally narrow — a top-level `.git` directory, or a
+// `/.git/` segment anywhere on the absolute path. Bare `.git` (the
+// directory itself, not a file inside it) is also treated as a control
+// path so directory-level operations like `rm -rf .git` still surface the
+// ask before the worktree collapses.
+function isGitControlPath(absolutePath: string): boolean {
+  const normalized = absolutePath.replace(/\\/g, "/")
+  if (normalized === ".git" || normalized.endsWith("/.git")) return true
+  return /(^|\/)\.git(\/|$)/.test(normalized)
 }
 
 const log = Log.create({ service: "bash-tool" })
@@ -381,12 +401,23 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
       // pipeline stages, `;`/`&&` segments, subshells, command substitutions,
       // and `bash -c` / `eval` inner strings — must pass the fail-closed
       // allowlist in bash-readonly.ts before any permission prompt or spawn.
-      // A user permission rule that explicitly allows bash for the plan agent
-      // cannot be detected from the tool layer (the resolved policy is only
-      // reachable through ctx.ask), so the classifier applies unconditionally
-      // for the plan agent; that remains the documented gap of ADR-208 (3).
+      // ADR-224 amends ADR-208 (3): an explicit allow rule in the
+      // USER-configured permission section overrides the classifier denial
+      // for the matching command only (see explicitBashAllowOverride).
       const planReadOnly = ctx.agent === "plan"
       const planDenials: string[] = []
+      // Built from Config directly — the built-in agent defaults that shape
+      // ctx.ask's ruleset are deliberately excluded. Managed config merges
+      // last with the highest priority, so evaluate()'s last-match semantics
+      // inside the matcher keep a managed deny winning over a user allow.
+      const planUserRules = planReadOnly ? Permission.fromConfig((await Config.get()).permission ?? {}) : undefined
+      const planAllowOverride = (text: string): boolean => {
+        if (!planUserRules) return false
+        const pattern = explicitBashAllowOverride(text, planUserRules)
+        if (pattern === undefined) return false
+        log.info("plan agent bash classifier overridden by explicit user allow rule", { pattern })
+        return true
+      }
       const recordPlanWriteRedirect = (
         redirect: { childCount: number; child(index: number): { type: string } | null },
         target: string | undefined,
@@ -1025,7 +1056,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         // fail-closed branch below denies anything it cannot inspect.
         if (planReadOnly && !["eval", "bash", "sh", "zsh", "source", "."].includes(executable)) {
           const denial = classifyReadOnlyCommand(normalizedCommand)
-          if (denial) planDenials.push(`${commandText}: ${denial}`)
+          if (denial && !planAllowOverride(commandText)) planDenials.push(`${commandText}: ${denial}`)
         }
 
         // Commands that wrap or delegate to other commands.
@@ -1099,7 +1130,9 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
                 if (innerDestructiveReason) destructiveCommands.set(innerNode.text, innerDestructiveReason)
                 if (planReadOnly) {
                   const innerDenial = classifyReadOnlyCommand(normalizedInnerParts)
-                  if (innerDenial) planDenials.push(`${innerNode.text}: ${innerDenial}`)
+                  if (innerDenial && !planAllowOverride(innerNode.text)) {
+                    planDenials.push(`${innerNode.text}: ${innerDenial}`)
+                  }
                 }
                 const innerCommand = findWrappedCommand(normalizedInnerParts)
                 const innerWrappers = innerCommand
@@ -1162,7 +1195,11 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           // extracted and statically parsed (`bash -c` with dynamic text,
           // `bash script.sh`, `source script`): the plan agent cannot run
           // commands this classifier never saw (ADR-208).
-          if (planReadOnly && (executable === "source" || executable === "." || !innerCmd)) {
+          if (
+            planReadOnly &&
+            (executable === "source" || executable === "." || !innerCmd) &&
+            !planAllowOverride(commandText)
+          ) {
             planDenials.push(`${commandText}: ${executable} executes commands this classifier cannot inspect`)
           }
 
@@ -1423,7 +1460,31 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         })
       }
 
-      Isolation.assertBash(ctx.extra?.isolation, cwd, Instance.directory, Instance.worktree, [...resolvedPaths])
+      // ADR-235: a shell-level write that reaches a .git/ control path is
+      // asked about even where isolation does not forbid it. The pattern is
+      // the workspace-relative path so user ruleset entries keyed on
+      // ".git/**" / ".git/HEAD" keep matching.
+      const resolvedPathsList = [...resolvedPaths]
+      // The isolation boundary and protected-path checks run first over EVERY
+      // resolved path, exactly as before (ADR-235 must never relax them).
+      Isolation.assertBash(ctx.extra?.isolation, cwd, Instance.directory, Instance.worktree, resolvedPathsList)
+      // Only when isolation let the write through (for example full-access
+      // mode) does a .git control path still need an explicit approval.
+      const gitControlPaths = resolvedPathsList.filter(isGitControlPath)
+      if (gitControlPaths.length > 0) {
+        const asked = new Set<string>()
+        for (const filePath of gitControlPaths) {
+          const rel = normalizeToWorkspacePath(filePath, Instance.worktree) || filePath
+          if (asked.has(rel)) continue
+          asked.add(rel)
+          await ctx.ask({
+            permission: "edit",
+            patterns: [rel],
+            always: [],
+            metadata: { reason: "git_control_path" },
+          })
+        }
+      }
       Isolation.assertBashNetwork(ctx.extra?.isolation, commandNames, { wrapperSuspect: networkWrapperSuspect })
 
       // OS sandbox wrap for bash (Seatbelt / bubblewrap). App-layer checks

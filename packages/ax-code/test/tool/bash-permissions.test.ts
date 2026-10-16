@@ -386,4 +386,96 @@ describe("tool.bash permissions", () => {
       },
     })
   })
+
+  // ADR-235: shell-level writes to .git/ control paths (hooks, config,
+  // HEAD, refs, info) require an edit-permission ask instead of the
+  // historical isolation-throw, so the user (or autonomous guardian) gets
+  // a chance to approve. Ordinary `git <subcommand>` invocations that
+  // don't record any .git/ paths in the resolved set must not surface
+  // the ask — that is the carve-out the ADR calls out as the difference
+  // between shell-level manipulation and git's own internal writes.
+  describe("git control path ask (ADR-235)", () => {
+    // The .username/.model pair is required so Config.get() does not
+    // call os.userInfo() — this sandbox returns ENOENT for that call.
+    const tmpConfig = { git: true, config: { model: "test/model", username: "testuser" } } as const
+    test("a redirect to .git/HEAD triggers an edit-permission ask", async () => {
+      await using tmp = await tmpdir(tmpConfig)
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const requests = await collectPermissionRequests(
+            (testCtx) =>
+              bash.execute({ command: "echo corruption > .git/HEAD", description: "Overwrite HEAD" }, testCtx),
+            (req) => req.permission === "edit",
+          )
+          const editReq = requests.find((r) => r.permission === "edit")
+          expect(editReq).toBeDefined()
+          expect(editReq!.patterns).toContain(".git/HEAD")
+          expect(editReq!.metadata?.reason).toBe("git_control_path")
+        },
+      })
+    })
+
+    test("a redirect to .git/hooks/post-commit stays hard-denied (not relaxed to an ask)", async () => {
+      await using tmp = await tmpdir(tmpConfig)
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          await expect(
+            collectPermissionRequests(
+              (testCtx) =>
+                bash.execute(
+                  { command: "echo '#!/bin/sh' > .git/hooks/post-commit", description: "Plant hook" },
+                  testCtx,
+                ),
+              (req) => req.permission === "edit",
+            ),
+          ).rejects.toThrow(/blocked-path pattern/)
+        },
+      })
+    })
+
+    test("ordinary `git status` does not trigger the git-control-path ask", async () => {
+      await using tmp = await tmpdir(tmpConfig)
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const requests = await collectPermissionRequests(
+            (testCtx) => bash.execute({ command: "git status", description: "Status" }, testCtx),
+            (req) => req.permission === "edit" && req.metadata?.reason === "git_control_path",
+          )
+          expect(
+            requests.filter((r) => r.permission === "edit" && r.metadata?.reason === "git_control_path"),
+          ).toHaveLength(0)
+        },
+      })
+    })
+
+    test("benign `git config user.email x` does not trigger the git-control-path ask", async () => {
+      // The existing benign-key exception: when the implicit .git/config
+      // target is workspace-internal and the key is non-dangerous, the
+      // resolved path is not recorded, so no .git-control-path ask fires.
+      // This mirrors the "ordinary git subcommand" carve-out the ADR asks
+      // for — git's own internal benign writes are not surfaced to the
+      // user.
+      await using tmp = await tmpdir(tmpConfig)
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const requests = await collectPermissionRequests(
+            (testCtx) =>
+              bash.execute({ command: "git config user.email test@example.com", description: "Set email" }, testCtx),
+            (req) => req.permission === "edit" && req.metadata?.reason === "git_control_path",
+          )
+          expect(
+            requests.filter((r) => r.permission === "edit" && r.metadata?.reason === "git_control_path"),
+          ).toHaveLength(0)
+        },
+      })
+    })
+  })
 })

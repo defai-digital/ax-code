@@ -68,6 +68,17 @@ Modes are scoped to the active directory. A nested `ax-code.json` can override t
 
 **Non-overridable protected paths:** autonomous mode also refuses to write a fixed set of policy/control-plane paths — `ax-code.json`/`ax-code.jsonc`, `.ax-code/**`, `.git/config`, and `.git/refs/**` — so the agent cannot edit its own configuration, raise its own autonomy caps, or plant git hooks. Unlike the configurable blocked-path list, these cannot be removed by project or user config.
 
+**Configurable blocked paths (default list, replaceable via `autonomy.budget.changes.blocked_paths`):** in addition to the non-overridable set above, autonomous mode hard-denies the following surface paths so secret material cannot be edited by the agent, even when the user is not present:
+
+- Secret-shaped environment files: `.env`, `.env.*` (top-level and nested).
+- A `secrets/` directory at any depth.
+- Git hooks: `.git/hooks/**`.
+- Private keys and material credentials: `*.pem`, `*.p12`, `id_rsa*`, `id_ed25519*` (any depth).
+- Tool and cloud dotfile credentials: `.npmrc`, `.pypirc`, `.netrc`, `.aws/credentials`, `credentials.json`, `.config/gcloud/**`.
+- Infrastructure surfaces: `infra/**`, `terraform/**`, `.github/workflows/**`.
+
+`.git/hooks`, `.git/config` and `.git/refs` stay hard-denied. Other `.git/` control paths such as `HEAD` and `info/` require an explicit approval (ADR-235).
+
 ### 2. Question Auto-Answer (Server-Side)
 
 When a tool asks the user a question, the Question module picks an answer immediately. It prefers options marked as recommended, default, safe, standard, common, conventional, best practice, simple, or minimal. It avoids options marked experimental, risky, dangerous, destructive, advanced, complex, rewrite, or over-engineered. If no option has a signal, it picks the first option because the question tool instructs agents to put the recommended option first.

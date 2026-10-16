@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { ScopedFlag } from "../../src/flag/scoped"
 import { Instance } from "../../src/project/instance"
 import { ProviderID } from "../../src/provider/schema"
@@ -387,6 +387,45 @@ describe("system prompt cache stability", () => {
     expect(second).toContain("manual-env")
     expect(second).not.toContain("autonomous-env")
     expect(calls).toBe(2)
+  })
+
+  test("environment cache invalidates when the local date changes without a model change (ADR-235)", async () => {
+    // SystemPrompt.environment() prints "Today's date: <local>" via
+    // toDateString. The cache key must include the local YYYY-MM-DD —
+    // otherwise a long-running run that crosses midnight keeps serving
+    // yesterday's date until the model or the autonomous flag changes.
+    const cache = {}
+    let calls = 0
+    const environment = async () => {
+      calls++
+      const d = new Date()
+      return [`today:${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`]
+    }
+    const callArgs = {
+      agent: { name: "build" } as any,
+      model: { providerID: ProviderID.make("openai"), api: { id: "gpt-5.2" } } as any,
+      format: { type: "text" } as { type: string },
+      cache,
+      skills: async () => undefined,
+      environment,
+      instructions: async () => ["rules"],
+      memory: async () => undefined,
+    }
+
+    const startOfDay = new Date(2026, 4, 15, 9, 0, 0)
+    vi.setSystemTime(startOfDay)
+    const first = await systemPrompt(callArgs)
+    expect(first).toContain("today:2026-5-15")
+    expect(calls).toBe(1)
+
+    // Same model, same cache object — only the wall clock advances.
+    vi.setSystemTime(new Date(2026, 4, 16, 0, 30, 0))
+    const second = await systemPrompt(callArgs)
+    expect(second).toContain("today:2026-5-16")
+    expect(second).not.toContain("today:2026-5-15")
+    expect(calls).toBe(2)
+
+    vi.useRealTimers()
   })
 })
 

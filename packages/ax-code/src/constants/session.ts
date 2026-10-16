@@ -116,6 +116,38 @@ export const AUTONOMOUS_BLOCKED_PATHS: readonly string[] = [
   // nested submodule layouts)
   ".git/hooks/**",
   "**/.git/hooks/**",
+  // ADR-235: sensitive credentials get the same handling `*.env` already
+  // does — a hard-deny from the blast-radius layer and an ask/deny
+  // decision from the SafetyPolicy layer. Private keys and material
+  // credentials (PEM, P12, OpenSSH id_rsa*/id_ed25519*) plus the dotfile
+  // credentials store that the npm, PyPI, and major clouds read at
+  // login (.npmrc, .pypirc, .netrc, .aws/credentials,
+  // .config/gcloud/...). `credentials.json` is the most common name for
+  // service-account key files (gcloud, GCP, generic) and is listed
+  // explicitly so a generic rename away from the cloud-specific paths
+  // still trips the block. Like the rest of this list, each entry is
+  // listed anchored and `**/`-prefixed so both top-level and nested
+  // placements trip the guard.
+  "*.pem",
+  "**/*.pem",
+  "*.p12",
+  "**/*.p12",
+  "id_rsa*",
+  "**/id_rsa*",
+  "id_ed25519*",
+  "**/id_ed25519*",
+  ".npmrc",
+  "**/.npmrc",
+  ".pypirc",
+  "**/.pypirc",
+  ".netrc",
+  "**/.netrc",
+  "credentials.json",
+  "**/credentials.json",
+  ".aws/credentials",
+  "**/.aws/credentials",
+  ".config/gcloud/**",
+  "**/.config/gcloud/**",
   // Infrastructure surfaces — already top-level by convention, kept as-is
   "infra/**",
   "terraform/**",
@@ -152,6 +184,8 @@ export const AUTONOMOUS_PROTECTED_PATHS: readonly string[] = [
   "**/.ax-code/**",
   // Git control plane: .git/config (hook/fsmonitor injection) and .git/refs
   // (history rewrite). .git/hooks is already covered by the blocked list.
+  // Other .git/ paths (HEAD, info/) get an explicit "ask" from SafetyPolicy
+  // (ADR-235).
   ".git/config",
   "**/.git/config",
   ".git/refs/**",

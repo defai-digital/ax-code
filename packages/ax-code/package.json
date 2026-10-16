@@ -152,6 +152,7 @@
     "pino": "^10.4.0",
     "remeda": "catalog:",
     "semver": "catalog:",
+    "smol-toml": "catalog:",
     "solid-js": "catalog:",
     "strip-ansi": "catalog:",
     "tree-sitter-bash": "0.25.1",

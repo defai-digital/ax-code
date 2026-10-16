@@ -63,6 +63,22 @@ export namespace SafetyPolicy {
     "**/.git/hooks",
   ] as const
 
+  // ADR-235: .git/ paths that the protected list does not already deny
+  // (for example HEAD and info/) require an explicit "ask". The protected
+  // list is checked first, so hooks, config and refs stay hard-denied.
+  const GIT_CONTROL_PATH_PATTERNS = [".git", "**/.git", ".git/**", "**/.git/**"] as const
+
+  function gitControlPathMatch(input: Input): string | undefined {
+    const paths = [input.path, ...(input.paths ?? [])].filter((item): item is string => !!item)
+    for (const path of paths) {
+      const normalized = normalizePath(path)
+      for (const pattern of GIT_CONTROL_PATH_PATTERNS) {
+        if (matchPath(normalized, normalizePath(pattern))) return pattern
+      }
+    }
+    return undefined
+  }
+
   export function decide(input: Input): Decision {
     const mode = input.mode ?? "normal"
     const protectedMatch = protectedPathMatch(input)
@@ -73,6 +89,20 @@ export namespace SafetyPolicy {
         reason: "protected_path",
         checkpointRequired: false,
         matchedRule: protectedMatch,
+      }
+    }
+
+    // ADR-235: .git control paths that are not already hard-denied above
+    // (HEAD, info/, and anything else under .git/) need an explicit ask.
+    // This never relaxes the protected list: .git/config, .git/refs and
+    // .git/hooks stay denied.
+    if (gitControlPathMatch(input)) {
+      return {
+        action: "ask",
+        risk: "high",
+        reason: "git_control_path",
+        checkpointRequired: true,
+        matchedRule: ".git/**",
       }
     }
 

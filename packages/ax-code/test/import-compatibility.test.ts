@@ -210,13 +210,176 @@ describe("CompatibilityImport MCP servers (ADR-220)", () => {
 
     const homeSpy = vi.spyOn(Global.Path, "home", "get").mockReturnValue(home.path)
     try {
+      // ADR-227: smol-toml 1.9.0 is now in the catalog, so the user-level
+      // config.toml is parsed — the docs server becomes a copy candidate
+      // (disabled) rather than a skip with the toml_parser_unavailable
+      // reason the pre-ADR-227 placeholder emitted.
       const report = await CompatibilityImport.plan({ source: "codex", directory: tmp.path, user: true })
-      const skipped = report.candidates.find((item) => item.kind === "mcp")
-      expect(skipped?.action).toBe("skip")
-      expect(skipped?.reason).toBe("toml_parser_unavailable")
+      const docs = report.candidates.find((item) => item.targetPath.endsWith("#mcp/docs"))
+      expect(docs?.action).toBe("copy")
+      expect(docs?.sourcePath).toBe(path.join(home.path, ".codex", "config.toml"))
     } finally {
       homeSpy.mockRestore()
     }
+  })
+})
+
+describe("CompatibilityImport Codex MCP servers (ADR-227)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  test("parses project .codex/config.toml mcp_servers.* into copy candidates (disabled)", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.mkdir(path.join(dir, ".codex"), { recursive: true })
+        await fs.writeFile(
+          path.join(dir, ".codex", "config.toml"),
+          [
+            "[mcp_servers.docs]",
+            'command = "npx"',
+            'args = ["-y", "@modelcontextprotocol/server-docs"]',
+            'env = { TOKEN = "${DOCS_TOKEN}", LITERAL = "literal-leak" }',
+            "startup_timeout = 1500",
+            "",
+            "[mcp_servers.disabled_server]",
+            'command = "noop"',
+            "disabled = true",
+            "",
+          ].join("\n"),
+          "utf-8",
+        )
+      },
+    })
+    const report = await CompatibilityImport.plan({ source: "codex", directory: tmp.path })
+    const mcp = report.candidates.filter((item) => item.kind === "mcp")
+    expect(mcp.length).toBe(2)
+
+    const docs = mcp.find((item) => item.targetPath.endsWith("#mcp/docs"))
+    expect(docs?.action).toBe("copy")
+    expect(docs?.sourcePath).toBe(path.join(tmp.path, ".codex", "config.toml"))
+    // Literal env values are never printed (name-only warning).
+    expect(JSON.stringify(report)).not.toContain("literal-leak")
+    expect(docs?.warnings).toContain("env_value_omitted:LITERAL")
+
+    const disabled = mcp.find((item) => item.targetPath.endsWith("#mcp/disabled_server"))
+    expect(disabled?.action).toBe("copy")
+  })
+
+  test("maps Codex URL servers with bearer_token_env_var to a {env:VAR} Authorization header", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.mkdir(path.join(dir, ".codex"), { recursive: true })
+        await fs.writeFile(
+          path.join(dir, ".codex", "config.toml"),
+          [
+            "[mcp_servers.remote]",
+            'url = "https://mcp.example.com/remote"',
+            'bearer_token_env_var = "REMOTE_TOKEN"',
+            "",
+          ].join("\n"),
+          "utf-8",
+        )
+      },
+    })
+
+    await CompatibilityImport.run({ source: "codex", directory: tmp.path, write: true })
+    const config = JSON.parse(await fs.readFile(path.join(tmp.path, "ax-code.json"), "utf-8"))
+    expect(config.mcp.remote).toEqual({
+      type: "remote",
+      url: "https://mcp.example.com/remote",
+      enabled: false,
+      headers: { Authorization: "{env:REMOTE_TOKEN}" },
+    })
+  })
+
+  test("does NOT overwrite an existing entry in the project config", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.mkdir(path.join(dir, ".codex"), { recursive: true })
+        await fs.writeFile(path.join(dir, ".codex", "config.toml"), '[mcp_servers.docs]\ncommand = "npx"\n', "utf-8")
+        await fs.writeFile(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({ mcp: { docs: { type: "local", command: ["keep-me"] } } }),
+          "utf-8",
+        )
+      },
+    })
+    const report = await CompatibilityImport.run({ source: "codex", directory: tmp.path, write: true })
+    const docs = report.candidates.find((item) => item.targetPath.endsWith("#mcp/docs"))
+    expect(docs?.action).toBe("skip")
+    expect(docs?.reason).toBe("target_exists")
+    const config = JSON.parse(await fs.readFile(path.join(tmp.path, "ax-code.json"), "utf-8"))
+    expect(config.mcp.docs).toEqual({ type: "local", command: ["keep-me"] })
+  })
+
+  test("reads home ~/.codex/config.toml only with --user", async () => {
+    await using home = await tmpdir({
+      init: async (dir) => {
+        await fs.mkdir(path.join(dir, ".codex"), { recursive: true })
+        await fs.writeFile(
+          path.join(dir, ".codex", "config.toml"),
+          '[mcp_servers.personal]\ncommand = "uvx"\nargs = ["personal-mcp"]\n',
+          "utf-8",
+        )
+      },
+    })
+    await using tmp = await tmpdir()
+    const homeSpy = vi.spyOn(Global.Path, "home", "get").mockReturnValue(home.path)
+    try {
+      const withoutUser = await CompatibilityImport.plan({ source: "codex", directory: tmp.path })
+      expect(
+        withoutUser.candidates
+          .filter((item) => item.kind === "mcp")
+          .map((item) => item.targetPath)
+          .join("\n"),
+      ).not.toContain("#mcp/personal")
+
+      const withUser = await CompatibilityImport.plan({ source: "codex", directory: tmp.path, user: true })
+      const names = withUser.candidates.filter((item) => item.kind === "mcp").map((item) => item.targetPath)
+      expect(names.join("\n")).toContain("#mcp/personal")
+    } finally {
+      homeSpy.mockRestore()
+    }
+  })
+
+  test("malformed line becomes a skipped source with the line number, not a crash", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.mkdir(path.join(dir, ".codex"), { recursive: true })
+        // 4 lines: a valid table header on line 1, an unterminated string
+        // on line 2, a closing bracket on line 3, an unquoted key on
+        // line 4. smol-toml surfaces the first failure (line 2).
+        await fs.writeFile(
+          path.join(dir, ".codex", "config.toml"),
+          ["[mcp_servers.docs]", 'command = "unterminated', "]", "key =", ""].join("\n"),
+          "utf-8",
+        )
+      },
+    })
+    const report = await CompatibilityImport.plan({ source: "codex", directory: tmp.path })
+    const mcp = report.candidates.filter((item) => item.kind === "mcp")
+    expect(mcp.length).toBe(1)
+    const skip = mcp[0]
+    expect(skip?.action).toBe("skip")
+    expect(skip?.reason).toMatch(/^invalid_source_toml(:\d+)?$/)
+  })
+
+  test("unsupported mcp shape (no command, no url) is reported as skip with reason", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.mkdir(path.join(dir, ".codex"), { recursive: true })
+        await fs.writeFile(
+          path.join(dir, ".codex", "config.toml"),
+          "[mcp_servers.broken]\nunexpected = true\n",
+          "utf-8",
+        )
+      },
+    })
+    const report = await CompatibilityImport.plan({ source: "codex", directory: tmp.path })
+    const broken = report.candidates.find((item) => item.targetPath.endsWith("#mcp/broken"))
+    expect(broken?.action).toBe("skip")
+    expect(broken?.reason).toBe("unsupported_mcp_shape")
   })
 })
 

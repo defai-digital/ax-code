@@ -1,3 +1,5 @@
+import { evaluate } from "@/permission/evaluate"
+import { Wildcard } from "@/util/wildcard"
 import { classifyDestructiveCommand, findWrappedCommand, gitSubcommand } from "./bash-destructive"
 import { stripShellQuotes } from "./bash-helpers"
 
@@ -16,11 +18,11 @@ import { stripShellQuotes } from "./bash-helpers"
  * -i, and every build/test/install command. The denial message tells the
  * model to hand the command to the build agent instead.
  *
- * Known limitation (documented in bash-impl.ts at the enforcement site): a
- * user permission rule that explicitly allows bash for the plan agent cannot
- * be detected from the tool layer, because the resolved permission policy is
- * only accessible through ctx.ask. Until that surfaces, the classifier
- * applies unconditionally for the plan agent.
+ * Known limitation closed by ADR-224: a user permission rule that explicitly
+ * allows bash for the plan agent was originally undetectable from the tool
+ * layer. bash-impl.ts now feeds the user-configured ruleset (never the
+ * built-in agent defaults) into explicitBashAllowOverride below, which can
+ * skip the classifier denial for a single matching command.
  */
 
 /** Read-only commands the plan agent may run as-is (after wrapper resolution). */
@@ -128,4 +130,37 @@ export function planReadOnlyError(denials: readonly string[]): string {
   const first = denials[0] ?? "the command is not read-only"
   const extra = denials.length > 1 ? ` (and ${denials.length - 1} more violation${denials.length > 2 ? "s" : ""})` : ""
   return `The plan agent's bash is read-only: ${first}${extra}. Hand this command to the build agent.`
+}
+
+/**
+ * ADR-224: does an explicitly USER-configured bash allow rule match this
+ * command, overriding the plan-agent classifier for this command only?
+ *
+ * `rules` comes from the user/project/managed config (`Config.get().permission`
+ * through Permission.fromConfig) — never the built-in agent defaults. The
+ * decision reuses evaluate()'s last-match-wins semantics, so a managed deny
+ * (managed config merges last, highest priority) still beats a user allow.
+ *
+ * A rule counts only when the last matching rule is an allow whose pattern
+ * names the command or a prefix of it: the pattern's first token must match
+ * the command name and must not be composed purely of wildcard characters.
+ * A bare `*` allow therefore never unlocks the classifier.
+ *
+ * Returns the matching pattern (for logging; arguments are never included)
+ * or undefined when the classifier denial must stand.
+ */
+export function explicitBashAllowOverride(
+  commandText: string,
+  rules: readonly { permission: string; pattern: string; action: "allow" | "deny" | "ask" }[],
+): string | undefined {
+  const commandName = stripShellQuotes(commandText.split(/\s+/, 1)[0] ?? "")
+  if (!commandName) return undefined
+  const rule = evaluate("bash", commandText, [...rules])
+  if (rule.action !== "allow") return undefined
+  const head = rule.pattern.split(/\s+/, 1)[0] ?? ""
+  // The pattern must name the command or a prefix: a first token made purely
+  // of wildcards (`*`, `* *`) names no command and does not count.
+  if (!head.replaceAll(/[*?]/g, "")) return undefined
+  if (!Wildcard.match(commandName, head)) return undefined
+  return rule.pattern
 }

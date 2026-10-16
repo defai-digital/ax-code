@@ -1,8 +1,15 @@
 import { describe, expect, test, vi } from "vitest"
+import fs from "fs/promises"
+import path from "path"
 import { BashTool } from "../../src/tool/bash"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
-import { classifyReadOnlyCommand, planReadOnlyError, readonlyRedirectDenial } from "../../src/tool/bash-readonly"
+import {
+  classifyReadOnlyCommand,
+  explicitBashAllowOverride,
+  planReadOnlyError,
+  readonlyRedirectDenial,
+} from "../../src/tool/bash-readonly"
 import type { Permission } from "../../src/permission"
 import { SessionID, MessageID } from "../../src/session/schema"
 
@@ -133,6 +140,160 @@ describe("planReadOnlyError", () => {
     expect(planReadOnlyError(["a", "b"])).toBe(
       "The plan agent's bash is read-only: a (and 1 more violation). Hand this command to the build agent.",
     )
+  })
+})
+
+describe("explicitBashAllowOverride (ADR-224)", () => {
+  const rule = (pattern: string, action: Permission.Action, permission = "bash") => ({ permission, pattern, action })
+
+  test("returns the pattern when an explicit allow rule names the command", () => {
+    expect(explicitBashAllowOverride("npm test", [rule("npm *", "allow")])).toBe("npm *")
+    expect(explicitBashAllowOverride("node --version", [rule("node --version", "allow")])).toBe("node --version")
+    expect(explicitBashAllowOverride("git commit -m x", [rule("git commit *", "allow")])).toBe("git commit *")
+  })
+
+  test("a bare wildcard allow does not count", () => {
+    expect(explicitBashAllowOverride("npm test", [rule("*", "allow")])).toBeUndefined()
+    expect(explicitBashAllowOverride("npm test", [rule("* *", "allow")])).toBeUndefined()
+  })
+
+  test("a pattern naming a different command does not count", () => {
+    expect(explicitBashAllowOverride("npm test", [rule("git *", "allow")])).toBeUndefined()
+    expect(explicitBashAllowOverride("npm test", [rule("* test", "allow")])).toBeUndefined()
+  })
+
+  test("an ask rule does not override the classifier", () => {
+    expect(explicitBashAllowOverride("npm test", [rule("npm *", "ask")])).toBeUndefined()
+  })
+
+  test("a later matching deny wins over an earlier allow (managed precedence)", () => {
+    expect(explicitBashAllowOverride("npm test", [rule("npm *", "allow"), rule("npm *", "deny")])).toBeUndefined()
+    expect(explicitBashAllowOverride("npm test", [rule("npm *", "allow"), rule("*", "deny")])).toBeUndefined()
+  })
+
+  test("no matching rule does not override", () => {
+    expect(explicitBashAllowOverride("npm test", [])).toBeUndefined()
+    expect(explicitBashAllowOverride("npm test", [rule("ls", "allow")])).toBeUndefined()
+  })
+})
+
+describe("plan-agent explicit allow override (ADR-224)", () => {
+  const managedConfigDir = process.env.AX_CODE_TEST_MANAGED_CONFIG_DIR!
+
+  test("an explicit user allow rule unlocks only the named command", async () => {
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+    try {
+      await using tmp = await tmpdir({
+        git: true,
+        config: {
+          model: "test/model",
+          username: "testuser",
+          permission: { bash: { "node --version": "allow" } },
+        },
+      })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const result = await bash.execute({ command: "node --version", description: "Allowed override" }, planCtx)
+          expect(result.metadata.exit).toBe(0)
+        },
+      })
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  test("a bare wildcard allow does not unlock the classifier", async () => {
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+    try {
+      await using tmp = await tmpdir({
+        git: true,
+        config: {
+          model: "test/model",
+          username: "testuser",
+          permission: { bash: "allow" },
+        },
+      })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const error = (await bash
+            .execute({ command: "node --version", description: "Wildcard allow" }, planCtx)
+            .catch((err) => err)) as Error
+          expect(error).toBeInstanceOf(Error)
+          expect(error.message).toMatch(/The plan agent's bash is read-only/)
+        },
+      })
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  test("a compound command overrides only the matching segment", async () => {
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+    try {
+      await using tmp = await tmpdir({
+        git: true,
+        config: {
+          model: "test/model",
+          username: "testuser",
+          permission: { bash: { "node --version": "allow" } },
+        },
+      })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const error = (await bash
+            .execute(
+              { command: "node --version && rm definitely-missing.txt", description: "Compound override" },
+              planCtx,
+            )
+            .catch((err) => err)) as Error
+          expect(error).toBeInstanceOf(Error)
+          expect(error.message).toMatch(/The plan agent's bash is read-only/)
+          expect(error.message).toMatch(/rm/)
+          expect(error.message).not.toMatch(/node --version/)
+        },
+      })
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  test("a managed deny wins over the user allow override", async () => {
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+    await fs.mkdir(managedConfigDir, { recursive: true })
+    await fs.writeFile(
+      path.join(managedConfigDir, "ax-code.json"),
+      JSON.stringify({ permission: { bash: { "node --version": "deny" } } }),
+    )
+    try {
+      await using tmp = await tmpdir({
+        git: true,
+        config: {
+          model: "test/model",
+          username: "testuser",
+          permission: { bash: { "node --version": "allow" } },
+        },
+      })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const error = (await bash
+            .execute({ command: "node --version", description: "Managed deny" }, planCtx)
+            .catch((err) => err)) as Error
+          expect(error).toBeInstanceOf(Error)
+          expect(error.message).toMatch(/The plan agent's bash is read-only/)
+        },
+      })
+    } finally {
+      vi.unstubAllEnvs()
+      await fs.rm(managedConfigDir, { force: true, recursive: true }).catch(() => {})
+    }
   })
 })
 

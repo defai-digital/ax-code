@@ -1,5 +1,6 @@
 import path from "path"
 import z from "zod"
+import { parse as parseToml } from "smol-toml"
 import { ConfigMarkdown } from "../config/markdown"
 import { ConfigPaths } from "../config/paths"
 import { Filesystem } from "../util/filesystem"
@@ -56,22 +57,24 @@ export namespace CompatibilityImport {
           await candidate(parsedSource, "instruction", agents, path.join(targetRoot, "instructions", "AGENTS.md")),
         )
       }
-      // Codex keeps MCP tables in ~/.codex/config.toml ([mcp_servers.*]).
-      // There is no TOML parser in this workspace's dependencies, and adding
-      // one is a dependency decision beyond this import — emit an explicit
-      // skip so the dry-run report says so instead of failing silently.
+      // ADR-227: parse Codex MCP tables from .codex/config.toml. The
+      // project file is always read; the home file only with --user
+      // (mirrors the Claude --user rule for ~/.claude.json). The same
+      // rules apply as for the Claude MCP import: disabled entries stay
+      // disabled, no overwrite of existing entries, no literal env/header
+      // values, name-only warnings. Parse errors become a skipped source
+      // with the offending line number, never a crash.
+      const codexFiles: string[] = []
+      const projectCodexToml = path.join(input.directory, ".codex", "config.toml")
+      if (await Filesystem.exists(projectCodexToml)) codexFiles.push(projectCodexToml)
       if (input.user) {
-        const codexToml = path.join(Global.Path.home, ".codex", "config.toml")
-        if (await Filesystem.exists(codexToml)) {
-          candidates.push({
-            source: parsedSource,
-            kind: "mcp",
-            action: "skip",
-            sourcePath: codexToml,
-            targetPath: mcpTarget(input.directory, "*"),
-            reason: "toml_parser_unavailable",
-          })
-        }
+        const homeCodexToml = path.join(Global.Path.home, ".codex", "config.toml")
+        if (await Filesystem.exists(homeCodexToml)) codexFiles.push(homeCodexToml)
+      }
+      if (codexFiles.length > 0) {
+        candidates.push(
+          ...(await codexMcpCandidates({ source: parsedSource, directory: input.directory, files: codexFiles })),
+        )
       }
     }
     if (parsedSource === "cursor") {
@@ -338,6 +341,172 @@ export namespace CompatibilityImport {
     return candidates
   }
 
+  // --- Codex MCP import (ADR-227) ------------------------------------------
+
+  /**
+   * Pull a 1-based line number out of a smol-toml parse error. The error
+   * message format is "TOML parse error at line N, column M" (N and M
+   * integers); the regex stays loose so a future smol-toml version that
+   * drops or renames the prefix still surfaces a useful line.
+   */
+  function extractTomlLine(error: unknown): number | undefined {
+    const message = error instanceof Error ? error.message : String(error)
+    const match = message.match(/(?:at\s+)?line\s+(\d+)/i)
+    if (!match) return undefined
+    const value = Number.parseInt(match[1], 10)
+    return Number.isFinite(value) ? value : undefined
+  }
+
+  /**
+   * Read a Codex config.toml and return either the parsed document or a
+   * failure with the offending line number. Read failures (ENOENT, EACCES)
+   * collapse to `ok: false, line: undefined` so the caller can emit a
+   * single skipped source without distinguishing them.
+   */
+  async function readCodexToml(
+    file: string,
+  ): Promise<{ ok: true; data: unknown } | { ok: false; line: number | undefined }> {
+    let text: string
+    try {
+      text = await Filesystem.readText(file)
+    } catch {
+      return { ok: false, line: undefined }
+    }
+    try {
+      return { ok: true, data: parseToml(text) }
+    } catch (error) {
+      return { ok: false, line: extractTomlLine(error) }
+    }
+  }
+
+  /** Codex stores MCP tables under a top-level `mcp_servers` table. */
+  function codexMcpTable(data: unknown): Record<string, unknown> {
+    if (!isRecord(data)) return {}
+    const table: Record<string, unknown> = {}
+    if (isRecord(data.mcp_servers)) Object.assign(table, data.mcp_servers)
+    return table
+  }
+
+  /**
+   * Map one Codex MCP server entry onto the AX Code MCP config shape.
+   * Mirrors the Claude `mapMcpServer` for `type: "local"` (command+args)
+   * and `type: "remote"` (URL), and threads the Codex-specific fields
+   * `bearer_token_env_var` (translated into an `Authorization: {env:VAR}`
+   * header — the variable NAME only, never the literal value) and
+   * `startup_timeout` (renamed to `startup_timeout_ms` so the unit is
+   * unambiguous). `disabled: true` maps to `enabled: false`; the entry
+   * is still emitted (the rule: disabled entries stay disabled).
+   */
+  function mapCodexMcpServer(raw: unknown): { server?: Record<string, unknown>; warnings?: string[]; reason?: string } {
+    if (!isRecord(raw)) return { reason: "unsupported_mcp_shape" }
+    const startupTimeoutMs = (() => {
+      const value = raw.startup_timeout
+      if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return undefined
+      return value
+    })()
+    if (typeof raw.url === "string" && raw.url.trim().length > 0) {
+      const headers: Record<string, string> = {}
+      const warnings: string[] = []
+      if (typeof raw.bearer_token_env_var === "string" && raw.bearer_token_env_var.trim().length > 0) {
+        headers["Authorization"] = `{env:${raw.bearer_token_env_var}}`
+      } else if (raw.bearer_token_env_var !== undefined && raw.bearer_token_env_var !== null) {
+        // Non-string bearer_token_env_var cannot be safely imported; warn
+        // by name only so the value is never printed.
+        warnings.push("bearer_token_env_var_omitted")
+      }
+      const server: Record<string, unknown> = {
+        type: "remote",
+        url: raw.url,
+        enabled: false,
+        ...(Object.keys(headers).length > 0 ? { headers } : {}),
+        ...(startupTimeoutMs !== undefined ? { startup_timeout_ms: startupTimeoutMs } : {}),
+      }
+      return { server, ...(warnings.length > 0 ? { warnings } : {}) }
+    }
+    if (typeof raw.command === "string" && raw.command.trim().length > 0) {
+      const args = Array.isArray(raw.args) && raw.args.every((arg) => typeof arg === "string") ? raw.args : []
+      const environment = redactMcpValues("env", raw.env)
+      const server: Record<string, unknown> = {
+        type: "local",
+        command: [raw.command, ...args],
+        enabled: false,
+        ...(Object.keys(environment.kept).length > 0 ? { environment: environment.kept } : {}),
+        ...(startupTimeoutMs !== undefined ? { startup_timeout_ms: startupTimeoutMs } : {}),
+      }
+      return {
+        server,
+        ...(environment.warnings.length > 0 ? { warnings: environment.warnings } : {}),
+      }
+    }
+    return { reason: "unsupported_mcp_shape" }
+  }
+
+  async function codexMcpCandidates(input: {
+    source: Source
+    directory: string
+    files: string[]
+  }): Promise<Candidate[]> {
+    const configFile = await projectConfigFileFor(input.directory)
+    const configText = await Filesystem.readText(configFile).catch(() => "")
+    const configData = configText.trim() ? ConfigPaths.parseJsoncOrThrow(configText, configFile) : {}
+    const existingMcp =
+      isRecord(configData) && isRecord(configData.mcp) ? new Set(Object.keys(configData.mcp)) : new Set<string>()
+    const commentsNormalized = configText.includes("//")
+
+    const candidates: Candidate[] = []
+    for (const file of input.files) {
+      const parsed = await readCodexToml(file)
+      if (!parsed.ok) {
+        candidates.push({
+          source: input.source,
+          kind: "mcp",
+          action: "skip",
+          sourcePath: file,
+          targetPath: mcpTarget(input.directory, "*"),
+          reason: parsed.line !== undefined ? `invalid_source_toml:${parsed.line}` : "invalid_source_toml",
+        })
+        continue
+      }
+      const table = codexMcpTable(parsed.data)
+      for (const [name, raw] of Object.entries(table)) {
+        const mapped = mapCodexMcpServer(raw)
+        const warnings = [...(mapped.warnings ?? []), ...(commentsNormalized ? ["config_comments_normalized"] : [])]
+        if (mapped.reason || mapped.server === undefined) {
+          candidates.push({
+            source: input.source,
+            kind: "mcp",
+            action: "skip",
+            sourcePath: file,
+            targetPath: mcpTarget(input.directory, name),
+            reason: mapped.reason ?? "unsupported_mcp_shape",
+            ...(warnings.length > 0 ? { warnings } : {}),
+          })
+          continue
+        }
+        if (existingMcp.has(name)) {
+          candidates.push({
+            source: input.source,
+            kind: "mcp",
+            action: "skip",
+            sourcePath: file,
+            targetPath: mcpTarget(input.directory, name),
+            reason: "target_exists",
+          })
+          continue
+        }
+        candidates.push({
+          source: input.source,
+          kind: "mcp",
+          action: "copy",
+          sourcePath: file,
+          targetPath: mcpTarget(input.directory, name),
+          ...(warnings.length > 0 ? { warnings } : {}),
+        })
+      }
+    }
+    return candidates
+  }
+
   /** Apply copy-action MCP candidates by merging them into the project config once. */
   async function applyMcpCandidates(directory: string, candidates: Candidate[]) {
     const bySource = new Map<string, Set<string>>()
@@ -353,11 +522,22 @@ export namespace CompatibilityImport {
 
     const servers: Record<string, unknown> = {}
     for (const [file, names] of bySource) {
-      const text = await Filesystem.readText(file).catch(() => "")
       try {
-        const table = claudeMcpTable(ConfigPaths.parseJsoncOrThrow(text, file), directory)
+        // ADR-227: .toml is Codex, JSON/JSONC is Claude. Dispatch to the
+        // matching parser so a single apply pass can fold both sources
+        // into the project config without re-reading or re-validating.
+        const isToml = file.endsWith(".toml")
+        let table: Record<string, unknown>
+        if (isToml) {
+          const parsed = await readCodexToml(file)
+          if (!parsed.ok) continue
+          table = codexMcpTable(parsed.data)
+        } else {
+          const text = await Filesystem.readText(file).catch(() => "")
+          table = claudeMcpTable(ConfigPaths.parseJsoncOrThrow(text, file), directory)
+        }
         for (const name of names) {
-          const mapped = mapMcpServer(table[name])
+          const mapped = isToml ? mapCodexMcpServer(table[name]) : mapMcpServer(table[name])
           if (mapped.server) servers[name] = mapped.server
         }
       } catch {

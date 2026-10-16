@@ -34,6 +34,46 @@ describe("SafetyPolicy", () => {
     })
   })
 
+  test("denies sensitive credential files the same way .env is denied (ADR-235)", () => {
+    // Private keys, material credentials, and the dotfile credentials
+    // stores that npm/PyPI/the major clouds read at login. Each path
+    // must trip a hard "deny" the same way .env does, with a matched
+    // rule from the protected list — so the existing blast-radius and
+    // permission paths pick the right reason without per-file special
+    // cases.
+    const cases: Array<[string, string]> = [
+      // Top-level paths trip the bare-name pattern; nested paths trip
+      // the `**/`-prefixed twin. Either way the action is `deny` with
+      // `protected_path` — the matched rule is informational, the
+      // protection is not.
+      ["server.pem", "*.pem"],
+      ["keys/server.pem", "**/*.pem"],
+      ["certs/site.p12", "**/*.p12"],
+      [".ssh/id_rsa", "**/id_rsa*"],
+      [".ssh/id_rsa-cert", "**/id_rsa*"],
+      [".ssh/id_ed25519", "**/id_ed25519*"],
+      [".ssh/id_ed25519-sk", "**/id_ed25519*"],
+      [".npmrc", ".npmrc"],
+      ["subdir/.npmrc", "**/.npmrc"],
+      [".pypirc", ".pypirc"],
+      [".netrc", ".netrc"],
+      ["service-account/credentials.json", "**/credentials.json"],
+      [".aws/credentials", ".aws/credentials"],
+      ["subdir/.aws/credentials", "**/.aws/credentials"],
+      [".config/gcloud/credentials.db", ".config/gcloud/**"],
+    ]
+    for (const [path, expectedRule] of cases) {
+      const decision = SafetyPolicy.decide({
+        mode: "autonomous",
+        permission: "edit",
+        path,
+      })
+      expect(decision.action, path).toBe("deny")
+      expect(decision.reason, path).toBe("protected_path")
+      expect(decision.matchedRule, path).toBe(expectedRule)
+    }
+  })
+
   test("denies protected directories as well as nested files", () => {
     expect(
       SafetyPolicy.decide({
@@ -324,16 +364,27 @@ describe("SafetyPolicy", () => {
     })
   })
 
-  test("denies protected git hooks paths", () => {
-    expect(
-      SafetyPolicy.decide({
-        permission: "write",
-        path: ".git/hooks/pre-commit",
-      }),
-    ).toMatchObject({
-      action: "deny",
-      reason: "protected_path",
+  test("keeps denying protected .git paths and asks for other .git control paths (ADR-235)", () => {
+    for (const path of [".git/hooks/pre-commit", ".git/config", ".git/refs/heads/main"]) {
+      const decision = SafetyPolicy.decide({ mode: "autonomous", permission: "write", path })
+      expect(decision.action, path).toBe("deny")
+      expect(decision.reason, path).toBe("protected_path")
+    }
+    for (const path of [".git/HEAD", ".git/info/exclude", "subdir/.git/HEAD"]) {
+      const decision = SafetyPolicy.decide({ mode: "autonomous", permission: "write", path })
+      expect(decision.action, path).toBe("ask")
+      expect(decision.reason, path).toBe("git_control_path")
+      expect(decision.checkpointRequired, path).toBe(true)
+    }
+  })
+  test("asks for nested .git control paths", () => {
+    const decision = SafetyPolicy.decide({
+      mode: "autonomous",
+      permission: "edit",
+      path: "subdir/.git/HEAD",
     })
+    expect(decision.action).toBe("ask")
+    expect(decision.reason).toBe("git_control_path")
   })
 
   test("evaluates custom protected paths when provided", () => {
@@ -367,7 +418,7 @@ describe("SafetyPolicy unified protected paths", () => {
   })
 
   test("still denies directory-form patterns kept as local additions", () => {
-    for (const path of ["secrets", "nested/secrets", ".git/hooks"]) {
+    for (const path of ["secrets", "nested/secrets"]) {
       const decision = SafetyPolicy.decide({
         mode: "autonomous",
         permission: "edit",
