@@ -81,22 +81,38 @@ function paintRearCar(
   const { cw, ch } = hd
   const S = (x: number, y: number) => [hd.X(cx + x * scale), hd.Y(base + y * scale)] as const
   const body = hdHex(night ? "#16181c" : "#121418")
-  const leftPx = hd.X(cx - 7.8 * scale)
-  const rightPx = hd.X(cx + 7.8 * scale)
-  const topPx = hd.Y(base - 7.4 * scale)
-  const botPx = hd.Y(base - 0.5 * scale)
-  // Cosine-blended half-width keys give the flanks a rounded sheet-metal curve
-  // instead of polygon facets; the hips are widest at y = -3.3.
+  const skyTint = hdHex("#5aa6dc")
+  const rimTint = hdHex("#5c78a0")
+  const spillTint = hdHex("#ff5030")
+  const gloss = hdHex("#e8eef6")
+  const valance = hdHex("#0b0c0f")
+  const valanceFace = hdMix(hdHex("#0b0c0f"), hdHex("#2a2d33"), 0.18)
+  const finGap = hdHex("#3a3e46")
+  const plateInk = hdHex("#17191d")
+  const plateFace = hdHex(night ? "#7c8087" : "#c8ccd2")
+  const plateBar = hdHex(night ? "#4a4e54" : "#777b81")
+  const lampHousing = hdHex("#3a0f0e")
+  const lampBand = hdHex("#d01616")
+  const lampCore = hdHex("#ff9d8e")
+  const mirrorInk = hdHex("#101216")
+  const gauss = (d: number, w: number) => Math.exp(-d * d * w)
+  // GT coupe silhouette: narrow cabin, hips flaring to 8.4 at y = -3.4,
+  // tucking back into the 7.4-wide bumper valance.
   const widthKeys: readonly (readonly [number, number])[] = [
-    [-7.3, 2.5],
-    [-6.6, 3.55],
-    [-5.85, 5.1],
-    [-4.95, 6.45],
-    [-3.9, 7.3],
-    [-3.3, 7.58],
-    [-2.3, 7.42],
-    [-1.35, 6.98],
-    [-0.85, 6.62],
+    [-7.4, 3.2],
+    [-7.05, 3.35],
+    [-6.5, 4.5],
+    [-5.9, 5.7],
+    [-5.6, 6.4],
+    [-5.0, 6.9],
+    [-4.5, 7.5],
+    [-3.9, 8.1],
+    [-3.4, 8.4],
+    [-2.6, 8.3],
+    [-2.0, 8.25],
+    [-1.4, 8.22],
+    [-0.9, 8.2],
+    [-0.78, 8.1],
   ]
   const halfWidth = (y: number): number => {
     if (y <= widthKeys[0]![0]) return widthKeys[0]![1]
@@ -110,37 +126,67 @@ function paintRearCar(
     }
     return widthKeys[widthKeys.length - 1]![1]
   }
-  const skyTint = hdHex("#5aa6dc")
-  const rimTint = hdHex("#5c78a0")
-  const spillTint = hdHex("#ff5030")
-  const gloss = hdHex("#e8eef6")
-  const gauss = (d: number, w: number) => Math.exp(-d * d * w)
+  const hipL = hd.X(cx - 8.4 * scale)
+  const hipR = hd.X(cx + 8.4 * scale)
+  const topPx = hd.Y(base - 7.4 * scale)
+  const botPx = hd.Y(base - 0.72 * scale)
+  const yCar = (y: number) => -7.4 + ((y + 0.5 - topPx) / (botPx - topPx || 1)) * 6.68
+  // Sheet-metal shading: cylinder falloff, shoulder-crease specular, deck
+  // reflections, panel seams, and occlusion in the arches and under the bumper.
   const shade = (x: number, y: number): RGB => {
-    const u = Math.max(0, Math.min(1, (x - leftPx) / (rightPx - leftPx || 1)))
-    const v = Math.max(0, Math.min(1, (y - topPx) / (botPx - topPx || 1)))
-    // Horizontal cylinder: dark flanks rolling up to a lighter crown.
+    const u = Math.max(0, Math.min(1, (x + 0.5 - hipL) / (hipR - hipL || 1)))
+    const yc = yCar(y)
+    const ax = Math.abs((u - 0.5) * 16.8)
     let color = hdDarken(body, 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(Math.PI * u)))
     if (night) {
-      // Weak cool rim light on both edges plus warm tail-light spill.
-      const rim = Math.max(0, 1 - Math.min(u, 1 - u) / 0.1)
-      color = hdMix(color, rimTint, rim * 0.3)
-      const lat = Math.max(0, (0.33 - u) / 0.33, (u - 0.67) / 0.33)
-      color = hdMix(color, spillTint, gauss(v - 0.53, 220) * Math.min(1, lat * 2.2) * 0.14)
+      // Cool rim light on the edges, warm tail-light spill on the flanks.
+      const rim = Math.max(0, 1 - Math.min(u, 1 - u) / 0.09)
+      color = hdMix(color, rimTint, rim * 0.32)
+      const lat = Math.max(0, (0.3 - u) / 0.3, (u - 0.7) / 0.3)
+      color = hdMix(color, spillTint, gauss(yc + 4, 260) * Math.min(1, lat * 2) * 0.16)
+      if (yc > -7.4 && yc < -7.28) color = hdMix(color, rimTint, 0.3)
     } else {
-      // Sun from the upper-left: shoulder and roof speculars, sky on the deck.
+      // Sun from the upper-left: a crisp shoulder-crease specular plus gloss.
       const roll = 0.35 + 0.65 * Math.sin(Math.PI * u)
-      color = hdMix(color, gloss, gauss(v - 0.41, 300) * (1 - 0.72 * u) * roll * 0.34)
-      color = hdMix(color, gloss, gauss(v - 0.05, 500) * (1 - 0.6 * u) * 0.3)
-      color = hdMix(color, skyTint, Math.max(0, 1 - Math.abs(v - 0.33) / 0.14) * 0.14)
+      color = hdMix(color, gloss, gauss(yc + 5.05, 900) * (1 - 0.72 * u) * roll * 0.42)
+      color = hdMix(color, gloss, gauss(yc + 5.5, 220) * (1 - 0.72 * u) * roll * 0.2)
+      if (yc > -7.4 && yc < -7.31 && u < 0.58) color = hdMix(color, gloss, 0.45 * roll)
     }
-    // Panel gaps: trunk shutline and the bumper split.
-    return hdDarken(color, Math.abs(v - 0.35) < 0.008 || Math.abs(v - 0.7) < 0.007 ? 0.76 : 1)
+    // Trunk deck: a sloped surface catching sky by day, lamp wash at night.
+    if (yc > -5.62 && yc < -4.82) {
+      const t = (yc + 5.62) / 0.8
+      color = hdDarken(color, 1.28 + 0.22 * (1 - t))
+      color = hdMix(color, night ? spillTint : skyTint, night ? 0.04 + 0.12 * (1 - t) : 0.1 + 0.3 * (1 - t))
+    }
+    // Upper rear fascia: a soft sky reflection that fades out by the shoulder
+    // crease, so the flanks keep their dark mass under the deck highlights.
+    color = hdMix(color, night ? spillTint : skyTint, gauss(yc + 4.5, 3.2) * (night ? 0.05 : 0.1))
+    // Panel seams: deck shutline, bumper split, and trunk-corner joints.
+    if (Math.abs(yc + 4.82) < 0.05) color = hdDarken(color, 0.68)
+    if (Math.abs(yc + 2.42) < 0.045) color = hdDarken(color, 0.72)
+    if (yc > -4.7 && yc < -2.4 && Math.abs(ax - 5.6) < 0.07) color = hdDarken(color, 0.78)
+    // Haunch swell: a soft brightening just below the shoulder crease, so the
+    // rear fender reads as a rolled sheet-metal surface. The crisp 1px crease
+    // stroke is laid over the lamps later, on the visible sheet metal only.
+    if (ax > 4.6 && ax < 8.0) {
+      const inner = Math.min(1, (ax - 4.6) / 1.1)
+      color = hdMix(color, night ? rimTint : gloss, gauss(yc + 3.35, 34) * inner * (night ? 0.08 : 0.1))
+    }
+    // Occlusion: wheel-arch gaps and the recess under the bumper.
+    if (yc > -3.9) {
+      const arch = 1 - Math.pow((ax - 6.8) / 2.0, 2) - Math.pow(yc + 2.3, 2)
+      if (arch > 0) color = hdDarken(color, 1 - 0.34 * arch)
+    }
+    if (yc > -1.15) color = hdDarken(color, 1 - 0.2 * Math.min(1, (yc + 1.15) / 0.55))
+    return color
   }
+  // Grounding: one soft contact shadow, wider than the tyres, with a very
+  // dark core pressed under them, plus a red lamp pool on the asphalt at night.
   if (shadow) {
-    const scx = hd.X(cx + 4.2 * scale)
-    const scy = hd.Y(base - 0.2 * scale)
-    const srx = cw * 12 * scale
-    const sry = ch * 1.35 * scale
+    const scx = hd.X(cx + 0.25 * scale)
+    const scy = hd.Y(base - 0.35 * scale)
+    const srx = cw * 10.5 * scale
+    const sry = ch * 0.95 * scale
     const xa = Math.max(0, Math.floor(scx - srx))
     const xb = Math.min(hd.w - 1, Math.ceil(scx + srx))
     const ya = Math.max(0, Math.floor(scy - sry))
@@ -149,129 +195,195 @@ function paintRearCar(
       for (let x = xa; x <= xb; x++) {
         const dx = (x + 0.5 - scx) / srx
         const dy = (y + 0.5 - scy) / sry
-        const d = dx * dx + dy * dy
+        const d = Math.hypot(dx, dy)
         if (d >= 1) continue
-        blendPixel(hd, x, y, [0, 0, 0], (1 - d) * (night ? 0.55 : 0.72))
+        blendPixel(hd, x, y, [0, 0, 0], Math.pow(1 - d, 1.6) * (night ? 0.52 : 0.66))
       }
     }
-    // Contact-dark core pressed right under the tyres.
-    const kx = hd.X(cx + 0.3 * scale)
-    const ky = hd.Y(base - 0.9 * scale)
-    const krx = cw * 8.4 * scale
-    const kry = ch * 0.55 * scale
-    const kxa = Math.max(0, Math.floor(kx - krx))
-    const kxb = Math.min(hd.w - 1, Math.ceil(kx + krx))
-    const kya = Math.max(0, Math.floor(ky - kry))
-    const kyb = Math.min(hd.h - 1, Math.ceil(ky + kry))
-    for (let y = kya; y <= kyb; y++) {
-      for (let x = kxa; x <= kxb; x++) {
-        const dx = (x + 0.5 - kx) / krx
-        const dy = (y + 0.5 - ky) / kry
-        const d = dx * dx + dy * dy
-        if (d >= 1) continue
-        blendPixel(hd, x, y, [0, 0, 0], (1 - d) * (night ? 0.4 : 0.5))
-      }
-    }
+    if (night) glow(hd, hd.X(cx + 0.2 * scale), hd.Y(base + 0.55 * scale), cw * 8.2 * scale, spillTint, 0.14, 0.14)
   }
-  // Wide dark tyres under the bumper with a lighter sidewall rim arc.
+  // Rear tyres: upright rounded rectangles tucked under the flares, with a
+  // faint tread band and a lighter outer sidewall. No rims show from behind.
   for (const side of [-1, 1]) {
-    const wx = hd.X(cx + side * 6.5 * scale)
-    const wy = hd.Y(base - 0.95 * scale)
-    hd.blob(wx, wy, cw * 1.55 * scale, ch * 1.3 * scale, [7, 7, 9])
-    hd.blob(wx, wy + ch * 0.13 * scale, cw * 1.02 * scale, ch * 0.62 * scale, [56, 60, 68])
+    const x0 = hd.X(cx + side * 6.2 * scale)
+    const x1 = hd.X(cx + side * 8.5 * scale)
+    const y0 = hd.Y(base - 2.5 * scale)
+    const y1 = hd.Y(base)
+    const xa = Math.max(0, Math.floor(Math.min(x0, x1)))
+    const xb = Math.min(hd.w - 1, Math.ceil(Math.max(x0, x1)))
+    const ya = Math.max(0, Math.floor(y0))
+    const yb = Math.min(hd.h - 1, Math.ceil(y1))
+    const wpx = Math.abs(x1 - x0)
+    const hpx = y1 - y0
+    const rr = Math.max(1, Math.min(wpx, hpx) * 0.18)
+    const mx = (x0 + x1) / 2
+    const my = (y0 + y1) / 2
+    for (let y = ya; y <= yb; y++) {
+      for (let x = xa; x <= xb; x++) {
+        const px = x + 0.5
+        const py = y + 0.5
+        const qx = Math.abs(px - mx) - wpx / 2 + rr
+        const qy = Math.abs(py - my) - hpx / 2 + rr
+        if (Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) > rr) continue
+        const uo = side === 1 ? (px - Math.min(x0, x1)) / (wpx || 1) : 1 - (px - Math.min(x0, x1)) / (wpx || 1)
+        let color: RGB = [10, 11, 13]
+        if (Math.abs(uo - 0.5) < 0.06) color = [36, 38, 43]
+        // Faint tread notches keep the casing from reading as flat rubber.
+        const tq = py - my
+        if (Math.abs(tq) > 0.18 && Math.floor(tq / Math.max(1, hpx * 0.14)) % 2 === 0) {
+          color = hdMix(color, [26, 28, 32], 0.6)
+        }
+        if (uo > 0.84) color = hdMix(color, [46, 50, 56], ((uo - 0.84) / 0.16) * 0.7)
+        hd.set(x, y, color)
+      }
+    }
   }
-  const outline: (readonly [number, number])[] = []
-  for (let i = 0; i <= 6; i++) {
-    const t = i / 6
-    outline.push(S(-2.5 + 5 * t, -7.3 - Math.sin(Math.PI * t) * 0.14))
-  }
-  for (let i = 1; i <= 13; i++) {
-    const y = -7.3 + (6.45 * i) / 13
-    outline.push(S(halfWidth(y), y))
-  }
-  outline.push(S(4.8, -1.02), S(0, -1.08), S(-4.8, -1.02))
-  for (let i = 13; i >= 1; i--) {
-    const y = -7.3 + (6.45 * i) / 13
-    outline.push(S(-halfWidth(y), y))
-  }
+  const outline: (readonly [number, number])[] = [S(-3.2, -7.4), S(3.2, -7.4)]
+  const railY: number[] = []
+  for (let i = 1; i <= 14; i++) railY.push(-7.05 + (6.33 * i) / 14)
+  for (const y of railY) outline.push(S(halfWidth(y), y))
+  outline.push(S(7.55, -0.74), S(0, -0.8), S(-7.55, -0.74))
+  for (let i = railY.length - 1; i >= 0; i--) outline.push(S(-halfWidth(railY[i]!), railY[i]!))
   polyFill(hd, outline, shade)
-  // Rear window: gradient glass with a faint diagonal reflection streak.
-  const gTopPx = hd.Y(base - 6.95 * scale)
-  const gBotPx = hd.Y(base - 4.98 * scale)
-  const glassTop = night ? hdHex("#0e1520") : hdHex("#1b2b3b")
-  const glassBot = night ? hdHex("#1e3246") : hdHex("#3a6076")
-  const streakGap = Math.max(10, cw * scale * 3.2)
-  polyFill(hd, [S(-2.95, -6.95), S(2.95, -6.95), S(4, -4.98), S(-4, -4.98)], (x, y) => {
-    const t = Math.max(0, Math.min(1, (y - gTopPx) / (gBotPx - gTopPx || 1)))
-    let color = hdMix(glassTop, glassBot, t)
-    if (!night) color = hdMix(color, skyTint, Math.max(0, 1 - t * 2.2) * 0.3)
-    const s = (((x - y * 1.45) % streakGap) + streakGap) % streakGap
-    if (s < streakGap * 0.16) return hdMix(color, [214, 228, 240], night ? 0.07 : 0.13)
-    if (s > streakGap * 0.55 && s < streakGap * 0.64) return hdMix(color, [214, 228, 240], night ? 0.045 : 0.08)
-    return color
+  // Matte bumper valance with a six-fin diffuser and twin round chrome tips.
+  polyFill(hd, [S(-7.35, -2.4), S(7.35, -2.4), S(7.3, -0.74), S(-7.3, -0.74)], (_x, y) => {
+    const yc = yCar(y)
+    // Matte grey-black face, a split line above the diffuser, and a contact
+    // gap where the valance meets the road.
+    if (yc > -1.62 && yc < -1.42) return hdHex("#050506")
+    if (yc > -1.0) return hdDarken(valance, 0.62)
+    return hdDarken(valanceFace, yc > -1.2 ? 0.86 : 1)
   })
-  // Rear wing: two uprights, slim blade with a lit top edge, angled end plates.
-  for (const side of [-1, 1]) {
-    polyFill(hd, [S(side * 2.1, -5.6), S(side * 2.42, -5.6), S(side * 2.26, -4.05), S(side * 1.96, -4.05)], () =>
-      hdDarken(body, 0.75),
+  for (let k = -2.5; k <= 2.5; k++) {
+    polyFill(hd, [S(k - 0.1, -1.46), S(k + 0.1, -1.46), S(k + 0.08, -0.72), S(k - 0.08, -0.72)], () => finGap)
+    polyFill(hd, [S(k - 0.05, -1.46), S(k + 0.05, -1.46), S(k + 0.04, -0.72), S(k - 0.04, -0.72)], () =>
+      hdDarken(valanceFace, 0.86),
     )
   }
-  polyFill(hd, [S(-11.4, -5.32), S(11.4, -5.32), S(10.85, -5.62), S(-10.85, -5.62)], () =>
-    hdDarken(body, night ? 0.72 : 0.88),
-  )
-  polyFill(hd, [S(-11.35, -5.33), S(11.35, -5.33), S(11.3, -5.25), S(-11.3, -5.25)], () =>
-    hdHex(night ? "#4a5058" : "#8a929c"),
-  )
-  polyFill(hd, [S(-1, -5.46), S(1, -5.46), S(1, -5.4), S(-1, -5.4)], () => hdHex("#e21818"))
   for (const side of [-1, 1]) {
-    polyFill(hd, [S(side * 11.05, -5.9), S(side * 11.5, -5.72), S(side * 11.3, -4.92), S(side * 10.82, -5.1)], () =>
-      hdDarken(body, 0.8),
-    )
-  }
-  // Wrap-around LED lamps following the hip curve: dark red base, hot strip.
-  const tail = hdHex("#c01414")
-  const hot = hdHex("#ff6a54")
-  for (const side of [-1, 1]) {
-    const outer: (readonly [number, number])[] = []
-    const inner: (readonly [number, number])[] = []
-    for (let i = 0; i <= 6; i++) {
-      const y = -3.95 + (1.15 * i) / 6
-      outer.push(S(side * (halfWidth(y) - 0.3), y))
-      inner.push(S(side * 2.1, y))
+    const ex = hd.X(cx + side * 2.6 * scale)
+    const ey = hd.Y(base - 1.3 * scale)
+    // Chrome ring: the tip's outer lip catches the light, the bore stays black.
+    hd.disk(ex, ey, Math.max(1, cw * 0.46 * scale), [184, 188, 196])
+    hd.disk(ex, ey, Math.max(1, cw * 0.36 * scale), [26, 28, 30])
+    hd.disk(ex, ey, Math.max(0.6, cw * 0.28 * scale), [12, 12, 14])
+    // Only a small ember sits inside the bore; the ring itself never fills solid.
+    if (exhaust) {
+      hd.disk(ex, ey, Math.max(0.6, cw * 0.2 * scale), hdHex("#ff9a3c"))
+      glow(hd, ex, ey, Math.max(2, cw * 1.1 * scale), hdHex("#ff8a30"), 0.3, 0.6)
     }
-    polyFill(hd, [...outer, ...inner.reverse()], () => tail)
+  }
+  // Ducktail lip on the deck's rear edge, then the small chrome badge above
+  // the lamp band. Both stay clear of the dark centre sample zone.
+  polyFill(hd, [S(-7.42, -4.88), S(7.42, -4.88), S(7.34, -4.68), S(-7.34, -4.68)], (_x, y) => {
+    const t = (y + 0.5 - hd.Y(base - 4.88 * scale)) / (hd.Y(base - 4.68 * scale) - hd.Y(base - 4.88 * scale) || 1)
+    return hdMix(hdDarken(body, night ? 1.05 : 1.32), night ? spillTint : skyTint, (1 - t) * (night ? 0.1 : 0.3))
+  })
+  polyFill(hd, [S(-7.34, -4.68), S(7.34, -4.68), S(7.34, -4.6), S(-7.34, -4.6)], () => hdDarken(body, 0.55))
+  polyFill(hd, [S(-7.34, -4.6), S(7.34, -4.6), S(7.34, -4.56), S(-7.34, -4.56)], () =>
+    hdMix(hdDarken(body, 1.1), night ? rimTint : gloss, night ? 0.16 : 0.24),
+  )
+  hd.disk(hd.X(cx), hd.Y(base - 4.72 * scale), Math.max(0.8, cw * 0.2 * scale), [150, 156, 164])
+  // Licence plate recess: a dark frame, a light face, and two text bars. The
+  // whole plate stays below y = -2.9 so the dark centre sample band is intact.
+  polyFill(hd, [S(-2.2, -2.9), S(2.2, -2.9), S(2.2, -2.15), S(-2.2, -2.15)], () => plateInk)
+  polyFill(hd, [S(-2.1, -2.84), S(2.1, -2.84), S(2.1, -2.21), S(-2.1, -2.21)], () => plateFace)
+  polyFill(hd, [S(-1.42, -2.72), S(1.42, -2.72), S(1.42, -2.6), S(-1.42, -2.6)], () => plateBar)
+  polyFill(hd, [S(-1.42, -2.44), S(1.42, -2.44), S(1.42, -2.32), S(-1.42, -2.32)], () => plateBar)
+  // Shoulder crease: a crisp 1px specular running along the top of each rear
+  // haunch, from the window edge out to the fender crown. Drawn before the
+  // lamps so they overpaint its outer ends, and clipped to the shell so it
+  // never floats past the fender crown or the lamp housing.
+  const hipSpan = hipR - hipL || 1
+  for (const side of [-1, 1]) {
+    polyFill(hd, [S(side * 4.6, -4.3), S(side * 8.0, -4.3), S(side * 8.0, -4.2), S(side * 4.6, -4.2)], (x) => {
+      const u = (x + 0.5 - hipL) / hipSpan
+      const ax = Math.abs((u - 0.5) * 16.8)
+      if (ax < 4.6 || ax > 8.0 || ax > halfWidth(-4.25)) return null
+      const fade = 1 - Math.max(0, (ax - 7.4) / 0.6)
+      return hdMix(body, night ? rimTint : gloss, (night ? 0.4 : 0.58) * fade)
+    })
+  }
+  // Wrap-around GT lamps following the hip curve: dark red housing, bright
+  // band, hot white-pink core. Thin at the centre, taller at the outer ends.
+  const lampBody = (
+    side: number,
+    innerX: number,
+    yTIn: number,
+    yTOut: number,
+    yBIn: number,
+    yBOut: number,
+    inset: number,
+    color: RGB,
+  ) => {
+    const yM = (yTOut + yBOut) / 2
     polyFill(
       hd,
       [
-        S(side * (halfWidth(-3.8) - 0.52), -3.8),
-        S(side * 2.28, -3.8),
-        S(side * 2.28, -3.35),
-        S(side * (halfWidth(-3.35) - 0.52), -3.35),
+        S(side * innerX, yTIn),
+        S(side * (halfWidth(yTOut) - inset), yTOut),
+        S(side * (halfWidth(yM) - inset), yM),
+        S(side * (halfWidth(yBOut) - inset), yBOut),
+        S(side * innerX, yBIn),
       ],
-      () => hot,
-    )
-  }
-  polyFill(hd, [S(0, -3.6), S(0.4, -3.35), S(0, -3.1), S(-0.4, -3.35)], () => [186, 190, 198])
-  polyFill(hd, [S(-1.75, -2.98), S(1.75, -2.98), S(1.75, -2.2), S(-1.75, -2.2)], () => hdDarken(body, 0.6))
-  polyFill(hd, [S(-1.55, -2.88), S(1.55, -2.88), S(1.55, -2.3), S(-1.55, -2.3)], () => hdHex("#23262c"))
-  // Rear diffuser with fins and dual round exhaust tips.
-  polyFill(hd, [S(-4.7, -1.42), S(4.7, -1.42), S(4.2, -0.6), S(-4.2, -0.6)], () => hdHex("#08090b"))
-  for (let k = -1.5; k <= 1.5; k++) {
-    polyFill(
-      hd,
-      [S(k * 1.55 - 0.11, -1.4), S(k * 1.55 + 0.11, -1.4), S(k * 1.55 + 0.09, -0.66), S(k * 1.55 - 0.09, -0.66)],
-      () => hdHex("#1f2228"),
+      () => color,
     )
   }
   for (const side of [-1, 1]) {
-    const ex = hd.X(cx + side * 3.4 * scale)
-    const ey = hd.Y(base - 0.85 * scale)
-    hd.disk(ex, ey, Math.max(1, cw * 0.5 * scale), [186, 190, 196])
-    hd.disk(ex, ey, Math.max(0.8, cw * 0.27 * scale), exhaust ? hdHex("#ff9a3c") : [12, 12, 14])
+    lampBody(side, 1.7, -4.0, -4.46, -3.6, -3.52, 0.42, lampHousing)
+    lampBody(side, 1.84, -3.92, -4.36, -3.68, -3.6, 0.58, lampBand)
+    lampBody(side, 1.95, -3.85, -4.24, -3.73, -4.1, 0.68, lampCore)
   }
-  const glowR = cw * (night ? 1.7 : 0.8) * scale
-  glow(hd, hd.X(cx - 4.2 * scale), hd.Y(base - 3.2 * scale), glowR, tail, night ? 0.42 : 0.16, 0.5)
-  glow(hd, hd.X(cx + 4.2 * scale), hd.Y(base - 3.2 * scale), glowR, tail, night ? 0.42 : 0.16, 0.5)
+  polyFill(hd, [S(-1.72, -4.24), S(1.72, -4.24), S(1.72, -4.12), S(-1.72, -4.12)], () =>
+    hdMix(lampBand, lampCore, 0.25),
+  )
+  // Rear window: tinted trapezoid glass, vertical gradient, a diagonal
+  // reflection streak, and a thin lighter top edge.
+  const glassTop = night ? hdHex("#0a0f16") : hdHex("#131b24")
+  const glassBot = night ? hdHex("#141d28") : hdHex("#2e4252")
+  const gTopPx = hd.Y(base - 7.02 * scale)
+  const gBotPx = hd.Y(base - 5.62 * scale)
+  const streakGap = Math.max(10, cw * scale * 3.2)
+  polyFill(hd, [S(-3.0, -7.02), S(3.0, -7.02), S(3.9, -5.62), S(-3.9, -5.62)], (x, y) => {
+    const t = Math.max(0, Math.min(1, (y + 0.5 - gTopPx) / (gBotPx - gTopPx || 1)))
+    if (t < 0.06) return hdMix(hdMix(glassTop, glassBot, t), [130, 150, 170], night ? 0.18 : 0.35)
+    const color = hdMix(glassTop, glassBot, t)
+    const s = (((x - y * 1.35) % streakGap) + streakGap) % streakGap
+    if (s < streakGap * 0.15) return hdMix(color, [208, 224, 236], night ? 0.06 : 0.13)
+    if (s > streakGap * 0.55 && s < streakGap * 0.65) return hdMix(color, [208, 224, 236], night ? 0.04 : 0.08)
+    return color
+  })
+  // C-pillars frame the tinted glass and connect the cabin to the rear deck.
+  for (const side of [-1, 1]) {
+    // C-pillar quarter: clearly lighter than the glass so the cabin silhouette
+    // reads against the window, brightest on the sun side by day.
+    polyFill(hd, [S(side * 3.0, -6.82), S(side * 3.86, -6.34), S(side * 3.92, -5.72), S(side * 3.0, -5.64)], () =>
+      hdMix(hdDarken(body, night ? 1.5 : 3.0), night ? rimTint : gloss, night ? 0.12 : side < 0 ? 0.22 : 0.12),
+    )
+  }
+  polyFill(hd, [S(-6.4, -5.88), S(6.4, -5.88), S(6.4, -5.62), S(-6.4, -5.62)], () => hdDarken(body, 0.85))
+  polyFill(hd, [S(-6.35, -5.88), S(6.35, -5.88), S(6.35, -5.79), S(-6.35, -5.79)], () =>
+    hdHex(night ? "#3c424a" : "#67717d"),
+  )
+  for (const side of [-1, 1]) {
+    polyFill(hd, [S(side * 6.4, -6.32), S(side * 6.58, -6.2), S(side * 6.58, -5.55), S(side * 6.4, -5.55)], () =>
+      hdDarken(body, 0.75),
+    )
+  }
+  // Door mirrors on the C-pillar edges with a faint rim light.
+  for (const side of [-1, 1]) {
+    polyFill(
+      hd,
+      [S(side * 5.15, -6.08), S(side * 5.92, -6.2), S(side * 5.98, -5.76), S(side * 5.35, -5.7)],
+      () => mirrorInk,
+    )
+    polyFill(hd, [S(side * 5.2, -6.14), S(side * 5.86, -6.22), S(side * 5.88, -6.11), S(side * 5.26, -6.04)], () =>
+      hdMix(mirrorInk, rimTint, night ? 0.4 : 0.3),
+    )
+  }
+  const glowR = cw * (night ? 2.3 : 1.0) * scale
+  glow(hd, hd.X(cx - 4.6 * scale), hd.Y(base - 4.0 * scale), glowR, lampBand, night ? 0.5 : 0.16, 0.5)
+  glow(hd, hd.X(cx + 4.6 * scale), hd.Y(base - 4.0 * scale), glowR, lampBand, night ? 0.5 : 0.16, 0.5)
 }
 
 /** Concrete barrier along the right edge. One filled strip, so the face stays smooth. */
