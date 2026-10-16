@@ -11,6 +11,7 @@ import { existsSync, readFileSync } from "node:fs"
 import { rm } from "node:fs/promises"
 import path from "node:path"
 import { WebMcpApprovals } from "./webmcp-approvals"
+import { ProcessRegistry } from "../runtime/process-registry"
 import { Config } from "../config/config"
 import { Log } from "../util/log"
 import { Env } from "../util/env"
@@ -350,6 +351,10 @@ export namespace MCP {
           error: isErrnoException(error) ? error.code : toErrorMessage(error),
         })
       }
+      // ADR-209: the registry entry for a local stdio server is removed on
+      // every close path so the startup sweep only ever sees hard-dead
+      // owners' children. Unknown (remote) pids are a no-op here.
+      void ProcessRegistry.unregister(pid, "mcp")
     }
     await target.close().catch((error) => {
       log.debug("failed to close MCP object", { mcpName, context, error })
@@ -627,7 +632,11 @@ export namespace MCP {
   // connected at startup (the common case) would stall on reconnect.
   function registerClientOnClose(name: string, client: MCPClient, owner: McpState) {
     const s = owner
+    // Capture the stdio child's pid while the transport is still reachable;
+    // the registry entry must also disappear when the server dies on its own.
+    const registryPid = processTreePid(client as unknown as ClosableMcpObject)
     client.onclose = Instance.bind(() => {
+      if (registryPid !== undefined) void ProcessRegistry.unregister(registryPid, "mcp")
       void Promise.resolve()
         .then(() => {
           // Capture the owning state instead of calling state() here. A late
@@ -1209,6 +1218,13 @@ export namespace MCP {
         }
         await withTimeout(client.connect(transport), connectTimeout)
         rememberClientTransport(client, transport)
+        // ADR-209: record the stdio server for the startup orphan sweep.
+        // The SDK child is not a process-group leader (pgid 0), so a sweep
+        // signals it by pid only. Commands are stored as basename only.
+        const stdioPid = processTreePid(transport)
+        if (stdioPid !== undefined) {
+          void ProcessRegistry.register({ pid: stdioPid, kind: "mcp", command: resolvedCommand })
+        }
         registerNotificationHandlers(client, key, owner)
         const close = client.close.bind(client)
         client.close = async () => {

@@ -1,6 +1,13 @@
 import path from "path"
 import z from "zod"
 import { parseJsonStrict } from "../../util/json-value"
+import { ProcessRegistry } from "../../runtime/process-registry"
+
+export type DoctorCheck = {
+  name: string
+  status: "ok" | "warn" | "fail"
+  detail: string
+}
 
 const WindowsProcess = z.object({
   ProcessId: z.number().int().nonnegative(),
@@ -69,4 +76,81 @@ function isReadOnly(args: string[]) {
     return arg === "doctor" || arg === "tui-backend"
   }
   return false
+}
+
+const REGISTERED_ENTRIES_SHOWN = 8
+
+/**
+ * Child-process registry row for `ax-code doctor` (ADR-209): lists the
+ * children registered by live ax-code instances, any orphaned or
+ * unverifiable entries the startup sweep left behind, and what this
+ * process's own startup sweep did.
+ */
+export async function getDoctorProcessRegistryCheck(input?: {
+  platform?: NodeJS.Platform
+  list?: () => Promise<ProcessRegistry.ListedProcess[]>
+  lastSweep?: () => { report: ProcessRegistry.SweepReport; at: number } | undefined
+}): Promise<DoctorCheck> {
+  const platform = input?.platform ?? process.platform
+  const list = input?.list ?? (() => ProcessRegistry.list({ platform }))
+  const lastSweep = input?.lastSweep ?? ProcessRegistry.lastSweepReport
+
+  const entries = await list()
+  const sweep = lastSweep()
+  const details: string[] = []
+  let status: DoctorCheck["status"] = "ok"
+
+  if (entries.length === 0) {
+    details.push(platform === "win32" ? "child process registry disabled (windows)" : "no registered child processes")
+  } else {
+    const perKind = new Map<string, number>()
+    for (const item of entries) perKind.set(item.entry.kind, (perKind.get(item.entry.kind) ?? 0) + 1)
+    const counts = [...perKind.entries()].map(([kind, count]) => `${count} ${kind}`).join(", ")
+    const orphans = entries.filter((item) => item.state === "orphan")
+    const unverified = entries.filter((item) => item.state === "unverified")
+    const stale = entries.filter((item) => item.state === "dead" || item.state === "pid-reused")
+    const live = entries.filter((item) => item.state === "live-owner")
+    details.push(
+      `${entries.length} registered child process(es): ${counts} — ` +
+        (live.length === entries.length
+          ? "all owners alive"
+          : `${live.length} with live owners, ${orphans.length} orphaned, ${unverified.length} unverifiable, ${stale.length} stale`),
+    )
+    const shown = entries.slice(0, REGISTERED_ENTRIES_SHOWN)
+    const hidden = entries.length - shown.length
+    details.push(
+      shown
+        .map((item) => {
+          const label = `${item.entry.kind} pid ${item.entry.pid} (${item.entry.commandBase})`
+          return item.state === "orphan" || item.state === "unverified" ? `${item.state}: ${label}` : label
+        })
+        .join(", ") + (hidden > 0 ? `, +${hidden} more` : ""),
+    )
+    if (orphans.length + unverified.length > 0) {
+      status = "warn"
+      details.push(
+        "orphaned or unverifiable entries remain — the startup sweep did not clear them; inspect these processes before removing the state directory",
+      )
+    }
+  }
+
+  if (sweep) {
+    const { report } = sweep
+    const summary =
+      `startup sweep: ${report.killed} killed, ${report.alreadyDead} already dead, ` +
+      `${report.pidReused} pid-reuse skipped, ${report.unverified} unverified, ${report.keptLiveOwner} kept (live owners)`
+    details.push(report.skipped ? `${summary} (skipped on windows)` : summary)
+    if (report.errors.length > 0) {
+      status = "warn"
+      details.push(`sweep reported ${report.errors.length} error(s)`)
+    }
+  } else if (platform !== "win32") {
+    details.push("startup sweep not recorded in this process")
+  }
+
+  return {
+    name: "Child processes",
+    status,
+    detail: details.join("; "),
+  }
 }

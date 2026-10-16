@@ -26,6 +26,7 @@ import { Shell } from "@/shell/shell"
 import { BunProc } from "@/bun"
 import { NpmManager, packageManagerKind, toolRunner } from "@/bun/package-manager"
 import { Log } from "@/util/log"
+import { ProcessRegistry } from "@/runtime/process-registry"
 
 export const LspEvent = {
   Updated: BusEvent.define("lsp.updated", z.object({})),
@@ -74,6 +75,16 @@ configureCodeIntelHost({
     toolRunner: () => toolRunner({ bunExecutable: BunProc.which() }),
   },
   killTree: (proc, opts) => Shell.killTree(proc, opts),
+  // ADR-209: LSP children spawned through the package's launch funnel are
+  // registered for the core's startup orphan sweep.
+  childProcesses: {
+    register: (child) => {
+      void ProcessRegistry.register({ ...child, kind: "lsp" })
+    },
+    unregister: (pid) => {
+      void ProcessRegistry.unregister(pid, "lsp")
+    },
+  },
   listFiles: (input) => Ripgrep.files(input),
   // Both root-marker and workspace-generation invalidation react to the same
   // file-watcher event; they differ only in what the consumer does with it.

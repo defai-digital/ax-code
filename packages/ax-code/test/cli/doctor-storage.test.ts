@@ -118,6 +118,47 @@ describe("getDoctorDatabaseCheck", () => {
     expect(check.detail).toContain("cannot inspect database files")
     expect(check.detail).toContain("ax-code.db: permission denied")
   })
+
+  test("warns and reports the rollback journal on a network filesystem", async () => {
+    const check = await getDoctorDatabaseCheck({
+      databasePath: "/mnt/nfs/ax-code/ax-code.db",
+      exists: async (target) => target === "/mnt/nfs/ax-code/ax-code.db",
+      env: {},
+      isNetworkFilesystem: () => true,
+    })
+
+    expect(check.status).toBe("warn")
+    expect(check.detail).toContain("data directory is on a network filesystem")
+    expect(check.detail).toContain("journal DELETE")
+    expect(check.detail).toContain("WAL is unsafe over network mounts")
+  })
+
+  test("reports the AX_CODE_SQLITE_JOURNAL override", async () => {
+    const check = await getDoctorDatabaseCheck({
+      databasePath: "/tmp/ax-code/ax-code.db",
+      exists: async () => false,
+      env: { AX_CODE_SQLITE_JOURNAL: "truncate" },
+      isNetworkFilesystem: () => false,
+    })
+
+    expect(check.status).toBe("ok")
+    expect(check.detail).toContain("journal TRUNCATE")
+    expect(check.detail).toContain("AX_CODE_SQLITE_JOURNAL override")
+  })
+
+  test("keeps WAL and stays ok when network detection fails", async () => {
+    const check = await getDoctorDatabaseCheck({
+      databasePath: "/tmp/ax-code/ax-code.db",
+      exists: async () => false,
+      isNetworkFilesystem: () => {
+        throw new Error("EPERM")
+      },
+    })
+
+    expect(check.status).toBe("ok")
+    expect(check.detail).toContain("journal WAL")
+    expect(check.detail).not.toContain("network filesystem")
+  })
 })
 
 function createHealthyDatabase(file: string, rows = 500) {

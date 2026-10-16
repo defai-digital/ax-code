@@ -349,6 +349,7 @@ describe("cli doctor machine contract", () => {
       "legacy-render-flags",
       "feature-flags",
       "db-integrity",
+      "child-processes",
     ])
     for (const id of DOCTOR_CHECK_IDS) expect(id).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/)
   })

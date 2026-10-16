@@ -119,6 +119,14 @@ export type CodeIntelHost = {
   runtime: CodeIntelRuntime
   // Kill a process tree (graceful SIGTERM with escalation).
   killTree(proc: KillableProcess, opts?: { exited?: () => boolean; signal?: NodeJS.Signals | number }): Promise<void>
+  // Optional child-process registry (ADR-209 in the core host): notified
+  // when an LSP child spawns (POSIX: detached, its own process-group
+  // leader) and when its streams close. Best effort; hosts without a
+  // registry simply omit it.
+  childProcesses?: {
+    register(child: { pid: number; pgid: number; command: string }): void
+    unregister(pid: number): void
+  }
   // Enumerate workspace files (relative paths), used to probe languages.
   listFiles(input: { cwd: string; limit: number }): AsyncIterable<string>
   // Subscribe to project root marker file changes (package.json, lockfiles...).

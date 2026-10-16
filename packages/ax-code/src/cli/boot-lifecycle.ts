@@ -2,6 +2,8 @@ import { DiagnosticLog } from "../debug/diagnostic-log"
 import { Log } from "../util/log"
 import { isHarmlessInterrupt } from "../util/harmless-interrupt"
 import { initNetworkEnv } from "../util/network-env"
+import { toErrorMessage } from "../util/error-message"
+import { ProcessRegistry } from "../runtime/process-registry"
 
 // Process-lifecycle machinery shared by cli/boot.ts (full CLI) and
 // cli/boot-node.ts (doctor/generate-only build): forced-exit timer and the
@@ -58,4 +60,11 @@ export function hooks() {
   initNetworkEnv()
   process.on("unhandledRejection", onUnhandledRejection)
   process.on("uncaughtException", onUncaughtException)
+  // ADR-209: sweep child-process registry entries whose owner died hard
+  // (OOM, SIGKILL, a node:ffi crash). Fire-and-forget with a catch: the
+  // sweep must never block or fail startup, and it is a no-op on Windows
+  // and when the registry directory does not exist yet.
+  void ProcessRegistry.sweepOrphans().catch((error) => {
+    Log.Default.warn("child process orphan sweep failed", { error: toErrorMessage(error) })
+  })
 }

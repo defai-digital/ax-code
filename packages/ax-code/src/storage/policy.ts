@@ -1,3 +1,7 @@
+import { isNetworkFilesystem } from "./network-fs"
+
+export type SqliteJournalMode = "WAL" | "DELETE" | "TRUNCATE"
+
 export const DurableStoragePolicy = {
   // Keep SQLite's built-in WAL as the batching/durability boundary instead
   // of introducing an app-level in-memory database with background sync.
@@ -19,9 +23,47 @@ export const DurableStoragePolicy = {
   preMigrationBackupsKept: 2,
 } as const
 
-export function describeDurableStoragePolicy() {
+// ADR-210: WAL's shared-memory -shm sidecar is unsafe over NFS/SMB, so a
+// database on a network filesystem uses a rollback journal instead.
+// AX_CODE_SQLITE_JOURNAL (wal|delete|truncate) overrides the detection.
+// Detection failure keeps WAL (the DurableStoragePolicy default).
+export function resolveSqliteJournalMode(
+  input: {
+    path?: string
+    env?: Record<string, string | undefined>
+    isNetworkFilesystem?: (target: string) => boolean
+  } = {},
+): SqliteJournalMode {
+  const override = parseSqliteJournalOverride((input.env ?? process.env).AX_CODE_SQLITE_JOURNAL)
+  if (override) return override
+  if (input.path) {
+    const probe = input.isNetworkFilesystem ?? isNetworkFilesystem
+    try {
+      if (probe(input.path)) return "DELETE"
+    } catch {
+      // Detection failure keeps WAL.
+    }
+  }
+  return DurableStoragePolicy.journalMode
+}
+
+export function parseSqliteJournalOverride(value: string | undefined): SqliteJournalMode | undefined {
+  switch (value?.trim().toLowerCase()) {
+    case "wal":
+      return "WAL"
+    case "delete":
+      return "DELETE"
+    case "truncate":
+      return "TRUNCATE"
+    default:
+      return undefined
+  }
+}
+
+export function describeDurableStoragePolicy(input?: { journalMode?: SqliteJournalMode }) {
+  const journalMode = input?.journalMode ?? DurableStoragePolicy.journalMode
   return [
-    `SQLite policy: journal ${DurableStoragePolicy.journalMode}`,
+    `SQLite policy: journal ${journalMode}`,
     `synchronous ${DurableStoragePolicy.synchronous}`,
     `busy timeout ${DurableStoragePolicy.busyTimeoutMs}ms`,
     `WAL autocheckpoint ${DurableStoragePolicy.walAutoCheckpointPages} pages`,

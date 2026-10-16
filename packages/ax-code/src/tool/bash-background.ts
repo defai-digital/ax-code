@@ -8,6 +8,7 @@ import { Bus } from "@/bus"
 import { NotificationEvent } from "@/notification/events"
 import { TOAST_DURATION_LONG_MS } from "@/constants/server"
 import { abortError } from "@/util/abort"
+import { ProcessRegistry } from "@/runtime/process-registry"
 import { BackgroundNotification } from "../session/background-notification"
 
 const log = Log.create({ service: "bash-background" })
@@ -169,6 +170,14 @@ export namespace BackgroundShell {
     shells.set(id, entry)
     retentionTimer ??= setInterval(expireFinished, 60_000).unref()
 
+    // ADR-209: record the shell for the startup orphan sweep. Background
+    // shells are spawned detached, so the child is its own group leader and
+    // a sweep signals the whole group. Best effort; failures are logged
+    // inside the registry and never affect the shell.
+    if (proc.pid) {
+      void ProcessRegistry.register({ pid: proc.pid, pgid: proc.pid, kind: "shell", command: entry.command })
+    }
+
     // Seed before any stream listener can fire so the adopted history stays
     // ordered ahead of live output. The spool enforces its own size caps.
     if (input.seedOutput) entry.spool.append(input.seedOutput)
@@ -261,6 +270,7 @@ export namespace BackgroundShell {
 
   function finish(entry: Entry, status: Status, exitCode: number | null) {
     if (entry.status !== "running") return
+    const registryPid = entry.proc?.pid
     entry.exited = true
     entry.status = status
     entry.exitCode = exitCode
@@ -300,6 +310,9 @@ export namespace BackgroundShell {
     }
     entry.observers.clear()
     evictFinished(entry.sessionID)
+    // ADR-209: every terminal state (completed, failed, killed) removes the
+    // registry entry so only a hard owner death leaves one behind.
+    if (registryPid) void ProcessRegistry.unregister(registryPid, "shell")
     log.info("background shell finished", { id: entry.id, status, exitCode })
   }
 

@@ -1,4 +1,4 @@
-import { codeIntelHost } from "./host"
+import { codeIntelHost, codeIntelHostMaybe } from "./host"
 import { type ProcessChild, type ProcessOptions } from "@ax-code/util/process"
 import type { ChildProcessWithoutNullStreams } from "child_process"
 import { Process } from "./internal/process"
@@ -43,9 +43,14 @@ export function spawn(cmd: string, argsOrOpts?: string[] | SpawnOptions, opts?: 
   else proc.stderr.resume() // Unread stderr can block the next RPC response.
 
   liveChildren.add(proc)
+  // ADR-209 (core host): record the child for the startup orphan sweep.
+  // Uses the maybe-variant so an unconfigured host never breaks a spawn.
+  const registry = codeIntelHostMaybe()?.childProcesses
+  if (registry && proc.pid) registry.register({ pid: proc.pid, pgid: proc.pid, command: cmd })
   proc.once("close", () => {
     liveChildren.delete(proc)
     if (onStderr) proc.stderr.off("data", onStderr)
+    if (registry && proc.pid) registry.unregister(proc.pid)
   })
 
   return proc

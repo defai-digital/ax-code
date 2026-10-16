@@ -18,7 +18,7 @@ import { Flag } from "../flag/flag"
 import { iife } from "@/util/iife"
 import { sleep as sleepDefault } from "@/util/timeout"
 import { init } from "#db"
-import { DurableStoragePolicy } from "./policy"
+import { DurableStoragePolicy, resolveSqliteJournalMode } from "./policy"
 import { Shard } from "./shard"
 import { isCorruptError as isCorruptErrorImpl, raiseCorruptDatabaseError } from "./corrupt"
 import {
@@ -125,7 +125,9 @@ export namespace Database {
     path?: string
   }) {
     input.run(`PRAGMA busy_timeout = ${DurableStoragePolicy.busyTimeoutMs}`)
-    input.run(`PRAGMA journal_mode = ${DurableStoragePolicy.journalMode}`)
+    // ADR-210: DELETE (rollback journal) instead of WAL when the database
+    // sits on a network filesystem; AX_CODE_SQLITE_JOURNAL overrides.
+    input.run(`PRAGMA journal_mode = ${resolveSqliteJournalMode({ path: input.path })}`)
     // NORMAL (not FULL): ~10-20% faster writes. Trade-off: on an OS crash or
     // power loss (not app crash), the most recently committed transaction may
     // be silently rolled back. Acceptable for a local dev tool where the

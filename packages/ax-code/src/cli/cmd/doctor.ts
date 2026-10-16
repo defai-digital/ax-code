@@ -21,6 +21,7 @@ import { Locale } from "@/util/locale"
 import { getTuiPreloadCheck } from "./doctor-preload"
 import { getDoctorDatabaseCheck, getDoctorDatabaseIntegrityCheck } from "./doctor-storage"
 import { getRecentLogsChecks, getRunningInstancesCheck } from "./doctor-health"
+import { getDoctorProcessRegistryCheck } from "./doctor-processes"
 import path from "path"
 import { realpathSync } from "fs"
 import { access } from "fs/promises"
@@ -432,6 +433,7 @@ export const DOCTOR_CHECK_IDS = [
   "legacy-render-flags",
   "feature-flags",
   "db-integrity",
+  "child-processes",
 ] as const
 
 export type DoctorCheckId = (typeof DOCTOR_CHECK_IDS)[number]
@@ -652,6 +654,12 @@ export async function runDoctorChecks(input: { skip?: ReadonlySet<string> } = {}
   if (!skip.has("stale-instances")) {
     const runningInstances = await getRunningInstancesCheck()
     if (runningInstances) push("stale-instances", runningInstances)
+  }
+
+  // 10b. Child process registry — children left behind by hard-dead backends
+  // (ADR-209) and what this process's startup orphan sweep did.
+  if (!skip.has("child-processes")) {
+    push("child-processes", await getDoctorProcessRegistryCheck())
   }
 
   try {

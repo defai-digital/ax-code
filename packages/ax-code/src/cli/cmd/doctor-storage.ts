@@ -1,6 +1,14 @@
 import path from "path"
 import { stat } from "node:fs/promises"
-import { describeDurableStoragePolicy, DurableStoragePolicy, formatStorageBytes } from "../../storage/policy"
+import {
+  describeDurableStoragePolicy,
+  DurableStoragePolicy,
+  formatStorageBytes,
+  parseSqliteJournalOverride,
+  resolveSqliteJournalMode,
+  type SqliteJournalMode,
+} from "../../storage/policy"
+import { isNetworkFilesystem } from "../../storage/network-fs"
 import { isCorruptError } from "../../storage/corrupt"
 import { listDatabaseBackups } from "../../storage/backup"
 import { toErrorMessage } from "@/util/error-message"
@@ -24,11 +32,20 @@ export async function getDoctorDatabaseCheck(input: {
   databasePath: string
   exists?: (target: string) => Promise<boolean>
   inspect?: (target: string) => Promise<DatabaseFileInfo>
+  env?: Record<string, string | undefined>
+  isNetworkFilesystem?: (target: string) => boolean
 }): Promise<DoctorCheck> {
   const inspect = input.inspect ?? (input.exists ? inspectWithExists(input.exists) : inspectWithStat)
   const databasePath = input.databasePath
   const databaseName = path.basename(databasePath)
   const dataDir = path.dirname(databasePath)
+  // ADR-210: report the journal mode actually in use for this data directory
+  // (network filesystem => rollback journal) and warn when the database sits
+  // on a network mount, where WAL's -shm sidecar is unsafe.
+  const env = input.env ?? process.env
+  const networkProbe = input.isNetworkFilesystem ?? isNetworkFilesystem
+  const journalMode = resolveSqliteJournalMode({ path: dataDir, env, isNetworkFilesystem: networkProbe })
+  const journalOverride = parseSqliteJournalOverride(env.AX_CODE_SQLITE_JOURNAL)
   const bundledPath = path.join(dataDir, "ax-code.db")
   const localPath = path.join(dataDir, "ax-code-local.db")
   const current = await inspect(databasePath)
@@ -41,8 +58,18 @@ export async function getDoctorDatabaseCheck(input: {
   }
   const details = [
     `${databasePath} (${databaseModeLabel(databaseName)}${current.exists ? "" : ", not created yet"})`,
-    describeDurableStoragePolicy(),
+    describeDurableStoragePolicy({ journalMode }),
   ]
+
+  if (isNetworkDataDirectory(networkProbe, dataDir)) {
+    markWarn()
+    details.push(
+      `data directory is on a network filesystem: journal ${journalMode} in use (WAL is unsafe over network mounts)`,
+    )
+  }
+  if (journalOverride) {
+    details.push(`journal ${journalMode} (AX_CODE_SQLITE_JOURNAL override)`)
+  }
 
   const readErrors = [
     current.error ? `${databaseName}: ${current.error}` : undefined,
@@ -102,6 +129,16 @@ function databaseModeLabel(databaseName: string) {
   if (databaseName === "ax-code.db") return "bundled state"
   if (databaseName === "ax-code-local.db") return "source/dev state"
   return `${databaseName} state`
+}
+
+// Probe failures (missing mount table, timeouts) must not fail the doctor
+// row: they keep WAL, which needs no warning (ADR-210).
+function isNetworkDataDirectory(probe: (target: string) => boolean, dataDir: string): boolean {
+  try {
+    return probe(dataDir)
+  } catch {
+    return false
+  }
 }
 
 function inspectWithExists(exists: (target: string) => Promise<boolean>) {

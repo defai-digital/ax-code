@@ -9,7 +9,7 @@ import { Context } from "../util/context"
 import { Global } from "../global"
 import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
-import { DurableStoragePolicy } from "./policy"
+import { DurableStoragePolicy, resolveSqliteJournalMode } from "./policy"
 import { isCorruptError as isCorrupt, raiseCorruptDatabaseError } from "./corrupt"
 import { readSchemaTableCount, takePreMigrationBackup } from "./backup"
 import type { ProjectID } from "../project/schema"
@@ -124,7 +124,9 @@ export namespace Shard {
   // DurableStoragePolicy.
   function applyStartupPragmas(db: ShardClient, file: string) {
     db.run(`PRAGMA busy_timeout = ${DurableStoragePolicy.busyTimeoutMs}`)
-    db.run(`PRAGMA journal_mode = ${DurableStoragePolicy.journalMode}`)
+    // ADR-210: DELETE (rollback journal) instead of WAL when the shard sits
+    // on a network filesystem; AX_CODE_SQLITE_JOURNAL overrides.
+    db.run(`PRAGMA journal_mode = ${resolveSqliteJournalMode({ path: file })}`)
     // NORMAL (not FULL): ~10-20% faster writes; on OS crash/power loss only the
     // most recent transaction may roll back. Consistent with the registry DB.
     db.run(`PRAGMA synchronous = ${DurableStoragePolicy.synchronous}`)
