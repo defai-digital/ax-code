@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-10-11
+Last reviewed: 2026-10-15
 Owner: AX Code maintainers
 
 Downloads and updates use the public `download.ax-code.com` origin. No private
@@ -17,6 +17,19 @@ seconds after launch, at most once a day. To check again sooner, run `/update`. 
 minor and major releases and Homebrew installs only show the update dialog. Set
 `autoupdate` to `false` or `"notify"` in the config, or `AX_CODE_DISABLE_AUTOUPDATE=1`,
 to change that. Only one upgrade runs at a time across ax-code processes.
+
+## Concurrent upgrades
+
+If another upgrade is running, wait for it to finish and retry. An active upgrade
+lock does not expire by elapsed time: a slow download or Homebrew installation
+must keep exclusive ownership. Locks left by a terminated process on the same
+host are recovered automatically.
+
+If the busy message persists after a hostname change or when user state is shared
+between hosts, run `ax-code debug paths` and inspect `upgrade.lock` in the reported
+state directory. Confirm that no installation is running on the recorded host
+before removing that lock. A reused or inaccessible PID also requires inspection;
+lock age alone is not evidence that the installer has stopped.
 
 ## Standalone installer users
 

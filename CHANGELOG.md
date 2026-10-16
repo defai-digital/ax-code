@@ -6,6 +6,18 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.26.1] - 2026-10-16
+
+### Changed
+
+- Publish SDK 2.6.23 with the update-check API used by the TUI.
+- Include the manual TUI update dialog and completed-check background scheduling.
+
+### Fixed
+
+- Preserve exclusive upgrade ownership during installations lasting longer than 15 minutes.
+- Retain automatic recovery for terminated same-host owners while requiring inspection of uncertain or foreign locks.
+
 ## [7.26.0] - 2026-10-15
 
 ### Changed
