@@ -60,6 +60,8 @@ import {
   mergeRemoteMcpHeaders,
 } from "./connect-error"
 import { McpElicitation } from "./elicitation"
+import { OsvCheck } from "./osv-check"
+import { SessionHealth } from "./session-health"
 
 export namespace MCP {
   const log = Log.create({ service: "mcp" })
@@ -635,6 +637,11 @@ export namespace MCP {
     // Capture the stdio child's pid while the transport is still reachable;
     // the registry entry must also disappear when the server dies on its own.
     const registryPid = processTreePid(client as unknown as ClosableMcpObject)
+    // ADR-237: register the in-flight tracker before the onclose wiring
+    // so any call already dispatched on this client gets rejected the
+    // moment the transport closes. The session-health module also chains
+    // any prior onclose so the bookkeeping still runs on this client.
+    SessionHealth.attachClient(client, name)
     client.onclose = Instance.bind(() => {
       if (registryPid !== undefined) void ProcessRegistry.unregister(registryPid, "mcp")
       void Promise.resolve()
@@ -1187,6 +1194,31 @@ export namespace MCP {
       // Resolve the bare launcher once: the spawn uses the resolved path, and a
       // failure message must know whether the PATH lookup already succeeded.
       const resolvedCommand = resolveLocalCommand(cmd, env)
+      // ADR-230: opt-in OSV preflight for npx/uvx/pnpm-dlx/bunx/pipx-run MCP
+      // servers. The check is gated on mcp_security.osv_check because it
+      // sends the package name off-machine; a failed lookup fails open and
+      // the launch proceeds. The launch command (not the resolved path) is
+      // the input the parser expects, so it sees the launcher name first.
+      const osvEnabled = (await Config.get()).mcp_security?.osv_check === true
+      if (osvEnabled) {
+        try {
+          await OsvCheck.checkLocalLaunch(launchCommand, key)
+        } catch (error) {
+          if (error instanceof OsvCheck.McpOSVBlocked) {
+            return {
+              mcpClient: undefined,
+              status: {
+                status: "failed" as const,
+                error: `OSV blocked launch of ${error.data.package}${
+                  error.data.version ? `@${error.data.version}` : ""
+                } (advisories: ${error.data.ids.join(", ")})`,
+              },
+            }
+          }
+          // Any other error (including a network/parse fail-open) does not
+          // block the launch; the check logged the cause and proceeded.
+        }
+      }
       const transport = new StdioClientTransport({
         stderr: "pipe",
         command: resolvedCommand,
@@ -1328,6 +1360,19 @@ export namespace MCP {
 
   export async function clients() {
     return state().then((state) => state.clients)
+  }
+
+  /**
+   * Return the live connected client for a server, or undefined when the
+   * server is not connected. Used by {@link SessionHealth.preflightCall}'s
+   * reconnect thunk to swap the pre-ping client for the freshly reconnected
+   * one without taking a lock on the whole MCP namespace.
+   */
+  export function liveClient(name: string): MCPClient | undefined {
+    const s = liveStates.get(Instance.directory)
+    const client = s?.clients[name]
+    if (!client || s?.status[name]?.status !== "connected") return undefined
+    return client
   }
 
   // Per-server connect serialization. Two concurrent connect(name)
@@ -1860,6 +1905,11 @@ export namespace MCP {
                   },
                 }
               : undefined,
+            // ADR-237: the server name flows to the dynamic-tool wrapper so
+            // the idle preflight can reconnect through MCP.connect when the
+            // SDK's onclose fast-fail (attached in registerClientOnClose)
+            // would otherwise reject a still-pending call.
+            clientName,
           )
             .then((tool) => {
               if (s.disposed || s.clients[clientName] !== client) return

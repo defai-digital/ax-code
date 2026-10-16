@@ -1054,6 +1054,21 @@ export const Info = z
         "never enables the bridge and never bypasses the per-call interactive webmcp approval.",
     ),
     tools: z.record(z.string(), z.boolean()).optional().describe("@deprecated Use 'permission' field instead"),
+    mcp_security: z
+      .object({
+        osv_check: z
+          .boolean()
+          .optional()
+          .describe(
+            "ADR-230: query api.osv.dev for the npx/uvx/pnpm-dlx/bunx/pipx-run package before launching a local MCP " +
+              "server. When set, the package name and version are sent to api.osv.dev. Advisories whose id starts with " +
+              "MAL- block the launch; other advisories are logged. Network errors fail open. Default: false (opt-in).",
+          ),
+      })
+      .optional()
+      .describe(
+        "MCP server launch security checks. All fields default to off and only send data off-machine when enabled.",
+      ),
     session: z
       .object({
         ttl_days: SafeInteger.min(1).optional().describe("Auto-prune sessions older than this many days (default: 30)"),

@@ -8,6 +8,7 @@ import { WebMcpApprovals } from "./webmcp-approvals"
 import { WebMcpProfile } from "./webmcp-profile"
 import { redirectOriginOutsideAllowlist } from "./webmcp-redirect"
 import { McpElicitation } from "./elicitation"
+import { SessionHealth } from "./session-health"
 
 const log = Log.create({ service: "mcp" })
 const MAX_TOOL_DESCRIPTION = 4_000
@@ -235,6 +236,12 @@ export async function convertMcpTool(
   client: Client,
   timeout?: number,
   webmcp?: WebMcpProfile.Policy,
+  /**
+   * Server name used by the idle-ping reconnect path. Optional so the test
+   * surface (which builds a `dynamicTool` from a fake client) can omit it;
+   * production callers always pass the configured MCP name.
+   */
+  serverName?: string,
 ): Promise<ConvertedMcpTool> {
   const inputSchema = webmcp
     ? z.toJSONSchema(WebMcpProfile.callSchema(webmcp.toolName, webmcp.profile), { target: "draft-7" })
@@ -394,37 +401,71 @@ export async function convertMcpTool(
         // The request is about to reach the bridge: the session layer refunds
         // a wait_for reservation only for failures before this point.
         if (webmcp) WebMcpProfile.markDispatched(args)
-        // The call context bound by the session wrapper rides on `opts`; make
-        // it active for this client so an elicitation/create the server sends
-        // mid-call resolves the session (and abort signal) it belongs to.
-        const result = await McpElicitation.withActiveCall(client, opts, () =>
-          client.callTool(
-            {
-              name: mcpTool.name,
-              arguments: {
-                ...((input || {}) as Record<string, unknown>),
-                ...(webmcp?.toolName === "new_page"
-                  ? WebMcpProfile.workflowContextArguments(webmcp.profile, input as object)
-                  : {}),
-                // A wait longer than the remaining dispatch budget would outlive
-                // the MCP request; let the bridge settle first and report.
-                ...(webmcp?.toolName === "wait_for" && mainTimeout !== undefined
-                  ? {
-                      timeout: WebMcpProfile.waitTimeoutWithin((input as Record<string, unknown>).timeout, mainTimeout),
-                    }
-                  : {}),
-              },
-            },
-            {
-              resetTimeoutOnProgress: true,
-              // A bridge that streams progress forever must not extend an
-              // approved WebMCP call past its total budget.
-              ...(webmcp && mainTimeout !== undefined ? { maxTotalTimeout: mainTimeout } : {}),
-              signal: opts.abortSignal,
-              timeout: mainTimeout,
-            },
-          ),
-        )
+        // ADR-237: idle-server preflight + in-flight fast-fail. The
+        // preflight pings the client when the previous call is older than
+        // MCP_IDLE_THRESHOLD_MS, reconnects through MCP.connect on ping
+        // failure, and tracks the in-flight call so a closed transport
+        // rejects the awaited promise immediately instead of waiting for
+        // the SDK timeout. The reconnect thunk uses a dynamic import to
+        // avoid a circular dependency between this module and impl.ts.
+        const tracker = SessionHealth.trackCall(client)
+        const preflight = await SessionHealth.preflightCall(client, async () => {
+          if (!serverName) throw new Error("MCP reconnect requested without a server name")
+          const mod = await import("./impl")
+          await mod.MCP.connect(serverName)
+          const live = mod.MCP.liveClient(serverName)
+          if (!live) throw new Error(`MCP reconnect produced no live client for ${serverName}`)
+          return live
+        })
+        const callClient = preflight.client
+        let result: Awaited<ReturnType<typeof callClient.callTool>>
+        try {
+          // The call context bound by the session wrapper rides on `opts`;
+          // make it active for this client so an elicitation/create the
+          // server sends mid-call resolves the session (and abort signal)
+          // it belongs to. `Promise.race` against `tracker.promise` lets
+          // the onclose fast-fail reject this awaiter immediately, so a
+          // closed transport fails the call in O(1) instead of waiting for
+          // the SDK's full request timeout.
+          result = await Promise.race([
+            McpElicitation.withActiveCall(callClient, opts, () =>
+              callClient.callTool(
+                {
+                  name: mcpTool.name,
+                  arguments: {
+                    ...((input || {}) as Record<string, unknown>),
+                    ...(webmcp?.toolName === "new_page"
+                      ? WebMcpProfile.workflowContextArguments(webmcp.profile, input as object)
+                      : {}),
+                    // A wait longer than the remaining dispatch budget would outlive
+                    // the MCP request; let the bridge settle first and report.
+                    ...(webmcp?.toolName === "wait_for" && mainTimeout !== undefined
+                      ? {
+                          timeout: WebMcpProfile.waitTimeoutWithin(
+                            (input as Record<string, unknown>).timeout,
+                            mainTimeout,
+                          ),
+                        }
+                      : {}),
+                  },
+                },
+                {
+                  resetTimeoutOnProgress: true,
+                  // A bridge that streams progress forever must not extend an
+                  // approved WebMCP call past its total budget.
+                  ...(webmcp && mainTimeout !== undefined ? { maxTotalTimeout: mainTimeout } : {}),
+                  signal: opts.abortSignal,
+                  timeout: mainTimeout,
+                },
+              ),
+            ),
+            tracker.promise,
+          ])
+          tracker.finish()
+        } catch (error) {
+          tracker.fail(error)
+          throw error
+        }
         if (webmcp) {
           try {
             WebMcpProfile.validateResult(webmcp.toolName, result, (input ?? {}) as Record<string, unknown>)
