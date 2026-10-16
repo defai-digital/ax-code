@@ -3,6 +3,7 @@ import path from "path"
 import { Env } from "../util/env"
 import { Global } from "../global"
 import { isRecord } from "@/util/record"
+import { parseJsonResult } from "@/util/json-value"
 
 /**
  * Import Claude Code session history (ADR-229).
@@ -119,13 +120,9 @@ export namespace ClaudeSessions {
     for (const raw of text.split(/\r?\n/)) {
       const line = raw.trim()
       if (!line) continue
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(line)
-      } catch {
-        continue
-      }
-      for (const chunk of readRecord(parsed)) {
+      const parsed = parseJsonResult(line)
+      if (!parsed.ok) continue
+      for (const chunk of readRecord(parsed.value)) {
         const label = chunk.role === "user" ? "User" : "Assistant"
         lines.push(`${label}: ${chunk.text}`)
       }
