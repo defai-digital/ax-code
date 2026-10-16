@@ -4,6 +4,7 @@ import type { Agent } from "../agent/agent"
 import type { Permission } from "../permission"
 import type { SessionID, MessageID } from "../session/schema"
 import { Truncate } from "./truncate"
+import * as ArgCoercion from "./arg-coercion"
 import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
 
@@ -123,21 +124,48 @@ export namespace Tool {
         const execute = base.execute
         toolInfo.execute = async (args, ctx) => {
           let validated: typeof args
+          // ADR-207: set when the arguments were repaired by schema-guided
+          // coercion; the result metadata then carries coerced: true.
+          let coercedPaths: string[] | undefined
           try {
             validated = toolInfo.parameters.parse(args)
           } catch (error) {
-            if (error instanceof z.ZodError && toolInfo.formatValidationError) {
-              throw new Error(toolInfo.formatValidationError(error), { cause: error })
+            // One conservative repair pass over the failing paths, then a
+            // single re-parse. A failed re-parse falls through so the model
+            // still sees the original error (ADR-207). Valid calls never take
+            // this branch, so coercion cannot change a correct invocation.
+            let recovered: typeof args | undefined
+            if (error instanceof z.ZodError) {
+              const repair = ArgCoercion.coerceToolArguments(toolInfo.parameters, args, error)
+              if (repair) {
+                try {
+                  recovered = toolInfo.parameters.parse(repair.value) as typeof args
+                  coercedPaths = repair.paths
+                } catch {
+                  recovered = undefined
+                }
+              }
             }
-            throw new Error(
-              `The ${id} tool was called with invalid arguments: ${toErrorMessage(error)}.\nPlease rewrite the input so it satisfies the expected schema.`,
-              { cause: error },
-            )
+            if (recovered === undefined) {
+              if (error instanceof z.ZodError && toolInfo.formatValidationError) {
+                throw new Error(toolInfo.formatValidationError(error), { cause: error })
+              }
+              throw new Error(
+                `The ${id} tool was called with invalid arguments: ${toErrorMessage(error)}.\nPlease rewrite the input so it satisfies the expected schema.`,
+                { cause: error },
+              )
+            }
+            validated = recovered
+          }
+          if (coercedPaths) {
+            // Paths only — never argument values (ADR-207).
+            log.debug("tool arguments coerced", { toolName: id, paths: coercedPaths })
           }
           const toolStart = Date.now()
           let result: Awaited<ReturnType<typeof execute>>
           try {
             result = await execute(validated, ctx)
+            if (coercedPaths && result.metadata) (result.metadata as Metadata).coerced = true
             if (toolInfo.outputSchema) result.data = toolInfo.outputSchema.parse(result.data)
           } catch (err) {
             const durationMs = Date.now() - toolStart

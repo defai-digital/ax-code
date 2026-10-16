@@ -36,6 +36,7 @@ import { OsSandbox } from "@/isolation/os-sandbox"
 import { BlastRadius } from "@/session/blast-radius"
 import { assertSymlinkInsideProject } from "./external-directory"
 import { classifyDestructiveCommand, findWrappedCommand, gitSubcommand } from "./bash-destructive"
+import { classifyReadOnlyCommand, planReadOnlyError, readonlyRedirectDenial } from "./bash-readonly"
 import { gitConfigInvocation, gitConfigLocationFlags, isDangerousGitConfigKey } from "./bash-git-config"
 import { BashNetworkHeuristics } from "./bash-network-heuristics"
 import { denyDestructiveInOpsStrict } from "./bash-strict"
@@ -376,6 +377,26 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
       let networkWrapperSuspect = false
       let foundCommands = false
       const externalReviewClis = new Set<string>()
+      // ADR-208: the plan agent's bash is read-only. Every parsed command —
+      // pipeline stages, `;`/`&&` segments, subshells, command substitutions,
+      // and `bash -c` / `eval` inner strings — must pass the fail-closed
+      // allowlist in bash-readonly.ts before any permission prompt or spawn.
+      // A user permission rule that explicitly allows bash for the plan agent
+      // cannot be detected from the tool layer (the resolved policy is only
+      // reachable through ctx.ask), so the classifier applies unconditionally
+      // for the plan agent; that remains the documented gap of ADR-208 (3).
+      const planReadOnly = ctx.agent === "plan"
+      const planDenials: string[] = []
+      const recordPlanWriteRedirect = (
+        redirect: { childCount: number; child(index: number): { type: string } | null },
+        target: string | undefined,
+      ) => {
+        if (!planReadOnly || !isWriteFileRedirect(redirect)) return
+        // fd duplication (`>&1`) redirects between descriptors, not files.
+        if (target !== undefined && (target === "" || target.startsWith("&"))) return
+        const denial = readonlyRedirectDenial(target)
+        if (denial) planDenials.push(denial)
+      }
 
       // `decoded` marks a word already normalized by decodeShellLiteral.
       // A `$`, backtick, or glob that survives decoding came from a quoted or
@@ -998,6 +1019,15 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         const executable = path.basename(scanParts[0] ?? "").replace(/\.(?:exe|cmd|bat)$/i, "")
         if (["claude", "grok", "codex"].includes(executable)) externalReviewClis.add(executable)
 
+        // Plan-agent read-only classification (ADR-208). Shell/eval/source
+        // wrappers are skipped here: when their inner command string decodes,
+        // the inner scan below classifies every nested command, and the
+        // fail-closed branch below denies anything it cannot inspect.
+        if (planReadOnly && !["eval", "bash", "sh", "zsh", "source", "."].includes(executable)) {
+          const denial = classifyReadOnlyCommand(normalizedCommand)
+          if (denial) planDenials.push(`${commandText}: ${denial}`)
+        }
+
         // Commands that wrap or delegate to other commands.
         // For shell invocations with -c, and eval, we parse the inner
         // command string to extract paths. For source/., we resolve
@@ -1067,6 +1097,10 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
                 const normalizedInnerParts = decodeCommandParts(innerParts)
                 const innerDestructiveReason = classifyDestructiveCommand(normalizedInnerParts)
                 if (innerDestructiveReason) destructiveCommands.set(innerNode.text, innerDestructiveReason)
+                if (planReadOnly) {
+                  const innerDenial = classifyReadOnlyCommand(normalizedInnerParts)
+                  if (innerDenial) planDenials.push(`${innerNode.text}: ${innerDenial}`)
+                }
                 const innerCommand = findWrappedCommand(normalizedInnerParts)
                 const innerWrappers = innerCommand
                   ? normalizedInnerParts.slice(0, normalizedInnerParts.length - innerCommand.args.length - 1)
@@ -1093,7 +1127,16 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
                 for (let j = 0; j < innerRedirect.childCount; j++) {
                   const c = innerRedirect.child(j)
                   if (!c) continue
-                  if (!["word", "string", "raw_string", "concatenation"].includes(c.type)) continue
+                  if (!["word", "string", "raw_string", "concatenation"].includes(c.type)) {
+                    // A write-redirect target the classifier cannot decode
+                    // (expansion, substitution) is denied for the plan agent.
+                    if (
+                      ["simple_expansion", "expansion", "command_substitution", "process_substitution"].includes(c.type)
+                    ) {
+                      recordPlanWriteRedirect(innerRedirect, undefined)
+                    }
+                    continue
+                  }
                   // decodeShellLiteral joins split-quoted targets
                   // (`> ".git/con"fig`), mirroring the outer scan at the
                   // top-level redirect loop; a word it cannot decode is dynamic
@@ -1101,9 +1144,11 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
                   const target = decodeShellLiteral(c.text)
                   if (target === undefined) {
                     dynamicPathAccess = true
+                    recordPlanWriteRedirect(innerRedirect, undefined)
                     continue
                   }
                   if (!target || /^&/.test(target)) continue
+                  recordPlanWriteRedirect(innerRedirect, target)
                   assertStaticRedirectTarget(target)
                   assertSupportedWindowsRedirect(c.text, isEval ? shell : scanParts[0])
                   const resolved = await recordResolvedPath(target)
@@ -1111,6 +1156,14 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
                 }
               }
             }
+          }
+
+          // Fail closed when the wrapper's inner command string could not be
+          // extracted and statically parsed (`bash -c` with dynamic text,
+          // `bash script.sh`, `source script`): the plan agent cannot run
+          // commands this classifier never saw (ADR-208).
+          if (planReadOnly && (executable === "source" || executable === "." || !innerCmd)) {
+            planDenials.push(`${commandText}: ${executable} executes commands this classifier cannot inspect`)
           }
 
           // For source/. (not eval or shell -c), resolve args as file paths
@@ -1163,6 +1216,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           // the write.
           if (["simple_expansion", "expansion", "command_substitution", "process_substitution"].includes(child.type)) {
             dynamicPathAccess = true
+            recordPlanWriteRedirect(redirect, undefined)
             continue
           }
           if (!["word", "string", "raw_string", "concatenation"].includes(child.type)) continue
@@ -1172,10 +1226,12 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           const target = decodeShellLiteral(child.text)
           if (target === undefined) {
             dynamicPathAccess = true
+            recordPlanWriteRedirect(redirect, undefined)
             continue
           }
           // Skip fd dup (&1 etc.) — opaque or non-path.
           if (!target || /^&/.test(target)) continue
+          recordPlanWriteRedirect(redirect, target)
           assertStaticRedirectTarget(target)
           assertSupportedWindowsRedirect(child.text, shell)
           const literal = expandLeadingTilde(target, home)
@@ -1194,6 +1250,12 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           }
         }
       }
+
+      // ADR-208: fail closed before any permission prompt (the first ctx.ask
+      // is the external_directory admission below) and before the blast-radius
+      // checks, so the model sees the plan-agent reason rather than a
+      // downstream policy error.
+      if (planReadOnly && planDenials.length > 0) throw new Error(planReadOnlyError(planDenials))
 
       for (const filePath of redirectWritePaths) {
         if (Filesystem.contains(Instance.worktree, filePath)) {
