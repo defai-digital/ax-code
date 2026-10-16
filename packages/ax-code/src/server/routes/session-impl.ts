@@ -10,6 +10,7 @@ import { Session } from "../../session"
 import { MessageV2 } from "../../session/message-v2"
 import { SessionPrompt } from "../../session/prompt"
 import { SessionRecap } from "../../session/recap"
+import { SessionBtw } from "../../session/btw"
 import { SessionCompaction } from "../../session/compaction"
 import { SessionRevert } from "../../session/revert"
 import { SessionStatus } from "@/session/status"
@@ -1061,10 +1062,10 @@ export const SessionRoutes = lazy(() =>
           providerID: ProviderID.zod,
           modelID: ModelID.zod,
           auto: JsonBoolean.optional().default(false),
-        }),
           // ADR-215: optional focus topic for manual compaction, quoted into
           // the prompt as user data. Omitted focus keeps today's prompt.
           focus: z.string().trim().max(SessionCompaction.COMPACTION_FOCUS_MAX_CHARS).optional(),
+        }),
       ),
       async (c) => {
         const sessionID = await parseCurrentProjectSessionID(c)
@@ -1091,8 +1092,8 @@ export const SessionRoutes = lazy(() =>
           },
           auto: body.auto,
           triggerReason: "manual",
-        })
           ...(body.focus === undefined || body.focus === "" ? {} : { focus: body.focus }),
+        })
         await SessionPrompt.loop({ sessionID })
         return c.json(true)
       },
@@ -1123,6 +1124,56 @@ export const SessionRoutes = lazy(() =>
         SessionPrompt.assertNotBusy(sessionID)
         const recap = await SessionRecap.generate({ sessionID, scope: c.req.valid("query").scope })
         return c.json({ text: recap?.text ?? null })
+      },
+    )
+    .post(
+      "/:sessionID/btw",
+      describeRoute({
+        summary: "Ask a side question",
+        description:
+          "Answer a one-shot side question from a bounded snapshot of the session (ADR-213). Tool-less and transcript-free: no messages, parts, lastRecap, queue, or task state are touched, and a running turn is neither awaited nor interrupted.",
+        operationId: "session.btw",
+        responses: {
+          200: {
+            description: "Plain-text answer to the side question",
+            content: {
+              "application/json": {
+                schema: resolver(z.object({ answer: z.string() })),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", SESSION_ID_PARAM),
+      validator(
+        "json",
+        z
+          .object({
+            question: z.string().trim().min(1).max(2000),
+            providerID: ProviderID.zod.optional(),
+            modelID: ModelID.zod.optional(),
+          })
+          .refine((value) => (value.providerID === undefined) === (value.modelID === undefined), {
+            message: "providerID and modelID must be provided together",
+          }),
+      ),
+      async (c) => {
+        const sessionID = await parseCurrentProjectSessionID(c)
+        const body = c.req.valid("json")
+        try {
+          const { answer } = await SessionBtw.generate({
+            sessionID,
+            question: body.question,
+            model: body.providerID && body.modelID ? { providerID: body.providerID, modelID: body.modelID } : undefined,
+          })
+          return c.json({ answer })
+        } catch (err) {
+          if (SessionBtw.UnavailableError.isInstance(err)) {
+            return invalidRequest(c, { message: err.data.message, details: { resource: "sessionBtw" } })
+          }
+          throw err
+        }
       },
     )
     .get(

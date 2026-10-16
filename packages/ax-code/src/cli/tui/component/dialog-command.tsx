@@ -1,5 +1,5 @@
 import { useLanguage } from "../context/language"
-import { useDialog } from "@tui/ui/dialog"
+import { useDialog, type DialogContext } from "@tui/ui/dialog"
 import { DialogSelect, type DialogSelectOption, type DialogSelectRef } from "@tui/ui/dialog-select"
 import {
   createContext,
@@ -31,12 +31,18 @@ type Slash = {
   aliases?: string[]
   /** Typeable via `/name`, but omitted from `/` autocomplete. */
   hidden?: boolean
+  /** This slash command consumes inline arguments (`/name <args>`) locally
+   *  instead of falling through to the server command route. */
+  arguments?: boolean
 }
 
 export type CommandOption = DialogSelectOption<string> & {
   keybind?: KeybindKey
   suggested?: boolean
   slash?: Slash
+  /** Handler for slash invocations that carry inline arguments; only reached
+   *  when `slash.arguments` is set. The bare command still uses onSelect. */
+  onSlashArguments?: (args: string, dialog: DialogContext) => void
   hidden?: boolean
   enabled?: boolean
 }
@@ -188,6 +194,33 @@ function init() {
           runCommandAction(option, "slash")
           return true
         }
+      }
+      return false
+    },
+    /** Dispatch a local slash invocation that carries inline arguments.
+     *  Returns false for names that are not argument-taking client commands
+     *  so the caller can fall through to its default handling. */
+    trySlashWithArguments(name: string, args: string): boolean {
+      for (const option of entries()) {
+        if (!option.slash?.arguments || !option.onSlashArguments) continue
+        if (!isEnabled(option)) continue
+        if (option.slash.name !== name && !option.slash.aliases?.includes(name)) continue
+        recordUsage(option)
+        const handler = option.onSlashArguments
+        void Promise.resolve()
+          .then(() => handler(args, dialog))
+          .catch((error) => {
+            log.warn("command action failed", {
+              error,
+              route: "slash",
+              value: option.value,
+            })
+            toast.show({
+              message: error instanceof Error ? error.message : `Failed to run ${option.title}`,
+              variant: "error",
+            })
+          })
+        return true
       }
       return false
     },

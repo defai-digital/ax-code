@@ -821,6 +821,12 @@ export const messages = {
   "ui.conversationRecap": "\u041e\u0431\u0437\u043e\u0440 \u0440\u0430\u0437\u0433\u043e\u0432\u043e\u0440\u0430",
   "ui.showConversationRecap":
     "\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u043e\u0431\u0437\u043e\u0440 \u0440\u0430\u0437\u0433\u043e\u0432\u043e\u0440\u0430",
+  "ui.btwSideQuestion": "Задать побочный вопрос",
+  "ui.btwUsageHint": "Использование: /btw <вопрос> - ответ без изменения сессии",
+  "ui.btwNoSession": "Откройте сессию, прежде чем задать побочный вопрос.",
+  "ui.btwDialogTitle": "Побочный вопрос",
+  "ui.btwLoading": "Запрос к модели...",
+  "ui.btwFailed": "Не удалось ответить на побочный вопрос.",
   "ui.searchMessages": "\u041f\u043e\u0438\u0441\u043a \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439",
   "ui.searchTranscript": "\u041f\u043e\u0438\u0441\u043a \u0432 \u043f\u0440\u043e\u0442\u043e\u043a\u043e\u043b\u0435",
   "ui.startTypingToChat": "\u041d\u0430\u0447\u043d\u0438\u0442\u0435 \u043f\u0438\u0441\u0430\u0442\u044c",

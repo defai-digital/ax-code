@@ -245,6 +245,52 @@ describe("prompt submission lifecycle", () => {
     expect(host.toast.show).not.toHaveBeenCalled()
   })
 
+  test("dispatches argument-taking client slash commands locally with their inline text", async () => {
+    const { controller, host, requests } = setup({
+      mode: "normal",
+      workMode: "agent",
+      text: "/btw what is this session doing?",
+    })
+    const trySlashWithArguments = vi.fn(() => true)
+    host.command.trySlashWithArguments = trySlashWithArguments
+
+    await controller.submit()
+
+    expect(trySlashWithArguments).toHaveBeenCalledWith("btw", "what is this session doing?")
+    expect(host.clearPromptDraft).toHaveBeenCalled()
+    expect(requests).toHaveLength(0)
+    expect(controller.submitInFlight).toBe(false)
+  })
+
+  test("preserves multi-line arguments when dispatching client slash commands", async () => {
+    const { controller, host } = setup({
+      mode: "normal",
+      workMode: "agent",
+      text: "/btw first line\nsecond line",
+    })
+    const trySlashWithArguments = vi.fn(() => true)
+    host.command.trySlashWithArguments = trySlashWithArguments
+
+    await controller.submit()
+
+    expect(trySlashWithArguments).toHaveBeenCalledWith("btw", "first line\nsecond line")
+  })
+
+  test("falls through to the server when the client does not take arguments", async () => {
+    const { controller, host, requests } = setup({
+      mode: "normal",
+      workMode: "agent",
+      text: "/council review this change",
+    })
+    host.command.trySlashWithArguments = vi.fn(() => false)
+
+    await controller.submit()
+
+    expect(host.command.trySlashWithArguments).toHaveBeenCalledWith("council", "review this change")
+    expect(requests).toHaveLength(1)
+    expect(new URL(requests[0].url).pathname).toBe("/session/ses_test/command_async")
+  })
+
   test("records first-use after a successful council submit", async () => {
     const { controller, host } = setup({ mode: "normal", workMode: "council", text: "Review this change" })
     await controller.submit()

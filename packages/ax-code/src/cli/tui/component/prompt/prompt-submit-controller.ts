@@ -89,7 +89,10 @@ export type PromptSubmitHost = {
     get: (key: string, fallback?: any) => any
     set?: (key: string, value: any) => void
   }
-  command: { trySlash: (name: string) => boolean }
+  command: {
+    trySlash: (name: string) => boolean
+    trySlashWithArguments?: (name: string, args: string) => boolean
+  }
   sync: {
     data: {
       command: readonly { name: string }[]
@@ -418,6 +421,22 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
       clearPromptDraft()
       props.onSubmit?.()
       log.info("tui.prompt.submit: slash command dispatched", { command: slashName })
+      return
+    }
+    // Argument-taking local slash commands (e.g. /btw <question>) are also
+    // dispatched locally: everything after the first token is the argument,
+    // and multi-line input is preserved.
+    if (
+      currentMode === "normal" &&
+      workRouted.kind === "prompt" &&
+      slashName &&
+      slashHasArguments &&
+      slashToken &&
+      command.trySlashWithArguments?.(slashName, routedText.trim().slice(slashToken.length).trim())
+    ) {
+      clearPromptDraft()
+      props.onSubmit?.()
+      log.info("tui.prompt.submit: slash command with arguments dispatched", { command: slashName })
       return
     }
     // From here on, use routedText for network submission (inputText kept for local settle).

@@ -4,6 +4,7 @@ import { isNativeShiftPressed, shouldDetectNativeShiftEnter } from "@tui/util/na
 import { Editor } from "@tui/util/editor"
 import { errorPayloadMessage } from "@tui/util/error-message"
 import type { DialogContext } from "@tui/ui/dialog"
+import { showBtwDialog } from "../dialog-btw"
 import type { CommandOption } from "../dialog-command"
 import { endDisplayOffset, expandPromptTextParts, relocatePromptPartsAfterEditor } from "./prompt-helpers"
 import type { PromptInfo } from "./history"
@@ -35,9 +36,16 @@ export type PromptCommandsInput = {
   autocompleteVisible: () => boolean
   sessionID: () => string | undefined
   statusType: () => string
-  sdk: { client: { session: { abort: (input: { sessionID: string }) => Promise<unknown> } } }
+  sdk: {
+    url: string
+    directory?: string
+    fetch: typeof fetch
+    client: { session: { abort: (input: { sessionID: string }) => Promise<unknown> } }
+  }
   log: { warn: (message: string, extra?: Record<string, unknown>) => void }
-  toast: { show: (input: { message: string; variant: "error" | "warning" | "info" | "success" }) => void }
+  toast: {
+    show: (input: { message: string; variant: "error" | "warning" | "info" | "success"; duration?: number }) => void
+  }
   renderer: any
   restoreExtmarksFromParts: (parts: PromptInfo["parts"]) => void
   allPastesExpanded: () => boolean
@@ -138,6 +146,40 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
         if (!composer().focused) return
         setStore("mode", "normal")
         dialog.clear()
+      },
+    },
+    {
+      // Side question (ADR-213): /btw <question> answers from a bounded
+      // snapshot without touching the transcript or the running turn. The
+      // bare command explains the usage; the argument form is dispatched
+      // through onSlashArguments.
+      title: uiText("ui.btwSideQuestion"),
+      value: "session.btw",
+      category: uiText("common.session"),
+      slash: { name: "btw", arguments: true },
+      onSelect: (dialog) => {
+        toast.show({ message: uiText("ui.btwUsageHint"), variant: "info", duration: 6000 })
+        dialog.clear()
+      },
+      onSlashArguments: (args, dialog) => {
+        const currentSessionID = sessionID()
+        const question = args.trim()
+        if (!currentSessionID) {
+          toast.show({ message: uiText("ui.btwNoSession"), variant: "warning" })
+          dialog.clear()
+          return
+        }
+        if (!question) {
+          toast.show({ message: uiText("ui.btwUsageHint"), variant: "info", duration: 6000 })
+          dialog.clear()
+          return
+        }
+        showBtwDialog({
+          dialog,
+          sdk: { url: sdk.url, directory: sdk.directory, fetch: sdk.fetch },
+          sessionID: currentSessionID,
+          question,
+        })
       },
     },
     {
