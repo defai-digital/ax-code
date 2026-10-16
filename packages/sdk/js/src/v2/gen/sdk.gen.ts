@@ -219,6 +219,8 @@ import type {
   SessionAbortResponses,
   SessionBranchRankErrors,
   SessionBranchRankResponses,
+  SessionBtwErrors,
+  SessionBtwResponses,
   SessionChildrenErrors,
   SessionChildrenResponses,
   SessionCommandAsyncErrors,
@@ -4806,6 +4808,7 @@ export class Session2 extends HeyApiClient {
       providerID: string
       modelID: string
       auto?: boolean
+      focus?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4819,6 +4822,7 @@ export class Session2 extends HeyApiClient {
             { in: "body", key: "providerID" },
             { in: "body", key: "modelID" },
             { in: "body", key: "auto" },
+            { in: "body", key: "focus" },
           ],
         },
       ],
@@ -4864,6 +4868,47 @@ export class Session2 extends HeyApiClient {
       url: "/session/{sessionID}/recap",
       ...options,
       ...params,
+    })
+  }
+
+  /**
+   * Ask a side question
+   *
+   * Answer a one-shot side question from a bounded snapshot of the session (ADR-213). Tool-less and transcript-free: no messages, parts, lastRecap, queue, or task state are touched, and a running turn is neither awaited nor interrupted.
+   */
+  public btw<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      question: string
+      providerID?: string
+      modelID?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "question" },
+            { in: "body", key: "providerID" },
+            { in: "body", key: "modelID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SessionBtwResponses, SessionBtwErrors, ThrowOnError>({
+      url: "/session/{sessionID}/btw",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 

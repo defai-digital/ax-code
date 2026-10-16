@@ -28592,6 +28592,10 @@
                   },
                   "auto": {
                     "type": "boolean"
+                  },
+                  "focus": {
+                    "type": "string",
+                    "maxLength": 500
                   }
                 },
                 "required": [
@@ -28695,6 +28699,102 @@
           {
             "lang": "js",
             "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.session.recap({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/session/{sessionID}/btw": {
+      "post": {
+        "operationId": "session.btw",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses_.*"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Ask a side question",
+        "description": "Answer a one-shot side question from a bounded snapshot of the session (ADR-213). Tool-less and transcript-free: no messages, parts, lastRecap, queue, or task state are touched, and a running turn is neither awaited nor interrupted.",
+        "responses": {
+          "200": {
+            "description": "Plain-text answer to the side question",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "answer": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "answer"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "providerID": {
+                    "type": "string"
+                  },
+                  "modelID": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "question"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.session.btw({\n  ...\n})"
           }
         ]
       }
@@ -38740,6 +38840,10 @@
               "prompt_preflight",
               "manual"
             ]
+          },
+          "focus": {
+            "type": "string",
+            "maxLength": 500
           }
         },
         "required": [
@@ -38938,6 +39042,18 @@
               }
             }
           },
+          "tool_output": {
+            "description": "Tool result output handling",
+            "type": "object",
+            "properties": {
+              "step_budget_bytes": {
+                "description": "Aggregate byte budget for the tool results of one model step. When the summed output exceeds it, the largest results spill to disk until the total fits; spilled results keep at least a 2 KB preview and error results are never spilled. Default: 35% of the model context window (~4 bytes per token), clamped to [32 KB, 400 KB].",
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              }
+            }
+          },
           "language": {
             "description": "UI language (English only)",
             "type": "string",
@@ -39048,6 +39164,82 @@
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/AgentConfig"
+            }
+          },
+          "agents": {
+            "description": "Agent subsystem settings (subagent model selection pool, ADR-218)",
+            "type": "object",
+            "properties": {
+              "model_pool": {
+                "description": "User-authorised models the task/task_parallel model parameter can select from (ADR-218). Without a pool the tools offer no model parameter.",
+                "type": "object",
+                "properties": {
+                  "default": {
+                    "description": "Alias used when a task call omits the model parameter. An agent's own model pin still wins over this default.",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "models": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "alias": {
+                              "description": "Pool alias (required in the array form; the record key supplies it otherwise)",
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "model": {
+                              "type": "string",
+                              "description": "Model in \"provider/model\" format, e.g. anthropic/claude-sonnet-5"
+                            },
+                            "hint": {
+                              "description": "Short usage hint listed next to the alias in the task tool schema",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "model"
+                          ]
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "object",
+                          "properties": {
+                            "alias": {
+                              "description": "Pool alias (required in the array form; the record key supplies it otherwise)",
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "model": {
+                              "type": "string",
+                              "description": "Model in \"provider/model\" format, e.g. anthropic/claude-sonnet-5"
+                            },
+                            "hint": {
+                              "description": "Short usage hint listed next to the alias in the task tool schema",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "model"
+                          ]
+                        }
+                      }
+                    ],
+                    "description": "Pool entries as an array of {alias, model, hint} or a record keyed by alias"
+                  }
+                },
+                "required": [
+                  "models"
+                ]
+              }
             }
           },
           "provider": {
@@ -40074,6 +40266,16 @@
                     "selectors"
                   ]
                 }
+              }
+            }
+          },
+          "code_intelligence": {
+            "description": "Code graph / code-intelligence behavior.",
+            "type": "object",
+            "properties": {
+              "post_edit_dependents": {
+                "description": "After edit, write, and apply_patch, list up to 5 files that import the edited file, using the code graph (ADR-217). Only reads a fresh graph; never triggers indexing. Default: false.",
+                "type": "boolean"
               }
             }
           },
@@ -46308,7 +46510,10 @@
               "SessionStart",
               "SessionEnd",
               "PostCompact",
-              "Interrupt"
+              "Interrupt",
+              "PermissionRequest",
+              "StopFailure",
+              "Notification"
             ]
           },
           "tool": {
@@ -46374,7 +46579,10 @@
               "SessionStart",
               "SessionEnd",
               "PostCompact",
-              "Interrupt"
+              "Interrupt",
+              "PermissionRequest",
+              "StopFailure",
+              "Notification"
             ]
           },
           "matcher": {
@@ -48387,6 +48595,10 @@
               "messageID",
               "callID"
             ]
+          },
+          "deferred": {
+            "description": "Answer is delivered later, not through the tool result",
+            "type": "boolean"
           }
         },
         "required": [

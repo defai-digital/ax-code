@@ -259,6 +259,7 @@ export type CompactionPart = {
   auto: boolean
   overflow?: boolean
   triggerReason?: "provider_usage" | "context_overflow_error" | "request_too_large" | "prompt_preflight" | "manual"
+  focus?: string
 }
 
 /** Runtime configuration of a generated client instance: baseUrl, headers, fetch, and parsers. */
@@ -347,6 +348,15 @@ export type Config = {
     auto_background_on_timeout?: boolean
   }
   /**
+   * Tool result output handling
+   */
+  tool_output?: {
+    /**
+     * Aggregate byte budget for the tool results of one model step. When the summed output exceeds it, the largest results spill to disk until the total fits; spilled results keep at least a 2 KB preview and error results are never spilled. Default: 35% of the model context window (~4 bytes per token), clamped to [32 KB, 400 KB].
+     */
+    step_budget_bytes?: number
+  }
+  /**
    * UI language (English only)
    */
   language?: "en"
@@ -404,6 +414,54 @@ export type Config = {
     summary?: AgentConfig
     compaction?: AgentConfig
     [key: string]: AgentConfig | undefined
+  }
+  /**
+   * Agent subsystem settings (subagent model selection pool, ADR-218)
+   */
+  agents?: {
+    /**
+     * User-authorised models the task/task_parallel model parameter can select from (ADR-218). Without a pool the tools offer no model parameter.
+     */
+    model_pool?: {
+      /**
+       * Alias used when a task call omits the model parameter. An agent's own model pin still wins over this default.
+       */
+      default?: string
+      /**
+       * Pool entries as an array of {alias, model, hint} or a record keyed by alias
+       */
+      models:
+        | Array<{
+            /**
+             * Pool alias (required in the array form; the record key supplies it otherwise)
+             */
+            alias?: string
+            /**
+             * Model in "provider/model" format, e.g. anthropic/claude-sonnet-5
+             */
+            model: string
+            /**
+             * Short usage hint listed next to the alias in the task tool schema
+             */
+            hint?: string
+          }>
+        | {
+            [key: string]: {
+              /**
+               * Pool alias (required in the array form; the record key supplies it otherwise)
+               */
+              alias?: string
+              /**
+               * Model in "provider/model" format, e.g. anthropic/claude-sonnet-5
+               */
+              model: string
+              /**
+               * Short usage hint listed next to the alias in the task tool schema
+               */
+              hint?: string
+            }
+          }
+    }
   }
   /**
    * Custom provider configurations and model overrides
@@ -1024,6 +1082,15 @@ export type Config = {
       purpose: string
       selectors: Array<string>
     }>
+  }
+  /**
+   * Code graph / code-intelligence behavior.
+   */
+  code_intelligence?: {
+    /**
+     * After edit, write, and apply_patch, list up to 5 files that import the edited file, using the code graph (ADR-217). Only reads a fresh graph; never triggers indexing. Default: false.
+     */
+    post_edit_dependents?: boolean
   }
   /**
    * Image generation provider configuration
@@ -2840,6 +2907,9 @@ export type HookCompleted = {
     | "SessionEnd"
     | "PostCompact"
     | "Interrupt"
+    | "PermissionRequest"
+    | "StopFailure"
+    | "Notification"
   tool?: string
   command: string
   source: "project" | "pack"
@@ -2864,6 +2934,9 @@ export type HookEntry = {
     | "SessionEnd"
     | "PostCompact"
     | "Interrupt"
+    | "PermissionRequest"
+    | "StopFailure"
+    | "Notification"
   matcher?: string
   command: string
   protocol?: "claude-code"
@@ -3576,6 +3649,10 @@ export type QuestionRequest = {
     messageID: string
     callID: string
   }
+  /**
+   * Answer is delivered later, not through the tool result
+   */
+  deferred?: boolean
 }
 
 /** AX Code API schema `Range` (auto-generated from the OpenAPI contract). */
@@ -13815,6 +13892,7 @@ export type SessionSummarizeData = {
     providerID: string
     modelID: string
     auto?: boolean
+    focus?: string
   }
   path: {
     sessionID: string
@@ -13891,6 +13969,50 @@ export type SessionRecapResponses = {
 
 /** Successful response payload for `POST /session/{sessionID}/recap` — Recap conversation */
 export type SessionRecapResponse = SessionRecapResponses[keyof SessionRecapResponses]
+
+/** Request payload shape for `POST /session/{sessionID}/btw` — Ask a side question */
+export type SessionBtwData = {
+  body?: {
+    question: string
+    providerID?: string
+    modelID?: string
+  }
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/btw"
+}
+
+/** Error response payloads for `POST /session/{sessionID}/btw` — Ask a side question */
+export type SessionBtwErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+}
+
+/** Error response payload for `POST /session/{sessionID}/btw` — Ask a side question */
+export type SessionBtwError = SessionBtwErrors[keyof SessionBtwErrors]
+
+/** Success response payloads for `POST /session/{sessionID}/btw` — Ask a side question */
+export type SessionBtwResponses = {
+  /**
+   * Plain-text answer to the side question
+   */
+  200: {
+    answer: string
+  }
+}
+
+/** Successful response payload for `POST /session/{sessionID}/btw` — Ask a side question */
+export type SessionBtwResponse = SessionBtwResponses[keyof SessionBtwResponses]
 
 /** Request payload shape for `GET /session/{sessionID}/message` — Get session messages */
 export type SessionMessagesData = {
