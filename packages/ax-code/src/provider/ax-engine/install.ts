@@ -333,80 +333,110 @@ export async function installAxEngineBinary(
     input.signal?.throwIfAborted()
 
     const installDir = AxEnginePaths.managedBinaryDir(release.version)
-    await fs.rm(installDir, { recursive: true, force: true }).catch(() => undefined)
-    await fs.mkdir(installDir, { recursive: true })
+    // Download and verify outside the selectable version tree. A same-version
+    // repair must leave the installed payload intact until the locked switch.
+    await fs.mkdir(AxEnginePaths.root, { recursive: true })
+    // @scan-suppress security_scan - Trusted contained AX Engine cache root plus a fixed temporary-directory prefix.
+    const staging = await fs.mkdtemp(path.join(AxEnginePaths.root, "install-"))
+    // @scan-suppress security_scan - mkdtemp-owned directory plus a fixed payload leaf.
+    const stagedDir = path.join(staging, "payload")
+    // @scan-suppress security_scan - mkdtemp-owned payload directory plus the fixed managed executable basename.
+    const stagedBinary = path.join(stagedDir, path.basename(binaryPath))
+    let cleanupStaging = true
+    try {
+      await fs.mkdir(stagedDir)
+      const timeoutSignal = AbortSignal.timeout(INSTALL_TIMEOUT_MS)
+      const signal = input.signal ? AbortSignal.any([input.signal, timeoutSignal]) : timeoutSignal
 
-    const timeoutSignal = AbortSignal.timeout(INSTALL_TIMEOUT_MS)
-    const signal = input.signal ? AbortSignal.any([input.signal, timeoutSignal]) : timeoutSignal
-
-    const installed = await install({
-      id: "ax-engine",
-      assetName: release.assetName,
-      url: release.url,
-      bin: binaryPath,
-      installDir,
-      sha256: release.sha256,
-      fetcher: (url) => Ssrf.pinnedFetch(url, { label: "ax-engine.release", signal }),
-    }).catch((error: unknown) => {
-      log.warn("ax-engine binary download failed", {
-        status: "error",
-        durationMs: 0,
-        errorCode: AX_ENGINE_ERROR.DownloadFailed,
-        error: toErrorMessage(error),
+      const installed = await install({
+        id: "ax-engine",
+        assetName: release.assetName,
+        url: release.url,
+        bin: stagedBinary,
+        installDir: stagedDir,
+        sha256: release.sha256,
+        fetcher: (url) => Ssrf.pinnedFetch(url, { label: "ax-engine.release", signal }),
+      }).catch((error: unknown) => {
+        log.warn("ax-engine binary download failed", {
+          status: "error",
+          durationMs: 0,
+          errorCode: AX_ENGINE_ERROR.DownloadFailed,
+          error: toErrorMessage(error),
+        })
+        return undefined
       })
-      return undefined
-    })
 
-    if (!installed) {
-      await fs.rm(installDir, { recursive: true, force: true }).catch(() => undefined)
-      throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: failed to download or verify the ax-engine binary`)
-    }
-
-    try {
-      await assertAxEngineRuntimePayload(installDir)
-      await chmodRuntimePayload(installDir)
-      await clearXattr(installDir)
-      for (const name of AX_ENGINE_RUNTIME_SIGNED_FILES) {
-        const runtimeFile = axEngineRuntimeFile(installDir, name)
-        await clearXattr(runtimeFile)
-        await verify(runtimeFile, release.teamId)
+      if (!installed) {
+        await fs.rm(stagedDir, { recursive: true, force: true }).catch(() => undefined)
+        throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: failed to download or verify the ax-engine binary`)
       }
-      await smoke(binaryPath, release.version)
-    } catch (error) {
-      // Never leave an unverified binary behind — a later resolution must not
-      // pick it up.
-      await fs.rm(installDir, { recursive: true, force: true }).catch(() => undefined)
-      throw error
-    }
 
-    // Switch versions under the server lock. A server start that resolved the
-    // old binary either finishes first, and the final check sees it running,
-    // or waits until the old versions are gone and then fails cleanly. A
-    // cancel that arrives after the download still wins here.
-    try {
+      try {
+        await assertAxEngineRuntimePayload(stagedDir)
+        await chmodRuntimePayload(stagedDir)
+        await clearXattr(stagedDir)
+        for (const name of AX_ENGINE_RUNTIME_SIGNED_FILES) {
+          const runtimeFile = axEngineRuntimeFile(stagedDir, name)
+          await clearXattr(runtimeFile)
+          await verify(runtimeFile, release.teamId)
+        }
+        await smoke(stagedBinary, release.version)
+      } catch (error) {
+        // Never leave an unverified binary behind — a later resolution must not
+        // pick it up.
+        await fs.rm(stagedDir, { recursive: true, force: true }).catch(() => undefined)
+        throw error
+      }
+
+      // Keep replacement, state publication and old-version cleanup in the same
+      // server critical section. Startup must never observe a half-switched tree.
       using _server = await acquireServerLock()
       input.signal?.throwIfAborted()
       await assertReplaceable()
-      const state: AxEngineInstallState = {
-        version: release.version,
-        path: binaryPath,
-        installedAt: Date.now(),
-        sha256: release.sha256,
+      await fs.mkdir(AxEnginePaths.bin, { recursive: true })
+      // @scan-suppress security_scan - mkdtemp-owned directory plus a fixed backup leaf.
+      const previous = path.join(staging, "previous")
+      const backedUp = await fs.rename(installDir, previous).then(
+        () => true,
+        (error: NodeJS.ErrnoException) => {
+          if (error.code === "ENOENT") return false
+          throw error
+        },
+      )
+      let promoted = false
+      try {
+        await fs.rename(stagedDir, installDir)
+        promoted = true
+        const state: AxEngineInstallState = {
+          version: release.version,
+          path: binaryPath,
+          installedAt: Date.now(),
+          sha256: release.sha256,
+        }
+        await Filesystem.writeJson(AxEnginePaths.installState, state)
+      } catch (error) {
+        try {
+          if (promoted) await fs.rm(installDir, { recursive: true, force: true })
+          if (backedUp) await fs.rename(previous, installDir)
+        } catch (rollbackError) {
+          // Retain the backup if the filesystem cannot complete restoration.
+          cleanupStaging = false
+          throw new AggregateError([error, rollbackError], "Failed to restore the previous AX Engine installation")
+        }
+        throw error
       }
-      await Filesystem.writeJson(AxEnginePaths.installState, state)
-    } catch (error) {
-      await fs.rm(installDir, { recursive: true, force: true }).catch(() => undefined)
-      throw error
-    }
-    await cleanupOtherVersions(release.version).catch(() => undefined)
+      await cleanupOtherVersions(release.version).catch(() => undefined)
 
-    log.info("installed managed ax-engine binary", {
-      status: "success",
-      durationMs: 0,
-      version: release.version,
-      binaryPath,
-    })
-    return { installed: true, alreadyPresent: false, version: release.version, binaryPath }
+      log.info("installed managed ax-engine binary", {
+        status: "success",
+        durationMs: 0,
+        version: release.version,
+        binaryPath,
+      })
+      return { installed: true, alreadyPresent: false, version: release.version, binaryPath }
+    } finally {
+      if (cleanupStaging) await fs.rm(staging, { recursive: true, force: true })
+    }
   })()
 
   inflight.set(release.version, run)

@@ -234,7 +234,7 @@ function paintRearCar(
           color = hdMix(color, [26, 28, 32], 0.6)
         }
         if (uo > 0.84) color = hdMix(color, [46, 50, 56], ((uo - 0.84) / 0.16) * 0.7)
-        hd.set(x, y, color)
+        hd.set(x, y, color) // @scan-suppress lifecycle_scan - Bounded writes into the current pixel frame, not a Map.
       }
     }
   }

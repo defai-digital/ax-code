@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import fs from "fs/promises"
-import { constants as fsConstants } from "fs"
+import { constants as fsConstants, existsSync } from "fs"
 import path from "path"
 import os from "os"
 import { execFileSync } from "child_process"
 import { createHash } from "crypto"
 
 import * as Which from "../../../src/util/which"
+import { Filesystem } from "../../../src/util/filesystem"
 import { AxEnginePaths } from "../../../src/provider/ax-engine/paths"
 import { installReleaseBin } from "@ax-code/ax-code-intel/server-releases"
 import {
@@ -342,6 +343,65 @@ echo '${detected}'
     expect(events).toEqual(["check", "check", "lock", "check", "unlock"])
   })
 
+  test("failed same-version repair preserves the installed payload", async () => {
+    const old = await installAt(RELEASE.version)
+    const content = await fs.readFile(old.binaryPath)
+    await expect(
+      installAxEngineBinary(
+        { force: true },
+        baseRuntime({
+          smoke: async () => {
+            throw new Error("smoke failed")
+          },
+        }),
+      ),
+    ).rejects.toThrow("smoke failed")
+    expect(await fs.readFile(old.binaryPath)).toEqual(content)
+    expect(await getManagedBinary()).toEqual({ path: old.binaryPath, version: RELEASE.version })
+  })
+
+  test("failed state publication restores the previous same-version payload", async () => {
+    const old = await installAt(RELEASE.version)
+    const content = await fs.readFile(old.binaryPath)
+    vi.spyOn(Filesystem, "writeJson").mockRejectedValueOnce(new Error("state write failed"))
+    await expect(installAxEngineBinary({ force: true }, baseRuntime())).rejects.toThrow("state write failed")
+    expect(await fs.readFile(old.binaryPath)).toEqual(content)
+    expect(await getManagedBinary()).toEqual({ path: old.binaryPath, version: RELEASE.version })
+  })
+
+  test("same-version repair stages the payload before taking the server lock", async () => {
+    const old = await installAt(RELEASE.version)
+    let active = false
+    await expect(
+      installAxEngineBinary(
+        { force: true },
+        baseRuntime({
+          smoke: async (file) => {
+            expect(file).not.toBe(old.binaryPath)
+            await fs.access(old.binaryPath)
+            active = true
+          },
+          runningServerBinary: async () => (active ? old.binaryPath : undefined),
+        }),
+      ),
+    ).rejects.toThrow(AX_ENGINE_ERROR.ServerRunning)
+    await fs.access(old.binaryPath)
+    expect(await getManagedBinary()).toEqual({ path: old.binaryPath, version: RELEASE.version })
+  })
+
+  test("removes old versions before releasing the server lock", async () => {
+    const old = await installAt("9.9.8")
+    let oldPresentAtUnlock = false
+    await installAt("9.9.9", {
+      acquireServerLock: async () => ({
+        [Symbol.dispose]: () => {
+          oldPresentAtUnlock = existsSync(old.binaryPath)
+        },
+      }),
+    })
+    expect(oldPresentAtUnlock).toBe(false)
+  })
+
   test("reports a server that holds the lock too long as running", async () => {
     await installAt("9.9.8")
     await expect(
@@ -590,7 +650,7 @@ describe("end-to-end install of a real tarball artifact", () => {
       await fs.access(bin, fsConstants.X_OK)
       expect(await fs.readFile(bin, "utf8")).toContain("ax-engine-real")
       expect(await fs.readFile(path.join(path.dirname(bin), "mlx.metallib"), "utf8")).toContain("mlx.metallib")
-      expect(codesigned).toContain(bin)
+      expect(codesigned.some((file) => path.basename(file) === path.basename(bin))).toBe(true)
       // And it now resolves as the managed dependency.
       expect(await getManagedBinary()).toEqual({ path: bin, version: "e2e-1" })
       const status = await getDependencyStatus()
