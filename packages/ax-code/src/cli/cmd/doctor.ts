@@ -22,6 +22,7 @@ import { getTuiPreloadCheck } from "./doctor-preload"
 import { getDoctorDatabaseCheck, getDoctorDatabaseIntegrityCheck } from "./doctor-storage"
 import { getRecentLogsChecks, getRunningInstancesCheck } from "./doctor-health"
 import { getDoctorProcessRegistryCheck } from "./doctor-processes"
+import { runTerminalDoctorChecks, type TmuxOptionSource } from "./doctor-terminal"
 import path from "path"
 import { realpathSync } from "fs"
 import { access } from "fs/promises"
@@ -871,11 +872,56 @@ export async function executeDoctor(
   return 0
 }
 
+/**
+ * `ax-code doctor terminal [--json]` — read-only terminal and multiplexer
+ * diagnostics (ADR-223). Never applies fixes and never fails the exit code;
+ * warnings are the signal.
+ */
+export async function executeTerminalDoctor(
+  args: { json?: boolean },
+  deps: {
+    env?: Record<string, string | undefined>
+    tmuxOption?: TmuxOptionSource
+    stdout?: (text: string) => void
+    exit?: (code: number) => void
+  } = {},
+): Promise<number> {
+  const writeOut = deps.stdout ?? ((text: string) => process.stdout.write(text))
+  const setExit =
+    deps.exit ??
+    ((code: number) => {
+      process.exitCode = code
+    })
+
+  const checks = await runTerminalDoctorChecks({ env: deps.env, tmuxOption: deps.tmuxOption })
+  if (args.json) {
+    writeOut(JSON.stringify(toDoctorReport(checks), null, 2) + "\n")
+  } else {
+    writeOut(renderDoctorHuman(checks) + "\n")
+  }
+
+  setExit(0)
+  return 0
+}
+
 export const DoctorCommand = cmd({
   command: "doctor",
   describe: "check system health and diagnose issues",
   builder: (yargs) =>
     yargs
+      .command({
+        command: "terminal",
+        describe: "report terminal and multiplexer diagnostics (read-only)",
+        builder: (sub) =>
+          sub.option("json", {
+            type: "boolean",
+            default: false,
+            describe: "Emit a single machine-readable JSON report and suppress human output",
+          }),
+        handler: async (args) => {
+          await executeTerminalDoctor({ json: args.json })
+        },
+      })
       .option("json", {
         type: "boolean",
         default: false,

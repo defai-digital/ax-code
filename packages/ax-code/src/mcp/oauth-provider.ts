@@ -45,6 +45,15 @@ function issuerOf(value: object): { issuer?: string } {
 }
 
 export class McpOAuthProvider implements OAuthClientProvider {
+  /**
+   * Fingerprint of the tokens this instance last issued to the SDK through
+   * tokens()/saveTokens() — i.e. the credential the in-flight request used.
+   * invalidateCredentials("tokens") compares the store against it so a
+   * stale rejection cannot wipe tokens a peer process just refreshed or
+   * re-logged-in (ADR-221). Token values are never logged.
+   */
+  private lastIssuedTokens: { accessToken: string; refreshToken?: string } | undefined
+
   constructor(
     private mcpName: string,
     private serverUrl: string,
@@ -120,6 +129,13 @@ export class McpOAuthProvider implements OAuthClientProvider {
     const entry = await McpAuth.getForUrl(this.mcpName, this.serverUrl)
     if (!entry?.tokens) return undefined
 
+    // Remember what this instance issued (ADR-221) so a later invalidation
+    // can compare-and-clear instead of unconditionally wiping the store.
+    this.lastIssuedTokens = {
+      accessToken: entry.tokens.accessToken,
+      refreshToken: entry.tokens.refreshToken,
+    }
+
     return {
       access_token: entry.tokens.accessToken,
       token_type: "Bearer",
@@ -147,6 +163,12 @@ export class McpOAuthProvider implements OAuthClientProvider {
       },
       this.serverUrl,
     )
+    // The saved credential is now the one this instance's requests use;
+    // keep the invalidation fingerprint in sync (ADR-221).
+    this.lastIssuedTokens = {
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+    }
     log.info("saved oauth tokens", { mcpName: this.mcpName })
   }
 
@@ -222,9 +244,22 @@ export class McpOAuthProvider implements OAuthClientProvider {
       case "client":
         await McpAuth.clearClientInfo(this.mcpName)
         return
-      case "tokens":
-        await McpAuth.clearTokens(this.mcpName)
+      case "tokens": {
+        // ADR-221: clear only when the stored tokens are still the ones
+        // this instance issued to the failed request. A peer process that
+        // refreshed or re-logged-in between our read and this rejection
+        // changed the store; wiping it would log everyone out. Instances
+        // that never issued tokens fall back to an unconditional clear so
+        // recovery from a fresh process still works.
+        const expected = this.lastIssuedTokens
+        if (expected) {
+          const cleared = await McpAuth.clearTokensIfMatches(this.mcpName, expected)
+          log.info("token invalidation applied", { mcpName: this.mcpName, cleared })
+        } else {
+          await McpAuth.clearTokens(this.mcpName)
+        }
         return
+      }
     }
   }
 }

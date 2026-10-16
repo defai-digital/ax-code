@@ -264,6 +264,48 @@ export namespace McpAuth {
   }
 
   /**
+   * Compare-and-clear for tokens (ADR-221): drops the stored tokens only
+   * when they are still the exact credential the caller issued to the
+   * failed request — the same shape as clearOAuthStateIfMatches. A peer
+   * process that refreshed or re-logged-in in between changed the store,
+   * so the stale invalidation must not wipe it. Returns whether the clear
+   * happened. Never logs token values.
+   */
+  export async function clearTokensIfMatches(
+    mcpName: string,
+    expected: { accessToken: string; refreshToken?: string },
+  ): Promise<boolean> {
+    let cleared = false
+    await withFileEntryLock(mcpName, (entry) => {
+      if (!entry.tokens) return
+      if (entry.tokens.accessToken !== expected.accessToken) return
+      if ((entry.tokens.refreshToken ?? undefined) !== (expected.refreshToken ?? undefined)) return
+      delete entry.tokens
+      cleared = true
+    })
+    return cleared
+  }
+
+  /**
+   * Serialize a token refresh as one read-refresh-store section under the
+   * shared file lock (ADR-221). Concurrent callers queue on the same lock;
+   * the second caller's read then observes the first caller's stored
+   * result instead of refreshing the same stale credential twice. The
+   * refresh callback runs while the lock is held, so its store cannot be
+   * trampled by a parallel write.
+   */
+  export async function refreshTokens(
+    mcpName: string,
+    refresh: (tokens: Tokens) => Promise<Tokens>,
+  ): Promise<Tokens | undefined> {
+    return withFileEntryLock(mcpName, async (entry) => {
+      if (!entry.tokens) return undefined
+      entry.tokens = await refresh(entry.tokens)
+      return entry.tokens
+    })
+  }
+
+  /**
    * Check if stored tokens are expired.
    * Returns null if no tokens exist, false if no expiry or not expired, true if expired.
    */

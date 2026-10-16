@@ -48,7 +48,9 @@ import { Instance } from "@/project/instance"
 import { Filesystem } from "@/util/filesystem"
 import { FILE_PATH_ALIAS_KEYS } from "@/tool/file-path"
 import { FILE_TOUCHING_TOOLS, MUTATION_TOOLS } from "@/tool/mutation-tools"
+import { Truncate } from "@/tool/truncate"
 import { Env } from "@/util/env"
+import { ToolResultBudget } from "./tool-result-budget"
 
 export namespace SessionProcessor {
   const log = Log.create({ service: "session.processor" })
@@ -648,6 +650,11 @@ export namespace SessionProcessor {
               | { type: "reasoning"; text: string }
               | { type: "tool_call"; callID: string; tool: string; input: Record<string, unknown> }
             > = []
+            // ADR-211: completed string outputs of the current step's tool
+            // calls, in arrival order. Errors never enter this list (they
+            // are never spilled); the finish-step handler applies the
+            // aggregate step budget over it.
+            let stepToolResults: Array<{ part: MessageV2.ToolPart; text: string; bytes: number }> = []
             lastStreamError = undefined
             // A setup the caller started ahead of time belongs to the first
             // attempt only: a retry must set up again rather than replay a
@@ -1087,7 +1094,7 @@ export namespace SessionProcessor {
                       doomLoopWarning && typeof value.output.output === "string"
                         ? `${sanitizeForXmlTag(value.output.output)}\n\n<system-reminder>\n${doomLoopWarning}\n</system-reminder>`
                         : value.output.output
-                    await Session.updatePart.force({
+                    const completedPart: MessageV2.ToolPart = {
                       ...match,
                       state: {
                         status: "completed",
@@ -1101,7 +1108,15 @@ export namespace SessionProcessor {
                         },
                         attachments: value.output.attachments,
                       },
-                    })
+                    }
+                    await Session.updatePart.force(completedPart)
+                    if (typeof output === "string" && output.length > 0) {
+                      stepToolResults.push({
+                        part: completedPart,
+                        text: output,
+                        bytes: Buffer.byteLength(output, "utf-8"),
+                      })
+                    }
                     // Attribute patch-part files to this message's own writes:
                     // claim the paths this completed mutating tool wrote so
                     // later patch parts can separate them from external edits.
@@ -1311,6 +1326,7 @@ export namespace SessionProcessor {
                   // empty (GitHub issue #301).
                   stepStartTime = Date.now()
                   stepParts = []
+                  stepToolResults = []
                   // Judge repetition per model step: identical phrasing across
                   // separate steps is normal (e.g. recapping a plan), identical
                   // phrasing many times within one step is a generation loop.
@@ -1656,6 +1672,58 @@ export namespace SessionProcessor {
                   // keep stretching future retry delays for this provider.
                   SessionRetry.recordNetworkSuccess(input.model.providerID)
                   SessionRetry.recordConcurrencySuccess(input.model.providerID)
+                  // ADR-211: bound the summed tool output of this step. Each
+                  // result already carries its per-tool truncation; this pass
+                  // spills the largest emitted outputs through the same
+                  // Truncate path (head preview + spill file note) until the
+                  // projected total fits the budget. Call ids and result
+                  // order are unchanged, only output text shrinks, and a
+                  // spilled result keeps at least a 2 KB preview.
+                  if (stepToolResults.length > 0) {
+                    const overrideBytes = (await Config.get()).tool_output?.step_budget_bytes
+                    const budgetBytes = ToolResultBudget.resolveBudgetBytes({
+                      contextTokens: input.model.limit.context,
+                      overrideBytes,
+                    })
+                    const plan = ToolResultBudget.plan({
+                      results: stepToolResults.map((entry) => ({ bytes: entry.bytes })),
+                      budgetBytes,
+                    })
+                    for (const index of plan.spill) {
+                      const entry = stepToolResults[index]!
+                      try {
+                        const truncated = await Truncate.output(entry.text, {
+                          maxBytes: ToolResultBudget.PREVIEW_FLOOR_BYTES,
+                        })
+                        if (!truncated.truncated) continue
+                        const state = entry.part.state
+                        if (state.status !== "completed") continue
+                        await Session.updatePart.force({
+                          ...entry.part,
+                          state: { ...state, output: truncated.content },
+                        })
+                      } catch (error) {
+                        log.warn("step tool-result budget spill failed", {
+                          error,
+                          sessionID: input.sessionID,
+                          callID: entry.part.callID,
+                        })
+                      }
+                    }
+                    if (plan.spill.length > 0) {
+                      log.info("step tool-result budget applied", {
+                        command: "session.processor.step-budget",
+                        status: "ok",
+                        sessionID: input.sessionID,
+                        messageID: input.assistantMessage.id,
+                        stepIndex: attempt,
+                        budgetBytes,
+                        results: stepToolResults.length,
+                        spilled: plan.spill.length,
+                        projectedBytes: plan.projectedBytes,
+                      })
+                    }
+                  }
                   attempt = 0
                   break
 

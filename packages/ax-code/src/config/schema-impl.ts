@@ -676,6 +676,19 @@ export const Info = z
       })
       .optional()
       .describe("Bash tool execution behavior"),
+    tool_output: z
+      .object({
+        step_budget_bytes: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe(
+            "Aggregate byte budget for the tool results of one model step. When the summed output exceeds it, the largest results spill to disk until the total fits; spilled results keep at least a 2 KB preview and error results are never spilled. Default: 35% of the model context window (~4 bytes per token), clamped to [32 KB, 400 KB].",
+          ),
+      })
+      .optional()
+      .describe("Tool result output handling"),
     language: z.literal("en").optional().describe("UI language (English only)"),
     disabled_providers: z.array(z.string()).optional().describe("Disable providers that are loaded automatically"),
     enabled_providers: z
