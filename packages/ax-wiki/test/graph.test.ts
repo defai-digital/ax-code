@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { GRAPH_LIMITS, graphRelativePath, parseWikiGraph, projectWikiManifest } from "../src/graph.js"
+import { cutGraphText, GRAPH_LIMITS, graphRelativePath, parseWikiGraph, projectWikiManifest } from "../src/graph.js"
 
 const hash = "a".repeat(64)
 const manifest = () => ({
@@ -728,4 +728,26 @@ test("page freshness counts stay within the bounded source list", () => {
   expect(page.unknown).toBe(0)
   expect(page.changed).toHaveLength(GRAPH_LIMITS.sourcesPerPage)
   expect(page.changed.every((source) => page.sources.includes(source))).toBe(true)
+})
+
+test("cuts a composed symbol detail to its own budget instead of failing the projection", () => {
+  // `qualified` has its own, larger limit, so `<kind> <qualified>` cannot fit.
+  const qualified = "Q".repeat(600)
+  expect(GRAPH_LIMITS.qualified).toBeGreaterThan(GRAPH_LIMITS.detail)
+  const graph = projectWikiManifest(manifest(), {
+    snapshot: "fixture",
+    inventory: new Map([["src/a.ts", [{ name: "Foo", qualified, kind: "class" }]]]),
+  })
+  const symbol = graph.nodes.find((node) => node.kind === "symbol")
+  expect(symbol?.qualified).toBe(qualified)
+  expect(symbol?.detail.length).toBe(GRAPH_LIMITS.detail)
+  expect(symbol?.detail.startsWith("class Q")).toBe(true)
+})
+
+test("cuts graph text on a code-point boundary", () => {
+  const value = `a${"\u{1D11E}".repeat(4)}𝄞`
+  expect(cutGraphText("abcdef", 3)).toBe("abc")
+  expect(cutGraphText("ab𝄞", 3)).toBe("ab")
+  expect(cutGraphText(value, 4)).toBe("a𝄞")
+  for (let max = 0; max <= value.length; max++) expect(() => encodeURIComponent(cutGraphText(value, max))).not.toThrow()
 })

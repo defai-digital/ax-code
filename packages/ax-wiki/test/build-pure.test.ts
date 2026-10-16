@@ -14,7 +14,7 @@ import {
   type WikiPageGenerationResult,
   type WikiSource,
 } from "../src"
-import { projectWikiManifest } from "../src/graph.js"
+import { GRAPH_LIMITS, projectWikiManifest } from "../src/graph.js"
 
 // Fully in-memory fixture: no filesystem, git, or network. Proves the compiler core
 // runs entirely on injected effects (AC2).
@@ -913,4 +913,22 @@ describe("resumable bounded generation", () => {
     expect(result.generatedPages).toHaveLength(4)
     expect(result.manifest.pages["quickstart.md"]).toEqual(first.manifest.pages["quickstart.md"])
   })
+})
+
+test("records a generated summary cut on a code-point boundary", async () => {
+  const input = baseInput()
+  // The cut lands inside the surrogate pair of the 1024th astral character.
+  const result = await buildPure({
+    ...input,
+    generator: vi.fn(async () => ({
+      summary: `a${"\u{1D11E}".repeat(2000)}`,
+      body: `## Purpose\n\nA body long enough to stand as a page and to exceed the generator minimum, grounded in the cited files and verified against the code before any structural change.`,
+      symbols: [],
+    })),
+  })
+  const recorded = Object.values(result.manifest.pages)[0]?.summary ?? ""
+  expect(recorded.length).toBe(GRAPH_LIMITS.summary - 1)
+  expect(recorded.endsWith("𝄞")).toBe(true)
+  // A lone surrogate half renders as U+FFFD; encodeURIComponent rejects one.
+  expect(() => encodeURIComponent(recorded)).not.toThrow()
 })

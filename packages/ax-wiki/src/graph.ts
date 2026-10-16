@@ -134,6 +134,19 @@ function text(value: unknown, max = 1024): string {
     throw new Error("Invalid graph text")
   return value
 }
+
+/**
+ * `text` rejects anything past `max`; this cuts to it instead, on a code-point
+ * boundary so a truncated astral character cannot leave a lone surrogate in the
+ * output. For fields composed from other bounded fields, where the composition
+ * can exceed the field's own budget (`<kind> <qualified>` against `detail`) and
+ * throwing would take the whole projection down.
+ */
+export function cutGraphText(value: string, max: number = GRAPH_LIMITS.detail): string {
+  const candidate = value.slice(0, Math.max(0, max))
+  const last = candidate.charCodeAt(candidate.length - 1)
+  return last >= 0xd800 && last <= 0xdbff ? candidate.slice(0, -1) : candidate
+}
 export function graphRelativePath(value: unknown): string {
   const result = text(value)
   if (/[\\:?#]/.test(result) || result.split("/").some((part) => !part || part === "." || part === ".."))
@@ -556,7 +569,9 @@ export function projectWikiManifest(
           recordedReferences: 0,
           summary: glossBySource.get(source)?.get(name) ?? "",
           symbols: [],
-          detail: text(`${kind} ${qualified}`, GRAPH_LIMITS.detail),
+          // `qualified` has its own, larger budget, so the composed label is cut
+          // to the `detail` field rather than aborting the whole projection.
+          detail: cutGraphText(`${kind} ${qualified}`),
           qualified,
         })
         pushEdge({ from: target, to: symbolId, kind: "contains", freshness: sourceNode.freshness })

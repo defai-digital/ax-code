@@ -14,7 +14,7 @@
 import { fingerprintEvidenceBundle, renderEvidenceBundle, type EvidenceBundle } from "./contracts.js"
 import { mapWithBoundedConcurrency } from "./discovery-concurrency.js"
 import { parseFrontmatter, renderWikiPage } from "./frontmatter.js"
-import { GRAPH_LIMITS, GRAPH_TEXT_FORBIDDEN } from "./graph.js"
+import { cutGraphText, GRAPH_LIMITS, GRAPH_TEXT_FORBIDDEN } from "./graph.js"
 import { sha256, stableJson } from "./hash.js"
 import type { EvidenceProvider } from "./ports.js"
 import { createWikiPlan, selectPageSources, sourceMatchesPage } from "./plan.js"
@@ -56,7 +56,7 @@ const FORBIDDEN_RUN = new RegExp(`${GRAPH_TEXT_FORBIDDEN.source}+`, "g")
  * cleaned here instead of being rejected there.
  */
 function projectableText(value: string, max: number): string {
-  return value.replace(FORBIDDEN_RUN, " ").replace(/ {2,}/g, " ").trim().slice(0, max).trimEnd()
+  return cutGraphText(value.replace(FORBIDDEN_RUN, " ").replace(/ {2,}/g, " ").trim(), max).trimEnd()
 }
 
 /**
