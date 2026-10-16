@@ -6,9 +6,20 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.26.2] - 2026-10-16
+
+### Fixed
+
+- Stage and verify managed AX Engine repairs before replacing the installed payload, restoring the previous payload if state publication fails.
+- Hold the server lock through version replacement and old-version cleanup, and honor cancellation while waiting for locks, downloading, and checking server state.
+- Expose the AX Engine status schema to SDK consumers, including the pinned version and managed update availability.
+- Correct Wiki graph projection, label truncation, match cycling, pan release, edge trimming, and per-file freshness.
+- Inspect the matched path call in the security scanner when a line contains multiple path operations.
+
 ### Changed
 
-- Restyle the racing theme HD opening and ending as a chase view behind a glossy sports car on a mountain highway, with a textured rock face, concrete wall, overhead gantry signs, curved street lamps, tyre-marked asphalt, conifer slope, and layered clouds. The text fallback is unchanged.
+- Publish SDK 2.6.24 with typed AX Engine status responses.
+- Include Racing and Dinosaur animation themes and the revised racing highway and car artwork.
 
 ## [7.26.1] - 2026-10-16
 
