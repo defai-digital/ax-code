@@ -577,10 +577,13 @@ export const messages = {
   "ui.update.title": "ax-code \uc5c5\ub370\uc774\ud2b8",
   "ui.update.checking": "\uc5c5\ub370\uc774\ud2b8\ub97c \ud655\uc778\ud558\ub294 \uc911\u2026",
   "ui.update.current": "ax-code v{version}\uc740(\ub294) \ucd5c\uc2e0 \ubc84\uc804\uc785\ub2c8\ub2e4.",
-  "ui.update.available": "ax-code v{latest}\uc744(\ub97c) \uc0ac\uc6a9\ud560 \uc218 \uc788\uc2b5\ub2c8\ub2e4(\ud604\uc7ac v{current}).",
+  "ui.update.available":
+    "ax-code v{latest}\uc744(\ub97c) \uc0ac\uc6a9\ud560 \uc218 \uc788\uc2b5\ub2c8\ub2e4(\ud604\uc7ac v{current}).",
   "ui.update.installing": "v{version} \uc124\uce58 \uc911\u2026",
-  "ui.update.installed": "v{version}(\uc73c)\ub85c \uc5c5\ub370\uc774\ud2b8\ud588\uc2b5\ub2c8\ub2e4. ax-code\ub97c \uc885\ub8cc\ud558\uace0 \ub2e4\uc2dc \uc2dc\uc791\ud558\uba74 \uc801\uc6a9\ub429\ub2c8\ub2e4.",
-  "ui.update.checkFailed": "\uc5c5\ub370\uc774\ud2b8\ub97c \ud655\uc778\ud560 \uc218 \uc5c6\uc2b5\ub2c8\ub2e4: {message}",
+  "ui.update.installed":
+    "v{version}(\uc73c)\ub85c \uc5c5\ub370\uc774\ud2b8\ud588\uc2b5\ub2c8\ub2e4. ax-code\ub97c \uc885\ub8cc\ud558\uace0 \ub2e4\uc2dc \uc2dc\uc791\ud558\uba74 \uc801\uc6a9\ub429\ub2c8\ub2e4.",
+  "ui.update.checkFailed":
+    "\uc5c5\ub370\uc774\ud2b8\ub97c \ud655\uc778\ud560 \uc218 \uc5c6\uc2b5\ub2c8\ub2e4: {message}",
   "ui.update.action.install": "\uc9c0\uae08 \uc5c5\ub370\uc774\ud2b8",
   "ui.update.action.retry": "\ub2e4\uc2dc \uc2dc\ub3c4",
   "ui.update.action.exit": "ax-code \uc885\ub8cc",
@@ -1165,6 +1168,10 @@ export const messages = {
   "animation.singaporeNight": "Singapore: Marina Bay \ubc24",
   "animation.sanguozhiMuster": "삼국지: 새벽 출진",
   "animation.sanguozhiDusk": "삼국지: 황혼의 귀진",
+  "animation.racingDay": "레이싱: 낮",
+  "animation.racingNight": "레이싱: 밤",
+  "animation.dinosaurDay": "공룡: 낮",
+  "animation.dinosaurNight": "공룡: 밤",
   "ui.steerNowHint": "{keybind} \uc989\uc2dc \uc870\uc815",
   "ui.steerQueueEmpty":
     "\uc870\uc815\ud560 \uc800\uc7a5\ub41c \ud6c4\uc18d \uc791\uc5c5\uc774 \uc5c6\uc2b5\ub2c8\ub2e4",

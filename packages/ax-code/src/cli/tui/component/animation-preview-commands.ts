@@ -597,6 +597,38 @@ const PREVIEWS = [
     value: "app.animation.sanguozhi_ending",
     slash: "sanguozhi-ending",
   },
+  {
+    family: "Racing",
+    ending: false,
+    style: "racing-day",
+    key: "animation.racingDay",
+    value: "app.animation.racing",
+    slash: "racing",
+  },
+  {
+    family: "Racing",
+    ending: true,
+    style: "racing-night",
+    key: "animation.racingNight",
+    value: "app.animation.racing_ending",
+    slash: "racing-ending",
+  },
+  {
+    family: "Dinosaur",
+    ending: false,
+    style: "dinosaur-day",
+    key: "animation.dinosaurDay",
+    value: "app.animation.dinosaur",
+    slash: "dinosaur",
+  },
+  {
+    family: "Dinosaur",
+    ending: true,
+    style: "dinosaur-night",
+    key: "animation.dinosaurNight",
+    value: "app.animation.dinosaur_ending",
+    slash: "dinosaur-ending",
+  },
 ] as const
 
 type AnimationPreviewInput = {

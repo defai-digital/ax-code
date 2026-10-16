@@ -33,6 +33,8 @@ import { isSteppeStyle } from "./steppe-view-model"
 import { isCanyonStyle } from "./canyon-view-model"
 import { isSingaporeStyle } from "./singapore-view-model"
 import { isSanguozhiStyle } from "./sanguozhi-view-model"
+import { isRacingStyle } from "./racing-view-model"
+import { isDinosaurStyle } from "./dinosaur-view-model"
 import { renderSingaporePixels } from "./singapore-pixels"
 import { renderSanguozhiPixels } from "./sanguozhi-pixels"
 import { renderFujiPixels } from "./fuji-pixels"
@@ -68,6 +70,8 @@ import { renderLighthousePixels } from "./lighthouse-pixels"
 import { renderFallsPixels } from "./falls-pixels"
 import { renderSteppePixels } from "./steppe-pixels"
 import { renderCanyonPixels } from "./canyon-pixels"
+import { renderRacingPixels } from "./racing-pixels"
+import { renderDinosaurPixels } from "./dinosaur-pixels"
 import type { TextSceneStyle } from "./text-scene-view-model"
 
 export function renderTextScenePixels(width: number, height: number, style: TextSceneStyle, elapsedMs: number): Buffer {
@@ -107,5 +111,7 @@ export function renderTextScenePixels(width: number, height: number, style: Text
   if (isCanyonStyle(style)) return renderCanyonPixels(width, height, style, elapsedMs)
   if (isSingaporeStyle(style)) return renderSingaporePixels(width, height, style, elapsedMs)
   if (isSanguozhiStyle(style)) return renderSanguozhiPixels(width, height, style, elapsedMs)
+  if (isRacingStyle(style)) return renderRacingPixels(width, height, style, elapsedMs)
+  if (isDinosaurStyle(style)) return renderDinosaurPixels(width, height, style, elapsedMs)
   return style satisfies never
 }

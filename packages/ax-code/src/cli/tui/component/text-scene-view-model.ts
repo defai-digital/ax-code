@@ -38,6 +38,8 @@ import { steppeRows, steppeBackground, isSteppeStyle, type SteppeStyle } from ".
 import { canyonRows, canyonBackground, isCanyonStyle, type CanyonStyle } from "./canyon-view-model"
 import { singaporeRows, singaporeBackground, isSingaporeStyle, type SingaporeStyle } from "./singapore-view-model"
 import { sanguozhiRows, sanguozhiBackground, isSanguozhiStyle, type SanguozhiStyle } from "./sanguozhi-view-model"
+import { racingRows, racingBackground, isRacingStyle, type RacingStyle } from "./racing-view-model"
+import { dinosaurRows, dinosaurBackground, isDinosaurStyle, type DinosaurStyle } from "./dinosaur-view-model"
 export type TextSceneStyle =
   | BenchStyle
   | FujiStyle
@@ -74,6 +76,8 @@ export type TextSceneStyle =
   | CanyonStyle
   | SingaporeStyle
   | SanguozhiStyle
+  | RacingStyle
+  | DinosaurStyle
 export type SceneRun = FujiRun
 export function isTextSceneStyle(style: string | undefined): style is TextSceneStyle {
   return (
@@ -111,7 +115,9 @@ export function isTextSceneStyle(style: string | undefined): style is TextSceneS
     isSteppeStyle(style) ||
     isCanyonStyle(style) ||
     isSingaporeStyle(style) ||
-    isSanguozhiStyle(style)
+    isSanguozhiStyle(style) ||
+    isRacingStyle(style) ||
+    isDinosaurStyle(style)
   )
 }
 export function textSceneBackground(style: TextSceneStyle) {
@@ -148,6 +154,8 @@ export function textSceneBackground(style: TextSceneStyle) {
   if (isCanyonStyle(style)) return canyonBackground(style)
   if (isSingaporeStyle(style)) return singaporeBackground(style)
   if (isSanguozhiStyle(style)) return sanguozhiBackground(style)
+  if (isRacingStyle(style)) return racingBackground(style)
+  if (isDinosaurStyle(style)) return dinosaurBackground(style)
   return isFujiStyle(style) ? fujiBackground(style) : benchBackground(style)
 }
 export function textSceneRows(width: number, height: number, style: TextSceneStyle, elapsedMs: number): SceneRun[][] {
@@ -184,5 +192,7 @@ export function textSceneRows(width: number, height: number, style: TextSceneSty
   if (isCanyonStyle(style)) return canyonRows(width, height, style, elapsedMs)
   if (isSingaporeStyle(style)) return singaporeRows(width, height, style, elapsedMs)
   if (isSanguozhiStyle(style)) return sanguozhiRows(width, height, style, elapsedMs)
+  if (isRacingStyle(style)) return racingRows(width, height, style, elapsedMs)
+  if (isDinosaurStyle(style)) return dinosaurRows(width, height, style, elapsedMs)
   return isFujiStyle(style) ? fujiRows(width, height, style, elapsedMs) : benchRows(width, height, style, elapsedMs)
 }

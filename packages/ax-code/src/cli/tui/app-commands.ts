@@ -821,7 +821,15 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
                                                                               : input.animationPair?.opening ===
                                                                                   "sanguozhi-muster"
                                                                                 ? uiText("animation.sanguozhiMuster")
-                                                                                : uiText("animation.classicFoliage"),
+                                                                                : input.animationPair?.opening ===
+                                                                                    "racing-day"
+                                                                                  ? uiText("animation.racingDay")
+                                                                                  : input.animationPair?.opening ===
+                                                                                      "dinosaur-day"
+                                                                                    ? uiText("animation.dinosaurDay")
+                                                                                    : uiText(
+                                                                                        "animation.classicFoliage",
+                                                                                      ),
       slash: { name: "ov", aliases: ["op"], hidden: true },
       value: "app.digital_code.play",
       category: t("category.system"),
@@ -908,7 +916,13 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
                                                                               : input.animationPair?.ending ===
                                                                                   "sanguozhi-dusk"
                                                                                 ? uiText("animation.sanguozhiDusk")
-                                                                                : uiText("animation.goldenFoliage"),
+                                                                                : input.animationPair?.ending ===
+                                                                                    "racing-night"
+                                                                                  ? uiText("animation.racingNight")
+                                                                                  : input.animationPair?.ending ===
+                                                                                      "dinosaur-night"
+                                                                                    ? uiText("animation.dinosaurNight")
+                                                                                    : uiText("animation.goldenFoliage"),
       slash: { name: "ev", hidden: true },
       value: "app.digital_code.play_reverse",
       category: t("category.system"),

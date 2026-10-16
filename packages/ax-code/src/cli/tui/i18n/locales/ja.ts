@@ -610,10 +610,13 @@ export const messages = {
   "ui.update.title": "ax-code \u3092\u66f4\u65b0",
   "ui.update.checking": "\u30a2\u30c3\u30d7\u30c7\u30fc\u30c8\u3092\u78ba\u8a8d\u3057\u3066\u3044\u307e\u3059\u2026",
   "ui.update.current": "ax-code v{version} \u306f\u6700\u65b0\u3067\u3059\u3002",
-  "ui.update.available": "ax-code v{latest} \u304c\u5229\u7528\u53ef\u80fd\u3067\u3059\uff08\u73fe\u5728\u306f v{current}\uff09\u3002",
+  "ui.update.available":
+    "ax-code v{latest} \u304c\u5229\u7528\u53ef\u80fd\u3067\u3059\uff08\u73fe\u5728\u306f v{current}\uff09\u3002",
   "ui.update.installing": "v{version} \u3092\u30a4\u30f3\u30b9\u30c8\u30fc\u30eb\u3057\u3066\u3044\u307e\u3059\u2026",
-  "ui.update.installed": "v{version} \u306b\u66f4\u65b0\u3057\u307e\u3057\u305f\u3002ax-code \u3092\u7d42\u4e86\u3057\u3066\u518d\u8d77\u52d5\u3059\u308b\u3068\u53cd\u6620\u3055\u308c\u307e\u3059\u3002",
-  "ui.update.checkFailed": "\u30a2\u30c3\u30d7\u30c7\u30fc\u30c8\u3092\u78ba\u8a8d\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f: {message}",
+  "ui.update.installed":
+    "v{version} \u306b\u66f4\u65b0\u3057\u307e\u3057\u305f\u3002ax-code \u3092\u7d42\u4e86\u3057\u3066\u518d\u8d77\u52d5\u3059\u308b\u3068\u53cd\u6620\u3055\u308c\u307e\u3059\u3002",
+  "ui.update.checkFailed":
+    "\u30a2\u30c3\u30d7\u30c7\u30fc\u30c8\u3092\u78ba\u8a8d\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f: {message}",
   "ui.update.action.install": "\u4eca\u3059\u3050\u66f4\u65b0",
   "ui.update.action.retry": "\u518d\u8a66\u884c",
   "ui.update.action.exit": "ax-code \u3092\u7d42\u4e86",
@@ -1226,6 +1229,10 @@ export const messages = {
   "animation.singaporeNight": "Singapore: Marina Bay \u591c",
   "animation.sanguozhiMuster": "Sanguozhi：夜明けの出陣",
   "animation.sanguozhiDusk": "Sanguozhi：夕暮れの帰陣",
+  "animation.racingDay": "レース：昼",
+  "animation.racingNight": "レース：夜",
+  "animation.dinosaurDay": "恐竜：昼",
+  "animation.dinosaurNight": "恐竜：夜",
   "ui.steerNowHint": "{keybind} \u4eca\u3059\u3050\u8a98\u5c0e",
   "ui.steerQueueEmpty":
     "\u8a98\u5c0e\u3067\u304d\u308b\u4fdd\u5b58\u6e08\u307f\u30d5\u30a9\u30ed\u30fc\u30a2\u30c3\u30d7\u304c\u3042\u308a\u307e\u305b\u3093",

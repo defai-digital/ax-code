@@ -565,7 +565,8 @@ export const messages = {
   "ui.update.current": "ax-code v{version} \u0111\u00e3 l\u00e0 b\u1ea3n m\u1edbi nh\u1ea5t.",
   "ui.update.available": "\u0110\u00e3 c\u00f3 ax-code v{latest} (b\u1ea1n \u0111ang d\u00f9ng v{current}).",
   "ui.update.installing": "\u0110ang c\u00e0i \u0111\u1eb7t v{version}\u2026",
-  "ui.update.installed": "\u0110\u00e3 c\u1eadp nh\u1eadt l\u00ean v{version}. H\u00e3y tho\u00e1t v\u00e0 kh\u1edfi \u0111\u1ed9ng l\u1ea1i ax-code \u0111\u1ec3 d\u00f9ng b\u1ea3n m\u1edbi.",
+  "ui.update.installed":
+    "\u0110\u00e3 c\u1eadp nh\u1eadt l\u00ean v{version}. H\u00e3y tho\u00e1t v\u00e0 kh\u1edfi \u0111\u1ed9ng l\u1ea1i ax-code \u0111\u1ec3 d\u00f9ng b\u1ea3n m\u1edbi.",
   "ui.update.checkFailed": "Kh\u00f4ng th\u1ec3 ki\u1ec3m tra c\u1eadp nh\u1eadt: {message}",
   "ui.update.action.install": "C\u1eadp nh\u1eadt ngay",
   "ui.update.action.retry": "Th\u1eed l\u1ea1i",
@@ -1143,6 +1144,10 @@ export const messages = {
   "animation.singaporeNight": "Singapore: Marina Bay \u0110\u00eam",
   "animation.sanguozhiMuster": "Sanguozhi: Bình minh",
   "animation.sanguozhiDusk": "Sanguozhi: Hoàng hôn",
+  "animation.racingDay": "Đua xe: Ngày",
+  "animation.racingNight": "Đua xe: Đêm",
+  "animation.dinosaurDay": "Khủng long: Ngày",
+  "animation.dinosaurNight": "Khủng long: Đêm",
   "ui.steerNowHint": "{keybind} \u0111i\u1ec1u h\u01b0\u1edbng ngay",
   "ui.steerQueueEmpty":
     "Kh\u00f4ng c\u00f3 theo d\u00f5i \u0111\u00e3 l\u01b0u \u0111\u1ec3 \u0111i\u1ec1u h\u01b0\u1edbng",
